@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useAuth } from "@/lib/auth";
 import { Sidebar } from "@/components/layout/sidebar";
@@ -46,20 +46,16 @@ export default function Settings() {
   });
 
   // Form state
-  const [emailDigestFrequency, setEmailDigestFrequency] = useState<string>(
-    settings?.emailDigestFrequency || "daily"
-  );
-  const [emailNotificationsEnabled, setEmailNotificationsEnabled] = useState<boolean>(
-    settings?.emailNotificationsEnabled || true
-  );
+  const [emailDigestFrequency, setEmailDigestFrequency] = useState<string>("daily");
+  const [emailNotificationsEnabled, setEmailNotificationsEnabled] = useState<boolean>(true);
 
   // Update form values when settings load
-  useState(() => {
+  useEffect(() => {
     if (settings) {
-      setEmailDigestFrequency(settings.emailDigestFrequency);
-      setEmailNotificationsEnabled(settings.emailNotificationsEnabled);
+      setEmailDigestFrequency(settings.emailDigestFrequency || "daily");
+      setEmailNotificationsEnabled(settings.emailNotificationsEnabled || true);
     }
-  });
+  }, [settings]);
 
   const handleToggleDarkMode = () => {
     // Client-side immediate toggle
@@ -283,7 +279,7 @@ export default function Settings() {
                         variant="outline"
                         onClick={async () => {
                           try {
-                            await apiRequest("DELETE", "/api/subscriptions");
+                            await apiRequest("DELETE", "/api/get-or-create-subscription");
                             queryClient.invalidateQueries({ queryKey: ["/api/auth/me"] });
                             toast({
                               title: "Subscription Cancelled",

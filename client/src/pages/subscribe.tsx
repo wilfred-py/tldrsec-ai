@@ -7,7 +7,8 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { useIsMobile } from '@/hooks/use-mobile';
-import { BadgeCheck, Shield } from 'lucide-react';
+import { BadgeCheck, Shield, ArrowLeft } from 'lucide-react';
+import { Link } from 'wouter';
 
 // Make sure to call `loadStripe` outside of a component's render to avoid
 // recreating the `Stripe` object on every render.
@@ -92,7 +93,7 @@ export default function Subscribe() {
     async function createSubscription() {
       try {
         setIsLoading(true);
-        const response = await apiRequest("POST", "/api/subscriptions");
+        const response = await apiRequest("POST", "/api/get-or-create-subscription");
         
         if (!response.ok) {
           const errorData = await response.json();
@@ -131,6 +132,15 @@ export default function Subscribe() {
 
   return (
     <div className="container mx-auto max-w-5xl py-8 px-4">
+      <div className="mb-6">
+        <Link to="/dashboard">
+          <Button variant="ghost" className="flex items-center gap-1 text-muted-foreground hover:text-foreground">
+            <ArrowLeft className="h-4 w-4" />
+            Back to Dashboard
+          </Button>
+        </Link>
+      </div>
+
       <h1 className="text-3xl font-bold text-center mb-8">Upgrade to tldrSEC Premium</h1>
       
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
@@ -180,7 +190,7 @@ export default function Subscribe() {
             <CardHeader>
               <CardTitle>Payment Details</CardTitle>
               <CardDescription>
-                $29.99/month - Cancel anytime
+                $59.00/month - Cancel anytime
               </CardDescription>
             </CardHeader>
             <CardContent>
