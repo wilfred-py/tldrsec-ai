@@ -9,6 +9,7 @@ import { FcGoogle } from "react-icons/fc";
 import { useAuth } from "@/lib/auth";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { useToast } from "@/hooks/use-toast";
+import { useLocation } from "wouter";
 
 export function AuthForm() {
   const { login, register, loginWithOAuth, isLoading } = useAuth();
@@ -17,6 +18,7 @@ export function AuthForm() {
   const [password, setPassword] = useState("");
   const [username, setUsername] = useState("");
   const [isRegistering, setIsRegistering] = useState(false);
+  const [_, navigate] = useLocation();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -28,12 +30,16 @@ export function AuthForm() {
           title: "Account created",
           description: "You've been successfully registered and logged in.",
         });
+        // Navigate to dashboard after registration
+        navigate("/dashboard");
       } else {
         await login(email, password);
         toast({
           title: "Welcome back",
           description: "You've been successfully logged in.",
         });
+        // Navigate to dashboard after login
+        navigate("/dashboard");
       }
     } catch (error) {
       toast({
@@ -69,6 +75,9 @@ export function AuthForm() {
         title: "Successfully logged in",
         description: `Authenticated with ${provider}`,
       });
+      
+      // Navigate to dashboard after OAuth login
+      navigate("/dashboard");
     } catch (error) {
       toast({
         title: "Authentication failed",
