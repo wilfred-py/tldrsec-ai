@@ -246,6 +246,98 @@ export default function Settings() {
                 </div>
               </CardContent>
             </Card>
+            
+            {/* Subscription Settings */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Subscription</CardTitle>
+                <CardDescription>
+                  Manage your tldrSEC subscription and billing.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                  <div className="space-y-0.5">
+                    <h3 className="text-lg font-medium">
+                      {user?.subscriptionStatus === 'premium' 
+                        ? 'Premium Subscription' 
+                        : 'Free Plan'}
+                    </h3>
+                    <p className="text-sm text-muted-foreground">
+                      {user?.subscriptionStatus === 'premium'
+                        ? 'You have access to all premium features.'
+                        : 'Upgrade to premium for additional features.'}
+                    </p>
+                  </div>
+                  
+                  {user?.subscriptionStatus === 'premium' ? (
+                    <div className="flex flex-col sm:flex-row gap-2">
+                      <Button
+                        variant="outline"
+                        onClick={async () => {
+                          try {
+                            await apiRequest("DELETE", "/api/subscriptions");
+                            queryClient.invalidateQueries({ queryKey: ["/api/auth/me"] });
+                            toast({
+                              title: "Subscription Cancelled",
+                              description: "Your subscription has been cancelled.",
+                            });
+                          } catch (error) {
+                            toast({
+                              title: "Error",
+                              description: "Failed to cancel subscription.",
+                              variant: "destructive",
+                            });
+                          }
+                        }}
+                      >
+                        Cancel Subscription
+                      </Button>
+                      <Button disabled className="bg-green-600 hover:bg-green-700">
+                        Active
+                      </Button>
+                    </div>
+                  ) : (
+                    <Button 
+                      onClick={() => window.location.href = '/subscribe'}
+                      className="bg-primary hover:bg-primary/90"
+                    >
+                      Upgrade to Premium
+                    </Button>
+                  )}
+                </div>
+                
+                {user?.subscriptionStatus === 'premium' && (
+                  <div className="rounded-md bg-muted p-4 mt-4">
+                    <div className="text-sm">
+                      <p className="font-medium">Subscription Details</p>
+                      <p className="mt-1 text-muted-foreground">
+                        Your premium subscription gives you access to unlimited SEC filing summaries, 
+                        AI analysis, and priority email alerts.
+                      </p>
+                      <p className="mt-3 text-xs text-muted-foreground">
+                        Subscription ID: {user.stripeSubscriptionId?.substring(0, 8)}...
+                      </p>
+                    </div>
+                  </div>
+                )}
+                
+                {user?.subscriptionStatus !== 'premium' && (
+                  <div className="rounded-md bg-muted p-4 mt-4">
+                    <div className="text-sm">
+                      <p className="font-medium">Premium Benefits</p>
+                      <ul className="mt-2 space-y-1 list-disc list-inside text-muted-foreground">
+                        <li>Unlimited SEC filing summaries and insights</li>
+                        <li>Advanced AI analysis of financial statements</li>
+                        <li>Priority email alerts for critical filings</li>
+                        <li>Export summaries to PDF or Excel</li>
+                        <li>Historical filing database access</li>
+                      </ul>
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
           </div>
         </main>
       </div>

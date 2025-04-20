@@ -7,6 +7,9 @@ export type AuthUser = {
   username: string;
   email: string;
   darkMode: boolean;
+  stripeCustomerId?: string | null;
+  stripeSubscriptionId?: string | null;
+  subscriptionStatus?: string | null;
 };
 
 export type AuthState = {
