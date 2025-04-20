@@ -61,20 +61,27 @@ export default function Settings() {
     }
   });
 
-  const handleToggleDarkMode = async () => {
-    try {
-      await apiRequest("POST", "/api/settings/dark-mode", {
-        darkMode: !user?.darkMode,
-      });
-      
-      queryClient.invalidateQueries({ queryKey: ["/api/auth/me"] });
-    } catch (error) {
+  const handleToggleDarkMode = () => {
+    // Client-side immediate toggle
+    const isDark = document.documentElement.classList.contains('dark');
+    
+    if (isDark) {
+      document.documentElement.classList.remove('dark');
+    } else {
+      document.documentElement.classList.add('dark');
+    }
+    
+    // Asynchronously update the server setting
+    apiRequest("POST", "/api/settings/dark-mode", {
+      darkMode: !isDark,
+    }).catch(error => {
+      console.error("Failed to update dark mode setting:", error);
       toast({
         title: "Error",
-        description: "Failed to toggle dark mode.",
+        description: "Failed to save dark mode preference.",
         variant: "destructive",
       });
-    }
+    });
   };
 
   const handleSaveNotificationSettings = () => {

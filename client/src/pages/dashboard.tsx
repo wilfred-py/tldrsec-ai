@@ -85,9 +85,13 @@ export default function Dashboard() {
   }, [user?.darkMode]);
 
   const handleSearch = async (query: string) => {
-    if (query.trim().length < 2) {
+    if (query.trim() === '') {
       setSearchResults([]);
       setShowSearchResults(false);
+      return;
+    }
+    
+    if (query.trim().length < 2) {
       return;
     }
     
@@ -110,20 +114,27 @@ export default function Dashboard() {
     queryClient.invalidateQueries({ queryKey: ["/api/stats"] });
   };
 
-  const handleToggleDarkMode = async () => {
-    try {
-      await apiRequest("POST", "/api/settings/dark-mode", {
-        darkMode: !user?.darkMode,
-      });
-      
-      queryClient.invalidateQueries({ queryKey: ["/api/auth/me"] });
-    } catch (error) {
+  const handleToggleDarkMode = () => {
+    // Client-side immediate toggle
+    const isDark = document.documentElement.classList.contains('dark');
+    
+    if (isDark) {
+      document.documentElement.classList.remove('dark');
+    } else {
+      document.documentElement.classList.add('dark');
+    }
+    
+    // Asynchronously update the server setting
+    apiRequest("POST", "/api/settings/dark-mode", {
+      darkMode: !isDark,
+    }).catch(error => {
+      console.error("Failed to update dark mode setting:", error);
       toast({
         title: "Error",
-        description: "Failed to toggle dark mode.",
+        description: "Failed to save dark mode preference.",
         variant: "destructive",
       });
-    }
+    });
   };
 
   const handleViewSummary = (filingId: number) => {
@@ -171,11 +182,12 @@ export default function Dashboard() {
                 {/* Search results dropdown */}
                 {showSearchResults && searchResults.length > 0 && (
                   <div className="absolute z-10 mt-1 w-full bg-card shadow-lg rounded-md max-h-60 overflow-auto">
-                    <ul className="py-1">
-                      {searchResults.map((result) => (
+                    <ul className="py-1" id="search-results-list">
+                      {searchResults.map((result, index) => (
                         <li
                           key={result.ticker}
                           className="px-3 py-2 hover:bg-muted cursor-pointer flex items-center justify-between"
+                          data-index={index}
                         >
                           <div className="flex items-center">
                             <span className="font-medium">{result.ticker}</span>
