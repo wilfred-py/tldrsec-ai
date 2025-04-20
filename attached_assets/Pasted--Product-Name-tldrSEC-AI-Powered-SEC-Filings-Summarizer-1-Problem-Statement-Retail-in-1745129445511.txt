@@ -1,0 +1,277 @@
+## Product Name
+
+**tldrSEC** - AI-Powered SEC Filings Summarizer
+
+## 1. Problem Statement
+
+Retail investors lack the time and expertise to analyze lengthy SEC filings (e.g., 10-K, 10-Q, 8-K, Form 4), which are critical for informed investment decisions. These documents, often spanning hundreds of pages, contain vital financial and operational insights buried in complex language and formats.
+
+## 2. Solution Overview
+
+**tldrSEC** is a web application that:
+
+- Monitors the SEC website (https://www.sec.gov/) hourly for new filings.
+- Pulls, parses, and analyzes all new filings (10-K, 10-Q, 8-K, Form 4) without prioritization.
+- Uses AI to summarize filings based on specific prompts tailored to each filing type.
+- Delivers concise, actionable summaries to users’ inboxes.
+- Provides a dashboard for managing tracked tickers and an onboarding flow for new users.
+
+### Key Features
+
+1. **Automated SEC Filing Monitoring**:
+    - Checks SEC.gov hourly for new filings via a cron job.
+    - Identifies filings matching user-tracked tickers.
+2. **AI-Powered Summarization**:
+    - Parses filings in HTML, PDF, and XBRL formats.
+    - Generates summaries using an AI model (e.g., Claude or Grok) based on provided prompts.
+3. **Email Notifications**:
+    - Sends summaries to users based on their preferences.
+4. **Dashboard**:
+    - Displays tracked tickers in a sortable, searchable table.
+    - Includes a resizable sidebar and search functionality.
+5. **Onboarding Flow**:
+    - Guides users through registration and ticker selection using OAuth (Google, GitHub, Twitter).
+6. **Settings**:
+    - Manages notification preferences, dark mode, and subscription status.
+
+## 3. Target Audience
+
+- **Retail Investors**: Seeking quick, actionable insights from SEC filings.
+- **Financial Hobbyists**: Tracking specific companies for personal investment.
+
+## 4. Technical Requirements
+
+### Tech Stack
+
+- **Frontend**: Next.js with TypeScript, shadcn/ui for UI components.
+- **Backend**: Next.js API routes (custom-built to avoid third-party API costs).
+- **Database**: PostgreSQL (Neon free tier) for user data and ticker tracking.
+- **Authentication**: Clerk (OAuth with Google, GitHub, Twitter).
+- **Payments**: Stripe ($0.30/transaction, fits within budget).
+- **Email**: Resend (free tier up to 3,000 emails/month).
+- **File Parsing**:
+    - HTML: cheerio
+    - PDF: pdf-parse
+    - XBRL: xbrl
+- **AI Summarization**: Anthropic’s Claude (preferred for long documents; API key required).
+- **Cron Jobs**: Vercel Cron Jobs (hourly, free tier).
+- **Security**: express-rate-limit, HTTPS via Vercel.
+- **Testing**: Jest for unit tests.
+- **Deployment**: Vercel (Hobby plan, $20/month).
+
+### Budget Breakdown
+
+- **Vercel**: $20/month (Hobby plan, covers hosting and cron jobs).
+- **Neon**: $0 (free tier, sufficient for small-scale database).
+- **Resend**: $0 (free tier for email delivery).
+- **Claude API**: ~$10/month (estimated for moderate usage; adjustable based on volume).
+- **Total**: $30/month (fits constraint with careful usage management).
+
+## 5. Functional Requirements
+
+### 5.1 Onboarding Flow
+
+- **Steps**:
+    1. User lands on homepage with "Sign Up" options (Google, GitHub, Twitter OAuth via Clerk).
+    2. Post-authentication, user enters tracked tickers via a search bar.
+    3. Email confirmation sent via Resend.
+- **UI**: Simple form with OAuth buttons, ticker input, and confirmation message.
+
+### 5.2 Dashboard
+
+- **Sidebar**:
+    - Expanded by default, resizable via drag, collapsible on mobile.
+    - Links: Dashboard, Settings, Logout.
+- **Search Bar**:
+    - Debounced (300ms), with loading spinner.
+    - Queries PostgreSQL for US-listed equities.
+- **Tracked Tickers Table**:
+    - Columns: Ticker, Company Name, Date Added, Actions (Remove).
+    - Sortable by all columns; paginated (10 per page).
+
+### 5.3 Filing Processing & Summarization
+
+- **Monitoring**:
+    - Hourly cron job fetches new filings from SEC EDGAR RSS or website.
+- **Parsing**:
+    - HTML: cheerio extracts text.
+    - PDF: pdf-parse processes documents.
+    - XBRL: xbrl handles structured data.
+- **Summarization Prompts**:
+    
+    ### 10-K/10-Q
+    
+    - **Prompt**:
+    Analyze this SEC filing document and provide:
+    **Object**:
+        1. **Business Impact Analysis**:
+            - Identify upside opportunities and risk factors impacting operating margins.
+            - For each:
+                - Headline (max 15 words).
+                - Direct quote as evidence (with section/page reference).
+                - One-sentence margin impact explanation.
+            - Focus on quantifiable, company-specific impacts.**Output**:
+        
+        text
+        
+        Copy
+        
+        `UPSIDE OPPORTUNITIES:
+        [Headline]
+        Source: [exact quote] (Section X)
+        Impact: [One sentence on margin effect]
+        
+        RISK FACTORS:
+        [Headline]
+        Source: [exact quote] (Section X)
+        Impact: [One sentence on margin effect]`
+        
+        json
+        
+        Copy
+        
+        `{
+          "company": "",
+          "period": "QX YYYY",
+          "financials": [
+            {"label": "Revenue", "value": "$", "growth": "", "unit": "% YoY"},
+            {"label": "Operating Margin", "value": "$", "growth": "", "unit": "% YoY"},
+            {"label": "[Key Segment]", "value": "$", "growth": "", "unit": "% YoY"}
+          ],
+          "insights": ["", "", ""],
+          "risks": ["", "", ""]
+        }`
+        
+    
+    ### 8-K
+    
+    - **Prompt**:
+    Analyze this 8-K SEC filing and provide:
+    **Object**:
+        1. **Material Event Analysis**:
+            - Identify positive developments, potential concerns, and structural changes.
+            - For each:
+                - Headline (max 15 words).
+                - Direct quote (with item number).
+                - One-sentence business impact explanation.
+            - Focus on material, quantifiable events.**Output**:
+        
+        text
+        
+        Copy
+        
+        `POSITIVE DEVELOPMENTS:
+        [Headline]
+        Event: [exact quote] (Item X.XX)
+        Impact: [One sentence on business/financial effect]
+        
+        POTENTIAL CONCERNS:
+        [Headline]
+        Event: [exact quote] (Item X.XX)
+        Impact: [One sentence on business/financial effect]
+        
+        STRUCTURAL CHANGES:
+        [Headline]
+        Change: [exact quote] (Item X.XX)
+        Impact: [One sentence on organizational effect]`
+        
+        json
+        
+        Copy
+        
+        `{
+          "company": "",
+          "reportDate": "DD MMM YYYY",
+          "eventType": "",
+          "summary": "",
+          "positiveDevelopments": "",
+          "potentialConcerns": "",
+          "structuralChanges": "",
+          "additionalNotes": ""
+        }`
+        
+    
+    ### Form 4
+    
+    - **Prompt**:
+    Analyze this Form 4 SEC filing and provide:
+    **Object**:
+        1. **Transaction Analysis**:
+            - Summarize insider trading activity (purchases, sales, options).
+            - For each:
+                - Structured data with shares, price, total value, code, ownership.
+            - Include net position changes and context.**Output**:
+        
+        text
+        
+        Copy
+        
+        `TRANSACTION OVERVIEW:
+        Insider Name: [Name and Title]
+        Transaction Date: [Date]
+        Security Type: [Common Stock/Options/etc.]
+        
+        TRANSACTION DETAILS:
+        Type: [Purchase/Sale/Option Exercise]
+        Shares: [Number]
+        Price: [$X.XX]
+        Total Value: [$XXX,XXX]
+        Transaction Code: [P/S/M/etc.]
+        Ownership: [Direct/Indirect]
+        
+        POSITION SUMMARY:
+        Previous Holdings: [Number]
+        Current Holdings: [Number]
+        Net Change: [Number and Percentage]
+        
+        CONTEXT AND PATTERNS:
+        [Notes on 10b5-1, patterns, timing]`
+        
+        json
+        
+        Copy
+        
+        `{
+          "company": "",
+          "filingDate": "DD MMM YYYY",
+          "filerName": "",
+          "relationship": "",
+          "ownershipType": "",
+          "totalValue": "$",
+          "percentageChange": "%",
+          "previousStake": "",
+          "newStake": "",
+          "summary": ""
+        }`
+        
+- **Email Delivery**: Summaries sent via Resend based on user preferences (immediate or digest).
+
+### 5.4 API Routes
+
+- **GET /api/tickers**: Returns tracked tickers.
+- **POST /api/tickers**: Adds a ticker.
+- **DELETE /api/tickers/[ticker]**: Removes a ticker.
+- **GET /api/summaries/[ticker]**: Retrieves latest summaries.
+
+## 6. Non-Functional Requirements
+
+- **Performance**: API responses <500ms; cron job completes within 5 minutes.
+- **Security**:
+    - HTTPS enforced via Vercel.
+    - Rate limiting (100 requests/15 min/IP) with express-rate-limit.
+    - Input validation on all endpoints.
+- **Language**: English only.
+- **Budget**: Stays within $30/month.
+
+## 7. UI Design
+
+- **Color Scheme**: Blue and white.
+- **Typography**: Roboto.
+- **Layout**: Clean, minimalist with shadcn/ui components.
+
+## 8. Implementation Notes
+
+- **OAuth**: Clerk handles Google, GitHub, Twitter authentication.
+- **Cron Job**: Hourly execution fits Vercel’s free tier.
+- **Custom API**: Built from scratch with Next.js, avoiding third-party costs.
+- **Accessibility**: No specific requirements; standard usability applies.
