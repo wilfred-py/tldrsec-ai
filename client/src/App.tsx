@@ -9,6 +9,7 @@ import Home from "@/pages/home";
 import Dashboard from "@/pages/dashboard";
 import Settings from "@/pages/settings";
 import Summaries from "@/pages/summaries";
+import Subscribe from "@/pages/subscribe";
 import { useAuth } from "@/lib/auth";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 
@@ -54,6 +55,9 @@ function Router() {
       </Route>
       <Route path="/summaries">
         <ProtectedRoute component={Summaries} />
+      </Route>
+      <Route path="/subscribe">
+        <ProtectedRoute component={Subscribe} />
       </Route>
       <Route component={NotFound} />
     </Switch>
