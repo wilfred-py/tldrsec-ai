@@ -107,6 +107,12 @@ export function SearchInput({
     });
   }, [selectedIndex]);
 
+  // Function to reset search
+  const resetSearch = () => {
+    setQuery('');
+    onSearch(''); // Clear search results
+  };
+
   return (
     <div className={`relative ${className}`}>
       <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none">
@@ -118,6 +124,12 @@ export function SearchInput({
         value={query}
         onChange={(e) => setQuery(e.target.value)}
         onKeyDown={handleKeyDown}
+        onBlur={() => {
+          // Small delay to allow click events to fire first
+          setTimeout(() => {
+            resetSearch();
+          }, 200);
+        }}
         placeholder={placeholder}
         className="pl-10"
       />

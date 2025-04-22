@@ -127,10 +127,10 @@ export function AuthForm() {
           </Button>
         </div>
         
-        <div className="flex items-center justify-center">
-          <Separator className="flex-grow" />
+        <div className="flex items-center justify-center px-3 my-4">
+          <div className="flex-grow h-[1px] bg-border"></div>
           <span className="px-3 text-sm text-muted-foreground">OR</span>
-          <Separator className="flex-grow" />
+          <div className="flex-grow h-[1px] bg-border"></div>
         </div>
         
         <form onSubmit={handleSubmit} className="space-y-4">

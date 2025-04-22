@@ -162,18 +162,17 @@ export function TickersTable({ tickers, isLoading, onRemove }: TickersTableProps
                       </TableCell>
                       <TableCell className="text-right">
                         <Button 
-                          variant="destructive" 
-                          size="sm"
+                          variant="ghost" 
+                          size="icon"
+                          className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
                           onClick={() => handleRemove(ticker.id)}
                           disabled={removingId === ticker.id}
+                          title="Remove ticker"
                         >
                           {removingId === ticker.id ? (
                             <LoadingSpinner size="sm" />
                           ) : (
-                            <>
-                              <Trash className="h-4 w-4 mr-1" />
-                              Remove
-                            </>
+                            <Trash className="h-4 w-4" />
                           )}
                         </Button>
                       </TableCell>

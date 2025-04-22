@@ -17,7 +17,7 @@ export function StatsCard({
   iconColorClass = "text-primary"
 }: StatsCardProps) {
   return (
-    <Card>
+    <Card className="border-t-4 border-t-primary/50 hover:shadow-md transition-shadow">
       <CardContent className="pt-5">
         <div className="flex items-center justify-between">
           <div>
