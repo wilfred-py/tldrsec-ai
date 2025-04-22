@@ -4,7 +4,10 @@ import { useAuth } from "@/lib/auth";
 import { Sidebar } from "@/components/layout/sidebar";
 import { Header } from "@/components/layout/header";
 import { StatsCard } from "@/components/dashboard/stats-card";
+import { StatsCardSkeleton } from "@/components/dashboard/stats-card-skeleton";
 import { TickersTable } from "@/components/dashboard/tickers-table";
+import { TickersTableSkeleton } from "@/components/dashboard/tickers-table-skeleton";
+import { SummaryDialogSkeleton } from "@/components/dashboard/summary-dialog-skeleton";
 import { SearchInput } from "@/components/ui/search-input";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
@@ -220,37 +223,51 @@ export default function Dashboard() {
             
             {/* Summary Stats */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <StatsCard
-                title="Tracked Tickers"
-                value={isLoadingStats ? "..." : stats?.trackedTickers || 0}
-                icon={<BarChart className="h-6 w-6" />}
-              />
-              
-              <StatsCard
-                title="New Summaries"
-                value={isLoadingStats ? "..." : stats?.newSummaries || 0}
-                icon={<FileTextIcon className="h-6 w-6" />}
-                iconBgClass="bg-green-100 dark:bg-green-900/30"
-                iconColorClass="text-green-600 dark:text-green-400"
-              />
-              
-              <StatsCard
-                title="Email Digests"
-                value={isLoadingStats ? "..." : stats?.emailDigests || "Daily"}
-                icon={<MailIcon className="h-6 w-6" />}
-                iconBgClass="bg-indigo-100 dark:bg-indigo-900/30"
-                iconColorClass="text-indigo-600 dark:text-indigo-400"
-              />
+              {isLoadingStats ? (
+                <>
+                  <StatsCardSkeleton />
+                  <StatsCardSkeleton />
+                  <StatsCardSkeleton />
+                </>
+              ) : (
+                <>
+                  <StatsCard
+                    title="Tracked Tickers"
+                    value={stats?.trackedTickers || 0}
+                    icon={<BarChart className="h-6 w-6" />}
+                  />
+                  
+                  <StatsCard
+                    title="New Summaries"
+                    value={stats?.newSummaries || 0}
+                    icon={<FileTextIcon className="h-6 w-6" />}
+                    iconBgClass="bg-green-100 dark:bg-green-900/30"
+                    iconColorClass="text-green-600 dark:text-green-400"
+                  />
+                  
+                  <StatsCard
+                    title="Email Digests"
+                    value={stats?.emailDigests || "Daily"}
+                    icon={<MailIcon className="h-6 w-6" />}
+                    iconBgClass="bg-indigo-100 dark:bg-indigo-900/30"
+                    iconColorClass="text-indigo-600 dark:text-indigo-400"
+                  />
+                </>
+              )}
             </div>
             
             {/* Recent SEC Filings section removed as requested */}
             
             {/* Tracked Tickers */}
-            <TickersTable 
-              tickers={tickers || []} 
-              isLoading={isLoadingTickers}
-              onRemove={handleRemoveTicker}
-            />
+            {isLoadingTickers ? (
+              <TickersTableSkeleton />
+            ) : (
+              <TickersTable 
+                tickers={tickers || []} 
+                isLoading={false}
+                onRemove={handleRemoveTicker}
+              />
+            )}
           </div>
         </main>
       </div>
@@ -267,9 +284,7 @@ export default function Dashboard() {
           
           <div className="flex-1 overflow-y-auto mt-4">
             {isLoadingSummary ? (
-              <div className="flex justify-center items-center h-full">
-                <div className="animate-spin h-8 w-8 border-4 border-primary border-t-transparent rounded-full" />
-              </div>
+              <SummaryDialogSkeleton />
             ) : (
               <div className="prose dark:prose-invert max-w-none">
                 <pre className="text-sm whitespace-pre-wrap">{filingSummary?.summary}</pre>
