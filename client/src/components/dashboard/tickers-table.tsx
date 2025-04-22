@@ -10,10 +10,11 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
-import { ArrowUpDown, Trash } from "lucide-react";
+import { ArrowUpDown, Trash, Search } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { format } from "date-fns";
+import { Input } from "@/components/ui/input";
 
 interface TrackedTicker {
   id: number;

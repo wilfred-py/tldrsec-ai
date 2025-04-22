@@ -59,8 +59,15 @@ export default function Dashboard() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/tickers"] });
       queryClient.invalidateQueries({ queryKey: ["/api/stats"] });
+      
+      // Clear search input and results
+      const searchInput = document.querySelector('input[placeholder="Search and add tickers..."]') as HTMLInputElement;
+      if (searchInput) {
+        searchInput.value = '';
+      }
       setSearchResults([]);
       setShowSearchResults(false);
+      
       toast({
         title: "Ticker added",
         description: "The ticker has been added to your watchlist.",
@@ -166,8 +173,8 @@ export default function Dashboard() {
           onLogout={logout}
         />
         
-        <main className="flex-1 overflow-y-auto p-4 lg:p-6 bg-slate-50 dark:bg-slate-900">
-          <div className="space-y-6">
+        <main className="flex-1 overflow-y-auto p-3 sm:p-4 lg:p-6 bg-slate-50 dark:bg-slate-900">
+          <div className="max-w-7xl mx-auto space-y-5 sm:space-y-6">
             {/* Title and Search */}
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
               <h1 className="text-2xl font-bold">Dashboard</h1>
@@ -188,6 +195,7 @@ export default function Dashboard() {
                           key={result.ticker}
                           className="px-3 py-2 hover:bg-muted cursor-pointer flex items-center justify-between"
                           data-index={index}
+                          onClick={() => handleAddTicker(result)}
                         >
                           <div className="flex items-center">
                             <span className="font-medium">{result.ticker}</span>
@@ -199,7 +207,10 @@ export default function Dashboard() {
                             size="sm"
                             variant="ghost"
                             className="text-primary hover:text-primary/80"
-                            onClick={() => handleAddTicker(result)}
+                            onClick={(e) => {
+                              e.stopPropagation(); // Prevent double firing when clicking button
+                              handleAddTicker(result);
+                            }}
                             disabled={addTickerMutation.isPending}
                           >
                             Add
