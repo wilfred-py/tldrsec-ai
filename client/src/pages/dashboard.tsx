@@ -4,7 +4,6 @@ import { useAuth } from "@/lib/auth";
 import { Sidebar } from "@/components/layout/sidebar";
 import { Header } from "@/components/layout/header";
 import { StatsCard } from "@/components/dashboard/stats-card";
-import { FilingsTable } from "@/components/dashboard/filings-table";
 import { TickersTable } from "@/components/dashboard/tickers-table";
 import { SearchInput } from "@/components/ui/search-input";
 import { Button } from "@/components/ui/button";
@@ -40,10 +39,6 @@ export default function Dashboard() {
   
   const { data: tickers, isLoading: isLoadingTickers } = useQuery({
     queryKey: ["/api/tickers"],
-  });
-  
-  const { data: filings, isLoading: isLoadingFilings } = useQuery({
-    queryKey: ["/api/filings"],
   });
   
   const { data: filingSummary, isLoading: isLoadingSummary } = useQuery({
@@ -248,12 +243,7 @@ export default function Dashboard() {
               />
             </div>
             
-            {/* Recent SEC Filings */}
-            <FilingsTable 
-              filings={filings || []} 
-              isLoading={isLoadingFilings}
-              onViewSummary={handleViewSummary}
-            />
+            {/* Recent SEC Filings section removed as requested */}
             
             {/* Tracked Tickers */}
             <TickersTable 
