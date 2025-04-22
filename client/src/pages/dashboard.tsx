@@ -173,51 +173,62 @@ export default function Dashboard() {
         
         <main className="flex-1 overflow-y-auto p-3 sm:p-4 lg:p-6 bg-slate-50 dark:bg-slate-900">
           <div className="max-w-7xl mx-auto space-y-5 sm:space-y-6">
-            {/* Title and Search */}
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-              <h1 className="text-2xl font-bold">Dashboard</h1>
-              
-              <div className="relative w-full sm:w-auto">
-                <SearchInput
-                  placeholder="Search and add tickers..."
-                  onSearch={handleSearch}
-                  className="w-full sm:w-64"
-                />
+            {/* Title */}
+            <div className="text-center mb-2">
+              <h1 className="text-3xl font-bold mb-2">tldrSEC Dashboard</h1>
+              <p className="text-muted-foreground">Track your SEC filings and get AI summaries delivered to your inbox</p>
+            </div>
+            
+            {/* Enhanced Search Bar */}
+            <div className="w-full max-w-3xl mx-auto mb-6">
+              <div className="bg-card border rounded-lg p-4 shadow-sm">
+                <h2 className="text-lg font-medium mb-2">Add Company Tickers</h2>
+                <p className="text-sm text-muted-foreground mb-4">
+                  Search for companies to track their SEC filings
+                </p>
                 
-                {/* Search results dropdown */}
-                {showSearchResults && searchResults.length > 0 && (
-                  <div className="absolute z-10 mt-1 w-full bg-card shadow-lg rounded-md max-h-60 overflow-auto">
-                    <ul className="py-1" id="search-results-list">
-                      {searchResults.map((result, index) => (
-                        <li
-                          key={result.ticker}
-                          className="px-3 py-2 hover:bg-muted cursor-pointer flex items-center justify-between"
-                          data-index={index}
-                          onClick={() => handleAddTicker(result)}
-                        >
-                          <div className="flex items-center">
-                            <span className="font-medium">{result.ticker}</span>
-                            <span className="ml-2 text-sm text-muted-foreground">
-                              {result.companyName}
-                            </span>
-                          </div>
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            className="text-primary hover:text-primary/80"
-                            onClick={(e) => {
-                              e.stopPropagation(); // Prevent double firing when clicking button
-                              handleAddTicker(result);
-                            }}
-                            disabled={addTickerMutation.isPending}
+                <div className="relative">
+                  <SearchInput
+                    placeholder="Search by ticker or company name..."
+                    onSearch={handleSearch}
+                    className="w-full"
+                  />
+                  
+                  {/* Search results dropdown */}
+                  {showSearchResults && searchResults.length > 0 && (
+                    <div className="absolute z-10 mt-1 w-full bg-card shadow-lg rounded-md max-h-60 overflow-auto border">
+                      <ul className="py-1" id="search-results-list">
+                        {searchResults.map((result, index) => (
+                          <li
+                            key={result.ticker}
+                            className="px-4 py-3 hover:bg-muted cursor-pointer flex items-center justify-between"
+                            data-index={index}
+                            onClick={() => handleAddTicker(result)}
                           >
-                            Add
-                          </Button>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
+                            <div className="flex items-center">
+                              <span className="font-medium text-lg">{result.ticker}</span>
+                              <span className="ml-3 text-muted-foreground">
+                                {result.companyName}
+                              </span>
+                            </div>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="ml-4 bg-primary/10 hover:bg-primary/20 border-primary/20"
+                              onClick={(e) => {
+                                e.stopPropagation(); // Prevent double firing when clicking button
+                                handleAddTicker(result);
+                              }}
+                              disabled={addTickerMutation.isPending}
+                            >
+                              <span className="font-medium">Add</span>
+                            </Button>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
             
