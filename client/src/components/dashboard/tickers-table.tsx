@@ -33,6 +33,7 @@ export function TickersTable({ tickers, isLoading, onRemove }: TickersTableProps
   const [sortColumn, setSortColumn] = useState<keyof TrackedTicker>("ticker");
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
   const [removingId, setRemovingId] = useState<number | null>(null);
+  const [searchQuery, setSearchQuery] = useState<string>("");
   const { toast } = useToast();
 
   const handleSort = (column: keyof TrackedTicker) => {
@@ -64,8 +65,19 @@ export function TickersTable({ tickers, isLoading, onRemove }: TickersTableProps
     }
   };
 
+  // Filter by search query
+  const filteredTickers = [...tickers].filter((ticker) => {
+    if (!searchQuery.trim()) return true;
+    
+    const lowerSearchQuery = searchQuery.toLowerCase().trim();
+    return (
+      ticker.ticker.toLowerCase().includes(lowerSearchQuery) ||
+      ticker.companyName.toLowerCase().includes(lowerSearchQuery)
+    );
+  });
+
   // Sort tickers
-  const sortedTickers = [...tickers].sort((a, b) => {
+  const sortedTickers = filteredTickers.sort((a, b) => {
     if (a[sortColumn] < b[sortColumn]) {
       return sortDirection === "asc" ? -1 : 1;
     }
@@ -77,8 +89,20 @@ export function TickersTable({ tickers, isLoading, onRemove }: TickersTableProps
 
   return (
     <Card>
-      <CardHeader className="border-b flex flex-row items-center justify-between">
+      <CardHeader className="border-b flex flex-row items-center justify-between flex-wrap gap-4">
         <CardTitle>Tracked Tickers</CardTitle>
+        <div className="relative w-full sm:w-64">
+          <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none">
+            <Search className="h-4 w-4 text-muted-foreground" />
+          </div>
+          <Input
+            type="text"
+            placeholder="Search tickers..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="pl-10"
+          />
+        </div>
       </CardHeader>
 
       {isLoading ? (
