@@ -10,7 +10,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
-import { ArrowUpDown, Trash, Search } from "lucide-react";
+import { ArrowUpDown, Trash, Search, BarChart } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { format } from "date-fns";
@@ -88,16 +88,21 @@ export function TickersTable({ tickers, isLoading, onRemove }: TickersTableProps
   });
 
   return (
-    <Card>
-      <CardHeader className="border-b flex flex-row items-center justify-between flex-wrap gap-4">
-        <CardTitle>Tracked Tickers</CardTitle>
+    <Card className="overflow-hidden border shadow-sm hover:shadow-md transition-shadow">
+      <CardHeader className="border-b flex flex-row items-center justify-between flex-wrap gap-4 bg-muted/30">
+        <CardTitle className="text-xl">
+          <div className="flex items-center gap-2">
+            <Search className="h-5 w-5 text-primary" />
+            Tracked Tickers
+          </div>
+        </CardTitle>
         <div className="relative w-full sm:w-64">
           <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none">
             <Search className="h-4 w-4 text-muted-foreground" />
           </div>
           <Input
             type="text"
-            placeholder="Search tickers..."
+            placeholder="Filter tickers..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="pl-10"
