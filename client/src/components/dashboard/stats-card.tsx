@@ -4,6 +4,7 @@ import { ReactNode } from "react";
 interface StatsCardProps {
   title: string;
   value: string | number;
+  subtitle?: string;
   icon: ReactNode;
   iconBgClass?: string;
   iconColorClass?: string;
@@ -12,6 +13,7 @@ interface StatsCardProps {
 export function StatsCard({
   title,
   value,
+  subtitle,
   icon,
   iconBgClass = "bg-primary/10",
   iconColorClass = "text-primary"
@@ -23,6 +25,7 @@ export function StatsCard({
           <div>
             <p className="text-sm font-medium text-muted-foreground">{title}</p>
             <h3 className="text-2xl font-bold mt-1">{value}</h3>
+            {subtitle && <p className="text-xs text-muted-foreground mt-1">{subtitle}</p>}
           </div>
           <div className={`p-3 rounded-full ${iconBgClass}`}>
             <div className={`${iconColorClass}`}>{icon}</div>

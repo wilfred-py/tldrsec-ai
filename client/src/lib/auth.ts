@@ -7,6 +7,7 @@ export type AuthUser = {
   username: string;
   email: string;
   darkMode: boolean;
+  lastLoginAt?: string;
   stripeCustomerId?: string | null;
   stripeSubscriptionId?: string | null;
   subscriptionStatus?: string | null;
