@@ -87,11 +87,7 @@ export function Sidebar({ expanded, onToggle, user }: SidebarProps) {
             label="Summaries" 
           />
           
-          <NavItem 
-            href="/settings" 
-            icon={<Settings className="h-5 w-5" />} 
-            label="Settings" 
-          />
+          {/* Settings removed as it's accessible from header */}
         </nav>
         
         {/* User profile removed as it's shown in header */}

@@ -38,6 +38,7 @@ export interface IStorage {
   // Filing summaries methods
   getFilingSummary(filingId: number): Promise<FilingSummary | undefined>;
   getFilingSummaries(userId: number, limit?: number, offset?: number): Promise<FilingSummary[]>;
+  getNewSummaries(userId: number, sinceDate: Date): Promise<FilingSummary[]>;
   createFilingSummary(summary: InsertFilingSummary): Promise<FilingSummary>;
   
   // User settings methods
@@ -90,7 +91,7 @@ export class DatabaseStorage implements IStorage {
   async updateLastLoginAt(userId: number, lastLoginAt: string): Promise<User> {
     const [user] = await db
       .update(users)
-      .set({ lastLoginAt })
+      .set({ lastLoginAt: new Date(lastLoginAt) })
       .where(eq(users.id, userId))
       .returning();
     return user;
@@ -230,6 +231,27 @@ export class DatabaseStorage implements IStorage {
       .orderBy(desc(filingSummaries.createdAt))
       .limit(limit)
       .offset(offset);
+  }
+  
+  async getNewSummaries(userId: number, sinceDate: Date): Promise<FilingSummary[]> {
+    const userTickersList = await db.select({ ticker: trackedTickers.ticker })
+      .from(trackedTickers)
+      .where(eq(trackedTickers.userId, userId));
+    
+    const tickers = userTickersList.map(t => t.ticker);
+    
+    if (tickers.length === 0) {
+      return [];
+    }
+    
+    return db
+      .select()
+      .from(filingSummaries)
+      .where(and(
+        sql`${filingSummaries.ticker} IN ${tickers}`,
+        sql`${filingSummaries.createdAt} > ${sinceDate}`
+      ))
+      .orderBy(desc(filingSummaries.createdAt));
   }
 
   async createFilingSummary(insertSummary: InsertFilingSummary): Promise<FilingSummary> {
