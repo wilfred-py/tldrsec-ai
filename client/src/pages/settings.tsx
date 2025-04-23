@@ -116,12 +116,12 @@ export default function Settings() {
           <div className="max-w-4xl mx-auto space-y-6">
             <h1 className="text-2xl font-bold">Settings</h1>
             
-            {/* Profile Settings */}
+            {/* Account Information */}
             <Card>
               <CardHeader>
-                <CardTitle>Profile</CardTitle>
+                <CardTitle>Account Information</CardTitle>
                 <CardDescription>
-                  Manage your account information.
+                  View your account details
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -144,6 +144,12 @@ export default function Settings() {
                       disabled 
                     />
                   </div>
+                </div>
+                
+                <div className="text-xs text-muted-foreground">
+                  {user?.lastLoginAt && (
+                    <p>Last login: {new Date(user.lastLoginAt).toLocaleString()}</p>
+                  )}
                 </div>
               </CardContent>
             </Card>
@@ -180,7 +186,7 @@ export default function Settings() {
                     <Separator />
                     
                     <div className="space-y-3">
-                      <Label>Email Digest Frequency</Label>
+                      <Label>Email Frequency</Label>
                       <RadioGroup
                         value={emailDigestFrequency}
                         onValueChange={setEmailDigestFrequency}

@@ -26,10 +26,14 @@ export async function apiRequest(
 type UnauthorizedBehavior = "returnNull" | "throw";
 export const getQueryFn: <T>(options: {
   on401: UnauthorizedBehavior;
+  endpoint?: string;
+  method?: string;
 }) => QueryFunction<T> =
-  ({ on401: unauthorizedBehavior }) =>
+  ({ on401: unauthorizedBehavior, endpoint, method = "GET" }) =>
   async ({ queryKey }) => {
-    const res = await fetch(queryKey[0] as string, {
+    const url = endpoint || (queryKey[0] as string);
+    const res = await fetch(url, {
+      method,
       credentials: "include",
     });
 
