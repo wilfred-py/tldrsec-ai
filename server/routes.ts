@@ -326,6 +326,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ message: "Failed to fetch summaries" });
     }
   });
+  
+  // New endpoint to get summaries added since last login
+  app.get("/api/summaries/new", requireAuth, async (req, res) => {
+    try {
+      const userId = req.session.userId as number;
+      const user = await storage.getUser(userId);
+      
+      if (!user || !user.lastLoginAt) {
+        // If no last login timestamp, return all recent summaries
+        const recentSummaries = await storage.getFilingSummaries(userId, 10, 0);
+        return res.json(recentSummaries);
+      }
+      
+      // Get summaries created after the last login time
+      const newSummaries = await storage.getNewSummaries(userId, user.lastLoginAt);
+      res.json(newSummaries);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch new summaries" });
+    }
+  });
 
   app.get("/api/summaries/:filingId", requireAuth, async (req, res) => {
     try {
