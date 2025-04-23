@@ -12,6 +12,7 @@ import { SearchInput } from "@/components/ui/search-input";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { BarChart, LineChart, FileTextIcon, MailIcon } from "lucide-react";
+import { format } from "date-fns";
 import { apiRequest } from "@/lib/queryClient";
 import { queryClient } from "@/lib/queryClient";
 import {
@@ -175,15 +176,51 @@ export default function Dashboard() {
           <div className="max-w-7xl mx-auto space-y-5 sm:space-y-6">
             {/* Title */}
             <div className="text-center mb-2">
-              <h1 className="text-3xl font-bold mb-2">tldrSEC Dashboard</h1>
-              <p className="text-muted-foreground">Track your SEC filings and get AI summaries delivered to your inbox</p>
+              <h1 className="text-2xl sm:text-3xl font-bold mb-2">tldrSEC Dashboard</h1>
+              <p className="text-sm sm:text-base text-muted-foreground px-2">Track your SEC filings and get AI summaries delivered to your inbox</p>
+            </div>
+            
+            {/* Summary Stats */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
+              {isLoadingStats ? (
+                <>
+                  <StatsCardSkeleton />
+                  <StatsCardSkeleton />
+                  <StatsCardSkeleton />
+                </>
+              ) : (
+                <>
+                  <StatsCard
+                    title="Tracked Tickers"
+                    value={stats?.trackedTickers || 0}
+                    icon={<BarChart className="h-5 w-5 sm:h-6 sm:w-6" />}
+                  />
+                  
+                  <StatsCard
+                    title="New Summaries"
+                    value={`${stats?.newSummaries || 0}`}
+                    subtitle={user?.lastLoginAt ? `since ${format(new Date(user.lastLoginAt), "dd MMM yyyy")}` : ""}
+                    icon={<FileTextIcon className="h-5 w-5 sm:h-6 sm:w-6" />}
+                    iconBgClass="bg-green-100 dark:bg-green-900/30"
+                    iconColorClass="text-green-600 dark:text-green-400"
+                  />
+                  
+                  <StatsCard
+                    title="Email Frequency"
+                    value={stats?.emailDigests || "Daily"}
+                    icon={<MailIcon className="h-5 w-5 sm:h-6 sm:w-6" />}
+                    iconBgClass="bg-indigo-100 dark:bg-indigo-900/30"
+                    iconColorClass="text-indigo-600 dark:text-indigo-400"
+                  />
+                </>
+              )}
             </div>
             
             {/* Enhanced Search Bar */}
-            <div className="w-full max-w-3xl mx-auto mb-6">
-              <div className="bg-card border rounded-lg p-4 shadow-sm">
+            <div className="w-full mx-auto">
+              <div className="bg-card border rounded-lg p-3 sm:p-4 shadow-sm">
                 <h2 className="text-lg font-medium mb-2">Add Company Tickers</h2>
-                <p className="text-sm text-muted-foreground mb-4">
+                <p className="text-xs sm:text-sm text-muted-foreground mb-3 sm:mb-4">
                   Search for companies to track their SEC filings
                 </p>
                 
@@ -201,20 +238,20 @@ export default function Dashboard() {
                         {searchResults.map((result, index) => (
                           <li
                             key={result.ticker}
-                            className="px-4 py-3 hover:bg-muted cursor-pointer flex items-center justify-between"
+                            className="px-2 sm:px-4 py-2 sm:py-3 hover:bg-muted cursor-pointer flex items-center justify-between flex-wrap sm:flex-nowrap"
                             data-index={index}
                             onClick={() => handleAddTicker(result)}
                           >
-                            <div className="flex items-center">
-                              <span className="font-medium text-lg">{result.ticker}</span>
-                              <span className="ml-3 text-muted-foreground">
+                            <div className="flex items-center w-full sm:w-auto">
+                              <span className="font-medium text-base sm:text-lg">{result.ticker}</span>
+                              <span className="ml-2 sm:ml-3 text-xs sm:text-sm text-muted-foreground truncate max-w-[150px] sm:max-w-none">
                                 {result.companyName}
                               </span>
                             </div>
                             <Button
                               size="sm"
                               variant="outline"
-                              className="ml-4 bg-primary/10 hover:bg-primary/20 border-primary/20"
+                              className="ml-auto mt-2 sm:mt-0 sm:ml-4 bg-primary/10 hover:bg-primary/20 border-primary/20"
                               onClick={(e) => {
                                 e.stopPropagation(); // Prevent double firing when clicking button
                                 handleAddTicker(result);
@@ -231,43 +268,6 @@ export default function Dashboard() {
                 </div>
               </div>
             </div>
-            
-            {/* Summary Stats */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {isLoadingStats ? (
-                <>
-                  <StatsCardSkeleton />
-                  <StatsCardSkeleton />
-                  <StatsCardSkeleton />
-                </>
-              ) : (
-                <>
-                  <StatsCard
-                    title="Tracked Tickers"
-                    value={stats?.trackedTickers || 0}
-                    icon={<BarChart className="h-6 w-6" />}
-                  />
-                  
-                  <StatsCard
-                    title="New Summaries"
-                    value={stats?.newSummaries || 0}
-                    icon={<FileTextIcon className="h-6 w-6" />}
-                    iconBgClass="bg-green-100 dark:bg-green-900/30"
-                    iconColorClass="text-green-600 dark:text-green-400"
-                  />
-                  
-                  <StatsCard
-                    title="Email Digests"
-                    value={stats?.emailDigests || "Daily"}
-                    icon={<MailIcon className="h-6 w-6" />}
-                    iconBgClass="bg-indigo-100 dark:bg-indigo-900/30"
-                    iconColorClass="text-indigo-600 dark:text-indigo-400"
-                  />
-                </>
-              )}
-            </div>
-            
-            {/* Recent SEC Filings section removed as requested */}
             
             {/* Tracked Tickers */}
             {isLoadingTickers ? (
