@@ -88,8 +88,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Set session
       req.session.userId = user.id;
       
+      // Update last login timestamp
+      const updatedUser = await storage.updateLastLoginAt(user.id, new Date().toISOString());
+      
       // Remove password from response
-      const { password: _, ...userWithoutPassword } = user;
+      const { password: _, ...userWithoutPassword } = updatedUser;
       
       res.json(userWithoutPassword);
     } catch (error) {

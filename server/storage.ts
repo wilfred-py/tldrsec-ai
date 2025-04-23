@@ -16,6 +16,7 @@ export interface IStorage {
   getUserByProvider(provider: string, providerId: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
   updateUserDarkMode(userId: number, darkMode: boolean): Promise<User>;
+  updateLastLoginAt(userId: number, lastLoginAt: string): Promise<User>;
   updateStripeCustomerId(userId: number, customerId: string | null): Promise<User>;
   updateStripeSubscriptionId(userId: number, subscriptionId: string | null): Promise<User>;
   updateSubscriptionStatus(userId: number, status: string): Promise<User>;
@@ -81,6 +82,15 @@ export class DatabaseStorage implements IStorage {
     const [user] = await db
       .update(users)
       .set({ darkMode })
+      .where(eq(users.id, userId))
+      .returning();
+    return user;
+  }
+  
+  async updateLastLoginAt(userId: number, lastLoginAt: string): Promise<User> {
+    const [user] = await db
+      .update(users)
+      .set({ lastLoginAt })
       .where(eq(users.id, userId))
       .returning();
     return user;

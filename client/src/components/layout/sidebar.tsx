@@ -94,21 +94,7 @@ export function Sidebar({ expanded, onToggle, user }: SidebarProps) {
           />
         </nav>
         
-        <div className="p-3 border-t">
-          {user && (
-            <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-primary">
-                {user.username.charAt(0).toUpperCase()}
-              </div>
-              {expanded && (
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium truncate">{user.username}</p>
-                  <p className="text-xs text-muted-foreground truncate">{user.email}</p>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
+        {/* User profile removed as it's shown in header */}
       </div>
     </aside>
   );
