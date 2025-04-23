@@ -207,7 +207,7 @@ export default function Dashboard() {
                   
                   <StatsCard
                     title="Email Frequency"
-                    value={stats?.emailDigests || "Daily"}
+                    value={stats?.emailDigests ? (stats.emailDigests.charAt(0).toUpperCase() + stats.emailDigests.slice(1)) : "Daily"}
                     icon={<MailIcon className="h-5 w-5 sm:h-6 sm:w-6" />}
                     iconBgClass="bg-indigo-100 dark:bg-indigo-900/30"
                     iconColorClass="text-indigo-600 dark:text-indigo-400"

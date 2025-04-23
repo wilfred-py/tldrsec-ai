@@ -26,6 +26,16 @@ import { Link } from "wouter";
 import { getQueryFn } from "@/lib/queryClient";
 import { useQuery } from "@tanstack/react-query";
 
+// Type definition for filing summary to fix type issues
+interface FilingSummary {
+  id: number;
+  filingId: number;
+  ticker: string;
+  formType: string;
+  summary: string;
+  createdAt: string;
+}
+
 interface HeaderProps {
   onMenuClick: () => void;
   onDarkModeToggle: () => void;
@@ -42,9 +52,9 @@ export function Header({
   onLogout
 }: HeaderProps) {
   // Fetch new summaries since last login
-  const { data: newSummaries = [] } = useQuery({
+  const { data: newSummaries = [] as FilingSummary[] } = useQuery<FilingSummary[]>({
     queryKey: ['/api/summaries/new'],
-    queryFn: getQueryFn({
+    queryFn: getQueryFn<FilingSummary[]>({
       on401: 'returnNull',
       endpoint: '/api/summaries/new',
       method: 'GET'
@@ -121,7 +131,7 @@ export function Header({
               </div>
             ) : (
               <>
-                {newSummaries.slice(0, 5).map((summary: any) => (
+                {newSummaries.slice(0, 5).map((summary: FilingSummary) => (
                   <DropdownMenuItem key={summary.id} asChild>
                     <Link href={`/summaries/${summary.filingId}`}>
                       <div className="flex gap-2 w-full py-1">
@@ -169,7 +179,7 @@ export function Header({
               <Link href="/settings">
                 <div className="flex items-center gap-2 w-full">
                   <User2Icon className="h-4 w-4" />
-                  <span>Your Profile</span>
+                  <span>Account Information</span>
                 </div>
               </Link>
             </DropdownMenuItem>
