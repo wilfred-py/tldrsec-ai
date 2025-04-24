@@ -27,9 +27,11 @@ interface TickersTableProps {
   tickers: TrackedTicker[];
   isLoading: boolean;
   onRemove: (id: number) => void;
+  isPremium?: boolean;
+  maxFreeTickers?: number;
 }
 
-export function TickersTable({ tickers, isLoading, onRemove }: TickersTableProps) {
+export function TickersTable({ tickers, isLoading, onRemove, isPremium = false, maxFreeTickers = 2 }: TickersTableProps) {
   const [sortColumn, setSortColumn] = useState<keyof TrackedTicker>("ticker");
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
   const [removingId, setRemovingId] = useState<number | null>(null);
@@ -89,14 +91,21 @@ export function TickersTable({ tickers, isLoading, onRemove }: TickersTableProps
 
   return (
     <Card className="overflow-hidden border shadow-sm hover:shadow-md transition-shadow">
-      <CardHeader className="border-b flex flex-row items-center justify-between flex-wrap gap-4 bg-muted/30">
-        <CardTitle className="text-xl">
-          <div className="flex items-center gap-2">
-            <Search className="h-5 w-5 text-primary" />
-            Tracked Tickers
-          </div>
-        </CardTitle>
-        <div className="relative w-full sm:w-64">
+      <CardHeader className="border-b flex flex-col md:flex-row md:items-center justify-between gap-4 bg-muted/30">
+        <div>
+          <CardTitle className="text-xl">
+            <div className="flex items-center gap-2">
+              <Search className="h-5 w-5 text-primary" />
+              Tracked Tickers
+            </div>
+          </CardTitle>
+          {!isPremium && tickers.length >= maxFreeTickers && (
+            <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
+              Free plan limited to {maxFreeTickers} tickers. <a href="/subscribe" className="font-medium hover:underline">Upgrade to Pro</a> for unlimited tracking.
+            </p>
+          )}
+        </div>
+        <div className="relative w-full md:w-64">
           <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none">
             <Search className="h-4 w-4 text-muted-foreground" />
           </div>
