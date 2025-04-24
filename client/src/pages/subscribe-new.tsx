@@ -93,12 +93,12 @@ export default function Subscribe() {
     async function createSubscription() {
       try {
         setIsLoading(true);
-        const response = await apiRequest("POST", "/api/get-or-create-subscription");
         
-        // Check content type to handle HTML error responses
+        const response = await apiRequest("POST", "/api/get-or-create-subscription");
         const contentType = response.headers.get("content-type");
         
         if (!response.ok) {
+          // Handle error response
           if (contentType && contentType.includes("application/json")) {
             const errorData = await response.json();
             throw new Error(errorData.message || 'Failed to create subscription');
@@ -107,10 +107,14 @@ export default function Subscribe() {
           }
         }
         
-        // Safely parse JSON only for JSON content
+        // Handle successful response
         if (contentType && contentType.includes("application/json")) {
           const data = await response.json();
-          setClientSecret(data.clientSecret);
+          if (data.clientSecret) {
+            setClientSecret(data.clientSecret);
+          } else {
+            throw new Error('Missing client secret in response');
+          }
         } else {
           throw new Error('Server returned invalid content type');
         }
@@ -239,4 +243,4 @@ export default function Subscribe() {
       </div>
     </div>
   );
-};
+}
