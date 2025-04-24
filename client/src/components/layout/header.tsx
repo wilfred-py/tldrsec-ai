@@ -178,14 +178,6 @@ export function Header({
             <DropdownMenuItem asChild>
               <Link href="/settings">
                 <div className="flex items-center gap-2 w-full">
-                  <User2Icon className="h-4 w-4" />
-                  <span>Account Information</span>
-                </div>
-              </Link>
-            </DropdownMenuItem>
-            <DropdownMenuItem asChild>
-              <Link href="/settings">
-                <div className="flex items-center gap-2 w-full">
                   <SettingsIcon className="h-4 w-4" />
                   <span>Settings</span>
                 </div>

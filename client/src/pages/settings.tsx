@@ -117,7 +117,7 @@ export default function Settings() {
             <h1 className="text-2xl font-bold">Settings</h1>
             
             {/* Account Information */}
-            <Card>
+            <Card id="account">
               <CardHeader>
                 <CardTitle>Account Information</CardTitle>
                 <CardDescription>
@@ -155,7 +155,7 @@ export default function Settings() {
             </Card>
             
             {/* Notification Settings */}
-            <Card>
+            <Card id="notifications">
               <CardHeader>
                 <CardTitle>Notifications</CardTitle>
                 <CardDescription>
@@ -232,7 +232,7 @@ export default function Settings() {
             </Card>
             
             {/* Appearance Settings */}
-            <Card>
+            <Card id="appearance">
               <CardHeader>
                 <CardTitle>Appearance</CardTitle>
                 <CardDescription>
@@ -257,7 +257,7 @@ export default function Settings() {
             </Card>
             
             {/* Subscription Settings */}
-            <Card>
+            <Card id="subscription">
               <CardHeader>
                 <CardTitle>Subscription</CardTitle>
                 <CardDescription>
