@@ -112,6 +112,15 @@ export default function Dashboard() {
   };
 
   const handleAddTicker = (ticker: SearchResult) => {
+    // For free users, check if they've reached the maximum number of tracked tickers
+    if (user?.subscriptionStatus !== "premium" && tickers && tickers.length >= 2) {
+      toast({
+        title: "Free plan limit reached",
+        description: "You can track up to 2 tickers in the free plan. Upgrade to Pro for unlimited tracking.",
+        variant: "destructive"
+      });
+      return;
+    }
     addTickerMutation.mutate(ticker);
   };
 
@@ -277,6 +286,8 @@ export default function Dashboard() {
                 tickers={tickers || []} 
                 isLoading={false}
                 onRemove={handleRemoveTicker}
+                isPremium={user?.subscriptionStatus === "premium"}
+                maxFreeTickers={2}
               />
             )}
           </div>

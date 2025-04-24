@@ -87,10 +87,37 @@ export function Sidebar({ expanded, onToggle, user }: SidebarProps) {
             label="Summaries" 
           />
           
-          {/* Settings removed as it's accessible from header */}
+          <NavItem 
+            href="/settings" 
+            icon={<Settings className="h-5 w-5" />} 
+            label="Settings" 
+          />
         </nav>
         
-        {/* User profile removed as it's shown in header */}
+        {!user?.subscriptionStatus && (
+          <div className={cn(
+            "p-3 m-2 rounded-lg transition-all bg-gradient-to-r from-amber-100 to-amber-200 dark:from-amber-900/50 dark:to-amber-800/50 border border-amber-300 dark:border-amber-700",
+          )}>
+            {expanded ? (
+              <div className="text-center">
+                <h4 className="font-bold mb-1 text-amber-800 dark:text-amber-300">Upgrade to Pro</h4>
+                <p className="text-xs mb-2 text-amber-700 dark:text-amber-400">Track unlimited tickers and get premium features</p>
+                <Link href="/subscribe">
+                  <Button className="w-full bg-amber-500 hover:bg-amber-600 text-white border-none">
+                    Upgrade Now
+                  </Button>
+                </Link>
+              </div>
+            ) : (
+              <Link href="/subscribe">
+                <Button className="w-full p-0 h-10 bg-amber-500 hover:bg-amber-600 text-white border-none">
+                  <span className="sr-only">Upgrade to Pro</span>
+                  <span className="text-lg font-bold">⭐</span>
+                </Button>
+              </Link>
+            )}
+          </div>
+        )}
       </div>
     </aside>
   );
