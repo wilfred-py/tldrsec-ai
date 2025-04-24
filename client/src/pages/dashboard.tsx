@@ -116,7 +116,16 @@ export default function Dashboard() {
       toast({
         title: "Free plan limit reached",
         description: "You can track up to 2 tickers in the free plan. Upgrade to Pro for unlimited tracking.",
-        variant: "destructive"
+        variant: "destructive",
+        action: (
+          <Button 
+            onClick={() => window.location.href = '/subscribe'} 
+            variant="outline" 
+            className="bg-amber-500 hover:bg-amber-600 text-white border-none"
+          >
+            Upgrade
+          </Button>
+        )
       });
       return;
     }

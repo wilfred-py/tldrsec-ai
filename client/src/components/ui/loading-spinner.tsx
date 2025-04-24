@@ -1,25 +1,25 @@
 import { cn } from "@/lib/utils";
+import { Loader2 } from "lucide-react";
 
 interface LoadingSpinnerProps {
   size?: "sm" | "md" | "lg";
   className?: string;
 }
 
-export function LoadingSpinner({ size = "md", className }: LoadingSpinnerProps) {
-  const sizeClasses = {
-    sm: "h-4 w-4 border-2",
-    md: "h-6 w-6 border-2",
-    lg: "h-8 w-8 border-3"
-  };
+const sizeClassMap = {
+  sm: "h-4 w-4",
+  md: "h-6 w-6",
+  lg: "h-8 w-8"
+};
 
+export function LoadingSpinner({ size = "md", className }: LoadingSpinnerProps) {
   return (
-    <div 
+    <Loader2 
       className={cn(
-        "animate-spin rounded-full border-primary border-t-transparent", 
-        sizeClasses[size], 
+        "animate-spin text-primary", 
+        sizeClassMap[size],
         className
       )} 
-      aria-label="Loading"
     />
   );
 }

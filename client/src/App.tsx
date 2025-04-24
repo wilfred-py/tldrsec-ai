@@ -4,12 +4,13 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ThemeProvider } from "@/components/ui/theme-provider";
+import { MobileBottomNav } from "@/components/layout/mobile-bottom-nav";
 import NotFound from "@/pages/not-found";
 import Home from "@/pages/home";
 import Dashboard from "@/pages/dashboard";
-import Settings from "@/pages/settings";
+import Settings from "@/pages/settings-new";
 import Summaries from "@/pages/summaries";
-import Subscribe from "@/pages/subscribe";
+import Subscribe from "@/pages/subscribe-new";
 import { useAuth } from "@/lib/auth";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 
@@ -71,6 +72,7 @@ function App() {
         <TooltipProvider>
           <Toaster />
           <Router />
+          <MobileBottomNav />
         </TooltipProvider>
       </ThemeProvider>
     </QueryClientProvider>
