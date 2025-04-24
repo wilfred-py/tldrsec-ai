@@ -1,8 +1,7 @@
 import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useAuth } from "@/lib/auth";
-import { Sidebar } from "@/components/layout/sidebar";
-import { Header } from "@/components/layout/header";
+import { AppLayout } from "@/components/layout/app-layout";
 import { StatsCard } from "@/components/dashboard/stats-card";
 import { StatsCardSkeleton } from "@/components/dashboard/stats-card-skeleton";
 import { TickersTable } from "@/components/dashboard/tickers-table";
@@ -157,31 +156,9 @@ export default function Dashboard() {
   };
 
   return (
-    <div className="h-screen flex overflow-hidden">
-      <Sidebar 
-        expanded={sidebarExpanded} 
-        onToggle={() => setSidebarExpanded(!sidebarExpanded)}
-        user={user}
-      />
-      
-      {/* Mobile sidebar overlay */}
-      {sidebarExpanded && (
-        <div
-          className="fixed inset-0 bg-black/50 z-20 lg:hidden"
-          onClick={() => setSidebarExpanded(false)}
-        />
-      )}
-      
-      <div className="flex-1 flex flex-col overflow-hidden">
-        <Header 
-          onMenuClick={() => setSidebarExpanded(!sidebarExpanded)}
-          onDarkModeToggle={handleToggleDarkMode}
-          darkMode={!!user?.darkMode}
-          user={user}
-          onLogout={logout}
-        />
-        
-        <main className="flex-1 overflow-y-auto p-3 sm:p-4 lg:p-6 bg-slate-50 dark:bg-slate-900">
+    <div>
+      <AppLayout>
+        <div className="p-3 sm:p-4 lg:p-6 bg-slate-50 dark:bg-slate-900">
           <div className="max-w-7xl mx-auto space-y-5 sm:space-y-6">
             {/* Title */}
             <div className="text-center mb-2">
@@ -291,8 +268,8 @@ export default function Dashboard() {
               />
             )}
           </div>
-        </main>
-      </div>
+        </div>
+      </AppLayout>
       
       {/* Summary Dialog */}
       <Dialog open={selectedFiling !== null} onOpenChange={(open) => !open && setSelectedFiling(null)}>
