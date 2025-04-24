@@ -114,16 +114,16 @@ export default function Settings() {
         
         <main className="flex-1 overflow-y-auto p-4 lg:p-6 bg-slate-50 dark:bg-slate-900">
           <div className="max-w-4xl mx-auto space-y-6">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between flex-wrap gap-4">
               <h1 className="text-2xl font-bold">Settings</h1>
               
-              <div className="flex space-x-2">
+              <div className="flex flex-wrap gap-3">
                 <a href="#account" className="text-sm text-muted-foreground hover:text-foreground">Account</a>
-                <span className="text-muted-foreground">•</span>
+                <span className="hidden sm:inline text-muted-foreground">•</span>
                 <a href="#notifications" className="text-sm text-muted-foreground hover:text-foreground">Notifications</a>
-                <span className="text-muted-foreground">•</span>
+                <span className="hidden sm:inline text-muted-foreground">•</span>
                 <a href="#appearance" className="text-sm text-muted-foreground hover:text-foreground">Appearance</a>
-                <span className="text-muted-foreground">•</span>
+                <span className="hidden sm:inline text-muted-foreground">•</span>
                 <a href="#subscription" className="text-sm text-muted-foreground hover:text-foreground">Subscription</a>
               </div>
             </div>
