@@ -8,9 +8,9 @@ import {
   ChevronLeft
 } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { Separator } from "@/components/ui/separator";
 import { Button } from "@/components/ui/button";
 import { AuthUser } from "@/lib/auth";
+import { useEffect, useState } from "react";
 
 interface SidebarProps {
   expanded: boolean;
@@ -20,6 +20,25 @@ interface SidebarProps {
 
 export function Sidebar({ expanded, onToggle, user }: SidebarProps) {
   const [location] = useLocation();
+  const [windowWidth, setWindowWidth] = useState(typeof window !== "undefined" ? window.innerWidth : 0);
+
+  useEffect(() => {
+    // Handle window resize
+    const handleResize = () => {
+      setWindowWidth(window.innerWidth);
+    };
+
+    window.addEventListener("resize", handleResize);
+    
+    return () => {
+      window.removeEventListener("resize", handleResize);
+    };
+  }, []);
+
+  // Conditionally hide the sidebar on smaller screens
+  if (windowWidth > 0 && windowWidth < 425) {
+    return null;
+  }
 
   const NavItem = ({ href, icon, label }: { href: string; icon: React.ReactNode; label: string }) => {
     const isActive = location === href;
@@ -54,8 +73,11 @@ export function Sidebar({ expanded, onToggle, user }: SidebarProps) {
   return (
     <aside 
       className={cn(
-        "border-r bg-card h-screen z-30 transition-all fixed lg:relative",
-        expanded ? "w-64" : "w-14"
+        "border-r bg-card h-screen z-30 transition-all duration-300",
+        // Only fixed on larger screens or expanded on medium screens
+        windowWidth >= 1024 ? "fixed lg:relative" : windowWidth >= 425 && !expanded ? "fixed" : "fixed",
+        // Auto-collapse on medium screens
+        windowWidth >= 425 && windowWidth < 1024 ? (expanded ? "w-64 translate-x-0" : "w-14 -translate-x-full sm:translate-x-0") : (expanded ? "w-64" : "w-14"),
       )}
     >
       <div className="h-full flex flex-col">
@@ -67,7 +89,7 @@ export function Sidebar({ expanded, onToggle, user }: SidebarProps) {
           <Button 
             variant="ghost" 
             size="icon" 
-            className="ml-auto hidden lg:flex"
+            className="ml-auto"
             onClick={onToggle}
           >
             {expanded ? <ChevronLeft className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
@@ -94,7 +116,7 @@ export function Sidebar({ expanded, onToggle, user }: SidebarProps) {
           />
         </nav>
         
-        {!user?.subscriptionStatus && (
+        {user && !user.subscriptionStatus && (
           <div className={cn(
             "p-3 m-2 rounded-lg transition-all bg-gradient-to-r from-amber-100 to-amber-200 dark:from-amber-900/50 dark:to-amber-800/50 border border-amber-300 dark:border-amber-700",
           )}>
