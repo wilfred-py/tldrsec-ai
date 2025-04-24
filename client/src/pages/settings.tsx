@@ -114,19 +114,27 @@ export default function Settings() {
         
         <main className="flex-1 overflow-y-auto p-4 lg:p-6 bg-slate-50 dark:bg-slate-900">
           <div className="max-w-4xl mx-auto space-y-6">
-            <div className="flex items-center justify-between flex-wrap gap-4">
-              <h1 className="text-2xl font-bold">Settings</h1>
-              
-              <div className="flex flex-wrap gap-3">
-                <a href="#account" className="text-sm text-muted-foreground hover:text-foreground">Account</a>
-                <span className="hidden sm:inline text-muted-foreground">•</span>
-                <a href="#notifications" className="text-sm text-muted-foreground hover:text-foreground">Notifications</a>
-                <span className="hidden sm:inline text-muted-foreground">•</span>
-                <a href="#appearance" className="text-sm text-muted-foreground hover:text-foreground">Appearance</a>
-                <span className="hidden sm:inline text-muted-foreground">•</span>
-                <a href="#subscription" className="text-sm text-muted-foreground hover:text-foreground">Subscription</a>
+            <div className="flex flex-col sm:flex-row gap-8">
+              <div className="sm:w-1/4 lg:w-1/5">
+                <h1 className="text-2xl font-bold mb-4">Settings</h1>
+                
+                <nav className="sticky top-4 space-y-2 mb-8">
+                  <a href="#account" className="block py-2 px-3 border-l-2 hover:border-primary hover:text-primary transition-colors text-sm font-medium">
+                    Account
+                  </a>
+                  <a href="#notifications" className="block py-2 px-3 border-l-2 hover:border-primary hover:text-primary transition-colors text-sm font-medium">
+                    Notifications
+                  </a>
+                  <a href="#appearance" className="block py-2 px-3 border-l-2 hover:border-primary hover:text-primary transition-colors text-sm font-medium">
+                    Appearance
+                  </a>
+                  <a href="#subscription" className="block py-2 px-3 border-l-2 hover:border-primary hover:text-primary transition-colors text-sm font-medium">
+                    Subscription
+                  </a>
+                </nav>
               </div>
-            </div>
+              
+              <div className="sm:w-3/4 lg:w-4/5 space-y-6">
             
             {/* Account Information */}
             <Card id="account">
@@ -359,6 +367,8 @@ export default function Settings() {
                 )}
               </CardContent>
             </Card>
+              </div>
+            </div>
           </div>
         </main>
       </div>
