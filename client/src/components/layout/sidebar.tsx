@@ -83,6 +83,7 @@ export function Sidebar({ expanded, onToggle, user }: SidebarProps) {
   };
   
   // When in auto-collapse mode (mid-sized screens), force the sidebar to be collapsed
+  // We need to respect the user's preference when not in auto-collapse mode
   const isCollapsed = shouldAutoCollapse ? false : expanded;
 
   return (
@@ -92,9 +93,9 @@ export function Sidebar({ expanded, onToggle, user }: SidebarProps) {
         // Fixed position with different widths based on state
         "fixed",
         // Width control based on expanded state and viewport
-        isCollapsed ? "w-64" : "w-14",
-        // When auto-collapsed on medium screens, show only icons
-        shouldAutoCollapse ? "w-14" : "",
+        shouldAutoCollapse 
+          ? "w-14" // Always collapsed in medium screens (768-1024px)
+          : isCollapsed ? "w-64" : "w-14" // User's choice on other screen sizes
       )}
     >
       <div className="h-full flex flex-col">
