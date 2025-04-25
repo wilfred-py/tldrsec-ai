@@ -21,23 +21,14 @@ export function MobileBottomNav() {
     typeof window !== "undefined" ? window.innerWidth : 0
   );
   
-  // Manage window resize
   useEffect(() => {
-    function handleResize() {
+    // Handle resize for responsive behavior
+    const handleResize = () => {
       setWindowWidth(window.innerWidth);
-    }
-    
-    window.addEventListener("resize", handleResize);
-    handleResize(); // Initial call
-    
-    return () => {
-      window.removeEventListener("resize", handleResize);
     };
-  }, []);
-  
-  // Manage scroll behavior
-  useEffect(() => {
-    function handleScroll() {
+    
+    // Handle scroll behavior
+    const handleScroll = () => {
       setScrolling(true);
       
       // Clear previous timeout
@@ -59,17 +50,22 @@ export function MobileBottomNav() {
           setVisible(false);
         }, 3000);
       }, 150);
-    }
+    };
     
-    // Show initially
+    // Set up event listeners
+    window.addEventListener("resize", handleResize);
+    window.addEventListener("scroll", handleScroll);
+    
+    // Initial setup
+    handleResize();
     setVisible(true);
     fadeTimerRef.current = setTimeout(() => {
       setVisible(false);
     }, 3000);
     
-    window.addEventListener("scroll", handleScroll);
-    
+    // Cleanup
     return () => {
+      window.removeEventListener("resize", handleResize);
       window.removeEventListener("scroll", handleScroll);
       if (scrollTimeoutRef.current) clearTimeout(scrollTimeoutRef.current);
       if (fadeTimerRef.current) clearTimeout(fadeTimerRef.current);

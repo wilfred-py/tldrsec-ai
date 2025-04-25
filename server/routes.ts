@@ -458,6 +458,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
+  // Added the correct endpoint path that the client-side is using
+  app.post("/api/get-or-create-subscription", requireAuth, async (req, res) => {
+    try {
+      const userId = req.session.userId as number;
+      const result = await getOrCreateSubscription(userId);
+      
+      if (!result.clientSecret) {
+        return res.status(500).json({ message: "Failed to create subscription" });
+      }
+      
+      res.json({
+        subscriptionId: result.subscriptionId,
+        clientSecret: result.clientSecret
+      });
+    } catch (error) {
+      console.error("Subscription error:", error);
+      res.status(500).json({ message: "Error creating subscription" });
+    }
+  });
+  
+  // Keep the original endpoint for backward compatibility
   app.post("/api/subscriptions", requireAuth, async (req, res) => {
     try {
       const userId = req.session.userId as number;
