@@ -1,0 +1,41 @@
+mobile-bottom-nav.tsx:39 Warning: React has detected a change in the order of Hooks called by MobileBottomNav. This will lead to bugs and errors if not fixed. For more information, read the Rules of Hooks: https://reactjs.org/link/rules-of-hooks
+
+   Previous render            Next render
+   ------------------------------------------------------
+1. useContext                 useContext
+2. useSyncExternalStore       useSyncExternalStore
+3. useRef                     useRef
+4. useInsertionEffect         useInsertionEffect
+5. useState                   useState
+6. useEffect                  useEffect
+7. useState                   useState
+8. useState                   useState
+9. useState                   useState
+10. useState                  useState
+11. useEffect                 useEffect
+12. undefined                 useEffect
+   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ Error Component Stack
+    at MobileBottomNav (mobile-bottom-nav.tsx:14:22)
+    at ThemeProvider (theme-provider.tsx:24:3)
+MobileBottomNav	@	mobile-bottom-nav.tsx:39
+
+chunk-RPCDYKBN.js?v=686f9ddc:11678 Uncaught Error: Rendered more hooks than during the previous render.
+    at MobileBottomNav (mobile-bottom-nav.tsx:39:3)
+chunk-RPCDYKBN.js?v=686f9ddc:11678 Uncaught Error: Rendered more hooks than during the previous render.
+    at MobileBottomNav (mobile-bottom-nav.tsx:39:3)
+hook.js:608 The above error occurred in the <MobileBottomNav> component:
+
+    at MobileBottomNav (https://3f294d18-c752-4b5e-b925-a4c45f44e061-00-1ug5c2jokt76d.worf.replit.dev/src/components/layout/mobile-bottom-nav.tsx:31:22)
+    at Provider (https://3f294d18-c752-4b5e-b925-a4c45f44e061-00-1ug5c2jokt76d.worf.replit.d…unner/workspace/node_modules/.vite/deps/chunk-M3NVYRND.js?v=686f9ddc:48:15)
+    at TooltipProvider (https://3f294d18-c752-4b5e-b925-a4c45f44e061-00-1ug5c2jokt76d.worf.replit.d…rkspace/node_modules/.vite/deps/@radix-ui_react-tooltip.js?v=686f9ddc:59:5)
+    at ThemeProvider (https://3f294d18-c752-4b5e-b925-a4c45f44e061-00-1ug5c2jokt76d.worf.replit.dev/src/components/ui/theme-provider.tsx:25:3)
+    at QueryClientProvider (https://3f294d18-c752-4b5e-b925-a4c45f44e061-00-1ug5c2jokt76d.worf.replit.d…rkspace/node_modules/.vite/deps/@tanstack_react-query.js?v=686f9ddc:2805:3)
+    at App
+
+Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://reactjs.org/link/error-boundaries to learn more about error boundaries.
+chunk-RPCDYKBN.js?v=686f9ddc:11678 Uncaught Error: Rendered more hooks than during the previous render.
+    at MobileBottomNav (mobile-bottom-nav.tsx:39:3)
+﻿
+

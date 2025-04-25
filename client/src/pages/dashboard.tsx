@@ -36,8 +36,17 @@ export default function Dashboard() {
   const { toast } = useToast();
   
   // Dashboard data queries
-  const { data: stats, isLoading: isLoadingStats } = useQuery({
+  const { data: stats, isLoading: isLoadingStats, refetch: refetchStats } = useQuery({
     queryKey: ["/api/stats"],
+  });
+  
+  // Get user settings to ensure email frequency is in sync
+  const { data: settings } = useQuery({
+    queryKey: ["/api/settings"],
+    // Refetch stats when settings change to keep email frequency in sync
+    onSuccess: () => {
+      refetchStats();
+    }
   });
   
   const { data: tickers, isLoading: isLoadingTickers } = useQuery({
