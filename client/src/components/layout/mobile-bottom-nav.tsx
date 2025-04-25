@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Link, useLocation } from "wouter";
 import { Settings, LayoutDashboard, FileText, User } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -15,71 +15,71 @@ export function MobileBottomNav() {
   const { user, logout } = useAuth();
   const [visible, setVisible] = useState(false);
   const [scrolling, setScrolling] = useState(false);
-  const [fadeTimer, setFadeTimer] = useState<NodeJS.Timeout | null>(null);
+  const fadeTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const scrollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const [windowWidth, setWindowWidth] = useState(
     typeof window !== "undefined" ? window.innerWidth : 0
   );
-
+  
+  // Manage window resize
   useEffect(() => {
-    const handleResize = () => {
+    function handleResize() {
       setWindowWidth(window.innerWidth);
-    };
-
+    }
+    
     window.addEventListener("resize", handleResize);
+    handleResize(); // Initial call
+    
     return () => {
       window.removeEventListener("resize", handleResize);
     };
   }, []);
-
-  // Don't show on larger screens
-  if (windowWidth > 425) {
-    return null;
-  }
-
+  
+  // Manage scroll behavior
   useEffect(() => {
-    let scrollTimeout: NodeJS.Timeout;
-
-    const handleScroll = () => {
+    function handleScroll() {
       setScrolling(true);
       
       // Clear previous timeout
-      if (scrollTimeout) {
-        clearTimeout(scrollTimeout);
+      if (scrollTimeoutRef.current) {
+        clearTimeout(scrollTimeoutRef.current);
       }
       
       // Set new timeout to detect when scrolling stops
-      scrollTimeout = setTimeout(() => {
+      scrollTimeoutRef.current = setTimeout(() => {
         setScrolling(false);
         setVisible(true);
         
         // Auto-hide after 3 seconds
-        if (fadeTimer) {
-          clearTimeout(fadeTimer);
+        if (fadeTimerRef.current) {
+          clearTimeout(fadeTimerRef.current);
         }
         
-        const timer = setTimeout(() => {
+        fadeTimerRef.current = setTimeout(() => {
           setVisible(false);
         }, 3000);
-        
-        setFadeTimer(timer);
       }, 150);
-    };
-    
-    window.addEventListener("scroll", handleScroll);
+    }
     
     // Show initially
     setVisible(true);
-    const initialTimer = setTimeout(() => {
+    fadeTimerRef.current = setTimeout(() => {
       setVisible(false);
     }, 3000);
-    setFadeTimer(initialTimer);
+    
+    window.addEventListener("scroll", handleScroll);
     
     return () => {
       window.removeEventListener("scroll", handleScroll);
-      if (scrollTimeout) clearTimeout(scrollTimeout);
-      if (fadeTimer) clearTimeout(fadeTimer);
+      if (scrollTimeoutRef.current) clearTimeout(scrollTimeoutRef.current);
+      if (fadeTimerRef.current) clearTimeout(fadeTimerRef.current);
     };
-  }, [fadeTimer]);
+  }, []);
+  
+  // Don't render on larger screens
+  if (windowWidth > 768) {
+    return null;
+  }
 
   return (
     <div 

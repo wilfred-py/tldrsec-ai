@@ -37,7 +37,12 @@ export async function oauthLogin(provider: string, providerId: string, email: st
 
 export async function logoutUser(): Promise<void> {
   await apiRequest("POST", "/api/auth/logout", {});
+  // Clear all query data and redirect to home page
   queryClient.clear();
+  // Redirect to home page after logout - ensure this runs on the client side
+  if (typeof window !== 'undefined') {
+    window.location.href = '/';
+  }
 }
 
 export async function getCurrentUser(): Promise<AuthUser | null> {
