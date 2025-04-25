@@ -43,11 +43,14 @@ export default function Dashboard() {
   // Get user settings to ensure email frequency is in sync
   const { data: settings } = useQuery({
     queryKey: ["/api/settings"],
-    // Refetch stats when settings change to keep email frequency in sync
-    onSuccess: () => {
+  });
+  
+  // Refetch stats when settings change
+  useEffect(() => {
+    if (settings) {
       refetchStats();
     }
-  });
+  }, [settings, refetchStats]);
   
   const { data: tickers, isLoading: isLoadingTickers } = useQuery({
     queryKey: ["/api/tickers"],
