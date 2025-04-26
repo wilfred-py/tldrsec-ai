@@ -165,11 +165,11 @@ export function Header({
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" className="flex items-center gap-2">
               <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-primary">
-                {user?.username.charAt(0).toUpperCase()}
+                {user?.username?.charAt(0).toUpperCase() || "U"}
               </div>
-              <span className="hidden sm:inline text-sm font-medium">
+              <div className="hidden sm:block min-w-[80px] text-sm font-medium">
                 {user?.username || "User"}
-              </span>
+              </div>
               <ChevronDownIcon className="h-4 w-4" />
             </Button>
           </DropdownMenuTrigger>
