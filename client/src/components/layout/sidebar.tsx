@@ -84,7 +84,7 @@ export function Sidebar({ expanded, onToggle, user }: SidebarProps) {
   
   // When in auto-collapse mode (mid-sized screens), force the sidebar to be collapsed
   // We need to respect the user's preference when not in auto-collapse mode
-  const isCollapsed = shouldAutoCollapse ? false : expanded;
+  const sidebarDisplayContent = shouldAutoCollapse ? false : expanded;
 
   return (
     <aside 
@@ -95,13 +95,13 @@ export function Sidebar({ expanded, onToggle, user }: SidebarProps) {
         // Width control based on expanded state and viewport
         shouldAutoCollapse 
           ? "w-14" // Always collapsed in medium screens (768-1024px)
-          : isCollapsed ? "w-64" : "w-14" // User's choice on other screen sizes
+          : expanded ? "w-64" : "w-14" // User's choice on other screen sizes
       )}
     >
       <div className="h-full flex flex-col">
         <div className="flex items-center h-16 px-4 border-b">
           <h1 className="text-xl font-bold text-primary whitespace-nowrap">
-            {isCollapsed && !shouldAutoCollapse ? "tldrSEC" : "tS"}
+            {sidebarDisplayContent ? "tldrSEC" : "tS"}
           </h1>
           
           {!shouldAutoCollapse && (
@@ -111,7 +111,7 @@ export function Sidebar({ expanded, onToggle, user }: SidebarProps) {
               className="ml-auto"
               onClick={onToggle}
             >
-              {isCollapsed ? <ChevronLeft className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+              {expanded ? <ChevronLeft className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
             </Button>
           )}
         </div>
@@ -143,7 +143,7 @@ export function Sidebar({ expanded, onToggle, user }: SidebarProps) {
             ? "bg-green-100 dark:bg-green-900/30 border-green-300 dark:border-green-700" 
             : "bg-gray-100 dark:bg-gray-800/50 border-gray-200 dark:border-gray-700"
         )}>
-          {isCollapsed && !shouldAutoCollapse ? (
+          {sidebarDisplayContent ? (
             <div className="text-center">
               <h4 className={cn(
                 "font-bold mb-1",
@@ -151,11 +151,12 @@ export function Sidebar({ expanded, onToggle, user }: SidebarProps) {
                   ? "text-green-700 dark:text-green-400" 
                   : "text-gray-700 dark:text-gray-300"
               )}>
-                {user?.subscriptionStatus === 'premium' ? 'Pro Plan' : 'Free Plan'}
+                {user?.subscriptionStatus === 'premium' ? 'Pro Plan' : ''}
               </h4>
               
               {user?.subscriptionStatus !== 'premium' && (
-                <div className="mt-2">
+                <div className="mt-2 flex items-center gap-1 justify-center">
+                  <Crown className="h-4 w-4 text-amber-400" />
                   <Link href="/subscribe">
                     <Button className="w-full bg-amber-500 hover:bg-amber-600 text-white border-none">
                       Upgrade Now
@@ -172,7 +173,7 @@ export function Sidebar({ expanded, onToggle, user }: SidebarProps) {
                 <Link href="/subscribe">
                   <Button className="w-full h-8 p-0 bg-amber-500 hover:bg-amber-600 text-white border-none">
                     <span className="sr-only">Upgrade to Pro</span>
-                    <span className="text-base font-bold">⭐</span>
+                    <Crown className="h-4 w-4 text-white" />
                   </Button>
                 </Link>
               )}
@@ -185,7 +186,7 @@ export function Sidebar({ expanded, onToggle, user }: SidebarProps) {
           <div className={cn(
             "p-3 m-2 mt-0 rounded-lg transition-all bg-gradient-to-r from-amber-100 to-amber-200 dark:from-amber-900/50 dark:to-amber-800/50 border border-amber-300 dark:border-amber-700",
           )}>
-            {isCollapsed && !shouldAutoCollapse ? (
+            {sidebarDisplayContent ? (
               <div className="text-center">
                 <h4 className="font-bold mb-1 text-amber-800 dark:text-amber-300">Upgrade to Pro</h4>
                 <p className="text-xs mb-2 text-amber-700 dark:text-amber-400">Track unlimited tickers and get premium features</p>
@@ -199,7 +200,7 @@ export function Sidebar({ expanded, onToggle, user }: SidebarProps) {
               <Link href="/subscribe">
                 <Button className="w-full p-0 h-10 bg-amber-500 hover:bg-amber-600 text-white border-none">
                   <span className="sr-only">Upgrade to Pro</span>
-                  <span className="text-lg font-bold">⭐</span>
+                  <Crown className="h-4 w-4 text-white" />
                 </Button>
               </Link>
             )}
