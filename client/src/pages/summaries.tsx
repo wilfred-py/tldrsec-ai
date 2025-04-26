@@ -68,8 +68,8 @@ export default function Summaries() {
                     <div className="flex justify-center py-8">
                       <LoadingSpinner size="lg" />
                     </div>
-                  ) : summaries && summaries.length > 0 ? (
-                    summaries.map((summary: any) => (
+                  ) : summaries && Array.isArray(summaries) && summaries.length > 0 ? (
+                    summaries.map((summary: { id: number; ticker: string; formType: string; summary: string; createdAt: string }) => (
                       <Card key={summary.id} className="overflow-hidden">
                         <CardContent className="p-0">
                           <div className="p-6">
@@ -167,7 +167,15 @@ export default function Summaries() {
           <DialogHeader>
             <DialogTitle>SEC Filing Summary</DialogTitle>
             <DialogDescription>
-              {selectedSummary?.ticker} - {selectedSummary?.createdAt && format(new Date(selectedSummary.createdAt), "MMMM d, yyyy")}
+              {selectedSummary && typeof selectedSummary === 'object' && 'ticker' in selectedSummary ? (
+                <>
+                  {selectedSummary.ticker} - {
+                    'createdAt' in selectedSummary && selectedSummary.createdAt ? 
+                    format(new Date(selectedSummary.createdAt as string), "MMMM d, yyyy") : 
+                    ''
+                  }
+                </>
+              ) : 'Loading summary...'}
             </DialogDescription>
           </DialogHeader>
           
@@ -178,7 +186,12 @@ export default function Summaries() {
               </div>
             ) : (
               <div className="prose dark:prose-invert max-w-none">
-                <pre className="text-sm whitespace-pre-wrap">{selectedSummary?.summary}</pre>
+                <pre className="text-sm whitespace-pre-wrap">
+                  {selectedSummary && typeof selectedSummary === 'object' && 'summary' in selectedSummary ? 
+                    selectedSummary.summary as string : 
+                    'Summary not available'
+                  }
+                </pre>
               </div>
             )}
           </div>

@@ -6,8 +6,9 @@ if (!process.env.STRIPE_SECRET_KEY) {
 }
 
 // Initialize Stripe with the secret key
+// Using the latest API version compatible with TypeScript definitions
 const stripe = process.env.STRIPE_SECRET_KEY 
-  ? new Stripe(process.env.STRIPE_SECRET_KEY, { apiVersion: '2023-10-16' })
+  ? new Stripe(process.env.STRIPE_SECRET_KEY, { apiVersion: '2025-03-31.basil' as any })
   : null;
 
 /**
@@ -61,9 +62,10 @@ export async function getOrCreateSubscription(userId: number): Promise<{
           try {
             const invoice = await stripe.invoices.retrieve(subscription.latest_invoice as string);
             
-            // Check if the invoice has a payment intent
-            if (invoice.payment_intent) {
-              const paymentIntent = invoice.payment_intent as string;
+            // Check if the invoice has a payment intent using type assertion
+            const invoiceWithPaymentIntent = invoice as unknown as { payment_intent?: string };
+            if (invoiceWithPaymentIntent.payment_intent) {
+              const paymentIntent = invoiceWithPaymentIntent.payment_intent;
               const pi = await stripe.paymentIntents.retrieve(paymentIntent);
               
               if (pi.client_secret) {
@@ -124,10 +126,14 @@ export async function getOrCreateSubscription(userId: number): Promise<{
       
       if (subscription.latest_invoice && 
           typeof subscription.latest_invoice !== 'string') {
+        // Use type assertion to handle the expanded fields
         const invoice = subscription.latest_invoice;
-        if (invoice.payment_intent && 
-            typeof invoice.payment_intent !== 'string') {
-          clientSecret = invoice.payment_intent.client_secret;
+        const invoiceWithPaymentIntent = invoice as unknown as { 
+          payment_intent?: { client_secret?: string } 
+        };
+        
+        if (invoiceWithPaymentIntent.payment_intent) {
+          clientSecret = invoiceWithPaymentIntent.payment_intent.client_secret;
         }
       }
       
