@@ -9,10 +9,26 @@ interface AppLayoutProps {
   children: React.ReactNode;
 }
 
+// Keep sidebar state in localStorage to preserve between routes
+const getSavedSidebarState = (): boolean => {
+  if (typeof window !== "undefined") {
+    const saved = localStorage.getItem("sidebarExpanded");
+    return saved !== null ? saved === "true" : true; // Default to expanded
+  }
+  return true;
+};
+
 export function AppLayout({ children }: AppLayoutProps) {
   const { user, logout } = useAuth();
-  const [sidebarExpanded, setSidebarExpanded] = useState(true);
+  const [sidebarExpanded, setSidebarExpanded] = useState(getSavedSidebarState());
   const [darkMode, setDarkMode] = useState(user?.darkMode || false);
+  
+  // Save sidebar state to localStorage when it changes
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      localStorage.setItem("sidebarExpanded", String(sidebarExpanded));
+    }
+  }, [sidebarExpanded]);
 
   const handleDarkModeToggle = () => {
     setDarkMode(!darkMode);
