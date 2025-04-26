@@ -1,8 +1,6 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { useAuth } from "@/lib/auth";
-import { Sidebar } from "@/components/layout/sidebar";
-import { Header } from "@/components/layout/header";
+import { AppLayout } from "@/components/layout/app-layout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -13,8 +11,6 @@ import { Search } from "lucide-react";
 import { format } from "date-fns";
 
 export default function Summaries() {
-  const { user, logout } = useAuth();
-  const [sidebarExpanded, setSidebarExpanded] = useState(true);
   const [selectedSummaryId, setSelectedSummaryId] = useState<number | null>(null);
   
   // Get summaries
@@ -27,181 +23,142 @@ export default function Summaries() {
     enabled: selectedSummaryId !== null,
   });
 
-  const handleToggleDarkMode = async () => {
-    try {
-      await fetch("/api/settings/dark-mode", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ darkMode: !user?.darkMode }),
-      });
-      
-      // Refetch current user to update darkMode setting
-      window.location.reload();
-    } catch (error) {
-      console.error("Failed to toggle dark mode:", error);
-    }
-  };
-
   // Function to get the form type badge
   const getFormTypeBadge = (formType: string) => {
     switch (formType) {
       case "10-K":
         return <Badge variant="destructive">{formType}</Badge>;
       case "10-Q":
-        return <Badge variant="blue">{formType}</Badge>;
+        return <Badge variant="secondary">{formType}</Badge>;
       case "8-K":
-        return <Badge variant="purple">{formType}</Badge>;
+        return <Badge variant="default">{formType}</Badge>;
       case "4":
       case "Form 4":
-        return <Badge variant="amber">{formType}</Badge>;
+        return <Badge variant="outline">{formType}</Badge>;
       default:
         return <Badge>{formType}</Badge>;
     }
   };
 
   return (
-    <div className="h-screen flex overflow-hidden">
-      <Sidebar 
-        expanded={sidebarExpanded} 
-        onToggle={() => setSidebarExpanded(!sidebarExpanded)}
-        user={user}
-      />
-      
-      {/* Mobile sidebar overlay */}
-      {sidebarExpanded && (
-        <div
-          className="fixed inset-0 bg-black/50 z-20 lg:hidden"
-          onClick={() => setSidebarExpanded(false)}
-        />
-      )}
-      
-      <div className="flex-1 flex flex-col overflow-hidden">
-        <Header 
-          onMenuClick={() => setSidebarExpanded(!sidebarExpanded)}
-          onDarkModeToggle={handleToggleDarkMode}
-          darkMode={!!user?.darkMode}
-          user={user}
-          onLogout={logout}
-        />
-        
-        <main className="flex-1 overflow-y-auto p-4 lg:p-6 bg-slate-50 dark:bg-slate-900">
-          <div className="space-y-6">
-            <h1 className="text-2xl font-bold">Filing Summaries</h1>
-            
-            <Card>
-              <CardHeader>
-                <CardTitle>SEC Filing Summaries</CardTitle>
-                <CardDescription>
-                  View AI-generated summaries of SEC filings for your tracked tickers.
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <Tabs defaultValue="all">
-                  <TabsList className="mb-6">
-                    <TabsTrigger value="all">All Filings</TabsTrigger>
-                    <TabsTrigger value="10k">10-K</TabsTrigger>
-                    <TabsTrigger value="10q">10-Q</TabsTrigger>
-                    <TabsTrigger value="8k">8-K</TabsTrigger>
-                    <TabsTrigger value="form4">Form 4</TabsTrigger>
-                  </TabsList>
-                  
-                  <TabsContent value="all" className="space-y-4">
-                    {isLoadingSummaries ? (
-                      <div className="flex justify-center py-8">
-                        <LoadingSpinner size="lg" />
-                      </div>
-                    ) : summaries && summaries.length > 0 ? (
-                      summaries.map((summary: any) => (
-                        <Card key={summary.id} className="overflow-hidden">
-                          <CardContent className="p-0">
-                            <div className="p-6">
-                              <div className="flex items-center justify-between">
-                                <div className="flex items-center space-x-3">
-                                  <div className="h-10 w-10 bg-primary/10 rounded-md flex items-center justify-center text-primary font-bold">
-                                    {summary.ticker.charAt(0)}
-                                  </div>
-                                  <div>
-                                    <h3 className="font-semibold">{summary.ticker}</h3>
-                                    <p className="text-sm text-muted-foreground">
-                                      {format(new Date(summary.createdAt), "MMMM d, yyyy")}
-                                    </p>
-                                  </div>
+    <AppLayout>
+      <div className="p-4 lg:p-6 bg-slate-50 dark:bg-slate-900">
+        <div className="space-y-6">
+          <h1 className="text-2xl font-bold">Filing Summaries</h1>
+          
+          <Card>
+            <CardHeader>
+              <CardTitle>SEC Filing Summaries</CardTitle>
+              <CardDescription>
+                View AI-generated summaries of SEC filings for your tracked tickers.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Tabs defaultValue="all">
+                <TabsList className="mb-6">
+                  <TabsTrigger value="all">All Filings</TabsTrigger>
+                  <TabsTrigger value="10k">10-K</TabsTrigger>
+                  <TabsTrigger value="10q">10-Q</TabsTrigger>
+                  <TabsTrigger value="8k">8-K</TabsTrigger>
+                  <TabsTrigger value="form4">Form 4</TabsTrigger>
+                </TabsList>
+                
+                <TabsContent value="all" className="space-y-4">
+                  {isLoadingSummaries ? (
+                    <div className="flex justify-center py-8">
+                      <LoadingSpinner size="lg" />
+                    </div>
+                  ) : summaries && summaries.length > 0 ? (
+                    summaries.map((summary: any) => (
+                      <Card key={summary.id} className="overflow-hidden">
+                        <CardContent className="p-0">
+                          <div className="p-6">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center space-x-3">
+                                <div className="h-10 w-10 bg-primary/10 rounded-md flex items-center justify-center text-primary font-bold">
+                                  {summary.ticker.charAt(0)}
                                 </div>
-                                
-                                <div className="flex items-center space-x-4">
-                                  {getFormTypeBadge(summary.formType || "Unknown")}
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() => setSelectedSummaryId(summary.id)}
-                                  >
-                                    View Summary
-                                  </Button>
+                                <div>
+                                  <h3 className="font-semibold">{summary.ticker}</h3>
+                                  <p className="text-sm text-muted-foreground">
+                                    {format(new Date(summary.createdAt), "MMMM d, yyyy")}
+                                  </p>
                                 </div>
                               </div>
+                              
+                              <div className="flex items-center space-x-4">
+                                {getFormTypeBadge(summary.formType || "Unknown")}
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => setSelectedSummaryId(summary.id)}
+                                >
+                                  View Summary
+                                </Button>
+                              </div>
                             </div>
-                          </CardContent>
-                        </Card>
-                      ))
-                    ) : (
-                      <div className="text-center py-12">
-                        <Search className="h-12 w-12 mx-auto text-muted-foreground/50" />
-                        <h3 className="mt-4 text-lg font-medium">No summaries found</h3>
-                        <p className="mt-2 text-muted-foreground">
-                          No SEC filing summaries available for your tracked tickers.
-                        </p>
-                        <Button className="mt-4" variant="outline" onClick={() => window.location.href = '/dashboard'}>
-                          Track Tickers
-                        </Button>
-                      </div>
-                    )}
-                  </TabsContent>
-                  
-                  {/* Other tabs would filter by form type */}
-                  <TabsContent value="10k" className="space-y-4">
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))
+                  ) : (
                     <div className="text-center py-12">
                       <Search className="h-12 w-12 mx-auto text-muted-foreground/50" />
-                      <h3 className="mt-4 text-lg font-medium">No 10-K summaries</h3>
+                      <h3 className="mt-4 text-lg font-medium">No summaries found</h3>
                       <p className="mt-2 text-muted-foreground">
-                        No 10-K filing summaries available for your tracked tickers.
+                        No SEC filing summaries available for your tracked tickers.
                       </p>
+                      <Button className="mt-4" variant="outline" onClick={() => window.location.href = '/dashboard'}>
+                        Track Tickers
+                      </Button>
                     </div>
-                  </TabsContent>
-                  
-                  <TabsContent value="10q" className="space-y-4">
-                    <div className="text-center py-12">
-                      <Search className="h-12 w-12 mx-auto text-muted-foreground/50" />
-                      <h3 className="mt-4 text-lg font-medium">No 10-Q summaries</h3>
-                      <p className="mt-2 text-muted-foreground">
-                        No 10-Q filing summaries available for your tracked tickers.
-                      </p>
-                    </div>
-                  </TabsContent>
-                  
-                  <TabsContent value="8k" className="space-y-4">
-                    <div className="text-center py-12">
-                      <Search className="h-12 w-12 mx-auto text-muted-foreground/50" />
-                      <h3 className="mt-4 text-lg font-medium">No 8-K summaries</h3>
-                      <p className="mt-2 text-muted-foreground">
-                        No 8-K filing summaries available for your tracked tickers.
-                      </p>
-                    </div>
-                  </TabsContent>
-                  
-                  <TabsContent value="form4" className="space-y-4">
-                    <div className="text-center py-12">
-                      <Search className="h-12 w-12 mx-auto text-muted-foreground/50" />
-                      <h3 className="mt-4 text-lg font-medium">No Form 4 summaries</h3>
-                      <p className="mt-2 text-muted-foreground">
-                        No Form 4 filing summaries available for your tracked tickers.
-                      </p>
-                    </div>
-                  </TabsContent>
-                </Tabs>
-              </CardContent>
-            </Card>
-          </div>
-        </main>
+                  )}
+                </TabsContent>
+                
+                {/* Other tabs would filter by form type */}
+                <TabsContent value="10k" className="space-y-4">
+                  <div className="text-center py-12">
+                    <Search className="h-12 w-12 mx-auto text-muted-foreground/50" />
+                    <h3 className="mt-4 text-lg font-medium">No 10-K summaries</h3>
+                    <p className="mt-2 text-muted-foreground">
+                      No 10-K filing summaries available for your tracked tickers.
+                    </p>
+                  </div>
+                </TabsContent>
+                
+                <TabsContent value="10q" className="space-y-4">
+                  <div className="text-center py-12">
+                    <Search className="h-12 w-12 mx-auto text-muted-foreground/50" />
+                    <h3 className="mt-4 text-lg font-medium">No 10-Q summaries</h3>
+                    <p className="mt-2 text-muted-foreground">
+                      No 10-Q filing summaries available for your tracked tickers.
+                    </p>
+                  </div>
+                </TabsContent>
+                
+                <TabsContent value="8k" className="space-y-4">
+                  <div className="text-center py-12">
+                    <Search className="h-12 w-12 mx-auto text-muted-foreground/50" />
+                    <h3 className="mt-4 text-lg font-medium">No 8-K summaries</h3>
+                    <p className="mt-2 text-muted-foreground">
+                      No 8-K filing summaries available for your tracked tickers.
+                    </p>
+                  </div>
+                </TabsContent>
+                
+                <TabsContent value="form4" className="space-y-4">
+                  <div className="text-center py-12">
+                    <Search className="h-12 w-12 mx-auto text-muted-foreground/50" />
+                    <h3 className="mt-4 text-lg font-medium">No Form 4 summaries</h3>
+                    <p className="mt-2 text-muted-foreground">
+                      No Form 4 filing summaries available for your tracked tickers.
+                    </p>
+                  </div>
+                </TabsContent>
+              </Tabs>
+            </CardContent>
+          </Card>
+        </div>
       </div>
       
       {/* Summary Dialog */}
@@ -227,6 +184,6 @@ export default function Summaries() {
           </div>
         </DialogContent>
       </Dialog>
-    </div>
+    </AppLayout>
   );
 }
