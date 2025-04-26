@@ -93,6 +93,14 @@ export default function Subscribe() {
     async function createSubscription() {
       try {
         setIsLoading(true);
+        
+        // Debug: Check if we're logged in before making subscription request
+        const currentUser = await apiRequest("GET", "/api/auth/me");
+        if (!currentUser.ok) {
+          throw new Error('You must be logged in to create a subscription');
+        }
+        
+        // Make the subscription request
         const response = await apiRequest("POST", "/api/get-or-create-subscription");
         
         // Check content type to handle HTML error responses
@@ -110,6 +118,10 @@ export default function Subscribe() {
         // Safely parse JSON only for JSON content
         if (contentType && contentType.includes("application/json")) {
           const data = await response.json();
+          console.log("Subscription data received:", data);
+          if (!data.clientSecret) {
+            throw new Error('No client secret returned from server');
+          }
           setClientSecret(data.clientSecret);
         } else {
           throw new Error('Server returned invalid content type');
