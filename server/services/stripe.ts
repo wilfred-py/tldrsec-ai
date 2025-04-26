@@ -53,17 +53,36 @@ export async function getOrCreateSubscription(userId: number): Promise<{
 
     // Check if the user already has a subscription
     if (user.stripeSubscriptionId) {
-      const subscription = await stripe.subscriptions.retrieve(user.stripeSubscriptionId);
-      
-      // Get the payment intent client secret
-      const invoice = await stripe.invoices.retrieve(subscription.latest_invoice as string);
-      const paymentIntent = invoice.payment_intent as string;
-      const pi = await stripe.paymentIntents.retrieve(paymentIntent);
-
-      return {
-        subscriptionId: subscription.id,
-        clientSecret: pi.client_secret,
-      };
+      try {
+        const subscription = await stripe.subscriptions.retrieve(user.stripeSubscriptionId);
+        
+        // Only attempt to get the payment intent if there's a latest invoice
+        if (subscription.latest_invoice) {
+          try {
+            const invoice = await stripe.invoices.retrieve(subscription.latest_invoice as string);
+            
+            // Check if the invoice has a payment intent
+            if (invoice.payment_intent) {
+              const paymentIntent = invoice.payment_intent as string;
+              const pi = await stripe.paymentIntents.retrieve(paymentIntent);
+              
+              if (pi.client_secret) {
+                return {
+                  subscriptionId: subscription.id,
+                  clientSecret: pi.client_secret,
+                };
+              }
+            }
+          } catch (error) {
+            console.error('Error retrieving invoice or payment intent:', error);
+            // Continue to create a new subscription if error occurs
+          }
+        }
+      } catch (error) {
+        console.error('Error retrieving subscription:', error);
+        // If the subscription retrieval fails, we'll create a new one
+        await storage.updateStripeSubscriptionId(userId, null);
+      }
     }
 
     // Create a new customer if needed
@@ -83,26 +102,47 @@ export async function getOrCreateSubscription(userId: number): Promise<{
       await storage.updateStripeCustomerId(userId, customerId);
     }
 
-    // Create a subscription
-    const subscription = await stripe.subscriptions.create({
-      customer: customerId,
-      items: [{
-        price: process.env.STRIPE_PRICE_ID, // This should be set in the environment variables
-      }],
-      payment_behavior: 'default_incomplete',
-      expand: ['latest_invoice.payment_intent'],
-    });
+    try {
+      // Log the Stripe Price ID being used
+      console.log('Using STRIPE_PRICE_ID:', process.env.STRIPE_PRICE_ID);
+      
+      // Create a subscription
+      const subscription = await stripe.subscriptions.create({
+        customer: customerId,
+        items: [{
+          price: process.env.STRIPE_PRICE_ID, // This should be set in the environment variables
+        }],
+        payment_behavior: 'default_incomplete',
+        expand: ['latest_invoice.payment_intent'],
+      });
 
-    // Update user with subscription ID
-    await storage.updateStripeSubscriptionId(userId, subscription.id);
+      // Update user with subscription ID
+      await storage.updateStripeSubscriptionId(userId, subscription.id);
 
-    // @ts-ignore - Expanded fields
-    const clientSecret = subscription.latest_invoice?.payment_intent?.client_secret;
+      // Safely access expanded fields
+      let clientSecret = null;
+      
+      if (subscription.latest_invoice && 
+          typeof subscription.latest_invoice !== 'string') {
+        const invoice = subscription.latest_invoice;
+        if (invoice.payment_intent && 
+            typeof invoice.payment_intent !== 'string') {
+          clientSecret = invoice.payment_intent.client_secret;
+        }
+      }
+      
+      if (!clientSecret) {
+        console.warn('Failed to get client secret from expanded fields');
+      }
 
-    return {
-      subscriptionId: subscription.id,
-      clientSecret,
-    };
+      return {
+        subscriptionId: subscription.id,
+        clientSecret,
+      };
+    } catch (error) {
+      console.error('Error in subscription creation:', error);
+      return { subscriptionId: null, clientSecret: null };
+    }
   } catch (error) {
     console.error('Error creating subscription:', error);
     return { subscriptionId: null, clientSecret: null };
