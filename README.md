@@ -17,6 +17,20 @@ gh repo clone wilfred-py/tldrsec-ai
 git clone git@github.com:wilfred-py/tldrsec-ai.git
 ```
 
+## Task Management & Automation
+
+This project uses Task Master for task management. When completing tasks, you can use our automation scripts to mark tasks as complete and automatically commit them to GitHub:
+
+```bash
+# Mark a subtask as complete and commit to GitHub
+./scripts/complete-subtask.sh <task_id> <subtask_id> [custom_message]
+
+# Example: Complete subtask 2.3 with a custom message
+./scripts/complete-subtask.sh 2 3 "Implement database schema with foreign keys"
+```
+
+For more information about the automation scripts, see [scripts/README.md](scripts/README.md).
+
 ## Database Management
 
 This project uses Prisma ORM with PostgreSQL. All database-related files are in the `app` directory:
