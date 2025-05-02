@@ -1,0 +1,524 @@
+# tldrSEC - AI-Powered SEC Filings Summarizer
+
+## Overview
+
+tldrSEC is a web application designed to solve a critical problem for retail investors: the lack of time and expertise to analyze lengthy SEC filings. These documents (10-K, 10-Q, 8-K, Form 4) often span hundreds of pages and contain vital financial and operational insights buried in complex language and formats. 
+
+By automatically monitoring, parsing, and summarizing these filings using AI, tldrSEC delivers concise, actionable insights directly to users, enabling them to make informed investment decisions without the time-consuming process of reading entire documents.
+
+The application targets retail investors and financial hobbyists who track specific companies for personal investment but lack the resources to thoroughly analyze SEC filings in a timely manner.
+
+## Core Features
+
+### 1. Automated SEC Filing Monitoring
+- **What it does**: Checks SEC.gov hourly for new filings via a cron job and identifies filings matching user-tracked tickers
+- **Why it's important**: Ensures users never miss critical financial disclosures that could impact investment decisions
+- **How it works**: Vercel cron job executes hourly to fetch new filings from SEC EDGAR RSS or website, then matches against user-tracked tickers
+
+### 2. AI-Powered Summarization
+- **What it does**: Parses filings in various formats (HTML, PDF, XBRL) and generates concise summaries using specialized AI prompts
+- **Why it's important**: Transforms lengthy, complex documents into actionable insights
+- **How it works**: Uses format-specific parsers (cheerio, pdf-parse, xbrl) to extract content, then processes it through Claude AI with filing-specific prompts
+
+### 3. Email Notification System
+- **What it does**: Delivers summaries to users based on their preferences (immediate or digest)
+- **Why it's important**: Provides timely insights without requiring users to actively check the platform
+- **How it works**: Resend email service delivers customized notifications with summary content based on user preferences
+
+### 4. User Dashboard
+- **What it does**: Displays tracked tickers in a sortable, searchable table with a resizable sidebar
+- **Why it's important**: Offers a central hub for managing investments and accessing historical summaries
+- **How it works**: Next.js frontend with shadcn/ui components provides an intuitive interface for managing tracked companies
+
+### 5. User Authentication & Management
+- **What it does**: Enables secure sign-up and login via OAuth (Google, GitHub, Twitter)
+- **Why it's important**: Provides simple, secure access to personalized content
+- **How it works**: Clerk authentication handles user identity and session management
+
+## User Experience
+
+### User Personas
+
+1. **Casual Retail Investor**
+   - Has a modest portfolio (5-15 stocks)
+   - Checks investments weekly
+   - Limited financial expertise
+   - Values plain-language explanations
+
+2. **Active Trader**
+   - Monitors markets daily
+   - Has a larger portfolio (15+ positions)
+   - Intermediate financial knowledge
+   - Needs immediate notifications for time-sensitive filings
+
+### Key User Flows
+
+1. **Onboarding Flow**
+   - User lands on homepage with "Sign Up" options (Google, GitHub, Twitter OAuth)
+   - Post-authentication, user enters tracked tickers via a search bar
+   - Email confirmation sent via Resend
+
+2. **Dashboard Interaction**
+   - User logs in and views tracked tickers table
+   - Can sort, search, and manage ticker list
+   - Accesses filing summaries through the dashboard
+   - Navigates to settings to configure preferences
+
+3. **Filing Summary Access**
+   - User receives email notification of new filing
+   - Clicks through to view complete summary
+   - Can access historical summaries through dashboard
+
+### UI/UX Considerations
+
+- **Dashboard Layout**:
+  - Sidebar: Expanded by default, resizable via drag, collapsible on mobile
+  - Search Bar: Debounced (300ms), with loading spinner
+  - Tracked Tickers Table: Sortable, paginated (10 per page)
+
+- **Design System**:
+  - Color Scheme: Blue and white
+  - Typography: Roboto
+  - Layout: Clean, minimalist with shadcn/ui components
+  - Responsive design for mobile and desktop
+
+- **Accessibility**:
+  - Standard usability considerations
+  - Clear visual hierarchy and readable typography
+
+## Technical Architecture
+
+### System Components
+
+1. **Frontend**:
+   - Next.js with TypeScript
+   - shadcn/ui for UI components
+   - Server-side rendering for performance
+   - Responsive layout for mobile and desktop
+
+2. **Backend**:
+   - Next.js API routes
+   - Custom-built SEC filing monitoring service
+   - File parsing system for different formats
+   - AI integration for summarization
+
+3. **Database**:
+   - PostgreSQL (Neon free tier)
+   - Stores user data, tracked tickers, and summaries
+
+4. **Authentication**:
+   - Clerk OAuth (Google, GitHub, Twitter)
+   - Session management
+   - User profile storage
+
+5. **Third-Party Services**:
+   - Anthropic's Claude API for AI summarization
+   - Resend for email delivery
+   - Vercel Cron Jobs for scheduled tasks
+
+### Data Models
+
+1. **User Model**:
+   ```typescript
+   User {
+     id: string               // Primary key
+     email: string            // User email
+     name: string             // Display name
+     authProvider: string     // "google", "github", "twitter"
+     authProviderId: string   // ID from provider
+     createdAt: timestamp     // Account creation date
+     preferences: {           // User preferences
+       notifications: "immediate" | "digest" | "none"
+       theme: "light" | "dark"
+     }
+   }
+   ```
+
+2. **Ticker Model**:
+   ```typescript
+   Ticker {
+     id: string               // Primary key
+     symbol: string           // Stock ticker symbol
+     companyName: string      // Full company name
+     userId: string           // Foreign key to User
+     addedAt: timestamp       // When user added this ticker
+   }
+   ```
+
+3. **Summary Model**:
+   ```typescript
+   Summary {
+     id: string               // Primary key
+     tickerId: string         // Foreign key to Ticker
+     filingType: string       // "10-K", "10-Q", "8-K", "Form4"
+     filingDate: timestamp    // Date of the filing
+     filingUrl: string        // Link to original filing
+     summaryText: string      // Full summary text
+     summaryJSON: json        // Structured summary data
+     createdAt: timestamp     // When summary was generated
+     sentToUser: boolean      // Whether notification was sent
+   }
+   ```
+
+### APIs and Integrations
+
+1. **Internal API Routes**:
+   - `GET /api/tickers` - Returns tracked tickers
+   - `POST /api/tickers` - Adds a ticker
+   - `DELETE /api/tickers/[ticker]` - Removes a ticker
+   - `GET /api/summaries/[ticker]` - Retrieves latest summaries
+   - `PUT /api/settings` - Updates user preferences
+
+2. **External APIs**:
+   - SEC EDGAR API - For monitoring new filings
+   - Claude API - For summarization
+   - Resend API - For email delivery
+
+3. **Parsing Modules**:
+   - HTML parser using cheerio
+   - PDF parser using pdf-parse
+   - XBRL parser using xbrl library
+
+### Infrastructure Requirements
+
+1. **Hosting**:
+   - Vercel Hobby plan ($20/month)
+   - Includes hosting and cron jobs
+
+2. **Database**:
+   - Neon PostgreSQL (free tier)
+   - Sufficient for small-scale database
+
+3. **Email**:
+   - Resend (free tier, up to 3,000 emails/month)
+
+4. **AI Services**:
+   - Claude API (~$10/month estimated)
+
+5. **Authentication**:
+   - Clerk (free tier sufficient)
+
+6. **Total Budget**: $30/month
+
+## Development Roadmap
+
+### Phase 1: MVP Foundation
+
+1. **Core Infrastructure**:
+   - Set up Next.js project with TypeScript
+   - Configure PostgreSQL database with Neon
+   - Create database schema
+   - Set up Clerk authentication
+   - Implement Vercel cron job structure
+
+2. **Authentication & User Management**:
+   - Implement OAuth (Google, GitHub, Twitter)
+   - Create user registration flow
+   - Develop email verification
+   - Build user profile management
+
+3. **Basic SEC Monitoring**:
+   - Build SEC EDGAR monitoring service
+   - Implement filing type detection
+   - Create basic filing retrieval and storage
+   - Develop ticker matching algorithm
+
+4. **Initial AI Integration**:
+   - Integrate Claude API
+   - Implement basic prompt templates
+   - Create summary storage and retrieval
+
+5. **Essential UI**:
+   - Develop landing page
+   - Create onboarding flow
+   - Build basic dashboard
+   - Implement ticker search and tracking
+
+6. **Notification Foundation**:
+   - Build email template system
+   - Implement immediate notification flow
+
+7. **Core Security**:
+   - Enforce HTTPS everywhere
+   - Implement input validation
+   - Keep API keys server-side only
+
+### Phase 2: Enhanced Features
+
+1. **Advanced Filing Processing**:
+   - Enhance parsing for all file formats
+   - Improve metadata extraction
+   - Optimize processing for large documents
+
+2. **Refined AI Summarization**:
+   - Optimize prompts for each filing type
+   - Implement error handling and retry logic
+   - Add summary quality checks
+
+3. **UI Enhancements**:
+   - Add dark/light mode toggle
+   - Implement responsive mobile layout
+   - Add sorting and pagination to tables
+   - Create summary viewing interface
+
+4. **Extended Notification System**:
+   - Create daily digest email format
+   - Set up notification preference management
+   - Build notification queue
+
+5. **Advanced Security**:
+   - Add CSRF protection
+   - Implement rate limiting
+   - Set up proper security headers
+   - Configure secure cookies
+
+### Phase 3: Scaling & Optimization
+
+1. **Performance Improvements**:
+   - Optimize database queries
+   - Implement caching strategies
+   - Enhance frontend performance
+
+2. **Advanced Filing Analysis**:
+   - Add historical comparison of filings
+   - Implement sentiment analysis
+   - Create trend detection
+
+3. **User Experience Refinements**:
+   - Add personalized insights
+   - Create customizable dashboards
+   - Implement user feedback system
+
+4. **Comprehensive Testing**:
+   - Write unit tests for core functionality
+   - Create integration tests for API routes
+   - Implement end-to-end testing
+   - Perform security vulnerability testing
+
+5. **Production Readiness**:
+   - Set up monitoring and error tracking
+   - Create deployment documentation
+   - Implement backup and recovery strategies
+
+## Logical Dependency Chain
+
+1. **Foundation First**:
+   - Next.js setup with TypeScript
+   - PostgreSQL database configuration
+   - Authentication system
+   - Basic API routes
+
+2. **Core Functionality**:
+   - SEC monitoring service
+   - Filing retrieval and parsing
+   - User management and ticker tracking
+   - AI integration for summarization
+
+3. **User-Facing Features**:
+   - Landing page and onboarding flow
+   - Dashboard with ticker management
+   - Email notification system
+   - Settings and preferences
+
+4. **Enhancement Layers**:
+   - Improved parsing and AI prompts
+   - UI refinements and responsiveness
+   - Advanced security features
+   - Performance optimizations
+
+5. **Production Preparation**:
+   - Comprehensive testing
+   - Error handling and monitoring
+   - Documentation and deployment setup
+
+## Risks and Mitigations
+
+### Technical Challenges
+
+1. **SEC Website Structure Changes**
+   - **Risk**: SEC may change their website structure or API
+   - **Mitigation**: Implement flexible parsers with retry logic; monitor for changes
+
+2. **Large Document Processing**
+   - **Risk**: PDF files can be massive and resource-intensive
+   - **Mitigation**: Implement chunking strategies; set timeout handling
+
+3. **AI Token Limits**
+   - **Risk**: Claude has context window limitations
+   - **Mitigation**: Implement document summarization before final summarization
+
+### MVP Scope Risks
+
+1. **Feature Creep**
+   - **Risk**: Expanding scope beyond core functionality
+   - **Mitigation**: Strictly prioritize features; follow MVP roadmap
+
+2. **Complexity Management**
+   - **Risk**: Over-engineering solutions
+   - **Mitigation**: Focus on simplicity; build incrementally
+
+### Resource Constraints
+
+1. **Budget Limitations**
+   - **Risk**: Exceeding $30/month budget
+   - **Mitigation**: Implement usage tracking; set alerts; optimize resource usage
+
+2. **API Rate Limits**
+   - **Risk**: Hitting SEC API or Claude API rate limits
+   - **Mitigation**: Implement queuing system; add retries with exponential backoff
+
+## Security Implementation
+
+### Frontend Security
+
+1. **HTTPS Everywhere**
+   - Prevents basic eavesdropping and man-in-the-middle attacks
+   - Enforced via Vercel deployment
+
+2. **Input Validation and Sanitization**
+   - Prevents XSS attacks by validating all user inputs
+   - Implemented at form level and API endpoints
+
+3. **Local Storage Protection**
+   - No secrets stored in localStorage or client-side code
+   - Session management handled securely
+
+4. **CSRF Protection**
+   - Implement anti-CSRF tokens for forms and state-changing requests
+   - Secure token validation on server
+
+5. **API Key Protection**
+   - API credentials remain server-side only
+   - No exposure of sensitive keys in frontend
+
+### Backend Security
+
+1. **Authentication Fundamentals**
+   - Use established libraries (Clerk)
+   - Implement proper password storage with hashing and salting
+
+2. **Authorization Checks**
+   - Always verify permissions before performing actions
+   - Implement proper access control
+
+3. **API Endpoint Protection**
+   - Implement proper authentication for every API endpoint
+   - Validate all requests
+
+4. **SQL Injection Prevention**
+   - Use parameterized queries or ORMs
+   - Never use raw SQL with user input
+
+5. **Basic Security Headers**
+   - Implement X-Frame-Options, X-Content-Type-Options, and HSTS
+   - Configure secure response headers
+
+6. **DDoS Protection**
+   - Use Vercel's built-in DDoS mitigation capabilities
+   - Implement rate limiting
+
+### Practical Security Habits
+
+1. **Dependency Management**
+   - Keep dependencies updated to prevent vulnerabilities
+   - Regular security audits
+
+2. **Proper Error Handling**
+   - Don't expose sensitive details in error messages
+   - Implement consistent error patterns
+
+3. **Secure Cookies**
+   - Set HttpOnly, Secure, and SameSite attributes
+   - Protect session information
+
+4. **File Upload Security**
+   - Validate file types, sizes, and scan for malicious content
+   - Implement proper storage and access controls
+
+5. **Rate Limiting**
+   - Implement on all API endpoints
+   - Focus especially on authentication-related endpoints
+
+## Appendix
+
+### AI Prompt Templates
+
+#### 10-K/10-Q Prompt
+```
+Analyze this SEC filing document and provide:
+1. Business Impact Analysis:
+   - Identify upside opportunities and risk factors impacting operating margins.
+   - For each:
+      - Headline (max 15 words).
+      - Direct quote as evidence (with section/page reference).
+      - One-sentence margin impact explanation.
+   - Focus on quantifiable, company-specific impacts.
+
+Output (JSON):
+{
+  "company": "",
+  "period": "QX YYYY",
+  "financials": [
+    {"label": "Revenue", "value": "$", "growth": "", "unit": "% YoY"},
+    {"label": "Operating Margin", "value": "$", "growth": "", "unit": "% YoY"},
+    {"label": "[Key Segment]", "value": "$", "growth": "", "unit": "% YoY"}
+  ],
+  "insights": ["", "", ""],
+  "risks": ["", "", ""]
+}
+```
+
+#### 8-K Prompt
+```
+Analyze this 8-K SEC filing and provide:
+1. Material Event Analysis:
+   - Identify positive developments, potential concerns, and structural changes.
+   - For each:
+      - Headline (max 15 words).
+      - Direct quote (with item number).
+      - One-sentence business impact explanation.
+   - Focus on material, quantifiable events.
+
+Output (JSON):
+{
+  "company": "",
+  "reportDate": "DD MMM YYYY",
+  "eventType": "",
+  "summary": "",
+  "positiveDevelopments": "",
+  "potentialConcerns": "",
+  "structuralChanges": "",
+  "additionalNotes": ""
+}
+```
+
+#### Form 4 Prompt
+```
+Analyze this Form 4 SEC filing and provide:
+1. Transaction Analysis:
+   - Summarize insider trading activity (purchases, sales, options).
+   - For each:
+      - Structured data with shares, price, total value, code, ownership.
+   - Include net position changes and context.
+
+Output (JSON):
+{
+  "company": "",
+  "filingDate": "DD MMM YYYY",
+  "filerName": "",
+  "relationship": "",
+  "ownershipType": "",
+  "totalValue": "$",
+  "percentageChange": "%",
+  "previousStake": "",
+  "newStake": "",
+  "summary": ""
+}
+```
+
+### Performance Targets
+   
+- API responses <500ms
+- Cron job completes within 5 minutes
+- Email delivery within 1 minute of summary generation
+- UI interactions respond within 200ms 
