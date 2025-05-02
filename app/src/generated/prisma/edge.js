@@ -196,12 +196,11 @@ const config = {
     "db"
   ],
   "activeProvider": "postgresql",
-  "postinstall": false,
   "inlineDatasources": {
     "db": {
       "url": {
         "fromEnvVar": "DATABASE_URL",
-        "value": null
+        "value": "postgresql://wilfred-py:gMcywV09vTID@ep-rapid-wildflower-291580-pooler.ap-southeast-1.aws.neon.tech/tldrsec?sslmode=require"
       }
     }
   },
