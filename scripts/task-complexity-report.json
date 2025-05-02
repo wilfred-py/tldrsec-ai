@@ -1,0 +1,91 @@
+{
+  "meta": {
+    "generatedAt": "2025-05-01T22:13:25.732Z",
+    "tasksAnalyzed": 10,
+    "thresholdScore": 5,
+    "projectName": "Your Project Name",
+    "usedResearch": false
+  },
+  "complexityAnalysis": [
+    {
+      "taskId": 1,
+      "taskTitle": "Set up Next.js project with TypeScript and authentication",
+      "complexityScore": 6,
+      "recommendedSubtasks": 5,
+      "expansionPrompt": "Break down the Next.js project setup with TypeScript and Clerk authentication into specific implementation steps, including project initialization, authentication configuration, routing setup, environment variable management, and UI component integration.",
+      "reasoning": "This task involves multiple technologies (Next.js, TypeScript, Clerk) and requires configuration of authentication, routing, and UI components. It's moderately complex due to the integration points between these technologies, but follows standard patterns for Next.js applications."
+    },
+    {
+      "taskId": 2,
+      "taskTitle": "Set up PostgreSQL database and schema",
+      "complexityScore": 7,
+      "recommendedSubtasks": 6,
+      "expansionPrompt": "Detail the specific steps for setting up a PostgreSQL database with Neon, including database provisioning, schema design for User/Ticker/Summary models, Prisma ORM configuration, migration management, environment setup, and implementing CRUD operations.",
+      "reasoning": "Database setup involves multiple components: cloud service configuration (Neon), schema design for multiple models, ORM integration (Prisma), migration management, and CRUD implementation. The complexity comes from ensuring proper data relationships and reliable database operations."
+    },
+    {
+      "taskId": 3,
+      "taskTitle": "Implement SEC EDGAR monitoring service",
+      "complexityScore": 8,
+      "recommendedSubtasks": 6,
+      "expansionPrompt": "Break down the SEC EDGAR monitoring service implementation into specific components: SEC API integration, ticker matching algorithm, Vercel cron job setup, database storage design, error handling/retry logic, and rate limit optimization.",
+      "reasoning": "This task is highly complex as it involves external API integration with SEC EDGAR, which has specific rate limits and formatting. It requires building a reliable monitoring system with error handling, retry logic, and scheduled execution via cron jobs. The matching algorithm adds additional complexity."
+    },
+    {
+      "taskId": 4,
+      "taskTitle": "Build file parsing system for different formats",
+      "complexityScore": 9,
+      "recommendedSubtasks": 7,
+      "expansionPrompt": "Detail the implementation steps for building parsers for different SEC filing formats, including HTML parser with cheerio, PDF parser with pdf-parse, XBRL parser, document chunking strategy, unified parser interface, error handling, and metadata extraction.",
+      "reasoning": "This task has high complexity due to the variety of document formats (HTML, PDF, XBRL) that need parsing, each requiring different libraries and approaches. The need for chunking strategies for large documents and creating a unified interface adds significant complexity. Error handling for malformed documents is also challenging."
+    },
+    {
+      "taskId": 5,
+      "taskTitle": "Integrate Claude API for AI summarization",
+      "complexityScore": 8,
+      "recommendedSubtasks": 6,
+      "expansionPrompt": "Break down the Claude API integration for SEC filing summarization into specific components: API authentication setup, prompt engineering for different filing types, summarization service implementation, error handling/retry logic, token management/chunking, and database storage for summaries.",
+      "reasoning": "Integrating with Claude API involves complex prompt engineering for different filing types, handling large documents with token limits, implementing retry logic, and ensuring the generated summaries are properly structured and stored. The specialized prompts for different filing types add significant complexity."
+    },
+    {
+      "taskId": 6,
+      "taskTitle": "Develop user dashboard with ticker management",
+      "complexityScore": 6,
+      "recommendedSubtasks": 5,
+      "expansionPrompt": "Detail the implementation steps for the user dashboard with ticker management, including UI component development with shadcn/ui, ticker table implementation with sorting/searching/pagination, sidebar design, ticker search functionality with debouncing, and API route development for ticker management.",
+      "reasoning": "This task involves frontend development with multiple interactive components (tables, search, sidebar) and corresponding API routes. The complexity comes from implementing features like debounced search, pagination, and ensuring responsive design, but follows standard patterns for dashboard interfaces."
+    },
+    {
+      "taskId": 7,
+      "taskTitle": "Implement email notification system",
+      "complexityScore": 7,
+      "recommendedSubtasks": 5,
+      "expansionPrompt": "Break down the email notification system implementation into specific components: Resend integration, email template design, notification logic based on user preferences, notification queue implementation, and database tracking for sent notifications.",
+      "reasoning": "Email notification systems require careful implementation of templates, delivery logic, and tracking. The complexity comes from handling different notification preferences, creating a reliable queue system, and ensuring emails are properly formatted with the right content."
+    },
+    {
+      "taskId": 8,
+      "taskTitle": "Create summary viewing interface",
+      "complexityScore": 6,
+      "recommendedSubtasks": 5,
+      "expansionPrompt": "Detail the implementation steps for the summary viewing interface, including UI component development, API route creation for retrieving summaries, historical summary browsing with filters, SEC filing linking, and responsive design implementation.",
+      "reasoning": "This task involves creating a specialized UI for viewing structured data (summaries) with filtering and browsing capabilities. The complexity comes from properly displaying financial data and insights in a user-friendly format, but follows standard patterns for data visualization interfaces."
+    },
+    {
+      "taskId": 9,
+      "taskTitle": "Implement user settings and preferences",
+      "complexityScore": 5,
+      "recommendedSubtasks": 4,
+      "expansionPrompt": "Break down the user settings implementation into specific components: settings page UI development, notification preference controls, theme toggle implementation, and API routes for updating user settings with validation.",
+      "reasoning": "User settings interfaces are relatively straightforward, involving form controls and corresponding API routes. The complexity is moderate, requiring proper validation and database updates, but follows standard patterns for settings management."
+    },
+    {
+      "taskId": 10,
+      "taskTitle": "Implement security measures and prepare for deployment",
+      "complexityScore": 8,
+      "recommendedSubtasks": 7,
+      "expansionPrompt": "Detail the security implementation and deployment preparation steps, including security headers configuration, CSRF protection, rate limiting, secure cookie setup, input validation/sanitization, error handling, monitoring setup, and security vulnerability testing.",
+      "reasoning": "Security implementation requires attention to multiple aspects of the application, from headers and cookies to input validation and rate limiting. The complexity comes from ensuring comprehensive protection across all parts of the application while maintaining functionality. Deployment preparation adds additional complexity with monitoring and backup strategies."
+    }
+  ]
+}

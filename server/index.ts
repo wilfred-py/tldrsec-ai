@@ -1,6 +1,14 @@
+import 'dotenv/config';
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
+
+// Check for required environment variables early
+if (!process.env.DATABASE_URL) {
+  log("Error: DATABASE_URL environment variable is not set");
+  log("Please create or update your .env file with a valid DATABASE_URL");
+  process.exit(1);
+}
 
 const app = express();
 app.use(express.json());
@@ -59,12 +67,10 @@ app.use((req, res, next) => {
   // ALWAYS serve the app on port 5000
   // this serves both the API and the client.
   // It is the only port that is not firewalled.
-  const port = 5000;
-  server.listen({
-    port,
-    host: "0.0.0.0",
-    reusePort: true,
-  }, () => {
+  const port = 5000; // Force the port to 5000 regardless of env variable
+  log(`Using configured port: ${port} (ignoring PORT=${process.env.PORT})`);
+  
+  server.listen(port, () => {
     log(`serving on port ${port}`);
   });
 })();

@@ -1,0 +1,142 @@
+# Prisma Database Management
+
+This document outlines guidelines for working with Prisma in the SECInsightAI project.
+
+## Project Structure
+
+- The Prisma schema and related files are located in the `app/prisma` directory
+- Prisma scripts are defined in the `app/package.json` file
+- The database connection utility is defined in `app/src/lib/db.ts`
+- API utilities are in `app/src/lib/api/` directory
+- Prisma client is generated to `app/src/generated/prisma`
+
+## Executing Prisma Commands
+
+**Important**: All Prisma commands must be run from the `app` directory, not the project root.
+
+✅ **Correct Usage**:
+```bash
+cd app
+npm run prisma:generate
+npm run prisma:migrate
+npm run db:seed
+```
+
+❌ **Incorrect Usage**:
+```bash
+# From project root
+npm run prisma:push  # This will fail
+```
+
+## Available Prisma Scripts
+
+- `prisma:generate`: Generate Prisma client based on schema
+- `prisma:migrate`: Create and apply database migrations
+- `prisma:studio`: Launch Prisma Studio UI to view/edit data
+- `prisma:push`: Push schema changes directly to the database (development only)
+- `db:seed`: Seed the database with sample data using TypeScript
+
+## Prisma Client Usage
+
+Import the Prisma client from the database utility:
+
+```typescript
+// ✅ Correct import for application code
+import { prisma } from '@/lib/db';
+
+// Example: Query users
+const users = await prisma.user.findMany();
+```
+
+For scripts like seed files, use the direct import path:
+
+```typescript
+// ✅ Correct import for seed files
+import { PrismaClient } from '../src/generated/prisma';
+
+const prisma = new PrismaClient();
+```
+
+## TypeScript Seed Files
+
+When working with TypeScript seed files:
+
+1. Always use the generated Prisma client path:
+   ```typescript
+   import { PrismaClient } from '../src/generated/prisma';
+   ```
+
+2. Use `tsx` instead of `ts-node` for ESM compatibility:
+   ```json
+   "db:seed": "npx tsx prisma/seed.ts"
+   ```
+
+3. ESM-compatible error handling:
+   ```typescript
+   main()
+     .catch((e) => {
+       console.error(e);
+       process.exit(1);
+     })
+     .finally(async () => {
+       await prisma.$disconnect();
+     });
+   ```
+
+## JSON Field Handling
+
+When working with JSON fields in Prisma (like `summaryJSON` in the `Summary` model), use the correct type handling:
+
+```typescript
+// ❌ Incorrect - may cause type errors
+const summary = await prisma.summary.create({
+  data: {
+    // ...other fields
+    summaryJSON: jsonData || null,  // Type error with null
+  },
+});
+
+// ✅ Correct - use Prisma's JSON null handling
+const summary = await prisma.summary.create({
+  data: {
+    // ...other fields
+    summaryJSON: jsonData || undefined,  // Use undefined instead of null
+  },
+});
+```
+
+## Database Connection Setup
+
+Before running Prisma commands:
+
+1. Ensure your database is running and accessible
+2. Verify your `.env` or `.env.local` contains a valid `DATABASE_URL`
+3. For cloud databases like Neon:
+   - Ensure the connection string includes the proper credentials
+   - Test the connection before running migrations or seeds
+   - Add `?sslmode=require` for secure connections
+
+Example connection string:
+```
+DATABASE_URL="postgresql://username:password@hostname:port/database?sslmode=require"
+```
+
+## Troubleshooting Common Issues
+
+### "Cannot find module '@prisma/client'"
+- Run `npm run prisma:generate` from the `app` directory
+- Ensure the output path matches the import paths in your code
+
+### "Unknown file extension '.ts'"
+- Use `tsx` instead of `ts-node` for TypeScript ESM compatibility
+- Update the package.json script: `"db:seed": "npx tsx prisma/seed.ts"`
+
+### Database Connection Issues
+- Check that `.env` or `.env.local` contains the correct `DATABASE_URL`
+- Verify network connectivity to the database server
+- For Neon or other serverless databases, check if credentials are still valid
+
+### Schema Push vs. Migrate
+- Use `prisma:push` during initial development
+- Use `prisma:migrate` for proper versioned migrations
+- Never use `prisma:push` in production 
