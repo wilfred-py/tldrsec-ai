@@ -19,14 +19,43 @@ git clone git@github.com:wilfred-py/tldrsec-ai.git
 
 ## Task Management & Automation
 
-This project uses Task Master for task management. When completing tasks, you can use our automation scripts to mark tasks as complete and automatically commit them to GitHub:
+This project uses Task Master for task management and implements a branch-based Git workflow:
+
+1. Each task gets its own feature branch with descriptive name based on task title
+2. Subtasks are completed on the task branch
+3. When a task is complete, the branch is merged to main
+4. The task branch is deleted after completion
+
+### Branch Naming Convention
+
+Branches follow this naming convention:
+- Task branches: `task-<task_id>-<task-title-slug>`
+- Example: `task-2-set-up-postgresql-database-and-schema`
+
+### Workflow Scripts
 
 ```bash
-# Mark a subtask as complete and commit to GitHub
+# 1. Start a new task
+./scripts/create-task-branch.sh <task_id>
+
+# 2. Complete a subtask
 ./scripts/complete-subtask.sh <task_id> <subtask_id> [custom_message]
 
-# Example: Complete subtask 2.3 with a custom message
-./scripts/complete-subtask.sh 2 3 "Implement database schema with foreign keys"
+# 3. Complete a task when all subtasks are done
+./scripts/complete-task.sh <task_id> [custom_message]
+```
+
+For example, to work on Task 2 (Database Setup):
+
+```bash
+# Create branch for task 2
+./scripts/create-task-branch.sh 2
+
+# Complete subtask 2.3 (Database schema)
+./scripts/complete-subtask.sh 2 3 "Implement schema with foreign key relationships"
+
+# When all subtasks are done, complete the task
+./scripts/complete-task.sh 2 "Complete database setup and migrations"
 ```
 
 For more information about the automation scripts, see [scripts/README.md](scripts/README.md).

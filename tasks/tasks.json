@@ -1,34 +1,763 @@
 {
   "tasks": [
     {
-      "id": 999,
-      "title": "Test Branch Naming Convention",
-      "description": "This is a dummy task to test the branch naming convention in our automation scripts",
-      "status": "in-progress",
+      "id": 1,
+      "title": "Project Setup and Infrastructure Configuration",
+      "description": "Set up the Next.js project with TypeScript, configure PostgreSQL database with Neon, and establish the basic project structure.",
+      "status": "done",
       "dependencies": [],
-      "priority": "low",
-      "details": "This task is only for testing purposes and will be deleted after testing the automation scripts.",
-      "testStrategy": "Create a branch, complete a subtask, and complete the task to verify that the branch naming convention works correctly.",
+      "priority": "high",
+      "details": "Initialize a new Next.js project with TypeScript using `npx create-next-app@latest --typescript`. Configure the PostgreSQL database connection using Neon's free tier. Set up the project structure with appropriate directories for components, pages, API routes, utilities, and types. Install required dependencies including shadcn/ui, Clerk for authentication, and other core libraries. Create environment variables for database connection, API keys, and service configurations.",
+      "testStrategy": "Verify project builds successfully. Test database connection by running a simple query. Ensure environment variables are properly loaded and accessible.",
       "subtasks": [
         {
           "id": 1,
-          "title": "Test creating a descriptive branch name",
-          "description": "Verify that the branch name includes the task title in a URL-friendly format",
-          "status": "pending",
+          "title": "Initialize Next.js project with TypeScript",
+          "description": "Create a new Next.js project with TypeScript configuration and set up the basic file structure",
+          "status": "done",
           "dependencies": [],
-          "details": "Run the create-task-branch.sh script and verify that the branch name includes the task title."
+          "details": "Run `npx create-next-app@latest --typescript` and follow the CLI prompts. Select the following options: Yes to using ESLint, Yes to using Tailwind CSS, Yes to using src/ directory, Yes to App Router, and No to customizing default import alias. After initialization, verify the project structure and ensure TypeScript is properly configured by checking tsconfig.json. Test the setup by running `npm run dev` to confirm the development server starts correctly."
         },
         {
           "id": 2,
-          "title": "Test completing a subtask",
-          "description": "Verify that subtask completion works correctly with the new branch naming convention",
+          "title": "Set up project directory structure",
+          "description": "Establish a comprehensive directory structure for the application components, utilities, and API routes",
+          "status": "done",
+          "dependencies": [
+            1
+          ],
+          "details": "Create the following directory structure within the src/ folder: 1) components/ (with subdirectories: ui/, forms/, layouts/, shared/), 2) lib/ (for utilities and helpers), 3) types/ (for TypeScript type definitions), 4) hooks/ (for custom React hooks), 5) app/ (ensure proper structure for Next.js App Router), 6) services/ (for external API integrations). Create placeholder index.ts files in each directory to maintain proper module exports. Add a README.md in each major directory explaining its purpose."
+        },
+        {
+          "id": 3,
+          "title": "Install and configure core dependencies",
+          "description": "Install and set up essential libraries including UI components, authentication, and database tools",
+          "status": "done",
+          "dependencies": [
+            1
+          ],
+          "details": "Install the following dependencies: 1) shadcn/ui: Follow the official setup guide at shadcn.com to initialize with `npx shadcn-ui@latest init`, 2) Clerk: `npm install @clerk/nextjs`, 3) Database tools: `npm install @neondatabase/serverless pg drizzle-orm`, 4) Utility libraries: `npm install zod axios date-fns`, 5) Development dependencies: `npm install -D drizzle-kit`. After installation, create basic configuration files for each major library in the appropriate locations. Verify all packages are correctly listed in package.json."
+        },
+        {
+          "id": 4,
+          "title": "Configure PostgreSQL with Neon",
+          "description": "Set up a PostgreSQL database using Neon's free tier and establish the connection in the application",
+          "status": "done",
+          "dependencies": [
+            3
+          ],
+          "details": "1) Create a free account on Neon (neon.tech), 2) Create a new project and PostgreSQL database instance, 3) Save the connection string, 4) Create a new file at src/lib/db.ts to configure the database connection using the @neondatabase/serverless package, 5) Implement a basic connection test function, 6) Create a simple schema definition file at src/lib/schema.ts using Drizzle ORM to define a test table, 7) Create a drizzle.config.ts file in the project root to configure Drizzle Kit for migrations."
+        },
+        {
+          "id": 5,
+          "title": "Set up environment variables and configuration",
+          "description": "Create and configure environment variables for database connections, API keys, and service configurations",
+          "status": "done",
+          "dependencies": [
+            3,
+            4
+          ],
+          "details": "1) Create a .env file in the project root, 2) Add the Neon database connection string as DATABASE_URL, 3) Add Clerk authentication keys (NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY and CLERK_SECRET_KEY), 4) Create a .env.example file with the same variables but without actual values for reference, 5) Add .env to .gitignore, 6) Create a src/lib/env.ts file using zod to validate environment variables at runtime, 7) Update next.config.js to include any necessary environment variable configurations, 8) Test the environment setup by creating a simple API route that verifies database connectivity."
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "Database Schema Implementation",
+      "description": "Create the database schema for User, Ticker, and Summary models as specified in the PRD.",
+      "status": "done",
+      "dependencies": [
+        1
+      ],
+      "priority": "high",
+      "details": "Implement the database schema using a migration tool or direct SQL scripts. Create tables for User (id, email, name, authProvider, authProviderId, createdAt, preferences), Ticker (id, symbol, companyName, userId, addedAt), and Summary (id, tickerId, filingType, filingDate, filingUrl, summaryText, summaryJSON, createdAt, sentToUser). Set up appropriate indexes, foreign key constraints, and data types. Create database utility functions for common operations on these models.",
+      "testStrategy": "Write test scripts to verify table creation, relationships, and constraints. Test CRUD operations on each model to ensure proper functionality.",
+      "subtasks": [
+        {
+          "id": 1,
+          "title": "Design database schema diagram and relationships",
+          "description": "Create a detailed database schema diagram showing all tables, fields, data types, and relationships between User, Ticker, and Summary models.",
+          "status": "done",
+          "dependencies": [],
+          "details": "Use a database modeling tool (like dbdiagram.io, Lucidchart, or MySQL Workbench) to create a visual representation of the schema. Define primary keys, foreign keys, and relationships. Specify data types for each field with appropriate sizes. Document any constraints, indexes, or special considerations. The diagram should clearly show the one-to-many relationship between User and Ticker, and between Ticker and Summary. Include notes about indexing strategies for performance optimization."
+        },
+        {
+          "id": 2,
+          "title": "Create User table migration",
+          "description": "Implement the User table with all required fields, constraints, and indexes.",
+          "status": "done",
+          "dependencies": [
+            1
+          ],
+          "details": "Create a migration script that defines the User table with fields: id (primary key), email (unique, indexed), name, authProvider, authProviderId, createdAt, and preferences (JSON/JSONB type). Set appropriate NOT NULL constraints where needed. Add a unique composite index on authProvider and authProviderId to ensure users can't register twice with the same provider. Ensure the email field has a case-insensitive unique index. The preferences field should be implemented as a JSON/JSONB type to store user configuration options flexibly."
+        },
+        {
+          "id": 3,
+          "title": "Create Ticker table migration",
+          "description": "Implement the Ticker table with all required fields, constraints, and indexes.",
+          "status": "done",
+          "dependencies": [
+            1,
+            2
+          ],
+          "details": "Create a migration script that defines the Ticker table with fields: id (primary key), symbol (indexed), companyName, userId (foreign key to User.id), and addedAt. Add a foreign key constraint to link userId to the User table with appropriate cascade rules. Create a compound unique index on userId and symbol to prevent duplicate ticker tracking for the same user. Ensure the symbol field is stored in uppercase for consistency. Add appropriate indexes to optimize queries that filter by symbol or userId."
+        },
+        {
+          "id": 4,
+          "title": "Create Summary table migration",
+          "description": "Implement the Summary table with all required fields, constraints, and indexes.",
+          "status": "done",
+          "dependencies": [
+            1,
+            3
+          ],
+          "details": "Create a migration script that defines the Summary table with fields: id (primary key), tickerId (foreign key to Ticker.id), filingType, filingDate, filingUrl, summaryText, summaryJSON (JSON/JSONB type), createdAt, and sentToUser (boolean). Add a foreign key constraint to link tickerId to the Ticker table with appropriate cascade rules. Create indexes on filingDate and filingType for efficient querying. Add a compound index on tickerId and filingDate to optimize queries that retrieve summaries for a specific ticker within a date range. Ensure the summaryJSON field is implemented as a JSON/JSONB type to store structured summary data."
+        },
+        {
+          "id": 5,
+          "title": "Implement database utility functions",
+          "description": "Create utility functions for common database operations on the User, Ticker, and Summary models.",
+          "status": "done",
+          "dependencies": [
+            2,
+            3,
+            4
+          ],
+          "details": "Implement a set of database utility functions that abstract common operations: 1) User functions: createUser, getUserById, getUserByEmail, getUserByAuthProvider, updateUserPreferences. 2) Ticker functions: addTickerForUser, getTickersForUser, removeTickerForUser. 3) Summary functions: createSummary, getSummariesForTicker, getUnsentSummaries, markSummaryAsSent. Each function should handle error cases, implement proper validation, and use parameterized queries to prevent SQL injection. Document each function with clear input/output specifications and usage examples. Implement transaction support for operations that modify multiple tables."
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "Authentication System Implementation",
+      "description": "Implement user authentication using Clerk with OAuth providers (Google, GitHub, Twitter) and user registration flow.",
+      "status": "pending",
+      "dependencies": [
+        1,
+        2
+      ],
+      "priority": "high",
+      "details": "Set up Clerk authentication with OAuth providers (Google, GitHub, Twitter). Create authentication middleware for protected routes. Implement user registration flow that captures necessary user information and stores it in the database. Create API endpoints for user profile management. Implement secure session handling and token validation. Set up email verification process. Create utility functions to check user authentication status and permissions.",
+      "testStrategy": "Test sign-up and login flows with each OAuth provider. Verify user data is correctly stored in the database. Test authentication middleware by accessing protected routes with and without valid authentication.",
+      "subtasks": [
+        {
+          "id": 1,
+          "title": "Set up Clerk authentication with OAuth providers",
+          "description": "Initialize Clerk in the application and configure OAuth providers (Google, GitHub, Twitter)",
+          "status": "done",
+          "dependencies": [],
+          "details": "Create a Clerk account and project. Install the Clerk SDK (@clerk/nextjs). Configure environment variables for Clerk API keys. Set up OAuth providers in the Clerk dashboard by registering the application with Google, GitHub, and Twitter developer platforms. Implement the Clerk provider in the application's root component. Create sign-in and sign-up pages using Clerk components."
+        },
+        {
+          "id": 2,
+          "title": "Create authentication middleware for protected routes",
+          "description": "Implement middleware to protect routes that require authentication",
+          "status": "done",
+          "dependencies": [
+            1
+          ],
+          "details": "Create a middleware file that uses Clerk's authMiddleware to protect routes. Configure public routes that don't require authentication. Implement route groups for authenticated and unauthenticated users. Set up redirects for unauthenticated users trying to access protected routes. Test the middleware with both authenticated and unauthenticated sessions."
+        },
+        {
+          "id": 3,
+          "title": "Implement user registration flow with database integration",
+          "description": "Create a user registration process that captures user information and stores it in the database",
           "status": "pending",
           "dependencies": [
             1
           ],
-          "details": "Run the complete-subtask.sh script and verify that it finds and updates the correct branch."
+          "details": "Design a user schema in the database with fields for profile information. Create a webhook handler for Clerk user creation events. Implement logic to create a new user record in your database when a user registers through Clerk. Add custom fields to the Clerk sign-up form if needed. Test the registration flow and verify data is correctly stored in both Clerk and your database."
+        },
+        {
+          "id": 4,
+          "title": "Create API endpoints for user profile management",
+          "description": "Develop API routes for retrieving and updating user profile information",
+          "status": "pending",
+          "dependencies": [
+            2,
+            3
+          ],
+          "details": "Create GET endpoint to retrieve user profile data from your database. Implement PUT/PATCH endpoint to update user profile information. Add validation for user input using a schema validation library. Ensure endpoints are protected and only accessible by the authenticated user or admins. Add error handling for database operations. Test endpoints with various scenarios including valid and invalid requests."
+        },
+        {
+          "id": 5,
+          "title": "Implement secure session handling and token validation",
+          "description": "Set up proper session management and token validation for API requests",
+          "status": "pending",
+          "dependencies": [
+            2
+          ],
+          "details": "Implement utility functions to verify JWT tokens from Clerk. Create helper functions to extract user information from the session. Set up CSRF protection for form submissions. Implement session timeout and refresh token logic. Create a higher-order function or React hook to easily access the current user in components. Test token validation with valid and expired tokens."
+        },
+        {
+          "id": 6,
+          "title": "Set up email verification and permission utilities",
+          "description": "Implement email verification process and create utilities for checking user permissions",
+          "status": "pending",
+          "dependencies": [
+            3,
+            5
+          ],
+          "details": "Configure Clerk's email verification settings. Create custom email templates for verification emails. Implement a verification callback route to handle email verification completion. Develop utility functions to check user roles and permissions. Create a permission system based on user roles stored in your database. Implement functions to check if users can perform specific actions. Test the verification flow and permission checks with different user types."
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "title": "SEC Filing Monitoring Service",
+      "description": "Build the service to monitor SEC EDGAR for new filings via a cron job and identify filings matching user-tracked tickers.",
+      "status": "in-progress",
+      "dependencies": [
+        2
+      ],
+      "priority": "high",
+      "details": "Create a Vercel cron job that runs hourly to fetch new filings from SEC EDGAR RSS or website. Implement logic to match filings against user-tracked tickers. Build a filing type detection system to categorize filings (10-K, 10-Q, 8-K, Form 4). Create a queue system for processing identified filings. Implement error handling and retry logic for API rate limits. Store filing metadata in the database for further processing. Add logging for monitoring and debugging purposes.",
+      "testStrategy": "Test the monitoring service with sample SEC data. Verify correct identification of filings for tracked tickers. Test error handling by simulating API failures and rate limits. Verify logging functionality.",
+      "subtasks": [
+        {
+          "id": 1,
+          "title": "Set up SEC EDGAR data fetching module",
+          "description": "Create a module to fetch new filings from SEC EDGAR via RSS feed or direct website scraping",
+          "status": "pending",
+          "dependencies": [],
+          "details": "Implement a service that connects to SEC EDGAR's RSS feed (preferred) or website to retrieve recent filings. Handle pagination and response parsing to extract filing metadata (company name, CIK, filing type, date, URL). Include proper error handling for network issues and implement rate limiting compliance to avoid IP blocks. Export a function that returns a structured array of recent filings with all necessary metadata."
+        },
+        {
+          "id": 2,
+          "title": "Create filing type detection and categorization system",
+          "description": "Build a system to identify and categorize different SEC filing types",
+          "status": "pending",
+          "dependencies": [
+            1
+          ],
+          "details": "Implement logic to detect and categorize filings into types (10-K, 10-Q, 8-K, Form 4, etc.) based on filing codes and metadata from the SEC. Create a mapping object for common filing types and their significance. The system should export functions to categorize a filing and return standardized type information. Include edge case handling for less common filing types."
+        },
+        {
+          "id": 3,
+          "title": "Implement ticker matching logic",
+          "description": "Create a system to match SEC filings with user-tracked tickers",
+          "status": "pending",
+          "dependencies": [
+            1
+          ],
+          "details": "Develop logic to match filings against user-tracked tickers. This requires creating functions to normalize company names and tickers for comparison, handling subsidiaries and parent companies, and matching CIK numbers. Implement fuzzy matching for company names when exact matches aren't found. The module should accept a filing and a list of tracked tickers, returning whether there's a match and the confidence level."
+        },
+        {
+          "id": 4,
+          "title": "Build database schema and storage functions",
+          "description": "Design and implement the database schema and functions to store filing metadata",
+          "status": "pending",
+          "dependencies": [
+            2,
+            3
+          ],
+          "details": "Create database schema for storing filing metadata, including tables for filings, filing types, and matching results. Implement functions to store new filings, update existing ones, and query for processing status. Include indexes for efficient querying by ticker, filing type, and date. Create functions to mark filings as processed, failed, or queued for retry. Test with sample data to ensure proper storage and retrieval."
+        },
+        {
+          "id": 5,
+          "title": "Develop queue system for filing processing",
+          "description": "Implement a reliable queue system to handle the processing of identified filings",
+          "status": "pending",
+          "dependencies": [
+            4
+          ],
+          "details": "Create a queue system using a database table or a dedicated service like AWS SQS or Redis. Implement functions to add filings to the queue, retrieve the next filing for processing, and handle completion/failure states. Include retry logic with exponential backoff for failed processing attempts. Ensure the queue can handle concurrent processing and is resilient to service restarts. Add monitoring capabilities to track queue length and processing times."
+        },
+        {
+          "id": 6,
+          "title": "Create Vercel cron job implementation",
+          "description": "Set up a Vercel cron job to periodically fetch and process SEC filings",
+          "status": "pending",
+          "dependencies": [
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "details": "Implement a Vercel cron job that runs hourly to orchestrate the filing monitoring process. The job should: 1) Fetch recent filings using the SEC EDGAR module, 2) Apply ticker matching logic to identify relevant filings, 3) Categorize filings by type, 4) Store metadata in the database, and 5) Add matched filings to the processing queue. Include comprehensive error handling and logging. Configure the cron job in Vercel's configuration with appropriate timing and retry settings."
+        },
+        {
+          "id": 7,
+          "title": "Implement logging, monitoring, and alerting",
+          "description": "Add comprehensive logging, monitoring, and alerting for the SEC filing monitoring service",
+          "status": "pending",
+          "dependencies": [
+            6
+          ],
+          "details": "Implement structured logging throughout the system to track operations, errors, and performance metrics. Set up monitoring dashboards to visualize system health, including success rates, processing times, and queue lengths. Create alerts for critical failures, such as consecutive failed runs or excessive queue backlogs. Implement a status page or admin interface to view recent activity and manually trigger runs if needed. Include detailed logs for debugging purposes, with appropriate log levels to control verbosity in different environments."
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "title": "Filing Parsing System",
+      "description": "Develop parsers for different filing formats (HTML, PDF, XBRL) to extract content for AI summarization.",
+      "status": "pending",
+      "dependencies": [
+        4
+      ],
+      "priority": "medium",
+      "details": "Implement HTML parser using cheerio to extract content from HTML filings. Create PDF parser using pdf-parse to extract text from PDF filings. Develop XBRL parser using xbrl library to extract structured data. Build a unified parsing interface that detects file type and applies the appropriate parser. Implement chunking strategies for large documents to handle token limits. Create utility functions to clean and normalize extracted text. Add error handling for malformed or unexpected document structures.",
+      "testStrategy": "Test each parser with sample filings of different formats. Verify correct content extraction and handling of edge cases. Test chunking functionality with large documents. Validate error handling with malformed documents.",
+      "subtasks": [
+        {
+          "id": 1,
+          "title": "Implement HTML Parser with Cheerio",
+          "description": "Create a parser module that extracts content from HTML filings using the Cheerio library",
+          "status": "pending",
+          "dependencies": [],
+          "details": "Install cheerio npm package. Create a function that accepts HTML content as input and returns extracted text. Focus on identifying and extracting relevant sections like headers, paragraphs, tables, and lists while preserving their semantic meaning. Implement methods to handle different HTML structures commonly found in financial filings. Include options for selective extraction based on CSS selectors or XPath. Return the extracted content in a standardized format with metadata."
+        },
+        {
+          "id": 2,
+          "title": "Develop PDF Parser with pdf-parse",
+          "description": "Build a parser module that extracts text content from PDF filings using the pdf-parse library",
+          "status": "pending",
+          "dependencies": [],
+          "details": "Install pdf-parse npm package. Create a function that accepts a PDF buffer as input and returns extracted text. Implement page-by-page extraction to maintain document structure. Handle common PDF issues like text encoding, embedded images, and multi-column layouts. Add options to extract metadata like title, author, and creation date. Ensure proper text flow reconstruction for readability. Return the extracted content in the same standardized format as the HTML parser."
+        },
+        {
+          "id": 3,
+          "title": "Create XBRL Parser",
+          "description": "Develop a parser module that extracts structured data from XBRL filings using an appropriate XBRL library",
+          "status": "pending",
+          "dependencies": [],
+          "details": "Research and install an appropriate XBRL parsing library. Create a function that accepts XBRL content and extracts structured financial data. Implement methods to identify and extract key financial metrics, taxonomies, and contexts. Build functionality to convert complex XBRL structures into more accessible JSON objects. Include options to filter data by reporting period, concept, or dimension. Return both the structured data and any accompanying text in the standardized format."
+        },
+        {
+          "id": 4,
+          "title": "Build Unified Parsing Interface",
+          "description": "Create a unified interface that detects file type and routes to the appropriate parser",
+          "status": "pending",
+          "dependencies": [
+            1,
+            2,
+            3
+          ],
+          "details": "Implement a file type detection function using content analysis, file extensions, and/or MIME types. Create a main parse() function that accepts file content, automatically detects the type, and routes to the appropriate parser implementation. Handle edge cases like embedded formats (e.g., HTML within PDF). Implement a consistent error reporting mechanism across all parsers. Return parsing results in a standardized format regardless of the original file type. Add logging for parsing operations."
+        },
+        {
+          "id": 5,
+          "title": "Implement Text Cleaning and Normalization Utilities",
+          "description": "Create utility functions to clean and normalize extracted text for improved AI processing",
+          "status": "pending",
+          "dependencies": [
+            4
+          ],
+          "details": "Develop functions to remove redundant whitespace, normalize line breaks, and standardize character encodings. Implement methods to handle special characters, symbols, and non-ASCII text. Create utilities to detect and fix common extraction artifacts like header/footer repetition, page numbers, and watermarks. Add functions to normalize financial notation (e.g., currency symbols, percentages). Build text segmentation utilities to identify document sections, paragraphs, and sentences. Ensure all cleaning operations preserve the semantic meaning of the content."
+        },
+        {
+          "id": 6,
+          "title": "Develop Document Chunking Strategies",
+          "description": "Implement intelligent chunking algorithms to handle large documents within token limits",
+          "status": "pending",
+          "dependencies": [
+            5
+          ],
+          "details": "Research optimal chunking strategies for different document types. Implement semantic chunking that preserves logical document sections. Create functions to estimate token counts based on text length and complexity. Develop algorithms to split documents at natural boundaries (sections, paragraphs) while respecting token limits. Implement overlap strategies to maintain context between chunks. Add metadata to chunks to track their position in the original document. Create functions to reassemble processed chunks if needed."
+        },
+        {
+          "id": 7,
+          "title": "Add Robust Error Handling and Recovery",
+          "description": "Implement comprehensive error handling for malformed or unexpected document structures",
+          "status": "pending",
+          "dependencies": [
+            4,
+            5,
+            6
+          ],
+          "details": "Identify common parsing failure scenarios for each document type. Implement graceful degradation strategies when optimal parsing fails. Create specialized error classes for different types of parsing failures. Add recovery mechanisms to extract partial content when complete parsing isn't possible. Implement validation functions to check parsing results for completeness and quality. Add detailed logging of parsing errors with diagnostic information. Create a feedback mechanism to improve parsers based on failure patterns. Test with intentionally malformed documents to verify error handling."
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "title": "AI Summarization Integration",
+      "description": "Integrate Claude API for AI-powered summarization of SEC filings using specialized prompts for different filing types.",
+      "status": "pending",
+      "dependencies": [
+        5
+      ],
+      "priority": "high",
+      "details": "Set up Claude API integration with proper authentication. Implement the prompt templates for different filing types (10-K/10-Q, 8-K, Form 4) as specified in the PRD. Create a summarization service that processes parsed content through Claude API. Implement error handling and retry logic for API failures. Add logic to handle token limits by chunking and summarizing in stages if necessary. Store generated summaries in the database with proper metadata. Create utility functions to format and structure the AI responses.",
+      "testStrategy": "Test summarization with sample filings of each type. Verify correct prompt usage and response handling. Test error scenarios and retry logic. Validate handling of token limits with large documents.",
+      "subtasks": [
+        {
+          "id": 1,
+          "title": "Set up Claude API integration",
+          "description": "Implement the core API client for Claude with proper authentication and configuration",
+          "status": "pending",
+          "dependencies": [],
+          "details": "Create a dedicated service class for Claude API integration. Implement authentication using API keys stored in environment variables. Set up the base request/response handling with proper error types. Configure API endpoints, request timeouts, and retry settings. Include basic logging for API interactions. Create a simple test harness to verify connectivity."
+        },
+        {
+          "id": 2,
+          "title": "Design and implement prompt templates",
+          "description": "Create specialized prompt templates for different SEC filing types",
+          "status": "pending",
+          "dependencies": [
+            1
+          ],
+          "details": "Design prompt templates for 10-K/10-Q, 8-K, and Form 4 filings as specified in the PRD. Structure prompts to extract the most relevant information for each filing type. Include instructions for formatting the output consistently. Store templates in a configuration file for easy updates. Add a template selection mechanism based on filing type. Create unit tests to validate template rendering with sample data."
+        },
+        {
+          "id": 3,
+          "title": "Implement content chunking and token management",
+          "description": "Create utilities to handle large documents within Claude's token limits",
+          "status": "pending",
+          "dependencies": [
+            1
+          ],
+          "details": "Implement a content chunking strategy that respects Claude's token limits. Create utilities to estimate token counts for input text. Design an algorithm to split documents intelligently at logical boundaries (sections, paragraphs). Implement a mechanism to track context across chunks. Create a reassembly function to combine multiple summary chunks into a coherent whole. Add logging to track chunking decisions."
+        },
+        {
+          "id": 4,
+          "title": "Build summarization service with retry logic",
+          "description": "Create the core summarization service with proper error handling and retry mechanisms",
+          "status": "pending",
+          "dependencies": [
+            1,
+            2,
+            3
+          ],
+          "details": "Implement the main summarization service that processes parsed content through Claude API. Add comprehensive error handling for API failures, timeout issues, and malformed responses. Implement exponential backoff retry logic with configurable attempts. Add circuit breaker pattern to prevent overwhelming the API during outages. Create detailed logging for troubleshooting. Implement timeout handling for long-running summarization requests."
+        },
+        {
+          "id": 5,
+          "title": "Implement summary storage and retrieval",
+          "description": "Create database models and services for storing and retrieving generated summaries",
+          "status": "pending",
+          "dependencies": [
+            4
+          ],
+          "details": "Design and implement database models for storing summaries with appropriate metadata (filing ID, type, generation timestamp, model version). Create a service layer for saving and retrieving summaries. Implement caching to avoid regenerating recent summaries. Add TTL (time-to-live) settings for cached summaries. Create indexes for efficient retrieval. Implement a summary invalidation mechanism for when source documents are updated."
+        },
+        {
+          "id": 6,
+          "title": "Create summary formatting and presentation utilities",
+          "description": "Implement utilities to format and structure AI responses for presentation",
+          "status": "pending",
+          "dependencies": [
+            4,
+            5
+          ],
+          "details": "Create utility functions to parse and structure the AI-generated summaries. Implement formatting for different output contexts (API JSON, HTML, plain text). Add functions to extract key insights and highlights from summaries. Create sanitization utilities to handle any problematic content in AI responses. Implement markdown to HTML conversion for rich text presentation. Add unit tests to verify formatting consistency across different filing types."
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "title": "Email Notification System",
+      "description": "Build the email notification system using Resend to deliver summaries based on user preferences.",
+      "status": "pending",
+      "dependencies": [
+        3,
+        6
+      ],
+      "priority": "medium",
+      "details": "Integrate Resend email service for sending notifications. Create email templates for immediate notifications and digest formats. Implement logic to determine notification timing based on user preferences. Build a queue system for email delivery to handle rate limits. Create API endpoints for managing notification preferences. Implement tracking for sent notifications to prevent duplicates. Add error handling and retry logic for failed email deliveries.",
+      "testStrategy": "Test email delivery with sample summaries. Verify correct template usage based on notification type. Test preference-based delivery timing. Validate error handling and retry logic for failed deliveries.",
+      "subtasks": [
+        {
+          "id": 1,
+          "title": "Integrate Resend API and create basic email service",
+          "description": "Set up the Resend API integration and create a basic email service layer that handles authentication and sending simple emails",
+          "status": "pending",
+          "dependencies": [],
+          "details": "Create a service class that wraps the Resend API. Implement authentication using API keys stored in environment variables. Create basic methods for sending emails with proper error handling. Set up logging for all API interactions. Test the integration with simple plain-text emails to verify connectivity."
+        },
+        {
+          "id": 2,
+          "title": "Design and implement email templates",
+          "description": "Create reusable email templates for immediate notifications and digest formats with proper styling and responsive design",
+          "status": "pending",
+          "dependencies": [
+            1
+          ],
+          "details": "Design HTML templates for immediate notifications and digest formats. Implement a templating system using a library like Handlebars or React Email. Create template variables for personalization (user name, notification content, etc.). Ensure templates are responsive and display correctly across email clients. Add tracking pixels for open rate analytics if needed. Test templates with various content lengths and types."
+        },
+        {
+          "id": 3,
+          "title": "Build notification preference system and API endpoints",
+          "description": "Create data models and API endpoints for users to manage their notification preferences",
+          "status": "pending",
+          "dependencies": [
+            1
+          ],
+          "details": "Design a data model for storing user notification preferences (immediate vs. digest, frequency, categories of interest, etc.). Implement API endpoints for users to view and update their preferences. Create admin endpoints for managing default preferences. Add validation to ensure preferences are valid. Document the API endpoints for frontend integration. Implement proper authorization to ensure users can only modify their own preferences."
+        },
+        {
+          "id": 4,
+          "title": "Implement notification queue system with rate limiting",
+          "description": "Build a robust queue system to handle email delivery with rate limiting, tracking, and prevention of duplicate notifications",
+          "status": "pending",
+          "dependencies": [
+            1,
+            2,
+            3
+          ],
+          "details": "Implement a queue system using a database or message broker (like Redis, RabbitMQ, or a database table). Create logic to batch notifications based on user preferences. Implement rate limiting to respect Resend's API limits. Add a tracking system to record sent notifications and prevent duplicates. Create a scheduler for digest emails that runs at appropriate intervals. Implement error handling with automatic retries for failed deliveries. Add monitoring to track queue health and delivery success rates."
+        },
+        {
+          "id": 5,
+          "title": "Create notification delivery logic based on user preferences",
+          "description": "Implement the core logic that determines when and how to send notifications based on user preferences",
+          "status": "pending",
+          "dependencies": [
+            2,
+            3,
+            4
+          ],
+          "details": "Build the decision engine that determines if a notification should be sent immediately or added to a digest. Implement logic to aggregate notifications for digest emails. Create a system to handle time-sensitive notifications that should bypass digest settings. Add support for notification categories and priority levels. Implement tests to verify notifications are sent according to user preferences. Create a dashboard for monitoring notification delivery metrics and debugging issues."
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "title": "User Dashboard and UI Implementation",
+      "description": "Develop the user dashboard with tracked tickers table, search functionality, and settings management.",
+      "status": "pending",
+      "dependencies": [
+        3
+      ],
+      "priority": "medium",
+      "details": "Create the landing page with sign-up options. Implement the onboarding flow for new users to enter tracked tickers. Build the dashboard UI with shadcn/ui components featuring a resizable sidebar, search bar, and tracked tickers table. Implement sorting, pagination, and filtering for the tickers table. Create the settings page for managing user preferences. Build the summary viewing interface. Implement responsive design for mobile and desktop. Add dark/light mode toggle based on user preferences.",
+      "testStrategy": "Test UI components across different screen sizes. Verify responsive behavior on mobile devices. Test sorting, pagination, and filtering functionality. Validate form submissions and user preference updates.",
+      "subtasks": [
+        {
+          "id": 1,
+          "title": "Landing Page with Sign-up Flow",
+          "description": "Create the initial landing page with sign-up options and authentication flow",
+          "status": "pending",
+          "dependencies": [],
+          "details": "Implement the landing page using shadcn/ui components with a clean layout featuring app description, benefits, and prominent sign-up/login buttons. Create authentication forms with email/password and social login options. Implement form validation and error handling. Set up the authentication flow with proper redirects after successful login/signup. Ensure the page is responsive for both mobile and desktop views."
+        },
+        {
+          "id": 2,
+          "title": "User Onboarding Flow",
+          "description": "Build the onboarding experience for new users to set up their tracked tickers",
+          "status": "pending",
+          "dependencies": [
+            1
+          ],
+          "details": "Design a multi-step onboarding flow that guides new users through setting up their account after registration. Create UI for users to search and select initial tickers to track. Implement a ticker suggestion system based on popularity or categories. Add the ability to skip onboarding and complete it later. Store user selections in the database and redirect to the main dashboard upon completion."
+        },
+        {
+          "id": 3,
+          "title": "Dashboard Layout and Navigation",
+          "description": "Implement the core dashboard layout with resizable sidebar and navigation components",
+          "status": "pending",
+          "dependencies": [
+            1
+          ],
+          "details": "Build the main dashboard layout with a resizable sidebar using shadcn/ui components. Implement the navigation menu with links to different sections (Dashboard, Settings, etc.). Create a responsive header with user profile dropdown, notifications, and dark/light mode toggle. Ensure the layout adapts properly to different screen sizes with appropriate breakpoints. Implement state management to remember sidebar collapsed/expanded state."
+        },
+        {
+          "id": 4,
+          "title": "Tracked Tickers Table with Search",
+          "description": "Develop the interactive table for displaying and managing tracked tickers",
+          "status": "pending",
+          "dependencies": [
+            3
+          ],
+          "details": "Implement a data table component using shadcn/ui to display tracked tickers with columns for ticker symbol, company name, current price, daily change, and actions. Add client-side search functionality with debounced input. Implement sorting capabilities for all columns. Create pagination with configurable page size. Add filtering options by performance metrics or categories. Ensure the table is responsive and gracefully adapts to smaller screens."
+        },
+        {
+          "id": 5,
+          "title": "Settings Page for User Preferences",
+          "description": "Create the settings interface for managing user preferences and account settings",
+          "status": "pending",
+          "dependencies": [
+            3
+          ],
+          "details": "Build a settings page with sections for account information, notification preferences, display settings, and data preferences. Implement forms for updating user profile information with validation. Create toggles for notification settings (email, push, etc.). Add interface for managing default dashboard views and ticker display preferences. Implement the dark/light mode settings with system preference detection. Ensure all settings are properly saved to the user's profile in the database."
+        },
+        {
+          "id": 6,
+          "title": "Summary Viewing Interface and Mobile Optimization",
+          "description": "Implement the ticker summary view and finalize responsive design across all components",
+          "status": "pending",
+          "dependencies": [
+            4,
+            5
+          ],
+          "details": "Create a detailed summary view component that displays comprehensive information about a selected ticker. Implement charts and performance metrics visualization. Add historical data display with customizable time ranges. Ensure all UI components are fully responsive across devices. Optimize touch interactions for mobile users. Implement specific mobile layouts where necessary. Test and refine the UI across different device sizes and orientations. Finalize the dark/light mode implementation across all components."
+        }
+      ]
+    },
+    {
+      "id": 9,
+      "title": "API Routes and Data Integration",
+      "description": "Implement Next.js API routes for tickers, summaries, and user settings, connecting the frontend to the database.",
+      "status": "pending",
+      "dependencies": [
+        2,
+        3,
+        6,
+        7,
+        8
+      ],
+      "priority": "high",
+      "details": "Create API routes for ticker management (GET /api/tickers, POST /api/tickers, DELETE /api/tickers/[ticker]). Implement API routes for summary retrieval (GET /api/summaries/[ticker]). Build API endpoints for user settings management (PUT /api/settings). Add authentication middleware to protect all API routes. Implement proper error handling and response formatting. Add rate limiting to prevent abuse. Create utility functions for common data operations. Implement input validation and sanitization for all API endpoints.",
+      "testStrategy": "Test each API endpoint with valid and invalid requests. Verify authentication requirements are enforced. Test rate limiting functionality. Validate error responses for various scenarios.",
+      "subtasks": [
+        {
+          "id": 1,
+          "title": "Create API routes for ticker management",
+          "description": "Implement the core ticker management API endpoints to allow retrieving, adding, and removing tickers from the database",
+          "status": "pending",
+          "dependencies": [],
+          "details": "Create three API routes in the pages/api directory: GET /api/tickers to retrieve all tickers, POST /api/tickers to add a new ticker, and DELETE /api/tickers/[ticker] to remove a specific ticker. Each endpoint should connect to the database using the appropriate data access methods. Include basic error handling and response formatting. Use the Next.js API routes pattern with req/res objects. Test each endpoint with tools like Postman or Thunder Client."
+        },
+        {
+          "id": 2,
+          "title": "Implement authentication middleware",
+          "description": "Create a reusable authentication middleware to protect all API routes and ensure only authenticated users can access the endpoints",
+          "status": "pending",
+          "dependencies": [
+            1
+          ],
+          "details": "Create a middleware function in a utils/middleware.js file that verifies the user's authentication status. Use NextAuth.js or a similar authentication library to validate the session. The middleware should extract the user ID from the session and attach it to the request object for downstream handlers. Apply this middleware to the previously created ticker routes and ensure they only return data for the authenticated user. Return appropriate 401/403 status codes for unauthorized requests."
+        },
+        {
+          "id": 3,
+          "title": "Implement API routes for summary retrieval",
+          "description": "Create endpoints to fetch financial summaries for specific tickers with proper authentication and error handling",
+          "status": "pending",
+          "dependencies": [
+            1,
+            2
+          ],
+          "details": "Create a GET /api/summaries/[ticker] endpoint that retrieves financial summary data for a specific ticker from the database. Apply the authentication middleware to ensure only authorized users can access the data. Implement error handling for cases where the ticker doesn't exist or the summary data is unavailable. Format the response data consistently with other API endpoints. Consider implementing caching for frequently accessed summaries to improve performance."
+        },
+        {
+          "id": 4,
+          "title": "Build API endpoints for user settings management",
+          "description": "Create API routes to manage user preferences and application settings with proper validation",
+          "status": "pending",
+          "dependencies": [
+            2
+          ],
+          "details": "Implement a PUT /api/settings endpoint that allows users to update their preferences and settings. Create a GET /api/settings endpoint to retrieve current settings. Apply the authentication middleware to protect these routes. Implement input validation using a library like Zod or Joi to ensure the settings data is properly formatted. Store settings in the database with appropriate user association. Include error handling for validation failures and database errors."
+        },
+        {
+          "id": 5,
+          "title": "Add advanced API features and security",
+          "description": "Enhance all API routes with rate limiting, comprehensive validation, and utility functions for common operations",
+          "status": "pending",
+          "dependencies": [
+            1,
+            2,
+            3,
+            4
+          ],
+          "details": "Implement rate limiting for all API endpoints using a library like express-rate-limit or a custom solution. Create utility functions in utils/api.js for common operations like response formatting, error handling, and data transformation. Add comprehensive input validation and sanitization to all endpoints using a validation library. Implement proper HTTP status codes for different scenarios. Add logging for API requests to help with debugging and monitoring. Test all endpoints thoroughly with different scenarios including edge cases and error conditions."
+        }
+      ]
+    },
+    {
+      "id": 10,
+      "title": "Security Implementation and Production Readiness",
+      "description": "Implement security measures, error handling, monitoring, and prepare the application for production deployment.",
+      "status": "pending",
+      "dependencies": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9
+      ],
+      "priority": "high",
+      "details": "Configure security headers (X-Frame-Options, X-Content-Type-Options, HSTS). Implement CSRF protection for forms and state-changing requests. Set up secure cookies with HttpOnly, Secure, and SameSite attributes. Add input validation and sanitization throughout the application. Implement rate limiting on authentication endpoints and API routes. Set up error monitoring and logging. Create deployment documentation. Implement backup and recovery strategies for the database. Configure monitoring for cron jobs and API performance. Perform security vulnerability testing and address any issues.",
+      "testStrategy": "Run security scanning tools to identify vulnerabilities. Test rate limiting by simulating excessive requests. Verify secure headers are properly set. Test error monitoring by triggering various error scenarios. Validate backup and recovery procedures.",
+      "subtasks": [
+        {
+          "id": 1,
+          "title": "Configure Security Headers and CSRF Protection",
+          "description": "Implement essential HTTP security headers and CSRF protection mechanisms to prevent common web attacks",
+          "status": "in-progress",
+          "dependencies": [],
+          "details": "Configure the following security headers in the application: X-Frame-Options (set to DENY or SAMEORIGIN), X-Content-Type-Options (set to nosniff), Strict-Transport-Security (HSTS with appropriate max-age). Implement CSRF token generation and validation for all forms and state-changing requests. Create middleware to ensure these protections are applied consistently across the application."
+        },
+        {
+          "id": 2,
+          "title": "Implement Secure Cookie Configuration and Session Management",
+          "description": "Configure cookies with security attributes and implement secure session management",
+          "status": "pending",
+          "dependencies": [
+            1
+          ],
+          "details": "Set up cookies with HttpOnly, Secure, and SameSite (Strict or Lax) attributes. Implement session timeout and rotation mechanisms. Ensure session IDs are sufficiently random and secure. Configure session storage securely, preferably in a database rather than in-memory. Add session validation middleware to verify session integrity on each request."
+        },
+        {
+          "id": 3,
+          "title": "Add Input Validation and Sanitization",
+          "description": "Implement comprehensive input validation and sanitization throughout the application",
+          "status": "pending",
+          "dependencies": [
+            1
+          ],
+          "details": "Create validation schemas for all user inputs using a validation library. Implement server-side validation for all form submissions and API requests. Add sanitization for user-generated content to prevent XSS attacks. Create custom validators for domain-specific data. Ensure validation errors are properly handled and communicated to users with appropriate error messages."
+        },
+        {
+          "id": 4,
+          "title": "Implement Rate Limiting and API Security",
+          "description": "Add rate limiting to authentication endpoints and API routes to prevent abuse",
+          "status": "pending",
+          "dependencies": [
+            2,
+            3
+          ],
+          "details": "Implement IP-based and user-based rate limiting for login, registration, and password reset endpoints. Add rate limiting to all API routes with appropriate limits. Create a mechanism to track and log rate limit violations. Configure appropriate HTTP 429 (Too Many Requests) responses with Retry-After headers. Implement API keys or tokens for external API access with proper validation."
+        },
+        {
+          "id": 5,
+          "title": "Set Up Error Monitoring and Logging",
+          "description": "Implement comprehensive error handling, monitoring, and logging systems",
+          "status": "in-progress",
+          "dependencies": [
+            3,
+            4
+          ],
+          "details": "Integrate an error monitoring service (like Sentry, Rollbar, or New Relic). Implement structured logging with different log levels (error, warn, info, debug). Create custom error handlers to catch and log exceptions properly. Set up log rotation and retention policies. Ensure sensitive data is not logged. Configure alerts for critical errors. Implement performance monitoring for key application functions."
+        },
+        {
+          "id": 6,
+          "title": "Configure Database Backup and Recovery Strategies",
+          "description": "Implement automated database backup and recovery procedures",
+          "status": "pending",
+          "dependencies": [
+            5
+          ],
+          "details": "Set up automated daily database backups with proper encryption. Implement incremental backup strategies for large databases. Create and document database recovery procedures. Test recovery procedures to ensure they work correctly. Configure backup retention policies. Set up monitoring and alerts for backup failures. Implement database connection pooling and timeout handling for production environment."
+        },
+        {
+          "id": 7,
+          "title": "Perform Security Testing and Create Deployment Documentation",
+          "description": "Conduct security vulnerability testing and create comprehensive deployment documentation",
+          "status": "pending",
+          "dependencies": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6
+          ],
+          "details": "Run automated security scanning tools (like OWASP ZAP or Snyk). Perform manual security testing focusing on OWASP Top 10 vulnerabilities. Address and fix all identified security issues. Create detailed deployment documentation including environment setup, configuration requirements, and deployment procedures. Document monitoring setup for cron jobs and API performance. Create runbooks for common operational tasks and incident response."
         }
       ]
     }
-  ]
+  ],
+  "metadata": {
+    "projectName": "tldrSEC - AI-Powered SEC Filings Summarizer",
+    "totalTasks": 10,
+    "sourceFile": "scripts/PRD.txt",
+    "generatedAt": "2023-11-12"
+  }
 }

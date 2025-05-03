@@ -1,1 +1,104 @@
- 
+# Clerk Authentication
+
+This document outlines guidelines for working with Clerk authentication in the SECInsightAI project.
+
+## Clerk Version Compatibility
+
+This project uses Clerk v6, which has different import patterns than previous versions. Always use the correct imports for v6:
+
+```typescript
+// ✅ Correct imports for Clerk v6
+import { auth, currentUser, clerkClient } from '@clerk/nextjs';
+import { SignIn, SignUp, UserButton } from '@clerk/nextjs';
+
+// ❌ Incorrect/deprecated imports
+import { withAuth } from '@clerk/nextjs/server'; // Use middleware instead
+```
+
+## Getting User Information
+
+### Server Components and API Routes
+
+```typescript
+// In server components or API routes
+import { auth, currentUser } from '@clerk/nextjs';
+
+// Get the user ID and session
+const { userId, sessionId } = auth();
+if (!userId) {
+  // Handle unauthenticated user
+}
+
+// Get the full user object (in async contexts)
+const user = await currentUser();
+if (!user) {
+  // Handle user not found
+}
+
+// Access user properties
+const email = user.emailAddresses.find(
+  email => email.id === user.primaryEmailAddressId
+)?.emailAddress;
+```
+
+### Client Components
+
+```typescript
+// In client components
+'use client';
+import { useAuth, useUser } from '@clerk/nextjs';
+
+function MyComponent() {
+  const { userId, sessionId, isLoaded, isSignedIn } = useAuth();
+  const { user } = useUser();
+  
+  if (!isLoaded) {
+    return <div>Loading...</div>;
+  }
+  
+  if (!isSignedIn) {
+    return <div>Please sign in</div>;
+  }
+  
+  return <div>Hello, {user.firstName}</div>;
+}
+```
+
+## Protecting Routes
+
+Use Clerk middleware to protect routes:
+
+```typescript
+// In middleware.ts
+import { authMiddleware } from '@clerk/nextjs';
+
+export default authMiddleware({
+  publicRoutes: ['/'],
+});
+
+export const config = {
+  matcher: ['/((?!.+\\.[\\w]+$|_next).*)', '/', '/(api|trpc)(.*)'],
+};
+```
+
+## Common Issues
+
+### Import Errors
+
+If you see errors like "Module '@clerk/nextjs' has no exported member 'auth'":
+
+1. Check that you're using the correct imports for your Clerk version
+2. Make sure @clerk/nextjs is properly installed
+3. Try clearing Next.js cache: `rm -rf .next` and restart the dev server
+
+### Webhook Configuration
+
+When setting up the webhook to sync Clerk users with your database:
+
+1. Add the webhook URL in the Clerk dashboard
+2. Ensure the `CLERK_WEBHOOK_SECRET` is set in your environment variables
+3. Test the webhook with sample events
+
+## Next Steps
+
+For detailed information, visit the [Clerk documentation](https://clerk.com/docs). 
