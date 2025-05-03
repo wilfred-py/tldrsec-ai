@@ -19,6 +19,11 @@ node_modules/
 
 # Environment variables
 .env
+.env.local
+.env.development
+.env.test
+.env.production
+*.env
 
 # Editor directories and files
 .idea
@@ -33,4 +38,19 @@ node_modules/
 
 # Task files
 tasks.json
-tasks/ 
+tasks/
+
+# Prisma generated files that might contain credentials
+**/generated/prisma/**
+**/generated/client/** 
+# Environment variables (added by security fix)
+.env
+.env.local
+.env.development
+.env.test
+.env.production
+*.env
+
+# Prisma generated files that might contain credentials (added by security fix)
+**/generated/prisma/**
+**/generated/client/**
