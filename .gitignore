@@ -54,3 +54,15 @@ tasks/
 # Prisma generated files that might contain credentials (added by security fix)
 **/generated/prisma/**
 **/generated/client/**
+
+# Environment variables (added by security fix)
+.env
+.env.local
+.env.development
+.env.test
+.env.production
+*.env
+
+# Prisma generated files that might contain credentials (added by security fix)
+**/generated/prisma/**
+**/generated/client/**
