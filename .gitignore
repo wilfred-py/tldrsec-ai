@@ -66,3 +66,8 @@ tasks/
 # Prisma generated files that might contain credentials (added by security fix)
 **/generated/prisma/**
 **/generated/client/**
+
+# Add Prisma generated files with explicit paths
+app/src/generated/prisma/edge.js
+app/src/generated/prisma/index.js
+app/src/generated/prisma/*.js
