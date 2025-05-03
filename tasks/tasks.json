@@ -1,0 +1,34 @@
+{
+  "tasks": [
+    {
+      "id": 999,
+      "title": "Test Branch Naming Convention",
+      "description": "This is a dummy task to test the branch naming convention in our automation scripts",
+      "status": "in-progress",
+      "dependencies": [],
+      "priority": "low",
+      "details": "This task is only for testing purposes and will be deleted after testing the automation scripts.",
+      "testStrategy": "Create a branch, complete a subtask, and complete the task to verify that the branch naming convention works correctly.",
+      "subtasks": [
+        {
+          "id": 1,
+          "title": "Test creating a descriptive branch name",
+          "description": "Verify that the branch name includes the task title in a URL-friendly format",
+          "status": "pending",
+          "dependencies": [],
+          "details": "Run the create-task-branch.sh script and verify that the branch name includes the task title."
+        },
+        {
+          "id": 2,
+          "title": "Test completing a subtask",
+          "description": "Verify that subtask completion works correctly with the new branch naming convention",
+          "status": "pending",
+          "dependencies": [
+            1
+          ],
+          "details": "Run the complete-subtask.sh script and verify that it finds and updates the correct branch."
+        }
+      ]
+    }
+  ]
+}
