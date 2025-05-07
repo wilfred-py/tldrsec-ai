@@ -1,5 +1,6 @@
 import { clerkMiddleware } from '@clerk/nextjs/server';
 
+// Use Clerk's built-in authMiddleware which handles redirecting unauthenticated users
 export default clerkMiddleware();
 
 export const config = {
