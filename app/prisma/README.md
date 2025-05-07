@@ -1,67 +1,147 @@
-# Database Setup and Management
+# Prisma Database Setup and Management
 
-This project uses PostgreSQL with Prisma ORM to manage the database.
+This document provides instructions for setting up and managing the database for the SECInsightAI project.
 
-## Database Setup
+## Environment Setup
 
-1. **Install dependencies**:
-   ```bash
-   npm install
-   ```
+1. Ensure your database connection string is correctly set up in `.env`
+2. The connection string should be in the format:
+```
+DATABASE_URL="postgresql://username:password@hostname:port/database?sslmode=require"
+```
 
-2. **Set up environment variables**:
-   Create or update the `.env` file with your PostgreSQL connection string:
-   ```
-   DATABASE_URL="postgresql://username:password@localhost:5432/secinsight?schema=public"
-   ```
+## Available Commands
 
-   For production, use a secure connection string from your database provider.
+Run these commands from the `app` directory:
 
-3. **Generate Prisma Client**:
-   ```bash
-   npm run prisma:generate
-   ```
+```bash
+# Generate Prisma client
+npm run prisma:generate
 
-4. **Run database migrations**:
-   ```bash
-   npm run prisma:migrate
-   ```
+# Create and apply database migrations
+npm run prisma:migrate
 
-5. **Seed the database** (optional):
-   ```bash
-   npm run db:seed
-   ```
+# Push schema changes to database (dev only)
+npm run prisma:push
 
-## Database Management
+# Open Prisma Studio
+npm run prisma:studio
 
-- **View and manage data**:
-  ```bash
-  npm run prisma:studio
-  ```
+# Seed the database with initial data
+npm run db:seed
+```
 
-- **Create a new migration** after schema changes:
-  ```bash
-  npm run prisma:migrate
-  ```
+## Database Schema Overview
 
-## Database Schema
+- **User**: Represents application users with authentication details and preferences
+- **Ticker**: Represents stock ticker symbols tracked by users
+- **Summary**: Stores SEC filing summaries for tracked tickers
 
-The database schema includes the following models:
+## Troubleshooting Common Issues
 
-1. **User** - Application users with authentication details
-   - Fields: id, email, name, authProvider, authProviderId, etc.
+### Database Connection Errors
 
-2. **Ticker** - Stock tickers that users are tracking
-   - Fields: id, symbol, companyName, userId, etc.
+If you encounter database connection errors:
 
-3. **Summary** - SEC filing summaries for tracked tickers
-   - Fields: id, tickerId, filingType, filingDate, summaryText, etc.
+1. **Check your database URL**: Verify the connection string in `.env` is correct
+2. **Verify database exists**: Ensure the database has been created
+3. **Network access**: Ensure your IP is allowed to access the database
+4. **Credentials**: Verify username and password are correct
+5. **SSL requirements**: For cloud databases, make sure to include `?sslmode=require`
 
-## API Utilities
+### "Table Does Not Exist" Errors
 
-The database API utilities are located in `src/lib/api/` and include:
+If you encounter errors about missing tables:
 
-- `users.ts` - Functions for user management
-- `tickers.ts` - Functions for ticker and summary management
+1. **Run database push**: Execute `npm run prisma:push` to create the tables
+2. **Check schema**: Ensure your schema matches the database configuration
+3. **Verify database name**: Make sure you're connecting to the correct database
+4. **Check permissions**: Ensure your database user has permission to create tables
+5. **Correct schema**: For PostgreSQL, verify you're using the correct schema (usually "public")
 
-These utilities provide type-safe access to the database and should be used for all data operations. 
+### Full Reset (Development Only)
+
+If you need to completely reset your database:
+
+```bash
+# Drop all tables and recreate them
+npm run prisma:reset
+
+# Push schema changes
+npm run prisma:push
+
+# Seed with fresh data
+npm run db:seed
+```
+
+## Database Connection Verification
+
+To verify your database connection:
+
+```typescript
+import { PrismaClient } from '@prisma/client';
+
+async function verifyConnection() {
+  const prisma = new PrismaClient();
+  try {
+    await prisma.$queryRaw`SELECT 1`;
+    console.log('Database connection successful');
+    return true;
+  } catch (error) {
+    console.error('Database connection failed:', error);
+    return false;
+  } finally {
+    await prisma.$disconnect();
+  }
+}
+
+verifyConnection();
+```
+
+## Production Environment
+
+For production environments:
+
+1. Use a managed database service like Neon, Supabase, or AWS RDS
+2. Configure proper security, including:
+   - Strong passwords
+   - SSL encryption
+   - IP restrictions
+   - Regular backups
+3. Use proper migrations instead of direct schema pushes
+
+## Next Steps
+
+After database setup:
+
+1. Create or update your database migrations
+2. Add seed data for development
+3. Set up proper error handling and connection pooling
+
+## Database Environment Variables
+
+### About Environment Files Priority
+
+In a Next.js application, environment variables are loaded with the following priority:
+
+1. `.env.$(NODE_ENV).local`
+2. `.env.local`
+3. `.env.$(NODE_ENV)`
+4. `.env`
+
+When multiple environment files define the same variable (like `DATABASE_URL`), only the value from the highest priority file will be used.
+
+### Common Environment Issues
+
+- **Multiple DATABASE_URL definitions**: If you have `DATABASE_URL` in both `.env` and `.env.local`, the one in `.env.local` will be used.
+- **Different databases for development/production**: Use separate environment files (`.env.development.local` and `.env.production.local`) for different environments.
+
+### Verifying Which Database You're Connected To
+
+To verify which database your application is connecting to, look for the following log message on startup:
+
+```
+Connecting to database: [database-name]
+```
+
+If you need to switch databases, update the appropriate environment file and restart the application. 

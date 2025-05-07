@@ -1,164 +1,148 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { Webhook } from 'svix';
 import { headers } from 'next/headers';
-import { createUser, getUserByEmail } from '@/lib/api/users';
+import { createUser, getUserByEmail, updateUser } from '@/lib/api/users';
 
-// The Clerk webhook types
+// Webhook secret from Clerk Dashboard
+const WEBHOOK_SECRET = process.env.CLERK_WEBHOOK_SECRET;
+
+// Type for Clerk webhook events
 type WebhookEvent = {
-  data: {
-    id: string;
-    email_addresses: {
-      id: string;
-      email_address: string;
-      verification: {
-        status: string;
-      };
-    }[];
-    primary_email_address_id: string;
-    first_name?: string;
-    last_name?: string;
-  };
+  data: any;
+  object: string;
   type: string;
 };
 
-export async function POST(req: NextRequest) {
-  // Get the webhook secret from the environment variables
-  const secret = process.env.CLERK_WEBHOOK_SECRET;
-
-  if (!secret) {
-    console.error('CLERK_WEBHOOK_SECRET is not set');
-    return NextResponse.json(
-      { error: 'Webhook secret not configured' },
-      { status: 500 }
-    );
-  }
-
-  // Get the headers
-  const headersList = headers();
-  const svix_id = headersList.get('svix-id');
-  const svix_timestamp = headersList.get('svix-timestamp');
-  const svix_signature = headersList.get('svix-signature');
-
-  // If there are no headers, return a 400
-  if (!svix_id || !svix_timestamp || !svix_signature) {
-    return NextResponse.json(
-      { error: 'Missing Svix headers' },
-      { status: 400 }
-    );
-  }
-
-  // Get the body
-  const payload = await req.json();
-  const body = JSON.stringify(payload);
-
-  // Create a new Svix instance with the secret
-  const webhook = new Webhook(secret);
-
-  let evt: WebhookEvent;
-
+/**
+ * Handle user.created event by creating a new user in our database
+ */
+async function handleUserCreated(user: any) {
   try {
-    // Verify the payload with the headers
-    evt = webhook.verify(body, {
-      'svix-id': svix_id,
-      'svix-timestamp': svix_timestamp,
-      'svix-signature': svix_signature,
-    }) as WebhookEvent;
-  } catch (err) {
-    console.error('Error verifying webhook:', err);
-    return NextResponse.json(
-      { error: 'Invalid webhook signature' },
-      { status: 400 }
-    );
-  }
-
-  // Handle the webhook based on the event type
-  switch (evt.type) {
-    case 'user.created':
-      return await handleUserCreated(evt.data);
-    case 'user.updated':
-      return await handleUserUpdated(evt.data);
-    default:
-      return NextResponse.json({ message: 'Webhook received' });
-  }
-}
-
-// Handle the user.created event
-async function handleUserCreated(userData: WebhookEvent['data']) {
-  try {
-    // Get the primary email
-    const primaryEmail = userData.email_addresses.find(
-      (email) => email.id === userData.primary_email_address_id
-    );
-
-    if (!primaryEmail) {
-      console.error('No primary email found for user:', userData.id);
-      return NextResponse.json(
-        { error: 'No primary email found' },
-        { status: 400 }
-      );
+    // Find primary email if available
+    const email = user.email_addresses?.[0]?.email_address;
+    if (!email) {
+      console.warn('No email found for user creation webhook', user.id);
+      return;
     }
-
-    // Check if user already exists
-    const existingUser = await getUserByEmail(primaryEmail.email_address);
+    
+    // Check if user already exists (handle potential duplicates)
+    const existingUser = await getUserByEmail(email);
     if (existingUser) {
-      // User already exists, no need to create
-      return NextResponse.json({ message: 'User already exists' });
+      console.info(`User already exists, skipping creation: ${email}`);
+      return;
     }
-
-    // Create a new user in our database
-    const newUser = await createUser({
-      email: primaryEmail.email_address,
-      name: userData.first_name && userData.last_name
-        ? `${userData.first_name} ${userData.last_name}`
-        : undefined,
+    
+    // Create new user in database
+    const name = `${user.first_name || ''} ${user.last_name || ''}`.trim() || 
+      email.split('@')[0]; // Use part of email as fallback
+    
+    await createUser({
+      email,
+      name,
       authProvider: 'clerk',
-      authProviderId: userData.id,
+      authProviderId: user.id
     });
-
-    return NextResponse.json({
-      message: 'User created successfully',
-      user: { id: newUser.id, email: newUser.email }
-    });
+    
+    console.info(`User created from webhook: ${email} (${user.id})`);
   } catch (error) {
-    console.error('Error creating user:', error);
-    return NextResponse.json(
-      { error: 'Failed to create user' },
-      { status: 500 }
-    );
+    console.error('Error handling user.created webhook:', error);
   }
 }
 
-// Handle the user.updated event
-async function handleUserUpdated(userData: WebhookEvent['data']) {
+/**
+ * Handle user.updated event by updating user details in our database
+ */
+async function handleUserUpdated(user: any) {
   try {
-    // Get the primary email
-    const primaryEmail = userData.email_addresses.find(
-      (email) => email.id === userData.primary_email_address_id
-    );
+    // Find primary email if available
+    const email = user.email_addresses?.[0]?.email_address;
+    if (!email) {
+      console.warn('No email found for user update webhook', user.id);
+      return;
+    }
+    
+    // Find existing user
+    const existingUser = await getUserByEmail(email);
+    if (!existingUser) {
+      // If user doesn't exist, create them
+      console.info(`User doesn't exist for update, creating: ${email}`);
+      return handleUserCreated(user);
+    }
+    
+    // Update user details
+    const name = `${user.first_name || ''} ${user.last_name || ''}`.trim() || 
+      email.split('@')[0];
+    
+    await updateUser(existingUser.id, {
+      name,
+    });
+    
+    console.info(`User updated from webhook: ${email} (${user.id})`);
+  } catch (error) {
+    console.error('Error handling user.updated webhook:', error);
+  }
+}
 
-    if (!primaryEmail) {
-      console.error('No primary email found for user:', userData.id);
+/**
+ * Webhook handler for Clerk events
+ */
+export async function POST(req: NextRequest) {
+  try {
+    // Get the headers
+    const headersList = headers();
+    const svix_id = headersList.get("svix-id");
+    const svix_timestamp = headersList.get("svix-timestamp");
+    const svix_signature = headersList.get("svix-signature");
+    
+    if (!svix_id || !svix_timestamp || !svix_signature || !WEBHOOK_SECRET) {
+      console.error('Missing webhook verification headers');
       return NextResponse.json(
-        { error: 'No primary email found' },
+        { error: 'Missing webhook verification headers' },
         { status: 400 }
       );
     }
-
-    // Check if user exists
-    const existingUser = await getUserByEmail(primaryEmail.email_address);
-    if (!existingUser) {
-      // User doesn't exist, create them
-      return await handleUserCreated(userData);
+    
+    const payload = await req.json();
+    const body = JSON.stringify(payload);
+    
+    try {
+      const webhook = new Webhook(WEBHOOK_SECRET);
+      const event = webhook.verify(body, {
+        'svix-id': svix_id,
+        'svix-timestamp': svix_timestamp,
+        'svix-signature': svix_signature,
+      }) as WebhookEvent;
+      
+      // Log webhook event for debugging
+      console.info(`Processing Clerk webhook event: ${event.type}`);
+      
+      // Handle different webhook events
+      switch (event.type) {
+        case 'user.created':
+          await handleUserCreated(event.data);
+          break;
+        case 'user.updated':
+          await handleUserUpdated(event.data);
+          break;
+        default:
+          console.debug(`Unhandled webhook event type: ${event.type}`);
+      }
+      
+      return NextResponse.json({ 
+        success: true,
+        message: `Webhook processed successfully: ${event.type}`
+      });
+    } catch (error) {
+      console.error('Webhook verification failed:', error);
+      return NextResponse.json(
+        { error: 'Webhook verification failed' },
+        { status: 400 }
+      );
     }
-
-    // For now, we're not updating any user data
-    // This would be where you'd update the user's name, etc.
-
-    return NextResponse.json({ message: 'User update processed' });
   } catch (error) {
-    console.error('Error updating user:', error);
+    console.error('Error processing webhook:', error);
     return NextResponse.json(
-      { error: 'Failed to update user' },
+      { error: 'Internal server error' },
       { status: 500 }
     );
   }

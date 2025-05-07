@@ -1,9 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
-
 generator client {
   provider = "prisma-client-js"
   output   = "../src/generated/prisma"
@@ -14,58 +8,47 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// User model represents application users
 model User {
-  id             String    @id @default(cuid())
-  email          String    @unique
-  name           String?
-  authProvider   String    // "google", "github", "twitter"
-  authProviderId String    // ID from provider
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
-  
-  // User preferences
-  notificationPreference String    @default("immediate") // "immediate", "digest", "none"
-  theme                  String    @default("light") // "light", "dark"
-  
-  // Relationships
-  tickers        Ticker[]
+  id                     String   @id @default(cuid())
+  email                  String   @unique
+  name                   String?
+  authProvider           String
+  authProviderId         String
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+  notificationPreference String   @default("immediate")
+  theme                  String   @default("light")
+  tickers                Ticker[]
 
   @@map("users")
 }
 
-// Ticker model represents stock ticker symbols tracked by users
 model Ticker {
   id          String    @id @default(cuid())
-  symbol      String    // Stock ticker symbol
-  companyName String    // Full company name
-  userId      String    // Foreign key to User
+  symbol      String
+  companyName String
+  userId      String
   addedAt     DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
-  
-  // Relationships
-  user         User       @relation(fields: [userId], references: [id], onDelete: Cascade)
-  summaries    Summary[]
+  summaries   Summary[]
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@unique([userId, symbol]) // One ticker per user
+  @@unique([userId, symbol])
   @@index([symbol])
   @@map("tickers")
 }
 
-// Summary model represents SEC filing summaries
 model Summary {
-  id          String    @id @default(cuid())
-  tickerId    String    // Foreign key to Ticker
-  filingType  String    // "10-K", "10-Q", "8-K", "Form4"
-  filingDate  DateTime  
-  filingUrl   String    // Link to original filing
-  summaryText String    @db.Text // Full summary text
-  summaryJSON Json?     // Structured summary data
-  createdAt   DateTime  @default(now())
-  sentToUser  Boolean   @default(false) // Whether notification was sent
-  
-  // Relationships
-  ticker      Ticker     @relation(fields: [tickerId], references: [id], onDelete: Cascade)
+  id          String   @id @default(cuid())
+  tickerId    String
+  filingType  String
+  filingDate  DateTime
+  filingUrl   String
+  summaryText String
+  summaryJSON Json?
+  createdAt   DateTime @default(now())
+  sentToUser  Boolean  @default(false)
+  ticker      Ticker   @relation(fields: [tickerId], references: [id], onDelete: Cascade)
 
   @@index([filingDate])
   @@index([filingType])
