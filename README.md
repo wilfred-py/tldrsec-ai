@@ -40,17 +40,63 @@ Open [http://localhost:3000](http://localhost:3000) with your browser to see the
 
 Create a `.env.local` file in the root directory with the following variables:
 
+### Clerk Authentication
+
+Sign up for a Clerk account at [dashboard.clerk.com](https://dashboard.clerk.com/) and create a new application. Then add the following to your `.env.local` file:
+
 ```
 # Clerk Authentication
 NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=your_clerk_publishable_key
 CLERK_SECRET_KEY=your_clerk_secret_key
+CLERK_WEBHOOK_SECRET=your_clerk_webhook_secret
+
+# Clerk URL Configuration
 NEXT_PUBLIC_CLERK_SIGN_IN_URL=/sign-in
 NEXT_PUBLIC_CLERK_SIGN_UP_URL=/sign-up
 NEXT_PUBLIC_CLERK_AFTER_SIGN_IN_URL=/dashboard
 NEXT_PUBLIC_CLERK_AFTER_SIGN_UP_URL=/dashboard
+```
 
-# Database
-DATABASE_URL=your_database_connection_string
+### Neon PostgreSQL Database
+
+1. Sign up for a Neon account at [console.neon.tech](https://console.neon.tech/)
+2. Create a new project
+3. In the project dashboard, find your connection string under "Connection Details"
+4. Add the connection string to your `.env.local` file:
+
+```
+# Neon PostgreSQL Database
+DATABASE_URL=postgresql://user:password@hostname:port/database?sslmode=require
+```
+
+Example of a real connection string:
+```
+DATABASE_URL=postgresql://john:mypassword@ep-cool-snow-123456.us-east-2.aws.neon.tech/neondb?sslmode=require
+```
+
+### Application URLs
+
+```
+# App URL for webhooks in development
+NEXT_PUBLIC_APP_URL=http://localhost:3000
+```
+
+## Database Setup
+
+After setting up your environment variables, run the following commands to initialize your database:
+
+```bash
+# Generate Prisma client
+npm run db:generate
+
+# Create database tables (first time only)
+npm run db:migrate -- --name init
+
+# Test database connection
+npm run db:test
+
+# Open Prisma Studio to view/edit data
+npm run db:studio
 ```
 
 ## Deploy on Vercel

@@ -11,7 +11,7 @@
     "db:migrate": "prisma migrate dev",
     "db:push": "prisma db push",
     "db:studio": "prisma studio",
-    "db:test": "ts-node lib/test-db.ts"
+    "db:test": "node lib/test-db.js"
   },
   "dependencies": {
     "@clerk/nextjs": "^6.19.3",
