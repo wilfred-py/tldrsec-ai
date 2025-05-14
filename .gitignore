@@ -39,3 +39,35 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Added by Claude Task Master
+# Logs
+logs
+*.log
+dev-debug.log
+# Dependency directories
+node_modules/
+# Environment variables
+.env
+# Editor directories and files
+.idea
+.vscode
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+# OS specific
+# Task files
+tasks.json
+tasks/ 
+# clerk configuration (can include secrets)
+/.clerk/
+
+# TaskMaster and Cursor files
+.taskmasterconfig
+.roo/
+.roomodes
+.windsurfrules
+.cursor/
+scripts/

@@ -1,4 +1,24 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# tldrSEC-AI
+
+tldrSEC is a web application designed to solve a critical problem for retail investors: the lack of time and expertise to analyze lengthy SEC filings. These documents (10-K, 10-Q, 8-K, Form 4) often span hundreds of pages and contain vital financial and operational insights buried in complex language and formats.
+
+## Features
+
+- **Track Companies**: Monitor SEC filings for your favorite company tickers
+- **AI-Powered Summaries**: Get concise, digestible summaries of complex SEC filings
+- **Email Notifications**: Receive alerts when new filings are available
+- **User Authentication**: Secure access to your personalized dashboard
+- **Responsive Design**: Access from any device
+
+## Tech Stack
+
+- **Framework**: Next.js 14 with App Router
+- **Language**: TypeScript
+- **Authentication**: Clerk
+- **Database**: PostgreSQL (Neon)
+- **ORM**: Prisma
+- **UI Components**: shadcn/ui
+- **Styling**: Tailwind CSS
 
 ## Getting Started
 
@@ -16,18 +36,22 @@ bun dev
 
 Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Environment Variables
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Create a `.env.local` file in the root directory with the following variables:
 
-## Learn More
+```
+# Clerk Authentication
+NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=your_clerk_publishable_key
+CLERK_SECRET_KEY=your_clerk_secret_key
+NEXT_PUBLIC_CLERK_SIGN_IN_URL=/sign-in
+NEXT_PUBLIC_CLERK_SIGN_UP_URL=/sign-up
+NEXT_PUBLIC_CLERK_AFTER_SIGN_IN_URL=/dashboard
+NEXT_PUBLIC_CLERK_AFTER_SIGN_UP_URL=/dashboard
 
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+# Database
+DATABASE_URL=your_database_connection_string
+```
 
 ## Deploy on Vercel
 
