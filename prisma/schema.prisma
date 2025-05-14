@@ -1,0 +1,51 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../lib/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String    @id @default(uuid())
+  email         String    @unique
+  name          String?
+  authProvider  String
+  authProviderId String
+  createdAt     DateTime  @default(now())
+  preferences   Json?     // Store notification and theme preferences
+  tickers       Ticker[]
+}
+
+model Ticker {
+  id          String    @id @default(uuid())
+  symbol      String
+  companyName String
+  userId      String
+  addedAt     DateTime  @default(now())
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  summaries   Summary[]
+  
+  @@unique([userId, symbol])
+}
+
+model Summary {
+  id          String    @id @default(uuid())
+  tickerId    String
+  filingType  String    // "10-K", "10-Q", "8-K", "Form4"
+  filingDate  DateTime
+  filingUrl   String
+  summaryText String    @db.Text
+  summaryJSON Json?
+  createdAt   DateTime  @default(now())
+  sentToUser  Boolean   @default(false)
+  ticker      Ticker    @relation(fields: [tickerId], references: [id], onDelete: Cascade)
+}
