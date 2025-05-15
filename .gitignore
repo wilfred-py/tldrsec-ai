@@ -71,3 +71,6 @@ tasks/
 .windsurfrules
 .cursor/
 scripts/
+
+# Prisma generated files
+lib/generated/
