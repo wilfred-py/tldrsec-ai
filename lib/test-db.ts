@@ -1,3 +1,4 @@
+// @ts-ignore
 import { prisma } from './db';
 
 async function main() {
@@ -26,8 +27,8 @@ async function main() {
   }
 }
 
-// Run the test if this script is executed directly
-if (require.main === module) {
+// Check if this file is being run directly
+if (typeof require !== 'undefined' && require.main === module) {
   main()
     .then(() => process.exit(0))
     .catch((error) => {
@@ -36,4 +37,4 @@ if (require.main === module) {
     });
 }
 
-export default main; 
+module.exports = main; 
