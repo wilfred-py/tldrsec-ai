@@ -49,3 +49,42 @@ model Summary {
   sentToUser  Boolean   @default(false)
   ticker      Ticker    @relation(fields: [tickerId], references: [id], onDelete: Cascade)
 }
+
+// Model for mapping ticker symbols to SEC Central Index Keys (CIK)
+model CikMapping {
+  id                String    @id @default(uuid())
+  cik               String    @unique // Central Index Key with leading zeros
+  ticker            String    // Primary ticker symbol
+  companyName       String    // Company name from SEC
+  aliases           String[]  // Alternative ticker symbols or company names
+  exchangeCodes     String[]  // Stock exchange codes (e.g., NYSE, NASDAQ)
+  sic               String?   // Standard Industrial Classification code
+  ein               String?   // Employer Identification Number
+  entityType        String?   // Type of entity (e.g., "Corporation", "Limited Partnership")
+  formerNames       Json?     // Historical company names with effective dates
+  formerTickers     Json?     // Historical ticker symbols with effective dates
+  lastUpdated       DateTime  @default(now())
+  fetchAttempts     Int       @default(0) // Number of attempts to fetch data
+  lastFetchStatus   String?   // Status of the last fetch attempt
+  isActive          Boolean   @default(true) // Whether the company is still active
+
+  @@index([ticker])
+  @@index([companyName])
+}
+
+// Model to track changes to ticker symbols over time (mergers, acquisitions, etc.)
+model TickerChange {
+  id              String    @id @default(uuid())
+  oldTicker       String
+  newTicker       String
+  oldCik          String?
+  newCik          String?
+  effectiveDate   DateTime
+  changeType      String    // "Merger", "Acquisition", "NameChange", "Spinoff", etc.
+  description     String?
+  createdAt       DateTime  @default(now())
+
+  @@index([oldTicker])
+  @@index([newTicker])
+  @@index([effectiveDate])
+}
