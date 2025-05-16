@@ -104,3 +104,37 @@ npm run db:studio
 The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
 
 Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+
+## Development Workflow
+
+This project follows a task-based branching strategy to track implementation progress.
+
+### Branching Strategy
+
+For each task in our development roadmap:
+
+1. Create a new branch based on the task number and title:
+   ```bash
+   # Usage: ./scripts/create-task-branch.sh <task-number> [optional-suffix]
+   ./scripts/create-task-branch.sh 3 sec-filing-service
+   ```
+
+2. Make your changes and commit them with clear messages:
+   ```bash
+   git commit -m "Implement task 3: SEC filing monitoring service"
+   ```
+
+3. Push the branch to GitHub:
+   ```bash
+   git push -u origin <branch-name>
+   ```
+
+4. Create a pull request for review.
+
+5. After review, merge the branch into main.
+
+This strategy helps us:
+- Track implementation progress by task
+- Keep changes isolated and focused
+- Maintain a clean commit history
+- Simplify code reviews
