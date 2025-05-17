@@ -6,43 +6,54 @@ import {
   SECApiEntry,
   SECApiResponse,
   SECEdgarError,
-  SECErrorCode 
+  SECErrorCode,
+  ProcessedFilingsResult
 } from './types';
+import { XMLParser } from 'fast-xml-parser';
+import { v4 as uuidv4 } from 'uuid';
+import { PrismaClient } from '@prisma/client';
+
+const parser = new XMLParser({
+  ignoreAttributes: false,
+  attributeNamePrefix: '',
+  isArray: (name, jpath) => {
+    if (name === 'entry') return true;
+    return false;
+  }
+});
 
 /**
  * Parse the SEC EDGAR RSS feed response
  */
-export function parseRssFeed(xmlContent: string): SECApiResponse {
+export function parseRssFeed(xmlData: string): SECApiResponse {
   try {
-    const $ = cheerio.load(xmlContent, { xmlMode: true });
-    const entries: SECApiEntry[] = [];
-
-    // Extract each entry from the feed
-    $('entry').each((i, el) => {
-      const entry: SECApiEntry = {
-        title: $(el).find('title').text().trim(),
-        link: $(el).find('link').attr('href') || '',
-        summary: $(el).find('summary').text().trim(),
-        updated: $(el).find('updated').text().trim(),
-        id: $(el).find('id').text().trim(),
-        category: $(el).find('category').attr('term')
-      };
-
-      entries.push(entry);
-    });
-
-    // Extract pagination link if it exists
-    const nextPage = $('link[rel="next"]').attr('href');
-
+    // Parse the XML
+    const result = parser.parse(xmlData);
+    
+    // Handle different XML structures
+    const feed = result.feed || result.rss?.channel;
+    
+    if (!feed) {
+      throw new Error('Unsupported RSS format');
+    }
+    
+    // Extract entries
+    const entries = feed.entry || feed.item || [];
+    
     return {
-      entries,
-      nextPage
+      entries: entries.map((entry: any) => ({
+        title: entry.title || '',
+        link: entry.link?.href || entry.link || '',
+        summary: entry.summary || entry.description || '',
+        updated: entry.updated || entry.pubDate || '',
+        id: entry.id || entry.guid || uuidv4(),
+        category: entry.category || ''
+      })),
+      nextPage: feed.link?.find((link: any) => link.rel === 'next')?.href
     };
   } catch (error) {
-    throw new SECEdgarError(
-      `Failed to parse SEC EDGAR RSS feed: ${(error as Error).message}`,
-      SECErrorCode.PARSING_ERROR
-    );
+    console.error('Error parsing RSS feed:', error);
+    throw new Error(`Failed to parse RSS feed: ${(error as Error).message}`);
   }
 }
 
@@ -128,28 +139,114 @@ export function parseFilingEntry(entry: SECApiEntry): FilingMetadata | null {
 /**
  * Process and transform multiple filing entries
  */
-export function processFilingEntries(entries: SECApiEntry[]): ParsedFiling[] {
+export async function processFilingEntries(entries: SECApiEntry[], prisma: PrismaClient): Promise<ProcessedFilingsResult> {
   const filings: ParsedFiling[] = [];
+  const newFilings: ParsedFiling[] = [];
+  const existingFilings: ParsedFiling[] = [];
   
   for (const entry of entries) {
-    const metadata = parseFilingEntry(entry);
-    
-    if (metadata) {
-      // Generate a unique ID for the filing
-      const id = `${metadata.ticker}-${metadata.filingType}-${metadata.filingDate.getTime()}`;
+    try {
+      // Extract ticker and form type from title
+      // Example title: "10-K - APPLE INC (0000320193) (Filer)"
+      const titleMatch = entry.title.match(/^([^-]+)\s*-\s*(.+?)\s*\((\d+)\)/);
       
-      // Create a formatted title for display
-      const formattedTitle = `${metadata.companyName} (${metadata.ticker}) - ${metadata.filingType}`;
+      if (!titleMatch) {
+        console.log(`Skipping entry with unrecognized title format: ${entry.title}`);
+        continue;
+      }
       
-      filings.push({
-        ...metadata,
+      const [_, formTypeRaw, companyName, cik] = titleMatch;
+      
+      // Clean up form type
+      const formType = formTypeRaw.trim() as FilingType;
+      
+      if (!isValidFormType(formType)) {
+        console.log(`Skipping entry with unsupported form type: ${formType}`);
+        continue;
+      }
+      
+      // Extract filing date
+      const filingDate = new Date(entry.updated);
+      
+      // Generate a unique ID
+      const id = entry.id || uuidv4();
+      
+      // Create parsed filing object
+      const parsedFiling: ParsedFiling = {
         id,
-        formattedTitle
+        companyName: companyName.trim(),
+        ticker: '', // Will extract from database below
+        cik: cik,
+        formType,
+        filingDate,
+        filingUrl: entry.link,
+        url: entry.link,
+        formattedTitle: `${formType} - ${companyName.trim()}`
+      };
+      
+      // Try to lookup ticker by CIK
+      const company = await prisma.company.findFirst({
+        where: { cik: cik }
       });
+      
+      if (company) {
+        parsedFiling.ticker = company.ticker;
+        
+        // Check if we already have this filing in the database
+        const existingFiling = await prisma.filing.findFirst({
+          where: {
+            cik: cik,
+            formType: formType,
+            filingDate: {
+              // Look for filings on the same day (ignoring time)
+              gte: new Date(filingDate.setHours(0, 0, 0, 0)),
+              lt: new Date(filingDate.setHours(23, 59, 59, 999))
+            }
+          }
+        });
+        
+        if (existingFiling) {
+          existingFilings.push(parsedFiling);
+        } else {
+          // Store the filing in the database
+          await prisma.filing.create({
+            data: {
+              id: parsedFiling.id,
+              cik: parsedFiling.cik,
+              companyId: company.id,
+              formType: parsedFiling.formType,
+              filingDate: parsedFiling.filingDate,
+              url: parsedFiling.url,
+              processed: false
+            }
+          });
+          
+          newFilings.push(parsedFiling);
+        }
+      } else {
+        console.log(`Skipping filing for unknown company with CIK: ${cik}`);
+        continue;
+      }
+      
+      filings.push(parsedFiling);
+    } catch (error) {
+      console.error(`Error processing filing entry:`, error);
+      // Continue with next entry
     }
   }
   
-  return filings;
+  return {
+    newFilings,
+    existingFilings
+  };
+}
+
+/**
+ * Validate that a form type is supported
+ */
+function isValidFormType(formType: string): formType is FilingType {
+  const validTypes: FilingType[] = ['10-K', '10-Q', '8-K', 'Form4', '4'];
+  return validTypes.includes(formType as FilingType);
 }
 
 /**
