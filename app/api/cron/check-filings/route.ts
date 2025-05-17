@@ -6,6 +6,7 @@ import { FilingType, ParsedFiling } from '@/lib/sec-edgar/types';
 import { JobQueueService, JobType } from '@/lib/job-queue';
 import { LockService } from '@/lib/job-queue/lock-service';
 import { logger } from '@/lib/logging';
+import { monitoring } from '@/lib/monitoring';
 import { 
   appRouterAsyncHandler, 
   createInternalError,
@@ -65,11 +66,21 @@ export const GET = appRouterAsyncHandler(async (request: Request) => {
     processId
   });
   
+  // Start tracking performance
+  monitoring.incrementCounter('sec.check_started', 1, { 
+    filingType: filingType || 'all' 
+  });
+  
   // Try to acquire a lock
   const lock = await LockService.acquireLock(lockName, processId);
   
   if (!lock) {
     componentLogger.info(`Another instance is already checking SEC filings for ${lockName}`);
+    monitoring.incrementCounter('sec.check_skipped', 1, { 
+      reason: 'lock_exists', 
+      filingType: filingType || 'all' 
+    });
+    
     return NextResponse.json({
       success: true,
       message: `Another instance is already checking SEC filings for ${lockName}`,
@@ -96,8 +107,15 @@ export const GET = appRouterAsyncHandler(async (request: Request) => {
         idempotencyKey: `${jobType}-${new Date().toISOString().split('T')[0]}` // Daily deduplication
       });
       
+      // Track metrics
+      monitoring.incrementCounter('sec.check_queued', 1, { filingType });
+      
       // Calculate duration
       const duration = Date.now() - startTime;
+      monitoring.recordTiming('sec.check_duration', duration, { 
+        filingType,
+        result: 'queued'
+      });
       
       // Return success response
       return NextResponse.json({
@@ -118,8 +136,24 @@ export const GET = appRouterAsyncHandler(async (request: Request) => {
     
     try {
       componentLogger.debug(`Fetching SEC RSS feed: ${rssFeedUrl}`);
+      
+      // Track API call start
+      const apiCallStart = Date.now();
+      
       rssData = await secClient.fetchRssFeed(rssFeedUrl);
+      
+      // Track API call success
+      const apiDuration = Date.now() - apiCallStart;
+      monitoring.recordTiming('sec.api_response_time', apiDuration, { 
+        endpoint: 'rss_feed',
+        result: 'success'
+      });
     } catch (error) {
+      // Track API failure
+      monitoring.incrementCounter('sec.api_error', 1, { 
+        endpoint: 'rss_feed' 
+      });
+      
       if (error instanceof Error) {
         throw createExternalApiError(`Failed to fetch SEC RSS feed: ${error.message}`, { 
           url: rssFeedUrl,
@@ -137,9 +171,28 @@ export const GET = appRouterAsyncHandler(async (request: Request) => {
     const entries = parsedFeed.entries || [];
     componentLogger.info(`Found ${entries.length} entries to process`);
     
+    // Track entry count
+    monitoring.incrementCounter('sec.entries_found', entries.length);
+    
     // Process the filings to find ones we need to track
     try {
       const processedFilings = await processFilingEntries(entries, prisma);
+      
+      // Track filing counts
+      monitoring.incrementCounter('sec.new_filings', processedFilings.newFilings.length);
+      monitoring.incrementCounter('sec.existing_filings', processedFilings.existingFilings.length);
+      
+      // Track filings by type
+      const filingsByType = new Map<string, number>();
+      for (const filing of processedFilings.newFilings) {
+        const count = filingsByType.get(filing.filingType) || 0;
+        filingsByType.set(filing.filingType, count + 1);
+      }
+      
+      // Record metrics for each filing type
+      for (const [type, count] of filingsByType.entries()) {
+        monitoring.trackFilingOperation('new', type, count);
+      }
       
       // Queue jobs for each new filing that needs processing
       const jobPromises = processedFilings.newFilings.map(filing => {
@@ -166,6 +219,11 @@ export const GET = appRouterAsyncHandler(async (request: Request) => {
       // Calculate duration
       const duration = Date.now() - startTime;
       
+      // Track overall time
+      monitoring.recordTiming('sec.check_duration', duration, { 
+        result: 'success'
+      });
+      
       // Log the success
       componentLogger.info(`SEC filing check completed successfully`, {
         totalFilings: entries.length,
@@ -184,6 +242,9 @@ export const GET = appRouterAsyncHandler(async (request: Request) => {
         duration
       });
     } catch (error) {
+      // Track processing failure
+      monitoring.incrementCounter('sec.processing_error', 1);
+      
       if (error instanceof Error) {
         throw createInternalError(`Failed to process filings: ${error.message}`, { error });
       }
@@ -192,6 +253,12 @@ export const GET = appRouterAsyncHandler(async (request: Request) => {
   } catch (error) {
     // This will be caught by the appRouterAsyncHandler and properly formatted
     if (error instanceof Error) {
+      // Track overall failure
+      monitoring.incrementCounter('sec.check_failed', 1, {
+        errorType: error instanceof ApiError ? error.code : 'UNKNOWN',
+        filingType: filingType || 'all'
+      });
+      
       throw error instanceof ApiError 
         ? error 
         : createInternalError(`SEC filing check failed: ${error.message}`, { error });
@@ -204,6 +271,9 @@ export const GET = appRouterAsyncHandler(async (request: Request) => {
       componentLogger.debug(`Released lock: ${lockName}`);
     } catch (releaseError) {
       componentLogger.error(`Failed to release lock: ${lockName}`, releaseError);
+      monitoring.incrementCounter('locks.release_error', 1, {
+        lockName
+      });
     }
   }
 }); 

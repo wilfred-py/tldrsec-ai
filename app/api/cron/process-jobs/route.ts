@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { JobQueueService, JobType, JobResultData } from '@/lib/job-queue';
 import { LockService } from '@/lib/job-queue/lock-service';
+  import { DeadLetterQueueService } from '@/lib/job-queue/dead-letter-queue';
 import { logger } from '@/lib/logging';
 import { 
   appRouterAsyncHandler, 
@@ -8,6 +9,7 @@ import {
   ApiError,
   ErrorCode
 } from '@/lib/error-handling';
+import { monitoring } from '@/lib/monitoring';
 import { v4 as uuidv4 } from 'uuid';
 import { PrismaClient } from '@prisma/client';
 
@@ -15,11 +17,15 @@ import { PrismaClient } from '@prisma/client';
 interface JobQueueItem {
   id: string;
   jobType: JobType;
+  payload: any;
+  attempts: number;
   [key: string]: any; // For other properties we don't explicitly need to type
 }
 
 // Number of jobs to process in a single run
 const BATCH_SIZE = 10;
+// Maximum attempts before moving to dead letter queue
+const MAX_ATTEMPTS = 3;
 // Process ID for this instance
 const processId = uuidv4();
 
@@ -37,6 +43,7 @@ const processJob = async (jobId: string) => {
     
     if (!job) {
       componentLogger.warn(`Job not found: ${jobId}`);
+      monitoring.incrementCounter('jobs.not_found', 1);
       return false;
     }
     
@@ -106,13 +113,37 @@ const processJob = async (jobId: string) => {
       duration,
     });
     
+    // Track metrics
+    monitoring.trackJobOperation(job.jobType, 'completed', duration);
+    
     return true;
   } catch (error) {
+    // Get job details for failure handling
+    let job;
+    try {
+      job = await JobQueueService.getJobById(jobId);
+    } catch (getError) {
+      // If we can't even get the job details, log and return
+      componentLogger.error(`Failed to get job details for failure handling`, getError, { jobId });
+      monitoring.incrementCounter('jobs.error', 1, { type: 'job_retrieval_error' });
+      return false;
+    }
+    
+    if (!job) {
+      componentLogger.error(`Job not found for failure handling`, { jobId });
+      monitoring.incrementCounter('jobs.error', 1, { type: 'job_not_found_error' });
+      return false;
+    }
+    
     // Log the error
     if (error instanceof Error) {
-      componentLogger.error(`Job ${jobId} failed`, error, { jobId });
+      componentLogger.error(`Job ${jobId} failed`, error, { 
+        jobId, 
+        jobType: job.jobType,
+        attempts: job.attempts 
+      });
       
-      // Update job status to FAILED
+      // Update job status based on attempts
       try {
         const jobResultData: JobResultData = {
           lastError: error.message,
@@ -123,10 +154,35 @@ const processJob = async (jobId: string) => {
           jobResultData.stack = error.stack;
         }
         
+        // Check if we've exceeded max attempts
+        if (job.attempts >= MAX_ATTEMPTS - 1) {
+          // Move to dead letter queue before marking as failed
+          await DeadLetterQueueService.addToDeadLetterQueue(
+            jobId,
+            job.jobType,
+            job.payload,
+            error,
+            job.attempts + 1
+          );
+          
+          componentLogger.warn(`Moving job ${jobId} to dead letter queue after ${job.attempts + 1} attempts`, {
+            jobId,
+            jobType: job.jobType
+          });
+          
+          // Track DLQ metric
+          monitoring.incrementCounter('jobs.dead_letter', 1, { jobType: job.jobType });
+        }
+        
+        // Update job status to FAILED
         await JobQueueService.updateJobStatus(jobId, 'FAILED', jobResultData);
+        
+        // Track failure metric
+        monitoring.trackJobOperation(job.jobType, 'failed');
       } catch (updateError) {
         // If we can't update the job status, log it but don't fail
         componentLogger.error(`Failed to update job status for ${jobId}`, updateError);
+        monitoring.incrementCounter('jobs.error', 1, { type: 'status_update_error' });
       }
     }
     
@@ -194,15 +250,26 @@ export const GET = appRouterAsyncHandler(async (request: Request) => {
     
     // Count successful jobs
     const successCount = results.filter(Boolean).length;
+    const failureCount = jobs.length - successCount;
     
     // Calculate processing time
     const duration = Date.now() - startTime;
+    
+    // Track metrics
+    monitoring.incrementCounter('jobs.processed_batch', jobs.length, { 
+      success: successCount.toString(),
+      failed: failureCount.toString(),
+      jobType: specificJobType || 'all' 
+    });
+    monitoring.recordTiming('jobs.batch_duration', duration, { 
+      jobType: specificJobType || 'all' 
+    });
     
     // Log the job processing summary
     componentLogger.info(`Job processing complete`, {
       totalJobs: jobs.length,
       successfulJobs: successCount,
-      failedJobs: jobs.length - successCount,
+      failedJobs: failureCount,
       duration,
       specificJobType,
     });
@@ -212,13 +279,19 @@ export const GET = appRouterAsyncHandler(async (request: Request) => {
       success: true,
       message: `Processed ${successCount} out of ${jobs.length} jobs`,
       processed: successCount,
-      failed: jobs.length - successCount,
+      failed: failureCount,
       duration,
     });
   } catch (error) {
     // This will be caught by the appRouterAsyncHandler
     // and handled appropriately
     if (error instanceof Error) {
+      // Track error metric
+      monitoring.incrementCounter('jobs.system_error', 1, {
+        type: error.name,
+        jobType: specificJobType || 'all'
+      });
+      
       throw createInternalError(`Job processing failed: ${error.message}`, {
         specificJobType,
         processId,
@@ -233,6 +306,7 @@ export const GET = appRouterAsyncHandler(async (request: Request) => {
       componentLogger.debug(`Released lock: ${lockName}`);
     } catch (releaseError) {
       componentLogger.error(`Failed to release lock: ${lockName}`, releaseError);
+      monitoring.incrementCounter('locks.release_error', 1);
     }
   }
 }); 
