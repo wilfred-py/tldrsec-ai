@@ -27,6 +27,18 @@ export interface JobPayload {
   [key: string]: any;
 }
 
+// Job result/error data
+export interface JobResultData {
+  startedAt?: Date;
+  completedAt?: Date;
+  failedAt?: Date;
+  lastError?: string;
+  executionTime?: number;
+  result?: any;
+  stack?: string;
+  error?: string;
+}
+
 /**
  * Job queue service for managing background tasks
  */
@@ -40,245 +52,211 @@ export class JobQueueService {
     priority = 5,
     scheduledFor = new Date(),
     idempotencyKey,
-    maxRetries = 3
+    maxAttempts = 3
   }: {
     jobType: JobType;
     payload: JobPayload;
     priority?: number;
     scheduledFor?: Date;
     idempotencyKey?: string;
-    maxRetries?: number;
+    maxAttempts?: number;
   }) {
     try {
-      // Check for existing job with same idempotency key if provided
+      // If idempotency key is provided, check for existing job
       if (idempotencyKey) {
         const existingJob = await prisma.jobQueue.findFirst({
           where: {
             idempotencyKey,
-            status: { in: ['PENDING', 'PROCESSING', 'RETRYING'] }
+            status: {
+              in: ['PENDING', 'PROCESSING', 'RETRYING']
+            }
           }
         });
 
         if (existingJob) {
-          console.log(`Job with idempotency key ${idempotencyKey} already exists, skipping`);
           return existingJob;
         }
       }
 
       // Create a new job
-      const job = await prisma.jobQueue.create({
+      return await prisma.jobQueue.create({
         data: {
           id: uuidv4(),
           jobType,
-          status: 'PENDING',
-          priority,
           payload,
-          idempotencyKey,
+          priority,
           scheduledFor,
-          maxRetries,
-          createdAt: new Date()
+          idempotencyKey,
+          maxAttempts,
+          status: 'PENDING',
+          createdAt: new Date(),
+          updatedAt: new Date()
         }
       });
-
-      console.log(`Added job ${job.id} of type ${jobType} to queue`);
-      return job;
     } catch (error) {
-      console.error('Failed to add job to queue:', error);
-      throw new Error(`Failed to add job to queue: ${(error as Error).message}`);
+      console.error('Error adding job to queue:', error);
+      throw error;
     }
   }
 
   /**
-   * Get the next pending job to process based on priority and scheduled time
+   * Get a specific job by ID
+   */
+  static async getJobById(id: string) {
+    try {
+      return await prisma.jobQueue.findUnique({
+        where: { id }
+      });
+    } catch (error) {
+      console.error(`Error fetching job ${id}:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get jobs to process
+   */
+  static async getJobsToProcess(limit: number = 10, jobType?: JobType) {
+    try {
+      const now = new Date();
+      
+      return await prisma.jobQueue.findMany({
+        where: {
+          status: {
+            in: ['PENDING', 'RETRYING']
+          },
+          scheduledFor: {
+            lte: now
+          },
+          ...(jobType ? { jobType } : {}),
+          attempts: {
+            lt: prisma.jobQueue.fields.maxAttempts
+          }
+        },
+        orderBy: [
+          { priority: 'desc' },
+          { scheduledFor: 'asc' },
+          { createdAt: 'asc' }
+        ],
+        take: limit
+      });
+    } catch (error) {
+      console.error('Error getting jobs to process:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get the next job to process
    */
   static async getNextJob(jobTypes?: JobType[]) {
     try {
-      const whereClause: any = {
-        status: 'PENDING',
-        scheduledFor: { lte: new Date() }
-      };
-
-      // Filter by job types if specified
-      if (jobTypes && jobTypes.length > 0) {
-        whereClause.jobType = { in: jobTypes };
-      }
-
-      const job = await prisma.jobQueue.findFirst({
-        where: whereClause,
+      const now = new Date();
+      
+      return await prisma.jobQueue.findFirst({
+        where: {
+          status: {
+            in: ['PENDING', 'RETRYING']
+          },
+          scheduledFor: {
+            lte: now
+          },
+          ...(jobTypes && jobTypes.length > 0 
+            ? { jobType: { in: jobTypes } } 
+            : {}),
+          attempts: {
+            lt: prisma.jobQueue.fields.maxAttempts
+          }
+        },
         orderBy: [
-          { priority: 'desc' }, // Higher priority first
-          { scheduledFor: 'asc' }, // Earlier scheduled time first
-          { createdAt: 'asc' } // Oldest job first
+          { priority: 'desc' },
+          { scheduledFor: 'asc' },
+          { createdAt: 'asc' }
         ]
       });
-
-      return job;
     } catch (error) {
-      console.error('Failed to get next job:', error);
-      throw new Error(`Failed to get next job: ${(error as Error).message}`);
+      console.error('Error getting next job:', error);
+      throw error;
     }
   }
 
   /**
-   * Update job status
+   * Update job status with optional result data
    */
-  static async updateJobStatus(jobId: string, status: JobStatus, details?: {
-    startedAt?: Date;
-    completedAt?: Date;
-    failedAt?: Date;
-    lastError?: string;
-    executionTime?: number;
-    result?: any;
-  }) {
+  static async updateJobStatus(id: string, status: JobStatus, resultData: JobResultData = {}) {
     try {
-      const updateData: any = { status };
+      const job = await prisma.jobQueue.findUnique({
+        where: { id }
+      });
 
-      // Add optional fields if provided
-      if (details) {
-        Object.assign(updateData, details);
+      if (!job) {
+        throw new Error(`Job with ID ${id} not found`);
+      }
 
-        // Increment retry count if status is RETRYING
-        if (status === 'RETRYING') {
-          updateData.retryCount = { increment: 1 };
+      const now = new Date();
+      const updateData: any = {
+        status,
+        updatedAt: now
+      };
+
+      // Add appropriate timestamp based on status
+      if (status === 'PROCESSING') {
+        updateData.startedAt = resultData.startedAt || now;
+        updateData.attempts = job.attempts + 1;
+      } else if (status === 'COMPLETED') {
+        updateData.completedAt = resultData.completedAt || now;
+        updateData.executionTime = resultData.executionTime || 
+          (job.startedAt ? now.getTime() - job.startedAt.getTime() : undefined);
+        updateData.result = resultData.result;
+      } else if (status === 'FAILED') {
+        updateData.failedAt = resultData.failedAt || now;
+        updateData.lastError = resultData.error || resultData.lastError;
+        
+        // If stack trace is provided, save it
+        if (resultData.stack) {
+          updateData.lastErrorStack = resultData.stack;
+        }
+        
+        // Determine if we should retry
+        if (job.attempts < job.maxAttempts) {
+          // Schedule for retry with exponential backoff
+          const backoffMinutes = Math.pow(2, job.attempts);
+          const retryDate = new Date();
+          retryDate.setMinutes(retryDate.getMinutes() + backoffMinutes);
+          
+          updateData.status = 'RETRYING';
+          updateData.scheduledFor = retryDate;
         }
       }
 
-      const job = await prisma.jobQueue.update({
-        where: { id: jobId },
+      return await prisma.jobQueue.update({
+        where: { id },
         data: updateData
       });
-
-      console.log(`Updated job ${jobId} status to ${status}`);
-      return job;
     } catch (error) {
-      console.error(`Failed to update job ${jobId} status:`, error);
-      throw new Error(`Failed to update job status: ${(error as Error).message}`);
+      console.error(`Error updating job ${id} status:`, error);
+      throw error;
     }
   }
 
   /**
-   * Mark a job as processing
+   * Clean up old completed jobs
    */
-  static async markJobAsProcessing(jobId: string) {
-    const startedAt = new Date();
-    return this.updateJobStatus(jobId, 'PROCESSING', { startedAt });
-  }
-
-  /**
-   * Mark a job as completed
-   */
-  static async markJobAsCompleted(jobId: string, result?: any) {
-    const completedAt = new Date();
-    const job = await prisma.jobQueue.findUnique({ where: { id: jobId } });
-
-    if (!job) {
-      throw new Error(`Job ${jobId} not found`);
-    }
-
-    // Calculate execution time in milliseconds
-    const startedAt = job.startedAt;
-    const executionTime = startedAt ? completedAt.getTime() - startedAt.getTime() : null;
-
-    return this.updateJobStatus(jobId, 'COMPLETED', { 
-      completedAt, 
-      result, 
-      executionTime: executionTime || undefined 
-    });
-  }
-
-  /**
-   * Mark a job as failed
-   */
-  static async markJobAsFailed(jobId: string, error: Error | string) {
-    const failedAt = new Date();
-    const lastError = typeof error === 'string' ? error : error.message;
-    
-    const job = await prisma.jobQueue.findUnique({ where: { id: jobId } });
-    
-    if (!job) {
-      throw new Error(`Job ${jobId} not found`);
-    }
-
-    // Check if we should retry
-    if (job.retryCount < job.maxRetries) {
-      // Calculate next retry time with exponential backoff
-      const retryDelay = Math.min(
-        1000 * Math.pow(2, job.retryCount), 
-        60 * 60 * 1000 // Max 1 hour delay
-      );
-      
-      const scheduledFor = new Date(Date.now() + retryDelay);
-      
-      return prisma.jobQueue.update({
-        where: { id: jobId },
-        data: {
-          status: 'RETRYING',
-          lastError,
-          retryCount: { increment: 1 },
-          scheduledFor
+  static async cleanupOldJobs(olderThan: Date) {
+    try {
+      return await prisma.jobQueue.deleteMany({
+        where: {
+          status: {
+            in: ['COMPLETED', 'FAILED']
+          },
+          updatedAt: {
+            lt: olderThan
+          }
         }
       });
+    } catch (error) {
+      console.error('Error cleaning up old jobs:', error);
+      throw error;
     }
-
-    // Max retries reached, mark as permanently failed
-    return this.updateJobStatus(jobId, 'FAILED', { failedAt, lastError });
-  }
-
-  /**
-   * Fetch failed jobs for analysis
-   */
-  static async getFailedJobs(limit = 100) {
-    return prisma.jobQueue.findMany({
-      where: { status: 'FAILED' },
-      orderBy: { failedAt: 'desc' },
-      take: limit
-    });
-  }
-
-  /**
-   * Get stats on job processing
-   */
-  static async getJobStats() {
-    const statusCounts = await prisma.jobQueue.groupBy({
-      by: ['status', 'jobType'],
-      _count: { id: true }
-    });
-
-    const totalJobs = await prisma.jobQueue.count();
-    const pendingJobs = await prisma.jobQueue.count({ 
-      where: { status: 'PENDING' } 
-    });
-    const failedJobs = await prisma.jobQueue.count({ 
-      where: { status: 'FAILED' } 
-    });
-    const completedJobs = await prisma.jobQueue.count({ 
-      where: { status: 'COMPLETED' } 
-    });
-
-    return {
-      totalJobs,
-      pendingJobs,
-      failedJobs,
-      completedJobs,
-      statusCounts
-    };
-  }
-
-  /**
-   * Clean up old completed or failed jobs
-   */
-  static async cleanupOldJobs(olderThan?: Date) {
-    const cutoffDate = olderThan || new Date(Date.now() - 30 * 24 * 60 * 60 * 1000); // Default: 30 days
-
-    const result = await prisma.jobQueue.deleteMany({
-      where: {
-        status: { in: ['COMPLETED', 'FAILED'] },
-        completedAt: { lt: cutoffDate },
-        failedAt: { lt: cutoffDate }
-      }
-    });
-
-    console.log(`Cleaned up ${result.count} old jobs`);
-    return result;
   }
 } 

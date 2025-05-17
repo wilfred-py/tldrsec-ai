@@ -8,6 +8,7 @@ import {
   SECErrorCode, 
   SECRequestOptions 
 } from './types';
+import { sleep } from '@/lib/utils';
 
 /**
  * Default SEC EDGAR API configuration
@@ -27,6 +28,8 @@ export class SECEdgarClient {
   private client: AxiosInstance;
   private limiter: Bottleneck;
   private config: SECEdgarConfig;
+  private requestInterval: number;
+  private lastRequestTime: number = 0;
 
   constructor(config: Partial<SECEdgarConfig> = {}) {
     this.config = { ...DEFAULT_CONFIG, ...config };
@@ -59,6 +62,11 @@ export class SECEdgarClient {
       console.log(`Retrying in ${delay}ms`);
       return delay;
     });
+
+    // Calculate request interval in ms from max requests per second
+    this.requestInterval = this.config.maxRequestsPerSecond 
+      ? 1000 / this.config.maxRequestsPerSecond 
+      : 100; // Default: 10 requests per second
   }
 
   /**
@@ -217,5 +225,111 @@ export class SECEdgarClient {
         }
       }
     );
+  }
+
+  /**
+   * Fetch an RSS feed from the SEC EDGAR API
+   */
+  async fetchRssFeed(url: string): Promise<string> {
+    await this.throttleRequest();
+    
+    try {
+      const response = await this.client.get(url, {
+        responseType: 'text',
+      });
+      return response.data;
+    } catch (error) {
+      console.error(`Error fetching SEC RSS feed: ${error}`);
+      throw error;
+    }
+  }
+
+  /**
+   * Get recent filings from the SEC EDGAR API
+   */
+  async getRecentFilingsFromApi(params: SECFilingSearchParams): Promise<SECApiResponse> {
+    await this.throttleRequest();
+    
+    try {
+      const url = this.buildFilingsUrl(params);
+      const response = await this.client.get(url);
+      return response.data;
+    } catch (error) {
+      console.error(`Error fetching SEC filings: ${error}`);
+      throw error;
+    }
+  }
+
+  /**
+   * Get a specific filing from the SEC EDGAR API
+   */
+  async getFiling(url: string): Promise<string> {
+    await this.throttleRequest();
+    
+    try {
+      const response = await this.client.get(url, {
+        responseType: 'text',
+      });
+      return response.data;
+    } catch (error) {
+      console.error(`Error fetching SEC filing: ${error}`);
+      throw error;
+    }
+  }
+
+  /**
+   * Throttle requests to comply with SEC Edgar API rate limits
+   */
+  private async throttleRequest(): Promise<void> {
+    const now = Date.now();
+    const timeSinceLastRequest = now - this.lastRequestTime;
+    
+    if (timeSinceLastRequest < this.requestInterval) {
+      const sleepTime = this.requestInterval - timeSinceLastRequest;
+      await sleep(sleepTime);
+    }
+    
+    this.lastRequestTime = Date.now();
+  }
+
+  /**
+   * Build the URL for the SEC EDGAR API
+   */
+  private buildFilingsUrl(params: SECFilingSearchParams): string {
+    const baseUrl = 'https://data.sec.gov/api/xbrl/filings';
+    const queryParams = new URLSearchParams();
+    
+    if (params.formType) {
+      const formTypes = Array.isArray(params.formType) 
+        ? params.formType 
+        : [params.formType];
+      queryParams.append('form', formTypes.join(','));
+    }
+    
+    if (params.startDate) {
+      queryParams.append('from', this.formatDate(params.startDate));
+    }
+    
+    if (params.endDate) {
+      queryParams.append('to', this.formatDate(params.endDate));
+    }
+    
+    if (params.count) {
+      queryParams.append('count', params.count.toString());
+    }
+    
+    if (params.ticker) {
+      queryParams.append('ticker', params.ticker);
+    }
+    
+    const queryString = queryParams.toString();
+    return queryString ? `${baseUrl}?${queryString}` : baseUrl;
+  }
+  
+  /**
+   * Format a date for the SEC EDGAR API
+   */
+  private formatDate(date: Date): string {
+    return date.toISOString().split('T')[0];
   }
 } 

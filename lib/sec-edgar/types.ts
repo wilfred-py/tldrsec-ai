@@ -3,7 +3,7 @@
  */
 
 // Filing types supported by the application
-export type FilingType = '10-K' | '10-Q' | '8-K' | 'Form4';
+export type FilingType = '10-K' | '10-Q' | '8-K' | 'Form4' | '4';
 
 // Basic filing metadata interface
 export interface FilingMetadata {
@@ -21,12 +21,14 @@ export interface ParsedFiling extends FilingMetadata {
   id: string; // Unique identifier for the filing
   content?: string; // Optional full content of the filing
   formattedTitle?: string; // Formatted title for display
+  url: string; // URL of the filing (may be same as filingUrl)
 }
 
 // Interface for SEC EDGAR API response
 export interface SECApiResponse {
   entries: SECApiEntry[];
   nextPage?: string; // URL for pagination
+  length?: number; // Optional length property for compatibility
 }
 
 // Single entry in the SEC EDGAR feed
@@ -49,6 +51,17 @@ export interface SECRequestOptions {
   owner?: 'include' | 'exclude' | 'only'; // Owner filter
   retry?: boolean; // Whether to retry failed requests
   maxRetries?: number; // Maximum number of retries
+}
+
+/**
+ * Search parameters for SEC EDGAR filings
+ */
+export interface SECFilingSearchParams {
+  formType?: FilingType | FilingType[];
+  startDate?: Date;
+  endDate?: Date;
+  count?: number;
+  ticker?: string;
 }
 
 // Configuration for SEC Edgar client
@@ -81,4 +94,12 @@ export class SECEdgarError extends Error {
     this.code = code;
     this.status = status;
   }
+}
+
+/**
+ * Response from the processFilingEntries function
+ */
+export interface ProcessedFilingsResult {
+  newFilings: ParsedFiling[];
+  existingFilings: ParsedFiling[];
 } 

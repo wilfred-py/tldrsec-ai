@@ -88,3 +88,41 @@ model TickerChange {
   @@index([newTicker])
   @@index([effectiveDate])
 }
+
+// Model for job queue to manage SEC filing processing jobs
+model JobQueue {
+  id                String    @id @default(uuid())
+  jobType           String    // "CHECK_FILINGS", "PROCESS_FILING", "ARCHIVE_FILINGS", etc.
+  status            String    // "PENDING", "PROCESSING", "COMPLETED", "FAILED", "RETRYING"
+  priority          Int       @default(5) // 1-10, higher number = higher priority
+  payload           Json      // Job-specific data (filing types, date ranges, etc.)
+  idempotencyKey    String?   // Unique key for preventing duplicate job processing
+  createdAt         DateTime  @default(now())
+  scheduledFor      DateTime  // When the job should be executed
+  startedAt         DateTime? // When job execution began
+  completedAt       DateTime? // When job execution completed
+  failedAt          DateTime? // When job execution failed
+  retryCount        Int       @default(0) // Number of retry attempts
+  maxRetries        Int       @default(3) // Maximum number of retries
+  lastError         String?   @db.Text // Last error message
+  executionTime     Int?      // Execution time in milliseconds
+  result            Json?     // Result of the job execution
+  
+  @@index([status, scheduledFor]) // For efficient job fetching
+  @@index([jobType, status]) // For querying specific job types
+  @@index([idempotencyKey]) // For idempotency checks
+  @@index([createdAt]) // For historical analysis
+}
+
+// Model for distributed locks to prevent concurrent execution
+model JobLock {
+  id              String    @id @default(uuid())
+  lockName        String    @unique // Name of the lock (e.g., "check-10k-filings")
+  acquiredBy      String    // Identifier of the process that acquired the lock
+  acquiredAt      DateTime  @default(now())
+  expiresAt       DateTime  // When the lock expires
+  refreshedAt     DateTime? // When the lock was last refreshed
+  released        Boolean   @default(false) // Whether the lock has been released
+  
+  @@index([lockName, released, expiresAt]) // For efficient lock checking
+}
