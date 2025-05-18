@@ -3,7 +3,17 @@
  */
 
 // Filing types supported by the application
-export type FilingType = '10-K' | '10-Q' | '8-K' | 'Form4' | '4';
+export type FilingType = 
+  | '10-K' 
+  | '10-Q' 
+  | '8-K' 
+  | 'Form4' 
+  | '4'
+  | 'DEFA14A'
+  | 'SC 13D'
+  | 'SC13D'
+  | '144'
+  | 'Form 144';
 
 // Basic filing metadata interface
 export interface FilingMetadata {
