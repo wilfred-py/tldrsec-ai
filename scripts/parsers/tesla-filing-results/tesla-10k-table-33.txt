@@ -1,0 +1,9 @@
+Table: Table 34
+
+												
+		December 31,			December 31,			December 31,	
+		2022			2021			2020	
+Cash and cash equivalents		$	16,253			$	17,576			$	19,384	
+Restricted cash included in prepaid expenses and other    current assets			294				345				238	
+Restricted cash included in other non-current assets			377				223				279	
+Total as presented in the consolidated statements of cash flows		$	16,924			$	18,144			$	19,901	

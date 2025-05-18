@@ -1,0 +1,19 @@
+Table: Table 92
+
+												
+												
+10.34		Amendment to Gigafactory Documents, dated April 5, 2016, by and among the Registrant, Panasonic Corporation, Panasonic Corporation of North America and Panasonic Energy Corporation of North America.		10-Q		001-34756		10.2		May 10, 2016		
+												
+10.35††		2019 Pricing Agreement (Japan Cells) with respect to 2011 Supply Agreement, executed September 20, 2019, by and among the Registrant, Tesla Motors Netherlands B.V., Panasonic Corporation and SANYO Electric Co., Ltd.		10-Q		001-34756		10.6		October 29, 2019		
+												
+10.36††		2020 Pricing Agreement (Gigafactory 2170 Cells), entered into on June 9, 2020, by and among Registrant, Tesla Motors Netherlands B.V., Panasonic Corporation and Panasonic Corporation of North America.		10-Q		001-34756		10.3		July 28, 2020		
+												
+10.37††		2021 Pricing Agreement (Japan Cells) with respect to 2011 Supply Agreement, executed December 29, 2020, by and among the Registrant, Tesla Motors Netherlands B.V., Panasonic Corporation of North America and SANYO Electric Co., Ltd.		10-K		001-34756		10.39		February 8, 2021		
+												
+10.38††		Amended and Restated Factory Lease, executed as of March 26, 2019, by and between the Registrant and Panasonic Energy North America, a division of Panasonic Corporation of North America, as tenant.		10-Q		001-34756		10.3		July 29, 2019		
+												
+10.39††		Lease Amendment, executed September 20, 2019, by and among the Registrant, Panasonic Corporation of North America, on behalf of its division Panasonic Energy of North America, with respect to the Amended and Restated Factory Lease, executed as of March 26, 2019.		10-Q		001-34756		10.7		October 29, 2019		
+												
+10.40††		Second Lease Amendment, entered into on June 9, 2020, by and between the Registrant and Panasonic Energy of North America, a division of Panasonic Corporation of North America, with respect to the Amended and Restated Factory Lease dated January 1, 2017.		10-Q		001-34756		10.1		July 28, 2020		
+												
+10.41		Amendment and Restatement in respect of ABL Credit Agreement, dated as of March 6, 2019, by and among certain of the Registrant’s and Tesla Motors Netherlands B.V.’s direct or indirect subsidiaries from time to time party thereto, as borrowers, Wells Fargo Bank, National Association, as documentation agent, JPMorgan Chase Bank, N.A., Goldman Sachs Bank USA, Morgan Stanley Senior Funding Inc. and Bank of America, N.A., as syndication agents, the lenders from time to time party thereto, and Deutsche Bank AG New York Branch, as administrative agent and collateral agent.		S-4/A		333-229749		10.68		April 3, 2019		

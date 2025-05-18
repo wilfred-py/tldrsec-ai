@@ -1,0 +1,16 @@
+Table: Table 56
+
+								
+		Operating			Finance	
+		Leases			Leases	
+2023		$	610			$	534	
+2024			558				387	
+2025			490				122	
+2026			383				52	
+2027			300				31	
+Thereafter			805				4	
+Total minimum lease payments			3,146				1,130	
+Less: Interest			497				76	
+Present value of lease obligations			2,649				1,054	
+Less: Current portion			485				486	
+Long-term portion of lease obligations		$	2,164			$	568	

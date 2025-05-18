@@ -1,0 +1,11 @@
+Table: Table 40
+
+																								
+		December 31, 2022	
+		Adjusted Cost			Gross Unrealized Gains			Gross Unrealized Losses			Fair Value			Cash and Cash Equivalents			Short-Term Investments	
+Cash		$	13,965			$	—			$	—			$	13,965			$	13,965			$	—	
+Money market funds			2,188				—				—				2,188				2,188				—	
+U.S. government securities			897				—				(3	)			894				—				894	
+Corporate debt securities			907				—				(22	)			885				—				885	
+Certificates of deposit and time deposits			4,252				1				—				4,253				100				4,153	
+Total cash, cash equivalents and short-term investments		$	22,209			$	1			$	(25	)		$	22,185			$	16,253			$	5,932	

@@ -1,0 +1,10 @@
+Table: Table 30
+
+								
+		Year ended December 31,	
+		2022			2021	
+Deferred revenue— beginning of period		$	2,382			$	1,926	
+Additions			1,178				847	
+Net changes in liability for pre-existing contracts			(67	)			(25	)
+Revenue recognized			(580	)			(366	)
+Deferred revenue— end of period		$	2,913			$	2,382	

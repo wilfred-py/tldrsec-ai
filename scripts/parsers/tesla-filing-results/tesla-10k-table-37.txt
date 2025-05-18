@@ -1,0 +1,14 @@
+Table: Table 38
+
+												
+		Balances at December 31, 2020			Adjustments fromAdoption of ASU 2020-06			Balances at January 1, 2021	
+Assets									
+Property, plant and equipment, net		$	12,747			$	(45	)		$	12,702	
+Liabilities									
+Current portion of debt and finance leases			2,132				50				2,182	
+Debt and finance leases, net of current portion			9,556				219				9,775	
+Mezzanine equity									
+Convertible senior notes			51				(51	)			—	
+Equity									
+Additional paid-in capital			27,260				(474	)			26,786	
+Accumulated deficit			(5,399	)			211				(5,188	)

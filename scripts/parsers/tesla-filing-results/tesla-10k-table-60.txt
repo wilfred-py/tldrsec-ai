@@ -1,0 +1,10 @@
+Table: Table 61
+
+												
+		Year Ended December 31,	
+		2022			2021			2020	
+Risk-free interest rate			3.11	%			0.66	%			0.26	%
+Expected term (in years)			4.1				4.3				3.9	
+Expected volatility			63	%			59	%			69	%
+Dividend yield			0.0	%			0.0	%			0.0	%
+Grant date fair value per share (1)		$	114.51			$	128.02			$	72.05	

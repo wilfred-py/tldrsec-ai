@@ -1,0 +1,19 @@
+Table: Table 52
+
+								
+		December 31, 2022			December 31, 2021	
+Operating leases:						
+Operating lease right-of-use assets		$	2,563			$	2,016	
+						
+Accrued liabilities and other		$	485			$	368	
+Other long-term liabilities			2,164				1,671	
+Total operating lease liabilities		$	2,649			$	2,039	
+						
+Finance leases:						
+Solar energy systems, net		$	25			$	27	
+Property, plant and equipment, net			1,094				1,536	
+Total finance lease assets		$	1,119			$	1,563	
+						
+Current portion of long-term debt and finance leases		$	486			$	501	
+Long-term debt and finance leases, net of current portion			568				991	
+Total finance lease liabilities		$	1,054			$	1,492	

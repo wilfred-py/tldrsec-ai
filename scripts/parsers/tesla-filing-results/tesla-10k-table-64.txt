@@ -1,0 +1,16 @@
+Table: Table 65
+
+												
+		Year Ended December 31,	
+		2022			2021			2020	
+Current:									
+Federal		$	—			$	—			$	—	
+State			62				9				4	
+Foreign			1,266				839				248	
+Total current			1,328				848				252	
+Deferred:									
+Federal			26				—				—	
+State			1				—				—	
+Foreign			(223	)			(149	)			40	
+Total deferred			(196	)			(149	)			40	
+Total provision for income taxes		$	1,132			$	699			$	292	

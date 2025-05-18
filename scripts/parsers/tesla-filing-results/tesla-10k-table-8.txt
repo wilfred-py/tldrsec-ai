@@ -1,0 +1,11 @@
+Table: Table 9
+
+				
+Primary Manufacturing Facilities		Location		Owned or Leased
+Gigafactory Texas		Austin, Texas		Owned
+Fremont Factory		Fremont, California		Owned
+Gigafactory Nevada		Sparks, Nevada		Owned
+Gigafactory Berlin-Brandenburg		Grunheide, Germany		Owned
+Gigafactory Shanghai		Shanghai, China		*
+Gigafactory New York		Buffalo, New York		Leased
+Megafactory		Lathrop, California		Leased

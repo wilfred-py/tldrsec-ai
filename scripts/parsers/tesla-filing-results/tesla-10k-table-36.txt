@@ -1,0 +1,10 @@
+Table: Table 37
+
+												
+		Year Ended December 31,	
+		2022			2021			2020	
+Accrued warranty—beginning of period		$	2,101			$	1,468			$	1,089	
+Warranty costs incurred			(803	)			(525	)			(312	)
+Net changes in liability for pre-existing warranties,   including expirations and foreign exchange impact			522				102				66	
+Provision for warranty			1,685				1,056				625	
+Accrued warranty—end of period		$	3,505			$	2,101			$	1,468	

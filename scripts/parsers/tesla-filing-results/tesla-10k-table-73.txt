@@ -1,0 +1,29 @@
+Table: Table 74
+
+												
+Exhibit				Incorporated by Reference		Filed
+Number		Exhibit Description		Form		File No.		Exhibit		Filing Date		Herewith
+												
+3.1		Amended and Restated Certificate of Incorporation of the Registrant.		10-K		001-34756		3.1		March 1, 2017		
+												
+3.2		Certificate of Amendment to the Amended and Restated Certificate of Incorporation of the Registrant.		10-K		001-34756		3.2		March 1, 2017		
+												
+3.3		Amended and Restated Bylaws of the Registrant.		8-K		001-34756		3.2		February 1, 2017		
+												
+4.1		Specimen common stock certificate of the Registrant.		10-K		001-34756		4.1		March 1, 2017		
+												
+4.2		Fifth Amended and Restated Investors’ Rights Agreement, dated as of August 31, 2009, between Registrant and certain holders of the Registrant’s capital stock named therein.		S-1		333-164593		4.2		January 29, 2010		
+												
+4.3		Amendment to Fifth Amended and Restated Investors’ Rights Agreement, dated as of May 20, 2010, between Registrant and certain holders of the Registrant’s capital stock named therein.		S-1/A		333-164593		4.2A		May 27, 2010		
+												
+4.4		Amendment to Fifth Amended and Restated Investors’ Rights Agreement between Registrant, Toyota Motor Corporation and certain holders of the Registrant’s capital stock named therein.		S-1/A		333-164593		4.2B		May 27, 2010		
+												
+4.5		Amendment to Fifth Amended and Restated Investor’s Rights Agreement, dated as of June 14, 2010, between Registrant and certain holders of the Registrant’s capital stock named therein.		S-1/A		333-164593		4.2C		June 15, 2010		
+												
+4.6		Amendment to Fifth Amended and Restated Investor’s Rights Agreement, dated as of November 2, 2010, between Registrant and certain holders of the Registrant’s capital stock named therein.		8-K		001-34756		4.1		November 4, 2010		
+												
+4.7		Waiver to Fifth Amended and Restated Investor’s Rights Agreement, dated as of May 22, 2011, between Registrant and certain holders of the Registrant’s capital stock named therein.		S-1/A		333-174466		4.2E		June 2, 2011		
+												
+4.8		Amendment to Fifth Amended and Restated Investor’s Rights Agreement, dated as of May 30, 2011, between Registrant and certain holders of the Registrant’s capital stock named therein.		8-K		001-34756		4.1		June 1, 2011		
+												
+4.9		Sixth Amendment to Fifth Amended and Restated Investors’ Rights Agreement, dated as of May 15, 2013 among the Registrant, the Elon Musk Revocable Trust dated July 22, 2003 and certain other holders of the capital stock of the Registrant named therein.		8-K		001-34756		4.1		May 20, 2013		

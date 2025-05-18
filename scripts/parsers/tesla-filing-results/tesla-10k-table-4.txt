@@ -1,0 +1,5 @@
+Table: Table 5
+
+		
+Title of each class	Trading Symbol(s)	Name of each exchange on which registered
+Common stock	TSLA	The Nasdaq Global Select Market

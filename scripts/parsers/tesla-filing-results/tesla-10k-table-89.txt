@@ -1,0 +1,27 @@
+Table: Table 90
+
+												
+												
+10.22		Form of Warrant Confirmation relating to 1.25% Convertible Senior Notes Due March 1, 2021.		8-K		001-34756		10.5		March 5, 2014		
+												
+10.23		Form of Call Option Confirmation relating to 2.00% Convertible Senior Notes due May 15, 2024.		8-K		001-34756		10.1		May 3, 2019		
+												
+10.24		Form of Warrant Confirmation relating to 2.00% Convertible Senior Notes due May 15, 2024.		8-K		001-34756		10.2		May 3, 2019		
+												
+10.25†		Supply Agreement between Panasonic Corporation and the Registrant dated October 5, 2011.		10-K		001-34756		10.50		February 27, 2012		
+												
+10.26†		Amendment No. 1 to Supply Agreement between Panasonic Corporation and the Registrant dated October 29, 2013.		10-K		001-34756		10.35A		February 26, 2014		
+												
+10.27		Agreement between Panasonic Corporation and the Registrant dated July 31, 2014.		10-Q		001-34756		10.1		November 7, 2014		
+												
+10.28†		General Terms and Conditions between Panasonic Corporation and the Registrant dated October 1, 2014.		8-K		001-34756		10.2		October 11, 2016		
+												
+10.29		Letter Agreement, dated as of February 24, 2015, regarding addition of co-party to General Terms and Conditions, Production Pricing Agreement and Investment Letter Agreement between Panasonic Corporation and the Registrant.		10-K		001-34756		10.25A		February 24, 2016		
+												
+10.30†		Amendment to Gigafactory General Terms, dated March 1, 2016, by and among the Registrant, Panasonic Corporation and Panasonic Energy Corporation of North America.		8-K		001-34756		10.1		October 11, 2016		
+												
+10.31††		Amended and Restated General Terms and Conditions for Gigafactory, entered into on June 10, 2020, by and among Registrant, Tesla Motors Netherlands B.V., Panasonic Corporation and Panasonic Corporation of North America.		10-Q		001-34756		10.2		July 28, 2020		
+												
+10.32†		Production Pricing Agreement between Panasonic Corporation and the Registrant dated October 1, 2014.		10-Q		001-34756		10.3		November 7, 2014		
+												
+10.33†		Investment Letter Agreement between Panasonic Corporation and the Registrant dated October 1, 2014.		10-Q		001-34756		10.4		November 7, 2014		

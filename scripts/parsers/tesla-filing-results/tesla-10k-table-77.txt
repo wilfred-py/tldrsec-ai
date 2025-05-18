@@ -1,0 +1,27 @@
+Table: Table 78
+
+												
+												
+4.20		Indenture, dated as of October 15, 2014, between SolarCity and U.S. Bank National Association, as trustee.		S-3ASR(1)		333-199321		4.1		October 15, 2014		
+												
+4.21		Tenth Supplemental Indenture, dated as of March 9, 2015, by and between SolarCity and the Trustee, related to SolarCity’s 5.00% Solar Bonds, Series 2015/6-10.		8-K(1)		001-35758		4.3		March 9, 2015		
+												
+4.22		Eleventh Supplemental Indenture, dated as of March 9, 2015, by and between SolarCity and the Trustee, related to SolarCity’s 5.75% Solar Bonds, Series 2015/7-15.		8-K(1)		001-35758		4.4		March 9, 2015		
+												
+4.23		Fifteenth Supplemental Indenture, dated as of March 19, 2015, by and between SolarCity and the Trustee, related to SolarCity’s 4.70% Solar Bonds, Series 2015/C4-10.		8-K(1)		001-35758		4.5		March 19, 2015		
+												
+4.24		Sixteenth Supplemental Indenture, dated as of March 19, 2015, by and between SolarCity and the Trustee, related to SolarCity’s 5.45% Solar Bonds, Series 2015/C5-15.		8-K(1)		001-35758		4.6		March 19, 2015		
+												
+4.25		Twentieth Supplemental Indenture, dated as of March 26, 2015, by and between SolarCity and the Trustee, related to SolarCity’s 4.70% Solar Bonds, Series 2015/C9-10.		8-K(1)		001-35758		4.5		March 26, 2015		
+												
+4.26		Twenty-First Supplemental Indenture, dated as of March 26, 2015, by and between SolarCity and the Trustee, related to SolarCity’s 5.45% Solar Bonds, Series 2015/C10-15.		8-K(1)		001-35758		4.6		March 26, 2015		
+												
+4.27		Twenty-Sixth Supplemental Indenture, dated as of April 2, 2015, by and between SolarCity and the Trustee, related to SolarCity’s 4.70% Solar Bonds, Series 2015/C14-10.		8-K(1)		001-35758		4.5		April 2, 2015		
+												
+4.28		Thirtieth Supplemental Indenture, dated as of April 9, 2015, by and between SolarCity and the Trustee, related to SolarCity’s 4.70% Solar Bonds, Series 2015/C19-10.		8-K(1)		001-35758		4.5		April 9, 2015		
+												
+4.29		Thirty-First Supplemental Indenture, dated as of April 9, 2015, by and between SolarCity and the Trustee, related to SolarCity’s 5.45% Solar Bonds, Series 2015/C20-15.		8-K(1)		001-35758		4.6		April 9, 2015		
+												
+4.30		Thirty-Fifth Supplemental Indenture, dated as of April 14, 2015, by and between SolarCity and the Trustee, related to SolarCity’s 4.70% Solar Bonds, Series 2015/C24-10.		8-K(1)		001-35758		4.5		April 14, 2015		
+												
+4.31		Thirty-Sixth Supplemental Indenture, dated as of April 14, 2015, by and between SolarCity and the Trustee, related to SolarCity’s 5.45% Solar Bonds, Series 2015/C25-15.		8-K(1)		001-35758		4.6		April 14, 2015		

@@ -1,0 +1,11 @@
+Table: Table 39
+
+																																
+		December 31, 2022			December 31, 2021	
+		Fair Value			Level I			Level II			Level III			Fair Value			Level I			Level II			Level III	
+Money market funds		$	2,188			$	2,188			$	—			$	—			$	9,548			$	9,548			$	—			$	—	
+U.S. government securities			894				—				894				—				—				—				—				—	
+Corporate debt securities			885				—				885				—				131				—				131				—	
+Certificates of deposit and time deposits			4,253				—				4,253				—				—				—				—				—	
+Interest rate swap liabilities			—				—				—				—				31				—				31				—	
+Total		$	8,220			$	2,188			$	6,032			$	—			$	9,710			$	9,548			$	162			$	—	

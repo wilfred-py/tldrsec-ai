@@ -1,0 +1,9 @@
+Table: Table 41
+
+																								
+		December 31, 2021	
+		Adjusted Cost			Gross Unrealized Gains			Gross Unrealized Losses			Fair Value			Cash and Cash Equivalents			Short-Term Investments	
+Cash		$	8,028			$	—			$	—			$	8,028			$	8,028			$	—	
+Money market funds			9,548				—				—				9,548				9,548				—	
+Corporate debt securities			132				—				(1	)			131				—				131	
+Total cash, cash equivalents and short-term investments		$	17,708			$	—			$	(1	)		$	17,707			$	17,576			$	131	

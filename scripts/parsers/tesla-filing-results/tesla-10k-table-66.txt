@@ -1,0 +1,17 @@
+Table: Table 67
+
+												
+		Year Ended December 31,	
+		2022			2021			2020	
+Tax at statutory federal rate		$	2,881			$	1,332			$	242	
+State tax, net of federal benefit			51				6				4	
+Nondeductible executive compensations			14				201				184	
+Other nondeductible expenses			89				67				52	
+Excess tax benefits related to stock based    compensation			(745	)			(7,123	)			(666	)
+Foreign income rate differential			(923	)			(668	)			33	
+U.S. tax credits			(276	)			(328	)			(181	)
+Noncontrolling interests and redeemable    noncontrolling interests adjustment			42				11				5	
+GILTI inclusion			1,279				1,008				133	
+Unrecognized tax benefits			252				28				1	
+Change in valuation allowance			(1,532	)			6,165				485	
+Provision for income taxes		$	1,132			$	699			$	292	

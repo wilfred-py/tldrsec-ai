@@ -1,0 +1,13 @@
+Table: Table 11
+
+				
+Production Location		Vehicle Model(s)		Production Status
+Fremont Factory		Model S / Model X		Active
+		Model 3 / Model Y		Active
+Gigafactory Shanghai		Model 3 / Model Y		Active
+Gigafactory Berlin-Brandenburg		Model Y		Active
+Gigafactory Texas		Model Y		Active
+		Cybertruck		Tooling
+Gigafactory Nevada		Tesla Semi		Pilot production
+TBD		Tesla Roadster		In development
+TBD		Robotaxi & Others		In development

@@ -1,0 +1,13 @@
+Table: Table 58
+
+								
+		December 31, 2022			December 31, 2021	
+Gross lease receivables		$	837			$	427	
+Unearned interest income			(95	)			(50	)
+Allowance for expected credit losses			(4	)			(1	)
+Net investment in sales-type leases		$	738			$	376	
+						
+Reported as:						
+Prepaid expenses and other current assets		$	164			$	73	
+Other non-current assets			574				303	
+Net investment in sales-type leases		$	738			$	376	

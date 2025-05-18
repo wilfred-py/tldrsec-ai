@@ -1,0 +1,40 @@
+Table: Table 27
+
+																																					
+															Accumulated			(Accumulated										
+		Redeemable										Additional			Other			Deficit)			Total			Noncontrolling				
+		Noncontrolling				Common Stock			Paid-In			Comprehensive			Retained			Stockholders’			Interests in			Total	
+		Interests				Shares (1)			Amount (1)			Capital			(Loss) Income			Earnings (1)			Equity			Subsidiaries			Equity	
+Balance as of December 31, 2019		$	643					2,716			$	3			$	12,736			$	(36	)		$	(6,085	)		$	6,618			$	849			$	7,467	
+Adjustments for prior periods from adopting ASU 2016-13			—					—				—				—				—				(37	)			(37	)			—				(37	)
+Reclassification between equity and mezzanine equity for convertible senior    notes			—					—				—				(51	)			—				—				(51	)			—				(51	)
+Exercises of conversion feature of convertible senior notes			—					5				0				59				—				—				59				—				59	
+Issuance of common stock for equity incentive awards			—					55				0				417				—				—				417				—				417	
+Issuance of common stock in public offerings, net of issuance costs of $68			—					103				0				12,269				—				—				12,269				—				12,269	
+Stock-based compensation			—					—				—				1,861				—				—				1,861				—				1,861	
+Contributions from noncontrolling interests			7					—				—				—				—				—				—				17				17	
+Distributions to noncontrolling interests			(67	)				—				—				—				—				—				—				(132	)			(132	)
+Buy-outs of noncontrolling interests			(4	)				—				—				(31	)			—				—				(31	)			—				(31	)
+Net income			25					—				—				—				—				721				721				116				837	
+Other comprehensive income			—					—				—				—				399				—				399				—				399	
+Balance as of December 31, 2020		$	604					2,879			$	3			$	27,260			$	363			$	(5,401	)		$	22,225			$	850			$	23,075	
+Adjustments for prior periods from adopting ASU 2020-06			—					—				—				(474	)			—				211				(263	)			—				(263	)
+Exercises of conversion feature of convertible senior notes			—					2				0				6				—				—				6				—				6	
+Settlements of warrants			—					112				0				—				—				—				—				—				—	
+Issuance of common stock for equity incentive awards			—					107				0				707				—				—				707				—				707	
+Stock-based compensation			—					—				—				2,299				—				—				2,299				—				2,299	
+Contributions from noncontrolling interests			2					—				—				—				—				—				—				—				—	
+Distributions to noncontrolling interests			(66	)				—				—				—				—				—				—				(106	)			(106	)
+Buy-outs of noncontrolling interests			(15	)				—				—				5				—				—				5				—				5	
+Net income			43					—				—				—				—				5,519				5,519				82				5,601	
+Other comprehensive loss			—					—				—				—				(309	)			—				(309	)			—				(309	)
+Balance as of December 31, 2021		$	568				$	3,100			$	3			$	29,803			$	54			$	329			$	30,189			$	826			$	31,015	
+Exercises of conversion feature of convertible senior notes			—					0				0				0				—				—				—				—				—	
+Settlements of warrants			—					37				0				0				—				—				—				—				—	
+Issuance of common stock for equity incentive awards			—					27				0				541				—				—				541				—				541	
+Stock-based compensation			—					—				—				1,806				—				—				1,806				—				1,806	
+Distributions to noncontrolling interests			(46	)				—				—				—				—				—				—				(113	)			(113	)
+Buy-outs of noncontrolling interests			(11	)				—				—				27				—				—				27				(61	)			(34	)
+Net (loss) income			(102	)				—				—				—				—				12,556				12,556				133				12,689	
+Other comprehensive loss			—					—				—				—				(415	)			—				(415	)			—				(415	)
+Balance as of December 31, 2022		$	409					3,164			$	3			$	32,177			$	(361	)		$	12,885			$	44,704			$	785			$	45,489	
