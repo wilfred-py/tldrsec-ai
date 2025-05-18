@@ -24,6 +24,7 @@ const mockFilings: (ParsedFiling & FilingWithAllProperties)[] = [
     filingType: '10-K',
     filingDate: new Date('2023-10-27'),
     filingUrl: 'https://www.sec.gov/Archives/edgar/data/320193/000032019323000106/aapl-20230930.htm',
+    url: 'https://www.sec.gov/Archives/edgar/data/320193/000032019323000106/aapl-20230930.htm',
     description: 'Annual Report'
   },
   {
@@ -34,6 +35,7 @@ const mockFilings: (ParsedFiling & FilingWithAllProperties)[] = [
     filingType: '10-Q',
     filingDate: new Date('2023-07-28'),
     filingUrl: 'https://www.sec.gov/Archives/edgar/data/320193/000032019323000077/aapl-20230701.htm',
+    url: 'https://www.sec.gov/Archives/edgar/data/320193/000032019323000077/aapl-20230701.htm',
     description: 'Quarterly Report'
   },
   {
@@ -44,6 +46,7 @@ const mockFilings: (ParsedFiling & FilingWithAllProperties)[] = [
     filingType: '8-K',
     filingDate: new Date('2023-11-01'),
     filingUrl: 'https://www.sec.gov/Archives/edgar/data/789019/000095017023080511/msft-20231101.htm',
+    url: 'https://www.sec.gov/Archives/edgar/data/789019/000095017023080511/msft-20231101.htm',
     description: 'Current Report'
   },
   {
@@ -54,6 +57,7 @@ const mockFilings: (ParsedFiling & FilingWithAllProperties)[] = [
     filingType: '10-K',
     filingDate: new Date('2023-07-27'),
     filingUrl: 'https://www.sec.gov/Archives/edgar/data/789019/000156459023030735/msft-10k_20230630.htm',
+    url: 'https://www.sec.gov/Archives/edgar/data/789019/000156459023030735/msft-10k_20230630.htm',
     description: 'Annual Report'
   },
   {
@@ -64,6 +68,7 @@ const mockFilings: (ParsedFiling & FilingWithAllProperties)[] = [
     filingType: 'Form4',
     filingDate: new Date('2023-11-02'),
     filingUrl: 'https://www.sec.gov/Archives/edgar/data/1018724/000112760223025392/xslF345X02/form4.xml',
+    url: 'https://www.sec.gov/Archives/edgar/data/1018724/000112760223025392/xslF345X02/form4.xml',
     description: 'Statement of Changes in Beneficial Ownership'
   },
 ];

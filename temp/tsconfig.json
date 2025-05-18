@@ -1,0 +1,24 @@
+{
+  "compilerOptions": {
+    "target": "es2020",
+    "module": "commonjs",
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "outDir": "/Users/wilf/Software/tldrsec-ai/tldrsec-ai/temp/dist",
+    "rootDir": "/Users/wilf/Software/tldrsec-ai/tldrsec-ai",
+    "paths": {
+      "@/*": [
+        "*"
+      ]
+    }
+  },
+  "include": [
+    "/Users/wilf/Software/tldrsec-ai/tldrsec-ai/lib/parsers/**/*.ts",
+    "/Users/wilf/Software/tldrsec-ai/tldrsec-ai/lib/sec-edgar/**/*.ts",
+    "/Users/wilf/Software/tldrsec-ai/tldrsec-ai/scripts/parsers/test-content-extraction.ts"
+  ],
+  "exclude": [
+    "node_modules"
+  ]
+}

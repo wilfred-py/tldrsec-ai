@@ -19,6 +19,7 @@ const mockFiling: ParsedFiling = {
   filingType: '10-K' as FilingType,
   filingDate: new Date('2023-10-27'),
   filingUrl: 'https://www.sec.gov/Archives/edgar/data/320193/000032019323000106/aapl-20230930.htm',
+  url: 'https://www.sec.gov/Archives/edgar/data/320193/000032019323000106/aapl-20230930.htm',
   description: 'Annual Report for Apple Inc.'
 };
 
@@ -49,6 +50,7 @@ const createMockFilings = (count: number): ParsedFiling[] => {
       filingType,
       filingDate: date,
       filingUrl: `https://www.sec.gov/example/${company.ticker.toLowerCase()}-${filingType.toLowerCase()}-${date.getFullYear()}${(date.getMonth() + 1).toString().padStart(2, '0')}${date.getDate().toString().padStart(2, '0')}.htm`,
+      url: `https://www.sec.gov/example/${company.ticker.toLowerCase()}-${filingType.toLowerCase()}-${date.getFullYear()}${(date.getMonth() + 1).toString().padStart(2, '0')}${date.getDate().toString().padStart(2, '0')}.htm`,
       description: `${filingType} filing for ${company.name}`
     });
   }
