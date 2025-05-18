@@ -80,6 +80,12 @@ const DEFAULT_OPTIONS: SECFilingParserOptions = {
   extractTables: true,
   extractLists: true,
   removeBoilerplate: true,
+  enableChunking: false,
+  chunkOptions: {
+    maxChunkSize: 4000,
+    chunkOverlap: 500,
+    respectSemanticBoundaries: true
+  }
 };
 
 /**
@@ -375,4 +381,30 @@ async function parsePDFAsSECFiling(
     logger.error('Error parsing PDF as SEC filing:', error);
     throw new Error(`Failed to parse PDF as SEC filing: ${error}`);
   }
+}
+
+/**
+ * Creates a parser for a filing based on its detected type and with chunking support
+ * 
+ * @param content The content to parse (HTML/XBRL string or PDF buffer)
+ * @param options Parser options to apply
+ * @param enableChunking Whether to enable document chunking
+ * @returns The parsed SEC filing
+ * @throws Error if the filing type cannot be detected or is not supported
+ */
+export async function createAutoParserWithChunking(
+  content: string | Buffer,
+  options?: Partial<SECFilingParserOptions>,
+  enableChunking = false
+): Promise<ParsedSECFiling> {
+  // Build options with chunking enabled if requested
+  const chunkingOptions: Partial<SECFilingParserOptions> = {
+    ...options,
+    enableChunking,
+    // If custom chunk options weren't provided, use defaults
+    chunkOptions: options?.chunkOptions || DEFAULT_OPTIONS.chunkOptions
+  };
+  
+  // Use the standard auto parser with chunking options
+  return createAutoParser(content, chunkingOptions);
 } 

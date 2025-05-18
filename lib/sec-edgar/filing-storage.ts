@@ -172,6 +172,7 @@ export class FilingStorage {
         filingType: summary.filingType as FilingType,
         filingDate: summary.filingDate,
         filingUrl: summary.filingUrl,
+        url: summary.filingUrl,
         description: summary.summaryText,
         // Extract other fields from summaryJSON if needed
         ...(summary.summaryJSON as object)
@@ -242,6 +243,7 @@ export class FilingStorage {
         filingType: (filing.filingType || firstSummary.filingType) as FilingType,
         filingDate: filing.filingDate || firstSummary.filingDate,
         filingUrl: firstSummary.filingUrl,
+        url: firstSummary.filingUrl,
         description: filing.description || firstSummary.summaryText,
         // Include other fields from the original filing
         ...(firstSummary.summaryJSON as object),
@@ -331,7 +333,7 @@ export class FilingStorage {
       const summaries = await this.prisma.summary.findMany({
         where: {
           tickerId: {
-            in: tickerRecords.map((t) => t.id)
+            in: tickerRecords.map((t: Ticker) => t.id)
           }
         },
         orderBy: {
@@ -344,10 +346,10 @@ export class FilingStorage {
       });
       
       // Create a map of ticker IDs to ticker records for faster lookup
-      const tickerMap = new Map(tickerRecords.map((t) => [t.id, t]));
+      const tickerMap = new Map(tickerRecords.map((t: Ticker) => [t.id, t]));
       
       // Convert summaries to filings
-      return summaries.map((summary) => {
+      return summaries.map((summary: any) => {
         const ticker = tickerMap.get(summary.tickerId) || summary.ticker;
         
         return {
@@ -358,6 +360,7 @@ export class FilingStorage {
           filingType: summary.filingType as FilingType,
           filingDate: summary.filingDate,
           filingUrl: summary.filingUrl,
+          url: summary.filingUrl,
           description: summary.summaryText,
           // Include other fields from the summary JSON
           ...(summary.summaryJSON as object)
@@ -409,7 +412,7 @@ export class FilingStorage {
       });
       
       // Convert summaries to filings
-      return summaries.map((summary) => ({
+      return summaries.map((summary: any) => ({
         id: summary.id,
         companyName: summary.ticker.companyName,
         ticker: summary.ticker.symbol,
@@ -417,6 +420,7 @@ export class FilingStorage {
         filingType: summary.filingType as FilingType,
         filingDate: summary.filingDate,
         filingUrl: summary.filingUrl,
+        url: summary.filingUrl,
         description: summary.summaryText,
         // Include other fields from the summary JSON
         ...(summary.summaryJSON as object)

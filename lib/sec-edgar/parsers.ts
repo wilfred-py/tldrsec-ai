@@ -177,7 +177,7 @@ export async function processFilingEntries(entries: SECApiEntry[], prisma: Prism
         companyName: companyName.trim(),
         ticker: '', // Will extract from database below
         cik: cik,
-        formType,
+        filingType: formType,
         filingDate,
         filingUrl: entry.link,
         url: entry.link,
@@ -214,7 +214,7 @@ export async function processFilingEntries(entries: SECApiEntry[], prisma: Prism
               id: parsedFiling.id,
               cik: parsedFiling.cik,
               companyId: company.id,
-              formType: parsedFiling.formType,
+              formType: parsedFiling.filingType,
               filingDate: parsedFiling.filingDate,
               url: parsedFiling.url,
               processed: false

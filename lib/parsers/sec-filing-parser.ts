@@ -12,6 +12,11 @@ import {
   FilingSectionType,
   HTMLParserOptions
 } from './html-parser';
+import { 
+  ChunkOptions, 
+  chunkParsedFiling, 
+  DocumentChunk 
+} from './chunk-manager';
 import { Logger } from '@/lib/logging';
 import { FilingType } from '@/lib/sec-edgar/types';
 
@@ -66,6 +71,9 @@ export interface SECFilingParserOptions extends HTMLParserOptions {
   extractImportantSections?: boolean;
   includeFullText?: boolean;
   maxFullTextLength?: number;
+  // Chunking options
+  enableChunking?: boolean;
+  chunkOptions?: ChunkOptions;
 }
 
 /**
@@ -81,6 +89,7 @@ const DEFAULT_SEC_FILING_OPTIONS: SECFilingParserOptions = {
   extractTables: true,
   extractLists: true,
   removeBoilerplate: true,
+  enableChunking: false,
 };
 
 /**
@@ -110,6 +119,9 @@ export interface ParsedSECFiling {
   lists: FilingSection[];
   fullText?: string;
   metadata?: SECFilingMetadata;
+  // Chunking-related fields
+  chunks?: DocumentChunk[];
+  isChunked?: boolean;
 }
 
 /**
@@ -203,20 +215,8 @@ function processSECFiling(
     }
   }
   
-  // Create a full text version if requested
-  let fullText: string | undefined = undefined;
-  if (options.includeFullText) {
-    fullText = sections
-      .map(section => section.content)
-      .join('\n\n')
-      .trim();
-    
-    if (options.maxFullTextLength && fullText.length > options.maxFullTextLength) {
-      fullText = fullText.substring(0, options.maxFullTextLength) + '...';
-    }
-  }
-  
-  return {
+  // Create the parsed filing object
+  const parsedFiling: ParsedSECFiling = {
     filingType,
     cik: metadata.cik,
     companyName: metadata.companyName,
@@ -225,9 +225,36 @@ function processSECFiling(
     sections,
     tables,
     lists,
-    fullText,
-    metadata
+    metadata,
   };
+  
+  // Include full text if requested
+  if (options.includeFullText) {
+    const fullText = sections
+      .map(section => section.content)
+      .join('\n\n')
+      .trim();
+    
+    parsedFiling.fullText = options.maxFullTextLength && fullText.length > options.maxFullTextLength
+      ? fullText.substring(0, options.maxFullTextLength)
+      : fullText;
+  }
+  
+  // Apply chunking if enabled
+  if (options.enableChunking && options.chunkOptions) {
+    try {
+      logger.debug(`Applying chunking to ${filingType} filing`);
+      const chunkResult = chunkParsedFiling(parsedFiling, options.chunkOptions);
+      parsedFiling.chunks = chunkResult.chunks;
+      parsedFiling.isChunked = true;
+      logger.debug(`Created ${chunkResult.totalChunks} chunks with avg size ${chunkResult.averageChunkSize.toFixed(0)} chars`);
+    } catch (error) {
+      logger.error(`Error chunking SEC filing:`, error);
+      parsedFiling.isChunked = false;
+    }
+  }
+  
+  return parsedFiling;
 }
 
 /**
@@ -241,35 +268,47 @@ function extractSECFilingMetadata(
     filingType
   };
   
-  // Try to find document header or title section
-  const titleSection = sections.find(section => 
-    section.type === FilingSectionType.TITLE || 
-    (section.type === FilingSectionType.SECTION && section.title?.includes('Document'))
-  );
-  
-  if (titleSection) {
-    // Try to extract company name from title
-    const companyNameMatch = titleSection.content.match(/([A-Z][A-Z\s&,.]+)(?:\s+\(|\s+-)/);
-    if (companyNameMatch) {
-      metadata.companyName = companyNameMatch[1].trim();
-    }
+  // Try to find the company name and CIK
+  for (const section of sections) {
+    const content = section.content.trim();
     
-    // Try to extract CIK from title
-    const cikMatch = titleSection.content.match(/CIK\s*[#:]?\s*(\d+)/i) || 
-                     titleSection.content.match(/(\d{10})/);
-    if (cikMatch) {
+    // Look for CIK pattern
+    const cikMatch = content.match(/CIK=(\d{10})/i) || 
+                     content.match(/CIK[:\s]*(\d{10})/i) ||
+                     content.match(/(\d{10})(?=\s*\(Filer\))/i);
+    if (cikMatch && !metadata.cik) {
       metadata.cik = cikMatch[1];
     }
     
-    // Try to extract filing date
-    const dateMatch = titleSection.content.match(
-      /(?:filed|date|as of)[\s:]*(\d{1,2})[-\/](\d{1,2})[-\/](\d{2,4})/i
-    );
-    if (dateMatch) {
-      const [_, month, day, year] = dateMatch;
-      const fullYear = year.length === 2 ? `20${year}` : year;
-      const dateStr = `${fullYear}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
-      metadata.filingDate = new Date(dateStr);
+    // Look for company name in standard formats
+    if (!metadata.companyName) {
+      // Check for common company name formats in SEC filings
+      const nameMatch = content.match(/COMPANY\s*:\s*([^\n]+)/i) ||
+                        content.match(/Registrant\s*:\s*([^\n]+)/i) ||
+                        content.match(/^([^,\n]+),?\s*INC\.?/i) ||
+                        content.match(/^([^,\n]+),?\s*CORP\.?/i) ||
+                        content.match(/^([^,\n]+),?\s*CORPORATION/i) ||
+                        content.match(/^([^,\n]+),?\s*LLC/i) ||
+                        content.match(/^([^,\n]+),?\s*CO\./i);
+      if (nameMatch) {
+        metadata.companyName = nameMatch[1].trim();
+      }
+    }
+    
+    // Look for filing date
+    const dateMatch = content.match(/filed\s*(?:on|as of)?\s*(?:date)?:?\s*(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})/i) ||
+                      content.match(/filing\s*date:?\s*(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})/i);
+    if (dateMatch && !metadata.filingDate) {
+      const month = parseInt(dateMatch[1], 10);
+      const day = parseInt(dateMatch[2], 10);
+      let year = parseInt(dateMatch[3], 10);
+      
+      // Handle 2-digit years
+      if (year < 100) {
+        year += year < 50 ? 2000 : 1900;
+      }
+      
+      metadata.filingDate = new Date(year, month - 1, day);
     }
   }
   
@@ -277,105 +316,76 @@ function extractSECFilingMetadata(
 }
 
 /**
- * Find content for a specific section based on its name
+ * Find content for a specific section by name
  */
 function findSectionContent(
   sections: FilingSection[],
   sectionName: string
 ): string | undefined {
-  // Search for exact section title match
-  const exactMatch = sections.find(section => 
-    section.title && section.title.includes(sectionName)
-  );
-  
-  if (exactMatch) {
-    return exactMatch.content;
-  }
-  
-  // Search in content for section references
+  // First, try to find an exact section title match
   for (const section of sections) {
-    if (section.content.includes(sectionName)) {
-      // Find the position of the section name in the content
-      const position = section.content.indexOf(sectionName);
-      
-      // Return the content from that position onwards
-      // This is a simplistic approach, but often works for SEC filings
-      return section.content.substring(position);
+    if (section.title && section.title.includes(sectionName)) {
+      return section.content;
     }
     
-    // Search in children if available
-    if (section.children && section.children.length > 0) {
-      const childContent = findSectionContent(section.children, sectionName);
-      if (childContent) {
-        return childContent;
+    // Check children recursively if no direct match
+    if (section.children) {
+      for (const child of section.children) {
+        if (child.title && child.title.includes(sectionName)) {
+          return child.content;
+        }
       }
+    }
+  }
+  
+  // If no title match, search in content (less reliable)
+  for (const section of sections) {
+    if (section.content && section.content.includes(sectionName)) {
+      return section.content;
     }
   }
   
   return undefined;
 }
 
+// Type-specific parsing functions below, for convenience
+
 /**
- * Parse a 10-K SEC filing with optimized extraction for this report type
+ * Parse a 10-K filing
  */
 export function parse10KFiling(
   html: string,
   options: SECFilingParserOptions = DEFAULT_SEC_FILING_OPTIONS
 ): ParsedSECFiling {
-  // Specialized options for 10-K filings
-  const tenKOptions: SECFilingParserOptions = {
-    ...options,
-    extractImportantSections: true,
-  };
-  
-  return parseSECFiling(html, '10-K', tenKOptions);
+  return parseSECFiling(html, '10-K', options);
 }
 
 /**
- * Parse a 10-Q SEC filing with optimized extraction for this report type
+ * Parse a 10-Q filing
  */
 export function parse10QFiling(
   html: string,
   options: SECFilingParserOptions = DEFAULT_SEC_FILING_OPTIONS
 ): ParsedSECFiling {
-  // Specialized options for 10-Q filings
-  const tenQOptions: SECFilingParserOptions = {
-    ...options,
-    extractImportantSections: true,
-  };
-  
-  return parseSECFiling(html, '10-Q', tenQOptions);
+  return parseSECFiling(html, '10-Q', options);
 }
 
 /**
- * Parse an 8-K SEC filing with optimized extraction for this report type
+ * Parse an 8-K filing
  */
 export function parse8KFiling(
   html: string,
   options: SECFilingParserOptions = DEFAULT_SEC_FILING_OPTIONS
 ): ParsedSECFiling {
-  // Specialized options for 8-K filings
-  const eightKOptions: SECFilingParserOptions = {
-    ...options,
-    extractImportantSections: true,
-  };
-  
-  return parseSECFiling(html, '8-K', eightKOptions);
+  return parseSECFiling(html, '8-K', options);
 }
 
 /**
- * Parse a Form 4 SEC filing with optimized extraction for this report type
+ * Parse a Form 4 filing
  */
 export function parseForm4Filing(
   html: string,
   options: SECFilingParserOptions = DEFAULT_SEC_FILING_OPTIONS
 ): ParsedSECFiling {
-  // Specialized options for Form 4 filings
-  const form4Options: SECFilingParserOptions = {
-    ...options,
-    extractImportantSections: true,
-    extractTables: true, // Form 4 filings have important tables
-  };
-  
-  return parseSECFiling(html, 'Form4', form4Options);
+  return parseSECFiling(html, '4', options);
 } 

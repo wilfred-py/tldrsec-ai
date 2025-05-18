@@ -13,6 +13,7 @@ export * from './html-parser';
 export * from './sec-filing-parser';
 export * from './filing-parser-factory';
 export * from './filing-type-registry';
+export * from './chunk-manager';
 
 // Export the individual filing types (for direct imports if needed)
 export * as filingTypes from './filing-types';
