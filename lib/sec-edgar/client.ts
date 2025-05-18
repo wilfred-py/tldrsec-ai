@@ -6,9 +6,10 @@ import {
   SECEdgarConfig, 
   SECEdgarError, 
   SECErrorCode, 
-  SECRequestOptions 
+  SECRequestOptions,
+  SECFilingSearchParams
 } from './types';
-import { sleep } from '@/lib/utils';
+import { sleep } from '../utils';
 
 /**
  * Default SEC EDGAR API configuration
