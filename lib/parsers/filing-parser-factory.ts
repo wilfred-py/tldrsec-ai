@@ -2,6 +2,7 @@
  * SEC Filing Parser Factory
  * 
  * Provides factory functions for creating parsers for specific SEC filing types.
+ * Implements the unified content extraction strategy for different filing types.
  */
 
 import { Logger } from '@/lib/logging';
@@ -15,9 +16,58 @@ import {
 import { FilingType } from '@/lib/sec-edgar/types';
 import { parsePDFFromBuffer } from './pdf-parser';
 import { isXBRL, parseXBRLAsSECFiling } from './xbrl-parser';
+import { FilingSection } from './html-parser';
+import { 
+  STANDARD_SECTIONS,
+  extractMetadata,
+  extractImportantSections,
+  removeBoilerplate,
+  extractFinancialMetrics
+} from './content-extraction-strategy';
+
+// Initialize all filing types
+import './filing-types';
 
 // Create a logger for the factory
 const logger = new Logger({}, 'filing-parser-factory');
+
+// Common patterns for detecting filing types
+const FILING_TYPE_PATTERNS = {
+  '10-K': [
+    /Form\s*10-?K/i,
+    /Annual\s*Report/i,
+    /Pursuant\s*to\s*Section\s*13\s*or\s*15\(d\)\s*of\s*the\s*Securities\s*Exchange\s*Act\s*of\s*1934/i,
+  ],
+  '10-Q': [
+    /Form\s*10-?Q/i,
+    /Quarterly\s*Report/i,
+    /Pursuant\s*to\s*Section\s*13\s*or\s*15\(d\)\s*of\s*the\s*Securities\s*Exchange\s*Act\s*of\s*1934/i,
+  ],
+  '8-K': [
+    /Form\s*8-?K/i,
+    /Current\s*Report/i,
+    /Pursuant\s*to\s*Section\s*13\s*or\s*15\(d\)\s*of\s*the\s*Securities\s*Exchange\s*Act\s*of\s*1934/i,
+  ],
+  'Form4': [
+    /Form\s*4/i,
+    /Statement\s*of\s*Changes\s*in\s*Beneficial\s*Ownership/i,
+  ],
+  'DEFA14A': [
+    /DEFA\s*14A/i,
+    /DEF\s*14A/i,
+    /Definitive\s*Proxy\s*Statement/i,
+    /Additional\s*Proxy\s*Soliciting\s*Materials/i,
+  ],
+  'SC 13D': [
+    /Schedule\s*13D/i,
+    /SC\s*13D/i,
+    /beneficial\s*ownership\s*report/i,
+  ],
+  '144': [
+    /Form\s*144/i,
+    /Notice\s*of\s*Proposed\s*Sale/i,
+  ],
+};
 
 // Get default options from sec-filing-parser.ts
 const DEFAULT_OPTIONS: SECFilingParserOptions = {
@@ -84,13 +134,24 @@ export function isPDF(content: string | Buffer): boolean {
 }
 
 /**
+ * Match content against patterns to determine filing type
+ * 
+ * @param content The content to analyze
+ * @param patterns Array of regex patterns to match against
+ * @returns True if any pattern matches, false otherwise
+ */
+function matchesPatterns(content: string, patterns: RegExp[]): boolean {
+  return patterns.some(pattern => pattern.test(content));
+}
+
+/**
  * Detects the filing type from content
  * 
  * @param content The content to analyze
  * @returns The detected filing type or null if not detected
  */
 export function detectFilingType(content: string | Buffer): string | null {
-  // Check if this is a PDF file - if so, we won't be able to detect by HTML patterns
+  // Check if this is a PDF file
   if (isPDF(content)) {
     logger.debug('Content appears to be a PDF file');
     return 'PDF'; // Return a special type to indicate PDF
@@ -107,26 +168,30 @@ export function detectFilingType(content: string | Buffer): string | null {
     ? content.toString('utf8', 0, 2000) 
     : content.substring(0, 2000);
   
-  // Simple regex-based detection from title or content
+  // Check against filing type patterns
+  for (const [filingType, patterns] of Object.entries(FILING_TYPE_PATTERNS)) {
+    if (matchesPatterns(html, patterns)) {
+      logger.debug(`Detected filing type: ${filingType}`);
+      return filingType;
+    }
+  }
+  
+  // Try to extract from title as fallback
   const titleMatch = html.match(/<title[^>]*>([^<]+)<\/title>/i);
-  const title = titleMatch ? titleMatch[1].trim() : '';
-  
-  // Check for common patterns in the title
-  if (/Form 10-K|Annual Report|10-K/i.test(title)) return '10-K';
-  if (/Form 10-Q|Quarterly Report|10-Q/i.test(title)) return '10-Q';
-  if (/Form 8-K|Current Report|8-K/i.test(title)) return '8-K';
-  if (/Form 4|Statement of Changes|beneficial ownership/i.test(title)) return 'Form4';
-  if (/DEFA14A|DEFA 14A|Additional Proxy Materials|Additional Proxy Soliciting/i.test(title)) return 'DEFA14A';
-  if (/Schedule 13D|SC 13D|beneficial ownership report/i.test(title)) return 'SC 13D';
-  if (/Form 144|Notice of Proposed Sale/i.test(title)) return '144';
-  
-  // Check content if title doesn't provide clear indication
-  if (/Form 10-K/i.test(html)) return '10-K';
-  if (/Form 10-Q/i.test(html)) return '10-Q';
-  if (/Form 8-K/i.test(html)) return '8-K';
-  if (/DEFA14A|DEFA 14A|Additional Proxy Materials/i.test(html)) return 'DEFA14A';
+  if (titleMatch) {
+    const title = titleMatch[1].trim();
+    
+    // Check title against filing type patterns
+    for (const [filingType, patterns] of Object.entries(FILING_TYPE_PATTERNS)) {
+      if (matchesPatterns(title, patterns)) {
+        logger.debug(`Detected filing type from title: ${filingType}`);
+        return filingType;
+      }
+    }
+  }
   
   // No recognized pattern found
+  logger.debug('Could not detect filing type');
   return null;
 }
 
@@ -179,7 +244,43 @@ export async function createAutoParser(
   
   // For HTML files, create and use the appropriate parser
   const parser = createFilingParser(detectedType);
-  return parser(Buffer.isBuffer(content) ? content.toString('utf8') : content, options);
+  const contentString = Buffer.isBuffer(content) ? content.toString('utf8') : content;
+  
+  // Extract metadata using content extraction strategy
+  const metadata = extractMetadata(contentString, detectedType);
+  
+  // Parse the content with appropriate options
+  const parsedResult = parser(contentString, options);
+  
+  // Add the metadata to the result
+  parsedResult.metadata = metadata;
+  
+  // Extract important sections using content extraction strategy
+  if (parsedResult.sections && parsedResult.sections.length > 0) {
+    const extractedSections = extractImportantSections(parsedResult.sections, detectedType);
+    
+    // Merge with existing important sections
+    parsedResult.importantSections = {
+      ...parsedResult.importantSections,
+      ...extractedSections
+    };
+    
+    // Apply boilerplate detection and removal if requested
+    if (options?.removeBoilerplate !== false) {
+      parsedResult.sections = removeBoilerplate(parsedResult.sections);
+    }
+    
+    // Extract financial metrics if available and add to metadata
+    const financialMetrics = extractFinancialMetrics(parsedResult.sections);
+    if (Object.keys(financialMetrics).length > 0) {
+      if (!parsedResult.metadata) {
+        parsedResult.metadata = metadata;
+      }
+      parsedResult.metadata.financialMetrics = financialMetrics;
+    }
+  }
+  
+  return parsedResult;
 }
 
 /**
@@ -207,35 +308,8 @@ async function parsePDFAsSECFiling(
       section.type === 'section' && section.title === 'Metadata'
     );
     
-    // Extract important sections based on headings
-    const importantSections: { [sectionName: string]: string } = {};
-    
-    // Look for common important sections in SEC filings
-    const sectionNames = [
-      'Management\'s Discussion and Analysis',
-      'Risk Factors',
-      'Financial Statements',
-      'Notes to Financial Statements',
-      'Controls and Procedures',
-      'Quantitative and Qualitative Disclosures',
-      'Business',
-      'Item 1.',
-      'Item 1A.',
-      'Item 7.',
-      'Item 8.',
-    ];
-    
-    // Find sections that match important section names
-    for (const section of sections) {
-      if (section.title) {
-        for (const sectionName of sectionNames) {
-          if (section.title.includes(sectionName)) {
-            importantSections[sectionName] = section.content;
-            break;
-          }
-        }
-      }
-    }
+    // Use standard sections list for consistency
+    const importantSections = extractImportantSections(sections, 'PDF');
     
     // Extract tables
     const tables = sections.filter(section => section.type === 'table');
@@ -280,6 +354,20 @@ async function parsePDFAsSECFiling(
           logger.error('Error parsing PDF creation date:', error);
         }
       }
+    }
+    
+    // Apply boilerplate detection and removal if requested
+    if (options?.removeBoilerplate !== false) {
+      result.sections = removeBoilerplate(result.sections);
+    }
+    
+    // Extract financial metrics if available and add to metadata
+    const financialMetrics = extractFinancialMetrics(result.sections);
+    if (Object.keys(financialMetrics).length > 0) {
+      if (!result.metadata) {
+        result.metadata = { filingType: 'PDF' };
+      }
+      result.metadata.financialMetrics = financialMetrics;
     }
     
     return result;

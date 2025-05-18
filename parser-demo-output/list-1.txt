@@ -1,0 +1,6 @@
+Vehicle Production
+==================
+
+1. Model S/X: 71,177 vehicles
+2. Model 3/Y: 1,298,434 vehicles
+3. Total: 1,369,611 vehicles

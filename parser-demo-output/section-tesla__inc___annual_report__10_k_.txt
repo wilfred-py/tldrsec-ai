@@ -1,0 +1,41 @@
+TESLA, INC - Annual Report (10-K)
+=================================
+
+Item 1. Business
+Tesla is a technology company focused on accelerating the world's transition to sustainable energy. We design, develop, manufacture, sell and lease electric vehicles and energy generation and storage systems, and offer services related thereto.
+Item 1A. Risk Factors
+We may face operational challenges that could adversely affect our business and future prospects and financial performance, as well as our ability to attain revenue growth and profitability objectives.
+Management's Discussion and Analysis
+Our business has been successful as we have scaled our operations and increased production to satisfy the growing demand for our products.
+Financial Results
+Annual Financial Data (in millions, except per share data)
+    
+      
+        Year
+        Revenue
+        Net Income
+        EPS (Diluted)
+      
+    
+    
+      
+        2022
+        $81,462
+        $12,556
+        $3.62
+      
+      
+        2021
+        $53,823
+        $5,519
+        $1.59
+      
+      
+        2020
+        $31,536
+        $862
+        $0.25
+Vehicle Production
+Model S/X: 71,177 vehicles
+    Model 3/Y: 1,298,434 vehicles
+    Total: 1,369,611 vehicles
