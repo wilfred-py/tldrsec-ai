@@ -1,0 +1,17 @@
+Table: Table 96
+
+												
+Exhibit												Filed
+Number		Exhibit Description		Form		File No.		Exhibit		Filing Date		Herewith
+												
+10.54		Ninth Amendment to Amended and Restated Agreement For Research & Development Alliance on Triex Module Technology, effective as of December 9, 2015, by and between The Research Foundation For The State University of New York, on behalf of the College of Nanoscale Science and Engineering of the State University of New York, and Silevo, LLC.		10-K(1)		001-35758		10.16i		February 10, 2016		
+												
+10.55		Tenth Amendment to Amended and Restated Agreement For Research & Development Alliance on Triex Module Technology, effective as of March 31, 2017, by and between The Research Foundation For The State University of New York, on behalf of the Colleges of Nanoscale Science and Engineering of the State University of New York, and Silevo, LLC.		10-Q		001-34756		10.8		May 10, 2017		
+												
+10.56		Eleventh Amendment to Amended and Restated Agreement for Research & Development Alliance on Triex Module Technology, effective as of July 22, 2020, among the Research Foundation for the State University of New York, Silevo, LLC and Tesla Energy Operations, Inc.		10-Q		001-34756		10.6		July 28, 2020		
+												
+10.57		Twelfth Amendment to Amended and Restated Agreement for Research & Development Alliance on Triex Module Technology, effective as of May 1, 2021, among the Research Foundation for the State University of New York, Silevo, LLC and Tesla Energy Operations, Inc.		10-Q		001-34756		10.1		October 25, 2021		
+												
+10.58††		Grant Contract for State-Owned Construction Land Use Right, dated as of October 17, 2018, by and between Shanghai Planning and Land Resource Administration Bureau, as grantor, and Tesla (Shanghai) Co., Ltd., as grantee (English translation).		10-Q		001-34756		10.2		July 29, 2019		
+												
+10.59		Credit Agreement, dated as of January 20, 2023, among Tesla, Inc., the Lenders and Issuing Banks from time to time party thereto, Citibank, N.A., as Administrative Agent and Deutsche Bank Securities, Inc., as Syndication Agent		—		—		—		—		X

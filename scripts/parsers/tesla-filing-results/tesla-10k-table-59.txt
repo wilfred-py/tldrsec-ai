@@ -1,0 +1,16 @@
+Table: Table 60
+
+																								
+		Stock Options			RSUs	
+								Weighted-									Weighted-	
+					Weighted-			Average			Aggregate						Average	
+		Number of			Average			Remaining			Intrinsic			Number			Grant	
+		Options			Exercise			Contractual			Value			of RSUs			Date Fair	
+		(in thousands)			Price			Life (years)			(in billions)			(in thousands)			Value	
+Beginning of period (1)			357,120			$	28.15										34,312			$	88.23	
+Granted			4,120			$	226.53										8,714			$	239.85	
+Exercised or released			(7,971	)		$	27.96										(17,702	)		$	61.74	
+Cancelled			(9,705	)		$	24.25										(3,991	)		$	140.68	
+End of period			343,564			$	30.65			5.19			$	32.79				21,333			$	162.32	
+Vested and expected    to vest, December 31, 2022			343,105			$	30.61				5.19			$	32.75				21,323			$	162.33	
+Exercisable and vested,   December 31, 2022 (2)			304,862			$	25.68				5.08			$	29.93							

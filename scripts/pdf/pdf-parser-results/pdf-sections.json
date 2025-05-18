@@ -1,0 +1,78 @@
+[
+  {
+    "type": "title",
+    "content": "TESLA INC - Annual Report (10-K)"
+  },
+  {
+    "type": "section",
+    "title": "Metadata",
+    "content": "{\n  \"PDFFormatVersion\": \"1.3\",\n  \"IsAcroFormPresent\": false,\n  \"IsXFAPresent\": false,\n  \"Title\": \"TESLA INC - Annual Report (10-K)\",\n  \"Author\": \"Tesla, Inc.\",\n  \"Subject\": \"SEC Filing\",\n  \"Keywords\": \"SEC, 10-K, Annual Report, Tesla\",\n  \"Creator\": \"PDFKit\",\n  \"Producer\": \"Sample PDF Generator for Testing\",\n  \"CreationDate\": \"D:20250518055550Z\"\n}",
+    "metadata": {
+      "PDFFormatVersion": "1.3",
+      "IsAcroFormPresent": false,
+      "IsXFAPresent": false,
+      "Title": "TESLA INC - Annual Report (10-K)",
+      "Author": "Tesla, Inc.",
+      "Subject": "SEC Filing",
+      "Keywords": "SEC, 10-K, Annual Report, Tesla",
+      "Creator": "PDFKit",
+      "Producer": "Sample PDF Generator for Testing",
+      "CreationDate": "D:20250518055550Z"
+    }
+  },
+  {
+    "type": "section",
+    "title": "Main Content",
+    "content": "TESLA, INC.\nAnnual Report (10-K)\nItem 1. Business\nTesla, Inc. (\"Tesla\", the \"Company\", \"we\", \"us\" or \"our\") designs, develops, \nmanufactures and sells high-performance, fully electric vehicles, solar energy \ngeneration systems and energy storage products. We also install and maintain such \nsystems and sell solar electricity. We are the world's first vertically integrated \nsustainable energy company, offering end-to-end clean energy products.\nWe currently produce and sell three fully electric vehicles: the Model S sedan, the \nModel X sport utility vehicle (\"SUV\") and the Model 3 sedan. We continue to enhance \nour vehicle offerings with enhanced Autopilot options, internet connectivity and free \nover-the-air software updates to provide additional safety, convenience and \nperformance features.\nItem 1A. Risk Factors\nYou should carefully consider the risks described below together with the other \ninformation set forth in this report, which could materially affect our business, financial \ncondition and future results. The risks described below are not the only risks facing our \ncompany. Risks and uncertainties not currently known to us or that we currently deem \nto be immaterial also may materially adversely affect our business, financial condition \nand operating results.\nRisks Related to Our Business and Industry\nWe face competition from both established automotive manufacturers and new entrants \ninto the automotive market, and if we are unable to compete effectively, our financial \nperformance could suffer.\nItem 7. Management's Discussion and Analysis of Financial \nCondition\nThe following discussion and analysis should be read in conjunction with our \nconsolidated financial statements and related notes included elsewhere in this Annual \nReport on Form 10-K.\nFinancial Results\nFinancial Metric"
+  },
+  {
+    "type": "section",
+    "title": "2022",
+    "content": "2021"
+  },
+  {
+    "type": "section",
+    "title": "2020",
+    "content": "Revenue (in millions)"
+  },
+  {
+    "type": "section",
+    "title": "$81,462",
+    "content": "$53,823"
+  },
+  {
+    "type": "section",
+    "title": "$31,536",
+    "content": "Gross Profit (in millions)"
+  },
+  {
+    "type": "section",
+    "title": "$20,853",
+    "content": "$13,606"
+  },
+  {
+    "type": "section",
+    "title": "$6,630",
+    "content": "Net Income (in millions)"
+  },
+  {
+    "type": "section",
+    "title": "$12,556",
+    "content": "$5,519"
+  },
+  {
+    "type": "section",
+    "title": "$721",
+    "content": "EPS (diluted)"
+  },
+  {
+    "type": "section",
+    "title": "$3.52",
+    "content": "$1.59"
+  },
+  {
+    "type": "section",
+    "title": "$0.64",
+    "content": "Key Business \nPriorities:\n• Increase \nvehicle production \ncapacity\n• Expand global \nservice center and \nSupercharger \nnetworks\n• Continue to \nimprove battery \ntechnology and \nreduce costs\n• Expand \nenergy generation \nand storage \nbusiness\n• Further \ndevelopment of \nautonomous \ndriving technology"
+  }
+]

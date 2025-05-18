@@ -1,0 +1,11 @@
+Table: Table 55
+
+												
+		Year Ended December 31,	
+		2022			2021			2020	
+Cash paid for amounts included in the measurement of lease liabilities:									
+Operating cash outflows from operating leases		$	754			$	616			$	456	
+Operating cash outflows from finance leases (interest payments)		$	75			$	89			$	100	
+Financing cash outflows from finance leases		$	502			$	439			$	338	
+Leased assets obtained in exchange for finance lease liabilities		$	58			$	486			$	188	
+Leased assets obtained in exchange for operating lease liabilities		$	1,059			$	818			$	553	

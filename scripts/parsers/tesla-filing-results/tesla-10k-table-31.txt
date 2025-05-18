@@ -1,0 +1,11 @@
+Table: Table 32
+
+												
+		Year Ended December 31,	
+		2022			2021			2020	
+Weighted average shares used in computing net income per share of common stock, basic			3,130				2,959				2,798	
+Add:									
+Stock-based awards			310				292				198	
+Convertible senior notes			3				29				141	
+Warrants			32				106				112	
+Weighted average shares used in computing net income per share of common stock, diluted			3,475				3,386				3,249	

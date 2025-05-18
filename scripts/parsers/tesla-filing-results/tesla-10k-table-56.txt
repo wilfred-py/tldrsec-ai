@@ -1,0 +1,12 @@
+Table: Table 57
+
+								
+		Operating			Sales-type	
+		Leases			Leases	
+2023		$	1,212			$	202	
+2024			900				208	
+2025			463				192	
+2026			215				174	
+2027			194				49	
+Thereafter			1,697				12	
+Gross lease receivables		$	4,681			$	837	

@@ -1,0 +1,14 @@
+Table: Table 46
+
+								
+		December 31,			December 31,	
+		2022			2021	
+Machinery, equipment, vehicles and office furniture		$	13,558			$	9,953	
+Tooling			2,579				2,188	
+Leasehold improvements			2,366				1,826	
+Land and buildings			7,751				4,675	
+Computer equipment, hardware and software			2,072				1,414	
+Construction in progress			4,263				5,559	
+			32,589				25,615	
+Less: Accumulated depreciation			(9,041	)			(6,731	)
+Total		$	23,548			$	18,884	

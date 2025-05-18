@@ -1,0 +1,68 @@
+{
+  "filingType": "10-K",
+  "title": "TESLA INC (0001318605) - Form 10-K - Filed on 01/31/2023",
+  "companyName": "TESLA INC",
+  "cik": "0001318605",
+  "sections": [
+    {
+      "title": "TESLA, INC - Annual Report (10-K)",
+      "content": ""
+    },
+    {
+      "title": "Item 1. Business",
+      "content": "Tesla is a technology company focused on accelerating the world's transition to sustainable energy. We design, develop, manufacture, sell and lease electric vehicles and energy generation and storage systems, and offer services related thereto."
+    },
+    {
+      "title": "Item 1A. Risk Factors",
+      "content": "We may face operational challenges that could adversely affect our business and future prospects and financial performance, as well as our ability to attain revenue growth and profitability objectives."
+    },
+    {
+      "title": "Management's Discussion and Analysis",
+      "content": "Our business has been successful as we have scaled our operations and increased production to satisfy the growing demand for our products."
+    },
+    {
+      "title": "Financial Results",
+      "content": "Annual Financial Data (in millions, except per share data)\n    \n      \n        Year\n        Revenue\n        Net Income\n        EPS (Diluted)\n      \n    \n    \n      \n        2022\n        $81,462\n        $12,556\n        $3.62\n      \n      \n        2021\n        $53,823\n        $5,519\n        $1.59\n      \n      \n        2020\n        $31,536\n        $862\n        $0.25"
+    },
+    {
+      "title": "Vehicle Production",
+      "content": "Model S/X: 71,177 vehicles\n    Model 3/Y: 1,298,434 vehicles\n    Total: 1,369,611 vehicles"
+    }
+  ],
+  "tables": [
+    {
+      "title": "Annual Financial Data (in millions, except per share data)",
+      "tableData": [
+        [
+          "Year",
+          "Revenue",
+          "Net Income",
+          "EPS (Diluted)"
+        ],
+        [
+          "2022",
+          "$81,462",
+          "$12,556",
+          "$3.62"
+        ],
+        [
+          "2021",
+          "$53,823",
+          "$5,519",
+          "$1.59"
+        ],
+        [
+          "2020",
+          "$31,536",
+          "$862",
+          "$0.25"
+        ]
+      ]
+    }
+  ],
+  "importantSections": {
+    "Management's Discussion and Analysis": "Our business has been successful as we have scaled our operations and increased production to satisfy the growing demand for our products.",
+    "Risk Factors": "We may face operational challenges that could adversely affect our business and future prospects and financial performance, as well as our ability to attain revenue growth and profitability objectives.",
+    "Business": "Tesla is a technology company focused on accelerating the world's transition to sustainable energy. We design, develop, manufacture, sell and lease electric vehicles and energy generation and storage systems, and offer services related thereto."
+  }
+}

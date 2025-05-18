@@ -1,0 +1,45 @@
+Table: Table 88
+
+												
+												
+10.1**		Form of Indemnification Agreement between the Registrant and its directors and officers.		S-1/A		333-164593		10.1		June 15, 2010		
+												
+10.2**		2003 Equity Incentive Plan.		S-1/A		333-164593		10.2		May 27, 2010		
+												
+10.3**		Form of Stock Option Agreement under 2003 Equity Incentive Plan.		S-1		333-164593		10.3		January 29, 2010		
+												
+10.4**		Amended and Restated 2010 Equity Incentive Plan.		10-K		001-34756		10.4		February 23, 2018		
+												
+10.5**		Form of Stock Option Agreement under 2010 Equity Incentive Plan.		10-K		001-34756		10.6		March 1, 2017		
+												
+10.6**		Form of Restricted Stock Unit Award Agreement under 2010 Equity Incentive Plan.		10-K		001-34756		10.7		March 1, 2017		
+												
+10.7**		Amended and Restated 2010 Employee Stock Purchase Plan, effective as of February 1, 2017.		10-K		001-34756		10.8		March 1, 2017		
+												
+10.8**		2019 Equity Incentive Plan.		S-8		333-232079		4.2		June 12, 2019		
+												
+10.9**		Form of Stock Option Agreement under 2019 Equity Incentive Plan.		S-8		333-232079		4.3		June 12, 2019		
+												
+10.10**		Form of Restricted Stock Unit Award Agreement under 2019 Equity Incentive Plan.		S-8		333-232079		4.4		June 12, 2019		
+												
+10.11**		Employee Stock Purchase Plan, effective as of June 12, 2019.		S-8		333-232079		4.5		June 12, 2019		
+												
+10.12**		2007 SolarCity Stock Plan and form of agreements used thereunder.		S-1(1)		333-184317		10.2		October 5, 2012		
+												
+10.13**		2012 SolarCity Equity Incentive Plan and form of agreements used thereunder.		S-1(1)		333-184317		10.3		October 5, 2012		
+												
+10.14**		2010 Zep Solar, Inc. Equity Incentive Plan and form of agreements used thereunder.		S-8(1)		333-192996		4.5		December 20, 2013		
+												
+10.15**		Offer Letter between the Registrant and Elon Musk dated October 13, 2008.		S-1		333-164593		10.9		January 29, 2010		
+												
+10.16**		Performance Stock Option Agreement between the Registrant and Elon Musk dated January 21, 2018.		DEF 14A		001-34756		Appendix A		February 8, 2018		
+												
+10.17**		Maxwell Technologies, Inc. 2005 Omnibus Equity Incentive Plan, as amended through May 6, 2010		8-K(2)		001-15477		10.1		May 10, 2010		
+												
+10.18**		Maxwell Technologies, Inc. 2013 Omnibus Equity Incentive Plan		DEF 14A(2)		001-15477		Appendix A		June 2, 2017		
+												
+10.19		Indemnification Agreement, effective as of June 23, 2020, between Registrant and Elon R. Musk.		10-Q		001-34756		10.4		July 28, 2020		
+												
+10.20		Indemnification Agreement, dated as of February 27, 2014, by and between the Registrant and J.P. Morgan Securities LLC.		8-K		001-34756		10.1		March 5, 2014		
+												
+10.21		Form of Call Option Confirmation relating to 1.25% Convertible Senior Notes Due March 1, 2021.		8-K		001-34756		10.3		March 5, 2014		

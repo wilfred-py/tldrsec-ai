@@ -1,0 +1,22 @@
+Table: Table 50
+
+																													
+							Unpaid				Unused							
+		Net Carrying Value				Principal				Committed				Contractual		Contractual
+		Current				Long-Term				Balance				Amount (1)				Interest Rates		Maturity Date
+Recourse debt:																									
+2022 Notes		$		29				$		—				$		29				$		—				2.375	%		March 2022
+2024 Notes				1						89						91						—				2.00	%		May 2024
+Credit Agreement				—						1,250						1,250						920				3.25	%		July 2023
+Solar Bonds			0						7						7						—				4.00-5.75	%		January 2022-January 2031
+Total recourse debt				30						1,346						1,377						920							
+Non-recourse debt:																									
+Automotive Asset-backed Notes				1,007						1,706						2,723						—				0.12-5.48	%		September 2022-September 2025
+Solar Asset and Loan-backed Notes				27						800						844						—				2.87-7.74	%		September 2024-September 2049
+Cash Equity Debt				24						388						422						—				5.25-5.81	%		July 2033-January 2035
+Automotive Lease-backed Credit Facilities				—						—						—						167				Not applicable		September 2023
+Other Loans				—						14						14						21				5.10	%		February 2033
+Total non-recourse debt				1,058						2,908						4,003						188							
+Total debt				1,088						4,254				$		5,380				$		1,108							
+Finance leases				501						991																	
+Total debt and finance leases		$		1,589				$		5,245																	

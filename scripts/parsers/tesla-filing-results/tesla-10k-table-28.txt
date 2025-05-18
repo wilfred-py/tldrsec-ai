@@ -1,0 +1,13 @@
+Table: Table 29
+
+												
+		Year Ended December 31,	
+		2022			2021			2020	
+Automotive sales (1)		$	67,210			$	44,125			$	24,604	
+Automotive regulatory credits			1,776				1,465				1,580	
+Energy generation and storage sales			3,376				2,279				1,477	
+Services and other			6,091				3,802				2,306	
+Total revenues from sales and services			78,453				51,671				29,967	
+Automotive leasing			2,476				1,642				1,052	
+Energy generation and storage leasing			533				510				517	
+Total revenues		$	81,462			$	53,823			$	31,536	

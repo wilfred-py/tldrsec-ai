@@ -1,0 +1,42 @@
+Table: Table 25
+
+												
+		Year Ended December 31,	
+		2022			2021			2020	
+Revenues									
+Automotive sales		$	67,210			$	44,125			$	24,604	
+Automotive regulatory credits			1,776				1,465				1,580	
+Automotive leasing			2,476				1,642				1,052	
+Total automotive revenues			71,462				47,232				27,236	
+Energy generation and storage			3,909				2,789				1,994	
+Services and other			6,091				3,802				2,306	
+Total revenues			81,462				53,823				31,536	
+Cost of revenues									
+Automotive sales			49,599				32,415				19,696	
+Automotive leasing			1,509				978				563	
+Total automotive cost of revenues			51,108				33,393				20,259	
+Energy generation and storage			3,621				2,918				1,976	
+Services and other			5,880				3,906				2,671	
+Total cost of revenues			60,609				40,217				24,906	
+Gross profit			20,853				13,606				6,630	
+Operating expenses									
+Research and development			3,075				2,593				1,491	
+Selling, general and administrative			3,946				4,517				3,145	
+Restructuring and other			176				(27	)			—	
+Total operating expenses			7,197				7,083				4,636	
+Income from operations			13,656				6,523				1,994	
+Interest income			297				56				30	
+Interest expense			(191	)			(371	)			(748	)
+Other (expense) income, net			(43	)			135				(122	)
+Income before income taxes			13,719				6,343				1,154	
+Provision for income taxes			1,132				699				292	
+Net income			12,587				5,644				862	
+Net income attributable to noncontrolling    interests and redeemable noncontrolling interests    in subsidiaries			31				125				141	
+Net income attributable to common stockholders		$	12,556			$	5,519			$	721	
+									
+Net income per share of common stock    attributable to common stockholders (1)									
+Basic		$	4.02			$	1.87			$	0.25	
+Diluted		$	3.62			$	1.63			$	0.21	
+Weighted average shares used in computing net    income per share of common stock (1)									
+Basic			3,130				2,959				2,798	
+Diluted			3,475				3,386				3,249	

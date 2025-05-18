@@ -1,0 +1,10 @@
+Table: Table 31
+
+												
+		Year Ended December 31,	
+		2022			2021			2020	
+Net income attributable to common stockholders		$	12,556			$	5,519			$	721	
+Less: Buy-out of noncontrolling interest			(27	)			(5	)			31	
+Net income used in computing basic net income per share of common stock			12,583				5,524				690	
+Less: Dilutive convertible debt			(1	)			(9	)			—	
+Net income used in computing diluted net income per share of common stock		$	12,584			$	5,533			$	690	

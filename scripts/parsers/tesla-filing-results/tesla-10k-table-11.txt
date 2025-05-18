@@ -1,0 +1,13 @@
+Table: Table 12
+
+																												
+		Year Ended December 31,			2022 vs. 2021 Change			2021 vs. 2020 Change	
+(Dollars in millions)		2022			2021			2020			$			%			$			%	
+Automotive sales		$	67,210			$	44,125			$	24,604			$	23,085				52	%		$	19,521				79	%
+Automotive regulatory credits			1,776				1,465				1,580				311				21	%			(115	)			(7	)%
+Automotive leasing			2,476				1,642				1,052				834				51	%			590				56	%
+Total automotive revenues			71,462				47,232				27,236				24,230				51	%			19,996				73	%
+Services and other			6,091				3,802				2,306				2,289				60	%			1,496				65	%
+Total automotive & services and other   segment revenue			77,553				51,034				29,542				26,519				52	%			21,492				73	%
+Energy generation and storage segment revenue			3,909				2,789				1,994				1,120				40	%			795				40	%
+Total revenues		$	81,462			$	53,823			$	31,536			$	27,639				51	%		$	22,287				71	%

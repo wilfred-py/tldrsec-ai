@@ -1,0 +1,25 @@
+Table: Table 13
+
+																												
+		Year Ended December 31,			2022 vs. 2021 Change			2021 vs. 2020 Change	
+(Dollars in millions)		2022			2021			2020			$			%			$			%	
+Cost of revenues																					
+Automotive sales		$	49,599			$	32,415			$	19,696			$	17,184				53	%		$	12,719				65	%
+Automotive leasing			1,509				978				563				531				54	%			415				74	%
+Total automotive cost of revenues			51,108				33,393				20,259				17,715				53	%			13,134				65	%
+Services and other			5,880				3,906				2,671				1,974				51	%			1,235				46	%
+Total automotive & services and other    segment cost of revenues			56,988				37,299				22,930				19,689				53	%			14,369				63	%
+Energy generation and storage segment			3,621				2,918				1,976				703				24	%			942				48	%
+Total cost of revenues		$	60,609			$	40,217			$	24,906			$	20,392				51	%		$	15,311				61	%
+																					
+Gross profit total automotive		$	20,354			$	13,839			$	6,977													
+Gross margin total automotive			28.5	%			29.3	%			25.6	%												
+																					
+Gross profit total automotive & services and other   segment		$	20,565			$	13,735			$	6,612													
+Gross margin total automotive & services and other   segment			26.5	%			26.9	%			22.4	%												
+																					
+Gross profit energy generation and storage segment		$	288			$	(129	)		$	18													
+Gross margin energy generation and storage segment			7.4	%			(4.6	)%			0.9	%												
+																					
+Total gross profit		$	20,853			$	13,606			$	6,630													
+Total gross margin			25.6	%			25.3	%			21.0	%												

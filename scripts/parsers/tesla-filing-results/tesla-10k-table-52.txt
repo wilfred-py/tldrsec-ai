@@ -1,0 +1,14 @@
+Table: Table 53
+
+												
+		Year Ended December 31,	
+		2022			2021			2020	
+Operating lease expense:									
+Operating lease expense (1)		$	798			$	627			$	451	
+									
+Finance lease expense:									
+Amortization of leased assets		$	493			$	415			$	348	
+Interest on lease liabilities			72				89				100	
+Total finance lease expense		$	565			$	504			$	448	
+									
+Total lease expense		$	1,363			$	1,131			$	899	

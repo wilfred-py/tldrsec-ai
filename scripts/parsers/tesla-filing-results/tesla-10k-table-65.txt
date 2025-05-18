@@ -1,0 +1,27 @@
+Table: Table 66
+
+								
+		December 31,			December 31,	
+		2022			2021	
+Deferred tax assets:						
+Net operating loss carry-forwards		$	4,486			$	7,607	
+Research and development credits			1,184				923	
+Other tax credits and attributes			217				335	
+Deferred revenue			751				546	
+Inventory and warranty reserves			819				377	
+Stock-based compensation			185				115	
+Operating lease right-of-use liabilities			554				430	
+Capitalized research and development costs			693				—	
+Deferred GILTI tax assets			466				556	
+Accruals and others			178				191	
+Total deferred tax assets			9,533				11,080	
+Valuation allowance			(7,349	)			(9,074	)
+Deferred tax assets, net of valuation allowance			2,184				2,006	
+Deferred tax liabilities:						
+Depreciation and amortization			(1,178	)			(1,279	)
+Investment in certain financing funds			(238	)			(209	)
+Operating lease right-of-use assets			(506	)			(391	)
+Deferred revenue			—				(49	)
+Other			(15	)			(13	)
+Total deferred tax liabilities			(1,937	)			(1,941	)
+Deferred tax assets (liabilities), net of valuation allowance		$	247			$	65	

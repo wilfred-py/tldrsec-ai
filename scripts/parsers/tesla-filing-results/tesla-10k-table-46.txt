@@ -1,0 +1,13 @@
+Table: Table 47
+
+								
+		December 31,			December 31,	
+		2022			2021	
+Accrued purchases (1)		$	2,747			$	2,045	
+Taxes payable (2)			1,235				1,122	
+Payroll and related costs			1,026				906	
+Accrued warranty reserve, current portion			1,025				703	
+Sales return reserve, current portion			270				265	
+Operating lease liabilities, current portion			485				368	
+Other current liabilities			354				310	
+Total		$	7,142			$	5,719	

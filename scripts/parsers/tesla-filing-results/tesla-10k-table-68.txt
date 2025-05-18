@@ -1,0 +1,24 @@
+Table: Table 69
+
+								
+		December 31,			December 31,	
+		2022			2021	
+Assets						
+Current assets						
+Cash and cash equivalents		$	68			$	87	
+Accounts receivable, net			22				24	
+Prepaid expenses and other current assets			274				152	
+Total current assets			364				263	
+Solar energy systems, net			4,060				4,515	
+Other non-current assets			404				276	
+Total assets		$	4,828			$	5,054	
+Liabilities						
+Current liabilities						
+Accrued liabilities and other		$	69			$	74	
+Deferred revenue			10				11	
+Current portion of debt and finance leases			1,013				1,031	
+Total current liabilities			1,092				1,116	
+Deferred revenue, net of current portion			149				161	
+Debt and finance leases, net of current portion			971				2,093	
+Other long-term liabilities			3				11	
+Total liabilities		$	2,215			$	3,381	
