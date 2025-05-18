@@ -1,0 +1,125 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<xbrl xmlns="http://www.xbrl.org/2003/instance" 
+      xmlns:xbrli="http://www.xbrl.org/2003/instance"
+      xmlns:dei="http://xbrl.sec.gov/dei/2021"
+      xmlns:us-gaap="http://fasb.org/us-gaap/2021">
+  <dei:DocumentType>10-K</dei:DocumentType>
+  <dei:EntityRegistrantName>Tesla, Inc.</dei:EntityRegistrantName>
+  <dei:DocumentPeriodEndDate>2023-12-31</dei:DocumentPeriodEndDate>
+  <dei:DocumentFiscalYearFocus>2023</dei:DocumentFiscalYearFocus>
+  <dei:DocumentFiscalPeriodFocus>FY</dei:DocumentFiscalPeriodFocus>
+  
+  <!-- Context definitions -->
+  <xbrli:context id="FY2023">
+    <xbrli:entity>
+      <xbrli:identifier scheme="http://www.sec.gov/CIK">0001318605</xbrli:identifier>
+    </xbrli:entity>
+    <xbrli:period>
+      <xbrli:startDate>2023-01-01</xbrli:startDate>
+      <xbrli:endDate>2023-12-31</xbrli:endDate>
+    </xbrli:period>
+  </xbrli:context>
+  
+  <xbrli:context id="FY2022">
+    <xbrli:entity>
+      <xbrli:identifier scheme="http://www.sec.gov/CIK">0001318605</xbrli:identifier>
+    </xbrli:entity>
+    <xbrli:period>
+      <xbrli:startDate>2022-01-01</xbrli:startDate>
+      <xbrli:endDate>2022-12-31</xbrli:endDate>
+    </xbrli:period>
+  </xbrli:context>
+  
+  <xbrli:context id="AsOf2023-12-31">
+    <xbrli:entity>
+      <xbrli:identifier scheme="http://www.sec.gov/CIK">0001318605</xbrli:identifier>
+    </xbrli:entity>
+    <xbrli:period>
+      <xbrli:instant>2023-12-31</xbrli:instant>
+    </xbrli:period>
+  </xbrli:context>
+  
+  <xbrli:context id="AsOf2022-12-31">
+    <xbrli:entity>
+      <xbrli:identifier scheme="http://www.sec.gov/CIK">0001318605</xbrli:identifier>
+    </xbrli:entity>
+    <xbrli:period>
+      <xbrli:instant>2022-12-31</xbrli:instant>
+    </xbrli:period>
+  </xbrli:context>
+  
+  <!-- Unit definitions -->
+  <xbrli:unit id="USD">
+    <xbrli:measure>iso4217:USD</xbrli:measure>
+  </xbrli:unit>
+  
+  <xbrli:unit id="shares">
+    <xbrli:measure>xbrli:shares</xbrli:measure>
+  </xbrli:unit>
+  
+  <xbrli:unit id="usd-per-share">
+    <xbrli:divide>
+      <xbrli:numerator>
+        <xbrli:measure>iso4217:USD</xbrli:measure>
+      </xbrli:numerator>
+      <xbrli:denominator>
+        <xbrli:measure>xbrli:shares</xbrli:measure>
+      </xbrli:denominator>
+    </xbrli:divide>
+  </xbrli:unit>
+  
+  <!-- Income Statement Data -->
+  <us-gaap:Revenue contextRef="FY2023" unitRef="USD" decimals="-6">96773000000</us-gaap:Revenue>
+  <us-gaap:Revenue contextRef="FY2022" unitRef="USD" decimals="-6">81462000000</us-gaap:Revenue>
+  
+  <us-gaap:CostOfGoodsAndServicesSold contextRef="FY2023" unitRef="USD" decimals="-6">71248000000</us-gaap:CostOfGoodsAndServicesSold>
+  <us-gaap:CostOfGoodsAndServicesSold contextRef="FY2022" unitRef="USD" decimals="-6">58928000000</us-gaap:CostOfGoodsAndServicesSold>
+  
+  <us-gaap:GrossProfit contextRef="FY2023" unitRef="USD" decimals="-6">25525000000</us-gaap:GrossProfit>
+  <us-gaap:GrossProfit contextRef="FY2022" unitRef="USD" decimals="-6">22534000000</us-gaap:GrossProfit>
+  
+  <us-gaap:OperatingIncomeLoss contextRef="FY2023" unitRef="USD" decimals="-6">13046000000</us-gaap:OperatingIncomeLoss>
+  <us-gaap:OperatingIncomeLoss contextRef="FY2022" unitRef="USD" decimals="-6">13656000000</us-gaap:OperatingIncomeLoss>
+  
+  <us-gaap:NetIncomeLoss contextRef="FY2023" unitRef="USD" decimals="-6">15173000000</us-gaap:NetIncomeLoss>
+  <us-gaap:NetIncomeLoss contextRef="FY2022" unitRef="USD" decimals="-6">12583000000</us-gaap:NetIncomeLoss>
+  
+  <us-gaap:EarningsPerShareBasic contextRef="FY2023" unitRef="usd-per-share" decimals="2">4.82</us-gaap:EarningsPerShareBasic>
+  <us-gaap:EarningsPerShareBasic contextRef="FY2022" unitRef="usd-per-share" decimals="2">3.99</us-gaap:EarningsPerShareBasic>
+  
+  <us-gaap:EarningsPerShareDiluted contextRef="FY2023" unitRef="usd-per-share" decimals="2">4.59</us-gaap:EarningsPerShareDiluted>
+  <us-gaap:EarningsPerShareDiluted contextRef="FY2022" unitRef="usd-per-share" decimals="2">3.62</us-gaap:EarningsPerShareDiluted>
+  
+  <!-- Balance Sheet Data -->
+  <us-gaap:AssetsCurrent contextRef="AsOf2023-12-31" unitRef="USD" decimals="-6">40456000000</us-gaap:AssetsCurrent>
+  <us-gaap:AssetsCurrent contextRef="AsOf2022-12-31" unitRef="USD" decimals="-6">39313000000</us-gaap:AssetsCurrent>
+  
+  <us-gaap:AssetsNoncurrent contextRef="AsOf2023-12-31" unitRef="USD" decimals="-6">91450000000</us-gaap:AssetsNoncurrent>
+  <us-gaap:AssetsNoncurrent contextRef="AsOf2022-12-31" unitRef="USD" decimals="-6">42213000000</us-gaap:AssetsNoncurrent>
+  
+  <us-gaap:Assets contextRef="AsOf2023-12-31" unitRef="USD" decimals="-6">131906000000</us-gaap:Assets>
+  <us-gaap:Assets contextRef="AsOf2022-12-31" unitRef="USD" decimals="-6">81462000000</us-gaap:Assets>
+  
+  <us-gaap:LiabilitiesCurrent contextRef="AsOf2023-12-31" unitRef="USD" decimals="-6">28403000000</us-gaap:LiabilitiesCurrent>
+  <us-gaap:LiabilitiesCurrent contextRef="AsOf2022-12-31" unitRef="USD" decimals="-6">27099000000</us-gaap:LiabilitiesCurrent>
+  
+  <us-gaap:LiabilitiesNoncurrent contextRef="AsOf2023-12-31" unitRef="USD" decimals="-6">14625000000</us-gaap:LiabilitiesNoncurrent>
+  <us-gaap:LiabilitiesNoncurrent contextRef="AsOf2022-12-31" unitRef="USD" decimals="-6">12849000000</us-gaap:LiabilitiesNoncurrent>
+  
+  <us-gaap:Liabilities contextRef="AsOf2023-12-31" unitRef="USD" decimals="-6">43028000000</us-gaap:Liabilities>
+  <us-gaap:Liabilities contextRef="AsOf2022-12-31" unitRef="USD" decimals="-6">39948000000</us-gaap:Liabilities>
+  
+  <us-gaap:StockholdersEquity contextRef="AsOf2023-12-31" unitRef="USD" decimals="-6">88878000000</us-gaap:StockholdersEquity>
+  <us-gaap:StockholdersEquity contextRef="AsOf2022-12-31" unitRef="USD" decimals="-6">41514000000</us-gaap:StockholdersEquity>
+  
+  <us-gaap:CashAndCashEquivalentsAtCarryingValue contextRef="AsOf2023-12-31" unitRef="USD" decimals="-6">29140000000</us-gaap:CashAndCashEquivalentsAtCarryingValue>
+  <us-gaap:CashAndCashEquivalentsAtCarryingValue contextRef="AsOf2022-12-31" unitRef="USD" decimals="-6">22185000000</us-gaap:CashAndCashEquivalentsAtCarryingValue>
+  
+  <!-- Segment Information -->
+  <us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax contextRef="FY2023" unitRef="USD" decimals="-6">96773000000</us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax>
+  
+  <!-- Key Operational Metrics - Custom Values -->
+  <us-gaap:NewMarkets contextRef="FY2023" unitRef="USD" decimals="-6">12500000000</us-gaap:NewMarkets>
+  <us-gaap:ResearchAndDevelopmentExpense contextRef="FY2023" unitRef="USD" decimals="-6">3520000000</us-gaap:ResearchAndDevelopmentExpense>
+  <us-gaap:ResearchAndDevelopmentExpense contextRef="FY2022" unitRef="USD" decimals="-6">3075000000</us-gaap:ResearchAndDevelopmentExpense>
+</xbrl> 

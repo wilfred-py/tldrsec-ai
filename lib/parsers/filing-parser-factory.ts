@@ -14,6 +14,7 @@ import {
 } from './sec-filing-parser';
 import { FilingType } from '@/lib/sec-edgar/types';
 import { parsePDFFromBuffer } from './pdf-parser';
+import { isXBRL, parseXBRLAsSECFiling } from './xbrl-parser';
 
 // Create a logger for the factory
 const logger = new Logger({}, 'filing-parser-factory');
@@ -83,17 +84,28 @@ export function isPDF(content: string | Buffer): boolean {
 }
 
 /**
- * Detects the filing type from HTML content
+ * Detects the filing type from content
  * 
- * @param html The HTML content to analyze
+ * @param content The content to analyze
  * @returns The detected filing type or null if not detected
  */
-export function detectFilingType(html: string): string | null {
+export function detectFilingType(content: string | Buffer): string | null {
   // Check if this is a PDF file - if so, we won't be able to detect by HTML patterns
-  if (isPDF(html)) {
+  if (isPDF(content)) {
     logger.debug('Content appears to be a PDF file');
     return 'PDF'; // Return a special type to indicate PDF
   }
+  
+  // Check if this is an XBRL file
+  if (isXBRL(content)) {
+    logger.debug('Content appears to be an XBRL file');
+    return 'XBRL'; // Return a special type to indicate XBRL
+  }
+  
+  // Extract HTML sample for pattern detection
+  const html = Buffer.isBuffer(content) 
+    ? content.toString('utf8', 0, 2000) 
+    : content.substring(0, 2000);
   
   // Simple regex-based detection from title or content
   const titleMatch = html.match(/<title[^>]*>([^<]+)<\/title>/i);
@@ -121,7 +133,7 @@ export function detectFilingType(html: string): string | null {
 /**
  * Creates a parser for a filing based on its detected type
  * 
- * @param content The content to parse (HTML string or PDF buffer)
+ * @param content The content to parse (HTML/XBRL string or PDF buffer)
  * @param options Parser options to apply
  * @returns The parsed SEC filing
  * @throws Error if the filing type cannot be detected or is not supported
@@ -130,11 +142,11 @@ export async function createAutoParser(
   content: string | Buffer,
   options?: Partial<SECFilingParserOptions>
 ): Promise<ParsedSECFiling> {
-  // Handle Buffer input
-  const contentString = Buffer.isBuffer(content) ? content.toString('utf8', 0, 1000) : content;
+  // Handle Buffer input for detection
+  const contentSample = Buffer.isBuffer(content) ? content.toString('utf8', 0, 1000) : content.substring(0, 1000);
   
   // Try to detect the filing type
-  const detectedType = detectFilingType(contentString);
+  const detectedType = detectFilingType(contentSample);
   
   if (!detectedType) {
     logger.warn('Could not detect filing type from content');
@@ -145,11 +157,7 @@ export async function createAutoParser(
   
   // Check if this is a PDF file
   if (detectedType === 'PDF') {
-    // For PDF files, we need to process differently
-    logger.debug('Processing PDF file');
-    
-    // For now, we don't have PDF filing type-specific parsing
-    // So we'll use a generic approach that returns a basic SEC filing
+    // Make sure content is a Buffer for PDF parsing
     if (!Buffer.isBuffer(content)) {
       content = Buffer.from(content);
     }
@@ -158,9 +166,20 @@ export async function createAutoParser(
     return await parsePDFAsSECFiling(content, options);
   }
   
+  // Check if this is an XBRL file
+  if (detectedType === 'XBRL') {
+    // Make sure content is a Buffer for XBRL parsing
+    if (!Buffer.isBuffer(content)) {
+      content = Buffer.from(content);
+    }
+    
+    // Parse the XBRL
+    return await parseXBRLAsSECFiling(content, options);
+  }
+  
   // For HTML files, create and use the appropriate parser
   const parser = createFilingParser(detectedType);
-  return parser(contentString, options);
+  return parser(Buffer.isBuffer(content) ? content.toString('utf8') : content, options);
 }
 
 /**
