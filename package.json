@@ -12,6 +12,8 @@
     "test:tesla:simple": "node scripts/test-tesla-simple.js",
     "test:pdf": "node scripts/test-pdf-parser.js",
     "test:xbrl": "node scripts/test-xbrl-parser.js",
+    "test:extraction": "node scripts/test-content-extraction.js",
+    "test:extraction:ts": "ts-node scripts/test-content-extraction.ts",
     "create-pdf": "node scripts/create-sample-pdf.js",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
