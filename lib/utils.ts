@@ -6,10 +6,14 @@ export function cn(...inputs: ClassValue[]) {
 }
 
 /**
+ * Utility functions for the application
+ */
+
+/**
  * Sleep for the specified number of milliseconds
- * @param ms Milliseconds to sleep
+ * @param ms Number of milliseconds to sleep
  * @returns Promise that resolves after the specified time
  */
-export const sleep = (ms: number): Promise<void> => {
+export async function sleep(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms));
-};
+}
