@@ -19,6 +19,7 @@ import {
 } from './chunk-manager';
 import { Logger } from '@/lib/logging';
 import { FilingType } from '@/lib/sec-edgar/types';
+import { withErrorHandling, RecoveryStrategy, ParserErrorCategory } from './parser-error-handler';
 
 // Create a logger for the SEC filing parser
 const logger = new Logger({}, 'sec-filing-parser');
@@ -137,21 +138,27 @@ export async function parseSECFilingFromUrl(
   filingType: FilingType,
   options: SECFilingParserOptions = DEFAULT_SEC_FILING_OPTIONS
 ): Promise<ParsedSECFiling> {
-  try {
+  // Use withErrorHandling to catch and classify all errors in a structured way
+  return withErrorHandling(async () => {
     logger.debug(`Parsing SEC filing of type ${filingType} from URL: ${url}`);
-    
     // Merge options with defaults
     const mergedOptions = { ...DEFAULT_SEC_FILING_OPTIONS, ...options };
-    
     // Use the base HTML parser to get sections
     const sections = await parseHTMLFromUrl(url, mergedOptions);
-    
     // Process the sections based on filing type
     return processSECFiling(sections, filingType, mergedOptions);
-  } catch (error) {
-    logger.error(`Error parsing SEC filing from URL ${url}:`, error);
-    throw new Error(`Failed to parse SEC filing from URL: ${url}`);
-  }
+  }, {
+    defaultCategory: ParserErrorCategory.PARSING,
+    defaultRecovery: RecoveryStrategy.FALLBACK,
+    context: { url, filingType },
+    // Fallback: try simplified parsing if main parsing fails
+    fallbackFn: async () => {
+      logger.warn('Falling back to simplified parsing options.');
+      const simplifiedOptions = { ...DEFAULT_SEC_FILING_OPTIONS, extractTables: false, extractLists: false, removeBoilerplate: false };
+      const sections = await parseHTMLFromUrl(url, simplifiedOptions);
+      return processSECFiling(sections, filingType, simplifiedOptions);
+    }
+  });
 }
 
 /**

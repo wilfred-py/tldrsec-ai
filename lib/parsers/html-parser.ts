@@ -8,6 +8,8 @@
 import axios from 'axios';
 import * as cheerio from 'cheerio';
 import { Logger } from '@/lib/logging';
+import { withRetry } from './parser-recovery';
+import { withErrorHandling, RecoveryStrategy, ParserErrorCategory } from './parser-error-handler';
 
 // Create a logger for the HTML parser
 const logger = new Logger({}, 'html-parser');
@@ -73,20 +75,31 @@ export async function parseHTMLFromUrl(
   url: string, 
   options: HTMLParserOptions = DEFAULT_OPTIONS
 ): Promise<FilingSection[]> {
-  try {
-    logger.debug(`Fetching HTML content from ${url}`);
-    const response = await axios.get(url, {
-      headers: {
-        'User-Agent': 'TLDRSec-AI/1.0 (https://tldrsec.com; support@tldrsec.com)'
+  // Use withErrorHandling to catch and classify all errors in a structured way
+  return withErrorHandling(async () => {
+    // Use withRetry to handle transient network errors
+    const html = await withRetry(async () => {
+      logger.debug(`Fetching HTML content from ${url}`);
+      const response = await axios.get(url, {
+        headers: {
+          'User-Agent': 'TLDRSec-AI/1.0 (https://tldrsec.com; support@tldrsec.com)'
+        }
+      });
+      return response.data;
+    }, {
+      maxRetries: 3,
+      retryableCategories: [ParserErrorCategory.NETWORK],
+      onRetry: (error, attempt, delayMs) => {
+        logger.warn(`Retry #${attempt} after ${delayMs}ms due to: ${error.message}`);
       }
     });
-    
-    const html = response.data;
+    // Parse the HTML content
     return parseHTML(html, options);
-  } catch (error) {
-    logger.error(`Error fetching or parsing HTML from URL ${url}:`, error);
-    throw new Error(`Failed to parse HTML from URL: ${url}`);
-  }
+  }, {
+    defaultCategory: ParserErrorCategory.NETWORK,
+    defaultRecovery: RecoveryStrategy.RETRY,
+    context: { url }
+  });
 }
 
 /**

@@ -1,0 +1,55 @@
+{
+  "timestamp": "2025-05-19T09:08:11.603Z",
+  "summary": {
+    "totalTests": 7,
+    "successes": 5,
+    "failures": 2,
+    "successRate": "71.43%"
+  },
+  "results": [
+    {
+      "scenario": "standard-success",
+      "success": true,
+      "expected": true,
+      "duration": 0
+    },
+    {
+      "scenario": "network-error-retry",
+      "success": false,
+      "expected": true,
+      "duration": 1002
+    },
+    {
+      "scenario": "fallback-success",
+      "success": true,
+      "expected": true,
+      "duration": 1
+    },
+    {
+      "scenario": "all-fallbacks-fail",
+      "success": false,
+      "expected": true,
+      "duration": 0
+    },
+    {
+      "scenario": "validation-failure",
+      "success": false,
+      "expected": true,
+      "duration": 0
+    },
+    {
+      "scenario": "deliberate-fail-1",
+      "success": false,
+      "expected": false,
+      "error": "Unexpected error: Deliberate failure to demonstrate error reporting",
+      "duration": 1
+    },
+    {
+      "scenario": "deliberate-fail-2",
+      "success": false,
+      "expected": false,
+      "error": "Wrong error type: expected network, got parsing",
+      "duration": 1
+    }
+  ]
+}
