@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { JobQueueService, JobType, JobResultData } from '@/lib/job-queue';
 import { LockService } from '@/lib/job-queue/lock-service';
-  import { DeadLetterQueueService } from '@/lib/job-queue/dead-letter-queue';
+import { DeadLetterQueueService } from '@/lib/job-queue/dead-letter-queue';
 import { logger } from '@/lib/logging';
 import { 
   appRouterAsyncHandler, 
@@ -12,6 +12,7 @@ import {
 import { monitoring } from '@/lib/monitoring';
 import { v4 as uuidv4 } from 'uuid';
 import { PrismaClient } from '@prisma/client';
+import { summarizeFiling, SummarizationError } from '@/lib/ai/summarize';
 
 // Define an interface for the job object structure returned from the database
 interface JobQueueItem {
@@ -192,121 +193,195 @@ const processJob = async (jobId: string) => {
 
 /**
  * GET handler for job processing cron job
- * This endpoint is called by Vercel Cron to process pending jobs
+ * This endpoint is called by Vercel Cron to process queued jobs
  */
 export const GET = appRouterAsyncHandler(async (request: Request) => {
   const startTime = Date.now();
   
-  // Extract job type from query parameters if any
+  // Extract parameters
   const { searchParams } = new URL(request.url);
-  const typeParam = searchParams.get('type');
-  // Convert null to undefined if needed, and ensure the value is a valid JobType
-  const specificJobType = typeParam ? (typeParam as JobType) : undefined;
+  const limit = parseInt(searchParams.get('limit') || '5', 10);
+  const jobTypes = searchParams.get('types')?.split(',') || undefined;
   
-  // Create a lock name that includes the job type if specified
-  const lockName = specificJobType 
-    ? `process-${specificJobType.toLowerCase()}`
-    : 'process-all-jobs';
+  // Create a lock name for this processor
+  const lockName = 'process-jobs-queue';
   
-  // Log the job processing start
-  componentLogger.info(`Starting job processing`, {
-    specificJobType,
-    lockName,
+  // Log the job start
+  componentLogger.info(`Starting job processor`, {
+    limit,
+    jobTypes,
     processId
   });
+  
+  // Start tracking performance
+  monitoring.incrementCounter('jobs.processing_started', 1);
   
   // Try to acquire a lock
   const lock = await LockService.acquireLock(lockName, processId);
   
   if (!lock) {
-    componentLogger.info(`Another instance is already processing jobs for ${lockName}`);
+    componentLogger.info(`Another instance is already processing jobs`);
+    monitoring.incrementCounter('jobs.processing_skipped', 1, { 
+      reason: 'lock_exists'
+    });
+    
     return NextResponse.json({
       success: true,
-      message: `Another instance is already processing jobs for ${lockName}`,
-      processed: 0,
+      message: `Another instance is already processing jobs`,
+      skipped: true
     });
   }
   
   try {
-    // Get pending jobs
-    const jobs = await JobQueueService.getJobsToProcess(BATCH_SIZE, specificJobType);
+    // Get jobs to process
+    const jobs = await JobQueueService.getJobsToProcess(limit, jobTypes ? jobTypes[0] as any : undefined);
     
+    // If no jobs, return early
     if (jobs.length === 0) {
-      componentLogger.info(`No pending jobs found for processing`, { specificJobType });
+      componentLogger.info(`No jobs to process`);
+      
       return NextResponse.json({
         success: true,
-        message: `No pending jobs found for processing`,
-        processed: 0,
+        message: `No jobs to process`,
+        jobsProcessed: 0
       });
     }
     
     // Log the number of jobs found
-    componentLogger.info(`Found ${jobs.length} jobs to process`, { specificJobType });
+    componentLogger.info(`Found ${jobs.length} jobs to process`);
     
     // Process each job
-    const results = await Promise.all(
-      jobs.map((job: JobQueueItem) => processJob(job.id))
+    const results = await Promise.allSettled(
+      jobs.map(async (job) => {
+        const jobStartTime = Date.now();
+        
+        // Mark job as processing
+        await JobQueueService.updateJobStatus(job.id, 'PROCESSING', {
+          startedAt: new Date()
+        });
+        
+        // Log job processing start
+        componentLogger.info(`Processing job ${job.id}`, {
+          jobType: job.jobType,
+          attempt: job.attempts + 1,
+          maxAttempts: job.maxAttempts
+        });
+        
+        try {
+          // Process based on job type
+          if (job.jobType === 'SUMMARIZE_FILING') {
+            // Extract summaryId from payload
+            const { summaryId } = job.payload;
+            
+            if (!summaryId) {
+              throw new Error('Missing summaryId in job payload');
+            }
+            
+            // Call the summarization function
+            const result = await summarizeFiling(summaryId);
+            
+            // Log success
+            componentLogger.info(`Successfully processed summarization job ${job.id}`, {
+              summaryId,
+              duration: Date.now() - jobStartTime
+            });
+            
+            // Mark job as completed
+            await JobQueueService.updateJobStatus(job.id, 'COMPLETED', {
+              completedAt: new Date(),
+              executionTime: Date.now() - jobStartTime,
+              result
+            });
+            
+            // Track successful job
+            monitoring.incrementCounter('jobs.completed', 1, {
+              jobType: job.jobType
+            });
+            
+            return { jobId: job.id, success: true, result };
+          } else {
+            // Unsupported job type
+            componentLogger.warn(`Unsupported job type: ${job.jobType}`, { jobId: job.id });
+            
+            // Mark job as failed
+            await JobQueueService.updateJobStatus(job.id, 'FAILED', {
+              failedAt: new Date(),
+              error: `Unsupported job type: ${job.jobType}`,
+              executionTime: Date.now() - jobStartTime
+            });
+            
+            // Track failed job
+            monitoring.incrementCounter('jobs.failed', 1, {
+              jobType: job.jobType,
+              reason: 'unsupported_type'
+            });
+            
+            return { jobId: job.id, success: false, error: `Unsupported job type: ${job.jobType}` };
+          }
+        } catch (error) {
+          // Log the error
+          componentLogger.error(`Error processing job ${job.id}`, {
+            jobType: job.jobType,
+            error
+          });
+          
+          // Mark job as failed
+          await JobQueueService.updateJobStatus(job.id, 'FAILED', {
+            failedAt: new Date(),
+            error: error instanceof Error ? error.message : String(error),
+            stack: error instanceof Error ? error.stack : undefined,
+            executionTime: Date.now() - jobStartTime
+          });
+          
+          // Track failed job
+          monitoring.incrementCounter('jobs.failed', 1, {
+            jobType: job.jobType,
+            reason: error instanceof SummarizationError ? error.code : 'unknown'
+          });
+          
+          return { 
+            jobId: job.id, 
+            success: false, 
+            error: error instanceof Error ? error.message : String(error)
+          };
+        }
+      })
     );
     
-    // Count successful jobs
-    const successCount = results.filter(Boolean).length;
-    const failureCount = jobs.length - successCount;
+    // Compile results
+    const succeeded = results.filter(r => r.status === 'fulfilled' && (r.value as any).success).length;
+    const failed = results.filter(r => r.status === 'rejected' || !(r.value as any).success).length;
     
-    // Calculate processing time
+    // Calculate duration
     const duration = Date.now() - startTime;
     
-    // Track metrics
-    monitoring.incrementCounter('jobs.processed_batch', jobs.length, { 
-      success: successCount.toString(),
-      failed: failureCount.toString(),
-      jobType: specificJobType || 'all' 
-    });
-    monitoring.recordTiming('jobs.batch_duration', duration, { 
-      jobType: specificJobType || 'all' 
+    // Log completion
+    componentLogger.info(`Completed job processing`, {
+      processed: jobs.length,
+      succeeded,
+      failed,
+      duration
     });
     
-    // Log the job processing summary
-    componentLogger.info(`Job processing complete`, {
-      totalJobs: jobs.length,
-      successfulJobs: successCount,
-      failedJobs: failureCount,
-      duration,
-      specificJobType,
-    });
-    
-    // Return response
+    // Return success response
     return NextResponse.json({
       success: true,
-      message: `Processed ${successCount} out of ${jobs.length} jobs`,
-      processed: successCount,
-      failed: failureCount,
-      duration,
+      message: `Job processing completed`,
+      processed: jobs.length,
+      succeeded,
+      failed,
+      duration
     });
   } catch (error) {
-    // This will be caught by the appRouterAsyncHandler
-    // and handled appropriately
+    // Track processing failure
+    monitoring.incrementCounter('jobs.processor_error', 1);
+    
     if (error instanceof Error) {
-      // Track error metric
-      monitoring.incrementCounter('jobs.system_error', 1, {
-        type: error.name,
-        jobType: specificJobType || 'all'
-      });
-      
-      throw createInternalError(`Job processing failed: ${error.message}`, {
-        specificJobType,
-        processId,
-        error,
-      });
+      throw createInternalError(`Failed to process jobs: ${error.message}`, { error });
     }
     throw error;
   } finally {
-    // Always release the lock regardless of outcome
-    try {
-      await LockService.releaseLock(lockName, processId);
-      componentLogger.debug(`Released lock: ${lockName}`);
-    } catch (releaseError) {
-      componentLogger.error(`Failed to release lock: ${lockName}`, releaseError);
-      monitoring.incrementCounter('locks.release_error', 1);
-    }
+    // Release the lock
+    await LockService.releaseLock(lockName, processId);
   }
 }); 

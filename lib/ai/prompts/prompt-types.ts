@@ -89,4 +89,131 @@ export interface FilingPromptTemplate {
   userPrompt: PromptTemplate;
   config: PromptConfig;
   contextConfig: ContextWindowConfig;
+}
+
+/**
+ * Type definitions for SEC filing prompts
+ */
+
+/**
+ * SEC filing types supported by the system
+ */
+export type SECFilingType = '10-K' | '10-Q' | '8-K' | 'Form4' | 'generic';
+
+/**
+ * Schema structure for 10-K (Annual Report) filings
+ */
+export interface Form10KSchema {
+  company: string;
+  period: string;
+  fiscalYear?: string;
+  reportDate?: string;
+  financials: {
+    label: string;
+    value: string;
+    growth?: string;
+    unit?: string;
+  }[];
+  keyHighlights: string[];
+  insights: string[];
+  risks: string[];
+  riskFactors?: {
+    category: string;
+    description: string;
+    impact: string;
+  }[];
+  segments?: {
+    name: string;
+    revenue: string;
+    growth?: string;
+  }[];
+  executiveSummary?: string;
+}
+
+/**
+ * Schema structure for 10-Q (Quarterly Report) filings
+ */
+export interface Form10QSchema {
+  company: string;
+  period: string;
+  quarterEnding?: string;
+  reportDate?: string;
+  financials: {
+    label: string;
+    value: string;
+    growth?: string;
+    unit?: string;
+  }[];
+  keyHighlights: string[];
+  insights: string[];
+  risks: string[];
+  quarterlyTrends?: string[];
+  guidanceChanges?: string;
+  outlook?: string;
+  executiveSummary?: string;
+}
+
+/**
+ * Schema structure for 8-K (Current Report) filings
+ */
+export interface Form8KSchema {
+  company: string;
+  reportDate: string;
+  eventDate?: string;
+  eventType: string;
+  summary: string;
+  positiveDevelopments: string | string[];
+  potentialConcerns: string | string[];
+  structuralChanges: string | string[];
+  items?: {
+    item: string;
+    title: string;
+    content: string;
+  }[];
+  materialityAssessment?: string;
+  additionalNotes?: string;
+  executiveSummary?: string;
+}
+
+/**
+ * Schema structure for Form 4 (Insider Trading) filings
+ */
+export interface FormForm4Schema {
+  company: string;
+  filingDate: string;
+  reportDate?: string;
+  filerName: string;
+  relationship: string;
+  ownershipType: string;
+  transactions: {
+    type: string;
+    date: string;
+    shares: string;
+    pricePerShare: string;
+    totalValue: string;
+    securityType: string;
+    acquisitionDisposition: string;
+  }[];
+  totalValue: string;
+  percentageChange?: string;
+  previousStake?: string;
+  newStake?: string;
+  summary: string;
+  signalStrength?: string;
+  insiderBehaviorPattern?: string;
+}
+
+/**
+ * Schema structure for generic filings
+ */
+export interface GenericFilingSchema {
+  company: string;
+  filingType: string;
+  filingDate: string;
+  summary: string;
+  keyPoints: string[];
+  importantInformation: string[];
+  financialImpact?: string;
+  riskConsiderations?: string[];
+  executiveSummary?: string;
 } 

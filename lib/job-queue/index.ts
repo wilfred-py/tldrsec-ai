@@ -12,7 +12,8 @@ export type JobType =
   | 'CHECK_10K_FILINGS'
   | 'CHECK_10Q_FILINGS'
   | 'CHECK_8K_FILINGS'
-  | 'CHECK_FORM4_FILINGS';
+  | 'CHECK_FORM4_FILINGS'
+  | 'SUMMARIZE_FILING';
 
 // Job status
 export type JobStatus = 
