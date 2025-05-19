@@ -207,7 +207,7 @@ export function validateAgainstSchema(
       } else {
         return {
           valid: false,
-          errors: result.error.errors.map(e => e.message),
+          errors: result.error.errors.map((e: z.ZodIssue) => e.message),
           partialData: data
         };
       }
@@ -215,7 +215,8 @@ export function validateAgainstSchema(
     // In non-strict mode, we validate as much as possible
     else {
       // Create a partial schema with only the fields that exist in the data
-      const partialSchema = schema.partial();
+      // Type assertion to handle the fact that partial() is not on ZodTypeAny
+      const partialSchema = (schema as z.ZodObject<any, any, any>).partial();
       const result = partialSchema.safeParse(data);
       
       if (result.success) {
@@ -235,7 +236,7 @@ export function validateAgainstSchema(
       } else {
         return {
           valid: false,
-          errors: result.error.errors.map(e => e.message),
+          errors: result.error.errors.map((e: z.ZodIssue) => e.message),
           partialData: data
         };
       }

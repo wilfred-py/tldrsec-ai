@@ -139,6 +139,19 @@ export function parseResponse<T = any>(
     // Check if we have at least some usable data
     const hasPartialData = data && Object.keys(data).length > 0;
     
+    // For successful validation, set partial to undefined explicitly (not just omitted)
+    if (validationResult.valid) {
+      return {
+        success: true,
+        data: data as T,
+        raw: extracted.raw,
+        partial: undefined,
+        errors: undefined,
+        metrics: options.collectMetrics ? metrics : undefined
+      };
+    }
+    
+    // For partial data, make sure we properly indicate it's partial
     return {
       success: validationResult.valid || hasPartialData,
       data: data as T,
