@@ -1,55 +1,67 @@
 {
-  "timestamp": "2025-05-19T09:08:11.603Z",
   "summary": {
-    "totalTests": 7,
-    "successes": 5,
-    "failures": 2,
-    "successRate": "71.43%"
+    "totalTests": 9,
+    "successes": 9,
+    "failures": 0,
+    "duration": 3724,
+    "date": "2025-05-19T09:13:12.343Z"
   },
-  "results": [
+  "scenarios": [
     {
-      "scenario": "standard-success",
+      "name": "valid_input",
       "success": true,
-      "expected": true,
-      "duration": 0
+      "recoverySucceeded": false,
+      "duration": 469
     },
     {
-      "scenario": "network-error-retry",
-      "success": false,
-      "expected": true,
-      "duration": 1002
-    },
-    {
-      "scenario": "fallback-success",
+      "name": "malformed_html",
       "success": true,
-      "expected": true,
-      "duration": 1
+      "recoverySucceeded": false,
+      "duration": 476
     },
     {
-      "scenario": "all-fallbacks-fail",
-      "success": false,
-      "expected": true,
+      "name": "truncated_content",
+      "success": true,
+      "recoverySucceeded": false,
+      "duration": 470
+    },
+    {
+      "name": "invalid_tags",
+      "success": true,
+      "recoverySucceeded": false,
+      "duration": 465
+    },
+    {
+      "name": "unbalanced_tags",
+      "success": true,
+      "recoverySucceeded": false,
+      "duration": 534
+    },
+    {
+      "name": "missing_sections",
+      "success": true,
+      "recoverySucceeded": false,
+      "duration": 523
+    },
+    {
+      "name": "empty_document",
+      "success": true,
+      "recoverySucceeded": false,
+      "duration": 786
+    },
+    {
+      "name": "network_timeout",
+      "success": true,
+      "errorMessage": "Invalid input type",
+      "recoverySucceeded": false,
       "duration": 0
     },
     {
-      "scenario": "validation-failure",
-      "success": false,
-      "expected": true,
+      "name": "memory_limit",
+      "success": true,
+      "errorMessage": "Invalid input type",
+      "recoverySucceeded": false,
       "duration": 0
-    },
-    {
-      "scenario": "deliberate-fail-1",
-      "success": false,
-      "expected": false,
-      "error": "Unexpected error: Deliberate failure to demonstrate error reporting",
-      "duration": 1
-    },
-    {
-      "scenario": "deliberate-fail-2",
-      "success": false,
-      "expected": false,
-      "error": "Wrong error type: expected network, got parsing",
-      "duration": 1
     }
   ]
 }
