@@ -1,7 +1,8 @@
-/** @type {import('ts-jest').JestConfigWithTsJest} */
-module.exports = {
-  preset: 'ts-jest',
+// ESM-compatible Jest configuration
+export default {
+  preset: 'ts-jest/presets/js-with-ts-esm',
   testEnvironment: 'node',
+  setupFilesAfterEnv: ['./jest.setup.mjs'],
   moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/$1',
     '^@components/(.*)$': '<rootDir>/components/$1',
@@ -19,9 +20,9 @@ module.exports = {
     }]
   },
   extensionsToTreatAsEsm: ['.ts', '.tsx', '.mts'],
-  moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json', 'node'],
+  moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json', 'node', 'mjs'],
   testMatch: ['**/__tests__/**/*.ts?(x)', '**/?(*.)+(spec|test).ts?(x)'],
   transformIgnorePatterns: [
-    'node_modules/(?!(@)/)' // Don't transform node_modules except for packages starting with @
+    'node_modules/(?!(@)/)'
   ]
 }; 
