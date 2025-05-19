@@ -3,6 +3,57 @@
  * This file contains settings for the Claude API client
  */
 
+/**
+ * Get environment variable with fallback
+ */
+function getEnv(key: string, defaultValue?: string): string {
+  const value = process.env[key];
+  if (value === undefined) {
+    if (defaultValue === undefined) {
+      throw new Error(`Environment variable ${key} is not set`);
+    }
+    return defaultValue;
+  }
+  return value;
+}
+
+/**
+ * Base API configuration
+ */
+export const apiConfig = {
+  apiKey: getEnv('ANTHROPIC_API_KEY'),
+  baseUrl: getEnv('ANTHROPIC_API_URL', 'https://api.anthropic.com'),
+  maxRetries: parseInt(getEnv('ANTHROPIC_MAX_RETRIES', '3'), 10),
+  timeout: parseInt(getEnv('ANTHROPIC_TIMEOUT_MS', '120000'), 10),
+  rateLimitPerMinute: parseInt(getEnv('ANTHROPIC_RATE_LIMIT', '30'), 10)
+};
+
+/**
+ * Model configuration
+ */
+export const modelConfig = {
+  defaultModel: getEnv('CLAUDE_DEFAULT_MODEL', 'claude-3-opus-20240229'),
+  fallbackModel: getEnv('CLAUDE_FALLBACK_MODEL', 'claude-3-sonnet-20240229'),
+  maxInputTokens: parseInt(getEnv('CLAUDE_MAX_INPUT_TOKENS', '100000'), 10),
+  maxOutputTokens: parseInt(getEnv('CLAUDE_MAX_OUTPUT_TOKENS', '4096'), 10),
+  temperature: parseFloat(getEnv('CLAUDE_TEMPERATURE', '0.2')),
+  topP: parseFloat(getEnv('CLAUDE_TOP_P', '0.9')),
+  topK: parseInt(getEnv('CLAUDE_TOP_K', '50'), 10)
+};
+
+/**
+ * Cost tracking configuration
+ */
+export const costConfig = {
+  // Cost per million tokens
+  claude3OpusInputCost: parseFloat(getEnv('CLAUDE3_OPUS_INPUT_COST', '15.0')),
+  claude3OpusOutputCost: parseFloat(getEnv('CLAUDE3_OPUS_OUTPUT_COST', '75.0')),
+  claude3SonnetInputCost: parseFloat(getEnv('CLAUDE3_SONNET_INPUT_COST', '3.0')),
+  claude3SonnetOutputCost: parseFloat(getEnv('CLAUDE3_SONNET_OUTPUT_COST', '15.0')),
+  claude3HaikuInputCost: parseFloat(getEnv('CLAUDE3_HAIKU_INPUT_COST', '0.25')),
+  claude3HaikuOutputCost: parseFloat(getEnv('CLAUDE3_HAIKU_OUTPUT_COST', '1.25'))
+};
+
 export const ClaudeConfig = {
   // API key should be set in the .env file
   apiKey: process.env.ANTHROPIC_API_KEY || '',
