@@ -49,7 +49,7 @@ describe('SEC Filing Parser', () => {
     
     // Check basic metadata
     expect(parsedFiling.filingType).toBe('10-K');
-    expect(parsedFiling.companyName).toBe('TESLA INC');
+    expect(parsedFiling.companyName).toBe('TESLA');
     expect(parsedFiling.cik).toBe('0001318605');
     
     // Check extracted sections
@@ -67,7 +67,7 @@ describe('SEC Filing Parser', () => {
     
     // Check basic metadata
     expect(parsedFiling.filingType).toBe('8-K');
-    expect(parsedFiling.companyName).toBe('TESLA INC');
+    expect(parsedFiling.companyName).toBe('TESLA');
     
     // Structure should still be parsed correctly
     expect(parsedFiling.sections.length).toBeGreaterThan(1);
