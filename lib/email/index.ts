@@ -1,23 +1,34 @@
 /**
- * Email module for sending notifications using Resend
+ * Email client module
+ * 
+ * Provides functionality for sending emails
  */
 
-// Import client
-import { resendClient } from './resend-client';
+import { ResendClient } from './resend-client';
+import { EmailMessage, EmailSendResult } from './types';
+import { resendConfig } from './config';
 
-// Export types
+// Re-export types
 export * from './types';
-
-// Export core client
-export { ResendClient, ResendErrorCode } from './resend-client';
-export { resendClient };
-
-// Export config
 export { resendConfig } from './config';
 
+// Export notification components
+export * from './notification-service';
+export * from './notification-processor';
+export * from './notification-integration';
+
+// Create the default client
+export const emailClient = new ResendClient();
+
 /**
- * Main export for convenience - use this to send emails
- * @param message Email message to send
- * @returns Result of the email send operation
+ * Send an email using the default client
  */
-export const sendEmail = resendClient.sendEmail.bind(resendClient); 
+export async function sendEmail(
+  message: EmailMessage, 
+  options = {}
+): Promise<EmailSendResult> {
+  return emailClient.sendEmail(message, options);
+}
+
+// Export the ResendClient class
+export { ResendClient }; 
