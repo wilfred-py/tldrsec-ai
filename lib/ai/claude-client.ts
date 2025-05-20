@@ -88,6 +88,59 @@ export class ClaudeClient {
   }
 
   /**
+   * Complete a chat with Claude (newer API format)
+   * @param params Chat completion parameters
+   * @returns Response from Claude API
+   */
+  async completeChat(params: {
+    model: string;
+    messages: Array<{ role: string; content: string | any[] }>;
+    max_tokens?: number;
+    temperature?: number;
+    system?: string;
+  }) {
+    const requestId = uuidv4();
+    console.log(`[Claude] Starting chat completion ${requestId} with model ${params.model}`);
+
+    try {
+      // Use the rate limiter to prevent hitting API limits
+      const response = await this.limiter.schedule(() => this.executeWithRetry(
+        async () => this.anthropic.messages.create({
+          model: params.model,
+          max_tokens: params.max_tokens || ClaudeConfig.maxTokens,
+          temperature: params.temperature ?? ClaudeConfig.temperature,
+          system: params.system || '',
+          messages: params.messages.map(m => ({
+            role: m.role as 'user' | 'assistant',
+            content: typeof m.content === 'string' ? m.content : m.content
+          })),
+        })
+      ));
+
+      // Update tracking
+      this.totalTokensUsed.input += response.usage?.input_tokens || 0;
+      this.totalTokensUsed.output += response.usage?.output_tokens || 0;
+
+      // Calculate cost
+      const modelInfo = ClaudeConfig.modelInfo[params.model as keyof typeof ClaudeConfig.modelInfo] || {
+        costPerInputToken: 0,
+        costPerOutputToken: 0,
+      };
+      
+      const inputCost = (response.usage?.input_tokens || 0) * modelInfo.costPerInputToken;
+      const outputCost = (response.usage?.output_tokens || 0) * modelInfo.costPerOutputToken;
+      this.totalCost += inputCost + outputCost;
+
+      console.log(`[Claude] Chat completion ${requestId} completed. Used ${response.usage?.input_tokens} input and ${response.usage?.output_tokens} output tokens.`);
+
+      return response;
+    } catch (error: any) {
+      console.error(`[Claude] Error in chat completion ${requestId}:`, error.message);
+      throw this.formatError(error);
+    }
+  }
+
+  /**
    * Send a message to Claude and get a response
    * @param messages An array of messages with role and content
    * @param options Optional parameters for the request
