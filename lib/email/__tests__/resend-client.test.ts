@@ -23,6 +23,21 @@ jest.mock('resend', () => {
   };
 });
 
+// Mock TimeoutAbortController with a simple implementation
+jest.mock('../../error-handling/retry', () => {
+  const original = jest.requireActual('../../error-handling/retry');
+  return {
+    ...original,
+    // Mock implementation doesn't actually set timeouts
+    TimeoutAbortController: class MockTimeoutAbortController {
+      public signal = new AbortController().signal;
+      setTimeout() {} // Empty implementation - no real timeout set
+      clearTimeout() {} // Empty implementation - no cleanup needed
+      abort() {} // Empty implementation - no real abort
+    }
+  };
+});
+
 // Mock error handling
 jest.mock('../../error-handling', () => {
   const original = jest.requireActual('../../error-handling');

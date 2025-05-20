@@ -228,6 +228,9 @@ export class ResendClient {
           code: normalizedError.code
         }
       };
+    } finally {
+      // Clean up the timeout to prevent memory leaks and test hanging
+      abortController.clearTimeout();
     }
   }
   
