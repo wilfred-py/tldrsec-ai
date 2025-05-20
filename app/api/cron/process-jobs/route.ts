@@ -7,12 +7,28 @@ import {
   appRouterAsyncHandler, 
   createInternalError,
   ApiError,
-  ErrorCode
+  ErrorCode,
+  ErrorCategory,
+  ErrorSeverity
 } from '@/lib/error-handling';
+import { 
+  executeWithRetry, 
+  RetryConfig, 
+  DefaultRetryConfig,
+  CircuitBreakerConfig,
+  DefaultCircuitBreakerConfig,
+  TimeoutAbortController
+} from '@/lib/error-handling/retry';
+import { 
+  executeWithModelFallback, 
+  BatchClaudeFallback, 
+  ModelCapability
+} from '@/lib/error-handling/model-fallback';
 import { monitoring } from '@/lib/monitoring';
 import { v4 as uuidv4 } from 'uuid';
 import { PrismaClient } from '@prisma/client';
-import { summarizeFiling, SummarizationError } from '@/lib/ai/summarize';
+import { summarizeFiling, SummarizationResult, SummarizationError } from '@/lib/ai/summarize';
+import { ClaudeClient } from '@/lib/ai/claude-client';
 
 // Define an interface for the job object structure returned from the database
 interface JobQueueItem {
@@ -21,6 +37,24 @@ interface JobQueueItem {
   payload: any;
   attempts: number;
   [key: string]: any; // For other properties we don't explicitly need to type
+}
+
+// Extend the JobResultData interface to include our AI metrics
+declare module '@/lib/job-queue' {
+  interface JobResultData {
+    duration?: number;
+    modelUsed?: string;
+    inputTokens?: number;
+    outputTokens?: number;
+    cost?: number;
+    attempts?: number;
+    // Error details
+    errorCode?: string;
+    errorCategory?: string;
+    isRetriable?: boolean;
+    lastError?: string;
+    stack?: string;
+  }
 }
 
 // Number of jobs to process in a single run
@@ -32,6 +66,17 @@ const processId = uuidv4();
 
 // Component logger
 const componentLogger = logger.child('job-processor');
+
+// Initialize Claude client for AI processing
+const claudeClient = new ClaudeClient();
+
+// Process-specific circuit breaker configuration
+const jobCircuitBreakerConfig: CircuitBreakerConfig = {
+  ...DefaultCircuitBreakerConfig,
+  failureThreshold: 5, // More tolerant for batch jobs
+  resetTimeoutMs: 60000, // 1 minute reset time
+  halfOpenSuccessThreshold: 2
+};
 
 /**
  * Process a single job with error handling
@@ -58,10 +103,24 @@ const processJob = async (jobId: string) => {
       attempts: job.attempts,
     });
     
-    // Record start time for performance tracking
+    // Start tracking performance
+    monitoring.startTimer(`job.${job.jobType}.process`);
     const startTime = Date.now();
     
+    // Create an abort controller with timeout
+    const abortController = new TimeoutAbortController();
+    // Set different timeouts based on job type
+    if (job.jobType === 'SUMMARIZE_FILING') {
+      // Longer timeout for AI operations
+      abortController.setTimeout(5 * 60 * 1000); // 5 minutes
+    } else {
+      // Standard timeout for other operations
+      abortController.setTimeout(2 * 60 * 1000); // 2 minutes
+    }
+    
     // Simple job type based processing - will be expanded in future tasks
+    let result: SummarizationResult | undefined;
+    
     switch (job.jobType) {
       case 'CHECK_FILINGS':
         // Will implement detailed filing check process in future task
@@ -84,6 +143,67 @@ const processJob = async (jobId: string) => {
         await new Promise(resolve => setTimeout(resolve, 300));
         break;
         
+      case 'SUMMARIZE_FILING':
+        // Process the filing summarization with robust error handling and retries
+        componentLogger.info(`Executing SUMMARIZE_FILING job`, { 
+          jobId, 
+          filingId: job.payload.filingId,
+          summaryId: job.payload.summaryId 
+        });
+        
+        // Configure retry behavior specific to summarization
+        const summaryRetryConfig: RetryConfig = {
+          ...DefaultRetryConfig,
+          maxRetries: 4, // More retries for AI operations
+          initialDelayMs: 2000, // Start with 2 second delay
+          maxDelayMs: 60000, // Max 1 minute delay
+          backoffFactor: 3, // More aggressive backoff for AI rate limits
+          jitterFactor: 0.3,
+          onRetry: (error, attempt, delay) => {
+            componentLogger.warn(`Retry attempt ${attempt} for summarization after ${delay}ms delay`, {
+              error: error.message,
+              attempt,
+              delay,
+              jobId,
+              filingId: job.payload.filingId
+            });
+            monitoring.incrementCounter('jobs.summarize_filing.retry', 1);
+          }
+        };
+        
+        // Process with circuit breaker and retry mechanisms
+        result = await executeWithRetry(
+          async () => {
+            // Use model fallback for Claude API
+            return await summarizeFiling({
+              filingId: job.payload.filingId,
+              summaryId: job.payload.summaryId,
+              requestId: jobId,
+              claudeClient,
+              claudeOptions: {
+                requestType: 'batch', // Use batch configuration
+                requiredCapabilities: [ModelCapability.SUMMARIZATION],
+                abortSignal: abortController.signal,
+                retryConfig: summaryRetryConfig
+              }
+            });
+          },
+          'summarize-filing-job', // Service name for circuit breaker
+          summaryRetryConfig,
+          jobCircuitBreakerConfig
+        );
+        
+        // Record success after all retries and fallbacks
+        monitoring.incrementCounter('jobs.summarize_filing.success', 1);
+        componentLogger.info(`Successfully summarized filing`, {
+          jobId,
+          filingId: job.payload.filingId,
+          executionTimeMs: Date.now() - startTime,
+          modelUsed: result?.modelUsed,
+          attempts: result?.attempts || 1,
+        });
+        break;
+        
       // Form-specific filing checks
       case 'CHECK_10K_FILINGS':
       case 'CHECK_10Q_FILINGS':
@@ -102,11 +222,30 @@ const processJob = async (jobId: string) => {
         );
     }
     
-    // Calculate processing duration
-    const duration = Date.now() - startTime;
+    // Clear the timeout
+    abortController.clearTimeout();
     
-    // Mark job as completed
-    await JobQueueService.updateJobStatus(jobId, 'COMPLETED');
+    // Calculate processing duration
+    const duration = monitoring.stopTimer(`job.${job.jobType}.process`) || 
+                    (Date.now() - startTime);
+    
+    // Prepare job result data including any important metrics
+    let jobResultData: JobResultData = {};
+    
+    // Include AI metrics if this was an AI job
+    if (job.jobType === 'SUMMARIZE_FILING' && result) {
+      jobResultData = {
+        duration,
+        modelUsed: result.modelUsed,
+        inputTokens: result.inputTokens,
+        outputTokens: result.outputTokens,
+        cost: result.cost,
+        attempts: result.attempts || 1
+      };
+    }
+    
+    // Mark job as completed with result data
+    await JobQueueService.updateJobStatus(jobId, 'COMPLETED', jobResultData);
     
     // Log successful job completion
     componentLogger.info(`Job ${jobId} completed successfully`, { 
@@ -119,6 +258,16 @@ const processJob = async (jobId: string) => {
     
     return true;
   } catch (error) {
+    // Stop timer if running
+    try {
+      const job = await JobQueueService.getJobById(jobId);
+      if (job) {
+        monitoring.stopTimer(`job.${job.jobType}.process`);
+      }
+    } catch (e) {
+      // Ignore errors in cleanup
+    }
+    
     // Get job details for failure handling
     let job;
     try {
@@ -136,13 +285,52 @@ const processJob = async (jobId: string) => {
       return false;
     }
     
-    // Log the error
+    // Log the error with appropriate severity
     if (error instanceof Error) {
-      componentLogger.error(`Job ${jobId} failed`, error, { 
-        jobId, 
-        jobType: job.jobType,
-        attempts: job.attempts 
-      });
+      // Determine error category and severity
+      let category = ErrorCategory.UNKNOWN_ERROR;
+      let severity = ErrorSeverity.MEDIUM;
+      let isRetriable = false;
+      
+      if (error instanceof ApiError) {
+        category = error.category;
+        severity = error.severity;
+        isRetriable = error.isRetriable;
+        
+        // Track specific API error types
+        monitoring.incrementCounter('jobs.error', 1, {
+          type: error.code,
+          jobType: job.jobType
+        });
+      } else if (error instanceof SummarizationError) {
+        category = ErrorCategory.AI_ERROR;
+        isRetriable = error.isRetriable;
+        
+        // Track summarization-specific errors
+        monitoring.incrementCounter('jobs.summarize_filing.error', 1, {
+          reason: error.reason || 'unknown'
+        });
+      }
+      
+      // Log based on severity
+      if (severity === ErrorSeverity.CRITICAL || severity === ErrorSeverity.HIGH) {
+        componentLogger.error(`Job ${jobId} failed with ${severity} severity`, error, { 
+          jobId, 
+          jobType: job.jobType,
+          attempts: job.attempts,
+          category,
+          isRetriable
+        });
+      } else {
+        componentLogger.warn(`Job ${jobId} failed with ${severity} severity`, { 
+          error: error.message,
+          jobId, 
+          jobType: job.jobType,
+          attempts: job.attempts,
+          category,
+          isRetriable
+        });
+      }
       
       // Update job status based on attempts
       try {
@@ -153,6 +341,13 @@ const processJob = async (jobId: string) => {
         // Add stack trace if available
         if (error.stack) {
           jobResultData.stack = error.stack;
+        }
+        
+        // Add API error details if available
+        if (error instanceof ApiError) {
+          jobResultData.errorCode = error.code;
+          jobResultData.errorCategory = error.category;
+          jobResultData.isRetriable = error.isRetriable;
         }
         
         // Check if we've exceeded max attempts
@@ -173,6 +368,30 @@ const processJob = async (jobId: string) => {
           
           // Track DLQ metric
           monitoring.incrementCounter('jobs.dead_letter', 1, { jobType: job.jobType });
+        } else if (job.jobType === 'SUMMARIZE_FILING' && error instanceof ApiError && error.isRetriable) {
+          // For retriable errors with AI summarization, mark for retry after a delay
+          // This is especially important for rate limit errors
+          let retryAfterMs = error.retryAfter || 30000; // Default 30s delay if not specified
+          
+          componentLogger.info(`Scheduling retry for job ${jobId} after ${retryAfterMs}ms delay`, {
+            jobId,
+            jobType: job.jobType,
+            errorCode: error.code
+          });
+          
+          // Mark for retry with delay
+          await JobQueueService.markForRetry(
+            jobId, 
+            new Date(Date.now() + retryAfterMs),
+            jobResultData
+          );
+          
+          monitoring.incrementCounter('jobs.scheduled_retry', 1, { 
+            jobType: job.jobType,
+            errorCode: error instanceof ApiError ? error.code : 'UNKNOWN'
+          });
+          
+          return false;
         }
         
         // Update job status to FAILED

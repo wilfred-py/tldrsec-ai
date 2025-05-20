@@ -38,6 +38,7 @@ class Monitoring {
   private prisma: PrismaClient;
   private maxMetricValues: number = 1000; // Keep only the last 1000 values per metric
   private componentLogger = logger.child('monitoring');
+  private timers: Map<string, number> = new Map(); // Store operation start times
 
   constructor() {
     this.prisma = new PrismaClient();
@@ -101,6 +102,40 @@ class Monitoring {
       ...tags,
       value
     });
+  }
+
+  /**
+   * Start a timer for measuring operation duration
+   * 
+   * @param operationName - Unique identifier for the operation being timed
+   * @returns The operation name for chaining
+   */
+  startTimer(operationName: string): string {
+    this.timers.set(operationName, Date.now());
+    return operationName;
+  }
+
+  /**
+   * Stop a timer and record the duration
+   * 
+   * @param operationName - The name of the timer to stop (same as used in startTimer)
+   * @param tags - Optional tags to associate with the timing data
+   * @returns The duration in milliseconds, or undefined if timer wasn't found
+   */
+  stopTimer(operationName: string, tags: Record<string, string> = {}): number | undefined {
+    const startTime = this.timers.get(operationName);
+    if (startTime === undefined) {
+      this.componentLogger.warn(`Attempted to stop non-existent timer: ${operationName}`);
+      return undefined;
+    }
+
+    const duration = Date.now() - startTime;
+    this.timers.delete(operationName);
+    
+    // Record the timing data
+    this.recordTiming(operationName, duration, tags);
+    
+    return duration;
   }
 
   /**
