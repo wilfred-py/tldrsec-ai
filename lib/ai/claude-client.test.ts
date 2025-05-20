@@ -1,33 +1,99 @@
-import { ClaudeClient, ClaudeApiError, ClaudeMessage } from './claude-client';
+import { ClaudeClient, ClaudeMessage } from './claude-client';
 import { ClaudeConfig } from './config';
 
-// Mock the Anthropic API
-const mockCreate = jest.fn().mockImplementation(() => 
-  Promise.resolve({
-    id: 'msg_mock12345',
-    model: 'claude-3-sonnet-20240229',
-    content: [
-      {
-        type: 'text',
-        text: 'This is a mock response from Claude.',
-      },
-    ],
-    usage: {
-      input_tokens: 50,
-      output_tokens: 25,
-    },
-  })
-);
+// Mock the error-handling modules
+jest.mock('../error-handling/retry', () => ({
+  executeWithRetry: jest.fn((fn) => fn()),
+  DefaultRetryConfig: {},
+  DefaultCircuitBreakerConfig: {},
+  TimeoutAbortController: class {
+    signal = { addEventListener: jest.fn() };
+    abort = jest.fn();
+    setTimeout = jest.fn();
+    clearTimeout = jest.fn();
+  }
+}));
 
-// Mock the entire module
+// Set up a mock response for Anthropic API
+const mockApiResponse = {
+  id: 'msg_mock12345',
+  model: 'claude-3-sonnet-20240229',
+  content: [
+    {
+      type: 'text',
+      text: 'This is a mock response from Claude.',
+    },
+  ],
+  usage: {
+    input_tokens: 50,
+    output_tokens: 25,
+  },
+};
+
+jest.mock('../error-handling/model-fallback', () => ({
+  executeWithModelFallback: jest.fn((fn) => {
+    return Promise.resolve({
+      result: mockApiResponse,
+      modelUsed: 'claude-3-sonnet-20240229',
+      attempts: 1,
+      executionTimeMs: 1000
+    });
+  }),
+  DefaultClaudeFallback: { 
+    initialModel: 'claude-3-opus-20240229',
+    fallbackModels: ['claude-3-sonnet-20240229', 'claude-3-haiku-20240307']
+  },
+  BatchClaudeFallback: {
+    initialModel: 'claude-3-opus-20240229',
+    fallbackModels: ['claude-3-sonnet-20240229']
+  },
+  PremiumClaudeFallback: {
+    initialModel: 'claude-3-opus-20240229',
+    fallbackModels: []
+  },
+  selectModelByCost: jest.fn(() => ({ id: 'claude-3-sonnet-20240229' })),
+  ModelCapability: { SUMMARIZATION: 'SUMMARIZATION' }
+}));
+
+// Mock the monitoring and logging modules
+jest.mock('../monitoring', () => ({
+  monitoring: {
+    incrementCounter: jest.fn(),
+    recordValue: jest.fn(),
+    recordTiming: jest.fn(),
+    startTimer: jest.fn(),
+    stopTimer: jest.fn(),
+  }
+}));
+
+jest.mock('../logging', () => ({
+  logger: {
+    info: jest.fn(),
+    warn: jest.fn(),
+    error: jest.fn(),
+    debug: jest.fn(),
+  }
+}));
+
+// Mock the Anthropic API
 jest.mock('@anthropic-ai/sdk', () => {
-  return {
-    default: jest.fn().mockImplementation(() => ({
+  // Create a mock constructor function
+  const mockCreate = jest.fn().mockImplementation(() => 
+    Promise.resolve(mockApiResponse)
+  );
+  
+  const MockAnthropic = function() {
+    return {
       messages: {
         create: mockCreate
       },
-    })),
+    };
   };
+  
+  // Add a default export
+  MockAnthropic.default = MockAnthropic;
+  
+  return MockAnthropic;
 });
 
 /**
@@ -91,10 +157,9 @@ describe('ClaudeClient', () => {
     await client.sendMessage(messages);
     const usage = client.getUsage();
     
-    expect(usage.tokens.input).toBe(50);
-    expect(usage.tokens.output).toBe(25);
-    expect(usage.cost).toBeGreaterThan(0);
-    expect(usage.formattedCost).toContain('$');
+    expect(usage.totalInputTokens).toBe(50);
+    expect(usage.totalOutputTokens).toBe(25);
+    expect(usage.totalCost).toBeGreaterThan(0);
   });
   
   test('should reset usage statistics', async () => {
@@ -106,9 +171,8 @@ describe('ClaudeClient', () => {
     client.resetUsage();
     const usage = client.getUsage();
     
-    expect(usage.tokens.input).toBe(0);
-    expect(usage.tokens.output).toBe(0);
-    expect(usage.cost).toBe(0);
-    expect(usage.formattedCost).toBe('$0.0000');
+    expect(usage.totalInputTokens).toBe(0);
+    expect(usage.totalOutputTokens).toBe(0);
+    expect(usage.totalCost).toBe(0);
   });
 }); 

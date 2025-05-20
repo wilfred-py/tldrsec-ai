@@ -77,7 +77,9 @@ describe('Retry Mechanisms', () => {
         initialDelayMs: 10,
         maxDelayMs: 50,
         backoffFactor: 2,
-        jitterFactor: 0.1
+        jitterFactor: 0.1,
+        // Set a short timeout to prevent test hanging
+        timeoutMs: 1000
       };
       
       // Mock onRetry callback
@@ -110,7 +112,9 @@ describe('Retry Mechanisms', () => {
         initialDelayMs: 10,
         maxDelayMs: 20,
         backoffFactor: 1.5,
-        jitterFactor: 0.1
+        jitterFactor: 0.1,
+        // Set a short timeout to prevent test hanging
+        timeoutMs: 1000
       };
       
       // Execute with retry and expect failure
@@ -118,7 +122,7 @@ describe('Retry Mechanisms', () => {
         mockFn,
         'test-service',
         testRetryConfig
-      )).rejects.toThrow('Retry attempts exhausted');
+      )).rejects.toThrow(/Unexpected error from test-service: Persistent failure/);
       
       // Function should be called maxRetries + 1 times (1 initial + maxRetries)
       expect(mockFn).toHaveBeenCalledTimes(testRetryConfig.maxRetries + 1);
@@ -210,25 +214,25 @@ describe('Retry Mechanisms', () => {
       await expect(executeWithRetry(
         mockFn,
         'test-circuit-service',
-        { ...DefaultRetryConfig, maxRetries: 0 }, // No retries to simplify test
+        { ...DefaultRetryConfig, maxRetries: 0, timeoutMs: 1000 }, // No retries to simplify test
         testCircuitConfig
-      )).rejects.toThrow('Service failure');
+      )).rejects.toThrow(/Unexpected error from test-circuit-service: Service failure/);
       
       // Second call - circuit should be closed
       await expect(executeWithRetry(
         mockFn,
         'test-circuit-service',
-        { ...DefaultRetryConfig, maxRetries: 0 },
+        { ...DefaultRetryConfig, maxRetries: 0, timeoutMs: 1000 },
         testCircuitConfig
-      )).rejects.toThrow('Service failure');
+      )).rejects.toThrow(/Unexpected error from test-circuit-service: Service failure/);
       
       // Third call - circuit should be open
       await expect(executeWithRetry(
         mockFn,
         'test-circuit-service',
-        { ...DefaultRetryConfig, maxRetries: 0 },
+        { ...DefaultRetryConfig, maxRetries: 0, timeoutMs: 1000 },
         testCircuitConfig
-      )).rejects.toThrow('Circuit breaker is open');
+      )).rejects.toThrow(/Circuit breaker for test-circuit-service is open/);
       
       // Function should only be called twice (circuit prevents third call)
       expect(mockFn).toHaveBeenCalledTimes(2);

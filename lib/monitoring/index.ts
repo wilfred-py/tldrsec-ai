@@ -1,5 +1,5 @@
 import { PrismaClient } from '@prisma/client';
-import { logger } from '@/lib/logging';
+import { logger } from '../logging';
 
 // Define metrics types
 export interface MetricValue {

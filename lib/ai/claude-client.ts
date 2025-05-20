@@ -1,5 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk';
-import type { MessageCreateParams } from '@anthropic-ai/sdk/resources/messages';
+import type { MessageParam } from '@anthropic-ai/sdk/resources/messages';
 import { ClaudeConfig } from './config';
 import Bottleneck from 'bottleneck';
 import { v4 as uuidv4 } from 'uuid';
@@ -13,7 +13,7 @@ import {
   createAiModelError,
   createAiParsingError,
   createTimeoutError
-} from '@/lib/error-handling';
+} from '../error-handling';
 import { 
   executeWithRetry, 
   RetryConfig, 
@@ -21,7 +21,7 @@ import {
   CircuitBreakerConfig,
   DefaultCircuitBreakerConfig, 
   TimeoutAbortController
-} from '@/lib/error-handling/retry';
+} from '../error-handling/retry';
 import { 
   executeWithModelFallback, 
   FallbackConfig, 
@@ -30,9 +30,9 @@ import {
   PremiumClaudeFallback,
   ModelCapability,
   selectModelByCost
-} from '@/lib/error-handling/model-fallback';
-import { logger } from '@/lib/logging';
-import { monitoring } from '@/lib/monitoring';
+} from '../error-handling/model-fallback';
+import { logger } from '../logging';
+import { monitoring } from '../monitoring';
 
 /**
  * Type definitions for Claude API requests and responses
@@ -75,6 +75,14 @@ export type ClaudeResponse = {
     fallbackUsed: boolean;
     originalModel?: string;
   };
+};
+
+// Type for executeWithModelFallback return value
+type ModelFallbackResult<T> = {
+  result: T;
+  modelUsed: string;
+  attempts: number;
+  executionTimeMs: number;
 };
 
 /**
@@ -126,7 +134,7 @@ export class ClaudeClient {
   async completeChat(
     params: {
       model: string;
-      messages: Array<{ role: string; content: string | any[] }>;
+      messages: MessageParam[];
       max_tokens?: number;
       temperature?: number;
       system?: string;
@@ -146,7 +154,7 @@ export class ClaudeClient {
     // Use external abort signal if provided
     if (options.abortSignal) {
       options.abortSignal.addEventListener('abort', () => {
-        abortController.abort(options.abortSignal.reason);
+        abortController.abort(options.abortSignal?.reason);
       });
     }
     
@@ -204,7 +212,7 @@ export class ClaudeClient {
         };
         
       // Execute with model fallback capabilities
-      const { result, modelUsed, attempts, executionTimeMs } = await this.limiter.schedule(() => 
+      const result = await this.limiter.schedule<ModelFallbackResult<Anthropic.Messages.Message>>(() => 
         executeWithModelFallback(
           async (modelId) => {
             // Use the retry system with circuit breaker
@@ -214,12 +222,10 @@ export class ClaudeClient {
                 max_tokens: params.max_tokens || ClaudeConfig.maxTokens,
                 temperature: params.temperature ?? ClaudeConfig.temperature,
                 system: params.system || '',
-                messages: params.messages.map(m => ({
-                  role: m.role as 'user' | 'assistant',
-                  content: typeof m.content === 'string' ? m.content : m.content
-                })),
-                // Pass abort signal
-                signal: abortController.signal as any,
+                messages: params.messages,
+              }, {
+                // Pass abort signal as separate request option
+                signal: abortController.signal
               }),
               `${this.serviceName}-${modelId}`,
               retryConfig,
@@ -233,6 +239,9 @@ export class ClaudeClient {
         )
       );
 
+      const { modelUsed, attempts, executionTimeMs } = result;
+      const responseResult = result.result;
+
       // Record timing metrics
       monitoring.stopTimer(`claude.request.${requestType}`);
       monitoring.recordValue('claude.request.duration', Date.now() - startTime, {
@@ -245,8 +254,8 @@ export class ClaudeClient {
       abortController.clearTimeout();
       
       // Update tracking
-      this.totalTokensUsed.input += result.usage?.input_tokens || 0;
-      this.totalTokensUsed.output += result.usage?.output_tokens || 0;
+      this.totalTokensUsed.input += responseResult.usage?.input_tokens || 0;
+      this.totalTokensUsed.output += responseResult.usage?.output_tokens || 0;
 
       // Calculate cost
       const modelInfo = ClaudeConfig.modelInfo[modelUsed as keyof typeof ClaudeConfig.modelInfo] || {
@@ -254,8 +263,8 @@ export class ClaudeClient {
         costPerOutputToken: 0,
       };
       
-      const inputCost = (result.usage?.input_tokens || 0) * modelInfo.costPerInputToken;
-      const outputCost = (result.usage?.output_tokens || 0) * modelInfo.costPerOutputToken;
+      const inputCost = (responseResult.usage?.input_tokens || 0) * modelInfo.costPerInputToken;
+      const outputCost = (responseResult.usage?.output_tokens || 0) * modelInfo.costPerOutputToken;
       this.totalCost += inputCost + outputCost;
       
       // Record cost metrics
@@ -268,16 +277,16 @@ export class ClaudeClient {
         model: modelUsed,
         originalModel: params.model,
         requestId,
-        inputTokens: result.usage?.input_tokens,
-        outputTokens: result.usage?.output_tokens,
+        inputTokens: responseResult.usage?.input_tokens,
+        outputTokens: responseResult.usage?.output_tokens,
         fallbackUsed: modelUsed !== params.model,
         duration: executionTimeMs
       });
 
       // Add metadata about model fallback
-      result.model = modelUsed;
+      responseResult.model = modelUsed;
       return {
-        ...result,
+        ...responseResult,
         executionMetadata: {
           attempts,
           executionTimeMs,
@@ -345,7 +354,7 @@ export class ClaudeClient {
     // Use external abort signal if provided
     if (options.abortSignal) {
       options.abortSignal.addEventListener('abort', () => {
-        abortController.abort(options.abortSignal.reason);
+        abortController.abort(options.abortSignal?.reason);
       });
     }
     
@@ -437,7 +446,7 @@ export class ClaudeClient {
         };
         
       // Execute with model fallback capabilities
-      const { result, modelUsed, attempts, executionTimeMs } = await this.limiter.schedule(() => 
+      const result = await this.limiter.schedule<ModelFallbackResult<Anthropic.Messages.Message>>(() => 
         executeWithModelFallback(
           async (modelId) => {
             // Use the retry system with circuit breaker
@@ -451,8 +460,9 @@ export class ClaudeClient {
                   role: m.role,
                   content: m.content,
                 })),
-                // Pass abort signal
-                signal: abortController.signal as any,
+              }, {
+                // Pass abort signal as separate request option
+                signal: abortController.signal
               }),
               `${this.serviceName}-${modelId}`,
               retryConfig,
@@ -466,13 +476,16 @@ export class ClaudeClient {
         )
       );
 
+      const { modelUsed, attempts, executionTimeMs } = result;
+      const responseResult = result.result;
+
       // Extract content from the response
-      const content = this.extractTextContent(result.content);
+      const content = this.extractTextContent(responseResult.content);
 
       // Calculate token usage and cost
       const usage = {
-        inputTokens: result.usage?.input_tokens || 0,
-        outputTokens: result.usage?.output_tokens || 0,
+        inputTokens: responseResult.usage?.input_tokens || 0,
+        outputTokens: responseResult.usage?.output_tokens || 0,
       };
 
       const modelInfo = ClaudeConfig.modelInfo[modelUsed as keyof typeof ClaudeConfig.modelInfo] || {
@@ -522,7 +535,7 @@ export class ClaudeClient {
       });
 
       return {
-        id: result.id,
+        id: responseResult.id,
         content,
         model: modelUsed,
         usage,
@@ -567,7 +580,11 @@ export class ClaudeClient {
    * @param contentBlocks Array of content blocks from Claude
    * @returns Combined text content
    */
-  private extractTextContent(contentBlocks: any[]): string {
+  private extractTextContent(contentBlocks: Anthropic.ContentBlock[]): string {
+    if (!Array.isArray(contentBlocks)) {
+      return typeof contentBlocks === 'string' ? contentBlocks : '';
+    }
+    
     return contentBlocks
       .filter(block => block.type === 'text')
       .map(block => {

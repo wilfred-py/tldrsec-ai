@@ -7,6 +7,11 @@
  * Get environment variable with fallback
  */
 function getEnv(key: string, defaultValue?: string): string {
+  // Use test value when in test environment
+  if (process.env.NODE_ENV === 'test' && key === 'ANTHROPIC_API_KEY') {
+    return 'test-api-key-for-testing-only';
+  }
+  
   const value = process.env[key];
   if (value === undefined) {
     if (defaultValue === undefined) {

@@ -31,6 +31,7 @@
     "test:extract-xbrl": "node scripts/parsers/extract-xbrl.js"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.51.0",
     "@clerk/nextjs": "^6.19.3",
     "@hookform/resolvers": "^5.0.1",
     "@prisma/client": "^6.7.0",

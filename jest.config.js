@@ -23,5 +23,6 @@ module.exports = {
   testMatch: ['**/__tests__/**/*.ts?(x)', '**/?(*.)+(spec|test).ts?(x)'],
   transformIgnorePatterns: [
     'node_modules/(?!(@)/)' // Don't transform node_modules except for packages starting with @
-  ]
+  ],
+  testTimeout: 10000
 }; 

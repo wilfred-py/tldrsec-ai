@@ -1,6 +1,6 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import { NextRequest, NextResponse } from 'next/server';
-import { logger } from '@/lib/logging';
+import { logger } from '../logging';
 
 // Error categories for better error handling
 export enum ErrorCategory {
@@ -45,6 +45,7 @@ export enum ErrorCode {
   
   // Retry-specific
   RETRY_EXHAUSTED = 'RETRY_EXHAUSTED',
+  CIRCUIT_OPEN = 'CIRCUIT_OPEN',
 }
 
 // Error severity for prioritizing alerting
@@ -76,6 +77,7 @@ const errorStatusCodes: Record<ErrorCode, number> = {
   [ErrorCode.NETWORK_UNAVAILABLE]: 503,
   [ErrorCode.CONNECTION_RESET]: 503,
   [ErrorCode.RETRY_EXHAUSTED]: 429,
+  [ErrorCode.CIRCUIT_OPEN]: 503,
 };
 
 // Map error codes to categories for better grouping
@@ -99,6 +101,7 @@ const errorCategories: Record<ErrorCode, ErrorCategory> = {
   [ErrorCode.NETWORK_UNAVAILABLE]: ErrorCategory.NETWORK_ERROR,
   [ErrorCode.CONNECTION_RESET]: ErrorCategory.NETWORK_ERROR,
   [ErrorCode.RETRY_EXHAUSTED]: ErrorCategory.SERVER_ERROR,
+  [ErrorCode.CIRCUIT_OPEN]: ErrorCategory.SERVER_ERROR,
 };
 
 // Map error codes to severity levels
@@ -122,6 +125,7 @@ const errorSeverityLevels: Record<ErrorCode, ErrorSeverity> = {
   [ErrorCode.NETWORK_UNAVAILABLE]: ErrorSeverity.HIGH,
   [ErrorCode.CONNECTION_RESET]: ErrorSeverity.MEDIUM,
   [ErrorCode.RETRY_EXHAUSTED]: ErrorSeverity.HIGH,
+  [ErrorCode.CIRCUIT_OPEN]: ErrorSeverity.HIGH,
 };
 
 // Map to determine if an error is transient/retriable
@@ -145,6 +149,7 @@ export const isRetriableError: Record<ErrorCode, boolean> = {
   [ErrorCode.NETWORK_UNAVAILABLE]: true,
   [ErrorCode.CONNECTION_RESET]: true,
   [ErrorCode.RETRY_EXHAUSTED]: false,
+  [ErrorCode.CIRCUIT_OPEN]: true,
 };
 
 // API error class
@@ -248,9 +253,12 @@ export const createNetworkUnavailableError = (message: string, details?: any, re
 export const createConnectionResetError = (message: string, details?: any, requestId?: string) => 
   new ApiError(ErrorCode.CONNECTION_RESET, message, details, true, requestId);
 
-// Retry exhausted error
+// Retry-specific errors
 export const createRetryExhaustedError = (message: string, details?: any, requestId?: string) => 
   new ApiError(ErrorCode.RETRY_EXHAUSTED, message, details, true, requestId);
+
+export const createCircuitOpenError = (message: string, details?: any, requestId?: string) => 
+  new ApiError(ErrorCode.CIRCUIT_OPEN, message, details, true, requestId);
 
 /**
  * Format error response for API
