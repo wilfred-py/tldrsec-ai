@@ -241,6 +241,62 @@ export class JobQueueService {
   }
 
   /**
+   * Mark a job for retry at a specific time
+   * 
+   * @param id - Job ID to retry
+   * @param retryAt - Date/time when the job should be retried
+   * @param resultData - Optional data to store with the job
+   * @returns The updated job record
+   */
+  static async markForRetry(id: string, retryAt: Date, resultData: JobResultData = {}) {
+    try {
+      const job = await prisma.jobQueue.findUnique({
+        where: { id }
+      });
+
+      if (!job) {
+        throw new Error(`Job with ID ${id} not found`);
+      }
+      
+      const now = new Date();
+      const updateData: any = {
+        status: 'RETRYING',
+        updatedAt: now,
+        scheduledFor: retryAt
+      };
+      
+      // Add error information if provided
+      if (resultData.lastError) {
+        updateData.lastError = resultData.lastError;
+      }
+      
+      if (resultData.stack) {
+        updateData.lastErrorStack = resultData.stack;
+      }
+      
+      // Store additional result data in the job record
+      if (Object.keys(resultData).length > 0) {
+        updateData.resultData = {
+          ...job.resultData,
+          lastRetry: {
+            attemptNumber: job.attempts,
+            error: resultData.lastError,
+            timeStamp: now.toISOString()
+          }
+        };
+      }
+      
+      return await prisma.jobQueue.update({
+        where: { id },
+        data: updateData
+      });
+    } catch (error) {
+      console.error(`Error marking job ${id} for retry:`, error);
+      throw error;
+    }
+  }
+
+  /**
    * Clean up old completed jobs
    */
   static async cleanupOldJobs(olderThan: Date) {
