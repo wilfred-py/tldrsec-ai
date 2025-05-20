@@ -252,7 +252,7 @@ export const GET = appRouterAsyncHandler(async (request: Request) => {
     
     // Process each job
     const results = await Promise.allSettled(
-      jobs.map(async (job) => {
+      jobs.map(async (job: JobQueueItem) => {
         const jobStartTime = Date.now();
         
         // Mark job as processing

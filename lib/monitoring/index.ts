@@ -86,10 +86,43 @@ class Monitoring {
   }
 
   /**
-   * Record a timing metric in milliseconds
+   * Record a numeric value for a specific metric
+   * 
+   * @param metric - The name of the metric to record
+   * @param value - The numeric value to record
+   * @param tags - Optional tags for the metric
    */
-  recordTiming(name: string, timeMs: number, tags?: Record<string, string>): void {
-    this.recordMetric(name, timeMs, tags, 'ms', 'Response time in milliseconds');
+  recordValue(metric: string, value: number, tags: Record<string, string> = {}): void {
+    this.incrementCounter(`${metric}.count`, 1, tags);
+    
+    // In a real monitoring system, this would use a different type of metric
+    // like a gauge or histogram. For now, we're logging it for development.
+    console.log(`[Monitoring] Value: ${metric} = ${value}`, {
+      ...tags,
+      value
+    });
+  }
+
+  /**
+   * Record timing information for performance monitoring
+   * 
+   * @param metric - The name of the timing metric
+   * @param durationMs - Duration in milliseconds
+   * @param tags - Optional tags for the metric
+   */
+  recordTiming(metric: string, durationMs: number, tags: Record<string, string | boolean> = {}): void {
+    // Convert boolean values to strings for consistent handling
+    const normalizedTags: Record<string, string> = {};
+    for (const [key, value] of Object.entries(tags)) {
+      normalizedTags[key] = String(value);
+    }
+    
+    this.recordValue(`${metric}.duration_ms`, durationMs, normalizedTags);
+    
+    // Log times above certain thresholds for easy identification of slow operations
+    if (durationMs > 5000) {
+      console.warn(`[Monitoring] Slow operation: ${metric} took ${durationMs}ms`, normalizedTags);
+    }
   }
 
   /**
@@ -249,16 +282,13 @@ class Monitoring {
   /**
    * Track job operations
    */
-  trackJobOperation(jobType: string, status: string, duration?: number): void {
-    this.incrementCounter('jobs.processed', 1, { 
-      jobType, 
-      status 
-    });
+  trackJobOperation(jobType: string, operation: string, durationMs?: number): void {
+    this.incrementCounter(`jobs.${operation}`, 1, { jobType });
     
-    if (duration !== undefined) {
-      this.recordTiming('jobs.duration', duration, { 
+    if (durationMs !== undefined) {
+      this.recordTiming('jobs.duration', durationMs, { 
         jobType, 
-        status 
+        operation 
       });
     }
   }
