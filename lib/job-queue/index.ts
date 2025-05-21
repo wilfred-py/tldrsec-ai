@@ -13,7 +13,9 @@ export type JobType =
   | 'CHECK_10Q_FILINGS'
   | 'CHECK_8K_FILINGS'
   | 'CHECK_FORM4_FILINGS'
-  | 'SUMMARIZE_FILING';
+  | 'SUMMARIZE_FILING'
+  | 'SEND_FILING_NOTIFICATION'
+  | 'COMPILE_DAILY_DIGEST';
 
 // Job status
 export type JobStatus = 
@@ -38,6 +40,24 @@ export interface JobResultData {
   result?: any;
   stack?: string;
   error?: string;
+}
+
+/**
+ * Process a job based on its type
+ */
+export async function processJobCallback(job: any, digestService?: any) {
+  switch (job.jobType) {
+    case 'COMPILE_DAILY_DIGEST':
+      if (!digestService) {
+        throw new Error('Digest service is required for COMPILE_DAILY_DIGEST job');
+      }
+      await digestService.compileAndSendDigests();
+      break;
+    // Other job types handled elsewhere
+    default:
+      // This function can be extended to handle other job types
+      break;
+  }
 }
 
 /**
