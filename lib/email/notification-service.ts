@@ -13,6 +13,11 @@ import { EmailType, EmailMessage } from './types';
 import { logger } from '../logging';
 import { monitoring } from '../monitoring';
 import { JobQueueService, JobType } from '../job-queue';
+import { 
+  getEmailTemplate, 
+  FilingTemplateData, 
+  BaseTemplateData 
+} from './templates';
 
 // Initialize Prisma client
 const prisma = new PrismaClient();
@@ -41,6 +46,7 @@ export interface FilingNotificationPayload {
   description?: string;
   summaryId?: string;
   summaryText?: string;
+  summaryData?: any; // JSON data from the summary
   priorityLevel?: 'high' | 'medium' | 'low';
   url?: string;
 }
@@ -381,6 +387,8 @@ export class NotificationService {
     try {
       // Prepare email content
       const subject = this.getNotificationSubject(payload);
+      
+      // Get email content
       const { html, text } = this.generateNotificationContent(payload);
       
       // Prepare email message
@@ -393,7 +401,16 @@ export class NotificationService {
           'type:immediate',
           `ticker:${payload.ticker}`,
           `form:${payload.formType}`
-        ]
+        ],
+        metadata: {
+          userId: recipient.userId,
+          type: 'immediate',
+          summaryCount: 1,
+          tickerCount: 1,
+          tickerId: payload.ticker,
+          filingId: payload.filingId,
+          formType: payload.formType
+        }
       };
       
       // Send email
@@ -449,6 +466,57 @@ export class NotificationService {
    * @returns HTML and text content
    */
   private generateNotificationContent(
+    payload: FilingNotificationPayload
+  ): { html: string, text: string } {
+    try {
+      // Log that we're using the template system
+      logger.debug('Generating email content using template system', {
+        ticker: payload.ticker,
+        formType: payload.formType,
+        hasDetails: !!payload.summaryId
+      });
+      
+      // Get the site URL from env or use default
+      const baseUrl = process.env.SITE_URL || 'https://tldrsec.com';
+      
+      // Prepare template data for the filing
+      const filingData: FilingTemplateData = {
+        symbol: payload.ticker,
+        companyName: payload.companyName,
+        filingType: payload.formType,
+        filingDate: payload.filingDate,
+        filingUrl: payload.url || `https://www.sec.gov/edgar/search/#/entityName=${encodeURIComponent(payload.companyName)}`,
+        summaryId: payload.summaryId || payload.filingId,
+        summaryUrl: `${baseUrl}/summary/${payload.summaryId || payload.filingId}`,
+        summaryText: payload.summaryText,
+        summaryData: payload.summaryData || null
+      };
+      
+      // Prepare base template data
+      const baseData: BaseTemplateData = {
+        recipientEmail: 'user@example.com', // Will be replaced in sendSingleImmediateNotification
+        preferencesUrl: `${baseUrl}/settings`,
+        unsubscribeUrl: `${baseUrl}/unsubscribe`,
+      };
+      
+      // Generate email content using the template system
+      return getEmailTemplate(EmailType.IMMEDIATE, {
+        ...baseData,
+        filing: filingData
+      });
+    } catch (error) {
+      logger.error('Error generating notification content using templates', error);
+      
+      // Fallback to simple content if template generation fails
+      return this.generateSimpleNotificationContent(payload);
+    }
+  }
+  
+  /**
+   * Generate simple notification content as fallback
+   * @param payload Filing notification payload
+   */
+  private generateSimpleNotificationContent(
     payload: FilingNotificationPayload
   ): { html: string, text: string } {
     // Generate text version

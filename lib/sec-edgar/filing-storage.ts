@@ -2,6 +2,8 @@ import { PrismaClient } from '@prisma/client';
 import type { Ticker, Summary } from '../generated/prisma';
 import { ParsedFiling, FilingType, SECEdgarError, SECErrorCode } from './types';
 import { TickerResolver } from './ticker-service';
+// Import notification functions
+import { notifyNewFiling, notifyFilingUpdate, notifySummaryReady } from '../email/notification-integration';
 
 /**
  * Options for filing operations

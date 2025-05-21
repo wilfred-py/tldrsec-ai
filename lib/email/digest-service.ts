@@ -10,9 +10,11 @@ import { PrismaClient } from '@prisma/client';
 import { logger } from '../logging';
 import { monitoring } from '../monitoring';
 import { ResendClient, sendEmail } from './index';
-import { EmailMessage } from './types';
+import { EmailMessage, EmailType } from './types';
 import { JobQueueService, JobType } from '../job-queue';
 import { NotificationPreference, UserNotificationPreferences } from './notification-service';
+import { getEmailTemplate, BaseTemplateData, FilingTemplateData } from './templates';
+import { v4 as uuidv4 } from 'uuid';
 
 // Initialize Prisma client
 const prisma = new PrismaClient();
@@ -328,16 +330,28 @@ export class DigestService {
    */
   private async sendDigestEmail(digestData: UserDigestData): Promise<void> {
     try {
+      // Start timing the email sending process
+      const timer = monitoring.startTimer('digest.email.sendTime');
+      
       // Generate email content from digest data
       const emailContent = this.formatDigestEmail(digestData);
       
-      // Create email message
+      // Create email message with tags for tracking
       const message: EmailMessage = {
-        to: digestData.email,
+        to: {
+          email: digestData.email,
+          name: digestData.name || undefined
+        },
         from: 'digest@tldrsec.com',
-        subject: 'Your Daily SEC Filings Digest',
+        subject: `Your Daily SEC Filings Digest - ${new Date().toLocaleDateString()}`,
         html: emailContent.html,
         text: emailContent.text,
+        tags: [
+          'type:digest',
+          'frequency:daily',
+          `summaries:${this.countSummaries(digestData)}`,
+          `tickers:${digestData.tickerGroups.length}`
+        ],
         metadata: {
           userId: digestData.userId,
           type: 'daily-digest',
@@ -347,14 +361,44 @@ export class DigestService {
       };
       
       // Send the email
-      await sendEmail(message);
+      const result = await sendEmail(message);
+      
+      // Stop timer
+      monitoring.stopTimer(timer);
+      
+      if (!result.success) {
+        throw new Error(`Failed to send digest email: ${result.error?.message}`);
+      }
       
       logger.info(`Digest email sent to ${digestData.email}`, {
         userId: digestData.userId,
-        summaryCount: this.countSummaries(digestData)
+        summaryCount: this.countSummaries(digestData),
+        emailId: result.id
       });
       
+      // Record metrics
       monitoring.incrementCounter('digest.email.sent', 1);
+      monitoring.recordValue('digest.email.summaryCount', this.countSummaries(digestData));
+      monitoring.recordValue('digest.email.tickerCount', digestData.tickerGroups.length);
+      
+      // Record in database that we sent this digest notification
+      try {
+        await prisma.sentDigest.create({
+          data: {
+            id: uuidv4(),
+            userId: digestData.userId,
+            emailId: result.id,
+            summaryCount: this.countSummaries(digestData),
+            tickerCount: digestData.tickerGroups.length,
+            sentAt: new Date()
+          }
+        });
+      } catch (dbError) {
+        // Log but don't fail if we can't record the sent digest
+        logger.error('Error recording sent digest in database', dbError, {
+          userId: digestData.userId
+        });
+      }
     } catch (error) {
       logger.error(`Error sending digest email to ${digestData.email}`, error);
       monitoring.incrementCounter('digest.email.error', 1);
@@ -403,6 +447,53 @@ export class DigestService {
    * @param digestData User digest data
    */
   private formatDigestEmail(digestData: UserDigestData): { html: string, text: string } {
+    try {
+      // Get base URL for links
+      const baseUrl = process.env.SITE_URL || 'https://tldrsec.com';
+      
+      // Prepare base template data
+      const baseTemplateData: BaseTemplateData = {
+        recipientName: digestData.name,
+        recipientEmail: digestData.email,
+        preferencesUrl: `${baseUrl}/settings`,
+        unsubscribeUrl: `${baseUrl}/unsubscribe?email=${encodeURIComponent(digestData.email)}&type=digest`
+      };
+      
+      // Convert our digest format to template format
+      const templateData = {
+        ...baseTemplateData,
+        tickerGroups: digestData.tickerGroups.map(group => ({
+          symbol: group.symbol,
+          companyName: group.companyName,
+          filings: group.summaries.map(summary => ({
+            symbol: group.symbol,
+            companyName: group.companyName,
+            filingType: summary.filingType,
+            filingDate: summary.filingDate,
+            filingUrl: summary.filingUrl,
+            summaryUrl: `${baseUrl}/summary/${summary.id}`,
+            summaryId: summary.id,
+            summaryText: summary.summaryText,
+            summaryData: summary.summaryJSON
+          } as FilingTemplateData))
+        }))
+      };
+      
+      // Use template system to generate email
+      return getEmailTemplate(EmailType.DIGEST, templateData);
+    } catch (error) {
+      logger.error('Error using template system for digest email, falling back to default', error);
+      
+      // If template generation fails, fall back to the original implementation
+      return this.formatDigestEmailFallback(digestData);
+    }
+  }
+  
+  /**
+   * Fallback for digest email formatting if template system fails
+   * @param digestData User digest data
+   */
+  private formatDigestEmailFallback(digestData: UserDigestData): { html: string, text: string } {
     // Count total summaries for display
     const totalSummaries = this.countSummaries(digestData);
     
