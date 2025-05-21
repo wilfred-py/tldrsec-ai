@@ -308,64 +308,121 @@ export class NotificationService {
     payload: FilingNotificationPayload
   ): Promise<UserNotificationPreferences[]> {
     try {
+      // Uppercase the ticker and form type for consistent comparison
+      const upperTicker = payload.ticker.toUpperCase();
+      const upperFormType = payload.formType.toUpperCase();
+      
       // Get users who have immediate notification preference
-      // AND either watch this ticker or don't have any specific ticker preferences
+      // Using new preference structure with JSON preferences field
       const users = await prisma.user.findMany({
         where: {
           emailVerified: true,
-          AND: [
-            { notificationPreference: 'immediate' },
+          OR: [
+            // Users with preferences.notifications.emailFrequency set to immediate
             {
-              OR: [
-                // User is watching this specific ticker
-                {
-                  watchedTickers: {
-                    has: payload.ticker.toUpperCase()
-                  }
-                },
-                // User has no watched tickers (watches all)
-                {
-                  watchedTickers: {
-                    isEmpty: true
-                  }
-                }
-              ]
+              preferences: {
+                path: ['notifications', 'emailFrequency'],
+                equals: NotificationPreference.IMMEDIATE
+              },
             },
-            {
-              OR: [
-                // User is watching this form type
-                {
-                  watchedFormTypes: {
-                    has: payload.formType.toUpperCase()
-                  }
-                },
-                // User has no watched form types (watches all)
-                {
-                  watchedFormTypes: {
-                    isEmpty: true
-                  }
-                }
-              ]
-            }
+            // Legacy support for older preference structure
+            { notificationPreference: 'immediate' }
           ]
         },
         select: {
           id: true,
           email: true,
+          preferences: true,
+          // Backward compatibility
           notificationPreference: true,
           watchedTickers: true,
-          watchedFormTypes: true
+          watchedFormTypes: true,
         }
       });
       
-      // Map to user preferences
-      return users.map((user: any) => ({
-        userId: user.id,
-        email: user.email,
-        emailNotificationPreference: user.notificationPreference as NotificationPreference,
-        watchedTickers: user.watchedTickers as string[],
-        watchedFormTypes: user.watchedFormTypes as string[]
-      }));
+      // Get all tickers for subscribed users upfront
+      const userTickers: Record<string, { symbol: string }[]> = {};
+      
+      for (const user of users) {
+        // Get tickers for this user
+        const tickers = await prisma.ticker.findMany({
+          where: { userId: user.id },
+          select: { symbol: true }
+        });
+        userTickers[user.id] = tickers;
+      }
+      
+      // Filter users based on their ticker and form type preferences
+      return users
+        .filter((user: any) => {
+          // If user has no preferences, use legacy fields or default to true
+          if (!user.preferences) {
+            // Legacy: If user has specific tickers, check if this ticker is included
+            if (user.watchedTickers && user.watchedTickers.length > 0) {
+              if (!user.watchedTickers.includes(upperTicker)) {
+                return false;
+              }
+            }
+            
+            // Legacy: If user has specific form types, check if this form type is included
+            if (user.watchedFormTypes && user.watchedFormTypes.length > 0) {
+              if (!user.watchedFormTypes.includes(upperFormType)) {
+                return false;
+              }
+            }
+            
+            // If we've made it this far with legacy fields, user should receive notification
+            return true;
+          }
+          
+          // Use new preference structure
+          const prefs = user.preferences as any;
+          
+          // Skip if user doesn't want this form type
+          if (prefs.notifications?.filingTypes) {
+            const filingTypes = prefs.notifications.filingTypes;
+            
+            // Check specific form type preferences
+            if (upperFormType.includes('10-K') && filingTypes.form10K === false) {
+              return false;
+            }
+            if (upperFormType.includes('10-Q') && filingTypes.form10Q === false) {
+              return false;
+            }
+            if (upperFormType.includes('8-K') && filingTypes.form8K === false) {
+              return false;
+            }
+            if (upperFormType.includes('FORM4') && filingTypes.form4 === false) {
+              return false;
+            }
+            if (!upperFormType.match(/10-K|10-Q|8-K|FORM4/) && filingTypes.otherFilings === false) {
+              return false;
+            }
+          }
+          
+          // Use the pre-fetched tickers
+          const tickers = userTickers[user.id] || [];
+          
+          // If user has no tickers, they want all (default)
+          if (tickers.length === 0) {
+            return true;
+          }
+          
+          // Check if user is watching this specific ticker
+          return tickers.some((t: { symbol: string }) => t.symbol.toUpperCase() === upperTicker);
+        })
+        .map((user: any) => {
+          // Convert to UserNotificationPreferences
+          return {
+            userId: user.id,
+            email: user.email,
+            emailNotificationPreference: user.preferences 
+              ? (user.preferences as any).notifications?.emailFrequency || NotificationPreference.IMMEDIATE
+              : (user.notificationPreference as NotificationPreference) || NotificationPreference.IMMEDIATE,
+            watchedTickers: user.watchedTickers || [],
+            watchedFormTypes: user.watchedFormTypes || []
+          };
+        });
     } catch (error) {
       logger.error('Error getting notification recipients', error, {
         filingId: payload.filingId,
