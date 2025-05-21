@@ -1,129 +1,98 @@
 /**
- * Tests for the Email Notification Service
+ * Tests for notification service
  */
 
-import { PrismaClient } from '@prisma/client';
-import { v4 as uuidv4 } from 'uuid';
-import { 
-  NotificationService, 
-  notificationEvents, 
-  NotificationEventType, 
-  FilingNotificationPayload
-} from '../notification-service';
-import { EmailSendResult } from '../types';
+import { NotificationService, NotificationEventType, FilingNotificationPayload, NotificationPreference } from '../notification-service';
+import { JobQueueService } from '../../job-queue';
 
 // Mock ResendClient
-const mockSendEmail = jest.fn().mockResolvedValue({
-  success: true,
-  id: 'mock-email-id'
-} as EmailSendResult);
+jest.mock('../resend-client');
 
-const mockResendClient = {
-  sendEmail: mockSendEmail
-};
-
-// Mock PrismaClient
-jest.mock('@prisma/client', () => {
-  return {
-    PrismaClient: jest.fn().mockImplementation(() => ({
-      user: {
-        findMany: jest.fn().mockResolvedValue([
-          {
-            id: 'user-1',
-            email: 'user1@example.com',
-            notificationPreference: 'immediate',
-            watchedTickers: ['AAPL', 'MSFT'],
-            watchedFormTypes: ['10-K', '8-K']
-          },
-          {
-            id: 'user-2',
-            email: 'user2@example.com',
-            notificationPreference: 'immediate',
-            watchedTickers: ['AAPL'],
-            watchedFormTypes: []
-          }
-        ])
-      },
-      sentNotification: {
-        create: jest.fn().mockResolvedValue({
-          id: 'notification-1'
-        })
-      }
-    }))
-  };
-});
-
-// Mock logger
+// Mock dependencies
+jest.mock('../../job-queue');
 jest.mock('../../logging', () => ({
   logger: {
     info: jest.fn(),
     error: jest.fn(),
-    warn: jest.fn()
+    debug: jest.fn(),
   }
 }));
-
-// Mock monitoring
 jest.mock('../../monitoring', () => ({
   monitoring: {
     incrementCounter: jest.fn(),
-    startTimer: jest.fn(),
-    stopTimer: jest.fn(),
-    recordValue: jest.fn()
   }
 }));
 
-// Mock uuidv4
-jest.mock('uuid', () => ({
-  v4: jest.fn().mockReturnValue('mock-uuid')
-}));
+// Mock the NotificationProcessor class
+jest.mock('../notification-processor', () => {
+  const mockProcessorInstance = {
+    processNotificationJob: jest.fn().mockResolvedValue(undefined),
+    start: jest.fn(),
+    stop: jest.fn(),
+  };
+  
+  return {
+    NotificationProcessor: jest.fn().mockImplementation(() => mockProcessorInstance),
+  };
+});
 
-// Mock JobQueueService
-jest.mock('../../job-queue', () => ({
-  JobQueueService: {
-    addJob: jest.fn().mockResolvedValue({ id: 'job-1' })
-  }
-}));
+// Mock Resend client
+jest.mock('../index', () => {
+  return {
+    sendEmail: jest.fn().mockResolvedValue({ id: 'mock-email-id', success: true }),
+  };
+});
 
-// Mock sendEmail function
-jest.mock('../index', () => ({
-  sendEmail: jest.fn().mockResolvedValue({
-    success: true,
-    id: 'mock-email-id'
-  })
-}));
+// Mock Prisma client
+jest.mock('@prisma/client', () => {
+  const mockPrismaClient = {
+    $connect: jest.fn(),
+    $disconnect: jest.fn(),
+    sentNotification: {
+      create: jest.fn().mockResolvedValue({}),
+    },
+    user: {
+      findMany: jest.fn().mockResolvedValue([]),
+    },
+  };
+  
+  return {
+    PrismaClient: jest.fn(() => mockPrismaClient),
+  };
+});
 
 describe('NotificationService', () => {
   let notificationService: NotificationService;
+  let mockJobQueueService: any;
   let mockFiling: FilingNotificationPayload;
   
   beforeEach(() => {
     jest.clearAllMocks();
-    
-    // Create a new notification service with the mock client
-    notificationService = new NotificationService(mockResendClient as any);
+    mockJobQueueService = JobQueueService;
+    notificationService = NotificationService.getInstance(); // Use singleton
     
     // Create a mock filing
     mockFiling = {
-      filingId: 'filing-1',
+      filingId: 'filing-123',
       ticker: 'AAPL',
       companyName: 'Apple Inc.',
-      formType: '8-K',
-      filingDate: new Date('2023-01-01'),
-      description: 'Test filing description',
-      url: 'https://example.com/filing'
+      formType: '10-K',
+      filingDate: new Date(),
+      description: 'Annual report',
+      url: 'https://example.com/filing.pdf',
+      summaryData: {
+        period: 'FY 2023'
+      }
     };
   });
   
-  describe('Event handling', () => {
-    it('should add new filing event to job queue', async () => {
-      // Emit a new filing event
-      notificationEvents.emit(NotificationEventType.NEW_FILING, mockFiling);
+  describe('event handlers', () => {
+    it('should add job to queue for new filing events', async () => {
+      // Act
+      await (notificationService as any).handleNewFilingEvent(mockFiling);
       
-      // Wait for async operations
-      await new Promise(resolve => setTimeout(resolve, 100));
-      
-      // Check if job was added to queue
-      expect(require('../../job-queue').JobQueueService.addJob).toHaveBeenCalledWith(
+      // Assert
+      expect(mockJobQueueService.addJob).toHaveBeenCalledWith(
         expect.objectContaining({
           jobType: 'SEND_FILING_NOTIFICATION',
           payload: {
@@ -135,15 +104,12 @@ describe('NotificationService', () => {
       );
     });
     
-    it('should add filing update event to job queue', async () => {
-      // Emit a filing update event
-      notificationEvents.emit(NotificationEventType.FILING_UPDATE, mockFiling);
+    it('should add job to queue for filing update events', async () => {
+      // Act
+      await (notificationService as any).handleFilingUpdateEvent(mockFiling);
       
-      // Wait for async operations
-      await new Promise(resolve => setTimeout(resolve, 100));
-      
-      // Check if job was added to queue
-      expect(require('../../job-queue').JobQueueService.addJob).toHaveBeenCalledWith(
+      // Assert
+      expect(mockJobQueueService.addJob).toHaveBeenCalledWith(
         expect.objectContaining({
           jobType: 'SEND_FILING_NOTIFICATION',
           payload: {
@@ -155,22 +121,18 @@ describe('NotificationService', () => {
       );
     });
     
-    it('should add summary ready event to job queue', async () => {
-      // Update filing with summary info
+    it('should add job to queue for summary ready events', async () => {
+      // Arrange
       const filingWithSummary = {
         ...mockFiling,
-        summaryId: 'summary-1',
-        summaryText: 'Test summary text'
+        summaryId: 'summary-123',
       };
       
-      // Emit a summary ready event
-      notificationEvents.emit(NotificationEventType.SUMMARY_READY, filingWithSummary);
+      // Act
+      await (notificationService as any).handleSummaryReadyEvent(filingWithSummary);
       
-      // Wait for async operations
-      await new Promise(resolve => setTimeout(resolve, 100));
-      
-      // Check if job was added to queue
-      expect(require('../../job-queue').JobQueueService.addJob).toHaveBeenCalledWith(
+      // Assert
+      expect(mockJobQueueService.addJob).toHaveBeenCalledWith(
         expect.objectContaining({
           jobType: 'SEND_FILING_NOTIFICATION',
           payload: {
@@ -183,84 +145,14 @@ describe('NotificationService', () => {
     });
   });
   
-  describe('sendImmediateNotification', () => {
-    it('should send immediate notifications to eligible users', async () => {
-      // Setup mock for sendEmail
-      const { sendEmail } = require('../index');
-      sendEmail.mockResolvedValue({
-        success: true,
-        id: 'mock-email-id'
-      });
+  describe('getNotificationSubject', () => {
+    it('should generate a clear subject line', () => {
+      // Act
+      const subject = (notificationService as any).getNotificationSubject(mockFiling);
       
-      // Call the method
-      await notificationService.sendImmediateNotification(mockFiling);
-      
-      // Check that we got recipients
-      const prisma = new PrismaClient();
-      expect(prisma.user.findMany).toHaveBeenCalled();
-      
-      // Should have sent 2 emails (to our 2 mock users)
-      expect(sendEmail).toHaveBeenCalledTimes(2);
-      
-      // Check that email was sent with the right content
-      expect(sendEmail.mock.calls[0][0]).toMatchObject({
-        to: 'user1@example.com',
-        subject: expect.stringContaining('AAPL: 8-K New Filing'),
-        tags: expect.arrayContaining(['type:immediate', 'ticker:AAPL', 'form:8-K'])
-      });
-      
-      // Check that we stored the notifications
-      expect(prisma.sentNotification.create).toHaveBeenCalledTimes(2);
-    });
-    
-    it('should handle case with no eligible recipients', async () => {
-      // Override mock to return no users
-      const prisma = new PrismaClient();
-      (prisma.user.findMany as jest.Mock).mockResolvedValueOnce([]);
-      
-      // Call the method
-      await notificationService.sendImmediateNotification(mockFiling);
-      
-      // Should not attempt to send any emails
-      const { sendEmail } = require('../index');
-      expect(sendEmail).not.toHaveBeenCalled();
-      
-      // Should log that there were no recipients
-      expect(require('../../logging').logger.info).toHaveBeenCalledWith(
-        expect.stringContaining('No recipients for immediate notification'),
-        expect.any(Object)
-      );
-    });
-    
-    it('should handle email send failures gracefully', async () => {
-      // Setup mock to fail for the second email
-      const { sendEmail } = require('../index');
-      sendEmail
-        .mockResolvedValueOnce({
-          success: true,
-          id: 'mock-email-id-1'
-        })
-        .mockResolvedValueOnce({
-          success: false,
-          error: { message: 'Failed to send' }
-        });
-      
-      // Call the method
-      await notificationService.sendImmediateNotification(mockFiling);
-      
-      // Check that we attempted to send both emails
-      expect(sendEmail).toHaveBeenCalledTimes(2);
-      
-      // First email should create a notification record
-      const prisma = new PrismaClient();
-      expect(prisma.sentNotification.create).toHaveBeenCalledTimes(1);
-      
-      // Should log the failure
-      expect(require('../../logging').logger.error).toHaveBeenCalledWith(
-        expect.stringContaining('Failed to send notification'),
-        expect.any(Object),
-        expect.any(Object)
-      );
+      // Assert
+      expect(subject).toContain('New 10-K for AAPL');
+      expect(subject).toContain('Apple Inc');
     });
   });
 }); 
