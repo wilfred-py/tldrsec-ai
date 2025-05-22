@@ -42,8 +42,9 @@ next-env.d.ts
 
 # Added by Claude Task Master
 # Logs
-logs
+/logs
 *.log
+!app/dashboard/logs
 dev-debug.log
 # Dependency directories
 node_modules/
