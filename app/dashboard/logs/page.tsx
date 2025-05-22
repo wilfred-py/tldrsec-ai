@@ -40,8 +40,25 @@ import {
   getFilteredRowModel,
 } from "@tanstack/react-table";
 
-// Representing a company with filing preferences
+// Define interfaces
+interface FilingDetails {
+  revenue?: string;
+  netIncome?: string;
+  eps?: string;
+  cashFlow?: string;
+  assets?: string;
+  operatingMargin?: string;
+  yoy?: {
+    revenue: string;
+    margin: string;
+    eps: string;
+  };
+  keyInsights?: string[];
+  riskFactors?: string[];
+}
+
 interface FilingLog {
+  id: string;
   ticker: string;
   company: string;
   filingCode: string;
@@ -50,175 +67,176 @@ interface FilingLog {
   jobStart: string;
   jobCompleted: string;
   emailSent: string;
-  status: "Completed" | "Started" | "Failed";
-  details?: {
-    revenue?: string;
-    operatingMargin?: string;
-    eps?: string;
-    yoy?: {
-      revenue: string;
-      margin: string;
-      eps: string;
-    };
-    keyInsights?: string[];
-    riskFactors?: string[];
-  };
+  status: string;
+  details?: FilingDetails;
 }
 
 // This would typically come from an API or database
 const MOCK_LOGS: FilingLog[] = [
   {
+    id: "log-1",
     ticker: "AAPL",
     company: "Apple Inc.",
-    filingCode: "10-Q",
-    filingName: "Quarterly Report",
-    filingDate: "May 15",
-    jobStart: "May 15, 2025, 10:30 AM",
-    jobCompleted: "May 15, 2025, 10:32 AM",
-    emailSent: "May 15, 2025, 10:33 AM",
+    filingCode: "10-K",
+    filingName: "Annual Report",
+    filingDate: "Dec 12, 2023",
+    jobStart: "Dec 12, 2023, 4:30 PM",
+    jobCompleted: "Dec 12, 2023, 4:35 PM",
+    emailSent: "Dec 12, 2023, 4:36 PM",
     status: "Completed",
     details: {
-      revenue: "$81.8B",
-      operatingMargin: "30.3%",
-      eps: "$1.52",
-      yoy: {
-        revenue: "+2.1%",
-        margin: "+1.2%",
-        eps: "+3.4%"
-      },
+      revenue: "$394.3 billion",
+      netIncome: "$96.9 billion",
+      eps: "$6.14",
+      cashFlow: "$114.5 billion",
+      assets: "$335.1 billion",
       keyInsights: [
-        "Services revenue reached all-time high, driving margin expansion",
-        "iPhone sales exceeded expectations despite supply chain challenges",
-        "China revenue declined 2.5% amid increased competition"
+        "iPhone sales increased by 4% year-over-year",
+        "Services revenue reached an all-time high of $85.2 billion",
+        "International sales accounted for 62% of revenue",
+        "R&D spending increased by 12% to $26.3 billion"
       ],
       riskFactors: [
-        "Ongoing supply chain constraints may impact product availability",
-        "Regulatory scrutiny in app store practices could affect services growth",
-        "Foreign exchange headwinds expected to continue in next quarter"
+        "Global economic conditions affecting consumer spending",
+        "Intense competition in all business areas",
+        "Rapid technological changes requiring continuous innovation",
+        "Complex supply chain dependencies in multiple countries",
+        "Regulatory challenges in key markets"
       ]
     }
   },
   {
+    id: "log-2",
     ticker: "MSFT",
     company: "Microsoft Corp.",
-    filingCode: "8-K",
-    filingName: "Current Report",
-    filingDate: "May 12",
-    jobStart: "May 12, 2025, 02:22 PM",
-    jobCompleted: "May 12, 2025, 02:23 PM",
-    emailSent: "May 12, 2025, 02:24 PM",
+    filingCode: "10-Q",
+    filingName: "Quarterly Report",
+    filingDate: "Nov 30, 2023",
+    jobStart: "Nov 30, 2023, 2:15 PM",
+    jobCompleted: "Nov 30, 2023, 2:22 PM",
+    emailSent: "Nov 30, 2023, 2:23 PM",
     status: "Completed",
     details: {
       keyInsights: [
-        "Azure cloud division revenue grew 27% year-over-year",
-        "Acquisition of Nuance Communications completed",
-        "New productivity features announced for Microsoft 365"
+        "Cloud revenue grew 27% year-over-year driven by Azure",
+        "Office 365 Commercial revenue increased by 15%",
+        "Operating margin expanded to 45.3%",
+        "AI implementations boosted premium service adoption"
       ],
       riskFactors: [
-        "Increased competition in cloud services market",
-        "Global economic uncertainty may affect enterprise spending",
-        "Cybersecurity threats could impact customer confidence"
+        "Increased competition in cloud services",
+        "Potential cybersecurity incidents affecting customer trust",
+        "Regulatory challenges related to market concentration",
+        "Dependency on semiconductor supply chain"
       ]
     }
   },
   {
-    ticker: "AMZN",
-    company: "Amazon.com Inc.",
-    filingCode: "Form 4",
-    filingName: "Statement of Changes in Beneficial Ownership",
-    filingDate: "May 10",
-    jobStart: "May 10, 2025, 09:15 AM",
-    jobCompleted: "May 10, 2025, 09:16 AM",
-    emailSent: "May 10, 2025, 09:17 AM",
-    status: "Completed",
-    details: {
-      keyInsights: [
-        "CEO sold 50,000 shares at $175.25 per share",
-        "Transaction part of pre-established trading plan",
-        "CEO retains 10.2 million shares after transaction"
-      ]
-    }
-  },
-  {
+    id: "log-3",
     ticker: "GOOGL",
     company: "Alphabet Inc.",
     filingCode: "8-K",
     filingName: "Current Report",
-    filingDate: "May 8",
-    jobStart: "May 8, 2025, 04:45 PM",
-    jobCompleted: "May 8, 2025, 04:47 PM",
-    emailSent: "May 8, 2025, 04:48 PM",
+    filingDate: "Nov 28, 2023",
+    jobStart: "Nov 28, 2023, 10:45 AM",
+    jobCompleted: "Nov 28, 2023, 10:50 AM",
+    emailSent: "Nov 28, 2023, 10:51 AM",
     status: "Completed",
     details: {
       keyInsights: [
-        "Board approved additional $70 billion share repurchase program",
-        "New head of AI division appointed",
-        "YouTube ad revenue increased 15% year-over-year"
-      ],
-      riskFactors: [
-        "Increased regulatory scrutiny in multiple jurisdictions",
-        "Competitive pressures in digital advertising market",
-        "AI ethics concerns may affect product development timeline"
+        "Announcement of $25 billion share repurchase program",
+        "Executive leadership changes in Cloud division",
+        "Expansion of AI research initiatives"
       ]
     }
   },
   {
-    ticker: "META",
-    company: "Meta Platforms Inc.",
+    id: "log-4",
+    ticker: "AMZN",
+    company: "Amazon.com Inc.",
+    filingCode: "10-Q",
+    filingName: "Quarterly Report",
+    filingDate: "Nov 15, 2023",
+    jobStart: "Nov 15, 2023, 3:30 PM",
+    jobCompleted: "Nov 15, 2023, 3:37 PM",
+    emailSent: "Nov 15, 2023, 3:38 PM",
+    status: "Completed",
+    details: {
+      keyInsights: [
+        "AWS revenue grew 18% year-over-year",
+        "Prime membership reached new highs in both retention and engagement",
+        "Operating margin improved to 7.8% from 5.3% last year",
+        "International segment achieved profitability for the second consecutive quarter"
+      ],
+      riskFactors: [
+        "Increasing logistics costs",
+        "Regulatory scrutiny in multiple jurisdictions",
+        "Labor cost pressures in fulfillment centers",
+        "Intense competition in cloud computing"
+      ]
+    }
+  },
+  {
+    id: "log-5",
+    ticker: "NVDA",
+    company: "NVIDIA Corporation",
     filingCode: "10-K",
     filingName: "Annual Report",
-    filingDate: "May 5",
-    jobStart: "May 5, 2025, 11:10 AM",
-    jobCompleted: "May 5, 2025, 11:14 AM",
-    emailSent: "May 5, 2025, 11:15 AM",
+    filingDate: "Nov 8, 2023",
+    jobStart: "Nov 8, 2023, 9:15 AM",
+    jobCompleted: "Nov 8, 2023, 9:23 AM",
+    emailSent: "Nov 8, 2023, 9:24 AM",
     status: "Completed",
     details: {
-      revenue: "$134.9B",
-      operatingMargin: "29.4%",
-      eps: "$13.15",
-      yoy: {
-        revenue: "+15.7%",
-        margin: "-2.3%",
-        eps: "+18.2%"
-      },
+      revenue: "$26.97 billion",
+      netIncome: "$9.75 billion",
+      eps: "$3.91",
+      cashFlow: "$11.53 billion",
+      assets: "$51.47 billion",
       keyInsights: [
-        "Daily active users across family of apps increased 5% to 3.1 billion",
-        "Reality Labs segment losses increased to $13.7 billion",
-        "Ad impression growth of 12% offset by 3% decrease in average price per ad"
+        "Data center revenue increased 118% year-over-year",
+        "AI solutions now represent 65% of data center revenue",
+        "Gaming revenue stabilized with 22% growth in the second half",
+        "Automotive and embedded segments grew 35% combined"
       ],
       riskFactors: [
-        "Privacy changes in mobile operating systems continue to impact ad effectiveness",
-        "Metaverse investment requires significant capital with uncertain returns",
-        "Regulatory headwinds in key markets including EU and US"
+        "Semiconductor industry cyclicality",
+        "Concentration risk with key manufacturing partners",
+        "Dependency on continued AI market expansion",
+        "Increasing competition in accelerated computing",
+        "Export restrictions affecting international sales"
       ]
     }
   },
   {
+    id: "log-6",
     ticker: "TSLA",
     company: "Tesla, Inc.",
     filingCode: "8-K",
     filingName: "Current Report",
-    filingDate: "May 3",
-    jobStart: "May 3, 2025, 01:20 PM",
-    jobCompleted: "—",
-    emailSent: "—",
-    status: "Started",
+    filingDate: "Oct 30, 2023",
+    jobStart: "Oct 30, 2023, 11:45 AM",
+    jobCompleted: "",
+    emailSent: "",
+    status: "Started"
   },
   {
-    ticker: "NVDA",
-    company: "NVIDIA Corporation",
-    filingCode: "Form 4",
-    filingName: "Statement of Changes in Beneficial Ownership",
-    filingDate: "May 1",
-    jobStart: "May 1, 2025, 08:30 AM",
-    jobCompleted: "May 1, 2025, 08:31 AM",
-    emailSent: "May 1, 2025, 08:32 AM",
+    id: "log-7",
+    ticker: "META",
+    company: "Meta Platforms Inc.",
+    filingCode: "10-Q",
+    filingName: "Quarterly Report",
+    filingDate: "Oct 25, 2023",
+    jobStart: "Oct 25, 2023, 5:30 PM",
+    jobCompleted: "Oct 25, 2023, 5:37 PM",
+    emailSent: "Oct 25, 2023, 5:38 PM",
     status: "Completed",
     details: {
       keyInsights: [
-        "CTO purchased 15,000 shares at $950.25 per share",
-        "Direct acquisition, not part of compensation package",
-        "CTO owns 235,000 shares after transaction"
+        "Daily active users across family of apps increased 5% year-over-year",
+        "Reality Labs revenue grew 35% but continued to operate at a loss",
+        "Ad impression growth of 21% across all platforms",
+        "Cost reduction initiatives on track with 10% headcount reduction"
       ]
     }
   },
@@ -248,7 +266,7 @@ export default function LogsPage() {
   const [selectedStatus, setSelectedStatus] = useState("all-statuses");
   const [isFilingDetailsOpen, setIsFilingDetailsOpen] = useState(false);
   const [selectedFiling, setSelectedFiling] = useState<FilingLog | null>(null);
-  const [runningJobs, setRunningJobs] = useState<Record<number, boolean>>({});
+  const [loadingRerun, setLoadingRerun] = useState<string | null>(null);
   const [sorting, setSorting] = useState<SortingState>([]);
 
   // Define column filters based on dropdowns
@@ -280,22 +298,26 @@ export default function LogsPage() {
     columnHelper.accessor('ticker', {
       header: ({ column }) => {
         return (
-          <Button
-            variant="ghost"
-            onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
-            className="p-0 font-medium hover:bg-transparent group"
-          >
-            Ticker
-            {column.getIsSorted() ? (
-              column.getIsSorted() === 'asc' ? (
-                <ChevronUp className="ml-2 h-4 w-4" />
-              ) : (
-                <ChevronDown className="ml-2 h-4 w-4" />
-              )
-            ) : (
-              <ArrowUpDown className="ml-2 h-4 w-4 opacity-0 group-hover:opacity-100 transition-opacity" />
-            )}
-          </Button>
+          <div className="flex items-center">
+            <Button
+              variant="ghost"
+              onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
+              className="p-0 font-medium hover:bg-transparent w-full justify-start"
+            >
+              Ticker
+              <span className="ml-2 w-4">
+                {column.getIsSorted() ? (
+                  column.getIsSorted() === 'asc' ? (
+                    <ChevronUp className="h-4 w-4" />
+                  ) : (
+                    <ChevronDown className="h-4 w-4" />
+                  )
+                ) : (
+                  <ArrowUpDown className="h-4 w-4 opacity-0 transition-opacity hover:opacity-100" />
+                )}
+              </span>
+            </Button>
+          </div>
         )
       },
       cell: info => <span className="font-medium">{info.getValue()}</span>,
@@ -303,22 +325,26 @@ export default function LogsPage() {
     columnHelper.accessor('company', {
       header: ({ column }) => {
         return (
-          <Button
-            variant="ghost"
-            onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
-            className="p-0 font-medium hover:bg-transparent group"
-          >
-            Company
-            {column.getIsSorted() ? (
-              column.getIsSorted() === 'asc' ? (
-                <ChevronUp className="ml-2 h-4 w-4" />
-              ) : (
-                <ChevronDown className="ml-2 h-4 w-4" />
-              )
-            ) : (
-              <ArrowUpDown className="ml-2 h-4 w-4 opacity-0 group-hover:opacity-100 transition-opacity" />
-            )}
-          </Button>
+          <div className="flex items-center">
+            <Button
+              variant="ghost"
+              onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
+              className="p-0 font-medium hover:bg-transparent w-full justify-start"
+            >
+              Company
+              <span className="ml-2 w-4">
+                {column.getIsSorted() ? (
+                  column.getIsSorted() === 'asc' ? (
+                    <ChevronUp className="h-4 w-4" />
+                  ) : (
+                    <ChevronDown className="h-4 w-4" />
+                  )
+                ) : (
+                  <ArrowUpDown className="h-4 w-4 opacity-0 transition-opacity hover:opacity-100" />
+                )}
+              </span>
+            </Button>
+          </div>
         )
       },
       cell: info => info.getValue(),
@@ -326,22 +352,26 @@ export default function LogsPage() {
     columnHelper.accessor('filingCode', {
       header: ({ column }) => {
         return (
-          <Button
-            variant="ghost"
-            onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
-            className="p-0 font-medium hover:bg-transparent group"
-          >
-            Filing Code
-            {column.getIsSorted() ? (
-              column.getIsSorted() === 'asc' ? (
-                <ChevronUp className="ml-2 h-4 w-4" />
-              ) : (
-                <ChevronDown className="ml-2 h-4 w-4" />
-              )
-            ) : (
-              <ArrowUpDown className="ml-2 h-4 w-4 opacity-0 group-hover:opacity-100 transition-opacity" />
-            )}
-          </Button>
+          <div className="flex items-center">
+            <Button
+              variant="ghost"
+              onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
+              className="p-0 font-medium hover:bg-transparent w-full justify-start"
+            >
+              Filing Code
+              <span className="ml-2 w-4">
+                {column.getIsSorted() ? (
+                  column.getIsSorted() === 'asc' ? (
+                    <ChevronUp className="h-4 w-4" />
+                  ) : (
+                    <ChevronDown className="h-4 w-4" />
+                  )
+                ) : (
+                  <ArrowUpDown className="h-4 w-4 opacity-0 transition-opacity hover:opacity-100" />
+                )}
+              </span>
+            </Button>
+          </div>
         )
       },
       cell: info => info.getValue(),
@@ -349,22 +379,26 @@ export default function LogsPage() {
     columnHelper.accessor('filingName', {
       header: ({ column }) => {
         return (
-          <Button
-            variant="ghost"
-            onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
-            className="p-0 font-medium hover:bg-transparent group"
-          >
-            Filing Name
-            {column.getIsSorted() ? (
-              column.getIsSorted() === 'asc' ? (
-                <ChevronUp className="ml-2 h-4 w-4" />
-              ) : (
-                <ChevronDown className="ml-2 h-4 w-4" />
-              )
-            ) : (
-              <ArrowUpDown className="ml-2 h-4 w-4 opacity-0 group-hover:opacity-100 transition-opacity" />
-            )}
-          </Button>
+          <div className="flex items-center">
+            <Button
+              variant="ghost"
+              onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
+              className="p-0 font-medium hover:bg-transparent w-full justify-start"
+            >
+              Filing Name
+              <span className="ml-2 w-4">
+                {column.getIsSorted() ? (
+                  column.getIsSorted() === 'asc' ? (
+                    <ChevronUp className="h-4 w-4" />
+                  ) : (
+                    <ChevronDown className="h-4 w-4" />
+                  )
+                ) : (
+                  <ArrowUpDown className="h-4 w-4 opacity-0 transition-opacity hover:opacity-100" />
+                )}
+              </span>
+            </Button>
+          </div>
         )
       },
       cell: info => info.getValue(),
@@ -372,22 +406,26 @@ export default function LogsPage() {
     columnHelper.accessor('filingDate', {
       header: ({ column }) => {
         return (
-          <Button
-            variant="ghost"
-            onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
-            className="p-0 font-medium hover:bg-transparent group"
-          >
-            Filing Date
-            {column.getIsSorted() ? (
-              column.getIsSorted() === 'asc' ? (
-                <ChevronUp className="ml-2 h-4 w-4" />
-              ) : (
-                <ChevronDown className="ml-2 h-4 w-4" />
-              )
-            ) : (
-              <ArrowUpDown className="ml-2 h-4 w-4 opacity-0 group-hover:opacity-100 transition-opacity" />
-            )}
-          </Button>
+          <div className="flex items-center">
+            <Button
+              variant="ghost"
+              onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
+              className="p-0 font-medium hover:bg-transparent w-full justify-start"
+            >
+              Filing Date
+              <span className="ml-2 w-4">
+                {column.getIsSorted() ? (
+                  column.getIsSorted() === 'asc' ? (
+                    <ChevronUp className="h-4 w-4" />
+                  ) : (
+                    <ChevronDown className="h-4 w-4" />
+                  )
+                ) : (
+                  <ArrowUpDown className="h-4 w-4 opacity-0 transition-opacity hover:opacity-100" />
+                )}
+              </span>
+            </Button>
+          </div>
         )
       },
       cell: info => info.getValue(),
@@ -395,22 +433,26 @@ export default function LogsPage() {
     columnHelper.accessor('jobStart', {
       header: ({ column }) => {
         return (
-          <Button
-            variant="ghost"
-            onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
-            className="p-0 font-medium hover:bg-transparent group"
-          >
-            Job Start
-            {column.getIsSorted() ? (
-              column.getIsSorted() === 'asc' ? (
-                <ChevronUp className="ml-2 h-4 w-4" />
-              ) : (
-                <ChevronDown className="ml-2 h-4 w-4" />
-              )
-            ) : (
-              <ArrowUpDown className="ml-2 h-4 w-4 opacity-0 group-hover:opacity-100 transition-opacity" />
-            )}
-          </Button>
+          <div className="flex items-center">
+            <Button
+              variant="ghost"
+              onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
+              className="p-0 font-medium hover:bg-transparent w-full justify-start"
+            >
+              Job Start
+              <span className="ml-2 w-4">
+                {column.getIsSorted() ? (
+                  column.getIsSorted() === 'asc' ? (
+                    <ChevronUp className="h-4 w-4" />
+                  ) : (
+                    <ChevronDown className="h-4 w-4" />
+                  )
+                ) : (
+                  <ArrowUpDown className="h-4 w-4 opacity-0 transition-opacity hover:opacity-100" />
+                )}
+              </span>
+            </Button>
+          </div>
         )
       },
       cell: info => info.getValue(),
@@ -418,22 +460,26 @@ export default function LogsPage() {
     columnHelper.accessor('jobCompleted', {
       header: ({ column }) => {
         return (
-          <Button
-            variant="ghost"
-            onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
-            className="p-0 font-medium hover:bg-transparent group"
-          >
-            Job Completed
-            {column.getIsSorted() ? (
-              column.getIsSorted() === 'asc' ? (
-                <ChevronUp className="ml-2 h-4 w-4" />
-              ) : (
-                <ChevronDown className="ml-2 h-4 w-4" />
-              )
-            ) : (
-              <ArrowUpDown className="ml-2 h-4 w-4 opacity-0 group-hover:opacity-100 transition-opacity" />
-            )}
-          </Button>
+          <div className="flex items-center">
+            <Button
+              variant="ghost"
+              onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
+              className="p-0 font-medium hover:bg-transparent w-full justify-start"
+            >
+              Job Completed
+              <span className="ml-2 w-4">
+                {column.getIsSorted() ? (
+                  column.getIsSorted() === 'asc' ? (
+                    <ChevronUp className="h-4 w-4" />
+                  ) : (
+                    <ChevronDown className="h-4 w-4" />
+                  )
+                ) : (
+                  <ArrowUpDown className="h-4 w-4 opacity-0 transition-opacity hover:opacity-100" />
+                )}
+              </span>
+            </Button>
+          </div>
         )
       },
       cell: info => info.getValue(),
@@ -441,22 +487,26 @@ export default function LogsPage() {
     columnHelper.accessor('emailSent', {
       header: ({ column }) => {
         return (
-          <Button
-            variant="ghost"
-            onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
-            className="p-0 font-medium hover:bg-transparent group"
-          >
-            Email Sent
-            {column.getIsSorted() ? (
-              column.getIsSorted() === 'asc' ? (
-                <ChevronUp className="ml-2 h-4 w-4" />
-              ) : (
-                <ChevronDown className="ml-2 h-4 w-4" />
-              )
-            ) : (
-              <ArrowUpDown className="ml-2 h-4 w-4 opacity-0 group-hover:opacity-100 transition-opacity" />
-            )}
-          </Button>
+          <div className="flex items-center">
+            <Button
+              variant="ghost"
+              onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
+              className="p-0 font-medium hover:bg-transparent w-full justify-start"
+            >
+              Email Sent
+              <span className="ml-2 w-4">
+                {column.getIsSorted() ? (
+                  column.getIsSorted() === 'asc' ? (
+                    <ChevronUp className="h-4 w-4" />
+                  ) : (
+                    <ChevronDown className="h-4 w-4" />
+                  )
+                ) : (
+                  <ArrowUpDown className="h-4 w-4 opacity-0 transition-opacity hover:opacity-100" />
+                )}
+              </span>
+            </Button>
+          </div>
         )
       },
       cell: info => info.getValue(),
@@ -464,22 +514,26 @@ export default function LogsPage() {
     columnHelper.accessor('status', {
       header: ({ column }) => {
         return (
-          <Button
-            variant="ghost"
-            onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
-            className="p-0 font-medium hover:bg-transparent group"
-          >
-            Status
-            {column.getIsSorted() ? (
-              column.getIsSorted() === 'asc' ? (
-                <ChevronUp className="ml-2 h-4 w-4" />
-              ) : (
-                <ChevronDown className="ml-2 h-4 w-4" />
-              )
-            ) : (
-              <ArrowUpDown className="ml-2 h-4 w-4 opacity-0 group-hover:opacity-100 transition-opacity" />
-            )}
-          </Button>
+          <div className="flex items-center">
+            <Button
+              variant="ghost"
+              onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
+              className="p-0 font-medium hover:bg-transparent w-full justify-start"
+            >
+              Status
+              <span className="ml-2 w-4">
+                {column.getIsSorted() ? (
+                  column.getIsSorted() === 'asc' ? (
+                    <ChevronUp className="h-4 w-4" />
+                  ) : (
+                    <ChevronDown className="h-4 w-4" />
+                  )
+                ) : (
+                  <ArrowUpDown className="h-4 w-4 opacity-0 transition-opacity hover:opacity-100" />
+                )}
+              </span>
+            </Button>
+          </div>
         )
       },
       cell: ({ getValue }) => {
@@ -501,42 +555,34 @@ export default function LogsPage() {
     }),
     columnHelper.display({
       id: 'actions',
-      header: () => <div className="text-right">Actions</div>,
-      cell: ({ row }) => {
-        const log = row.original;
-        const index = logs.findIndex(l => l === log);
-        return (
-          <div className="flex justify-end gap-2">
-            <Button 
-              variant="ghost" 
-              size="icon" 
-              className="h-8 w-8"
-              onClick={() => handleViewFiling(log)}
-              disabled={log.status !== "Completed" || !log.details}
-            >
-              <EyeIcon className="h-4 w-4" />
-              <span className="sr-only">View</span>
-            </Button>
-            
-            <Button 
-              variant="ghost" 
-              size="icon" 
-              className="h-8 w-8"
-              onClick={() => handleRerunJob(index)}
-              disabled={runningJobs[index]}
-            >
-              {runningJobs[index] ? (
-                <Loader2Icon className="h-4 w-4 animate-spin" />
-              ) : (
-                <ArrowRightIcon className="h-4 w-4" />
-              )}
-              <span className="sr-only">Rerun</span>
-            </Button>
-          </div>
-        );
-      },
+      header: 'Actions',
+      cell: ({ row }) => (
+        <div className="flex items-center space-x-2">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => handleViewDetails(row.original)}
+            className="h-8 w-8"
+          >
+            <EyeIcon className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => handleRerunJob(row.original.id)}
+            className="h-8 w-8"
+            disabled={loadingRerun === row.original.id}
+          >
+            {loadingRerun === row.original.id ? (
+              <Loader2Icon className="h-4 w-4 animate-spin" />
+            ) : (
+              <ArrowRightIcon className="h-4 w-4" />
+            )}
+          </Button>
+        </div>
+      ),
     }),
-  ], [logs, runningJobs]);
+  ], [logs, loadingRerun]);
 
   // Initialize the table with React Table
   const table = useReactTable({
@@ -579,75 +625,22 @@ export default function LogsPage() {
   }, [table.getRowModel().rows, selectedFilingType, selectedStatus]);
 
   // Handle viewing a filing's details
-  const handleViewFiling = (log: FilingLog) => {
+  const handleViewDetails = (log: FilingLog) => {
     setSelectedFiling(log);
     setIsFilingDetailsOpen(true);
   };
 
   // Handle rerun job functionality
-  const handleRerunJob = (index: number) => {
-    // Set the job as running
-    setRunningJobs(prev => ({ ...prev, [index]: true }));
+  const handleRerunJob = (id: string) => {
+    setLoadingRerun(id);
     
-    // Update the job start time
-    const now = new Date();
-    const formattedDate = now.toLocaleString('en-US', {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric',
-      hour: 'numeric',
-      minute: '2-digit',
-      hour12: true
-    });
-    
-    // Create a copy of the logs array and update the specific log
-    const updatedLogs = [...logs];
-    updatedLogs[index] = {
-      ...updatedLogs[index],
-      jobStart: formattedDate,
-      jobCompleted: "—",
-      emailSent: "—",
-      status: "Started"
-    };
-    
-    setLogs(updatedLogs);
-    
-    // Simulate job completion after a random time between 2-5 seconds
-    const completionTime = Math.floor(Math.random() * 3000) + 2000;
-    
+    // Simulate API call
     setTimeout(() => {
-      const completionDate = new Date(now.getTime() + completionTime);
-      const formattedCompletionDate = completionDate.toLocaleString('en-US', {
-        month: 'short',
-        day: 'numeric',
-        year: 'numeric',
-        hour: 'numeric',
-        minute: '2-digit',
-        hour12: true
+      toast.success("Job rerun initiated", {
+        description: "The job has been submitted for reprocessing.",
       });
-      
-      const emailDate = new Date(completionDate.getTime() + 1000);
-      const formattedEmailDate = emailDate.toLocaleString('en-US', {
-        month: 'short',
-        day: 'numeric',
-        year: 'numeric',
-        hour: 'numeric',
-        minute: '2-digit',
-        hour12: true
-      });
-      
-      const finalLogs = [...updatedLogs];
-      finalLogs[index] = {
-        ...finalLogs[index],
-        jobCompleted: formattedCompletionDate,
-        emailSent: formattedEmailDate,
-        status: "Completed"
-      };
-      
-      setLogs(finalLogs);
-      setRunningJobs(prev => ({ ...prev, [index]: false }));
-      toast.success(`Job for ${finalLogs[index].ticker} completed and email sent`);
-    }, completionTime);
+      setLoadingRerun(null);
+    }, 1500);
   };
 
   return (
