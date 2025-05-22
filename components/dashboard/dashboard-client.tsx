@@ -1,10 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { DashboardHeader } from "@/components/dashboard";
 import { Input } from "@/components/ui/input";
-import { SearchIcon, SettingsIcon, Trash2Icon, PlusIcon } from "lucide-react";
+import { SearchIcon, SettingsIcon, Trash2Icon, PlusIcon, ArrowUpDown, ChevronDown, ChevronUp } from "lucide-react";
 import {
   Table,
   TableBody,
@@ -26,6 +26,16 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
+import {
+  createColumnHelper,
+  flexRender,
+  getCoreRowModel,
+  getSortedRowModel,
+  SortingState,
+  useReactTable,
+  FilterFn,
+  getFilteredRowModel
+} from "@tanstack/react-table";
 
 // Representing a company with filing preferences
 interface Company {
@@ -141,6 +151,18 @@ const AVAILABLE_TICKERS = [
   { symbol: "ABNB", name: "Airbnb Inc." }
 ];
 
+// Column definition helper
+const columnHelper = createColumnHelper<Company>();
+
+// Global filter function for search
+const globalFilterFn: FilterFn<Company> = (row, columnId, value) => {
+  const searchValue = String(value).toLowerCase();
+  const symbol = row.original.symbol.toLowerCase();
+  const name = row.original.name.toLowerCase();
+  
+  return symbol.includes(searchValue) || name.includes(searchValue);
+};
+
 export function DashboardClient() {
   const [companies, setCompanies] = useState<Company[]>(MOCK_COMPANIES);
   const [searchQuery, setSearchQuery] = useState("");
@@ -149,12 +171,247 @@ export function DashboardClient() {
   const [searchResults, setSearchResults] = useState<typeof AVAILABLE_TICKERS>([]);
   const [isPreferencesOpen, setIsPreferencesOpen] = useState(false);
   const [isAddTickerOpen, setIsAddTickerOpen] = useState(false);
+  const [sorting, setSorting] = useState<SortingState>([]);
   
-  // Filter companies based on search query
-  const filteredCompanies = companies.filter(company => 
-    company.symbol.toLowerCase().includes(searchQuery.toLowerCase()) || 
-    company.name.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  // Define table columns
+  const columns = useMemo(() => [
+    columnHelper.accessor('symbol', {
+      header: ({ column }) => {
+        return (
+          <Button
+            variant="ghost"
+            onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
+            className="p-0 font-medium hover:bg-transparent"
+          >
+            Symbol
+            {column.getIsSorted() === 'asc' ? (
+              <ChevronUp className="ml-2 h-4 w-4" />
+            ) : column.getIsSorted() === 'desc' ? (
+              <ChevronDown className="ml-2 h-4 w-4" />
+            ) : (
+              <ArrowUpDown className="ml-2 h-4 w-4" />
+            )}
+          </Button>
+        )
+      },
+      cell: info => <span className="font-medium">{info.getValue()}</span>,
+    }),
+    columnHelper.accessor('name', {
+      header: ({ column }) => {
+        return (
+          <Button
+            variant="ghost"
+            onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
+            className="p-0 font-medium hover:bg-transparent"
+          >
+            Company
+            {column.getIsSorted() === 'asc' ? (
+              <ChevronUp className="ml-2 h-4 w-4" />
+            ) : column.getIsSorted() === 'desc' ? (
+              <ChevronDown className="ml-2 h-4 w-4" />
+            ) : (
+              <ArrowUpDown className="ml-2 h-4 w-4" />
+            )}
+          </Button>
+        )
+      },
+      cell: info => info.getValue(),
+    }),
+    columnHelper.accessor('lastFiling', {
+      header: ({ column }) => {
+        return (
+          <Button
+            variant="ghost"
+            onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
+            className="p-0 font-medium hover:bg-transparent"
+          >
+            Last Filing
+            {column.getIsSorted() === 'asc' ? (
+              <ChevronUp className="ml-2 h-4 w-4" />
+            ) : column.getIsSorted() === 'desc' ? (
+              <ChevronDown className="ml-2 h-4 w-4" />
+            ) : (
+              <ArrowUpDown className="ml-2 h-4 w-4" />
+            )}
+          </Button>
+        )
+      },
+      cell: info => info.getValue(),
+    }),
+    columnHelper.display({
+      id: 'actions',
+      header: () => <div className="text-right">Actions</div>,
+      cell: ({ row }) => {
+        const company = row.original;
+        return (
+          <div className="flex justify-end gap-2">
+            <Dialog 
+              open={isPreferencesOpen && currentCompany?.symbol === company.symbol} 
+              onOpenChange={(open) => {
+                setIsPreferencesOpen(open);
+                if (!open) setCurrentCompany(null);
+              }}
+            >
+              <DialogTrigger asChild>
+                <Button 
+                  variant="ghost" 
+                  size="icon" 
+                  className="h-8 w-8"
+                  onClick={() => {
+                    setCurrentCompany(company);
+                    setIsPreferencesOpen(true);
+                  }}
+                >
+                  <SettingsIcon className="h-4 w-4" />
+                  <span className="sr-only">Settings</span>
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>
+                    {company.symbol} Filing Preferences
+                  </DialogTitle>
+                  <DialogDescription>
+                    Select which filing types you want to receive for {company.name}.
+                  </DialogDescription>
+                </DialogHeader>
+                
+                {currentCompany && currentCompany.symbol === company.symbol && (
+                  <>
+                    <div className="py-4 space-y-4">
+                      <div className="flex items-center justify-between">
+                        <Label htmlFor={`${company.symbol}-10k`} className="cursor-pointer">
+                          10-K and 10-Q Reports
+                        </Label>
+                        <Switch 
+                          id={`${company.symbol}-10k`}
+                          checked={currentCompany.preferences.tenK}
+                          onCheckedChange={(checked) => {
+                            setCurrentCompany({
+                              ...currentCompany,
+                              preferences: {
+                                ...currentCompany.preferences,
+                                tenK: checked,
+                                tenQ: checked
+                              }
+                            });
+                          }}
+                        />
+                      </div>
+                      
+                      <div className="flex items-center justify-between">
+                        <Label htmlFor={`${company.symbol}-8k`} className="cursor-pointer">
+                          8-K Reports
+                        </Label>
+                        <Switch 
+                          id={`${company.symbol}-8k`}
+                          checked={currentCompany.preferences.eightK}
+                          onCheckedChange={(checked) => {
+                            setCurrentCompany({
+                              ...currentCompany,
+                              preferences: {
+                                ...currentCompany.preferences,
+                                eightK: checked
+                              }
+                            });
+                          }}
+                        />
+                      </div>
+                      
+                      <div className="flex items-center justify-between">
+                        <Label htmlFor={`${company.symbol}-form4`} className="cursor-pointer">
+                          Form 4 (Insider Trading)
+                        </Label>
+                        <Switch 
+                          id={`${company.symbol}-form4`}
+                          checked={currentCompany.preferences.form4}
+                          onCheckedChange={(checked) => {
+                            setCurrentCompany({
+                              ...currentCompany,
+                              preferences: {
+                                ...currentCompany.preferences,
+                                form4: checked
+                              }
+                            });
+                          }}
+                        />
+                      </div>
+                      
+                      <div className="flex items-center justify-between">
+                        <Label htmlFor={`${company.symbol}-other`} className="cursor-pointer">
+                          Other Filings
+                        </Label>
+                        <Switch 
+                          id={`${company.symbol}-other`}
+                          checked={currentCompany.preferences.other}
+                          onCheckedChange={(checked) => {
+                            setCurrentCompany({
+                              ...currentCompany,
+                              preferences: {
+                                ...currentCompany.preferences,
+                                other: checked
+                              }
+                            });
+                          }}
+                        />
+                      </div>
+                    </div>
+                    
+                    <DialogFooter>
+                      <Button variant="outline" onClick={() => {
+                        setCurrentCompany(null);
+                        setIsPreferencesOpen(false);
+                      }}>
+                        Cancel
+                      </Button>
+                      <Button 
+                        onClick={() => {
+                          if (currentCompany) {
+                            handleSavePreferences(
+                              currentCompany.symbol, 
+                              currentCompany.preferences
+                            );
+                          }
+                        }}
+                      >
+                        Save Preferences
+                      </Button>
+                    </DialogFooter>
+                  </>
+                )}
+              </DialogContent>
+            </Dialog>
+            
+            <Button 
+              variant="ghost" 
+              size="icon" 
+              className="h-8 w-8"
+              onClick={() => handleDeleteCompany(company.symbol)}
+            >
+              <Trash2Icon className="h-4 w-4" />
+              <span className="sr-only">Delete</span>
+            </Button>
+          </div>
+        )
+      },
+    }),
+  ], []);
+  
+  // Initialize the table with React Table
+  const table = useReactTable({
+    data: companies,
+    columns,
+    state: {
+      sorting,
+      globalFilter: searchQuery,
+    },
+    globalFilterFn,
+    onGlobalFilterChange: setSearchQuery,
+    onSortingChange: setSorting,
+    getSortedRowModel: getSortedRowModel(),
+    getFilteredRowModel: getFilteredRowModel(),
+    getCoreRowModel: getCoreRowModel(),
+  });
 
   // Handle saving preferences for a company
   const handleSavePreferences = (symbol: string, preferences: Company['preferences']) => {
@@ -205,7 +462,7 @@ export function DashboardClient() {
     }
   };
 
-  const showEmptyState = filteredCompanies.length === 0 && searchQuery === "";
+  const showEmptyState = table.getRowModel().rows.length === 0;
 
   return (
     <div className="space-y-6">
@@ -378,175 +635,45 @@ export function DashboardClient() {
                 <div className="rounded-md border">
                   <Table>
                     <TableHeader>
-                      <TableRow>
-                        <TableHead>Symbol</TableHead>
-                        <TableHead>Company</TableHead>
-                        <TableHead>Last Filing</TableHead>
-                        <TableHead className="text-right">Actions</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {filteredCompanies.map((company) => (
-                        <TableRow key={company.symbol}>
-                          <TableCell className="font-medium">{company.symbol}</TableCell>
-                          <TableCell>{company.name}</TableCell>
-                          <TableCell>{company.lastFiling}</TableCell>
-                          <TableCell className="text-right">
-                            <div className="flex justify-end gap-2">
-                              <Dialog open={isPreferencesOpen && currentCompany?.symbol === company.symbol} 
-                                      onOpenChange={(open) => {
-                                        setIsPreferencesOpen(open);
-                                        if (!open) setCurrentCompany(null);
-                                      }}>
-                                <DialogTrigger asChild>
-                                  <Button 
-                                    variant="ghost" 
-                                    size="icon" 
-                                    className="h-8 w-8"
-                                    onClick={() => {
-                                      setCurrentCompany(company);
-                                      setIsPreferencesOpen(true);
-                                    }}
-                                  >
-                                    <SettingsIcon className="h-4 w-4" />
-                                    <span className="sr-only">Settings</span>
-                                  </Button>
-                                </DialogTrigger>
-                                <DialogContent>
-                                  <DialogHeader>
-                                    <DialogTitle>
-                                      {company.symbol} Filing Preferences
-                                    </DialogTitle>
-                                    <DialogDescription>
-                                      Select which filing types you want to receive for {company.name}.
-                                    </DialogDescription>
-                                  </DialogHeader>
-                                  
-                                  {currentCompany && currentCompany.symbol === company.symbol && (
-                                    <>
-                                      <div className="py-4 space-y-4">
-                                        <div className="flex items-center justify-between">
-                                          <Label htmlFor={`${company.symbol}-10k`} className="cursor-pointer">
-                                            10-K and 10-Q Reports
-                                          </Label>
-                                          <Switch 
-                                            id={`${company.symbol}-10k`}
-                                            checked={currentCompany.preferences.tenK}
-                                            onCheckedChange={(checked) => {
-                                              setCurrentCompany({
-                                                ...currentCompany,
-                                                preferences: {
-                                                  ...currentCompany.preferences,
-                                                  tenK: checked,
-                                                  tenQ: checked
-                                                }
-                                              });
-                                            }}
-                                          />
-                                        </div>
-                                        
-                                        <div className="flex items-center justify-between">
-                                          <Label htmlFor={`${company.symbol}-8k`} className="cursor-pointer">
-                                            8-K Reports
-                                          </Label>
-                                          <Switch 
-                                            id={`${company.symbol}-8k`}
-                                            checked={currentCompany.preferences.eightK}
-                                            onCheckedChange={(checked) => {
-                                              setCurrentCompany({
-                                                ...currentCompany,
-                                                preferences: {
-                                                  ...currentCompany.preferences,
-                                                  eightK: checked
-                                                }
-                                              });
-                                            }}
-                                          />
-                                        </div>
-                                        
-                                        <div className="flex items-center justify-between">
-                                          <Label htmlFor={`${company.symbol}-form4`} className="cursor-pointer">
-                                            Form 4 (Insider Trading)
-                                          </Label>
-                                          <Switch 
-                                            id={`${company.symbol}-form4`}
-                                            checked={currentCompany.preferences.form4}
-                                            onCheckedChange={(checked) => {
-                                              setCurrentCompany({
-                                                ...currentCompany,
-                                                preferences: {
-                                                  ...currentCompany.preferences,
-                                                  form4: checked
-                                                }
-                                              });
-                                            }}
-                                          />
-                                        </div>
-                                        
-                                        <div className="flex items-center justify-between">
-                                          <Label htmlFor={`${company.symbol}-other`} className="cursor-pointer">
-                                            Other Filings
-                                          </Label>
-                                          <Switch 
-                                            id={`${company.symbol}-other`}
-                                            checked={currentCompany.preferences.other}
-                                            onCheckedChange={(checked) => {
-                                              setCurrentCompany({
-                                                ...currentCompany,
-                                                preferences: {
-                                                  ...currentCompany.preferences,
-                                                  other: checked
-                                                }
-                                              });
-                                            }}
-                                          />
-                                        </div>
-                                      </div>
-                                      
-                                      <DialogFooter>
-                                        <Button variant="outline" onClick={() => {
-                                          setCurrentCompany(null);
-                                          setIsPreferencesOpen(false);
-                                        }}>
-                                          Cancel
-                                        </Button>
-                                        <Button 
-                                          onClick={() => {
-                                            if (currentCompany) {
-                                              handleSavePreferences(
-                                                currentCompany.symbol, 
-                                                currentCompany.preferences
-                                              );
-                                            }
-                                          }}
-                                        >
-                                          Save Preferences
-                                        </Button>
-                                      </DialogFooter>
-                                    </>
+                      {table.getHeaderGroups().map(headerGroup => (
+                        <TableRow key={headerGroup.id}>
+                          {headerGroup.headers.map(header => (
+                            <TableHead key={header.id}>
+                              {header.isPlaceholder
+                                ? null
+                                : flexRender(
+                                    header.column.columnDef.header,
+                                    header.getContext()
                                   )}
-                                </DialogContent>
-                              </Dialog>
-                              
-                              <Button 
-                                variant="ghost" 
-                                size="icon" 
-                                className="h-8 w-8"
-                                onClick={() => handleDeleteCompany(company.symbol)}
-                              >
-                                <Trash2Icon className="h-4 w-4" />
-                                <span className="sr-only">Delete</span>
-                              </Button>
-                            </div>
-                          </TableCell>
+                            </TableHead>
+                          ))}
                         </TableRow>
                       ))}
+                    </TableHeader>
+                    <TableBody>
+                      {table.getRowModel().rows.length ? (
+                        table.getRowModel().rows.map(row => (
+                          <TableRow key={row.id} data-state={row.getIsSelected() && "selected"}>
+                            {row.getVisibleCells().map(cell => (
+                              <TableCell key={cell.id}>
+                                {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                              </TableCell>
+                            ))}
+                          </TableRow>
+                        ))
+                      ) : (
+                        <TableRow>
+                          <TableCell colSpan={columns.length} className="h-24 text-center">
+                            No companies found.
+                          </TableCell>
+                        </TableRow>
+                      )}
                     </TableBody>
                   </Table>
                 </div>
                 
                 <div className="mt-4 text-right text-sm text-muted-foreground">
-                  Total tracked tickers: {filteredCompanies.length}
+                  Total tracked tickers: {table.getRowModel().rows.length}
                 </div>
               </>
             )}
