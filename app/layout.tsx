@@ -31,7 +31,7 @@ export default function RootLayout({
         <body
           className={`${geistSans.variable} ${geistMono.variable} antialiased`}
         >
-          <Navbar />
+          {/* Navbar is not needed on dashboard pages as it has its own sidebar navigation */}
           <main className="min-h-screen">
             {children}
           </main>
