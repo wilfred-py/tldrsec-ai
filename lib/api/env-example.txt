@@ -1,0 +1,6 @@
+# API configuration
+NEXT_PUBLIC_API_ENABLED=false
+NEXT_PUBLIC_API_URL=https://api.tldrsec.dev
+
+# When true, the mock data will be used
+# When false and backend is ready, real API calls will be made 
