@@ -245,142 +245,18 @@ export function DashboardClient() {
         const company = row.original;
         return (
           <div className="flex justify-end gap-2">
-            <Dialog 
-              open={isPreferencesOpen && currentCompany?.symbol === company.symbol} 
-              onOpenChange={(open) => {
-                setIsPreferencesOpen(open);
-                if (!open) setCurrentCompany(null);
+            <Button 
+              variant="ghost" 
+              size="icon" 
+              className="h-8 w-8"
+              onClick={() => {
+                setCurrentCompany({...company});
+                setIsPreferencesOpen(true);
               }}
             >
-              <DialogTrigger asChild>
-                <Button 
-                  variant="ghost" 
-                  size="icon" 
-                  className="h-8 w-8"
-                  onClick={() => {
-                    setCurrentCompany(company);
-                    setIsPreferencesOpen(true);
-                  }}
-                >
-                  <SettingsIcon className="h-4 w-4" />
-                  <span className="sr-only">Settings</span>
-                </Button>
-              </DialogTrigger>
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>
-                    {company.symbol} Filing Preferences
-                  </DialogTitle>
-                  <DialogDescription>
-                    Select which filing types you want to receive for {company.name}.
-                  </DialogDescription>
-                </DialogHeader>
-                
-                {currentCompany && currentCompany.symbol === company.symbol && (
-                  <>
-                    <div className="py-4 space-y-4">
-                      <div className="flex items-center justify-between">
-                        <Label htmlFor={`${company.symbol}-10k`} className="cursor-pointer">
-                          10-K and 10-Q Reports
-                        </Label>
-                        <Switch 
-                          id={`${company.symbol}-10k`}
-                          checked={currentCompany.preferences.tenK}
-                          onCheckedChange={(checked) => {
-                            setCurrentCompany({
-                              ...currentCompany,
-                              preferences: {
-                                ...currentCompany.preferences,
-                                tenK: checked,
-                                tenQ: checked
-                              }
-                            });
-                          }}
-                        />
-                      </div>
-                      
-                      <div className="flex items-center justify-between">
-                        <Label htmlFor={`${company.symbol}-8k`} className="cursor-pointer">
-                          8-K Reports
-                        </Label>
-                        <Switch 
-                          id={`${company.symbol}-8k`}
-                          checked={currentCompany.preferences.eightK}
-                          onCheckedChange={(checked) => {
-                            setCurrentCompany({
-                              ...currentCompany,
-                              preferences: {
-                                ...currentCompany.preferences,
-                                eightK: checked
-                              }
-                            });
-                          }}
-                        />
-                      </div>
-                      
-                      <div className="flex items-center justify-between">
-                        <Label htmlFor={`${company.symbol}-form4`} className="cursor-pointer">
-                          Form 4 (Insider Trading)
-                        </Label>
-                        <Switch 
-                          id={`${company.symbol}-form4`}
-                          checked={currentCompany.preferences.form4}
-                          onCheckedChange={(checked) => {
-                            setCurrentCompany({
-                              ...currentCompany,
-                              preferences: {
-                                ...currentCompany.preferences,
-                                form4: checked
-                              }
-                            });
-                          }}
-                        />
-                      </div>
-                      
-                      <div className="flex items-center justify-between">
-                        <Label htmlFor={`${company.symbol}-other`} className="cursor-pointer">
-                          Other Filings
-                        </Label>
-                        <Switch 
-                          id={`${company.symbol}-other`}
-                          checked={currentCompany.preferences.other}
-                          onCheckedChange={(checked) => {
-                            setCurrentCompany({
-                              ...currentCompany,
-                              preferences: {
-                                ...currentCompany.preferences,
-                                other: checked
-                              }
-                            });
-                          }}
-                        />
-                      </div>
-                    </div>
-                    
-                    <DialogFooter>
-                      <Button variant="outline" onClick={() => {
-                        setCurrentCompany(null);
-                        setIsPreferencesOpen(false);
-                      }}>
-                        Cancel
-                      </Button>
-                      <Button 
-                        onClick={() => {
-                          if (currentCompany) {
-                            handleSavePreferences(
-                              currentCompany.symbol, 
-                              currentCompany.preferences
-                            );
-                          }
-                        }}
-                      >
-                        Save Preferences
-                      </Button>
-                    </DialogFooter>
-                  </>
-                )}
-              </DialogContent>
-            </Dialog>
+              <SettingsIcon className="h-4 w-4" />
+              <span className="sr-only">Settings</span>
+            </Button>
             
             <Button 
               variant="ghost" 
@@ -419,7 +295,8 @@ export function DashboardClient() {
       company.symbol === symbol ? { ...company, preferences } : company
     ));
     toast.success(`Preferences updated for ${symbol}`);
-    setIsPreferencesOpen(false); // Close modal after saving
+    setIsPreferencesOpen(false);
+    setCurrentCompany(null);
   };
 
   // Handle deleting a company
@@ -680,6 +557,182 @@ export function DashboardClient() {
           </div>
         </div>
       </div>
+
+      {/* Preferences Dialog */}
+      <Dialog 
+        open={isPreferencesOpen} 
+        onOpenChange={(open) => {
+          setIsPreferencesOpen(open);
+          if (!open) setCurrentCompany(null);
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              Form Preferences for {currentCompany?.symbol}
+            </DialogTitle>
+            <DialogDescription>
+              Select which SEC form types you want to receive notifications for this ticker.
+            </DialogDescription>
+          </DialogHeader>
+          
+          {currentCompany && (
+            <>
+              <div className="py-4 space-y-4">
+                <div className="flex items-center justify-between">
+                  <Label htmlFor={`${currentCompany.symbol}-10k`} className="cursor-pointer">
+                    10-K
+                    <div className="text-xs text-muted-foreground">Annual Report</div>
+                  </Label>
+                  <Switch 
+                    id={`${currentCompany.symbol}-10k`}
+                    checked={currentCompany.preferences.tenK}
+                    onCheckedChange={(checked) => {
+                      setCurrentCompany({
+                        ...currentCompany,
+                        preferences: {
+                          ...currentCompany.preferences,
+                          tenK: checked
+                        }
+                      });
+                    }}
+                  />
+                </div>
+                
+                <div className="flex items-center justify-between">
+                  <Label htmlFor={`${currentCompany.symbol}-10q`} className="cursor-pointer">
+                    10-Q
+                    <div className="text-xs text-muted-foreground">Quarterly Report</div>
+                  </Label>
+                  <Switch 
+                    id={`${currentCompany.symbol}-10q`}
+                    checked={currentCompany.preferences.tenQ}
+                    onCheckedChange={(checked) => {
+                      setCurrentCompany({
+                        ...currentCompany,
+                        preferences: {
+                          ...currentCompany.preferences,
+                          tenQ: checked
+                        }
+                      });
+                    }}
+                  />
+                </div>
+                
+                <div className="flex items-center justify-between">
+                  <Label htmlFor={`${currentCompany.symbol}-8k`} className="cursor-pointer">
+                    8-K
+                    <div className="text-xs text-muted-foreground">Current Report</div>
+                  </Label>
+                  <Switch 
+                    id={`${currentCompany.symbol}-8k`}
+                    checked={currentCompany.preferences.eightK}
+                    onCheckedChange={(checked) => {
+                      setCurrentCompany({
+                        ...currentCompany,
+                        preferences: {
+                          ...currentCompany.preferences,
+                          eightK: checked
+                        }
+                      });
+                    }}
+                  />
+                </div>
+                
+                <div className="flex items-center justify-between">
+                  <Label htmlFor={`${currentCompany.symbol}-form4`} className="cursor-pointer">
+                    Form 4
+                    <div className="text-xs text-muted-foreground">Insider Trading</div>
+                  </Label>
+                  <Switch 
+                    id={`${currentCompany.symbol}-form4`}
+                    checked={currentCompany.preferences.form4}
+                    onCheckedChange={(checked) => {
+                      setCurrentCompany({
+                        ...currentCompany,
+                        preferences: {
+                          ...currentCompany.preferences,
+                          form4: checked
+                        }
+                      });
+                    }}
+                  />
+                </div>
+                
+                <div className="flex items-center justify-between">
+                  <Label htmlFor={`${currentCompany.symbol}-144`} className="cursor-pointer">
+                    Form 144
+                    <div className="text-xs text-muted-foreground">Proposed Sale of Securities</div>
+                  </Label>
+                  <Switch 
+                    id={`${currentCompany.symbol}-144`}
+                    checked={currentCompany.preferences.other}
+                    onCheckedChange={(checked) => {
+                      setCurrentCompany({
+                        ...currentCompany,
+                        preferences: {
+                          ...currentCompany.preferences,
+                          other: checked
+                        }
+                      });
+                    }}
+                  />
+                </div>
+                
+                <div className="flex items-center justify-between">
+                  <Label htmlFor={`${currentCompany.symbol}-13f`} className="cursor-pointer">
+                    Form 13F
+                    <div className="text-xs text-muted-foreground">Beneficial Ownership Report</div>
+                  </Label>
+                  <Switch 
+                    id={`${currentCompany.symbol}-13f`}
+                    checked={false}
+                    disabled={true}
+                    onCheckedChange={() => {}}
+                  />
+                </div>
+                
+                <div className="flex items-center justify-between">
+                  <Label htmlFor={`${currentCompany.symbol}-13g`} className="cursor-pointer">
+                    Form 13G
+                    <div className="text-xs text-muted-foreground">Beneficial Ownership Report</div>
+                  </Label>
+                  <Switch 
+                    id={`${currentCompany.symbol}-13g`}
+                    checked={false}
+                    disabled={true}
+                    onCheckedChange={() => {}}
+                  />
+                </div>
+              </div>
+              
+              <DialogFooter>
+                <Button 
+                  variant="outline" 
+                  onClick={() => {
+                    setCurrentCompany(null);
+                    setIsPreferencesOpen(false);
+                  }}
+                >
+                  Cancel
+                </Button>
+                <Button 
+                  onClick={() => {
+                    if (currentCompany) {
+                      handleSavePreferences(
+                        currentCompany.symbol, 
+                        currentCompany.preferences
+                      );
+                    }
+                  }}
+                >
+                  Save Preferences
+                </Button>
+              </DialogFooter>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 } 
