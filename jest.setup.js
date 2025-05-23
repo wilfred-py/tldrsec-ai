@@ -1,5 +1,14 @@
-// Import jest-dom matchers
-import '@testing-library/jest-dom';
+// Import Jest DOM for DOM testing utilities
+require('@testing-library/jest-dom');
+// Import fetch polyfill for testing API calls
+require('whatwg-fetch');
+
+// Mock environment variables
+process.env.NEXT_PUBLIC_API_ENABLED = 'false';
+process.env.NEXT_PUBLIC_API_URL = 'https://test-api.tldrsec.dev';
+
+// Mock the global fetch function
+global.fetch = jest.fn();
 
 // Mock Next.js objects
 global.Request = class Request {
@@ -136,8 +145,8 @@ Object.defineProperty(window, 'matchMedia', {
     matches: false,
     media: query,
     onchange: null,
-    addListener: jest.fn(), // deprecated
-    removeListener: jest.fn(), // deprecated
+    addListener: jest.fn(),
+    removeListener: jest.fn(),
     addEventListener: jest.fn(),
     removeEventListener: jest.fn(),
     dispatchEvent: jest.fn(),
@@ -152,4 +161,28 @@ global.IntersectionObserver = class IntersectionObserver {
   observe() { return null; }
   unobserve() { return null; }
   disconnect() { return null; }
-}; 
+};
+
+// Mock next/navigation
+jest.mock('next/navigation', () => ({
+  useRouter: () => ({
+    push: jest.fn(),
+    replace: jest.fn(),
+    prefetch: jest.fn(),
+  }),
+  usePathname: () => '/',
+  useSearchParams: () => new URLSearchParams(),
+}));
+
+// Mock toast notifications
+jest.mock('sonner', () => ({
+  toast: {
+    success: jest.fn(),
+    error: jest.fn(),
+  },
+}));
+
+// Reset all mocks between tests
+beforeEach(() => {
+  jest.clearAllMocks();
+}); 

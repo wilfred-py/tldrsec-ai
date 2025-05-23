@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { DashboardHeader } from "@/components/dashboard";
 import { Input } from "@/components/ui/input";
@@ -36,120 +36,10 @@ import {
   FilterFn,
   getFilteredRowModel
 } from "@tanstack/react-table";
-
-// Representing a company with filing preferences
-interface Company {
-  symbol: string;
-  name: string;
-  lastFiling: string;
-  preferences: {
-    tenK: boolean;
-    tenQ: boolean;
-    eightK: boolean;
-    form4: boolean;
-    other: boolean;
-  };
-}
-
-// This would typically come from an API or database
-const MOCK_COMPANIES: Company[] = [
-  { 
-    symbol: "AAPL", 
-    name: "Apple Inc.", 
-    lastFiling: "2 days ago",
-    preferences: { tenK: true, tenQ: true, eightK: true, form4: true, other: false }
-  },
-  { 
-    symbol: "MSFT", 
-    name: "Microsoft Corp.", 
-    lastFiling: "1 week ago",
-    preferences: { tenK: true, tenQ: true, eightK: true, form4: false, other: false }
-  },
-  { 
-    symbol: "GOOGL", 
-    name: "Alphabet Inc.", 
-    lastFiling: "3 days ago",
-    preferences: { tenK: true, tenQ: true, eightK: true, form4: true, other: false }
-  },
-  { 
-    symbol: "AMZN", 
-    name: "Amazon.com Inc.", 
-    lastFiling: "1 day ago",
-    preferences: { tenK: true, tenQ: true, eightK: true, form4: true, other: true }
-  },
-  { 
-    symbol: "META", 
-    name: "Meta Platforms Inc.", 
-    lastFiling: "2 weeks ago",
-    preferences: { tenK: true, tenQ: true, eightK: true, form4: false, other: false }
-  },
-  { 
-    symbol: "TSLA", 
-    name: "Tesla, Inc.", 
-    lastFiling: "5 days ago",
-    preferences: { tenK: true, tenQ: true, eightK: true, form4: true, other: false }
-  },
-  { 
-    symbol: "NVDA", 
-    name: "NVIDIA Corporation", 
-    lastFiling: "1 week ago",
-    preferences: { tenK: true, tenQ: true, eightK: false, form4: false, other: false }
-  },
-  { 
-    symbol: "AMD", 
-    name: "Advanced Micro Devices, Inc.", 
-    lastFiling: "3 weeks ago",
-    preferences: { tenK: true, tenQ: true, eightK: true, form4: false, other: false }
-  },
-  { 
-    symbol: "INTC", 
-    name: "Intel Corporation", 
-    lastFiling: "2 weeks ago",
-    preferences: { tenK: true, tenQ: true, eightK: true, form4: false, other: false }
-  },
-];
-
-// More comprehensive list of available tickers for search
-// In a real application, this would come from an API or database
-const AVAILABLE_TICKERS = [
-  { symbol: "WMT", name: "Walmart Inc." },
-  { symbol: "TGT", name: "Target Corporation" },
-  { symbol: "COST", name: "Costco Wholesale Corp." },
-  { symbol: "HD", name: "Home Depot Inc." },
-  { symbol: "LOW", name: "Lowe's Companies Inc." },
-  { symbol: "SBUX", name: "Starbucks Corporation" },
-  { symbol: "MCD", name: "McDonald's Corporation" },
-  { symbol: "DIS", name: "The Walt Disney Company" },
-  { symbol: "NFLX", name: "Netflix Inc." },
-  { symbol: "JPM", name: "JPMorgan Chase & Co." },
-  { symbol: "BAC", name: "Bank of America Corp." },
-  { symbol: "WFC", name: "Wells Fargo & Co." },
-  { symbol: "C", name: "Citigroup Inc." },
-  { symbol: "GS", name: "Goldman Sachs Group Inc." },
-  { symbol: "V", name: "Visa Inc." },
-  { symbol: "MA", name: "Mastercard Inc." },
-  { symbol: "PYPL", name: "PayPal Holdings Inc." },
-  { symbol: "SQ", name: "Block Inc." },
-  { symbol: "ADBE", name: "Adobe Inc." },
-  { symbol: "CRM", name: "Salesforce Inc." },
-  { symbol: "IBM", name: "International Business Machines Corp." },
-  { symbol: "ORCL", name: "Oracle Corporation" },
-  { symbol: "CSCO", name: "Cisco Systems Inc." },
-  { symbol: "QCOM", name: "Qualcomm Inc." },
-  { symbol: "TMO", name: "Thermo Fisher Scientific Inc." },
-  { symbol: "DHR", name: "Danaher Corporation" },
-  { symbol: "JNJ", name: "Johnson & Johnson" },
-  { symbol: "PFE", name: "Pfizer Inc." },
-  { symbol: "MRK", name: "Merck & Co. Inc." },
-  { symbol: "ABBV", name: "AbbVie Inc." },
-  { symbol: "LLY", name: "Eli Lilly and Company" },
-  { symbol: "PG", name: "Procter & Gamble Co." },
-  { symbol: "KO", name: "Coca-Cola Company" },
-  { symbol: "PEP", name: "PepsiCo Inc." },
-  { symbol: "MDLZ", name: "Mondelez International Inc." },
-  { symbol: "NKE", name: "Nike Inc." },
-  { symbol: "ABNB", name: "Airbnb Inc." }
-];
+import { Company, TickerSearchResult } from "@/lib/api/types";
+import { getTrackedCompanies, searchCompanies, addTrackedCompany, deleteTrackedCompany, updateCompanyPreferences } from "@/lib/api/ticker-service";
+import { useAsync } from "@/lib/hooks/use-async";
+import { Skeleton } from "@/components/ui/skeleton";
 
 // Column definition helper
 const columnHelper = createColumnHelper<Company>();
@@ -164,14 +54,32 @@ const globalFilterFn: FilterFn<Company> = (row, columnId, value) => {
 };
 
 export function DashboardClient() {
-  const [companies, setCompanies] = useState<Company[]>(MOCK_COMPANIES);
   const [searchQuery, setSearchQuery] = useState("");
   const [currentCompany, setCurrentCompany] = useState<Company | null>(null);
   const [newTickerSearch, setNewTickerSearch] = useState("");
-  const [searchResults, setSearchResults] = useState<typeof AVAILABLE_TICKERS>([]);
+  const [searchResults, setSearchResults] = useState<TickerSearchResult[]>([]);
   const [isPreferencesOpen, setIsPreferencesOpen] = useState(false);
   const [isAddTickerOpen, setIsAddTickerOpen] = useState(false);
   const [sorting, setSorting] = useState<SortingState>([]);
+  
+  // Use the custom hook for async operations
+  const {
+    data: companies,
+    isLoading: isLoadingCompanies,
+    error: companiesError,
+    execute: executeCompaniesQuery,
+    setData: setCompanies
+  } = useAsync<Company[]>([]);
+  
+  // Fetch companies on component mount
+  useEffect(() => {
+    executeCompaniesQuery(
+      () => getTrackedCompanies(),
+      {
+        errorMessage: "Failed to load tracked companies. Please try again."
+      }
+    );
+  }, [executeCompaniesQuery]);
   
   // Define table columns
   const columns = useMemo(() => [
@@ -189,7 +97,7 @@ export function DashboardClient() {
             ) : column.getIsSorted() === 'desc' ? (
               <ChevronDown className="ml-2 h-4 w-4" />
             ) : (
-              <ArrowUpDown className="ml-2 h-4 w-4" />
+              <ArrowUpDown className="ml-2 h-4 w-4 opacity-0 group-hover:opacity-100" />
             )}
           </Button>
         )
@@ -210,7 +118,7 @@ export function DashboardClient() {
             ) : column.getIsSorted() === 'desc' ? (
               <ChevronDown className="ml-2 h-4 w-4" />
             ) : (
-              <ArrowUpDown className="ml-2 h-4 w-4" />
+              <ArrowUpDown className="ml-2 h-4 w-4 opacity-0 group-hover:opacity-100" />
             )}
           </Button>
         )
@@ -231,7 +139,7 @@ export function DashboardClient() {
             ) : column.getIsSorted() === 'desc' ? (
               <ChevronDown className="ml-2 h-4 w-4" />
             ) : (
-              <ArrowUpDown className="ml-2 h-4 w-4" />
+              <ArrowUpDown className="ml-2 h-4 w-4 opacity-0 group-hover:opacity-100" />
             )}
           </Button>
         )
@@ -262,7 +170,7 @@ export function DashboardClient() {
               variant="ghost" 
               size="icon" 
               className="h-8 w-8"
-              onClick={() => handleDeleteCompany(company.symbol)}
+              onClick={() => handleDeleteCompany(company.id)}
             >
               <Trash2Icon className="h-4 w-4" />
               <span className="sr-only">Delete</span>
@@ -275,7 +183,7 @@ export function DashboardClient() {
   
   // Initialize the table with React Table
   const table = useReactTable({
-    data: companies,
+    data: companies || [],
     columns,
     state: {
       sorting,
@@ -290,56 +198,109 @@ export function DashboardClient() {
   });
 
   // Handle saving preferences for a company
-  const handleSavePreferences = (symbol: string, preferences: Company['preferences']) => {
-    setCompanies(companies.map(company => 
-      company.symbol === symbol ? { ...company, preferences } : company
-    ));
-    toast.success(`Preferences updated for ${symbol}`);
-    setIsPreferencesOpen(false);
-    setCurrentCompany(null);
+  const handleSavePreferences = async (id: string, preferences: Company['preferences']) => {
+    const { success } = await executeCompaniesQuery(
+      () => updateCompanyPreferences(id, preferences),
+      {
+        successMessage: `Preferences updated for ${currentCompany?.symbol || 'company'}`,
+        errorMessage: "Failed to update preferences. Please try again.",
+        onSuccess: (updatedCompany) => {
+          // Update the companies list with the updated company
+          if (companies) {
+            setCompanies(
+              companies.map(company => 
+                company.id === id ? { ...company, preferences } : company
+              )
+            );
+          }
+          setIsPreferencesOpen(false);
+          setCurrentCompany(null);
+        }
+      }
+    );
+    
+    if (success) {
+      setIsPreferencesOpen(false);
+      setCurrentCompany(null);
+    }
   };
 
   // Handle deleting a company
-  const handleDeleteCompany = (symbol: string) => {
-    setCompanies(companies.filter(company => company.symbol !== symbol));
-    toast.success(`${symbol} has been removed from tracked tickers`);
+  const handleDeleteCompany = async (id: string) => {
+    if (!companies) return;
+    
+    // Find the company for the toast message
+    const company = companies.find(c => c.id === id);
+    
+    // Optimistic update
+    const previousCompanies = [...companies];
+    setCompanies(companies.filter(company => company.id !== id));
+    
+    const { success } = await executeCompaniesQuery(
+      () => deleteTrackedCompany(id),
+      {
+        successMessage: `${company?.symbol || 'Company'} has been removed from tracked tickers`,
+        errorMessage: "Failed to remove company. Please try again.",
+        onError: () => {
+          // Restore previous state if error
+          setCompanies(previousCompanies);
+        }
+      }
+    );
   };
 
   // Handle search for adding new tickers
-  const handleSearchTickers = (query: string) => {
+  const handleSearchTickers = async (query: string) => {
     setNewTickerSearch(query);
-    if (query.length > 1) {
-      const results = AVAILABLE_TICKERS.filter(ticker => 
-        ticker.symbol.toLowerCase().includes(query.toLowerCase()) || 
-        ticker.name.toLowerCase().includes(query.toLowerCase())
-      );
-      setSearchResults(results);
-    } else {
+    
+    if (query.length < 2) {
       setSearchResults([]);
+      return;
+    }
+    
+    const { success, data } = await executeCompaniesQuery(
+      () => searchCompanies(query),
+      {
+        errorMessage: "Failed to search tickers. Please try again."
+      }
+    );
+    
+    if (success && data) {
+      setSearchResults(data);
     }
   };
 
   // Handle adding a new ticker
-  const handleAddTicker = (symbol: string, name: string) => {
+  const handleAddTicker = async (symbol: string, name: string) => {
+    if (!companies) return;
+    
+    // Check if company already exists client-side
     const exists = companies.some(company => company.symbol === symbol);
-    if (!exists) {
-      const newCompany: Company = {
-        symbol,
-        name,
-        lastFiling: "—",
-        preferences: { tenK: true, tenQ: true, eightK: true, form4: false, other: false }
-      };
-      setCompanies([...companies, newCompany]);
-      toast.success(`${symbol} has been added to tracked tickers`);
-      setNewTickerSearch("");
-      setSearchResults([]);
-      setIsAddTickerOpen(false); // Close modal after adding
-    } else {
+    if (exists) {
       toast.error(`${symbol} is already being tracked`);
+      return;
+    }
+    
+    const { success, data } = await executeCompaniesQuery(
+      () => addTrackedCompany(symbol, name),
+      {
+        successMessage: `${symbol} has been added to tracked tickers`,
+        errorMessage: `Failed to add ${symbol}. Please try again.`,
+        onSuccess: () => {
+          setNewTickerSearch("");
+          setSearchResults([]);
+          setIsAddTickerOpen(false);
+        }
+      }
+    );
+    
+    if (success && data) {
+      // Add the new company to the list
+      setCompanies([...(companies || []), data]);
     }
   };
 
-  const showEmptyState = table.getRowModel().rows.length === 0;
+  const showEmptyState = (companies?.length === 0 && !isLoadingCompanies) || companiesError;
 
   return (
     <div className="space-y-6">
@@ -425,7 +386,14 @@ export function DashboardClient() {
           </div>
           
           <div className="mt-6">
-            {showEmptyState ? (
+            {isLoadingCompanies ? (
+              <div className="space-y-3">
+                <Skeleton className="h-12 w-full" />
+                <Skeleton className="h-12 w-full" />
+                <Skeleton className="h-12 w-full" />
+                <Skeleton className="h-12 w-full" />
+              </div>
+            ) : showEmptyState ? (
               <div className="flex min-h-[200px] flex-col items-center justify-center rounded-md border border-dashed p-8 text-center">
                 <h3 className="text-base font-medium">No companies tracked yet</h3>
                 <p className="mt-2 text-sm text-muted-foreground">
@@ -515,7 +483,7 @@ export function DashboardClient() {
                       {table.getHeaderGroups().map(headerGroup => (
                         <TableRow key={headerGroup.id}>
                           {headerGroup.headers.map(header => (
-                            <TableHead key={header.id}>
+                            <TableHead key={header.id} className="group">
                               {header.isPlaceholder
                                 ? null
                                 : flexRender(
@@ -720,7 +688,7 @@ export function DashboardClient() {
                   onClick={() => {
                     if (currentCompany) {
                       handleSavePreferences(
-                        currentCompany.symbol, 
+                        currentCompany.id, 
                         currentCompany.preferences
                       );
                     }
