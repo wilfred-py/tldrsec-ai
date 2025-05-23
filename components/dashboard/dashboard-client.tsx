@@ -331,10 +331,11 @@ export function DashboardClient() {
               <DialogTrigger asChild>
                 <Button>
                   <PlusIcon className="h-4 w-4 mr-2" />
-                  Add Ticker
+                  <span className="hidden sm:inline">Add Ticker</span>
+                  <span className="sm:hidden">Add</span>
                 </Button>
               </DialogTrigger>
-              <DialogContent>
+              <DialogContent className="max-w-[95vw] sm:max-w-md">
                 <DialogHeader>
                   <DialogTitle>Add New Ticker</DialogTitle>
                   <DialogDescription>
@@ -381,7 +382,7 @@ export function DashboardClient() {
                   )}
                 </div>
                 
-                <DialogFooter>
+                <DialogFooter className="flex-col sm:flex-row gap-2 sm:gap-0">
                   <Button variant="outline" onClick={() => {
                     setNewTickerSearch("");
                     setSearchResults([]);
@@ -403,7 +404,7 @@ export function DashboardClient() {
                 <Skeleton className="h-12 w-full" />
               </div>
             ) : showEmptyState ? (
-              <div className="flex min-h-[200px] flex-col items-center justify-center rounded-md border border-dashed p-8 text-center">
+              <div className="flex min-h-[200px] flex-col items-center justify-center rounded-md border border-dashed p-4 sm:p-8 text-center">
                 <h3 className="text-base font-medium">No companies tracked yet</h3>
                 <p className="mt-2 text-sm text-muted-foreground">
                   Start tracking companies to receive SEC filing summaries.
@@ -412,7 +413,7 @@ export function DashboardClient() {
                   <DialogTrigger asChild>
                     <Button className="mt-6">Add Your First Company</Button>
                   </DialogTrigger>
-                  <DialogContent>
+                  <DialogContent className="max-w-[95vw] sm:max-w-md">
                     <DialogHeader>
                       <DialogTitle>Add New Ticker</DialogTitle>
                       <DialogDescription>
@@ -459,7 +460,7 @@ export function DashboardClient() {
                       )}
                     </div>
                     
-                    <DialogFooter>
+                    <DialogFooter className="flex-col sm:flex-row gap-2 sm:gap-0">
                       <Button variant="outline" onClick={() => {
                         setNewTickerSearch("");
                         setSearchResults([]);
@@ -486,7 +487,8 @@ export function DashboardClient() {
                   </div>
                 </div>
                 
-                <div className="rounded-md border">
+                {/* Desktop Table View */}
+                <div className="rounded-md border hidden sm:block">
                   <Table>
                     <TableHeader>
                       {table.getHeaderGroups().map(headerGroup => (
@@ -526,6 +528,60 @@ export function DashboardClient() {
                   </Table>
                 </div>
                 
+                {/* Mobile Card View */}
+                <div className="sm:hidden space-y-4">
+                  {table.getRowModel().rows.length ? (
+                    table.getRowModel().rows.map((row) => (
+                      <div key={row.id} className="border rounded-md p-4 space-y-3">
+                        <div className="flex justify-between items-center">
+                          <h3 className="font-medium text-lg">{row.original.symbol}</h3>
+                          <div className="flex gap-2">
+                            <Button 
+                              variant="ghost" 
+                              size="icon" 
+                              className="h-8 w-8"
+                              onClick={() => {
+                                setCurrentCompany({...row.original});
+                                setIsPreferencesOpen(true);
+                              }}
+                            >
+                              <SettingsIcon className="h-4 w-4" />
+                              <span className="sr-only">Settings</span>
+                            </Button>
+                            
+                            <Button 
+                              variant="ghost" 
+                              size="icon" 
+                              className="h-8 w-8"
+                              onClick={() => {
+                                setCompanyToDelete(row.original);
+                                setIsDeleteConfirmOpen(true);
+                              }}
+                            >
+                              <Trash2Icon className="h-4 w-4" />
+                              <span className="sr-only">Delete</span>
+                            </Button>
+                          </div>
+                        </div>
+                        
+                        <div className="space-y-1">
+                          <div className="text-sm text-muted-foreground">Company</div>
+                          <div>{row.original.name}</div>
+                        </div>
+                        
+                        <div className="space-y-1">
+                          <div className="text-sm text-muted-foreground">Last Filing</div>
+                          <div>{row.original.lastFiling}</div>
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="text-center py-10 border rounded-md">
+                      No companies found.
+                    </div>
+                  )}
+                </div>
+                
                 <div className="mt-4 text-right text-sm text-muted-foreground">
                   Total tracked tickers: {table.getRowModel().rows.length}
                 </div>
@@ -543,7 +599,7 @@ export function DashboardClient() {
           if (!open) setCurrentCompany(null);
         }}
       >
-        <DialogContent>
+        <DialogContent className="max-w-[95vw] sm:max-w-md">
           <DialogHeader>
             <DialogTitle>
               Form Preferences for {currentCompany?.symbol}
@@ -683,7 +739,7 @@ export function DashboardClient() {
                 </div>
               </div>
               
-              <DialogFooter>
+              <DialogFooter className="flex-col sm:flex-row gap-2 sm:gap-0">
                 <Button 
                   variant="outline" 
                   onClick={() => {
@@ -713,7 +769,7 @@ export function DashboardClient() {
 
       {/* Delete Confirmation Dialog */}
       <Dialog open={isDeleteConfirmOpen} onOpenChange={setIsDeleteConfirmOpen}>
-        <DialogContent>
+        <DialogContent className="max-w-[95vw] sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Confirm Deletion</DialogTitle>
             <DialogDescription>
@@ -721,7 +777,7 @@ export function DashboardClient() {
               This action cannot be undone.
             </DialogDescription>
           </DialogHeader>
-          <DialogFooter className="gap-2 sm:gap-0">
+          <DialogFooter className="flex-col sm:flex-row gap-2 sm:gap-0">
             <Button
               variant="outline"
               onClick={() => {
