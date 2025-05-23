@@ -61,6 +61,8 @@ export function DashboardClient() {
   const [isPreferencesOpen, setIsPreferencesOpen] = useState(false);
   const [isAddTickerOpen, setIsAddTickerOpen] = useState(false);
   const [sorting, setSorting] = useState<SortingState>([]);
+  const [companyToDelete, setCompanyToDelete] = useState<Company | null>(null);
+  const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
   
   // Use the custom hook for async operations
   const {
@@ -170,7 +172,10 @@ export function DashboardClient() {
               variant="ghost" 
               size="icon" 
               className="h-8 w-8"
-              onClick={() => handleDeleteCompany(company.id)}
+              onClick={() => {
+                setCompanyToDelete(company);
+                setIsDeleteConfirmOpen(true);
+              }}
             >
               <Trash2Icon className="h-4 w-4" />
               <span className="sr-only">Delete</span>
@@ -235,6 +240,10 @@ export function DashboardClient() {
     // Optimistic update
     const previousCompanies = [...companies];
     setCompanies(companies.filter(company => company.id !== id));
+    
+    // Close the confirmation dialog
+    setIsDeleteConfirmOpen(false);
+    setCompanyToDelete(null);
     
     const { success } = await executeCompaniesQuery(
       () => deleteTrackedCompany(id),
@@ -699,6 +708,36 @@ export function DashboardClient() {
               </DialogFooter>
             </>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={isDeleteConfirmOpen} onOpenChange={setIsDeleteConfirmOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Confirm Deletion</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to remove {companyToDelete?.symbol} ({companyToDelete?.name}) from your tracked tickers?
+              This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setIsDeleteConfirmOpen(false);
+                setCompanyToDelete(null);
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => companyToDelete && handleDeleteCompany(companyToDelete.id)}
+            >
+              Delete
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>
