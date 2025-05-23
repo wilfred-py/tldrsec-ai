@@ -1,12 +1,19 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Summary } from '@/lib/generated/prisma';
 import { Badge } from '@/components/ui/badge';
-import { ArrowDown, ArrowUp, Info, AlertTriangle, BarChart, Briefcase, Calendar, DollarSign, FileText, TrendingUp } from 'lucide-react';
+import { ArrowDown, ArrowUp, Info, AlertTriangle, BarChart, Briefcase, Calendar, DollarSign, FileText, TrendingUp, Search, Copy, Download, Check, ChevronDown, ChevronRight, X } from 'lucide-react';
 import { format } from 'date-fns';
+import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
+import { coldarkDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
+import { atomDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
+import { JSONTree } from 'react-json-tree';
+import CopyToClipboard from 'react-copy-to-clipboard';
+import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
 
 interface SummaryContentProps {
   summary: Summary & {
@@ -19,6 +26,11 @@ interface SummaryContentProps {
 
 export function SummaryContent({ summary }: SummaryContentProps) {
   const [activeTab, setActiveTab] = useState('formatted');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [copied, setCopied] = useState(false);
+  const [expandedNodes, setExpandedNodes] = useState<string[]>([]);
+  const rawTextRef = useRef<HTMLPreElement>(null);
+  const jsonRef = useRef<HTMLDivElement>(null);
 
   // Parse the JSON summary if available
   let parsedSummary = null;
@@ -31,6 +43,122 @@ export function SummaryContent({ summary }: SummaryContentProps) {
   } catch (error) {
     console.error('Error parsing summary JSON:', error);
   }
+
+  // Copy success handler
+  const handleCopy = () => {
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  // Download function
+  const downloadContent = (content: string, filename: string, contentType: string) => {
+    const blob = new Blob([content], { type: contentType });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  // Highlighted search in text
+  const highlightSearchText = (text: string) => {
+    if (!searchQuery || searchQuery.trim() === '') return text;
+    
+    const parts = text.split(new RegExp(`(${searchQuery})`, 'gi'));
+    return (
+      <>
+        {parts.map((part, i) => 
+          part.toLowerCase() === searchQuery.toLowerCase() ? 
+            <span key={i} className="bg-yellow-200 text-black font-medium">{part}</span> : 
+            part
+        )}
+      </>
+    );
+  };
+
+  // JSON search handler
+  const handleSearchInJson = () => {
+    if (!jsonRef.current || !searchQuery) return;
+    
+    const allElements = jsonRef.current.querySelectorAll('span');
+    let foundMatch = false;
+    
+    // Remove previous highlights
+    allElements.forEach(el => {
+      el.classList.remove('bg-yellow-200', 'text-black', 'font-medium');
+    });
+    
+    // Add new highlights
+    allElements.forEach(el => {
+      if (el.textContent?.toLowerCase().includes(searchQuery.toLowerCase())) {
+        el.classList.add('bg-yellow-200', 'text-black', 'font-medium');
+        if (!foundMatch) {
+          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          foundMatch = true;
+        }
+      }
+    });
+  };
+
+  // Raw text search handler
+  const handleSearchInRaw = () => {
+    if (!rawTextRef.current || !searchQuery) return;
+    
+    const textContent = rawTextRef.current.textContent || '';
+    const index = textContent.toLowerCase().indexOf(searchQuery.toLowerCase());
+    
+    if (index !== -1) {
+      const lineHeight = 20; // Approximate line height in pixels
+      const linesBeforeTarget = textContent.substring(0, index).split('\n').length - 1;
+      const scrollPosition = linesBeforeTarget * lineHeight;
+      
+      rawTextRef.current.scrollTop = scrollPosition;
+    }
+  };
+
+  // Handle search when user presses Enter
+  const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      if (activeTab === 'raw') {
+        handleSearchInRaw();
+      } else if (activeTab === 'json') {
+        handleSearchInJson();
+      }
+    }
+  };
+
+  // Clear search
+  const clearSearch = () => {
+    setSearchQuery('');
+    if (jsonRef.current) {
+      const allElements = jsonRef.current.querySelectorAll('span');
+      allElements.forEach(el => {
+        el.classList.remove('bg-yellow-200', 'text-black', 'font-medium');
+      });
+    }
+  };
+
+  // Custom JSON theme that matches the UI
+  const jsonTheme = {
+    scheme: 'atelierDune',
+    base00: 'hsl(var(--muted))',
+    base01: '#292e34',
+    base02: '#3e4451',
+    base03: '#565c64',
+    base04: '#9196a1',
+    base05: '#abb2bf',
+    base06: '#c8ccd4',
+    base07: '#e6e6e6',
+    base08: 'hsl(var(--destructive))',
+    base09: '#e5c07b',
+    base0A: '#e5c07b',
+    base0B: 'hsl(var(--primary))',
+    base0C: '#56b6c2',
+    base0D: '#61afef',
+    base0E: '#c678dd',
+    base0F: '#be5046',
+  };
 
   return (
     <Tabs defaultValue="formatted" onValueChange={setActiveTab}>
@@ -55,16 +183,141 @@ export function SummaryContent({ summary }: SummaryContentProps) {
       </TabsContent>
 
       <TabsContent value="raw">
-        <pre className="bg-muted p-4 rounded overflow-auto max-h-[600px] text-sm">
-          {summary.summaryText}
-        </pre>
+        <Card>
+          <CardHeader className="pb-3">
+            <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-4">
+              <CardTitle className="text-xl">Raw Filing Text</CardTitle>
+              <div className="flex items-center gap-2">
+                <div className="relative w-full md:w-64">
+                  <Input
+                    type="text"
+                    placeholder="Search in text..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    onKeyDown={handleSearchKeyDown}
+                    className="pr-8"
+                  />
+                  {searchQuery && (
+                    <button 
+                      className="absolute right-2 top-1/2 transform -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                      onClick={clearSearch}
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  )}
+                </div>
+                <Button 
+                  variant="outline" 
+                  size="icon" 
+                  onClick={handleSearchInRaw}
+                  disabled={!searchQuery}>
+                  <Search className="h-4 w-4" />
+                </Button>
+                <CopyToClipboard text={summary.summaryText} onCopy={handleCopy}>
+                  <Button variant="outline" size="icon">
+                    {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                  </Button>
+                </CopyToClipboard>
+                <Button 
+                  variant="outline" 
+                  size="icon"
+                  onClick={() => downloadContent(
+                    summary.summaryText, 
+                    `${summary.ticker.symbol}_${summary.filingType}_raw.txt`, 
+                    'text/plain'
+                  )}>
+                  <Download className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="relative">
+              <SyntaxHighlighter
+                language="plaintext"
+                style={coldarkDark}
+                showLineNumbers={true}
+                wrapLines={true}
+                customStyle={{
+                  maxHeight: '500px',
+                  borderRadius: '0.5rem',
+                  fontSize: '0.875rem',
+                  lineHeight: '1.5',
+                }}
+                ref={rawTextRef}
+              >
+                {summary.summaryText}
+              </SyntaxHighlighter>
+            </div>
+          </CardContent>
+        </Card>
       </TabsContent>
 
       {parsedSummary && (
         <TabsContent value="json">
-          <pre className="bg-muted p-4 rounded overflow-auto max-h-[600px] text-sm">
-            {JSON.stringify(parsedSummary, null, 2)}
-          </pre>
+          <Card>
+            <CardHeader className="pb-3">
+              <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-4">
+                <CardTitle className="text-xl">JSON Structure</CardTitle>
+                <div className="flex items-center gap-2">
+                  <div className="relative w-full md:w-64">
+                    <Input
+                      type="text"
+                      placeholder="Search in JSON..."
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      onKeyDown={handleSearchKeyDown}
+                      className="pr-8"
+                    />
+                    {searchQuery && (
+                      <button 
+                        className="absolute right-2 top-1/2 transform -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                        onClick={clearSearch}
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    )}
+                  </div>
+                  <Button 
+                    variant="outline" 
+                    size="icon" 
+                    onClick={handleSearchInJson}
+                    disabled={!searchQuery}>
+                    <Search className="h-4 w-4" />
+                  </Button>
+                  <CopyToClipboard text={JSON.stringify(parsedSummary, null, 2)} onCopy={handleCopy}>
+                    <Button variant="outline" size="icon">
+                      {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                    </Button>
+                  </CopyToClipboard>
+                  <Button 
+                    variant="outline" 
+                    size="icon"
+                    onClick={() => downloadContent(
+                      JSON.stringify(parsedSummary, null, 2), 
+                      `${summary.ticker.symbol}_${summary.filingType}.json`, 
+                      'application/json'
+                    )}>
+                    <Download className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div 
+                className="bg-muted rounded-lg p-4 overflow-auto max-h-[500px]" 
+                ref={jsonRef}
+              >
+                <JSONTree 
+                  data={parsedSummary} 
+                  theme={jsonTheme}
+                  invertTheme={false}
+                  hideRoot={false}
+                  shouldExpandNodeInitially={() => false}
+                />
+              </div>
+            </CardContent>
+          </Card>
         </TabsContent>
       )}
     </Tabs>
