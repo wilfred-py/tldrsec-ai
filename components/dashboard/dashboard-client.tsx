@@ -40,6 +40,8 @@ import { Company, TickerSearchResult } from "@/lib/api/types";
 import { getTrackedCompanies, searchCompanies, addTrackedCompany, deleteTrackedCompany, updateCompanyPreferences } from "@/lib/api/ticker-service";
 import { useAsync } from "@/lib/hooks/use-async";
 import { Skeleton } from "@/components/ui/skeleton";
+import { SummaryList } from "@/components/dashboard/summary-list";
+import { getRecentSummaries } from "@/lib/api/summary-service";
 
 // Column definition helper
 const columnHelper = createColumnHelper<Company>();
@@ -73,7 +75,15 @@ export function DashboardClient() {
     setData: setCompanies
   } = useAsync<Company[]>([]);
   
-  // Fetch companies on component mount
+  // Use the custom hook for recent summaries
+  const {
+    data: recentSummaries,
+    isLoading: isLoadingSummaries,
+    error: summariesError,
+    execute: executeSummariesQuery
+  } = useAsync([]);
+  
+  // Fetch companies and summaries on component mount
   useEffect(() => {
     executeCompaniesQuery(
       () => getTrackedCompanies(),
@@ -81,7 +91,14 @@ export function DashboardClient() {
         errorMessage: "Failed to load tracked companies. Please try again."
       }
     );
-  }, [executeCompaniesQuery]);
+    
+    executeSummariesQuery(
+      () => getRecentSummaries(),
+      {
+        errorMessage: "Failed to load recent summaries."
+      }
+    );
+  }, [executeCompaniesQuery, executeSummariesQuery]);
   
   // Define table columns
   const columns = useMemo(() => [
@@ -589,6 +606,16 @@ export function DashboardClient() {
             )}
           </div>
         </div>
+      </div>
+
+      {/* Recent Summaries Section */}
+      <div className="mt-8">
+        <SummaryList 
+          summaries={recentSummaries || []} 
+          title="Recent Summaries"
+          showEmptyState={!isLoadingSummaries}
+          className={isLoadingSummaries ? "animate-pulse" : ""}
+        />
       </div>
 
       {/* Preferences Dialog */}
