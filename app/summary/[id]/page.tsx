@@ -3,13 +3,21 @@ import { redirect, notFound } from 'next/navigation';
 import { prisma } from '@/lib/db';
 import { Sidebar } from '@/components/layout/sidebar';
 import { formatDistanceToNow, format } from 'date-fns';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, ChevronRight } from 'lucide-react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { checkSummaryAccess, AccessDeniedError, ResourceNotFoundError } from '@/lib/auth/access-control';
 import { SummaryContent } from '@/components/summary/summary-content';
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
 import { AlertCircle } from 'lucide-react';
+import {
+  Breadcrumb,
+  BreadcrumbItem,
+  BreadcrumbLink,
+  BreadcrumbList,
+  BreadcrumbPage,
+  BreadcrumbSeparator,
+} from "@/components/ui/breadcrumb";
 
 interface SummaryPageProps {
   params: {
@@ -48,6 +56,26 @@ export default async function SummaryPage({ params }: SummaryPageProps) {
           <Sidebar className="fixed inset-y-0 z-30 w-64 border-r" />
           <main className="flex-1 md:pl-64">
             <div className="container py-8 md:py-10 px-6 md:px-8 space-y-6">
+              <Breadcrumb className="mb-4">
+                <BreadcrumbList>
+                  <BreadcrumbItem>
+                    <BreadcrumbLink href="/dashboard">Dashboard</BreadcrumbLink>
+                  </BreadcrumbItem>
+                  <BreadcrumbSeparator>
+                    <ChevronRight className="h-4 w-4" />
+                  </BreadcrumbSeparator>
+                  <BreadcrumbItem>
+                    <BreadcrumbLink href="/dashboard/summaries">Summaries</BreadcrumbLink>
+                  </BreadcrumbItem>
+                  <BreadcrumbSeparator>
+                    <ChevronRight className="h-4 w-4" />
+                  </BreadcrumbSeparator>
+                  <BreadcrumbItem>
+                    <BreadcrumbPage>{summary.ticker.symbol}: {summary.filingType}</BreadcrumbPage>
+                  </BreadcrumbItem>
+                </BreadcrumbList>
+              </Breadcrumb>
+              
               <div className="flex flex-col space-y-2">
                 <div className="flex items-center space-x-2">
                   <Link href="/dashboard">
@@ -97,6 +125,20 @@ export default async function SummaryPage({ params }: SummaryPageProps) {
             <Sidebar className="fixed inset-y-0 z-30 w-64 border-r" />
             <main className="flex-1 md:pl-64">
               <div className="container py-8 md:py-10 px-6 md:px-8">
+                <Breadcrumb className="mb-4">
+                  <BreadcrumbList>
+                    <BreadcrumbItem>
+                      <BreadcrumbLink href="/dashboard">Dashboard</BreadcrumbLink>
+                    </BreadcrumbItem>
+                    <BreadcrumbSeparator>
+                      <ChevronRight className="h-4 w-4" />
+                    </BreadcrumbSeparator>
+                    <BreadcrumbItem>
+                      <BreadcrumbPage>Access Denied</BreadcrumbPage>
+                    </BreadcrumbItem>
+                  </BreadcrumbList>
+                </Breadcrumb>
+                
                 <div className="flex items-center space-x-2 mb-6">
                   <Link href="/dashboard">
                     <Button variant="ghost" size="icon">
