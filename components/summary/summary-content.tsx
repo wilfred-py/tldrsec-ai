@@ -5,7 +5,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Summary } from '@/lib/generated/prisma';
 import { Badge } from '@/components/ui/badge';
-import { ArrowDown, ArrowUp, Info, AlertTriangle, BarChart, Briefcase, Calendar, DollarSign, FileText, TrendingUp, Search, Copy, Download, Check, ChevronDown, ChevronRight, X } from 'lucide-react';
+import { ArrowDown, ArrowUp, Info, AlertTriangle, BarChart, Briefcase, Calendar, DollarSign, FileText, TrendingUp, Search, Copy, Download, Check, ChevronDown, ChevronRight, X, ShieldAlert } from 'lucide-react';
 import { format } from 'date-fns';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { coldarkDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
@@ -14,14 +14,30 @@ import { JSONTree } from 'react-json-tree';
 import CopyToClipboard from 'react-copy-to-clipboard';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+import Link from 'next/link';
+
+// Extend the Summary type to include redacted properties
+interface RedactedSummary {
+  id: string;
+  filingType: string;
+  filingDate: Date;
+  ticker: {
+    symbol: string;
+    companyName: string;
+  };
+  summaryText: string;
+  summaryJSON: null;
+  accessDeniedReason: string;
+  isRedacted: boolean;
+}
 
 interface SummaryContentProps {
-  summary: Summary & {
+  summary: (Summary & {
     ticker: {
       symbol: string;
       companyName: string;
     }
-  };
+  }) | RedactedSummary;
 }
 
 export function SummaryContent({ summary }: SummaryContentProps) {
@@ -29,9 +45,28 @@ export function SummaryContent({ summary }: SummaryContentProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [copied, setCopied] = useState(false);
   const [expandedNodes, setExpandedNodes] = useState<string[]>([]);
-  const rawTextRef = useRef<HTMLPreElement>(null);
+  const rawTextRef = useRef<HTMLDivElement>(null);
   const jsonRef = useRef<HTMLDivElement>(null);
 
+  // Check if the summary is redacted due to access restrictions
+  if ('isRedacted' in summary && summary.isRedacted) {
+    return (
+      <div className="bg-gray-50 p-6 rounded-lg border border-gray-200">
+        <div className="flex items-center space-x-2 mb-4">
+          <ShieldAlert className="h-5 w-5 text-red-500" />
+          <h2 className="text-lg font-semibold">Access Restricted</h2>
+        </div>
+        <p className="mb-4 text-gray-700">{summary.summaryText}</p>
+        <p className="text-sm text-gray-500">{summary.accessDeniedReason}</p>
+        <div className="mt-4">
+          <Link href="/dashboard/settings">
+            <Button>Add to Watchlist</Button>
+          </Link>
+        </div>
+      </div>
+    );
+  }
+  
   // Parse the JSON summary if available
   let parsedSummary = null;
   try {
@@ -160,6 +195,15 @@ export function SummaryContent({ summary }: SummaryContentProps) {
     base0F: '#be5046',
   };
 
+  // Update this section only:
+  // Fix the ref type issue in the SyntaxHighlighter
+  const customSyntaxHighlighterRef = (el: any) => {
+    if (rawTextRef.current && el) {
+      // @ts-ignore - We're just using this ref to get access to the DOM node
+      rawTextRef.current = el;
+    }
+  };
+
   return (
     <Tabs defaultValue="formatted" onValueChange={setActiveTab}>
       <TabsList className="mb-4">
@@ -244,7 +288,7 @@ export function SummaryContent({ summary }: SummaryContentProps) {
                   fontSize: '0.875rem',
                   lineHeight: '1.5',
                 }}
-                ref={rawTextRef}
+                ref={customSyntaxHighlighterRef}
               >
                 {summary.summaryText}
               </SyntaxHighlighter>
