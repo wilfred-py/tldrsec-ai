@@ -17,12 +17,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { SearchIcon, RefreshCw } from "lucide-react";
+import { SearchIcon, RefreshCw, FileTextIcon, InfoIcon } from "lucide-react";
 import { SummaryCard } from "@/components/summary/summary-card";
 import { Summary } from "@/lib/generated/prisma";
 import { useAsync } from "@/lib/hooks/use-async";
 import { getRecentSummaries, SummaryWithTicker as ApiSummaryWithTicker } from "@/lib/api/summary-service";
 import { ApiResponse } from "@/lib/api/types";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 
 // Extend the interface to match the structure from the API service
@@ -37,196 +38,157 @@ interface SummaryWithTicker extends Summary {
 }
 
 export function SummariesClient() {
-  const [searchQuery, setSearchQuery] = useState("");
-  const [filingType, setFilingType] = useState("all");
-  const [sortBy, setSortBy] = useState("newest");
-  const [filteredSummaries, setFilteredSummaries] = useState<SummaryWithTicker[]>([]);
+  const router = useRouter();
+  const [searchTerm, setSearchTerm] = useState("");
+  const [filter, setFilter] = useState("all");
+  const [sortBy, setSortBy] = useState("date-desc");
 
-  // Wrap getRecentSummaries in a function that returns the expected ApiResponse format
-  const fetchSummariesWithApiResponse = async (): Promise<ApiResponse<SummaryWithTicker[]>> => {
-    try {
-      const summaries = await getRecentSummaries();
-      // Convert the API type to our component type if needed
-      const convertedSummaries = summaries as unknown as SummaryWithTicker[];
-      return { data: convertedSummaries };
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to fetch summaries';
-      return {
-        error: {
-          status: 500,
-          message
+  // Use the useAsync hook
+  const { data, isLoading, error, execute } = useAsync<SummaryWithTicker[]>([], {
+    onMount: true,
+    asyncFn: async () => {
+      try {
+        const response = await getRecentSummaries();
+        if (response && response.data) {
+          return response.data;
         }
-      };
+        return [];
+      } catch (error) {
+        console.error("Error fetching summaries:", error);
+        return [];
+      }
     }
+  });
+
+  // Function to handle search input changes
+  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setSearchTerm(e.target.value);
   };
 
-  // Use the custom hook for async operations
-  const {
-    data: summaries,
-    isLoading,
-    error,
-    execute: fetchSummaries
-  } = useAsync<SummaryWithTicker[]>([]);
+  // Function to refresh summaries
+  const handleRefresh = () => {
+    execute();
+    router.refresh();
+  };
 
-  // Fetch summaries on component mount
-  useEffect(() => {
-    fetchSummaries(
-      fetchSummariesWithApiResponse,
-      {
-        errorMessage: "Failed to load summaries. Please try again."
-      }
-    );
-  }, [fetchSummaries]);
-
-  // Filter and sort summaries when data, filingType or sortBy changes
-  useEffect(() => {
-    if (!summaries) {
-      setFilteredSummaries([]);
-      return;
-    }
-
-    let filtered = [...summaries];
-    
-    // Filter by filing type if specified
-    if (filingType !== "all") {
-      filtered = filtered.filter(summary => 
-        summary.filingType.toUpperCase() === filingType.toUpperCase()
-      );
-    }
-    
-    // Sort the summaries
-    filtered = filtered.sort((a, b) => {
-      switch (sortBy) {
-        case 'newest':
-          return new Date(b.filingDate).getTime() - new Date(a.filingDate).getTime();
-        case 'oldest':
-          return new Date(a.filingDate).getTime() - new Date(b.filingDate).getTime();
-        case 'company-asc':
-          return a.ticker.symbol.localeCompare(b.ticker.symbol);
-        case 'company-desc':
-          return b.ticker.symbol.localeCompare(a.ticker.symbol);
-        default:
-          return 0;
+  // Filter and sort summaries
+  const filteredSummaries = (data || [])
+    .filter(summary => {
+      // Apply search filter
+      const matchesSearch = searchTerm === "" || 
+        summary.ticker.symbol.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        summary.ticker.companyName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        summary.summaryText.toLowerCase().includes(searchTerm.toLowerCase());
+      
+      // Apply tab filter
+      const matchesFilter = 
+        filter === "all" || 
+        (filter === "10k" && summary.filingType === "10-K") ||
+        (filter === "10q" && summary.filingType === "10-Q") ||
+        (filter === "8k" && summary.filingType === "8-K");
+      
+      return matchesSearch && matchesFilter;
+    })
+    .sort((a, b) => {
+      // Apply sorting
+      if (sortBy === "date-desc") {
+        return new Date(b.filingDate).getTime() - new Date(a.filingDate).getTime();
+      } else if (sortBy === "date-asc") {
+        return new Date(a.filingDate).getTime() - new Date(b.filingDate).getTime();
+      } else if (sortBy === "ticker") {
+        return a.ticker.symbol.localeCompare(b.ticker.symbol);
+      } else {
+        return 0;
       }
     });
 
-    // Filter by search query
-    if (searchQuery.trim()) {
-      const query = searchQuery.toLowerCase();
-      filtered = filtered.filter(summary => 
-        summary.ticker.symbol.toLowerCase().includes(query) ||
-        summary.ticker.companyName?.toLowerCase().includes(query) ||
-        summary.filingType.toLowerCase().includes(query) ||
-        summary.summaryText.toLowerCase().includes(query)
-      );
-    }
-    
-    setFilteredSummaries(filtered);
-  }, [summaries, filingType, sortBy, searchQuery]);
-
-  // Handle search input change
-  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setSearchQuery(e.target.value);
-  };
-
-  // Handle refresh button click
-  const handleRefresh = () => {
-    fetchSummaries(
-      fetchSummariesWithApiResponse,
-      {
-        errorMessage: "Failed to refresh summaries. Please try again."
-      }
-    );
-  };
-
   return (
     <div className="space-y-6">
-      {/* Search and filter controls */}
       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-        <div className="relative">
-          <SearchIcon className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-          <Input
-            type="search"
-            placeholder="Search summaries..."
-            className="pl-8 w-full md:max-w-sm"
-            value={searchQuery}
-            onChange={handleSearchChange}
-          />
-        </div>
-        
-        <div className="flex gap-2">
-          <Select 
-            defaultValue="newest"
-            value={sortBy}
-            onValueChange={setSortBy}
-          >
-            <SelectTrigger className="w-[160px]">
+        <div className="flex items-center gap-2 flex-1">
+          <div className="relative flex-1 max-w-md">
+            <SearchIcon className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+            <Input
+              type="search"
+              placeholder="Search summaries by ticker or keyword..."
+              className="pl-8"
+              value={searchTerm}
+              onChange={handleSearchChange}
+            />
+          </div>
+          <Select value={sortBy} onValueChange={setSortBy}>
+            <SelectTrigger className="w-[180px]">
               <SelectValue placeholder="Sort by" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="newest">Newest first</SelectItem>
-              <SelectItem value="oldest">Oldest first</SelectItem>
-              <SelectItem value="company-asc">Company (A-Z)</SelectItem>
-              <SelectItem value="company-desc">Company (Z-A)</SelectItem>
+              <SelectItem value="date-desc">Newest first</SelectItem>
+              <SelectItem value="date-asc">Oldest first</SelectItem>
+              <SelectItem value="ticker">Ticker symbol</SelectItem>
             </SelectContent>
           </Select>
-          
-          <Button 
-            variant="outline" 
-            size="icon" 
-            className="h-10 w-10"
-            onClick={handleRefresh}
-            disabled={isLoading}
-          >
-            <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
-            <span className="sr-only">Refresh</span>
-          </Button>
         </div>
+        <Button
+          variant="outline"
+          size="icon"
+          onClick={handleRefresh}
+          title="Refresh summaries"
+        >
+          <RefreshCw className="h-4 w-4" />
+          <span className="sr-only">Refresh</span>
+        </Button>
       </div>
-      
-      {/* Tabs for different filing types */}
-      <Tabs 
-        defaultValue="all" 
-        value={filingType}
-        onValueChange={setFilingType}
-        className="w-full"
-      >
-        <TabsList className="mb-6">
-          <TabsTrigger value="all">All</TabsTrigger>
-          <TabsTrigger value="10-K">10-K</TabsTrigger>
-          <TabsTrigger value="10-Q">10-Q</TabsTrigger>
-          <TabsTrigger value="8-K">8-K</TabsTrigger>
-          <TabsTrigger value="other">Other</TabsTrigger>
+
+      <Tabs defaultValue="all" onValueChange={setFilter}>
+        <TabsList>
+          <TabsTrigger value="all">All Filings</TabsTrigger>
+          <TabsTrigger value="10k">10-K</TabsTrigger>
+          <TabsTrigger value="10q">10-Q</TabsTrigger>
+          <TabsTrigger value="8k">8-K</TabsTrigger>
         </TabsList>
-        
-        {/* Display summaries or empty state */}
-        {isLoading ? (
-          <div className="space-y-4 animate-pulse">
-            {[...Array(3)].map((_, index) => (
-              <div key={index} className="h-24 bg-muted rounded-md" />
-            ))}
-          </div>
-        ) : filteredSummaries.length > 0 ? (
-          <div className="space-y-4">
-            {filteredSummaries.map((summary) => (
-              <SummaryCard 
-                key={summary.id}
-                summary={summary}
-              />
-            ))}
-          </div>
-        ) : (
-          <EmptyPlaceholder
-            title={`No ${filingType !== 'all' ? filingType : ''} summaries yet`}
-            description="Summaries will appear here once you start tracking companies."
-            actions={
-              <Link href="/dashboard">
-                <Button>Add Company</Button>
-              </Link>
-            }
-          />
-        )}
+        <TabsContent value="all" className="mt-6">
+          {renderSummaryList(filteredSummaries, isLoading)}
+        </TabsContent>
+        <TabsContent value="10k" className="mt-6">
+          {renderSummaryList(filteredSummaries, isLoading)}
+        </TabsContent>
+        <TabsContent value="10q" className="mt-6">
+          {renderSummaryList(filteredSummaries, isLoading)}
+        </TabsContent>
+        <TabsContent value="8k" className="mt-6">
+          {renderSummaryList(filteredSummaries, isLoading)}
+        </TabsContent>
       </Tabs>
+    </div>
+  );
+}
+
+function renderSummaryList(
+  summaries: SummaryWithTicker[],
+  isLoading: boolean
+) {
+  if (isLoading) {
+    return (
+      <div className="flex justify-center p-8">
+        <RefreshCw className="h-6 w-6 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  if (summaries.length === 0) {
+    return (
+      <EmptyPlaceholder
+        title="No summaries found"
+        description="Try adjusting your search or filter criteria."
+        icon={() => <FileTextIcon className="h-8 w-8" />}
+      />
+    );
+  }
+
+  return (
+    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      {summaries.map((summary) => (
+        <SummaryCard key={summary.id} summary={summary as any} />
+      ))}
     </div>
   );
 } 

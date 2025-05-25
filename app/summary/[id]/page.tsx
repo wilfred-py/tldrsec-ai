@@ -10,6 +10,14 @@ import { checkSummaryAccess, AccessDeniedError, ResourceNotFoundError } from '@/
 import { SummaryContent } from '@/components/summary/summary-content';
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
 import { AlertCircle } from 'lucide-react';
+import {
+  Breadcrumb,
+  BreadcrumbItem,
+  BreadcrumbLink,
+  BreadcrumbList,
+  BreadcrumbPage,
+  BreadcrumbSeparator,
+} from "@/components/ui/breadcrumb";
 
 interface SummaryPageProps {
   params: {
@@ -47,54 +55,57 @@ export default async function SummaryPage({ params }: SummaryPageProps) {
         <div className="flex flex-1">
           <Sidebar className="fixed inset-y-0 z-30 w-64 border-r" />
           <main className="flex-1 md:pl-64">
-            <div className="container py-8 md:py-10 px-6 md:px-8">
-              <div className="flex flex-col space-y-6">
-                {/* Simple navigation path */}
-                <div className="flex items-center text-sm text-muted-foreground">
-                  <Link href="/dashboard" className="hover:text-foreground">
-                    Dashboard
+            <div className="container py-8 md:py-10 px-6 md:px-8 space-y-6">
+              <Breadcrumb className="mb-4">
+                <BreadcrumbList>
+                  <BreadcrumbItem>
+                    <BreadcrumbLink href="/dashboard">Dashboard</BreadcrumbLink>
+                  </BreadcrumbItem>
+                  <BreadcrumbSeparator>
+                    <ChevronRight className="h-4 w-4" />
+                  </BreadcrumbSeparator>
+                  <BreadcrumbItem>
+                    <BreadcrumbLink href="/dashboard/summaries">Summaries</BreadcrumbLink>
+                  </BreadcrumbItem>
+                  <BreadcrumbSeparator>
+                    <ChevronRight className="h-4 w-4" />
+                  </BreadcrumbSeparator>
+                  <BreadcrumbItem>
+                    <BreadcrumbPage>{summary.ticker.symbol}: {summary.filingType}</BreadcrumbPage>
+                  </BreadcrumbItem>
+                </BreadcrumbList>
+              </Breadcrumb>
+              
+              <div className="flex flex-col space-y-2">
+                <div className="flex items-center space-x-2">
+                  <Link href="/dashboard">
+                    <Button variant="ghost" size="icon">
+                      <ArrowLeft className="h-4 w-4" />
+                      <span className="sr-only">Back to dashboard</span>
+                    </Button>
                   </Link>
-                  <ChevronRight className="h-4 w-4 mx-1" />
-                  <Link href="/dashboard/summaries" className="hover:text-foreground">
-                    Summaries
-                  </Link>
-                  <ChevronRight className="h-4 w-4 mx-1" />
-                  <span className="text-foreground font-medium truncate max-w-[200px]">
-                    {summary.ticker.symbol}: {summary.filingType}
-                  </span>
+                  <h1 className="text-2xl font-bold">
+                    {summary.ticker.symbol}: {summary.filingType} Summary
+                  </h1>
                 </div>
-                
-                <div className="flex flex-col space-y-2">
-                  <div className="flex items-center space-x-2">
-                    <Link href="/dashboard/summaries">
-                      <Button variant="ghost" size="icon">
-                        <ArrowLeft className="h-4 w-4" />
-                        <span className="sr-only">Back to summaries</span>
-                      </Button>
-                    </Link>
-                    <h1 className="text-2xl font-bold">
-                      {summary.ticker.symbol}: {summary.filingType} Summary
-                    </h1>
-                  </div>
-                  <div className="text-muted-foreground text-sm">
-                    Filed {format(new Date(summary.filingDate), 'PPP')}
-                    {' '}({formatDistanceToNow(new Date(summary.filingDate), { addSuffix: true })})
-                  </div>
-                  <div className="mt-2">
-                    <a
-                      href={summary.filingUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-blue-600 hover:underline text-sm"
-                    >
-                      View Original Filing
-                    </a>
-                  </div>
+                <div className="text-muted-foreground text-sm">
+                  Filed {format(new Date(summary.filingDate), 'PPP')}
+                  {' '}({formatDistanceToNow(new Date(summary.filingDate), { addSuffix: true })})
                 </div>
-                
-                <div className="bg-white rounded-lg shadow p-6">
-                  <SummaryContent summary={summary} />
+                <div className="mt-2">
+                  <a
+                    href={summary.filingUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-blue-600 hover:underline text-sm"
+                  >
+                    View Original Filing
+                  </a>
                 </div>
+              </div>
+              
+              <div className="bg-white rounded-lg shadow p-6">
+                <SummaryContent summary={summary} />
               </div>
             </div>
           </main>
@@ -114,20 +125,19 @@ export default async function SummaryPage({ params }: SummaryPageProps) {
             <Sidebar className="fixed inset-y-0 z-30 w-64 border-r" />
             <main className="flex-1 md:pl-64">
               <div className="container py-8 md:py-10 px-6 md:px-8">
-                {/* Simple navigation path */}
-                <div className="flex items-center text-sm text-muted-foreground mb-4">
-                  <Link href="/dashboard" className="hover:text-foreground">
-                    Dashboard
-                  </Link>
-                  <ChevronRight className="h-4 w-4 mx-1" />
-                  <Link href="/dashboard/summaries" className="hover:text-foreground">
-                    Summaries
-                  </Link>
-                  <ChevronRight className="h-4 w-4 mx-1" />
-                  <span className="text-foreground font-medium">
-                    Access Denied
-                  </span>
-                </div>
+                <Breadcrumb className="mb-4">
+                  <BreadcrumbList>
+                    <BreadcrumbItem>
+                      <BreadcrumbLink href="/dashboard">Dashboard</BreadcrumbLink>
+                    </BreadcrumbItem>
+                    <BreadcrumbSeparator>
+                      <ChevronRight className="h-4 w-4" />
+                    </BreadcrumbSeparator>
+                    <BreadcrumbItem>
+                      <BreadcrumbPage>Access Denied</BreadcrumbPage>
+                    </BreadcrumbItem>
+                  </BreadcrumbList>
+                </Breadcrumb>
                 
                 <div className="flex items-center space-x-2 mb-6">
                   <Link href="/dashboard/summaries">

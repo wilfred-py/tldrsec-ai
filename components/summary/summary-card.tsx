@@ -4,9 +4,15 @@ import { Summary } from '@/lib/generated/prisma';
 import { formatDistanceToNow } from 'date-fns';
 import Link from 'next/link';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import { FileTextIcon, ExternalLinkIcon } from 'lucide-react';
+import { FileTextIcon, ExternalLinkIcon, InfoIcon } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 interface SummaryWithTicker extends Summary {
   ticker: {
@@ -59,13 +65,18 @@ export function SummaryCard({
     if (upperType.includes('8-K') || upperType.includes('8K')) return 'yellow';
     return 'secondary';
   };
+  
+  // Format the date to relative time (e.g., "2 days ago")
+  const formattedDate = formatDistanceToNow(new Date(summary.filingDate), {
+    addSuffix: true,
+  });
 
-  // Generate a preview of the summary text
-  const summaryPreview = showPreview 
-    ? summary.summaryText.length > previewLength 
-      ? `${summary.summaryText.substring(0, previewLength)}...` 
+  // Truncate the content for preview if needed
+  const previewContent = showPreview && summary.summaryText
+    ? summary.summaryText.length > previewLength
+      ? `${summary.summaryText.substring(0, previewLength)}...`
       : summary.summaryText
-    : null;
+    : '';
 
   if (variant === 'compact') {
     return (
@@ -90,48 +101,86 @@ export function SummaryCard({
         
         {showPreview && (
           <p className="text-sm text-muted-foreground mt-2 line-clamp-1">
-            {summaryPreview}
+            {previewContent}
           </p>
         )}
         
         <div className="text-xs text-muted-foreground mt-2">
-          {formatDistanceToNow(new Date(summary.filingDate), { addSuffix: true })}
+          {formattedDate}
         </div>
       </Link>
     );
   }
 
   return (
-    <Card className={className}>
+    <Card className={cn(
+      "transition-all duration-200 hover:shadow-md",
+      className
+    )}>
       <CardHeader className="pb-2">
-        <div className="flex justify-between items-center">
-          <CardTitle className="text-base flex items-center gap-2">
+        <div className="flex justify-between items-start">
+          <div className="flex items-center gap-2">
             <FileTextIcon className="h-4 w-4 text-blue-600" />
-            {summary.ticker.symbol}: {formatFilingType(summary.filingType)}
-          </CardTitle>
+            <CardTitle className="font-medium text-base">
+              {summary.ticker.symbol}: {formatFilingType(summary.filingType)}
+            </CardTitle>
+            
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <InfoIcon className="h-4 w-4 text-muted-foreground cursor-pointer" />
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Filed on {new Date(summary.filingDate).toLocaleDateString()}</p>
+                  <p>{summary.ticker.companyName}</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          </div>
+          
           <Badge variant={getBadgeVariant(summary.filingType) as any}>
             {formatFilingType(summary.filingType)}
           </Badge>
         </div>
       </CardHeader>
-      <CardContent className="pb-2">
-        {showPreview && (
-          <p className="text-sm text-muted-foreground line-clamp-2">
-            {summaryPreview}
-          </p>
-        )}
-      </CardContent>
-      <CardFooter className="flex justify-between pt-0">
+      
+      {showPreview && (
+        <CardContent className="pb-2 text-sm text-muted-foreground">
+          {previewContent}
+        </CardContent>
+      )}
+      
+      <CardFooter className="pt-0 flex justify-between">
         <span className="text-xs text-muted-foreground">
-          {formatDistanceToNow(new Date(summary.filingDate), { addSuffix: true })}
+          {formattedDate}
         </span>
-        <Link 
-          href={`/summary/${summary.id}`}
-          className="text-xs text-blue-600 hover:underline flex items-center gap-1"
-        >
-          View Details
-          <ExternalLinkIcon className="h-3 w-3" />
-        </Link>
+        
+        <div className="flex items-center gap-4">
+          <Link 
+            href={`/summary/${summary.id}`} 
+            className="text-xs text-blue-600 hover:underline flex items-center gap-1"
+          >
+            View Summary <ExternalLinkIcon className="h-3 w-3" />
+          </Link>
+          
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <a
+                  href={summary.filingUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1"
+                >
+                  Original Filing <ExternalLinkIcon className="h-3 w-3" />
+                </a>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>View the original SEC filing</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        </div>
       </CardFooter>
     </Card>
   );
