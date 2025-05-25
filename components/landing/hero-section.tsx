@@ -40,13 +40,13 @@ export function HeroSection() {
       >
         <motion.div variants={item}>
           <h1 className="text-5xl md:text-7xl font-bold mb-6 bg-clip-text text-transparent bg-gradient-to-r from-violet-500 to-pink-600">
-            SEC Filings, Simplified
+            SEC Filings, Delivered to Your Inbox
           </h1>
         </motion.div>
         
         <motion.div variants={item}>
           <p className="text-xl md:text-2xl mb-10 max-w-3xl mx-auto text-muted-foreground">
-            AI-powered summaries of complex SEC filings. Save time, gain insights, make better investment decisions.
+            Subscribe to company tickers and receive concise, real-time email summaries of SEC filings. Stay informed without the information overload.
           </p>
         </motion.div>
         
@@ -56,12 +56,12 @@ export function HeroSection() {
         >
           <Link href="/auth/sign-up">
             <Button size="lg" className="bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 text-white px-8 py-6 text-lg rounded-full">
-              Start for Free
+              Start Free Trial
             </Button>
           </Link>
-          <Link href="/about">
+          <Link href="/pricing">
             <Button variant="outline" size="lg" className="border-2 px-8 py-6 text-lg rounded-full">
-              Learn More
+              View Pricing
             </Button>
           </Link>
         </motion.div>
@@ -70,13 +70,13 @@ export function HeroSection() {
           className="mt-16"
           variants={item}
         >
-          <p className="text-sm text-muted-foreground mb-4">Trusted by financial professionals</p>
+          <p className="text-sm text-muted-foreground mb-4">Subscribe to public companies like</p>
           <div className="flex flex-wrap justify-center items-center gap-8 opacity-60">
-            {/* Replace these with actual logos */}
-            <div className="h-8 w-24 bg-gray-300 rounded"></div>
-            <div className="h-8 w-24 bg-gray-300 rounded"></div>
-            <div className="h-8 w-24 bg-gray-300 rounded"></div>
-            <div className="h-8 w-24 bg-gray-300 rounded"></div>
+            {/* Replace these with actual ticker symbols or company names */}
+            <div className="h-8 w-24 bg-gray-300 rounded flex items-center justify-center">AAPL</div>
+            <div className="h-8 w-24 bg-gray-300 rounded flex items-center justify-center">MSFT</div>
+            <div className="h-8 w-24 bg-gray-300 rounded flex items-center justify-center">AMZN</div>
+            <div className="h-8 w-24 bg-gray-300 rounded flex items-center justify-center">GOOGL</div>
           </div>
         </motion.div>
       </motion.div>

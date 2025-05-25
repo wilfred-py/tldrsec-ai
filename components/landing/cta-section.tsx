@@ -20,10 +20,10 @@ export function CTASection() {
           transition={{ duration: 0.8 }}
         >
           <h2 className="text-4xl md:text-5xl font-bold mb-6 bg-clip-text text-transparent bg-gradient-to-r from-violet-500 to-pink-600">
-            Ready to Simplify SEC Filings?
+            Never Miss Important SEC Filings Again
           </h2>
           <p className="text-xl mb-10 text-muted-foreground">
-            Join thousands of investors who are saving time and making better decisions with our AI-powered platform.
+            Join investors who stay informed with real-time email summaries of SEC filings for the companies they follow.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <Link href="/auth/sign-up">

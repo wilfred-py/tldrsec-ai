@@ -1,28 +1,28 @@
 'use client';
 
 import { motion } from 'framer-motion';
-import { Clock, LineChart, Search, Share2 } from 'lucide-react';
+import { Inbox, Bell, FileText, Clock } from 'lucide-react';
 
 const features = [
   {
+    icon: <Inbox className="h-8 w-8" />,
+    title: 'Email Delivery',
+    description: 'Summaries sent directly to your inbox, no need to check another dashboard or app.'
+  },
+  {
+    icon: <Bell className="h-8 w-8" />,
+    title: 'Real-Time Alerts',
+    description: 'Receive notifications within minutes of new SEC filings for your subscribed tickers.'
+  },
+  {
+    icon: <FileText className="h-8 w-8" />,
+    title: 'Concise Summaries',
+    description: 'Get clear, readable summaries that extract what matters most from dense financial documents.'
+  },
+  {
     icon: <Clock className="h-8 w-8" />,
-    title: 'Save Time',
-    description: 'Get the key insights from complex SEC filings in minutes, not hours.'
-  },
-  {
-    icon: <Search className="h-8 w-8" />,
-    title: 'AI-Powered Analysis',
-    description: 'Our AI extracts the most important information, highlighting what matters most.'
-  },
-  {
-    icon: <LineChart className="h-8 w-8" />,
-    title: 'Better Decisions',
-    description: 'Make more informed investment decisions with clear, concise summaries.'
-  },
-  {
-    icon: <Share2 className="h-8 w-8" />,
-    title: 'Easy Sharing',
-    description: 'Share insights with your team or clients with a single click.'
+    title: 'Time Savings',
+    description: 'Focus on making decisions instead of spending hours reading through lengthy filings.'
   }
 ];
 
@@ -60,9 +60,9 @@ export function FeaturesSection() {
           transition={{ duration: 0.8 }}
           className="text-center mb-16"
         >
-          <h2 className="text-4xl md:text-5xl font-bold mb-6">Why Choose Our Platform?</h2>
+          <h2 className="text-4xl md:text-5xl font-bold mb-6">Stay Ahead with Email Updates</h2>
           <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
-            Our AI-powered platform transforms complex SEC filings into clear, actionable insights.
+            Our email subscription service transforms complex SEC filings into clear, actionable insights delivered right when you need them.
           </p>
         </motion.div>
 

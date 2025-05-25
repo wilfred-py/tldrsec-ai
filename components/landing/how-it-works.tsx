@@ -7,18 +7,18 @@ import Link from 'next/link';
 const steps = [
   {
     number: '01',
-    title: 'Upload SEC Filing',
-    description: 'Simply provide the URL or upload the SEC filing document you want to analyze.'
+    title: 'Choose Your Tickers',
+    description: 'Select the company tickers you want to follow. Add as many as your plan allows.'
   },
   {
     number: '02',
-    title: 'AI Analysis',
-    description: 'Our advanced AI reads through and analyzes the entire document in seconds.'
+    title: 'We Monitor SEC Filings',
+    description: 'Our system continuously monitors for new SEC filings from your selected companies.'
   },
   {
     number: '03',
-    title: 'Get Key Insights',
-    description: 'Receive a concise summary highlighting the most important information.'
+    title: 'Receive Email Summaries',
+    description: 'Get concise, easy-to-read summaries delivered directly to your inbox when new filings appear.'
   }
 ];
 
@@ -39,7 +39,7 @@ export function HowItWorks() {
         >
           <h2 className="text-4xl md:text-5xl font-bold mb-6">How It Works</h2>
           <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
-            Our platform makes it easy to get insights from complex financial documents in just a few steps.
+            Our subscription service delivers SEC filing summaries in three simple steps.
           </p>
         </motion.div>
 
@@ -71,7 +71,7 @@ export function HowItWorks() {
         >
           <Link href="/auth/sign-up">
             <Button size="lg" className="bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 text-white px-8 py-6 text-lg rounded-full">
-              Try It Now
+              Start Your Free Trial
             </Button>
           </Link>
         </motion.div>
