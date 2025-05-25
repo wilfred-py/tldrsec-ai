@@ -61,6 +61,46 @@ jest.mock('next/link', () => {
   };
 });
 
+// Mock UI components
+jest.mock('@/components/ui/breadcrumb', () => ({
+  Breadcrumb: ({ children }: { children: React.ReactNode }) => (
+    <div data-testid="breadcrumb">{children}</div>
+  ),
+  BreadcrumbItem: ({ children }: { children: React.ReactNode }) => (
+    <div data-testid="breadcrumb-item">{children}</div>
+  ),
+  BreadcrumbList: ({ children }: { children: React.ReactNode }) => (
+    <div data-testid="breadcrumb-list">{children}</div>
+  ),
+  BreadcrumbLink: ({ children, href }: { children: React.ReactNode; href: string }) => (
+    <a data-testid="breadcrumb-link" href={href}>{children}</a>
+  ),
+  BreadcrumbPage: ({ children }: { children: React.ReactNode }) => (
+    <span data-testid="breadcrumb-page">{children}</span>
+  ),
+  BreadcrumbSeparator: ({ children }: { children: React.ReactNode }) => (
+    <span data-testid="breadcrumb-separator">{children}</span>
+  ),
+}));
+
+jest.mock('@/components/ui/alert', () => ({
+  Alert: ({ children }: { children: React.ReactNode }) => (
+    <div data-testid="alert">{children}</div>
+  ),
+  AlertTitle: ({ children }: { children: React.ReactNode }) => (
+    <div data-testid="alert-title">{children}</div>
+  ),
+  AlertDescription: ({ children }: { children: React.ReactNode }) => (
+    <div data-testid="alert-description">{children}</div>
+  ),
+}));
+
+jest.mock('@/components/ui/button', () => ({
+  Button: ({ children }: { children: React.ReactNode }) => (
+    <button data-testid="button">{children}</button>
+  ),
+}));
+
 // Define the mocks we'll access
 const mockFindUnique = jest.fn();
 const prisma = require('@/lib/db').prisma;
