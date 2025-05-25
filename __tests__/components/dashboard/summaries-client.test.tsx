@@ -10,9 +10,12 @@ jest.mock('next/link', () => {
   };
 });
 
+// Create a mock refresh function we can spy on
+const mockRefresh = jest.fn();
+
 jest.mock('next/navigation', () => ({
   useRouter: () => ({
-    refresh: jest.fn(),
+    refresh: mockRefresh,
   }),
 }));
 
@@ -171,7 +174,7 @@ describe('SummariesClient Component', () => {
     });
     
     // Clear the mock calls count after initial load
-    (global.fetch as jest.Mock).mockClear();
+    mockRefresh.mockClear();
     
     // Find and click the refresh button
     const refreshButton = screen.getByTitle('Refresh summaries');
@@ -180,7 +183,7 @@ describe('SummariesClient Component', () => {
       fireEvent.click(refreshButton);
     });
     
-    // Verify fetch was called
-    expect(global.fetch).toHaveBeenCalledTimes(1);
+    // Verify router.refresh was called instead of fetch
+    expect(mockRefresh).toHaveBeenCalledTimes(1);
   });
 }); 
