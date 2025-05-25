@@ -1,20 +1,22 @@
-import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
-import { ClerkProvider } from "@clerk/nextjs";
-import { Toaster } from "@/components/ui/sonner";
-import { Navbar } from "@/components/layout";
-import { PostHogProvider } from "@/components/analytics/posthog-provider";
-import { PageViewTracker } from "@/components/analytics/page-view-tracker";
-import "./globals.css";
+import './globals.css';
+import type { Metadata } from 'next';
+import { Geist, Geist_Mono } from 'next/font/google';
+import { ClerkProvider } from '@clerk/nextjs';
+import { Toaster } from '@/components/ui/sonner';
+import { Navbar } from '@/components/layout';
+import { PostHogProvider } from '@/components/analytics/posthog-provider';
+import { PageViewTracker } from '@/components/analytics/page-view-tracker';
+import { MouseFollowEffect } from '@/components/landing/mouse-follow-effect';
+import { JsonLd } from '@/components/structured-data';
 
 const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
+  variable: '--font-geist-sans',
+  subsets: ['latin'],
 });
 
 const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
+  variable: '--font-geist-mono',
+  subsets: ['latin'],
 });
 
 export const metadata: Metadata = {
@@ -58,7 +60,10 @@ export default function RootLayout({
         >
           <PostHogProvider>
             <PageViewTracker />
+            <MouseFollowEffect />
             {/* Navbar is not needed on dashboard pages as it has its own sidebar navigation */}
+            <Navbar />
+            <JsonLd />
             <main className="min-h-screen">
               {children}
             </main>
