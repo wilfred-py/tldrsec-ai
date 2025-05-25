@@ -26,39 +26,39 @@ import { ApiResponse } from "@/lib/api/types";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 
-// Extend the interface to match the structure from the API service
-interface SummaryWithTicker extends Summary {
-  ticker: {
-    id: string;
-    symbol: string;
-    companyName: string;
-    userId: string;
-    addedAt: Date;
-  };
-}
+// Use the API type directly to avoid type mismatches
+type SummaryWithTicker = ApiSummaryWithTicker;
 
 export function SummariesClient() {
   const router = useRouter();
   const [searchTerm, setSearchTerm] = useState("");
   const [filter, setFilter] = useState("all");
   const [sortBy, setSortBy] = useState("date-desc");
+  const [summaries, setSummaries] = useState<SummaryWithTicker[]>([]);
 
   // Use the useAsync hook
-  const { data, isLoading, error, execute } = useAsync<SummaryWithTicker[]>([], {
-    onMount: true,
-    asyncFn: async () => {
-      try {
-        const response = await getRecentSummaries();
-        if (response && response.data) {
-          return response.data;
+  const { data, isLoading, error, execute } = useAsync<SummaryWithTicker[]>(null);
+
+  // Load summaries on mount
+  useEffect(() => {
+    const fetchSummaries = async () => {
+      const result = await execute(async () => {
+        try {
+          const data = await getRecentSummaries();
+          return { data };
+        } catch (error) {
+          console.error("Error fetching summaries:", error);
+          return { error: { status: 500, message: "Failed to fetch summaries" } };
         }
-        return [];
-      } catch (error) {
-        console.error("Error fetching summaries:", error);
-        return [];
+      });
+      
+      if (result.success && result.data) {
+        setSummaries(result.data);
       }
-    }
-  });
+    };
+    
+    fetchSummaries();
+  }, [execute]);
 
   // Function to handle search input changes
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -67,12 +67,20 @@ export function SummariesClient() {
 
   // Function to refresh summaries
   const handleRefresh = () => {
-    execute();
+    execute(async () => {
+      try {
+        const data = await getRecentSummaries();
+        return { data };
+      } catch (error) {
+        console.error("Error fetching summaries:", error);
+        return { error: { status: 500, message: "Failed to fetch summaries" } };
+      }
+    });
     router.refresh();
   };
 
   // Filter and sort summaries
-  const filteredSummaries = (data || [])
+  const filteredSummaries = (summaries || [])
     .filter(summary => {
       // Apply search filter
       const matchesSearch = searchTerm === "" || 
@@ -179,7 +187,7 @@ function renderSummaryList(
       <EmptyPlaceholder
         title="No summaries found"
         description="Try adjusting your search or filter criteria."
-        icon={() => <FileTextIcon className="h-8 w-8" />}
+        icon={<FileTextIcon className="h-8 w-8" />}
       />
     );
   }
