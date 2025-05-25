@@ -27,6 +27,10 @@ const item = {
   },
 };
 
+const tickerItems = [
+  "AAPL", "MSFT", "AMZN", "GOOGL", "META", "TSLA", "NVDA", "JNJ", "JPM", "V", "PG", "WMT", "DIS", "KO", "PFE"
+];
+
 export function HeroSection() {
   return (
     <div className="relative min-h-[90vh] flex items-center">
@@ -56,12 +60,7 @@ export function HeroSection() {
         >
           <Link href="/auth/sign-up">
             <Button size="lg" className="bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 text-white px-8 py-6 text-lg rounded-full">
-              Start Free Trial
-            </Button>
-          </Link>
-          <Link href="/pricing">
-            <Button variant="outline" size="lg" className="border-2 px-8 py-6 text-lg rounded-full">
-              View Pricing
+              Get Started
             </Button>
           </Link>
         </motion.div>
@@ -71,13 +70,48 @@ export function HeroSection() {
           variants={item}
         >
           <p className="text-sm text-muted-foreground mb-4">Subscribe to public companies like</p>
-          <div className="flex flex-wrap justify-center items-center gap-8 opacity-60">
-            {/* Replace these with actual ticker symbols or company names */}
-            <div className="h-8 w-24 bg-gray-300 rounded flex items-center justify-center">AAPL</div>
-            <div className="h-8 w-24 bg-gray-300 rounded flex items-center justify-center">MSFT</div>
-            <div className="h-8 w-24 bg-gray-300 rounded flex items-center justify-center">AMZN</div>
-            <div className="h-8 w-24 bg-gray-300 rounded flex items-center justify-center">GOOGL</div>
+          
+          <div className="relative w-full overflow-hidden mask-gradient">
+            <div className="ticker-container">
+              <div className="ticker">
+                {[...tickerItems, ...tickerItems].map((ticker, index) => (
+                  <div 
+                    key={index} 
+                    className="px-4 py-2 mx-4 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-100 inline-block whitespace-nowrap"
+                  >
+                    {ticker}
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
+          
+          <style jsx global>{`
+            @keyframes ticker {
+              0% {
+                transform: translateX(0);
+              }
+              100% {
+                transform: translateX(-50%);
+              }
+            }
+            
+            .mask-gradient {
+              mask-image: linear-gradient(to right, rgba(0, 0, 0, 0) 0%, rgba(0, 0, 0, 1) 10%, rgba(0, 0, 0, 1) 90%, rgba(0, 0, 0, 0) 100%);
+            }
+            
+            .ticker-container {
+              width: 100%;
+              overflow: hidden;
+              padding: 1rem 0;
+            }
+            
+            .ticker {
+              display: inline-flex;
+              white-space: nowrap;
+              animation: ticker 30s linear infinite;
+            }
+          `}</style>
         </motion.div>
       </motion.div>
     </div>

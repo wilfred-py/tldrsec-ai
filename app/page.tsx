@@ -49,12 +49,24 @@ export async function generateMetadata(
 export default function Home() {
   return (
     <main>
-      <HeroSection />
-      <FeaturesSection />
-      <ComprehensiveInsights />
-      <HowItWorks />
-      <PricingSection />
-      <CTASection />
+      <section id="hero">
+        <HeroSection />
+      </section>
+      <section id="features">
+        <FeaturesSection />
+      </section>
+      <section id="insights">
+        <ComprehensiveInsights />
+      </section>
+      <section id="how-it-works">
+        <HowItWorks />
+      </section>
+      <section id="pricing">
+        <PricingSection />
+      </section>
+      <section id="cta">
+        <CTASection />
+      </section>
     </main>
   );
 } 

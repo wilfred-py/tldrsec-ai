@@ -71,7 +71,7 @@ export function HowItWorks() {
         >
           <Link href="/auth/sign-up">
             <Button size="lg" className="bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 text-white px-8 py-6 text-lg rounded-full">
-              Start Your Free Trial
+              Get Started
             </Button>
           </Link>
         </motion.div>

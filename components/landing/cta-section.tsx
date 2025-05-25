@@ -25,15 +25,10 @@ export function CTASection() {
           <p className="text-xl mb-10 text-muted-foreground">
             Join investors who stay informed with real-time email summaries of SEC filings for the companies they follow.
           </p>
-          <div className="flex flex-col sm:flex-row gap-4 justify-center">
+          <div className="flex justify-center">
             <Link href="/auth/sign-up">
               <Button size="lg" className="bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 text-white px-8 py-6 text-lg rounded-full">
-                Start Your Free Trial
-              </Button>
-            </Link>
-            <Link href="/pricing">
-              <Button variant="outline" size="lg" className="border-2 px-8 py-6 text-lg rounded-full">
-                View Pricing
+                Get Started
               </Button>
             </Link>
           </div>

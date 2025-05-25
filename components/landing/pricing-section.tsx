@@ -18,7 +18,7 @@ const pricingPlans = [
       "Basic summary format",
       "24-hour delivery window"
     ],
-    cta: "Start Free Trial",
+    cta: "Get Started",
     highlighted: false
   },
   {
@@ -27,34 +27,14 @@ const pricingPlans = [
     period: "per month",
     description: "Ideal for active investors who need comprehensive insights.",
     features: [
-      "Up to 25 ticker subscriptions",
-      "Priority email delivery",
+      "Unlimited ticker subscriptions",
+      "Delivery within minutes of SEC filing",
       "All SEC filing types covered",
       "Enhanced summary format with insights",
-      "Real-time delivery (within minutes)",
-      "Historical filing access",
-      "Web dashboard access"
+      "Real-time delivery (within minutes)"
     ],
-    cta: "Start Free Trial",
+    cta: "Get Started",
     highlighted: true
-  },
-  {
-    name: "Enterprise",
-    price: "Custom",
-    period: "pricing",
-    description: "For professional teams requiring advanced features and support.",
-    features: [
-      "Unlimited ticker subscriptions",
-      "Priority email delivery",
-      "All SEC filing types covered",
-      "Custom summary format",
-      "Real-time delivery (within minutes)",
-      "API access",
-      "Team collaboration tools",
-      "Dedicated support"
-    ],
-    cta: "Contact Sales",
-    highlighted: false
   }
 ];
 
@@ -74,11 +54,11 @@ export function PricingSection() {
         >
           <h2 className="text-4xl md:text-5xl font-bold mb-6">Simple, Transparent Pricing</h2>
           <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
-            Choose the plan that fits your investment needs. All plans include a 7-day free trial.
+            Choose the plan that fits your investment needs.
           </p>
         </motion.div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-4xl mx-auto">
           {pricingPlans.map((plan, index) => (
             <motion.div
               key={index}
@@ -112,7 +92,7 @@ export function PricingSection() {
                 ))}
               </div>
               
-              <Link href={plan.name === "Enterprise" ? "/contact" : "/auth/sign-up"} className="mt-auto">
+              <Link href="/auth/sign-up" className="mt-auto">
                 <Button 
                   className={`w-full ${plan.highlighted ? 'bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 text-white' : ''}`}
                   variant={plan.highlighted ? "default" : "outline"}
@@ -124,21 +104,6 @@ export function PricingSection() {
             </motion.div>
           ))}
         </div>
-        
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          transition={{ duration: 0.8, delay: 0.6 }}
-          className="text-center mt-16"
-        >
-          <p className="text-muted-foreground mb-4">Need a custom solution?</p>
-          <Link href="/contact">
-            <Button variant="outline" size="lg">
-              Contact Our Team
-            </Button>
-          </Link>
-        </motion.div>
       </div>
     </section>
   );
