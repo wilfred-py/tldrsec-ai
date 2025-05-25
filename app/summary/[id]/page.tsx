@@ -140,10 +140,10 @@ export default async function SummaryPage({ params }: SummaryPageProps) {
                 </Breadcrumb>
                 
                 <div className="flex items-center space-x-2 mb-6">
-                  <Link href="/dashboard">
+                  <Link href="/dashboard/summaries">
                     <Button variant="ghost" size="icon">
                       <ArrowLeft className="h-4 w-4" />
-                      <span className="sr-only">Back to dashboard</span>
+                      <span className="sr-only">Back to summaries</span>
                     </Button>
                   </Link>
                   <h1 className="text-2xl font-bold">Summary Access Denied</h1>

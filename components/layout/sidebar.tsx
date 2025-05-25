@@ -35,6 +35,11 @@ export function Sidebar({ className }: SidebarProps) {
       icon: LayoutDashboardIcon,
     },
     {
+      name: "Summaries",
+      href: "/dashboard/summaries",
+      icon: FileTextIcon,
+    },
+    {
       name: "Logs",
       href: "/dashboard/logs",
       icon: FileTextIcon,

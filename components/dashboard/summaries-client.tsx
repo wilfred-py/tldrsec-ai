@@ -17,115 +17,62 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { SearchIcon, RefreshCw, FileTextIcon } from "lucide-react";
+import { SearchIcon, RefreshCw, FileTextIcon, InfoIcon } from "lucide-react";
 import { SummaryCard } from "@/components/summary/summary-card";
+import { Summary } from "@/lib/generated/prisma";
+import { useAsync } from "@/lib/hooks/use-async";
+import { getRecentSummaries, SummaryWithTicker as ApiSummaryWithTicker } from "@/lib/api/summary-service";
+import { ApiResponse } from "@/lib/api/types";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 
-interface SummaryWithTicker {
-  id: string;
-  filingType: string;
-  filingDate: string;
-  filingUrl: string;
-  summaryText: string;
-  createdAt: string;
-  tickerId: string;
+// Extend the interface to match the structure from the API service
+interface SummaryWithTicker extends Summary {
   ticker: {
     id: string;
     symbol: string;
     companyName: string;
     userId: string;
-    addedAt: string;
+    addedAt: Date;
   };
 }
 
 export function SummariesClient() {
   const router = useRouter();
-  const [summaries, setSummaries] = useState<SummaryWithTicker[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [filter, setFilter] = useState("all");
   const [sortBy, setSortBy] = useState("date-desc");
 
-  useEffect(() => {
-    const fetchSummaries = async () => {
-      setIsLoading(true);
+  // Use the useAsync hook
+  const { data, isLoading, error, execute } = useAsync<SummaryWithTicker[]>([], {
+    onMount: true,
+    asyncFn: async () => {
       try {
-        // In a real implementation, this would be an API call with filters
-        const response = await fetch('/api/summaries');
-        const data = await response.json();
-        
-        if (data.success) {
-          setSummaries(data.summaries);
-        } else {
-          console.error("Failed to fetch summaries:", data.error);
+        const response = await getRecentSummaries();
+        if (response && response.data) {
+          return response.data;
         }
+        return [];
       } catch (error) {
         console.error("Error fetching summaries:", error);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    fetchSummaries();
-  }, []);
-
-  // For demo purposes, we'll use mock data if no summaries are fetched
-  const mockSummaries: SummaryWithTicker[] = isLoading || summaries.length > 0 ? [] : [
-    {
-      id: "1",
-      filingType: "10-K",
-      filingDate: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(),
-      filingUrl: "https://www.sec.gov/example",
-      summaryText: "Annual report highlighting strong revenue growth despite market challenges. Key financials show a 15% increase in operating income and expansion into new markets.",
-      createdAt: new Date().toISOString(),
-      tickerId: "t1",
-      ticker: {
-        id: "t1",
-        symbol: "AAPL",
-        companyName: "Apple Inc.",
-        userId: "user1",
-        addedAt: new Date().toISOString()
-      }
-    },
-    {
-      id: "2",
-      filingType: "8-K",
-      filingDate: new Date(Date.now() - 15 * 24 * 60 * 60 * 1000).toISOString(),
-      filingUrl: "https://www.sec.gov/example2",
-      summaryText: "Current report announcing the appointment of a new Chief Financial Officer with extensive experience in the technology sector.",
-      createdAt: new Date().toISOString(),
-      tickerId: "t2",
-      ticker: {
-        id: "t2",
-        symbol: "MSFT",
-        companyName: "Microsoft Corporation",
-        userId: "user1",
-        addedAt: new Date().toISOString()
-      }
-    },
-    {
-      id: "3",
-      filingType: "10-Q",
-      filingDate: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
-      filingUrl: "https://www.sec.gov/example3",
-      summaryText: "Quarterly report showing better than expected earnings. Revenue increased by 12% year-over-year with strong performance in cloud services division.",
-      createdAt: new Date().toISOString(),
-      tickerId: "t1",
-      ticker: {
-        id: "t1",
-        symbol: "AAPL",
-        companyName: "Apple Inc.",
-        userId: "user1",
-        addedAt: new Date().toISOString()
+        return [];
       }
     }
-  ];
+  });
 
-  const displaySummaries = summaries.length > 0 ? summaries : mockSummaries;
-  
+  // Function to handle search input changes
+  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setSearchTerm(e.target.value);
+  };
+
+  // Function to refresh summaries
+  const handleRefresh = () => {
+    execute();
+    router.refresh();
+  };
+
   // Filter and sort summaries
-  const filteredSummaries = displaySummaries
+  const filteredSummaries = (data || [])
     .filter(summary => {
       // Apply search filter
       const matchesSearch = searchTerm === "" || 
@@ -166,7 +113,7 @@ export function SummariesClient() {
               placeholder="Search summaries by ticker or keyword..."
               className="pl-8"
               value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
+              onChange={handleSearchChange}
             />
           </div>
           <Select value={sortBy} onValueChange={setSortBy}>
@@ -183,7 +130,7 @@ export function SummariesClient() {
         <Button
           variant="outline"
           size="icon"
-          onClick={() => router.refresh()}
+          onClick={handleRefresh}
           title="Refresh summaries"
         >
           <RefreshCw className="h-4 w-4" />
@@ -230,27 +177,17 @@ function renderSummaryList(
   if (summaries.length === 0) {
     return (
       <EmptyPlaceholder
-        icon={<FileTextIcon className="h-8 w-8" />}
         title="No summaries found"
-        description="No summaries were found matching your filters. Try adjusting your search or add more tickers to your watchlist."
-        actions={
-          <Link href="/dashboard/settings">
-            <Button>Manage Watchlist</Button>
-          </Link>
-        }
+        description="Try adjusting your search or filter criteria."
+        icon={() => <FileTextIcon className="h-8 w-8" />}
       />
     );
   }
 
   return (
-    <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
       {summaries.map((summary) => (
-        <SummaryCard
-          key={summary.id}
-          summary={summary as any}
-          showPreview={true}
-          previewLength={150}
-        />
+        <SummaryCard key={summary.id} summary={summary as any} />
       ))}
     </div>
   );

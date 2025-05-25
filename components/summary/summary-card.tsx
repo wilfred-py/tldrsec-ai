@@ -39,6 +39,33 @@ export function SummaryCard({
   showPreview = true,
   previewLength = 120
 }: SummaryCardProps) {
+  // Format the filing type for display
+  const formatFilingType = (type: string) => {
+    // Common filing types with special formatting
+    switch (type.toUpperCase()) {
+      case '10-K':
+      case '10K':
+        return '10-K';
+      case '10-Q':
+      case '10Q':
+        return '10-Q';
+      case '8-K':
+      case '8K':
+        return '8-K';
+      default:
+        return type;
+    }
+  };
+
+  // Get the badge color based on filing type
+  const getBadgeVariant = (type: string) => {
+    const upperType = type.toUpperCase();
+    if (upperType.includes('10-K') || upperType.includes('10K')) return 'blue';
+    if (upperType.includes('10-Q') || upperType.includes('10Q')) return 'green';
+    if (upperType.includes('8-K') || upperType.includes('8K')) return 'yellow';
+    return 'secondary';
+  };
+  
   // Format the date to relative time (e.g., "2 days ago")
   const formattedDate = formatDistanceToNow(new Date(summary.filingDate), {
     addSuffix: true,
@@ -51,21 +78,51 @@ export function SummaryCard({
       : summary.summaryText
     : '';
 
+  if (variant === 'compact') {
+    return (
+      <Link 
+        href={`/summary/${summary.id}`}
+        className={cn(
+          "block border rounded-md p-3 hover:bg-muted/50 transition-colors",
+          className
+        )}
+      >
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <FileTextIcon className="h-4 w-4 text-blue-600" />
+            <span className="font-medium">
+              {summary.ticker.symbol}: {formatFilingType(summary.filingType)}
+            </span>
+          </div>
+          <Badge variant={getBadgeVariant(summary.filingType) as any}>
+            {formatFilingType(summary.filingType)}
+          </Badge>
+        </div>
+        
+        {showPreview && (
+          <p className="text-sm text-muted-foreground mt-2 line-clamp-1">
+            {previewContent}
+          </p>
+        )}
+        
+        <div className="text-xs text-muted-foreground mt-2">
+          {formattedDate}
+        </div>
+      </Link>
+    );
+  }
+
   return (
     <Card className={cn(
       "transition-all duration-200 hover:shadow-md",
-      variant === 'compact' ? 'p-3' : '',
       className
     )}>
-      <CardHeader className={cn("pb-2", variant === 'compact' ? 'p-3' : '')}>
+      <CardHeader className="pb-2">
         <div className="flex justify-between items-start">
           <div className="flex items-center gap-2">
-            <FileTextIcon className="h-4 w-4 text-muted-foreground" />
-            <CardTitle className={cn(
-              "font-medium leading-none",
-              variant === 'compact' ? 'text-base' : 'text-lg'
-            )}>
-              {summary.ticker.symbol}: {summary.filingType}
+            <FileTextIcon className="h-4 w-4 text-blue-600" />
+            <CardTitle className="font-medium text-base">
+              {summary.ticker.symbol}: {formatFilingType(summary.filingType)}
             </CardTitle>
             
             <TooltipProvider>
@@ -81,49 +138,49 @@ export function SummaryCard({
             </TooltipProvider>
           </div>
           
-          <Badge variant="outline" className="text-xs">
-            {formattedDate}
+          <Badge variant={getBadgeVariant(summary.filingType) as any}>
+            {formatFilingType(summary.filingType)}
           </Badge>
         </div>
       </CardHeader>
       
       {showPreview && (
-        <CardContent className={cn(
-          "text-sm text-muted-foreground",
-          variant === 'compact' ? 'p-3 pt-0' : ''
-        )}>
+        <CardContent className="pb-2 text-sm text-muted-foreground">
           {previewContent}
         </CardContent>
       )}
       
-      <CardFooter className={cn(
-        "pt-2 flex justify-between",
-        variant === 'compact' ? 'p-3' : ''
-      )}>
-        <Link 
-          href={`/summary/${summary.id}`} 
-          className="text-xs text-blue-600 hover:underline flex items-center gap-1"
-        >
-          View Summary <ExternalLinkIcon className="h-3 w-3" />
-        </Link>
+      <CardFooter className="pt-0 flex justify-between">
+        <span className="text-xs text-muted-foreground">
+          {formattedDate}
+        </span>
         
-        <TooltipProvider>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <a
-                href={summary.filingUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1"
-              >
-                Original Filing <ExternalLinkIcon className="h-3 w-3" />
-              </a>
-            </TooltipTrigger>
-            <TooltipContent>
-              <p>View the original SEC filing</p>
-            </TooltipContent>
-          </Tooltip>
-        </TooltipProvider>
+        <div className="flex items-center gap-4">
+          <Link 
+            href={`/summary/${summary.id}`} 
+            className="text-xs text-blue-600 hover:underline flex items-center gap-1"
+          >
+            View Summary <ExternalLinkIcon className="h-3 w-3" />
+          </Link>
+          
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <a
+                  href={summary.filingUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1"
+                >
+                  Original Filing <ExternalLinkIcon className="h-3 w-3" />
+                </a>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>View the original SEC filing</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        </div>
       </CardFooter>
     </Card>
   );
