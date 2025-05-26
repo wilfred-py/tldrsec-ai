@@ -4,12 +4,12 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuthContext } from "@/lib/context/auth-context";
 import { Card, CardContent } from "@/components/ui/card";
-import { Loader2 } from "lucide-react";
+import { Progress } from "@/components/ui/progress";
+import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { CheckCircle, ArrowRight, Building2, Cpu, Heart, Car, ShoppingCart, Zap, Home, Banknote, Search, Loader2 } from "lucide-react";
 import { toast } from "sonner";
-import { MultiStepForm } from "@/components/onboarding/multi-step-form";
-import { TickerSelection, SelectedTicker } from "@/components/onboarding/ticker-selection";
-import { NotificationPreferences } from "@/components/onboarding/notification-preferences";
-import { UserProfileForm } from "@/components/onboarding/user-profile";
 import { NotificationPreference } from "@/lib/email/notification-service";
 import { 
   FilingTypePreferences, 
@@ -20,14 +20,142 @@ import {
 } from "@/lib/user/preference-types";
 import { saveUserPreferences, addTickerSubscription } from "./actions";
 
+// Define sectors with their icons and descriptions
+const sectors = [
+  {
+    id: "technology",
+    name: "Technology",
+    icon: Cpu,
+    description: "Software, hardware, and tech services",
+    color: "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950 dark:text-blue-300 dark:border-blue-800",
+  },
+  {
+    id: "healthcare",
+    name: "Healthcare",
+    icon: Heart,
+    description: "Pharmaceuticals, biotech, and medical devices",
+    color: "bg-green-50 text-green-700 border-green-200 dark:bg-green-950 dark:text-green-300 dark:border-green-800",
+  },
+  {
+    id: "financial",
+    name: "Financial Services",
+    icon: Banknote,
+    description: "Banks, insurance, and investment firms",
+    color: "bg-yellow-50 text-yellow-700 border-yellow-200 dark:bg-yellow-950 dark:text-yellow-300 dark:border-yellow-800",
+  },
+  {
+    id: "automotive",
+    name: "Automotive",
+    icon: Car,
+    description: "Auto manufacturers and suppliers",
+    color: "bg-red-50 text-red-700 border-red-200 dark:bg-red-950 dark:text-red-300 dark:border-red-800",
+  },
+  {
+    id: "consumer",
+    name: "Consumer Goods",
+    icon: ShoppingCart,
+    description: "Retail, food, and consumer products",
+    color: "bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-950 dark:text-purple-300 dark:border-purple-800",
+  },
+  {
+    id: "energy",
+    name: "Energy",
+    icon: Zap,
+    description: "Oil, gas, and renewable energy",
+    color: "bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-950 dark:text-orange-300 dark:border-orange-800",
+  },
+  {
+    id: "realestate",
+    name: "Real Estate",
+    icon: Home,
+    description: "REITs and property companies",
+    color: "bg-teal-50 text-teal-700 border-teal-200 dark:bg-teal-950 dark:text-teal-300 dark:border-teal-800",
+  },
+  {
+    id: "industrial",
+    name: "Industrial",
+    icon: Building2,
+    description: "Manufacturing and industrial services",
+    color: "bg-gray-50 text-gray-700 border-gray-200 dark:bg-gray-950 dark:text-gray-300 dark:border-gray-800",
+  },
+];
+
+// Sample equities by sector for the reference implementation
+// In production, this would be fetched from an API
+const equitiesBySector = {
+  technology: [
+    { symbol: "AAPL", name: "Apple Inc." },
+    { symbol: "MSFT", name: "Microsoft Corporation" },
+    { symbol: "GOOGL", name: "Alphabet Inc." },
+    { symbol: "AMZN", name: "Amazon.com Inc." },
+    { symbol: "META", name: "Meta Platforms Inc." },
+  ],
+  healthcare: [
+    { symbol: "JNJ", name: "Johnson & Johnson" },
+    { symbol: "PFE", name: "Pfizer Inc." },
+    { symbol: "UNH", name: "UnitedHealth Group" },
+    { symbol: "ABBV", name: "AbbVie Inc." },
+    { symbol: "TMO", name: "Thermo Fisher Scientific" },
+  ],
+  financial: [
+    { symbol: "JPM", name: "JPMorgan Chase & Co." },
+    { symbol: "BAC", name: "Bank of America Corp" },
+    { symbol: "WFC", name: "Wells Fargo & Company" },
+    { symbol: "GS", name: "Goldman Sachs Group" },
+    { symbol: "MS", name: "Morgan Stanley" },
+  ],
+  automotive: [
+    { symbol: "TSLA", name: "Tesla Inc." },
+    { symbol: "F", name: "Ford Motor Company" },
+    { symbol: "GM", name: "General Motors Company" },
+    { symbol: "TM", name: "Toyota Motor Corporation" },
+    { symbol: "HMC", name: "Honda Motor Co." },
+  ],
+  consumer: [
+    { symbol: "WMT", name: "Walmart Inc." },
+    { symbol: "PG", name: "Procter & Gamble" },
+    { symbol: "KO", name: "Coca-Cola Company" },
+    { symbol: "PEP", name: "PepsiCo Inc." },
+    { symbol: "COST", name: "Costco Wholesale" },
+  ],
+  energy: [
+    { symbol: "XOM", name: "Exxon Mobil Corporation" },
+    { symbol: "CVX", name: "Chevron Corporation" },
+    { symbol: "COP", name: "ConocoPhillips" },
+    { symbol: "EOG", name: "EOG Resources" },
+    { symbol: "SLB", name: "Schlumberger Limited" },
+  ],
+  realestate: [
+    { symbol: "AMT", name: "American Tower Corporation" },
+    { symbol: "PLD", name: "Prologis Inc." },
+    { symbol: "CCI", name: "Crown Castle Inc." },
+    { symbol: "EQIX", name: "Equinix Inc." },
+    { symbol: "SPG", name: "Simon Property Group" },
+  ],
+  industrial: [
+    { symbol: "BA", name: "Boeing Company" },
+    { symbol: "CAT", name: "Caterpillar Inc." },
+    { symbol: "HON", name: "Honeywell International" },
+    { symbol: "UPS", name: "United Parcel Service" },
+    { symbol: "LMT", name: "Lockheed Martin Corporation" },
+  ],
+};
+
 export default function OnboardingPage() {
   const { isAuthenticated, isLoading, userName, userId } = useAuthContext();
   const router = useRouter();
   const [initializing, setInitializing] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Form state
-  const [selectedTickers, setSelectedTickers] = useState<SelectedTicker[]>([]);
+  // New state for the simplified onboarding flow
+  const [currentStep, setCurrentStep] = useState(1);
+  const [selectedSectors, setSelectedSectors] = useState<string[]>([]);
+  const [selectedEquities, setSelectedEquities] = useState<string[]>([]);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [isTransitioning, setIsTransitioning] = useState(false);
+
+  // Default preferences
   const [emailFrequency, setEmailFrequency] = useState<NotificationPreference>(
     DEFAULT_NOTIFICATION_PREFERENCES.emailFrequency
   );
@@ -37,17 +165,12 @@ export default function OnboardingPage() {
   const [contentPreferences, setContentPreferences] = useState<NotificationContentPreferences>(
     DEFAULT_NOTIFICATION_PREFERENCES.contentPreferences
   );
-  const [fullName, setFullName] = useState("");
-  const [jobTitle, setJobTitle] = useState("");
-  const [company, setCompany] = useState("");
-  const [bio, setBio] = useState("");
   const [uiPreferences, setUiPreferences] = useState<UIPreferences>(DEFAULT_UI_PREFERENCES);
-  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Initialize with user's name if available
   useEffect(() => {
     if (userName) {
-      setFullName(userName);
+      // Set any user-specific initial values
     }
   }, [userName]);
 
@@ -66,44 +189,84 @@ export default function OnboardingPage() {
     }
   }, [isAuthenticated, isLoading, router]);
 
-  // Handle ticker selection
-  const handleAddTicker = (ticker: SelectedTicker) => {
-    setSelectedTickers(prev => [...prev, ticker]);
+  // Calculate progress based on current step and selections
+  const calculateProgress = () => {
+    if (currentStep === 1) {
+      // Step 1: 0% if no sectors selected, 50% if at least one sector is selected
+      return selectedSectors.length > 0 ? 50 : 0;
+    } else {
+      // Step 2: 50% if no companies selected, 100% if at least one company is selected
+      return 50 + (selectedEquities.length > 0 ? 50 : 0);
+    }
   };
 
-  const handleRemoveTicker = (tickerSymbol: string) => {
-    setSelectedTickers(prev => prev.filter(ticker => ticker.symbol !== tickerSymbol));
+  const progress = calculateProgress();
+
+  // Handle sector selection
+  const handleSectorToggle = (sectorId: string) => {
+    setSelectedSectors((prev) => 
+      prev.includes(sectorId) ? prev.filter((id) => id !== sectorId) : [...prev, sectorId]
+    );
   };
 
-  // Handle filing type preferences
-  const handleFilingTypeChange = (key: keyof FilingTypePreferences, value: boolean) => {
-    setFilingTypes(prev => ({
-      ...prev,
-      [key]: value
-    }));
+  // Handle equity selection
+  const handleEquityToggle = (symbol: string) => {
+    setSelectedEquities((prev) => {
+      if (prev.includes(symbol)) {
+        return prev.filter((s) => s !== symbol);
+      }
+      if (prev.length < 5) {
+        return [...prev, symbol];
+      }
+      return prev;
+    });
   };
 
-  // Handle content preferences
-  const handleContentPreferenceChange = (key: keyof NotificationContentPreferences, value: boolean) => {
-    setContentPreferences(prev => ({
-      ...prev,
-      [key]: value
-    }));
+  // Get available equities based on selected sectors and search query
+  const getAvailableEquities = () => {
+    if (selectedSectors.length === 0) return [];
+
+    const allEquities = selectedSectors.flatMap((sectorId) => equitiesBySector[sectorId as keyof typeof equitiesBySector] || []);
+    const uniqueEquities = allEquities.filter(
+      (equity, index, self) => index === self.findIndex((e) => e.symbol === equity.symbol)
+    );
+
+    if (searchQuery) {
+      return uniqueEquities.filter(
+        (equity) =>
+          equity.symbol.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          equity.name.toLowerCase().includes(searchQuery.toLowerCase())
+      );
+    }
+
+    return uniqueEquities;
   };
 
-  // Handle UI preferences
-  const handleThemeChange = (theme: UIPreferences['theme']) => {
-    setUiPreferences(prev => ({
-      ...prev,
-      theme
-    }));
+  // Handle next button click
+  const handleNext = () => {
+    if (currentStep === 1) {
+      setIsTransitioning(true);
+      setTimeout(() => {
+        setCurrentStep(2);
+        setIsTransitioning(false);
+      }, 300);
+    } else {
+      handleCompleteOnboarding();
+    }
   };
 
-  const handleDashboardLayoutChange = (layout: UIPreferences['dashboardLayout']) => {
-    setUiPreferences(prev => ({
-      ...prev,
-      dashboardLayout: layout
-    }));
+  // Handle skip button click
+  const handleSkip = () => {
+    router.push("/dashboard");
+  };
+
+  // Handle back button click
+  const handleBack = () => {
+    setIsTransitioning(true);
+    setTimeout(() => {
+      setCurrentStep(1);
+      setIsTransitioning(false);
+    }, 300);
   };
 
   // Handle onboarding completion
@@ -111,6 +274,14 @@ export default function OnboardingPage() {
     try {
       setIsSubmitting(true);
       setError(null);
+
+      // Format selected tickers for saving
+      const formattedTickers = getAvailableEquities()
+        .filter(equity => selectedEquities.includes(equity.symbol))
+        .map(equity => ({
+          symbol: equity.symbol,
+          companyName: equity.name
+        }));
 
       // Save user preferences using server action
       const result = await saveUserPreferences({
@@ -127,7 +298,7 @@ export default function OnboardingPage() {
       }
 
       // Add ticker subscriptions using server action
-      for (const ticker of selectedTickers) {
+      for (const ticker of formattedTickers) {
         const subResult = await addTickerSubscription({
           symbol: ticker.symbol,
           companyName: ticker.companyName,
@@ -170,15 +341,14 @@ export default function OnboardingPage() {
             <div className="text-center">
               <h2 className="text-2xl font-bold text-red-600 mb-4">Error</h2>
               <p className="mb-6">{error}</p>
-              <button 
-                className="px-4 py-2 bg-primary text-white rounded-md"
+              <Button 
                 onClick={() => {
                   setError(null);
                   router.refresh();
                 }}
               >
                 Retry
-              </button>
+              </Button>
             </div>
           </CardContent>
         </Card>
@@ -186,81 +356,210 @@ export default function OnboardingPage() {
     );
   }
 
-  // Define the steps for our multi-step form
-  const steps = [
-    {
-      id: "user-profile",
-      title: "Profile",
-      description: "Tell us about yourself",
-      component: (
-        <UserProfileForm
-          fullName={fullName}
-          jobTitle={jobTitle}
-          company={company}
-          bio={bio}
-          uiPreferences={uiPreferences}
-          onNameChange={setFullName}
-          onJobTitleChange={setJobTitle}
-          onCompanyChange={setCompany}
-          onBioChange={setBio}
-          onThemeChange={handleThemeChange}
-          onDashboardLayoutChange={handleDashboardLayoutChange}
-        />
-      )
-    },
-    {
-      id: "ticker-selection",
-      title: "Companies",
-      description: "Select companies to track",
-      component: (
-        <TickerSelection
-          selectedTickers={selectedTickers}
-          onAddTicker={handleAddTicker}
-          onRemoveTicker={handleRemoveTicker}
-        />
-      )
-    },
-    {
-      id: "notification-preferences",
-      title: "Notifications",
-      description: "Set your notification preferences",
-      component: (
-        <NotificationPreferences
-          emailFrequency={emailFrequency}
-          filingTypes={filingTypes}
-          contentPreferences={contentPreferences}
-          onEmailFrequencyChange={setEmailFrequency}
-          onFilingTypeChange={handleFilingTypeChange}
-          onContentPreferenceChange={handleContentPreferenceChange}
-        />
-      )
-    }
-  ];
+  if (isSubmitting) {
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <div className="text-center">
+          <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4" />
+          <p>Setting up your account...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="flex min-h-screen items-center justify-center p-4">
-      <Card className="w-full max-w-2xl">
-        <CardContent className="p-6">
-          <div className="mb-6">
-            <h2 className="text-2xl font-bold">Welcome to tldrSEC</h2>
-            <p className="text-muted-foreground">
-              Let's set up your account to track SEC filings
-            </p>
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50 dark:from-gray-950 dark:via-gray-900 dark:to-gray-950">
+      <div className="container mx-auto px-4 py-8">
+        <div className="mx-auto max-w-4xl">
+          {/* Header */}
+          <div className="mb-8 text-center">
+            <div className="mb-4 flex items-center justify-center">
+              <span className="text-3xl font-bold text-primary">tldr</span>
+              <span className="text-3xl font-bold">SEC</span>
+            </div>
+            <h1 className="mb-2 text-2xl font-bold">Welcome to tldrSEC!</h1>
+            <p className="text-muted-foreground">Let's personalize your experience in just 2 quick steps</p>
           </div>
 
-          {isSubmitting ? (
-            <div className="py-8 text-center">
-              <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4" />
-              <p>Setting up your account...</p>
+          {/* Progress */}
+          <div className="mb-8">
+            <div className="mb-2 flex items-center justify-between text-sm">
+              <span className="font-medium">Step {currentStep} of 2</span>
+              <span className="text-muted-foreground">{Math.round(progress)}% complete</span>
             </div>
-          ) : (
-            <MultiStepForm 
-              steps={steps} 
-              onComplete={handleCompleteOnboarding} 
-            />
-          )}
-        </CardContent>
-      </Card>
+            <Progress value={progress} className="h-2" />
+          </div>
+
+          {/* Step Container with Transition */}
+          <div className="relative overflow-hidden">
+            <div
+              className={`transition-all duration-300 ease-in-out ${
+                isTransitioning ? "translate-x-[-100%] opacity-0" : "translate-x-0 opacity-100"
+              }`}
+            >
+              {/* Step 1: Sector Selection */}
+              {currentStep === 1 && (
+                <Card className="border-0 shadow-lg">
+                  <CardContent className="p-6">
+                    <div className="text-center mb-6">
+                      <h2 className="text-xl font-bold">What sectors interest you?</h2>
+                      <p className="text-muted-foreground">
+                        Select the industries you'd like to track. You can always change this later.
+                      </p>
+                    </div>
+
+                    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                      {sectors.map((sector) => {
+                        const Icon = sector.icon;
+                        const isSelected = selectedSectors.includes(sector.id);
+                        return (
+                          <div
+                            key={sector.id}
+                            className={`cursor-pointer rounded-lg border-2 p-4 transition-all hover:shadow-md ${
+                              isSelected
+                                ? "border-primary bg-primary/10 shadow-md"
+                                : "border-border hover:border-primary/50"
+                            }`}
+                            onClick={() => handleSectorToggle(sector.id)}
+                          >
+                            <div className="flex flex-col items-center text-center">
+                              <div
+                                className={`mb-3 flex h-12 w-12 items-center justify-center rounded-lg border ${sector.color}`}
+                              >
+                                <Icon className="h-6 w-6" />
+                              </div>
+                              <h3 className="mb-1 font-medium">{sector.name}</h3>
+                              <p className="mb-6 text-xs text-muted-foreground">{sector.description}</p>
+                              <div className="h-5 flex items-center justify-center">
+                                {isSelected && <CheckCircle className="h-5 w-5 text-primary" />}
+                              </div>
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+
+                    <div className="mt-8 flex items-center justify-between">
+                      <div></div>
+                      <div className="flex items-center gap-4">
+                        <span className="text-sm text-muted-foreground">
+                          {selectedSectors.length} sector{selectedSectors.length !== 1 ? "s" : ""} selected
+                        </span>
+                        <Button onClick={handleNext} disabled={selectedSectors.length === 0}>
+                          Continue
+                          <ArrowRight className="ml-2 h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Step 2: Equity Selection */}
+              {currentStep === 2 && (
+                <Card className="border-0 shadow-lg">
+                  <CardContent className="p-6">
+                    <div className="text-center mb-6">
+                      <h2 className="text-xl font-bold">Choose your first companies</h2>
+                      <p className="text-muted-foreground">
+                        Select up to 5 companies to start tracking. Based on your selected sectors.
+                      </p>
+                    </div>
+
+                    {/* Search */}
+                    <div className="relative mb-6">
+                      <Input
+                        placeholder="Search companies..."
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        className="pl-10"
+                      />
+                      <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                    </div>
+
+                    {/* Selected Sectors */}
+                    <div className="mb-6">
+                      <h3 className="mb-2 text-sm font-medium">Selected Sectors:</h3>
+                      <div className="flex flex-wrap gap-2">
+                        {selectedSectors.map((sectorId) => {
+                          const sector = sectors.find((s) => s.id === sectorId);
+                          return (
+                            <Badge key={sectorId} variant="secondary">
+                              {sector?.name}
+                            </Badge>
+                          )
+                        })}
+                      </div>
+                    </div>
+
+                    {/* Equity Grid */}
+                    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                      {getAvailableEquities().map((equity) => {
+                        const isSelected = selectedEquities.includes(equity.symbol);
+                        const isDisabled = !isSelected && selectedEquities.length >= 5;
+                        return (
+                          <div
+                            key={equity.symbol}
+                            className={`cursor-pointer rounded-lg border p-3 transition-all ${
+                              isSelected
+                                ? "border-primary bg-primary/10 shadow-sm"
+                                : isDisabled
+                                  ? "border-border bg-muted/50 opacity-50"
+                                  : "border-border hover:border-primary/50 hover:shadow-sm"
+                            }`}
+                            onClick={() => !isDisabled && handleEquityToggle(equity.symbol)}
+                          >
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <div className="font-medium">{equity.symbol}</div>
+                                <div className="text-sm text-muted-foreground">{equity.name}</div>
+                              </div>
+                              {isSelected && <CheckCircle className="h-5 w-5 text-primary" />}
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+
+                    {getAvailableEquities().length === 0 && (
+                      <div className="py-8 text-center text-muted-foreground">
+                        {selectedSectors.length === 0
+                          ? "Please select at least one sector to see available companies."
+                          : searchQuery
+                            ? "No companies found matching your search."
+                            : "No companies available for selected sectors."}
+                      </div>
+                    )}
+
+                    <div className="mt-8 flex items-center justify-between">
+                      <Button variant="outline" onClick={handleBack}>
+                        <ArrowRight className="mr-2 h-4 w-4 rotate-180" />
+                        Back
+                      </Button>
+                      <div className="flex items-center gap-4">
+                        <span className="text-sm text-muted-foreground">
+                          {selectedEquities.length} of 5 companies selected
+                        </span>
+                        <Button onClick={handleNext} disabled={selectedEquities.length === 0}>
+                          Get Started
+                          <ArrowRight className="ml-2 h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+            </div>
+          </div>
+
+          {/* Skip Option */}
+          <div className="mt-6 text-center">
+            <Button variant="link" onClick={handleSkip} className="text-muted-foreground">
+              Skip setup and go to dashboard
+            </Button>
+          </div>
+        </div>
+      </div>
     </div>
   );
 } 
