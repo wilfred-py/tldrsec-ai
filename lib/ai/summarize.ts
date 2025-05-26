@@ -5,7 +5,6 @@
  * with specialized prompts for different filing types.
  */
 
-import { PrismaClient } from '@prisma/client';
 import { ClaudeClient, ClaudeRequestOptions } from './claude-client';
 import { modelConfig } from './config';
 import { parseResponse } from './parsers';
@@ -15,9 +14,7 @@ import { extractFilingContent } from '@/lib/parsers/filing-extractor';
 import { logger } from '@/lib/logging';
 import { monitoring } from '@/lib/monitoring';
 import { ApiError, ErrorCode } from '@/lib/error-handling';
-
-// Initialize Prisma client
-const prisma = new PrismaClient();
+import { prisma } from '@/lib/db/prisma';
 
 // Component logger
 const componentLogger = logger.child('claude-summarizer');

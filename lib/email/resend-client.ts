@@ -60,19 +60,37 @@ export interface SendEmailOptions {
  * Resend email client with advanced error handling, retries, and monitoring
  */
 export class ResendClient {
-  private resend: Resend;
+  private resend: Resend | null = null;
   private limiter: Bottleneck;
   private totalSent: number;
   private totalFailed: number;
   private lastResetTime: Date;
   private serviceName = 'resend-email';
+  private isDummyClient = false;
 
   /**
    * Create a new ResendClient instance
    * @param apiKey Optional API key (defaults to environment variable)
    */
   constructor(apiKey?: string) {
-    this.resend = new Resend(apiKey || resendConfig.apiKey);
+    const key = apiKey || resendConfig.apiKey;
+    
+    // Handle missing API key
+    if (!key) {
+      // In development or test, create a dummy client that logs but doesn't send
+      if (process.env.NODE_ENV !== 'production') {
+        this.isDummyClient = true;
+        logger.warn('No Resend API key provided. Using dummy client that will not send emails.');
+      } else {
+        // In production, still create the client but log a warning
+        logger.error('No Resend API key provided in production. Set RESEND_API_KEY in your environment variables.');
+        // We'll initialize with an empty string which will cause API calls to fail gracefully
+        this.resend = new Resend('');
+      }
+    } else {
+      // Initialize with valid API key
+      this.resend = new Resend(key);
+    }
     
     // Initialize rate limiter
     this.limiter = new Bottleneck({
@@ -84,11 +102,6 @@ export class ResendClient {
     this.totalSent = 0;
     this.totalFailed = 0;
     this.lastResetTime = new Date();
-    
-    // Validate API key
-    if (!apiKey && !resendConfig.apiKey) {
-      logger.warn('No Resend API key provided. Set RESEND_API_KEY in your environment variables.');
-    }
   }
   
   /**
@@ -122,7 +135,34 @@ export class ResendClient {
       requestId
     });
     
+    // If we're using a dummy client in non-production, log and return success without sending
+    if (this.isDummyClient) {
+      logger.info(`[DUMMY] Would send email to ${Array.isArray(message.to) ? message.to : [message.to]}`, {
+        subject: message.subject,
+        html: message.html?.substring(0, 100) + '...',
+        text: message.text?.substring(0, 100) + '...',
+        requestId
+      });
+      
+      // Return a dummy successful result
+      return {
+        id: `dummy_${requestId}`,
+        to: emailParams.to,
+        success: true
+      };
+    }
+    
     try {
+      // If we have no client at all, throw a meaningful error
+      if (!this.resend) {
+        throw createExternalApiError(
+          'Resend client not initialized. Missing API key.',
+          { code: ResendErrorCode.MISSING_API_KEY },
+          false,
+          requestId
+        );
+      }
+      
       // Configure retry behavior
       const retryConfig: RetryConfig = {
         ...DefaultRetryConfig,
@@ -155,6 +195,16 @@ export class ResendClient {
             abortController.signal.addEventListener('abort', () => {
               fetchController.abort(abortController.signal.reason);
             });
+            
+            // This check was already added above but ensuring it's here for safety
+            if (!this.resend) {
+              throw createExternalApiError(
+                'Resend client not initialized. Missing API key.',
+                { code: ResendErrorCode.MISSING_API_KEY },
+                false,
+                requestId
+              );
+            }
             
             const response = await this.resend.emails.send({
               from: emailParams.from,

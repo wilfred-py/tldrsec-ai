@@ -1,8 +1,5 @@
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '@/lib/db/prisma';
 import { v4 as uuidv4 } from 'uuid';
-
-// Initialize Prisma client
-const prisma = new PrismaClient();
 
 // Job types
 export type JobType = 

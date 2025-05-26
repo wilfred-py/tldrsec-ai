@@ -1,6 +1,7 @@
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '@/lib/db/prisma';
 import { logger } from '@/lib/logging';
 import { JobType } from './index';
+import { v4 as uuidv4 } from 'uuid';
 
 // Dead letter queue entry interface
 export interface DeadLetterEntry {
@@ -35,7 +36,6 @@ interface DbDeadLetterEntry {
  * for later manual inspection or automatic retry
  */
 export class DeadLetterQueueService {
-  private static prisma = new PrismaClient();
   private static componentLogger = logger.child('dead-letter-queue');
 
   /**
@@ -52,7 +52,7 @@ export class DeadLetterQueueService {
       const errorMessage = error instanceof Error ? `${error.message}\n${error.stack || ''}` : error;
       
       // Create a DLQ entry in the database
-      const dlqEntry = await this.prisma.deadLetterQueue.create({
+      const dlqEntry = await prisma.deadLetterQueue.create({
         data: {
           originalJobId,
           jobType,
@@ -93,7 +93,7 @@ export class DeadLetterQueueService {
     includeReprocessed: boolean = false
   ): Promise<DeadLetterEntry[]> {
     try {
-      const entries = await this.prisma.deadLetterQueue.findMany({
+      const entries = await prisma.deadLetterQueue.findMany({
         where: includeReprocessed ? {} : { reprocessed: false },
         orderBy: { createdAt: 'desc' },
         take: limit,
@@ -115,7 +115,7 @@ export class DeadLetterQueueService {
    */
   static async getDeadLetterCount(includeReprocessed: boolean = false): Promise<number> {
     try {
-      return await this.prisma.deadLetterQueue.count({
+      return await prisma.deadLetterQueue.count({
         where: includeReprocessed ? {} : { reprocessed: false }
       });
     } catch (error) {
@@ -129,7 +129,7 @@ export class DeadLetterQueueService {
    */
   static async markAsReprocessed(dlqId: string): Promise<boolean> {
     try {
-      await this.prisma.deadLetterQueue.update({
+      await prisma.deadLetterQueue.update({
         where: { id: dlqId },
         data: {
           reprocessed: true,
@@ -154,7 +154,7 @@ export class DeadLetterQueueService {
   ): Promise<string | null> {
     try {
       // Get the DLQ entry
-      const dlqEntry = await this.prisma.deadLetterQueue.findUnique({
+      const dlqEntry = await prisma.deadLetterQueue.findUnique({
         where: { id: dlqId }
       });
       
@@ -197,7 +197,7 @@ export class DeadLetterQueueService {
       const cutoffDate = new Date();
       cutoffDate.setDate(cutoffDate.getDate() - olderThanDays);
       
-      const result = await this.prisma.deadLetterQueue.deleteMany({
+      const result = await prisma.deadLetterQueue.deleteMany({
         where: {
           reprocessed: true,
           processedAt: {
