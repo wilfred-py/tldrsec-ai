@@ -3,6 +3,7 @@
 import { motion } from 'framer-motion';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
+import { useAuthContext } from '@/lib/context/auth-context';
 
 const steps = [
   {
@@ -23,6 +24,8 @@ const steps = [
 ];
 
 export function HowItWorks() {
+  const { isAuthenticated, isLoading } = useAuthContext();
+  
   return (
     <section className="py-24 relative overflow-hidden">
       {/* Background gradient elements */}
@@ -69,11 +72,21 @@ export function HowItWorks() {
           viewport={{ once: true }}
           transition={{ duration: 0.8, delay: 0.6 }}
         >
-          <Link href="/auth/sign-up">
-            <Button size="lg" className="bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 text-white px-8 py-6 text-lg rounded-full">
-              Get Started
-            </Button>
-          </Link>
+          {!isLoading && (
+            isAuthenticated ? (
+              <Link href="/dashboard">
+                <Button size="lg" className="bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 text-white px-8 py-6 text-lg rounded-full">
+                  Go to Dashboard
+                </Button>
+              </Link>
+            ) : (
+              <Link href="/sign-up">
+                <Button size="lg" className="bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 text-white px-8 py-6 text-lg rounded-full">
+                  Get Started
+                </Button>
+              </Link>
+            )
+          )}
         </motion.div>
       </div>
     </section>

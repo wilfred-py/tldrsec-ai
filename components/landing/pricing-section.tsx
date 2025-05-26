@@ -4,6 +4,7 @@ import { motion } from 'framer-motion';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
 import { Check } from 'lucide-react';
+import { useAuthContext } from '@/lib/context/auth-context';
 
 const pricingPlans = [
   {
@@ -19,6 +20,7 @@ const pricingPlans = [
       "24-hour delivery window"
     ],
     cta: "Get Started",
+    ctaAuth: "Go to Dashboard",
     highlighted: false
   },
   {
@@ -34,11 +36,14 @@ const pricingPlans = [
       "Real-time delivery (within minutes)"
     ],
     cta: "Get Started",
+    ctaAuth: "Go to Dashboard",
     highlighted: true
   }
 ];
 
 export function PricingSection() {
+  const { isAuthenticated, isLoading } = useAuthContext();
+  
   return (
     <section className="py-24 bg-gradient-to-b from-background to-background/90 relative overflow-hidden">
       {/* Background gradient elements */}
@@ -92,15 +97,29 @@ export function PricingSection() {
                 ))}
               </div>
               
-              <Link href="/auth/sign-up" className="mt-auto">
-                <Button 
-                  className={`w-full ${plan.highlighted ? 'bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 text-white' : ''}`}
-                  variant={plan.highlighted ? "default" : "outline"}
-                  size="lg"
-                >
-                  {plan.cta}
-                </Button>
-              </Link>
+              {!isLoading && (
+                isAuthenticated ? (
+                  <Link href="/dashboard" className="mt-auto">
+                    <Button 
+                      className={`w-full ${plan.highlighted ? 'bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 text-white' : ''}`}
+                      variant={plan.highlighted ? "default" : "outline"}
+                      size="lg"
+                    >
+                      {plan.ctaAuth}
+                    </Button>
+                  </Link>
+                ) : (
+                  <Link href="/sign-up" className="mt-auto">
+                    <Button 
+                      className={`w-full ${plan.highlighted ? 'bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 text-white' : ''}`}
+                      variant={plan.highlighted ? "default" : "outline"}
+                      size="lg"
+                    >
+                      {plan.cta}
+                    </Button>
+                  </Link>
+                )
+              )}
             </motion.div>
           ))}
         </div>

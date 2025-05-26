@@ -4,6 +4,7 @@ import { motion } from 'framer-motion';
 import { Button } from '@/components/ui/button';
 import { AnimatedGradient } from './animated-gradient';
 import Link from 'next/link';
+import { useAuthContext } from '@/lib/context/auth-context';
 
 const container = {
   hidden: { opacity: 0 },
@@ -32,6 +33,8 @@ const tickerItems = [
 ];
 
 export function HeroSection() {
+  const { isAuthenticated, isLoading } = useAuthContext();
+  
   return (
     <div className="relative min-h-[90vh] flex items-center">
       <AnimatedGradient />
@@ -58,11 +61,21 @@ export function HeroSection() {
           className="flex flex-col sm:flex-row gap-4 justify-center items-center"
           variants={item}
         >
-          <Link href="/auth/sign-up">
-            <Button size="lg" className="bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 text-white px-8 py-6 text-lg rounded-full">
-              Get Started
-            </Button>
-          </Link>
+          {!isLoading && (
+            isAuthenticated ? (
+              <Link href="/dashboard">
+                <Button size="lg" className="bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 text-white px-8 py-6 text-lg rounded-full">
+                  Go to Dashboard
+                </Button>
+              </Link>
+            ) : (
+              <Link href="/sign-up">
+                <Button size="lg" className="bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 text-white px-8 py-6 text-lg rounded-full">
+                  Get Started
+                </Button>
+              </Link>
+            )
+          )}
         </motion.div>
         
         <motion.div 

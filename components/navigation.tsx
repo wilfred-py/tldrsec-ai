@@ -4,8 +4,11 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
 import { Button } from '@/components/ui/button';
+import { useAuthContext } from '@/lib/context/auth-context';
 
 export function Navigation() {
+  const { isAuthenticated, isLoading } = useAuthContext();
+
   return (
     <div className="sticky top-0 z-40 w-full bg-background/70 backdrop-blur-lg">
       <div className="container mx-auto px-4 py-4">
@@ -24,13 +27,25 @@ export function Navigation() {
           </nav>
           
           <div className="flex items-center">
-            <Link href="/auth/sign-up">
-              <Button 
-                className="bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 text-white rounded-lg"
-              >
-                Get Started
-              </Button>
-            </Link>
+            {!isLoading && (
+              isAuthenticated ? (
+                <Link href="/dashboard">
+                  <Button 
+                    className="bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 text-white rounded-lg"
+                  >
+                    Dashboard
+                  </Button>
+                </Link>
+              ) : (
+                <Link href="/sign-up">
+                  <Button 
+                    className="bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 text-white rounded-lg"
+                  >
+                    Get Started
+                  </Button>
+                </Link>
+              )
+            )}
           </div>
         </div>
       </div>
