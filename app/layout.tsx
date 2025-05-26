@@ -8,6 +8,7 @@ import { PostHogProvider } from '@/components/analytics/posthog-provider';
 import { PageViewTracker } from '@/components/analytics/page-view-tracker';
 import { MouseFollowEffect } from '@/components/landing/mouse-follow-effect';
 import { JsonLd } from '@/components/structured-data';
+import { AuthProvider } from '@/lib/context/auth-context';
 
 const geistSans = Geist({
   variable: '--font-geist-sans',
@@ -59,15 +60,17 @@ export default function RootLayout({
           className={`${geistSans.variable} ${geistMono.variable} antialiased`}
         >
           <PostHogProvider>
-            <PageViewTracker />
-            <MouseFollowEffect />
-            {/* Use our new Navigation component */}
-            <Navigation />
-            <JsonLd />
-            <main className="min-h-screen">
-              {children}
-            </main>
-            <Toaster />
+            <AuthProvider>
+              <PageViewTracker />
+              <MouseFollowEffect />
+              {/* Use our new Navigation component */}
+              <Navigation />
+              <JsonLd />
+              <main className="min-h-screen">
+                {children}
+              </main>
+              <Toaster />
+            </AuthProvider>
           </PostHogProvider>
         </body>
       </html>
