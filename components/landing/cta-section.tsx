@@ -3,8 +3,11 @@
 import { motion } from 'framer-motion';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
+import { useAuthContext } from '@/lib/context/auth-context';
 
 export function CTASection() {
+  const { isAuthenticated, isLoading } = useAuthContext();
+  
   return (
     <section className="py-24 relative overflow-hidden">
       {/* Background gradient elements */}
@@ -26,11 +29,21 @@ export function CTASection() {
             Join investors who stay informed with real-time email summaries of SEC filings for the companies they follow.
           </p>
           <div className="flex justify-center">
-            <Link href="/auth/sign-up">
-              <Button size="lg" className="bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 text-white px-8 py-6 text-lg rounded-full">
-                Get Started
-              </Button>
-            </Link>
+            {!isLoading && (
+              isAuthenticated ? (
+                <Link href="/dashboard">
+                  <Button size="lg" className="bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 text-white px-8 py-6 text-lg rounded-full">
+                    Go to Dashboard
+                  </Button>
+                </Link>
+              ) : (
+                <Link href="/sign-up">
+                  <Button size="lg" className="bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 text-white px-8 py-6 text-lg rounded-full">
+                    Get Started
+                  </Button>
+                </Link>
+              )
+            )}
           </div>
         </motion.div>
       </div>
