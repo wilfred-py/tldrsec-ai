@@ -1,10 +1,7 @@
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '@/lib/db/prisma';
 import { DEFAULT_USER_PREFERENCES, NotificationPreferences, PreferenceUpdateResponse, TickerSubscription, UserPreferences, SubscriptionUpdateResponse } from './preference-types';
 import { logger } from '../logging';
 import { v4 as uuidv4 } from 'uuid';
-
-// Initialize Prisma client
-const prisma = new PrismaClient();
 
 /**
  * User Preference Service

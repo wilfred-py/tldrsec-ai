@@ -18,11 +18,13 @@ import {
   DEFAULT_NOTIFICATION_PREFERENCES,
   DEFAULT_UI_PREFERENCES
 } from "@/lib/user/preference-types";
+import { saveUserPreferences, addTickerSubscription } from "./actions";
 
 export default function OnboardingPage() {
   const { isAuthenticated, isLoading, userName, userId } = useAuthContext();
   const router = useRouter();
   const [initializing, setInitializing] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   // Form state
   const [selectedTickers, setSelectedTickers] = useState<SelectedTicker[]>([]);
@@ -51,9 +53,15 @@ export default function OnboardingPage() {
 
   // Protect this route
   useEffect(() => {
-    if (!isLoading && !isAuthenticated) {
-      router.replace("/sign-in");
-    } else if (!isLoading) {
+    try {
+      if (!isLoading && !isAuthenticated) {
+        router.replace("/sign-in");
+      } else if (!isLoading) {
+        setInitializing(false);
+      }
+    } catch (err) {
+      console.error("Error during authentication check:", err);
+      setError("An error occurred while checking authentication status. Please try refreshing the page.");
       setInitializing(false);
     }
   }, [isAuthenticated, isLoading, router]);
@@ -102,46 +110,32 @@ export default function OnboardingPage() {
   const handleCompleteOnboarding = async () => {
     try {
       setIsSubmitting(true);
+      setError(null);
 
-      // Save user preferences
-      const response = await fetch('/api/user/preferences', {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json'
+      // Save user preferences using server action
+      const result = await saveUserPreferences({
+        notifications: {
+          emailFrequency,
+          filingTypes,
+          contentPreferences
         },
-        body: JSON.stringify({
-          notifications: {
-            emailFrequency,
-            filingTypes,
-            contentPreferences
-          },
-          ui: uiPreferences
-        })
+        ui: uiPreferences
       });
 
-      if (!response.ok) {
-        throw new Error('Failed to save preferences');
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to save preferences');
       }
 
-      // Save user profile
-      // TODO: Implement user profile API
-
-      // Add ticker subscriptions
+      // Add ticker subscriptions using server action
       for (const ticker of selectedTickers) {
-        const subResponse = await fetch('/api/user/subscriptions', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            symbol: ticker.symbol,
-            companyName: ticker.companyName,
-            overridePreferences: false
-          })
+        const subResult = await addTickerSubscription({
+          symbol: ticker.symbol,
+          companyName: ticker.companyName,
+          overridePreferences: false
         });
 
-        if (!subResponse.ok) {
-          console.error(`Failed to subscribe to ${ticker.symbol}`);
+        if (!subResult.success) {
+          console.error(`Failed to subscribe to ${ticker.symbol}: ${subResult.error}`);
         }
       }
 
@@ -149,6 +143,8 @@ export default function OnboardingPage() {
       router.push('/dashboard');
     } catch (error) {
       console.error('Error completing onboarding:', error);
+      const errorMessage = error instanceof Error ? error.message : 'An unexpected error occurred';
+      setError(errorMessage);
       toast.error('Failed to complete onboarding. Please try again.');
     } finally {
       setIsSubmitting(false);
@@ -162,6 +158,30 @@ export default function OnboardingPage() {
           <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4" />
           <p>Loading...</p>
         </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex min-h-screen items-center justify-center p-4">
+        <Card className="w-full max-w-md">
+          <CardContent className="p-6">
+            <div className="text-center">
+              <h2 className="text-2xl font-bold text-red-600 mb-4">Error</h2>
+              <p className="mb-6">{error}</p>
+              <button 
+                className="px-4 py-2 bg-primary text-white rounded-md"
+                onClick={() => {
+                  setError(null);
+                  router.refresh();
+                }}
+              >
+                Retry
+              </button>
+            </div>
+          </CardContent>
+        </Card>
       </div>
     );
   }

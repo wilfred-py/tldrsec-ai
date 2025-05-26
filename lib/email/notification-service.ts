@@ -5,7 +5,6 @@
  * Supports immediate notifications and daily digests.
  */
 
-import { PrismaClient } from '@prisma/client';
 import { EventEmitter } from 'events';
 import { v4 as uuidv4 } from 'uuid';
 import { ResendClient, sendEmail } from './index';
@@ -18,9 +17,8 @@ import {
   FilingTemplateData, 
   BaseTemplateData 
 } from './templates';
-
-// Initialize Prisma client
-const prisma = new PrismaClient();
+// Import prisma with dynamic import to avoid initialization issues
+import { prisma } from '@/lib/db/prisma';
 
 // Notification events
 export enum NotificationEventType {

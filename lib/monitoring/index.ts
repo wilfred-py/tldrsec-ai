@@ -1,4 +1,4 @@
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '@/lib/db/prisma';
 import { logger } from '../logging';
 
 // Define metrics types
@@ -35,13 +35,11 @@ class Monitoring {
   private metrics: Map<string, Metric> = new Map();
   private healthChecks: Map<string, () => Promise<ComponentHealth>> = new Map();
   private startTime: Date = new Date();
-  private prisma: PrismaClient;
   private maxMetricValues: number = 1000; // Keep only the last 1000 values per metric
   private componentLogger = logger.child('monitoring');
   private timers: Map<string, number> = new Map(); // Store operation start times
 
   constructor() {
-    this.prisma = new PrismaClient();
     this.registerDefaultHealthChecks();
   }
 
@@ -229,7 +227,7 @@ class Monitoring {
     this.registerHealthCheck('database', async () => {
       try {
         // Verify database connection with a simple query
-        await this.prisma.$queryRaw`SELECT 1`;
+        await prisma.$queryRaw`SELECT 1`;
         return {
           status: 'healthy',
           message: 'Database connection is healthy',

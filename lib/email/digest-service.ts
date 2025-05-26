@@ -6,7 +6,6 @@
  * immediate notifications.
  */
 
-import { PrismaClient } from '@prisma/client';
 import { logger } from '../logging';
 import { monitoring } from '../monitoring';
 import { ResendClient, sendEmail } from './index';
@@ -15,9 +14,7 @@ import { JobQueueService, JobType } from '../job-queue';
 import { NotificationPreference, UserNotificationPreferences } from './notification-service';
 import { getEmailTemplate, BaseTemplateData, FilingTemplateData } from './templates';
 import { v4 as uuidv4 } from 'uuid';
-
-// Initialize Prisma client
-const prisma = new PrismaClient();
+import { prisma } from '@/lib/db/prisma';
 
 /**
  * Summary item interface for digest emails
