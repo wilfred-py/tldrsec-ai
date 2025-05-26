@@ -1,9 +1,9 @@
-import { EnhancedSignInForm } from "@/components/auth/enhanced-sign-in-form";
+import { SignIn } from "@clerk/nextjs";
 
 export default function SignInPage() {
   return (
     <div className="flex min-h-screen items-center justify-center p-4">
-      <EnhancedSignInForm />
+      <SignIn />
     </div>
   );
 } 

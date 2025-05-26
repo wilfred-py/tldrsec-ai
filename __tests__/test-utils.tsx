@@ -1,15 +1,39 @@
 import React from 'react';
 import { render as rtlRender, RenderOptions } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { MockAuthProvider } from './mocks/auth-provider-mock';
 
 // Define a custom render method that includes providers if needed
 function render(
   ui: React.ReactElement,
-  options?: Omit<RenderOptions, 'wrapper'>
+  options?: Omit<RenderOptions, 'wrapper'> & {
+    withAuth?: boolean;
+    isAuthenticated?: boolean;
+    isLoading?: boolean;
+  }
 ) {
+  const {
+    withAuth = false,
+    isAuthenticated = true,
+    isLoading = false,
+    ...renderOptions
+  } = options || {};
+
+  // Wrap the UI with necessary providers
+  const Wrapper = ({ children }: { children: React.ReactNode }) => {
+    if (withAuth) {
+      return (
+        <MockAuthProvider isAuthenticated={isAuthenticated} isLoading={isLoading}>
+          {children}
+        </MockAuthProvider>
+      );
+    }
+    return <>{children}</>;
+  };
+
   return {
     user: userEvent.setup(),
-    ...rtlRender(ui, options)
+    ...rtlRender(ui, { wrapper: Wrapper, ...renderOptions })
   };
 }
 
