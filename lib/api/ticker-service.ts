@@ -1,5 +1,6 @@
 import { Company, TickerSearchResult, ApiResponse, FilingPreferences } from './types';
 import { MOCK_COMPANIES, AVAILABLE_TICKERS } from './mock-data';
+import { prisma } from '@/lib/db/prisma';
 
 // Environment check for API vs mock mode
 const API_ENABLED = process.env.NEXT_PUBLIC_API_ENABLED === 'true';
@@ -26,9 +27,46 @@ export async function getTrackedCompanies(): Promise<ApiResponse<Company[]>> {
       const data = await response.json();
       return { data };
     } else {
-      // Mock data with simulated delay
-      await delay(800);
-      return { data: MOCK_COMPANIES };
+      // For development, try to get real user tickers from database
+      try {
+        // Instead of using Clerk's server components, make a client-side API call
+        // to our own endpoint that will handle the auth check server-side
+        const userResponse = await fetch('/api/user/tickers', {
+          credentials: 'include',
+        });
+        
+        if (!userResponse.ok) {
+          console.log('No user data found, using mock data');
+          await delay(800);
+          return { data: MOCK_COMPANIES };
+        }
+        
+        const userData = await userResponse.json();
+        
+        if (!userData || !userData.tickers || userData.tickers.length === 0) {
+          console.log('No tickers found for user, using mock data');
+          await delay(800);
+          return { data: MOCK_COMPANIES };
+        }
+        
+        // Convert API tickers to Company format
+        const userCompanies: Company[] = userData.tickers.map((ticker: any) => ({
+          id: ticker.id,
+          symbol: ticker.symbol,
+          companyName: ticker.companyName,
+          name: ticker.companyName,
+          lastFiling: "—", // No filing data in local DB
+          preferences: { tenK: true, tenQ: true, eightK: true, form4: false, other: false }
+        }));
+        
+        console.log(`Found ${userCompanies.length} tickers for user`);
+        
+        return { data: userCompanies };
+      } catch (apiError) {
+        console.error('Could not fetch from API, falling back to mock data:', apiError);
+        await delay(800);
+        return { data: MOCK_COMPANIES };
+      }
     }
   } catch (error) {
     console.error('Error fetching tracked companies:', error);

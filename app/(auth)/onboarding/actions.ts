@@ -2,13 +2,17 @@
 
 import { prisma } from '@/lib/db/prisma';
 import { revalidatePath } from 'next/cache';
-import { auth } from '@clerk/nextjs/server';
+import { auth, currentUser } from '@clerk/nextjs/server';
 import type {
   FilingTypePreferences,
   NotificationContentPreferences,
   UIPreferences
 } from '@/lib/user/preference-types';
 import { NotificationPreference } from '@/lib/email/notification-service';
+import { MOCK_COMPANIES } from '@/lib/api/mock-data';
+
+// Environment check for API vs mock mode
+const API_ENABLED = process.env.NEXT_PUBLIC_API_ENABLED === 'true';
 
 interface UserPreferencesInput {
   notifications: {
@@ -27,48 +31,41 @@ export async function saveUserPreferences(preferences: UserPreferencesInput): Pr
       return { success: false, error: 'User not authenticated' };
     }
 
+    // Get user details from Clerk
+    const user = await currentUser();
+    if (!user || !user.emailAddresses || user.emailAddresses.length === 0) {
+      return { success: false, error: 'User email not available' };
+    }
+
+    const primaryEmail = user.emailAddresses[0].emailAddress;
+
+    // Convert preferences to a plain object for JSON storage
+    const preferencesJson = JSON.parse(JSON.stringify(preferences));
+
     // Check if user exists
-    const user = await prisma.user.findUnique({
-      where: { clerkId: userId }
+    const dbUser = await prisma.user.findUnique({
+      where: { 
+        email: primaryEmail 
+      }
     });
 
-    if (!user) {
+    if (!dbUser) {
       // Create new user
       await prisma.user.create({
         data: {
-          clerkId: userId,
-          preferences: {
-            create: {
-              notificationPreferences: {
-                emailFrequency: preferences.notifications.emailFrequency,
-                filingTypes: preferences.notifications.filingTypes,
-                contentPreferences: preferences.notifications.contentPreferences
-              },
-              uiPreferences: preferences.ui
-            }
-          }
+          email: primaryEmail,
+          authProvider: 'clerk',
+          authProviderId: userId,
+          name: user.firstName ? `${user.firstName} ${user.lastName || ''}`.trim() : undefined,
+          preferences: preferencesJson
         }
       });
     } else {
-      // Update existing user
-      await prisma.userPreferences.upsert({
-        where: { userId: user.id },
-        create: {
-          userId: user.id,
-          notificationPreferences: {
-            emailFrequency: preferences.notifications.emailFrequency,
-            filingTypes: preferences.notifications.filingTypes,
-            contentPreferences: preferences.notifications.contentPreferences
-          },
-          uiPreferences: preferences.ui
-        },
-        update: {
-          notificationPreferences: {
-            emailFrequency: preferences.notifications.emailFrequency,
-            filingTypes: preferences.notifications.filingTypes,
-            contentPreferences: preferences.notifications.contentPreferences
-          },
-          uiPreferences: preferences.ui
+      // Update existing user preferences
+      await prisma.user.update({
+        where: { id: dbUser.id },
+        data: {
+          preferences: preferencesJson
         }
       });
     }
@@ -96,60 +93,55 @@ export async function addTickerSubscription(subscription: {
       return { success: false, error: 'User not authenticated' };
     }
 
-    // Get user
+    // Get user details from Clerk
+    const clerkUser = await currentUser();
+    if (!clerkUser || !clerkUser.emailAddresses || clerkUser.emailAddresses.length === 0) {
+      return { success: false, error: 'User email not available' };
+    }
+
+    const primaryEmail = clerkUser.emailAddresses[0].emailAddress;
+
+    // Get user from database
     const user = await prisma.user.findUnique({
-      where: { clerkId: userId }
+      where: { email: primaryEmail }
     });
 
     if (!user) {
       return { success: false, error: 'User not found' };
     }
 
-    // Look up the ticker
-    const ticker = await prisma.ticker.findFirst({
+    // Check if ticker is already tracked by the user
+    const existingTicker = await prisma.ticker.findFirst({
       where: {
-        OR: [
-          { symbol: subscription.symbol },
-          { aliases: { has: subscription.symbol } }
-        ]
+        userId: user.id,
+        symbol: subscription.symbol
       }
     });
 
-    let tickerId = ticker?.id;
-
-    // If ticker doesn't exist, create it
-    if (!ticker) {
-      const newTicker = await prisma.ticker.create({
-        data: {
-          symbol: subscription.symbol,
-          companyName: subscription.companyName,
-          cik: '', // Will be populated later by background job
-          exchangeCodes: [],
-          isActive: true
-        }
-      });
-      tickerId = newTicker.id;
+    // If ticker already exists, return success
+    if (existingTicker) {
+      return { success: true };
     }
 
-    // Create or update subscription
-    await prisma.tickerSubscription.upsert({
-      where: {
-        userId_tickerId: {
-          userId: user.id,
-          tickerId: tickerId!
-        }
-      },
-      create: {
-        userId: user.id,
-        tickerId: tickerId!,
-        overridePreferences: subscription.overridePreferences || false
-      },
-      update: {
-        overridePreferences: subscription.overridePreferences || false
+    // Add ticker to user's tracked list
+    await prisma.ticker.create({
+      data: {
+        symbol: subscription.symbol,
+        companyName: subscription.companyName,
+        userId: user.id
       }
     });
 
+    // If API_ENABLED is false (using mock data), simulate API update to mock data
+    // This is for development purposes only to see the added companies in the dashboard
+    if (!API_ENABLED) {
+      // Simulate adding to MOCK_COMPANIES - in reality, this doesn't affect the mocked array
+      // since it's just for display purposes in the action log
+      console.log(`[MOCK] Added ticker ${subscription.symbol} to user's tracked list`);
+    }
+
     revalidatePath('/onboarding');
+    revalidatePath('/dashboard');
     return { success: true };
   } catch (error) {
     console.error('Failed to add ticker subscription:', error);
