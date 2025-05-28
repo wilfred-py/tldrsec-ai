@@ -311,13 +311,15 @@ export default function OnboardingPage() {
       }
 
       toast.success('Onboarding completed successfully!');
+      
+      // Keep loading state active during navigation
+      // Don't reset isSubmitting
       router.push('/dashboard');
     } catch (error) {
       console.error('Error completing onboarding:', error);
       const errorMessage = error instanceof Error ? error.message : 'An unexpected error occurred';
       setError(errorMessage);
       toast.error('Failed to complete onboarding. Please try again.');
-    } finally {
       setIsSubmitting(false);
     }
   };
@@ -373,12 +375,9 @@ export default function OnboardingPage() {
         <div className="mx-auto max-w-4xl">
           {/* Header */}
           <div className="mb-8 text-center">
-            <div className="mb-4 flex items-center justify-center">
-              <span className="text-3xl font-bold text-primary">tldr</span>
-              <span className="text-3xl font-bold">SEC</span>
-            </div>
-            <h1 className="mb-2 text-2xl font-bold">Welcome to tldrSEC!</h1>
-            <p className="text-muted-foreground">Let's personalize your experience in just 2 quick steps</p>
+           
+            <h1 className="mt-10 mb-2 text-2xl font-bold">Welcome to tldrSEC!</h1>
+            <p className="text-muted-foreground">Let's personalize your experience in just 2 quick steps.</p>
           </div>
 
           {/* Progress */}
@@ -453,6 +452,15 @@ export default function OnboardingPage() {
                     </div>
                   </CardContent>
                 </Card>
+              )}
+
+              {/* Skip setup button below sectors card */}
+              {currentStep === 1 && (
+                <div className="mt-4 text-center">
+                  <Button variant="ghost" onClick={handleSkip} className="text-muted-foreground">
+                    Skip setup and go to dashboard
+                  </Button>
+                </div>
               )}
 
               {/* Step 2: Equity Selection */}
@@ -549,14 +557,16 @@ export default function OnboardingPage() {
                   </CardContent>
                 </Card>
               )}
-            </div>
-          </div>
 
-          {/* Skip Option */}
-          <div className="mt-6 text-center">
-            <Button variant="link" onClick={handleSkip} className="text-muted-foreground">
-              Skip setup and go to dashboard
-            </Button>
+              {/* Skip setup button below equities card */}
+              {currentStep === 2 && (
+                <div className="mt-4 text-center">
+                  <Button variant="ghost" onClick={handleSkip} className="text-muted-foreground">
+                    Skip setup and go to dashboard
+                  </Button>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </div>
