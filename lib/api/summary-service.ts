@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/db';
+import { ApiResponse } from './types';
 
 // Type for Summary with Ticker information
 export interface SummaryWithTicker {
@@ -25,14 +26,20 @@ export interface SummaryWithTicker {
  * implemented properly with a real API or database query in production
  * @returns Array of summaries with ticker details
  */
-export async function getRecentSummaries(): Promise<SummaryWithTicker[]> {
+export async function getRecentSummaries(): Promise<ApiResponse<SummaryWithTicker[]>> {
   try {
     // In a real implementation, we would use the current user's ID 
     // and fetch from a real API or database
-    return getMockSummaries();
+    const summaries = getMockSummaries();
+    return { data: summaries };
   } catch (error) {
     console.error('Error fetching recent summaries:', error);
-    return [];
+    return { 
+      error: { 
+        status: 500, 
+        message: error instanceof Error ? error.message : 'Unknown error fetching summaries' 
+      } 
+    };
   }
 }
 
@@ -41,15 +48,21 @@ export async function getRecentSummaries(): Promise<SummaryWithTicker[]> {
  * @param id Summary ID
  * @returns Summary with ticker details
  */
-export async function getSummaryById(id: string): Promise<SummaryWithTicker | null> {
+export async function getSummaryById(id: string): Promise<ApiResponse<SummaryWithTicker | null>> {
   try {
     // In a real implementation, we would call an API endpoint
     // For now, we'll filter the mock data
     const summaries = getMockSummaries();
-    return summaries.find(summary => summary.id === id) || null;
+    const summary = summaries.find(summary => summary.id === id) || null;
+    return { data: summary };
   } catch (error) {
     console.error(`Error fetching summary ${id}:`, error);
-    return null;
+    return { 
+      error: { 
+        status: 500, 
+        message: error instanceof Error ? error.message : `Unknown error fetching summary ${id}` 
+      } 
+    };
   }
 }
 

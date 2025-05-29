@@ -270,6 +270,16 @@ export function DashboardClient() {
         onError: () => {
           // Restore previous state if error
           setCompanies(previousCompanies);
+        },
+        onSuccess: () => {
+          // After successful delete, re-fetch the company list to ensure UI is in sync with database
+          executeCompaniesQuery(
+            () => getTrackedCompanies(),
+            {
+              // No need for additional messages since we already showed a success message
+              errorMessage: "Failed to refresh company list after deletion."
+            }
+          );
         }
       }
     );
