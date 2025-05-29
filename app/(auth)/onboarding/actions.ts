@@ -176,40 +176,61 @@ export async function completeOnboarding(): Promise<{ success: boolean; error?: 
     }
     
     const primaryEmail = user.emailAddresses[0].emailAddress;
+    const userName = user.firstName ? `${user.firstName} ${user.lastName || ''}`.trim() : 'User';
     
-    // Check if user exists in database
+    // Check if user exists in database by both authProviderId and email
     let dbUser = await prisma.user.findFirst({
       where: { 
-        authProviderId: userId 
+        OR: [
+          { authProviderId: userId },
+          { email: primaryEmail }
+        ]
       }
     });
     
     // If user doesn't exist yet, create a new user record
     if (!dbUser) {
+      console.log(`Creating new user during onboarding for ${primaryEmail}`);
+      
       // Convert preferences to plain JSON object for database storage
       const defaultPreferences = {
         notifications: JSON.parse(JSON.stringify(DEFAULT_NOTIFICATION_PREFERENCES)),
         ui: JSON.parse(JSON.stringify(DEFAULT_UI_PREFERENCES))
       };
       
-      dbUser = await prisma.user.create({
-        data: {
-          email: primaryEmail,
-          authProvider: 'clerk',
-          authProviderId: userId,
-          name: user.firstName ? `${user.firstName} ${user.lastName || ''}`.trim() : undefined,
-          preferences: defaultPreferences
-        }
-      });
-      
-      console.log(`Created new user in database during onboarding: ${dbUser.id}`);
+      try {
+        dbUser = await prisma.user.create({
+          data: {
+            email: primaryEmail,
+            authProvider: 'clerk',
+            authProviderId: userId,
+            name: userName,
+            preferences: defaultPreferences
+          }
+        });
+        
+        console.log(`Created new user in database during onboarding: ${dbUser.id}`);
+      } catch (createError) {
+        console.error('Failed to create user in database:', createError);
+        return { 
+          success: false, 
+          error: createError instanceof Error ? createError.message : 'Failed to create user in database' 
+        };
+      }
     }
     
-    // Send welcome email
-    const emailResult = await sendWelcomeEmail();
-    
-    if (!emailResult.success) {
-      console.warn('Failed to send welcome email:', emailResult.error);
+    // Send welcome email with proper error handling
+    try {
+      const emailResult = await sendWelcomeEmail();
+      
+      if (!emailResult.success) {
+        console.warn('Failed to send welcome email:', emailResult.error);
+        // Continue even if email fails - don't block the user
+      } else {
+        console.log(`Welcome email sent successfully to ${primaryEmail}`);
+      }
+    } catch (emailError) {
+      console.error('Exception when sending welcome email:', emailError);
       // Continue even if email fails - don't block the user
     }
     

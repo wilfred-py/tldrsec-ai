@@ -95,7 +95,7 @@ export function TutorialGuide({
   
   const totalSteps = tutorialSteps.length;
   
-  // Calculate tooltip position
+  // Calculate tooltip position with improved edge detection
   const calculateTooltipPosition = useCallback(() => {
     if (!highlightedElement) return { top: '50%', left: '50%' };
     
@@ -106,8 +106,8 @@ export function TutorialGuide({
     const viewportWidth = window.innerWidth;
     const viewportHeight = window.innerHeight;
     
-    // Default tooltip dimensions
-    const tooltipWidth = 300;
+    // Responsive tooltip width
+    const tooltipWidth = viewportWidth < 640 ? Math.min(viewportWidth * 0.9, 350) : 350;
     const tooltipHeight = 200;
     
     // Add padding from edges
@@ -117,21 +117,45 @@ export function TutorialGuide({
     
     switch (position) {
       case 'top':
-        top = Math.max(edgePadding, rect.top - 10 - tooltipHeight);
+        top = Math.max(edgePadding, rect.top - tooltipHeight - 16); // Extra gap
         left = Math.max(edgePadding, Math.min(viewportWidth - tooltipWidth - edgePadding, rect.left + rect.width/2 - tooltipWidth/2));
+        
+        // If tooltip would be too close to top, position it below
+        if (top < edgePadding * 2) {
+          top = Math.min(viewportHeight - tooltipHeight - edgePadding, rect.bottom + 16);
+        }
         break;
+        
       case 'right':
         top = Math.max(edgePadding, Math.min(viewportHeight - tooltipHeight - edgePadding, rect.top + rect.height/2 - tooltipHeight/2));
-        left = Math.min(viewportWidth - tooltipWidth - edgePadding, rect.right + 10);
+        left = Math.min(viewportWidth - tooltipWidth - edgePadding, rect.right + 16);
+        
+        // If tooltip would be too close to right edge, position it to the left
+        if (left + tooltipWidth > viewportWidth - edgePadding) {
+          left = Math.max(edgePadding, rect.left - tooltipWidth - 16);
+        }
         break;
+        
       case 'bottom':
-        top = Math.min(viewportHeight - tooltipHeight - edgePadding, rect.bottom + 10);
+        top = Math.min(viewportHeight - tooltipHeight - edgePadding, rect.bottom + 16);
         left = Math.max(edgePadding, Math.min(viewportWidth - tooltipWidth - edgePadding, rect.left + rect.width/2 - tooltipWidth/2));
+        
+        // If tooltip would be too close to bottom, position it above
+        if (top + tooltipHeight > viewportHeight - edgePadding * 2) {
+          top = Math.max(edgePadding, rect.top - tooltipHeight - 16);
+        }
         break;
+        
       case 'left':
         top = Math.max(edgePadding, Math.min(viewportHeight - tooltipHeight - edgePadding, rect.top + rect.height/2 - tooltipHeight/2));
-        left = Math.max(edgePadding, rect.left - 10 - tooltipWidth);
+        left = Math.max(edgePadding, rect.left - tooltipWidth - 16);
+        
+        // If tooltip would be too close to left edge, position it to the right
+        if (left < edgePadding) {
+          left = Math.min(viewportWidth - tooltipWidth - edgePadding, rect.right + 16);
+        }
         break;
+        
       case 'center':
       default:
         top = Math.max(edgePadding, Math.min(viewportHeight - tooltipHeight - edgePadding, rect.top + rect.height/2 - tooltipHeight/2));
@@ -158,6 +182,11 @@ export function TutorialGuide({
     if (element) {
       element.classList.add('tutorial-highlight');
       setHighlightedElement(element);
+      
+      // Ensure the element is visible and scrolled into view if needed
+      if (element.scrollIntoView) {
+        element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
     } else {
       setHighlightedElement(null);
       console.warn(`Tutorial element not found: ${selector}`);
@@ -247,6 +276,19 @@ export function TutorialGuide({
     });
   }, [currentStep, totalSteps]);
   
+  // Add resize listener to reposition tooltip on window resize
+  useEffect(() => {
+    const handleResize = () => {
+      if (highlightedElement) {
+        // Force re-calculation of tooltip position
+        setHighlightedElement(highlightedElement);
+      }
+    };
+    
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, [highlightedElement]);
+  
   if (!isActive) return null;
   
   const tooltipPosition = calculateTooltipPosition();
@@ -254,7 +296,13 @@ export function TutorialGuide({
   return (
     <>
       {/* Semi-transparent overlay - prevent clicks from exiting tutorial */}
-      <div className="fixed inset-0 bg-black/50 z-40 h-[100vh] w-[100vw]" onClick={(e) => e.preventDefault()} />
+      <div 
+        className="fixed inset-0 bg-black/50 z-40 h-[100vh] w-[100vw]" 
+        onClick={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+        }} 
+      />
       
       {/* Tutorial tooltip */}
       <div 

@@ -45,6 +45,7 @@ export function SummariesClient() {
       const result = await execute(async () => {
         try {
           const response = await getRecentSummaries();
+          // Ensure response is always an array
           return { data: Array.isArray(response) ? response : [] };
         } catch (error) {
           console.error("Error fetching summaries:", error);
@@ -53,6 +54,7 @@ export function SummariesClient() {
       });
       
       if (result.success && result.data) {
+        // Ensure we always set an array to summaries
         setSummaries(Array.isArray(result.data) ? result.data : []);
       }
     };
@@ -70,6 +72,7 @@ export function SummariesClient() {
     execute(async () => {
       try {
         const response = await getRecentSummaries();
+        // Ensure response is always an array
         const data = Array.isArray(response) ? response : [];
         setSummaries(data);
         return { data };
@@ -81,36 +84,43 @@ export function SummariesClient() {
     router.refresh();
   };
 
-  // Filter and sort summaries
-  const filteredSummaries = (summaries || [])
-    .filter(summary => {
-      // Apply search filter
-      const matchesSearch = searchTerm === "" || 
-        summary.ticker.symbol.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        summary.ticker.companyName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        summary.summaryText.toLowerCase().includes(searchTerm.toLowerCase());
-      
-      // Apply tab filter
-      const matchesFilter = 
-        filter === "all" || 
-        (filter === "10k" && summary.filingType === "10-K") ||
-        (filter === "10q" && summary.filingType === "10-Q") ||
-        (filter === "8k" && summary.filingType === "8-K");
-      
-      return matchesSearch && matchesFilter;
-    })
-    .sort((a, b) => {
-      // Apply sorting
-      if (sortBy === "date-desc") {
-        return new Date(b.filingDate).getTime() - new Date(a.filingDate).getTime();
-      } else if (sortBy === "date-asc") {
-        return new Date(a.filingDate).getTime() - new Date(b.filingDate).getTime();
-      } else if (sortBy === "ticker") {
-        return a.ticker.symbol.localeCompare(b.ticker.symbol);
-      } else {
-        return 0;
-      }
-    });
+  // Filter and sort summaries with better type safety
+  const filteredSummaries = (() => {
+    // Ensure summaries is an array before filtering
+    const summariesArray = Array.isArray(summaries) ? summaries : [];
+    
+    return summariesArray
+      .filter(summary => {
+        if (!summary) return false;
+        
+        // Apply search filter
+        const matchesSearch = searchTerm === "" || 
+          (summary.ticker?.symbol?.toLowerCase().includes(searchTerm.toLowerCase()) ?? false) ||
+          (summary.ticker?.companyName?.toLowerCase().includes(searchTerm.toLowerCase()) ?? false) ||
+          (summary.summaryText?.toLowerCase().includes(searchTerm.toLowerCase()) ?? false);
+        
+        // Apply tab filter
+        const matchesFilter = 
+          filter === "all" || 
+          (filter === "10k" && summary.filingType === "10-K") ||
+          (filter === "10q" && summary.filingType === "10-Q") ||
+          (filter === "8k" && summary.filingType === "8-K");
+        
+        return matchesSearch && matchesFilter;
+      })
+      .sort((a, b) => {
+        // Apply sorting
+        if (sortBy === "date-desc") {
+          return new Date(b.filingDate).getTime() - new Date(a.filingDate).getTime();
+        } else if (sortBy === "date-asc") {
+          return new Date(a.filingDate).getTime() - new Date(b.filingDate).getTime();
+        } else if (sortBy === "ticker") {
+          return a.ticker.symbol.localeCompare(b.ticker.symbol);
+        } else {
+          return 0;
+        }
+      });
+  })();
 
   return (
     <div className="space-y-6">
@@ -184,7 +194,10 @@ function renderSummaryList(
     );
   }
 
-  if (summaries.length === 0) {
+  // Extra safety check to ensure summaries is an array
+  const summariesArray = Array.isArray(summaries) ? summaries : [];
+  
+  if (summariesArray.length === 0) {
     return (
       <EmptyPlaceholder
         title="No summaries found"
@@ -196,7 +209,7 @@ function renderSummaryList(
 
   return (
     <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-      {summaries.map((summary) => (
+      {summariesArray.map((summary) => (
         <SummaryCard key={summary.id} summary={summary as any} />
       ))}
     </div>

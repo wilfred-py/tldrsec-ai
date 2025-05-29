@@ -68,7 +68,7 @@ export default function RootLayout({
             <AuthProvider>
               <PageViewTracker />
               <MouseFollowEffect />
-              {/* Navigation is not shown for auth routes or app routes which have their own layouts */}
+              <Navigation />
               <JsonLd />
               <main className="min-h-screen">
                 {children}

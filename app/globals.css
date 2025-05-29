@@ -131,6 +131,14 @@
   background-color: white !important;
   color: black !important;
   opacity: 1 !important;
+  pointer-events: auto !important;
+}
+
+/* Dark mode tutorial highlight */
+.dark .tutorial-highlight {
+  background-color: #1e293b !important;
+  color: white !important;
+  box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.7);
 }
 
 /* Make search input stand out during the tutorial */
@@ -138,6 +146,39 @@
   background-color: white !important;
   opacity: 1 !important;
   z-index: 50 !important;
+}
+
+/* Make settings icon stand out for preferences tutorial step */
+.tutorial-highlight[data-tutorial="ticker-preferences"] {
+  background-color: rgba(255, 255, 255, 1) !important;
+  color: #0f172a !important;
+  box-shadow: 0 0 0 6px rgba(79, 70, 229, 0.6) !important;
+  border-radius: 50% !important;
+  z-index: 50 !important;
+}
+
+/* Make trash icon stand out for delete tutorial step */
+.tutorial-highlight[data-tutorial="delete-ticker"] {
+  background-color: rgba(255, 255, 255, 1) !important;
+  color: #0f172a !important;
+  box-shadow: 0 0 0 6px rgba(79, 70, 229, 0.6) !important;
+  border-radius: 50% !important;
+  z-index: 50 !important;
+}
+
+/* Make Summaries link in sidebar stand out */
+.tutorial-highlight[data-tutorial="sidebar-summaries"] {
+  background-color: #eef2ff !important;
+  color: #4f46e5 !important;
+  font-weight: bold !important;
+  box-shadow: 0 0 0 4px rgba(79, 70, 229, 0.6) !important;
+  opacity: 1 !important;
+  z-index: 50 !important;
+}
+
+.dark .tutorial-highlight[data-tutorial="sidebar-summaries"] {
+  background-color: #312e81 !important;
+  color: white !important;
 }
 
 @keyframes pulse {
