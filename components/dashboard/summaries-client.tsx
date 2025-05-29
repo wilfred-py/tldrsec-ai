@@ -44,8 +44,8 @@ export function SummariesClient() {
     const fetchSummaries = async () => {
       const result = await execute(async () => {
         try {
-          const data = await getRecentSummaries();
-          return { data };
+          const response = await getRecentSummaries();
+          return { data: Array.isArray(response) ? response : [] };
         } catch (error) {
           console.error("Error fetching summaries:", error);
           return { error: { status: 500, message: "Failed to fetch summaries" } };
@@ -53,7 +53,7 @@ export function SummariesClient() {
       });
       
       if (result.success && result.data) {
-        setSummaries(result.data);
+        setSummaries(Array.isArray(result.data) ? result.data : []);
       }
     };
     
@@ -69,7 +69,9 @@ export function SummariesClient() {
   const handleRefresh = () => {
     execute(async () => {
       try {
-        const data = await getRecentSummaries();
+        const response = await getRecentSummaries();
+        const data = Array.isArray(response) ? response : [];
+        setSummaries(data);
         return { data };
       } catch (error) {
         console.error("Error fetching summaries:", error);
