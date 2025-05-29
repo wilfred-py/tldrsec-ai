@@ -3,7 +3,6 @@ import type { Metadata } from 'next';
 import { Geist, Geist_Mono } from 'next/font/google';
 import { ClerkProvider } from '@clerk/nextjs';
 import { Toaster } from '@/components/ui/sonner';
-import { Navigation } from '@/components/navigation';
 import { PostHogProvider } from '@/components/analytics/posthog-provider';
 import { PageViewTracker } from '@/components/analytics/page-view-tracker';
 import { MouseFollowEffect } from '@/components/landing/mouse-follow-effect';
@@ -68,7 +67,6 @@ export default function RootLayout({
             <AuthProvider>
               <PageViewTracker />
               <MouseFollowEffect />
-              {/* Navigation is not shown for auth routes or app routes which have their own layouts */}
               <JsonLd />
               <main className="min-h-screen">
                 {children}

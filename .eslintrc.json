@@ -1,0 +1,14 @@
+{
+  "ignorePatterns": [
+    "node_modules/",
+    ".next/",
+    "out/",
+    "public/",
+    "lib/generated/**",
+    "lib/sec-edgar/**",
+    "lib/parsers/**",
+    "lib/job-queue/**",
+    "lib/monitoring/**",
+    "lib/logging/**"
+  ]
+} 

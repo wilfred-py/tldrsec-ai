@@ -21,7 +21,6 @@ import {
   DialogDescription,
   DialogFooter,
   DialogTrigger,
-  DialogClose,
 } from "@/components/ui/dialog";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
@@ -42,6 +41,9 @@ import { useAsync } from "@/lib/hooks/use-async";
 import { Skeleton } from "@/components/ui/skeleton";
 import { SummaryList } from "@/components/dashboard/summary-list";
 import { getRecentSummaries } from "@/lib/api/summary-service";
+import { TutorialGuide } from '@/components/onboarding/tutorial-guide';
+import { useAuthContext } from '@/lib/context/auth-context';
+import { getUserOnboardingStatus } from '@/components/onboarding/actions';
 
 // Column definition helper
 const columnHelper = createColumnHelper<Company>();
@@ -65,6 +67,11 @@ export function DashboardClient() {
   const [sorting, setSorting] = useState<SortingState>([]);
   const [companyToDelete, setCompanyToDelete] = useState<Company | null>(null);
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
+  
+  // New state for the tutorial modal
+  const [showTutorial, setShowTutorial] = useState(false);
+  const [tutorialProgress, setTutorialProgress] = useState(0);
+  const { isAuthenticated, userId } = useAuthContext();
   
   // Use the custom hook for async operations
   const {
@@ -99,6 +106,31 @@ export function DashboardClient() {
       }
     );
   }, [executeCompaniesQuery, executeSummariesQuery]);
+  
+  // Check if user needs to see tutorial
+  useEffect(() => {
+    if (!isAuthenticated || !userId) return;
+    
+    const checkOnboardingStatus = async () => {
+      try {
+        const status = await getUserOnboardingStatus();
+        if (status.success) {
+          // If user has completed onboarding but not the tutorial, show it
+          if (status.onboardingCompleted && !status.tutorialCompleted) {
+            // Wait for dashboard to load before showing tutorial
+            if (!isLoadingCompanies && companies && companies.length > 0) {
+              setShowTutorial(true);
+              setTutorialProgress(status.tutorialProgress || 0);
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Failed to check onboarding status:', error);
+      }
+    };
+    
+    checkOnboardingStatus();
+  }, [isAuthenticated, userId, isLoadingCompanies, companies]);
   
   // Define table columns
   const columns = useMemo(() => [
@@ -180,6 +212,7 @@ export function DashboardClient() {
                 setCurrentCompany({...company});
                 setIsPreferencesOpen(true);
               }}
+              data-tutorial="ticker-preferences"
             >
               <SettingsIcon className="h-4 w-4" />
               <span className="sr-only">Settings</span>
@@ -193,6 +226,7 @@ export function DashboardClient() {
                 setCompanyToDelete(company);
                 setIsDeleteConfirmOpen(true);
               }}
+              data-tutorial="delete-ticker"
             >
               <Trash2Icon className="h-4 w-4" />
               <span className="sr-only">Delete</span>
@@ -221,12 +255,12 @@ export function DashboardClient() {
 
   // Handle saving preferences for a company
   const handleSavePreferences = async (id: string, preferences: Company['preferences']) => {
-    const { success } = await executeCompaniesQuery(
+    const { success, data: updatedCompany } = await executeCompaniesQuery(
       () => updateCompanyPreferences(id, preferences),
       {
         successMessage: `Preferences updated for ${currentCompany?.symbol || 'company'}`,
         errorMessage: "Failed to update preferences. Please try again.",
-        onSuccess: (updatedCompany) => {
+        onSuccess: () => {
           // Update the companies list with the updated company
           if (companies) {
             setCompanies(
@@ -241,7 +275,7 @@ export function DashboardClient() {
       }
     );
     
-    if (success) {
+    if (success && updatedCompany) {
       setIsPreferencesOpen(false);
       setCurrentCompany(null);
     }
@@ -254,13 +288,12 @@ export function DashboardClient() {
     // Find the company for the toast message
     const company = companies.find(c => c.id === id);
     
-    // Optimistic update
-    const previousCompanies = [...companies];
-    setCompanies(companies.filter(company => company.id !== id));
-    
     // Close the confirmation dialog
     setIsDeleteConfirmOpen(false);
     setCompanyToDelete(null);
+    
+    // Save the previous state before making any changes
+    const previousCompanies = [...companies];
     
     const { success } = await executeCompaniesQuery(
       () => deleteTrackedCompany(id),
@@ -268,21 +301,28 @@ export function DashboardClient() {
         successMessage: `${company?.symbol || 'Company'} has been removed from tracked tickers`,
         errorMessage: "Failed to remove company. Please try again.",
         onError: () => {
-          // Restore previous state if error
-          setCompanies(previousCompanies);
-        },
-        onSuccess: () => {
-          // After successful delete, re-fetch the company list to ensure UI is in sync with database
-          executeCompaniesQuery(
-            () => getTrackedCompanies(),
-            {
-              // No need for additional messages since we already showed a success message
-              errorMessage: "Failed to refresh company list after deletion."
-            }
-          );
+          // No need to restore previous state here as we're not doing optimistic updates
         }
       }
     );
+    
+    if (success) {
+      // After successful delete, re-fetch the company list to ensure UI is in sync with database
+      const { success: refreshSuccess, data: refreshedCompanies } = await executeCompaniesQuery(
+        () => getTrackedCompanies(),
+        {
+          errorMessage: "Failed to refresh company list after deletion."
+        }
+      );
+      
+      if (refreshSuccess) {
+        // Update with the refreshed data
+        setCompanies(refreshedCompanies || []);
+      } else {
+        // If refresh failed, remove the deleted company from local state
+        setCompanies(previousCompanies.filter(c => c.id !== id));
+      }
+    }
   };
 
   // Handle search for adding new tickers
@@ -311,12 +351,18 @@ export function DashboardClient() {
     if (!companies) return;
     
     // Check if company already exists client-side
-    const exists = companies.some(company => company.symbol === symbol);
-    if (exists) {
-      toast.error(`${symbol} is already being tracked`);
+    const existsInClientList = companies.some(company => company.symbol.toLowerCase() === symbol.toLowerCase());
+    
+    // If it exists in the client-side list, we can stop early
+    if (existsInClientList) {
+      toast.info(`${symbol} is already being tracked`);
+      setNewTickerSearch("");
+      setSearchResults([]);
+      setIsAddTickerOpen(false);
       return;
     }
     
+    // Otherwise, try to add it - if it already exists server-side, the API will return it
     const { success, data } = await executeCompaniesQuery(
       () => addTrackedCompany(symbol, name),
       {
@@ -331,8 +377,11 @@ export function DashboardClient() {
     );
     
     if (success && data) {
-      // Add the new company to the list
-      setCompanies([...(companies || []), data]);
+      // Check again if it's not already in our list (could have been added in onboarding)
+      if (!companies.some(company => company.id === data.id)) {
+        // Add the new company to the list
+        setCompanies([...(companies || []), data]);
+      }
     }
   };
 
@@ -356,10 +405,14 @@ export function DashboardClient() {
             
             <Dialog open={isAddTickerOpen} onOpenChange={setIsAddTickerOpen}>
               <DialogTrigger asChild>
-                <Button>
+                <Button
+                  onClick={() => setIsAddTickerOpen(true)}
+                  className="gap-1"
+                  data-tutorial="add-ticker"
+                >
                   <PlusIcon className="h-4 w-4 mr-2" />
                   <span className="hidden sm:inline">Add Ticker</span>
-                  <span className="sm:hidden">Add</span>
+                  <span className="inline sm:hidden">Add</span>
                 </Button>
               </DialogTrigger>
               <DialogContent className="max-w-[95vw] sm:max-w-md">
@@ -510,6 +563,7 @@ export function DashboardClient() {
                       className="pl-8 w-full sm:max-w-sm"
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
+                      data-tutorial="filter-companies"
                     />
                   </div>
                 </div>
@@ -571,6 +625,7 @@ export function DashboardClient() {
                                 setCurrentCompany({...row.original});
                                 setIsPreferencesOpen(true);
                               }}
+                              data-tutorial="ticker-preferences"
                             >
                               <SettingsIcon className="h-4 w-4" />
                               <span className="sr-only">Settings</span>
@@ -584,6 +639,7 @@ export function DashboardClient() {
                                 setCompanyToDelete(row.original);
                                 setIsDeleteConfirmOpen(true);
                               }}
+                              data-tutorial="delete-ticker"
                             >
                               <Trash2Icon className="h-4 w-4" />
                               <span className="sr-only">Delete</span>
@@ -618,15 +674,7 @@ export function DashboardClient() {
         </div>
       </div>
 
-      {/* Recent Summaries Section */}
-      <div className="mt-8">
-        <SummaryList 
-          summaries={recentSummaries || []} 
-          title="Recent Summaries"
-          showEmptyState={!isLoadingSummaries}
-          className={isLoadingSummaries ? "animate-pulse" : ""}
-        />
-      </div>
+      
 
       {/* Preferences Dialog */}
       <Dialog 
@@ -833,6 +881,13 @@ export function DashboardClient() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Tutorial Guide */}
+      <TutorialGuide
+        active={showTutorial}
+        onComplete={() => setShowTutorial(false)}
+        initialProgress={tutorialProgress}
+      />
     </div>
   );
 } 

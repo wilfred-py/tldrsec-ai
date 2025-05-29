@@ -30,6 +30,7 @@ interface SummaryCardProps {
   variant?: 'default' | 'compact';
   showPreview?: boolean;
   previewLength?: number;
+  [key: string]: any; // Allow additional props like data-tutorial
 }
 
 export function SummaryCard({
@@ -37,7 +38,8 @@ export function SummaryCard({
   className = '',
   variant = 'default',
   showPreview = true,
-  previewLength = 120
+  previewLength = 120,
+  ...rest
 }: SummaryCardProps) {
   // Format the filing type for display
   const formatFilingType = (type: string) => {
@@ -86,6 +88,8 @@ export function SummaryCard({
           "block border rounded-md p-3 hover:bg-muted/50 transition-colors",
           className
         )}
+        data-tutorial="summary-card"
+        {...(rest || {})}
       >
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2">

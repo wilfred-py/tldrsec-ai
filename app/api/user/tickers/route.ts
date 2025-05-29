@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { auth, currentUser } from '@clerk/nextjs/server';
 import { prisma } from '@/lib/db/prisma';
+import { revalidatePath } from 'next/cache';
 
 /**
  * GET /api/user/tickers
@@ -78,31 +79,76 @@ export async function POST(request: Request) {
 
     const primaryEmail = user.emailAddresses[0].emailAddress;
 
-    // Find user in database
-    const dbUser = await prisma.user.findUnique({
-      where: { email: primaryEmail }
-    });
-
-    if (!dbUser) {
-      return NextResponse.json({ error: 'User not found in database' }, { status: 404 });
-    }
-
-    // Check if ticker already exists for this user
-    const existingTicker = await prisma.ticker.findFirst({
+    // Find user in database - use findFirst with multiple conditions to be more flexible
+    const dbUser = await prisma.user.findFirst({
       where: {
-        userId: dbUser.id,
-        symbol: symbol
+        OR: [
+          { email: primaryEmail },
+          { authProviderId: userId }
+        ]
+      },
+      include: {
+        tickers: true
       }
     });
 
+    if (!dbUser) {
+      // If no user found, create one
+      console.log(`User not found. Creating new user for ${primaryEmail} with auth ID ${userId}`);
+      
+      // Create new user
+      const newUser = await prisma.user.create({
+        data: {
+          email: primaryEmail,
+          authProvider: 'clerk',
+          authProviderId: userId,
+          name: user.firstName ? `${user.firstName} ${user.lastName || ''}`.trim() : undefined,
+        }
+      });
+      
+      // Create the ticker for the new user
+      const newTicker = await prisma.ticker.create({
+        data: {
+          symbol,
+          companyName,
+          userId: newUser.id
+        }
+      });
+      
+      // Return the new ticker
+      return NextResponse.json({ 
+        id: newTicker.id,
+        symbol: newTicker.symbol,
+        companyName: newTicker.companyName,
+        name: newTicker.companyName,
+        userId: newTicker.userId,
+        addedAt: newTicker.addedAt,
+        lastFiling: "—",
+        preferences: { tenK: true, tenQ: true, eightK: true, form4: false, other: false }
+      });
+    }
+
+    // Check if ticker already exists for this user (case-insensitive)
+    const existingTicker = dbUser.tickers.find(ticker => 
+      ticker.symbol.toLowerCase() === symbol.toLowerCase()
+    );
+
     if (existingTicker) {
-      return NextResponse.json(
-        { error: `Ticker ${symbol} is already being tracked` }, 
-        { status: 409 }
-      );
+      console.log(`Ticker ${symbol} is already being tracked by user ${dbUser.id}`);
+      return NextResponse.json({ 
+        id: existingTicker.id,
+        symbol: existingTicker.symbol,
+        companyName: existingTicker.companyName,
+        name: existingTicker.companyName,
+        userId: existingTicker.userId,
+        addedAt: existingTicker.addedAt,
+        lastFiling: "—",
+        preferences: { tenK: true, tenQ: true, eightK: true, form4: false, other: false }
+      });
     }
 
     // Add ticker to user's tracked list
+    console.log(`Adding ticker ${symbol} for user ${dbUser.id}`);
     const newTicker = await prisma.ticker.create({
       data: {
         symbol,
@@ -111,6 +157,9 @@ export async function POST(request: Request) {
       }
     });
 
+    // Make sure cache is refreshed
+    revalidatePath('/dashboard');
+    
     // Return the new ticker
     return NextResponse.json({ 
       id: newTicker.id,

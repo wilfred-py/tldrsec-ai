@@ -147,6 +147,8 @@ export async function addTrackedCompany(symbol: string, name: string): Promise<A
     } else {
       // Use our internal API instead of mock data
       try {
+        // We're not doing a check here since the API route already handles checking
+        // for existing tickers and either returns them or creates new ones
         const response = await fetch('/api/user/tickers', {
           method: 'POST',
           credentials: 'include',
@@ -162,7 +164,14 @@ export async function addTrackedCompany(symbol: string, name: string): Promise<A
         }
         
         const data = await response.json();
-        return { data };
+        
+        // If the ticker was already being tracked, data is still returned, so we 
+        // should adjust the return value to avoid confusing the user
+        return { 
+          data,
+          // Note that we're not setting an error here because the API already 
+          // returns the existing ticker if it exists
+         };
       } catch (apiError) {
         console.error('Error adding ticker:', apiError);
         return { 

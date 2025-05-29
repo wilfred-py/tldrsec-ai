@@ -18,7 +18,7 @@ import {
   DEFAULT_NOTIFICATION_PREFERENCES,
   DEFAULT_UI_PREFERENCES
 } from "@/lib/user/preference-types";
-import { saveUserPreferences, addTickerSubscription } from "./actions";
+import { saveUserPreferences, addTickerSubscription, completeOnboarding } from "./actions";
 
 // Define sectors with their icons and descriptions
 const sectors = [
@@ -309,6 +309,9 @@ export default function OnboardingPage() {
           console.error(`Failed to subscribe to ${ticker.symbol}: ${subResult.error}`);
         }
       }
+
+      // Complete onboarding and send welcome email
+      await completeOnboarding();
 
       toast.success('Onboarding completed successfully!');
       

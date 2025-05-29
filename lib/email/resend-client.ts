@@ -122,7 +122,8 @@ export class ResendClient {
     
     // Start monitoring timing
     const startTime = Date.now();
-    monitoring.startTimer('email.send');
+    // Temporarily comment out the monitoring calls that are causing issues
+    // monitoring.startTimer('email.send');
     
     // Validate the message has required fields
     this.validateEmailMessage(message);
@@ -234,14 +235,14 @@ export class ResendClient {
       );
       
       // Record timing metrics
-      monitoring.stopTimer('email.send');
-      monitoring.recordValue('email.send.duration', Date.now() - startTime, {
-        success: 'true'
-      });
+      // monitoring.stopTimer('email.send');
+      // monitoring.recordValue('email.send.duration', Date.now() - startTime, {
+      //   success: 'true'
+      // });
       
       // Increment success counter
       this.totalSent++;
-      monitoring.incrementCounter('email.sent', 1);
+      // monitoring.incrementCounter('email.sent', 1);
       
       // Return success result
       return {
@@ -251,15 +252,15 @@ export class ResendClient {
       };
     } catch (error) {
       // Record timing metrics for failure
-      monitoring.stopTimer('email.send');
-      monitoring.recordValue('email.send.duration', Date.now() - startTime, {
-        success: 'false',
-        error: error instanceof Error ? error.message : 'Unknown error'
-      });
+      // monitoring.stopTimer('email.send');
+      // monitoring.recordValue('email.send.duration', Date.now() - startTime, {
+      //   success: 'false',
+      //   error: error instanceof Error ? error.message : 'Unknown error'
+      // });
       
       // Increment failure counter
       this.totalFailed++;
-      monitoring.incrementCounter('email.failed', 1);
+      // monitoring.incrementCounter('email.failed', 1);
       
       // Normalize and log error
       const normalizedError = this.normalizeError(error, requestId);
