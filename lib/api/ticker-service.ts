@@ -36,17 +36,17 @@ export async function getTrackedCompanies(): Promise<ApiResponse<Company[]>> {
         });
         
         if (!userResponse.ok) {
-          console.log('No user data found, using mock data');
-          await delay(800);
-          return { data: MOCK_COMPANIES };
+          console.log('No user data found, returning empty array');
+          // Return empty array instead of mock data to show empty state
+          return { data: [] };
         }
         
         const userData = await userResponse.json();
         
         if (!userData || !userData.tickers || userData.tickers.length === 0) {
-          console.log('No tickers found for user, using mock data');
-          await delay(800);
-          return { data: MOCK_COMPANIES };
+          console.log('No tickers found for user, returning empty array');
+          // Return empty array instead of mock data to show empty state
+          return { data: [] };
         }
         
         // Convert API tickers to Company format
@@ -63,9 +63,9 @@ export async function getTrackedCompanies(): Promise<ApiResponse<Company[]>> {
         
         return { data: userCompanies };
       } catch (apiError) {
-        console.error('Could not fetch from API, falling back to mock data:', apiError);
-        await delay(800);
-        return { data: MOCK_COMPANIES };
+        console.error('Could not fetch from API, returning empty array:', apiError);
+        // Return empty array instead of mock data to show empty state
+        return { data: [] };
       }
     }
   } catch (error) {
@@ -145,31 +145,33 @@ export async function addTrackedCompany(symbol: string, name: string): Promise<A
       const data = await response.json();
       return { data };
     } else {
-      // Mock addition with default preferences
-      await delay(600);
-      
-      // Check if company already exists in mock data
-      const exists = MOCK_COMPANIES.some(company => company.symbol === symbol);
-      if (exists) {
+      // Use our internal API instead of mock data
+      try {
+        const response = await fetch('/api/user/tickers', {
+          method: 'POST',
+          credentials: 'include',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ symbol, companyName: name }),
+        });
+        
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.error || `API error: ${response.status}`);
+        }
+        
+        const data = await response.json();
+        return { data };
+      } catch (apiError) {
+        console.error('Error adding ticker:', apiError);
         return { 
           error: { 
-            status: 409, 
-            message: `Company ${symbol} is already being tracked` 
+            status: 500, 
+            message: apiError instanceof Error ? apiError.message : 'Unknown error adding ticker'
           } 
         };
       }
-      
-      const newCompany: Company = {
-        id: `mock-${Date.now()}`,
-        symbol,
-        name,
-        lastFiling: "—",
-        preferences: { tenK: true, tenQ: true, eightK: true, form4: false, other: false }
-      };
-      
-      // In a real app, we would update the database
-      // For mock, we return the new company but don't actually modify MOCK_COMPANIES
-      return { data: newCompany };
     }
   } catch (error) {
     console.error('Error adding company:', error);
@@ -200,11 +202,29 @@ export async function deleteTrackedCompany(companyId: string): Promise<ApiRespon
       
       return { data: { success: true } };
     } else {
-      // Mock deletion
-      await delay(500);
-      
-      // In a real app, we would update the database
-      return { data: { success: true } };
+      // Use our internal API instead of mock data
+      try {
+        const response = await fetch(`/api/user/tickers/${companyId}`, {
+          method: 'DELETE',
+          credentials: 'include',
+        });
+        
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.error || `API error: ${response.status}`);
+        }
+        
+        const data = await response.json();
+        return { data };
+      } catch (apiError) {
+        console.error('Error deleting ticker:', apiError);
+        return { 
+          error: { 
+            status: 500, 
+            message: apiError instanceof Error ? apiError.message : 'Unknown error deleting ticker'
+          } 
+        };
+      }
     }
   } catch (error) {
     console.error('Error deleting company:', error);
