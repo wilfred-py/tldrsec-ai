@@ -15,6 +15,8 @@ interface SummaryListProps {
   className?: string;
   showEmptyState?: boolean;
   emptyStateActions?: React.ReactNode;
+  isLoading?: boolean;
+  cardAttributes?: (index: number) => Record<string, string | undefined>;
 }
 
 export function SummaryList({ 
@@ -22,10 +24,12 @@ export function SummaryList({
   title = "Recent Summaries", 
   className = "",
   showEmptyState = true,
-  emptyStateActions
+  emptyStateActions,
+  isLoading = false,
+  cardAttributes
 }: SummaryListProps) {
   return (
-    <Card className={className}>
+    <Card className={`${className} ${isLoading ? "animate-pulse" : ""}`}>
       <CardHeader className="flex flex-row items-center justify-between">
         <CardTitle>{title}</CardTitle>
         {summaries.length > 0 && (
@@ -39,11 +43,12 @@ export function SummaryList({
       <CardContent>
         {summaries.length > 0 ? (
           <div className="space-y-4">
-            {summaries.map((summary) => (
+            {summaries.map((summary, index) => (
               <SummaryCard 
                 key={summary.id}
                 summary={summary}
                 variant="compact"
+                {...(cardAttributes ? cardAttributes(index) : {})}
               />
             ))}
           </div>

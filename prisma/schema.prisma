@@ -23,6 +23,12 @@ model User {
   createdAt     DateTime  @default(now())
   preferences   Json?     // Store notification and theme preferences
   tickers       Ticker[]
+  
+  // Onboarding tracking
+  onboardingCompleted Boolean @default(false)
+  tutorialProgress    Int     @default(0)  // Progress percentage (0-100)
+  tutorialCompletedAt DateTime?           // When the tutorial was completed
+  tutorialSteps       Json?               // Track individual tutorial steps completed
 }
 
 model Ticker {

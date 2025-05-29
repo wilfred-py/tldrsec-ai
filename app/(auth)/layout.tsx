@@ -1,4 +1,4 @@
-import React from 'react';
+import { Navigation } from "@/components/navigation";
 
 export default function AuthLayout({
   children,
@@ -6,8 +6,11 @@ export default function AuthLayout({
   children: React.ReactNode;
 }) {
   return (
-    <div className="min-h-screen w-full">
-      {children}
-    </div>
+    <>
+      <Navigation />
+      <div className="min-h-screen">
+        {children}
+      </div>
+    </>
   );
 } 

@@ -6,6 +6,8 @@ import { Progress } from '@/components/ui/progress';
 import { Confetti } from '@/components/ui/confetti';
 import { toast } from 'sonner';
 import { updateTutorialProgress } from '@/components/onboarding/actions';
+import { sendLatestSummariesEmail } from '@/lib/email/summary-service';
+import { useRouter } from 'next/navigation';
 import {
   List,
   ActivityIcon,
@@ -16,7 +18,9 @@ import {
   ArrowRight,
   ArrowLeft,
   X,
-  CheckCircle
+  CheckCircle,
+  ThumbsUp,
+  ThumbsDown
 } from 'lucide-react';
 
 interface TutorialGuideProps {
@@ -46,6 +50,8 @@ export function TutorialGuide({
   const [progress, setProgress] = useState(initialProgress);
   const [showConfetti, setShowConfetti] = useState(false);
   const [highlightedElement, setHighlightedElement] = useState<HTMLElement | null>(null);
+  const [isSendingEmail, setIsSendingEmail] = useState(false);
+  const router = useRouter();
   
   // Define the tutorial steps
   const tutorialSteps = useMemo(() => [
@@ -90,6 +96,13 @@ export function TutorialGuide({
       selector: '[data-tutorial="summary-card"]',
       icon: <Mail className="h-5 w-5" />,
       position: 'top'
+    },
+    {
+      title: "Email Summaries",
+      description: "Would you like to receive an email with the latest 10-K and 10-Q summaries for your tracked companies?",
+      selector: '.tutorial-highlight-placeholder', // This won't actually highlight anything
+      icon: <Mail className="h-5 w-5" />,
+      position: 'center'
     }
   ], []);
   
@@ -158,8 +171,9 @@ export function TutorialGuide({
         
       case 'center':
       default:
-        top = Math.max(edgePadding, Math.min(viewportHeight - tooltipHeight - edgePadding, rect.top + rect.height/2 - tooltipHeight/2));
-        left = Math.max(edgePadding, Math.min(viewportWidth - tooltipWidth - edgePadding, rect.left + rect.width/2 - tooltipWidth/2));
+        // Center in the viewport
+        top = (viewportHeight - tooltipHeight) / 2;
+        left = (viewportWidth - tooltipWidth) / 2;
         break;
     }
     
@@ -171,6 +185,12 @@ export function TutorialGuide({
     if (!isActive || !tutorialSteps[currentStep]) return;
     
     const selector = tutorialSteps[currentStep].selector;
+    
+    // Special case for the email summaries step which has no element to highlight
+    if (selector === '.tutorial-highlight-placeholder') {
+      setHighlightedElement(null);
+      return;
+    }
     
     // Clear previous highlighting
     document.querySelectorAll('.tutorial-highlight').forEach(el => {
@@ -198,27 +218,58 @@ export function TutorialGuide({
     if (currentStep < totalSteps - 1) {
       setCurrentStep(prev => prev + 1);
     } else {
-      // Tutorial complete
-      setShowConfetti(true);
-      
-      // Mark tutorial as complete
-      updateTutorialProgress(100, {
-        currentStep: currentStep,
-        currentSubstep: 0,
-        completed: true,
-      }).catch(error => {
-        console.error('Failed to mark tutorial as complete:', error);
-      });
-      
-      // Notify user
-      toast.success('Tutorial completed! You can now use all features of tldrSEC.');
-      
-      // After a brief delay, close the tutorial
-      setTimeout(() => {
-        setIsActive(false);
-        onComplete();
-      }, 3000);
+      // Last step - complete tutorial
+      completeTutorial();
     }
+  };
+  
+  // Complete the tutorial
+  const completeTutorial = () => {
+    setShowConfetti(true);
+    
+    // Mark tutorial as complete
+    updateTutorialProgress(100, {
+      currentStep: currentStep,
+      currentSubstep: 0,
+      completed: true,
+    }).catch(error => {
+      console.error('Failed to mark tutorial as complete:', error);
+    });
+    
+    // Notify user
+    toast.success('Tutorial completed! You can now use all features of tldrSEC.');
+    
+    // After a brief delay, close the tutorial and redirect to dashboard
+    setTimeout(() => {
+      setIsActive(false);
+      onComplete();
+      router.push('/dashboard');
+    }, 3000);
+  };
+  
+  // Handle yes/no for email summaries
+  const handleEmailSummariesResponse = async (sendEmail: boolean) => {
+    if (sendEmail) {
+      setIsSendingEmail(true);
+      try {
+        const result = await sendLatestSummariesEmail();
+        if (result.success) {
+          toast.success('Summaries email sent! Check your inbox in a few minutes.');
+        } else {
+          toast.error(`Couldn't send email: ${result.error || 'Unknown error'}`);
+        }
+      } catch (error) {
+        console.error('Error sending summaries email:', error);
+        toast.error('Failed to send summaries email');
+      } finally {
+        setIsSendingEmail(false);
+      }
+    } else {
+      toast('You can always send summary emails later from the dashboard.');
+    }
+    
+    // Complete the tutorial in either case
+    completeTutorial();
   };
   
   // Handle previous step
@@ -242,6 +293,7 @@ export function TutorialGuide({
     setIsActive(false);
     onComplete();
     toast('Tutorial skipped. You can always revisit it from your profile settings.');
+    router.push('/dashboard');
   };
   
   // Update active state based on props
@@ -293,6 +345,9 @@ export function TutorialGuide({
   
   const tooltipPosition = calculateTooltipPosition();
   
+  // Special rendering for the email summaries step
+  const isEmailSummariesStep = currentStep === tutorialSteps.length - 1;
+  
   return (
     <>
       {/* Semi-transparent overlay - prevent clicks from exiting tutorial */}
@@ -341,26 +396,65 @@ export function TutorialGuide({
         
         {/* Navigation buttons */}
         <div className="flex justify-between">
-          <Button 
-            variant="outline" 
-            size="sm"
-            onClick={handlePrevStep}
-            disabled={currentStep === 0}
-            className="gap-1"
-          >
-            <ArrowLeft className="h-4 w-4" />
-            Back
-          </Button>
-          
-          <Button 
-            variant="default" 
-            size="sm"
-            onClick={handleNextStep}
-            className="gap-1"
-          >
-            {currentStep === totalSteps - 1 ? 'Finish' : 'Next'}
-            {currentStep === totalSteps - 1 ? <CheckCircle className="h-4 w-4" /> : <ArrowRight className="h-4 w-4" />}
-          </Button>
+          {isEmailSummariesStep ? (
+            // Yes/No buttons for email summaries step
+            <>
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={() => handleEmailSummariesResponse(false)}
+                className="gap-1"
+                disabled={isSendingEmail}
+              >
+                <ThumbsDown className="h-4 w-4" />
+                No, thanks
+              </Button>
+              
+              <Button 
+                variant="default" 
+                size="sm"
+                onClick={() => handleEmailSummariesResponse(true)}
+                className="gap-1"
+                disabled={isSendingEmail}
+              >
+                {isSendingEmail ? (
+                  <>
+                    <span className="animate-spin mr-1">⟳</span>
+                    Sending...
+                  </>
+                ) : (
+                  <>
+                    <ThumbsUp className="h-4 w-4" />
+                    Yes, send it!
+                  </>
+                )}
+              </Button>
+            </>
+          ) : (
+            // Standard navigation for other steps
+            <>
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={handlePrevStep}
+                disabled={currentStep === 0}
+                className="gap-1"
+              >
+                <ArrowLeft className="h-4 w-4" />
+                Back
+              </Button>
+              
+              <Button 
+                variant="default" 
+                size="sm"
+                onClick={handleNextStep}
+                className="gap-1"
+              >
+                {currentStep === totalSteps - 2 ? 'Next' : 'Next'}
+                <ArrowRight className="h-4 w-4" />
+              </Button>
+            </>
+          )}
         </div>
       </div>
       

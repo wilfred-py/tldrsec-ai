@@ -351,12 +351,18 @@ export function DashboardClient() {
     if (!companies) return;
     
     // Check if company already exists client-side
-    const exists = companies.some(company => company.symbol === symbol);
-    if (exists) {
-      toast.error(`${symbol} is already being tracked`);
+    const existsInClientList = companies.some(company => company.symbol.toLowerCase() === symbol.toLowerCase());
+    
+    // If it exists in the client-side list, we can stop early
+    if (existsInClientList) {
+      toast.info(`${symbol} is already being tracked`);
+      setNewTickerSearch("");
+      setSearchResults([]);
+      setIsAddTickerOpen(false);
       return;
     }
     
+    // Otherwise, try to add it - if it already exists server-side, the API will return it
     const { success, data } = await executeCompaniesQuery(
       () => addTrackedCompany(symbol, name),
       {
@@ -371,8 +377,11 @@ export function DashboardClient() {
     );
     
     if (success && data) {
-      // Add the new company to the list
-      setCompanies([...(companies || []), data]);
+      // Check again if it's not already in our list (could have been added in onboarding)
+      if (!companies.some(company => company.id === data.id)) {
+        // Add the new company to the list
+        setCompanies([...(companies || []), data]);
+      }
     }
   };
 
