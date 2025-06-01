@@ -3,6 +3,7 @@
 import { useState, useMemo, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { DashboardHeader } from "@/components/dashboard";
+import { CompanySearch } from "@/components/dashboard/company-search";
 import { Input } from "@/components/ui/input";
 import { SearchIcon, SettingsIcon, Trash2Icon, PlusIcon, ArrowUpDown, ChevronDown, ChevronUp, Mail as EnvelopeIcon } from "lucide-react";
 
@@ -54,6 +55,7 @@ export function DashboardClient() {
   const [isPreferencesOpen, setIsPreferencesOpen] = useState(false);
   const [newTickerSearch, setNewTickerSearch] = useState("");
   const [searchResults, setSearchResults] = useState<TickerSearchResult[]>([]);
+
   const [showTutorial, setShowTutorial] = useState(false);
   const [tutorialProgress, setTutorialProgress] = useState(0);
   
@@ -74,6 +76,8 @@ export function DashboardClient() {
   const isDeletingTicker = deleteStatus === 'pending';
   const isUpdatingPreferences = updateStatus === 'pending';
   
+
+
   // Load tracked companies on component mount
   useEffect(() => {
     loadCompanies();
@@ -110,44 +114,50 @@ export function DashboardClient() {
     }
   };
   
-  // Handle search for tickers
-  const handleSearchTickers = async (query: string) => {
-    setNewTickerSearch(query);
-    if (query.length < 2) {
-      setSearchResults([]);
-      return;
-    }
-    
-    try {
-      const results = await executeSearchTickers(query);
-      setSearchResults(results || []);
-    } catch (error) {
-      console.error("Error searching tickers:", error);
-      toast.error("Failed to search tickers");
-    }
-  };
+
+
+
   
   // Handle adding a ticker
   const handleAddTicker = async (symbol: string, name: string) => {
+    setIsAddTickerOpen(false);
+    setNewTickerSearch("");
+    setSearchResults([]);
+    
     try {
       await executeAddTicker(symbol);
-      toast.success(`Added ${symbol} to tracked companies`);
+      toast.success(`Added ${symbol} to your tracked companies`);
       
       // Add to local state to avoid refetch
-      setCompanies(prev => [...prev, { 
-        symbol, 
-        name, 
-        preferences: { 
-          emailAlerts: true, 
-          pushNotifications: false,
-          summaryFrequency: 'daily'
-        } 
-      }]);
+      setCompanies(prevCompanies => {
+        // Ensure prev is an array before spreading
+        const prevArray = Array.isArray(prevCompanies) ? prevCompanies : [];
+        
+        return [...prevArray, { 
+          id: `temp-${Date.now()}`, // Temporary ID until refresh
+          symbol, 
+          name, 
+          companyName: name,
+          lastFiling: "—", // Placeholder
+          lastFilingDate: "", // Empty string instead of null
+          preferences: { 
+            emailAlerts: true, 
+            pushNotifications: false,
+            summaryFrequency: 'daily',
+            // Add missing FilingPreferences properties
+            tenK: true,
+            tenQ: true,
+            eightK: true,
+            form4: false,
+            other: false
+          } 
+        } as Company];
+      });
       
-      // Reset search
-      setNewTickerSearch("");
-      setSearchResults([]);
-      setIsAddTickerOpen(false);
+      // Show next step in tutorial if active
+      if (showTutorial && tutorialProgress === 0) {
+        setTutorialProgress(1);
+      }
     } catch (error) {
       console.error("Error adding ticker:", error);
       toast.error(`Failed to add ${symbol}`);
@@ -372,42 +382,10 @@ export function DashboardClient() {
                   </DialogHeader>
                   
                   <div className="my-4">
-                    <div className="relative">
-                      <SearchIcon className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                      <Input
-                        type="search"
-                        placeholder="Search by ticker or company name..."
-                        className="pl-8 w-full"
-                        value={newTickerSearch}
-                        onChange={(e) => handleSearchTickers(e.target.value)}
-                      />
-                    </div>
-                    
-                    {searchResults.length > 0 && (
-                      <div className="mt-4 border rounded-md divide-y max-h-64 overflow-auto">
-                        {searchResults.map((result) => (
-                          <div 
-                            key={result.symbol}
-                            className="p-3 hover:bg-accent flex justify-between items-center cursor-pointer"
-                            onClick={() => handleAddTicker(result.symbol, result.name)}
-                          >
-                            <div>
-                              <p className="font-medium">{result.symbol}</p>
-                              <p className="text-sm text-muted-foreground">{result.name}</p>
-                            </div>
-                            <Button size="sm" variant="ghost">
-                              <PlusIcon className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                    
-                    {newTickerSearch.length > 1 && searchResults.length === 0 && (
-                      <div className="mt-4 text-center py-8 border rounded-md">
-                        <p className="text-muted-foreground">No results found</p>
-                      </div>
-                    )}
+                    <CompanySearch 
+                      onSelect={handleAddTicker}
+                      onCancel={() => setIsAddTickerOpen(false)}
+                    />
                   </div>
                   
                   <DialogFooter className="flex-col sm:flex-row gap-2 sm:gap-0">
@@ -448,42 +426,10 @@ export function DashboardClient() {
                 </DialogHeader>
                 
                 <div className="my-4">
-                  <div className="relative">
-                    <SearchIcon className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                    <Input
-                      type="search"
-                      placeholder="Search by ticker or company name..."
-                      className="pl-8 w-full"
-                      value={newTickerSearch}
-                      onChange={(e) => handleSearchTickers(e.target.value)}
-                    />
-                  </div>
-                  
-                  {searchResults.length > 0 && (
-                    <div className="mt-4 border rounded-md divide-y max-h-64 overflow-auto">
-                      {searchResults.map((result) => (
-                        <div 
-                          key={result.symbol}
-                          className="p-3 hover:bg-accent flex justify-between items-center cursor-pointer"
-                          onClick={() => handleAddTicker(result.symbol, result.name)}
-                        >
-                          <div>
-                            <p className="font-medium">{result.symbol}</p>
-                            <p className="text-sm text-muted-foreground">{result.name}</p>
-                          </div>
-                          <Button size="sm" variant="ghost">
-                            <PlusIcon className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                  
-                  {newTickerSearch.length > 1 && searchResults.length === 0 && (
-                    <div className="mt-4 text-center py-8 border rounded-md">
-                      <p className="text-muted-foreground">No results found</p>
-                    </div>
-                  )}
+                  <CompanySearch 
+                    onSelect={handleAddTicker}
+                    onCancel={() => setIsAddTickerOpen(false)}
+                  />
                 </div>
                 
                 <DialogFooter className="flex-col sm:flex-row gap-2 sm:gap-0">
