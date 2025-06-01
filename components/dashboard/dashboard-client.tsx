@@ -128,14 +128,37 @@ export function DashboardClient() {
     setNewTickerSearch("");
     setSearchResults([]);
     
+    // Create a new company object for optimistic update
+    const newCompany: Company = {
+      id: `temp-${Date.now()}`, // Temporary ID that will be replaced after API refresh
+      symbol,
+      name, // name property is the company name in the Company interface
+      lastFiling: "—",
+      lastFilingDate: undefined, // Using undefined instead of null to match Company type
+      preferences: { tenK: true, tenQ: true, eightK: true, form4: false, other: false }
+    };
+    
+    // Optimistically add the company to the list to reduce perceived latency
+    setCompanies(prevCompanies => {
+      // Check if this ticker already exists to prevent duplicates
+      const exists = prevCompanies.some(company => company.symbol === symbol);
+      if (exists) {
+        // If it exists, don't add it again
+        return prevCompanies;
+      }
+      // Add the new company to the list
+      return [...prevCompanies, newCompany];
+    });
+    
     try {
       // Add the ticker to the database
-      const result = await executeAddTicker(symbol, name);
+      const result = await executeAddTicker(() => addTrackedCompany(symbol, name));
       
-      if (result && !('error' in result)) {
+      if (result && result.success && result.data) {
         toast.success(`Added ${symbol} to your tracked companies`);
         
         // Explicitly reload the companies list from the API to ensure we have the latest data
+        // This will replace our optimistic update with the real data
         try {
           // Call executeGetCompanies with a function that calls getTrackedCompanies
           const response = await executeGetCompanies(() => getTrackedCompanies());
@@ -145,6 +168,7 @@ export function DashboardClient() {
         } catch (refreshError) {
           console.error("Error refreshing companies list:", refreshError);
           // Even if refresh fails, we still added the ticker successfully
+          // and our optimistic update remains in place
         }
         
         // Show next step in tutorial if active
@@ -152,13 +176,20 @@ export function DashboardClient() {
           setTutorialProgress(1);
         }
       } else {
-        // Handle API error response
-        const errorMessage = 'error' in result && result.error && typeof result.error === 'object' && 'message' in result.error
-          ? result.error.message as string
-          : `Failed to add ${symbol}`;
+        // Handle API error response - remove the optimistic update
+        setCompanies(prevCompanies => prevCompanies.filter(company => company.id !== newCompany.id));
+        
+        // Get error message from result if available
+        let errorMessage = `Failed to add ${symbol}`;
+        if (!result.success && result.data === null) {
+          errorMessage = `Failed to add ${symbol}: The ticker may already be tracked or not exist`;
+        }
         toast.error(errorMessage);
       }
     } catch (error) {
+      // Remove the optimistic update on error
+      setCompanies(prevCompanies => prevCompanies.filter(company => company.id !== newCompany.id));
+      
       console.error("Error adding ticker:", error);
       toast.error(`Failed to add ${symbol}`);
     }
