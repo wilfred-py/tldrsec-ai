@@ -132,3 +132,11 @@ model JobLock {
   
   @@index([lockName, released, expiresAt]) // For efficient lock checking
 }
+
+// Model for caching SEC company data
+model SecCompanyCache {
+  id          Int       @id @default(1) // Singleton record
+  data        String    @db.Text // JSON string of company data
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
