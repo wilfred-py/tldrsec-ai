@@ -106,8 +106,12 @@ export function DashboardClient() {
   // Load tracked companies
   const loadCompanies = async () => {
     try {
-      const data = await executeGetCompanies();
-      setCompanies(data || []);
+      const response = await executeGetCompanies(() => getTrackedCompanies());
+      if (response && 'data' in response && Array.isArray(response.data)) {
+        setCompanies(response.data);
+      } else {
+        setCompanies([]);
+      }
     } catch (error) {
       console.error("Error loading companies:", error);
       toast.error("Failed to load tracked companies");
@@ -125,15 +129,34 @@ export function DashboardClient() {
     setSearchResults([]);
     
     try {
-      await executeAddTicker(symbol);
-      toast.success(`Added ${symbol} to your tracked companies`);
+      // Add the ticker to the database
+      const result = await executeAddTicker(symbol, name);
       
-      // Reload companies list to ensure we have the latest data
-      await loadCompanies();
-      
-      // Show next step in tutorial if active
-      if (showTutorial && tutorialProgress === 0) {
-        setTutorialProgress(1);
+      if (result && !('error' in result)) {
+        toast.success(`Added ${symbol} to your tracked companies`);
+        
+        // Explicitly reload the companies list from the API to ensure we have the latest data
+        try {
+          // Call executeGetCompanies with a function that calls getTrackedCompanies
+          const response = await executeGetCompanies(() => getTrackedCompanies());
+          if (response && 'data' in response && Array.isArray(response.data)) {
+            setCompanies(response.data);
+          }
+        } catch (refreshError) {
+          console.error("Error refreshing companies list:", refreshError);
+          // Even if refresh fails, we still added the ticker successfully
+        }
+        
+        // Show next step in tutorial if active
+        if (showTutorial && tutorialProgress === 0) {
+          setTutorialProgress(1);
+        }
+      } else {
+        // Handle API error response
+        const errorMessage = 'error' in result && result.error && typeof result.error === 'object' && 'message' in result.error
+          ? result.error.message as string
+          : `Failed to add ${symbol}`;
+        toast.error(errorMessage);
       }
     } catch (error) {
       console.error("Error adding ticker:", error);
