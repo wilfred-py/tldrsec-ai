@@ -128,31 +128,8 @@ export function DashboardClient() {
       await executeAddTicker(symbol);
       toast.success(`Added ${symbol} to your tracked companies`);
       
-      // Add to local state to avoid refetch
-      setCompanies(prevCompanies => {
-        // Ensure prev is an array before spreading
-        const prevArray = Array.isArray(prevCompanies) ? prevCompanies : [];
-        
-        return [...prevArray, { 
-          id: `temp-${Date.now()}`, // Temporary ID until refresh
-          symbol, 
-          name, 
-          companyName: name,
-          lastFiling: "—", // Placeholder
-          lastFilingDate: "", // Empty string instead of null
-          preferences: { 
-            emailAlerts: true, 
-            pushNotifications: false,
-            summaryFrequency: 'daily',
-            // Add missing FilingPreferences properties
-            tenK: true,
-            tenQ: true,
-            eightK: true,
-            form4: false,
-            other: false
-          } 
-        } as Company];
-      });
+      // Reload companies list to ensure we have the latest data
+      await loadCompanies();
       
       // Show next step in tutorial if active
       if (showTutorial && tutorialProgress === 0) {
