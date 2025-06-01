@@ -106,8 +106,12 @@ export function DashboardClient() {
   // Load tracked companies
   const loadCompanies = async () => {
     try {
-      const data = await executeGetCompanies();
-      setCompanies(data || []);
+      const response = await executeGetCompanies(() => getTrackedCompanies());
+      if (response && 'data' in response && Array.isArray(response.data)) {
+        setCompanies(response.data);
+      } else {
+        setCompanies([]);
+      }
     } catch (error) {
       console.error("Error loading companies:", error);
       toast.error("Failed to load tracked companies");
@@ -125,38 +129,34 @@ export function DashboardClient() {
     setSearchResults([]);
     
     try {
-      await executeAddTicker(symbol);
-      toast.success(`Added ${symbol} to your tracked companies`);
+      // Add the ticker to the database
+      const result = await executeAddTicker(symbol, name);
       
-      // Add to local state to avoid refetch
-      setCompanies(prevCompanies => {
-        // Ensure prev is an array before spreading
-        const prevArray = Array.isArray(prevCompanies) ? prevCompanies : [];
+      if (result && !('error' in result)) {
+        toast.success(`Added ${symbol} to your tracked companies`);
         
-        return [...prevArray, { 
-          id: `temp-${Date.now()}`, // Temporary ID until refresh
-          symbol, 
-          name, 
-          companyName: name,
-          lastFiling: "—", // Placeholder
-          lastFilingDate: "", // Empty string instead of null
-          preferences: { 
-            emailAlerts: true, 
-            pushNotifications: false,
-            summaryFrequency: 'daily',
-            // Add missing FilingPreferences properties
-            tenK: true,
-            tenQ: true,
-            eightK: true,
-            form4: false,
-            other: false
-          } 
-        } as Company];
-      });
-      
-      // Show next step in tutorial if active
-      if (showTutorial && tutorialProgress === 0) {
-        setTutorialProgress(1);
+        // Explicitly reload the companies list from the API to ensure we have the latest data
+        try {
+          // Call executeGetCompanies with a function that calls getTrackedCompanies
+          const response = await executeGetCompanies(() => getTrackedCompanies());
+          if (response && 'data' in response && Array.isArray(response.data)) {
+            setCompanies(response.data);
+          }
+        } catch (refreshError) {
+          console.error("Error refreshing companies list:", refreshError);
+          // Even if refresh fails, we still added the ticker successfully
+        }
+        
+        // Show next step in tutorial if active
+        if (showTutorial && tutorialProgress === 0) {
+          setTutorialProgress(1);
+        }
+      } else {
+        // Handle API error response
+        const errorMessage = 'error' in result && result.error && typeof result.error === 'object' && 'message' in result.error
+          ? result.error.message as string
+          : `Failed to add ${symbol}`;
+        toast.error(errorMessage);
       }
     } catch (error) {
       console.error("Error adding ticker:", error);
