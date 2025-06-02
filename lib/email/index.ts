@@ -8,15 +8,6 @@ import { ResendClient } from './resend-client';
 import { EmailMessage, EmailSendResult } from './types';
 import { resendConfig } from './config';
 
-// Re-export types
-export * from './types';
-export { resendConfig } from './config';
-
-// Export notification components
-export * from './notification-service';
-export * from './notification-processor';
-export * from './notification-integration';
-
 // Create the default client with API key from environment
 const RESEND_API_KEY = process.env.RESEND_API_KEY;
 
@@ -29,6 +20,15 @@ if (!RESEND_API_KEY) {
 
 // Create the client with the API key
 export const emailClient = new ResendClient(RESEND_API_KEY);
+
+// Re-export types
+export * from './types';
+export { resendConfig } from './config';
+
+// Export notification components
+export * from './notification-service';
+export * from './notification-processor';
+export * from './notification-integration';
 
 /**
  * Send an email using the default client
