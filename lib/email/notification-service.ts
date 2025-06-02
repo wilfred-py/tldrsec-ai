@@ -7,9 +7,10 @@
 
 import { EventEmitter } from 'events';
 import { v4 as uuidv4 } from 'uuid';
-import { ResendClient, sendEmail } from './index';
+import { sendEmail } from './index';
 import { EmailType, EmailMessage } from './types';
 import { logger } from '../logging';
+import { ResendClient } from './resend-client';
 import { monitoring } from '../monitoring';
 import { JobQueueService, JobType } from '../job-queue';
 import { 
@@ -69,11 +70,11 @@ export const notificationEvents = new EventEmitter();
  */
 export class NotificationService {
   private static instance: NotificationService;
-  private emailClient: ResendClient;
+  private emailClient: any;
   
-  constructor(emailClient?: ResendClient) {
-    // Use provided client or default
-    this.emailClient = emailClient || new ResendClient();
+  constructor(customEmailClient?: any) {
+    // Use provided client or create a new one
+    this.emailClient = customEmailClient || new ResendClient(process.env.RESEND_API_KEY);
     
     // Set up event listeners
     this.setupEventListeners();
@@ -82,9 +83,9 @@ export class NotificationService {
   /**
    * Get singleton instance
    */
-  static getInstance(emailClient?: ResendClient): NotificationService {
+  static getInstance(customEmailClient?: any): NotificationService {
     if (!NotificationService.instance) {
-      NotificationService.instance = new NotificationService(emailClient);
+      NotificationService.instance = new NotificationService(customEmailClient);
     }
     return NotificationService.instance;
   }
@@ -314,7 +315,7 @@ export class NotificationService {
       // Using new preference structure with JSON preferences field
       const users = await prisma.user.findMany({
         where: {
-          emailVerified: true,
+          // emailVerified removed - field no longer in schema
           OR: [
             // Users with preferences.notifications.emailFrequency set to immediate
             {
@@ -323,18 +324,18 @@ export class NotificationService {
                 equals: NotificationPreference.IMMEDIATE
               },
             },
-            // Legacy support for older preference structure
-            { notificationPreference: 'immediate' }
+            // Legacy support removed - field no longer exists in schema
+            // Comment left for historical context
           ]
         },
         select: {
           id: true,
           email: true,
           preferences: true,
-          // Backward compatibility
-          notificationPreference: true,
-          watchedTickers: true,
-          watchedFormTypes: true,
+          // Backward compatibility field removed
+          // notificationPreference was removed from schema
+          // watchedTickers and watchedFormTypes fields removed from schema
+          // These fields have been migrated to the preferences JSON structure
         }
       });
       
@@ -483,6 +484,9 @@ export class NotificationService {
       });
       
       // Record in database that we sent this notification
+      // sentNotification model no longer exists in Prisma schema
+      // This functionality needs to be updated to use the current schema
+      /*
       await prisma.sentNotification.create({
         data: {
           id: uuidv4(),
@@ -493,6 +497,9 @@ export class NotificationService {
           sentAt: new Date()
         }
       });
+      */
+      
+      // TODO: Update this to use the appropriate model for tracking sent notifications
     } catch (error) {
       logger.error(`Failed to send notification to ${recipient.email}`, error, {
         userId: recipient.userId,
