@@ -56,10 +56,42 @@ export async function getTrackedCompanies(): Promise<ApiResponse<Company[]>> {
           companyName: ticker.companyName,
           name: ticker.companyName,
           lastFiling: "—", // No filing data in local DB
+          lastFilingDate: ticker.lastFilingDate || null,
           preferences: { tenK: true, tenQ: true, eightK: true, form4: false, other: false }
         }));
         
         console.log(`Found ${userCompanies.length} tickers for user`);
+        
+        // Fetch the last filing date for each ticker
+        try {
+          const filingsResponse = await fetch('/api/filings/latest', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              tickers: userCompanies.map(company => company.symbol)
+            })
+          });
+          
+          if (filingsResponse.ok) {
+            const filingsData = await filingsResponse.json();
+            
+            // Update companies with last filing dates
+            if (filingsData.filings) {
+              userCompanies.forEach(company => {
+                const filingInfo = filingsData.filings.find((f: any) => f.ticker === company.symbol);
+                if (filingInfo) {
+                  company.lastFilingDate = filingInfo.filingDate;
+                  company.lastFiling = filingInfo.formType || "—";
+                }
+              });
+            }
+          }
+        } catch (filingError) {
+          console.error('Error fetching latest filings:', filingError);
+          // Continue without filing dates if there's an error
+        }
         
         return { data: userCompanies };
       } catch (apiError) {

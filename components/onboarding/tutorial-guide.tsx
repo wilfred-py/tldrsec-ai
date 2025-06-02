@@ -224,52 +224,75 @@ export function TutorialGuide({
   };
   
   // Complete the tutorial
-  const completeTutorial = () => {
-    setShowConfetti(true);
-    
-    // Mark tutorial as complete
-    updateTutorialProgress(100, {
-      currentStep: currentStep,
-      currentSubstep: 0,
-      completed: true,
-    }).catch(error => {
-      console.error('Failed to mark tutorial as complete:', error);
-    });
-    
-    // Notify user
-    toast.success('Tutorial completed! You can now use all features of tldrSEC.');
-    
-    // After a brief delay, close the tutorial and redirect to dashboard
-    setTimeout(() => {
-      setIsActive(false);
-      onComplete();
-      router.push('/dashboard');
-    }, 3000);
+  const completeTutorial = async () => {
+    try {
+      // Show confetti
+      setShowConfetti(true);
+      
+      // Update tutorial progress in database
+      const result = await updateTutorialProgress(100, {
+        currentStep: currentStep,
+        currentSubstep: 0,
+        completed: true
+      });
+      
+      if (!result.success) {
+        console.error('Failed to update tutorial progress:', result.error);
+        toast.error('Failed to save your progress');
+      }
+      
+      // Send welcome email in the background
+      // We don't await this to prevent UI stalling
+      fetch('/api/email/welcome', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          data: {}
+        })
+      }).catch(err => {
+        console.error('Failed to send welcome email:', err);
+        // Don't show error to user since this is a background task
+      });
+      
+      // Hide the tutorial after a delay
+      setTimeout(() => {
+        setIsActive(false);
+        onComplete();
+      }, 3000);
+    } catch (error) {
+      console.error('Error completing tutorial:', error);
+      toast.error('Something went wrong. Please try again.');
+    }
   };
   
   // Handle yes/no for email summaries
   const handleEmailSummariesResponse = async (sendEmail: boolean) => {
-    if (sendEmail) {
+    try {
       setIsSendingEmail(true);
-      try {
-        const result = await sendLatestSummariesEmail();
-        if (result.success) {
-          toast.success('Summaries email sent! Check your inbox in a few minutes.');
-        } else {
-          toast.error(`Couldn't send email: ${result.error || 'Unknown error'}`);
-        }
-      } catch (error) {
-        console.error('Error sending summaries email:', error);
-        toast.error('Failed to send summaries email');
-      } finally {
-        setIsSendingEmail(false);
+      
+      // First complete the tutorial to prevent UI stalling
+      // This ensures the confetti shows and the tutorial closes properly
+      completeTutorial();
+      
+      if (sendEmail) {
+        // Send the email summaries in the background
+        // We don't await this to prevent stalling the UI
+        toast.promise(
+          sendLatestSummariesEmail(),
+          {
+            loading: 'Sending email summaries...',
+            success: 'Email summaries sent successfully!',
+            error: (err) => `Failed to send email: ${err?.error || 'Unknown error'}`
+          }
+        );
       }
-    } else {
-      toast('You can always send summary emails later from the dashboard.');
+    } catch (error) {
+      console.error('Error handling email summaries response:', error);
+      toast.error('Something went wrong. Please try again.');
+      setIsSendingEmail(false);
     }
-    
-    // Complete the tutorial in either case
-    completeTutorial();
   };
   
   // Handle previous step

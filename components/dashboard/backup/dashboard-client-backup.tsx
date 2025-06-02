@@ -1,0 +1,931 @@
+"use client";
+
+import { useState, useMemo, useEffect } from "react";
+import { Button } from "@/components/ui/button";
+import { DashboardHeader } from "@/components/dashboard";
+import { Input } from "@/components/ui/input";
+import { SearchIcon, SettingsIcon, Trash2Icon, PlusIcon, ArrowUpDown, ChevronDown, ChevronUp, Mail as EnvelopeIcon } from "lucide-react";
+
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { 
+  Dialog, 
+  DialogContent, 
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
+import { toast } from "sonner";
+import {
+  createColumnHelper,
+  flexRender,
+  getCoreRowModel,
+  getSortedRowModel,
+  SortingState,
+  useReactTable,
+  FilterFn,
+  getFilteredRowModel
+} from "@tanstack/react-table";
+import { Company, TickerSearchResult } from "@/lib/api/types";
+import { getTrackedCompanies, searchCompanies, addTrackedCompany, deleteTrackedCompany, updateCompanyPreferences } from "@/lib/api/ticker-service";
+import { useAsync } from "@/lib/hooks/use-async";
+import { Skeleton } from "@/components/ui/skeleton";
+import { SummaryList } from "@/components/dashboard/summary-list";
+import { getRecentSummaries } from "@/lib/api/summary-service";
+import { TutorialGuide } from '@/components/onboarding/tutorial-guide';
+import { useAuthContext } from '@/lib/context/auth-context';
+import { getUserOnboardingStatus } from '@/components/onboarding/actions';
+
+// Column definition helper
+const columnHelper = createColumnHelper<Company>();
+
+// Global filter function for search
+const globalFilterFn: FilterFn<Company> = (row, columnId, value) => {
+  const searchValue = String(value).toLowerCase();
+  const symbol = row.original.symbol.toLowerCase();
+  const name = row.original.name.toLowerCase();
+  
+  return symbol.includes(searchValue) || name.includes(searchValue);
+};
+
+export function DashboardClient() {
+  const [searchQuery, setSearchQuery] = useState("");
+  const [currentCompany, setCurrentCompany] = useState<Company | null>(null);
+  const [newTickerSearch, setNewTickerSearch] = useState("");
+  const [searchResults, setSearchResults] = useState<TickerSearchResult[]>([]);
+  const [isPreferencesOpen, setIsPreferencesOpen] = useState(false);
+  const [isAddTickerOpen, setIsAddTickerOpen] = useState(false);
+  const [sorting, setSorting] = useState<SortingState>([]);
+  const [companyToDelete, setCompanyToDelete] = useState<Company | null>(null);
+  const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
+  
+  // New state for the tutorial modal
+  const [showTutorial, setShowTutorial] = useState(false);
+  const [tutorialProgress, setTutorialProgress] = useState(0);
+  const { isAuthenticated, userId } = useAuthContext();
+  
+  // Use the custom hook for async operations
+  const {
+    data: companies,
+    isLoading: isLoadingCompanies,
+    error: companiesError,
+    execute: executeCompaniesQuery,
+    setData: setCompanies
+  } = useAsync<Company[]>([]);
+  
+  // Use the custom hook for email request
+  const {
+    isLoading: isEmailRequestLoading,
+    error: emailRequestError,
+    execute: executeEmailRequest
+  } = useAsync(null);
+  
+  // Use the custom hook for recent summaries
+  const {
+    data: recentSummaries,
+    isLoading: isLoadingSummaries,
+    error: summariesError,
+    execute: executeSummariesQuery
+  } = useAsync([]);
+  
+  // Fetch companies and summaries on component mount
+  useEffect(() => {
+    executeCompaniesQuery(
+      () => getTrackedCompanies(),
+      {
+        errorMessage: "Failed to load tracked companies. Please try again."
+      }
+    );
+    
+    executeSummariesQuery(
+      () => getRecentSummaries(),
+      {
+        errorMessage: "Failed to load recent summaries."
+      }
+    );
+  }, [executeCompaniesQuery, executeSummariesQuery]);
+  
+  // Check if user needs to see tutorial
+  useEffect(() => {
+    if (!isAuthenticated || !userId) return;
+    
+    const checkOnboardingStatus = async () => {
+      try {
+        const status = await getUserOnboardingStatus();
+        if (status.success) {
+          // If user has completed onboarding but not the tutorial, show it
+          if (status.onboardingCompleted && !status.tutorialCompleted) {
+            // Wait for dashboard to load before showing tutorial
+            if (!isLoadingCompanies && companies && companies.length > 0) {
+              setShowTutorial(true);
+              setTutorialProgress(status.tutorialProgress || 0);
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Failed to check onboarding status:', error);
+      }
+    };
+    
+    checkOnboardingStatus();
+  }, [isAuthenticated, userId, isLoadingCompanies, companies]);
+  
+  // Define table columns
+  const columns = useMemo(() => [
+    columnHelper.accessor('symbol', {
+      header: ({ column }) => {
+        return (
+          <Button
+            variant="ghost"
+            onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
+            className="p-0 font-medium hover:bg-transparent"
+          >
+            Symbol
+            {column.getIsSorted() === 'asc' ? (
+              <ChevronUp className="ml-2 h-4 w-4" />
+            ) : column.getIsSorted() === 'desc' ? (
+              <ChevronDown className="ml-2 h-4 w-4" />
+            ) : (
+              <ArrowUpDown className="ml-2 h-4 w-4 opacity-0 group-hover:opacity-100" />
+            )}
+          </Button>
+        )
+      },
+      cell: info => <span className="font-medium">{info.getValue()}</span>,
+    }),
+    columnHelper.accessor('name', {
+      header: ({ column }) => {
+        return (
+          <Button
+            variant="ghost"
+            onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
+            className="p-0 font-medium hover:bg-transparent"
+          >
+            Company
+            {column.getIsSorted() === 'asc' ? (
+              <ChevronUp className="ml-2 h-4 w-4" />
+            ) : column.getIsSorted() === 'desc' ? (
+              <ChevronDown className="ml-2 h-4 w-4" />
+            ) : (
+              <ArrowUpDown className="ml-2 h-4 w-4 opacity-0 group-hover:opacity-100" />
+            )}
+          </Button>
+        )
+      },
+      cell: info => info.getValue(),
+    }),
+    columnHelper.accessor(row => row.lastFilingDate || '', {
+      id: 'lastFilingDate',
+      header: ({ column }) => {
+        return (
+          <Button
+            variant="ghost"
+            onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
+            className="p-0 font-medium hover:bg-transparent"
+          >
+            Last Filing Date
+            {column.getIsSorted() === 'asc' ? (
+              <ChevronUp className="ml-2 h-4 w-4" />
+            ) : column.getIsSorted() === 'desc' ? (
+              <ChevronDown className="ml-2 h-4 w-4" />
+            ) : (
+              <ArrowUpDown className="ml-2 h-4 w-4 opacity-0 group-hover:opacity-100" />
+            )}
+          </Button>
+        )
+      },
+      cell: info => {
+        const lastFilingDate = info.getValue();
+        return (
+          <div className="font-normal">
+            {lastFilingDate ? new Date(lastFilingDate).toLocaleDateString() : "No filings yet"}
+          </div>
+        );
+      },
+    }),
+    columnHelper.display({
+      id: 'actions',
+      header: () => <div className="text-right">Actions</div>,
+      cell: ({ row }) => {
+        const company = row.original;
+        return (
+          <div className="flex justify-end gap-2">
+            <Button 
+              variant="ghost" 
+              size="icon" 
+              className="h-8 w-8"
+              onClick={() => {
+                setCurrentCompany({...company});
+                setIsPreferencesOpen(true);
+              }}
+              data-tutorial="ticker-preferences"
+            >
+              <SettingsIcon className="h-4 w-4" />
+              <span className="sr-only">Settings</span>
+            </Button>
+            
+            <Button 
+              variant="ghost" 
+              size="icon" 
+              className="h-8 w-8"
+              onClick={() => {
+                setCompanyToDelete(company);
+                setIsDeleteConfirmOpen(true);
+              }}
+              data-tutorial="delete-ticker"
+            >
+              <Trash2Icon className="h-4 w-4" />
+              <span className="sr-only">Delete</span>
+            </Button>
+          </div>
+        )
+      },
+    }),
+  ], []);
+  
+  // Initialize the table with React Table
+  const table = useReactTable({
+    data: companies || [],
+    columns,
+    state: {
+      sorting,
+      globalFilter: searchQuery,
+    },
+    globalFilterFn,
+    onGlobalFilterChange: setSearchQuery,
+    onSortingChange: setSorting,
+    getSortedRowModel: getSortedRowModel(),
+    getFilteredRowModel: getFilteredRowModel(),
+    getCoreRowModel: getCoreRowModel(),
+  });
+
+  // Handle saving preferences for a company
+  const handleSavePreferences = async (id: string, preferences: Company['preferences']) => {
+    const { success, data: updatedCompany } = await executeCompaniesQuery(
+      () => updateCompanyPreferences(id, preferences),
+      {
+        successMessage: `Preferences updated for ${currentCompany?.symbol || 'company'}`,
+        errorMessage: "Failed to update preferences. Please try again.",
+        onSuccess: () => {
+          // Update the companies list with the updated company
+          if (companies) {
+            setCompanies(
+              companies.map(company => 
+                company.id === id ? { ...company, preferences } : company
+              )
+            );
+          }
+          setIsPreferencesOpen(false);
+          setCurrentCompany(null);
+        }
+      }
+    );
+    
+    if (success && updatedCompany) {
+      setIsPreferencesOpen(false);
+      setCurrentCompany(null);
+    }
+  };
+
+  // Handle deleting a company
+  const handleDeleteCompany = async (id: string) => {
+    if (!companies) return;
+    
+    // Find the company for the toast message
+    const company = companies.find(c => c.id === id);
+    
+    // Close the confirmation dialog
+    setIsDeleteConfirmOpen(false);
+    setCompanyToDelete(null);
+    
+    // Save the previous state before making any changes
+    const previousCompanies = [...companies];
+    
+    const { success } = await executeCompaniesQuery(
+      () => deleteTrackedCompany(id),
+      {
+        successMessage: `${company?.symbol || 'Company'} has been removed from tracked tickers`,
+        errorMessage: "Failed to remove company. Please try again.",
+        onError: () => {
+          // No need to restore previous state here as we're not doing optimistic updates
+        }
+      }
+    );
+    
+    if (success) {
+      // After successful delete, re-fetch the company list to ensure UI is in sync with database
+      const { success: refreshSuccess, data: refreshedCompanies } = await executeCompaniesQuery(
+        () => getTrackedCompanies(),
+        {
+          errorMessage: "Failed to refresh company list after deletion."
+        }
+      );
+      
+      if (refreshSuccess) {
+        // Update with the refreshed data
+        setCompanies(refreshedCompanies || []);
+      } else {
+        // If refresh failed, remove the deleted company from local state
+        setCompanies(previousCompanies.filter(c => c.id !== id));
+      }
+    }
+  };
+
+  // Handle search for adding new tickers
+  const handleSearchTickers = async (query: string) => {
+    setNewTickerSearch(query);
+    
+    if (query.length < 2) {
+      setSearchResults([]);
+      return;
+    }
+    
+    const { success, data } = await executeCompaniesQuery(
+      () => searchCompanies(query),
+      {
+        errorMessage: "Failed to search tickers. Please try again."
+      }
+    );
+    
+    if (success && data) {
+      setSearchResults(data);
+    }
+  };
+
+  // Handle requesting email summary
+  const handleRequestEmailSummary = async () => {
+    try {
+      // Get tickers from tracked companies
+      const tickers = companies ? companies.map(company => company.symbol) : [];
+      
+      // Execute the API request
+      const result = await executeEmailRequest(
+        async () => {
+          const response = await fetch('/api/email/filings-summary', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ tickers }),
+          });
+          
+          if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.message || 'Failed to send email');
+          }
+          
+          return response.json();
+        },
+        {
+          errorMessage: 'Failed to send filing summaries email.'
+        }
+      );
+      
+      if (result?.success) {
+        toast.success('Filing summaries email sent! Check your inbox.');
+      }
+    } catch (error) {
+      console.error('Error sending email:', error);
+      toast.error(error instanceof Error ? error.message : 'Failed to send email');
+    }
+  };
+
+  // Handle adding a new ticker
+  const handleAddTicker = async (symbol: string, name: string) => {
+    if (!companies) return;
+    
+    // Check if company already exists client-side
+    const existsInClientList = companies.some(company => company.symbol.toLowerCase() === symbol.toLowerCase());
+    
+    // If it exists in the client-side list, we can stop early
+    if (existsInClientList) {
+      toast.info(`${symbol} is already being tracked`);
+      setNewTickerSearch("");
+      setSearchResults([]);
+      setIsAddTickerOpen(false);
+      return;
+    }
+    
+    // Otherwise, try to add it - if it already exists server-side, the API will return it
+    const { success, data } = await executeCompaniesQuery(
+      () => addTrackedCompany(symbol, name),
+      {
+        successMessage: `${symbol} has been added to tracked tickers`,
+        errorMessage: `Failed to add ${symbol}. Please try again.`,
+        onSuccess: () => {
+          setNewTickerSearch("");
+          setSearchResults([]);
+          setIsAddTickerOpen(false);
+        }
+      }
+    );
+    
+    if (success && data) {
+      // Check again if it's not already in our list (could have been added in onboarding)
+      if (!companies.some(company => company.id === data.id)) {
+        // Add the new company to the list
+        setCompanies([...(companies || []), data]);
+      }
+    }
+  };
+
+  const showEmptyState = (companies?.length === 0 && !isLoadingCompanies) || companiesError;
+
+  return (
+    <div className="space-y-6">
+      <DashboardHeader
+        heading="Dashboard"
+        description="Welcome to tldrSEC."
+      />
+      
+      {/* Tracked Tickers - Removed border */}
+      <div>
+        <div className="mb-6">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h2 className="text-lg font-semibold">Tracked Tickers</h2>
+              <p className="text-sm text-muted-foreground">Manage your tracked companies.</p>
+            </div>
+            
+            <div className="flex gap-2">
+              {/* Email Latest Filings Button */}
+              <Button
+                onClick={handleRequestEmailSummary}
+                disabled={isEmailRequestLoading}
+                className="gap-1"
+              >
+                <EnvelopeIcon className="h-4 w-4 mr-2" />
+                <span className="hidden sm:inline">Email Latest Filings</span>
+                <span className="inline sm:hidden">Email</span>
+              </Button>
+              
+              <Dialog open={isAddTickerOpen} onOpenChange={setIsAddTickerOpen}>
+              <DialogTrigger asChild>
+                <Button
+                  onClick={() => setIsAddTickerOpen(true)}
+                  className="gap-1"
+                  data-tutorial="add-ticker"
+                >
+                  <PlusIcon className="h-4 w-4 mr-2" />
+                  <span className="hidden sm:inline">Add Ticker</span>
+                  <span className="inline sm:hidden">Add</span>
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="max-w-[95vw] sm:max-w-md">
+                <DialogHeader>
+                  <DialogTitle>Add New Ticker</DialogTitle>
+                  <DialogDescription>
+                    Search for a company to track its SEC filings.
+                  </DialogDescription>
+                </DialogHeader>
+                
+                <div className="my-4">
+                  <div className="relative">
+                    <SearchIcon className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      type="search"
+                      placeholder="Search by ticker or company name..."
+                      className="pl-8 w-full"
+                      value={newTickerSearch}
+                      onChange={(e) => handleSearchTickers(e.target.value)}
+                    />
+                  </div>
+                  
+                  {searchResults.length > 0 && (
+                    <div className="mt-4 border rounded-md divide-y max-h-64 overflow-auto">
+                      {searchResults.map((result) => (
+                        <div 
+                          key={result.symbol}
+                          className="p-3 hover:bg-accent flex justify-between items-center cursor-pointer"
+                          onClick={() => handleAddTicker(result.symbol, result.name)}
+                        >
+                          <div>
+                            <p className="font-medium">{result.symbol}</p>
+                            <p className="text-sm text-muted-foreground">{result.name}</p>
+                          </div>
+                          <Button size="sm" variant="ghost">
+                            <PlusIcon className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  
+                  {newTickerSearch.length > 1 && searchResults.length === 0 && (
+                    <div className="mt-4 text-center py-8 border rounded-md">
+                      <p className="text-muted-foreground">No results found</p>
+                    </div>
+                  )}
+                </div>
+                
+                <DialogFooter className="flex-col sm:flex-row gap-2 sm:gap-0">
+                  <Button variant="outline" onClick={() => {
+                    setNewTickerSearch("");
+                    setSearchResults([]);
+                    setIsAddTickerOpen(false);
+                  }}>
+                    Cancel
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+          </div>
+          
+          <div className="mt-6">
+            {isLoadingCompanies ? (
+              <div className="space-y-3">
+                <Skeleton className="h-12 w-full" />
+                <Skeleton className="h-12 w-full" />
+                <Skeleton className="h-12 w-full" />
+                <Skeleton className="h-12 w-full" />
+              </div>
+            ) : showEmptyState ? (
+              <div className="flex min-h-[200px] flex-col items-center justify-center rounded-md border border-dashed p-4 sm:p-8 text-center">
+                <h3 className="text-base font-medium">No companies tracked yet</h3>
+                <p className="mt-2 text-sm text-muted-foreground">
+                  Start tracking companies to receive SEC filing summaries.
+                </p>
+                <Dialog open={isAddTickerOpen} onOpenChange={setIsAddTickerOpen}>
+                  <DialogTrigger asChild>
+                    <Button className="mt-6">Add Your First Company</Button>
+                  </DialogTrigger>
+                  <DialogContent className="max-w-[95vw] sm:max-w-md">
+                    <DialogHeader>
+                      <DialogTitle>Add New Ticker</DialogTitle>
+                      <DialogDescription>
+                        Search for a company to track its SEC filings.
+                      </DialogDescription>
+                    </DialogHeader>
+                    
+                    <div className="my-4">
+                      <div className="relative">
+                        <SearchIcon className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                        <Input
+                          type="search"
+                          placeholder="Search by ticker or company name..."
+                          className="pl-8 w-full"
+                          value={newTickerSearch}
+                          onChange={(e) => handleSearchTickers(e.target.value)}
+                        />
+                      </div>
+                      
+                      {searchResults.length > 0 && (
+                        <div className="mt-4 border rounded-md divide-y max-h-64 overflow-auto">
+                          {searchResults.map((result) => (
+                            <div 
+                              key={result.symbol}
+                              className="p-3 hover:bg-accent flex justify-between items-center cursor-pointer"
+                              onClick={() => handleAddTicker(result.symbol, result.name)}
+                            >
+                              <div>
+                                <p className="font-medium">{result.symbol}</p>
+                                <p className="text-sm text-muted-foreground">{result.name}</p>
+                              </div>
+                              <Button size="sm" variant="ghost">
+                                <PlusIcon className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      
+                      {newTickerSearch.length > 1 && searchResults.length === 0 && (
+                        <div className="mt-4 text-center py-8 border rounded-md">
+                          <p className="text-muted-foreground">No results found</p>
+                        </div>
+                      )}
+                    </div>
+                    
+                    <DialogFooter className="flex-col sm:flex-row gap-2 sm:gap-0">
+                      <Button variant="outline" onClick={() => {
+                        setNewTickerSearch("");
+                        setSearchResults([]);
+                        setIsAddTickerOpen(false);
+                      }}>
+                          {headerGroup.headers.map(header => (
+                            <TableHead key={header.id} className="group">
+                              {header.isPlaceholder
+                                ? null
+                                : flexRender(
+                                    header.column.columnDef.header,
+                                    header.getContext()
+                                  )}
+                            </TableHead>
+                          ))}
+                        </TableRow>
+                      ))}
+                    </TableHeader>
+                    <TableBody>
+                      {table.getRowModel().rows.length ? (
+                        table.getRowModel().rows.map(row => (
+                          <TableRow key={row.id} data-state={row.getIsSelected() && "selected"}>
+                            {row.getVisibleCells().map(cell => (
+                              <TableCell key={cell.id}>
+                                {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                              </TableCell>
+                            ))}
+                          </TableRow>
+                        ))
+                      ) : (
+                        <TableRow>
+                          <TableCell colSpan={columns.length} className="h-24 text-center">
+                            No companies found.
+                          </TableCell>
+                        </TableRow>
+                      )}
+                    </TableBody>
+                  </Table>
+                </div>
+                
+                {/* Mobile Card View */}
+                <div className="sm:hidden space-y-4">
+                  {table.getRowModel().rows.length ? (
+                    table.getRowModel().rows.map((row) => (
+                      <div key={row.id} className="border rounded-md p-4 space-y-3">
+                        <div className="flex justify-between items-center">
+                          <h3 className="font-medium text-lg">{row.original.symbol}</h3>
+                          <div className="flex gap-2">
+                            <Button 
+                              variant="ghost" 
+                              size="icon" 
+                              className="h-8 w-8"
+                              onClick={() => {
+                                setCurrentCompany({...row.original});
+                                setIsPreferencesOpen(true);
+                              }}
+                              data-tutorial="ticker-preferences"
+                            >
+                              <SettingsIcon className="h-4 w-4" />
+                              <span className="sr-only">Settings</span>
+                            </Button>
+                            
+                            <Button 
+                              variant="ghost" 
+                              size="icon" 
+                              className="h-8 w-8"
+                              onClick={() => {
+                                setCompanyToDelete(row.original);
+                                setIsDeleteConfirmOpen(true);
+                              }}
+                              data-tutorial="delete-ticker"
+                            >
+                              <Trash2Icon className="h-4 w-4" />
+                              <span className="sr-only">Delete</span>
+                            </Button>
+                          </div>
+                        </div>
+                        
+                        <div className="space-y-1">
+                          <div className="text-sm text-muted-foreground">Company</div>
+                          <div>{row.original.name}</div>
+                        </div>
+                        
+                        <div className="space-y-1">
+                          <div className="text-sm text-muted-foreground">Last Filing</div>
+                          <div>{row.original.lastFiling}</div>
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="text-center py-10 border rounded-md">
+                      No companies found.
+                    </div>
+                  )}
+                </div>
+                
+                <div className="mt-4 text-right text-sm text-muted-foreground">
+                  Total tracked tickers: {table.getRowModel().rows.length}
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      </div>
+
+      
+
+      {/* Preferences Dialog */}
+      <Dialog 
+        open={isPreferencesOpen} 
+        onOpenChange={(open) => {
+          setIsPreferencesOpen(open);
+          if (!open) setCurrentCompany(null);
+        }}
+      >
+        <DialogContent className="max-w-[95vw] sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>
+              Form Preferences for {currentCompany?.symbol}
+            </DialogTitle>
+            <DialogDescription>
+              Select which SEC form types you want to receive notifications for this ticker.
+            </DialogDescription>
+          </DialogHeader>
+          
+          {currentCompany && (
+            <>
+              <div className="py-4 space-y-4">
+                <div className="flex items-center justify-between">
+                  <Label htmlFor={`${currentCompany.symbol}-10k`} className="cursor-pointer">
+                    10-K
+                    <div className="text-xs text-muted-foreground">Annual Report</div>
+                  </Label>
+                  <Switch 
+                    id={`${currentCompany.symbol}-10k`}
+                    checked={currentCompany.preferences.tenK}
+                    onCheckedChange={(checked) => {
+                      setCurrentCompany({
+                        ...currentCompany,
+                        preferences: {
+                          ...currentCompany.preferences,
+                          tenK: checked
+                        }
+                      });
+                    }}
+                  />
+                </div>
+                
+                <div className="flex items-center justify-between">
+                  <Label htmlFor={`${currentCompany.symbol}-10q`} className="cursor-pointer">
+                    10-Q
+                    <div className="text-xs text-muted-foreground">Quarterly Report</div>
+                  </Label>
+                  <Switch 
+                    id={`${currentCompany.symbol}-10q`}
+                    checked={currentCompany.preferences.tenQ}
+                    onCheckedChange={(checked) => {
+                      setCurrentCompany({
+                        ...currentCompany,
+                        preferences: {
+                          ...currentCompany.preferences,
+                          tenQ: checked
+                        }
+                      });
+                    }}
+                  />
+                </div>
+                
+                <div className="flex items-center justify-between">
+                  <Label htmlFor={`${currentCompany.symbol}-8k`} className="cursor-pointer">
+                    8-K
+                    <div className="text-xs text-muted-foreground">Current Report</div>
+                  </Label>
+                  <Switch 
+                    id={`${currentCompany.symbol}-8k`}
+                    checked={currentCompany.preferences.eightK}
+                    onCheckedChange={(checked) => {
+                      setCurrentCompany({
+                        ...currentCompany,
+                        preferences: {
+                          ...currentCompany.preferences,
+                          eightK: checked
+                        }
+                      });
+                    }}
+                  />
+                </div>
+                
+                <div className="flex items-center justify-between">
+                  <Label htmlFor={`${currentCompany.symbol}-form4`} className="cursor-pointer">
+                    Form 4
+                    <div className="text-xs text-muted-foreground">Insider Trading</div>
+                  </Label>
+                  <Switch 
+                    id={`${currentCompany.symbol}-form4`}
+                    checked={currentCompany.preferences.form4}
+                    onCheckedChange={(checked) => {
+                      setCurrentCompany({
+                        ...currentCompany,
+                        preferences: {
+                          ...currentCompany.preferences,
+                          form4: checked
+                        }
+                      });
+                    }}
+                  />
+                </div>
+                
+                <div className="flex items-center justify-between">
+                  <Label htmlFor={`${currentCompany.symbol}-144`} className="cursor-pointer">
+                    Form 144
+                    <div className="text-xs text-muted-foreground">Proposed Sale of Securities</div>
+                  </Label>
+                  <Switch 
+                    id={`${currentCompany.symbol}-144`}
+                    checked={currentCompany.preferences.other}
+                    onCheckedChange={(checked) => {
+                      setCurrentCompany({
+                        ...currentCompany,
+                        preferences: {
+                          ...currentCompany.preferences,
+                          other: checked
+                        }
+                      });
+                    }}
+                  />
+                </div>
+                
+                <div className="flex items-center justify-between">
+                  <Label htmlFor={`${currentCompany.symbol}-13f`} className="cursor-pointer">
+                    Form 13F
+                    <div className="text-xs text-muted-foreground">Beneficial Ownership Report</div>
+                  </Label>
+                  <Switch 
+                    id={`${currentCompany.symbol}-13f`}
+                    checked={false}
+                    disabled={true}
+                    onCheckedChange={() => {}}
+                  />
+                </div>
+                
+                <div className="flex items-center justify-between">
+                  <Label htmlFor={`${currentCompany.symbol}-13g`} className="cursor-pointer">
+                    Form 13G
+                    <div className="text-xs text-muted-foreground">Beneficial Ownership Report</div>
+                  </Label>
+                  <Switch 
+                    id={`${currentCompany.symbol}-13g`}
+                    checked={false}
+                    disabled={true}
+                    onCheckedChange={() => {}}
+                  />
+                </div>
+              </div>
+              
+              <DialogFooter className="flex-col sm:flex-row gap-2 sm:gap-0">
+                <Button 
+                  variant="outline" 
+                  onClick={() => {
+                    setCurrentCompany(null);
+                    setIsPreferencesOpen(false);
+                  }}
+                >
+                  Cancel
+                </Button>
+                <Button 
+                  onClick={() => {
+                    if (currentCompany) {
+                      handleSavePreferences(
+                        currentCompany.id, 
+                        currentCompany.preferences
+                      );
+                    }
+                  }}
+                >
+                  Save Preferences
+                </Button>
+              </DialogFooter>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={isDeleteConfirmOpen} onOpenChange={setIsDeleteConfirmOpen}>
+        <DialogContent className="max-w-[95vw] sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Confirm Deletion</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to remove {companyToDelete?.symbol} ({companyToDelete?.name}) from your tracked tickers?
+              This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="flex-col sm:flex-row gap-2 sm:gap-0">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setIsDeleteConfirmOpen(false);
+                setCompanyToDelete(null);
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => companyToDelete && handleDeleteCompany(companyToDelete.id)}
+            >
+              Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Tutorial Guide */}
+      <TutorialGuide
+        active={showTutorial}
+        onComplete={() => setShowTutorial(false)}
+        initialProgress={tutorialProgress}
+      />
+    </div>
+  );
+} 

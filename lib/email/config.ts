@@ -33,8 +33,8 @@ function getEnvVar(key: string, defaultValue?: string): string {
  */
 export const resendConfig: ResendConfig = {
   apiKey: getEnvVar('RESEND_API_KEY', ''),
-  defaultFrom: getEnvVar('EMAIL_DEFAULT_FROM', 'notifications@tldrsec.com'),
-  defaultReplyTo: getEnvVar('EMAIL_DEFAULT_REPLY_TO', 'no-reply@tldrsec.com'),
+  defaultFrom: getEnvVar('EMAIL_DEFAULT_FROM', 'tldrSEC <notifications@tldrsec.app>'),
+  defaultReplyTo: getEnvVar('EMAIL_DEFAULT_REPLY_TO', 'no-reply@tldrsec.app'),
   timeout: parseInt(getEnvVar('EMAIL_TIMEOUT_MS', '30000'), 10),
   retryAttempts: parseInt(getEnvVar('EMAIL_RETRY_ATTEMPTS', '3'), 10),
   maxConcurrentRequests: parseInt(getEnvVar('EMAIL_MAX_CONCURRENT', '10'), 10),

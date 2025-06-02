@@ -7,10 +7,11 @@
 
 import { NextResponse } from 'next/server';
 import { SECEdgarClient } from '@/lib/sec-edgar/client';
-import { claudeClient } from '@/lib/ai/claude-client';
 import { DOMParser } from '@xmldom/xmldom';
 import xpath from 'xpath';
 import { FilingType } from '@/lib/sec-edgar/types';
+import { filingAnalyzer } from '@/lib/ai/filing-analyzer';
+import { createHash } from 'crypto';
 
 // Initialize SEC Edgar client
 const secClient = new SECEdgarClient({
@@ -98,79 +99,34 @@ export async function GET() {
         
         const documentContent = await secClient.getFilingDocument(link);
         
-        // Analyze the filing with Claude AI
+        // Generate a document hash for caching
+        const documentHash = createHash('sha256')
+          .update(`TSLA-${filingType}-${updated}-${documentContent.length}`)
+          .digest('hex');
+        
+        // Analyze the filing with Claude AI using our optimized service
         console.log(`Analyzing ${filingType} filing with Claude AI...`);
         let analysis = null;
         
         try {
-          // Prepare the prompt for Claude
-          const prompt = `
-            You are an expert financial analyst specializing in SEC filings.
-            Please analyze the following ${filingType} filing from Tesla (TSLA) and provide:
-            
-            1. A concise summary (2-3 sentences)
-            2. Key financial metrics mentioned
-            3. Important disclosures or material changes
-            4. Potential risks identified
-            5. Overall sentiment (positive, neutral, negative)
-            
-            Filing content:
-            ${documentContent.substring(0, 15000)} // Limit content to avoid token limits
-            
-            Format your response as structured JSON with the following fields:
-            - summary
-            - keyMetrics (array)
-            - importantDisclosures (array)
-            - risks (array)
-            - sentiment
-            
-            IMPORTANT: Your response MUST be valid JSON. Do not include any text before or after the JSON.
-          `;
-          
-          // Call Claude API
-          const response = await claudeClient.completeChat({
-            messages: [
-              { role: 'user', content: prompt }
-            ],
-            model: 'claude-3-opus-20240229',
-            temperature: 0.2,
-            max_tokens: 2000,
-            system: "You are an expert financial analyst specializing in SEC filings analysis. Provide concise, accurate analyses in valid JSON format."
-          }, {
-            timeout: 30000, // 30 second timeout
-            requestType: 'premium' // Use premium request type for higher priority
-          }).catch(error => {
-            console.error('Claude API error:', error);
-            throw new Error(`Claude API error: ${error.message || 'Unknown error'}`);
-          });
-          
-          // Parse the response
-          let responseText = '';
-          if (response.content && response.content.length > 0) {
-            if ('text' in response.content[0]) {
-              responseText = response.content[0].text as string;
+          // Use the filing analyzer service with caching
+          analysis = await filingAnalyzer.analyzeFilingWithClaude(
+            filingType as FilingType,
+            'TSLA',
+            'Tesla, Inc.',
+            documentContent,
+            {
+              maxContentLength: 15000, // Limit content to avoid token limits
+              useCaching: true,
+              documentHash,
+              temperature: 0.2,
+              timeout: 30000, // 30 second timeout
+              maxTokens: 2000,
+              model: 'claude-3-opus-20240229'
             }
-          }
+          );
           
-          try {
-            // Try to extract JSON from the response if it's wrapped in text
-            const jsonMatch = responseText.match(/\{[\s\S]*\}/);
-            const jsonStr = jsonMatch ? jsonMatch[0] : responseText;
-            
-            // Try to parse as JSON
-            analysis = jsonStr ? JSON.parse(jsonStr) : null;
-            console.log('Successfully parsed Claude response as JSON');
-          } catch (parseError) {
-            console.warn('Failed to parse Claude response as JSON:', parseError);
-            // If not valid JSON, use the raw text but truncate if too long
-            analysis = { 
-              parseError: true,
-              rawAnalysis: responseText.substring(0, 500),
-              fullTextLength: responseText.length
-            };
-          }
-          
-          console.log('Claude analysis complete');
+          console.log('Filing analysis complete');
         } catch (aiError) {
           console.error('Error analyzing with Claude:', aiError);
           analysis = { error: `AI analysis failed: ${(aiError as Error).message}` };
@@ -196,11 +152,15 @@ export async function GET() {
     // Calculate usage statistics if available
     let usageStats;
     try {
-      usageStats = claudeClient.getUsage();
+      usageStats = filingAnalyzer.getUsageStats();
       console.log('Claude API usage statistics:', usageStats);
     } catch (statsError) {
       console.warn('Could not retrieve Claude usage statistics:', statsError);
     }
+    
+    // Get cache statistics for debugging
+    const cacheStats = filingAnalyzer.getCacheStats();
+    console.log('Filing analyzer cache stats:', cacheStats);
     
     // Return the results with enhanced metadata
     return NextResponse.json({

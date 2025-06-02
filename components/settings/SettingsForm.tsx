@@ -6,7 +6,19 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { NotificationPreference } from '@/lib/email/notification-service';
-import { UserPreferences, FilingTypePreferences, NotificationContentPreferences } from '@/lib/user/preference-types';
+import { 
+  UserPreferences, 
+  FilingTypePreferences, 
+  NotificationContentPreferences,
+  AnnualReportFilingPreferences,
+  QuarterlyReportFilingPreferences,
+  CurrentEventFilingPreferences,
+  InsiderTradingFilingPreferences,
+  BeneficialOwnershipFilingPreferences,
+  ProxyFilingPreferences,
+  RegistrationFilingPreferences,
+  OtherFilingPreferences
+} from '@/lib/user/preference-types';
 import { toast } from 'sonner';
 
 interface SettingsFormProps {
@@ -55,7 +67,7 @@ export default function SettingsForm({ userId }: SettingsFormProps) {
     });
   };
   
-  const handleFilingTypeChange = (key: keyof FilingTypePreferences, checked: boolean) => {
+  const handleFilingTypeChange = (category: keyof FilingTypePreferences, key: string, checked: boolean) => {
     if (!preferences) return;
     
     setPreferences({
@@ -64,7 +76,10 @@ export default function SettingsForm({ userId }: SettingsFormProps) {
         ...preferences.notifications,
         filingTypes: {
           ...preferences.notifications.filingTypes,
-          [key]: checked,
+          [category]: {
+            ...preferences.notifications.filingTypes[category],
+            [key]: checked
+          }
         }
       }
     });
@@ -198,48 +213,192 @@ export default function SettingsForm({ userId }: SettingsFormProps) {
         </div>
         
         {/* Filing Types */}
-        <div className="space-y-3">
-          <h3 className="text-sm font-medium">Filing Types to Receive</h3>
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <Label htmlFor="form10K">Annual Reports (10-K)</Label>
-              <Switch
-                id="form10K"
-                checked={preferences.notifications.filingTypes.form10K}
-                onCheckedChange={(checked: boolean) => handleFilingTypeChange('form10K', checked)}
-              />
+        <div className="space-y-6">
+          <h3 className="text-lg font-medium">Filing Types to Receive</h3>
+          
+          {/* Annual Reports */}
+          <div className="space-y-3">
+            <h4 className="text-sm font-medium">Annual Reports</h4>
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label htmlFor="form10K">Annual Reports (10-K)</Label>
+                <Switch
+                  id="form10K"
+                  checked={preferences.notifications.filingTypes.annualReports.form10K}
+                  onCheckedChange={(checked: boolean) => handleFilingTypeChange('annualReports', 'form10K', checked)}
+                />
+              </div>
+              <div className="flex items-center justify-between">
+                <Label htmlFor="form10KA">Annual Report Amendments (10-K/A)</Label>
+                <Switch
+                  id="form10KA"
+                  checked={preferences.notifications.filingTypes.annualReports.form10KA}
+                  onCheckedChange={(checked: boolean) => handleFilingTypeChange('annualReports', 'form10KA', checked)}
+                />
+              </div>
+              <div className="flex items-center justify-between">
+                <Label htmlFor="form20F">Foreign Issuer Annual Reports (20-F)</Label>
+                <Switch
+                  id="form20F"
+                  checked={preferences.notifications.filingTypes.annualReports.form20F}
+                  onCheckedChange={(checked: boolean) => handleFilingTypeChange('annualReports', 'form20F', checked)}
+                />
+              </div>
+              <div className="flex items-center justify-between">
+                <Label htmlFor="form40F">Canadian Issuer Annual Reports (40-F)</Label>
+                <Switch
+                  id="form40F"
+                  checked={preferences.notifications.filingTypes.annualReports.form40F}
+                  onCheckedChange={(checked: boolean) => handleFilingTypeChange('annualReports', 'form40F', checked)}
+                />
+              </div>
             </div>
-            <div className="flex items-center justify-between">
-              <Label htmlFor="form10Q">Quarterly Reports (10-Q)</Label>
-              <Switch
-                id="form10Q"
-                checked={preferences.notifications.filingTypes.form10Q}
-                onCheckedChange={(checked: boolean) => handleFilingTypeChange('form10Q', checked)}
-              />
+          </div>
+          
+          {/* Quarterly Reports */}
+          <div className="space-y-3">
+            <h4 className="text-sm font-medium">Quarterly Reports</h4>
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label htmlFor="form10Q">Quarterly Reports (10-Q)</Label>
+                <Switch
+                  id="form10Q"
+                  checked={preferences.notifications.filingTypes.quarterlyReports.form10Q}
+                  onCheckedChange={(checked: boolean) => handleFilingTypeChange('quarterlyReports', 'form10Q', checked)}
+                />
+              </div>
+              <div className="flex items-center justify-between">
+                <Label htmlFor="form10QA">Quarterly Report Amendments (10-Q/A)</Label>
+                <Switch
+                  id="form10QA"
+                  checked={preferences.notifications.filingTypes.quarterlyReports.form10QA}
+                  onCheckedChange={(checked: boolean) => handleFilingTypeChange('quarterlyReports', 'form10QA', checked)}
+                />
+              </div>
+              <div className="flex items-center justify-between">
+                <Label htmlFor="form6K">Foreign Issuer Reports (6-K)</Label>
+                <Switch
+                  id="form6K"
+                  checked={preferences.notifications.filingTypes.quarterlyReports.form6K}
+                  onCheckedChange={(checked: boolean) => handleFilingTypeChange('quarterlyReports', 'form6K', checked)}
+                />
+              </div>
             </div>
-            <div className="flex items-center justify-between">
-              <Label htmlFor="form8K">Material Events (8-K)</Label>
-              <Switch
-                id="form8K"
-                checked={preferences.notifications.filingTypes.form8K}
-                onCheckedChange={(checked: boolean) => handleFilingTypeChange('form8K', checked)}
-              />
+          </div>
+          
+          {/* Current Events */}
+          <div className="space-y-3">
+            <h4 className="text-sm font-medium">Current Events</h4>
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label htmlFor="form8K">Material Events (8-K)</Label>
+                <Switch
+                  id="form8K"
+                  checked={preferences.notifications.filingTypes.currentEvents.form8K}
+                  onCheckedChange={(checked: boolean) => handleFilingTypeChange('currentEvents', 'form8K', checked)}
+                />
+              </div>
+              <div className="flex items-center justify-between">
+                <Label htmlFor="form8KA">Material Events Amendments (8-K/A)</Label>
+                <Switch
+                  id="form8KA"
+                  checked={preferences.notifications.filingTypes.currentEvents.form8KA}
+                  onCheckedChange={(checked: boolean) => handleFilingTypeChange('currentEvents', 'form8KA', checked)}
+                />
+              </div>
             </div>
-            <div className="flex items-center justify-between">
-              <Label htmlFor="form4">Insider Trading (Form 4)</Label>
-              <Switch
-                id="form4"
-                checked={preferences.notifications.filingTypes.form4}
-                onCheckedChange={(checked: boolean) => handleFilingTypeChange('form4', checked)}
-              />
+          </div>
+          
+          {/* Insider Trading */}
+          <div className="space-y-3">
+            <h4 className="text-sm font-medium">Insider Trading</h4>
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label htmlFor="form4">Changes in Ownership (Form 4)</Label>
+                <Switch
+                  id="form4"
+                  checked={preferences.notifications.filingTypes.insiderTrading.form4}
+                  onCheckedChange={(checked: boolean) => handleFilingTypeChange('insiderTrading', 'form4', checked)}
+                />
+              </div>
+              <div className="flex items-center justify-between">
+                <Label htmlFor="form3">Initial Ownership (Form 3)</Label>
+                <Switch
+                  id="form3"
+                  checked={preferences.notifications.filingTypes.insiderTrading.form3}
+                  onCheckedChange={(checked: boolean) => handleFilingTypeChange('insiderTrading', 'form3', checked)}
+                />
+              </div>
+              <div className="flex items-center justify-between">
+                <Label htmlFor="form5">Annual Ownership (Form 5)</Label>
+                <Switch
+                  id="form5"
+                  checked={preferences.notifications.filingTypes.insiderTrading.form5}
+                  onCheckedChange={(checked: boolean) => handleFilingTypeChange('insiderTrading', 'form5', checked)}
+                />
+              </div>
+              <div className="flex items-center justify-between">
+                <Label htmlFor="form144">Notice of Sale (Form 144)</Label>
+                <Switch
+                  id="form144"
+                  checked={preferences.notifications.filingTypes.insiderTrading.form144}
+                  onCheckedChange={(checked: boolean) => handleFilingTypeChange('insiderTrading', 'form144', checked)}
+                />
+              </div>
             </div>
-            <div className="flex items-center justify-between">
-              <Label htmlFor="otherFilings">Other Filings</Label>
-              <Switch
-                id="otherFilings"
-                checked={preferences.notifications.filingTypes.otherFilings}
-                onCheckedChange={(checked: boolean) => handleFilingTypeChange('otherFilings', checked)}
-              />
+          </div>
+          
+          {/* Beneficial Ownership */}
+          <div className="space-y-3">
+            <h4 className="text-sm font-medium">Beneficial Ownership</h4>
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label htmlFor="formSC13D">Beneficial Ownership (Schedule 13D)</Label>
+                <Switch
+                  id="formSC13D"
+                  checked={preferences.notifications.filingTypes.beneficialOwnership.formSC13D}
+                  onCheckedChange={(checked: boolean) => handleFilingTypeChange('beneficialOwnership', 'formSC13D', checked)}
+                />
+              </div>
+              <div className="flex items-center justify-between">
+                <Label htmlFor="formSC13G">Passive Investors (Schedule 13G)</Label>
+                <Switch
+                  id="formSC13G"
+                  checked={preferences.notifications.filingTypes.beneficialOwnership.formSC13G}
+                  onCheckedChange={(checked: boolean) => handleFilingTypeChange('beneficialOwnership', 'formSC13G', checked)}
+                />
+              </div>
+              <div className="flex items-center justify-between">
+                <Label htmlFor="form13F">Institutional Holdings (13F)</Label>
+                <Switch
+                  id="form13F"
+                  checked={preferences.notifications.filingTypes.beneficialOwnership.form13F}
+                  onCheckedChange={(checked: boolean) => handleFilingTypeChange('beneficialOwnership', 'form13F', checked)}
+                />
+              </div>
+            </div>
+          </div>
+          
+          {/* Registration Filings */}
+          <div className="space-y-3">
+            <h4 className="text-sm font-medium">Registration Filings</h4>
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label htmlFor="formS1">Registration Statement (S-1)</Label>
+                <Switch
+                  id="formS1"
+                  checked={preferences.notifications.filingTypes.registrationFilings.formS1}
+                  onCheckedChange={(checked: boolean) => handleFilingTypeChange('registrationFilings', 'formS1', checked)}
+                />
+              </div>
+              <div className="flex items-center justify-between">
+                <Label htmlFor="formS3">Simplified Registration (S-3)</Label>
+                <Switch
+                  id="formS3"
+                  checked={preferences.notifications.filingTypes.registrationFilings.formS3}
+                  onCheckedChange={(checked: boolean) => handleFilingTypeChange('registrationFilings', 'formS3', checked)}
+                />
+              </div>
             </div>
           </div>
         </div>
