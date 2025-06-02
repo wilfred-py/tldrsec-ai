@@ -322,15 +322,27 @@ export class ResendClient {
     const params: Record<string, any> = {
       from: message.from || resendConfig.defaultFrom,
       to: this.formatRecipients(message.to),
-      subject: message.subject,
-      reply_to: message.replyTo || resendConfig.defaultReplyTo,
+      subject: message.subject
     };
+    
+    // Format reply_to as a string as required by Resend API
+    if (message.replyTo) {
+      params.reply_to = message.replyTo;
+    } else if (resendConfig.defaultReplyTo) {
+      params.reply_to = resendConfig.defaultReplyTo;
+    }
     
     // Add optional parameters
     if (message.html) params.html = message.html;
     if (message.text) params.text = message.text;
-    // Fix: Resend API expects tags to be simple strings, not objects with a name property
-    if (message.tags) params.tags = message.tags;
+    // Format tags as objects with name and value properties as required by Resend API
+    // Sanitize tag names to only contain ASCII letters, numbers, underscores, or dashes
+    if (message.tags) {
+      params.tags = message.tags.map(tag => ({
+        name: tag.replace(/[^a-zA-Z0-9_-]/g, '_'),
+        value: 'true'
+      }));
+    }
     
     // Add CC and BCC if present
     if (message.cc) params.cc = this.formatRecipients(message.cc);
