@@ -157,8 +157,7 @@ export async function summarizeFiling(options: SummarizationOptions): Promise<Su
       where: { id: summaryId },
       data: {
         processingStatus: 'PROCESSING',
-        processingStartedAt: new Date(),
-        updatedAt: new Date()
+        processingCompletedAt: null // Clear any previous completion date
       }
     });
     
@@ -203,8 +202,7 @@ export async function summarizeFiling(options: SummarizationOptions): Promise<Su
         where: { id: summaryId },
         data: {
           processingStatus: 'FAILED',
-          processingError: error instanceof Error ? error.message : String(error),
-          updatedAt: new Date()
+          processingError: error instanceof Error ? error.message : String(error)
         }
       });
       
@@ -229,7 +227,7 @@ export async function summarizeFiling(options: SummarizationOptions): Promise<Su
     const prompt = getPromptForFilingType(filing.formType as SECFilingType, {
       // Include additional context like ticker, company name if available
       ticker: filing.ticker?.symbol,
-      companyName: filing.ticker?.name || filing.companyName
+      companyName: filing.companyName // Use companyName directly from filing
     });
     
     // Log the prompt preparation
@@ -268,12 +266,49 @@ export async function summarizeFiling(options: SummarizationOptions): Promise<Su
         model: response.model
       });
       
+      // Get the text response - handle different Claude API response formats
+      let summaryText = '';
+      let inputTokens = 0;
+      let outputTokens = 0;
+      
+      // Handle different Claude API response formats
+      if (response.content && Array.isArray(response.content) && response.content.length > 0) {
+        // New Claude API format
+        const contentBlock = response.content[0];
+        if (typeof contentBlock === 'object' && contentBlock !== null) {
+          // Handle potential missing 'text' property
+          if ('text' in contentBlock) {
+            summaryText = contentBlock.text || '';
+          }
+        }
+        
+        // Get token usage from the new format
+        if (response.usage) {
+          inputTokens = response.usage.input_tokens || 0;
+          outputTokens = response.usage.output_tokens || 0;
+        }
+      } else {
+        // Handle legacy API format (for backward compatibility)
+        // We need to use type assertion since the completion property
+        // is not in the current type definition
+        const legacyResponse = response as any;
+        if (typeof legacyResponse.completion === 'string') {
+          summaryText = legacyResponse.completion;
+          
+          // Get token usage from the old format
+          if (legacyResponse.usage) {
+            inputTokens = legacyResponse.usage.inputTokens || 0;
+            outputTokens = legacyResponse.usage.outputTokens || 0;
+          }
+        }
+      }
+      
       // Log success
       componentLogger.info(`Claude API call successful`, {
         summaryId,
         filingType: filing.formType,
-        responseLength: response.content?.[0]?.text?.length || 0,
-        tokensUsed: response.usage?.input_tokens + response.usage?.output_tokens,
+        responseLength: summaryText.length,
+        tokensUsed: inputTokens + outputTokens,
         model: response.model,
         duration: apiCallDuration,
         operationId,
@@ -281,12 +316,11 @@ export async function summarizeFiling(options: SummarizationOptions): Promise<Su
         fallbackUsed: false
       });
       
-      // Track token usage
-      monitoring.recordValue('ai.tokens_used.input', response.usage?.input_tokens || 0);
-      monitoring.recordValue('ai.tokens_used.output', response.usage?.output_tokens || 0);
+      console.log(`[DEBUG][AI] Received summary text of length: ${summaryText.length}`);
       
-      // Get the text response - extract from the new response format
-      const summaryText = response.content?.[0]?.text || '';
+      // Track token usage
+      monitoring.recordValue('ai.tokens_used.input', inputTokens);
+      monitoring.recordValue('ai.tokens_used.output', outputTokens);
       
       // Parse the JSON from the response
       componentLogger.info(`Parsing response JSON`, { summaryId, operationId });
@@ -340,11 +374,10 @@ export async function summarizeFiling(options: SummarizationOptions): Promise<Su
             processingCompletedAt: new Date(),
             isPartialResult: parsedResult.partial || false,
             processingTimeMs: Date.now() - startTime,
-            tokensUsed: response.usage.inputTokens + response.usage.outputTokens,
+            tokensUsed: inputTokens + outputTokens,
             model: response.model,
-            cost: response.cost.totalCost,
-            attempts: response.executionMetadata?.attempts || 1,
-            updatedAt: new Date()
+            cost: 0, // Set default cost since it may not be available
+            attempts: response.executionMetadata?.attempts || 1
           }
         });
         
@@ -356,9 +389,9 @@ export async function summarizeFiling(options: SummarizationOptions): Promise<Su
           isPartial: parsedResult.partial || false,
           duration: Date.now() - startTime,
           modelUsed: response.model,
-          inputTokens: response.usage.inputTokens,
-          outputTokens: response.usage.outputTokens,
-          cost: response.cost.totalCost,
+          inputTokens,
+          outputTokens,
+          cost: 0, // Set default cost since it may not be available
           attempts: response.executionMetadata?.attempts || 1
         };
       } else {
@@ -384,11 +417,10 @@ export async function summarizeFiling(options: SummarizationOptions): Promise<Su
             isPartialResult: true,
             processingTimeMs: Date.now() - startTime,
             processingError: 'Failed to parse JSON response: ' + parsedResult.errors?.join('; '),
-            tokensUsed: response.usage.inputTokens + response.usage.outputTokens,
+            tokensUsed: inputTokens + outputTokens,
             model: response.model,
-            cost: response.cost.totalCost,
-            attempts: response.executionMetadata?.attempts || 1,
-            updatedAt: new Date()
+            cost: 0, // Set default cost since it may not be available
+            attempts: response.executionMetadata?.attempts || 1
           }
         });
         
@@ -399,9 +431,9 @@ export async function summarizeFiling(options: SummarizationOptions): Promise<Su
           parsingErrors: parsedResult.errors,
           duration: Date.now() - startTime,
           modelUsed: response.model,
-          inputTokens: response.usage.inputTokens,
-          outputTokens: response.usage.outputTokens,
-          cost: response.cost.totalCost,
+          inputTokens,
+          outputTokens,
+          cost: 0, // Set default cost since it may not be available
           attempts: response.executionMetadata?.attempts || 1
         };
       }
@@ -431,10 +463,9 @@ export async function summarizeFiling(options: SummarizationOptions): Promise<Su
           where: { id: summaryId },
           data: {
             processingStatus: 'FAILED',
-            processingError: error instanceof Error ? error.message : String(error),
+            processingError: `API call failed: ${error instanceof Error ? error.message : String(error)}`,
             processingErrorCode: error instanceof ApiError ? error.code : 'UNKNOWN_ERROR',
-            processingTimeMs: Date.now() - startTime,
-            updatedAt: new Date()
+            processingTimeMs: Date.now() - startTime
           }
         });
       }
