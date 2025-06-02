@@ -21,7 +21,8 @@ if (process.env.NODE_ENV === 'production') {
 } else {
   if (!global.prisma) {
     global.prisma = new PrismaClient({
-      log: ['query', 'error', 'warn'],
+      // Remove 'query' from log levels to reduce CLI clutter
+      log: ['error', 'warn'],
     })
   }
   prisma = global.prisma

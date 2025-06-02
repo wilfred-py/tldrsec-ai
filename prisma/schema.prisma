@@ -39,22 +39,35 @@ model Ticker {
   addedAt     DateTime  @default(now())
   user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   summaries   Summary[]
+  secFilings  SecFiling[]
   
   @@unique([userId, symbol])
 }
 
 model Summary {
-  id          String    @id @default(uuid())
-  tickerId    String
-  filingType  String    // "10-K", "10-Q", "8-K", "Form4"
-  filingDate  DateTime
-  filingUrl   String    // Kept for backward compatibility
-  url         String?   // New field for SEC HTML viewer URL
-  summaryText String    @db.Text
-  summaryJSON Json?
-  createdAt   DateTime  @default(now())
-  sentToUser  Boolean   @default(false)
-  ticker      Ticker    @relation(fields: [tickerId], references: [id], onDelete: Cascade)
+  id                  String    @id @default(uuid())
+  tickerId            String
+  filingType          String    // "10-K", "10-Q", "8-K", "Form4"
+  filingDate          DateTime
+  filingUrl           String    // Kept for backward compatibility
+  url                 String?   // New field for SEC HTML viewer URL
+  summaryText         String    @db.Text
+  summaryJSON         Json?
+  createdAt           DateTime  @default(now())
+  sentToUser          Boolean   @default(false)
+  ticker              Ticker    @relation(fields: [tickerId], references: [id], onDelete: Cascade)
+  secFilingId         String?   // Reference to the SEC filing
+  secFiling           SecFiling? @relation(fields: [secFilingId], references: [id], onDelete: SetNull)
+  processingStatus    String?   // "PENDING", "PROCESSING", "COMPLETED", "FAILED", "COMPLETED_WITH_WARNINGS"
+  processingError     String?   @db.Text
+  processingErrorCode String?
+  processingTimeMs    Int?
+  processingCompletedAt DateTime?
+  isPartialResult     Boolean?  @default(false)
+  tokensUsed          Int?
+  model               String?
+  cost                Float?
+  attempts            Int?      @default(0)
 }
 
 // Model for mapping ticker symbols to SEC Central Index Keys (CIK)
@@ -132,6 +145,25 @@ model JobLock {
   released        Boolean   @default(false) // Whether the lock has been released
   
   @@index([lockName, released, expiresAt]) // For efficient lock checking
+}
+
+// Model for SEC filings
+model SecFiling {
+  id              String    @id @default(uuid())
+  tickerId        String
+  ticker          Ticker    @relation(fields: [tickerId], references: [id], onDelete: Cascade)
+  formType        String    // "10-K", "10-Q", "8-K", "Form4"
+  filingDate      DateTime
+  secUrl          String    // URL to the SEC filing
+  accessionNumber String    // SEC accession number
+  companyName     String
+  cik             String
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  summaries       Summary[]
+  
+  @@index([tickerId, formType])
+  @@index([accessionNumber])
 }
 
 // Model for caching SEC company data

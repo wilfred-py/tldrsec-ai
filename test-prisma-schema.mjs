@@ -1,4 +1,4 @@
-// Test script to verify the Prisma schema migration for the url field in the Summary model
+// Test script to verify the Prisma schema migration for Summary model fields
 import { PrismaClient } from './lib/generated/prisma/index.js';
 import dotenv from 'dotenv';
 
@@ -8,12 +8,17 @@ dotenv.config();
 // Initialize Prisma client
 const prisma = new PrismaClient();
 
+// Suppress Prisma query logs to reduce console clutter
+prisma.$on('query', () => {
+  // Do nothing with the query event
+});
+
 async function testPrismaSchema() {
   try {
-    console.log('Testing Prisma schema migration for url field in Summary model...');
+    console.log('===== TESTING PRISMA SCHEMA FOR SUMMARY MODEL =====');
     
     // Step 1: Create a test user
-    console.log('Creating test user...');
+    console.log('\nCreating test user...');
     const testUser = await prisma.user.upsert({
       where: {
         email: 'test@example.com'
@@ -33,7 +38,7 @@ async function testPrismaSchema() {
     console.log(`Test user created with ID: ${testUser.id}`);
     
     // Step 2: Create a test ticker
-    console.log('Creating test ticker...');
+    console.log('\nCreating test ticker...');
     const testTicker = await prisma.ticker.upsert({
       where: {
         userId_symbol: {
@@ -52,66 +57,166 @@ async function testPrismaSchema() {
     });
     console.log(`Test ticker created with ID: ${testTicker.id}`);
     
-    // Step 2: Create a test summary with the url field
-    console.log('Creating test summary with url field...');
+    // Step 3: Create a test SEC filing
+    console.log('\nCreating test SEC filing...');
+    const testFiling = await prisma.secFiling.create({
+      data: {
+        tickerId: testTicker.id,
+        formType: '10-K',
+        filingDate: new Date(),
+        accessionNumber: '0000000000-00-000000',
+        secUrl: 'https://www.sec.gov/Archives/edgar/data/0000000/000000000000000000/test-filing.htm',
+        companyName: 'Test Company, Inc.',
+        cik: '0000000'
+      }
+    });
+    console.log(`Test SEC filing created with ID: ${testFiling.id}`);
+    
+    // Step 4: Create a test summary with all processing fields
+    console.log('\nCreating test summary with all processing fields...');
     const testSummary = await prisma.summary.create({
       data: {
         tickerId: testTicker.id,
-        filingType: 'TEST-FORM',
+        secFilingId: testFiling.id,  // Using secFilingId instead of filingId
+        filingType: '10-K',
         filingDate: new Date(),
         filingUrl: 'https://example.com/filing',
         url: 'https://www.sec.gov/example-viewer-url',
-        summaryText: 'This is a test summary to verify the url field in the Summary model.',
+        summaryText: 'This is a test summary to verify all the processing fields in the Summary model.',
         summaryJSON: {
           summary: 'Test summary',
           keyPoints: ['Test point 1', 'Test point 2']
-        }
+        },
+        // Processing fields
+        processingStatus: 'COMPLETED',
+        processingCompletedAt: new Date(),
+        processingTimeMs: 5000,
+        processingError: null,
+        processingErrorCode: null,
+        isPartialResult: false,
+        tokensUsed: 1500,
+        model: 'claude-3-haiku-20240307',
+        cost: 0.015,
+        attempts: 1,
+        sentToUser: false
       }
     });
     console.log(`Test summary created with ID: ${testSummary.id}`);
-    console.log('Summary data:', JSON.stringify(testSummary, null, 2));
     
-    // Step 3: Retrieve the test summary to verify the url field
-    console.log('Retrieving test summary to verify url field...');
+    // Step 5: Retrieve the test summary to verify all fields
+    console.log('\nRetrieving test summary to verify all fields...');
     const retrievedSummary = await prisma.summary.findUnique({
       where: {
         id: testSummary.id
       }
     });
     
-    // Step 4: Verify the url field
-    if (retrievedSummary.url === 'https://www.sec.gov/example-viewer-url') {
-      console.log('SUCCESS: url field is correctly stored and retrieved from the database');
-    } else {
-      console.error('ERROR: url field is not correctly stored or retrieved from the database');
-      console.error('Retrieved url:', retrievedSummary.url);
-    }
+    console.log('\n===== FIELD VERIFICATION RESULTS =====');
     
-    // Step 5: Clean up test data
-    console.log('Cleaning up test data...');
-    await prisma.summary.delete({
+    // Verify basic fields
+    console.log('\nBasic Fields:');
+    console.log(`- URL: ${retrievedSummary.url === 'https://www.sec.gov/example-viewer-url' ? '✅ PASS' : '❌ FAIL'}`);
+    console.log(`- Filing URL: ${retrievedSummary.filingUrl === 'https://example.com/filing' ? '✅ PASS' : '❌ FAIL'}`);
+    console.log(`- Filing Type: ${retrievedSummary.filingType === '10-K' ? '✅ PASS' : '❌ FAIL'}`);
+    
+    // Verify processing fields
+    console.log('\nProcessing Fields:');
+    console.log(`- Processing Status: ${retrievedSummary.processingStatus === 'COMPLETED' ? '✅ PASS' : '❌ FAIL'}`);
+    console.log(`- Processing Completed At: ${retrievedSummary.processingCompletedAt ? '✅ PASS' : '❌ FAIL'}`);
+    console.log(`- Processing Time (ms): ${retrievedSummary.processingTimeMs === 5000 ? '✅ PASS' : '❌ FAIL'}`);
+    console.log(`- Is Partial Result: ${retrievedSummary.isPartialResult === false ? '✅ PASS' : '❌ FAIL'}`);
+    
+    // Verify AI model fields
+    console.log('\nAI Model Fields:');
+    console.log(`- Tokens Used: ${retrievedSummary.tokensUsed === 1500 ? '✅ PASS' : '❌ FAIL'}`);
+    console.log(`- Model: ${retrievedSummary.model === 'claude-3-haiku-20240307' ? '✅ PASS' : '❌ FAIL'}`);
+    console.log(`- Cost: ${retrievedSummary.cost === 0.015 ? '✅ PASS' : '❌ FAIL'}`);
+    console.log(`- Attempts: ${retrievedSummary.attempts === 1 ? '✅ PASS' : '❌ FAIL'}`);
+    
+    // Verify email fields
+    console.log('\nEmail Fields:');
+    console.log(`- Sent To User: ${retrievedSummary.sentToUser === false ? '✅ PASS' : '❌ FAIL'}`);
+    
+    // Step 6: Update the summary to test processing status updates
+    console.log('\nUpdating summary processing status...');
+    const updatedSummary = await prisma.summary.update({
       where: {
         id: testSummary.id
+      },
+      data: {
+        processingStatus: 'FAILED',
+        processingError: 'Test error message',
+        processingErrorCode: 'TEST_ERROR',
+        sentToUser: true
       }
     });
-    console.log('Test summary deleted');
     
-    await prisma.ticker.delete({
-      where: {
-        id: testTicker.id
-      }
-    });
-    console.log('Test ticker deleted');
+    // Verify the update worked
+    console.log('\nVerifying status update:');
+    console.log(`- Processing Status: ${updatedSummary.processingStatus === 'FAILED' ? '✅ PASS' : '❌ FAIL'}`);
+    console.log(`- Processing Error: ${updatedSummary.processingError === 'Test error message' ? '✅ PASS' : '❌ FAIL'}`);
+    console.log(`- Processing Error Code: ${updatedSummary.processingErrorCode === 'TEST_ERROR' ? '✅ PASS' : '❌ FAIL'}`);
+    console.log(`- Sent To User: ${updatedSummary.sentToUser === true ? '✅ PASS' : '❌ FAIL'}`);
     
-    await prisma.user.delete({
-      where: {
-        id: testUser.id
-      }
-    });
-    console.log('Test user deleted')
+    // Overall test result
+    const testPassed = 
+      retrievedSummary.url === 'https://www.sec.gov/example-viewer-url' &&
+      retrievedSummary.processingStatus === 'COMPLETED' &&
+      retrievedSummary.tokensUsed === 1500 &&
+      retrievedSummary.model === 'claude-3-haiku-20240307' &&
+      updatedSummary.processingStatus === 'FAILED' &&
+      updatedSummary.sentToUser === true;
     
-    console.log('Test completed successfully');
-    return true;
+    console.log('\n===== TEST RESULT =====');
+    console.log(testPassed ? '✅ ALL TESTS PASSED' : '❌ SOME TESTS FAILED');
+    
+    // Step 7: Clean up test data
+    console.log('\n===== CLEANING UP TEST DATA =====');
+    try {
+      // Delete summary first (child record)
+      console.log('Deleting test summary...');
+      await prisma.summary.delete({
+        where: {
+          id: testSummary.id
+        }
+      });
+      console.log('Test summary deleted');
+      
+      // Delete SEC filing
+      console.log('Deleting test SEC filing...');
+      await prisma.secFiling.delete({
+        where: {
+          id: testFiling.id
+        }
+      });
+      console.log('Test SEC filing deleted');
+      
+      // Delete ticker
+      console.log('Deleting test ticker...');
+      await prisma.ticker.delete({
+        where: {
+          id: testTicker.id
+        }
+      });
+      console.log('Test ticker deleted');
+      
+      // Delete user
+      console.log('Deleting test user...');
+      await prisma.user.delete({
+        where: {
+          id: testUser.id
+        }
+      });
+      console.log('Test user deleted');
+      
+      console.log('\n✅ All test data cleaned up successfully');
+    } catch (cleanupError) {
+      console.error('\n⚠️ Error during cleanup:', cleanupError);
+      console.error('Some test data may not have been deleted properly');
+      // Continue with the test result despite cleanup errors
+    }
+    
+    return testPassed;
   } catch (error) {
     console.error('Error testing Prisma schema:', error);
     return false;

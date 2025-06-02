@@ -115,6 +115,12 @@ export interface FilingSummaryResult {
   filingUrl?: string; // Kept for backward compatibility
   parsedContent?: ParsedContent;
   rawData?: any;
+  // Adding AI metrics fields
+  tokensUsed?: number;
+  model?: string;
+  cost?: number;
+  processingStatus?: string;
+  processingTimeMs?: number;
 }
 
 const filingService = {
@@ -134,45 +140,67 @@ const filingService = {
   },
   
   // Send an email summary of the latest filings
-  sendEmailSummary: async (email: string, tickers: string[] = ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'META']) => {
+  sendEmailSummary: async (email: string, tickers: string[] = ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'META'], debug: boolean = false) => {
     try {
       const summaries: FilingSummaryResult[] = [];
       const errors: {ticker: string, error: string}[] = [];
       
+      // Log the start of the process with ticker count
+      console.log(`[INFO][FilingService] Starting email summary generation for ${tickers.length} tickers: ${tickers.join(', ')}`);
+      
       // Process each ticker
-      for (const ticker of tickers) {
+      for (let i = 0; i < tickers.length; i++) {
+        const ticker = tickers[i];
+        const progressPercent = Math.round(((i + 1) / tickers.length) * 100);
+        console.log(`[INFO][FilingService] Processing ticker ${i+1}/${tickers.length} (${progressPercent}%): ${ticker}`);
+        
         try {
           // Get the latest filing for this ticker regardless of form type
-          const latestFilings = await secService.getLatestFilings(ticker, 1);
+          console.log(`[INFO][FilingService] Fetching latest filings for ${ticker}...`);
+          const latestFilings = await secService.getLatestFilings(ticker, 3); // Get latest 3 filings
           
           if (latestFilings && latestFilings.length > 0) {
+            // Log the latest filings found
+            const filingInfo = latestFilings.slice(0, 3).map(f => 
+              `${f.form} (${new Date(f.filingDate).toLocaleDateString()})`
+            ).join(', ');
+            console.log(`[INFO][FilingService] Found ${latestFilings.length} filings for ${ticker}. Latest: ${filingInfo}`);
+            
             const latestFiling = latestFilings[0];
             // Use the actual form type from the latest filing
+            console.log(`[INFO][FilingService] Generating summary for ${ticker} - ${latestFiling.form}...`);
             const result = await filingService.getFilingSummary(ticker, latestFiling.form as FilingType);
             
             if (result.data) {
+              console.log(`[INFO][FilingService] Successfully generated summary for ${ticker} - ${latestFiling.form}`);
               summaries.push(result.data);
             } else if (result.error) {
+              console.error(`[ERROR][FilingService] Failed to generate summary for ${ticker}: ${result.error}`);
               errors.push({ ticker, error: result.error });
             }
           } else {
+            console.warn(`[WARN][FilingService] No recent filings found for ${ticker}`);
             errors.push({ ticker, error: 'No recent filings found' });
           }
         } catch (error) {
           // Handle errors for individual tickers
           const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+          console.error(`[ERROR][FilingService] Error processing ${ticker}: ${errorMessage}`);
           errors.push({ ticker, error: errorMessage });
         }
       }
       
       if (summaries.length === 0) {
         // Instead of throwing an error, return a graceful failure response
+        console.warn(`[WARN][FilingService] No filing summaries could be generated for any of the ${tickers.length} tickers`);
         return {
           success: false,
           message: 'No filing summaries could be generated',
           errors
         };
       }
+      
+      console.log(`[INFO][FilingService] Successfully generated ${summaries.length} summaries. Preparing email...`);
       
       // Generate email content
       const emailHtml = generateEmailHtml(summaries, errors);
@@ -187,11 +215,25 @@ const filingService = {
         replyTo: 'no-reply@tldrsec.app'
       };
       
-      console.log('Sending email summary to:', email);
-      const result = await emailClient.sendEmail(emailParams);
+      // Declare result variable outside the if/else blocks for proper scoping
+      let result;
+      
+      if (debug) {
+        console.log(`[INFO][FilingService] DEBUG MODE: Email would be sent to: ${email} with ${summaries.length} summaries and ${errors.length} errors`);
+        console.log(`[INFO][FilingService] DEBUG MODE: Email subject: ${emailParams.subject}`);
+        console.log(`[INFO][FilingService] DEBUG MODE: Email tags: ${emailParams.tags?.join(', ')}`);
+        // Create a mock result for testing
+        result = { id: 'debug-mode-' + Date.now(), success: true };
+      } else {
+        console.log(`[INFO][FilingService] Sending email summary to: ${email} with ${summaries.length} summaries and ${errors.length} errors`);
+        result = await emailClient.sendEmail(emailParams);
+      }
       
       // Mark summaries as sent to users
       try {
+        console.log(`[INFO][FilingService] Marking ${summaries.length} summaries as sent in the database...`);
+        let updatedCount = 0;
+        
         for (const summary of summaries) {
           // Find the summary in the database by ticker and filing type
           const tickerRecord = await prisma.ticker.findFirst({
@@ -200,7 +242,7 @@ const filingService = {
           
           if (tickerRecord) {
             // Update the summary to mark it as sent
-            await prisma.summary.updateMany({
+            const updateResult = await prisma.summary.updateMany({
               where: {
                 tickerId: tickerRecord.id,
                 filingType: summary.filingType,
@@ -214,13 +256,53 @@ const filingService = {
                 // No need to set updatedAt as Prisma handles this automatically
               }
             });
+            
+            updatedCount += updateResult.count;
           }
         }
+        
+        console.log(`[INFO][FilingService] Successfully marked ${updatedCount}/${summaries.length} summaries as sent`);
       } catch (dbError) {
         // Log the error but don't fail the operation
         console.error(`[ERROR][FilingService] Failed to mark summaries as sent: ${dbError instanceof Error ? dbError.message : 'Unknown error'}`);
       }
       
+      // Generate a summary table for the logs
+      console.log(`\n[INFO][FilingService] ========== FILING SUMMARY REPORT ==========`);
+      console.log(`[INFO][FilingService] Time: ${new Date().toISOString()}`);
+      console.log(`[INFO][FilingService] Recipient: ${email}`);
+      console.log(`[INFO][FilingService] ----------------------------------------`);
+      console.log(`[INFO][FilingService] | Ticker | Filing Type | Status      | Tokens | Cost ($) |`);
+      console.log(`[INFO][FilingService] |--------|------------|-------------|--------|---------|`);
+      
+      // Add each summary to the table
+      for (const summary of summaries) {
+        const ticker = summary.ticker.padEnd(6);
+        const filingType = summary.filingType.padEnd(10);
+        const status = 'Success'.padEnd(11);
+        const tokens = (summary.tokensUsed?.toString() || 'N/A').padEnd(6);
+        const cost = (summary.cost?.toFixed(4) || 'N/A').padEnd(7);
+        console.log(`[INFO][FilingService] | ${ticker} | ${filingType} | ${status} | ${tokens} | ${cost} |`);
+      }
+      
+      // Add each error to the table
+      for (const error of errors) {
+        const ticker = error.ticker.padEnd(6);
+        const filingType = 'N/A'.padEnd(10);
+        const status = 'Failed'.padEnd(11);
+        const tokens = 'N/A'.padEnd(6);
+        const cost = 'N/A'.padEnd(7);
+        console.log(`[INFO][FilingService] | ${ticker} | ${filingType} | ${status} | ${tokens} | ${cost} |`);
+      }
+      
+      // Add summary statistics
+      console.log(`[INFO][FilingService] ----------------------------------------`);
+      const totalTokens = summaries.reduce((sum, s) => sum + (s.tokensUsed || 0), 0);
+      const totalCost = summaries.reduce((sum, s) => sum + (s.cost || 0), 0).toFixed(4);
+      console.log(`[INFO][FilingService] | Total  | ${summaries.length} success | ${errors.length} failed | ${totalTokens} | ${totalCost} |`);
+      console.log(`[INFO][FilingService] ========================================\n`);
+      
+      console.log(`[INFO][FilingService] Email summary process completed successfully`);
       return {
         success: true,
         message: 'Email summary sent successfully!',
@@ -228,7 +310,8 @@ const filingService = {
         errors
       };
     } catch (error) {
-      console.error('Error sending email summary:', error);
+      console.error(`[ERROR][FilingService] Failed to send email summary: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      console.error(`[ERROR][FilingService] Stack trace: ${error instanceof Error ? error.stack : 'No stack trace'}`);
       return {
         success: false,
         error: error instanceof Error ? error.message : 'Failed to send email summary'
@@ -267,7 +350,7 @@ const filingService = {
             // Parse the JSON data from the database
             const summaryData = existingSummary.summaryJSON as Record<string, any> || {};
             
-            // Return the existing summary from the database
+            // Return the existing summary from the database with token usage and cost information
             return {
               data: {
                 ticker: ticker,
@@ -277,7 +360,12 @@ const filingService = {
                 accessionNumber: summaryData.accessionNumber || 'unknown',
                 url: existingSummary.url || existingSummary.filingUrl || '',
                 summaryText: existingSummary.summaryText,
-                keyPoints: Array.isArray(summaryData.keyPoints) ? summaryData.keyPoints : []
+                keyPoints: Array.isArray(summaryData.keyPoints) ? summaryData.keyPoints : [],
+                tokensUsed: existingSummary.tokensUsed || 0,
+                model: existingSummary.model || 'unknown',
+                cost: existingSummary.cost || 0,
+                processingStatus: existingSummary.processingStatus || 'N/A',
+                processingTimeMs: existingSummary.processingTimeMs || 0
               }
             };
           }
@@ -677,7 +765,13 @@ const filingService = {
                   summaryText, 
                   keyPoints, 
                   url: secHtmlUrl,
-                  rawData: filing
+                  rawData: filing,
+                  // Add fallback metrics for failed summarization
+                  tokensUsed: 0,
+                  model: 'fallback',
+                  cost: 0,
+                  processingStatus: 'FAILED',
+                  processingTimeMs: 0
                 },
                 error: `AI summarization failed: ${aiError instanceof Error ? aiError.message : String(aiError)}`
               };
@@ -748,6 +842,18 @@ const filingService = {
         // Generate a proper HTML viewer URL (not the raw text URL)
         const htmlViewerUrl = `https://www.sec.gov/Archives/edgar/data/${company.cik}/${filing.accessionNumber.replace(/-/g, '')}/`;
         
+        // Get the updated summary record to retrieve token usage and cost information
+        const updatedSummary = await prisma.summary.findFirst({
+          where: {
+            tickerId: (await prisma.ticker.findFirst({ where: { symbol: ticker.toUpperCase() } }))?.id,
+            filingType: normalizedFormType,
+            filingDate: new Date(filing.filingDate)
+          },
+          orderBy: {
+            createdAt: 'desc'
+          }
+        });
+        
         const summaryResult = {
           data: {
             ticker: ticker.toUpperCase(),
@@ -758,7 +864,13 @@ const filingService = {
             summaryText,
             keyPoints,
             url: htmlViewerUrl,
-            rawData: filingDetails
+            rawData: filingDetails,
+            // Add AI metrics fields from the database record if available
+            tokensUsed: updatedSummary?.tokensUsed || 0,
+            model: updatedSummary?.model || 'unknown',
+            cost: updatedSummary?.cost || 0,
+            processingStatus: updatedSummary?.processingStatus || 'COMPLETED',
+            processingTimeMs: updatedSummary?.processingTimeMs || 0
           }
         };
         // Store the summary in the database for future use
