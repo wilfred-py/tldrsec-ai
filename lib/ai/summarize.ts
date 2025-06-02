@@ -5,7 +5,7 @@
  * with specialized prompts for different filing types.
  */
 
-import { ClaudeClient, ClaudeRequestOptions } from './claude-client';
+import { claudeClient, ClaudeRequestOptions } from './claude-client';
 import { modelConfig } from './config';
 import { parseResponse } from './parsers';
 import { SECFilingType } from './prompts/prompt-types';
@@ -75,7 +75,6 @@ export interface SummarizationOptions {
   filingId: string;
   summaryId: string;
   requestId?: string;
-  claudeClient?: ClaudeClient;
   claudeOptions?: ClaudeRequestOptions;
 }
 
@@ -104,8 +103,8 @@ export async function summarizeFiling(options: SummarizationOptions): Promise<Su
   const { filingId, summaryId, requestId, claudeOptions } = options;
   const startTime = Date.now();
   
-  // Use provided Claude client or create a new one
-  const aiClient = options.claudeClient || new ClaudeClient();
+  // Use the singleton Claude client
+  const aiClient = claudeClient;
   
   // Create a unique operation ID for tracking
   const operationId = requestId || `summarize-${summaryId}-${Date.now()}`;
@@ -273,21 +272,21 @@ export async function summarizeFiling(options: SummarizationOptions): Promise<Su
       componentLogger.info(`Claude API call successful`, {
         summaryId,
         filingType: filing.formType,
-        responseLength: response.content.length,
-        tokensUsed: response.usage.inputTokens + response.usage.outputTokens,
+        responseLength: response.content?.[0]?.text?.length || 0,
+        tokensUsed: response.usage?.input_tokens + response.usage?.output_tokens,
         model: response.model,
         duration: apiCallDuration,
         operationId,
-        attempts: response.executionMetadata?.attempts || 1,
-        fallbackUsed: response.executionMetadata?.fallbackUsed || false
+        attempts: 1,
+        fallbackUsed: false
       });
       
       // Track token usage
-      monitoring.recordValue('ai.tokens_used.input', response.usage.inputTokens);
-      monitoring.recordValue('ai.tokens_used.output', response.usage.outputTokens);
+      monitoring.recordValue('ai.tokens_used.input', response.usage?.input_tokens || 0);
+      monitoring.recordValue('ai.tokens_used.output', response.usage?.output_tokens || 0);
       
-      // Get the text response
-      const summaryText = response.content;
+      // Get the text response - extract from the new response format
+      const summaryText = response.content?.[0]?.text || '';
       
       // Parse the JSON from the response
       componentLogger.info(`Parsing response JSON`, { summaryId, operationId });
