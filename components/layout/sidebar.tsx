@@ -12,6 +12,7 @@ import {
   FileTextIcon,
   SettingsIcon,
   CrownIcon,
+  ClipboardListIcon,
 } from "lucide-react";
 import UserButton from "@/components/auth/user-button";
 import { useUser } from "@clerk/nextjs";
@@ -40,9 +41,9 @@ export function Sidebar({ className }: SidebarProps) {
       icon: FileTextIcon,
     },
     {
-      name: "Logs",
-      href: "/dashboard/logs",
-      icon: FileTextIcon,
+      name: "Filing Logs",
+      href: "/dashboard/email-logs",
+      icon: ClipboardListIcon,
     },
     {
       name: "Settings",

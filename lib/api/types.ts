@@ -13,6 +13,7 @@ export interface Company {
   symbol: string;
   name: string;
   lastFiling: string;
+  lastFilingDate?: string; // ISO date string of the last filing
   preferences: FilingPreferences;
 }
 

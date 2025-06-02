@@ -1,6 +1,6 @@
 import React from 'react';
 import { render, screen, waitFor } from '@/__tests__/test-utils';
-import LogsPage from '@/app/dashboard/logs/page';
+import LogsPage from '@/app/dashboard/email-logs/page';
 import * as filingService from '@/lib/api/filing-service';
 import { MOCK_FILING_LOGS } from '@/lib/api/mock-data';
 

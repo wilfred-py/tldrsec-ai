@@ -40,11 +40,7 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-# Added by Claude Task Master
-# Logs
-/logs
-*.log
-!app/dashboard/logs
+
 dev-debug.log
 # Dependency directories
 node_modules/
@@ -84,3 +80,7 @@ test-output/
 
 # Added by Claude Task Master
 logs
+
+# Added by Claude Task Master
+# Logs
+*.log

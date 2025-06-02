@@ -1,0 +1,111 @@
+{
+  "info": {
+    "name": "TLDRSEC AI API Collection",
+    "description": "Collection of API endpoints for testing the TLDRSEC AI application",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "SEC Filings",
+      "description": "Endpoints for SEC filing retrieval and analysis",
+      "item": [
+        {
+          "name": "Get Tesla SEC Filings",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/test/sec-filings",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "test", "sec-filings"]
+            },
+            "description": "Fetches the latest SEC filings for Tesla and analyzes them using Claude AI with optimized caching. The response includes filing analysis, usage statistics, and cache information."
+          },
+          "response": []
+        },
+        {
+          "name": "Get SEC Filings by Ticker (Dynamic Route)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/filings/AAPL?limit=2",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "filings", "AAPL"],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "2",
+                  "description": "Maximum number of filings to retrieve (default: 3)"
+                }
+              ]
+            },
+            "description": "Fetches SEC filings for Apple Inc. using the dynamic ticker route with optimized Claude AI integration. Includes intelligent caching to reduce API costs and improve performance. The response includes filing analysis, usage statistics, and cache information."
+          },
+          "response": []
+        },
+        {
+          "name": "Get SEC Filings by Ticker (Query Parameter)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/filings/summary?ticker=TSLA&formType=10-K&limit=3",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "filings", "summary"],
+              "query": [
+                {
+                  "key": "ticker",
+                  "value": "TSLA",
+                  "description": "Stock ticker symbol (e.g., TSLA, AAPL, MSFT)"
+                },
+                {
+                  "key": "formType",
+                  "value": "10-K",
+                  "description": "REQUIRED: SEC form type (e.g., 10-K, 10-Q, 8-K)"
+                },
+                {
+                  "key": "limit",
+                  "value": "3",
+                  "description": "Maximum number of filings to retrieve (default: 5)"
+                }
+              ]
+            },
+            "description": "Fetches SEC filings for a specified ticker symbol and form type. The formType parameter is REQUIRED. Uses the optimized FilingAnalyzerService with intelligent caching to reduce API costs and improve performance."
+          },
+          "response": []
+        },
+        {
+          "name": "Cache Test - Sequential Requests",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/filings/MSFT?limit=2",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "filings", "MSFT"],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "2",
+                  "description": "Maximum number of filings to retrieve (default: 3)"
+                }
+              ]
+            },
+            "description": "Demonstrates the caching functionality. Run this request twice in succession and observe the cacheInfo in the response metadata. The first request will show 0 cache hits, while the second will show cache hits for the same filings, resulting in faster response times and reduced API costs."
+          },
+          "response": []
+        }
+      ]
+    }
+  ],
+  "event": [],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:3000",
+      "type": "string"
+    }
+  ],
+  "description": "# TLDRSEC AI API Documentation\n\n## Response Structure\n\nAll SEC filing API responses follow this structure:\n\n```json\n{\n  \"success\": true,\n  \"metadata\": {\n    \"ticker\": \"AAPL\",\n    \"cik\": \"0000320193\",\n    \"company\": \"Apple Inc.\",\n    \"requestTimestamp\": \"2025-05-31T09:06:45.000Z\",\n    \"filingCount\": 3,\n    \"processedCount\": 3,\n    \"aiProvider\": \"Claude\",\n    \"aiModel\": \"claude-3-opus-20240229\",\n    \"cacheInfo\": {\n      \"size\": 5,\n      \"maxSize\": 100,\n      \"cacheHits\": 2\n    }\n  },\n  \"usage\": {\n    \"totalRequests\": 3,\n    \"totalTokens\": 12500,\n    \"estimatedCost\": 0.25\n  },\n  \"results\": [\n    {\n      \"filingType\": \"10-K\",\n      \"filingDate\": \"2024-10-28\",\n      \"filingUrl\": \"https://www.sec.gov/...\",\n      \"analysis\": {\n        \"summary\": \"Annual report showing strong financial performance...\",\n        \"keyMetrics\": [...],\n        \"importantDisclosures\": [...],\n        \"risks\": [...],\n        \"sentiment\": \"positive\"\n      },\n      \"cacheHit\": true\n    }\n  ]\n}\n```\n\n## Cache Optimization\n\nThe API uses intelligent caching to reduce Claude API costs:\n\n1. **Document Hashing**: Each filing is hashed based on content and metadata\n2. **In-Memory Cache**: Analysis results are stored in memory\n3. **Cache Statistics**: Monitor cache performance in the response metadata\n4. **Cost Reduction**: Subsequent requests for the same filings avoid redundant AI calls"
+}

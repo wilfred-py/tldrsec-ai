@@ -4,16 +4,24 @@
 
 // Filing types supported by the application
 export type FilingType = 
-  | '10-K' 
-  | '10-Q' 
-  | '8-K' 
-  | 'Form4' 
-  | '4'
-  | 'DEFA14A'
-  | 'SC 13D'
-  | 'SC13D'
-  | '144'
-  | 'Form 144';
+  // Current forms
+  | '10-K' | '10-Q' | '8-K' | 'Form4' | '4' | 'DEFA14A' | 'SC 13D' | 'SC13D' | '144' | 'Form 144'
+  // Annual reports
+  | '10-K/A' | '20-F' | '40-F' | 'N-CSR' | 'N-CSRS'
+  // Quarterly reports
+  | '10-Q/A' | '6-K'
+  // Registration statements
+  | 'S-1' | 'S-3' | 'S-4' | 'S-8' | 'F-1' | 'F-3' | 'F-4'
+  // Proxy materials
+  | 'DEF 14A' | 'PRE 14A' | 'DEF 14C' | 'PRE 14C'
+  // Beneficial ownership
+  | '13F' | '13F-HR' | '13F-NT' | 'SC 13G' | 'SC13G'
+  // Insider trading
+  | '3' | 'Form3' | '5' | 'Form5'
+  // Investment company forms
+  | 'N-1A' | 'N-2' | 'N-MFP' | 'N-PORT' | 'N-PX'
+  // Other important forms
+  | 'ARS' | 'SD' | 'D' | 'POS AM' | '424B2' | '424B3' | '424B5' | '497' | 'FWP';
 
 // Basic filing metadata interface
 export interface FilingMetadata {
