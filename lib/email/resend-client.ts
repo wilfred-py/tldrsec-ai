@@ -329,7 +329,8 @@ export class ResendClient {
     // Add optional parameters
     if (message.html) params.html = message.html;
     if (message.text) params.text = message.text;
-    if (message.tags) params.tags = message.tags.map(tag => ({ name: tag }));
+    // Fix: Resend API expects tags to be simple strings, not objects with a name property
+    if (message.tags) params.tags = message.tags;
     
     // Add CC and BCC if present
     if (message.cc) params.cc = this.formatRecipients(message.cc);
@@ -433,8 +434,12 @@ export class ResendClient {
           );
         
         case ResendErrorCode.DOMAIN_NOT_VERIFIED:
+          // Extract domain from error message if possible
+          const domainMatch = error.message?.match(/The ([\w.-]+) domain is not verified/);
+          const domain = domainMatch ? domainMatch[1] : 'your email domain';
+          
           return createExternalApiError(
-            'Email domain not verified in Resend',
+            `The domain ${domain} is not verified in Resend. Please verify it at https://resend.com/domains`,
             details,
             false, // not retryable
             requestId
