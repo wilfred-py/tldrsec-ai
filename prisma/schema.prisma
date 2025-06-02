@@ -48,7 +48,8 @@ model Summary {
   tickerId    String
   filingType  String    // "10-K", "10-Q", "8-K", "Form4"
   filingDate  DateTime
-  filingUrl   String
+  filingUrl   String    // Kept for backward compatibility
+  url         String?   // New field for SEC HTML viewer URL
   summaryText String    @db.Text
   summaryJSON Json?
   createdAt   DateTime  @default(now())

@@ -43,6 +43,7 @@ export interface SecFilingDetails {
   primaryDocument: string;
   documents: SecDocument[];
   parsedContent?: any; // This will hold parsed content specific to form types
+  filingUrl?: string; // URL to the SEC HTML viewer for this filing
 }
 
 export interface SecDocument {
@@ -60,7 +61,19 @@ const SEC_API_CONFIG = {
   baseUrl: 'https://data.sec.gov',
   companySearchUrl: 'https://www.sec.gov/include/ticker.txt',
   submissionsUrl: (cik: string) => `https://data.sec.gov/submissions/CIK${cik}.json`,
-  filingUrl: (accessionNumber: string, cik: string) => 
+  filingUrl: (accessionNumber: string, cik: string) => {
+    // Format for raw text file (used internally for parsing)
+    const rawTextUrl = `https://www.sec.gov/Archives/edgar/data/${cik}/${accessionNumber.replace(/-/g, '')}/${accessionNumber}.txt`;
+    
+    // Format for HTML viewer (more readable for users)
+    const htmlViewerUrl = `https://www.sec.gov/Archives/edgar/data/${cik}/${accessionNumber.replace(/-/g, '')}/`;
+    
+    // Return the HTML viewer URL by default
+    return htmlViewerUrl;
+  },
+  
+  // Add a function to get the raw text URL when needed for parsing
+  rawFilingUrl: (accessionNumber: string, cik: string) => 
     `https://www.sec.gov/Archives/edgar/data/${cik}/${accessionNumber.replace(/-/g, '')}/${accessionNumber}.txt`,
   headers: {
     'User-Agent': 'tldrSEC/1.0 (contact@tldrsec.app)',
@@ -240,10 +253,13 @@ export async function getFilingDetails(
   cik: string
 ): Promise<SecFilingDetails> {
   try {
-    const formattedCik = formatCik(cik);
-    const url = SEC_API_CONFIG.filingUrl(accessionNumber, formattedCik);
+    const formattedCik = cik.padStart(10, '0');
+    // Use rawFilingUrl for parsing, but store the user-friendly URL for display
+    const rawUrl = SEC_API_CONFIG.rawFilingUrl(accessionNumber, formattedCik);
+    const htmlUrl = SEC_API_CONFIG.filingUrl(accessionNumber, formattedCik);
     
-    const response = await axios.get(url, {
+    // Fetch the filing text from the raw URL for parsing
+    const response = await axios.get(rawUrl, {
       headers: SEC_API_CONFIG.headers,
     });
     
@@ -257,8 +273,10 @@ export async function getFilingDetails(
       companyName: '',
       form: '',
       filingDate: '',
+      reportDate: '',
       primaryDocument: '',
       documents: [],
+      filingUrl: htmlUrl, // Store the HTML viewer URL for user-facing links
     };
     
     // Extract form type
@@ -398,7 +416,7 @@ export async function getFilingDetails(
         filingDetails.documents.push({
           fileName: syntheticFilename,
           description: 'COMPLETE SUBMISSION TEXT',
-          documentUrl: url, // Use the original URL
+          documentUrl: rawUrl, // Use the raw text URL
           type: filingDetails.form || 'FILING',
           size: filingText.length,
         });
@@ -558,6 +576,7 @@ export async function getForm144Summary(ticker: string): Promise<{
   summaryText: string;
   keyPoints: string[];
   filingUrl: string;
+  url?: string; // SEC HTML viewer URL
   rawData?: any;
 }> {
   try {
@@ -617,6 +636,9 @@ export async function getForm144Summary(ticker: string): Promise<{
       'Does not necessarily indicate negative sentiment about the company'
     ];
     
+    // Construct the SEC HTML viewer URL
+    const secHtmlUrl = `https://www.sec.gov/Archives/edgar/data/${company.cik}/${latestFiling.accessionNumber.replace(/-/g, '')}/index.htm`;
+    
     return {
       ticker: ticker.toUpperCase(),
       companyName: filingDetails.companyName,
@@ -625,6 +647,7 @@ export async function getForm144Summary(ticker: string): Promise<{
       summaryText,
       keyPoints,
       filingUrl: latestFiling.filingUrl,
+      url: secHtmlUrl, // Add the SEC HTML viewer URL
       rawData: form144Data
     };
   } catch (error) {
