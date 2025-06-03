@@ -19,32 +19,35 @@ dotenv.config();
 // Test URLs for SEC filings with fallbacks
 const TEST_CASES = [
   {
-    description: 'Tesla 10-K (2022)',
+    description: 'Tesla 10-K (2024 Annual Report)',
     urls: [
+      'https://www.sec.gov/Archives/edgar/data/0001318605/000162828025003063/tsla-20241231.htm',
+      'https://www.sec.gov/ix?doc=/Archives/edgar/data/0001318605/000162828025003063/tsla-20241231.htm',
+      // Fallback to 2022 10-K if 2024 is not available
       'https://www.sec.gov/Archives/edgar/data/1318605/000095017023001409/tsla-20221231.htm',
       'https://www.sec.gov/ix?doc=/Archives/edgar/data/1318605/000095017023001409/tsla-20221231.htm'
     ],
     expectedType: '10-K'
   },
   {
-    description: 'Tesla 10-Q (2023 Q3)',
+    description: 'Tesla 10-Q (2025 Q1)',
     urls: [
-      'https://www.sec.gov/Archives/edgar/data/1318605/000095017023045546/tsla-20230930.htm',
-      'https://www.sec.gov/ix?doc=/Archives/edgar/data/1318605/000095017023045546/tsla-20230930.htm',
-      // Fallback to 2023 Q1 if Q3 is not available
-      'https://www.sec.gov/Archives/edgar/data/1318605/000095017023019574/tsla-20230630.htm',
-      'https://www.sec.gov/ix?doc=/Archives/edgar/data/1318605/000095017023019574/tsla-20230630.htm'
+      'https://www.sec.gov/Archives/edgar/data/0001318605/000162828025018911/tsla-20250331.htm',
+      'https://www.sec.gov/ix?doc=/Archives/edgar/data/0001318605/000162828025018911/tsla-20250331.htm',
+      // Fallback to 2024 Q4 if 2025 Q1 is not available
+      'https://www.sec.gov/Archives/edgar/data/0001318605/000162828025003063/tsla-20241231.htm',
+      'https://www.sec.gov/ix?doc=/Archives/edgar/data/0001318605/000162828025003063/tsla-20241231.htm'
     ],
     expectedType: '10-Q'
   },
   {
-    description: 'Tesla 8-K (Recent)',
+    description: 'Tesla 8-K (May 2025)',
     urls: [
-      'https://www.sec.gov/Archives/edgar/data/1318605/000119312523249096/d561302d8k.htm',
-      'https://www.sec.gov/ix?doc=/Archives/edgar/data/1318605/000119312523249096/d561302d8k.htm',
-      // Fallback to older 8-K if recent one is not available
-      'https://www.sec.gov/Archives/edgar/data/1318605/000119312523079797/d449338d8k.htm',
-      'https://www.sec.gov/ix?doc=/Archives/edgar/data/1318605/000119312523079797/d449338d8k.htm'
+      'https://www.sec.gov/Archives/edgar/data/0001318605/000110465925050072/tm2515421d1_8k.htm',
+      'https://www.sec.gov/ix?doc=/Archives/edgar/data/0001318605/000110465925050072/tm2515421d1_8k.htm',
+      // Fallback to earlier 8-K if recent one is not available
+      'https://www.sec.gov/Archives/edgar/data/0001318605/000162828025018910/tsla-20250423.htm',
+      'https://www.sec.gov/ix?doc=/Archives/edgar/data/0001318605/000162828025018910/tsla-20250423.htm'
     ],
     expectedType: '8-K'
   }
