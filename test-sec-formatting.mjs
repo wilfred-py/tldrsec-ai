@@ -56,6 +56,9 @@ const TEST_CASES = [
 // Output directory for test results
 const OUTPUT_DIR = './sec-formatting-test-results';
 
+// Delay between Claude API calls to avoid rate limiting (in milliseconds)
+const CLAUDE_API_DELAY = 15000; // 15 seconds
+
 /**
  * Main test function
  */
@@ -184,26 +187,30 @@ async function runTest() {
       if (process.env.ANTHROPIC_API_KEY) {
         try {
           console.log('Testing Claude summarization...');
+          
+          // If this isn't the first test case, add a delay before calling Claude API
+          if (i > 0) {
+            console.log(`Waiting ${CLAUDE_API_DELAY/1000} seconds before next Claude API call to avoid rate limiting...`);
+            await new Promise(resolve => setTimeout(resolve, CLAUDE_API_DELAY));
+          }
+          
           summary = await generateSummary(prompt);
           summarySuccess = true;
+          console.log(`Summary size: ${(summary.length / 1024).toFixed(2)} KB`);
           
           // Save summary
           await fs.writeFile(
-            path.join(OUTPUT_DIR, `summary_${i + 1}.txt`), 
+            path.join(OUTPUT_DIR, `summary_${i + 1}.txt`),
             summary
           );
-          
-          const summarySizeKB = (summary.length / 1024).toFixed(2);
-          console.log(`Summary size: ${summarySizeKB} KB`);
         } catch (error) {
+          console.error(`Error generating summary: ${error.message}`);
           console.error(`Summarization failed: ${error.message}`);
-          summary = `Error generating summary: ${error.message}`;
-          summarySuccess = false;
           
-          // Save error summary
+          // Save error
           await fs.writeFile(
-            path.join(OUTPUT_DIR, `summary_error_${i + 1}.txt`), 
-            summary
+            path.join(OUTPUT_DIR, `summary_error_${i + 1}.txt`),
+            `Error: ${error.message}`
           );
         }
       } else {
@@ -277,74 +284,111 @@ ${content}
 }
 
 /**
- * Generate a summary using Claude API
+ * Generate a summary using Claude API with retry mechanism
  * @param {string} prompt - The prompt to send to Claude
+ * @param {object} options - Options for the API call
  * @returns {Promise<string>} - The generated summary
  */
-async function generateSummary(prompt) {
-  try {
-    // Check for API key
-    if (!process.env.ANTHROPIC_API_KEY) {
-      throw new Error('ANTHROPIC_API_KEY environment variable is not set');
-    }
-
-    // Add timeout to prevent hanging requests
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 60000); // 60-second timeout
-
+async function generateSummary(prompt, options = {}) {
+  const {
+    maxRetries = 3,
+    initialBackoff = 2000, // 2 seconds
+    maxBackoff = 30000 // 30 seconds
+  } = options;
+  
+  let attempt = 0;
+  
+  while (attempt < maxRetries) {
     try {
-      const response = await axios.post(
-        'https://api.anthropic.com/v1/messages',
-        {
-          model: 'claude-3-opus-20240229',
-          max_tokens: 4000,
-          messages: [
-            {
-              role: 'user',
-              content: prompt
-            }
-          ]
-        },
-        {
-          headers: {
-            'Content-Type': 'application/json',
-            'x-api-key': process.env.ANTHROPIC_API_KEY,
-            'anthropic-version': '2023-06-01'
+      // Check for API key
+      if (!process.env.ANTHROPIC_API_KEY) {
+        throw new Error('ANTHROPIC_API_KEY environment variable is not set');
+      }
+      
+      // If this is a retry, log and wait with exponential backoff
+      if (attempt > 0) {
+        const backoffTime = Math.min(initialBackoff * Math.pow(2, attempt - 1), maxBackoff);
+        console.log(`Retry attempt ${attempt}/${maxRetries} after ${backoffTime/1000} seconds...`);
+        await new Promise(resolve => setTimeout(resolve, backoffTime));
+      }
+
+      // Add timeout to prevent hanging requests
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 60000); // 60-second timeout
+
+      try {
+        const response = await axios.post(
+          'https://api.anthropic.com/v1/messages',
+          {
+            model: 'claude-3-opus-20240229',
+            max_tokens: 4000,
+            messages: [
+              {
+                role: 'user',
+                content: prompt
+              }
+            ]
           },
-          signal: controller.signal
+          {
+            headers: {
+              'Content-Type': 'application/json',
+              'x-api-key': process.env.ANTHROPIC_API_KEY,
+              'anthropic-version': '2023-06-01'
+            },
+            signal: controller.signal
+          }
+        );
+
+        // Clear the timeout
+        clearTimeout(timeoutId);
+
+        // Validate response format
+        if (!response.data?.content || !Array.isArray(response.data.content) || response.data.content.length === 0) {
+          throw new Error('Invalid response format from Claude API');
         }
-      );
 
-      // Clear the timeout
-      clearTimeout(timeoutId);
+        return response.data.content[0].text;
+      } catch (axiosError) {
+        // Handle timeout
+        if (axiosError.name === 'AbortError' || axiosError.code === 'ECONNABORTED') {
+          throw new Error('Claude API request timed out after 60 seconds');
+        }
 
-      // Validate response format
-      if (!response.data?.content || !Array.isArray(response.data.content) || response.data.content.length === 0) {
-        throw new Error('Invalid response format from Claude API');
+        // Get error message
+        const errorMessage = axiosError.response?.data?.error?.message || 
+                            axiosError.response?.statusText || 
+                            axiosError.message || 
+                            'Unknown error';
+        
+        // Check if this is a rate limit error
+        const isRateLimit = errorMessage.includes('rate limit') || 
+                          axiosError.response?.status === 429;
+        
+        // If it's a rate limit error and we have retries left, continue to retry
+        // Otherwise throw the error
+        if (isRateLimit && attempt < maxRetries) {
+          console.log(`Rate limit error detected, will retry: ${errorMessage}`);
+        } else {
+          throw new Error(`Claude API error: ${errorMessage}`);
+        }
+      } finally {
+        // Ensure timeout is cleared in all cases
+        clearTimeout(timeoutId);
       }
-
-      return response.data.content[0].text;
-    } catch (axiosError) {
-      // Handle timeout
-      if (axiosError.name === 'AbortError' || axiosError.code === 'ECONNABORTED') {
-        throw new Error('Claude API request timed out after 60 seconds');
+    } catch (error) {
+      // If this is the last attempt or not a retryable error, rethrow
+      if (attempt >= maxRetries || !error.message.includes('rate limit')) {
+        console.error('Error generating summary after retries:', error.message);
+        throw error;
       }
-
-      // Handle API errors
-      const errorMessage = axiosError.response?.data?.error?.message || 
-                          axiosError.response?.statusText || 
-                          axiosError.message || 
-                          'Unknown error';
-
-      throw new Error(`Claude API error: ${errorMessage}`);
-    } finally {
-      // Ensure timeout is cleared in all cases
-      clearTimeout(timeoutId);
     }
-  } catch (error) {
-    console.error('Error generating summary:', error.message);
-    throw error; // Re-throw to let the caller handle it
+    
+    // Increment attempt counter
+    attempt++;
   }
+  
+  // If we've exhausted all retries without returning, throw an error
+  throw new Error('Failed to generate summary after all retry attempts');
 }
 
 // Run the test
