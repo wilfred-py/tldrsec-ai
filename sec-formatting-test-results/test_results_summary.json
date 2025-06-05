@@ -1,0 +1,41 @@
+[
+  {
+    "testCase": "Tesla 10-K (2024 Annual Report)",
+    "success": true,
+    "url": "https://www.sec.gov/Archives/edgar/data/0001318605/000162828025003063/tsla-20241231.htm",
+    "filingType": "10-K",
+    "isInlineXbrl": true,
+    "rawContentSizeKB": "393.42",
+    "formattedContentSizeKB": "97.69",
+    "summarization": {
+      "success": true,
+      "size": "2.41 KB"
+    }
+  },
+  {
+    "testCase": "Tesla 10-Q (2025 Q1)",
+    "success": true,
+    "url": "https://www.sec.gov/Archives/edgar/data/0001318605/000162828025018911/tsla-20250331.htm",
+    "filingType": "10-Q",
+    "isInlineXbrl": true,
+    "rawContentSizeKB": "104.01",
+    "formattedContentSizeKB": "97.69",
+    "summarization": {
+      "success": true,
+      "size": "2.14 KB"
+    }
+  },
+  {
+    "testCase": "Tesla 8-K (May 2025)",
+    "success": true,
+    "url": "https://www.sec.gov/Archives/edgar/data/0001318605/000110465925050072/tm2515421d1_8k.htm",
+    "filingType": "8-K",
+    "isInlineXbrl": false,
+    "rawContentSizeKB": "1.79",
+    "formattedContentSizeKB": "1.79",
+    "summarization": {
+      "success": true,
+      "size": "1.53 KB"
+    }
+  }
+]

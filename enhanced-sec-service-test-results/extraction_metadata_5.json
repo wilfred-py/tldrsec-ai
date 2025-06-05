@@ -1,0 +1,10 @@
+{
+  "url": "https://www.sec.gov/ix?doc=/Archives/edgar/data/1318605/000095017023045546/tsla-20230930.htm",
+  "success": false,
+  "error": "All extraction methods failed",
+  "metadata": {
+    "url": "https://www.sec.gov/ix?doc=/Archives/edgar/data/1318605/000095017023045546/tsla-20230930.htm",
+    "extractionMethod": "enhanced",
+    "timestamp": "2025-06-03T12:48:08.899Z"
+  }
+}

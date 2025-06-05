@@ -1,0 +1,11 @@
+{
+  "success": true,
+  "summary": "I apologize, but you have not provided the actual content of the SEC filing for me to analyze. The text \"[SEC Filing Header]\" does not contain any meaningful financial information about Tesla, Inc.\n\nTo provide a helpful summary focusing on the key points you mentioned (financial results, business developments, risks, outlook, and notable changes), I would need the full text of the relevant SEC filing, such as a 10-K annual report or 10-Q quarterly report.\n\nPlease provide the content of the SEC filing you'd like me to analyze, and I'll be happy to review it and provide a concise summary highlighting the most important information for investors.",
+  "usage": {
+    "input_tokens": 133,
+    "cache_creation_input_tokens": 0,
+    "cache_read_input_tokens": 0,
+    "output_tokens": 139,
+    "service_tier": "standard"
+  }
+}

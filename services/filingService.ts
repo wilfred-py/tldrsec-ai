@@ -3,6 +3,8 @@ import { FilingType } from '../lib/sec-edgar/types';
 import { FormTypeMetadata, getFormMetadata, getFormsByCategory, getHighImportanceForms } from '../lib/sec-edgar/form-registry';
 import { parseFormContent, extractImportantContent, ParsedContent } from '../lib/parsers/form-parser';
 import { generateSystemPrompt, generateUserPrompt } from '../lib/ai/sec-prompts';
+import axios from 'axios';
+import { summarizeFiling } from '../lib/ai/summarize';
 import * as secService from './secService';
 import { prisma } from '../lib/db';
 import { JsonObject } from '@prisma/client/runtime/library';
@@ -345,7 +347,7 @@ const filingService = {
             }
           });
           
-          if (existingSummary) {
+          if (false && existingSummary) { // Temporarily bypassed cache for testing
             console.log(`[INFO][FilingService] Found existing summary in database for ${ticker} - ${formType}`);
             // Parse the JSON data from the database
             const summaryData = existingSummary.summaryJSON as Record<string, any> || {};
@@ -573,7 +575,7 @@ const filingService = {
           
           // Use axios for fetching to properly set headers
           try {
-            const axios = require('axios');
+            // axios is now imported at the top of the file.
             const axiosResponse = await axios.get(documentUrl, {
               headers: secHeaders,
               timeout: 10000 // 10 second timeout
@@ -618,8 +620,7 @@ const filingService = {
           const htmlViewerUrl = `https://www.sec.gov/Archives/edgar/data/${company.cik}/${filing.accessionNumber.replace(/-/g, '')}/`;
           
           try {
-            // Import the summarizeFiling function from the AI module
-            const { summarizeFiling } = require('../lib/ai/summarize');
+            // summarizeFiling is now imported at the top of the file.
             
             // First, store the filing in the database to get an ID
             const tickerRecord = await prisma.ticker.findFirst({
@@ -714,7 +715,8 @@ const filingService = {
               const summaryResult = await summarizeFiling({
                 filingId: filingId,
                 summaryId: summaryId,
-                requestId: `filing-summary-${ticker}-${normalizedFormType}-${Date.now()}`
+                requestId: `filing-summary-${ticker}-${normalizedFormType}-${Date.now()}`,
+                documentContent: content
               });
               
               console.log(`[DEBUG][FilingService] AI summarization completed for ${ticker} - ${normalizedFormType}`);

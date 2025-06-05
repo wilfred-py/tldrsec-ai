@@ -1,0 +1,26 @@
+[
+  {
+    "url": "https://www.sec.gov/Archives/edgar/data/1318605/000095017023001409/tsla-20221231.htm",
+    "filingType": "10-K",
+    "success": true,
+    "contentLength": 523247,
+    "sectionCount": 1,
+    "tableCount": 0
+  },
+  {
+    "url": "https://www.sec.gov/ix?doc=/Archives/edgar/data/1318605/000095017023039957/tsla-20230930.htm",
+    "filingType": "10-K",
+    "success": false,
+    "contentLength": 61,
+    "sectionCount": 1,
+    "tableCount": 0
+  },
+  {
+    "url": "https://www.sec.gov/ix?doc=/Archives/edgar/data/1318605/000162828023032175/tsla-20231018.htm",
+    "filingType": "10-K",
+    "success": false,
+    "contentLength": 61,
+    "sectionCount": 1,
+    "tableCount": 0
+  }
+]

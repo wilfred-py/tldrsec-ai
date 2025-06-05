@@ -1,0 +1,13 @@
+{
+  "description": "Tesla 10-K (2024 Annual Report)",
+  "url": "https://www.sec.gov/Archives/edgar/data/0001318605/000162828025003063/tsla-20241231.htm",
+  "filingType": "10-K",
+  "expectedType": "10-K",
+  "isInlineXbrl": true,
+  "rawContentSize": 402858,
+  "rawContentSizeKB": "393.42",
+  "formattedContentSize": 100037,
+  "formattedContentSizeKB": "97.69",
+  "extractionMethod": "enhanced",
+  "timestamp": "2025-06-03T22:09:04.673Z"
+}

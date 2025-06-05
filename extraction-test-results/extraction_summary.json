@@ -1,0 +1,33 @@
+[
+  {
+    "url": "https://www.sec.gov/Archives/edgar/data/1318605/000095017023001409/tsla-20221231.htm",
+    "filingType": "10-K",
+    "rawSize": 7964288,
+    "cleanedSize": 523247,
+    "isInlineXbrl": true,
+    "success": true
+  },
+  {
+    "url": "https://www.sec.gov/Archives/edgar/data/1318605/000095017023014423/tsla-20230331.htm",
+    "success": false,
+    "error": "Request failed with status code 404"
+  },
+  {
+    "url": "https://www.sec.gov/Archives/edgar/data/1318605/000119312523082241/d450853d8k.htm",
+    "success": false,
+    "error": "Request failed with status code 404"
+  },
+  {
+    "url": "https://www.sec.gov/Archives/edgar/data/1318605/000089924323000794/xslF345X03/doc4.xml",
+    "success": false,
+    "error": "Request failed with status code 404"
+  },
+  {
+    "url": "https://www.sec.gov/ix?doc=/Archives/edgar/data/1318605/000095017023014423/tsla-20230331.htm",
+    "filingType": "10-K",
+    "rawSize": 6356,
+    "cleanedSize": 0,
+    "isInlineXbrl": true,
+    "success": true
+  }
+]
