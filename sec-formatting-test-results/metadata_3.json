@@ -1,0 +1,13 @@
+{
+  "description": "Tesla 8-K (May 2025)",
+  "url": "https://www.sec.gov/Archives/edgar/data/0001318605/000110465925050072/tm2515421d1_8k.htm",
+  "filingType": "8-K",
+  "expectedType": "8-K",
+  "isInlineXbrl": false,
+  "rawContentSize": 1830,
+  "rawContentSizeKB": "1.79",
+  "formattedContentSize": 1830,
+  "formattedContentSizeKB": "1.79",
+  "extractionMethod": "enhanced",
+  "timestamp": "2025-06-03T22:10:07.183Z"
+}

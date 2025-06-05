@@ -1,0 +1,10 @@
+{
+  "url": "https://www.sec.gov/Archives/edgar/data/1318605/000095017023045546/tsla-20230930.htm",
+  "success": false,
+  "error": "Request failed with status code 404",
+  "metadata": {
+    "url": "https://www.sec.gov/Archives/edgar/data/1318605/000095017023045546/tsla-20230930.htm",
+    "extractionMethod": "enhanced",
+    "timestamp": "2025-06-03T12:47:44.624Z"
+  }
+}

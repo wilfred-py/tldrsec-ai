@@ -1,0 +1,11 @@
+{
+  "success": true,
+  "summary": "I apologize, but it appears that you have not provided the content of the SEC filing for Tesla, Inc. that you would like me to analyze and summarize. Without the actual text of the filing, I am unable to provide the requested analysis and summary focusing on the key points relevant to investors.\n\nPlease provide the content of the SEC filing, and I will be happy to review it and provide a concise, well-structured summary highlighting the most important information, including:\n\n1. Key financial results and metrics\n2. Significant business developments\n3. Risk factors or challenges\n4. Management's outlook and guidance\n5. Any notable changes from previous periods\n\nOnce you have the filing content ready, please share it with me, and I will proceed with the analysis.",
+  "usage": {
+    "input_tokens": 133,
+    "cache_creation_input_tokens": 0,
+    "cache_read_input_tokens": 0,
+    "output_tokens": 162,
+    "service_tier": "standard"
+  }
+}

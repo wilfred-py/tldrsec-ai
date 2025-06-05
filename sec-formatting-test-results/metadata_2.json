@@ -1,0 +1,13 @@
+{
+  "description": "Tesla 10-Q (2025 Q1)",
+  "url": "https://www.sec.gov/Archives/edgar/data/0001318605/000162828025018911/tsla-20250331.htm",
+  "filingType": "10-Q",
+  "expectedType": "10-Q",
+  "isInlineXbrl": true,
+  "rawContentSize": 106508,
+  "rawContentSizeKB": "104.01",
+  "formattedContentSize": 100037,
+  "formattedContentSizeKB": "97.69",
+  "extractionMethod": "enhanced",
+  "timestamp": "2025-06-03T22:09:28.392Z"
+}

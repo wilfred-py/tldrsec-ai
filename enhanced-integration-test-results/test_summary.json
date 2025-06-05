@@ -1,0 +1,40 @@
+[
+  {
+    "url": "https://www.sec.gov/Archives/edgar/data/1318605/000095017023001409/tsla-20221231.htm",
+    "type": "10-K",
+    "description": "Tesla 2022 Annual Report (10-K) - inline XBRL",
+    "extractionSuccess": true,
+    "contentLength": 640337,
+    "formattedLength": 19,
+    "isInlineXbrl": true,
+    "detectedType": "Unknown",
+    "summarySuccess": true,
+    "summaryLength": 651
+  },
+  {
+    "url": "https://www.sec.gov/Archives/edgar/data/1318605/000095017023019574/tsla-20230630.htm",
+    "type": "10-Q",
+    "description": "Tesla 2023 Q2 Report (10-Q) - inline XBRL",
+    "extractionSuccess": false,
+    "extractionError": "Request failed with status code 404"
+  },
+  {
+    "url": "https://www.sec.gov/Archives/edgar/data/1318605/000119312523079797/d449338d8k.htm",
+    "type": "8-K",
+    "description": "Tesla 8-K Report - standard HTML",
+    "extractionSuccess": false,
+    "extractionError": "Request failed with status code 404"
+  },
+  {
+    "url": "https://www.sec.gov/ix?doc=/Archives/edgar/data/1318605/000095017023001409/tsla-20221231.htm",
+    "type": "10-K",
+    "description": "Tesla 2022 Annual Report (10-K) - SEC viewer URL",
+    "extractionSuccess": true,
+    "contentLength": 640337,
+    "formattedLength": 19,
+    "isInlineXbrl": true,
+    "detectedType": "Unknown",
+    "summarySuccess": true,
+    "summaryLength": 770
+  }
+]

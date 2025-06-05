@@ -1,0 +1,5 @@
+{
+  "error1": "Cannot find module '/Users/wilf/Software/Windsurf Projects/tldrsec-ai/services/secService.js' imported from /Users/wilf/Software/Windsurf Projects/tldrsec-ai/test-sec-service-tesla.mjs",
+  "error2": "Unknown file extension \".ts\" for /Users/wilf/Software/Windsurf Projects/tldrsec-ai/services/secService.ts",
+  "error3": "Cannot find package '@/services' imported from /Users/wilf/Software/Windsurf Projects/tldrsec-ai/test-sec-service-tesla.mjs"
+}
