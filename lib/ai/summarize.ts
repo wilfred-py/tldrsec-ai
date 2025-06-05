@@ -16,6 +16,34 @@ import { monitoring } from '@/lib/monitoring';
 import { ApiError, ErrorCode } from '@/lib/error-handling';
 import { prisma } from '@/lib/db/prisma';
 
+// TODO: Implement actual cost calculation based on model and token counts
+// This function calculates the estimated cost of an AI operation.
+// Currently, it's a placeholder and returns 0.
+// It needs to be updated with actual pricing models for different AI models.
+function calculateCost(model: string, inputTokens: number, outputTokens: number): number {
+  // Example pricing (replace with actual rates)
+  // const claudeHaikuInputCostPerMillion = 0.25;
+  // const claudeHaikuOutputCostPerMillion = 1.25;
+  // const claudeSonnetInputCostPerMillion = 3;
+  // const claudeSonnetOutputCostPerMillion = 15;
+
+  let cost = 0;
+  // A real implementation would look up rates based on the 'model' string
+  // For now, log and return 0
+  componentLogger.debug(`Cost calculation for model '${model}', input tokens: ${inputTokens}, output tokens: ${outputTokens}. Placeholder returning 0.`);
+  
+  // Placeholder logic:
+  // if (model.includes('haiku')) {
+  //   cost = (inputTokens / 1000000) * claudeHaikuInputCostPerMillion + (outputTokens / 1000000) * claudeHaikuOutputCostPerMillion;
+  // } else if (model.includes('sonnet')) {
+  //   cost = (inputTokens / 1000000) * claudeSonnetInputCostPerMillion + (outputTokens / 1000000) * claudeSonnetOutputCostPerMillion;
+  // } else {
+  //   // Default or unknown model
+  //   cost = 0; // Or some other default calculation
+  // }
+  return cost;
+}
+
 // Component logger
 const componentLogger = logger.child('claude-summarizer');
 
@@ -76,6 +104,7 @@ export interface SummarizationOptions {
   summaryId: string;
   requestId?: string;
   claudeOptions?: ClaudeRequestOptions;
+  documentContent?: string;
 }
 
 /**
@@ -100,28 +129,19 @@ export interface SummarizationResult {
  * Summarize an SEC filing using Claude AI with robust error handling and fallback
  */
 export async function summarizeFiling(options: SummarizationOptions): Promise<SummarizationResult> {
-  const { filingId, summaryId, requestId, claudeOptions } = options;
+  let filingRecordFromDB: any = null;
+    const { filingId, summaryId, requestId, claudeOptions, documentContent } = options; 
+  // filingRecordFromDB is declared above so it's in scope for the catch blocks 
   const startTime = Date.now();
   
-  // Use the singleton Claude client
   const aiClient = claudeClient;
-  
-  // Create a unique operation ID for tracking
   const operationId = requestId || `summarize-${summaryId}-${Date.now()}`;
   
-  // Log the start of summarization
-  componentLogger.info(`Starting summarization`, {
-    summaryId,
-    filingId,
-    operationId
-  });
-  
-  // Record the summarization attempt
+  componentLogger.info(`Starting summarization`, { summaryId, filingId, operationId });
   monitoring.incrementCounter('ai.summarization_started', 1);
   
   try {
-    // Get the filing and summary records
-    const filing = await prisma.secFiling.findUnique({
+        filingRecordFromDB = await prisma.secFiling.findUnique({
       where: { id: filingId },
       include: { ticker: true }
     });
@@ -130,118 +150,50 @@ export async function summarizeFiling(options: SummarizationOptions): Promise<Su
       where: { id: summaryId }
     });
     
-    if (!filing) {
-      throw new SummarizationError(
-        `Filing with ID ${filingId} not found`,
-        summaryId,
-        'unknown',
-        'FILING_NOT_FOUND',
-        false,
-        'missing_filing'
-      );
+        if (!filingRecordFromDB) {
+            throw new SummarizationError(`Filing with ID ${filingId} not found`, summaryId, 'unknown', 'FILING_NOT_FOUND', false, 'missing_filing');
     }
     
     if (!summary) {
-      throw new SummarizationError(
-        `Summary with ID ${summaryId} not found`,
-        summaryId,
-        filing?.formType || 'unknown',
-        'SUMMARY_NOT_FOUND',
-        false,
-        'missing_summary'
-      );
+            throw new SummarizationError(`Summary with ID ${summaryId} not found`, summaryId, filingRecordFromDB?.formType || 'unknown', 'SUMMARY_NOT_FOUND', false, 'missing_summary');
     }
     
-    // Update status to processing
     await prisma.summary.update({
       where: { id: summaryId },
-      data: {
-        processingStatus: 'PROCESSING',
-        processingCompletedAt: null // Clear any previous completion date
-      }
+      data: { processingStatus: 'PROCESSING', processingCompletedAt: null }
     });
-    
-    componentLogger.info(`Extracting content for filing`, {
-      summaryId,
-      filingType: filing.formType,
-      filingUrl: filing.secUrl,
-      operationId
-    });
-    
-    // Track specific filing type
-    monitoring.incrementCounter('ai.summarization_by_type', 1, {
-      filingType: filing.formType
-    });
-    
-    // Extract the filing content
-    let content;
-    try {
-      // The extractFilingContent function gets the document from the SEC EDGAR system
-      // and parses it to extract the relevant text content
-      content = await extractFilingContent(filing.secUrl, filing.formType as SECFilingType);
-      
-      if (!content) {
-        throw new Error('Content extraction returned empty result');
-      }
-    } catch (error) {
-      // Log and track the extraction failure
-      componentLogger.error(`Error extracting filing content`, {
-        summaryId,
-        filingType: filing.formType,
-        filingUrl: filing.secUrl,
-        error,
-        operationId
-      });
-      
-      monitoring.incrementCounter('ai.extraction_failed', 1, {
-        filingType: filing.formType
-      });
-      
-      // Update the summary record with the error
-      await prisma.summary.update({
-        where: { id: summaryId },
-        data: {
-          processingStatus: 'FAILED',
-          processingError: error instanceof Error ? error.message : String(error)
-        }
-      });
-      
+
+    if (!documentContent || documentContent.length === 0) {
+            monitoring.incrementCounter('ai.summarization_error', 1, { reason: 'missing_document_content' });
       throw new SummarizationError(
-        `Failed to extract content: ${error instanceof Error ? error.message : String(error)}`,
+        `Document content was not provided for filing ${filingId}`,
         summaryId,
-        filing.formType,
-        'CONTENT_EXTRACTION_FAILED',
-        true, // Extraction failures may be retriable
-        'extraction_failed'
+        filingRecordFromDB!.formType,
+        'NO_CONTENT_PROVIDED',
+        false,
+        'missing_document_content'
       );
     }
+    componentLogger.info(`Using provided document content, preparing prompt`, { summaryId, operationId, contentLength: documentContent.length });
     
-    componentLogger.info(`Content extracted successfully, preparing prompt`, {
-      summaryId,
-      filingType: filing.formType,
-      contentLength: content.length,
-      operationId
+        monitoring.incrementCounter('ai.summarization_by_type', 1, { filingType: filingRecordFromDB!.formType });
+    
+    const promptGenerator = getPromptForFilingType(filingRecordFromDB!.formType as SECFilingType, {
+            ticker: filingRecordFromDB!.ticker?.symbol,
+            companyName: filingRecordFromDB!.ticker?.companyName 
     });
-    
-    // Get the appropriate prompt for this filing type
-    const prompt = getPromptForFilingType(filing.formType as SECFilingType, {
-      // Include additional context like ticker, company name if available
-      ticker: filing.ticker?.symbol,
-      companyName: filing.companyName // Use companyName directly from filing
-    });
-    
-    // Log the prompt preparation
+    const promptContent = promptGenerator.getFullPrompt(documentContent); 
+
     componentLogger.debug(`Prompt prepared`, {
       summaryId,
-      promptType: filing.formType,
-      promptLength: prompt.getFullPrompt(content).length,
+            promptType: filingRecordFromDB!.formType,
+      promptLength: promptContent.length, 
       operationId
     });
     
-    // Call Claude API with the prompt and content
     componentLogger.info(`Calling Claude API`, {
       summaryId,
-      filingType: filing.formType,
+      filingType: filingRecordFromDB!.formType,
       model: claudeOptions?.model || modelConfig.defaultModel,
       operationId
     });
@@ -249,169 +201,97 @@ export async function summarizeFiling(options: SummarizationOptions): Promise<Su
     const apiCallStart = Date.now();
     
     try {
-      // Make the API call to Claude with enhanced options
       const response = await aiClient.completeChat({
         model: claudeOptions?.model || modelConfig.defaultModel,
         messages: [
-          { role: 'user', content: prompt.getFullPrompt(content) }
+          { role: 'user', content: promptContent } 
         ],
         max_tokens: claudeOptions?.maxTokens || modelConfig.maxOutputTokens,
         temperature: claudeOptions?.temperature
       }, claudeOptions);
       
-      // Record API call duration
       const apiCallDuration = Date.now() - apiCallStart;
-      monitoring.recordTiming('ai.claude_api_duration', apiCallDuration, {
-        filingType: filing.formType,
-        model: response.model
-      });
+      monitoring.recordTiming('ai.claude_api_duration', apiCallDuration);
       
-      // Get the text response - handle different Claude API response formats
       let summaryText = '';
-      let inputTokens = 0;
-      let outputTokens = 0;
-      
-      // Handle different Claude API response formats
-      if (response.content && Array.isArray(response.content) && response.content.length > 0) {
-        // New Claude API format
-        const contentBlock = response.content[0];
-        if (typeof contentBlock === 'object' && contentBlock !== null) {
-          // Handle potential missing 'text' property
-          if ('text' in contentBlock) {
-            summaryText = contentBlock.text || '';
-          }
-        }
-        
-        // Get token usage from the new format
-        if (response.usage) {
-          inputTokens = response.usage.input_tokens || 0;
-          outputTokens = response.usage.output_tokens || 0;
-        }
-      } else {
-        // Handle legacy API format (for backward compatibility)
-        // We need to use type assertion since the completion property
-        // is not in the current type definition
-        const legacyResponse = response as any;
-        if (typeof legacyResponse.completion === 'string') {
-          summaryText = legacyResponse.completion;
-          
-          // Get token usage from the old format
-          if (legacyResponse.usage) {
-            inputTokens = legacyResponse.usage.inputTokens || 0;
-            outputTokens = legacyResponse.usage.outputTokens || 0;
+      if (response.content && Array.isArray(response.content)) {
+        for (const block of response.content) {
+          if (block.type === 'text' && typeof block.text === 'string') {
+            summaryText += block.text; // Concatenate text from all text blocks
           }
         }
       }
+
+      if (!summaryText && response.content) { // If summaryText is still empty but there was content
+        componentLogger.warn('No text content extracted from Claude response, using stringified content.', { summaryId, operationId, responseContent: response.content });
+        summaryText = JSON.stringify(response.content); // Fallback similar to old behavior for unexpected structure
+      } else if (!summaryText) {
+        componentLogger.warn('No text content and no response.content found in Claude response.', { summaryId, operationId });
+      }
       
-      // Log success
-      componentLogger.info(`Claude API call successful`, {
-        summaryId,
-        filingType: filing.formType,
-        responseLength: summaryText.length,
-        tokensUsed: inputTokens + outputTokens,
-        model: response.model,
-        duration: apiCallDuration,
-        operationId,
-        attempts: 1,
-        fallbackUsed: false
-      });
+      const inputTokens = response.usage?.input_tokens || 0;
+      const outputTokens = response.usage?.output_tokens || 0;
+      const modelUsed = response.model || (claudeOptions?.model || modelConfig.defaultModel);
+      const cost = calculateCost(modelUsed, inputTokens, outputTokens);
+
       
-      console.log(`[DEBUG][AI] Received summary text of length: ${summaryText.length}`);
       
-      // Track token usage
+      componentLogger.debug(`AI response received`, { summaryId, model: response.model, inputTokens, outputTokens, operationId });
       monitoring.recordValue('ai.tokens_used.input', inputTokens);
       monitoring.recordValue('ai.tokens_used.output', outputTokens);
       
-      // Parse the JSON from the response
+      console.log('\n[DEBUG][ClaudeSummarizer] RAW CLAUDE RESPONSE START ===\n', summaryText, '\n=== RAW CLAUDE RESPONSE END\n');
+
       componentLogger.info(`Parsing response JSON`, { summaryId, operationId });
-      
-      const parsingStart = Date.now();
-      
-      // Use our parser to extract structured data
-      const parsedResult = parseResponse(
-        summaryText,
-        filing.formType as SECFilingType,
-        {
-          allowPartial: true,
-          normalize: true,
-          collectMetrics: true
-        }
-      );
-      
-      // Record parsing duration
-      const parsingDuration = Date.now() - parsingStart;
-      monitoring.recordTiming('ai.parsing_duration', parsingDuration, {
-        filingType: filing.formType,
-        success: parsedResult.success
-      });
-      
-      // Handle parsing result
-      if (parsedResult.success) {
-        componentLogger.info(`Successfully parsed JSON from response`, {
-          summaryId,
-          filingType: filing.formType,
-          isPartial: parsedResult.partial || false,
-          operationId
-        });
+      const parsingStartTime = Date.now();
+      const parsedResult = parseResponse(summaryText, filingRecordFromDB!.formType as SECFilingType);
+      const parsingDuration = Date.now() - parsingStartTime;
+
+      if (parsedResult.success && parsedResult.data) {
+        monitoring.recordTiming('ai.parsing_duration', parsingDuration);
+        componentLogger.info(`Successfully parsed response JSON`, { summaryId, operationId });
         
-        if (parsedResult.partial) {
-          monitoring.incrementCounter('ai.partial_parsing', 1, {
-            filingType: filing.formType
-          });
-        } else {
-          monitoring.incrementCounter('ai.full_parsing', 1, {
-            filingType: filing.formType
-          });
-        }
-        
-        // Update the summary record with the results
         await prisma.summary.update({
           where: { id: summaryId },
           data: {
-            summaryText,
-            summaryJSON: parsedResult.data,
+            summaryText: parsedResult.data.summary,
             processingStatus: 'COMPLETED',
             processingCompletedAt: new Date(),
-            isPartialResult: parsedResult.partial || false,
+            isPartialResult: false,
             processingTimeMs: Date.now() - startTime,
             tokensUsed: inputTokens + outputTokens,
             model: response.model,
-            cost: 0, // Set default cost since it may not be available
+            cost,
             attempts: response.executionMetadata?.attempts || 1
           }
         });
         
-        // Return the successful result with metrics
         return {
           summaryId,
-          summaryText,
+          summaryText: parsedResult.data.summary,
           summaryJSON: parsedResult.data,
-          isPartial: parsedResult.partial || false,
           duration: Date.now() - startTime,
           modelUsed: response.model,
           inputTokens,
           outputTokens,
-          cost: 0, // Set default cost since it may not be available
+          cost,
           attempts: response.executionMetadata?.attempts || 1
         };
       } else {
-        // Handle parsing failure with partial results
+        monitoring.recordTiming('ai.parsing_duration', parsingDuration);
         componentLogger.warn(`Failed to parse valid JSON from response`, {
           summaryId,
-          filingType: filing.formType,
+          filingType: filingRecordFromDB!.formType,
           parsingErrors: parsedResult.errors,
           operationId
         });
         
-        monitoring.incrementCounter('ai.parsing_failed', 1, {
-          filingType: filing.formType
-        });
+        monitoring.incrementCounter('ai.summarization_parsing_error', 1);
         
-        // Store the text anyway, but mark as failed/partial
         await prisma.summary.update({
           where: { id: summaryId },
           data: {
-            summaryText,
+            summaryText, 
             processingStatus: 'COMPLETED_WITH_WARNINGS',
             processingCompletedAt: new Date(),
             isPartialResult: true,
@@ -419,12 +299,11 @@ export async function summarizeFiling(options: SummarizationOptions): Promise<Su
             processingError: 'Failed to parse JSON response: ' + parsedResult.errors?.join('; '),
             tokensUsed: inputTokens + outputTokens,
             model: response.model,
-            cost: 0, // Set default cost since it may not be available
+            cost,
             attempts: response.executionMetadata?.attempts || 1
           }
         });
         
-        // Return partial success with parsing errors
         return {
           summaryId,
           summaryText,
@@ -433,32 +312,24 @@ export async function summarizeFiling(options: SummarizationOptions): Promise<Su
           modelUsed: response.model,
           inputTokens,
           outputTokens,
-          cost: 0, // Set default cost since it may not be available
+          cost,
           attempts: response.executionMetadata?.attempts || 1
         };
       }
     } catch (error) {
-      // Handle AI API errors
       componentLogger.error(`Error calling Claude API`, {
         error: error instanceof Error ? error.message : String(error),
         summaryId,
-        filingType: filing.formType,
+        filingType: filingRecordFromDB!.formType,
         operationId
       });
       
-      // Track API failure
-      monitoring.incrementCounter('ai.api_error', 1, {
-        filingType: filing.formType,
-        errorType: error instanceof ApiError ? error.code : 'UNKNOWN'
-      });
+      monitoring.incrementCounter('ai.summarization_error', 1, { reason: (error instanceof ApiError || error instanceof SummarizationError) ? error.code : 'unknown_error_type', filingType: filingRecordFromDB?.formType || 'unknown' });
       
-      // Only update the database if the error is not retriable or rate limiting
-      // This allows the job processor to retry the task
       const isRetriable = error instanceof ApiError && error.isRetriable;
       const isRateLimit = error instanceof ApiError && error.code === ErrorCode.RATE_LIMITED;
       
       if (!isRetriable || (error instanceof ApiError && error.code === ErrorCode.RETRY_EXHAUSTED)) {
-        // Update the summary record with the error
         await prisma.summary.update({
           where: { id: summaryId },
           data: {
@@ -470,30 +341,27 @@ export async function summarizeFiling(options: SummarizationOptions): Promise<Su
         });
       }
       
-      // Wrap in SummarizationError for consistent handling
       throw new SummarizationError(
         `Claude API error: ${error instanceof Error ? error.message : String(error)}`,
         summaryId,
-        filing.formType,
+        filingRecordFromDB!.formType,
         error instanceof ApiError ? error.code : 'AI_ERROR',
         isRetriable || isRateLimit,
         error instanceof ApiError ? error.code : 'ai_error'
       );
     }
   } catch (error) {
-    // If error is already a SummarizationError, just rethrow
     if (error instanceof SummarizationError) {
       throw error;
     }
     
-    // Otherwise wrap in SummarizationError
     throw new SummarizationError(
       `Summarization failed: ${error instanceof Error ? error.message : String(error)}`,
       summaryId,
-      'unknown',
+      filingRecordFromDB?.formType || 'unknown', 
       'SUMMARIZATION_FAILED',
       error instanceof ApiError && error.isRetriable,
       'unexpected_error'
     );
   }
-} 
+}
