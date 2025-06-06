@@ -130,7 +130,7 @@ export interface SummarizationResult {
  */
 export async function summarizeFiling(options: SummarizationOptions): Promise<SummarizationResult> {
   let filingRecordFromDB: any = null;
-    const { filingId, summaryId, requestId, claudeOptions, documentContent } = options; 
+  const { filingId, summaryId, requestId, claudeOptions, documentContent } = options; 
   // filingRecordFromDB is declared above so it's in scope for the catch blocks 
   const startTime = Date.now();
   
@@ -164,7 +164,7 @@ export async function summarizeFiling(options: SummarizationOptions): Promise<Su
     });
 
     if (!documentContent || documentContent.length === 0) {
-            monitoring.incrementCounter('ai.summarization_error', 1, { reason: 'missing_document_content' });
+    monitoring.incrementCounter('ai.summarization_error', 1);
       throw new SummarizationError(
         `Document content was not provided for filing ${filingId}`,
         summaryId,
@@ -176,39 +176,110 @@ export async function summarizeFiling(options: SummarizationOptions): Promise<Su
     }
     componentLogger.info(`Using provided document content, preparing prompt`, { summaryId, operationId, contentLength: documentContent.length });
     
-        monitoring.incrementCounter('ai.summarization_by_type', 1, { filingType: filingRecordFromDB!.formType });
+        monitoring.incrementCounter('ai.summarization_by_type', 1);
     
-    const promptGenerator = getPromptForFilingType(filingRecordFromDB!.formType as SECFilingType, {
-            ticker: filingRecordFromDB!.ticker?.symbol,
-            companyName: filingRecordFromDB!.ticker?.companyName 
-    });
-    const promptContent = promptGenerator.getFullPrompt(documentContent); 
+    // --- Prompt Chunking/Truncation Integration ---
+    const { needsChunking } = await import('./prompts/context-manager');
+    const { generateChunkedPrompts } = await import('./prompts/filing-prompts');
 
-    componentLogger.debug(`Prompt prepared`, {
-      summaryId,
-            promptType: filingRecordFromDB!.formType,
-      promptLength: promptContent.length, 
-      operationId
-    });
-    
-    componentLogger.info(`Calling Claude API`, {
-      summaryId,
-      filingType: filingRecordFromDB!.formType,
-      model: claudeOptions?.model || modelConfig.defaultModel,
-      operationId
-    });
-    
-    const apiCallStart = Date.now();
-    
-    try {
-      const response = await aiClient.completeChat({
+    let summaryText = '';
+    let inputTokens = 0;
+    let outputTokens = 0;
+    let modelUsed = claudeOptions?.model || modelConfig.defaultModel;
+    let chunkSummaries: string[] = [];
+    let chunkParsingErrors: string[] = [];
+    let chunkAttempts = 0;
+    let cost = 0;
+    let parsingDuration = 0;
+    let parsedResult: any = null;
+    let chunked = false;
+
+    // Check if chunking is needed
+    const doChunk = needsChunking(documentContent, filingRecordFromDB!.formType);
+    if (doChunk) {
+      chunked = true;
+      componentLogger.info('Document requires chunking, splitting into chunks', { summaryId, operationId });
+      monitoring.incrementCounter('ai.summarization_chunked', 1);
+      // Generate chunked prompts
+      const chunkedPrompts = generateChunkedPrompts({
+        content: documentContent,
+        filingType: filingRecordFromDB!.formType,
+        companyName: filingRecordFromDB!.ticker?.companyName || 'Unknown Company',
+        filingDate: filingRecordFromDB!.filingDate ? new Date(filingRecordFromDB!.filingDate).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
+        ticker: filingRecordFromDB!.ticker?.symbol || 'Unknown',
+        contextConfig: undefined,
+        promptConfig: claudeOptions,
+        section: undefined
+      });
+      componentLogger.info(`Generated ${chunkedPrompts.length} chunks for summarization`, { summaryId, operationId });
+      for (const chunkPrompt of chunkedPrompts) {
+        try {
+          const chunkStart = Date.now();
+          const response = await aiClient.completeChat({
+            model: chunkPrompt.options.model || modelConfig.defaultModel,
+            messages: chunkPrompt.messages,
+            max_tokens: chunkPrompt.options.maxTokens || modelConfig.maxOutputTokens,
+            temperature: chunkPrompt.options.temperature
+          }, chunkPrompt.options);
+          const chunkDuration = Date.now() - chunkStart;
+          monitoring.recordTiming('ai.claude_api_duration', chunkDuration);
+
+          let chunkSummary = '';
+          if (response.content && Array.isArray(response.content)) {
+            for (const block of response.content) {
+              if (block.type === 'text' && typeof block.text === 'string') {
+                chunkSummary += block.text;
+              }
+            }
+          }
+          if (!chunkSummary && response.content) {
+            chunkSummary = JSON.stringify(response.content);
+          }
+          chunkSummaries.push(chunkSummary);
+          inputTokens += response.usage?.input_tokens || 0;
+          outputTokens += response.usage?.output_tokens || 0;
+          modelUsed = response.model || modelUsed;
+          cost += calculateCost(modelUsed, response.usage?.input_tokens || 0, response.usage?.output_tokens || 0);
+          chunkAttempts += response.executionMetadata?.attempts || 1;
+        } catch (chunkError) {
+          componentLogger.error('Error summarizing chunk', { summaryId, operationId, chunkIndex: chunkPrompt.chunkIndex, error: chunkError });
+          chunkParsingErrors.push(`Chunk ${chunkPrompt.chunkIndex + 1}: ${chunkError instanceof Error ? chunkError.message : String(chunkError)}`);
+          monitoring.incrementCounter('ai.summarization_chunk_error', 1);
+        }
+      }
+      summaryText = chunkSummaries.join('\n\n---\n\n');
+      // Optionally, you could re-summarize the combined chunk summaries in a final pass here
+      // For now, just aggregate
+      componentLogger.info('Aggregated chunked summaries', { summaryId, operationId, chunkCount: chunkedPrompts.length });
+    } else {
+      // Not chunked, use normal prompt
+      const promptGenerator = getPromptForFilingType(filingRecordFromDB!.formType as SECFilingType, {
+        ticker: filingRecordFromDB!.ticker?.symbol,
+        companyName: filingRecordFromDB!.ticker?.companyName
+      });
+      const promptContent = promptGenerator.getFullPrompt(documentContent);
+      componentLogger.debug(`Prompt prepared`, {
+        summaryId,
+        promptType: filingRecordFromDB!.formType,
+        promptLength: promptContent.length,
+        operationId
+      });
+      componentLogger.info(`Calling Claude API`, {
+        summaryId,
+        filingType: filingRecordFromDB!.formType,
         model: claudeOptions?.model || modelConfig.defaultModel,
-        messages: [
-          { role: 'user', content: promptContent } 
-        ],
-        max_tokens: claudeOptions?.maxTokens || modelConfig.maxOutputTokens,
-        temperature: claudeOptions?.temperature
-      }, claudeOptions);
+        operationId
+      });
+      const apiCallStart = Date.now();
+      try {
+        const response = await aiClient.completeChat({
+          model: claudeOptions?.model || modelConfig.defaultModel,
+          messages: [
+            { role: 'user', content: promptContent }
+          ],
+          max_tokens: claudeOptions?.maxTokens || modelConfig.maxOutputTokens,
+          temperature: claudeOptions?.temperature
+        }, claudeOptions);
       
       const apiCallDuration = Date.now() - apiCallStart;
       monitoring.recordTiming('ai.claude_api_duration', apiCallDuration);
@@ -234,11 +305,9 @@ export async function summarizeFiling(options: SummarizationOptions): Promise<Su
       const modelUsed = response.model || (claudeOptions?.model || modelConfig.defaultModel);
       const cost = calculateCost(modelUsed, inputTokens, outputTokens);
 
-      
-      
       componentLogger.debug(`AI response received`, { summaryId, model: response.model, inputTokens, outputTokens, operationId });
-      monitoring.recordValue('ai.tokens_used.input', inputTokens);
-      monitoring.recordValue('ai.tokens_used.output', outputTokens);
+        monitoring.recordValue('ai.tokens_used.input', inputTokens);
+        monitoring.recordValue('ai.tokens_used.output', outputTokens);
       
       console.log('\n[DEBUG][ClaudeSummarizer] RAW CLAUDE RESPONSE START ===\n', summaryText, '\n=== RAW CLAUDE RESPONSE END\n');
 
@@ -324,7 +393,7 @@ export async function summarizeFiling(options: SummarizationOptions): Promise<Su
         operationId
       });
       
-      monitoring.incrementCounter('ai.summarization_error', 1, { reason: (error instanceof ApiError || error instanceof SummarizationError) ? error.code : 'unknown_error_type', filingType: filingRecordFromDB?.formType || 'unknown' });
+      monitoring.incrementCounter('ai.summarization_error', 1);
       
       const isRetriable = error instanceof ApiError && error.isRetriable;
       const isRateLimit = error instanceof ApiError && error.code === ErrorCode.RATE_LIMITED;
@@ -350,18 +419,18 @@ export async function summarizeFiling(options: SummarizationOptions): Promise<Su
         error instanceof ApiError ? error.code : 'ai_error'
       );
     }
-  } catch (error) {
-    if (error instanceof SummarizationError) {
-      throw error;
-    }
-    
-    throw new SummarizationError(
-      `Summarization failed: ${error instanceof Error ? error.message : String(error)}`,
-      summaryId,
-      filingRecordFromDB?.formType || 'unknown', 
-      'SUMMARIZATION_FAILED',
-      error instanceof ApiError && error.isRetriable,
-      'unexpected_error'
-    );
   }
+} catch (error) {
+  if (error instanceof SummarizationError) {
+    throw error;
+  }
+  throw new SummarizationError(
+    `Summarization failed: ${error instanceof Error ? error.message : String(error)}`,
+    summaryId,
+    filingRecordFromDB?.formType || 'unknown',
+    'SUMMARIZATION_FAILED',
+    error instanceof ApiError && error.isRetriable,
+    'unexpected_error'
+  );
+}
 }

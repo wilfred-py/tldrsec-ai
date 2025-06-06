@@ -117,12 +117,18 @@ export interface FilingSummaryResult {
   filingUrl?: string; // Kept for backward compatibility
   parsedContent?: ParsedContent;
   rawData?: any;
-  // Adding AI metrics fields
-  tokensUsed?: number;
+  // AI metrics fields
+  tokensUsed?: number; // total tokens (legacy)
+  inputTokens?: number;
+  outputTokens?: number;
   model?: string;
   cost?: number;
   processingStatus?: string;
   processingTimeMs?: number;
+  /**
+   * If summarization failed or fallback was used, provides the error reason.
+   */
+  failureReason?: string;
 }
 
 const filingService = {
@@ -220,17 +226,6 @@ const filingService = {
       // Declare result variable outside the if/else blocks for proper scoping
       let result;
       
-      if (debug) {
-        console.log(`[INFO][FilingService] DEBUG MODE: Email would be sent to: ${email} with ${summaries.length} summaries and ${errors.length} errors`);
-        console.log(`[INFO][FilingService] DEBUG MODE: Email subject: ${emailParams.subject}`);
-        console.log(`[INFO][FilingService] DEBUG MODE: Email tags: ${emailParams.tags?.join(', ')}`);
-        // Create a mock result for testing
-        result = { id: 'debug-mode-' + Date.now(), success: true };
-      } else {
-        console.log(`[INFO][FilingService] Sending email summary to: ${email} with ${summaries.length} summaries and ${errors.length} errors`);
-        result = await emailClient.sendEmail(emailParams);
-      }
-      
       // Mark summaries as sent to users
       try {
         console.log(`[INFO][FilingService] Marking ${summaries.length} summaries as sent in the database...`);
@@ -274,17 +269,26 @@ const filingService = {
       console.log(`[INFO][FilingService] Time: ${new Date().toISOString()}`);
       console.log(`[INFO][FilingService] Recipient: ${email}`);
       console.log(`[INFO][FilingService] ----------------------------------------`);
-      console.log(`[INFO][FilingService] | Ticker | Filing Type | Status      | Tokens | Cost ($) |`);
-      console.log(`[INFO][FilingService] |--------|------------|-------------|--------|---------|`);
+      console.log(`[INFO][FilingService] | Ticker | Filing Type | Status      | In  | Out | Cost ($) | Failure Reason`);
+      console.log(`[INFO][FilingService] |--------|------------|-------------|-----|-----|---------|----------------`);
       
       // Add each summary to the table
       for (const summary of summaries) {
         const ticker = summary.ticker.padEnd(6);
         const filingType = summary.filingType.padEnd(10);
-        const status = 'Success'.padEnd(11);
-        const tokens = (summary.tokensUsed?.toString() || 'N/A').padEnd(6);
+        // Determine status: Success, Partial, or Failed
+        let status = 'Success';
+        if (summary.processingStatus === 'COMPLETED_WITH_WARNINGS' || summary.isPartialResult || summary.processingStatus === 'PARTIAL') {
+          status = 'Partial';
+        } else if (summary.processingStatus === 'FAILED') {
+          status = 'Failed';
+        }
+        status = status.padEnd(11);
+        const inTokens = (typeof summary.inputTokens === 'number' ? summary.inputTokens : 'N/A').toString().padEnd(4);
+        const outTokens = (typeof summary.outputTokens === 'number' ? summary.outputTokens : 'N/A').toString().padEnd(4);
         const cost = (summary.cost?.toFixed(4) || 'N/A').padEnd(7);
-        console.log(`[INFO][FilingService] | ${ticker} | ${filingType} | ${status} | ${tokens} | ${cost} |`);
+        const failureReason = summary.failureReason ? summary.failureReason.substring(0, 40) : '';
+        console.log(`[INFO][FilingService] | ${ticker} | ${filingType} | ${status} | ${inTokens} | ${outTokens} | ${cost} | ${failureReason}`);
       }
       
       // Add each error to the table
@@ -292,21 +296,37 @@ const filingService = {
         const ticker = error.ticker.padEnd(6);
         const filingType = 'N/A'.padEnd(10);
         const status = 'Failed'.padEnd(11);
-        const tokens = 'N/A'.padEnd(6);
+        const inTokens = 'N/A'.padEnd(4);
+        const outTokens = 'N/A'.padEnd(4);
         const cost = 'N/A'.padEnd(7);
-        console.log(`[INFO][FilingService] | ${ticker} | ${filingType} | ${status} | ${tokens} | ${cost} |`);
+        const failureReason = error.failureReason ? error.failureReason.substring(0, 40) : (error.error ? error.error.substring(0, 40) : '');
+        console.log(`[INFO][FilingService] | ${ticker} | ${filingType} | ${status} | ${inTokens} | ${outTokens} | ${cost} | ${failureReason}`);
       }
       
       // Add summary statistics
       console.log(`[INFO][FilingService] ----------------------------------------`);
-      const totalTokens = summaries.reduce((sum, s) => sum + (s.tokensUsed || 0), 0);
+      const totalInputTokens = summaries.reduce((sum, s) => sum + (s.inputTokens || 0), 0);
+      const totalOutputTokens = summaries.reduce((sum, s) => sum + (s.outputTokens || 0), 0);
       const totalCost = summaries.reduce((sum, s) => sum + (s.cost || 0), 0).toFixed(4);
-      console.log(`[INFO][FilingService] | Total  | ${summaries.length} success | ${errors.length} failed | ${totalTokens} | ${totalCost} |`);
+      console.log(`[INFO][FilingService] | Total  | ${summaries.length} success | ${errors.length} failed | ${totalInputTokens} | ${totalOutputTokens} | ${totalCost} |`);
       console.log(`[INFO][FilingService] ========================================\n`);
       
       console.log(`[INFO][FilingService] Email summary process completed successfully`);
+      
+      // Declare result variable outside the if/else blocks for proper scoping
+      let result;
+      
+      if (debug) {
+        // Create a mock result for testing
+        result = { id: 'debug-mode-' + Date.now(), success: true };
+      } else {
+        console.log(`[INFO][FilingService] Sending email summary to: ${email} with ${summaries.length} summaries and ${errors.length} errors`);
+        result = await emailClient.sendEmail(emailParams);
+      }
+      
+      // Final return
       return {
-        success: true,
+        success: result.success,
         message: 'Email summary sent successfully!',
         summaries,
         errors
@@ -321,6 +341,7 @@ const filingService = {
     }
   },
   
+{{ ... }}
   // Get a summary of a specific filing type for a company
   getFilingSummary: async (ticker: string, formType: FilingType): Promise<{ data: FilingSummaryResult | null, error?: string }> => {
     try {
@@ -754,34 +775,6 @@ const filingService = {
               }
               
               // We'll skip trying to parse the summaryJSON since AI summarization failed
-              // Generate a SEC HTML viewer URL from the accession number
-              const secHtmlUrl = `https://www.sec.gov/Archives/edgar/data/${company.cik || 'unknown'}/${filing.accessionNumber.replace(/-/g, '')}/index.htm`;
-              
-              return { 
-                data: {
-                  ticker,
-                  companyName: company.name,
-                  filingType: normalizedFormType as FilingType,
-                  filingDate: filing.filingDate,
-                  accessionNumber: filing.accessionNumber,
-                  summaryText, 
-                  keyPoints, 
-                  url: secHtmlUrl,
-                  rawData: filing,
-                  // Add fallback metrics for failed summarization
-                  tokensUsed: 0,
-                  model: 'fallback',
-                  cost: 0,
-                  processingStatus: 'FAILED',
-                  processingTimeMs: 0
-                },
-                error: `AI summarization failed: ${aiError instanceof Error ? aiError.message : String(aiError)}`
-              };
-            }
-            
-            // Extract key points from the summary JSON based on filing type
-            if (normalizedFormType === '10-K') {
-              // For 10-K, extract from financial highlights, business highlights, and risk factors
               keyPoints = [
                 summaryJSON.summary || `Annual report for ${company.name} (${ticker})`,
                 ...(summaryJSON.financialHighlights || []).map((item: any) => 
@@ -822,7 +815,8 @@ const filingService = {
             
             console.log(`[DEBUG][FilingService] Generated AI summary with ${keyPoints.length} key points`);
           } catch (aiError) {
-            console.error(`[ERROR][FilingService] Error generating AI summary: ${aiError instanceof Error ? aiError.message : 'Unknown error'}`);
+            const failureReason = aiError instanceof Error ? aiError.message : 'Unknown error';
+            console.error(`[ERROR][FilingService] Error generating AI summary: ${failureReason}`);
             console.error(`[ERROR][FilingService] Stack trace:`, aiError instanceof Error ? aiError.stack : 'No stack trace');
             
             // Fallback to basic summary if AI summarization fails
@@ -833,6 +827,8 @@ const filingService = {
               `Filed by ${company.name} (${ticker})`,
               `Accession number: ${filing.accessionNumber}`
             ];
+            // Store failureReason for downstream reporting
+            summaryJSON.failureReason = failureReason;
           }
         } catch (fetchError) {
           console.error(`[DEBUG][FilingService] Error fetching or processing document for ${ticker}:`, fetchError);
@@ -872,7 +868,9 @@ const filingService = {
             model: updatedSummary?.model || 'unknown',
             cost: updatedSummary?.cost || 0,
             processingStatus: updatedSummary?.processingStatus || 'COMPLETED',
-            processingTimeMs: updatedSummary?.processingTimeMs || 0
+            processingTimeMs: updatedSummary?.processingTimeMs || 0,
+            // Add failureReason if present in summaryJSON or updatedSummary
+            failureReason: summaryJSON.failureReason || updatedSummary?.processingError || undefined
           }
         };
         // Store the summary in the database for future use
@@ -901,9 +899,16 @@ const filingService = {
                   documentType: mainDocument?.type || 'unknown',
                   documentDescription: mainDocument?.description || 'unknown',
                   rawData: filingDetails ? JSON.stringify(filingDetails).substring(0, 5000) : null,
-                  generatedAt: new Date().toISOString()
+                  generatedAt: new Date().toISOString(),
+                  ...(summaryJSON.failureReason && { failureReason: summaryJSON.failureReason })
                 },
-                sentToUser: false // Will be marked as sent when included in an email
+                sentToUser: false, // Will be marked as sent when included in an email
+                // Store failure reason in processingError and set processingStatus/model for fallback
+                ...(summaryJSON.failureReason && {
+                  processingError: summaryJSON.failureReason,
+                  processingStatus: 'FAILED',
+                  model: 'fallback'
+                })
               }
             });
             console.log(`[INFO][FilingService] Successfully stored summary in database for ${ticker} - ${normalizedFormType}`);

@@ -32,7 +32,7 @@ import {
   selectModelByCost
 } from '../error-handling/model-fallback';
 import { logger } from '../logging';
-import { monitoring } from '../monitoring';
+import monitoring from '../monitoring';
 
 /**
  * Type definitions for Claude API requests and responses
@@ -181,10 +181,7 @@ export class ClaudeClient {
             requestId
           });
           
-          monitoring.incrementCounter('claude.retry', 1, {
-            model: params.model,
-            requestType
-          });
+          monitoring.incrementCounter('claude.retry', 1);
         }
       };
       
@@ -244,11 +241,7 @@ export class ClaudeClient {
 
       // Record timing metrics
       monitoring.stopTimer(`claude.request.${requestType}`);
-      monitoring.recordValue('claude.request.duration', Date.now() - startTime, {
-        model: modelUsed,
-        requestType,
-        success: 'true'
-      });
+      monitoring.recordTiming('claude.request.duration', Date.now() - startTime);
       
       // Clear the timeout if it was set
       abortController.clearTimeout();
@@ -268,10 +261,7 @@ export class ClaudeClient {
       this.totalCost += inputCost + outputCost;
       
       // Record cost metrics
-      monitoring.recordValue('claude.cost', inputCost + outputCost, {
-        model: modelUsed,
-        requestType
-      });
+      monitoring.recordTiming('claude.cost', inputCost + outputCost);
 
       logger.info(`Chat completion completed successfully`, {
         model: modelUsed,
@@ -297,15 +287,8 @@ export class ClaudeClient {
     } catch (error: any) {
       // Record failure metrics
       monitoring.stopTimer(`claude.request.${requestType}`);
-      monitoring.recordValue('claude.request.duration', Date.now() - startTime, {
-        model: params.model,
-        requestType,
-        success: 'false'
-      });
-      monitoring.incrementCounter('claude.error', 1, {
-        model: params.model,
-        errorType: error instanceof ApiError ? error.code : 'UNKNOWN'
-      });
+      monitoring.recordTiming('claude.request.duration', Date.now() - startTime);
+      monitoring.incrementCounter('claude.error', 1);
       
       // Clear the timeout if it was set
       abortController.clearTimeout();
@@ -383,10 +366,7 @@ export class ClaudeClient {
             requestId
           });
           
-          monitoring.incrementCounter('claude.retry', 1, {
-            model,
-            requestType
-          });
+          monitoring.incrementCounter('claude.retry', 1);
         }
       };
       
@@ -507,15 +487,8 @@ export class ClaudeClient {
       
       // Record metrics
       monitoring.stopTimer(`claude.request.${requestType}`);
-      monitoring.recordValue('claude.request.duration', executionTimeMs, {
-        model: modelUsed,
-        requestType,
-        success: 'true'
-      });
-      monitoring.recordValue('claude.cost', cost.totalCost, {
-        model: modelUsed, 
-        requestType
-      });
+      monitoring.recordTiming('claude.request.duration', executionTimeMs);
+      monitoring.recordTiming('claude.cost', cost.totalCost);
       
       // Clear the timeout if it was set
       abortController.clearTimeout();
@@ -551,15 +524,8 @@ export class ClaudeClient {
     } catch (error: any) {
       // Record failure metrics
       monitoring.stopTimer(`claude.request.${requestType}`);
-      monitoring.recordValue('claude.request.duration', Date.now() - startTime, {
-        model,
-        requestType,
-        success: 'false'
-      });
-      monitoring.incrementCounter('claude.error', 1, {
-        model,
-        errorType: error instanceof ApiError ? error.code : 'UNKNOWN'
-      });
+      monitoring.recordTiming('claude.request.duration', Date.now() - startTime);
+      monitoring.incrementCounter('claude.error', 1);
       
       // Clear the timeout if it was set
       abortController.clearTimeout();
