@@ -328,4 +328,5 @@ class Monitoring {
 }
 
 // Create and export a singleton instance
-export const monitoring = new Monitoring(); 
+export const monitoring = new Monitoring();
+export default monitoring;
