@@ -194,15 +194,17 @@ export function splitDocumentIntoChunks(
 
 /**
  * Calculate the estimated tokens for a document
- * This is a simple approximation - real implementation would use a tokenizer
+ * More accurate approximation for Claude's tokenizer
  */
 export function estimateTokenCount(text: string): number {
-  // A very rough estimation: ~4 characters per token for English
-  return Math.ceil(text.length / 4);
+  // Claude's tokenizer is closer to ~3.5 characters per token for English text
+  // Adding a 10% buffer to be safe
+  return Math.ceil(text.length / 3.5 * 1.1);
 }
 
 /**
  * Determine if a document needs chunking based on its size and filing type
+ * Uses a more conservative approach to ensure we stay within Claude's token limits
  */
 export function needsChunking(
   document: string,
@@ -212,6 +214,9 @@ export function needsChunking(
   const config = getContextConfig(filingType, section);
   const estimatedTokens = estimateTokenCount(document);
   
-  // Add a buffer to be safe
-  return estimatedTokens > config.maxChunkSize * 0.9;
+  // Be more conservative with the threshold - Claude has a 200k token limit
+  // but we need to account for the prompt text and system instructions too
+  const maxSafeTokens = Math.min(config.maxChunkSize, 150000); // Never exceed 150k tokens
+  
+  return estimatedTokens > maxSafeTokens * 0.85; // Add a 15% safety margin
 } 
