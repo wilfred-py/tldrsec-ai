@@ -10,11 +10,146 @@ import { modelConfig } from './config';
 import { parseResponse } from './parsers';
 import { SECFilingType } from './prompts/prompt-types';
 import { generateFilingPrompt } from './prompts/filing-prompts';
-import { extractFilingContent } from '@/lib/parsers/filing-extractor';
-import { logger } from '@/lib/logging';
-import { monitoring } from '@/lib/monitoring';
-import { ApiError, ErrorCode } from '@/lib/error-handling';
-import { prisma } from '@/lib/db/prisma';
+import { estimateTokenCount, splitDocumentIntoChunks, getContextConfig } from './prompts/context-manager';
+import type { ContentBlock } from '@anthropic-ai/sdk/resources/messages';
+import { extractFilingContent } from '../parsers/filing-extractor';
+import { logger } from '../logging';
+import { monitoring } from '../monitoring';
+import { ApiError, ErrorCode } from '../error-handling';
+import { prisma } from '../db/prisma';
+
+/**
+ * Process document content for summarization
+ * - Checks if document needs chunking based on token count
+ * - Either returns full document or processes it into chunks
+ * 
+ * @param content - The document content to process
+ * @param filingType - The type of SEC filing
+ * @param maxTokens - Maximum tokens allowed
+ * @returns Processed document content and chunking info
+ */
+function processDocumentContent(content: string, filingType: SECFilingType, maxTokens: number = 150000): {
+  processedContent: string;
+  isChunked: boolean;
+  chunkCount?: number;
+  estimatedTokens: number;
+} {
+  // Estimate current token count
+  const estimatedTokens = estimateTokenCount(content);
+  
+  // If we're already under the limit, return the full content
+  if (estimatedTokens <= maxTokens * 0.85) { // Using 85% of max as safety margin
+    return {
+      processedContent: content,
+      isChunked: false,
+      estimatedTokens
+    };
+  }
+  
+  // Document needs chunking - use the chunking strategy from context-manager
+  const config = getContextConfig(filingType);
+  
+  // Adjust config to respect our maxTokens parameter
+  const adjustedConfig = {
+    ...config,
+    maxChunkSize: Math.min(config.maxChunkSize, maxTokens * 0.85) // 85% of max tokens
+  };
+  
+  // Get chunks using the appropriate strategy
+  const chunks = splitDocumentIntoChunks(content, adjustedConfig);
+  
+  // For now, we'll just use the first chunk which contains the most important content
+  // In a more advanced implementation, we would process each chunk separately
+  // and then combine the results
+  
+  // Return the first chunk (most important content) and chunking info
+  return {
+    processedContent: chunks[0],
+    isChunked: true,
+    chunkCount: chunks.length,
+    estimatedTokens: estimateTokenCount(chunks[0])
+  };
+}
+
+/**
+ * Truncate document content to fit within token limits
+ * Uses a smart approach to preserve important sections
+ * 
+ * @param content - The document content to truncate
+ * @param maxTokens - Maximum tokens to allow
+ * @returns Truncated document content
+ */
+function truncateDocumentContent(content: string, maxTokens: number): string {
+  // Estimate current token count
+  const currentTokens = estimateTokenCount(content);
+  
+  // If already under limit, return as is
+  if (currentTokens <= maxTokens) {
+    return content;
+  }
+  
+  // Split document into sections/paragraphs
+  const sections = content.split(/\n\n+/);
+  
+  // Calculate approximate ratio to keep
+  const keepRatio = maxTokens / currentTokens;
+  
+  // Prioritize important sections based on keywords
+  const prioritizedSections = sections.map((section, index) => {
+    let priority = 0;
+    
+    // Prioritize sections with important keywords
+    if (/risk factors|item 1a|item 7|financial statements|management discussion/i.test(section)) {
+      priority += 3;
+    }
+    
+    // Prioritize sections with numbers (often important in financial docs)
+    if (/\$|\d+\.\d+|\d+%|million|billion/i.test(section)) {
+      priority += 2;
+    }
+    
+    // Prioritize beginning and end of document
+    if (index < sections.length * 0.2) { // First 20%
+      priority += 2;
+    } else if (index > sections.length * 0.8) { // Last 20%
+      priority += 1;
+    }
+    
+    return { section, priority, index };
+  });
+  
+  // Sort by priority (highest first)
+  prioritizedSections.sort((a, b) => {
+    if (a.priority !== b.priority) {
+      return b.priority - a.priority;
+    }
+    // If same priority, maintain original order
+    return a.index - b.index;
+  });
+  
+  // Keep sections until we hit the token limit
+  const keptSections: string[] = [];
+  let tokenCount = 0;
+  
+  for (const { section } of prioritizedSections) {
+    const sectionTokens = estimateTokenCount(section);
+    
+    if (tokenCount + sectionTokens <= maxTokens * 0.95) { // Leave 5% buffer
+      keptSections.push(section);
+      tokenCount += sectionTokens;
+    }
+  }
+  
+  // Sort back to original order
+  keptSections.sort((a, b) => {
+    const indexA = sections.indexOf(a);
+    const indexB = sections.indexOf(b);
+    return indexA - indexB;
+  });
+  
+  // Join sections back together
+  return keptSections.join('\n\n');
+}
 
 // TODO: Implement actual cost calculation based on model and token counts
 // This function calculates the estimated cost of an AI operation.
@@ -27,7 +162,7 @@ function calculateCost(model: string, inputTokens: number, outputTokens: number)
   // const claudeSonnetInputCostPerMillion = 3;
   // const claudeSonnetOutputCostPerMillion = 15;
 
-  let cost = 0;
+  const cost = 0;
   // A real implementation would look up rates based on the 'model' string
   // For now, log and return 0
   componentLogger.debug(`Cost calculation for model '${model}', input tokens: ${inputTokens}, output tokens: ${outputTokens}. Placeholder returning 0.`);
@@ -112,13 +247,13 @@ export interface SummarizationOptions {
  */
 export interface SummarizationResult {
   summaryId: string;
-  summaryText: any;
-  summaryJSON?: any;
+  summaryText: string | Record<string, unknown>;
+  summaryJSON?: Record<string, unknown>;
   isPartial?: boolean;
   duration: number;
   parsingErrors?: string[];
   // AI metrics
-  modelUsed?: string;
+  modelUsed: string;
   inputTokens?: number;
   outputTokens?: number;
   cost?: number;
@@ -129,7 +264,17 @@ export interface SummarizationResult {
  * Summarize an SEC filing using Claude AI with robust error handling and fallback
  */
 export async function summarizeFiling(options: SummarizationOptions): Promise<SummarizationResult> {
-  let filingRecordFromDB: any = null;
+  // Define a type that matches the Prisma return structure
+  type SECFilingRecord = {
+    id: string;
+    formType: string;
+    rawContent?: string;
+    companyName: string;
+    ticker?: { symbol?: string };
+    accessionNumber?: string;
+  };
+  
+  let filingRecordFromDB: SECFilingRecord | null = null;
   const { filingId, summaryId, requestId, claudeOptions, documentContent } = options; 
   // filingRecordFromDB is declared above so it's in scope for the catch blocks 
   const startTime = Date.now();
@@ -137,7 +282,7 @@ export async function summarizeFiling(options: SummarizationOptions): Promise<Su
   const aiClient = claudeClient;
   const operationId = requestId || `summarize-${summaryId}-${Date.now()}`;
   
-  componentLogger.info(`Starting summarization`, { summaryId, filingId, operationId });
+  componentLogger.info(`Starting summarization for summaryId=${summaryId}, filingId=${filingId}, operationId=${operationId}`);
   monitoring.incrementCounter('ai.summarization_started', 1);
   
   try {
@@ -150,176 +295,175 @@ export async function summarizeFiling(options: SummarizationOptions): Promise<Su
       where: { id: summaryId }
     });
     
-        if (!filingRecordFromDB) {
-            throw new SummarizationError(`Filing with ID ${filingId} not found`, summaryId, 'unknown', 'FILING_NOT_FOUND', false, 'missing_filing');
+    if (!filingRecordFromDB) {
+      componentLogger.error(`Filing not found for summaryId=${summaryId}, filingId=${filingId}`);
+      monitoring.incrementCounter('ai.summarization_error');
+      throw new SummarizationError(
+        `Filing not found: ${filingId}`,
+        summaryId,
+        'unknown',
+        'FILING_NOT_FOUND',
+        false,
+        'filing_not_found'
+      );
     }
     
     if (!summary) {
-            throw new SummarizationError(`Summary with ID ${summaryId} not found`, summaryId, filingRecordFromDB?.formType || 'unknown', 'SUMMARY_NOT_FOUND', false, 'missing_summary');
-    }
-    
-    await prisma.summary.update({
-      where: { id: summaryId },
-      data: { processingStatus: 'PROCESSING', processingCompletedAt: null }
-    });
-
-    if (!documentContent || documentContent.length === 0) {
-    monitoring.incrementCounter('ai.summarization_error', 1);
+      componentLogger.error(`Summary record not found for summaryId=${summaryId}`);
+      monitoring.incrementCounter('ai.summarization_error');
       throw new SummarizationError(
-        `Document content was not provided for filing ${filingId}`,
+        `Summary record not found: ${summaryId}`,
         summaryId,
-        filingRecordFromDB!.formType,
-        'NO_CONTENT_PROVIDED',
+        filingRecordFromDB.formType,
+        'SUMMARY_NOT_FOUND',
         false,
-        'missing_document_content'
+        'summary_not_found'
       );
     }
-    componentLogger.info(`Using provided document content, preparing prompt`, { summaryId, operationId, contentLength: documentContent.length });
     
-        monitoring.incrementCounter('ai.summarization_by_type', 1);
-    
-    // --- Prompt Chunking/Truncation Integration ---
-    const { needsChunking } = await import('./prompts/context-manager');
-    const { generateChunkedPrompts } = await import('./prompts/filing-prompts');
-
-    let summaryText = '';
-    let inputTokens = 0;
-    let outputTokens = 0;
-    let modelUsed = claudeOptions?.model || modelConfig.defaultModel;
-    let chunkSummaries: string[] = [];
-    let chunkParsingErrors: string[] = [];
-    let chunkAttempts = 0;
-    let cost = 0;
-    let parsingDuration = 0;
-    let parsedResult: any = null;
-    let chunked = false;
-
-    // Check if chunking is needed
-    const doChunk = needsChunking(documentContent, filingRecordFromDB!.formType);
-    if (doChunk) {
-      chunked = true;
-      componentLogger.info('Document requires chunking, splitting into chunks', { summaryId, operationId });
-      monitoring.incrementCounter('ai.summarization_chunked', 1);
-      // Generate chunked prompts
-      const chunkedPrompts = generateChunkedPrompts({
-        content: documentContent,
-        filingType: filingRecordFromDB!.formType,
-        companyName: filingRecordFromDB!.ticker?.companyName || 'Unknown Company',
-        filingDate: filingRecordFromDB!.filingDate ? new Date(filingRecordFromDB!.filingDate).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
-        ticker: filingRecordFromDB!.ticker?.symbol || 'Unknown',
-        contextConfig: undefined,
-        promptConfig: claudeOptions,
-        section: undefined
-      });
-      componentLogger.info(`Generated ${chunkedPrompts.length} chunks for summarization`, { summaryId, operationId });
-      for (const chunkPrompt of chunkedPrompts) {
-        try {
-          const chunkStart = Date.now();
-          const response = await aiClient.completeChat({
-            model: chunkPrompt.options.model || modelConfig.defaultModel,
-            messages: chunkPrompt.messages,
-            max_tokens: chunkPrompt.options.maxTokens || modelConfig.maxOutputTokens,
-            temperature: chunkPrompt.options.temperature
-          }, chunkPrompt.options);
-          const chunkDuration = Date.now() - chunkStart;
-          monitoring.recordTiming('ai.claude_api_duration', chunkDuration);
-
-          let chunkSummary = '';
-          if (response.content && Array.isArray(response.content)) {
-            for (const block of response.content) {
-              if (block.type === 'text' && typeof block.text === 'string') {
-                chunkSummary += block.text;
-              }
-            }
-          }
-          if (!chunkSummary && response.content) {
-            chunkSummary = JSON.stringify(response.content);
-          }
-          chunkSummaries.push(chunkSummary);
-          inputTokens += response.usage?.input_tokens || 0;
-          outputTokens += response.usage?.output_tokens || 0;
-          modelUsed = response.model || modelUsed;
-          cost += calculateCost(modelUsed, response.usage?.input_tokens || 0, response.usage?.output_tokens || 0);
-          chunkAttempts += response.executionMetadata?.attempts || 1;
-        } catch (chunkError) {
-          componentLogger.error('Error summarizing chunk', { summaryId, operationId, chunkIndex: chunkPrompt.chunkIndex, error: chunkError });
-          chunkParsingErrors.push(`Chunk ${chunkPrompt.chunkIndex + 1}: ${chunkError instanceof Error ? chunkError.message : String(chunkError)}`);
-          monitoring.incrementCounter('ai.summarization_chunk_error', 1);
-        }
-      }
-      summaryText = chunkSummaries.join('\n\n---\n\n');
-      // Optionally, you could re-summarize the combined chunk summaries in a final pass here
-      // For now, just aggregate
-      componentLogger.info('Aggregated chunked summaries', { summaryId, operationId, chunkCount: chunkedPrompts.length });
-    } else {
-      // Not chunked, use normal prompt
-      const promptGenerator = getPromptForFilingType(filingRecordFromDB!.formType as SECFilingType, {
-        ticker: filingRecordFromDB!.ticker?.symbol,
-        companyName: filingRecordFromDB!.ticker?.companyName
-      });
-      const promptContent = promptGenerator.getFullPrompt(documentContent);
-      componentLogger.debug(`Prompt prepared`, {
-        summaryId,
-        promptType: filingRecordFromDB!.formType,
-        promptLength: promptContent.length,
-        operationId
-      });
-      componentLogger.info(`Calling Claude API`, {
-        summaryId,
-        filingType: filingRecordFromDB!.formType,
-        model: claudeOptions?.model || modelConfig.defaultModel,
-        operationId
-      });
-      const apiCallStart = Date.now();
+    // Extract content from the filing
+    let content = documentContent;
+    if (!content) {
       try {
-        const response = await aiClient.completeChat({
-          model: claudeOptions?.model || modelConfig.defaultModel,
-          messages: [
-            { role: 'user', content: promptContent }
-          ],
-          max_tokens: claudeOptions?.maxTokens || modelConfig.maxOutputTokens,
-          temperature: claudeOptions?.temperature
-        }, claudeOptions);
-      
-      const apiCallDuration = Date.now() - apiCallStart;
-      monitoring.recordTiming('ai.claude_api_duration', apiCallDuration);
-      
-      let summaryText = '';
-      if (response.content && Array.isArray(response.content)) {
-        for (const block of response.content) {
-          if (block.type === 'text' && typeof block.text === 'string') {
-            summaryText += block.text; // Concatenate text from all text blocks
-          }
+        componentLogger.debug(`Extracting content for filing ${filingId}`);
+        // Ensure rawContent is defined before passing to extractFilingContent
+        if (!filingRecordFromDB.rawContent) {
+          throw new Error('Filing content is missing');
         }
+        content = await extractFilingContent(filingRecordFromDB.rawContent, filingRecordFromDB.formType as SECFilingType);
+        componentLogger.debug(`Content extracted successfully, length=${content.length}`);
+      } catch (extractError) {
+        componentLogger.error(`Failed to extract content from filing ${filingId}: ${extractError instanceof Error ? extractError.message : String(extractError)}`);
+        monitoring.incrementCounter('ai.content_extraction_error', 1);
+        throw new SummarizationError(
+          `Failed to extract content: ${extractError instanceof Error ? extractError.message : String(extractError)}`,
+          summaryId,
+          filingRecordFromDB.formType,
+          'CONTENT_EXTRACTION_FAILED',
+          true,
+          'content_extraction_failed'
+        );
       }
-
-      if (!summaryText && response.content) { // If summaryText is still empty but there was content
-        componentLogger.warn('No text content extracted from Claude response, using stringified content.', { summaryId, operationId, responseContent: response.content });
-        summaryText = JSON.stringify(response.content); // Fallback similar to old behavior for unexpected structure
-      } else if (!summaryText) {
-        componentLogger.warn('No text content and no response.content found in Claude response.', { summaryId, operationId });
+    }
+    
+    // Process document content - handle large documents appropriately
+    const processedDoc = processDocumentContent(content, filingRecordFromDB.formType as SECFilingType);
+    if (processedDoc.isChunked) {
+      componentLogger.info(`Document was chunked for processing. Using first chunk of ${processedDoc.chunkCount} chunks. Token estimate: ${processedDoc.estimatedTokens}`);
+      monitoring.incrementCounter('ai.document_chunked', 1);
+      monitoring.recordMetric('ai.document_chunks', processedDoc.chunkCount ? processedDoc.chunkCount : 1);
+    }
+    
+    // Use the processed content for the prompt
+    content = processedDoc.processedContent;
+    
+    // Get the appropriate prompt for this filing type
+    const promptGenerator = getPromptForFilingType(
+      filingRecordFromDB.formType as SECFilingType, 
+      { 
+        ticker: filingRecordFromDB.ticker?.symbol, 
+        companyName: filingRecordFromDB.companyName 
       }
+    );
+    
+    // Check if we need to chunk the document due to token limits
+    const estimatedTokens = estimateTokenCount(content);
+    const maxTokenLimit = 150000; // Claude's max token limit is 200k, but leave buffer for prompt
+    
+    let prompt: string;
+    let isChunked = false;
+    
+    if (estimatedTokens > maxTokenLimit) {
+      // Document is too large, we need to truncate or chunk it
+      componentLogger.warn(`Document for filing ${filingId} exceeds token limit (${estimatedTokens} tokens). Truncating to ${maxTokenLimit} tokens.`);
+      monitoring.incrementCounter('ai.document_truncated', 1);
       
+      // For now, we'll use a simple truncation approach
+      // A more sophisticated approach would use the chunking mechanism
+      const truncatedContent = truncateDocumentContent(content, maxTokenLimit);
+      prompt = promptGenerator.getFullPrompt(truncatedContent);
+      isChunked = true;
+    } else {
+      // Document is within token limits
+      prompt = promptGenerator.getFullPrompt(content);
+    }
+    
+    // Update the summary record to show we're processing
+    await prisma.summary.update({
+      where: { id: summaryId },
+      data: {
+        processingStatus: 'PROCESSING'
+        // Let Prisma handle the updatedAt timestamp automatically
+      }
+    });
+    
+    // Configure the Claude request
+    const model = modelConfig.defaultModel;
+    const requestOptions = {
+      // Use model config parameters directly since defaultOptions doesn't exist
+      maxInputTokens: modelConfig.maxInputTokens,
+      maxOutputTokens: modelConfig.maxOutputTokens,
+      temperature: modelConfig.temperature,
+      topP: modelConfig.topP,
+      topK: modelConfig.topK,
+      ...claudeOptions
+    };
+    
+    componentLogger.debug(`Using model ${model} for summaryId=${summaryId}`);
+    
+    try {
+      // Call Claude API to generate the summary
+      const response = await aiClient.completeChat({
+        model,
+        messages: [
+          {
+            role: 'user',
+            content: prompt
+          }
+        ],
+        ...requestOptions
+      }, {
+        metadata: {
+          operationId,
+          summaryId,
+          filingId,
+          filingType: filingRecordFromDB.formType
+        }
+      });
+      
+      // Extract text content from the Claude API response
+      const summaryText = response.content
+        .filter((block: ContentBlock) => block.type === 'text')
+        .map((block: ContentBlock) => {
+          // Handle text blocks safely
+          if ('text' in block) {
+            return block.text;
+          }
+          return '';
+        })
+        .filter(text => text.length > 0)
+        .join('\n');
+      
+      // Access token usage with correct property names from the Anthropic API
       const inputTokens = response.usage?.input_tokens || 0;
       const outputTokens = response.usage?.output_tokens || 0;
-      const modelUsed = response.model || (claudeOptions?.model || modelConfig.defaultModel);
-      const cost = calculateCost(modelUsed, inputTokens, outputTokens);
-
-      componentLogger.debug(`AI response received`, { summaryId, model: response.model, inputTokens, outputTokens, operationId });
-        monitoring.recordValue('ai.tokens_used.input', inputTokens);
-        monitoring.recordValue('ai.tokens_used.output', outputTokens);
+      const cost = calculateCost(model, inputTokens, outputTokens);
       
-      console.log('\n[DEBUG][ClaudeSummarizer] RAW CLAUDE RESPONSE START ===\n', summaryText, '\n=== RAW CLAUDE RESPONSE END\n');
-
-      componentLogger.info(`Parsing response JSON`, { summaryId, operationId });
+      componentLogger.info(`Received response for summaryId=${summaryId}, length=${summaryText.length}, inputTokens=${inputTokens}, outputTokens=${outputTokens}`);
+      monitoring.recordTiming('ai.response_time', Date.now() - startTime);
+      monitoring.incrementCounter('ai.summarization_completed', 1);
+      
+      // Parse the response
       const parsingStartTime = Date.now();
-      const parsedResult = parseResponse(summaryText, filingRecordFromDB!.formType as SECFilingType);
+      const parsedResult = parseResponse(summaryText);
       const parsingDuration = Date.now() - parsingStartTime;
-
-      if (parsedResult.success && parsedResult.data) {
+      
+      if (parsedResult.success) {
+        componentLogger.info(`Successfully parsed response for summaryId=${summaryId}, filingType=${filingRecordFromDB.formType}`);
         monitoring.recordTiming('ai.parsing_duration', parsingDuration);
-        componentLogger.info(`Successfully parsed response JSON`, { summaryId, operationId });
+        monitoring.incrementCounter('ai.summarization_parsing_success', 1);
         
+        // Update the summary record
         await prisma.summary.update({
           where: { id: summaryId },
           data: {
@@ -334,7 +478,6 @@ export async function summarizeFiling(options: SummarizationOptions): Promise<Su
             attempts: response.executionMetadata?.attempts || 1
           }
         });
-        
         return {
           summaryId,
           summaryText: parsedResult.data.summary,
@@ -348,19 +491,12 @@ export async function summarizeFiling(options: SummarizationOptions): Promise<Su
         };
       } else {
         monitoring.recordTiming('ai.parsing_duration', parsingDuration);
-        componentLogger.warn(`Failed to parse valid JSON from response`, {
-          summaryId,
-          filingType: filingRecordFromDB!.formType,
-          parsingErrors: parsedResult.errors,
-          operationId
-        });
-        
+        componentLogger.warn(`Failed to parse valid JSON from response for summaryId=${summaryId}, filingType=${filingRecordFromDB!.formType}, errors=${parsedResult.errors?.join('; ')}, operationId=${operationId}`);
         monitoring.incrementCounter('ai.summarization_parsing_error', 1);
-        
         await prisma.summary.update({
           where: { id: summaryId },
           data: {
-            summaryText, 
+            summaryText,
             processingStatus: 'COMPLETED_WITH_WARNINGS',
             processingCompletedAt: new Date(),
             isPartialResult: true,
@@ -372,7 +508,6 @@ export async function summarizeFiling(options: SummarizationOptions): Promise<Su
             attempts: response.executionMetadata?.attempts || 1
           }
         });
-        
         return {
           summaryId,
           summaryText,
@@ -386,18 +521,10 @@ export async function summarizeFiling(options: SummarizationOptions): Promise<Su
         };
       }
     } catch (error) {
-      componentLogger.error(`Error calling Claude API`, {
-        error: error instanceof Error ? error.message : String(error),
-        summaryId,
-        filingType: filingRecordFromDB!.formType,
-        operationId
-      });
-      
+      componentLogger.error(`Error calling Claude API for filing ${filingId}, summary ${summaryId}: ${error instanceof Error ? error.message : String(error)} (filingType: ${filingRecordFromDB!.formType}, operationId: ${operationId})`);
       monitoring.incrementCounter('ai.summarization_error', 1);
-      
       const isRetriable = error instanceof ApiError && error.isRetriable;
       const isRateLimit = error instanceof ApiError && error.code === ErrorCode.RATE_LIMITED;
-      
       if (!isRetriable || (error instanceof ApiError && error.code === ErrorCode.RETRY_EXHAUSTED)) {
         await prisma.summary.update({
           where: { id: summaryId },
@@ -409,7 +536,6 @@ export async function summarizeFiling(options: SummarizationOptions): Promise<Su
           }
         });
       }
-      
       throw new SummarizationError(
         `Claude API error: ${error instanceof Error ? error.message : String(error)}`,
         summaryId,
@@ -419,18 +545,17 @@ export async function summarizeFiling(options: SummarizationOptions): Promise<Su
         error instanceof ApiError ? error.code : 'ai_error'
       );
     }
+  } catch (error) {
+    if (error instanceof SummarizationError) {
+      throw error;
+    }
+    throw new SummarizationError(
+      `Summarization failed: ${error instanceof Error ? error.message : String(error)}`,
+      summaryId,
+      filingRecordFromDB?.formType || 'unknown',
+      'SUMMARIZATION_FAILED',
+      error instanceof ApiError && error.isRetriable,
+      'unexpected_error'
+    );
   }
-} catch (error) {
-  if (error instanceof SummarizationError) {
-    throw error;
-  }
-  throw new SummarizationError(
-    `Summarization failed: ${error instanceof Error ? error.message : String(error)}`,
-    summaryId,
-    filingRecordFromDB?.formType || 'unknown',
-    'SUMMARIZATION_FAILED',
-    error instanceof ApiError && error.isRetriable,
-    'unexpected_error'
-  );
-}
 }

@@ -224,7 +224,6 @@ const filingService = {
       };
       
       // Declare result variable outside the if/else blocks for proper scoping
-      let result;
       
       // Mark summaries as sent to users
       try {
@@ -278,7 +277,7 @@ const filingService = {
         const filingType = summary.filingType.padEnd(10);
         // Determine status: Success, Partial, or Failed
         let status = 'Success';
-        if (summary.processingStatus === 'COMPLETED_WITH_WARNINGS' || summary.isPartialResult || summary.processingStatus === 'PARTIAL') {
+        if (summary.processingStatus === 'COMPLETED_WITH_WARNINGS' || summary.processingStatus === 'PARTIAL') {
           status = 'Partial';
         } else if (summary.processingStatus === 'FAILED') {
           status = 'Failed';
@@ -299,7 +298,7 @@ const filingService = {
         const inTokens = 'N/A'.padEnd(4);
         const outTokens = 'N/A'.padEnd(4);
         const cost = 'N/A'.padEnd(7);
-        const failureReason = error.failureReason ? error.failureReason.substring(0, 40) : (error.error ? error.error.substring(0, 40) : '');
+        const failureReason = error.error ? error.error.substring(0, 40) : '';
         console.log(`[INFO][FilingService] | ${ticker} | ${filingType} | ${status} | ${inTokens} | ${outTokens} | ${cost} | ${failureReason}`);
       }
       
@@ -313,9 +312,7 @@ const filingService = {
       
       console.log(`[INFO][FilingService] Email summary process completed successfully`);
       
-      // Declare result variable outside the if/else blocks for proper scoping
       let result;
-      
       if (debug) {
         // Create a mock result for testing
         result = { id: 'debug-mode-' + Date.now(), success: true };
@@ -341,11 +338,19 @@ const filingService = {
     }
   },
   
-{{ ... }}
   // Get a summary of a specific filing type for a company
   getFilingSummary: async (ticker: string, formType: FilingType): Promise<{ data: FilingSummaryResult | null, error?: string }> => {
     try {
       console.log(`[DEBUG][FilingService] Getting summary for ${ticker} - ${formType}`);
+      
+      // Variables to store summary data
+      let summaryText = '';
+      let keyPoints: string[] = [];
+      let riskFactors: string[] = [];
+      let insightPoints: string[] = [];
+      
+      // Define summaryJSON at the top level so it's available throughout the function
+      let summaryJSON: Record<string, any> = {};
       
       // Check if we already have this summary in the database
       try {
@@ -371,24 +376,25 @@ const filingService = {
           if (false && existingSummary) { // Temporarily bypassed cache for testing
             console.log(`[INFO][FilingService] Found existing summary in database for ${ticker} - ${formType}`);
             // Parse the JSON data from the database
-            const summaryData = existingSummary.summaryJSON as Record<string, any> || {};
+            const summaryData = existingSummary?.summaryJSON as Record<string, any> || {};
             
             // Return the existing summary from the database with token usage and cost information
+            // Add null checks for existingSummary and tickerRecord
             return {
               data: {
                 ticker: ticker,
-                companyName: tickerRecord.companyName,
+                companyName: tickerRecord?.companyName || ticker,
                 filingType: formType as FilingType,
-                filingDate: existingSummary.filingDate.toISOString(),
+                filingDate: existingSummary?.filingDate?.toISOString() || new Date().toISOString(),
                 accessionNumber: summaryData.accessionNumber || 'unknown',
-                url: existingSummary.url || existingSummary.filingUrl || '',
-                summaryText: existingSummary.summaryText,
+                url: existingSummary?.url || existingSummary?.filingUrl || '',
+                summaryText: existingSummary?.summaryText || '',
                 keyPoints: Array.isArray(summaryData.keyPoints) ? summaryData.keyPoints : [],
-                tokensUsed: existingSummary.tokensUsed || 0,
-                model: existingSummary.model || 'unknown',
-                cost: existingSummary.cost || 0,
-                processingStatus: existingSummary.processingStatus || 'N/A',
-                processingTimeMs: existingSummary.processingTimeMs || 0
+                tokensUsed: existingSummary?.tokensUsed || 0,
+                model: existingSummary?.model || 'unknown',
+                cost: existingSummary?.cost || 0,
+                processingStatus: existingSummary?.processingStatus || 'N/A',
+                processingTimeMs: existingSummary?.processingTimeMs || 0
               }
             };
           }
@@ -722,12 +728,8 @@ const filingService = {
                 if (content.includes('Item 1A')) points.push('Includes Risk Factors (Item 1A)');
                 if (content.includes('Item 1')) points.push('Includes Financial Statements (Item 1)');
               }
-              
               return points;
             };
-            
-            // Variables to store summary JSON data
-            let summaryJSON: Record<string, any> = {};
             
             // Try to call the AI summarization function with error handling
             try {
@@ -743,7 +745,10 @@ const filingService = {
               console.log(`[DEBUG][FilingService] AI summarization completed for ${ticker} - ${normalizedFormType}`);
               
               // Extract the summary text and structured data
-              summaryText = summaryResult.summaryText || `Summary of ${normalizedFormType} filing for ${company.name} (${ticker})`;
+              // Ensure summaryText is always a string
+              summaryText = typeof summaryResult.summaryText === 'string' 
+                ? summaryResult.summaryText 
+                : `Summary of ${normalizedFormType} filing for ${company.name} (${ticker})`;
               
               // Get the updated summary record with the AI-generated content
               const updatedSummary = await prisma.summary.findUnique({
@@ -773,8 +778,11 @@ const filingService = {
                   keyPoints = [...keyPoints, ...basicPoints];
                 }
               }
-              
-              // We'll skip trying to parse the summaryJSON since AI summarization failed
+            }
+            
+            // We'll skip trying to parse the summaryJSON since AI summarization failed
+            if (normalizedFormType === '10-K') {
+              // For 10-K, extract from financial highlights, business highlights, risk factors
               keyPoints = [
                 summaryJSON.summary || `Annual report for ${company.name} (${ticker})`,
                 ...(summaryJSON.financialHighlights || []).map((item: any) => 
@@ -828,7 +836,9 @@ const filingService = {
               `Accession number: ${filing.accessionNumber}`
             ];
             // Store failureReason for downstream reporting
-            summaryJSON.failureReason = failureReason;
+            if (summaryJSON) {
+              summaryJSON.failureReason = failureReason;
+            }
           }
         } catch (fetchError) {
           console.error(`[DEBUG][FilingService] Error fetching or processing document for ${ticker}:`, fetchError);
@@ -870,7 +880,7 @@ const filingService = {
             processingStatus: updatedSummary?.processingStatus || 'COMPLETED',
             processingTimeMs: updatedSummary?.processingTimeMs || 0,
             // Add failureReason if present in summaryJSON or updatedSummary
-            failureReason: summaryJSON.failureReason || updatedSummary?.processingError || undefined
+            failureReason: summaryJSON?.failureReason || updatedSummary?.processingError || undefined
           }
         };
         // Store the summary in the database for future use
