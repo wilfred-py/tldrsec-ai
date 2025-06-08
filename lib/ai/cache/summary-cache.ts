@@ -195,6 +195,51 @@ export class SummaryCache {
     this.inMemoryCache.clear();
     componentLogger.debug('Cleared all cache entries');
   }
+  
+  /**
+   * Get a cached result by cache key
+   * @param key Cache key or string representation
+   * @returns The cached result or null if not found
+   */
+  async get(key: SummaryCacheKey | string): Promise<SummarizationResult | null> {
+    const cacheKey = typeof key === 'string' ? key : this.generateCacheKey(key);
+    
+    // Check in-memory cache first
+    if (this.inMemoryCache.has(cacheKey)) {
+      const entry = this.inMemoryCache.get(cacheKey);
+      if (entry && entry.status === 'COMPLETED' && entry.result) {
+        return entry.result;
+      }
+    }
+    
+    // If not in memory, check database
+    if (typeof key !== 'string') {
+      const dbEntry = await this.checkCache(key);
+      if (dbEntry && dbEntry.status === 'COMPLETED' && dbEntry.result) {
+        return dbEntry.result;
+      }
+    }
+    
+    return null;
+  }
+  
+  /**
+   * Set a result in the cache
+   * @param key Cache key or string representation
+   * @param result The result to cache
+   */
+  async set(key: SummaryCacheKey | string, result: SummarizationResult): Promise<void> {
+    const cacheKey = typeof key === 'string' ? key : this.generateCacheKey(key);
+    
+    this.inMemoryCache.set(cacheKey, {
+      summaryId: result.summaryId,
+      status: 'COMPLETED',
+      result,
+      lastUpdated: new Date()
+    });
+    
+    componentLogger.debug(`Set cache entry for ${cacheKey}`);
+  }
 }
 
 // Export a singleton instance
