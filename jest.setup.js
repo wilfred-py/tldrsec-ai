@@ -138,30 +138,34 @@ jest.mock('next/server', () => ({
   }
 }), { virtual: true });
 
-// Mock window methods that are not implemented in JSDOM
-Object.defineProperty(window, 'matchMedia', {
-  writable: true,
-  value: jest.fn().mockImplementation(query => ({
-    matches: false,
-    media: query,
-    onchange: null,
-    addListener: jest.fn(),
-    removeListener: jest.fn(),
-    addEventListener: jest.fn(),
-    removeEventListener: jest.fn(),
-    dispatchEvent: jest.fn(),
-  })),
-});
+// Mock window methods that are not implemented in JSDOM (only in browser environments)
+if (typeof window !== 'undefined') {
+  Object.defineProperty(window, 'matchMedia', {
+    writable: true,
+    value: jest.fn().mockImplementation(query => ({
+      matches: false,
+      media: query,
+      onchange: null,
+      addListener: jest.fn(),
+      removeListener: jest.fn(),
+      addEventListener: jest.fn(),
+      removeEventListener: jest.fn(),
+      dispatchEvent: jest.fn(),
+    })),
+  });
+}
 
-// Mock IntersectionObserver
-global.IntersectionObserver = class IntersectionObserver {
-  constructor(callback) {
-    this.callback = callback;
-  }
-  observe() { return null; }
-  unobserve() { return null; }
-  disconnect() { return null; }
-};
+// Mock IntersectionObserver if it doesn't exist (for Node environment)
+if (typeof global.IntersectionObserver === 'undefined') {
+  global.IntersectionObserver = class IntersectionObserver {
+    constructor(callback) {
+      this.callback = callback;
+    }
+    observe() { return null; }
+    disconnect() { return null; }
+    unobserve() { return null; }
+  };
+}
 
 // Mock next/navigation
 jest.mock('next/navigation', () => ({
