@@ -91,14 +91,8 @@ export interface FilingPromptTemplate {
   contextConfig: ContextWindowConfig;
 }
 
-/**
- * Type definitions for SEC filing prompts
- */
-
-/**
- * SEC filing types supported by the system
- */
-export type SECFilingType = '10-K' | '10-Q' | '8-K' | 'Form4' | 'generic';
+// Legacy type definition - remove in future update
+// export type SECFilingType = '10-K' | '10-Q' | '8-K' | 'Form4' | 'generic';
 
 /**
  * Schema structure for 10-K (Annual Report) filings
@@ -216,4 +210,32 @@ export interface GenericFilingSchema {
   financialImpact?: string;
   riskConsiderations?: string[];
   executiveSummary?: string;
+}
+
+/**
+ * The expected response format from Claude AI for filing summaries
+ */
+export interface FilingSummaryResult {
+  ticker: string;           // Company ticker symbol
+  companyName: string;      // Full company name
+  filingType: SECFilingType;// Type of filing (e.g., "10-K", "10-Q", "8-K")
+  filingDate: string;       // Filing date in YYYY-MM-DD format
+  accessionNumber: string;  // SEC filing accession number
+  summaryText: string;      // Main summary text
+  keyPoints: string[];      // Array of key bullet points
+  url: string;             // SEC HTML viewer URL
+  processingStatus: string; // Status of the processing ("completed" or "partial")
+  
+  // Optional fields
+  filingUrl?: string;      // Kept for backward compatibility
+  parsedContent?: any;     // Parsed content if available
+  rawData?: any;           // Raw filing data
+  
+  // AI metrics fields
+  tokensUsed?: number;     // Total tokens (legacy)
+  inputTokens?: number;    // Input tokens used
+  outputTokens?: number;   // Output tokens used
+  model?: string;          // AI model used
+  cost?: number;           // Cost of the AI call
+  failureReason?: string;  // If summarization failed or fallback was used
 } 

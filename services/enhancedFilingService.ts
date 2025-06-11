@@ -413,6 +413,24 @@ export class EnhancedFilingService extends EventEmitter {
     accessionNumber: string,
     url: string
   ): FilingSummaryResult {
+    // Expect result to be a JSON object matching FilingSummaryResult interface
+    const jsonResponse = typeof result === 'string' ? JSON.parse(result) : result;
+    
+    // Extract or generate summary text and key points
+    const summaryText = jsonResponse.summaryText || '';
+    const keyPoints = Array.isArray(jsonResponse.keyPoints) ? jsonResponse.keyPoints : [];
+    
+    // Ensure we have at least some key points
+    if (keyPoints.length === 0) {
+      keyPoints.push(
+        `${filingType} filing for ${companyName} (${ticker})`,
+        `Filed on ${filingDate}`,
+        'Contains official company disclosures',
+        'May contain material information for investors'
+      );
+    }
+    
+    // Return formatted result with all required fields
     // Extract summary text
     let summaryText = '';
     let keyPoints: string[] = [];
@@ -459,27 +477,26 @@ export class EnhancedFilingService extends EventEmitter {
       ];
     }
     
-    // Return formatted result
     return {
-      ticker,
-      companyName,
-      filingType,
-      filingDate,
-      accessionNumber,
+      ticker: jsonResponse.ticker || ticker,
+      companyName: jsonResponse.companyName || companyName,
+      filingType: jsonResponse.filingType || filingType,
+      filingDate: jsonResponse.filingDate || filingDate,
+      accessionNumber: jsonResponse.accessionNumber || accessionNumber,
       summaryText,
       keyPoints,
-      url,
-      filingUrl: url, // For backward compatibility
-      parsedContent,
-      rawData: result.summaryJSON || result.summaryText,
-      inputTokens: result.inputTokens,
-      outputTokens: result.outputTokens,
-      tokensUsed: (result.inputTokens || 0) + (result.outputTokens || 0),
-      model: result.modelUsed,
-      cost: result.cost,
-      processingStatus: result.isPartial ? 'PARTIAL' : 'COMPLETED',
+      url: jsonResponse.url || url,
+      filingUrl: jsonResponse.url || url, // For backward compatibility
+      parsedContent: jsonResponse.parsedContent,
+      rawData: jsonResponse,
+      inputTokens: jsonResponse.inputTokens || result.inputTokens,
+      outputTokens: jsonResponse.outputTokens || result.outputTokens,
+      tokensUsed: jsonResponse.tokensUsed || (jsonResponse.inputTokens || 0) + (jsonResponse.outputTokens || 0),
+      model: jsonResponse.model || result.modelUsed,
+      cost: jsonResponse.cost || result.cost,
+      processingStatus: jsonResponse.processingStatus || (result.isPartial ? 'PARTIAL' : 'COMPLETED'),
       processingTimeMs: result.duration,
-      failureReason: result.parsingErrors ? result.parsingErrors.join('; ') : undefined
+      failureReason: jsonResponse.failureReason || (result.parsingErrors ? result.parsingErrors.join('; ') : undefined)
     };
   }
   
