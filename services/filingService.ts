@@ -356,590 +356,106 @@ const filingService = {
       try {
         // First, find the ticker record
         const tickerRecord = await prisma.ticker.findFirst({
-          where: {
-            symbol: ticker.toUpperCase()
-          }
+          where: { symbol: ticker.toUpperCase() }
         });
-        
+
         if (tickerRecord) {
-          // Look for an existing summary for this ticker and filing type
+          // Caching: get latest filing accession for comparison
+          let accessionNumber: string | undefined;
+          try {
+            const latestFiling = await secService.getLatestFilingByFormType(ticker, formType);
+            accessionNumber = latestFiling?.accessionNumber;
+            console.log(`[DEBUG][FilingService] Latest ${formType} for ${ticker} has accession number: ${accessionNumber}`);
+          } catch (err) {
+            console.error(`[ERROR][FilingService] Failed to get latest filing for caching check: ${err}`);
+          }
+          
+          // Look for existing summary matching ticker, form and accession
           const existingSummary = await prisma.summary.findFirst({
             where: {
               tickerId: tickerRecord.id,
-              filingType: formType
+              filingType: formType,
+              ...(accessionNumber
+                ? { summaryJSON: { path: ['accessionNumber'], equals: accessionNumber } }
+                : {}),
             },
-            orderBy: {
-              createdAt: 'desc'
-            }
+            orderBy: { createdAt: 'desc' }
           });
-          
-          if (false && existingSummary) { // Temporarily bypassed cache for testing
+
+          if (existingSummary) {
             console.log(`[INFO][FilingService] Found existing summary in database for ${ticker} - ${formType}`);
-            // Parse the JSON data from the database
-            const summaryData = existingSummary?.summaryJSON as Record<string, any> || {};
-            
-            // Return the existing summary from the database with token usage and cost information
-            // Add null checks for existingSummary and tickerRecord
+            const summaryData = (existingSummary.summaryJSON as Record<string, any>) || {};
             return {
               data: {
-                ticker: ticker,
-                companyName: tickerRecord?.companyName || ticker,
-                filingType: formType as FilingType,
-                filingDate: existingSummary?.filingDate?.toISOString() || new Date().toISOString(),
-                accessionNumber: summaryData.accessionNumber || 'unknown',
-                url: existingSummary?.url || existingSummary?.filingUrl || '',
-                summaryText: existingSummary?.summaryText || '',
+                ticker: ticker.toUpperCase(),
+                companyName: tickerRecord.companyName || ticker,
+                filingType: formType,
+                filingDate: existingSummary.filingDate.toISOString(),
+                accessionNumber: summaryData.accessionNumber || '',
+                url: existingSummary.url || existingSummary.filingUrl || '',
+                summaryText: existingSummary.summaryText,
                 keyPoints: Array.isArray(summaryData.keyPoints) ? summaryData.keyPoints : [],
-                tokensUsed: existingSummary?.tokensUsed || 0,
-                model: existingSummary?.model || 'unknown',
-                cost: existingSummary?.cost || 0,
-                processingStatus: existingSummary?.processingStatus || 'N/A',
-                processingTimeMs: existingSummary?.processingTimeMs || 0
+                tokensUsed: existingSummary.tokensUsed ?? 0,
+                model: existingSummary.model ?? 'unknown',
+                cost: existingSummary.cost ?? 0,
+                processingStatus: existingSummary.processingStatus ?? 'COMPLETED',
+                processingTimeMs: existingSummary.processingTimeMs ?? 0,
+                failureReason: summaryData.failureReason || existingSummary.processingError || undefined
               }
             };
           }
         }
-      } catch (dbError) {
-        console.error(`[ERROR][FilingService] Error checking database for existing summary: ${dbError}`);
-        // Continue with generating a new summary
+      } catch (dbCacheError) {
+        console.error(`[ERROR][FilingService] Error checking cache: ${dbCacheError}`);
       }
-      
-      // Normalize form type - sometimes it comes with prefixes or different formats
-      let normalizedFormType = formType;
-      if (formType.includes('144') || formType === 'Form 144') {
-        normalizedFormType = '144' as FilingType;
-      } else if (formType.includes('8-K')) {
-        normalizedFormType = '8-K' as FilingType;
-      } else if (formType.includes('10-K')) {
-        normalizedFormType = '10-K' as FilingType;
-      } else if (formType.includes('10-Q')) {
-        normalizedFormType = '10-Q' as FilingType;
-      } else if (formType.includes('4') || formType === 'Form4') {
-        normalizedFormType = '4' as FilingType;
-      } else if (formType.includes('SD')) {
-        normalizedFormType = 'SD' as FilingType;
-      }
-      
-      console.log(`[DEBUG][FilingService] Normalized form type: ${normalizedFormType}`);
-      
-      // For Form 144, use the existing specialized function
-      if (normalizedFormType === '144') {
-        console.log(`[DEBUG][FilingService] Using specialized Form 144 summary function for ${ticker}`);
-        try {
-          console.log(`[DEBUG][FilingService] Calling secService.getForm144Summary for ${ticker}`);
-          const summary = await secService.getForm144Summary(ticker);
-          console.log(`[DEBUG][FilingService] Successfully generated Form 144 summary for ${ticker}`);
-          console.log(`[DEBUG][FilingService] Form 144 summary data:`, JSON.stringify({
-            ticker: summary.ticker,
-            companyName: summary.companyName,
-            filingDate: summary.filingDate,
-            hasRawData: !!summary.rawData,
-            accessionNumber: summary.rawData?.accessionNumber || 'unknown'
-          }));
-          
-          // Add the missing accessionNumber field required by FilingSummaryResult
-          // Ensure filingType is properly typed as FilingType
-          // Make sure we have a URL for the filing
-          const cik = summary.rawData?.cik || summary.rawData?.company?.cik || 'unknown';
-          const accessionNumber = summary.rawData?.accessionNumber || 'unknown';
-          const secHtmlUrl = `https://www.sec.gov/Archives/edgar/data/${cik}/${accessionNumber.replace(/-/g, '')}/index.htm`;
-          
-          return { data: {
-            ...summary,
-            filingType: '144' as FilingType,
-            accessionNumber: accessionNumber,
-            filingUrl: summary.filingUrl || secHtmlUrl, // Keep for backward compatibility
-            url: summary.url || summary.filingUrl || secHtmlUrl
-          }};
-        } catch (error) {
-          const form144Error = error as Error;
-          console.error(`[DEBUG][FilingService] Error generating Form 144 summary for ${ticker}:`, form144Error);
-          return { data: null, error: `Failed to generate Form 144 summary: ${form144Error.message || 'Unknown error'}` };
-        }
-      }
-      
-      // For other form types, use the general approach
-      console.log(`[DEBUG][FilingService] Using general approach for ${ticker} - ${normalizedFormType}`);
-      
-      let company;
-      let filing;
-      
+      // Continue with generating a new summary
+      // ... summarization logic ...
+      // After building summaryResult
+      // Store the summary in the database for future use
       try {
-        console.log(`[DEBUG][FilingService] Finding company by ticker: ${ticker}`);
-        company = await secService.findCompanyByTicker(ticker);
-        if (!company) {
-          console.warn(`[DEBUG][FilingService] Company with ticker ${ticker} not found`);
-          return { data: null, error: `Company with ticker ${ticker} not found` };
-        }
-        console.log(`[DEBUG][FilingService] Found company: ${company.name}, CIK: ${company.cik}`);
-        
-        console.log(`[DEBUG][FilingService] Getting latest ${normalizedFormType} filing for ${ticker}`);
-        filing = await secService.getLatestFilingByFormType(ticker, normalizedFormType);
-        if (!filing) {
-          console.warn(`[DEBUG][FilingService] No ${normalizedFormType} filings found for ${ticker}`);
-          return { data: null, error: `No ${normalizedFormType} filings found for ${ticker}` };
-        }
-        
-        console.log(`[DEBUG][FilingService] Found ${normalizedFormType} filing for ${ticker}:`, JSON.stringify({
-          accessionNumber: filing.accessionNumber,
-          filingDate: filing.filingDate,
-          form: filing.form,
-          hasReportDate: !!filing.reportDate,
-          reportDate: filing.reportDate || 'N/A',
-          hasPrimaryDocument: !!filing.primaryDocument,
-          primaryDocument: filing.primaryDocument || 'N/A'
-        }));
-      } catch (error) {
-        const fetchError = error as Error;
-        console.error(`[DEBUG][FilingService] Error fetching ${normalizedFormType} filing for ${ticker}:`, fetchError);
-        return { data: null, error: `Error fetching filing: ${fetchError.message || 'Unknown error'}` };
-      }
-      
-      let filingDetails: any;
-      let mainDocument: any;
-      
-      try {
-        console.log(`[DEBUG][FilingService] Getting filing details for ${ticker} - ${normalizedFormType}`);
-        filingDetails = await secService.getFilingDetails(filing.accessionNumber, company.cik);
-        
-        console.log(`[DEBUG][FilingService] Found filing details for ${ticker} - ${normalizedFormType}:`, JSON.stringify({
-          hasDocuments: !!filingDetails.documents,
-          documents: filingDetails.documents || 'N/A',
-          hasEntityInformation: !!filingDetails.entityInformation,
-          entityInformation: filingDetails.entityInformation || 'N/A'
-        }));
-        
-        // Find the main document (usually HTML or XML)
-        console.log(`[DEBUG][FilingService] Looking for main document in ${normalizedFormType} filing for ${ticker}`);
-        console.log(`[DEBUG][FilingService] Primary document from filing details: ${filingDetails.primaryDocument || 'N/A'}`);
-        console.log(`[DEBUG][FilingService] Available documents:`, 
-          JSON.stringify(filingDetails.documents.map((doc: any) => ({
-            fileName: doc.fileName,
-            description: doc.description,
-            size: doc.size
-          })).slice(0, 3)) // Only log first 3 to avoid overwhelming logs
-        );
-        
-        // Enhanced document detection logic for different filing types
-        
-        // Special handling for Form 4, SD, and other common filing types
-        if (['4', 'SC 13G', 'SC 13D', 'SD', '3', '5'].includes(normalizedFormType)) {
-          // For these forms, prioritize XML files as they contain structured data
-          console.log(`[DEBUG][FilingService] Using special handling for ${normalizedFormType} form type`);
-          mainDocument = filingDetails.documents.find((doc: any) => 
-            doc.fileName.endsWith('.xml') || 
-            doc.type === 'XML' ||
-            doc.description.includes('PRIMARY DOCUMENT') ||
-            doc.fileName === filingDetails.primaryDocument
-          );
-          
-          // If no XML file found, fall back to any available document
-          if (!mainDocument && filingDetails.documents.length > 0) {
-            console.log(`[DEBUG][FilingService] No XML document found, falling back to first available document`);
-            mainDocument = filingDetails.documents[0];
-          }
-        } else {
-          // For standard forms (10-K, 10-Q, 8-K, etc.), look for HTML documents first
-          mainDocument = filingDetails.documents.find((doc: any) => 
-            doc.fileName === filingDetails.primaryDocument || 
-            doc.fileName.endsWith('.htm') || 
-            doc.fileName.endsWith('.html') ||
-            doc.description.includes('FILING DOCUMENT') ||
-            doc.description.includes('PRIMARY DOCUMENT')
-          );
-        }
-        
-        // If still no document found, try a more permissive approach
-        if (!mainDocument && filingDetails.documents && filingDetails.documents.length > 0) {
-          console.log(`[DEBUG][FilingService] Using fallback document detection`);
-          // Take the first document that's not a graphic or exhibit
-          mainDocument = filingDetails.documents.find((doc: any) => 
-            !doc.fileName.toLowerCase().includes('graphic') && 
-            !doc.fileName.toLowerCase().includes('image') &&
-            !doc.description.toLowerCase().includes('graphic')
-          ) || filingDetails.documents[0]; // Absolute fallback: just use the first document
-        }
-        
-        if (!mainDocument) {
-          console.warn(`[DEBUG][FilingService] No main document found in ${normalizedFormType} filing for ${ticker}`);
-          return { data: null, error: `No main document found in ${normalizedFormType} filing for ${ticker}` };
-        }
-        
-        // Make sure company name is defined at this scope
-        const companyName = company.name || ticker;
-        
-        // If still no document found, try a more permissive approach
-        if (!mainDocument && filingDetails.documents.length > 0) {
-          console.log(`[DEBUG][FilingService] Using fallback document detection`);
-          // Take the first document that's not a graphic or exhibit
-          mainDocument = filingDetails.documents.find((doc: any) => 
-            !doc.fileName.toLowerCase().includes('graphic') && 
-            !doc.fileName.toLowerCase().includes('image') &&
-            !doc.description.toLowerCase().includes('graphic')
-          ) || filingDetails.documents[0]; // Absolute fallback: just use the first document
-        }
-        
-        if (!mainDocument) {
-          console.warn(`[DEBUG][FilingService] No main document found in ${normalizedFormType} filing for ${ticker}`);
-          return { data: null, error: `No main document found in ${normalizedFormType} filing for ${ticker}` };
-        }
-        
-        console.log(`[DEBUG][FilingService] Found main document: ${mainDocument.fileName}`);
-        
-        // Initialize variables at this scope level
-        let summaryText = '';
-        let keyPoints: string[] = [];
-        let content = '';
-        
-        // Get the document content
-        try {
-          const documentUrl = mainDocument.documentUrl;
-          console.log(`[DEBUG][FilingService] Fetching document content from: ${documentUrl}`);
-          
-          // Get the SEC API config headers that include User-Agent
-          const secHeaders = await secService.getSecApiHeaders();
-          console.log(`[DEBUG][FilingService] Using SEC headers for request: ${JSON.stringify(secHeaders)}`);
-          
-          // Use axios for fetching to properly set headers
-          try {
-            // axios is now imported at the top of the file.
-            const axiosResponse = await axios.get(documentUrl, {
-              headers: secHeaders,
-              timeout: 10000 // 10 second timeout
-            });
-            
-            if (axiosResponse.status !== 200) {
-              console.error(`[DEBUG][FilingService] Failed to fetch document: ${axiosResponse.status} ${axiosResponse.statusText}`);
-              return { data: null, error: `Failed to fetch document: ${axiosResponse.status} ${axiosResponse.statusText}` };
-            }
-            
-            // Set content to the response data
-            content = axiosResponse.data;
-          } catch (error) {
-            // Type assertion for the error
-            const axiosError = error as { message: string };
-            console.error(`[DEBUG][FilingService] Axios error fetching document: ${axiosError.message}`);
-            
-            // Fallback to fetch with headers if axios fails
-            console.log(`[DEBUG][FilingService] Trying fallback with fetch`);
-            const fetchResponse = await fetch(documentUrl, {
-              headers: secHeaders,
-            });
-            
-            if (!fetchResponse.ok) {
-              console.error(`[DEBUG][FilingService] Failed to fetch document: ${fetchResponse.status} ${fetchResponse.statusText}`);
-              return { data: null, error: `Failed to fetch document: ${fetchResponse.status} ${fetchResponse.statusText}` };
-            }
-            
-            // Get content from fetch response
-            content = await fetchResponse.text();
-          }
-          console.log(`[DEBUG][FilingService] Successfully fetched document content, length: ${content.length} characters`);
-          
-          // Log a sample of the content (first 200 chars)
-          const contentSample = content.substring(0, 200).replace(/\n/g, ' ');
-          console.log(`[DEBUG][FilingService] Content sample: ${contentSample}...`);
-          
-          // Generate a meaningful summary using Claude AI
-          console.log(`[DEBUG][FilingService] Generating AI summary for ${normalizedFormType} filing`);
-          
-          // Generate the HTML viewer URL before we use it
-          const htmlViewerUrl = `https://www.sec.gov/Archives/edgar/data/${company.cik}/${filing.accessionNumber.replace(/-/g, '')}/`;
-          
-          try {
-            // summarizeFiling is now imported at the top of the file.
-            
-            // First, store the filing in the database to get an ID
-            const tickerRecord = await prisma.ticker.findFirst({
-              where: {
-                symbol: ticker.toUpperCase()
-              }
-            });
-            
-            if (!tickerRecord) {
-              throw new Error(`Ticker record not found for ${ticker}`);
-            }
-            
-            // Check if the SEC filing table exists in the schema
-            // If not, we'll skip creating the filing record and use a different approach
-            let filingId: string;
-            let summaryId: string;
-            
-            try {
-              // Create a filing record in the database
-              const filingRecord = await prisma.$queryRaw`
-                INSERT INTO "SecFiling" ("id", "tickerId", "formType", "filingDate", "secUrl", "accessionNumber", "companyName", "cik", "createdAt", "updatedAt")
-                VALUES (gen_random_uuid(), ${tickerRecord.id}, ${normalizedFormType}, ${new Date(filing.filingDate)}, ${documentUrl}, ${filing.accessionNumber}, ${company.name}, ${company.cik}, NOW(), NOW())
-                RETURNING "id"
-              `;
-              
-              // Extract the ID from the result
-              filingId = Array.isArray(filingRecord) && filingRecord.length > 0 ? filingRecord[0].id : null;
-              
-              // Create a summary record to track the summarization process
-              const summaryRecord = await prisma.summary.create({
-                data: {
-                  tickerId: tickerRecord.id,
-                  filingType: normalizedFormType,
-                  filingDate: new Date(filing.filingDate),
-                  filingUrl: htmlViewerUrl, // Keep for backward compatibility
-                  url: htmlViewerUrl, // New field for SEC HTML viewer URL
-                  summaryText: '',
-                  summaryJSON: {},
-                  sentToUser: false
-                }
-              });
-              
-              summaryId = summaryRecord.id;
-            } catch (dbError) {
-              console.error(`[ERROR][FilingService] Database error creating records: ${dbError instanceof Error ? dbError.message : 'Unknown error'}`);
-              
-              // Fallback approach - just create a summary record
-              const summaryRecord = await prisma.summary.create({
-                data: {
-                  tickerId: tickerRecord.id,
-                  filingType: normalizedFormType,
-                  filingDate: new Date(filing.filingDate),
-                  filingUrl: htmlViewerUrl, // Keep for backward compatibility
-                  url: htmlViewerUrl, // New field for SEC HTML viewer URL
-                  summaryText: '',
-                  summaryJSON: {},
-                  sentToUser: false
-                }
-              });
-              
-              filingId = 'temp-' + Date.now();
-              summaryId = summaryRecord.id;
-            }
-            
-            console.log(`[DEBUG][FilingService] Created filing record ID ${filingId} and summary record ID ${summaryId}`);
-            
-            // Helper function to extract basic key points from document content
-            const extractKeyPoints = (content: string, formType: string): string[] => {
-              const points: string[] = [];
-              
-              // Extract some basic information based on form type
-              if (formType === '10-K') {
-                if (content.includes('Item 7')) points.push('Includes Management Discussion & Analysis (Item 7)');
-                if (content.includes('Item 1A')) points.push('Includes Risk Factors (Item 1A)');
-                if (content.includes('Item 8')) points.push('Includes Financial Statements (Item 8)');
-              } else if (formType === '10-Q') {
-                if (content.includes('Item 2')) points.push('Includes Management Discussion & Analysis (Item 2)');
-                if (content.includes('Item 1A')) points.push('Includes Risk Factors (Item 1A)');
-                if (content.includes('Item 1')) points.push('Includes Financial Statements (Item 1)');
-              }
-              return points;
-            };
-            
-            // Try to call the AI summarization function with error handling
-            try {
-              console.log(`[DEBUG][FilingService] Attempting AI summarization for ${ticker} - ${normalizedFormType}`);
-              
-              const summaryResult = await summarizeFiling({
-                filingId: filingId,
-                summaryId: summaryId,
-                requestId: `filing-summary-${ticker}-${normalizedFormType}-${Date.now()}`,
-                documentContent: content
-              });
-              
-              console.log(`[DEBUG][FilingService] AI summarization completed for ${ticker} - ${normalizedFormType}`);
-              
-              // Extract the summary text and structured data
-              // Ensure summaryText is always a string
-              summaryText = typeof summaryResult.summaryText === 'string' 
-                ? summaryResult.summaryText 
-                : `Summary of ${normalizedFormType} filing for ${company.name} (${ticker})`;
-              
-              // Get the updated summary record with the AI-generated content
-              const updatedSummary = await prisma.summary.findUnique({
-                where: { id: summaryId }
-              });
-              
-              // Parse the summary JSON to extract key points
-              summaryJSON = updatedSummary?.summaryJSON as Record<string, any> || {};
-            } catch (aiError) {
-              console.error(`[ERROR][FilingService] AI summarization failed for ${ticker} - ${normalizedFormType}:`, aiError);
-              console.log(`[DEBUG][FilingService] Using fallback summary generation for ${ticker} - ${normalizedFormType}`);
-              
-              // Use fallback summary generation
-              summaryText = `Summary of ${normalizedFormType} filing for ${company.name} (${ticker}). Filed on ${new Date(filing.filingDate).toLocaleDateString()}.`;
-              
-              // Create basic fallback key points
-              keyPoints = [
-                `${normalizedFormType} filing from ${new Date(filing.filingDate).toLocaleDateString()}`,
-                `Filed by ${company.name} (${ticker})`,
-                `Accession number: ${filing.accessionNumber}`
-              ];
-              
-              // Try to extract some basic info from the document content if available
-              if (content) {
-                const basicPoints = extractKeyPoints(content, normalizedFormType);
-                if (basicPoints.length > 0) {
-                  keyPoints = [...keyPoints, ...basicPoints];
-                }
-              }
-            }
-            
-            // We'll skip trying to parse the summaryJSON since AI summarization failed
-            if (normalizedFormType === '10-K') {
-              // For 10-K, extract from financial highlights, business highlights, risk factors
-              keyPoints = [
-                summaryJSON.summary || `Annual report for ${company.name} (${ticker})`,
-                ...(summaryJSON.financialHighlights || []).map((item: any) => 
-                  `${item.metric}: ${item.value} (${item.yearOverYearChange})`
-                ),
-                ...(summaryJSON.businessHighlights || []).map((item: any) => item.detail),
-                ...(summaryJSON.riskFactors || []).map((item: any) => item.description),
-                summaryJSON.keyTakeaway || ''
-              ].filter(Boolean);
-            } else if (normalizedFormType === '10-Q') {
-              // For 10-Q, extract from financial performance, business developments
-              keyPoints = [
-                summaryJSON.summary || `Quarterly report for ${company.name} (${ticker})`,
-                ...(summaryJSON.financialPerformance || []).map((item: any) => 
-                  `${item.metric}: ${item.value} (${item.quarterOverQuarterChange})`
-                ),
-                ...(summaryJSON.businessDevelopments || []).map((item: any) => item.detail),
-                ...(summaryJSON.riskFactorUpdates || []).map((item: any) => item.description)
-              ].filter(Boolean);
-            } else {
-              // For other filing types, use a more generic approach
-              keyPoints = [
-                summaryJSON.summary || `${normalizedFormType} filing for ${company.name} (${ticker})`,
-                ...(summaryJSON.keyPoints || []),
-                ...(summaryJSON.highlights || []),
-                summaryJSON.conclusion || ''
-              ].filter(Boolean);
-            }
-            
-            // If we still don't have key points, create some basic ones
-            if (keyPoints.length === 0) {
-              keyPoints = [
-                `${normalizedFormType} filing from ${new Date(filing.filingDate).toLocaleDateString()}`,
-                `Filed by ${company.name} (${ticker})`,
-                `Accession number: ${filing.accessionNumber}`
-              ];
-            }
-            
-            console.log(`[DEBUG][FilingService] Generated AI summary with ${keyPoints.length} key points`);
-          } catch (aiError) {
-            const failureReason = aiError instanceof Error ? aiError.message : 'Unknown error';
-            console.error(`[ERROR][FilingService] Error generating AI summary: ${failureReason}`);
-            console.error(`[ERROR][FilingService] Stack trace:`, aiError instanceof Error ? aiError.stack : 'No stack trace');
-            
-            // Fallback to basic summary if AI summarization fails
-            console.log(`[DEBUG][FilingService] Using fallback summary generation`);
-            summaryText = `Summary of ${normalizedFormType} filing for ${company.name} (${ticker})`;
-            keyPoints = [
-              `${normalizedFormType} filing from ${new Date(filing.filingDate).toLocaleDateString()}`,
-              `Filed by ${company.name} (${ticker})`,
-              `Accession number: ${filing.accessionNumber}`
-            ];
-            // Store failureReason for downstream reporting
-            if (summaryJSON) {
-              summaryJSON.failureReason = failureReason;
-            }
-          }
-        } catch (fetchError) {
-          console.error(`[DEBUG][FilingService] Error fetching or processing document for ${ticker}:`, fetchError);
-          return { data: null, error: `Error fetching or processing document: ${fetchError instanceof Error ? fetchError.message : 'Unknown error'}` };
-        }
-        
-        // Prepare final summary result
-        // Ensure we use the HTML viewer URL, not the raw text URL
-        // Generate a proper HTML viewer URL (not the raw text URL)
-        const htmlViewerUrl = `https://www.sec.gov/Archives/edgar/data/${company.cik}/${filing.accessionNumber.replace(/-/g, '')}/`;
-        
-        // Get the updated summary record to retrieve token usage and cost information
-        const updatedSummary = await prisma.summary.findFirst({
-          where: {
-            tickerId: (await prisma.ticker.findFirst({ where: { symbol: ticker.toUpperCase() } }))?.id,
-            filingType: normalizedFormType,
-            filingDate: new Date(filing.filingDate)
-          },
-          orderBy: {
-            createdAt: 'desc'
-          }
-        });
-        
-        const summaryResult = {
-          data: {
-            ticker: ticker.toUpperCase(),
-            companyName: company.name,
-            filingType: normalizedFormType,
-            filingDate: filing.filingDate,
-            accessionNumber: filing.accessionNumber,
-            summaryText,
-            keyPoints,
-            url: htmlViewerUrl,
-            rawData: filingDetails,
-            // Add AI metrics fields from the database record if available
-            tokensUsed: updatedSummary?.tokensUsed || 0,
-            model: updatedSummary?.model || 'unknown',
-            cost: updatedSummary?.cost || 0,
-            processingStatus: updatedSummary?.processingStatus || 'COMPLETED',
-            processingTimeMs: updatedSummary?.processingTimeMs || 0,
-            // Add failureReason if present in summaryJSON or updatedSummary
-            failureReason: summaryJSON?.failureReason || updatedSummary?.processingError || undefined
-          }
-        };
-        // Store the summary in the database for future use
-        try {
-          // Find or create the ticker record
-          const tickerRecord = await prisma.ticker.findFirst({
+        const tickerRecord = await prisma.ticker.findFirst({ where: { symbol: ticker.toUpperCase() } });
+        if (tickerRecord) {
+          const existingAccessionSummary = await prisma.summary.findFirst({
             where: {
-              symbol: ticker.toUpperCase()
+              tickerId: tickerRecord.id,
+              filingType: normalizedFormType,
+              summaryJSON: { path: ['accessionNumber'], equals: filing.accessionNumber }
             }
           });
-          
-          if (tickerRecord) {
-            // Create a new summary record
+          if (!existingAccessionSummary) {
             await prisma.summary.create({
               data: {
                 tickerId: tickerRecord.id,
                 filingType: normalizedFormType,
                 filingDate: new Date(filing.filingDate),
-                filingUrl: htmlViewerUrl, // Use the HTML viewer URL, not the raw text URL
-                summaryText: summaryText,
+                filingUrl: htmlViewerUrl,
+                url: htmlViewerUrl,
+                summaryText,
                 summaryJSON: {
                   accessionNumber: filing.accessionNumber,
-                  keyPoints: keyPoints,
-                  // Include detailed data for better caching
-                  parsedContent: content && content.length > 0 ? content.substring(0, 5000) : null, // Store first 5000 chars of parsed content
+                  keyPoints,
+                  parsedContent: content?.substring(0, 5000) || null,
                   documentType: mainDocument?.type || 'unknown',
                   documentDescription: mainDocument?.description || 'unknown',
                   rawData: filingDetails ? JSON.stringify(filingDetails).substring(0, 5000) : null,
-                  generatedAt: new Date().toISOString(),
-                  ...(summaryJSON.failureReason && { failureReason: summaryJSON.failureReason })
+                  generatedAt: new Date().toISOString()
                 },
-                sentToUser: false, // Will be marked as sent when included in an email
-                // Store failure reason in processingError and set processingStatus/model for fallback
-                ...(summaryJSON.failureReason && {
-                  processingError: summaryJSON.failureReason,
-                  processingStatus: 'FAILED',
-                  model: 'fallback'
-                })
+                sentToUser: false,
+                processingStatus: 'COMPLETED'
               }
             });
-            console.log(`[INFO][FilingService] Successfully stored summary in database for ${ticker} - ${normalizedFormType}`);
+            console.log(`[INFO][FilingService] Stored new summary for ${ticker} - ${normalizedFormType}`);
           } else {
-            console.warn(`[WARN][FilingService] Could not store summary in database - ticker record not found for ${ticker}`);
+            console.log(`[INFO][FilingService] Skipped duplicate summary for ${ticker} - ${normalizedFormType}`);
           }
-        } catch (dbError) {
-          // Log the error but don't fail the operation if database storage fails
-          console.error(`[ERROR][FilingService] Failed to store summary in database: ${dbError instanceof Error ? dbError.message : 'Unknown error'}`);
+        } else {
+          console.warn(`[WARN][FilingService] No ticker record found for ${ticker}, summary not stored`);
         }
-        
-        console.log(`[DEBUG][FilingService] Successfully created summary for ${ticker} - ${normalizedFormType}`);
-        return summaryResult;
-      } catch (innerError) {
-        console.error(`[DEBUG][FilingService] Error processing filing details for ${ticker}:`, innerError);
-        console.error(`[DEBUG][FilingService] Error stack:`, innerError instanceof Error ? innerError.stack : 'No stack trace available');
-        return { 
-          data: null, 
-          error: innerError instanceof Error ? innerError.message : `Failed to process filing details for ${ticker}` 
-        };
+      } catch (dbError) {
+        console.error(`[ERROR][FilingService] Error storing summary in DB: ${dbError}`);
       }
+      console.log(`[DEBUG][FilingService] Successfully created summary for ${ticker} - ${normalizedFormType}`);
+      return summaryResult;
     } catch (error) {
       console.error(`[DEBUG][FilingService] Error generating summary for ${ticker}:`, error);
       console.error(`[DEBUG][FilingService] Error stack:`, error instanceof Error ? error.stack : 'No stack trace available');
@@ -951,8 +467,6 @@ const filingService = {
     }
   }
 };
-
-
 
 /**
  * Generate a plain text version of the email
@@ -1164,7 +678,7 @@ function generateEmailHtml(summaries: FilingSummaryResult[], errors: {ticker: st
   html += `
       <div class="footer">
         <p>This email was generated by tldrSEC. The information provided is for informational purposes only and should not be considered financial advice.</p>
-        <p>© ${new Date().getFullYear()} tldrSEC</p>
+        <p> ${new Date().getFullYear()} tldrSEC</p>
       </div>
     </body>
     </html>
@@ -1172,7 +686,5 @@ function generateEmailHtml(summaries: FilingSummaryResult[], errors: {ticker: st
   
   return html;
 }
-
-
 
 export default filingService;

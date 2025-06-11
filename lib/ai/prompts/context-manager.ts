@@ -134,33 +134,15 @@ export function splitDocumentIntoChunks(
     while (position < document.length) {
       const end = Math.min(position + maxChunkSize, document.length);
       chunks.push(document.substring(position, end));
-      position = end - overlapSize; // Create overlap between chunks
       
-      // Prevent infinite loops for small documents
-      if (position >= document.length) break;
+      // If we've reached or passed the end, exit to avoid infinite loops
+      if (end >= document.length) break;
+      position = end - overlapSize; // Create overlap between chunks
     }
   } else if (chunkStrategy === 'section-based') {
-    // For section-based chunking, we'd identify section boundaries
-    // This is a simplified version - a real implementation would use regex or NLP
-    const sections = document.split(/(?=\n#{1,3} )/); // Split on markdown-like headings
-    
-    let currentChunk = '';
-    for (const section of sections) {
-      // If adding this section would exceed our chunk size, start a new chunk
-      if (currentChunk.length + section.length > maxChunkSize && currentChunk.length > 0) {
-        chunks.push(currentChunk);
-        // Include some overlap by repeating the last part of previous chunk
-        const overlapText = currentChunk.substring(Math.max(0, currentChunk.length - overlapSize));
-        currentChunk = overlapText + section;
-      } else {
-        currentChunk += section;
-      }
-    }
-    
-    // Don't forget the last chunk
-    if (currentChunk.length > 0) {
-      chunks.push(currentChunk);
-    }
+    // Section-based chunking: split on any heading (#, ##, ###)
+    const sections = document.split(/(?=#{1,3} )/g).filter((s) => s.trim().length > 0);
+    return sections;
   } else if (chunkStrategy === 'adaptive') {
     // In adaptive mode, we'd adjust chunk sizes based on content complexity
     // This is a simplified version that looks for natural breaks
@@ -204,7 +186,6 @@ export function estimateTokenCount(text: string): number {
 
 /**
  * Determine if a document needs chunking based on its size and filing type
- * Uses a more conservative approach to ensure we stay within Claude's token limits
  */
 export function needsChunking(
   document: string,
@@ -212,11 +193,6 @@ export function needsChunking(
   section?: SECFilingSection
 ): boolean {
   const config = getContextConfig(filingType, section);
-  const estimatedTokens = estimateTokenCount(document);
-  
-  // Be more conservative with the threshold - Claude has a 200k token limit
-  // but we need to account for the prompt text and system instructions too
-  const maxSafeTokens = Math.min(config.maxChunkSize, 150000); // Never exceed 150k tokens
-  
-  return estimatedTokens > maxSafeTokens * 0.85; // Add a 15% safety margin
+  // Chunk if raw document length exceeds configured maxChunkSize
+  return document.length > config.maxChunkSize;
 } 

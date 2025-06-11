@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect } from 'react';
+import { Skeleton } from '@/components/ui/skeleton';
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from '@/components/ui/table';
 import { Input } from '@/components/ui/input';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
@@ -12,6 +13,7 @@ import { FilingLog } from '@/types/filing';
 
 export default function LogsPage() {
   const [logs, setLogs] = useState<FilingLog[]>([]);
+  const [loading, setLoading] = useState<boolean>(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedFilingType, setSelectedFilingType] = useState('all-types');
   const [selectedStatus, setSelectedStatus] = useState('all-statuses');
@@ -24,11 +26,14 @@ export default function LogsPage() {
 
   const fetchLogs = async () => {
     try {
+      setLoading(true);
       const response = await filingService.getFilingLogs();
       setLogs(response.data || []);
     } catch (error) {
       console.error('Error fetching logs:', error);
       setLogs([]);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -97,44 +102,52 @@ export default function LogsPage() {
           </div>
         </div>
 
-        <div className="rounded-md border overflow-hidden">
-          <div className="overflow-x-auto">
-            <Table className="[&_td]:border-l [&_td:first-child]:border-l-0 [&_th]:border-l [&_th:first-child]:border-l-0">
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Ticker</TableHead>
-                  <TableHead>Company</TableHead>
-                  <TableHead>Filing Type</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Date</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredLogs.length > 0 ? (
-                  filteredLogs.map((filing) => (
-                    <TableRow 
-                      key={filing.id} 
-                      className="cursor-pointer hover:bg-muted/50"
-                      onClick={() => handleRowClick(filing)}
-                    >
-                      <TableCell>{filing.ticker}</TableCell>
-                      <TableCell>{filing.company}</TableCell>
-                      <TableCell>{filing.filingName}</TableCell>
-                      <TableCell>{filing.status}</TableCell>
-                      <TableCell>{filing.filingDate}</TableCell>
-                    </TableRow>
-                  ))
-                ) : (
-                  <TableRow>
-                    <TableCell colSpan={5} className="h-24 text-center">
-                      No logs found.
-                    </TableCell>
-                  </TableRow>
-                )}
-              </TableBody>
-            </Table>
+        {loading ? (
+          <div className="p-4">
+            {[...Array(3)].map((_, i) => (
+              <Skeleton key={i} className="h-8 mb-2" />
+            ))}
           </div>
-        </div>
+        ) : (
+          <div className="rounded-md border overflow-hidden">
+            <div className="overflow-x-auto">
+              <Table className="[&_td]:border-l [&_td:first-child]:border-l-0 [&_th]:border-l [&_th:first-child]:border-l-0">
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Ticker</TableHead>
+                    <TableHead>Company</TableHead>
+                    <TableHead>Filing Type</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Date</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredLogs.length > 0 ? (
+                    filteredLogs.map((filing) => (
+                      <TableRow 
+                        key={filing.id} 
+                        className="cursor-pointer hover:bg-muted/50"
+                        onClick={() => handleRowClick(filing)}
+                      >
+                        <TableCell>{filing.ticker}</TableCell>
+                        <TableCell>{filing.company}</TableCell>
+                        <TableCell>{filing.filingName}</TableCell>
+                        <TableCell>{filing.status}</TableCell>
+                        <TableCell>{filing.filingDate}</TableCell>
+                      </TableRow>
+                    ))
+                  ) : (
+                    <TableRow>
+                      <TableCell colSpan={5} className="h-24 text-center">
+                        No filings found.
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+          </div>
+        )}
 
         <div className="mt-4 text-right text-sm text-muted-foreground">
           Showing {filteredLogs.length} logs

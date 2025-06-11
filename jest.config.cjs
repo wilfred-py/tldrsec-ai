@@ -1,10 +1,10 @@
 /** @type {import('jest').Config} */
-export default {
+module.exports = {
   preset: 'ts-jest/presets/default-esm',
   testEnvironment: 'jsdom',
   setupFilesAfterEnv: ['<rootDir>/jest.setup.js'],
   testPathIgnorePatterns: ['<rootDir>/.next/', '<rootDir>/node_modules/'],
-  extensionsToTreatAsEsm: ['.ts', '.tsx', '.js', '.jsx', '.mjs'],
+  extensionsToTreatAsEsm: ['.ts', '.tsx'],
   globals: {
     'ts-jest': {
       tsconfig: 'tsconfig.json',
@@ -23,8 +23,5 @@ export default {
     '^.+\\.([tj]sx?|mjs)$': ['ts-jest', { tsconfig: 'tsconfig.json', useESM: true }],
   },
   moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'mjs'],
-  coveragePathIgnorePatterns: [
-    '/node_modules/',
-    '/.next/',
-  ],
+  coveragePathIgnorePatterns: ['/node_modules/', '/.next/'],
 };

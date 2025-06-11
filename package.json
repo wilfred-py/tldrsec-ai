@@ -8,10 +8,10 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "test": "jest --config=jest.config.mjs",
-    "test:esm": "node --experimental-vm-modules node_modules/jest/bin/jest.js --config jest.config.mjs",
-    "test:ts": "jest --config jest.config.js",
-    "test:parsers": "node --experimental-vm-modules node_modules/jest/bin/jest.js --config jest.config.mjs --testPathIgnorePatterns=filing-registry",
+    "test": "jest --config=jest.config.cjs",
+    "test:esm": "node --experimental-vm-modules node_modules/jest/bin/jest.js --config=jest.config.cjs",
+    "test:ts": "jest --config=jest.config.cjs",
+    "test:parsers": "node --experimental-vm-modules node_modules/jest/bin/jest.js --config=jest.config.cjs --testPathIgnorePatterns=filing-registry",
     "test:tesla": "node scripts/parsers/test-tesla-filings.js",
     "test:tesla:simple": "node scripts/parsers/test-tesla-simple.js",
     "test:pdf": "node scripts/pdf/test-pdf-parser.js",
@@ -31,7 +31,7 @@
     "db:test": "node lib/test-db.js",
     "test:samples": "node scripts/parsers/sample-content-reader.js",
     "test:extract-xbrl": "node scripts/parsers/extract-xbrl.js",
-    "test:watch": "jest --watch --config=jest.config.mjs"
+    "test:watch": "jest --watch --config=jest.config.cjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.51.0",

@@ -1,5 +1,10 @@
-import { splitDocumentIntoChunks, estimateTokenCount, getContextConfig, needsChunking } from '../context-manager';
 import { ContextWindowConfig } from '../prompt-types';
+import {
+  estimateTokenCount,
+  splitDocumentIntoChunks,
+  getContextConfig,
+  needsChunking,
+} from '../context-manager';
 
 describe('Context Manager', () => {
   describe('estimateTokenCount', () => {
