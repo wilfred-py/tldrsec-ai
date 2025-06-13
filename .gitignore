@@ -74,6 +74,9 @@ scripts/*
 # Prisma generated files
 lib/generated/
 
+# backup files
+*.bak
+
 # Test output directories
 performance-results/
 test-output/
