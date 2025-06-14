@@ -373,7 +373,7 @@ const filingService = {
             }
           });
           
-          if (false && existingSummary) { // Temporarily bypassed cache for testing
+          if (existingSummary) { // Use cached summary from database
             console.log(`[INFO][FilingService] Found existing summary in database for ${ticker} - ${formType}`);
             // Parse the JSON data from the database
             const summaryData = existingSummary?.summaryJSON as Record<string, any> || {};
