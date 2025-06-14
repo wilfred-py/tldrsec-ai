@@ -23,6 +23,7 @@ export enum EmailType {
   DIGEST = 'digest',
   ALERT = 'alert',
   WELCOME = 'welcome',
+  FORM4 = 'form4',
   PASSWORD_RESET = 'password-reset',
   VERIFICATION = 'verification',
 }

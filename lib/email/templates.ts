@@ -372,6 +372,70 @@ Unsubscribe: ${data.unsubscribeUrl}
 }
 
 /**
+ * Template for Form 4 insider trading email
+ */
+export function form4Template(
+  data: BaseTemplateData & { filing: FilingTemplateData }
+): { html: string; text: string } {
+  const { filing, recipientName } = data;
+  const name = recipientName || 'there';
+  const formattedDate = filing.filingDate.toLocaleDateString('en-US', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+  });
+
+  // HTML content
+  let htmlContent = `
+    <h1>Insider Transaction – Form 4</h1>
+    <p>Hello ${name},</p>
+    <p>A new Form 4 filing has been submitted for ${filing.companyName} (${filing.symbol}).</p>
+
+    <div class="card">
+      <div class="card-header">
+        <span class="filing-type">Form 4</span>
+        <span class="filing-date">${formattedDate}</span>
+      </div>
+      ${filing.summaryText ? `<p>${filing.summaryText}</p>` : ''}
+      <p style="margin-top: 15px;">
+        <a href="${filing.summaryUrl}" class="button">View Full Summary</a>
+      </p>
+      <p style="margin-top: 10px;">
+        <a href="${filing.filingUrl}">View Original SEC Filing</a>
+      </p>
+    </div>
+
+    <p>Stay informed with tldrSEC's automated SEC filing summaries.</p>
+  `;
+
+  // Plain text content
+  const textContent = `
+FORM 4 – INSIDER TRANSACTION
+
+Hello ${name},
+
+A new Form 4 filing has been submitted for ${filing.companyName} (${filing.symbol}) on ${formattedDate}.
+
+${filing.summaryText ? filing.summaryText.substring(0, 300) + '...' : 'View the full summary for details.'}
+
+View Full Summary: ${filing.summaryUrl}
+View Original SEC Filing: ${filing.filingUrl}
+
+Stay informed with tldrSEC's automated SEC filing summaries.
+
+--
+You received this email because you're subscribed to updates from tldrSEC.
+Manage preferences: ${data.preferencesUrl}
+Unsubscribe: ${data.unsubscribeUrl}
+  `.trim();
+
+  return {
+    html: baseTemplate(htmlContent, data),
+    text: textContent,
+  };
+}
+
+/**
  * Template for daily digest email
  */
 export function digestTemplate(
@@ -629,6 +693,8 @@ export function getEmailTemplate(
       return digestTemplate(data);
     case EmailType.WELCOME:
       return welcomeTemplate(data);
+    case EmailType.FORM4:
+      return form4Template(data);
     default:
       throw new Error(`Template type "${templateType}" not implemented`);
   }
