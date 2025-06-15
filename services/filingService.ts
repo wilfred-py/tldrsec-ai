@@ -11,6 +11,8 @@ import { JsonObject } from '@prisma/client/runtime/library';
 
 // Import the email client and types
 import { emailClient, EmailMessage } from '../lib/email';
+import { getEmailTemplate } from '../lib/email/templates';
+import { EmailType } from '../lib/email/types';
 
 // Mock filing data for demonstration
 const mockFilings: FilingLog[] = [
@@ -210,15 +212,47 @@ const filingService = {
       
       console.log(`[INFO][FilingService] Successfully generated ${summaries.length} summaries. Preparing email...`);
       
-      // Generate email content
-      const emailHtml = generateEmailHtml(summaries, errors);
+      // Generate email content using per-filing templates
+      
+      
+      const htmlSegments: string[] = [];
+      const textSegments: string[] = [];
+      for (const summary of summaries) {
+        // Map filingType to EmailType
+        let templateType: EmailType;
+        switch (summary.filingType) {
+          case 'Form4':
+            templateType = EmailType.FORM4;
+            break;
+          default:
+            templateType = EmailType.IMMEDIATE;
+        }
+        const { html, text } = getEmailTemplate(templateType, {
+          recipientName: '',
+          recipientEmail: email,
+          unsubscribeUrl: process.env.UNSUBSCRIBE_URL || '',
+          preferencesUrl: process.env.PREFERENCES_URL || '',
+          currentYear: new Date().getFullYear(),
+          filing: summary,
+        });
+        htmlSegments.push(html);
+        textSegments.push(text);
+      }
+      // Append errors if any
+      if (errors.length > 0) {
+        htmlSegments.push(`<div class="errors"><h3>Issues Encountered</h3><ul>${errors.map(err => `<li>${err.ticker}: ${err.error}</li>`).join('')}</ul></div>`);
+        textSegments.push('Issues Encountered:\n' + errors.map(err => `${err.ticker}: ${err.error}`).join('\n'));
+      }
+      const emailHtml = htmlSegments.join('<hr style="margin:20px 0;"/>');
+      const emailText = textSegments.join('\n\n---\n\n');
+      
       
       // Send email using the pre-initialized emailClient
       const emailParams: EmailMessage = {
         to: email,
         subject: `SEC Filing Summaries - ${new Date().toLocaleDateString()}`,
         html: emailHtml,
-        text: generatePlainTextEmail(summaries, errors),
+        text: emailText,
         tags: ['type:summaries', 'content:filings'],
         replyTo: 'no-reply@tldrsec.app'
       };
@@ -1094,6 +1128,64 @@ function generateEmailHtml(summaries: FilingSummaryResult[], errors: {ticker: st
     <html>
     <head>
       <style>
+        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 800px; margin: 0 auto; }
+        /* Header styling */
+        .header { 
+          background: linear-gradient(135deg, #7C3AED 0%, #EC4899 100%);
+          color: white;
+          padding: 20px;
+          text-align: center;
+          border-radius: 8px 8px 0 0;
+        }
+        .header h1 { font-size: 28px; margin: 0; }
+        .header p { margin: 8px 0 0; font-size: 16px; }
+
+        /* Card summary styling */
+        .summary { 
+          background-color: #fefefe;
+          border: 1px solid #e2e8f0;
+          padding: 20px;
+          margin-bottom: 20px;
+          border-radius: 8px;
+          box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        .summary h2 { margin-top: 0; color: #000000; font-size: 22px; }
+        .meta { color: #64748b; font-size: 14px; margin-bottom: 12px; }
+
+        /* Key points styling */
+        .key-points { 
+          background-color: #fafafa;
+          padding: 15px;
+          border: 1px solid #e2e8f0;
+          border-left: none;
+          border-radius: 8px;
+          margin-bottom: 15px;
+        }
+        .key-points h3 { margin-top: 0; font-size: 16px; font-weight: bold; color: #1E40AF; }
+        .key-points ul { margin: 10px 0 0; padding-left: 20px; }
+
+        .summary-text { margin-bottom: 15px; font-size: 14px; color: #374151; }
+
+        /* Button styling */
+        .filing-link { 
+          display: inline-block;
+          margin-top: 15px;
+          padding: 12px 20px;
+          background: linear-gradient(135deg, #7C3AED 0%, #EC4899 100%);
+          color: white;
+          text-decoration: none;
+          border-radius: 8px;
+          font-size: 14px;
+          font-weight: bold;
+        }
+        .filing-link:hover { opacity: 0.9; }
+
+        /* Errors styling */
+        .errors { background-color: #fff0f0; padding: 15px; margin-top: 20px; border-radius: 8px; }
+
+        /* Footer */
+        .footer { margin-top: 30px; text-align: center; font-size: 12px; color: #6B7280; }
+      </style>
         body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 800px; margin: 0 auto; }
         .header { background-color: #0066cc; color: white; padding: 20px; text-align: center; }
         .summary { border: 1px solid #ddd; padding: 15px; margin-bottom: 20px; border-radius: 5px; }

@@ -6,6 +6,31 @@
  */
 
 import { EmailType } from './types';
+import { renderAsync } from '@react-email/render';
+import SECFilingEmailTemplate from '../../components/email/templates/SECFilingEmailTemplate';
+
+// Helper function to generate plain text version of email
+function generatePlainTextEmail(filings: any[], errors: any[]) {
+  let text = '';
+  
+  for (const filing of filings) {
+    text += `${filing.companyName} (${filing.symbol}) - ${filing.filingType}\n`;
+    text += `Filing Date: ${new Date(filing.filingDate).toLocaleDateString()}\n`;
+    if (filing.summaryText) {
+      text += `Summary: ${filing.summaryText}\n`;
+    }
+    text += `View Filing: ${filing.filingUrl}\n\n`;
+  }
+
+  if (errors.length > 0) {
+    text += '\nErrors encountered:\n';
+    for (const error of errors) {
+      text += `${error}\n`;
+    }
+  }
+
+  return text;
+}
 
 // Branding colors and styling variables
 const COLORS = {
@@ -243,7 +268,7 @@ export function immediateNotificationTemplate(
 ): { html: string; text: string } {
   const { filing, recipientName } = data;
   const name = recipientName || 'there';
-  const formattedDate = filing.filingDate.toLocaleDateString('en-US', {
+  const formattedDate = new Date(filing.filingDate).toLocaleDateString('en-US', {
     year: 'numeric',
     month: 'short',
     day: 'numeric'
@@ -379,7 +404,7 @@ export function form4Template(
 ): { html: string; text: string } {
   const { filing, recipientName } = data;
   const name = recipientName || 'there';
-  const formattedDate = filing.filingDate.toLocaleDateString('en-US', {
+  const formattedDate = new Date(filing.filingDate).toLocaleDateString('en-US', {
     year: 'numeric',
     month: 'short',
     day: 'numeric',
@@ -471,7 +496,7 @@ export function digestTemplate(
     
     // Add filings for this ticker
     for (const filing of group.filings) {
-      const formattedDate = filing.filingDate.toLocaleDateString('en-US', {
+      const formattedDate = new Date(filing.filingDate).toLocaleDateString('en-US', {
         year: 'numeric',
         month: 'short',
         day: 'numeric'
@@ -547,7 +572,7 @@ ${'='.repeat(group.symbol.length + group.companyName.length + 3)}
     
     // Add summaries for this ticker
     for (const filing of group.filings) {
-      const formattedDate = filing.filingDate.toLocaleDateString();
+      const formattedDate = new Date(filing.filingDate).toLocaleDateString();
       
       textContent += `
 ${filing.filingType} - ${formattedDate}
@@ -682,19 +707,29 @@ Manage preferences: ${data.preferencesUrl}
 /**
  * Generate an HTML version of a template
  */
-export function getEmailTemplate(
+export async function getEmailTemplate(
   templateType: EmailType,
   data: any
-): { html: string; text: string } {
+): Promise<{ html: string; text: string }> {
   switch (templateType) {
-    case EmailType.IMMEDIATE:
-      return immediateNotificationTemplate(data);
+    case EmailType.IMMEDIATE: {
+      const html = await renderAsync(SECFilingEmailTemplate({ filing: data.filing }));
+      return {
+        html,
+        text: generatePlainTextEmail([data.filing], [])
+      };
+    }
     case EmailType.DIGEST:
       return digestTemplate(data);
     case EmailType.WELCOME:
       return welcomeTemplate(data);
-    case EmailType.FORM4:
-      return form4Template(data);
+    case EmailType.FORM4: {
+      const html = await renderAsync(SECFilingEmailTemplate({ filing: data.filing }));
+      return {
+        html,
+        text: generatePlainTextEmail([data.filing], [])
+      };
+    }
     default:
       throw new Error(`Template type "${templateType}" not implemented`);
   }

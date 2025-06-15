@@ -117,9 +117,17 @@ export async function findCompanyByTicker(ticker: string): Promise<SecCompanyInf
       const [tickerFromFile, cik] = line.split('\t');
       if (tickerFromFile && tickerFromFile.toUpperCase() === ticker.toUpperCase() && cik) {
         secLogger.debug(`Found company with ticker ${ticker}, CIK: ${cik}`);
+        // Get company name from submissions API
+        const submissionsResponse = await axios.get(
+          `${SEC_API_CONFIG.submissionsUrl}${formatCik(cik)}.json`,
+          { headers: SEC_API_CONFIG.headers }
+        );
+        
+        const companyName = submissionsResponse.data?.name || '';
+        
         return {
           cik: formatCik(cik),
-          name: '', // Name will be populated from submissions API
+          name: companyName,
           tickers: [ticker.toUpperCase()],
         };
       }

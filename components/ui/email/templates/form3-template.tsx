@@ -1,28 +1,5 @@
-import React from 'react';
-import Form11KEmailTemplate from '../ui/email/templates/11k-template';
-import Form144EmailTemplate from '../ui/email/templates/form144-template';
-import FormDEF14AEmailTemplate from '../ui/email/templates/def14a-template';
-import Schedule13DEmailTemplate from '../ui/email/templates/13d-template';
-import { FilingTemplateData } from '../../lib/email/types';
-
-interface SECFilingEmailTemplateProps {
-  filing: FilingTemplateData;
-}
-
-export default function SECFilingEmailTemplate({ filing }: SECFilingEmailTemplateProps) {
-  // Select appropriate template based on filing type
-  switch (filing.filingType) {
-    case 'Form 11-K':
-      return <Form11KEmailTemplate filing={filing} />;
-    case 'Form 144':
-      return <Form144EmailTemplate filing={filing} />;
-    case 'Form DEF 14A':
-      return <FormDEF14AEmailTemplate filing={filing} />;
-    case 'Schedule 13D':
-      return <Schedule13DEmailTemplate filing={filing} />;
-    default:
-      // For other filing types, use default template
-      return (
+export default function Form3EmailTemplate() {
+  return (
     <div style={{ maxWidth: "600px", margin: "0 auto", fontFamily: "Arial, sans-serif", backgroundColor: "#f8fafc" }}>
       {/* Header with gradient background */}
       <table
@@ -72,9 +49,9 @@ export default function SECFilingEmailTemplate({ filing }: SECFilingEmailTemplat
                           fontWeight: "bold",
                         }}
                       >
-                        {filing.companyName} ({filing.symbol}) - {filing.filingType}
+                        Palantir Technologies Inc. (PLTR) - Form 3 Filing
                       </h2>
-                      <p style={{ margin: "8px 0 20px", color: "#64748b", fontSize: "14px" }}>Filed on: {new Date(filing.filingDate).toLocaleDateString()}</p>
+                      <p style={{ margin: "8px 0 20px", color: "#64748b", fontSize: "14px" }}>Filed on: 6/5/2025</p>
                     </td>
                   </tr>
                 </tbody>
@@ -86,11 +63,12 @@ export default function SECFilingEmailTemplate({ filing }: SECFilingEmailTemplat
                 cellPadding="0"
                 cellSpacing="0"
                 style={{
-                  backgroundColor: "#fefefe",
+                  backgroundColor: "#fafafa",
                   border: "1px solid #e2e8f0",
                   borderRadius: "8px",
                   marginBottom: "20px",
-                  boxShadow: "0 1px 3px rgba(0,0,0,0.1)",
+                  boxShadow: "0 2px 4px rgba(0,0,0,0.05), 0 0 1px rgba(0,0,0,0.1)",
+                  backgroundImage: "linear-gradient(to bottom, #ffffff, #f9fafb)",
                 }}
               >
                 <tbody>
@@ -102,6 +80,8 @@ export default function SECFilingEmailTemplate({ filing }: SECFilingEmailTemplat
                           color: "#000000",
                           fontSize: "18px",
                           fontWeight: "bold",
+                          borderBottom: "2px solid #f1f5f9",
+                          paddingBottom: "8px",
                         }}
                       >
                         📋 Summary
@@ -112,12 +92,12 @@ export default function SECFilingEmailTemplate({ filing }: SECFilingEmailTemplat
                           <tr>
                             <td style={{ padding: "8px 0", width: "120px", verticalAlign: "top" }}>
                               <p style={{ margin: "0", color: "#6B7280", fontSize: "14px", fontWeight: "500" }}>
-                                Name:
+                                Reporting Person:
                               </p>
                             </td>
                             <td style={{ padding: "8px 0", verticalAlign: "top" }}>
                               <p style={{ margin: "0", color: "#374151", fontSize: "14px", fontWeight: "600" }}>
-                                Vaibhav Taneja
+                                Dr. Jennifer Martinez
                               </p>
                             </td>
                           </tr>
@@ -128,7 +108,9 @@ export default function SECFilingEmailTemplate({ filing }: SECFilingEmailTemplat
                               </p>
                             </td>
                             <td style={{ padding: "8px 0", verticalAlign: "top" }}>
-                              <p style={{ margin: "0", color: "#374151", fontSize: "14px" }}>Chief Financial Officer</p>
+                              <p style={{ margin: "0", color: "#374151", fontSize: "14px" }}>
+                                Chief Technology Officer
+                              </p>
                             </td>
                           </tr>
                           <tr>
@@ -138,31 +120,31 @@ export default function SECFilingEmailTemplate({ filing }: SECFilingEmailTemplat
                               </p>
                             </td>
                             <td style={{ padding: "8px 0", verticalAlign: "top" }}>
-                              <p style={{ margin: "0", color: "#374151", fontSize: "14px" }}>Form 4</p>
-                            </td>
-                          </tr>
-                          <tr>
-                            <td style={{ padding: "8px 0", width: "120px", verticalAlign: "top" }}>
-                              <p style={{ margin: "0", color: "#6B7280", fontSize: "14px", fontWeight: "500" }}>
-                                Report Date:
-                              </p>
-                            </td>
-                            <td style={{ padding: "8px 0", verticalAlign: "top" }}>
-                              <p style={{ margin: "0", color: "#374151", fontSize: "14px" }}>June 4, 2025</p>
-                            </td>
-                          </tr>
-                          <tr>
-                            <td style={{ padding: "8px 0", width: "120px", verticalAlign: "top" }}>
-                              <p style={{ margin: "0", color: "#6B7280", fontSize: "14px", fontWeight: "500" }}>
-                                Trading Plan:
-                              </p>
-                            </td>
-                            <td style={{ padding: "8px 0", verticalAlign: "top" }}>
                               <p style={{ margin: "0", color: "#374151", fontSize: "14px" }}>
-                                Rule 10b5-1 plan adopted on May 1, 2024
+                                Form 3 (Initial Ownership Statement)
                               </p>
                             </td>
                           </tr>
+                          <tr>
+                            <td style={{ padding: "8px 0", width: "120px", verticalAlign: "top" }}>
+                              <p style={{ margin: "0", color: "#6B7280", fontSize: "14px", fontWeight: "500" }}>
+                                Appointment Date:
+                              </p>
+                            </td>
+                            <td style={{ padding: "8px 0", verticalAlign: "top" }}>
+                              <p style={{ margin: "0", color: "#374151", fontSize: "14px" }}>June 1, 2025</p>
+                            </td>
+                          </tr>
+                          <tr>
+                            <td style={{ padding: "8px 0", width: "120px", verticalAlign: "top" }}>
+                              <p style={{ margin: "0", color: "#6B7280", fontSize: "14px", fontWeight: "500" }}>
+                                Filed Date:
+                              </p>
+                            </td>
+                            <td style={{ padding: "8px 0", verticalAlign: "top" }}>
+                              <p style={{ margin: "0", color: "#374151", fontSize: "14px" }}>June 5, 2025</p>
+                            </td>
+                          </tr>
                         </tbody>
                       </table>
                     </td>
@@ -170,17 +152,18 @@ export default function SECFilingEmailTemplate({ filing }: SECFilingEmailTemplat
                 </tbody>
               </table>
 
-              {/* Transactions Box with Graphics */}
+              {/* Initial Holdings */}
               <table
                 width="100%"
                 cellPadding="0"
                 cellSpacing="0"
                 style={{
-                  backgroundColor: "#fefefe",
+                  backgroundColor: "#fafafa",
                   border: "1px solid #e2e8f0",
                   borderRadius: "8px",
                   marginBottom: "20px",
-                  boxShadow: "0 1px 3px rgba(0,0,0,0.1)",
+                  boxShadow: "0 2px 4px rgba(0,0,0,0.05), 0 0 1px rgba(0,0,0,0.1)",
+                  backgroundImage: "linear-gradient(to bottom, #ffffff, #f9fafb)",
                 }}
               >
                 <tbody>
@@ -192,105 +175,11 @@ export default function SECFilingEmailTemplate({ filing }: SECFilingEmailTemplat
                           color: "#000000",
                           fontSize: "18px",
                           fontWeight: "bold",
+                          borderBottom: "2px solid #f1f5f9",
+                          paddingBottom: "8px",
                         }}
                       >
-                        💼 Notable Transactions
-                      </h3>
-
-                      <table width="100%" cellPadding="0" cellSpacing="0" style={{ borderCollapse: "collapse" }}>
-                        <tbody>
-                          <tr>
-                            <td style={{ padding: "12px 0", borderBottom: "1px solid #f1f5f9" }}>
-                              <div style={{ display: "flex", alignItems: "center", marginBottom: "8px" }}>
-                                <p style={{ margin: "0", color: "#374151", fontSize: "14px", fontWeight: "bold" }}>
-                                  June 2, 2025
-                                </p>
-                              </div>
-                              <ul
-                                style={{
-                                  margin: "0",
-                                  paddingLeft: "32px",
-                                  color: "#374151",
-                                  fontSize: "14px",
-                                  lineHeight: "1.6",
-                                }}
-                              >
-                                <li style={{ marginBottom: "4px" }}>
-                                  <span style={{ color: "#10B981", fontWeight: "bold" }}>+6,000 shares</span> acquired
-                                  through stock option exercise at $18.22/share
-                                </li>
-                                <li style={{ marginBottom: "4px" }}>
-                                  <span style={{ color: "#EF4444", fontWeight: "bold" }}>-6,000 shares</span> sold at
-                                  $333.77-$347.22/share
-                                </li>
-                                <li>
-                                  <span style={{ color: "#6B7280" }}>~2,733 shares sold for tax obligations</span>
-                                </li>
-                              </ul>
-                            </td>
-                          </tr>
-                          <tr>
-                            <td style={{ padding: "12px 0" }}>
-                              <div style={{ display: "flex", alignItems: "center", marginBottom: "8px" }}>
-                                <p style={{ margin: "0", color: "#374151", fontSize: "14px", fontWeight: "bold" }}>
-                                  June 3, 2025
-                                </p>
-                              </div>
-                              <ul
-                                style={{
-                                  margin: "0",
-                                  paddingLeft: "32px",
-                                  color: "#374151",
-                                  fontSize: "14px",
-                                  lineHeight: "1.6",
-                                }}
-                              >
-                                <li style={{ marginBottom: "4px" }}>
-                                  <span style={{ color: "#10B981", fontWeight: "bold" }}>+1,000 shares</span> acquired
-                                  through stock option exercise at $18.22/share
-                                </li>
-                                <li style={{ marginBottom: "4px" }}>
-                                  <span style={{ color: "#EF4444", fontWeight: "bold" }}>-1,000 shares</span> sold at
-                                  $350.00/share
-                                </li>
-                                <li>
-                                  <span style={{ color: "#6B7280" }}>~455 shares sold for tax obligations</span>
-                                </li>
-                              </ul>
-                            </td>
-                          </tr>
-                        </tbody>
-                      </table>
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-
-              {/* Holdings Table */}
-              <table
-                width="100%"
-                cellPadding="0"
-                cellSpacing="0"
-                style={{
-                  backgroundColor: "#fefefe",
-                  border: "1px solid #e2e8f0",
-                  borderRadius: "8px",
-                  marginBottom: "20px",
-                  boxShadow: "0 1px 3px rgba(0,0,0,0.1)",
-                }}
-              >
-                <tbody>
-                  <tr>
-                    <td style={{ padding: "20px" }}>
-                      <h3
-                        style={{
-                          margin: "0 0 16px",
-                          color: "#000000",
-                          fontSize: "18px",
-                          fontWeight: "bold",
-                        }}
-                      >
-                        📊 Post-Transaction Holdings
+                        📊 Initial Beneficial Ownership
                       </h3>
 
                       <table
@@ -301,10 +190,11 @@ export default function SECFilingEmailTemplate({ filing }: SECFilingEmailTemplat
                           borderCollapse: "collapse",
                           border: "1px solid #e2e8f0",
                           borderRadius: "6px",
+                          boxShadow: "0 1px 2px rgba(0,0,0,0.05)",
                         }}
                       >
                         <thead>
-                          <tr style={{ backgroundColor: "#f8fafc" }}>
+                          <tr style={{ backgroundColor: "#f1f5f9" }}>
                             <th
                               style={{
                                 padding: "12px",
@@ -315,7 +205,7 @@ export default function SECFilingEmailTemplate({ filing }: SECFilingEmailTemplat
                                 borderBottom: "1px solid #e2e8f0",
                               }}
                             >
-                              HOLDING TYPE
+                              SECURITY TYPE
                             </th>
                             <th
                               style={{
@@ -327,7 +217,7 @@ export default function SECFilingEmailTemplate({ filing }: SECFilingEmailTemplat
                                 borderBottom: "1px solid #e2e8f0",
                               }}
                             >
-                              SHARES
+                              SHARES/UNITS
                             </th>
                             <th
                               style={{
@@ -339,7 +229,7 @@ export default function SECFilingEmailTemplate({ filing }: SECFilingEmailTemplat
                                 borderBottom: "1px solid #e2e8f0",
                               }}
                             >
-                              CHANGE
+                              OWNERSHIP
                             </th>
                             <th
                               style={{
@@ -351,7 +241,7 @@ export default function SECFilingEmailTemplate({ filing }: SECFilingEmailTemplat
                                 borderBottom: "1px solid #e2e8f0",
                               }}
                             >
-                              % CHANGE
+                              VALUE*
                             </th>
                           </tr>
                         </thead>
@@ -363,9 +253,10 @@ export default function SECFilingEmailTemplate({ filing }: SECFilingEmailTemplat
                                 fontSize: "14px",
                                 color: "#374151",
                                 borderBottom: "1px solid #f1f5f9",
+                                backgroundColor: "#ffffff",
                               }}
                             >
-                              Direct Ownership
+                              Common Stock
                             </td>
                             <td
                               style={{
@@ -375,40 +266,34 @@ export default function SECFilingEmailTemplate({ filing }: SECFilingEmailTemplat
                                 fontWeight: "bold",
                                 color: "#374151",
                                 borderBottom: "1px solid #f1f5f9",
+                                backgroundColor: "#ffffff",
                               }}
                             >
-                              1,949.50
+                              0
                             </td>
                             <td
                               style={{
                                 padding: "12px",
                                 textAlign: "center",
+                                fontSize: "14px",
+                                color: "#374151",
                                 borderBottom: "1px solid #f1f5f9",
+                                backgroundColor: "#ffffff",
                               }}
                             >
-                              <span
-                                style={{
-                                  display: "inline-flex",
-                                  alignItems: "center",
-                                  color: "#EF4444",
-                                  fontSize: "14px",
-                                  fontWeight: "bold",
-                                }}
-                              >
-                                ↓ -3,267
-                              </span>
+                              Direct
                             </td>
                             <td
                               style={{
                                 padding: "12px",
                                 textAlign: "right",
                                 fontSize: "14px",
-                                fontWeight: "bold",
-                                color: "#EF4444",
+                                color: "#374151",
                                 borderBottom: "1px solid #f1f5f9",
+                                backgroundColor: "#ffffff",
                               }}
                             >
-                              -62.6%
+                              $0
                             </td>
                           </tr>
                           <tr>
@@ -418,9 +303,10 @@ export default function SECFilingEmailTemplate({ filing }: SECFilingEmailTemplat
                                 fontSize: "14px",
                                 color: "#374151",
                                 borderBottom: "1px solid #f1f5f9",
+                                backgroundColor: "#f8fafc",
                               }}
                             >
-                              Indirect - Taneja GRATs
+                              Stock Options (Vesting)
                             </td>
                             <td
                               style={{
@@ -430,38 +316,34 @@ export default function SECFilingEmailTemplate({ filing }: SECFilingEmailTemplat
                                 fontWeight: "bold",
                                 color: "#374151",
                                 borderBottom: "1px solid #f1f5f9",
+                                backgroundColor: "#f8fafc",
                               }}
                             >
-                              55,500
+                              250,000
                             </td>
                             <td
                               style={{
                                 padding: "12px",
                                 textAlign: "center",
+                                fontSize: "14px",
+                                color: "#374151",
                                 borderBottom: "1px solid #f1f5f9",
+                                backgroundColor: "#f8fafc",
                               }}
                             >
-                              <span
-                                style={{
-                                  display: "inline-flex",
-                                  alignItems: "center",
-                                  color: "#6B7280",
-                                  fontSize: "14px",
-                                }}
-                              >
-                                → No Change
-                              </span>
+                              Direct
                             </td>
                             <td
                               style={{
                                 padding: "12px",
                                 textAlign: "right",
                                 fontSize: "14px",
-                                color: "#6B7280",
+                                color: "#374151",
                                 borderBottom: "1px solid #f1f5f9",
+                                backgroundColor: "#f8fafc",
                               }}
                             >
-                              0.0%
+                              $4.8M**
                             </td>
                           </tr>
                           <tr>
@@ -470,10 +352,10 @@ export default function SECFilingEmailTemplate({ filing }: SECFilingEmailTemplat
                                 padding: "12px",
                                 fontSize: "14px",
                                 color: "#374151",
-                                borderBottom: "1px solid #f1f5f9",
+                                backgroundColor: "#ffffff",
                               }}
                             >
-                              Indirect - Spouse GRATs
+                              Restricted Stock Units
                             </td>
                             <td
                               style={{
@@ -482,90 +364,32 @@ export default function SECFilingEmailTemplate({ filing }: SECFilingEmailTemplat
                                 fontSize: "14px",
                                 fontWeight: "bold",
                                 color: "#374151",
-                                borderBottom: "1px solid #f1f5f9",
+                                backgroundColor: "#ffffff",
                               }}
                             >
-                              55,500
+                              75,000
                             </td>
                             <td
                               style={{
                                 padding: "12px",
                                 textAlign: "center",
-                                borderBottom: "1px solid #f1f5f9",
-                              }}
-                            >
-                              <span
-                                style={{
-                                  display: "inline-flex",
-                                  alignItems: "center",
-                                  color: "#6B7280",
-                                  fontSize: "14px",
-                                }}
-                              >
-                                → No Change
-                              </span>
-                            </td>
-                            <td
-                              style={{
-                                padding: "12px",
-                                textAlign: "right",
-                                fontSize: "14px",
-                                color: "#6B7280",
-                                borderBottom: "1px solid #f1f5f9",
-                              }}
-                            >
-                              0.0%
-                            </td>
-                          </tr>
-                          <tr>
-                            <td
-                              style={{
-                                padding: "12px",
                                 fontSize: "14px",
                                 color: "#374151",
+                                backgroundColor: "#ffffff",
                               }}
                             >
-                              Stock Options ($18.22)
+                              Direct
                             </td>
                             <td
                               style={{
                                 padding: "12px",
                                 textAlign: "right",
                                 fontSize: "14px",
-                                fontWeight: "bold",
                                 color: "#374151",
+                                backgroundColor: "#ffffff",
                               }}
                             >
-                              719,920
-                            </td>
-                            <td
-                              style={{
-                                padding: "12px",
-                                textAlign: "center",
-                              }}
-                            >
-                              <span
-                                style={{
-                                  display: "inline-flex",
-                                  alignItems: "center",
-                                  color: "#EF4444",
-                                  fontSize: "14px",
-                                  fontWeight: "bold",
-                                }}
-                              >
-                                ↓ -7,000
-                              </span>
-                            </td>
-                            <td
-                              style={{
-                                padding: "12px",
-                                textAlign: "right",
-                                fontSize: "14px",
-                                fontWeight: "bold",
-                                color: "#EF4444",
-                              }}
-                            >
-                              -0.96%
+                              $1.4M
                             </td>
                           </tr>
                         </tbody>
@@ -579,23 +403,89 @@ export default function SECFilingEmailTemplate({ filing }: SECFilingEmailTemplat
                           fontStyle: "italic",
                         }}
                       >
-                        * Stock options expire April 19, 2029
+                        * Based on closing price of $19.25 on June 5, 2025
+                        <br />
+                        ** Stock options have exercise price of $15.00, vesting over 4 years
                       </p>
                     </td>
                   </tr>
                 </tbody>
               </table>
 
-              {/* Additional Details Box */}
+              {/* Appointment Details */}
               <table
                 width="100%"
                 cellPadding="0"
                 cellSpacing="0"
                 style={{
-                  backgroundColor: "#fefefe",
+                  backgroundColor: "#fafafa",
                   border: "1px solid #e2e8f0",
                   borderRadius: "8px",
-                  boxShadow: "0 1px 3px rgba(0,0,0,0.1)",
+                  marginBottom: "20px",
+                  boxShadow: "0 2px 4px rgba(0,0,0,0.05), 0 0 1px rgba(0,0,0,0.1)",
+                  backgroundImage: "linear-gradient(to bottom, #ffffff, #f9fafb)",
+                }}
+              >
+                <tbody>
+                  <tr>
+                    <td style={{ padding: "20px" }}>
+                      <h3
+                        style={{
+                          margin: "0 0 16px",
+                          color: "#000000",
+                          fontSize: "18px",
+                          fontWeight: "bold",
+                          borderBottom: "2px solid #f1f5f9",
+                          paddingBottom: "8px",
+                        }}
+                      >
+                        👤 Appointment Details
+                      </h3>
+
+                      <div
+                        style={{
+                          padding: "12px",
+                          backgroundColor: "#f8fafc",
+                          borderRadius: "6px",
+                          marginBottom: "12px",
+                        }}
+                      >
+                        <p style={{ margin: "0 0 8px", color: "#374151", fontSize: "14px", lineHeight: "1.6" }}>
+                          <strong>Background:</strong> Dr. Jennifer Martinez joins Palantir as Chief Technology Officer,
+                          bringing over 15 years of experience in artificial intelligence and machine learning from her
+                          previous role as VP of AI Research at Google.
+                        </p>
+                      </div>
+
+                      <div
+                        style={{
+                          padding: "12px",
+                          backgroundColor: "#f8fafc",
+                          borderRadius: "6px",
+                        }}
+                      >
+                        <p style={{ margin: "0", color: "#374151", fontSize: "14px", lineHeight: "1.6" }}>
+                          <strong>Compensation Package:</strong> Dr. Martinez's initial equity grant includes 250,000
+                          stock options and 75,000 RSUs, with a 4-year vesting schedule and 1-year cliff. The package
+                          reflects Palantir's commitment to attracting top-tier technology talent.
+                        </p>
+                      </div>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+
+              {/* Filing Requirements */}
+              <table
+                width="100%"
+                cellPadding="0"
+                cellSpacing="0"
+                style={{
+                  backgroundColor: "#fafafa",
+                  border: "1px solid #e2e8f0",
+                  borderRadius: "8px",
+                  boxShadow: "0 2px 4px rgba(0,0,0,0.05), 0 0 1px rgba(0,0,0,0.1)",
+                  backgroundImage: "linear-gradient(to bottom, #ffffff, #f9fafb)",
                 }}
               >
                 <tbody>
@@ -607,13 +497,38 @@ export default function SECFilingEmailTemplate({ filing }: SECFilingEmailTemplat
                           color: "#000000",
                           fontSize: "18px",
                           fontWeight: "bold",
+                          borderBottom: "2px solid #f1f5f9",
+                          paddingBottom: "8px",
                         }}
                       >
-                        ℹ️ Additional Details
+                        ℹ️ Filing Information
                       </h3>
-                      <p style={{ margin: "0", color: "#374151", fontSize: "14px", lineHeight: "1.6" }}>
-                        {filing.summaryText}
-                      </p>
+                      <ul
+                        style={{
+                          margin: "0",
+                          paddingLeft: "20px",
+                          color: "#374151",
+                          fontSize: "14px",
+                          lineHeight: "1.6",
+                        }}
+                      >
+                        <li style={{ marginBottom: "8px" }}>
+                          <strong>Filing Requirement:</strong> Form 3 must be filed within 10 days of becoming an
+                          officer, director, or 10% shareholder.
+                        </li>
+                        <li style={{ marginBottom: "8px" }}>
+                          <strong>Purpose:</strong> Establishes baseline ownership for future Form 4 and Form 5 filings
+                          tracking changes in beneficial ownership.
+                        </li>
+                        <li style={{ marginBottom: "8px" }}>
+                          <strong>Next Steps:</strong> Dr. Martinez will be required to file Form 4 within two business
+                          days of any future transactions in Palantir securities.
+                        </li>
+                        <li>
+                          <strong>Public Disclosure:</strong> This filing provides transparency into insider ownership
+                          and potential conflicts of interest for investors and regulators.
+                        </li>
+                      </ul>
                     </td>
                   </tr>
                 </tbody>
@@ -639,7 +554,7 @@ export default function SECFilingEmailTemplate({ filing }: SECFilingEmailTemplat
           <tr>
             <td style={{ padding: "20px", textAlign: "center" }}>
               <a
-                href={filing.url}
+                href="#"
                 style={{
                   display: "inline-block",
                   padding: "12px 24px",
@@ -651,7 +566,7 @@ export default function SECFilingEmailTemplate({ filing }: SECFilingEmailTemplat
                   fontWeight: "bold",
                 }}
               >
-                View Filing on SEC Website
+                View on SEC Website
               </a>
               <p style={{ margin: "16px 0 0", color: "#6B7280", fontSize: "12px" }}>
                 © 2025 tldrSEC. All rights reserved.
@@ -659,8 +574,7 @@ export default function SECFilingEmailTemplate({ filing }: SECFilingEmailTemplat
             </td>
           </tr>
         </tbody>
-       </table>
+      </table>
     </div>
-  );
-  }
+  )
 }

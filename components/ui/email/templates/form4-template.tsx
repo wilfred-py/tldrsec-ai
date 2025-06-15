@@ -1,28 +1,5 @@
-import React from 'react';
-import Form11KEmailTemplate from '../ui/email/templates/11k-template';
-import Form144EmailTemplate from '../ui/email/templates/form144-template';
-import FormDEF14AEmailTemplate from '../ui/email/templates/def14a-template';
-import Schedule13DEmailTemplate from '../ui/email/templates/13d-template';
-import { FilingTemplateData } from '../../lib/email/types';
-
-interface SECFilingEmailTemplateProps {
-  filing: FilingTemplateData;
-}
-
-export default function SECFilingEmailTemplate({ filing }: SECFilingEmailTemplateProps) {
-  // Select appropriate template based on filing type
-  switch (filing.filingType) {
-    case 'Form 11-K':
-      return <Form11KEmailTemplate filing={filing} />;
-    case 'Form 144':
-      return <Form144EmailTemplate filing={filing} />;
-    case 'Form DEF 14A':
-      return <FormDEF14AEmailTemplate filing={filing} />;
-    case 'Schedule 13D':
-      return <Schedule13DEmailTemplate filing={filing} />;
-    default:
-      // For other filing types, use default template
-      return (
+export default function Form4EmailTemplate() {
+  return (
     <div style={{ maxWidth: "600px", margin: "0 auto", fontFamily: "Arial, sans-serif", backgroundColor: "#f8fafc" }}>
       {/* Header with gradient background */}
       <table
@@ -72,9 +49,9 @@ export default function SECFilingEmailTemplate({ filing }: SECFilingEmailTemplat
                           fontWeight: "bold",
                         }}
                       >
-                        {filing.companyName} ({filing.symbol}) - {filing.filingType}
+                        Tesla, Inc. (TSLA) - Form 4 Filing
                       </h2>
-                      <p style={{ margin: "8px 0 20px", color: "#64748b", fontSize: "14px" }}>Filed on: {new Date(filing.filingDate).toLocaleDateString()}</p>
+                      <p style={{ margin: "8px 0 20px", color: "#64748b", fontSize: "14px" }}>Filed on: 6/4/2025</p>
                     </td>
                   </tr>
                 </tbody>
@@ -86,11 +63,12 @@ export default function SECFilingEmailTemplate({ filing }: SECFilingEmailTemplat
                 cellPadding="0"
                 cellSpacing="0"
                 style={{
-                  backgroundColor: "#fefefe",
+                  backgroundColor: "#fafafa",
                   border: "1px solid #e2e8f0",
                   borderRadius: "8px",
                   marginBottom: "20px",
-                  boxShadow: "0 1px 3px rgba(0,0,0,0.1)",
+                  boxShadow: "0 2px 4px rgba(0,0,0,0.05), 0 0 1px rgba(0,0,0,0.1)",
+                  backgroundImage: "linear-gradient(to bottom, #ffffff, #f9fafb)",
                 }}
               >
                 <tbody>
@@ -102,6 +80,8 @@ export default function SECFilingEmailTemplate({ filing }: SECFilingEmailTemplat
                           color: "#000000",
                           fontSize: "18px",
                           fontWeight: "bold",
+                          borderBottom: "2px solid #f1f5f9",
+                          paddingBottom: "8px",
                         }}
                       >
                         📋 Summary
@@ -176,11 +156,12 @@ export default function SECFilingEmailTemplate({ filing }: SECFilingEmailTemplat
                 cellPadding="0"
                 cellSpacing="0"
                 style={{
-                  backgroundColor: "#fefefe",
+                  backgroundColor: "#fafafa",
                   border: "1px solid #e2e8f0",
                   borderRadius: "8px",
                   marginBottom: "20px",
-                  boxShadow: "0 1px 3px rgba(0,0,0,0.1)",
+                  boxShadow: "0 2px 4px rgba(0,0,0,0.05), 0 0 1px rgba(0,0,0,0.1)",
+                  backgroundImage: "linear-gradient(to bottom, #ffffff, #f9fafb)",
                 }}
               >
                 <tbody>
@@ -192,6 +173,8 @@ export default function SECFilingEmailTemplate({ filing }: SECFilingEmailTemplat
                           color: "#000000",
                           fontSize: "18px",
                           fontWeight: "bold",
+                          borderBottom: "2px solid #f1f5f9",
+                          paddingBottom: "8px",
                         }}
                       >
                         💼 Notable Transactions
@@ -200,7 +183,14 @@ export default function SECFilingEmailTemplate({ filing }: SECFilingEmailTemplat
                       <table width="100%" cellPadding="0" cellSpacing="0" style={{ borderCollapse: "collapse" }}>
                         <tbody>
                           <tr>
-                            <td style={{ padding: "12px 0", borderBottom: "1px solid #f1f5f9" }}>
+                            <td
+                              style={{
+                                padding: "12px",
+                                borderBottom: "1px solid #f1f5f9",
+                                backgroundColor: "#f8fafc",
+                                borderRadius: "6px",
+                              }}
+                            >
                               <div style={{ display: "flex", alignItems: "center", marginBottom: "8px" }}>
                                 <p style={{ margin: "0", color: "#374151", fontSize: "14px", fontWeight: "bold" }}>
                                   June 2, 2025
@@ -230,7 +220,14 @@ export default function SECFilingEmailTemplate({ filing }: SECFilingEmailTemplat
                             </td>
                           </tr>
                           <tr>
-                            <td style={{ padding: "12px 0" }}>
+                            <td
+                              style={{
+                                padding: "12px",
+                                marginTop: "12px",
+                                backgroundColor: "#f8fafc",
+                                borderRadius: "6px",
+                              }}
+                            >
                               <div style={{ display: "flex", alignItems: "center", marginBottom: "8px" }}>
                                 <p style={{ margin: "0", color: "#374151", fontSize: "14px", fontWeight: "bold" }}>
                                   June 3, 2025
@@ -272,11 +269,12 @@ export default function SECFilingEmailTemplate({ filing }: SECFilingEmailTemplat
                 cellPadding="0"
                 cellSpacing="0"
                 style={{
-                  backgroundColor: "#fefefe",
+                  backgroundColor: "#fafafa",
                   border: "1px solid #e2e8f0",
                   borderRadius: "8px",
                   marginBottom: "20px",
-                  boxShadow: "0 1px 3px rgba(0,0,0,0.1)",
+                  boxShadow: "0 2px 4px rgba(0,0,0,0.05), 0 0 1px rgba(0,0,0,0.1)",
+                  backgroundImage: "linear-gradient(to bottom, #ffffff, #f9fafb)",
                 }}
               >
                 <tbody>
@@ -288,6 +286,8 @@ export default function SECFilingEmailTemplate({ filing }: SECFilingEmailTemplat
                           color: "#000000",
                           fontSize: "18px",
                           fontWeight: "bold",
+                          borderBottom: "2px solid #f1f5f9",
+                          paddingBottom: "8px",
                         }}
                       >
                         📊 Post-Transaction Holdings
@@ -301,10 +301,11 @@ export default function SECFilingEmailTemplate({ filing }: SECFilingEmailTemplat
                           borderCollapse: "collapse",
                           border: "1px solid #e2e8f0",
                           borderRadius: "6px",
+                          boxShadow: "0 1px 2px rgba(0,0,0,0.05)",
                         }}
                       >
                         <thead>
-                          <tr style={{ backgroundColor: "#f8fafc" }}>
+                          <tr style={{ backgroundColor: "#f1f5f9" }}>
                             <th
                               style={{
                                 padding: "12px",
@@ -363,6 +364,7 @@ export default function SECFilingEmailTemplate({ filing }: SECFilingEmailTemplat
                                 fontSize: "14px",
                                 color: "#374151",
                                 borderBottom: "1px solid #f1f5f9",
+                                backgroundColor: "#ffffff",
                               }}
                             >
                               Direct Ownership
@@ -375,6 +377,7 @@ export default function SECFilingEmailTemplate({ filing }: SECFilingEmailTemplat
                                 fontWeight: "bold",
                                 color: "#374151",
                                 borderBottom: "1px solid #f1f5f9",
+                                backgroundColor: "#ffffff",
                               }}
                             >
                               1,949.50
@@ -384,6 +387,7 @@ export default function SECFilingEmailTemplate({ filing }: SECFilingEmailTemplat
                                 padding: "12px",
                                 textAlign: "center",
                                 borderBottom: "1px solid #f1f5f9",
+                                backgroundColor: "#ffffff",
                               }}
                             >
                               <span
@@ -406,6 +410,7 @@ export default function SECFilingEmailTemplate({ filing }: SECFilingEmailTemplat
                                 fontWeight: "bold",
                                 color: "#EF4444",
                                 borderBottom: "1px solid #f1f5f9",
+                                backgroundColor: "#ffffff",
                               }}
                             >
                               -62.6%
@@ -418,6 +423,7 @@ export default function SECFilingEmailTemplate({ filing }: SECFilingEmailTemplat
                                 fontSize: "14px",
                                 color: "#374151",
                                 borderBottom: "1px solid #f1f5f9",
+                                backgroundColor: "#f8fafc",
                               }}
                             >
                               Indirect - Taneja GRATs
@@ -430,6 +436,7 @@ export default function SECFilingEmailTemplate({ filing }: SECFilingEmailTemplat
                                 fontWeight: "bold",
                                 color: "#374151",
                                 borderBottom: "1px solid #f1f5f9",
+                                backgroundColor: "#f8fafc",
                               }}
                             >
                               55,500
@@ -439,6 +446,7 @@ export default function SECFilingEmailTemplate({ filing }: SECFilingEmailTemplat
                                 padding: "12px",
                                 textAlign: "center",
                                 borderBottom: "1px solid #f1f5f9",
+                                backgroundColor: "#f8fafc",
                               }}
                             >
                               <span
@@ -459,6 +467,7 @@ export default function SECFilingEmailTemplate({ filing }: SECFilingEmailTemplat
                                 fontSize: "14px",
                                 color: "#6B7280",
                                 borderBottom: "1px solid #f1f5f9",
+                                backgroundColor: "#f8fafc",
                               }}
                             >
                               0.0%
@@ -471,6 +480,7 @@ export default function SECFilingEmailTemplate({ filing }: SECFilingEmailTemplat
                                 fontSize: "14px",
                                 color: "#374151",
                                 borderBottom: "1px solid #f1f5f9",
+                                backgroundColor: "#ffffff",
                               }}
                             >
                               Indirect - Spouse GRATs
@@ -483,6 +493,7 @@ export default function SECFilingEmailTemplate({ filing }: SECFilingEmailTemplat
                                 fontWeight: "bold",
                                 color: "#374151",
                                 borderBottom: "1px solid #f1f5f9",
+                                backgroundColor: "#ffffff",
                               }}
                             >
                               55,500
@@ -492,6 +503,7 @@ export default function SECFilingEmailTemplate({ filing }: SECFilingEmailTemplat
                                 padding: "12px",
                                 textAlign: "center",
                                 borderBottom: "1px solid #f1f5f9",
+                                backgroundColor: "#ffffff",
                               }}
                             >
                               <span
@@ -512,6 +524,7 @@ export default function SECFilingEmailTemplate({ filing }: SECFilingEmailTemplat
                                 fontSize: "14px",
                                 color: "#6B7280",
                                 borderBottom: "1px solid #f1f5f9",
+                                backgroundColor: "#ffffff",
                               }}
                             >
                               0.0%
@@ -523,6 +536,7 @@ export default function SECFilingEmailTemplate({ filing }: SECFilingEmailTemplat
                                 padding: "12px",
                                 fontSize: "14px",
                                 color: "#374151",
+                                backgroundColor: "#f8fafc",
                               }}
                             >
                               Stock Options ($18.22)
@@ -534,6 +548,7 @@ export default function SECFilingEmailTemplate({ filing }: SECFilingEmailTemplat
                                 fontSize: "14px",
                                 fontWeight: "bold",
                                 color: "#374151",
+                                backgroundColor: "#f8fafc",
                               }}
                             >
                               719,920
@@ -542,6 +557,7 @@ export default function SECFilingEmailTemplate({ filing }: SECFilingEmailTemplat
                               style={{
                                 padding: "12px",
                                 textAlign: "center",
+                                backgroundColor: "#f8fafc",
                               }}
                             >
                               <span
@@ -563,6 +579,7 @@ export default function SECFilingEmailTemplate({ filing }: SECFilingEmailTemplat
                                 fontSize: "14px",
                                 fontWeight: "bold",
                                 color: "#EF4444",
+                                backgroundColor: "#f8fafc",
                               }}
                             >
                               -0.96%
@@ -592,10 +609,11 @@ export default function SECFilingEmailTemplate({ filing }: SECFilingEmailTemplat
                 cellPadding="0"
                 cellSpacing="0"
                 style={{
-                  backgroundColor: "#fefefe",
+                  backgroundColor: "#fafafa",
                   border: "1px solid #e2e8f0",
                   borderRadius: "8px",
-                  boxShadow: "0 1px 3px rgba(0,0,0,0.1)",
+                  boxShadow: "0 2px 4px rgba(0,0,0,0.05), 0 0 1px rgba(0,0,0,0.1)",
+                  backgroundImage: "linear-gradient(to bottom, #ffffff, #f9fafb)",
                 }}
               >
                 <tbody>
@@ -607,12 +625,16 @@ export default function SECFilingEmailTemplate({ filing }: SECFilingEmailTemplat
                           color: "#000000",
                           fontSize: "18px",
                           fontWeight: "bold",
+                          borderBottom: "2px solid #f1f5f9",
+                          paddingBottom: "8px",
                         }}
                       >
                         ℹ️ Additional Details
                       </h3>
                       <p style={{ margin: "0", color: "#374151", fontSize: "14px", lineHeight: "1.6" }}>
-                        {filing.summaryText}
+                        The stock options exercised by Taneja were granted on April 19, 2019, with a vesting schedule of
+                        1/8th of the shares vesting on September 13, 2019, and an additional 1/48th vesting each month
+                        thereafter, becoming fully vested on March 13, 2023.
                       </p>
                     </td>
                   </tr>
@@ -639,7 +661,7 @@ export default function SECFilingEmailTemplate({ filing }: SECFilingEmailTemplat
           <tr>
             <td style={{ padding: "20px", textAlign: "center" }}>
               <a
-                href={filing.url}
+                href="#"
                 style={{
                   display: "inline-block",
                   padding: "12px 24px",
@@ -651,7 +673,7 @@ export default function SECFilingEmailTemplate({ filing }: SECFilingEmailTemplat
                   fontWeight: "bold",
                 }}
               >
-                View Filing on SEC Website
+                View on SEC Website
               </a>
               <p style={{ margin: "16px 0 0", color: "#6B7280", fontSize: "12px" }}>
                 © 2025 tldrSEC. All rights reserved.
@@ -659,8 +681,7 @@ export default function SECFilingEmailTemplate({ filing }: SECFilingEmailTemplat
             </td>
           </tr>
         </tbody>
-       </table>
+      </table>
     </div>
-  );
-  }
+  )
 }

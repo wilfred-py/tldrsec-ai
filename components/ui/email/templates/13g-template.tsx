@@ -1,28 +1,5 @@
-import React from 'react';
-import Form11KEmailTemplate from '../ui/email/templates/11k-template';
-import Form144EmailTemplate from '../ui/email/templates/form144-template';
-import FormDEF14AEmailTemplate from '../ui/email/templates/def14a-template';
-import Schedule13DEmailTemplate from '../ui/email/templates/13d-template';
-import { FilingTemplateData } from '../../lib/email/types';
-
-interface SECFilingEmailTemplateProps {
-  filing: FilingTemplateData;
-}
-
-export default function SECFilingEmailTemplate({ filing }: SECFilingEmailTemplateProps) {
-  // Select appropriate template based on filing type
-  switch (filing.filingType) {
-    case 'Form 11-K':
-      return <Form11KEmailTemplate filing={filing} />;
-    case 'Form 144':
-      return <Form144EmailTemplate filing={filing} />;
-    case 'Form DEF 14A':
-      return <FormDEF14AEmailTemplate filing={filing} />;
-    case 'Schedule 13D':
-      return <Schedule13DEmailTemplate filing={filing} />;
-    default:
-      // For other filing types, use default template
-      return (
+export default function Schedule13GEmailTemplate() {
+  return (
     <div style={{ maxWidth: "600px", margin: "0 auto", fontFamily: "Arial, sans-serif", backgroundColor: "#f8fafc" }}>
       {/* Header with gradient background */}
       <table
@@ -72,9 +49,9 @@ export default function SECFilingEmailTemplate({ filing }: SECFilingEmailTemplat
                           fontWeight: "bold",
                         }}
                       >
-                        {filing.companyName} ({filing.symbol}) - {filing.filingType}
+                        Coinbase Global, Inc. (COIN) - Schedule 13G/A Filing
                       </h2>
-                      <p style={{ margin: "8px 0 20px", color: "#64748b", fontSize: "14px" }}>Filed on: {new Date(filing.filingDate).toLocaleDateString()}</p>
+                      <p style={{ margin: "8px 0 20px", color: "#64748b", fontSize: "14px" }}>Filed on: 6/5/2025</p>
                     </td>
                   </tr>
                 </tbody>
@@ -86,11 +63,12 @@ export default function SECFilingEmailTemplate({ filing }: SECFilingEmailTemplat
                 cellPadding="0"
                 cellSpacing="0"
                 style={{
-                  backgroundColor: "#fefefe",
+                  backgroundColor: "#fafafa",
                   border: "1px solid #e2e8f0",
                   borderRadius: "8px",
                   marginBottom: "20px",
-                  boxShadow: "0 1px 3px rgba(0,0,0,0.1)",
+                  boxShadow: "0 2px 4px rgba(0,0,0,0.05), 0 0 1px rgba(0,0,0,0.1)",
+                  backgroundImage: "linear-gradient(to bottom, #ffffff, #f9fafb)",
                 }}
               >
                 <tbody>
@@ -102,6 +80,8 @@ export default function SECFilingEmailTemplate({ filing }: SECFilingEmailTemplat
                           color: "#000000",
                           fontSize: "18px",
                           fontWeight: "bold",
+                          borderBottom: "2px solid #f1f5f9",
+                          paddingBottom: "8px",
                         }}
                       >
                         📋 Summary
@@ -112,23 +92,13 @@ export default function SECFilingEmailTemplate({ filing }: SECFilingEmailTemplat
                           <tr>
                             <td style={{ padding: "8px 0", width: "120px", verticalAlign: "top" }}>
                               <p style={{ margin: "0", color: "#6B7280", fontSize: "14px", fontWeight: "500" }}>
-                                Name:
+                                Reporting Person:
                               </p>
                             </td>
                             <td style={{ padding: "8px 0", verticalAlign: "top" }}>
                               <p style={{ margin: "0", color: "#374151", fontSize: "14px", fontWeight: "600" }}>
-                                Vaibhav Taneja
+                                The Vanguard Group
                               </p>
-                            </td>
-                          </tr>
-                          <tr>
-                            <td style={{ padding: "8px 0", width: "120px", verticalAlign: "top" }}>
-                              <p style={{ margin: "0", color: "#6B7280", fontSize: "14px", fontWeight: "500" }}>
-                                Position:
-                              </p>
-                            </td>
-                            <td style={{ padding: "8px 0", verticalAlign: "top" }}>
-                              <p style={{ margin: "0", color: "#374151", fontSize: "14px" }}>Chief Financial Officer</p>
                             </td>
                           </tr>
                           <tr>
@@ -138,31 +108,41 @@ export default function SECFilingEmailTemplate({ filing }: SECFilingEmailTemplat
                               </p>
                             </td>
                             <td style={{ padding: "8px 0", verticalAlign: "top" }}>
-                              <p style={{ margin: "0", color: "#374151", fontSize: "14px" }}>Form 4</p>
-                            </td>
-                          </tr>
-                          <tr>
-                            <td style={{ padding: "8px 0", width: "120px", verticalAlign: "top" }}>
-                              <p style={{ margin: "0", color: "#6B7280", fontSize: "14px", fontWeight: "500" }}>
-                                Report Date:
-                              </p>
-                            </td>
-                            <td style={{ padding: "8px 0", verticalAlign: "top" }}>
-                              <p style={{ margin: "0", color: "#374151", fontSize: "14px" }}>June 4, 2025</p>
-                            </td>
-                          </tr>
-                          <tr>
-                            <td style={{ padding: "8px 0", width: "120px", verticalAlign: "top" }}>
-                              <p style={{ margin: "0", color: "#6B7280", fontSize: "14px", fontWeight: "500" }}>
-                                Trading Plan:
-                              </p>
-                            </td>
-                            <td style={{ padding: "8px 0", verticalAlign: "top" }}>
                               <p style={{ margin: "0", color: "#374151", fontSize: "14px" }}>
-                                Rule 10b5-1 plan adopted on May 1, 2024
+                                Schedule 13G/A (Amendment No. 3)
                               </p>
                             </td>
                           </tr>
+                          <tr>
+                            <td style={{ padding: "8px 0", width: "120px", verticalAlign: "top" }}>
+                              <p style={{ margin: "0", color: "#6B7280", fontSize: "14px", fontWeight: "500" }}>
+                                Issuer:
+                              </p>
+                            </td>
+                            <td style={{ padding: "8px 0", verticalAlign: "top" }}>
+                              <p style={{ margin: "0", color: "#374151", fontSize: "14px" }}>Coinbase Global, Inc.</p>
+                            </td>
+                          </tr>
+                          <tr>
+                            <td style={{ padding: "8px 0", width: "120px", verticalAlign: "top" }}>
+                              <p style={{ margin: "0", color: "#6B7280", fontSize: "14px", fontWeight: "500" }}>
+                                As of Date:
+                              </p>
+                            </td>
+                            <td style={{ padding: "8px 0", verticalAlign: "top" }}>
+                              <p style={{ margin: "0", color: "#374151", fontSize: "14px" }}>May 30, 2025</p>
+                            </td>
+                          </tr>
+                          <tr>
+                            <td style={{ padding: "8px 0", width: "120px", verticalAlign: "top" }}>
+                              <p style={{ margin: "0", color: "#6B7280", fontSize: "14px", fontWeight: "500" }}>
+                                Filed Date:
+                              </p>
+                            </td>
+                            <td style={{ padding: "8px 0", verticalAlign: "top" }}>
+                              <p style={{ margin: "0", color: "#374151", fontSize: "14px" }}>June 5, 2025</p>
+                            </td>
+                          </tr>
                         </tbody>
                       </table>
                     </td>
@@ -170,17 +150,18 @@ export default function SECFilingEmailTemplate({ filing }: SECFilingEmailTemplat
                 </tbody>
               </table>
 
-              {/* Transactions Box with Graphics */}
+              {/* Ownership Details */}
               <table
                 width="100%"
                 cellPadding="0"
                 cellSpacing="0"
                 style={{
-                  backgroundColor: "#fefefe",
+                  backgroundColor: "#fafafa",
                   border: "1px solid #e2e8f0",
                   borderRadius: "8px",
                   marginBottom: "20px",
-                  boxShadow: "0 1px 3px rgba(0,0,0,0.1)",
+                  boxShadow: "0 2px 4px rgba(0,0,0,0.05), 0 0 1px rgba(0,0,0,0.1)",
+                  backgroundImage: "linear-gradient(to bottom, #ffffff, #f9fafb)",
                 }}
               >
                 <tbody>
@@ -192,105 +173,11 @@ export default function SECFilingEmailTemplate({ filing }: SECFilingEmailTemplat
                           color: "#000000",
                           fontSize: "18px",
                           fontWeight: "bold",
+                          borderBottom: "2px solid #f1f5f9",
+                          paddingBottom: "8px",
                         }}
                       >
-                        💼 Notable Transactions
-                      </h3>
-
-                      <table width="100%" cellPadding="0" cellSpacing="0" style={{ borderCollapse: "collapse" }}>
-                        <tbody>
-                          <tr>
-                            <td style={{ padding: "12px 0", borderBottom: "1px solid #f1f5f9" }}>
-                              <div style={{ display: "flex", alignItems: "center", marginBottom: "8px" }}>
-                                <p style={{ margin: "0", color: "#374151", fontSize: "14px", fontWeight: "bold" }}>
-                                  June 2, 2025
-                                </p>
-                              </div>
-                              <ul
-                                style={{
-                                  margin: "0",
-                                  paddingLeft: "32px",
-                                  color: "#374151",
-                                  fontSize: "14px",
-                                  lineHeight: "1.6",
-                                }}
-                              >
-                                <li style={{ marginBottom: "4px" }}>
-                                  <span style={{ color: "#10B981", fontWeight: "bold" }}>+6,000 shares</span> acquired
-                                  through stock option exercise at $18.22/share
-                                </li>
-                                <li style={{ marginBottom: "4px" }}>
-                                  <span style={{ color: "#EF4444", fontWeight: "bold" }}>-6,000 shares</span> sold at
-                                  $333.77-$347.22/share
-                                </li>
-                                <li>
-                                  <span style={{ color: "#6B7280" }}>~2,733 shares sold for tax obligations</span>
-                                </li>
-                              </ul>
-                            </td>
-                          </tr>
-                          <tr>
-                            <td style={{ padding: "12px 0" }}>
-                              <div style={{ display: "flex", alignItems: "center", marginBottom: "8px" }}>
-                                <p style={{ margin: "0", color: "#374151", fontSize: "14px", fontWeight: "bold" }}>
-                                  June 3, 2025
-                                </p>
-                              </div>
-                              <ul
-                                style={{
-                                  margin: "0",
-                                  paddingLeft: "32px",
-                                  color: "#374151",
-                                  fontSize: "14px",
-                                  lineHeight: "1.6",
-                                }}
-                              >
-                                <li style={{ marginBottom: "4px" }}>
-                                  <span style={{ color: "#10B981", fontWeight: "bold" }}>+1,000 shares</span> acquired
-                                  through stock option exercise at $18.22/share
-                                </li>
-                                <li style={{ marginBottom: "4px" }}>
-                                  <span style={{ color: "#EF4444", fontWeight: "bold" }}>-1,000 shares</span> sold at
-                                  $350.00/share
-                                </li>
-                                <li>
-                                  <span style={{ color: "#6B7280" }}>~455 shares sold for tax obligations</span>
-                                </li>
-                              </ul>
-                            </td>
-                          </tr>
-                        </tbody>
-                      </table>
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-
-              {/* Holdings Table */}
-              <table
-                width="100%"
-                cellPadding="0"
-                cellSpacing="0"
-                style={{
-                  backgroundColor: "#fefefe",
-                  border: "1px solid #e2e8f0",
-                  borderRadius: "8px",
-                  marginBottom: "20px",
-                  boxShadow: "0 1px 3px rgba(0,0,0,0.1)",
-                }}
-              >
-                <tbody>
-                  <tr>
-                    <td style={{ padding: "20px" }}>
-                      <h3
-                        style={{
-                          margin: "0 0 16px",
-                          color: "#000000",
-                          fontSize: "18px",
-                          fontWeight: "bold",
-                        }}
-                      >
-                        📊 Post-Transaction Holdings
+                        🔢 Ownership Details
                       </h3>
 
                       <table
@@ -301,10 +188,11 @@ export default function SECFilingEmailTemplate({ filing }: SECFilingEmailTemplat
                           borderCollapse: "collapse",
                           border: "1px solid #e2e8f0",
                           borderRadius: "6px",
+                          boxShadow: "0 1px 2px rgba(0,0,0,0.05)",
                         }}
                       >
                         <thead>
-                          <tr style={{ backgroundColor: "#f8fafc" }}>
+                          <tr style={{ backgroundColor: "#f1f5f9" }}>
                             <th
                               style={{
                                 padding: "12px",
@@ -315,7 +203,7 @@ export default function SECFilingEmailTemplate({ filing }: SECFilingEmailTemplat
                                 borderBottom: "1px solid #e2e8f0",
                               }}
                             >
-                              HOLDING TYPE
+                              METRIC
                             </th>
                             <th
                               style={{
@@ -327,12 +215,24 @@ export default function SECFilingEmailTemplate({ filing }: SECFilingEmailTemplat
                                 borderBottom: "1px solid #e2e8f0",
                               }}
                             >
-                              SHARES
+                              CURRENT
                             </th>
                             <th
                               style={{
                                 padding: "12px",
-                                textAlign: "center",
+                                textAlign: "right",
+                                fontSize: "12px",
+                                fontWeight: "bold",
+                                color: "#6B7280",
+                                borderBottom: "1px solid #e2e8f0",
+                              }}
+                            >
+                              PREVIOUS
+                            </th>
+                            <th
+                              style={{
+                                padding: "12px",
+                                textAlign: "right",
                                 fontSize: "12px",
                                 fontWeight: "bold",
                                 color: "#6B7280",
@@ -340,18 +240,6 @@ export default function SECFilingEmailTemplate({ filing }: SECFilingEmailTemplat
                               }}
                             >
                               CHANGE
-                            </th>
-                            <th
-                              style={{
-                                padding: "12px",
-                                textAlign: "right",
-                                fontSize: "12px",
-                                fontWeight: "bold",
-                                color: "#6B7280",
-                                borderBottom: "1px solid #e2e8f0",
-                              }}
-                            >
-                              % CHANGE
                             </th>
                           </tr>
                         </thead>
@@ -363,9 +251,10 @@ export default function SECFilingEmailTemplate({ filing }: SECFilingEmailTemplat
                                 fontSize: "14px",
                                 color: "#374151",
                                 borderBottom: "1px solid #f1f5f9",
+                                backgroundColor: "#ffffff",
                               }}
                             >
-                              Direct Ownership
+                              Shares Owned
                             </td>
                             <td
                               style={{
@@ -375,28 +264,22 @@ export default function SECFilingEmailTemplate({ filing }: SECFilingEmailTemplat
                                 fontWeight: "bold",
                                 color: "#374151",
                                 borderBottom: "1px solid #f1f5f9",
+                                backgroundColor: "#ffffff",
                               }}
                             >
-                              1,949.50
+                              24,175,749
                             </td>
                             <td
                               style={{
                                 padding: "12px",
-                                textAlign: "center",
+                                textAlign: "right",
+                                fontSize: "14px",
+                                color: "#374151",
                                 borderBottom: "1px solid #f1f5f9",
+                                backgroundColor: "#ffffff",
                               }}
                             >
-                              <span
-                                style={{
-                                  display: "inline-flex",
-                                  alignItems: "center",
-                                  color: "#EF4444",
-                                  fontSize: "14px",
-                                  fontWeight: "bold",
-                                }}
-                              >
-                                ↓ -3,267
-                              </span>
+                              19,852,319
                             </td>
                             <td
                               style={{
@@ -404,11 +287,12 @@ export default function SECFilingEmailTemplate({ filing }: SECFilingEmailTemplat
                                 textAlign: "right",
                                 fontSize: "14px",
                                 fontWeight: "bold",
-                                color: "#EF4444",
+                                color: "#10B981",
                                 borderBottom: "1px solid #f1f5f9",
+                                backgroundColor: "#ffffff",
                               }}
                             >
-                              -62.6%
+                              +21.8%
                             </td>
                           </tr>
                           <tr>
@@ -418,9 +302,10 @@ export default function SECFilingEmailTemplate({ filing }: SECFilingEmailTemplat
                                 fontSize: "14px",
                                 color: "#374151",
                                 borderBottom: "1px solid #f1f5f9",
+                                backgroundColor: "#f8fafc",
                               }}
                             >
-                              Indirect - Taneja GRATs
+                              Ownership Percentage
                             </td>
                             <td
                               style={{
@@ -430,38 +315,86 @@ export default function SECFilingEmailTemplate({ filing }: SECFilingEmailTemplat
                                 fontWeight: "bold",
                                 color: "#374151",
                                 borderBottom: "1px solid #f1f5f9",
+                                backgroundColor: "#f8fafc",
                               }}
                             >
-                              55,500
-                            </td>
-                            <td
-                              style={{
-                                padding: "12px",
-                                textAlign: "center",
-                                borderBottom: "1px solid #f1f5f9",
-                              }}
-                            >
-                              <span
-                                style={{
-                                  display: "inline-flex",
-                                  alignItems: "center",
-                                  color: "#6B7280",
-                                  fontSize: "14px",
-                                }}
-                              >
-                                → No Change
-                              </span>
+                              11.43%
                             </td>
                             <td
                               style={{
                                 padding: "12px",
                                 textAlign: "right",
                                 fontSize: "14px",
+                                color: "#374151",
+                                borderBottom: "1px solid #f1f5f9",
+                                backgroundColor: "#f8fafc",
+                              }}
+                            >
+                              9.38%
+                            </td>
+                            <td
+                              style={{
+                                padding: "12px",
+                                textAlign: "right",
+                                fontSize: "14px",
+                                fontWeight: "bold",
+                                color: "#10B981",
+                                borderBottom: "1px solid #f1f5f9",
+                                backgroundColor: "#f8fafc",
+                              }}
+                            >
+                              +2.05%
+                            </td>
+                          </tr>
+                          <tr>
+                            <td
+                              style={{
+                                padding: "12px",
+                                fontSize: "14px",
+                                color: "#374151",
+                                borderBottom: "1px solid #f1f5f9",
+                                backgroundColor: "#ffffff",
+                              }}
+                            >
+                              Sole Voting Power
+                            </td>
+                            <td
+                              style={{
+                                padding: "12px",
+                                textAlign: "right",
+                                fontSize: "14px",
+                                fontWeight: "bold",
+                                color: "#374151",
+                                borderBottom: "1px solid #f1f5f9",
+                                backgroundColor: "#ffffff",
+                              }}
+                            >
+                              0
+                            </td>
+                            <td
+                              style={{
+                                padding: "12px",
+                                textAlign: "right",
+                                fontSize: "14px",
+                                color: "#374151",
+                                borderBottom: "1px solid #f1f5f9",
+                                backgroundColor: "#ffffff",
+                              }}
+                            >
+                              0
+                            </td>
+                            <td
+                              style={{
+                                padding: "12px",
+                                textAlign: "right",
+                                fontSize: "14px",
+                                fontWeight: "bold",
                                 color: "#6B7280",
                                 borderBottom: "1px solid #f1f5f9",
+                                backgroundColor: "#ffffff",
                               }}
                             >
-                              0.0%
+                              No Change
                             </td>
                           </tr>
                           <tr>
@@ -471,9 +404,10 @@ export default function SECFilingEmailTemplate({ filing }: SECFilingEmailTemplat
                                 fontSize: "14px",
                                 color: "#374151",
                                 borderBottom: "1px solid #f1f5f9",
+                                backgroundColor: "#f8fafc",
                               }}
                             >
-                              Indirect - Spouse GRATs
+                              Shared Voting Power
                             </td>
                             <td
                               style={{
@@ -483,38 +417,35 @@ export default function SECFilingEmailTemplate({ filing }: SECFilingEmailTemplat
                                 fontWeight: "bold",
                                 color: "#374151",
                                 borderBottom: "1px solid #f1f5f9",
+                                backgroundColor: "#f8fafc",
                               }}
                             >
-                              55,500
-                            </td>
-                            <td
-                              style={{
-                                padding: "12px",
-                                textAlign: "center",
-                                borderBottom: "1px solid #f1f5f9",
-                              }}
-                            >
-                              <span
-                                style={{
-                                  display: "inline-flex",
-                                  alignItems: "center",
-                                  color: "#6B7280",
-                                  fontSize: "14px",
-                                }}
-                              >
-                                → No Change
-                              </span>
+                              265,628
                             </td>
                             <td
                               style={{
                                 padding: "12px",
                                 textAlign: "right",
                                 fontSize: "14px",
-                                color: "#6B7280",
+                                color: "#374151",
                                 borderBottom: "1px solid #f1f5f9",
+                                backgroundColor: "#f8fafc",
                               }}
                             >
-                              0.0%
+                              218,472
+                            </td>
+                            <td
+                              style={{
+                                padding: "12px",
+                                textAlign: "right",
+                                fontSize: "14px",
+                                fontWeight: "bold",
+                                color: "#10B981",
+                                borderBottom: "1px solid #f1f5f9",
+                                backgroundColor: "#f8fafc",
+                              }}
+                            >
+                              +21.6%
                             </td>
                           </tr>
                           <tr>
@@ -523,9 +454,11 @@ export default function SECFilingEmailTemplate({ filing }: SECFilingEmailTemplat
                                 padding: "12px",
                                 fontSize: "14px",
                                 color: "#374151",
+                                borderBottom: "1px solid #f1f5f9",
+                                backgroundColor: "#ffffff",
                               }}
                             >
-                              Stock Options ($18.22)
+                              Sole Dispositive Power
                             </td>
                             <td
                               style={{
@@ -534,27 +467,23 @@ export default function SECFilingEmailTemplate({ filing }: SECFilingEmailTemplat
                                 fontSize: "14px",
                                 fontWeight: "bold",
                                 color: "#374151",
+                                borderBottom: "1px solid #f1f5f9",
+                                backgroundColor: "#ffffff",
                               }}
                             >
-                              719,920
+                              23,181,168
                             </td>
                             <td
                               style={{
                                 padding: "12px",
-                                textAlign: "center",
+                                textAlign: "right",
+                                fontSize: "14px",
+                                color: "#374151",
+                                borderBottom: "1px solid #f1f5f9",
+                                backgroundColor: "#ffffff",
                               }}
                             >
-                              <span
-                                style={{
-                                  display: "inline-flex",
-                                  alignItems: "center",
-                                  color: "#EF4444",
-                                  fontSize: "14px",
-                                  fontWeight: "bold",
-                                }}
-                              >
-                                ↓ -7,000
-                              </span>
+                              19,047,125
                             </td>
                             <td
                               style={{
@@ -562,40 +491,142 @@ export default function SECFilingEmailTemplate({ filing }: SECFilingEmailTemplat
                                 textAlign: "right",
                                 fontSize: "14px",
                                 fontWeight: "bold",
-                                color: "#EF4444",
+                                color: "#10B981",
+                                borderBottom: "1px solid #f1f5f9",
+                                backgroundColor: "#ffffff",
                               }}
                             >
-                              -0.96%
+                              +21.7%
+                            </td>
+                          </tr>
+                          <tr>
+                            <td
+                              style={{
+                                padding: "12px",
+                                fontSize: "14px",
+                                color: "#374151",
+                                backgroundColor: "#f8fafc",
+                              }}
+                            >
+                              Shared Dispositive Power
+                            </td>
+                            <td
+                              style={{
+                                padding: "12px",
+                                textAlign: "right",
+                                fontSize: "14px",
+                                fontWeight: "bold",
+                                color: "#374151",
+                                backgroundColor: "#f8fafc",
+                              }}
+                            >
+                              994,581
+                            </td>
+                            <td
+                              style={{
+                                padding: "12px",
+                                textAlign: "right",
+                                fontSize: "14px",
+                                color: "#374151",
+                                backgroundColor: "#f8fafc",
+                              }}
+                            >
+                              805,194
+                            </td>
+                            <td
+                              style={{
+                                padding: "12px",
+                                textAlign: "right",
+                                fontSize: "14px",
+                                fontWeight: "bold",
+                                color: "#10B981",
+                                backgroundColor: "#f8fafc",
+                              }}
+                            >
+                              +23.5%
                             </td>
                           </tr>
                         </tbody>
                       </table>
-
-                      <p
-                        style={{
-                          margin: "12px 0 0",
-                          fontSize: "12px",
-                          color: "#6B7280",
-                          fontStyle: "italic",
-                        }}
-                      >
-                        * Stock options expire April 19, 2029
-                      </p>
                     </td>
                   </tr>
                 </tbody>
               </table>
 
-              {/* Additional Details Box */}
+              {/* Notable Developments */}
               <table
                 width="100%"
                 cellPadding="0"
                 cellSpacing="0"
                 style={{
-                  backgroundColor: "#fefefe",
+                  backgroundColor: "#fafafa",
                   border: "1px solid #e2e8f0",
                   borderRadius: "8px",
-                  boxShadow: "0 1px 3px rgba(0,0,0,0.1)",
+                  marginBottom: "20px",
+                  boxShadow: "0 2px 4px rgba(0,0,0,0.05), 0 0 1px rgba(0,0,0,0.1)",
+                  backgroundImage: "linear-gradient(to bottom, #ffffff, #f9fafb)",
+                }}
+              >
+                <tbody>
+                  <tr>
+                    <td style={{ padding: "20px" }}>
+                      <h3
+                        style={{
+                          margin: "0 0 16px",
+                          color: "#000000",
+                          fontSize: "18px",
+                          fontWeight: "bold",
+                          borderBottom: "2px solid #f1f5f9",
+                          paddingBottom: "8px",
+                        }}
+                      >
+                        📈 Notable Developments
+                      </h3>
+
+                      <div
+                        style={{
+                          padding: "12px",
+                          backgroundColor: "#f8fafc",
+                          borderRadius: "6px",
+                          marginBottom: "12px",
+                        }}
+                      >
+                        <p style={{ margin: "0", color: "#374151", fontSize: "14px", lineHeight: "1.6" }}>
+                          <strong>Increased Ownership:</strong> The Vanguard Group has significantly increased its
+                          beneficial ownership of Coinbase Global, Inc. common stock to 11.43%, crossing the 10%
+                          threshold.
+                        </p>
+                      </div>
+
+                      <div
+                        style={{
+                          padding: "12px",
+                          backgroundColor: "#f8fafc",
+                          borderRadius: "6px",
+                        }}
+                      >
+                        <p style={{ margin: "0", color: "#374151", fontSize: "14px", lineHeight: "1.6" }}>
+                          <strong>Investment Purpose:</strong> The securities were acquired and are held in the ordinary
+                          course of business and were not acquired for the purpose of changing or influencing control of
+                          the issuer.
+                        </p>
+                      </div>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+
+              {/* Additional Information */}
+              <table
+                width="100%"
+                cellPadding="0"
+                cellSpacing="0"
+                style={{
+                  backgroundColor: "#fafafa",
+                  border: "1px solid #e2e8f0",
+                  borderRadius: "8px",
+                  boxShadow: "0 2px 4px rgba(0,0,0,0.05), 0 0 1px rgba(0,0,0,0.1)",
+                  backgroundImage: "linear-gradient(to bottom, #ffffff, #f9fafb)",
                 }}
               >
                 <tbody>
@@ -607,13 +638,40 @@ export default function SECFilingEmailTemplate({ filing }: SECFilingEmailTemplat
                           color: "#000000",
                           fontSize: "18px",
                           fontWeight: "bold",
+                          borderBottom: "2px solid #f1f5f9",
+                          paddingBottom: "8px",
                         }}
                       >
-                        ℹ️ Additional Details
+                        ℹ️ Additional Information
                       </h3>
-                      <p style={{ margin: "0", color: "#374151", fontSize: "14px", lineHeight: "1.6" }}>
-                        {filing.summaryText}
-                      </p>
+                      <ul
+                        style={{
+                          margin: "0",
+                          paddingLeft: "20px",
+                          color: "#374151",
+                          fontSize: "14px",
+                          lineHeight: "1.6",
+                        }}
+                      >
+                        <li style={{ marginBottom: "8px" }}>
+                          <strong>Issuer Location:</strong> Coinbase Global, Inc.'s principal executive office is
+                          located at 1 Madison Avenue, Suite 2400, New York, NY 10010.
+                        </li>
+                        <li style={{ marginBottom: "8px" }}>
+                          <strong>Reporting Person:</strong> The Vanguard Group is an investment advisor (IA)
+                          incorporated in Pennsylvania, with its principal business office located at 100 Vanguard
+                          Blvd., Malvern, PA 19355.
+                        </li>
+                        <li style={{ marginBottom: "8px" }}>
+                          <strong>Client Rights:</strong> The Vanguard Group's clients have the right to receive or the
+                          power to direct the receipt of dividends from, or the proceeds from the sale of, the reported
+                          securities.
+                        </li>
+                        <li>
+                          <strong>Client Ownership:</strong> No single client's interest in the securities is more than
+                          5%.
+                        </li>
+                      </ul>
                     </td>
                   </tr>
                 </tbody>
@@ -639,7 +697,7 @@ export default function SECFilingEmailTemplate({ filing }: SECFilingEmailTemplat
           <tr>
             <td style={{ padding: "20px", textAlign: "center" }}>
               <a
-                href={filing.url}
+                href="#"
                 style={{
                   display: "inline-block",
                   padding: "12px 24px",
@@ -651,7 +709,7 @@ export default function SECFilingEmailTemplate({ filing }: SECFilingEmailTemplat
                   fontWeight: "bold",
                 }}
               >
-                View Filing on SEC Website
+                View on SEC Website
               </a>
               <p style={{ margin: "16px 0 0", color: "#6B7280", fontSize: "12px" }}>
                 © 2025 tldrSEC. All rights reserved.
@@ -659,8 +717,7 @@ export default function SECFilingEmailTemplate({ filing }: SECFilingEmailTemplat
             </td>
           </tr>
         </tbody>
-       </table>
+      </table>
     </div>
-  );
-  }
+  )
 }
