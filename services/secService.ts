@@ -1,252 +1,258 @@
 /**
  * SEC EDGAR API Service
- * Provides functions to interact with the SEC EDGAR database
- * Supports comprehensive form types with specialized parsing and summarization
+ * Main service module for interacting with SEC EDGAR database
+ * Provides high-level functions for filing summaries and company information
  */
 
-import axios from 'axios';
-import { load } from 'cheerio';
-import { FilingType } from '../lib/sec-edgar/types';
-import { getFormMetadata } from '../lib/sec-edgar/form-registry';
-import { parseFormContent, extractImportantContent } from '../lib/parsers/form-parser';
-import { generateSystemPrompt, generateUserPrompt } from '../lib/ai/sec-prompts';
-import { logger } from '../lib/logging';
+import { SecFiling, SecFilingDetails, FilingSummary, FilingType } from '../types/sec/filing';
+import { CompanyInfo } from '../types/sec/company';
+import { findCompanyByTicker } from './companyService';
+import filingService from './filingService';
+import { getLatestForm144 } from './form144Service';
+import { secLogger } from '../utils/logger';
+import { SEC_CONFIG } from '../config/sec';
 
-// Create a module-specific logger to reduce console noise
-const secLogger = logger.child('sec-service');
-
-// Types for SEC API responses
-export interface SecCompanyInfo {
-  cik: string;
-  name: string;
-  tickers?: string[];
-}
-
-export interface SecFiling {
-  accessionNumber: string;
-  filingDate: string;
-  reportDate?: string;
-  form: string;
-  primaryDocument: string;
-  primaryDocUrl: string;
-  filingUrl: string;
+interface Form144Filing extends SecFiling {
   description?: string;
-}
-
-export interface SecFilingDetails {
-  accessionNumber: string;
-  cik: string;
-  companyName: string;
-  form: string;
-  filingDate: string;
-  reportDate?: string;
-  primaryDocument: string;
-  documents: SecDocument[];
-  parsedContent?: any; // This will hold parsed content specific to form types
-  filingUrl?: string; // URL to the SEC HTML viewer for this filing
-}
-
-export interface SecDocument {
-  fileName: string;
-  description: string;
-  documentUrl: string;
-  type: string;
-  size: number;
+  keyPoints?: string[];
+  parsedContent?: any;
 }
 
 /**
- * SEC API configuration
+ * Gets a Form 144 summary for a given company
+ * @param ticker Company ticker symbol
+ * @returns Form 144 filing summary
  */
-const SEC_API_CONFIG = {
-  baseUrl: 'https://data.sec.gov',
-  companySearchUrl: 'https://www.sec.gov/include/ticker.txt',
-  submissionsUrl: (cik: string) => `https://data.sec.gov/submissions/CIK${cik}.json`,
-  filingUrl: (accessionNumber: string, cik: string) => {
-    // Format for raw text file (used internally for parsing)
-    const rawTextUrl = `https://www.sec.gov/Archives/edgar/data/${cik}/${accessionNumber.replace(/-/g, '')}/${accessionNumber}.txt`;
-    
-    // Format for HTML viewer (more readable for users)
-    const htmlViewerUrl = `https://www.sec.gov/Archives/edgar/data/${cik}/${accessionNumber.replace(/-/g, '')}/`;
-    
-    // Return the HTML viewer URL by default
-    return htmlViewerUrl;
-  },
-  
-  // Add a function to get the raw text URL when needed for parsing
-  rawFilingUrl: (accessionNumber: string, cik: string) => 
-    `https://www.sec.gov/Archives/edgar/data/${cik}/${accessionNumber.replace(/-/g, '')}/${accessionNumber}.txt`,
-  headers: {
-    'User-Agent': 'tldrSEC/1.0 (contact@tldrsec.app)',
-    'Accept-Encoding': 'gzip, deflate',
-  },
-  // Rate limiting - SEC allows 10 requests per second
-  maxRequestsPerSecond: 10,
-};
-
-/**
- * Gets the SEC API headers for making requests to SEC EDGAR
- * @returns The headers object with User-Agent and other required headers
- */
-export function getSecApiHeaders(): Record<string, string> {
-  return { ...SEC_API_CONFIG.headers };
-}
-
-/**
- * Formats a CIK number to 10 digits with leading zeros
- */
-export function formatCik(cik: string | number): string {
-  return cik.toString().padStart(10, '0');
-}
-
-/**
- * Searches for a company by ticker symbol
- * @param ticker The ticker symbol to search for
- * @returns Company information including CIK
- */
-export async function findCompanyByTicker(ticker: string): Promise<SecCompanyInfo | null> {
+export async function getForm144Summary(ticker: string): Promise<FilingSummary> {
   try {
-    secLogger.debug(`Searching for company with ticker: ${ticker}`);
-    // SEC provides a simple ticker-to-CIK mapping file
-    const response = await axios.get(SEC_API_CONFIG.companySearchUrl, {
-      headers: SEC_API_CONFIG.headers,
-    });
+    // Get company info by ticker
+    const companyInfo = await findCompanyByTicker(ticker) as CompanyInfo;
+    if (!companyInfo) {
+      throw new Error(`Company not found for ticker: ${ticker}`);
+    }
 
-    // Parse the ticker-to-CIK mapping file
-    const lines = response.data.split('\n');
-    for (const line of lines) {
-      const [tickerFromFile, cik] = line.split('\t');
-      if (tickerFromFile && tickerFromFile.toUpperCase() === ticker.toUpperCase() && cik) {
-        secLogger.debug(`Found company with ticker ${ticker}, CIK: ${cik}`);
-        // Get company name from submissions API
-        const submissionsResponse = await axios.get(
-          `${SEC_API_CONFIG.submissionsUrl}${formatCik(cik)}.json`,
-          { headers: SEC_API_CONFIG.headers }
-        );
-        
-        const companyName = submissionsResponse.data?.name || '';
-        
-        return {
-          cik: formatCik(cik),
-          name: companyName,
-          tickers: [ticker.toUpperCase()],
-        };
+    // Get latest Form 144 filing with parsed content
+    const latestFiling = await getLatestForm144(ticker) as Form144Filing;
+    if (!latestFiling) {
+      throw new Error(`No Form 144 filing found for ${ticker}`);
+    }
+
+    // Get full filing details with content
+    const filingDetails = await filingService.getFilingById(latestFiling.accessionNumber);
+    if (!filingDetails || !filingDetails.data) {
+      throw new Error(`Could not retrieve filing content for ${latestFiling.accessionNumber}`);
+    }
+
+    // Generate filing summary
+    const summary: FilingSummary = {
+      ticker,
+      companyName: companyInfo.name,
+      filingType: 'Form 144',
+      filingDate: filingDetails.data.filingDate,
+      summaryText: latestFiling.description || '',
+      keyPoints: latestFiling.keyPoints || [],
+      filingUrl: filingDetails.data.filingUrl || '',
+      url: `${SEC_CONFIG.BASE_URL}/Archives/edgar/data/${companyInfo.cik}/${latestFiling.accessionNumber.replace(/-/g, '')}/index.htm`,
+      rawData: latestFiling.parsedContent
+    };
+
+    return summary;
+
+  } catch (error) {
+    secLogger.error('Error in getForm144Summary:', error);
+    throw error;
+  }
+}
+
+/**
+ * Gets a summary for a specific filing type
+ * @param ticker Company ticker symbol
+ * @param formType Type of SEC form to get summary for
+ * @returns Filing summary
+ */
+export async function getFilingSummary(ticker: string, formType: FilingType): Promise<FilingSummary> {
+  try {
+    switch (formType) {
+      case 'Form 144':
+      case '144':
+        return getForm144Summary(ticker);
+      default:
+        throw new Error(`Filing type ${formType} not yet supported`);
+    }
+  } catch (error) {
+    secLogger.error('Error in getFilingSummary:', error);
+    throw error;
+  }
+}
+
+/**
+ * Helper function to extract text content from an XML node
+ * @param node XML Element node
+ * @returns Extracted text content
+ */
+export function extractTextContent(node: Element): string {
+  const textNodes = Array.from(node.childNodes)
+    .filter(child => child.nodeType === 3) // Text nodes only
+    .map(child => child.textContent?.trim())
+    .filter(text => text && text.length > 0);
+
+  return textNodes.join(' ');
+}
+
+/**
+ * Helper function to extract table data from an XML table element
+ * @param table XML table Element
+ * @returns 2D array of table cell contents
+ */
+export function extractTableData(table: Element): string[][] {
+  const rows = Array.from(table.getElementsByTagName('tr'));
+  return rows.map(row => {
+    const cells = Array.from(row.getElementsByTagName('td'));
+    return cells.map(cell => cell.textContent?.trim() || '');
+  });
+}
+
+/**
+ * Extracts text content from a filing
+ * @param content The filing content
+ * @returns Extracted text content
+ */
+export async function extractTextContent(content: string): Promise<string> {
+  try {
+    const textPattern = /<TEXT>([\s\S]*?)<\/TEXT>/gi;
+    const textMatches = content.match(textPattern);
+    if (!textMatches) return '';
+
+    const textContent = textMatches
+      .map(match => {
+        const textOnly = match.replace(/<\/?TEXT>/gi, '');
+        return textOnly.trim();
+      })
+      .join('\n\n');
+
+    return textContent;
+  } catch (error) {
+    secLogger.error('Error extracting text content:', error);
+    return '';
+  }
+}
+
+/**
+ * Extracts table data from a filing
+ * @param content The filing content
+ * @returns Extracted table data
+ */
+export async function extractTableData(content: string): Promise<{ [key: string]: string[] }> {
+  try {
+    const tablePattern = /<TABLE>([\s\S]*?)<\/TABLE>/gi;
+    const tableMatches = content.match(tablePattern);
+    if (!tableMatches) return {};
+
+    const tables: { [key: string]: string[] } = {};
+    let tableCount = 0;
+
+    for (const tableMatch of tableMatches) {
+      const rowPattern = /<TR[^>]*>([\s\S]*?)<\/TR>/gi;
+      const rowMatches = tableMatch.match(rowPattern);
+      if (!rowMatches) continue;
+
+      const rows: string[] = [];
+      for (const rowMatch of rowMatches) {
+        const cellPattern = /<T[HD][^>]*>([\s\S]*?)<\/T[HD]>/gi;
+        const cellMatches = rowMatch.match(cellPattern);
+        if (!cellMatches) continue;
+
+        const cells = cellMatches.map(cell => {
+          return cell.replace(/<[^>]+>/g, '').trim();
+        });
+
+        rows.push(cells.join('\t'));
+      }
+
+      if (rows.length > 0) {
+        tables[`Table${++tableCount}`] = rows;
       }
     }
-    
-    secLogger.info(`No company found with ticker: ${ticker}`);
-    return null;
+
+    return tables;
   } catch (error) {
-    secLogger.error(`Error finding company by ticker: ${ticker}`, error);
-    throw new Error(`Failed to find company with ticker ${ticker}`);
+    secLogger.error('Error extracting table data:', error);
+    return {};
   }
 }
 
 /**
  * Gets company information and recent filings
- * @param cik The CIK number of the company
+ * @param company The company information
  * @returns Company information and recent filings
  */
-export async function getCompanyFilings(cik: string): Promise<{
-  companyInfo: SecCompanyInfo;
-  recentFilings: SecFiling[];
-}> {
+export async function getCompanyFilings(company: SecCompanyInfo): Promise<{ recentFilings: SecFiling[] }> {
   try {
-    secLogger.debug(`Getting company filings for CIK: ${cik}`);
-    const formattedCik = formatCik(cik);
-    const url = SEC_API_CONFIG.submissionsUrl(formattedCik);
+    const formattedCik = formatCik(company.cik);
+    const url = `${SEC_API_BASE_URL}/submissions/CIK${formattedCik}.json`;
     
     const response = await axios.get(url, {
-      headers: SEC_API_CONFIG.headers,
-    });
-    
-    const data = response.data;
-    secLogger.debug(`Retrieved data for company: ${data.name}`);
-    
-    // Extract company info
-    const companyInfo: SecCompanyInfo = {
-      cik: formattedCik,
-      name: data.name || '',
-      tickers: data.tickers || [],
-    };
-    
-    // Extract recent filings
-    const recentFilings: SecFiling[] = [];
-    
-    if (data.filings && data.filings.recent) {
-      const recent = data.filings.recent;
-      secLogger.debug(`Found ${recent.form?.length || 0} recent filings`);
-      
-      const forms = recent.form || [];
-      const filingDates = recent.filingDate || [];
-      const reportDates = recent.reportDate || [];
-      const accessionNumbers = recent.accessionNumber || [];
-      const primaryDocuments = recent.primaryDocument || [];
-      
-      for (let i = 0; i < forms.length; i++) {
-        if (forms[i] && filingDates[i] && accessionNumbers[i]) {
-          const accessionNumber = accessionNumbers[i];
-          const primaryDocument = primaryDocuments[i] || '';
-          const filingDate = filingDates[i];
-          const reportDate = reportDates[i] || '';
-          const form = forms[i];
-          
-          // Create URLs
-          const primaryDocUrl = primaryDocument ? 
-            `https://www.sec.gov/Archives/edgar/data/${formattedCik}/${accessionNumber.replace(/-/g, '')}/${primaryDocument}` : '';
-          const filingUrl = `https://www.sec.gov/Archives/edgar/data/${formattedCik}/${accessionNumber.replace(/-/g, '')}/${accessionNumber}.txt`;
-          
-          // We don't need detailed logging for each filing
-          
-          recentFilings.push({
-            accessionNumber,
-            filingDate,
-            reportDate,
-            form,
-            primaryDocument,
-            primaryDocUrl,
-            filingUrl,
-          });
-        }
+      headers: {
+        'User-Agent': SEC_USER_AGENT,
+        'Accept': 'application/json'
       }
+    });
+
+    if (!response?.data?.filings?.recent) {
+      throw new Error(`No filings found for CIK ${company.cik}`);
     }
-    
-    return { companyInfo, recentFilings };
+
+    const recentFilings = response.data.filings.recent.map((filing: any) => ({
+      accessionNumber: filing.accessionNumber,
+      form: filing.form,
+      filingDate: filing.filingDate,
+      filingUrl: `${SEC_EDGAR_URL}/${filing.accessionNumber}`,
+      primaryDocument: filing.primaryDocument,
+      primaryDocUrl: `${SEC_EDGAR_URL}/${filing.accessionNumber}/${filing.primaryDocument}`,
+      documents: filing.documents || [],
+      cik: company.cik,
+      companyName: company.name
+    }));
+
+    return { recentFilings };
   } catch (error) {
-    secLogger.error('Error getting company filings', error);
-    throw new Error(`Failed to get company filings for CIK ${cik}`);
+    secLogger.error(`Error getting filings for ${company.cik}:`, error);
+    throw error;
+    secLogger.error(`Error getting company filings for ${company.ticker}:`, error);
+    throw new Error(`Failed to get company filings for ${company.ticker}`);
   }
 }
 
 /**
- * Gets the latest filing of a specific form type for a company
- * @param ticker The ticker symbol of the company
- * @param formType The form type to filter by (e.g., '10-K', '10-Q', '8-K', '144')
- * @returns The latest filing of the specified form type, or null if not found
+ * Gets the latest filing by form type
+ * @param company The company information
+ * @param formType The form type to search for
+ * @returns The latest filing by form type
  */
 export async function getLatestFilingByFormType(
-  ticker: string, 
-  formType: FilingType
+  company: SecCompanyInfo, 
+  formType: string
 ): Promise<SecFiling | null> {
   try {
-    // First, find the company by ticker
-    const company = await findCompanyByTicker(ticker);
-    if (!company) {
-      throw new Error(`Company with ticker ${ticker} not found`);
+    const filingResponse = await getCompanyFilings(company);
+    if (!filingResponse?.recentFilings?.length) {
+      return null;
     }
-    
-    // Then, get all recent filings
-    const { recentFilings } = await getCompanyFilings(company.cik);
-    
-    // Filter filings by form type and sort by filing date (newest first)
-    const filteredFilings = recentFilings
-      .filter(filing => filing.form.toUpperCase().includes(formType.toUpperCase()))
-      .sort((a, b) => new Date(b.filingDate).getTime() - new Date(a.filingDate).getTime());
-    
-    // Return the latest filing, or null if none found
-    return filteredFilings.length > 0 ? filteredFilings[0] : null;
+
+    return filingResponse.recentFilings.find(filing => filing.form === formType) || null;
   } catch (error) {
-    console.error(`Error getting latest ${formType} filing for ${ticker}:`, error);
-    throw new Error(`Failed to get latest ${formType} filing for ${ticker}`);
+    secLogger.error(`Error getting latest ${formType} filing for ${company.ticker}:`, error);
+    return null;
+  }
+}
+
+/**
+ * Gets the latest Form 144 filing
+ * @param ticker The ticker symbol
+ * @returns The latest Form 144 filing
+ */
+export async function getLatestForm144(ticker: string): Promise<SecFilingDetails | null> {
+  try {
   }
 }
 
@@ -256,87 +262,21 @@ export async function getLatestFilingByFormType(
  * @param cik The CIK number of the company
  * @returns The filing details
  */
-export async function getFilingDetails(
-  accessionNumber: string,
-  cik: string
-): Promise<SecFilingDetails> {
+export async function getFilingDetails(accessionNumber: string, cik: string): Promise<SecFilingDetails> {
+  // Initialize filing details with default values
+  const filingDetails: SecFilingDetails = {
+    accessionNumber,
+    cik,
+    companyName: '',
+    form: '',
+    filingDate: '',
+    primaryDocument: '',
+    documents: [],
+    parsedContent: undefined,
+    filingUrl: undefined,
   try {
-    const formattedCik = cik.padStart(10, '0');
-    // Use rawFilingUrl for parsing, but store the user-friendly URL for display
-    const rawUrl = SEC_API_CONFIG.rawFilingUrl(accessionNumber, formattedCik);
-    const htmlUrl = SEC_API_CONFIG.filingUrl(accessionNumber, formattedCik);
-    
-    // Fetch the filing text from the raw URL for parsing
-    const response = await axios.get(rawUrl, {
-      headers: SEC_API_CONFIG.headers,
-    });
-    
-    // Parse the filing text
-    const filingText = response.data;
-    
-    // Extract filing details
-    const filingDetails: SecFilingDetails = {
-      accessionNumber,
-      cik: formattedCik,
-      companyName: '',
-      form: '',
-      filingDate: '',
-      reportDate: '',
-      primaryDocument: '',
-      documents: [],
-      filingUrl: htmlUrl, // Store the HTML viewer URL for user-facing links
-    };
-    
-    // Extract form type
-    const formMatch = filingText.match(/CONFORMED SUBMISSION TYPE:\s*(.+)/i);
-    if (formMatch && formMatch[1]) {
-      filingDetails.form = formMatch[1].trim();
-    }
-    
-    // Extract company name
-    const nameMatch = filingText.match(/COMPANY CONFORMED NAME:\s*(.+)/i);
-    if (nameMatch && nameMatch[1]) {
-      filingDetails.companyName = nameMatch[1].trim();
-    }
-    
-    // Extract filing date
-    const dateMatch = filingText.match(/FILED AS OF DATE:\s*(\d{8})/i);
-    if (dateMatch && dateMatch[1]) {
-      const dateStr = dateMatch[1];
-      filingDetails.filingDate = `${dateStr.substring(0, 4)}-${dateStr.substring(4, 6)}-${dateStr.substring(6, 8)}`;
-    }
-    
-    // Extract documents using multiple approaches to ensure we catch all formats
-    secLogger.debug(`Extracting documents from filing ${accessionNumber}`);
-    
-    // Traditional approach with DOCUMENT tags
-    const docStartMatches = [...filingText.matchAll(/<DOCUMENT>([\s\S]*?)<\/DOCUMENT>/g)];
-    let documentsFound = 0;
-    
-    for (const docMatch of docStartMatches) {
-      if (docMatch && docMatch[1]) {
-        const docText = docMatch[1];
-        
-        // Extract document type
-        const typeMatch = docText.match(/<TYPE>([\s\S]*?)<\/TYPE>/);
-        const type = typeMatch && typeMatch[1] ? typeMatch[1].trim() : '';
-        
-        // Extract document filename
-        const filenameMatch = docText.match(/<FILENAME>([\s\S]*?)<\/FILENAME>/);
-        const filename = filenameMatch && filenameMatch[1] ? filenameMatch[1].trim() : '';
-        
-        // Extract document description
-        const descMatch = docText.match(/<DESCRIPTION>([\s\S]*?)<\/DESCRIPTION>/);
-        const description = descMatch && descMatch[1] ? descMatch[1].trim() : '';
-        
-        if (filename) {
-          filingDetails.documents.push({
-            fileName: filename,
-            description: description || type,
-            documentUrl: `https://www.sec.gov/Archives/edgar/data/${formattedCik}/${accessionNumber.replace(/-/g, '')}/${filename}`,
-            type,
-            size: docText.length,
-          });
+    const formattedCik = filing.cik.padStart(10, '0');
+    const url = `${SEC_API_CONFIG.baseUrl}/Archives/edgar/data/${formattedCik}/${filing.accessionNumber}/primary-document.xml`;
           
           // Set primary document
           if (type === filingDetails.form || !filingDetails.primaryDocument) {
@@ -440,213 +380,125 @@ export async function getFilingDetails(
   }
 }
 
-/**
  * Extracts Form 144 information from a filing
- * @param filingDetails The filing details
+ * @param filing The filing details
  * @returns Parsed Form 144 data
  */
-/**
- * Extracts Form 144 information from a filing
- * @param filingDetails The filing details
- * @returns Parsed Form 144 data
- */
-export async function parseForm144(filingDetails: SecFilingDetails): Promise<any> {
+export async function parseForm144(filing: { content: string; companyName: string; filingDate: string }): Promise<Form144ParsedContent> {
   try {
-    // Find the XML document in the filing
-    const xmlDoc = filingDetails.documents.find(doc => 
-      doc.fileName.toLowerCase().includes('.xml') || 
-      doc.type.toLowerCase().includes('144')
-    );
-    
-    // If no XML document is found, try to extract information from the main document
-    if (!xmlDoc) {
-      secLogger.warn(`No XML document found in Form 144 filing for ${filingDetails.companyName}. Attempting to extract from main document.`);
-      
-      // Get the main document (usually the first one or the primary document)
-      const mainDoc = filingDetails.documents.find(doc => 
-        doc.fileName === filingDetails.primaryDocument || 
-        doc.fileName.endsWith('.txt') ||
-        doc.fileName.endsWith('.html') ||
-        doc.fileName.endsWith('.htm')
-      );
-      
-      if (!mainDoc) {
-        return {
-          error: 'No suitable document found in Form 144 filing',
-          details: 'Neither XML nor text/HTML document found'
-        };
-      }
-      
-      // Return basic information from filing details since we can't parse the XML
-      return {
-        issuerName: filingDetails.companyName,
-        issuerTicker: '', // Not available without XML
-        securityTitle: 'Company Securities',
-        reportingPerson: 'Company Insider', // Generic placeholder
-        reportingPersonTitle: '',
-        relationshipToIssuer: '',
-        dateOfSale: filingDetails.filingDate,
-        amountOfSecurities: '',
-        proposedSaleDate: '',
-        broker: '',
-        note: 'Limited information available - XML data not found'
-      };
+    // Extract XML content using string pattern matching
+    const xmlPattern = /<XML>([\s\S]*?)<\/XML>/i;
+    const xmlMatch = filing.content.match(xmlPattern);
+    if (!xmlMatch || !xmlMatch[1]) {
+      throw new Error('No XML content found in Form 144 filing');
     }
+
+    const xmlContent = xmlMatch[1].trim();
+    const doc = new DOMParser().parseFromString(xmlContent, 'text/xml') as Document;
+    const select = xpath.useNamespaces({ 'ns1': 'http://www.sec.gov/edgar/form144' });
     
-    // Fetch the XML document
-    let xmlContent;
-    let $;
-    try {
-      const response = await axios.get(xmlDoc.documentUrl, {
-        headers: SEC_API_CONFIG.headers,
-      });
-      
-      xmlContent = response.data;
-      
-      // Parse the XML using cheerio
-      $ = load(xmlContent, { xmlMode: true });
-    } catch (fetchError) {
-      secLogger.error(`Error fetching or parsing XML document for Form 144`, fetchError);
-      return {
-        error: 'Failed to fetch or parse XML document',
-        details: fetchError instanceof Error ? fetchError.message : String(fetchError),
-        issuerName: filingDetails.companyName,
-        note: 'Limited information available - XML fetch/parse error'
-      };
-    }
-    
-    // Extract Form 144 data
-    const form144Data = {
-      issuerName: $('issuerName').text() || filingDetails.companyName,
-      issuerTicker: $('issuerTradingSymbol').text(),
-      securityTitle: $('securityTitle').text(),
-      reportingPerson: $('rptOwnerName').text(),
-      reportingPersonTitle: $('rptOwnerOfficerTitle').text(),
-      relationshipToIssuer: $('rptOwnerRelationship').text(),
-      dateOfSale: $('earliestTransDate').text(),
-      amountOfSecurities: $('amt').text(),
-      proposedSaleDate: $('sellDate').text(),
-      broker: $('brokerName').text(),
+    // Helper function to safely extract text from XML node
+    const getNodeText = (xpath: string): string => {
+      const nodes = select(xpath, doc) as Node[];
+      return nodes[0]?.nodeValue || '';
     };
     
-    return form144Data;
-  } catch (error) {
-    secLogger.error('Error parsing Form 144', error);
-    // Return a simplified object with error information
+    // Extract data from XML nodes
+    const reportingPerson = getNodeText('//ns1:reportingOwnerName/text()');
+    const reportingPersonTitle = getNodeText('//ns1:reportingOwnerTitle/text()');
+    const relationshipToIssuer = getNodeText('//ns1:relationshipToIssuer/text()');
+    const dateOfSale = getNodeText('//ns1:dateOfSale/text()') || filing.filingDate;
+    const amountOfSecurities = getNodeText('//ns1:amountOfSecurities/text()');
+    const proposedSaleDate = getNodeText('//ns1:proposedSaleDate/text()');
+    const broker = getNodeText('//ns1:brokerName/text()');
+    const note = getNodeText('//ns1:remarks/text()');
+
     return {
-      error: 'Failed to parse Form 144 filing',
-      details: error instanceof Error ? error.message : String(error),
+      reportingPerson,
+      reportingPersonTitle,
+      relationshipToIssuer,
+      dateOfSale,
+      amountOfSecurities,
+      proposedSaleDate,
+      broker,
+      note
     };
+  } catch (error) {
+    secLogger.error('Error parsing Form 144 filing:', error);
+    return null;
   }
 }
 
 /**
- * Gets the latest filings for a company regardless of form type
- * @param ticker The ticker symbol of the company
- * @param limit The maximum number of filings to return (default: 5)
- * @returns Array of the latest filings, or empty array if none found
+ * Extracts text content from a filing
+ * @param content The filing content
+ * @returns Extracted text content
  */
-export async function getLatestFilings(
-  ticker: string,
-  limit: number = 5
-): Promise<SecFiling[]> {
+export async function extractTextContent(content: string): Promise<string> {
   try {
-    secLogger.debug(`Getting latest filings for ${ticker}, limit: ${limit}`);
-    
-    // First, find the company by ticker
+    const textPattern = /<TEXT>([\s\S]*?)<\/TEXT>/gi;
+    const textMatches = content.match(textPattern);
+    if (!textMatches) return '';
+
+    const textContent = textMatches
+      .map(match => {
+        const textOnly = match.replace(/<\/?TEXT>/gi, '');
+        return textOnly.trim();
+      })
+      .join('\n\n');
+
+    return textContent;
+  } catch (error) {
+    secLogger.error('Error extracting text content:', error);
+    return '';
+  }
+}
+
+/**
+ * Extracts table data from a filing
+ * @param content The filing content
+ * @returns Extracted table data
+ */
+export async function extractTableData(content: string): Promise<{ [key: string]: string[] }> {
+  try {
+    // Get company info first
     const company = await findCompanyByTicker(ticker);
     if (!company) {
-      throw new Error(`Company with ticker ${ticker} not found`);
+      throw new Error(`Company not found for ticker ${ticker}`);
     }
-    
-    // Get company filings
-    const { recentFilings } = await getCompanyFilings(company.cik);
-    
-    // Sort by filing date and take the most recent ones
-    let latestFilings = recentFilings
-      .sort((a, b) => new Date(b.filingDate).getTime() - new Date(a.filingDate).getTime())
-      .slice(0, limit);
-    
-    secLogger.debug(`Found ${latestFilings.length} latest filings for ${ticker}`);
-    
-    return latestFilings;
-  } catch (error) {
-    console.error(`[DEBUG] Error getting latest filings for ${ticker}:`, error);
-    throw new Error(`Failed to get latest filings for ${ticker}`);
-  }
-}
 
-export async function getForm144Summary(ticker: string): Promise<{
-  ticker: string;
-  companyName: string;
-  filingType: string;
-  filingDate: string;
-  summaryText: string;
-  keyPoints: string[];
-  filingUrl: string;
-  url?: string; // SEC HTML viewer URL
-  rawData?: any;
-}> {
-  try {
-    // Get the latest Form 144 filing
-    const latestFiling = await getLatestFilingByFormType(ticker, '144');
-    
-    if (!latestFiling) {
+    // Get latest Form 144 filing
+    const filingDetails = await getLatestFilingByFormType(company, '144');
+    if (!filingDetails) {
       throw new Error(`No Form 144 filings found for ${ticker}`);
     }
-    
-    // Get the company info
-    const company = await findCompanyByTicker(ticker);
-    if (!company) {
-      throw new Error(`Company with ticker ${ticker} not found`);
+
+    // Parse Form 144 content
+    const form144Data = await parseForm144(filingDetails);
+    if (!form144Data) {
+      throw new Error(`Failed to parse Form 144 content for ${ticker}`);
     }
-    
-    // Get filing details
-    const filingDetails = await getFilingDetails(latestFiling.accessionNumber, company.cik);
-    
-    // Parse Form 144 data
-    let form144Data;
-    try {
-      form144Data = await parseForm144(filingDetails);
-    } catch (parseError) {
-      console.warn(`Error parsing Form 144 for ${ticker}, using fallback data:`, parseError);
-      // Provide fallback data if parsing fails
-      form144Data = {
-        error: 'Failed to parse Form 144 filing',
-        details: parseError instanceof Error ? parseError.message : String(parseError),
-        issuerName: filingDetails.companyName,
-        issuerTicker: ticker,
-        securityTitle: 'Company Securities',
-        reportingPerson: 'Company Insider',
-        reportingPersonTitle: '',
-        relationshipToIssuer: '',
-        dateOfSale: filingDetails.filingDate,
-        amountOfSecurities: '',
-        proposedSaleDate: '',
-        broker: '',
-        note: 'Limited information available - parsing error'
-      };
-    }
-    
-    // Generate a summary
-    const summaryText = form144Data.error 
-      ? `This Form 144 filing from ${filingDetails.companyName} (${ticker}) indicates a proposed sale of securities by an insider. Form 144 is a notice of the intent to sell restricted securities, typically by company executives or directors. The filing from ${latestFiling.filingDate} shows that a company insider is planning to sell shares in the near future. This is a routine filing required by the SEC when insiders plan to sell a significant amount of company stock.`
-      : `This Form 144 filing indicates that ${form144Data.reportingPerson || 'an insider'} (${form144Data.reportingPersonTitle || 'company insider'}) of ${form144Data.issuerName || filingDetails.companyName} (${ticker}) intends to sell ${form144Data.amountOfSecurities || 'a portion'} of ${form144Data.securityTitle || 'company securities'}. The proposed sale date is ${form144Data.proposedSaleDate || 'in the near future'} through ${form144Data.broker || 'a broker'}. Form 144 is required when affiliates of the company intend to sell restricted or control securities.`;
-    
-    // Generate key points
+
+    // Generate summary
+    const summaryText = `Form 144 filing from ${form144Data.reportingPerson} (${form144Data.reportingPersonTitle}) ` +
+      `indicates a proposed sale of ${form144Data.amountOfSecurities} securities. ` +
+      `The reporting person's relationship to the issuer is ${form144Data.relationshipToIssuer}. ` +
+      `The proposed sale date is ${form144Data.proposedSaleDate} through broker ${form144Data.broker}.`;
+
     const keyPoints = [
-      'Form 144 indicates a proposed sale of restricted securities',
-      form144Data.reportingPerson 
-        ? `Filed by ${form144Data.reportingPerson}${form144Data.reportingPersonTitle ? ` (${form144Data.reportingPersonTitle})` : ''}`
-        : 'Filed by a company insider',
-      `Filing date: ${filingDetails.filingDate}`,
-      'Required by SEC regulations for insider sales',
-      'Does not necessarily indicate negative sentiment about the company'
-    ];
-    
-    // Construct the SEC HTML viewer URL
-    const secHtmlUrl = `https://www.sec.gov/Archives/edgar/data/${company.cik}/${latestFiling.accessionNumber.replace(/-/g, '')}/index.htm`;
-    
+      `Filing Date: ${filingDetails.filingDate}`,
+      `Reporting Person: ${form144Data.reportingPerson}`,
+      `Title: ${form144Data.reportingPersonTitle}`,
+      `Relationship: ${form144Data.relationshipToIssuer}`,
+      `Amount: ${form144Data.amountOfSecurities}`,
+      `Sale Date: ${form144Data.dateOfSale}`,
+      `Broker: ${form144Data.broker}`,
+      form144Data.note ? `Note: ${form144Data.note}` : null
+    ].filter(Boolean) as string[];
+
+    // Construct SEC HTML viewer URL
+    const secHtmlUrl = `${SEC_CONFIG.BASE_URL}/Archives/edgar/data/${company.cik}/${filingDetails.accessionNumber.replace(/-/g, '')}/index.htm`;
+
     return {
       ticker: ticker.toUpperCase(),
       companyName: filingDetails.companyName,
@@ -654,12 +506,28 @@ export async function getForm144Summary(ticker: string): Promise<{
       filingDate: filingDetails.filingDate,
       summaryText,
       keyPoints,
-      filingUrl: latestFiling.filingUrl,
-      url: secHtmlUrl, // Add the SEC HTML viewer URL
+      filingUrl: secHtmlUrl,
+      url: secHtmlUrl,
       rawData: form144Data
     };
   } catch (error) {
-    console.error(`Error generating Form 144 summary for ${ticker}:`, error);
+    secLogger.error(`Error generating Form 144 summary for ${ticker}:`, error);
     throw new Error(`Failed to generate Form 144 summary for ${ticker}`);
   }
-}
+};
+
+/**
+ * Gets a summary for any supported filing type
+ * @param ticker The company's ticker symbol
+ * @param formType The type of form to get a summary for
+ * @returns A summary of the filing
+ */
+export const getFilingSummary = async (ticker: string, formType: FilingType): Promise<FilingSummary> => {
+  switch (formType) {
+    case 'Form 144':
+    case '144':
+      return getForm144Summary(ticker);
+    default:
+      throw new Error(`Filing type ${formType} is not supported yet`);
+  }
+};
