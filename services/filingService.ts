@@ -1,5 +1,5 @@
 import { FilingLog } from '../types/filing';
-import { FilingType } from '../lib/sec-edgar/types';
+import { FilingType } from '../types/sec/filing';
 import { FormTypeMetadata, getFormMetadata, getFormsByCategory, getHighImportanceForms } from '../lib/sec-edgar/form-registry';
 import { parseFormContent, extractImportantContent, ParsedContent } from '../lib/parsers/form-parser';
 import { generateSystemPrompt, generateUserPrompt } from '../lib/ai/sec-prompts';
@@ -220,14 +220,15 @@ const filingService = {
       for (const summary of summaries) {
         // Map filingType to EmailType
         let templateType: EmailType;
-        switch (summary.filingType) {
+        switch (summary.filingType as string) {
           case 'Form4':
             templateType = EmailType.FORM4;
             break;
           default:
             templateType = EmailType.IMMEDIATE;
         }
-        const { html, text } = getEmailTemplate(templateType, {
+        // Add await since getEmailTemplate is async
+        const { html, text } = await getEmailTemplate(templateType, {
           recipientName: '',
           recipientEmail: email,
           unsubscribeUrl: process.env.UNSUBSCRIBE_URL || '',
@@ -508,7 +509,8 @@ const filingService = {
         console.log(`[DEBUG][FilingService] Found company: ${company.name}, CIK: ${company.cik}`);
         
         console.log(`[DEBUG][FilingService] Getting latest ${normalizedFormType} filing for ${ticker}`);
-        filing = await secService.getLatestFilingByFormType(ticker, normalizedFormType);
+        // Pass the company object instead of just the ticker string
+        filing = await secService.getLatestFilingByFormType(company, normalizedFormType);
         if (!filing) {
           console.warn(`[DEBUG][FilingService] No ${normalizedFormType} filings found for ${ticker}`);
           return { data: null, error: `No ${normalizedFormType} filings found for ${ticker}` };
@@ -1055,7 +1057,7 @@ function generateSimpleSummary(parsedContent: ParsedContent, formType: FilingTyp
     summary += ` This current report discloses material events or corporate changes that could be important to shareholders or the SEC.`;
   } else if (formType.includes('13D') || formType.includes('13G')) {
     summary += ` This filing discloses beneficial ownership information from investors who have acquired a significant position in the company's securities.`;
-  } else if (formType === '4' || formType === 'Form4') {
+  } else if (formType === '4' || formType === 'Form4' || (typeof formType === 'string' && formType.includes('Form4'))) {
     summary += ` This filing reports changes in ownership of company securities by directors, officers, or significant shareholders.`;
   }
   

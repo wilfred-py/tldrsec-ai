@@ -23,6 +23,8 @@ export interface SecFilingDocument {
   filename: string;
   description: string;
   content?: string;
+  documentUrl?: string;
+  size?: number;
 }
 
 export interface FilingSummary {
@@ -37,4 +39,4 @@ export interface FilingSummary {
   rawData?: any;
 }
 
-export type FilingType = 'Form 144' | '144' | '10-K' | '10-Q' | '8-K';
+export type FilingType = 'Form 144' | '144' | '10-K' | '10-Q' | '8-K' | 'DEF 14A' | 'Form4' | '4';
