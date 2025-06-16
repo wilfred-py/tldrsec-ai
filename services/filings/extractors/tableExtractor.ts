@@ -28,34 +28,28 @@ export async function extractFilingTableData(content: string): Promise<{ [key: s
   try {
     // Extract tables using regex
     const tablePattern = /<TABLE[^>]*>([\s\S]*?)<\/TABLE>/gi;
-    const tableMatches = content.matchAll(tablePattern);
-    
-    if (!tableMatches) return {};
-    
     const tables: { [key: string]: string[] } = {};
     let tableIndex = 0;
     
-    for (const match of tableMatches) {
-      if (match[1]) {
+    // Use exec in a loop instead of matchAll for better TypeScript compatibility
+    let tableMatch;
+    while ((tableMatch = tablePattern.exec(content)) !== null) {
+      if (tableMatch[1]) {
         // Extract rows from the table
         const rowPattern = /<TR[^>]*>([\s\S]*?)<\/TR>/gi;
-        const rowMatches = match[1].matchAll(rowPattern);
-        
-        if (!rowMatches) continue;
-        
         const tableData: string[] = [];
         
-        for (const rowMatch of rowMatches) {
+        // Use exec in a loop for row matching
+        let rowMatch;
+        while ((rowMatch = rowPattern.exec(tableMatch[1])) !== null) {
           if (rowMatch[1]) {
             // Extract cells from the row
             const cellPattern = /<T[HD][^>]*>([\s\S]*?)<\/T[HD]>/gi;
-            const cellMatches = rowMatch[1].matchAll(cellPattern);
-            
-            if (!cellMatches) continue;
-            
             const rowData: string[] = [];
             
-            for (const cellMatch of cellMatches) {
+            // Use exec in a loop for cell matching
+            let cellMatch;
+            while ((cellMatch = cellPattern.exec(rowMatch[1])) !== null) {
               if (cellMatch[1]) {
                 // Clean up cell content
                 const cellContent = cellMatch[1].replace(/<[^>]+>/g, ' ').trim();
