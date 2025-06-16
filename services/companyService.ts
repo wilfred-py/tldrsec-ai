@@ -1,4 +1,4 @@
-import axios from 'axios';
+import * as axios from 'axios';
 import { secLogger } from '../utils/logger';
 import { SEC_CONFIG } from '../config/sec';
 import { FilingSearchResponse, SecCompanyInfo, SecFiling } from '../types/sec';

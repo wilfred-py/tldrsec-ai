@@ -3,7 +3,7 @@ import { FilingType } from '../types/sec/filing';
 import { FormTypeMetadata, getFormMetadata, getFormsByCategory, getHighImportanceForms } from '../lib/sec-edgar/form-registry';
 import { parseFormContent, extractImportantContent, ParsedContent } from '../lib/parsers/form-parser';
 import { generateSystemPrompt, generateUserPrompt } from '../lib/ai/sec-prompts';
-import axios from 'axios';
+import * as axios from 'axios';
 import { summarizeFiling } from '../lib/ai/summarize';
 import * as secService from './secService';
 import { prisma } from '../lib/db';
@@ -649,8 +649,8 @@ const filingService = {
               return { data: null, error: `Failed to fetch document: ${axiosResponse.status} ${axiosResponse.statusText}` };
             }
             
-            // Set content to the response data
-            content = axiosResponse.data;
+            // Set content to the response data with proper type casting
+            content = axiosResponse.data as string;
           } catch (error) {
             // Type assertion for the error
             const axiosError = error as { message: string };
