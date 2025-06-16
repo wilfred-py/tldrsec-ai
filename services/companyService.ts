@@ -1,6 +1,6 @@
 import axios from 'axios';
-import { secLogger } from '../lib/logger';
-import { SEC_API_CONFIG } from '../config/sec';
+import { secLogger } from '../utils/logger';
+import { SEC_CONFIG } from '../config/sec';
 import { FilingSearchResponse, SecCompanyInfo, SecFiling } from '../types/sec';
 
 /**
@@ -11,17 +11,18 @@ import { FilingSearchResponse, SecCompanyInfo, SecFiling } from '../types/sec';
 export async function findCompanyByTicker(ticker: string): Promise<SecCompanyInfo | null> {
   try {
     // First get the CIK number for the ticker
-    const tickerResponse = await axios.get(
-      `${SEC_API_CONFIG.BASE_URL}/cik-lookup-data.txt`,
-      {
-        headers: SEC_API_CONFIG.HEADERS,
-        transformResponse: [(data) => data] // Prevent JSON parsing
-      }
-    );
+    // Use axios.request with explicit typing to avoid TypeScript errors
+    const tickerResponse = await axios.request({
+      method: 'GET',
+      url: `${SEC_CONFIG.BASE_URL}/cik-lookup-data.txt`,
+      headers: SEC_CONFIG.HEADERS,
+      responseType: 'text' // This tells axios to return the response as text
+    });
 
     // Parse the response to find the CIK
-    const lines = tickerResponse.data.split('\n');
-    const tickerLine = lines.find(line => line.toLowerCase().includes(ticker.toLowerCase()));
+    const tickerData = tickerResponse.data as string;
+    const lines = tickerData.split('\n').filter((line: string) => line.includes(ticker.toUpperCase()));
+    const tickerLine = lines[0];
     if (!tickerLine) {
       return null;
     }
@@ -32,16 +33,12 @@ export async function findCompanyByTicker(ticker: string): Promise<SecCompanyInf
     }
 
     // Get detailed company info
-    const companyResponse = await axios.get(
-      `${SEC_API_CONFIG.BASE_URL}/submissions/CIK${cik.padStart(10, '0')}.json`,
-      {
-        headers: SEC_API_CONFIG.HEADERS,
-        transformResponse: [(data) => {
-          const parsed = JSON.parse(data);
-          return parsed;
-        }]
-      }
-    );
+    const companyResponse = await axios.request({
+      method: 'GET',
+      url: `${SEC_CONFIG.BASE_URL}/submissions/CIK${cik.padStart(10, '0')}.json`,
+      headers: SEC_CONFIG.HEADERS,
+      responseType: 'json'
+    });
 
     const filingSearchResponse = companyResponse.data as FilingSearchResponse;
 
@@ -87,19 +84,15 @@ export async function getCompanyFilings(company: SecCompanyInfo): Promise<{ rece
       return { recentFilings: filings };
     }
 
-    // Otherwise fetch filing data
-    const response = await axios.get(
-      `${SEC_API_CONFIG.BASE_URL}/submissions/CIK${company.cik.padStart(10, '0')}.json`,
-      {
-        headers: SEC_API_CONFIG.HEADERS,
-        transformResponse: [(data) => {
-          const parsed = JSON.parse(data);
-          return parsed;
-        }]
-      }
-    );
+    // Get company filings from the SEC API
+    const filingsResponse = await axios.request({
+      method: 'GET',
+      url: `${SEC_CONFIG.BASE_URL}/submissions/CIK${company.cik.padStart(10, '0')}.json`,
+      headers: SEC_CONFIG.HEADERS,
+      responseType: 'json'
+    });
 
-    const filingSearchResponse = response.data as FilingSearchResponse;
+    const filingSearchResponse = filingsResponse.data as FilingSearchResponse;
     const recentFilings = filingSearchResponse.filings.recent;
 
     // Map to our filing format
