@@ -23,6 +23,8 @@ import { parseForm144 } from './filings/parsers/form144Parser';
 
 // Import from company service
 import { findCompanyByTicker } from './companyService';
+import { getCompanyInfo, getSecApiHeaders as getSecApiHeadersInternal } from './filings/companyInfo';
+import { getFilings, getFilingContent } from './filings/filingRetrieval';
 
 // Import from API utilities
 import { SEC_CONFIG } from '../config/sec';
@@ -44,7 +46,7 @@ export async function getLatestFilings(ticker: string, limit: number = 5) {
  * @returns SEC API headers
  */
 export function getSecApiHeaders() {
-  return SEC_CONFIG.HEADERS || {};
+  return getSecApiHeadersInternal();
 }
 
 // Re-export all functions for backward compatibility
@@ -69,9 +71,12 @@ export {
   
   // Company information
   findCompanyByTicker,
+  getCompanyInfo,
   
   // Filing retrieval
-  getLatestFilingByFormType
+  getLatestFilingByFormType,
+  getFilings,
+  getFilingContent
 };
 
 /**
