@@ -8,6 +8,8 @@ import { summarizeFiling } from '../lib/ai/summarize';
 import * as secService from './secService';
 import { prisma } from '../lib/db/index';
 import { JsonObject } from '@prisma/client/runtime/library';
+import { SEC_CONFIG } from '../config/sec';
+import { logger } from '../lib/logging'; // Added logger import
 
 // Import the email client and types
 import { emailClient, EmailMessage } from '../lib/email';
@@ -138,15 +140,263 @@ const filingService = {
   getFilingLogs: async () => {
     // Simulate API call delay
     await new Promise(resolve => setTimeout(resolve, 500));
-    return { data: mockFilings };
+    return { data: [] };
   },
   
-  // Get filing details by ID
-  getFilingById: async (id: string) => {
-    // Simulate API call delay
-    await new Promise(resolve => setTimeout(resolve, 300));
-    const filing = mockFilings.find(f => f.id === id);
-    return { data: filing };
+  // Get filing details by ID (accessionNumber)
+  async getFilingById(accessionNumber: string, cik?: string): Promise<{ data: Record<string, any> }> {
+    try {
+      if (!accessionNumber) {
+        throw new Error('Accession number is required');
+      }
+
+      // Normalize CIK if provided
+      let normalizedCik = '';
+      if (cik) {
+        normalizedCik = cik.replace(/^0+/, '');
+        // Pad with leading zeros to 10 digits for API URL
+        normalizedCik = normalizedCik.padStart(10, '0');
+      } else {
+        // If no CIK provided, try to extract it from the accession number
+        const cikMatch = accessionNumber.match(/^(\d+)-/);
+        if (cikMatch && cikMatch[1]) {
+          normalizedCik = cikMatch[1].padStart(10, '0');
+        } else {
+          throw new Error('CIK is required when accession number does not contain it');
+        }
+      }
+
+      // Construct URL for the company submissions file which contains metadata for all filings
+      const submissionsUrl = `https://data.sec.gov/submissions/CIK${normalizedCik}.json`;
+      // Construct URL for the raw filing content
+      const rawUrl = SEC_CONFIG.RAW_FILING_URL(accessionNumber, normalizedCik);
+
+      logger.debug(`Fetching company submissions from ${submissionsUrl}`);
+      logger.debug(`Fetching raw filing from ${rawUrl}`);
+
+      // Fetch both the submissions data and raw filing content in parallel
+      const [submissionsResponse, rawResponse] = await Promise.all([
+        axios.get(submissionsUrl, {
+          headers: SEC_CONFIG.HEADERS
+        }),
+        axios.get(rawUrl, {
+          headers: SEC_CONFIG.HEADERS
+        })
+      ]);
+
+      // Find the specific filing in the submissions data
+      const submissionsData = submissionsResponse.data as {
+        filings?: {
+          recent?: {
+            accessionNumber?: string[];
+            filingDate?: string[];
+            form?: string[];
+            primaryDocument?: string[];
+            reportDate?: string[];
+          };
+          files?: Array<{
+            filings?: {
+              recent?: {
+                accessionNumber?: string[];
+                filingDate?: string[];
+                form?: string[];
+                primaryDocument?: string[];
+                reportDate?: string[];
+              };
+            };
+          }>;
+        };
+        name?: string;
+      };
+      let filingMetadata = null;
+      
+      // Format accession number to match the format in the submissions file (without dashes)
+      const formattedAccessionNumber = accessionNumber.replace(/-/g, '');
+      logger.debug(`Looking for formatted accession number: ${formattedAccessionNumber}`);
+      
+      // Log the structure of submissionsData to understand what we're working with
+      logger.debug(`submissionsData keys: ${JSON.stringify(Object.keys(submissionsData))}`);
+      if (submissionsData.filings) {
+        logger.debug(`submissionsData.filings keys: ${JSON.stringify(Object.keys(submissionsData.filings))}`);
+        if (submissionsData.filings.recent) {
+          logger.debug(`submissionsData.filings.recent keys: ${JSON.stringify(Object.keys(submissionsData.filings.recent))}`);
+          logger.debug(`Number of accessionNumber entries: ${(submissionsData.filings.recent.accessionNumber || []).length}`);
+          logger.debug(`First few accessionNumbers: ${JSON.stringify((submissionsData.filings.recent.accessionNumber || []).slice(0, 5))}`);
+        }
+      }
+      
+      // Look for the filing in the recent filings list
+      if (submissionsData.filings && submissionsData.filings.recent) {
+        const recentFilings = submissionsData.filings.recent;
+        const accessionNumberArray = recentFilings.accessionNumber || [];
+        const accessionNumberIndex = accessionNumberArray.findIndex(
+          (acc: string) => acc === formattedAccessionNumber
+        );
+        
+        logger.debug(`accessionNumberIndex in recent filings: ${accessionNumberIndex}`);
+        
+        if (accessionNumberIndex !== undefined && accessionNumberIndex >= 0) {
+          logger.debug(`Found filing at index ${accessionNumberIndex}`);
+          logger.debug(`filingDate at index: ${(recentFilings.filingDate || [])[accessionNumberIndex]}`);
+          logger.debug(`form at index: ${(recentFilings.form || [])[accessionNumberIndex]}`);
+          logger.debug(`primaryDocument at index: ${(recentFilings.primaryDocument || [])[accessionNumberIndex]}`);
+          logger.debug(`reportDate at index: ${(recentFilings.reportDate || [])[accessionNumberIndex]}`);
+          
+          filingMetadata = {
+            accessionNumber: accessionNumberArray[accessionNumberIndex],
+            filingDate: (recentFilings.filingDate || [])[accessionNumberIndex] || '',
+            form: (recentFilings.form || [])[accessionNumberIndex] || '',
+            primaryDocument: (recentFilings.primaryDocument || [])[accessionNumberIndex] || '',
+            reportDate: (recentFilings.reportDate || [])[accessionNumberIndex] || ''
+          };
+        } else {
+          logger.debug(`Filing with accessionNumber ${formattedAccessionNumber} not found in recent filings`);
+        }
+      }
+      
+      // If not found in recent, try the files array
+      if (!filingMetadata && submissionsData.filings && submissionsData.filings.files) {
+        logger.debug(`Filing not found in recent, checking files array with ${submissionsData.filings.files.length} entries`);
+        
+        for (let i = 0; i < submissionsData.filings.files.length; i++) {
+          const file = submissionsData.filings.files[i];
+          logger.debug(`Checking file ${i+1}/${submissionsData.filings.files.length}`);
+          
+          if (file.filings && file.filings.recent) {
+            const fileRecentFilings = file.filings.recent;
+            logger.debug(`File ${i+1} has recent filings, keys: ${JSON.stringify(Object.keys(fileRecentFilings))}`);
+            
+            if (fileRecentFilings.accessionNumber) {
+              logger.debug(`File ${i+1} has ${fileRecentFilings.accessionNumber.length} accessionNumber entries`);
+              logger.debug(`First few accessionNumbers: ${JSON.stringify(fileRecentFilings.accessionNumber.slice(0, 3))}`);
+            }
+            
+            const fileAccessionNumberArray = fileRecentFilings.accessionNumber || [];
+            const accessionNumberIndex = fileAccessionNumberArray.findIndex(
+              (acc: string) => acc === formattedAccessionNumber
+            );
+            
+            logger.debug(`File ${i+1} accessionNumberIndex: ${accessionNumberIndex}`);
+            
+            if (accessionNumberIndex !== undefined && accessionNumberIndex >= 0) {
+              logger.debug(`Found filing in file ${i+1} at index ${accessionNumberIndex}`);
+              logger.debug(`File ${i+1} filingDate at index: ${(fileRecentFilings.filingDate || [])[accessionNumberIndex]}`);
+              logger.debug(`File ${i+1} form at index: ${(fileRecentFilings.form || [])[accessionNumberIndex]}`);
+              logger.debug(`File ${i+1} primaryDocument at index: ${(fileRecentFilings.primaryDocument || [])[accessionNumberIndex]}`);
+              logger.debug(`File ${i+1} reportDate at index: ${(fileRecentFilings.reportDate || [])[accessionNumberIndex]}`);
+              
+              filingMetadata = {
+                accessionNumber: fileAccessionNumberArray[accessionNumberIndex],
+                filingDate: (fileRecentFilings.filingDate || [])[accessionNumberIndex] || '',
+                form: (fileRecentFilings.form || [])[accessionNumberIndex] || '',
+                primaryDocument: (fileRecentFilings.primaryDocument || [])[accessionNumberIndex] || '',
+                reportDate: (fileRecentFilings.reportDate || [])[accessionNumberIndex] || ''
+              };
+              break;
+            }
+          } else {
+            logger.debug(`File ${i+1} has no recent filings`);
+          }
+        }
+        
+        if (!filingMetadata) {
+          logger.debug(`Filing with accessionNumber ${formattedAccessionNumber} not found in any files`);
+        }
+      } else if (!filingMetadata) {
+        logger.debug(`No files array found in submissionsData.filings or filingMetadata already found`);
+      }
+
+      // Combine the data from both responses
+      const filingData: Record<string, any> = {
+        accessionNumber,
+        cik: normalizedCik,
+        content: rawResponse.data,
+        filingDate: filingMetadata?.filingDate || '',
+        filingCode: filingMetadata?.form || '',
+        company: submissionsData.name || '',
+        // Include additional metadata that might be useful
+        reportDate: filingMetadata?.reportDate || '',
+        primaryDocument: filingMetadata?.primaryDocument || ''
+      };
+      
+      // If metadata is not found in submissions data, try to extract it from raw filing content
+      if (!filingData.filingDate || !filingData.filingCode) {
+        logger.debug('Metadata not found in submissions data, attempting to extract from raw filing content');
+        
+        try {
+          const content = rawResponse.data as string;
+          
+          // Extract filing date - look for common patterns in XML/text filings
+          if (!filingData.filingDate) {
+            // Try to find filing date in Form 4 XML
+            const filingDateMatch = content.match(/<signatureDate>(\d{4}-\d{2}-\d{2})<\/signatureDate>/);
+            if (filingDateMatch && filingDateMatch[1]) {
+              filingData.filingDate = filingDateMatch[1];
+              logger.debug(`Extracted filingDate from raw content: ${filingData.filingDate}`);
+            }
+            
+            // Try to find filing date in other formats
+            if (!filingData.filingDate) {
+              const altDateMatch = content.match(/FILED:\s*(\d{2}\/\d{2}\/\d{4})/);
+              if (altDateMatch && altDateMatch[1]) {
+                // Convert MM/DD/YYYY to YYYY-MM-DD
+                const parts = altDateMatch[1].split('/');
+                if (parts.length === 3) {
+                  filingData.filingDate = `${parts[2]}-${parts[0]}-${parts[1]}`;
+                  logger.debug(`Extracted filingDate from raw content (alt format): ${filingData.filingDate}`);
+                }
+              }
+            }
+          }
+          
+          // Extract filing code (form type)
+          if (!filingData.filingCode) {
+            // Try to find form type in XML
+            const formTypeMatch = content.match(/<transactionFormType>(\w+(-\w+)*)<\/transactionFormType>/);
+            if (formTypeMatch && formTypeMatch[1]) {
+              filingData.filingCode = formTypeMatch[1];
+              logger.debug(`Extracted filingCode from raw content: ${filingData.filingCode}`);
+            }
+            
+            // Try to find form type in other formats
+            if (!filingData.filingCode) {
+              const altFormMatch = content.match(/FORM\s+(\d+-\w+|\w+)\s/);
+              if (altFormMatch && altFormMatch[1]) {
+                filingData.filingCode = altFormMatch[1];
+                logger.debug(`Extracted filingCode from raw content (alt format): ${filingData.filingCode}`);
+              }
+            }
+          }
+          
+          // Extract company name if not already available
+          if (!filingData.company) {
+            // Try to find issuer name in XML
+            const companyMatch = content.match(/<issuerName>([^<]+)<\/issuerName>/);
+            if (companyMatch && companyMatch[1]) {
+              filingData.company = companyMatch[1].trim();
+              logger.debug(`Extracted company from raw content: ${filingData.company}`);
+            }
+          }
+          
+          // Extract report date if not already available
+          if (!filingData.reportDate) {
+            // Try to find transaction date in XML
+            const reportDateMatch = content.match(/<transactionDate>\s*<value>(\d{4}-\d{2}-\d{2})<\/value>/);
+            if (reportDateMatch && reportDateMatch[1]) {
+              filingData.reportDate = reportDateMatch[1];
+              logger.debug(`Extracted reportDate from raw content: ${filingData.reportDate}`);
+            }
+          }
+        } catch (error) {
+          logger.error(`Error extracting metadata from raw filing content: ${error instanceof Error ? error.message : String(error)}`);
+        }
+      }
+      
+      return { data: filingData };
+    } catch (error: any) {
+      logger.error(`Error fetching filing ${accessionNumber}: ${error.message}`);
+      throw new Error(`Could not retrieve filing details for ${accessionNumber}`);
+    }
   },
   
   // Send an email summary of the latest filings
@@ -254,7 +504,10 @@ const filingService = {
         subject: `SEC Filing Summaries - ${new Date().toLocaleDateString()}`,
         html: emailHtml,
         text: emailText,
-        tags: ['type:summaries', 'content:filings'],
+        tags: [
+          { name: 'type-summaries' },
+          { name: 'content-filings' }
+        ],
         replyTo: 'no-reply@tldrsec.app'
       };
       
