@@ -39,4 +39,4 @@ export interface FilingSummary {
   rawData?: any;
 }
 
-export type FilingType = 'Form 144' | '144' | '10-K' | '10-Q' | '8-K' | 'DEF 14A' | 'Form4' | '4';
+export type FilingType = 'Form 144' | '144' | '10-K' | '10-Q' | '8-K' | 'DEF 14A' | 'Form4' | '4' | '25-NSE' | '25' | 'SC 13G' | 'SC 13G/A' | 'SC 13D' | 'SC 13D/A' | 'SD' | '6-K' | '20-F' | '40-F' | 'N-CSR' | 'N-Q' | 'N-PORT' | 'PX14A6G' | 'CORRESP' | 'UPLOAD';

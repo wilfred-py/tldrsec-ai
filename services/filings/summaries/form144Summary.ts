@@ -6,11 +6,13 @@
 
 import { FilingSummary } from '../../../types/sec/filing';
 import { CompanyInfo } from '../../../types/sec/company';
-import { secLogger } from '../../../utils/logger';
-import { SEC_CONFIG } from '../../../config/sec';
-import { findCompanyByTicker } from '../../companyService';
+import { logger as secLogger } from '../../../lib/logging';
 import filingService from '../../filingService';
+import { findCompanyByTicker } from '../../companyService';
+import { getCompanyFilings } from '../../company/filings';
+import { SecFiling, SecCompanyInfo } from '../../../types/sec';
 import { parseForm144 } from '../parsers/form144Parser';
+import { SEC_CONFIG } from '../../../config/sec';
 
 /**
  * Gets a Form 144 summary for a given company
@@ -53,8 +55,8 @@ export async function getForm144Summary(ticker: string): Promise<FilingSummary> 
 
     return summary;
 
-  } catch (error) {
-    secLogger.error('Error in getForm144Summary:', error);
+  } catch (error: unknown) {
+    secLogger.error('Error in getForm144Summary:', { error });
     throw error;
   }
 }
@@ -109,8 +111,8 @@ async function getLatestForm144Filing(ticker: string) {
       accessionNumber: filingDetails.accessionNumber
     };
 
-  } catch (error) {
-    secLogger.error(`Error getting Form 144 filing for ${ticker}:`, error);
+  } catch (error: unknown) {
+    secLogger.error(`Error getting Form 144 filing for ${ticker}:`, { error });
     throw error;
   }
 }
@@ -123,36 +125,70 @@ async function getLatestForm144Filing(ticker: string) {
  */
 export async function getLatestFilingByFormType(company: CompanyInfo, formType: string) {
   try {
-    // Get company filings
-    const filingResponse = await filingService.getFilingLogs();
-    if (!filingResponse || !Array.isArray(filingResponse)) {
-      throw new Error('Failed to retrieve filing logs');
+    secLogger.debug(`Getting latest ${formType} filing for ${company.name} (${company.ticker || company.cik})`);
+    
+    // Convert CompanyInfo to SecCompanyInfo for getCompanyFilings
+    const secCompany: SecCompanyInfo = {
+      cik: company.cik,
+      ticker: company.ticker || '',
+      name: company.name,
+      exchange: 'UNKNOWN' // CompanyInfo doesn't have exchange property, so provide a default
+    };
+    
+    // Get company filings directly from SEC API using getCompanyFilings
+    const filings = await getCompanyFilings(secCompany);
+    secLogger.debug(`Retrieved ${filings.length} filings for ${company.name}`);
+    
+    // Normalize the form type for comparison (handle variations like '25-NSE' vs '25')
+    let normalizedFormType = formType;
+    if (formType.includes('144') || formType === 'Form 144') {
+      normalizedFormType = '144';
+    } else if (formType.includes('25-NSE') || formType === '25') {
+      normalizedFormType = '25-NSE';
     }
-
-    // Filter filings by company and form type
-    const companyFilings = filingResponse.filter(filing => 
-      filing.ticker.toUpperCase() === (company.ticker || '').toUpperCase() && 
-      filing.filingCode === formType
-    );
-
-    if (companyFilings.length === 0) {
+    
+    // Filter filings by form type, handling variations
+    const matchingFilings = filings.filter((filing: SecFiling) => {
+      // Check if filing.form matches formType or normalized variations
+      const filingForm = filing.form;
+      return filingForm === formType || 
+             filingForm === normalizedFormType || 
+             (normalizedFormType === '25-NSE' && filingForm.includes('25')) ||
+             (normalizedFormType === '144' && filingForm.includes('144'));
+    });
+    
+    secLogger.debug(`Found ${matchingFilings.length} ${formType} filings for ${company.name}`);
+    
+    if (matchingFilings.length === 0) {
+      secLogger.warn(`No ${formType} filings found for ${company.name}`);
       return null;
     }
-
+    
     // Sort by filing date (newest first)
-    companyFilings.sort((a, b) => 
+    matchingFilings.sort((a: SecFiling, b: SecFiling) => 
       new Date(b.filingDate).getTime() - new Date(a.filingDate).getTime()
     );
-
-    // Return the latest filing
+    
+    const latestFiling = matchingFilings[0];
+    secLogger.debug(`Latest ${formType} filing: ${JSON.stringify({
+      accessionNumber: latestFiling.accessionNumber,
+      filingDate: latestFiling.filingDate,
+      form: latestFiling.form
+    })}`);
+    
+    // Return a more complete filing object that includes all necessary fields
     return {
-      accessionNumber: companyFilings[0].id,
+      accessionNumber: latestFiling.accessionNumber,
       companyName: company.name,
-      filingDate: companyFilings[0].filingDate,
-      content: companyFilings[0].content || ''
+      filingDate: latestFiling.filingDate,
+      form: latestFiling.form,
+      content: '', // This will be populated later if needed
+      primaryDocument: latestFiling.primaryDocument || '',
+      primaryDocUrl: latestFiling.primaryDocUrl || '',
+      filingUrl: latestFiling.filingUrl || ''
     };
-  } catch (error) {
-    secLogger.error(`Error getting latest ${formType} filing:`, error);
+  } catch (error: unknown) {
+    secLogger.error(`Error getting latest ${formType} filing for ${company.name}:`, { error });
     return null;
   }
 }
