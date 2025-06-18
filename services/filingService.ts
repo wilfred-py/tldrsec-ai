@@ -3,10 +3,10 @@ import { FilingType } from '../types/sec/filing';
 import { FormTypeMetadata, getFormMetadata, getFormsByCategory, getHighImportanceForms } from '../lib/sec-edgar/form-registry';
 import { parseFormContent, extractImportantContent, ParsedContent } from '../lib/parsers/form-parser';
 import { generateSystemPrompt, generateUserPrompt } from '../lib/ai/sec-prompts';
-import * as axios from 'axios';
+import axios from 'axios';
 import { summarizeFiling } from '../lib/ai/summarize';
 import * as secService from './secService';
-import { prisma } from '../lib/db';
+import { prisma } from '../lib/db/index';
 import { JsonObject } from '@prisma/client/runtime/library';
 
 // Import the email client and types
@@ -453,6 +453,18 @@ const filingService = {
         normalizedFormType = '4' as FilingType;
       } else if (formType.includes('SD')) {
         normalizedFormType = 'SD' as FilingType;
+      } else if (formType.includes('25-NSE') || formType.includes('25')) {
+        normalizedFormType = '25-NSE' as FilingType;
+      } else if (formType.includes('13G')) {
+        normalizedFormType = 'SC 13G' as FilingType;
+      } else if (formType.includes('13D')) {
+        normalizedFormType = 'SC 13D' as FilingType;
+      } else if (formType.includes('6-K')) {
+        normalizedFormType = '6-K' as FilingType;
+      } else if (formType.includes('20-F')) {
+        normalizedFormType = '20-F' as FilingType;
+      } else if (formType.includes('40-F')) {
+        normalizedFormType = '40-F' as FilingType;
       }
       
       console.log(`[DEBUG][FilingService] Normalized form type: ${normalizedFormType}`);
@@ -516,15 +528,46 @@ const filingService = {
           return { data: null, error: `No ${normalizedFormType} filings found for ${ticker}` };
         }
         
+        // Safely access properties with optional chaining
+        // Log filing details, adapting to the actual structure returned by getLatestFilingByFormType
+        // which returns { accessionNumber, companyName, filingDate, content } from form144Summary.ts
         console.log(`[DEBUG][FilingService] Found ${normalizedFormType} filing for ${ticker}:`, JSON.stringify({
           accessionNumber: filing.accessionNumber,
           filingDate: filing.filingDate,
-          form: filing.form,
-          hasReportDate: !!filing.reportDate,
-          reportDate: filing.reportDate || 'N/A',
-          hasPrimaryDocument: !!filing.primaryDocument,
-          primaryDocument: filing.primaryDocument || 'N/A'
+          companyName: filing.companyName,
+          hasContent: !!filing.content
         }));
+        
+        // Handle 25-NSE and other new form types with a generic approach
+        if (['25-NSE', '25', 'SC 13G', 'SC 13D', '6-K', '20-F', '40-F', 'N-CSR', 'N-Q', 'N-PORT', 'PX14A6G', 'CORRESP', 'UPLOAD'].includes(normalizedFormType)) {
+          console.log(`[DEBUG][FilingService] Using generic handler for ${normalizedFormType} filing`);
+          
+          // Create a basic summary for these form types
+          const summaryText = `This is a ${normalizedFormType} filing for ${company.name} (${ticker}) filed on ${filing.filingDate}.`;
+          
+          // Construct a URL for the filing using the SEC EDGAR pattern
+          const cik = company.cik.padStart(10, '0');
+          const formattedAccessionNumber = filing.accessionNumber.replace(/-/g, '');
+          const filingUrl = `https://www.sec.gov/Archives/edgar/data/${cik}/${formattedAccessionNumber}/`;
+          
+          return {
+            data: {
+              ticker: ticker,
+              companyName: company.name,
+              filingType: normalizedFormType,
+              filingDate: filing.filingDate,
+              accessionNumber: filing.accessionNumber,
+              url: filingUrl,
+              summaryText: summaryText,
+              keyPoints: [`${normalizedFormType} filing from ${filing.filingDate}`],
+              tokensUsed: 0,
+              model: 'rule-based',
+              cost: 0,
+              processingStatus: 'completed',
+              processingTimeMs: 0
+            }
+          };
+        }
       } catch (error) {
         const fetchError = error as Error;
         console.error(`[DEBUG][FilingService] Error fetching ${normalizedFormType} filing for ${ticker}:`, fetchError);
