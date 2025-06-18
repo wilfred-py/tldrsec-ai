@@ -23,29 +23,34 @@ import { resendClient } from '@/lib/email/resend-client';
  */
 export async function POST(request: NextRequest) {
   try {
-    // Get authenticated user
+    // Parse request body
+    const body = await request.json().catch(() => ({}));
+    const { tickers, email } = body;
+    
+    // Get the authenticated user
     const user = await currentUser();
     
     if (!user || !user.emailAddresses || user.emailAddresses.length === 0) {
       return NextResponse.json(
-        { success: false, message: 'Authentication required or email address not available' },
+        { success: false, message: 'Authentication required' },
         { status: 401 }
       );
     }
     
-    // Get primary email address
+    // Use the user's primary email address
     const primaryEmail = user.emailAddresses[0].emailAddress;
     
-    // Parse request body
-    const body = await request.json().catch(() => ({}));
-    const { tickers } = body;
+    logger.info('Processing email summary request', {
+      userId: user.id,
+      email: primaryEmail,
+      tickerCount: tickers?.length || 'default'
+    });
     
     // Send email summary
     const result = await filingService.sendEmailSummary(primaryEmail, tickers);
     
     if (result.success) {
       logger.info('Filing summaries email sent successfully', {
-        userId: user.id,
         email: primaryEmail,
         tickerCount: tickers?.length || 'default'
       });
@@ -53,11 +58,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({
         success: true,
         message: result.message || 'Filing summaries email sent successfully',
-        requestId: result.requestId
+        summaryCount: result.summaries?.length || 0
       });
     } else {
       logger.error('Failed to send filing summaries email', {
-        userId: user.id,
+        email: primaryEmail,
         error: result.error
       });
       
@@ -66,8 +71,8 @@ export async function POST(request: NextRequest) {
         { status: 500 }
       );
     }
-  } catch (error) {
-    logger.error('Error in filings-summary email endpoint', error);
+  } catch (error: unknown) {
+    logger.error('Error in filings-summary email endpoint', { error });
     
     return NextResponse.json(
       { 

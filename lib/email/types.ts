@@ -58,7 +58,7 @@ export interface EmailMessage {
   html?: string;
   text?: string;
   attachments?: EmailAttachment[];
-  tags?: string[];
+  tags?: Array<{name: string; value?: string}>;
 }
 
 /**
