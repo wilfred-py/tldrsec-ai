@@ -41,7 +41,7 @@ export default function SECFilingEmailTemplate({ filing }: SECFilingEmailTemplat
               <h1 style={{ margin: "0", fontSize: "32px", fontWeight: "bold", letterSpacing: "-0.5px" }}>
                 SEC Filing Summaries
               </h1>
-              <p style={{ margin: "12px 0 0", fontSize: "18px", opacity: "0.9" }}>6/6/2025</p>
+              <p style={{ margin: "12px 0 0", fontSize: "18px", opacity: "0.9" }}>{new Date().toLocaleDateString()}</p>
             </td>
           </tr>
         </tbody>
@@ -72,7 +72,7 @@ export default function SECFilingEmailTemplate({ filing }: SECFilingEmailTemplat
                           fontWeight: "bold",
                         }}
                       >
-                        {filing.companyName} ({filing.symbol}) - {filing.filingType}
+                        {filing.companyName} ({filing.symbol || filing.ticker}) - {filing.filingType}
                       </h2>
                       <p style={{ margin: "8px 0 20px", color: "#64748b", fontSize: "14px" }}>Filed on: {new Date(filing.filingDate).toLocaleDateString()}</p>
                     </td>
@@ -553,7 +553,7 @@ export default function SECFilingEmailTemplate({ filing }: SECFilingEmailTemplat
                                   fontWeight: "bold",
                                 }}
                               >
-                                ↓ -7,000
+                                {filing.summaryData?.changeDirection === 'decrease' ? '↓' : '↑'} {filing.summaryData?.changeAmount || 'N/A'}
                               </span>
                             </td>
                             <td
@@ -565,7 +565,7 @@ export default function SECFilingEmailTemplate({ filing }: SECFilingEmailTemplat
                                 color: "#EF4444",
                               }}
                             >
-                              -0.96%
+                              {filing.summaryData?.changePercent || 'N/A'}
                             </td>
                           </tr>
                         </tbody>
@@ -579,7 +579,7 @@ export default function SECFilingEmailTemplate({ filing }: SECFilingEmailTemplat
                           fontStyle: "italic",
                         }}
                       >
-                        * Stock options expire April 19, 2029
+                        {filing.summaryData?.footnote || ''}
                       </p>
                     </td>
                   </tr>
@@ -639,7 +639,7 @@ export default function SECFilingEmailTemplate({ filing }: SECFilingEmailTemplat
           <tr>
             <td style={{ padding: "20px", textAlign: "center" }}>
               <a
-                href={filing.url}
+                href={filing.filingUrl}
                 style={{
                   display: "inline-block",
                   padding: "12px 24px",

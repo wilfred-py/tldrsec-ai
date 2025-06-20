@@ -24,7 +24,7 @@ export default function FormDEF14AEmailTemplate({ filing }: FormDEF14ATemplatePr
               <h1 style={{ margin: "0", fontSize: "32px", fontWeight: "bold", letterSpacing: "-0.5px" }}>
                 SEC Filing Summaries
               </h1>
-              <p style={{ margin: "12px 0 0", fontSize: "18px", opacity: "0.9" }}>6/6/2025</p>
+              <p style={{ margin: "12px 0 0", fontSize: "18px", opacity: "0.9" }}>{new Date().toLocaleDateString()}</p>
             </td>
           </tr>
         </tbody>
@@ -55,7 +55,7 @@ export default function FormDEF14AEmailTemplate({ filing }: FormDEF14ATemplatePr
                           fontWeight: "bold",
                         }}
                       >
-                        {filing.companyName} ({filing.symbol}) - Form DEF 14A Filing
+                        {filing.companyName} ({filing.symbol || filing.ticker}) - Form DEF 14A Filing
                       </h2>
                       <p style={{ margin: "8px 0 20px", color: "#64748b", fontSize: "14px" }}>Filed on: {new Date(filing.filingDate).toLocaleDateString()}</p>
                     </td>
@@ -666,24 +666,19 @@ export default function FormDEF14AEmailTemplate({ filing }: FormDEF14ATemplatePr
                         }}
                       >
                         <li style={{ marginBottom: "8px" }}>
-                          <strong>New Director Nominee:</strong> Dr. Sarah Chen, former CEO of Quantum Computing Inc.,
-                          nominated to bring technology expertise to the board.
+                          <strong>New Director Nominee:</strong> {filing.summaryData?.boardChanges?.[0]?.name ? `${filing.summaryData.boardChanges[0].name}, ${filing.summaryData.boardChanges[0].role}` : 'No new director nominees'}
                         </li>
                         <li style={{ marginBottom: "8px" }}>
-                          <strong>Board Independence:</strong> 9 of 11 directors are independent, exceeding NYSE
-                          requirements.
+                          <strong>Board Independence:</strong> {filing.summaryData?.boardIndependence || 'Information not available'}
                         </li>
                         <li style={{ marginBottom: "8px" }}>
-                          <strong>Diversity:</strong> Board composition includes 45% women and 36% underrepresented
-                          minorities.
+                          <strong>Diversity:</strong> {filing.summaryData?.boardDiversity || 'Information not available'}
                         </li>
                         <li style={{ marginBottom: "8px" }}>
-                          <strong>Committee Changes:</strong> Audit Committee chair rotation with Anne Sweeney stepping
-                          down and Jay Hoag taking over.
+                          <strong>Committee Changes:</strong> {filing.summaryData?.committeeChanges || 'No committee changes reported'}
                         </li>
                         <li>
-                          <strong>Term Limits:</strong> All directors serve one-year terms with annual elections to
-                          ensure accountability.
+                          <strong>Term Limits:</strong> {filing.summaryData?.termLimits || 'Information not available'}
                         </li>
                       </ul>
                     </td>

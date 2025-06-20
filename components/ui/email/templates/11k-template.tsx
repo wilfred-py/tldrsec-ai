@@ -45,23 +45,23 @@ export default function Form11KEmailTemplate({ filing }: Form11KTemplateProps) {
           <tbody>
             <tr>
               <td style={{ padding: "4px 0", fontWeight: "bold", color: "#1f2937" }}>Company:</td>
-              <td style={{ padding: "4px 0", color: "#374151" }}>Apple Inc.</td>
+              <td style={{ padding: "4px 0", color: "#374151" }}>{filing.companyName}</td>
             </tr>
             <tr>
               <td style={{ padding: "4px 0", fontWeight: "bold", color: "#1f2937" }}>Plan Name:</td>
-              <td style={{ padding: "4px 0", color: "#374151" }}>Apple Inc. 401(k) Plan</td>
+              <td style={{ padding: "4px 0", color: "#374151" }}>{filing.summaryData?.planName || 'N/A'}</td>
             </tr>
             <tr>
               <td style={{ padding: "4px 0", fontWeight: "bold", color: "#1f2937" }}>Plan Year:</td>
-              <td style={{ padding: "4px 0", color: "#374151" }}>December 31, 2023</td>
+              <td style={{ padding: "4px 0", color: "#374151" }}>{filing.summaryData?.planYear || 'N/A'}</td>
             </tr>
             <tr>
               <td style={{ padding: "4px 0", fontWeight: "bold", color: "#1f2937" }}>Filing Date:</td>
-              <td style={{ padding: "4px 0", color: "#374151" }}>June 28, 2024</td>
+              <td style={{ padding: "4px 0", color: "#374151" }}>{new Date(filing.filingDate).toLocaleDateString()}</td>
             </tr>
             <tr>
               <td style={{ padding: "4px 0", fontWeight: "bold", color: "#1f2937" }}>Total Participants:</td>
-              <td style={{ padding: "4px 0", color: "#374151" }}>154,000</td>
+              <td style={{ padding: "4px 0", color: "#374151" }}>{filing.summaryData?.totalParticipants?.toLocaleString() || 'N/A'}</td>
             </tr>
           </tbody>
         </table>

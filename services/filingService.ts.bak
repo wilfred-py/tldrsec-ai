@@ -535,7 +535,7 @@ const filingService = {
           subject: `SEC Filing Summaries - ${new Date().toLocaleDateString()}`,
           html: emailHtml,
           text: emailText, // Use the already generated plain text from templates
-          tags: ['type_summaries', 'content_filings'],
+          tags: [{ name: 'type:summaries' }, { name: 'content:filings' }],
           replyTo: 'no-reply@tldrsec.app'
         };
         emailResult = await emailClient.sendEmail(emailParams);
@@ -647,7 +647,7 @@ const filingService = {
           subject: `SEC Filing Summaries - ${new Date().toLocaleDateString()}`,
           html: emailHtml,
           text: emailText,
-          tags: ['type_summaries', 'content_filings'], // Using object format for tags
+          tags: [{ name: 'type:summaries' }, { name: 'content:filings' }], // Using object format for tags
           replyTo: 'no-reply@tldrsec.app'
         };
         result = await emailClient.sendEmail(emailParams);
