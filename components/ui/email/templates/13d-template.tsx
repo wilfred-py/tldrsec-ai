@@ -24,7 +24,7 @@ export default function Schedule13DEmailTemplate({ filing }: Schedule13DTemplate
               <h1 style={{ margin: "0", fontSize: "32px", fontWeight: "bold", letterSpacing: "-0.5px" }}>
                 SEC Filing Summaries
               </h1>
-              <p style={{ margin: "12px 0 0", fontSize: "18px", opacity: "0.9" }}>6/6/2025</p>
+              <p style={{ margin: "12px 0 0", fontSize: "18px", opacity: "0.9" }}>{new Date().toLocaleDateString()}</p>
             </td>
           </tr>
         </tbody>
@@ -55,7 +55,7 @@ export default function Schedule13DEmailTemplate({ filing }: Schedule13DTemplate
                           fontWeight: "bold",
                         }}
                       >
-                        {filing.companyName} ({filing.symbol}) - Schedule 13D Filing
+                        {filing.companyName} ({filing.symbol || filing.ticker}) - Schedule 13D Filing
                       </h2>
                       <p style={{ margin: "8px 0 20px", color: "#64748b", fontSize: "14px" }}>Filed on: {new Date(filing.filingDate).toLocaleDateString()}</p>
                     </td>
@@ -504,9 +504,7 @@ export default function Schedule13DEmailTemplate({ filing }: Schedule13DTemplate
                           Timeline
                         </h4>
                         <p style={{ margin: "0", color: "#374151", fontSize: "14px", lineHeight: "1.6" }}>
-                          Starboard intends to continue discussions with Twitter's management over the next 60-90 days
-                          and may seek board representation at the next annual meeting if satisfactory progress is not
-                          achieved.
+                          {filing.summaryData?.timeline || 'The reporting person has disclosed their intentions regarding future actions as required by Schedule 13D regulations.'}
                         </p>
                       </div>
                     </td>
@@ -543,14 +541,10 @@ export default function Schedule13DEmailTemplate({ filing }: Schedule13DTemplate
                         📈 Market Impact
                       </h3>
                       <p style={{ margin: "0 0 12px", color: "#374151", fontSize: "14px", lineHeight: "1.6" }}>
-                        Following the disclosure of Starboard's position, Twitter's stock price increased 8.3% in
-                        after-hours trading. The market has responded positively to the potential for activist
-                        involvement, with analysts noting Starboard's successful track record in driving shareholder
-                        value at technology companies.
+                        {filing.summaryData?.marketImpact || 'Market reaction to this filing has not been analyzed.'}
                       </p>
                       <p style={{ margin: "0", color: "#374151", fontSize: "14px", lineHeight: "1.6" }}>
-                        This represents Starboard's largest technology investment to date and signals the firm's
-                        confidence in Twitter's long-term potential despite recent operational challenges.
+                        {filing.summaryData?.investmentContext || 'This filing represents a significant ownership position that may impact the company\'s strategic direction.'}
                       </p>
                     </td>
                   </tr>

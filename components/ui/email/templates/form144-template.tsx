@@ -24,7 +24,7 @@ export default function Form144EmailTemplate({ filing }: Form144TemplateProps) {
               <h1 style={{ margin: "0", fontSize: "32px", fontWeight: "bold", letterSpacing: "-0.5px" }}>
                 SEC Filing Summaries
               </h1>
-              <p style={{ margin: "12px 0 0", fontSize: "18px", opacity: "0.9" }}>6/6/2025</p>
+              <p style={{ margin: "12px 0 0", fontSize: "18px", opacity: "0.9" }}>{new Date().toLocaleDateString()}</p>
             </td>
           </tr>
         </tbody>
@@ -55,7 +55,7 @@ export default function Form144EmailTemplate({ filing }: Form144TemplateProps) {
                           fontWeight: "bold",
                         }}
                       >
-                        {filing.companyName} ({filing.symbol}) - Form 144 Filing
+                        {filing.companyName} ({filing.symbol || filing.ticker}) - Form 144 Filing
                       </h2>
                       <p style={{ margin: "8px 0 20px", color: "#64748b", fontSize: "14px" }}>Filed on: {new Date(filing.filingDate).toLocaleDateString()}</p>
                     </td>
@@ -122,12 +122,12 @@ export default function Form144EmailTemplate({ filing }: Form144TemplateProps) {
                           <tr>
                             <td style={{ padding: "8px 0", width: "140px", verticalAlign: "top" }}>
                               <p style={{ margin: "0", color: "#6B7280", fontSize: "14px", fontWeight: "500" }}>
-                                Form Type:
+                                Transaction Type:
                               </p>
                             </td>
                             <td style={{ padding: "8px 0", verticalAlign: "top" }}>
                               <p style={{ margin: "0", color: "#374151", fontSize: "14px" }}>
-                                {filing.summaryData?.saleDate || 'N/A'}(Notice of Sale)
+                                {filing.summaryData?.transactionType || 'Sale of Common Stock'}
                               </p>
                             </td>
                           </tr>
@@ -138,7 +138,7 @@ export default function Form144EmailTemplate({ filing }: Form144TemplateProps) {
                               </p>
                             </td>
                             <td style={{ padding: "8px 0", verticalAlign: "top" }}>
-                              <p style={{ margin: "0", color: "#374151", fontSize: "14px" }}>June 7-11, 2025</p>
+                              <p style={{ margin: "0", color: "#374151", fontSize: "14px" }}>{filing.summaryData?.saleDate || filing.summaryData?.transactionDate || new Date(filing.filingDate).toLocaleDateString()}</p>
                             </td>
                           </tr>
                           <tr>
@@ -148,7 +148,7 @@ export default function Form144EmailTemplate({ filing }: Form144TemplateProps) {
                               </p>
                             </td>
                             <td style={{ padding: "8px 0", verticalAlign: "top" }}>
-                              <p style={{ margin: "0", color: "#374151", fontSize: "14px" }}>June 5, 2025</p>
+                              <p style={{ margin: "0", color: "#374151", fontSize: "14px" }}>{new Date(filing.filingDate).toLocaleDateString()}</p>
                             </td>
                           </tr>
                         </tbody>
@@ -525,20 +525,16 @@ export default function Form144EmailTemplate({ filing }: Form144TemplateProps) {
                         }}
                       >
                         <li style={{ marginBottom: "8px" }}>
-                          <strong>Planned Sale:</strong> This Form 144 represents a notice of intent to sell, not a
-                          completed transaction. The actual sale may occur over the specified time period.
+                          <strong>Planned Sale:</strong> {filing.summaryData?.plannedSaleNote || 'This Form 144 represents a notice of intent to sell, not a completed transaction. The actual sale may occur over the specified time period.'}
                         </li>
                         <li style={{ marginBottom: "8px" }}>
-                          <strong>Trading Plan:</strong> The sale is part of a pre-established 10b5-1 trading plan,
-                          indicating it was planned in advance and not based on material non-public information.
+                          <strong>Trading Plan:</strong> {filing.summaryData?.tradingPlanNote || 'The sale may be part of a pre-established trading plan, indicating it was planned in advance.'}
                         </li>
                         <li style={{ marginBottom: "8px" }}>
-                          <strong>Routine Transaction:</strong> CEO stock sales are common for diversification and
-                          liquidity purposes and do not necessarily indicate negative sentiment about the company.
+                          <strong>Transaction Context:</strong> {filing.summaryData?.transactionContext || 'Insider stock transactions are common for diversification and liquidity purposes and do not necessarily indicate sentiment about the company.'}
                         </li>
                         <li>
-                          <strong>Transparency:</strong> Form 144 filings provide advance notice to the market of
-                          potential insider selling, promoting transparency and fair markets.
+                          <strong>Transparency:</strong> {filing.summaryData?.transparencyNote || 'Form 144 filings provide advance notice to the market of potential insider selling, promoting transparency and fair markets.'}
                         </li>
                       </ul>
                     </td>
@@ -566,7 +562,7 @@ export default function Form144EmailTemplate({ filing }: Form144TemplateProps) {
           <tr>
             <td style={{ padding: "20px", textAlign: "center" }}>
               <a
-                href={filing.filingUrl}
+                href={filing.filingUrl || filing.url}
                 style={{
                   display: "inline-block",
                   padding: "12px 24px",

@@ -366,6 +366,10 @@ export async function summarizeFiling(options: SummarizationOptions): Promise<Su
       }
     );
     
+    // Log the company context being passed to the prompt
+    componentLogger.debug(`Company context for summaryId=${summaryId}: ticker=${filingRecordFromDB.ticker?.symbol}, companyName=${filingRecordFromDB.companyName}`);
+
+    
     // Check if we need to chunk the document due to token limits
     const estimatedTokens = estimateTokenCount(content);
     const maxTokenLimit = 150000; // Claude's max token limit is 200k, but leave buffer for prompt
@@ -455,6 +459,8 @@ export async function summarizeFiling(options: SummarizationOptions): Promise<Su
       
       // Parse the response
       const parsingStartTime = Date.now();
+      // Log the raw AI response for debugging
+      componentLogger.debug(`Raw AI response for summaryId=${summaryId}, filingType=${filingRecordFromDB.formType}:\n${summaryText.substring(0, 500)}...`);
       const parsedResult = parseResponse(summaryText);
       const parsingDuration = Date.now() - parsingStartTime;
       
@@ -493,6 +499,72 @@ export async function summarizeFiling(options: SummarizationOptions): Promise<Su
         monitoring.recordTiming('ai.parsing_duration', parsingDuration);
         componentLogger.warn(`Failed to parse valid JSON from response for summaryId=${summaryId}, filingType=${filingRecordFromDB!.formType}, errors=${parsedResult.errors?.join('; ')}, operationId=${operationId}`);
         monitoring.incrementCounter('ai.summarization_parsing_error', 1);
+        
+        // Check if the error is due to missing company field
+        const isMissingCompanyField = parsedResult.errors?.some(err => err.includes('Missing minimum required fields'));
+        
+        if (isMissingCompanyField && parsedResult.raw) {
+          try {
+            // Try to extract whatever JSON we can and inject the company name
+            componentLogger.info(`Attempting to recover from missing company field for summaryId=${summaryId}`);
+            
+            // Parse the raw JSON if available
+            // The ParseResult interface doesn't have partialData, but it might have partial data in the raw property
+            let parsedData: any = {};
+            
+            // Try to extract data from the raw JSON if available
+            if (parsedResult.raw) {
+              try {
+                // Try to parse the raw JSON
+                const extractedData = JSON.parse(parsedResult.raw);
+                if (extractedData && typeof extractedData === 'object') {
+                  parsedData = extractedData;
+                }
+              } catch (jsonError) {
+                componentLogger.warn(`Failed to parse raw JSON: ${jsonError instanceof Error ? jsonError.message : String(jsonError)}`);
+              }
+            }
+            
+            // Inject the company name from the filing record
+            if (filingRecordFromDB.companyName) {
+              parsedData.company = filingRecordFromDB.companyName;
+              componentLogger.info(`Injected company name '${filingRecordFromDB.companyName}' into parsed data`);
+              
+              // If we have a summary field, consider this a successful parse
+              if (parsedData.summary) {
+                await prisma.summary.update({
+                  where: { id: summaryId },
+                  data: {
+                    summaryText: parsedData.summary,
+                    processingStatus: 'COMPLETED',
+                    processingCompletedAt: new Date(),
+                    isPartialResult: false,
+                    processingTimeMs: Date.now() - startTime,
+                    tokensUsed: inputTokens + outputTokens,
+                    model: response.model,
+                    cost,
+                    attempts: response.executionMetadata?.attempts || 1
+                  }
+                });
+                
+                return {
+                  summaryId,
+                  summaryText: parsedData.summary,
+                  summaryJSON: parsedData,
+                  duration: Date.now() - startTime,
+                  modelUsed: response.model,
+                  inputTokens,
+                  outputTokens,
+                  cost,
+                  attempts: response.executionMetadata?.attempts || 1
+                };
+              }
+            }
+          } catch (recoveryError) {
+            componentLogger.error(`Failed to recover from missing company field: ${recoveryError instanceof Error ? recoveryError.message : String(recoveryError)}`);
+          }
+        }
+        
         await prisma.summary.update({
           where: { id: summaryId },
           data: {
