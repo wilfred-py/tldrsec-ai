@@ -1,4 +1,4 @@
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, Prisma } from '@prisma/client';
 import type { Ticker, Summary } from '../generated/prisma';
 import { ParsedFiling, FilingType, SECEdgarError, SECErrorCode } from './types';
 import { TickerResolver } from './ticker-service';
@@ -285,21 +285,42 @@ export class FilingStorage {
     for (let i = 0; i < filings.length; i += batchSize) {
       const batch = filings.slice(i, i + batchSize);
       
-      // Process each batch in a transaction for atomicity
       try {
+        // Create a temporary storage instance that uses the transaction
+        const tempStorage = new FilingStorage({
+          ...options,
+          defaultOptions: opts
+        });
+        
+        // Use a transaction with a timeout to ensure all filings are stored atomically
         await this.prisma.$transaction(async (tx: PrismaClient) => {
-          // Create a temporary filing storage with the transaction client
-          const tempStorage = new FilingStorage({
-            prisma: tx as unknown as PrismaClient,
-            tickerResolver: this.tickerResolver,
-            defaultOptions: opts
-          });
+          // Set the transaction client on the temporary storage
+          tempStorage.prisma = tx;
           
           // Store each filing in the batch
           for (const filing of batch) {
-            const result = await tempStorage.storeFiling(filing, opts);
-            results.push(result);
+            // Set a timeout using Promise.race to prevent long-running operations
+            const processingPromise = async () => {
+              const result = await tempStorage.storeFiling(filing, opts);
+              results.push(result);
+              return result;
+            };
+            
+            // Create a timeout promise
+            const timeoutPromise = new Promise((_, reject) => {
+              setTimeout(() => {
+                reject(new Error('Filing processing timeout after 5 seconds'));
+              }, 5000); // 5 seconds timeout per filing
+            });
+            
+            // Race the processing against the timeout
+            await Promise.race([processingPromise(), timeoutPromise]);
           }
+        }, {
+          // Set isolation level for better performance in serverless environments
+          // Using string literal since the enum might not be available in this version
+          isolationLevel: 'ReadCommitted',
+          maxWait: 5000 // 5 seconds max wait time for transaction to start
         });
       } catch (error) {
         console.error(`Error storing batch of ${batch.length} filings:`, error);
