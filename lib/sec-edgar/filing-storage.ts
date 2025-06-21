@@ -4,6 +4,8 @@ import { ParsedFiling, FilingType, SECEdgarError, SECErrorCode } from './types';
 import { TickerResolver } from './ticker-service';
 // Import notification functions
 import { notifyNewFiling, notifyFilingUpdate, notifySummaryReady } from '../email/notification-integration';
+// Import the global Prisma client
+import { prisma as globalPrisma } from '../db/prisma';
 
 /**
  * Options for filing operations
@@ -28,7 +30,8 @@ export class FilingStorage {
     tickerResolver?: TickerResolver;
     defaultOptions?: FilingStorageOptions;
   } = {}) {
-    this.prisma = options.prisma || new PrismaClient();
+    // Use the provided Prisma client or the global instance instead of creating a new one
+    this.prisma = options.prisma || globalPrisma;
     this.tickerResolver = options.tickerResolver || new TickerResolver({ prisma: this.prisma });
     
     // Default options
