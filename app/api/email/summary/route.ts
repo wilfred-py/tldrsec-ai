@@ -278,45 +278,36 @@ export async function POST(req: NextRequest) {
         }
       }
 
-      // Mark summaries as sent using the interactive transaction API
-      // This provides better error handling and control over transaction lifetime
+      // Mark summaries as sent using the interactive transaction API with retry logic
       try {
         // Extract summary IDs for updating
         const summaryIds = tickersWithSummaries.flatMap(ticker => 
           ticker.summaries.map(summary => summary.id)
         );
         
-        // Use the interactive transaction API
-        await prisma.$transaction(async (tx) => {
-          // Set a timeout using Promise.race to prevent long-running transactions
-          const transactionPromise = tx.summary.updateMany({
-            where: {
-              id: {
-                in: summaryIds
+        // Use the withRetry wrapper to handle potential connection issues
+        await prisma.$withRetry(async () => {
+          // Use the interactive transaction API with timeout
+          await prisma.$transaction(async (tx: PrismaClient) => {
+            // Mark summaries as sent
+            await tx.summary.updateMany({
+              where: {
+                id: { in: summaryIds }
+              },
+              data: {
+                sentToUser: true,
+                sentDate: new Date()
               }
-            },
-            data: {
-              sentToUser: true
-            }
+            });
+          }, {
+            maxWait: 5000, // 5 seconds max wait time
+            timeout: 10000 // 10 seconds timeout
           });
-          
-          // Create a timeout promise
-          const timeoutPromise = new Promise((_, reject) => {
-            setTimeout(() => {
-              reject(new Error('Transaction timeout after 5 seconds'));
-            }, 5000); // 5 seconds timeout
-          });
-          
-          // Race the transaction against the timeout
-          return await Promise.race([transactionPromise, timeoutPromise]);
-        }, {
-          // Set isolation level for better performance in serverless environments
-          isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted
         });
         
         console.log(`Successfully marked ${summaryIds.length} summaries as sent`);
       } catch (error) {
-        console.error('Error marking summaries as sent:', error);
+        console.error('Failed to mark summaries as sent after retries:', error);
         // Continue execution - we don't want to fail the email response just because
         // we couldn't mark the summaries as sent
       }
