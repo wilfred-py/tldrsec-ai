@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { prisma } from '@/lib/db/prisma';
-import { sendEmail } from '@/lib/email';
+import { Prisma } from '@prisma/client';
+import { sendEmail, EmailSendResult } from '@/lib/email';
 
 /**
  * Helper function to create test data for a user
@@ -277,28 +278,65 @@ export async function POST(req: NextRequest) {
         }
       }
 
-      // Mark summaries as sent
-      await prisma.$transaction([
-        prisma.summary.updateMany({
-          where: {
-            id: {
-              in: tickersWithSummaries.flatMap(ticker => 
-                ticker.summaries.map(summary => summary.id)
-              )
+      // Mark summaries as sent using the interactive transaction API
+      // This provides better error handling and control over transaction lifetime
+      try {
+        // Extract summary IDs for updating
+        const summaryIds = tickersWithSummaries.flatMap(ticker => 
+          ticker.summaries.map(summary => summary.id)
+        );
+        
+        // Use the interactive transaction API
+        await prisma.$transaction(async (tx) => {
+          // Set a timeout using Promise.race to prevent long-running transactions
+          const transactionPromise = tx.summary.updateMany({
+            where: {
+              id: {
+                in: summaryIds
+              }
+            },
+            data: {
+              sentToUser: true
             }
-          },
-          data: {
-            sentToUser: true
-          }
-        })
-      ]);
-
+          });
+          
+          // Create a timeout promise
+          const timeoutPromise = new Promise((_, reject) => {
+            setTimeout(() => {
+              reject(new Error('Transaction timeout after 5 seconds'));
+            }, 5000); // 5 seconds timeout
+          });
+          
+          // Race the transaction against the timeout
+          return await Promise.race([transactionPromise, timeoutPromise]);
+        }, {
+          // Set isolation level for better performance in serverless environments
+          isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted
+        });
+        
+        console.log(`Successfully marked ${summaryIds.length} summaries as sent`);
+      } catch (error) {
+        console.error('Error marking summaries as sent:', error);
+        // Continue execution - we don't want to fail the email response just because
+        // we couldn't mark the summaries as sent
+      }
+      
+      // Handle the case where emailResult might not have an id property
+      let emailId = 'unknown';
+      if (emailResult) {
+        if ('id' in emailResult && emailResult.id) {
+          emailId = emailResult.id;
+        } else if ('error' in emailResult) {
+          console.error('Email send error:', emailResult.error);
+        }
+      }
+      
       return NextResponse.json({
         success: true,
-        message: isDev && emailResult.id.startsWith('mock-email') 
+        message: isDev && emailId.startsWith?.('mock-email') 
           ? 'Email simulated successfully (development mode)' 
           : 'Email sent successfully',
-        emailId: emailResult.id,
+        emailId,
         development: isDev
       });
     } catch (error) {
