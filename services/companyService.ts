@@ -26,11 +26,8 @@ export async function findCompanyByTicker(ticker: string): Promise<SecCompanyInf
     console.log(`[DEBUG][companyService] Parsing CIK lookup response (length: ${(tickerResponse.data as string)?.length || 0} chars)`);
     const tickerData = tickerResponse.data as string;
     
-    // The format of ticker.txt is: ticker\tCIK (CIK may have leading zeros)
+    // The format of ticker.txt is: ticker	CIK (CIK may have leading zeros)
     // We need to find the line that contains our ticker (case insensitive)
-    // First, let's log a sample of the data to understand its format
-    const sampleLines = tickerData.split('\n').slice(0, 5);
-    console.log(`[DEBUG][companyService] Sample lines from ticker.txt:`, sampleLines);
     
     // Search for the ticker in a case-insensitive way
     const tickerUpperCase = ticker.toUpperCase();

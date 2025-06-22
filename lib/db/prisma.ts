@@ -72,8 +72,8 @@ const createPrismaClient = () => {
         url: process.env.DATABASE_URL,
       },
     },
-    // Add connection timeout
-    connectionTimeout: 10000, // 10 seconds
+    // Note: connectionTimeout is not supported by Prisma
+    // Connection timeouts are managed internally by Prisma
   });
 };
 

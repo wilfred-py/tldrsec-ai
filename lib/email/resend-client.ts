@@ -348,8 +348,8 @@ export class ResendClient {
     if (message.html) params.html = message.html;
     if (message.text) params.text = message.text;
     
-    // Pass through tags directly as they are now in the correct format
-    if (message.tags) {
+    // Use simple string tags as required by Resend API
+    if (message.tags && message.tags.length > 0) {
       params.tags = message.tags;
     }
     
