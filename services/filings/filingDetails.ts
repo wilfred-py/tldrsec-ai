@@ -61,6 +61,7 @@ export async function getFilingDetails(accessionNumber: string, cik: string): Pr
       accessionNumber,
       cik,
       filingDate: filingResponse.data.filingDate || '',
+      form: filingResponse.data.filingCode || '', // Use filingCode as form
       formType: filingResponse.data.filingCode || '',
       companyName: filingResponse.data.company || '',
       reportDate: filingResponse.data.reportDate || '',
@@ -414,7 +415,23 @@ export async function getFilingDetails(accessionNumber: string, cik: string): Pr
     
     secLogger.debug(`[DEBUG] Final filingDetails: primaryDocument=${filingDetails.primaryDocument}, documents.length=${filingDetails.documents.length}`);
     return filingDetails;
-  } catch (error) {
+  } catch (error: any) {
+    // Check if this is a 404 error from axios
+    if (error.response && error.response.status === 404) {
+      secLogger.warn(`Filing not found (404) for ${accessionNumber} - this may be a valid response for some tickers`);
+      // Return a minimal filing details object instead of throwing
+      return {
+        accessionNumber,
+        cik,
+        filingDate: '',
+        form: '', // Add required form property
+        formType: '',
+        companyName: '',
+        content: '',
+        documents: []
+      };
+    }
+    
     secLogger.error(`Error getting filing details for ${accessionNumber}`, error);
     throw new Error(`Failed to get details for filing ${accessionNumber}`);
   }

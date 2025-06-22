@@ -6,6 +6,8 @@ export const SEC_CONFIG = {
     `https://www.sec.gov/Archives/edgar/data/${cik}/${accessionNumber.replace(/-/g, '')}/index.json`,
   RAW_FILING_URL: (accessionNumber: string, cik: string) => 
     `https://www.sec.gov/Archives/edgar/data/${cik}/${accessionNumber.replace(/-/g, '')}/${accessionNumber}.txt`,
+  PRIMARY_DOC_URL: (accessionNumber: string, cik: string, primaryDocument: string) => 
+    `https://www.sec.gov/Archives/edgar/data/${cik}/${accessionNumber.replace(/-/g, '')}/${primaryDocument}`,
   HEADERS: {
     'User-Agent': 'tldrsec.app contact@tldrsec.app'
   }
