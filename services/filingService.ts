@@ -614,7 +614,7 @@ const filingService = {
             }
             
             // Set content to the response data
-            content = axiosResponse.data;
+            content = axiosResponse.data as string;
           } catch (error) {
             // Type assertion for the error
             const axiosError = error as { message: string };
@@ -731,37 +731,70 @@ const filingService = {
               return points;
             };
             
-            // Try to call the AI summarization function with error handling
+            // Function to attempt AI summarization with retry logic for rate limits
+            const attemptSummarization = async (attempt = 1, maxAttempts = 5) => {
+              try {
+                console.log(`[DEBUG][FilingService] Attempting AI summarization for ${ticker} - ${normalizedFormType} (attempt ${attempt}/${maxAttempts})`);
+                
+                const summaryResult = await summarizeFiling({
+                  filingId: filingId,
+                  summaryId: summaryId,
+                  requestId: `filing-summary-${ticker}-${normalizedFormType}-${Date.now()}`,
+                  documentContent: content
+                });
+                
+                console.log(`[DEBUG][FilingService] AI summarization completed for ${ticker} - ${normalizedFormType} on attempt ${attempt}`);
+                
+                // Extract the summary text and structured data
+                // Ensure summaryText is always a string
+                const resultText = typeof summaryResult.summaryText === 'string' 
+                  ? summaryResult.summaryText 
+                  : `Summary of ${normalizedFormType} filing for ${company.name} (${ticker})`;
+                
+                // Get the updated summary record with the AI-generated content
+                const updatedSummary = await prisma.summary.findUnique({
+                  where: { id: summaryId }
+                });
+                
+                // Parse the summary JSON to extract key points
+                const resultJSON = updatedSummary?.summaryJSON as Record<string, any> || {};
+                
+                return { text: resultText, json: resultJSON, success: true };
+              } catch (error: any) {
+                // Check if this is a rate limit error that we can retry
+                if (error && typeof error === 'object' && error.code === 'RATE_LIMITED' && error.isRetriable && typeof error.retryAfterSeconds === 'number') {
+                  if (attempt < maxAttempts) {
+                    const retryAfterMs = error.retryAfterSeconds * 1000;
+                    const resetTime = error.resetTime || 'unknown';
+                    console.log(`[INFO][FilingService] Rate limit hit for ${ticker} - ${normalizedFormType}. Waiting ${error.retryAfterSeconds} seconds before retry ${attempt}/${maxAttempts}. Reset time: ${resetTime}`);
+                    
+                    // Wait for the specified time before retrying
+                    await new Promise(resolve => setTimeout(resolve, retryAfterMs));
+                    
+                    // Retry the summarization
+                    return attemptSummarization(attempt + 1, maxAttempts);
+                  } else {
+                    console.error(`[ERROR][FilingService] Maximum retry attempts (${maxAttempts}) reached for ${ticker} - ${normalizedFormType}. Falling back to simple summary.`);
+                    throw error; // Exceeded max retries, will be caught by outer catch block
+                  }
+                } else {
+                  // For other errors, rethrow to be handled by the outer catch block
+                  throw error;
+                }
+              }
+            };
+            
+            // Try to call the AI summarization function with error handling and retry logic
             try {
-              console.log(`[DEBUG][FilingService] Attempting AI summarization for ${ticker} - ${normalizedFormType}`);
-              
-              const summaryResult = await summarizeFiling({
-                filingId: filingId,
-                summaryId: summaryId,
-                requestId: `filing-summary-${ticker}-${normalizedFormType}-${Date.now()}`,
-                documentContent: content
-              });
-              
-              console.log(`[DEBUG][FilingService] AI summarization completed for ${ticker} - ${normalizedFormType}`);
-              
-              // Extract the summary text and structured data
-              // Ensure summaryText is always a string
-              summaryText = typeof summaryResult.summaryText === 'string' 
-                ? summaryResult.summaryText 
-                : `Summary of ${normalizedFormType} filing for ${company.name} (${ticker})`;
-              
-              // Get the updated summary record with the AI-generated content
-              const updatedSummary = await prisma.summary.findUnique({
-                where: { id: summaryId }
-              });
-              
-              // Parse the summary JSON to extract key points
-              summaryJSON = updatedSummary?.summaryJSON as Record<string, any> || {};
-            } catch (aiError) {
-              console.error(`[ERROR][FilingService] AI summarization failed for ${ticker} - ${normalizedFormType}:`, aiError);
+              // Start the summarization process with potential retries
+              const result = await attemptSummarization();
+              summaryText = result.text;
+              summaryJSON = result.json;
+            } catch (aiError: any) {
+              console.error(`[ERROR][FilingService] AI summarization failed for ${ticker} - ${normalizedFormType} after retries:`, aiError);
               console.log(`[DEBUG][FilingService] Using fallback summary generation for ${ticker} - ${normalizedFormType}`);
               
-              // Use fallback summary generation
+              // Use fallback summary generation only for non-rate-limit errors or if retries failed
               summaryText = `Summary of ${normalizedFormType} filing for ${company.name} (${ticker}). Filed on ${new Date(filing.filingDate).toLocaleDateString()}.`;
               
               // Create basic fallback key points
