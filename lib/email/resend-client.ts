@@ -220,7 +220,15 @@ export class ResendClient {
               tags: emailParams.tags
             });
             
+            // Log the full response for debugging
+            console.log('RESEND API RESPONSE:', JSON.stringify(response, null, 2));
+            
             if (!response.data || !response.data.id) {
+              console.log('RESEND API ERROR: No ID returned in response', {
+                responseData: response.data,
+                // Only log what's available in the CreateEmailResponse type
+                responseType: typeof response
+              });
               throw createExternalApiError('Failed to send email: No ID returned', {
                 response
               }, true, requestId);
@@ -264,7 +272,8 @@ export class ResendClient {
       
       // Normalize and log error
       const normalizedError = this.normalizeError(error, requestId);
-      logger.error(`Failed to send email: ${normalizedError.message}`, normalizedError, {
+      logger.error(`Failed to send email: ${normalizedError.message}`, {
+        ...normalizedError,
         subject: message.subject,
         to: emailParams.to,
         requestId
@@ -319,6 +328,9 @@ export class ResendClient {
    * @returns Properly formatted email parameters
    */
   private prepareEmailParams(message: EmailMessage): Record<string, any> {
+    // Log the raw message for debugging
+    console.log('RESEND PREPARE PARAMS - Raw message:', JSON.stringify(message, null, 2));
+    
     const params: Record<string, any> = {
       from: message.from || resendConfig.defaultFrom,
       to: this.formatRecipients(message.to),
@@ -335,13 +347,10 @@ export class ResendClient {
     // Add optional parameters
     if (message.html) params.html = message.html;
     if (message.text) params.text = message.text;
-    // Format tags as objects with name and value properties as required by Resend API
-    // Sanitize tag names to only contain ASCII letters, numbers, underscores, or dashes
-    if (message.tags) {
-      params.tags = message.tags.map(tag => ({
-        name: tag.replace(/[^a-zA-Z0-9_-]/g, '_'),
-        value: 'true'
-      }));
+    
+    // Use simple string tags as required by Resend API
+    if (message.tags && message.tags.length > 0) {
+      params.tags = message.tags;
     }
     
     // Add CC and BCC if present
