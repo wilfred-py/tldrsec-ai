@@ -212,14 +212,18 @@ export class SummarizationError extends Error {
   code: string;
   reason?: string;
   isRetriable: boolean;
-  
+  retryAfterSeconds?: number;
+  resetTime?: string;
+
   constructor(
     message: string, 
     summaryId: string, 
     filingType: string, 
     code: string = 'SUMMARIZATION_FAILED',
     isRetriable: boolean = false,
-    reason?: string
+    reason?: string,
+    retryAfterSeconds?: number,
+    resetTime?: string
   ) {
     super(message);
     this.name = 'SummarizationError';
@@ -228,6 +232,8 @@ export class SummarizationError extends Error {
     this.code = code;
     this.isRetriable = isRetriable;
     this.reason = reason;
+    this.retryAfterSeconds = retryAfterSeconds;
+    this.resetTime = resetTime;
   }
 }
 
@@ -595,9 +601,22 @@ export async function summarizeFiling(options: SummarizationOptions): Promise<Su
     } catch (error) {
       componentLogger.error(`Error calling Claude API for filing ${filingId}, summary ${summaryId}: ${error instanceof Error ? error.message : String(error)} (filingType: ${filingRecordFromDB!.formType}, operationId: ${operationId})`);
       monitoring.incrementCounter('ai.summarization_error', 1);
+      
       const isRetriable = error instanceof ApiError && error.isRetriable;
       const isRateLimit = error instanceof ApiError && error.code === ErrorCode.RATE_LIMITED;
-      if (!isRetriable || (error instanceof ApiError && error.code === ErrorCode.RETRY_EXHAUSTED)) {
+      
+      // Extract retry information if this is a rate limit error
+      let retryAfterSeconds: number | undefined;
+      let resetTime: string | undefined;
+      
+      if (isRateLimit && error instanceof ApiError) {
+        retryAfterSeconds = error.details?.retryAfterSeconds;
+        resetTime = error.details?.resetTime;
+        
+        componentLogger.warn(`Rate limit hit. Retry after ${retryAfterSeconds} seconds. Reset time: ${resetTime}`);
+      }
+      
+      if (!isRetriable && !isRateLimit) {
         await prisma.summary.update({
           where: { id: summaryId },
           data: {
@@ -608,13 +627,16 @@ export async function summarizeFiling(options: SummarizationOptions): Promise<Su
           }
         });
       }
+      
       throw new SummarizationError(
         `Claude API error: ${error instanceof Error ? error.message : String(error)}`,
         summaryId,
         filingRecordFromDB!.formType,
         error instanceof ApiError ? error.code : 'AI_ERROR',
         isRetriable || isRateLimit,
-        error instanceof ApiError ? error.code : 'ai_error'
+        error instanceof ApiError ? error.code : 'ai_error',
+        retryAfterSeconds,
+        resetTime
       );
     }
   } catch (error) {
