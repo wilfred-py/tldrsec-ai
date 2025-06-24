@@ -335,6 +335,7 @@ export class ResendClient {
     // Add optional parameters
     if (message.html) params.html = message.html;
     if (message.text) params.text = message.text;
+    
     // Format tags as objects with name and value properties as required by Resend API
     // Sanitize tag names to only contain ASCII letters, numbers, underscores, or dashes
     if (message.tags) {
