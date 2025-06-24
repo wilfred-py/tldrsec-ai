@@ -23,6 +23,7 @@ export enum EmailType {
   DIGEST = 'digest',
   ALERT = 'alert',
   WELCOME = 'welcome',
+  FORM4 = 'form4',
   PASSWORD_RESET = 'password-reset',
   VERIFICATION = 'verification',
 }
@@ -57,7 +58,7 @@ export interface EmailMessage {
   html?: string;
   text?: string;
   attachments?: EmailAttachment[];
-  tags?: string[];
+  tags?: string[] | Array<{name: string; value?: string}>; // Support both string[] and object format
 }
 
 /**
@@ -103,4 +104,106 @@ export interface EmailVerificationResult {
   isValid: boolean;
   reason?: string;
   suggestions?: string[];
+}
+
+/**
+ * Filing template data structure
+ */
+export interface FilingTemplateData {
+  companyName: string;
+  symbol: string;
+  ticker?: string; // Alternative to symbol
+  filingType: string;
+  filingDate: string;
+  filingUrl: string;
+  url?: string; // Alternative to filingUrl
+  summaryText?: string; // Additional summary text
+  summaryData?: {
+    // Form 11-K specific
+    planName?: string;
+    planYear?: string;
+    totalParticipants?: number;
+    activeParticipants?: number;
+    participationRate?: string;
+    averageAccountBalance?: number;
+    companyMatch?: number;
+    newInvestmentOptions?: string;
+    planExpenses?: string;
+    planAssets?: Array<{
+      category: string;
+      value2023: number;
+      value2022: number;
+      change: number;
+    }>;
+    totalPlanAssets?: number;
+    totalPlanAssets2022?: number;
+    totalPlanAssetsChange?: number;
+    investmentOptions?: Array<{
+      name: string;
+      return: number;
+      assets: number;
+    }>;
+
+    // Form 144 specific
+    reportingPerson?: string;
+    position?: string;
+    saleDate?: string;
+    transactionDate?: string;
+    securityType?: string;
+    shareAmount?: string;
+    amount?: string;
+    priceRange?: string;
+    price?: string;
+    totalValue?: string;
+    broker?: string;
+    tradingPlan?: string;
+    percentOwnership?: string;
+    transactionType?: string;
+    sharesOwned?: string;
+    sharesSold?: string;
+    sharesRemaining?: string;
+    percentOwnershipAfter?: string;
+    plannedSaleNote?: string;
+    tradingPlanNote?: string;
+    transactionContext?: string;
+    transparencyNote?: string;
+
+    // Form DEF 14A specific
+    meetingDate?: string;
+    meetingLocation?: string;
+    boardIndependence?: string;
+    boardDiversity?: string;
+    committeeChanges?: string;
+    termLimits?: string;
+    boardChanges?: Array<{
+      name: string;
+      role: string;
+      change: string;
+    }>;
+    proposalSummaries?: Array<{
+      title: string;
+      description: string;
+      boardRecommendation: string;
+    }>;
+
+    // Schedule 13D specific
+    acquisitionDate?: string;
+    purpose?: string;
+    sharesBeneficiallyOwned?: number;
+    ownershipPercentage?: number;
+    soleVotingPower?: number;
+    soleDispositivePower?: number;
+    aggregatePurchasePrice?: string;
+    pricePerShare?: string;
+    investmentValue?: number;
+    timeline?: string;
+    marketImpact?: string;
+    investmentContext?: string;
+    
+    // General summary data fields
+    changeDirection?: 'increase' | 'decrease';
+    changeAmount?: string;
+    changePercent?: string;
+    footnote?: string;
+  };
 } 

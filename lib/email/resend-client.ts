@@ -207,7 +207,15 @@ export class ResendClient {
               tags: emailParams.tags
             });
             
+            // Log the full response for debugging
+            console.log('RESEND API RESPONSE:', JSON.stringify(response, null, 2));
+            
             if (!response.data || !response.data.id) {
+              console.log('RESEND API ERROR: No ID returned in response', {
+                responseData: response.data,
+                // Only log what's available in the CreateEmailResponse type
+                responseType: typeof response
+              });
               throw createExternalApiError('Failed to send email: No ID returned', {
                 response
               }, true, requestId);
@@ -251,7 +259,13 @@ export class ResendClient {
       
       // Normalize and log error
       const normalizedError = this.normalizeError(error, requestId);
-      logger.error(`Failed to send email: ${normalizedError.message} | subject: ${message.subject} | to: ${JSON.stringify(emailParams.to)} | requestId: ${requestId}`);
+
+      logger.error(`Failed to send email: ${normalizedError.message}`, {
+        ...normalizedError,
+        subject: message.subject,
+        to: emailParams.to,
+        requestId
+      });
       
       // Return failure result
       return {
