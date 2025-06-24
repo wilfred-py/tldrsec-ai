@@ -131,19 +131,11 @@ export class ResendClient {
     // Prepare email parameters - ensure we have from address
     const emailParams = this.prepareEmailParams(message);
     
-    logger.info(`Sending email to ${Array.isArray(message.to) ? message.to.length + ' recipients' : message.to}`, {
-      subject: message.subject,
-      requestId
-    });
+    logger.info(`Sending email to ${Array.isArray(message.to) ? message.to.length + ' recipients' : message.to} | subject: ${message.subject} | requestId: ${requestId}`);
     
     // If we're using a dummy client in non-production, log and return success without sending
     if (this.isDummyClient) {
-      logger.info(`[DUMMY] Would send email to ${Array.isArray(message.to) ? message.to : [message.to]}`, {
-        subject: message.subject,
-        html: message.html?.substring(0, 100) + '...',
-        text: message.text?.substring(0, 100) + '...',
-        requestId
-      });
+      logger.info(`[DUMMY] Would send email to ${Array.isArray(message.to) ? message.to : [message.to]} | subject: ${message.subject} | html: ${message.html?.substring(0, 50)}... | text: ${message.text?.substring(0, 50)}... | requestId: ${requestId}`);
       
       // Return a dummy successful result
       return {
@@ -170,12 +162,7 @@ export class ResendClient {
         ...options.retryConfig,
         maxRetries: options.retryConfig?.maxRetries || resendConfig.retryAttempts,
         onRetry: (error, attempt, delay) => {
-          logger.warn(`Retry attempt ${attempt} for Resend API after ${delay}ms delay`, {
-            error: error.message,
-            attempt,
-            delay,
-            requestId
-          });
+          logger.warn(`Retry attempt ${attempt} for Resend API after ${delay}ms delay | error: ${error.message} | requestId: ${requestId}`);
           
           monitoring.incrementCounter('email.retry', 1);
         }
@@ -272,6 +259,7 @@ export class ResendClient {
       
       // Normalize and log error
       const normalizedError = this.normalizeError(error, requestId);
+
       logger.error(`Failed to send email: ${normalizedError.message}`, {
         ...normalizedError,
         subject: message.subject,
