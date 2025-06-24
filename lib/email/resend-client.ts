@@ -131,19 +131,11 @@ export class ResendClient {
     // Prepare email parameters - ensure we have from address
     const emailParams = this.prepareEmailParams(message);
     
-    logger.info(`Sending email to ${Array.isArray(message.to) ? message.to.length + ' recipients' : message.to}`, {
-      subject: message.subject,
-      requestId
-    });
+    logger.info(`Sending email to ${Array.isArray(message.to) ? message.to.length + ' recipients' : message.to} | subject: ${message.subject} | requestId: ${requestId}`);
     
     // If we're using a dummy client in non-production, log and return success without sending
     if (this.isDummyClient) {
-      logger.info(`[DUMMY] Would send email to ${Array.isArray(message.to) ? message.to : [message.to]}`, {
-        subject: message.subject,
-        html: message.html?.substring(0, 100) + '...',
-        text: message.text?.substring(0, 100) + '...',
-        requestId
-      });
+      logger.info(`[DUMMY] Would send email to ${Array.isArray(message.to) ? message.to : [message.to]} | subject: ${message.subject} | html: ${message.html?.substring(0, 50)}... | text: ${message.text?.substring(0, 50)}... | requestId: ${requestId}`);
       
       // Return a dummy successful result
       return {
@@ -170,12 +162,7 @@ export class ResendClient {
         ...options.retryConfig,
         maxRetries: options.retryConfig?.maxRetries || resendConfig.retryAttempts,
         onRetry: (error, attempt, delay) => {
-          logger.warn(`Retry attempt ${attempt} for Resend API after ${delay}ms delay`, {
-            error: error.message,
-            attempt,
-            delay,
-            requestId
-          });
+          logger.warn(`Retry attempt ${attempt} for Resend API after ${delay}ms delay | error: ${error.message} | requestId: ${requestId}`);
           
           monitoring.incrementCounter('email.retry', 1);
         }
@@ -264,11 +251,7 @@ export class ResendClient {
       
       // Normalize and log error
       const normalizedError = this.normalizeError(error, requestId);
-      logger.error(`Failed to send email: ${normalizedError.message}`, normalizedError, {
-        subject: message.subject,
-        to: emailParams.to,
-        requestId
-      });
+      logger.error(`Failed to send email: ${normalizedError.message} | subject: ${message.subject} | to: ${JSON.stringify(emailParams.to)} | requestId: ${requestId}`);
       
       // Return failure result
       return {
@@ -319,6 +302,9 @@ export class ResendClient {
    * @returns Properly formatted email parameters
    */
   private prepareEmailParams(message: EmailMessage): Record<string, any> {
+    // Log the raw message for debugging
+    console.log('RESEND PREPARE PARAMS - Raw message:', JSON.stringify(message, null, 2));
+    
     const params: Record<string, any> = {
       from: message.from || resendConfig.defaultFrom,
       to: this.formatRecipients(message.to),
@@ -335,13 +321,10 @@ export class ResendClient {
     // Add optional parameters
     if (message.html) params.html = message.html;
     if (message.text) params.text = message.text;
-    // Format tags as objects with name and value properties as required by Resend API
-    // Sanitize tag names to only contain ASCII letters, numbers, underscores, or dashes
-    if (message.tags) {
-      params.tags = message.tags.map(tag => ({
-        name: tag.replace(/[^a-zA-Z0-9_-]/g, '_'),
-        value: 'true'
-      }));
+    
+    // Use simple string tags as required by Resend API
+    if (message.tags && message.tags.length > 0) {
+      params.tags = message.tags;
     }
     
     // Add CC and BCC if present
