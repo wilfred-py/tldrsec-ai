@@ -219,7 +219,7 @@ const filingService = {
         subject: `SEC Filing Summaries - ${new Date().toLocaleDateString()}`,
         html: emailHtml,
         text: generatePlainTextEmail(summaries, errors),
-        tags: ['type:summaries', 'content:filings'],
+        tags: ['type_summaries', 'content_filings'], // Using simple string tags with underscores instead of colons
         replyTo: 'no-reply@tldrsec.app'
       };
       

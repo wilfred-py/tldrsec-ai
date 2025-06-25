@@ -136,6 +136,7 @@ export class ResendClient {
     // If we're using a dummy client in non-production, log and return success without sending
     if (this.isDummyClient) {
       logger.info(`[DUMMY] Would send email to ${Array.isArray(message.to) ? message.to : [message.to]} | subject: ${message.subject} | html: ${message.html?.substring(0, 50)}... | text: ${message.text?.substring(0, 50)}... | requestId: ${requestId}`);
+
       
       // Return a dummy successful result
       return {
@@ -161,6 +162,7 @@ export class ResendClient {
         ...DefaultRetryConfig,
         ...options.retryConfig,
         maxRetries: options.retryConfig?.maxRetries || resendConfig.retryAttempts,
+
         onRetry: (error, attempt, delay) => {
           logger.warn(`Retry attempt ${attempt} for Resend API after ${delay}ms delay | error: ${error.message} | requestId: ${requestId}`);
           
@@ -175,7 +177,7 @@ export class ResendClient {
       
       // Use the retry system with circuit breaker
       const result = await this.limiter.schedule(() => 
-        executeWithRetry(
+        executeWithRetry<any>(
           async () => {
             // Use standard AbortController for fetch API
             const fetchController = new AbortController();
@@ -194,19 +196,26 @@ export class ResendClient {
               );
             }
             
-            const response = await this.resend.emails.send({
+            // Ensure we have text content as it's required by the Resend API
+            if (!emailParams.text && emailParams.html) {
+              emailParams.text = emailParams.html.replace(/<[^>]*>/g, '');
+            }
+            
+            // Note: Resend API doesn't support AbortController signal in its type definitions
+            // We'll handle timeout separately if needed
+            const response = await this.resend!.emails.send({
               from: emailParams.from,
               to: emailParams.to,
               subject: emailParams.subject,
               html: emailParams.html,
-              text: emailParams.text,
-              replyTo: emailParams.reply_to,
+              text: emailParams.text || (emailParams.html ? emailParams.html.replace(/<[^>]*>/g, '') : ''),
+              replyTo: emailParams.replyTo,
               cc: emailParams.cc,
               bcc: emailParams.bcc,
               attachments: emailParams.attachments,
               tags: emailParams.tags
             });
-            
+       
             // Log the full response for debugging
             console.log('RESEND API RESPONSE:', JSON.stringify(response, null, 2));
             
@@ -216,12 +225,26 @@ export class ResendClient {
                 // Only log what's available in the CreateEmailResponse type
                 responseType: typeof response
               });
+
               throw createExternalApiError('Failed to send email: No ID returned', {
                 response
               }, true, requestId);
             }
             
-            return response;
+            // Increment success counter
+            this.totalSent++;
+            
+            // Record timing
+            const duration = Date.now() - startTime;
+            
+            // Log success
+            logger.info(`Email sent successfully in ${duration}ms. ID: ${response.data.id}, To: ${emailParams.to}, Subject: ${message.subject}, RequestId: ${requestId}`);
+            
+            return {
+              id: response.data.id,
+              to: emailParams.to,
+              success: true
+            };
           },
           this.serviceName,
           retryConfig,
@@ -245,7 +268,7 @@ export class ResendClient {
         to: emailParams.to,
         success: true
       };
-    } catch (error) {
+    } catch (error: any) {
       // Record timing metrics for failure
       // monitoring.stopTimer('email.send');
       // monitoring.recordValue('email.send.duration', Date.now() - startTime, {
@@ -260,6 +283,7 @@ export class ResendClient {
       // Normalize and log error
       const normalizedError = this.normalizeError(error, requestId);
 
+
       logger.error(`Failed to send email: ${normalizedError.message}`, {
         ...normalizedError,
         subject: message.subject,
@@ -273,7 +297,7 @@ export class ResendClient {
         success: false,
         error: {
           message: normalizedError.message,
-          code: normalizedError.code
+          code: normalizedError.code || 'unknown_error'
         }
       };
     } finally {
@@ -315,6 +339,7 @@ export class ResendClient {
    * @param message The email message
    * @returns Properly formatted email parameters
    */
+
   private prepareEmailParams(message: EmailMessage): Record<string, any> {
     // Log the raw message for debugging
     console.log('RESEND PREPARE PARAMS - Raw message:', JSON.stringify(message, null, 2));
@@ -325,11 +350,11 @@ export class ResendClient {
       subject: message.subject
     };
     
-    // Format reply_to as a string as required by Resend API
+    // Format replyTo as a string as required by Resend API
     if (message.replyTo) {
-      params.reply_to = message.replyTo;
+      params.replyTo = message.replyTo;
     } else if (resendConfig.defaultReplyTo) {
-      params.reply_to = resendConfig.defaultReplyTo;
+      params.replyTo = resendConfig.defaultReplyTo;
     }
     
     // Add optional parameters
@@ -337,6 +362,7 @@ export class ResendClient {
     if (message.text) params.text = message.text;
     
     // Use simple string tags as required by Resend API
+
     if (message.tags && message.tags.length > 0) {
       params.tags = message.tags;
     }
