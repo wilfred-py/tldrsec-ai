@@ -11,21 +11,33 @@ declare global {
   var prisma: PrismaClient | undefined
 }
 
-// Use a try-catch to handle potential initialization errors
+/**
+ * Configure Prisma client with improved connection handling
+ * 
+ * Note: Connection pool settings are configured via the DATABASE_URL
+ * connection string parameters. To improve connection handling:
+ * 1. Add ?connection_limit=30 to increase max connections (default is 21)
+ * 2. Add &pool_timeout=30 to increase timeout (default is 10 seconds)
+ * 3. Add &connection_timeout=20000 to increase connection timeout
+ * 
+ * Example: postgresql://user:password@host:port/database?connection_limit=30&pool_timeout=30
+ */
+
+// Use a singleton pattern to prevent connection pool exhaustion
 let prisma: PrismaClient
 
 if (process.env.NODE_ENV === 'production') {
   prisma = new PrismaClient({
-    log: ['error', 'warn'],
+    log: ['error', 'warn']
   })
 } else {
   if (!global.prisma) {
     global.prisma = new PrismaClient({
-      // Remove 'query' from log levels to reduce CLI clutter
-      log: ['error', 'warn'],
+      log: ['error', 'warn']
     })
   }
   prisma = global.prisma
 }
 
-export { prisma } 
+// Export the singleton instance
+export { prisma }

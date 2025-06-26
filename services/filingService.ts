@@ -12,6 +12,9 @@ import { JsonObject } from '@prisma/client/runtime/library';
 // Import the email client and types
 import { emailClient, EmailMessage } from '../lib/email';
 
+// Import database connection manager for optimizing connections
+import { optimizeConnections, checkDatabaseConnection } from '../lib/db/connection-manager';
+
 // Mock filing data for demonstration
 const mockFilings: FilingLog[] = [
   {
@@ -150,6 +153,14 @@ const filingService = {
   // Send an email summary of the latest filings
   sendEmailSummary: async (email: string, tickers: string[] = ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'META'], debug: boolean = false) => {
     try {
+      // Check database connection before starting
+      await checkDatabaseConnection()
+        .catch(err => console.error('[ERROR][FilingService] Database connection check failed:', err));
+      
+      // Optimize connections before heavy database operations
+      await optimizeConnections()
+        .catch(err => console.error('[ERROR][FilingService] Failed to optimize database connections:', err));
+      
       const summaries: FilingSummaryResult[] = [];
       const errors: {ticker: string, error: string}[] = [];
       
@@ -335,6 +346,10 @@ const filingService = {
         success: false,
         error: error instanceof Error ? error.message : 'Failed to send email summary'
       };
+    } finally {
+      // Always optimize connections after completing operations
+      await optimizeConnections()
+        .catch(err => console.error('[ERROR][FilingService] Failed to optimize connections after email sending:', err));
     }
   },
   
@@ -342,6 +357,14 @@ const filingService = {
   getFilingSummary: async (ticker: string, formType: FilingType): Promise<{ data: FilingSummaryResult | null, error?: string }> => {
     try {
       console.log(`[DEBUG][FilingService] Getting summary for ${ticker} - ${formType}`);
+      
+      // Check database connection before starting
+      await checkDatabaseConnection()
+        .catch(err => console.error('[ERROR][FilingService] Database connection check failed in getFilingSummary:', err));
+      
+      // Optimize connections before database operations
+      await optimizeConnections()
+        .catch(err => console.error('[ERROR][FilingService] Failed to optimize database connections in getFilingSummary:', err));
       
       // Variables to store summary data
       let summaryText = '';
@@ -373,7 +396,7 @@ const filingService = {
             }
           });
           
-          if (false && existingSummary) { // Temporarily bypassed cache for testing
+          if (existingSummary) { // Temporarily bypassed cache for testing
             console.log(`[INFO][FilingService] Found existing summary in database for ${ticker} - ${formType}`);
             // Parse the JSON data from the database
             const summaryData = existingSummary?.summaryJSON as Record<string, any> || {};
@@ -383,9 +406,7 @@ const filingService = {
             return {
               data: {
                 ticker: ticker,
-                companyName: tickerRecord?.companyName || ticker,
-                filingType: formType as FilingType,
-                filingDate: existingSummary?.filingDate?.toISOString() || new Date().toISOString(),
+                companyName: tickerRecord?.companyName || ticker, filingType: formType as FilingType, filingDate: existingSummary?.filingDate?.toISOString() || new Date().toISOString(),
                 accessionNumber: summaryData.accessionNumber || 'unknown',
                 url: existingSummary?.url || existingSummary?.filingUrl || '',
                 summaryText: existingSummary?.summaryText || '',
@@ -613,8 +634,8 @@ const filingService = {
               return { data: null, error: `Failed to fetch document: ${axiosResponse.status} ${axiosResponse.statusText}` };
             }
             
-            // Set content to the response data
-            content = axiosResponse.data;
+            // Set content to the response data with type assertion
+            content = axiosResponse.data as string;
           } catch (error) {
             // Type assertion for the error
             const axiosError = error as { message: string };
@@ -948,6 +969,10 @@ const filingService = {
         data: null, 
         error: error instanceof Error ? error.message : `Failed to generate summary for ${ticker}` 
       };
+    } finally {
+      // Always optimize connections after completing operations
+      await optimizeConnections()
+        .catch(err => console.error('[ERROR][FilingService] Failed to optimize connections after getFilingSummary:', err));
     }
   }
 };
