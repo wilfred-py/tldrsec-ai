@@ -34,9 +34,34 @@ export async function getForm144Summary(ticker: string): Promise<FilingSummary> 
     }
 
     // Get full filing details with content
-    const filingDetails = await filingService.getFilingById(latestFiling.accessionNumber);
-    if (!filingDetails || !filingDetails.data) {
-      throw new Error(`Could not retrieve filing content for ${latestFiling.accessionNumber}`);
+    let filingDetails;
+    try {
+      filingDetails = await filingService.getFilingById(latestFiling.accessionNumber);
+      if (!filingDetails || !filingDetails.data) {
+        secLogger.warn(`Could not retrieve filing content for ${latestFiling.accessionNumber}, using fallback data`);
+        // Create fallback filing details with available data
+        filingDetails = {
+          data: {
+            filingDate: latestFiling.filingDate || new Date().toISOString().split('T')[0],
+            metadata: {
+              companyName: companyInfo.name,
+              cik: companyInfo.cik
+            }
+          }
+        };
+      }
+    } catch (error) {
+      secLogger.error(`Error retrieving filing content for ${latestFiling.accessionNumber}:`, { error });
+      // Create fallback filing details with available data
+      filingDetails = {
+        data: {
+          filingDate: latestFiling.filingDate || new Date().toISOString().split('T')[0],
+          metadata: {
+            companyName: companyInfo.name,
+            cik: companyInfo.cik
+          }
+        }
+      };
     }
 
     // Generate filing summary

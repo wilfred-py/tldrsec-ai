@@ -5,7 +5,6 @@ import { parseFormContent, extractImportantContent, ParsedContent } from '../lib
 import { generateSystemPrompt, generateUserPrompt } from '../lib/ai/sec-prompts';
 import axios from 'axios';
 import { summarizeFiling } from '../lib/ai/summarize';
-import * as secService from './secService';
 import { prisma } from '../lib/db';
 import { JsonObject } from '@prisma/client/runtime/library';
 
@@ -15,94 +14,11 @@ import { emailClient, EmailMessage } from '../lib/email';
 // Import database connection manager for optimizing connections
 import { optimizeConnections, checkDatabaseConnection } from '../lib/db/connection-manager';
 
-// Mock filing data for demonstration
-const mockFilings: FilingLog[] = [
-  {
-    id: '1',
-    ticker: 'AAPL',
-    company: 'Apple Inc.',
-    filingName: 'Annual Report',
-    filingCode: '10-K',
-    filingDate: '2025-02-15',
-    status: 'completed',
-    details: {
-      revenue: '$394.3B',
-      operatingMargin: '30.3%',
-      eps: '$6.14',
-      yoy: {
-        revenue: '+8.1%',
-        margin: '+1.2%',
-        eps: '+10.4%'
-      },
-      keyInsights: [
-        'Record services revenue of $85.2B, up 17% year-over-year',
-        'Returned over $110B to shareholders through dividends and share repurchases',
-        'Announced new AI features across product lineup'
-      ],
-      riskFactors: [
-        'Increasing regulatory scrutiny in key markets',
-        'Supply chain constraints affecting product availability',
-        'Intensifying competition in services segment'
-      ]
-    }
-  },
-  {
-    id: '2',
-    ticker: 'MSFT',
-    company: 'Microsoft Corporation',
-    filingName: 'Quarterly Report',
-    filingCode: '10-Q',
-    filingDate: '2025-04-28',
-    status: 'completed',
-    details: {
-      revenue: '$52.7B',
-      operatingMargin: '42.1%',
-      eps: '$2.45',
-      yoy: {
-        revenue: '+12.3%',
-        margin: '+2.5%',
-        eps: '+14.0%'
-      },
-      keyInsights: [
-        'Azure revenue growth accelerated to 31% year-over-year',
-        'AI-powered Copilot services driving new commercial bookings',
-        'Operating margins expanded across all business segments'
-      ],
-      riskFactors: [
-        'Potential economic slowdown affecting enterprise spending',
-        'Cybersecurity threats targeting cloud infrastructure',
-        'Increasing competition in AI services'
-      ]
-    }
-  },
-  {
-    id: '3',
-    ticker: 'AMZN',
-    company: 'Amazon.com Inc.',
-    filingName: 'Current Report',
-    filingCode: '8-K',
-    filingDate: '2025-05-10',
-    status: 'completed'
-  },
-  {
-    id: '4',
-    ticker: 'GOOGL',
-    company: 'Alphabet Inc.',
-    filingName: 'Quarterly Report',
-    filingCode: '10-Q',
-    filingDate: '2025-05-02',
-    status: 'started'
-  },
-  {
-    id: '5',
-    ticker: 'META',
-    company: 'Meta Platforms Inc.',
-    filingName: 'Annual Report',
-    filingCode: '10-K',
-    filingDate: '2025-03-20',
-    status: 'failed'
-  }
-];
+// Import actual filing service functions
+import { getFilingById as fetchFilingById } from './filing/getFilingById';
+
+// Import SEC service for getting filings by ticker and other operations
+import * as secService from './secService';
 
 // Filing processing status types
 export type FilingProcessStatus = 'queued' | 'processing' | 'completed' | 'failed';
@@ -135,19 +51,41 @@ export interface FilingSummaryResult {
 }
 
 const filingService = {
-  // Get all filing logs
-  getFilingLogs: async () => {
-    // Simulate API call delay
-    await new Promise(resolve => setTimeout(resolve, 500));
-    return { data: mockFilings };
+  // Get latest filing by type
+  getLatestFilingByType: async (ticker: string, formType: FilingType) => {
+    try {
+      // First get company info from ticker
+      const secCompany = await secService.findCompanyByTicker(ticker);
+      
+      if (!secCompany) {
+        throw new Error(`Company not found for ticker: ${ticker}`);
+      }
+      
+      // Convert SecCompanyInfo to CompanyInfo
+      // The CompanyInfo interface only requires cik, name, and optional ticker
+      const company = {
+        cik: secCompany.cik,
+        name: secCompany.name,
+        ticker: secCompany.ticker
+      };
+      
+      // Use SEC service to get latest filing by form type with company info
+      return await secService.getLatestFilingByFormType(company, formType);
+    } catch (error) {
+      console.error(`[ERROR][FilingService] Error fetching latest ${formType} filing for ${ticker}:`, error);
+      throw error;
+    }
   },
   
   // Get filing details by ID
   getFilingById: async (id: string) => {
-    // Simulate API call delay
-    await new Promise(resolve => setTimeout(resolve, 300));
-    const filing = mockFilings.find(f => f.id === id);
-    return { data: filing };
+    try {
+      // Use the actual implementation from services/filing/getFilingById.ts
+      return await fetchFilingById(id);
+    } catch (error) {
+      console.error(`[ERROR][FilingService] Error fetching filing ${id}:`, error);
+      throw error;
+    }
   },
   
   // Send an email summary of the latest filings
@@ -323,14 +261,9 @@ const filingService = {
       
       console.log(`[INFO][FilingService] Email summary process completed successfully`);
       
-      let result;
-      if (debug) {
-        // Create a mock result for testing
-        result = { id: 'debug-mode-' + Date.now(), success: true };
-      } else {
-        console.log(`[INFO][FilingService] Sending email summary to: ${email} with ${summaries.length} summaries and ${errors.length} errors`);
-        result = await emailClient.sendEmail(emailParams);
-      }
+      // Send the email
+      console.log(`[INFO][FilingService] Sending email summary to: ${email} with ${summaries.length} summaries and ${errors.length} errors`);
+      const result = await emailClient.sendEmail(emailParams);
       
       // Final return
       return {

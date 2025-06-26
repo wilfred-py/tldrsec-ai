@@ -29,7 +29,10 @@ export async function getFilingById(
     }
     
     // Construct the URL for the filing metadata
-    const metadataUrl = SEC_CONFIG.FILING_METADATA_URL(normalizedAccessionNumber);
+    // Use FILING_URL which requires both accession number and CIK
+    const metadataUrl = normalizedCik 
+      ? SEC_CONFIG.FILING_URL(normalizedAccessionNumber, normalizedCik)
+      : `https://www.sec.gov/Archives/edgar/data/${normalizedAccessionNumber.replace(/-/g, '')}/index.json`;
     
     // Variables to store the responses
     let filingMetadata: Record<string, any> | null = null;
@@ -41,7 +44,7 @@ export async function getFilingById(
       const metadataResponse = await axios.get(metadataUrl, {
         headers: SEC_CONFIG.HEADERS
       });
-      filingMetadata = metadataResponse.data;
+      filingMetadata = metadataResponse.data as Record<string, any>;
       
       if (!filingMetadata) {
         throw new Error(`No metadata found for filing ${accessionNumber}`);
@@ -56,17 +59,22 @@ export async function getFilingById(
     }
     
     // Construct the URL for the filing content
-    let rawUrl;
+    let rawUrl: string;
     if (filingMetadata && filingMetadata.primaryDocument) {
       // If we have metadata with the primary document, use that
-      rawUrl = SEC_CONFIG.FILING_DOCUMENT_URL(
-        normalizedAccessionNumber,
-        normalizedCik,
-        filingMetadata.primaryDocument
-      );
+      // Use PRIMARY_DOC_URL instead of FILING_DOCUMENT_URL which doesn't exist
+      rawUrl = normalizedCik 
+        ? SEC_CONFIG.PRIMARY_DOC_URL(
+            normalizedAccessionNumber,
+            normalizedCik,
+            filingMetadata.primaryDocument
+          )
+        : `https://www.sec.gov/Archives/edgar/data/${normalizedAccessionNumber.replace(/-/g, '')}/${filingMetadata.primaryDocument}`;
     } else {
       // Otherwise, use the raw filing URL
-      rawUrl = SEC_CONFIG.RAW_FILING_URL(normalizedAccessionNumber, normalizedCik);
+      rawUrl = normalizedCik 
+        ? SEC_CONFIG.RAW_FILING_URL(normalizedAccessionNumber, normalizedCik)
+        : `https://www.sec.gov/Archives/edgar/data/${normalizedAccessionNumber.replace(/-/g, '')}/${normalizedAccessionNumber}.txt`;
     }
     
     // Try to get the filing content
@@ -123,7 +131,9 @@ export async function getFilingById(
         // If we get a 404 using the primary document URL, try the raw filing URL as a fallback
         if (error.response && error.response.status === 404 && filingMetadata && filingMetadata.primaryDocument) {
           logger.debug(`Primary document not found, trying raw filing URL as fallback`);
-          const fallbackUrl = SEC_CONFIG.RAW_FILING_URL(accessionNumber, normalizedCik);
+          const fallbackUrl = normalizedCik !== undefined 
+            ? SEC_CONFIG.RAW_FILING_URL(accessionNumber, normalizedCik)
+            : `https://www.sec.gov/Archives/edgar/data/${accessionNumber.replace(/-/g, '')}/${accessionNumber}.txt`;
           try {
             logger.debug(`Fetching filing content from fallback URL: ${fallbackUrl}`);
             const fallbackResponse = await axios.get(fallbackUrl, {
