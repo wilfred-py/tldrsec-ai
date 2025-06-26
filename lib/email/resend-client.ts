@@ -361,10 +361,15 @@ export class ResendClient {
     if (message.html) params.html = message.html;
     if (message.text) params.text = message.text;
     
-    // Use simple string tags as required by Resend API
-
+    // Format tags as objects with name property as required by Resend API
+    // Sanitize tag names to only contain ASCII letters, numbers, underscores, or dashes
     if (message.tags && message.tags.length > 0) {
-      params.tags = message.tags;
+      params.tags = message.tags.map(tag => ({
+        name: typeof tag === 'string' ? tag.replace(/[^a-zA-Z0-9_-]/g, '_') : String(tag).replace(/[^a-zA-Z0-9_-]/g, '_')
+      }));
+      
+      // Debug log for tag formatting
+      console.log('RESEND TAGS - Formatted:', JSON.stringify(params.tags, null, 2));
     }
     
     // Add CC and BCC if present
