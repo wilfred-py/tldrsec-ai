@@ -12,7 +12,6 @@
 import { FilingType } from '../lib/sec-edgar/types';
 import { FormTypeMetadata, getFormMetadata } from '../lib/sec-edgar/form-registry';
 import { parseFormContent, extractImportantContent, ParsedContent } from '../lib/parsers/form-parser';
-import * as secService from './secService';
 import { prisma } from '../lib/db';
 import { FilingSummaryResult } from './filingService';
 import { enhancedSummarizer, SummarizationEvent } from '../lib/ai/enhanced-summarize';
@@ -21,6 +20,10 @@ import { logger } from '../lib/logging';
 import { monitoring } from '../lib/monitoring';
 import { v4 as uuidv4 } from 'uuid';
 import { EventEmitter } from 'events';
+
+// Import modularized components directly
+import { getCompanyInfo } from './filings/companyInfo';
+import { getFilings, getFilingContent } from './filings/filingRetrieval';
 
 // Component logger
 const componentLogger = logger.child('enhanced-filing-service');
@@ -71,13 +74,13 @@ export class EnhancedFilingService extends EventEmitter {
       this.emit(EnhancedFilingEvent.SUMMARY_STARTED, { ticker, formType, requestId });
       
       // Step 1: Get company information
-      const companyInfo = await secService.getCompanyInfo(ticker);
+      const companyInfo = await getCompanyInfo(ticker);
       if (!companyInfo || !companyInfo.cik) {
         throw new Error(`Company information not found for ticker: ${ticker}`);
       }
       
       // Step 2: Get the latest filing of the requested type
-      const filings = await secService.getFilings(companyInfo.cik, formType, 1);
+      const filings = await getFilings(companyInfo.cik, formType, 1);
       if (!filings || filings.length === 0) {
         throw new Error(`No ${formType} filings found for ${ticker}`);
       }
@@ -142,9 +145,9 @@ export class EnhancedFilingService extends EventEmitter {
       // Step 6: If filing doesn't exist in our database, fetch and store it
       if (!secFiling) {
         // Get the filing content
-        const filingContent = await secService.getFilingContent(
-          companyInfo.cik,
-          accessionNumber
+        const filingContent = await getFilingContent(
+          accessionNumber,
+          companyInfo.cik
         );
         
         if (!filingContent) {
