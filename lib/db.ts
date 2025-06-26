@@ -1,14 +1,9 @@
-import { PrismaClient } from './generated/prisma';
+// Import the singleton Prisma instance from db/prisma.ts
+// This ensures we're using a single connection pool across the application
+import { prisma } from './db/prisma';
 
-// PrismaClient is attached to the `global` object in development to prevent
-// exhausting your database connection limit due to instantiating too many instances
-// during hot reloading.
-
-const globalForPrisma = global as unknown as { prisma: PrismaClient };
-
-export const prisma = globalForPrisma.prisma || new PrismaClient();
-
-if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prisma;
+// Re-export the prisma instance for backward compatibility
+export { prisma };
 
 // User operations
 export async function getUserByClerkId(clerkId: string) {

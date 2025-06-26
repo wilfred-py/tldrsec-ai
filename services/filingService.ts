@@ -1,16 +1,19 @@
-/**
- * Filing Service
- * 
- * This file serves as a compatibility layer for the refactored filing service.
- * It re-exports all functionality from the modularized services/filing directory.
- */
+import { FilingLog } from '../types/filing';
+import { FilingType } from '../lib/sec-edgar/types';
+import { FormTypeMetadata, getFormMetadata, getFormsByCategory, getHighImportanceForms } from '../lib/sec-edgar/form-registry';
+import { parseFormContent, extractImportantContent, ParsedContent } from '../lib/parsers/form-parser';
+import { generateSystemPrompt, generateUserPrompt } from '../lib/ai/sec-prompts';
+import axios from 'axios';
+import { summarizeFiling } from '../lib/ai/summarize';
+import * as secService from './secService';
+import { prisma } from '../lib/db';
+import { JsonObject } from '@prisma/client/runtime/library';
 
-// Re-export everything from the filing modules
-export * from './filing/types';
-export * from './filing/getFilingById';
-export * from './filing/getFilingSummary';
-export * from './filing/sendEmailSummary';
-export * from './filing/utils';
+// Import the email client and types
+import { emailClient, EmailMessage } from '../lib/email';
+
+// Import database connection manager for optimizing connections
+import { optimizeConnections, checkDatabaseConnection } from '../lib/db/connection-manager';
 
 // Mock filing data for demonstration
 const mockFilings: FilingLog[] = [
@@ -150,6 +153,14 @@ const filingService = {
   // Send an email summary of the latest filings
   sendEmailSummary: async (email: string, tickers: string[] = ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'META'], debug: boolean = false) => {
     try {
+      // Check database connection before starting
+      await checkDatabaseConnection()
+        .catch(err => console.error('[ERROR][FilingService] Database connection check failed:', err));
+      
+      // Optimize connections before heavy database operations
+      await optimizeConnections()
+        .catch(err => console.error('[ERROR][FilingService] Failed to optimize database connections:', err));
+      
       const summaries: FilingSummaryResult[] = [];
       const errors: {ticker: string, error: string}[] = [];
       
@@ -335,6 +346,10 @@ const filingService = {
         success: false,
         error: error instanceof Error ? error.message : 'Failed to send email summary'
       };
+    } finally {
+      // Always optimize connections after completing operations
+      await optimizeConnections()
+        .catch(err => console.error('[ERROR][FilingService] Failed to optimize connections after email sending:', err));
     }
   },
   
@@ -342,6 +357,14 @@ const filingService = {
   getFilingSummary: async (ticker: string, formType: FilingType): Promise<{ data: FilingSummaryResult | null, error?: string }> => {
     try {
       console.log(`[DEBUG][FilingService] Getting summary for ${ticker} - ${formType}`);
+      
+      // Check database connection before starting
+      await checkDatabaseConnection()
+        .catch(err => console.error('[ERROR][FilingService] Database connection check failed in getFilingSummary:', err));
+      
+      // Optimize connections before database operations
+      await optimizeConnections()
+        .catch(err => console.error('[ERROR][FilingService] Failed to optimize database connections in getFilingSummary:', err));
       
       // Variables to store summary data
       let summaryText = '';
@@ -373,7 +396,7 @@ const filingService = {
             }
           });
           
-          if (false && existingSummary) { // Temporarily bypassed cache for testing
+          if (existingSummary) { // Temporarily bypassed cache for testing
             console.log(`[INFO][FilingService] Found existing summary in database for ${ticker} - ${formType}`);
             // Parse the JSON data from the database
             const summaryData = existingSummary?.summaryJSON as Record<string, any> || {};
@@ -383,9 +406,7 @@ const filingService = {
             return {
               data: {
                 ticker: ticker,
-                companyName: tickerRecord?.companyName || ticker,
-                filingType: formType as FilingType,
-                filingDate: existingSummary?.filingDate?.toISOString() || new Date().toISOString(),
+                companyName: tickerRecord?.companyName || ticker, filingType: formType as FilingType, filingDate: existingSummary?.filingDate?.toISOString() || new Date().toISOString(),
                 accessionNumber: summaryData.accessionNumber || 'unknown',
                 url: existingSummary?.url || existingSummary?.filingUrl || '',
                 summaryText: existingSummary?.summaryText || '',
@@ -613,7 +634,7 @@ const filingService = {
               return { data: null, error: `Failed to fetch document: ${axiosResponse.status} ${axiosResponse.statusText}` };
             }
             
-            // Set content to the response data
+            // Set content to the response data with type assertion
             content = axiosResponse.data as string;
           } catch (error) {
             // Type assertion for the error
@@ -731,70 +752,37 @@ const filingService = {
               return points;
             };
             
-            // Function to attempt AI summarization with retry logic for rate limits
-            const attemptSummarization = async (attempt = 1, maxAttempts = 5) => {
-              try {
-                console.log(`[DEBUG][FilingService] Attempting AI summarization for ${ticker} - ${normalizedFormType} (attempt ${attempt}/${maxAttempts})`);
-                
-                const summaryResult = await summarizeFiling({
-                  filingId: filingId,
-                  summaryId: summaryId,
-                  requestId: `filing-summary-${ticker}-${normalizedFormType}-${Date.now()}`,
-                  documentContent: content
-                });
-                
-                console.log(`[DEBUG][FilingService] AI summarization completed for ${ticker} - ${normalizedFormType} on attempt ${attempt}`);
-                
-                // Extract the summary text and structured data
-                // Ensure summaryText is always a string
-                const resultText = typeof summaryResult.summaryText === 'string' 
-                  ? summaryResult.summaryText 
-                  : `Summary of ${normalizedFormType} filing for ${company.name} (${ticker})`;
-                
-                // Get the updated summary record with the AI-generated content
-                const updatedSummary = await prisma.summary.findUnique({
-                  where: { id: summaryId }
-                });
-                
-                // Parse the summary JSON to extract key points
-                const resultJSON = updatedSummary?.summaryJSON as Record<string, any> || {};
-                
-                return { text: resultText, json: resultJSON, success: true };
-              } catch (error: any) {
-                // Check if this is a rate limit error that we can retry
-                if (error && typeof error === 'object' && error.code === 'RATE_LIMITED' && error.isRetriable && typeof error.retryAfterSeconds === 'number') {
-                  if (attempt < maxAttempts) {
-                    const retryAfterMs = error.retryAfterSeconds * 1000;
-                    const resetTime = error.resetTime || 'unknown';
-                    console.log(`[INFO][FilingService] Rate limit hit for ${ticker} - ${normalizedFormType}. Waiting ${error.retryAfterSeconds} seconds before retry ${attempt}/${maxAttempts}. Reset time: ${resetTime}`);
-                    
-                    // Wait for the specified time before retrying
-                    await new Promise(resolve => setTimeout(resolve, retryAfterMs));
-                    
-                    // Retry the summarization
-                    return attemptSummarization(attempt + 1, maxAttempts);
-                  } else {
-                    console.error(`[ERROR][FilingService] Maximum retry attempts (${maxAttempts}) reached for ${ticker} - ${normalizedFormType}. Falling back to simple summary.`);
-                    throw error; // Exceeded max retries, will be caught by outer catch block
-                  }
-                } else {
-                  // For other errors, rethrow to be handled by the outer catch block
-                  throw error;
-                }
-              }
-            };
-            
-            // Try to call the AI summarization function with error handling and retry logic
+            // Try to call the AI summarization function with error handling
             try {
-              // Start the summarization process with potential retries
-              const result = await attemptSummarization();
-              summaryText = result.text;
-              summaryJSON = result.json;
-            } catch (aiError: any) {
-              console.error(`[ERROR][FilingService] AI summarization failed for ${ticker} - ${normalizedFormType} after retries:`, aiError);
+              console.log(`[DEBUG][FilingService] Attempting AI summarization for ${ticker} - ${normalizedFormType}`);
+              
+              const summaryResult = await summarizeFiling({
+                filingId: filingId,
+                summaryId: summaryId,
+                requestId: `filing-summary-${ticker}-${normalizedFormType}-${Date.now()}`,
+                documentContent: content
+              });
+              
+              console.log(`[DEBUG][FilingService] AI summarization completed for ${ticker} - ${normalizedFormType}`);
+              
+              // Extract the summary text and structured data
+              // Ensure summaryText is always a string
+              summaryText = typeof summaryResult.summaryText === 'string' 
+                ? summaryResult.summaryText 
+                : `Summary of ${normalizedFormType} filing for ${company.name} (${ticker})`;
+              
+              // Get the updated summary record with the AI-generated content
+              const updatedSummary = await prisma.summary.findUnique({
+                where: { id: summaryId }
+              });
+              
+              // Parse the summary JSON to extract key points
+              summaryJSON = updatedSummary?.summaryJSON as Record<string, any> || {};
+            } catch (aiError) {
+              console.error(`[ERROR][FilingService] AI summarization failed for ${ticker} - ${normalizedFormType}:`, aiError);
               console.log(`[DEBUG][FilingService] Using fallback summary generation for ${ticker} - ${normalizedFormType}`);
               
-              // Use fallback summary generation only for non-rate-limit errors or if retries failed
+              // Use fallback summary generation
               summaryText = `Summary of ${normalizedFormType} filing for ${company.name} (${ticker}). Filed on ${new Date(filing.filingDate).toLocaleDateString()}.`;
               
               // Create basic fallback key points
@@ -981,18 +969,235 @@ const filingService = {
         data: null, 
         error: error instanceof Error ? error.message : `Failed to generate summary for ${ticker}` 
       };
+    } finally {
+      // Always optimize connections after completing operations
+      await optimizeConnections()
+        .catch(err => console.error('[ERROR][FilingService] Failed to optimize connections after getFilingSummary:', err));
     }
   }
 };
 
-// Export a default object for backward compatibility with existing imports
-import { getFilingById } from './filing/getFilingById';
-import { getFilingSummary } from './filing/getFilingSummary';
-import { sendEmailSummary } from './filing/sendEmailSummary';
 
-export default {
-  getFilingLogs,
-  getFilingById,
-  sendEmailSummary,
-  getFilingSummary
-};
+
+/**
+ * Generate a plain text version of the email
+ */
+function generatePlainTextEmail(summaries: FilingSummaryResult[], errors: {ticker: string, error: string}[] = []): string {
+  let text = `SEC Filing Summaries - ${new Date().toLocaleDateString()}\n\n`;
+  
+  // Add summaries
+  summaries.forEach(summary => {
+    const formMetadata = getFormMetadata(summary.filingType);
+    const formName = formMetadata ? formMetadata.displayName : summary.filingType;
+    const filingDate = new Date(summary.filingDate).toLocaleDateString();
+    
+    // Make sure we have a summary text
+    const summaryTextContent = summary.summaryText && summary.summaryText.trim() !== '' ? 
+      summary.summaryText : 
+      `This is a ${formName} filing from ${summary.companyName}. View the original filing for complete details.`;
+    
+    text += `${summary.companyName} (${summary.ticker}) - ${formName}\n`;
+    text += `Filed on: ${filingDate}\n\n`;
+    text += `${summaryTextContent}\n\n`;
+    
+    text += `Key Points:\n`;
+    summary.keyPoints.forEach((point: string) => {
+      text += `- ${point}\n`;
+    });
+    text += `\n`;
+    
+    text += `View on SEC Website: ${summary.url}\n`;
+    text += `\n---\n\n`;
+  });
+  
+  // Add errors if any
+  if (errors.length > 0) {
+    text += `Issues Encountered:\n`;
+    errors.forEach(err => {
+      text += `- ${err.ticker}: ${err.error}\n`;
+    });
+    text += `\n`;
+  }
+  
+  // Add footer
+  text += `This email was generated by tldrSEC. The information provided is for informational purposes only and should not be considered financial advice.\n`;
+  text += ` ${new Date().getFullYear()} tldrSEC\n`;
+  
+  return text;
+}
+
+/**
+ * Generate a simple summary based on parsed content
+ * This is a fallback when AI summarization is not available
+ */
+function generateSimpleSummary(parsedContent: ParsedContent, formType: FilingType, ticker: string, companyName: string): string {
+  const { sections, keyData, title } = parsedContent;
+  const formMetadata = getFormMetadata(formType);
+  const formName = formMetadata ? formMetadata.displayName : formType;
+  
+  let summary = `This ${formName} filing from ${companyName} (${ticker}) was filed on ${new Date().toLocaleDateString()}.`;
+  
+  // Add information based on form type
+  if (formType.includes('10-K')) {
+    summary += ` This annual report provides comprehensive information about the company's financial performance, business operations, risk factors, and future outlook for the fiscal year.`;
+  } else if (formType.includes('10-Q')) {
+    summary += ` This quarterly report provides financial statements, management's discussion of the company's financial condition, and other important updates for the most recent fiscal quarter.`;
+  } else if (formType === '8-K') {
+    summary += ` This current report discloses material events or corporate changes that could be important to shareholders or the SEC.`;
+  } else if (formType.includes('13D') || formType.includes('13G')) {
+    summary += ` This filing discloses beneficial ownership information from investors who have acquired a significant position in the company's securities.`;
+  } else if (formType === '4' || formType === 'Form4') {
+    summary += ` This filing reports changes in ownership of company securities by directors, officers, or significant shareholders.`;
+  }
+  
+  // Add key data if available
+  if (Object.keys(keyData).length > 0) {
+    summary += ` Key information includes: `;
+    const keyItems = Object.entries(keyData)
+      .filter(([_, value]) => value !== null)
+      .map(([key, value]) => `${key}: ${value}`)
+      .slice(0, 3);
+    summary += keyItems.join(', ');
+  }
+  
+  // Add section highlights if available
+  const importantSectionNames = Object.keys(sections).slice(0, 2);
+  if (importantSectionNames.length > 0) {
+    summary += ` The filing includes sections on: ${importantSectionNames.join(', ')}.`;
+  }
+  
+  return summary;
+}
+
+/**
+ * Extract key points from parsed content
+ */
+function extractKeyPoints(parsedContent: ParsedContent, formType: FilingType): string[] {
+  const { sections, keyData } = parsedContent;
+  const keyPoints: string[] = [];
+  
+  // Add form-specific key points
+  const formMetadata = getFormMetadata(formType);
+  if (formMetadata) {
+    keyPoints.push(`This is a ${formMetadata.displayName} filing`);
+  }
+  
+  // Add key data points
+  for (const [key, value] of Object.entries(keyData)) {
+    if (value !== null && keyPoints.length < 5) {
+      keyPoints.push(`${key}: ${value}`);
+    }
+  }
+  
+  // Add section highlights
+  for (const [sectionName, content] of Object.entries(sections)) {
+    if (keyPoints.length < 5 && content.length > 0) {
+      // Extract the first sentence or a short excerpt
+      const excerpt = content.split('.')[0].trim() + '.';
+      if (excerpt.length < 100) {
+        keyPoints.push(`${sectionName}: ${excerpt}`);
+      }
+    }
+  }
+  
+  // Ensure we have at least some key points
+  if (keyPoints.length === 0) {
+    keyPoints.push('Filing available on SEC EDGAR');
+    keyPoints.push('Contains official company disclosures');
+    keyPoints.push('May contain material information for investors');
+  }
+  
+  return keyPoints;
+}
+
+/**
+ * Generate HTML email content for filing summaries
+ */
+function generateEmailHtml(summaries: FilingSummaryResult[], errors: {ticker: string, error: string}[] = []): string {
+  let html = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <style>
+        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 800px; margin: 0 auto; }
+        .header { background-color: #0066cc; color: white; padding: 20px; text-align: center; }
+        .summary { border: 1px solid #ddd; padding: 15px; margin-bottom: 20px; border-radius: 5px; }
+        .summary h2 { margin-top: 0; color: #0066cc; }
+        .meta { color: #666; font-size: 0.9em; margin-bottom: 10px; }
+        .key-points { background-color: #f9f9f9; padding: 10px; border-left: 3px solid #0066cc; margin-bottom: 15px; }
+        .key-points h3 { margin-top: 0; }
+        .key-points ul { margin-bottom: 0; }
+        .summary-text { margin-bottom: 15px; }
+        .filing-link { display: inline-block; margin-top: 15px; background-color: #0066cc; color: white; padding: 8px 15px; text-decoration: none; border-radius: 4px; }
+        .filing-link:hover { background-color: #0055aa; }
+        .errors { background-color: #fff0f0; padding: 10px; margin-top: 20px; border-radius: 5px; }
+        .footer { margin-top: 30px; text-align: center; font-size: 0.8em; color: #666; }
+      </style>
+    </head>
+    <body>
+      <div class="header">
+        <h1>SEC Filing Summaries</h1>
+        <p>${new Date().toLocaleDateString()}</p>
+      </div>
+  `;
+  
+  // Add summaries
+  summaries.forEach(summary => {
+    const formMetadata = getFormMetadata(summary.filingType);
+    const formName = formMetadata ? formMetadata.displayName : summary.filingType;
+    const filingDate = new Date(summary.filingDate).toLocaleDateString();
+    
+    // Make sure we have a summary text
+    const summaryTextContent = summary.summaryText && summary.summaryText.trim() !== '' ? 
+      summary.summaryText : 
+      `This is a ${formName} filing from ${summary.companyName}. View the original filing for complete details.`;
+    
+    html += `
+      <div class="summary">
+        <h2>${summary.companyName} (${summary.ticker}) - ${formName}</h2>
+        <div class="meta">Filed on: ${filingDate}</div>
+        
+        <div class="summary-text">
+          <p>${summaryTextContent}</p>
+        </div>
+        
+        <div class="key-points">
+          <h3>Key Points</h3>
+          <ul>
+            ${summary.keyPoints.map((point: string) => `<li>${point}</li>`).join('')}
+          </ul>
+        </div>
+        
+        <a href="${summary.url}" class="filing-link" target="_blank">View on SEC Website</a>
+      </div>
+    `;
+  });
+  
+  // Add errors if any
+  if (errors.length > 0) {
+    html += `
+      <div class="errors">
+        <h3>Issues Encountered</h3>
+        <ul>
+          ${errors.map(err => `<li>${err.ticker}: ${err.error}</li>`).join('')}
+        </ul>
+      </div>
+    `;
+  }
+  
+  // Add footer
+  html += `
+      <div class="footer">
+        <p>This email was generated by tldrSEC. The information provided is for informational purposes only and should not be considered financial advice.</p>
+        <p>© ${new Date().getFullYear()} tldrSEC</p>
+      </div>
+    </body>
+    </html>
+  `;
+  
+  return html;
+}
+
+
+
+export default filingService;

@@ -12,88 +12,32 @@ declare global {
 }
 
 /**
- * Wrapper function to retry database operations with exponential backoff
- * @param operation Function that performs the database operation
- * @param maxRetries Maximum number of retry attempts
- * @param initialDelay Initial delay in milliseconds
- * @returns Result of the operation
+ * Configure Prisma client with improved connection handling
+ * 
+ * Note: Connection pool settings are configured via the DATABASE_URL
+ * connection string parameters. To improve connection handling:
+ * 1. Add ?connection_limit=30 to increase max connections (default is 21)
+ * 2. Add &pool_timeout=30 to increase timeout (default is 10 seconds)
+ * 3. Add &connection_timeout=20000 to increase connection timeout
+ * 
+ * Example: postgresql://user:password@host:port/database?connection_limit=30&pool_timeout=30
  */
-export async function withRetry<T>(
-  operation: () => Promise<T>,
-  maxRetries = 3,
-  initialDelay = 100
-): Promise<T> {
-  let lastError: Error;
-  let delay = initialDelay;
 
-  for (let attempt = 0; attempt <= maxRetries; attempt++) {
-    try {
-      return await operation();
-    } catch (error) {
-      lastError = error as Error;
-      
-      // Check if the error is retryable (connection-related)
-      const isRetryable = 
-        error.message?.includes('Connection') || 
-        error.message?.includes('timeout') || 
-        error.message?.includes('pool') ||
-        error.message?.includes('ECONNREFUSED') ||
-        error.message?.includes('connection reset') ||
-        error.message?.includes('closed') ||
-        error.code === 'P1001' || // Authentication error
-        error.code === 'P1002' || // Connection error
-        error.code === 'P1008' || // Operations timeout
-        error.code === 'P1017';   // Server closed the connection
-      
-      if (!isRetryable || attempt === maxRetries) {
-        console.error(`Database operation failed after ${attempt + 1} attempts:`, error);
-        throw error;
-      }
-      
-      console.warn(`Database operation failed (attempt ${attempt + 1}/${maxRetries + 1}), retrying in ${delay}ms:`, error.message);
-      
-      // Wait before retrying with exponential backoff
-      await new Promise(resolve => setTimeout(resolve, delay));
-      delay *= 2; // Exponential backoff
-    }
-  }
-  
-  // This should never be reached due to the throw in the loop
-  throw lastError!;
-}
-
-// Create a Prisma client with connection pooling optimized for serverless
-const createPrismaClient = () => {
-  return new PrismaClient({
-    log: ['error', 'warn'],
-    // Connection pooling configuration
-    datasources: {
-      db: {
-        url: process.env.DATABASE_URL,
-      },
-    },
-    // Note: connectionTimeout is not supported by Prisma
-    // Connection timeouts are managed internally by Prisma
-  });
-};
-
-// Use a try-catch to handle potential initialization errors
-let prisma: PrismaClient;
+// Use a singleton pattern to prevent connection pool exhaustion
+let prisma: PrismaClient
 
 if (process.env.NODE_ENV === 'production') {
-  prisma = createPrismaClient();
+  prisma = new PrismaClient({
+    log: ['error', 'warn']
+  })
 } else {
   if (!global.prisma) {
-    global.prisma = createPrismaClient();
+    global.prisma = new PrismaClient({
+      log: ['error', 'warn']
+    })
   }
-  prisma = global.prisma;
+  prisma = global.prisma
 }
 
-// Extend the Prisma client with retry capabilities
-const prismaWithRetry = prisma as PrismaClient & {
-  $withRetry: typeof withRetry;
-};
-
-prismaWithRetry.$withRetry = withRetry;
-
-export { prismaWithRetry as prisma };
+// Export the singleton instance
+export { prisma }
