@@ -82,8 +82,30 @@ async function getLatestForm144Filing(ticker: string) {
 
     // Parse Form 144 content
     const form144Data = await parseForm144(filingDetails);
+    // Even if parsing fails, parseForm144 now returns a fallback object with basic information
+    // so we should never get null here, but let's handle it just in case
     if (!form144Data) {
-      throw new Error(`Failed to parse Form 144 content for ${ticker}`);
+      secLogger.warn(`Failed to parse Form 144 content for ${ticker}, using fallback summary`);
+      // Create a minimal fallback object
+      return {
+        ...filingDetails,
+        description: `Form 144 filing for ${filingDetails.companyName} indicates an intent to sell securities by an insider.`,
+        keyPoints: [
+          `Filing Date: ${filingDetails.filingDate}`,
+          `Company: ${filingDetails.companyName}`
+        ],
+        parsedContent: {
+          reportingPerson: 'Unknown',
+          reportingPersonTitle: 'Unknown',
+          relationshipToIssuer: 'Insider',
+          dateOfSale: filingDetails.filingDate,
+          amountOfSecurities: 'Unknown',
+          proposedSaleDate: filingDetails.filingDate,
+          broker: 'Unknown',
+          note: `This Form 144 filing could not be automatically parsed. It indicates an intent to sell securities by an insider.`
+        },
+        accessionNumber: filingDetails.accessionNumber
+      };
     }
 
     // Generate summary
