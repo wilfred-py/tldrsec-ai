@@ -5,7 +5,15 @@ import { SecCompanyInfo, SecFiling, FilingSearchResponse } from '../../types/sec
 
 export const getCompanyFilings = async (companyInfo: SecCompanyInfo): Promise<SecFiling[]> => {
   try {
-    const url = SEC_CONFIG.SUBMISSIONS_URL(companyInfo.cik);
+    // Ensure CIK exists and is a string before using padStart
+    if (!companyInfo.cik) {
+      secLogger.error(`Missing CIK for company ${companyInfo.name || companyInfo.ticker || 'unknown'}`);
+      return [];
+    }
+    
+    // Convert CIK to string if it's a number
+    const cikStr = String(companyInfo.cik);
+    const url = SEC_CONFIG.SUBMISSIONS_URL(cikStr);
     secLogger.debug(`Fetching filings from: ${url}`);
     
     const response = await axios.get<FilingSearchResponse>(url, {

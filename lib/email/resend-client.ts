@@ -201,20 +201,36 @@ export class ResendClient {
               emailParams.text = emailParams.html.replace(/<[^>]*>/g, '');
             }
             
-            // Note: Resend API doesn't support AbortController signal in its type definitions
-            // We'll handle timeout separately if needed
-            const response = await this.resend!.emails.send({
+            // Create a clean payload without undefined values
+            const payload: Record<string, any> = {
               from: emailParams.from,
               to: emailParams.to,
-              subject: emailParams.subject,
-              html: emailParams.html,
-              text: emailParams.text || (emailParams.html ? emailParams.html.replace(/<[^>]*>/g, '') : ''),
-              replyTo: emailParams.replyTo,
-              cc: emailParams.cc,
-              bcc: emailParams.bcc,
-              attachments: emailParams.attachments,
-              tags: emailParams.tags
-            });
+              subject: emailParams.subject
+            };
+            
+            // Only add defined properties
+            if (emailParams.html) payload.html = emailParams.html;
+            if (emailParams.text || emailParams.html) {
+              payload.text = emailParams.text || emailParams.html?.replace(/<[^>]*>/g, '');
+            }
+            if (emailParams.replyTo) payload.reply_to = emailParams.replyTo;
+            if (emailParams.cc) payload.cc = emailParams.cc;
+            if (emailParams.bcc) payload.bcc = emailParams.bcc;
+            if (emailParams.attachments) payload.attachments = emailParams.attachments;
+            
+            // Format tags according to Resend API requirements - must be an array of {name: string} objects
+            if (emailParams.tags && emailParams.tags.length > 0) {
+              payload.tags = emailParams.tags.map(tag => ({
+                name: typeof tag === 'string' ? tag : String(tag)
+              }));
+            }
+            
+            // Log the payload for debugging
+            console.log('RESEND API PAYLOAD:', JSON.stringify(payload, null, 2));
+            
+            // Note: Resend API doesn't support AbortController signal in its type definitions
+            // We'll handle timeout separately if needed
+            const response = await this.resend!.emails.send(payload);
        
             // Log the full response for debugging
             console.log('RESEND API RESPONSE:', JSON.stringify(response, null, 2));
@@ -263,8 +279,22 @@ export class ResendClient {
       // monitoring.incrementCounter('email.sent', 1);
       
       // Return success result
+      // Handle different response structures that might come from the inner function
+      // or from the Resend API directly
+      console.log('DEBUG: Email send result structure:', JSON.stringify(result, null, 2));
+      
+      // Safely extract the ID from wherever it might be in the result
+      let emailId = 'unknown';
+      if (result && typeof result === 'object') {
+        if (result.id) {
+          emailId = result.id;
+        } else if (result.data && result.data.id) {
+          emailId = result.data.id;
+        }
+      }
+      
       return {
-        id: result.data!.id,
+        id: emailId,
         to: emailParams.to,
         success: true
       };
@@ -361,12 +391,18 @@ export class ResendClient {
     if (message.html) params.html = message.html;
     if (message.text) params.text = message.text;
     
-    // Format tags as objects with name property as required by Resend API
+    // Format tags as simple strings as required by Resend API
     // Sanitize tag names to only contain ASCII letters, numbers, underscores, or dashes
     if (message.tags && message.tags.length > 0) {
-      params.tags = message.tags.map(tag => ({
-        name: typeof tag === 'string' ? tag.replace(/[^a-zA-Z0-9_-]/g, '_') : String(tag).replace(/[^a-zA-Z0-9_-]/g, '_')
-      }));
+      // Ensure tags are simple strings, not objects with a name property
+      params.tags = message.tags.map(tag => {
+        // If tag is already an object with a name property, extract the name
+        if (typeof tag === 'object' && tag !== null && 'name' in tag) {
+          return String(tag.name).replace(/[^a-zA-Z0-9_-]/g, '_');
+        }
+        // Otherwise, convert to string and sanitize
+        return typeof tag === 'string' ? tag.replace(/[^a-zA-Z0-9_-]/g, '_') : String(tag).replace(/[^a-zA-Z0-9_-]/g, '_');
+      });
       
       // Debug log for tag formatting
       console.log('RESEND TAGS - Formatted:', JSON.stringify(params.tags, null, 2));
@@ -376,7 +412,6 @@ export class ResendClient {
     if (message.cc) params.cc = this.formatRecipients(message.cc);
     if (message.bcc) params.bcc = this.formatRecipients(message.bcc);
     
-    // Add attachments if present
     if (message.attachments && message.attachments.length > 0) {
       params.attachments = message.attachments.map(attachment => ({
         filename: attachment.filename,

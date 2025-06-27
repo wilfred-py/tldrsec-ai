@@ -35,31 +35,48 @@ export async function getForm144Summary(ticker: string): Promise<FilingSummary> 
 
     // Get full filing details with content
     let filingDetails;
+    let usedFallback = false;
+    let fallbackReason = '';
+    
     try {
+      secLogger.debug(`Attempting to retrieve filing content for ${latestFiling.accessionNumber}`);
       filingDetails = await filingService.getFilingById(latestFiling.accessionNumber);
+      
       if (!filingDetails || !filingDetails.data) {
-        secLogger.warn(`Could not retrieve filing content for ${latestFiling.accessionNumber}, using fallback data`);
+        usedFallback = true;
+        fallbackReason = 'Empty response from filing service';
+        secLogger.warn(`Could not retrieve filing content for ${latestFiling.accessionNumber}, using fallback data: ${fallbackReason}`);
+        
         // Create fallback filing details with available data
         filingDetails = {
           data: {
             filingDate: latestFiling.filingDate || new Date().toISOString().split('T')[0],
             metadata: {
               companyName: companyInfo.name,
-              cik: companyInfo.cik
-            }
+              cik: companyInfo.cik,
+              formType: '144'
+            },
+            accessionNumber: latestFiling.accessionNumber,
+            content: latestFiling.description || `Form 144 filing for ${companyInfo.name}`
           }
         };
       }
     } catch (error) {
-      secLogger.error(`Error retrieving filing content for ${latestFiling.accessionNumber}:`, { error });
+      usedFallback = true;
+      fallbackReason = error instanceof Error ? error.message : 'Unknown error';
+      secLogger.error(`Error retrieving filing content for ${latestFiling.accessionNumber}: ${fallbackReason}`);
+      
       // Create fallback filing details with available data
       filingDetails = {
         data: {
           filingDate: latestFiling.filingDate || new Date().toISOString().split('T')[0],
           metadata: {
             companyName: companyInfo.name,
-            cik: companyInfo.cik
-          }
+            cik: companyInfo.cik,
+            formType: '144'
+          },
+          accessionNumber: latestFiling.accessionNumber,
+          content: latestFiling.description || `Form 144 filing for ${companyInfo.name}`
         }
       };
     }
@@ -75,8 +92,26 @@ export async function getForm144Summary(ticker: string): Promise<FilingSummary> 
       // FilingLog doesn't have filingUrl property directly, so construct it
       filingUrl: `${SEC_CONFIG.BASE_URL}/Archives/edgar/data/${companyInfo.cik}/${latestFiling.accessionNumber.replace(/-/g, '')}/index.htm`,
       url: `${SEC_CONFIG.BASE_URL}/Archives/edgar/data/${companyInfo.cik}/${latestFiling.accessionNumber.replace(/-/g, '')}/index.htm`,
-      rawData: latestFiling.parsedContent
+      rawData: latestFiling.parsedContent,
+      // Add fallback information to the summary
+      failureReason: usedFallback ? fallbackReason : undefined,
+      processingStatus: usedFallback ? 'PARTIAL' : 'COMPLETED'
     };
+    
+    // Add a note about using fallback data to the key points if applicable
+    if (usedFallback) {
+      secLogger.debug(`Adding fallback information to Form 144 summary for ${ticker}`);
+      // Add a note about using fallback data to the beginning of the key points
+      summary.keyPoints = [
+        `Note: Using limited filing data due to retrieval issues (${fallbackReason})`,
+        ...(summary.keyPoints || [])
+      ];
+      
+      // If there's no summary text, add a basic one
+      if (!summary.summaryText || summary.summaryText.trim() === '') {
+        summary.summaryText = `This is a Form 144 filing for ${companyInfo.name} (${ticker}). Complete filing details could not be retrieved. This summary contains basic information only.`;
+      }
+    }
 
     return summary;
 
