@@ -173,3 +173,22 @@ model SecCompanyCache {
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 }
+
+// Model for monitoring SEC fetch attempts
+model SecFetchAttempt {
+  id            String    @id @default(uuid())
+  filingId      String    // Filing accession number or identifier
+  ticker        String    // Ticker symbol
+  formType      String    // Form type (10-K, 10-Q, 8-K, Form 144, etc.)
+  urlAttempts   String    // JSON string of URL attempts
+  successful    Boolean   // Whether the fetch was ultimately successful
+  attemptCount  Int       // Total number of URL attempts
+  successCount  Int       // Number of successful URL attempts
+  timestamp     DateTime  // When the fetch attempt occurred
+  createdAt     DateTime  @default(now())
+  
+  @@index([filingId])
+  @@index([ticker])
+  @@index([formType])
+  @@index([timestamp])
+}

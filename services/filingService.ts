@@ -428,7 +428,8 @@ const filingService = {
         console.log(`[DEBUG][FilingService] Found company: ${company.name}, CIK: ${company.cik}`);
         
         console.log(`[DEBUG][FilingService] Getting latest ${normalizedFormType} filing for ${ticker}`);
-        filing = await secService.getLatestFilingByFormType(ticker, normalizedFormType);
+        // Create a CompanyInfo object to pass to getLatestFilingByFormType instead of just the ticker
+        filing = await secService.getLatestFilingByFormType(company, normalizedFormType);
         if (!filing) {
           console.warn(`[DEBUG][FilingService] No ${normalizedFormType} filings found for ${ticker}`);
           return { data: null, error: `No ${normalizedFormType} filings found for ${ticker}` };

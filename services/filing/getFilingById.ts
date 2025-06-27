@@ -1,6 +1,7 @@
 import axios from 'axios';
 import { SEC_CONFIG } from '../../config/sec';
 import { logger } from '../../lib/logging';
+import secFetchMonitor, { UrlAttempt, FetchAttemptData } from '../monitoring/secFetchMonitor';
 
 /**
  * Get filing details by ID (accessionNumber)
@@ -13,7 +14,10 @@ export async function getFilingById(
   cik?: string
 ): Promise<{ data: Record<string, any> }> {
   try {
-    logger.debug(`Getting filing by ID: ${accessionNumber}`);
+    logger.info(`Getting filing by ID: ${accessionNumber}`); // Upgraded to INFO level for better visibility
+    
+    // Track all URL attempts for this filing request
+    const urlAttempts: UrlAttempt[] = [];
     
     // Normalize the accession number (remove dashes)
     const normalizedAccessionNumber = accessionNumber.replace(/-/g, '');
@@ -28,11 +32,14 @@ export async function getFilingById(
       normalizedCik = normalizedAccessionNumber.substring(0, 10);
     }
     
+    // Format CIK with leading zeros to ensure consistent 10-digit format
+    const formattedCik = normalizedCik ? normalizedCik.padStart(10, '0') : '';
+    
     // Construct the URL for the filing metadata
     // Use FILING_URL which requires both accession number and CIK
     const metadataUrl = normalizedCik 
-      ? SEC_CONFIG.FILING_URL(normalizedAccessionNumber, normalizedCik)
-      : `https://www.sec.gov/Archives/edgar/data/${normalizedAccessionNumber.replace(/-/g, '')}/index.json`;
+      ? SEC_CONFIG.FILING_URL(normalizedAccessionNumber, formattedCik)
+      : `https://www.sec.gov/Archives/edgar/data/${normalizedAccessionNumber}/index.json`;
     
     // Variables to store the responses
     let filingMetadata: Record<string, any> | null = null;
@@ -40,22 +47,38 @@ export async function getFilingById(
     
     // First, try to get the filing metadata
     try {
-      logger.debug(`Fetching filing metadata from ${metadataUrl}`);
+      // Skip detailed URL logging at debug level
       const metadataResponse = await axios.get(metadataUrl, {
         headers: SEC_CONFIG.HEADERS
       });
       filingMetadata = metadataResponse.data as Record<string, any>;
       
+      // Track successful URL attempt
+      urlAttempts.push({
+        url: metadataUrl,
+        success: true,
+        statusCode: metadataResponse.status,
+        timestamp: Date.now()
+      });
+      
       if (!filingMetadata) {
         throw new Error(`No metadata found for filing ${accessionNumber}`);
       }
       
-      logger.debug(`Successfully fetched metadata for filing ${accessionNumber}`);
+      // Success logs only needed for errors
     } catch (error: any) {
+      // Track failed URL attempt
+      urlAttempts.push({
+        url: metadataUrl,
+        success: false,
+        statusCode: error.response?.status,
+        error: error.message,
+        timestamp: Date.now()
+      });
       logger.error(`Error fetching filing metadata from ${metadataUrl}: ${error.message}`);
       
       // If we can't get the metadata, we'll try to get the content directly
-      logger.debug(`Attempting to fetch filing content directly without metadata`);
+      logger.info(`Metadata fetch failed, attempting to fetch filing content directly`); // More informative message
     }
     
     // Construct the URL for the filing content
@@ -66,25 +89,41 @@ export async function getFilingById(
       rawUrl = normalizedCik 
         ? SEC_CONFIG.PRIMARY_DOC_URL(
             normalizedAccessionNumber,
-            normalizedCik,
+            formattedCik,
             filingMetadata.primaryDocument
           )
-        : `https://www.sec.gov/Archives/edgar/data/${normalizedAccessionNumber.replace(/-/g, '')}/${filingMetadata.primaryDocument}`;
+        : `https://www.sec.gov/Archives/edgar/data/${normalizedAccessionNumber}/${filingMetadata.primaryDocument}`;
     } else {
       // Otherwise, use the raw filing URL
       rawUrl = normalizedCik 
-        ? SEC_CONFIG.RAW_FILING_URL(normalizedAccessionNumber, normalizedCik)
-        : `https://www.sec.gov/Archives/edgar/data/${normalizedAccessionNumber.replace(/-/g, '')}/${normalizedAccessionNumber}.txt`;
+        ? SEC_CONFIG.RAW_FILING_URL(normalizedAccessionNumber, formattedCik)
+        : `https://www.sec.gov/Archives/edgar/data/${normalizedAccessionNumber}/${accessionNumber}.txt`;
     }
     
     // Try to get the filing content
     try {
-      logger.debug(`Fetching filing content from ${rawUrl}`);
+      // Skip detailed URL logging
       const rawResponse = await axios.get(rawUrl, {
         headers: SEC_CONFIG.HEADERS
       });
       filingContent = rawResponse.data as string;
+      
+      // Track successful URL attempt
+      urlAttempts.push({
+        url: rawUrl,
+        success: true,
+        statusCode: rawResponse.status,
+        timestamp: Date.now()
+      });
     } catch (error: any) {
+      // Track failed URL attempt
+      urlAttempts.push({
+        url: rawUrl,
+        success: false,
+        statusCode: error.response?.status,
+        error: error.message,
+        timestamp: Date.now()
+      });
       logger.error(`Error fetching filing content from ${rawUrl}: ${error.message}`);
       
       // Try alternative URL formats if the first attempt fails
@@ -100,29 +139,83 @@ export async function getFilingById(
         );
       }
       
-      // Add general fallback URLs for all filing types
-      alternativeUrls.push(
-        `https://www.sec.gov/Archives/edgar/data/${accessionNumber.replace(/-/g, '')}`,
-        `https://www.sec.gov/Archives/edgar/data/${accessionNumber}`
-      );
+      // Check if this is a Form 144 filing based on metadata or accession number
+      const isForm144 = 
+        (filingMetadata && filingMetadata.formType && filingMetadata.formType.includes('144')) ||
+        accessionNumber.toLowerCase().includes('form144') ||
+        accessionNumber.toLowerCase().includes('144');
+      
+      if (isForm144) {
+        // Form type detection logging not needed
+        
+        // For Form 144 filings, we need to ensure the CIK is properly formatted
+        // Form 144 URLs have a specific structure
+        // We're using the formattedCik defined earlier
+        const normalizedAccNum = normalizedAccessionNumber;
+        
+        // Add Form 144 specific URL patterns with proper CIK formatting
+        alternativeUrls.push(
+          // Primary Form 144 URL patterns
+          `https://www.sec.gov/Archives/edgar/data/${formattedCik}/${normalizedAccNum}/xslF144X01/${accessionNumber}.xml`,
+          `https://www.sec.gov/Archives/edgar/data/${formattedCik}/${normalizedAccNum}/form144.xml`,
+          `https://www.sec.gov/Archives/edgar/data/${formattedCik}/${normalizedAccNum}/form144.html`,
+          // Additional Form 144 patterns
+          `https://www.sec.gov/Archives/edgar/data/${formattedCik}/${normalizedAccNum}/form144.txt`,
+          `https://www.sec.gov/Archives/edgar/data/${formattedCik}/${normalizedAccNum}/form144.pdf`
+        );
+      }
+      
+      // Add general fallback URLs for all filing types with proper CIK formatting
+      // Ensure we're using the CIK when available, not the accession number in the path
+      if (normalizedCik) {
+        // We're using the formattedCik defined earlier
+        const normalizedAccNum = normalizedAccessionNumber;
+        
+        alternativeUrls.push(
+          // Standard SEC URL patterns with CIK
+          `https://www.sec.gov/Archives/edgar/data/${formattedCik}/${normalizedAccNum}/${accessionNumber}.txt`,
+          `https://www.sec.gov/Archives/edgar/data/${formattedCik}/${normalizedAccNum}/index.htm`,
+          `https://www.sec.gov/Archives/edgar/data/${formattedCik}/${normalizedAccNum}/index.html`
+        );
+      } else {
+        // Fallback URLs when CIK is not available (less reliable)
+        alternativeUrls.push(
+          `https://www.sec.gov/Archives/edgar/data/${accessionNumber.replace(/-/g, '')}`,
+          `https://www.sec.gov/Archives/edgar/data/${accessionNumber}`
+        );
+      }
       
       // Try each alternative URL
       let foundContent = false;
       for (const altUrl of alternativeUrls) {
         try {
-          logger.debug(`Trying alternative URL: ${altUrl}`);
+          logger.info(`Trying alternative URL: ${altUrl}`);
           const altResponse = await axios.get(altUrl, {
             headers: SEC_CONFIG.HEADERS
           });
           filingContent = altResponse.data as string;
           
-          if (filingContent) {
-            logger.debug(`Successfully fetched content from alternative URL: ${altUrl}`);
-            foundContent = true;
-            break;
-          }
+          // Track successful alternative URL attempt
+          urlAttempts.push({
+            url: altUrl,
+            success: true,
+            statusCode: altResponse.status,
+            timestamp: Date.now()
+          });
+          logger.info(`Successfully fetched content using alternative URL: ${altUrl}`);
+          foundContent = true;
+          break;
         } catch (altError: any) {
           logger.error(`Error fetching from alternative URL ${altUrl}: ${altError.message}`);
+          
+          // Track failed alternative URL attempt
+          urlAttempts.push({
+            url: altUrl,
+            success: false,
+            statusCode: altError.response?.status,
+            error: altError.message,
+            timestamp: Date.now()
+          });
         }
       }
       
@@ -130,18 +223,40 @@ export async function getFilingById(
       if (!foundContent) {
         // If we get a 404 using the primary document URL, try the raw filing URL as a fallback
         if (error.response && error.response.status === 404 && filingMetadata && filingMetadata.primaryDocument) {
-          logger.debug(`Primary document not found, trying raw filing URL as fallback`);
-          const fallbackUrl = normalizedCik !== undefined 
-            ? SEC_CONFIG.RAW_FILING_URL(accessionNumber, normalizedCik)
-            : `https://www.sec.gov/Archives/edgar/data/${accessionNumber.replace(/-/g, '')}/${accessionNumber}.txt`;
+          logger.info(`Primary document not found, trying raw filing URL as fallback`); // Keep this as INFO for visibility
+          // Ensure consistent normalization of accession number and CIK formatting
+          const normalizedAccNum = accessionNumber.replace(/-/g, '');
+          const formattedCik = normalizedCik ? normalizedCik.padStart(10, '0') : undefined;
+          
+          const fallbackUrl = formattedCik !== undefined 
+            ? SEC_CONFIG.RAW_FILING_URL(normalizedAccNum, formattedCik)
+            : `https://www.sec.gov/Archives/edgar/data/${normalizedAccNum}/${accessionNumber}.txt`;
           try {
-            logger.debug(`Fetching filing content from fallback URL: ${fallbackUrl}`);
+            // Skip detailed fallback URL logging
             const fallbackResponse = await axios.get(fallbackUrl, {
               headers: SEC_CONFIG.HEADERS
             });
             filingContent = fallbackResponse.data as string;
+            
+            // Track successful fallback URL attempt
+            urlAttempts.push({
+              url: fallbackUrl,
+              success: true,
+              statusCode: fallbackResponse.status,
+              timestamp: Date.now()
+            });
           } catch (fallbackError: any) {
             logger.error(`Error fetching filing content from fallback URL: ${fallbackError.message}`);
+            
+            // Track failed fallback URL attempt
+            urlAttempts.push({
+              url: fallbackUrl,
+              success: false,
+              statusCode: fallbackError.response?.status,
+              error: fallbackError.message,
+              timestamp: Date.now()
+            });
+            
             throw new Error(`Could not retrieve filing content for ${accessionNumber}`);
           }
         } else {
@@ -202,6 +317,43 @@ export async function getFilingById(
         logger.error(`Error extracting additional metadata from content: ${extractError}`);
         // Continue with the data we have
       }
+    }
+    
+    // Add URL attempts to the response for monitoring
+    filingData.urlAttempts = urlAttempts;
+    
+    // Log summary of URL attempts
+    const successfulAttempts = urlAttempts.filter(attempt => attempt.success).length;
+    const totalAttempts = urlAttempts.length;
+    
+    if (successfulAttempts > 0) {
+      logger.info(`✓ Successfully retrieved filing ${accessionNumber} after ${totalAttempts} URL attempts (${successfulAttempts} successful)`);
+    } else {
+      logger.error(`✘ Failed to retrieve filing ${accessionNumber} after ${totalAttempts} URL attempts`);
+    }
+    
+    // Record the fetch attempt for monitoring and analysis
+    try {
+      const formType = filingData.metadata?.formType || '';
+      const ticker = filingData.metadata?.ticker || '';
+      
+      const fetchData: FetchAttemptData = {
+        filingId: accessionNumber,
+        ticker,
+        formType,
+        attempts: urlAttempts,
+        successful: successfulAttempts > 0,
+        timestamp: Date.now()
+      };
+      
+      // Don't await this to avoid blocking the response
+      secFetchMonitor.recordFetchAttempt(fetchData)
+        .catch(monitorError => {
+          logger.error(`Failed to record SEC fetch attempt: ${monitorError instanceof Error ? monitorError.message : String(monitorError)}`);
+        });
+    } catch (monitorError) {
+      // Don't let monitoring errors affect the main flow
+      logger.error(`Error in SEC fetch monitoring: ${monitorError instanceof Error ? monitorError.message : String(monitorError)}`);
     }
     
     return { data: filingData };
