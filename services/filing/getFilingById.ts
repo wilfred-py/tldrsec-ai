@@ -1,6 +1,7 @@
 import axios from 'axios';
 import { SEC_CONFIG } from '../../config/sec';
 import { logger } from '../../lib/logging';
+import { logXmlDocument, generateXmlSummary } from '../../lib/xmlLogging';
 import secFetchMonitor, { UrlAttempt, FetchAttemptData } from '../monitoring/secFetchMonitor';
 
 /**
@@ -47,19 +48,30 @@ export async function getFilingById(
     
     // First, try to get the filing metadata
     try {
-      // Skip detailed URL logging at debug level
-      const metadataResponse = await axios.get(metadataUrl, {
-        headers: SEC_CONFIG.HEADERS
-      });
-      filingMetadata = metadataResponse.data as Record<string, any>;
+      // Log with visual indicator for parsing stage
+      logger.debug(`🔍 Fetching filing metadata from ${metadataUrl}`);
       
-      // Track successful URL attempt
+      const metadataResponse = await axios.get(metadataUrl, {
+        headers: {
+          'User-Agent': SEC_CONFIG.USER_AGENT
+        }
+      });
+      
+      // Record this URL attempt with parsing stage indicator
       urlAttempts.push({
         url: metadataUrl,
         success: true,
         statusCode: metadataResponse.status,
-        timestamp: Date.now()
+        timestamp: Date.now(),
+        parsingStages: {
+          fetchComplete: true,
+          xmlParsed: false,
+          namespacesResolved: false,
+          contextRefsValid: false
+        }
       });
+      
+      filingMetadata = metadataResponse.data as Record<string, any>;
       
       if (!filingMetadata) {
         throw new Error(`No metadata found for filing ${accessionNumber}`);
@@ -73,7 +85,13 @@ export async function getFilingById(
         success: false,
         statusCode: error.response?.status,
         error: error.message,
-        timestamp: Date.now()
+        timestamp: Date.now(),
+        parsingStages: {
+          fetchComplete: false,
+          xmlParsed: false,
+          namespacesResolved: false,
+          contextRefsValid: false
+        }
       });
       logger.error(`Error fetching filing metadata from ${metadataUrl}: ${error.message}`);
       
@@ -102,27 +120,83 @@ export async function getFilingById(
     
     // Try to get the filing content
     try {
-      // Skip detailed URL logging
-      const rawResponse = await axios.get(rawUrl, {
-        headers: SEC_CONFIG.HEADERS
-      });
-      filingContent = rawResponse.data as string;
+      // Log with visual indicator for parsing stage
+      logger.debug(`📄 Fetching filing content from ${rawUrl}`);
       
-      // Track successful URL attempt
-      urlAttempts.push({
+      const rawResponse = await axios.get(rawUrl, {
+        headers: {
+          'User-Agent': SEC_CONFIG.USER_AGENT
+        }
+      });
+      
+      // Check if the content is XML and log it with our structured format
+      const contentType = rawResponse.headers['content-type'] || '';
+      const isXml = contentType.includes('xml') || 
+                   rawResponse.data.toString().trim().startsWith('<?xml');
+      
+      // Create URL attempt with parsing stage indicators
+      const urlAttempt: UrlAttempt = {
         url: rawUrl,
         success: true,
         statusCode: rawResponse.status,
-        timestamp: Date.now()
-      });
+        timestamp: Date.now(),
+        parsingStages: {
+          fetchComplete: true,
+          xmlParsed: isXml,
+          namespacesResolved: false,
+          contextRefsValid: false
+        }
+      };
+      
+      // Record this URL attempt
+      urlAttempts.push(urlAttempt);
+      
+      filingContent = rawResponse.data as string;
+      
+      // Process XML content if applicable
+      if (typeof filingContent === 'string' && (
+        filingContent.trim().startsWith('<?xml') ||
+        filingContent.trim().startsWith('<XML>') ||
+        filingContent.trim().startsWith('<xbrl:') ||
+        filingContent.includes('<xbrl')
+      )) {
+        // Log with visual indicator for parsing stage
+        logger.debug(`🔄 Processing XML content for filing ${accessionNumber}`);
+        
+        // Update parsing stage indicators
+        if (urlAttempt.parsingStages) {
+          urlAttempt.parsingStages.xmlParsed = true;
+          
+          // Generate XML summary
+          const xmlSummary = generateXmlSummary(filingContent);
+          urlAttempt.xmlSummary = xmlSummary;
+          
+          // Update namespace resolution status
+          const namespaceCount = Object.keys(xmlSummary.namespaces).length;
+          urlAttempt.parsingStages.namespacesResolved = namespaceCount > 0;
+          
+          // Update context reference validation status
+          const contextRefCount = xmlSummary.contextRefs ? Object.keys(xmlSummary.contextRefs).length : 0;
+          urlAttempt.parsingStages.contextRefsValid = contextRefCount > 0;
+          
+          // Log visual indicator of parsing completion
+          const parsingStatus = urlAttempt.parsingStages.contextRefsValid ? '✅' : '⚠️';
+          logger.debug(`${parsingStatus} XML parsing complete for ${accessionNumber}: ${namespaceCount} namespaces, ${contextRefCount} context references`);
+        }
+      }
     } catch (error: any) {
-      // Track failed URL attempt
+      // Record this failed URL attempt with parsing stage information
       urlAttempts.push({
         url: rawUrl,
         success: false,
-        statusCode: error.response?.status,
         error: error.message,
-        timestamp: Date.now()
+        timestamp: Date.now(),
+        parsingStages: {
+          fetchComplete: false,
+          xmlParsed: false,
+          namespacesResolved: false,
+          contextRefsValid: false
+        }
       });
       logger.error(`Error fetching filing content from ${rawUrl}: ${error.message}`);
       
@@ -191,30 +265,80 @@ export async function getFilingById(
         try {
           logger.info(`Trying alternative URL: ${altUrl}`);
           const altResponse = await axios.get(altUrl, {
-            headers: SEC_CONFIG.HEADERS
+            headers: {
+              'User-Agent': SEC_CONFIG.USER_AGENT
+            }
           });
-          filingContent = altResponse.data as string;
           
-          // Track successful alternative URL attempt
-          urlAttempts.push({
+          // Check if the content is XML and log it with our structured format
+          const contentType = altResponse.headers['content-type'] || '';
+          const isXml = contentType.includes('xml') || 
+                       altResponse.data.toString().trim().startsWith('<?xml');
+          
+          // Create URL attempt with parsing stage indicators
+          const urlAttempt: UrlAttempt = {
             url: altUrl,
             success: true,
             statusCode: altResponse.status,
-            timestamp: Date.now()
-          });
+            timestamp: Date.now(),
+            parsingStages: {
+              fetchComplete: true,
+              xmlParsed: isXml,
+              namespacesResolved: false,
+              contextRefsValid: false
+            }
+          };
+          
+          // Record this URL attempt
+          urlAttempts.push(urlAttempt);
+          
+          filingContent = altResponse.data as string;
+          
+          // Process XML content if applicable
+          if (typeof filingContent === 'string' && filingContent.trim().startsWith('<?xml')) {
+            // Log with visual indicator for parsing stage
+            logger.debug(`🔄 Processing XML content for filing ${accessionNumber}`);
+            
+            // Update parsing stage indicators
+            if (urlAttempt.parsingStages) {
+              urlAttempt.parsingStages.xmlParsed = true;
+              
+              // Generate XML summary
+              const xmlSummary = generateXmlSummary(filingContent);
+              urlAttempt.xmlSummary = xmlSummary;
+              
+              // Update namespace resolution status
+              const namespaceCount = Object.keys(xmlSummary.namespaces).length;
+              urlAttempt.parsingStages.namespacesResolved = namespaceCount > 0;
+              
+              // Update context reference validation status
+              const contextRefCount = xmlSummary.contextRefs ? Object.keys(xmlSummary.contextRefs).length : 0;
+              urlAttempt.parsingStages.contextRefsValid = contextRefCount > 0;
+              
+              // Log visual indicator of parsing completion
+              const parsingStatus = urlAttempt.parsingStages.contextRefsValid ? '✅' : '⚠️';
+              logger.debug(`${parsingStatus} XML parsing complete for ${accessionNumber}: ${namespaceCount} namespaces, ${contextRefCount} context references`);
+            }
+          }
+          
           logger.info(`Successfully fetched content using alternative URL: ${altUrl}`);
           foundContent = true;
           break;
         } catch (altError: any) {
           logger.error(`Error fetching from alternative URL ${altUrl}: ${altError.message}`);
           
-          // Track failed alternative URL attempt
+          // Record this failed URL attempt with parsing stage information
           urlAttempts.push({
             url: altUrl,
             success: false,
-            statusCode: altError.response?.status,
             error: altError.message,
-            timestamp: Date.now()
+            timestamp: Date.now(),
+            parsingStages: {
+              fetchComplete: false,
+              xmlParsed: false,
+              namespacesResolved: false,
+              contextRefsValid: false
+            }
           });
         }
       }
@@ -232,29 +356,80 @@ export async function getFilingById(
             ? SEC_CONFIG.RAW_FILING_URL(normalizedAccNum, formattedCik)
             : `https://www.sec.gov/Archives/edgar/data/${normalizedAccNum}/${accessionNumber}.txt`;
           try {
-            // Skip detailed fallback URL logging
-            const fallbackResponse = await axios.get(fallbackUrl, {
-              headers: SEC_CONFIG.HEADERS
-            });
-            filingContent = fallbackResponse.data as string;
+            // Log with visual indicator for parsing stage
+            logger.debug(`📄 Fetching filing content from ${fallbackUrl}`);
             
-            // Track successful fallback URL attempt
-            urlAttempts.push({
+            const fallbackResponse = await axios.get(fallbackUrl, {
+              headers: {
+                'User-Agent': SEC_CONFIG.USER_AGENT
+              }
+            });
+            
+            // Check if the content is XML and log it with our structured format
+            const contentType = fallbackResponse.headers['content-type'] || '';
+            const isXml = contentType.includes('xml') || 
+                         fallbackResponse.data.toString().trim().startsWith('<?xml');
+            
+            // Create URL attempt with parsing stage indicators
+            const urlAttempt: UrlAttempt = {
               url: fallbackUrl,
               success: true,
               statusCode: fallbackResponse.status,
-              timestamp: Date.now()
-            });
+              timestamp: Date.now(),
+              parsingStages: {
+                fetchComplete: true,
+                xmlParsed: isXml,
+                namespacesResolved: false,
+                contextRefsValid: false
+              }
+            };
+            
+            // Record this URL attempt
+            urlAttempts.push(urlAttempt);
+            
+            filingContent = fallbackResponse.data as string;
+            
+            // Process XML content if applicable
+            if (typeof filingContent === 'string' && filingContent.trim().startsWith('<?xml')) {
+              // Log with visual indicator for parsing stage
+              logger.debug(`🔄 Processing XML content for filing ${accessionNumber}`);
+              
+              // Update parsing stage indicators
+              if (urlAttempt.parsingStages) {
+                urlAttempt.parsingStages.xmlParsed = true;
+                
+                // Generate XML summary
+                const xmlSummary = generateXmlSummary(filingContent);
+                urlAttempt.xmlSummary = xmlSummary;
+                
+                // Update namespace resolution status
+                const namespaceCount = Object.keys(xmlSummary.namespaces).length;
+                urlAttempt.parsingStages.namespacesResolved = namespaceCount > 0;
+                
+                // Update context reference validation status
+                const contextRefCount = xmlSummary.contextRefs ? Object.keys(xmlSummary.contextRefs).length : 0;
+                urlAttempt.parsingStages.contextRefsValid = contextRefCount > 0;
+                
+                // Log visual indicator of parsing completion
+                const parsingStatus = urlAttempt.parsingStages.contextRefsValid ? '✅' : '⚠️';
+                logger.debug(`${parsingStatus} XML parsing complete for ${accessionNumber}: ${namespaceCount} namespaces, ${contextRefCount} context references`);
+              }
+            }
           } catch (fallbackError: any) {
             logger.error(`Error fetching filing content from fallback URL: ${fallbackError.message}`);
             
-            // Track failed fallback URL attempt
+            // Record this failed URL attempt with parsing stage information
             urlAttempts.push({
               url: fallbackUrl,
               success: false,
-              statusCode: fallbackError.response?.status,
               error: fallbackError.message,
-              timestamp: Date.now()
+              timestamp: Date.now(),
+              parsingStages: {
+                fetchComplete: false,
+                xmlParsed: false,
+                namespacesResolved: false,
+                contextRefsValid: false
+              }
             });
             
             throw new Error(`Could not retrieve filing content for ${accessionNumber}`);
@@ -337,17 +512,24 @@ export async function getFilingById(
       const formType = filingData.metadata?.formType || '';
       const ticker = filingData.metadata?.ticker || '';
       
-      const fetchData: FetchAttemptData = {
-        filingId: accessionNumber,
-        ticker,
-        formType,
-        attempts: urlAttempts,
-        successful: successfulAttempts > 0,
-        timestamp: Date.now()
-      };
+      // Check if content is XML (more robust detection)
+      const isXmlContent = typeof filingContent === 'string' && (
+        filingContent.trim().startsWith('<?xml') ||
+        filingContent.trim().startsWith('<XML>') ||
+        filingContent.trim().startsWith('<xbrl:') ||
+        filingContent.includes('<xbrl')
+      );
       
       // Don't await this to avoid blocking the response
-      secFetchMonitor.recordFetchAttempt(fetchData)
+      secFetchMonitor.recordFetchAttempt({
+        filingId: accessionNumber,
+        ticker: ticker,
+        formType: formType,
+        attempts: urlAttempts,
+        successful: filingMetadata !== null,
+        timestamp: Date.now(),
+        xmlContent: isXmlContent ? filingContent : undefined
+      })
         .catch(monitorError => {
           logger.error(`Failed to record SEC fetch attempt: ${monitorError instanceof Error ? monitorError.message : String(monitorError)}`);
         });

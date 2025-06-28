@@ -1,9 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
-
 generator client {
   provider = "prisma-client-js"
   output   = "../lib/generated/prisma"
@@ -15,180 +9,176 @@ datasource db {
 }
 
 model User {
-  id            String    @id @default(uuid())
-  email         String    @unique
-  name          String?
-  authProvider  String
-  authProviderId String
-  createdAt     DateTime  @default(now())
-  preferences   Json?     // Store notification and theme preferences
-  tickers       Ticker[]
-  
-  // Onboarding tracking
-  onboardingCompleted Boolean @default(false)
-  tutorialProgress    Int     @default(0)  // Progress percentage (0-100)
-  tutorialCompletedAt DateTime?           // When the tutorial was completed
-  tutorialSteps       Json?               // Track individual tutorial steps completed
+  id                  String    @id @default(uuid())
+  email               String    @unique
+  name                String?
+  authProvider        String
+  authProviderId      String
+  createdAt           DateTime  @default(now())
+  preferences         Json?
+  onboardingCompleted Boolean   @default(false)
+  tutorialCompletedAt DateTime?
+  tutorialProgress    Int       @default(0)
+  tutorialSteps       Json?
+  tickers             Ticker[]
 }
 
 model Ticker {
-  id          String    @id @default(uuid())
+  id          String      @id @default(uuid())
   symbol      String
   companyName String
   userId      String
-  addedAt     DateTime  @default(now())
-  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  summaries   Summary[]
+  addedAt     DateTime    @default(now())
   secFilings  SecFiling[]
-  
+  summaries   Summary[]
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   @@unique([userId, symbol])
 }
 
 model Summary {
-  id                  String    @id @default(uuid())
-  tickerId            String
-  filingType          String    // "10-K", "10-Q", "8-K", "Form4"
-  filingDate          DateTime
-  filingUrl           String    // Kept for backward compatibility
-  url                 String?   // New field for SEC HTML viewer URL
-  summaryText         String    @db.Text
-  summaryJSON         Json?
-  createdAt           DateTime  @default(now())
-  sentToUser          Boolean   @default(false)
-  ticker              Ticker    @relation(fields: [tickerId], references: [id], onDelete: Cascade)
-  secFilingId         String?   // Reference to the SEC filing
-  secFiling           SecFiling? @relation(fields: [secFilingId], references: [id], onDelete: SetNull)
-  processingStatus    String?   // "PENDING", "PROCESSING", "COMPLETED", "FAILED", "COMPLETED_WITH_WARNINGS"
-  processingError     String?   @db.Text
-  processingErrorCode String?
-  processingTimeMs    Int?
+  id                    String     @id @default(uuid())
+  tickerId              String
+  filingType            String
+  filingDate            DateTime
+  filingUrl             String
+  summaryText           String
+  summaryJSON           Json?
+  createdAt             DateTime   @default(now())
+  sentToUser            Boolean    @default(false)
+  url                   String?
+  attempts              Int?       @default(0)
+  cost                  Float?
+  isPartialResult       Boolean?   @default(false)
+  model                 String?
   processingCompletedAt DateTime?
-  isPartialResult     Boolean?  @default(false)
-  tokensUsed          Int?
-  model               String?
-  cost                Float?
-  attempts            Int?      @default(0)
+  processingError       String?
+  processingErrorCode   String?
+  processingStatus      String?
+  processingTimeMs      Int?
+  secFilingId           String?
+  tokensUsed            Int?
+  secFiling             SecFiling? @relation(fields: [secFilingId], references: [id])
+  ticker                Ticker     @relation(fields: [tickerId], references: [id], onDelete: Cascade)
 }
 
-// Model for mapping ticker symbols to SEC Central Index Keys (CIK)
 model CikMapping {
-  id                String    @id @default(uuid())
-  cik               String    @unique // Central Index Key with leading zeros
-  ticker            String    // Primary ticker symbol
-  companyName       String    // Company name from SEC
-  aliases           String[]  // Alternative ticker symbols or company names
-  exchangeCodes     String[]  // Stock exchange codes (e.g., NYSE, NASDAQ)
-  sic               String?   // Standard Industrial Classification code
-  ein               String?   // Employer Identification Number
-  entityType        String?   // Type of entity (e.g., "Corporation", "Limited Partnership")
-  formerNames       Json?     // Historical company names with effective dates
-  formerTickers     Json?     // Historical ticker symbols with effective dates
-  lastUpdated       DateTime  @default(now())
-  fetchAttempts     Int       @default(0) // Number of attempts to fetch data
-  lastFetchStatus   String?   // Status of the last fetch attempt
-  isActive          Boolean   @default(true) // Whether the company is still active
+  id              String   @id @default(uuid())
+  cik             String   @unique
+  ticker          String
+  companyName     String
+  aliases         String[]
+  exchangeCodes   String[]
+  sic             String?
+  ein             String?
+  entityType      String?
+  formerNames     Json?
+  formerTickers   Json?
+  lastUpdated     DateTime @default(now())
+  fetchAttempts   Int      @default(0)
+  lastFetchStatus String?
+  isActive        Boolean  @default(true)
 
   @@index([ticker])
   @@index([companyName])
 }
 
-// Model to track changes to ticker symbols over time (mergers, acquisitions, etc.)
 model TickerChange {
-  id              String    @id @default(uuid())
-  oldTicker       String
-  newTicker       String
-  oldCik          String?
-  newCik          String?
-  effectiveDate   DateTime
-  changeType      String    // "Merger", "Acquisition", "NameChange", "Spinoff", etc.
-  description     String?
-  createdAt       DateTime  @default(now())
+  id            String   @id @default(uuid())
+  oldTicker     String
+  newTicker     String
+  oldCik        String?
+  newCik        String?
+  effectiveDate DateTime
+  changeType    String
+  description   String?
+  createdAt     DateTime @default(now())
 
   @@index([oldTicker])
   @@index([newTicker])
   @@index([effectiveDate])
 }
 
-// Model for job queue to manage SEC filing processing jobs
 model JobQueue {
-  id                String    @id @default(uuid())
-  jobType           String    // "CHECK_FILINGS", "PROCESS_FILING", "ARCHIVE_FILINGS", etc.
-  status            String    // "PENDING", "PROCESSING", "COMPLETED", "FAILED", "RETRYING"
-  priority          Int       @default(5) // 1-10, higher number = higher priority
-  payload           Json      // Job-specific data (filing types, date ranges, etc.)
-  idempotencyKey    String?   // Unique key for preventing duplicate job processing
-  createdAt         DateTime  @default(now())
-  scheduledFor      DateTime  // When the job should be executed
-  startedAt         DateTime? // When job execution began
-  completedAt       DateTime? // When job execution completed
-  failedAt          DateTime? // When job execution failed
-  retryCount        Int       @default(0) // Number of retry attempts
-  maxRetries        Int       @default(3) // Maximum number of retries
-  lastError         String?   @db.Text // Last error message
-  executionTime     Int?      // Execution time in milliseconds
-  result            Json?     // Result of the job execution
-  
-  @@index([status, scheduledFor]) // For efficient job fetching
-  @@index([jobType, status]) // For querying specific job types
-  @@index([idempotencyKey]) // For idempotency checks
-  @@index([createdAt]) // For historical analysis
+  id             String    @id @default(uuid())
+  jobType        String
+  status         String
+  priority       Int       @default(5)
+  payload        Json
+  idempotencyKey String?
+  createdAt      DateTime  @default(now())
+  scheduledFor   DateTime
+  startedAt      DateTime?
+  completedAt    DateTime?
+  failedAt       DateTime?
+  retryCount     Int       @default(0)
+  maxRetries     Int       @default(3)
+  lastError      String?
+  executionTime  Int?
+  result         Json?
+
+  @@index([status, scheduledFor])
+  @@index([jobType, status])
+  @@index([idempotencyKey])
+  @@index([createdAt])
 }
 
-// Model for distributed locks to prevent concurrent execution
 model JobLock {
-  id              String    @id @default(uuid())
-  lockName        String    @unique // Name of the lock (e.g., "check-10k-filings")
-  acquiredBy      String    // Identifier of the process that acquired the lock
-  acquiredAt      DateTime  @default(now())
-  expiresAt       DateTime  // When the lock expires
-  refreshedAt     DateTime? // When the lock was last refreshed
-  released        Boolean   @default(false) // Whether the lock has been released
-  
-  @@index([lockName, released, expiresAt]) // For efficient lock checking
+  id          String    @id @default(uuid())
+  lockName    String    @unique
+  acquiredBy  String
+  acquiredAt  DateTime  @default(now())
+  expiresAt   DateTime
+  refreshedAt DateTime?
+  released    Boolean   @default(false)
+
+  @@index([lockName, released, expiresAt])
 }
 
-// Model for SEC filings
 model SecFiling {
   id              String    @id @default(uuid())
   tickerId        String
-  ticker          Ticker    @relation(fields: [tickerId], references: [id], onDelete: Cascade)
-  formType        String    // "10-K", "10-Q", "8-K", "Form4"
+  formType        String
   filingDate      DateTime
-  secUrl          String    // URL to the SEC filing
-  accessionNumber String    // SEC accession number
+  secUrl          String
+  accessionNumber String
   companyName     String
   cik             String
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
+  ticker          Ticker    @relation(fields: [tickerId], references: [id], onDelete: Cascade)
   summaries       Summary[]
-  
+
   @@index([tickerId, formType])
   @@index([accessionNumber])
 }
 
-// Model for caching SEC company data
 model SecCompanyCache {
-  id          Int       @id @default(1) // Singleton record
-  data        String    @db.Text // JSON string of company data
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  id        Int      @id @default(1)
+  data      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
-// Model for monitoring SEC fetch attempts
 model SecFetchAttempt {
-  id            String    @id @default(uuid())
-  filingId      String    // Filing accession number or identifier
-  ticker        String    // Ticker symbol
-  formType      String    // Form type (10-K, 10-Q, 8-K, Form 144, etc.)
-  urlAttempts   String    // JSON string of URL attempts
-  successful    Boolean   // Whether the fetch was ultimately successful
-  attemptCount  Int       // Total number of URL attempts
-  successCount  Int       // Number of successful URL attempts
-  timestamp     DateTime  // When the fetch attempt occurred
-  createdAt     DateTime  @default(now())
-  
+  id              String   @id @default(cuid())
+  filingId        String
+  ticker          String
+  formType        String
+  successful      Boolean
+  attemptCount    Int
+  successCount    Int
+  timestamp       DateTime
+  hasXmlContent   Boolean  @default(false)
+  xmlSize         Int      @default(0)
+  hasEmbeddedHtml Boolean  @default(false)
+  namespaceCount  Int      @default(0)
+  contextRefCount Int      @default(0)
+  urlAttempts     Json
+
   @@index([filingId])
   @@index([ticker])
   @@index([formType])
   @@index([timestamp])
+  @@index([hasXmlContent])
 }
