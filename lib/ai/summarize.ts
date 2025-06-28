@@ -17,6 +17,7 @@ import { logger } from '../logging';
 import { monitoring } from '../monitoring';
 import { ApiError, ErrorCode } from '../error-handling';
 import { prisma } from '../db/prisma';
+import { ensureMinimumFields } from './parsers/response-fixer';
 
 /**
  * Process document content for summarization
@@ -458,7 +459,7 @@ export async function summarizeFiling(options: SummarizationOptions): Promise<Su
       const parsedResult = parseResponse(summaryText);
       const parsingDuration = Date.now() - parsingStartTime;
       
-      if (parsedResult.success) {
+      if (parsedResult.success && parsedResult.data) {
         componentLogger.info(`Successfully parsed response for summaryId=${summaryId}, filingType=${filingRecordFromDB.formType}`);
         monitoring.recordTiming('ai.parsing_duration', parsingDuration);
         monitoring.incrementCounter('ai.summarization_parsing_success', 1);
@@ -493,15 +494,22 @@ export async function summarizeFiling(options: SummarizationOptions): Promise<Su
         monitoring.recordTiming('ai.parsing_duration', parsingDuration);
         componentLogger.warn(`Failed to parse valid JSON from response for summaryId=${summaryId}, filingType=${filingRecordFromDB!.formType}, errors=${parsedResult.errors?.join('; ')}, operationId=${operationId}`);
         monitoring.incrementCounter('ai.summarization_parsing_error', 1);
+        
+        // Use response-fixer to ensure minimum fields are present
+        const companyName = filingRecordFromDB?.companyName || 
+                           (filingRecordFromDB?.ticker?.symbol ? `${filingRecordFromDB.ticker.symbol} Company` : 'Unknown Company');
+        const fixedData = ensureMinimumFields(summaryText, filingRecordFromDB!.formType as SECFilingType, companyName);
+        
+        // Update the summary record with the fixed data
         await prisma.summary.update({
           where: { id: summaryId },
           data: {
-            summaryText,
+            summaryText: fixedData.summary,
             processingStatus: 'COMPLETED_WITH_WARNINGS',
             processingCompletedAt: new Date(),
             isPartialResult: true,
             processingTimeMs: Date.now() - startTime,
-            processingError: 'Failed to parse JSON response: ' + parsedResult.errors?.join('; '),
+            processingError: 'Fixed JSON response: ' + parsedResult.errors?.join('; '),
             tokensUsed: inputTokens + outputTokens,
             model: response.model,
             cost,
@@ -510,7 +518,9 @@ export async function summarizeFiling(options: SummarizationOptions): Promise<Su
         });
         return {
           summaryId,
-          summaryText,
+          summaryText: fixedData.summary,
+          summaryJSON: fixedData,
+          isPartial: true,
           parsingErrors: parsedResult.errors,
           duration: Date.now() - startTime,
           modelUsed: response.model,

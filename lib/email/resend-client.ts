@@ -207,20 +207,65 @@ export class ResendClient {
               );
             }
             
-            const response = await this.resend.emails.send({
+            // Log the exact parameters being sent to Resend for debugging
+            logger.debug('Sending email with parameters:', {
+              from: emailParams.from,
+              to: emailParams.to,
+              subject: emailParams.subject,
+              replyTo: emailParams.reply_to,
+              requestId
+            });
+            
+            // Send with properly formatted tags if present
+            const emailOptions: any = {
               from: emailParams.from,
               to: emailParams.to,
               subject: emailParams.subject,
               html: emailParams.html,
               text: emailParams.text,
-              replyTo: emailParams.reply_to,
+              reply_to: emailParams.reply_to,
               cc: emailParams.cc,
               bcc: emailParams.bcc,
-              attachments: emailParams.attachments,
-              tags: emailParams.tags
+              attachments: emailParams.attachments
+            };
+            
+            // Only add tags if they exist
+            // Tags are already sanitized in prepareEmailParams
+            if (emailParams.tags && Array.isArray(emailParams.tags) && emailParams.tags.length > 0) {
+              emailOptions.tags = emailParams.tags;
+            }
+            
+            // Log the email options for debugging
+            logger.debug('Sending email with options:', { 
+              ...emailOptions,
+              html: emailOptions.html ? '(HTML content)' : undefined,
+              text: emailOptions.text ? '(Text content)' : undefined,
+              requestId
             });
             
+            const response = await this.resend.emails.send(emailOptions);
+            
+            // Log the raw response for debugging
+            logger.debug('Resend API response:', { response, requestId });
+            
+            // More robust response handling
+            if (!response) {
+              throw createExternalApiError('Failed to send email: Empty response from Resend API', {
+                response
+              }, true, requestId);
+            }
+            
+            // Handle case where response exists but doesn't have expected structure
             if (!response.data || !response.data.id) {
+              // If we have an error in the response, use that
+              if (response.error) {
+                throw createExternalApiError(`Failed to send email: ${response.error.message || 'Unknown error'}`, {
+                  response,
+                  errorCode: response.error.code
+                }, true, requestId);
+              }
+              
+              // Otherwise, generic error
               throw createExternalApiError('Failed to send email: No ID returned', {
                 response
               }, true, requestId);
@@ -336,9 +381,28 @@ export class ResendClient {
     if (message.html) params.html = message.html;
     if (message.text) params.text = message.text;
     
-    // Use simple string tags as expected by the Resend API
+    // Format tags as simple strings as expected by the Resend API
+    // Based on our testing and memory, Resend API expects simple strings without special characters
     if (message.tags) {
-      params.tags = message.tags;
+      // Helper function to sanitize tag values - only allow letters, numbers, underscores, and dashes
+      const sanitizeTagValue = (value: string): string => {
+        return value.replace(/[^a-zA-Z0-9_-]/g, '_');
+      };
+      
+      if (Array.isArray(message.tags)) {
+        // Handle array of tags - ensure they're all simple strings
+        params.tags = message.tags.map(tag => {
+          if (typeof tag === 'string') {
+            return sanitizeTagValue(tag);
+          } else if (tag && typeof tag === 'object' && 'name' in tag) {
+            return sanitizeTagValue(String(tag.name));
+          }
+          return sanitizeTagValue(String(tag));
+        });
+      } else {
+        // Single tag case
+        params.tags = [sanitizeTagValue(String(message.tags))];
+      }
     }
     
     // Add CC and BCC if present
