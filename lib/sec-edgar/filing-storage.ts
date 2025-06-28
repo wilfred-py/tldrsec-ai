@@ -1,9 +1,11 @@
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, Prisma } from '@prisma/client';
 import type { Ticker, Summary } from '../generated/prisma';
 import { ParsedFiling, FilingType, SECEdgarError, SECErrorCode } from './types';
 import { TickerResolver } from './ticker-service';
 // Import notification functions
 import { notifyNewFiling, notifyFilingUpdate, notifySummaryReady } from '../email/notification-integration';
+// Import the global Prisma client
+import { prisma as globalPrisma } from '../db/prisma';
 
 /**
  * Options for filing operations
@@ -28,7 +30,8 @@ export class FilingStorage {
     tickerResolver?: TickerResolver;
     defaultOptions?: FilingStorageOptions;
   } = {}) {
-    this.prisma = options.prisma || new PrismaClient();
+    // Use the provided Prisma client or the global instance instead of creating a new one
+    this.prisma = options.prisma || globalPrisma;
     this.tickerResolver = options.tickerResolver || new TickerResolver({ prisma: this.prisma });
     
     // Default options
@@ -282,24 +285,36 @@ export class FilingStorage {
     for (let i = 0; i < filings.length; i += batchSize) {
       const batch = filings.slice(i, i + batchSize);
       
-      // Process each batch in a transaction for atomicity
       try {
-        await this.prisma.$transaction(async (tx: PrismaClient) => {
-          // Create a temporary filing storage with the transaction client
-          const tempStorage = new FilingStorage({
-            prisma: tx as unknown as PrismaClient,
-            tickerResolver: this.tickerResolver,
-            defaultOptions: opts
-          });
-          
-          // Store each filing in the batch
-          for (const filing of batch) {
-            const result = await tempStorage.storeFiling(filing, opts);
-            results.push(result);
-          }
+        // Create a temporary storage instance that uses the transaction
+        const tempStorage = new FilingStorage({
+          ...options,
+          defaultOptions: opts
         });
+        
+        // Use withRetry to handle potential connection issues with exponential backoff
+        await this.prisma.$withRetry(async () => {
+          // Use a transaction with a timeout to ensure all filings are stored atomically
+          await this.prisma.$transaction(async (tx: PrismaClient) => {
+            // Set the transaction client on the temporary storage
+            tempStorage.prisma = tx;
+            
+            // Store each filing in the batch
+            for (const filing of batch) {
+              const result = await tempStorage.storeFiling(filing, opts);
+              results.push(result);
+            }
+          }, {
+            // Set isolation level for better performance in serverless environments
+            isolationLevel: 'ReadCommitted',
+            maxWait: 5000, // 5 seconds max wait time for transaction to start
+            timeout: 30000 // 30 seconds total transaction timeout
+          });
+        }, 3, 200); // 3 retries with 200ms initial delay
+        
+        console.log(`Successfully stored batch of ${batch.length} filings`);
       } catch (error) {
-        console.error(`Error storing batch of ${batch.length} filings:`, error);
+        console.error(`Error storing batch of ${batch.length} filings after retries:`, error);
         throw new SECEdgarError(
           `Failed to store batch of filings: ${(error as Error).message}`,
           SECErrorCode.UNKNOWN_ERROR
@@ -442,18 +457,23 @@ export class FilingStorage {
     if (!ids.length) return 0;
     
     try {
-      const result = await this.prisma.summary.updateMany({
-        where: {
-          id: { in: ids }
-        },
-        data: {
-          sentToUser: true
-        }
-      });
-      
-      return result.count;
+      // Use withRetry to handle potential connection issues with exponential backoff
+      return await this.prisma.$withRetry(async () => {
+        const result = await this.prisma.summary.updateMany({
+          where: {
+            id: { in: ids }
+          },
+          data: {
+            sentToUser: true,
+            sentDate: new Date()
+          }
+        });
+        
+        console.log(`Successfully marked ${result.count} filings as sent`);
+        return result.count;
+      }, 3, 200); // 3 retries with 200ms initial delay
     } catch (error) {
-      console.error(`Error marking filings as sent:`, error);
+      console.error(`Error marking filings as sent after retries:`, error);
       return 0;
     }
   }
@@ -483,15 +503,19 @@ export class FilingStorage {
         where.filingType = { in: filingTypes };
       }
       
-      // For now, we'll just mark them as archived by deleting them
-      // In a real implementation, we might move them to an archive table
-      const result = await this.prisma.summary.deleteMany({
-        where
-      });
-      
-      return result.count;
+      // Use withRetry to handle potential connection issues with exponential backoff
+      return await this.prisma.$withRetry(async () => {
+        // For now, we'll just mark them as archived by deleting them
+        // In a real implementation, we might move them to an archive table
+        const result = await this.prisma.summary.deleteMany({
+          where
+        });
+        
+        console.log(`Successfully archived ${result.count} old filings`);
+        return result.count;
+      }, 3, 200); // 3 retries with 200ms initial delay
     } catch (error) {
-      console.error(`Error archiving old filings:`, error);
+      console.error(`Error archiving old filings after retries:`, error);
       return 0;
     }
   }
