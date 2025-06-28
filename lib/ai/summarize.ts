@@ -17,6 +17,7 @@ import { logger } from '../logging';
 import { monitoring } from '../monitoring';
 import { ApiError, ErrorCode } from '../error-handling';
 import { prisma } from '../db/prisma';
+import { ensureMinimumFields } from './parsers/response-fixer';
 
 /**
  * Process document content for summarization
@@ -212,18 +213,14 @@ export class SummarizationError extends Error {
   code: string;
   reason?: string;
   isRetriable: boolean;
-  retryAfterSeconds?: number;
-  resetTime?: string;
-
+  
   constructor(
     message: string, 
     summaryId: string, 
     filingType: string, 
     code: string = 'SUMMARIZATION_FAILED',
     isRetriable: boolean = false,
-    reason?: string,
-    retryAfterSeconds?: number,
-    resetTime?: string
+    reason?: string
   ) {
     super(message);
     this.name = 'SummarizationError';
@@ -232,8 +229,6 @@ export class SummarizationError extends Error {
     this.code = code;
     this.isRetriable = isRetriable;
     this.reason = reason;
-    this.retryAfterSeconds = retryAfterSeconds;
-    this.resetTime = resetTime;
   }
 }
 
@@ -372,10 +367,6 @@ export async function summarizeFiling(options: SummarizationOptions): Promise<Su
       }
     );
     
-    // Log the company context being passed to the prompt
-    componentLogger.debug(`Company context for summaryId=${summaryId}: ticker=${filingRecordFromDB.ticker?.symbol}, companyName=${filingRecordFromDB.companyName}`);
-
-    
     // Check if we need to chunk the document due to token limits
     const estimatedTokens = estimateTokenCount(content);
     const maxTokenLimit = 150000; // Claude's max token limit is 200k, but leave buffer for prompt
@@ -465,12 +456,10 @@ export async function summarizeFiling(options: SummarizationOptions): Promise<Su
       
       // Parse the response
       const parsingStartTime = Date.now();
-      // Log the raw AI response for debugging
-      componentLogger.debug(`Raw AI response for summaryId=${summaryId}, filingType=${filingRecordFromDB.formType}:\n${summaryText.substring(0, 500)}...`);
       const parsedResult = parseResponse(summaryText);
       const parsingDuration = Date.now() - parsingStartTime;
       
-      if (parsedResult.success) {
+      if (parsedResult.success && parsedResult.data) {
         componentLogger.info(`Successfully parsed response for summaryId=${summaryId}, filingType=${filingRecordFromDB.formType}`);
         monitoring.recordTiming('ai.parsing_duration', parsingDuration);
         monitoring.incrementCounter('ai.summarization_parsing_success', 1);
@@ -506,80 +495,21 @@ export async function summarizeFiling(options: SummarizationOptions): Promise<Su
         componentLogger.warn(`Failed to parse valid JSON from response for summaryId=${summaryId}, filingType=${filingRecordFromDB!.formType}, errors=${parsedResult.errors?.join('; ')}, operationId=${operationId}`);
         monitoring.incrementCounter('ai.summarization_parsing_error', 1);
         
-        // Check if the error is due to missing company field
-        const isMissingCompanyField = parsedResult.errors?.some(err => err.includes('Missing minimum required fields'));
+        // Use response-fixer to ensure minimum fields are present
+        const companyName = filingRecordFromDB?.companyName || 
+                           (filingRecordFromDB?.ticker?.symbol ? `${filingRecordFromDB.ticker.symbol} Company` : 'Unknown Company');
+        const fixedData = ensureMinimumFields(summaryText, filingRecordFromDB!.formType as SECFilingType, companyName);
         
-        if (isMissingCompanyField && parsedResult.raw) {
-          try {
-            // Try to extract whatever JSON we can and inject the company name
-            componentLogger.info(`Attempting to recover from missing company field for summaryId=${summaryId}`);
-            
-            // Parse the raw JSON if available
-            // The ParseResult interface doesn't have partialData, but it might have partial data in the raw property
-            let parsedData: any = {};
-            
-            // Try to extract data from the raw JSON if available
-            if (parsedResult.raw) {
-              try {
-                // Try to parse the raw JSON
-                const extractedData = JSON.parse(parsedResult.raw);
-                if (extractedData && typeof extractedData === 'object') {
-                  parsedData = extractedData;
-                }
-              } catch (jsonError) {
-                componentLogger.warn(`Failed to parse raw JSON: ${jsonError instanceof Error ? jsonError.message : String(jsonError)}`);
-              }
-            }
-            
-            // Inject the company name from the filing record
-            if (filingRecordFromDB.companyName) {
-              parsedData.company = filingRecordFromDB.companyName;
-              componentLogger.info(`Injected company name '${filingRecordFromDB.companyName}' into parsed data`);
-              
-              // If we have a summary field, consider this a successful parse
-              if (parsedData.summary) {
-                await prisma.summary.update({
-                  where: { id: summaryId },
-                  data: {
-                    summaryText: parsedData.summary,
-                    processingStatus: 'COMPLETED',
-                    processingCompletedAt: new Date(),
-                    isPartialResult: false,
-                    processingTimeMs: Date.now() - startTime,
-                    tokensUsed: inputTokens + outputTokens,
-                    model: response.model,
-                    cost,
-                    attempts: response.executionMetadata?.attempts || 1
-                  }
-                });
-                
-                return {
-                  summaryId,
-                  summaryText: parsedData.summary,
-                  summaryJSON: parsedData,
-                  duration: Date.now() - startTime,
-                  modelUsed: response.model,
-                  inputTokens,
-                  outputTokens,
-                  cost,
-                  attempts: response.executionMetadata?.attempts || 1
-                };
-              }
-            }
-          } catch (recoveryError) {
-            componentLogger.error(`Failed to recover from missing company field: ${recoveryError instanceof Error ? recoveryError.message : String(recoveryError)}`);
-          }
-        }
-        
+        // Update the summary record with the fixed data
         await prisma.summary.update({
           where: { id: summaryId },
           data: {
-            summaryText,
+            summaryText: fixedData.summary,
             processingStatus: 'COMPLETED_WITH_WARNINGS',
             processingCompletedAt: new Date(),
             isPartialResult: true,
             processingTimeMs: Date.now() - startTime,
-            processingError: 'Failed to parse JSON response: ' + parsedResult.errors?.join('; '),
+            processingError: 'Fixed JSON response: ' + parsedResult.errors?.join('; '),
             tokensUsed: inputTokens + outputTokens,
             model: response.model,
             cost,
@@ -588,7 +518,9 @@ export async function summarizeFiling(options: SummarizationOptions): Promise<Su
         });
         return {
           summaryId,
-          summaryText,
+          summaryText: fixedData.summary,
+          summaryJSON: fixedData,
+          isPartial: true,
           parsingErrors: parsedResult.errors,
           duration: Date.now() - startTime,
           modelUsed: response.model,
@@ -601,22 +533,9 @@ export async function summarizeFiling(options: SummarizationOptions): Promise<Su
     } catch (error) {
       componentLogger.error(`Error calling Claude API for filing ${filingId}, summary ${summaryId}: ${error instanceof Error ? error.message : String(error)} (filingType: ${filingRecordFromDB!.formType}, operationId: ${operationId})`);
       monitoring.incrementCounter('ai.summarization_error', 1);
-      
       const isRetriable = error instanceof ApiError && error.isRetriable;
       const isRateLimit = error instanceof ApiError && error.code === ErrorCode.RATE_LIMITED;
-      
-      // Extract retry information if this is a rate limit error
-      let retryAfterSeconds: number | undefined;
-      let resetTime: string | undefined;
-      
-      if (isRateLimit && error instanceof ApiError) {
-        retryAfterSeconds = error.details?.retryAfterSeconds;
-        resetTime = error.details?.resetTime;
-        
-        componentLogger.warn(`Rate limit hit. Retry after ${retryAfterSeconds} seconds. Reset time: ${resetTime}`);
-      }
-      
-      if (!isRetriable && !isRateLimit) {
+      if (!isRetriable || (error instanceof ApiError && error.code === ErrorCode.RETRY_EXHAUSTED)) {
         await prisma.summary.update({
           where: { id: summaryId },
           data: {
@@ -627,16 +546,13 @@ export async function summarizeFiling(options: SummarizationOptions): Promise<Su
           }
         });
       }
-      
       throw new SummarizationError(
         `Claude API error: ${error instanceof Error ? error.message : String(error)}`,
         summaryId,
         filingRecordFromDB!.formType,
         error instanceof ApiError ? error.code : 'AI_ERROR',
         isRetriable || isRateLimit,
-        error instanceof ApiError ? error.code : 'ai_error',
-        retryAfterSeconds,
-        resetTime
+        error instanceof ApiError ? error.code : 'ai_error'
       );
     }
   } catch (error) {

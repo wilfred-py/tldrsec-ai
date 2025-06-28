@@ -131,12 +131,19 @@ export class ResendClient {
     // Prepare email parameters - ensure we have from address
     const emailParams = this.prepareEmailParams(message);
     
-    logger.info(`Sending email to ${Array.isArray(message.to) ? message.to.length + ' recipients' : message.to} | subject: ${message.subject} | requestId: ${requestId}`);
+    logger.info(`Sending email to ${Array.isArray(message.to) ? message.to.length + ' recipients' : message.to}`, {
+      subject: message.subject,
+      requestId
+    });
     
     // If we're using a dummy client in non-production, log and return success without sending
     if (this.isDummyClient) {
-      logger.info(`[DUMMY] Would send email to ${Array.isArray(message.to) ? message.to : [message.to]} | subject: ${message.subject} | html: ${message.html?.substring(0, 50)}... | text: ${message.text?.substring(0, 50)}... | requestId: ${requestId}`);
-
+      logger.info(`[DUMMY] Would send email to ${Array.isArray(message.to) ? message.to : [message.to]}`, {
+        subject: message.subject,
+        html: message.html?.substring(0, 100) + '...',
+        text: message.text?.substring(0, 100) + '...',
+        requestId
+      });
       
       // Return a dummy successful result
       return {
@@ -162,9 +169,13 @@ export class ResendClient {
         ...DefaultRetryConfig,
         ...options.retryConfig,
         maxRetries: options.retryConfig?.maxRetries || resendConfig.retryAttempts,
-
         onRetry: (error, attempt, delay) => {
-          logger.warn(`Retry attempt ${attempt} for Resend API after ${delay}ms delay | error: ${error.message} | requestId: ${requestId}`);
+          logger.warn(`Retry attempt ${attempt} for Resend API after ${delay}ms delay`, {
+            error: error.message,
+            attempt,
+            delay,
+            requestId
+          });
           
           monitoring.incrementCounter('email.retry', 1);
         }
@@ -177,7 +188,7 @@ export class ResendClient {
       
       // Use the retry system with circuit breaker
       const result = await this.limiter.schedule(() => 
-        executeWithRetry<any>(
+        executeWithRetry(
           async () => {
             // Use standard AbortController for fetch API
             const fetchController = new AbortController();
@@ -196,71 +207,71 @@ export class ResendClient {
               );
             }
             
-            // Ensure we have text content as it's required by the Resend API
-            if (!emailParams.text && emailParams.html) {
-              emailParams.text = emailParams.html.replace(/<[^>]*>/g, '');
-            }
-            
-            // Create a clean payload without undefined values
-            const payload: Record<string, any> = {
+            // Log the exact parameters being sent to Resend for debugging
+            logger.debug('Sending email with parameters:', {
               from: emailParams.from,
               to: emailParams.to,
-              subject: emailParams.subject
+              subject: emailParams.subject,
+              replyTo: emailParams.reply_to,
+              requestId
+            });
+            
+            // Send with properly formatted tags if present
+            const emailOptions: any = {
+              from: emailParams.from,
+              to: emailParams.to,
+              subject: emailParams.subject,
+              html: emailParams.html,
+              text: emailParams.text,
+              reply_to: emailParams.reply_to,
+              cc: emailParams.cc,
+              bcc: emailParams.bcc,
+              attachments: emailParams.attachments
             };
             
-            // Only add defined properties
-            if (emailParams.html) payload.html = emailParams.html;
-            if (emailParams.text || emailParams.html) {
-              payload.text = emailParams.text || emailParams.html?.replace(/<[^>]*>/g, '');
-            }
-            if (emailParams.replyTo) payload.reply_to = emailParams.replyTo;
-            if (emailParams.cc) payload.cc = emailParams.cc;
-            if (emailParams.bcc) payload.bcc = emailParams.bcc;
-            if (emailParams.attachments) payload.attachments = emailParams.attachments;
-            
-            // Format tags according to Resend API requirements - must be an array of {name: string} objects
-            if (emailParams.tags && emailParams.tags.length > 0) {
-              payload.tags = emailParams.tags.map(tag => ({
-                name: typeof tag === 'string' ? tag : String(tag)
-              }));
+            // Only add tags if they exist
+            // Tags are already sanitized in prepareEmailParams
+            if (emailParams.tags && Array.isArray(emailParams.tags) && emailParams.tags.length > 0) {
+              emailOptions.tags = emailParams.tags;
             }
             
-            // Log the payload for debugging
-            console.log('RESEND API PAYLOAD:', JSON.stringify(payload, null, 2));
+            // Log the email options for debugging
+            logger.debug('Sending email with options:', { 
+              ...emailOptions,
+              html: emailOptions.html ? '(HTML content)' : undefined,
+              text: emailOptions.text ? '(Text content)' : undefined,
+              requestId
+            });
             
-            // Note: Resend API doesn't support AbortController signal in its type definitions
-            // We'll handle timeout separately if needed
-            const response = await this.resend!.emails.send(payload);
-       
-            // Log the full response for debugging
-            console.log('RESEND API RESPONSE:', JSON.stringify(response, null, 2));
+            const response = await this.resend.emails.send(emailOptions);
             
+            // Log the raw response for debugging
+            logger.debug('Resend API response:', { response, requestId });
+            
+            // More robust response handling
+            if (!response) {
+              throw createExternalApiError('Failed to send email: Empty response from Resend API', {
+                response
+              }, true, requestId);
+            }
+            
+            // Handle case where response exists but doesn't have expected structure
             if (!response.data || !response.data.id) {
-              console.log('RESEND API ERROR: No ID returned in response', {
-                responseData: response.data,
-                // Only log what's available in the CreateEmailResponse type
-                responseType: typeof response
-              });
-
+              // If we have an error in the response, use that
+              if (response.error) {
+                throw createExternalApiError(`Failed to send email: ${response.error.message || 'Unknown error'}`, {
+                  response,
+                  errorCode: response.error.code
+                }, true, requestId);
+              }
+              
+              // Otherwise, generic error
               throw createExternalApiError('Failed to send email: No ID returned', {
                 response
               }, true, requestId);
             }
             
-            // Increment success counter
-            this.totalSent++;
-            
-            // Record timing
-            const duration = Date.now() - startTime;
-            
-            // Log success
-            logger.info(`Email sent successfully in ${duration}ms. ID: ${response.data.id}, To: ${emailParams.to}, Subject: ${message.subject}, RequestId: ${requestId}`);
-            
-            return {
-              id: response.data.id,
-              to: emailParams.to,
-              success: true
-            };
+            return response;
           },
           this.serviceName,
           retryConfig,
@@ -279,26 +290,12 @@ export class ResendClient {
       // monitoring.incrementCounter('email.sent', 1);
       
       // Return success result
-      // Handle different response structures that might come from the inner function
-      // or from the Resend API directly
-      console.log('DEBUG: Email send result structure:', JSON.stringify(result, null, 2));
-      
-      // Safely extract the ID from wherever it might be in the result
-      let emailId = 'unknown';
-      if (result && typeof result === 'object') {
-        if (result.id) {
-          emailId = result.id;
-        } else if (result.data && result.data.id) {
-          emailId = result.data.id;
-        }
-      }
-      
       return {
-        id: emailId,
+        id: result.data!.id,
         to: emailParams.to,
         success: true
       };
-    } catch (error: any) {
+    } catch (error) {
       // Record timing metrics for failure
       // monitoring.stopTimer('email.send');
       // monitoring.recordValue('email.send.duration', Date.now() - startTime, {
@@ -312,10 +309,7 @@ export class ResendClient {
       
       // Normalize and log error
       const normalizedError = this.normalizeError(error, requestId);
-
-
-      logger.error(`Failed to send email: ${normalizedError.message}`, {
-        ...normalizedError,
+      logger.error(`Failed to send email: ${normalizedError.message}`, normalizedError, {
         subject: message.subject,
         to: emailParams.to,
         requestId
@@ -327,7 +321,7 @@ export class ResendClient {
         success: false,
         error: {
           message: normalizedError.message,
-          code: normalizedError.code || 'unknown_error'
+          code: normalizedError.code
         }
       };
     } finally {
@@ -369,49 +363,53 @@ export class ResendClient {
    * @param message The email message
    * @returns Properly formatted email parameters
    */
-
   private prepareEmailParams(message: EmailMessage): Record<string, any> {
-    // Log the raw message for debugging
-    console.log('RESEND PREPARE PARAMS - Raw message:', JSON.stringify(message, null, 2));
-    
     const params: Record<string, any> = {
       from: message.from || resendConfig.defaultFrom,
       to: this.formatRecipients(message.to),
       subject: message.subject
     };
     
-    // Format replyTo as a string as required by Resend API
+    // Format reply_to as a string as required by Resend API
     if (message.replyTo) {
-      params.replyTo = message.replyTo;
+      params.reply_to = message.replyTo;
     } else if (resendConfig.defaultReplyTo) {
-      params.replyTo = resendConfig.defaultReplyTo;
+      params.reply_to = resendConfig.defaultReplyTo;
     }
     
     // Add optional parameters
     if (message.html) params.html = message.html;
     if (message.text) params.text = message.text;
     
-    // Format tags as simple strings as required by Resend API
-    // Sanitize tag names to only contain ASCII letters, numbers, underscores, or dashes
-    if (message.tags && message.tags.length > 0) {
-      // Ensure tags are simple strings, not objects with a name property
-      params.tags = message.tags.map(tag => {
-        // If tag is already an object with a name property, extract the name
-        if (typeof tag === 'object' && tag !== null && 'name' in tag) {
-          return String(tag.name).replace(/[^a-zA-Z0-9_-]/g, '_');
-        }
-        // Otherwise, convert to string and sanitize
-        return typeof tag === 'string' ? tag.replace(/[^a-zA-Z0-9_-]/g, '_') : String(tag).replace(/[^a-zA-Z0-9_-]/g, '_');
-      });
+    // Format tags as simple strings as expected by the Resend API
+    // Based on our testing and memory, Resend API expects simple strings without special characters
+    if (message.tags) {
+      // Helper function to sanitize tag values - only allow letters, numbers, underscores, and dashes
+      const sanitizeTagValue = (value: string): string => {
+        return value.replace(/[^a-zA-Z0-9_-]/g, '_');
+      };
       
-      // Debug log for tag formatting
-      console.log('RESEND TAGS - Formatted:', JSON.stringify(params.tags, null, 2));
+      if (Array.isArray(message.tags)) {
+        // Handle array of tags - ensure they're all simple strings
+        params.tags = message.tags.map(tag => {
+          if (typeof tag === 'string') {
+            return sanitizeTagValue(tag);
+          } else if (tag && typeof tag === 'object' && 'name' in tag) {
+            return sanitizeTagValue(String(tag.name));
+          }
+          return sanitizeTagValue(String(tag));
+        });
+      } else {
+        // Single tag case
+        params.tags = [sanitizeTagValue(String(message.tags))];
+      }
     }
     
     // Add CC and BCC if present
     if (message.cc) params.cc = this.formatRecipients(message.cc);
     if (message.bcc) params.bcc = this.formatRecipients(message.bcc);
     
+    // Add attachments if present
     if (message.attachments && message.attachments.length > 0) {
       params.attachments = message.attachments.map(attachment => ({
         filename: attachment.filename,

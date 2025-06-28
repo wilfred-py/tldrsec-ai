@@ -5,20 +5,101 @@ import { parseFormContent, extractImportantContent, ParsedContent } from '../lib
 import { generateSystemPrompt, generateUserPrompt } from '../lib/ai/sec-prompts';
 import axios from 'axios';
 import { summarizeFiling } from '../lib/ai/summarize';
+import * as secService from './secService';
 import { prisma } from '../lib/db';
 import { JsonObject } from '@prisma/client/runtime/library';
 
 // Import the email client and types
 import { emailClient, EmailMessage } from '../lib/email';
 
-// Import database connection manager for optimizing connections
-import { optimizeConnections, checkDatabaseConnection } from '../lib/db/connection-manager';
-
-// Import actual filing service functions
-import { getFilingById as fetchFilingById } from './filing/getFilingById';
-
-// Import SEC service for getting filings by ticker and other operations
-import * as secService from './secService';
+// Mock filing data for demonstration
+const mockFilings: FilingLog[] = [
+  {
+    id: '1',
+    ticker: 'AAPL',
+    company: 'Apple Inc.',
+    filingName: 'Annual Report',
+    filingCode: '10-K',
+    filingDate: '2025-02-15',
+    status: 'completed',
+    details: {
+      revenue: '$394.3B',
+      operatingMargin: '30.3%',
+      eps: '$6.14',
+      yoy: {
+        revenue: '+8.1%',
+        margin: '+1.2%',
+        eps: '+10.4%'
+      },
+      keyInsights: [
+        'Record services revenue of $85.2B, up 17% year-over-year',
+        'Returned over $110B to shareholders through dividends and share repurchases',
+        'Announced new AI features across product lineup'
+      ],
+      riskFactors: [
+        'Increasing regulatory scrutiny in key markets',
+        'Supply chain constraints affecting product availability',
+        'Intensifying competition in services segment'
+      ]
+    }
+  },
+  {
+    id: '2',
+    ticker: 'MSFT',
+    company: 'Microsoft Corporation',
+    filingName: 'Quarterly Report',
+    filingCode: '10-Q',
+    filingDate: '2025-04-28',
+    status: 'completed',
+    details: {
+      revenue: '$52.7B',
+      operatingMargin: '42.1%',
+      eps: '$2.45',
+      yoy: {
+        revenue: '+12.3%',
+        margin: '+2.5%',
+        eps: '+14.0%'
+      },
+      keyInsights: [
+        'Azure revenue growth accelerated to 31% year-over-year',
+        'AI-powered Copilot services driving new commercial bookings',
+        'Operating margins expanded across all business segments'
+      ],
+      riskFactors: [
+        'Potential economic slowdown affecting enterprise spending',
+        'Cybersecurity threats targeting cloud infrastructure',
+        'Increasing competition in AI services'
+      ]
+    }
+  },
+  {
+    id: '3',
+    ticker: 'AMZN',
+    company: 'Amazon.com Inc.',
+    filingName: 'Current Report',
+    filingCode: '8-K',
+    filingDate: '2025-05-10',
+    status: 'completed'
+  },
+  {
+    id: '4',
+    ticker: 'GOOGL',
+    company: 'Alphabet Inc.',
+    filingName: 'Quarterly Report',
+    filingCode: '10-Q',
+    filingDate: '2025-05-02',
+    status: 'started'
+  },
+  {
+    id: '5',
+    ticker: 'META',
+    company: 'Meta Platforms Inc.',
+    filingName: 'Annual Report',
+    filingCode: '10-K',
+    filingDate: '2025-03-20',
+    status: 'failed'
+  }
+];
 
 // Filing processing status types
 export type FilingProcessStatus = 'queued' | 'processing' | 'completed' | 'failed';
@@ -51,54 +132,24 @@ export interface FilingSummaryResult {
 }
 
 const filingService = {
-  // Get latest filing by type
-  getLatestFilingByType: async (ticker: string, formType: FilingType) => {
-    try {
-      // First get company info from ticker
-      const secCompany = await secService.findCompanyByTicker(ticker);
-      
-      if (!secCompany) {
-        throw new Error(`Company not found for ticker: ${ticker}`);
-      }
-      
-      // Convert SecCompanyInfo to CompanyInfo
-      // The CompanyInfo interface only requires cik, name, and optional ticker
-      const company = {
-        cik: secCompany.cik,
-        name: secCompany.name,
-        ticker: secCompany.ticker
-      };
-      
-      // Use SEC service to get latest filing by form type with company info
-      return await secService.getLatestFilingByFormType(company, formType);
-    } catch (error) {
-      console.error(`[ERROR][FilingService] Error fetching latest ${formType} filing for ${ticker}:`, error);
-      throw error;
-    }
+  // Get all filing logs
+  getFilingLogs: async () => {
+    // Simulate API call delay
+    await new Promise(resolve => setTimeout(resolve, 500));
+    return { data: mockFilings };
   },
   
   // Get filing details by ID
   getFilingById: async (id: string) => {
-    try {
-      // Use the actual implementation from services/filing/getFilingById.ts
-      return await fetchFilingById(id);
-    } catch (error) {
-      console.error(`[ERROR][FilingService] Error fetching filing ${id}:`, error);
-      throw error;
-    }
+    // Simulate API call delay
+    await new Promise(resolve => setTimeout(resolve, 300));
+    const filing = mockFilings.find(f => f.id === id);
+    return { data: filing };
   },
   
   // Send an email summary of the latest filings
   sendEmailSummary: async (email: string, tickers: string[] = ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'META'], debug: boolean = false) => {
     try {
-      // Check database connection before starting
-      await checkDatabaseConnection()
-        .catch(err => console.error('[ERROR][FilingService] Database connection check failed:', err));
-      
-      // Optimize connections before heavy database operations
-      await optimizeConnections()
-        .catch(err => console.error('[ERROR][FilingService] Failed to optimize database connections:', err));
-      
       const summaries: FilingSummaryResult[] = [];
       const errors: {ticker: string, error: string}[] = [];
       
@@ -168,7 +219,7 @@ const filingService = {
         subject: `SEC Filing Summaries - ${new Date().toLocaleDateString()}`,
         html: emailHtml,
         text: generatePlainTextEmail(summaries, errors),
-        tags: ['type_summaries', 'content_filings'], // Using simple string tags with underscores instead of colons
+        tags: ['type:summaries', 'content:filings'],
         replyTo: 'no-reply@tldrsec.app'
       };
       
@@ -261,9 +312,14 @@ const filingService = {
       
       console.log(`[INFO][FilingService] Email summary process completed successfully`);
       
-      // Send the email
-      console.log(`[INFO][FilingService] Sending email summary to: ${email} with ${summaries.length} summaries and ${errors.length} errors`);
-      const result = await emailClient.sendEmail(emailParams);
+      let result;
+      if (debug) {
+        // Create a mock result for testing
+        result = { id: 'debug-mode-' + Date.now(), success: true };
+      } else {
+        console.log(`[INFO][FilingService] Sending email summary to: ${email} with ${summaries.length} summaries and ${errors.length} errors`);
+        result = await emailClient.sendEmail(emailParams);
+      }
       
       // Final return
       return {
@@ -279,10 +335,6 @@ const filingService = {
         success: false,
         error: error instanceof Error ? error.message : 'Failed to send email summary'
       };
-    } finally {
-      // Always optimize connections after completing operations
-      await optimizeConnections()
-        .catch(err => console.error('[ERROR][FilingService] Failed to optimize connections after email sending:', err));
     }
   },
   
@@ -290,14 +342,6 @@ const filingService = {
   getFilingSummary: async (ticker: string, formType: FilingType): Promise<{ data: FilingSummaryResult | null, error?: string }> => {
     try {
       console.log(`[DEBUG][FilingService] Getting summary for ${ticker} - ${formType}`);
-      
-      // Check database connection before starting
-      await checkDatabaseConnection()
-        .catch(err => console.error('[ERROR][FilingService] Database connection check failed in getFilingSummary:', err));
-      
-      // Optimize connections before database operations
-      await optimizeConnections()
-        .catch(err => console.error('[ERROR][FilingService] Failed to optimize database connections in getFilingSummary:', err));
       
       // Variables to store summary data
       let summaryText = '';
@@ -329,7 +373,7 @@ const filingService = {
             }
           });
           
-          if (existingSummary) { // Temporarily bypassed cache for testing
+          if (existingSummary) { // Use database cache when available
             console.log(`[INFO][FilingService] Found existing summary in database for ${ticker} - ${formType}`);
             // Parse the JSON data from the database
             const summaryData = existingSummary?.summaryJSON as Record<string, any> || {};
@@ -339,7 +383,9 @@ const filingService = {
             return {
               data: {
                 ticker: ticker,
-                companyName: tickerRecord?.companyName || ticker, filingType: formType as FilingType, filingDate: existingSummary?.filingDate?.toISOString() || new Date().toISOString(),
+                companyName: tickerRecord?.companyName || ticker,
+                filingType: formType as FilingType,
+                filingDate: existingSummary?.filingDate?.toISOString() || new Date().toISOString(),
                 accessionNumber: summaryData.accessionNumber || 'unknown',
                 url: existingSummary?.url || existingSummary?.filingUrl || '',
                 summaryText: existingSummary?.summaryText || '',
@@ -428,8 +474,7 @@ const filingService = {
         console.log(`[DEBUG][FilingService] Found company: ${company.name}, CIK: ${company.cik}`);
         
         console.log(`[DEBUG][FilingService] Getting latest ${normalizedFormType} filing for ${ticker}`);
-        // Create a CompanyInfo object to pass to getLatestFilingByFormType instead of just the ticker
-        filing = await secService.getLatestFilingByFormType(company, normalizedFormType);
+        filing = await secService.getLatestFilingByFormType(ticker, normalizedFormType);
         if (!filing) {
           console.warn(`[DEBUG][FilingService] No ${normalizedFormType} filings found for ${ticker}`);
           return { data: null, error: `No ${normalizedFormType} filings found for ${ticker}` };
@@ -568,8 +613,8 @@ const filingService = {
               return { data: null, error: `Failed to fetch document: ${axiosResponse.status} ${axiosResponse.statusText}` };
             }
             
-            // Set content to the response data with type assertion
-            content = axiosResponse.data as string;
+            // Set content to the response data
+            content = axiosResponse.data;
           } catch (error) {
             // Type assertion for the error
             const axiosError = error as { message: string };
@@ -903,10 +948,6 @@ const filingService = {
         data: null, 
         error: error instanceof Error ? error.message : `Failed to generate summary for ${ticker}` 
       };
-    } finally {
-      // Always optimize connections after completing operations
-      await optimizeConnections()
-        .catch(err => console.error('[ERROR][FilingService] Failed to optimize connections after getFilingSummary:', err));
     }
   }
 };
