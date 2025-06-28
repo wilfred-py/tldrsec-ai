@@ -335,13 +335,10 @@ export class ResendClient {
     // Add optional parameters
     if (message.html) params.html = message.html;
     if (message.text) params.text = message.text;
-    // Format tags as objects with name and value properties as required by Resend API
-    // Sanitize tag names to only contain ASCII letters, numbers, underscores, or dashes
+    
+    // Use simple string tags as expected by the Resend API
     if (message.tags) {
-      params.tags = message.tags.map(tag => ({
-        name: tag.replace(/[^a-zA-Z0-9_-]/g, '_'),
-        value: 'true'
-      }));
+      params.tags = message.tags;
     }
     
     // Add CC and BCC if present
