@@ -3,7 +3,7 @@ import { FilingType } from '../lib/sec-edgar/types';
 import { FormTypeMetadata, getFormMetadata, getFormsByCategory, getHighImportanceForms } from '../lib/sec-edgar/form-registry';
 import { parseFormContent, extractImportantContent, ParsedContent } from '../lib/parsers/form-parser';
 import { generateSystemPrompt, generateUserPrompt } from '../lib/ai/sec-prompts';
-import axios from 'axios';
+import axios, { AxiosError } from 'axios';
 import { summarizeFiling } from '../lib/ai/summarize';
 import * as secService from './secService';
 import { prisma } from '../lib/db';
@@ -11,95 +11,6 @@ import { JsonObject } from '@prisma/client/runtime/library';
 
 // Import the email client and types
 import { emailClient, EmailMessage } from '../lib/email';
-
-// Mock filing data for demonstration
-const mockFilings: FilingLog[] = [
-  {
-    id: '1',
-    ticker: 'AAPL',
-    company: 'Apple Inc.',
-    filingName: 'Annual Report',
-    filingCode: '10-K',
-    filingDate: '2025-02-15',
-    status: 'completed',
-    details: {
-      revenue: '$394.3B',
-      operatingMargin: '30.3%',
-      eps: '$6.14',
-      yoy: {
-        revenue: '+8.1%',
-        margin: '+1.2%',
-        eps: '+10.4%'
-      },
-      keyInsights: [
-        'Record services revenue of $85.2B, up 17% year-over-year',
-        'Returned over $110B to shareholders through dividends and share repurchases',
-        'Announced new AI features across product lineup'
-      ],
-      riskFactors: [
-        'Increasing regulatory scrutiny in key markets',
-        'Supply chain constraints affecting product availability',
-        'Intensifying competition in services segment'
-      ]
-    }
-  },
-  {
-    id: '2',
-    ticker: 'MSFT',
-    company: 'Microsoft Corporation',
-    filingName: 'Quarterly Report',
-    filingCode: '10-Q',
-    filingDate: '2025-04-28',
-    status: 'completed',
-    details: {
-      revenue: '$52.7B',
-      operatingMargin: '42.1%',
-      eps: '$2.45',
-      yoy: {
-        revenue: '+12.3%',
-        margin: '+2.5%',
-        eps: '+14.0%'
-      },
-      keyInsights: [
-        'Azure revenue growth accelerated to 31% year-over-year',
-        'AI-powered Copilot services driving new commercial bookings',
-        'Operating margins expanded across all business segments'
-      ],
-      riskFactors: [
-        'Potential economic slowdown affecting enterprise spending',
-        'Cybersecurity threats targeting cloud infrastructure',
-        'Increasing competition in AI services'
-      ]
-    }
-  },
-  {
-    id: '3',
-    ticker: 'AMZN',
-    company: 'Amazon.com Inc.',
-    filingName: 'Current Report',
-    filingCode: '8-K',
-    filingDate: '2025-05-10',
-    status: 'completed'
-  },
-  {
-    id: '4',
-    ticker: 'GOOGL',
-    company: 'Alphabet Inc.',
-    filingName: 'Quarterly Report',
-    filingCode: '10-Q',
-    filingDate: '2025-05-02',
-    status: 'started'
-  },
-  {
-    id: '5',
-    ticker: 'META',
-    company: 'Meta Platforms Inc.',
-    filingName: 'Annual Report',
-    filingCode: '10-K',
-    filingDate: '2025-03-20',
-    status: 'failed'
-  }
-];
 
 // Filing processing status types
 export type FilingProcessStatus = 'queued' | 'processing' | 'completed' | 'failed';
@@ -131,20 +42,287 @@ export interface FilingSummaryResult {
   failureReason?: string;
 }
 
+/**
+ * Scrapes document links from a filing page HTML
+ * This function fetches the filing page HTML and extracts document links
+ * to find the primary document URL when other methods fail
+ * 
+ * @param filing The filing object containing filingUrl
+ * @param headers The SEC API headers to use for the request
+ * @returns The URL of the primary document if found, otherwise null
+ */
+const scrapeDocumentLinksFromFilingPage = async (filing: any, headers: any): Promise<string | null> => {
+  if (!filing || !filing.filingUrl) {
+    console.error(`[DEBUG][FilingService] ❌ Cannot scrape document links: missing filing or filingUrl`);
+    return null;
+  }
+  
+  try {
+    // Ensure the filing URL is absolute
+    const SEC_BASE_URL = 'https://www.sec.gov';
+    const filingPageUrl = filing.filingUrl.startsWith('http') 
+      ? filing.filingUrl 
+      : filing.filingUrl.startsWith('/') 
+        ? `${SEC_BASE_URL}${filing.filingUrl}` 
+        : `${SEC_BASE_URL}/${filing.filingUrl}`;
+    
+    console.log(`[DEBUG][FilingService] 🔍 Scraping document links from: ${filingPageUrl}`);
+    
+    // Fetch the filing page HTML
+    const response = await fetch(filingPageUrl, { headers });
+    
+    if (!response.ok) {
+      console.error(`[DEBUG][FilingService] ❌ Failed to fetch filing page: ${response.status}`);
+      return null;
+    }
+    
+    const html = await response.text();
+    console.log(`[DEBUG][FilingService] ✅ Successfully fetched filing page HTML, length: ${html.length}`);
+    
+    // Extract document links from the HTML
+    // First look for the table with document links
+    const documentTable = html.match(/<table[^>]*>([\s\S]*?)<\/table>/gi);
+    
+    if (!documentTable || documentTable.length === 0) {
+      console.error(`[DEBUG][FilingService] ❌ No document table found in filing page HTML`);
+      
+      // Try a more general approach to find any links
+      const allLinks = html.match(/href="([^"]+\.(htm|html|txt|xml))"/gi);
+      
+      if (allLinks && allLinks.length > 0) {
+        // Extract the first link that looks like a document
+        for (const link of allLinks) {
+          const href = link.match(/href="([^"]+)"/i)?.[1];
+          
+          if (href && (href.endsWith('.htm') || href.endsWith('.html') || href.endsWith('.txt') || href.endsWith('.xml'))) {
+            // Check if it's a relative or absolute URL
+            const documentUrl = href.startsWith('http') 
+              ? href 
+              : href.startsWith('/') 
+                ? `${SEC_BASE_URL}${href}` 
+                : `${filingPageUrl}/${href}`;
+            
+            console.log(`[DEBUG][FilingService] 🔗 Found document link: ${documentUrl}`);
+            return documentUrl;
+          }
+        }
+      }
+      
+      return null;
+    }
+    
+    // Find the primary document link
+    // First try to find a link with 'primary document' in the description
+    const tableRows = documentTable[0].match(/<tr[^>]*>([\s\S]*?)<\/tr>/gi);
+    
+    if (tableRows && tableRows.length > 0) {
+      for (const row of tableRows) {
+        const isPrimaryDocument = row.toLowerCase().includes('primary document') || 
+                              row.toLowerCase().includes('complete submission');
+        
+        if (isPrimaryDocument) {
+          const link = row.match(/href="([^"]+)"/i)?.[1];
+          
+          if (link) {
+            // Check if it's a relative or absolute URL
+            const documentUrl = link.startsWith('http') 
+              ? link 
+              : link.startsWith('/') 
+                ? `${SEC_BASE_URL}${link}` 
+                : `${filingPageUrl}/${link}`;
+            
+            console.log(`[DEBUG][FilingService] 🔗 Found primary document link: ${documentUrl}`);
+            return documentUrl;
+          }
+        }
+      }
+    }
+    
+    // If no primary document found, try to extract links from the table
+    const documentLinks = documentTable[0].match(/href="([^"]+\.(htm|html|txt|xml))"/gi);
+    
+    if (documentLinks && documentLinks.length > 0) {
+      // Use the first document link
+      const firstLink = documentLinks[0].match(/href="([^"]+)"/i)?.[1];
+      
+      if (firstLink) {
+        // Check if it's a relative or absolute URL
+        const documentUrl = firstLink.startsWith('http') 
+          ? firstLink 
+          : firstLink.startsWith('/') 
+            ? `${SEC_BASE_URL}${firstLink}` 
+            : `${filingPageUrl}/${firstLink}`;
+        
+        console.log(`[DEBUG][FilingService] 🔗 Using first document link: ${documentUrl}`);
+        return documentUrl;
+      }
+    } else {
+      console.error(`[DEBUG][FilingService] ❌ No document links found in table`);
+    }
+    
+    return null;
+  } catch (error) {
+    console.error(`[DEBUG][FilingService] ❌ Error scraping document links: ${error}`);
+    return null;
+  }
+};
+
+
 const filingService = {
   // Get all filing logs
   getFilingLogs: async () => {
-    // Simulate API call delay
-    await new Promise(resolve => setTimeout(resolve, 500));
-    return { data: mockFilings };
+    try {
+      console.log(`[DEBUG][FilingService] Getting all filing logs`);
+      
+      // Get filing logs from the database
+      const filingLogs = await prisma.filingLog.findMany({
+        orderBy: {
+          filingDate: 'desc'
+        },
+        take: 100 // Limit to most recent 100 filings
+      });
+      
+      console.log(`[DEBUG][FilingService] Retrieved ${filingLogs.length} filing logs`);
+      return { data: filingLogs };
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      console.error(`[ERROR][FilingService] Error getting filing logs:`, errorMessage);
+      throw new Error(`Failed to get filing logs: ${errorMessage}`);
+    }
   },
   
-  // Get filing details by ID
-  getFilingById: async (id: string) => {
-    // Simulate API call delay
-    await new Promise(resolve => setTimeout(resolve, 300));
-    const filing = mockFilings.find(f => f.id === id);
-    return { data: filing };
+  // Get filing by ID
+  getFilingById: async (accessionNumber: string) => {
+    try {
+      console.log(`[DEBUG][FilingService] Getting filing details for accession number: ${accessionNumber}`);
+      
+      // Extract CIK from accession number if possible
+      const cikMatch = accessionNumber.match(/^(\d+)-/); // Extract CIK from accession number format
+      const cik = cikMatch ? cikMatch[1].padStart(10, '0') : null;
+      
+      // Construct the filing URL
+      const filingUrl = cik 
+        ? `/Archives/edgar/data/${cik}/${accessionNumber.replace(/-/g, '')}/` 
+        : null;
+      
+      console.log(`[DEBUG][FilingService] Filing URL: ${filingUrl || 'Not available (no CIK)'}`); 
+      
+      // Initialize the result object
+      const result: any = {
+        data: {
+          accessionNumber,
+          documents: [],
+          filingUrl
+        }
+      };
+      
+      // Only attempt to fetch metadata if we have a CIK
+      if (cik) {
+        try {
+          // Get the SEC API config headers that include User-Agent
+          const secHeaders = await secService.getSecApiHeaders();
+          
+          // Fetch the filing page HTML to extract document links
+          const SEC_BASE_URL = 'https://www.sec.gov';
+          const absoluteFilingUrl = filingUrl?.startsWith('/') 
+            ? `${SEC_BASE_URL}${filingUrl}` 
+            : filingUrl;
+            
+          if (absoluteFilingUrl) {
+            console.log(`[DEBUG][FilingService] 🌐 Fetching filing page from: ${absoluteFilingUrl}`);
+            
+            const response = await fetch(absoluteFilingUrl, { headers: secHeaders });
+            
+            if (response.ok) {
+              const html = await response.text();
+              console.log(`[DEBUG][FilingService] ✅ Successfully fetched filing page HTML, length: ${html.length}`);
+              
+              // Parse the HTML to extract filing metadata and document links
+              // Extract document links from tables
+              const documentTables = html.match(/<table[^>]*>([\s\S]*?)<\/table>/gi);
+              
+              if (documentTables && documentTables.length > 0) {
+                // Look for document links in the tables
+                for (const table of documentTables) {
+                  const rows = table.match(/<tr[^>]*>([\s\S]*?)<\/tr>/gi);
+                  
+                  if (rows) {
+                    for (const row of rows) {
+                      // Skip header rows
+                      if (row.includes('<th') || !row.includes('href=')) continue;
+                      
+                      const columns = row.match(/<td[^>]*>([\s\S]*?)<\/td>/gi);
+                      
+                      if (columns && columns.length >= 2) {
+                        // Extract document info
+                        const linkMatch = columns[2]?.match(/href="([^"]+)"/i);
+                        const descriptionText = columns[1]?.replace(/<[^>]*>/g, '').trim();
+                        const typeText = columns[0]?.replace(/<[^>]*>/g, '').trim();
+                        
+                        if (linkMatch && linkMatch[1]) {
+                          const fileName = linkMatch[1].split('/').pop() || '';
+                          const documentUrl = linkMatch[1].startsWith('/') 
+                            ? `${SEC_BASE_URL}${linkMatch[1]}` 
+                            : `${absoluteFilingUrl}${linkMatch[1]}`;
+                          
+                          // Add to documents array
+                          result.data.documents.push({
+                            fileName,
+                            description: descriptionText,
+                            documentUrl,
+                            type: typeText
+                          });
+                          
+                          // If this is the primary document, set it in the result
+                          if (descriptionText.toLowerCase().includes('primary document')) {
+                            result.data.primaryDocument = fileName;
+                            result.data.primaryDocUrl = documentUrl;
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+              
+              // If no primary document was found but we have documents, use the first one
+              if (!result.data.primaryDocument && result.data.documents.length > 0) {
+                result.data.primaryDocument = result.data.documents[0].fileName;
+                result.data.primaryDocUrl = result.data.documents[0].documentUrl;
+              }
+              
+              console.log(`[DEBUG][FilingService] ✅ Extracted ${result.data.documents.length} documents from filing page`);
+              if (result.data.primaryDocument) {
+                console.log(`[DEBUG][FilingService] ✅ Primary document: ${result.data.primaryDocument}`);
+              }
+            } else {
+              console.error(`[DEBUG][FilingService] ❌ Failed to fetch filing page: ${response.status}`);
+            }
+          }
+        } catch (metadataError) {
+          console.error(`[DEBUG][FilingService] ❌ Error fetching filing metadata: ${metadataError}`);
+          // Continue with the basic filing data we have
+        }
+      } else {
+        console.log(`[DEBUG][FilingService] ℹ️ No CIK available, skipping metadata fetch`);
+      }
+      
+      return result;
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      console.error(`[ERROR][FilingService] Error getting filing details for ${accessionNumber}:`, errorMessage);
+      if (error instanceof Error && error.stack) {
+        console.error(`[ERROR][FilingService] Stack trace:`, error.stack);
+      }
+      
+      // Check if this is a 404 error
+      if (error instanceof AxiosError && error.response?.status === 404) {
+        console.warn(`[WARN][FilingService] Filing not found (404) for ${accessionNumber}`);
+        return { data: null, error: `Filing not found: ${accessionNumber}` };
+      }
+      
+      throw new Error(`Failed to get filing details for ${accessionNumber}: ${errorMessage}`);
+    }
   },
   
   // Send an email summary of the latest filings
@@ -154,17 +332,17 @@ const filingService = {
       const errors: {ticker: string, error: string}[] = [];
       
       // Log the start of the process with ticker count
-      console.log(`[INFO][FilingService] Starting email summary generation for ${tickers.length} tickers: ${tickers.join(', ')}`);
+      console.log(`[INFO][FilingService] 🚀 Starting email summary generation for ${tickers.length} tickers: ${tickers.join(', ')}`);
       
       // Process each ticker
       for (let i = 0; i < tickers.length; i++) {
         const ticker = tickers[i];
         const progressPercent = Math.round(((i + 1) / tickers.length) * 100);
-        console.log(`[INFO][FilingService] Processing ticker ${i+1}/${tickers.length} (${progressPercent}%): ${ticker}`);
+        console.log(`[INFO][FilingService] 🔍 Processing ticker ${i+1}/${tickers.length} (${progressPercent}%): ${ticker}`);
         
         try {
           // Get the latest filing for this ticker regardless of form type
-          console.log(`[INFO][FilingService] Fetching latest filings for ${ticker}...`);
+          console.log(`[INFO][FilingService] 🔗 Fetching latest filings for ${ticker}...`);
           const latestFilings = await secService.getLatestFilings(ticker, 3); // Get latest 3 filings
           
           if (latestFilings && latestFilings.length > 0) {
@@ -172,19 +350,19 @@ const filingService = {
             const filingInfo = latestFilings.slice(0, 3).map(f => 
               `${f.form} (${new Date(f.filingDate).toLocaleDateString()})`
             ).join(', ');
-            console.log(`[INFO][FilingService] Found ${latestFilings.length} filings for ${ticker}. Latest: ${filingInfo}`);
+            console.log(`[INFO][FilingService] ✅ Found ${latestFilings.length} filings for ${ticker}. Latest: ${latestFilings.map(f => `${f.form} (${f.filingDate})`).join(', ')}`);
             
             const latestFiling = latestFilings[0];
             // Use the actual form type from the latest filing
-            console.log(`[INFO][FilingService] Generating summary for ${ticker} - ${latestFiling.form}...`);
+            console.log(`[INFO][FilingService] 📝 Generating summary for ${ticker} - ${latestFiling.form}...`);
             const result = await filingService.getFilingSummary(ticker, latestFiling.form as FilingType);
             
             if (result.data) {
-              console.log(`[INFO][FilingService] Successfully generated summary for ${ticker} - ${latestFiling.form}`);
+              console.log(`[INFO][FilingService] ✅ Successfully generated summary for ${ticker} - ${latestFiling.form}`);
               summaries.push(result.data);
-            } else if (result.error) {
-              console.error(`[ERROR][FilingService] Failed to generate summary for ${ticker}: ${result.error}`);
-              errors.push({ ticker, error: result.error });
+            } else {
+              console.error(`[ERROR][FilingService] ❌ Failed to generate summary for ${ticker}: ${result.error}`);
+              errors.push({ ticker, error: result.error || 'Unknown error' });
             }
           } else {
             console.warn(`[WARN][FilingService] No recent filings found for ${ticker}`);
@@ -219,7 +397,7 @@ const filingService = {
         subject: `SEC Filing Summaries - ${new Date().toLocaleDateString()}`,
         html: emailHtml,
         text: generatePlainTextEmail(summaries, errors),
-        tags: ['type:summaries', 'content:filings'],
+        tags: ['type_summaries', 'content_filings'], // Using underscores instead of colons
         replyTo: 'no-reply@tldrsec.app'
       };
       
@@ -312,14 +490,11 @@ const filingService = {
       
       console.log(`[INFO][FilingService] Email summary process completed successfully`);
       
-      let result;
-      if (debug) {
-        // Create a mock result for testing
-        result = { id: 'debug-mode-' + Date.now(), success: true };
-      } else {
-        console.log(`[INFO][FilingService] Sending email summary to: ${email} with ${summaries.length} summaries and ${errors.length} errors`);
-        result = await emailClient.sendEmail(emailParams);
-      }
+      // Log email sending details, with debug flag indication if applicable
+      console.log(`[INFO][FilingService] Sending email summary to: ${email} with ${summaries.length} summaries and ${errors.length} errors${debug ? ' (debug mode)' : ''}`);
+      
+      // Always use the real email client
+      const result = await emailClient.sendEmail(emailParams);
       
       // Final return
       return {
@@ -474,7 +649,14 @@ const filingService = {
         console.log(`[DEBUG][FilingService] Found company: ${company.name}, CIK: ${company.cik}`);
         
         console.log(`[DEBUG][FilingService] Getting latest ${normalizedFormType} filing for ${ticker}`);
-        filing = await secService.getLatestFilingByFormType(ticker, normalizedFormType);
+        // First, ensure we have the company object with CIK before calling getLatestFilingByFormType
+        if (!company || !company.cik) {
+          console.error(`[ERROR][FilingService] Missing CIK for company ${ticker}`);
+          return { data: null, error: `Missing CIK for company ${ticker}` };
+        }
+        
+        // Pass the company object to getLatestFilingByFormType, not just the ticker
+        filing = await secService.getLatestFilingByFormType(company, normalizedFormType);
         if (!filing) {
           console.warn(`[DEBUG][FilingService] No ${normalizedFormType} filings found for ${ticker}`);
           return { data: null, error: `No ${normalizedFormType} filings found for ${ticker}` };
@@ -484,8 +666,9 @@ const filingService = {
           accessionNumber: filing.accessionNumber,
           filingDate: filing.filingDate,
           form: filing.form,
-          hasReportDate: !!filing.reportDate,
-          reportDate: filing.reportDate || 'N/A',
+          // Use optional chaining to safely access properties that might not exist
+          hasReportDate: !!(filing as any).reportDate,
+          reportDate: (filing as any).reportDate || 'N/A',
           hasPrimaryDocument: !!filing.primaryDocument,
           primaryDocument: filing.primaryDocument || 'N/A'
         }));
@@ -526,12 +709,19 @@ const filingService = {
         if (['4', 'SC 13G', 'SC 13D', 'SD', '3', '5'].includes(normalizedFormType)) {
           // For these forms, prioritize XML files as they contain structured data
           console.log(`[DEBUG][FilingService] Using special handling for ${normalizedFormType} form type`);
-          mainDocument = filingDetails.documents.find((doc: any) => 
-            doc.fileName.endsWith('.xml') || 
-            doc.type === 'XML' ||
-            doc.description.includes('PRIMARY DOCUMENT') ||
-            doc.fileName === filingDetails.primaryDocument
-          );
+          mainDocument = filingDetails.documents.find((doc: any) => {
+            // Handle both filename and fileName properties and add null checks
+            const docFilename = doc.filename || doc.fileName || '';
+            const docDescription = doc.description || '';
+            const docType = doc.type || '';
+            
+            return (
+              (typeof docFilename === 'string' && docFilename.endsWith('.xml')) || 
+              docType === 'XML' ||
+              docDescription.includes('PRIMARY DOCUMENT') ||
+              (filingDetails.primaryDocument && docFilename === filingDetails.primaryDocument)
+            );
+          });
           
           // If no XML file found, fall back to any available document
           if (!mainDocument && filingDetails.documents.length > 0) {
@@ -540,13 +730,18 @@ const filingService = {
           }
         } else {
           // For standard forms (10-K, 10-Q, 8-K, etc.), look for HTML documents first
-          mainDocument = filingDetails.documents.find((doc: any) => 
-            doc.fileName === filingDetails.primaryDocument || 
-            doc.fileName.endsWith('.htm') || 
-            doc.fileName.endsWith('.html') ||
-            doc.description.includes('FILING DOCUMENT') ||
-            doc.description.includes('PRIMARY DOCUMENT')
-          );
+          mainDocument = filingDetails.documents.find((doc: any) => {
+            // Handle both filename and fileName properties (SEC API inconsistency)
+            const docFilename = doc.filename || doc.fileName;
+            const docDescription = doc.description || '';
+            
+            // Add null checks to prevent TypeError
+            return (docFilename && filingDetails.primaryDocument && docFilename === filingDetails.primaryDocument) || 
+                  (docFilename && typeof docFilename === 'string' && docFilename.endsWith('.htm')) || 
+                  (docFilename && typeof docFilename === 'string' && docFilename.endsWith('.html')) ||
+                  (docDescription && docDescription.includes('FILING DOCUMENT')) ||
+                  (docDescription && docDescription.includes('PRIMARY DOCUMENT'));
+          });
         }
         
         // If still no document found, try a more permissive approach
@@ -584,7 +779,9 @@ const filingService = {
           return { data: null, error: `No main document found in ${normalizedFormType} filing for ${ticker}` };
         }
         
-        console.log(`[DEBUG][FilingService] Found main document: ${mainDocument.fileName}`);
+        // Safely log the main document name with null checks
+        const mainDocName = mainDocument.filename || mainDocument.fileName || 'unnamed document';
+        console.log(`[DEBUG][FilingService] Found main document: ${mainDocName}`);
         
         // Initialize variables at this scope level
         let summaryText = '';
@@ -593,8 +790,111 @@ const filingService = {
         
         // Get the document content
         try {
-          const documentUrl = mainDocument.documentUrl;
-          console.log(`[DEBUG][FilingService] Fetching document content from: ${documentUrl}`);
+          let documentUrl = mainDocument.documentUrl;
+          const documentFilename = mainDocument.filename || mainDocument.fileName;
+          
+          // Check if we have a valid document URL or need to use a better source
+          if (!documentUrl || documentUrl.includes('0000000000-00-000000.txt') || documentUrl === '/Archives/edgar/data/') {
+            console.log(`[DEBUG][FilingService] Invalid or missing document URL detected: ${documentUrl}`);
+            
+            // IMPROVED APPROACH: First try to use primaryDocUrl from the original filing data
+            if (filing && filing.primaryDocUrl) {
+              documentUrl = filing.primaryDocUrl;
+              console.log(`[DEBUG][FilingService] ✅ Using primaryDocUrl from filing data: ${documentUrl}`);
+            }
+            // If we have filingUrl and primaryDocument, we can construct the URL
+            else if (filing && filing.filingUrl && filing.primaryDocument) {
+              documentUrl = `${filing.filingUrl}/${filing.primaryDocument}`;
+              console.log(`[DEBUG][FilingService] ✅ Constructed URL from filingUrl and primaryDocument: ${documentUrl}`);
+            }
+            // Otherwise fall back to the old approach of constructing URLs
+            else {
+              // Get the filing accession number from multiple possible sources
+              let accessionNumber = '';
+              
+              // Try to extract from filing details first
+              if (filingDetails.accessionNumber) {
+                accessionNumber = filingDetails.accessionNumber;
+              } 
+              // Try to extract from document URL if available
+              else if (documentUrl && documentUrl.match(/\/(\d{10}-\d{2}-\d{6})\//)) {
+                const matches = documentUrl.match(/\/(\d{10}-\d{2}-\d{6})\//); 
+                if (matches && matches[1]) {
+                  accessionNumber = matches[1];
+                }
+              }
+              // Try to extract from the filing data if available
+              else if (filing && filing.accessionNumber) {
+                accessionNumber = filing.accessionNumber;
+              }
+              
+              if (!accessionNumber) {
+                console.error(`[DEBUG][FilingService] ❌ Could not determine accession number for ${ticker} - ${normalizedFormType}`);
+                return { data: null, error: `Could not determine accession number for ${ticker} - ${normalizedFormType}` };
+              }
+              
+              console.log(`[DEBUG][FilingService] 🔑 Using accession number: ${accessionNumber}`);
+              
+              // Extract CIK from multiple possible sources
+              let cik = '';
+              
+              // Try filing details first
+              if (filingDetails.cik) {
+                cik = filingDetails.cik;
+              }
+              // Try company info
+              else if (company && company.cik) {
+                cik = company.cik.toString().padStart(10, '0');
+              }
+              // Try to extract from accession number
+              else if (accessionNumber) {
+                cik = accessionNumber.split('-')[0].padStart(10, '0');
+              }
+              
+              if (!cik) {
+                console.error(`[DEBUG][FilingService] ❌ Could not determine CIK for ${ticker} - ${normalizedFormType}`);
+                return { data: null, error: `Could not determine CIK for ${ticker} - ${normalizedFormType}` };
+              }
+              
+              console.log(`[DEBUG][FilingService] 💼 Using CIK: ${cik}`);
+              
+              // For Form 4 filings, try to use the XML document URL pattern
+              if (['4', '3', '5'].includes(normalizedFormType)) {
+                // Form 4 XML documents often follow this pattern
+                const xmlFileName = filingDetails.primaryDocument || 
+                                 (documentFilename && documentFilename.includes('.xml') ? documentFilename : 
+                                  `xslF345X05/form4_${accessionNumber.replace(/-/g, '')}.xml`);
+                
+                documentUrl = `/Archives/edgar/data/${cik}/${accessionNumber.replace(/-/g, '')}/${xmlFileName}`;
+                console.log(`[DEBUG][FilingService] 📝 Using Form ${normalizedFormType} XML URL: ${documentUrl}`);
+              }
+              // Try to use the primary document from filing details
+              else if (filingDetails.primaryDocument && filingDetails.primaryDocument !== documentFilename) {
+                documentUrl = `/Archives/edgar/data/${cik}/${accessionNumber.replace(/-/g, '')}/${filingDetails.primaryDocument}`;
+                console.log(`[DEBUG][FilingService] 📄 Using primary document URL: ${documentUrl}`);
+              } 
+              // If we have an HTML file from the document
+              else if (documentFilename && (documentFilename.endsWith('.htm') || documentFilename.endsWith('.html'))) {
+                documentUrl = `/Archives/edgar/data/${cik}/${accessionNumber.replace(/-/g, '')}/${documentFilename}`;
+                console.log(`[DEBUG][FilingService] 📃 Using document filename URL: ${documentUrl}`);
+              }
+              // Fallback to the filing URL with index.htm appended
+              else {
+                documentUrl = `/Archives/edgar/data/${cik}/${accessionNumber.replace(/-/g, '')}/${filing.primaryDocument || 'index.htm'}`;
+                console.log(`[DEBUG][FilingService] 🔧 Using fallback URL: ${documentUrl}`);
+              }
+            }
+          }
+          
+          // Ensure documentUrl is an absolute URL
+          const SEC_BASE_URL = 'https://www.sec.gov';
+          const absoluteUrl = documentUrl.startsWith('http') 
+            ? documentUrl 
+            : documentUrl.startsWith('/') 
+              ? `${SEC_BASE_URL}${documentUrl}` 
+              : `${SEC_BASE_URL}/${documentUrl}`;
+          
+          console.log(`[DEBUG][FilingService] 🌐 Fetching from absolute URL: ${absoluteUrl}`);
           
           // Get the SEC API config headers that include User-Agent
           const secHeaders = await secService.getSecApiHeaders();
@@ -603,32 +903,140 @@ const filingService = {
           // Use axios for fetching to properly set headers
           try {
             // axios is now imported at the top of the file.
-            const axiosResponse = await axios.get(documentUrl, {
+            const axiosResponse = await axios.get(absoluteUrl, {
               headers: secHeaders,
               timeout: 10000 // 10 second timeout
             });
             
             if (axiosResponse.status !== 200) {
-              console.error(`[DEBUG][FilingService] Failed to fetch document: ${axiosResponse.status} ${axiosResponse.statusText}`);
+              console.error(`[DEBUG][FilingService] ❌ Failed to fetch document: ${axiosResponse.status} ${axiosResponse.statusText}`);
               return { data: null, error: `Failed to fetch document: ${axiosResponse.status} ${axiosResponse.statusText}` };
             }
             
-            // Set content to the response data
-            content = axiosResponse.data;
+            // Set content to the response data - ensure it's a string
+            content = typeof axiosResponse.data === 'string' ? axiosResponse.data : JSON.stringify(axiosResponse.data);
           } catch (error) {
             // Type assertion for the error
             const axiosError = error as { message: string };
-            console.error(`[DEBUG][FilingService] Axios error fetching document: ${axiosError.message}`);
+            console.error(`[DEBUG][FilingService] ❌ Axios error fetching document: ${axiosError.message}`);
             
             // Fallback to fetch with headers if axios fails
-            console.log(`[DEBUG][FilingService] Trying fallback with fetch`);
-            const fetchResponse = await fetch(documentUrl, {
+            console.log(`[DEBUG][FilingService] 🔍 Trying fallback with fetch`);
+            
+            // Ensure URL is absolute by prepending SEC base URL if it's a relative path
+            const absoluteUrl = documentUrl.startsWith('/') 
+              ? `https://www.sec.gov${documentUrl}` 
+              : documentUrl;
+            console.log(`[DEBUG][FilingService] 🌐 Fetching from absolute URL: ${absoluteUrl}`);
+            
+            const fetchResponse = await fetch(absoluteUrl, {
               headers: secHeaders,
             });
             
             if (!fetchResponse.ok) {
-              console.error(`[DEBUG][FilingService] Failed to fetch document: ${fetchResponse.status} ${fetchResponse.statusText}`);
-              return { data: null, error: `Failed to fetch document: ${fetchResponse.status} ${fetchResponse.statusText}` };
+              console.error(`[DEBUG][FilingService] ❌ Failed to fetch document: ${fetchResponse.status} ${fetchResponse.statusText}`);
+              
+              // If we get a 404, try alternative document formats
+              if (fetchResponse.status === 404) {
+                console.log(`[DEBUG][FilingService] 🔍 Trying alternative document formats...`);
+                
+                // Extract the base URL without the file extension
+                const urlParts = absoluteUrl.split('/');
+                const baseUrl = urlParts.slice(0, -1).join('/');
+                const filename = urlParts[urlParts.length - 1];
+                const filenameWithoutExt = filename.split('.')[0];
+                
+                // List of alternative file extensions to try
+                const extensions = ['html', 'htm', 'xml', 'txt'];
+                
+                for (const ext of extensions) {
+                  const alternativeUrl = `${baseUrl}/${filenameWithoutExt}.${ext}`;
+                  console.log(`[DEBUG][FilingService] 🔍 Trying alternative URL: ${alternativeUrl}`);
+                  
+                  try {
+                    const altResponse = await fetch(alternativeUrl, { headers: secHeaders });
+                    if (altResponse.ok) {
+                      console.log(`[DEBUG][FilingService] ✅ Successfully fetched alternative URL: ${alternativeUrl}`);
+                      content = await altResponse.text();
+                      break; // Exit the loop if we found a working URL
+                    }
+                  } catch (altError) {
+                    console.error(`[DEBUG][FilingService] ❌ Error fetching alternative URL: ${alternativeUrl}`, altError);
+                  }
+                }
+                
+                // If we still don't have content, try the directory listing
+                if (!content) {
+                  // Try to fetch the directory listing
+                  const directoryUrl = `${baseUrl}/`;
+                  console.log(`[DEBUG][FilingService] Trying directory listing: ${directoryUrl}`);
+                  
+                  try {
+                    const dirResponse = await fetch(directoryUrl, { headers: secHeaders });
+                    if (dirResponse.ok) {
+                      const dirHtml = await dirResponse.text();
+                      console.log(`[DEBUG][FilingService] Successfully fetched directory listing. Parsing for HTML files...`);
+                      
+                      // Look for HTML files in the directory listing
+                      const htmlFileMatches = dirHtml.match(/href="([^"]+\.html?)"/gi);
+                      if (htmlFileMatches && htmlFileMatches.length > 0) {
+                        // Extract the first HTML file URL
+                        const htmlFile = htmlFileMatches[0].replace(/href="|"/gi, '');
+                        const htmlUrl = `${baseUrl}/${htmlFile}`;
+                        console.log(`[DEBUG][FilingService] Found HTML file in directory: ${htmlUrl}`);
+                        
+                        const htmlResponse = await fetch(htmlUrl, { headers: secHeaders });
+                        if (htmlResponse.ok) {
+                          content = await htmlResponse.text();
+                          console.log(`[DEBUG][FilingService] ✅ Successfully fetched HTML file from directory listing`);
+                        }
+                      }
+                    }
+                  } catch (dirError) {
+                    console.error(`[DEBUG][FilingService] ❌ Error fetching directory listing: ${directoryUrl}`, dirError);
+                  }
+                }
+                
+                // If we still don't have content, try to scrape document links from the filing page
+                if (!content && filing && filing.filingUrl) {
+                  try {
+                    console.log(`[DEBUG][FilingService] 🔍 Attempting to scrape document links from filing page...`);
+                    const scrapedDocumentUrl = await scrapeDocumentLinksFromFilingPage(filing, secHeaders);
+                    
+                    if (scrapedDocumentUrl) {
+                      console.log(`[DEBUG][FilingService] ✅ Successfully scraped document URL: ${scrapedDocumentUrl}`);
+                      
+                      // Try to fetch the content from the scraped URL
+                      try {
+                        const scrapedResponse = await fetch(scrapedDocumentUrl, {
+                          headers: secHeaders
+                        });
+                        
+                        if (scrapedResponse.ok) {
+                          console.log(`[DEBUG][FilingService] ✅ Successfully fetched content from scraped URL`);
+                          content = await scrapedResponse.text();
+                        } else {
+                          console.error(`[DEBUG][FilingService] ❌ Failed to fetch content from scraped URL: ${scrapedResponse.status}`);
+                        }
+                      } catch (scrapedError) {
+                        console.error(`[DEBUG][FilingService] ❌ Error fetching content from scraped URL: ${scrapedError}`);
+                      }
+                    } else {
+                      console.error(`[DEBUG][FilingService] ❌ Failed to scrape document links`);
+                    }
+                  } catch (scrapeError) {
+                    console.error(`[DEBUG][FilingService] ❌ Error during document link scraping: ${scrapeError}`);
+                  }
+                }
+                
+                // If we still don't have content, return an error
+                if (!content) {
+                  return { data: null, error: `Failed to fetch document: ${fetchResponse.status} ${fetchResponse.statusText}` };
+                }
+              } else {
+                // For non-404 errors, return the original error
+                return { data: null, error: `Failed to fetch document: ${fetchResponse.status} ${fetchResponse.statusText}` };
+              }
             }
             
             // Get content from fetch response
