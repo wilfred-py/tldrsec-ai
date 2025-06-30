@@ -15,6 +15,8 @@ export type SECFilingType =
   | 'S-4'   // Registration for business combinations
   | '424B'  // Prospectus
   | 'DEF 14A' // Proxy statement
+  | '4'     // Form 4 insider trading reports
+  | '144'   // Form 144 planned sales of securities
   | 'Generic'; // Generic prompt for any other filing type
 
 /**
@@ -91,14 +93,6 @@ export interface FilingPromptTemplate {
   contextConfig: ContextWindowConfig;
 }
 
-/**
- * Type definitions for SEC filing prompts
- */
-
-/**
- * SEC filing types supported by the system
- */
-export type SECFilingType = '10-K' | '10-Q' | '8-K' | 'Form4' | 'generic';
 
 /**
  * Schema structure for 10-K (Annual Report) filings
