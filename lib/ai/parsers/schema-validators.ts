@@ -175,6 +175,8 @@ const schemaMap: Record<SECFilingType, z.ZodTypeAny> = {
   'S-4': schemaS1,   // Similar to S-1 but for business combinations
   '424B': schemaGeneric,
   'DEF 14A': schemaDEF14A,
+  '4': schemaForm4,  // Form 4 for insider trading reports
+  '144': schemaGeneric, // Form 144 for planned sales of securities
   'Generic': schemaGeneric
 };
 
