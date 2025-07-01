@@ -15,6 +15,7 @@ export type SECFilingType =
   | 'S-4'   // Registration for business combinations
   | '424B'  // Prospectus
   | 'DEF 14A' // Proxy statement
+  | '3'     // Form 3 initial insider holdings reports
   | '4'     // Form 4 insider trading reports
   | '144'   // Form 144 planned sales of securities
   | 'Generic'; // Generic prompt for any other filing type

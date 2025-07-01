@@ -137,9 +137,9 @@ export function parseResponse<T = any>(
       data = normalizeFields(data, filingType);
     }
     
-    // Post-process to handle missing required fields
-    if (data && (filingType === '4' || filingType === '144')) {
-      data = postProcessForm4Data(data);
+    // Post-process to handle missing required fields for all form types
+    if (data) {
+      data = postProcessFilingData(data, filingType);
     }
     
     // Check if we have at least some usable data
@@ -188,61 +188,112 @@ export function parseResponse<T = any>(
  * @returns Normalized data
  */
 /**
- * Post-process Form 4 data to handle missing required fields
+ * Post-process filing data to handle missing required fields for any form type
  * 
- * @param data - Partially processed Form 4 data
+ * @param data - Partially processed filing data
+ * @param filingType - Type of SEC filing
  * @returns Enhanced data with derived fields where possible
  */
-function postProcessForm4Data(data: any): any {
+function postProcessFilingData(data: any, filingType: SECFilingType = 'Generic'): any {
   if (!data || typeof data !== 'object') {
-    logger.debug('Form 4 post-processing: Input data is not an object');
+    logger.debug(`${filingType} post-processing: Input data is not an object`);
     return data;
   }
   
-  logger.debug(`Form 4 post-processing: Starting with fields: ${Object.keys(data).join(', ')}`);
+  logger.debug(`${filingType} post-processing: Starting with fields: ${Object.keys(data).join(', ')}`);
   
   const processed = { ...data };
   
   // If company field is missing but we have other identifying information
   if (!processed.company) {
-    logger.debug('Form 4 post-processing: Company field is missing, attempting to derive');
+    logger.debug(`${filingType} post-processing: Company field is missing, attempting to derive`);
     
     // Try to derive company from other fields
     if (processed.issuer) {
       processed.company = processed.issuer;
-      logger.debug(`Form 4 post-processing: Derived company from issuer: ${processed.company}`);
+      logger.debug(`${filingType} post-processing: Derived company from issuer: ${processed.company}`);
     } else if (processed.issuerName) {
       processed.company = processed.issuerName;
-      logger.debug(`Form 4 post-processing: Derived company from issuerName: ${processed.company}`);
+      logger.debug(`${filingType} post-processing: Derived company from issuerName: ${processed.company}`);
     } else if (processed.issuerCompany) {
       processed.company = processed.issuerCompany;
-      logger.debug(`Form 4 post-processing: Derived company from issuerCompany: ${processed.company}`);
+      logger.debug(`${filingType} post-processing: Derived company from issuerCompany: ${processed.company}`);
     } else if (processed.companyName) {
       processed.company = processed.companyName;
-      logger.debug(`Form 4 post-processing: Derived company from companyName: ${processed.company}`);
+      logger.debug(`${filingType} post-processing: Derived company from companyName: ${processed.company}`);
     } else if (processed.ticker) {
       processed.company = processed.ticker;
-      logger.debug(`Form 4 post-processing: Derived company from ticker: ${processed.company}`);
+      logger.debug(`${filingType} post-processing: Derived company from ticker: ${processed.company}`);
+    } else if (processed.filerName && ['3', '4', '144'].includes(filingType)) {
+      // For insider forms, filerName can be used as a fallback for company
+      processed.company = `Filing by ${processed.filerName}`;
+      logger.debug(`${filingType} post-processing: Derived company from filerName: ${processed.company}`);
     } else {
-      logger.debug('Form 4 post-processing: Could not derive company field from available data');
+      logger.debug(`${filingType} post-processing: Could not derive company field from available data`);
     }
   }
   
-  // Ensure summary field exists
-  if (!processed.summary && processed.transactions && processed.transactions.length > 0) {
-    logger.debug('Form 4 post-processing: Summary field is missing, generating from transaction data');
-    
-    // Create a basic summary from transaction data
-    const filer = processed.filerName || 'An insider';
-    const txType = processed.transactions[0].type || 'executed';
-    const shares = processed.transactions[0].shares || 'multiple';
-    
-    processed.summary = `${filer} ${txType} ${shares} shares of the company stock.`;
-    logger.debug(`Form 4 post-processing: Generated summary: ${processed.summary}`);
+  // Form-specific post-processing
+  switch (filingType) {
+    case '3': 
+    case '4':
+    case '144':
+      // Ensure summary field exists for insider forms
+      if (!processed.summary && processed.transactions && processed.transactions.length > 0) {
+        logger.debug(`${filingType} post-processing: Summary field is missing, generating from transaction data`);
+        
+        // Create a basic summary from transaction data
+        const filer = processed.filerName || 'An insider';
+        const txType = processed.transactions[0].type || 'executed';
+        const shares = processed.transactions[0].shares || 'multiple';
+        
+        processed.summary = `${filer} ${txType} ${shares} shares of the company stock.`;
+        logger.debug(`${filingType} post-processing: Generated summary: ${processed.summary}`);
+      } else if (!processed.summary && processed.filerName) {
+        // If no transactions but we have a filer name
+        processed.summary = `Initial filing by ${processed.filerName} with the SEC.`;
+        logger.debug(`${filingType} post-processing: Generated basic summary for filing without transactions`);
+      }
+      break;
+      
+    case '8-K':
+      // Ensure summary field exists for 8-K
+      if (!processed.summary && processed.eventType) {
+        processed.summary = `The company reported a ${processed.eventType} event.`;
+        logger.debug(`${filingType} post-processing: Generated summary from event type: ${processed.summary}`);
+      }
+      break;
+      
+    case '10-K':
+    case '10-Q':
+    case '20-F':
+    case '6-K':
+      // Ensure summary field exists for financial reports
+      if (!processed.summary && processed.period) {
+        processed.summary = `Financial report for the period ending ${processed.period}.`;
+        logger.debug(`${filingType} post-processing: Generated summary from period: ${processed.summary}`);
+      }
+      break;
+      
+    default:
+      // For other form types, create a basic summary if missing
+      if (!processed.summary) {
+        processed.summary = `${filingType} filing for ${processed.company || 'the company'}.`;
+        logger.debug(`${filingType} post-processing: Generated generic summary: ${processed.summary}`);
+      }
+      break;
   }
   
-  logger.debug(`Form 4 post-processing: Finished with fields: ${Object.keys(processed).join(', ')}`);
+  logger.debug(`${filingType} post-processing: Finished with fields: ${Object.keys(processed).join(', ')}`);
   return processed;
+}
+
+/**
+ * Legacy function for backward compatibility
+ * @deprecated Use postProcessFilingData instead
+ */
+function postProcessForm4Data(data: any): any {
+  return postProcessFilingData(data, '4');
 }
 
 /**
@@ -297,6 +348,53 @@ function normalizeFields(data: any, filingType: SECFilingType): any {
       
     case '8-K':
       // No specific fields that need normalization
+      break;
+      
+    case '3':
+    case '4':
+    case '144':
+      // Insider trading forms
+      if (Array.isArray(normalized.transactions)) {
+        normalized.transactions = normalized.transactions.map((tx: any) => {
+          const result = { ...tx };
+          
+          // Normalize transaction values
+          if (result.price && (typeof result.price === 'string' || typeof result.price === 'number')) {
+            result.price = normalizeCurrency(result.price);
+          }
+          
+          if (result.value && (typeof result.value === 'string' || typeof result.value === 'number')) {
+            result.value = normalizeCurrency(result.value);
+          }
+          
+          if (result.date && typeof result.date === 'string') {
+            result.date = normalizeDate(result.date);
+          }
+          
+          return result;
+        });
+      }
+      
+      // Normalize stake values
+      if (normalized.previousStake && typeof normalized.previousStake === 'string') {
+        if (/\d/.test(normalized.previousStake)) {
+          normalized.previousStake = normalized.previousStake.replace(/([\d,]+)\s*shares?/i, '$1 shares');
+        }
+      }
+      
+      if (normalized.newStake && typeof normalized.newStake === 'string') {
+        if (/\d/.test(normalized.newStake)) {
+          normalized.newStake = normalized.newStake.replace(/([\d,]+)\s*shares?/i, '$1 shares');
+        }
+      }
+      
+      if (normalized.totalValue && typeof normalized.totalValue === 'string') {
+        normalized.totalValue = normalizeCurrency(normalized.totalValue);
+      }
+      
+      if (normalized.percentageChange && typeof normalized.percentageChange === 'string') {
+        normalized.percentageChange = normalizePercentage(normalized.percentageChange);
+      }
       break;
       
     case 'DEF 14A':
