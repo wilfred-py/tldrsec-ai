@@ -44,6 +44,7 @@ export enum ResendErrorCode {
   DOMAIN_NOT_VERIFIED = 'domain_not_verified',
   EMAIL_SENDING_FAILED = 'email_sending_failed',
   SENDER_NOT_AUTHORIZED = 'sender_not_authorized',
+  VALIDATION_ERROR = 'validation_error',
 }
 
 /**
@@ -243,35 +244,93 @@ export class ResendClient {
               requestId
             });
             
-            const response = await this.resend.emails.send(emailOptions);
-            
-            // Log the raw response for debugging
-            logger.debug('Resend API response:', { response, requestId });
-            
-            // More robust response handling
-            if (!response) {
-              throw createExternalApiError('Failed to send email: Empty response from Resend API', {
-                response
-              }, true, requestId);
+            // Add detailed logging of the exact request body for diagnosing validation errors
+            if (emailOptions.tags) {
+              logger.debug('Tags being sent to Resend API:', {
+                tags: emailOptions.tags,
+                tagsType: typeof emailOptions.tags,
+                isArray: Array.isArray(emailOptions.tags),
+                tagsSample: Array.isArray(emailOptions.tags) ? emailOptions.tags.slice(0, 3).map(tag => ({ value: tag, type: typeof tag })) : null,
+                requestId
+              });
             }
             
-            // Handle case where response exists but doesn't have expected structure
-            if (!response.data || !response.data.id) {
-              // If we have an error in the response, use that
-              if (response.error) {
-                throw createExternalApiError(`Failed to send email: ${response.error.message || 'Unknown error'}`, {
-                  response,
-                  errorCode: response.error.code
+            // Log the stringified JSON to see exactly what's being sent
+            try {
+              const jsonBody = JSON.stringify(emailOptions);
+              logger.debug(`Request body JSON: ${jsonBody}`, { requestId });
+            } catch (jsonError) {
+              logger.error(`Error stringifying request body: ${jsonError instanceof Error ? jsonError.message : 'Unknown error'}`, { requestId });
+            }
+            
+            try {
+              const response = await this.resend.emails.send(emailOptions);
+              
+              // Log the raw response for debugging
+              logger.debug('Resend API response:', { response, requestId });
+              
+              // More robust response handling
+              if (!response) {
+                throw createExternalApiError('Failed to send email: Empty response from Resend API', {
+                  response
                 }, true, requestId);
               }
               
-              // Otherwise, generic error
-              throw createExternalApiError('Failed to send email: No ID returned', {
-                response
-              }, true, requestId);
+              // Handle case where response exists but doesn't have expected structure
+              if (!response.data || !response.data.id) {
+                // If we have an error in the response, use that
+                if (response.error) {
+                  throw createExternalApiError(`Failed to send email: ${response.error.message || 'Unknown error'}`, {
+                    response,
+                    errorCode: response.error.message ? response.error.message : 'unknown_error'
+                  }, true, requestId);
+                }
+                
+                // Otherwise, generic error
+                throw createExternalApiError('Failed to send email: No ID returned', {
+                  response
+                }, true, requestId);
+              }
+              
+              return {
+                id: response.data.id,
+                to: emailParams.to,
+                success: true
+              };
+            } catch (error) {
+              // Enhanced error handling for validation errors
+              if (error instanceof Error) {
+                const errorMessage = error.message || 'Unknown error';
+                
+                // Check for validation errors (422 status code)
+                if (errorMessage.includes('422') || errorMessage.includes('validation')) {
+                  logger.error(`Validation error when sending email: ${errorMessage}`, { 
+                    requestId,
+                    emailParams: {
+                      to: emailParams.to,
+                      subject: emailParams.subject,
+                      hasTags: !!emailParams.tags,
+                      tagsCount: emailParams.tags ? emailParams.tags.length : 0,
+                      tagsType: emailParams.tags ? typeof emailParams.tags : 'undefined',
+                      tagsIsArray: emailParams.tags ? Array.isArray(emailParams.tags) : false,
+                      tagsSample: emailParams.tags && Array.isArray(emailParams.tags) ? 
+                        emailParams.tags.slice(0, 3).map(tag => ({ value: tag, type: typeof tag })) : null
+                    }
+                  });
+                  
+                  // Throw a more specific error for validation issues
+                  throw createExternalApiError(
+                    `Email validation error: ${errorMessage}. Check tags format and other fields.`,
+                    { code: ResendErrorCode.VALIDATION_ERROR, originalError: error },
+                    true,
+                    requestId
+                  );
+                }
+              }
+              
+              // Re-throw the original error if not handled above
+              throw error;
             }
-            
-            return response;
           },
           this.serviceName,
           retryConfig,
@@ -291,7 +350,7 @@ export class ResendClient {
       
       // Return success result
       return {
-        id: result.data!.id,
+        id: result?.id || 'unknown',
         to: emailParams.to,
         success: true
       };
@@ -309,7 +368,8 @@ export class ResendClient {
       
       // Normalize and log error
       const normalizedError = this.normalizeError(error, requestId);
-      logger.error(`Failed to send email: ${normalizedError.message}`, normalizedError, {
+      logger.error(`Failed to send email: ${normalizedError.message}`, {
+        error: normalizedError,
         subject: message.subject,
         to: emailParams.to,
         requestId
@@ -381,28 +441,33 @@ export class ResendClient {
     if (message.html) params.html = message.html;
     if (message.text) params.text = message.text;
     
-    // Format tags as simple strings as expected by the Resend API
-    // Based on our testing and memory, Resend API expects simple strings without special characters
+    // Format tags according to Resend API documentation
     if (message.tags) {
-      // Helper function to sanitize tag values - only allow letters, numbers, underscores, and dashes
+      // Sanitize function to ensure tags only contain valid characters
       const sanitizeTagValue = (value: string): string => {
+        // Replace any character that's not a letter, number, underscore, or dash with an underscore
         return value.replace(/[^a-zA-Z0-9_-]/g, '_');
       };
       
-      if (Array.isArray(message.tags)) {
-        // Handle array of tags - ensure they're all simple strings
-        params.tags = message.tags.map(tag => {
-          if (typeof tag === 'string') {
-            return sanitizeTagValue(tag);
-          } else if (tag && typeof tag === 'object' && 'name' in tag) {
-            return sanitizeTagValue(String(tag.name));
-          }
-          return sanitizeTagValue(String(tag));
-        });
-      } else {
-        // Single tag case
-        params.tags = [sanitizeTagValue(String(message.tags))];
-      }
+      // Resend API expects tags to be objects with name and value properties
+      params.tags = message.tags.map(tag => {
+        if (typeof tag === 'string') {
+          // Convert simple string tags to the required format and sanitize
+          const sanitizedTag = sanitizeTagValue(tag);
+          return { name: sanitizedTag, value: sanitizedTag };
+        } else if (tag && typeof tag === 'object') {
+          // If already in object format, ensure it has name and value and sanitize both
+          const name = tag.name ? sanitizeTagValue(tag.name) : 'tag';
+          const value = tag.value ? sanitizeTagValue(tag.value) : name;
+          return { name, value };
+        }
+        // Fallback
+        const fallbackValue = sanitizeTagValue(String(tag));
+        return { name: fallbackValue, value: fallbackValue };
+      });
+      
+      // Log the sanitized tags for debugging
+      console.log(`[DEBUG][ResendClient] Sanitized tags: ${JSON.stringify(params.tags)}`);
     }
     
     // Add CC and BCC if present

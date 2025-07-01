@@ -15,6 +15,7 @@ import { extractJSON, repairJSON } from './json-extractors';
 import { validateAgainstSchema, extractValidFields } from './schema-validators';
 import { normalizeDate, normalizeCurrency, normalizePercentage } from './normalizers';
 import { SECFilingType } from '../prompts/prompt-types';
+import { secLogger as logger } from '../../../utils/logger';
 
 /**
  * Options for parsing responses
@@ -136,6 +137,11 @@ export function parseResponse<T = any>(
       data = normalizeFields(data, filingType);
     }
     
+    // Post-process to handle missing required fields
+    if (data && (filingType === '4' || filingType === '144')) {
+      data = postProcessForm4Data(data);
+    }
+    
     // Check if we have at least some usable data
     const hasPartialData = data && Object.keys(data).length > 0;
     
@@ -172,6 +178,71 @@ export function parseResponse<T = any>(
       } : undefined
     };
   }
+}
+
+/**
+ * Normalize fields based on filing type
+ * 
+ * @param data - Data to normalize
+ * @param filingType - Type of SEC filing
+ * @returns Normalized data
+ */
+/**
+ * Post-process Form 4 data to handle missing required fields
+ * 
+ * @param data - Partially processed Form 4 data
+ * @returns Enhanced data with derived fields where possible
+ */
+function postProcessForm4Data(data: any): any {
+  if (!data || typeof data !== 'object') {
+    logger.debug('Form 4 post-processing: Input data is not an object');
+    return data;
+  }
+  
+  logger.debug(`Form 4 post-processing: Starting with fields: ${Object.keys(data).join(', ')}`);
+  
+  const processed = { ...data };
+  
+  // If company field is missing but we have other identifying information
+  if (!processed.company) {
+    logger.debug('Form 4 post-processing: Company field is missing, attempting to derive');
+    
+    // Try to derive company from other fields
+    if (processed.issuer) {
+      processed.company = processed.issuer;
+      logger.debug(`Form 4 post-processing: Derived company from issuer: ${processed.company}`);
+    } else if (processed.issuerName) {
+      processed.company = processed.issuerName;
+      logger.debug(`Form 4 post-processing: Derived company from issuerName: ${processed.company}`);
+    } else if (processed.issuerCompany) {
+      processed.company = processed.issuerCompany;
+      logger.debug(`Form 4 post-processing: Derived company from issuerCompany: ${processed.company}`);
+    } else if (processed.companyName) {
+      processed.company = processed.companyName;
+      logger.debug(`Form 4 post-processing: Derived company from companyName: ${processed.company}`);
+    } else if (processed.ticker) {
+      processed.company = processed.ticker;
+      logger.debug(`Form 4 post-processing: Derived company from ticker: ${processed.company}`);
+    } else {
+      logger.debug('Form 4 post-processing: Could not derive company field from available data');
+    }
+  }
+  
+  // Ensure summary field exists
+  if (!processed.summary && processed.transactions && processed.transactions.length > 0) {
+    logger.debug('Form 4 post-processing: Summary field is missing, generating from transaction data');
+    
+    // Create a basic summary from transaction data
+    const filer = processed.filerName || 'An insider';
+    const txType = processed.transactions[0].type || 'executed';
+    const shares = processed.transactions[0].shares || 'multiple';
+    
+    processed.summary = `${filer} ${txType} ${shares} shares of the company stock.`;
+    logger.debug(`Form 4 post-processing: Generated summary: ${processed.summary}`);
+  }
+  
+  logger.debug(`Form 4 post-processing: Finished with fields: ${Object.keys(processed).join(', ')}`);
+  return processed;
 }
 
 /**

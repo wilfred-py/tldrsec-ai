@@ -222,11 +222,29 @@ export function validateAgainstSchema(
       const result = partialSchema.safeParse(data);
       
       if (result.success) {
-        // Also check if we have the minimum required fields
-        const minimumRequired = z.object({
-          company: z.string(),
-          summary: z.string().optional()
-        });
+        // Also check if we have the minimum required fields based on filing type
+        let minimumRequired;
+        
+        // Form 4 has different minimum requirements
+        if (filingType === '4' || filingType === '144') {
+          // For Form 4, either company or filerName must be present plus a summary field
+          minimumRequired = z.object({
+            company: z.string().optional(),
+            filerName: z.string().optional(),
+            summary: z.string().optional()
+          }).refine(data => {
+            // Ensure either company or filerName is present
+            return Boolean(data.company || data.filerName);
+          }, {
+            message: 'Either company or filerName must be present'
+          });
+        } else {
+          // Default minimum requirements for other filing types
+          minimumRequired = z.object({
+            company: z.string(),
+            summary: z.string().optional()
+          });
+        }
         
         const minimumCheck = minimumRequired.safeParse(data);
         

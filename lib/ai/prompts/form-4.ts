@@ -21,14 +21,17 @@ You must:
 3. Calculate the total value and ownership changes
 4. Assess the significance of the transactions
 5. Format your response as valid JSON according to the provided schema
-6. Be precise and quantitative whenever possible`;
+6. Be precise and quantitative whenever possible
+7. ALWAYS include the "company" field in your JSON response - this is required
+8. Ensure your JSON output is complete and valid, with all required fields`;
     
     // Set the user prompt (specific instructions)
     this.userPrompt = `Analyze this SEC Form 4 filing and provide:
 
-1. Company and insider identification (name, position/relationship)
-2. Ownership type (direct, indirect)
-3. Details of each transaction:
+1. Company name (REQUIRED - must be included in the "company" field)
+2. Insider identification (name, position/relationship)
+3. Ownership type (direct, indirect)
+4. Details of each transaction:
    - Transaction type (purchase, sale, option exercise, etc.)
    - Date
    - Number of shares
@@ -36,15 +39,17 @@ You must:
    - Total value
    - Type of security
    - Whether it was an acquisition (A) or disposition (D)
-4. Calculation of total transaction value
-5. Percentage change in ownership (if derivable)
-6. Previous and new stake information (if available)
-7. A concise summary of the insider trading activity and its significance`;
+5. Calculation of total transaction value
+6. Percentage change in ownership (if derivable)
+7. Previous and new stake information (if available)
+8. A concise summary of the insider trading activity and its significance
+
+IMPORTANT: Your JSON response MUST include the "company" field with the company name, even if you have to extract it from context. This field is required for proper processing.`;
     
     // Set the output format (JSON schema)
     this.outputFormat = `Output (JSON):
 {
-  "company": "Company Name",
+  "company": "Company Name", // REQUIRED - This field must be included
   "filingDate": "YYYY-MM-DD",
   "reportDate": "YYYY-MM-DD",
   "filerName": "Name of the insider",
@@ -65,7 +70,7 @@ You must:
   "percentageChange": "Percentage change in ownership",
   "previousStake": "Previous ownership stake",
   "newStake": "New ownership stake",
-  "summary": "Concise summary of the insider trading activity",
+  "summary": "Concise summary of the insider trading activity", // REQUIRED - This field must be included
   "signalStrength": "Assessment of the strength of the insider signal",
   "insiderBehaviorPattern": "Note on any pattern of insider behavior"
 }`;

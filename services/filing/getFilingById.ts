@@ -38,65 +38,71 @@ export async function getFilingById(
     
     // Construct the URL for the filing metadata
     // Use FILING_URL which requires both accession number and CIK
+    // Only attempt to fetch metadata if we have a CIK
     const metadataUrl = normalizedCik 
       ? SEC_CONFIG.FILING_URL(normalizedAccessionNumber, formattedCik)
-      : `https://www.sec.gov/Archives/edgar/data/${normalizedAccessionNumber}/index.json`;
+      : null; // Don't try to fetch index.json as it doesn't exist in SEC EDGAR
     
     // Variables to store the responses
     let filingMetadata: Record<string, any> | null = null;
     let filingContent: string = '';
     
-    // First, try to get the filing metadata
+    // First, try to get the filing metadata if we have a valid URL
     try {
-      // Log with visual indicator for parsing stage
-      logger.debug(`🔍 Fetching filing metadata from ${metadataUrl}`);
+      // Only attempt to fetch metadata if we have a valid URL
+      if (metadataUrl) {
+        // Log with visual indicator for parsing stage
+        logger.debug(`🔍 Fetching filing metadata from ${metadataUrl}`);
+        
+        const metadataResponse = await axios.get(metadataUrl, {
+          headers: SEC_CONFIG.HEADERS
+        });
       
-      const metadataResponse = await axios.get(metadataUrl, {
-        headers: {
-          'User-Agent': SEC_CONFIG.USER_AGENT
+        // Record this URL attempt with parsing stage indicator
+        urlAttempts.push({
+          url: metadataUrl,
+          success: true,
+          statusCode: metadataResponse.status,
+          timestamp: Date.now(),
+          parsingStages: {
+            fetchComplete: true,
+            xmlParsed: false,
+            namespacesResolved: false,
+            contextRefsValid: false
+          }
+        });
+      
+        filingMetadata = metadataResponse.data as Record<string, any>;
+        
+        if (!filingMetadata) {
+          throw new Error(`No metadata found for filing ${accessionNumber}`);
         }
-      });
-      
-      // Record this URL attempt with parsing stage indicator
-      urlAttempts.push({
-        url: metadataUrl,
-        success: true,
-        statusCode: metadataResponse.status,
-        timestamp: Date.now(),
-        parsingStages: {
-          fetchComplete: true,
-          xmlParsed: false,
-          namespacesResolved: false,
-          contextRefsValid: false
-        }
-      });
-      
-      filingMetadata = metadataResponse.data as Record<string, any>;
-      
-      if (!filingMetadata) {
-        throw new Error(`No metadata found for filing ${accessionNumber}`);
+      } else {
+        logger.info(`✅ Skipping metadata fetch - no CIK provided for ${accessionNumber}`);
       }
       
       // Success logs only needed for errors
     } catch (error: any) {
-      // Track failed URL attempt
-      urlAttempts.push({
-        url: metadataUrl,
-        success: false,
-        statusCode: error.response?.status,
-        error: error.message,
-        timestamp: Date.now(),
-        parsingStages: {
-          fetchComplete: false,
-          xmlParsed: false,
-          namespacesResolved: false,
-          contextRefsValid: false
-        }
-      });
-      logger.error(`Error fetching filing metadata from ${metadataUrl}: ${error.message}`);
+      // Only track failed URL attempt if we actually tried to fetch metadata
+      if (metadataUrl) {
+        urlAttempts.push({
+          url: metadataUrl,
+          success: false,
+          statusCode: error.response?.status,
+          error: error.message,
+          timestamp: Date.now(),
+          parsingStages: {
+            fetchComplete: false,
+            xmlParsed: false,
+            namespacesResolved: false,
+            contextRefsValid: false
+          }
+        });
+        logger.error(`❌ Error fetching filing metadata from ${metadataUrl}: ${error.message}`);
       
-      // If we can't get the metadata, we'll try to get the content directly
-      logger.info(`Metadata fetch failed, attempting to fetch filing content directly`); // More informative message
+        // If we can't get the metadata, we'll try to get the content directly
+        logger.info(`ℹ️ Metadata fetch failed, attempting to fetch filing content directly`); // More informative message
+      }
     }
     
     // Construct the URL for the filing content
@@ -124,15 +130,13 @@ export async function getFilingById(
       logger.debug(`📄 Fetching filing content from ${rawUrl}`);
       
       const rawResponse = await axios.get(rawUrl, {
-        headers: {
-          'User-Agent': SEC_CONFIG.USER_AGENT
-        }
+        headers: SEC_CONFIG.HEADERS
       });
       
       // Check if the content is XML and log it with our structured format
       const contentType = rawResponse.headers['content-type'] || '';
       const isXml = contentType.includes('xml') || 
-                   rawResponse.data.toString().trim().startsWith('<?xml');
+                   (rawResponse.data as string).trim().startsWith('<?xml');
       
       // Create URL attempt with parsing stage indicators
       const urlAttempt: UrlAttempt = {
@@ -265,15 +269,13 @@ export async function getFilingById(
         try {
           logger.info(`Trying alternative URL: ${altUrl}`);
           const altResponse = await axios.get(altUrl, {
-            headers: {
-              'User-Agent': SEC_CONFIG.USER_AGENT
-            }
+            headers: SEC_CONFIG.HEADERS
           });
           
           // Check if the content is XML and log it with our structured format
           const contentType = altResponse.headers['content-type'] || '';
           const isXml = contentType.includes('xml') || 
-                       altResponse.data.toString().trim().startsWith('<?xml');
+                       (altResponse.data as string).trim().startsWith('<?xml');
           
           // Create URL attempt with parsing stage indicators
           const urlAttempt: UrlAttempt = {
@@ -360,15 +362,13 @@ export async function getFilingById(
             logger.debug(`📄 Fetching filing content from ${fallbackUrl}`);
             
             const fallbackResponse = await axios.get(fallbackUrl, {
-              headers: {
-                'User-Agent': SEC_CONFIG.USER_AGENT
-              }
+              headers: SEC_CONFIG.HEADERS
             });
             
             // Check if the content is XML and log it with our structured format
             const contentType = fallbackResponse.headers['content-type'] || '';
             const isXml = contentType.includes('xml') || 
-                         fallbackResponse.data.toString().trim().startsWith('<?xml');
+                         (fallbackResponse.data as string).trim().startsWith('<?xml');
             
             // Create URL attempt with parsing stage indicators
             const urlAttempt: UrlAttempt = {
