@@ -99,6 +99,38 @@ const schemaForm4 = z.object({
 });
 
 /**
+ * Schema for Form 3 initial insider holdings reports
+ */
+const schemaForm3 = z.object({
+  company: z.string(),
+  filingDate: z.string(),
+  filerName: z.string(),
+  relationship: z.string(),
+  ownershipType: z.string().optional(),
+  holdings: z.array(
+    z.object({
+      securityTitle: z.string(),
+      shares: z.number().or(z.string()),
+      directOrIndirect: z.string().optional(),
+      natureOfOwnership: z.string().optional()
+    })
+  ).optional(),
+  transactions: z.array(
+    z.object({
+      type: z.string(),
+      date: z.string(),
+      shares: z.number().or(z.string()),
+      price: z.number().or(z.string()).optional(),
+      value: z.number().or(z.string()).optional(),
+      code: z.string().optional(),
+      description: z.string().optional()
+    })
+  ).optional(),
+  totalShares: z.string().optional(),
+  summary: z.string().optional()
+});
+
+/**
  * Schema for S-1 registration statements
  */
 const schemaS1 = z.object({
@@ -165,7 +197,7 @@ const schemaGeneric = z.object({
 /**
  * Map filing types to their schemas
  */
-const schemaMap: Record<SECFilingType, z.ZodTypeAny> = {
+const schemaMap: Record<SECFilingType | string, z.ZodTypeAny> = {
   '10-K': schema10K,
   '10-Q': schema10Q,
   '8-K': schema8K,
@@ -175,6 +207,7 @@ const schemaMap: Record<SECFilingType, z.ZodTypeAny> = {
   'S-4': schemaS1,   // Similar to S-1 but for business combinations
   '424B': schemaGeneric,
   'DEF 14A': schemaDEF14A,
+  '3': schemaForm3,  // Form 3 for initial insider holdings reports
   '4': schemaForm4,  // Form 4 for insider trading reports
   '144': schemaGeneric, // Form 144 for planned sales of securities
   'Generic': schemaGeneric
@@ -225,24 +258,70 @@ export function validateAgainstSchema(
         // Also check if we have the minimum required fields based on filing type
         let minimumRequired;
         
-        // Form 4 has different minimum requirements
-        if (filingType === '4' || filingType === '144') {
-          // For Form 4, either company or filerName must be present plus a summary field
+        // Different form types have different minimum requirements
+        // Forms that involve insider reporting (3, 4, 144) can use either company or filerName
+        if (['3', '4', '144'].includes(filingType)) {
+          // For insider forms, either company or filerName must be present
           minimumRequired = z.object({
             company: z.string().optional(),
             filerName: z.string().optional(),
+            issuer: z.string().optional(),     // Alternative field names that might be present
+            issuerName: z.string().optional(), // in AI responses for these form types
+            companyName: z.string().optional(),
+            ticker: z.string().optional(),
             summary: z.string().optional()
           }).refine(data => {
-            // Ensure either company or filerName is present
-            return Boolean(data.company || data.filerName);
+            // Ensure at least one company identifier is present
+            return Boolean(
+              data.company || 
+              data.filerName || 
+              data.issuer || 
+              data.issuerName || 
+              data.companyName || 
+              data.ticker
+            );
           }, {
-            message: 'Either company or filerName must be present'
+            message: 'At least one company identifier (company, filerName, issuer, etc.) must be present'
           });
-        } else {
-          // Default minimum requirements for other filing types
+        } 
+        // Prospectus forms might have different naming conventions
+        else if (filingType.startsWith('424B')) {
           minimumRequired = z.object({
-            company: z.string(),
+            company: z.string().optional(),
+            issuer: z.string().optional(),
+            issuerName: z.string().optional(),
+            companyName: z.string().optional(),
             summary: z.string().optional()
+          }).refine(data => {
+            // Ensure at least one company identifier is present
+            return Boolean(
+              data.company || 
+              data.issuer || 
+              data.issuerName || 
+              data.companyName
+            );
+          }, {
+            message: 'At least one company identifier (company, issuer, etc.) must be present'
+          });
+        } 
+        // Default minimum requirements for other filing types
+        else {
+          minimumRequired = z.object({
+            company: z.string().optional(),
+            companyName: z.string().optional(),
+            issuer: z.string().optional(),
+            issuerName: z.string().optional(),
+            summary: z.string().optional()
+          }).refine(data => {
+            // Ensure at least one company identifier is present
+            return Boolean(
+              data.company || 
+              data.companyName || 
+              data.issuer || 
+              data.issuerName
+            );
+          }, {
+            message: 'Company identifier must be present'
           });
         }
         
