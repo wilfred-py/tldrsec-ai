@@ -1,27 +1,26 @@
 /**
- * Type definitions for the prompt engineering module
+ * Type definitions for SEC filing prompts
  */
 
+import { ClaudeRequestOptions } from '../claude-client';
+
 /**
- * SEC filing types that we support with specialized prompts
+ * SEC Filing Types supported by the system
  */
 export type SECFilingType = 
-  | '10-K'  // Annual report
-  | '10-Q'  // Quarterly report
-  | '8-K'   // Current report (material events)
-  | '20-F'  // Annual report for foreign private issuers
-  | '6-K'   // Report for foreign private issuers
-  | 'S-1'   // Registration statement
-  | 'S-4'   // Registration for business combinations
-  | '424B'  // Prospectus
+  | '10-K'    // Annual report
+  | '10-Q'    // Quarterly report
+  | '8-K'     // Current report (material events)
   | 'DEF 14A' // Proxy statement
-  | '3'     // Form 3 initial insider holdings reports
-  | '4'     // Form 4 insider trading reports
-  | '144'   // Form 144 planned sales of securities
-  | 'Generic'; // Generic prompt for any other filing type
+  | '20-F'    // Annual report for foreign private issuers
+  | '6-K'     // Report for foreign private issuers
+  | 'S-1'     // Registration statement
+  | 'S-4'     // Business combinations
+  | '424B'    // Prospectus
+  | 'Generic'; // Generic template for any filing type
 
 /**
- * SEC filing sections that can be analyzed separately
+ * SEC Filing Sections that can be analyzed separately
  */
 export type SECFilingSection =
   | 'Risk Factors'
@@ -33,182 +32,48 @@ export type SECFilingSection =
   | 'Corporate Governance'
   | 'Executive Compensation'
   | 'Material Changes'
-  | 'Complete Document'; // For processing the entire document
+  | 'Complete Document';
 
 /**
- * Prompt template with variables that can be replaced
- */
-export interface PromptTemplate {
-  template: string;
-  variables: string[];
-  defaultValues?: Record<string, string>;
-}
-
-/**
- * Configuration for prompt complexity and token usage
- */
-export interface PromptConfig {
-  maxInputTokens: number;
-  maxOutputTokens: number;
-  temperature: number;
-  exampleIncluded: boolean;
-  systemPrompt: string;
-}
-
-/**
- * Context window management configuration
+ * Configuration for context window management
  */
 export interface ContextWindowConfig {
-  maxChunkSize: number;
-  overlapSize: number;
-  useSemanticChunking: boolean;
-  chunkStrategy: 'fixed' | 'adaptive' | 'section-based';
+  maxChunkSize: number;      // Maximum tokens per chunk
+  overlapSize: number;       // Overlap between chunks in tokens
+  useSemanticChunking: boolean; // Whether to use semantic boundaries
+  chunkStrategy: 'fixed' | 'section-based' | 'adaptive'; // Chunking strategy
 }
 
 /**
- * Complete prompt request with all needed parameters
- */
-export interface PromptRequest {
-  filingType: SECFilingType;
-  section?: SECFilingSection;
-  content: string;
-  companyName: string;
-  filingDate: string;
-  ticker: string;
-  fiscalYear?: string;
-  fiscalQuarter?: string;
-  customInstructions?: string;
-  promptConfig?: Partial<PromptConfig>;
-  contextConfig?: Partial<ContextWindowConfig>;
-}
-
-/**
- * The format for specialized SEC filing prompt templates
+ * Template for filing-specific prompts
  */
 export interface FilingPromptTemplate {
   filingType: SECFilingType;
   description: string;
   systemPrompt: string;
-  userPrompt: PromptTemplate;
-  config: PromptConfig;
+  userPrompt: string;
+  config: {
+    maxInputTokens: number;
+    maxOutputTokens: number;
+    temperature: number;
+    exampleIncluded: boolean;
+    systemPrompt: string;
+  };
   contextConfig: ContextWindowConfig;
 }
 
-
 /**
- * Schema structure for 10-K (Annual Report) filings
+ * Request parameters for generating a prompt
  */
-export interface Form10KSchema {
-  company: string;
-  period: string;
+export interface PromptRequest {
+  filingType: SECFilingType;
+  content: string;
+  companyName: string;
+  ticker: string;
+  filingDate: string;
+  section?: SECFilingSection;
   fiscalYear?: string;
-  reportDate?: string;
-  financials: {
-    label: string;
-    value: string;
-    growth?: string;
-    unit?: string;
-  }[];
-  keyHighlights: string[];
-  insights: string[];
-  risks: string[];
-  riskFactors?: {
-    category: string;
-    description: string;
-    impact: string;
-  }[];
-  segments?: {
-    name: string;
-    revenue: string;
-    growth?: string;
-  }[];
-  executiveSummary?: string;
+  fiscalQuarter?: string;
+  promptConfig?: Partial<ClaudeRequestOptions>;
+  contextConfig?: Partial<ContextWindowConfig>;
 }
-
-/**
- * Schema structure for 10-Q (Quarterly Report) filings
- */
-export interface Form10QSchema {
-  company: string;
-  period: string;
-  quarterEnding?: string;
-  reportDate?: string;
-  financials: {
-    label: string;
-    value: string;
-    growth?: string;
-    unit?: string;
-  }[];
-  keyHighlights: string[];
-  insights: string[];
-  risks: string[];
-  quarterlyTrends?: string[];
-  guidanceChanges?: string;
-  outlook?: string;
-  executiveSummary?: string;
-}
-
-/**
- * Schema structure for 8-K (Current Report) filings
- */
-export interface Form8KSchema {
-  company: string;
-  reportDate: string;
-  eventDate?: string;
-  eventType: string;
-  summary: string;
-  positiveDevelopments: string | string[];
-  potentialConcerns: string | string[];
-  structuralChanges: string | string[];
-  items?: {
-    item: string;
-    title: string;
-    content: string;
-  }[];
-  materialityAssessment?: string;
-  additionalNotes?: string;
-  executiveSummary?: string;
-}
-
-/**
- * Schema structure for Form 4 (Insider Trading) filings
- */
-export interface FormForm4Schema {
-  company: string;
-  filingDate: string;
-  reportDate?: string;
-  filerName: string;
-  relationship: string;
-  ownershipType: string;
-  transactions: {
-    type: string;
-    date: string;
-    shares: string;
-    pricePerShare: string;
-    totalValue: string;
-    securityType: string;
-    acquisitionDisposition: string;
-  }[];
-  totalValue: string;
-  percentageChange?: string;
-  previousStake?: string;
-  newStake?: string;
-  summary: string;
-  signalStrength?: string;
-  insiderBehaviorPattern?: string;
-}
-
-/**
- * Schema structure for generic filings
- */
-export interface GenericFilingSchema {
-  company: string;
-  filingType: string;
-  filingDate: string;
-  summary: string;
-  keyPoints: string[];
-  importantInformation: string[];
-  financialImpact?: string;
-  riskConsiderations?: string[];
-  executiveSummary?: string;
-} 

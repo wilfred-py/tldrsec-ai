@@ -6,3 +6,4 @@
 
 export * from './form144Summary';
 export * from './genericSummary';
+export * from './fallbackSummary';
