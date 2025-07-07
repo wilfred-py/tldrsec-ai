@@ -11,6 +11,13 @@ Focus on the most important information that would be relevant to investors and 
 Include key facts, figures, and any material changes or events disclosed in the filing.
 Format your response in clear, readable paragraphs with bullet points for key takeaways.
 
+IMPORTANT: These summaries will be sent via email to users of the tldrSEC service. Your summary must be:
+1. Concise yet comprehensive - provide valuable insights in a compact format
+2. Professional and polished - use clear, accessible financial language
+3. Actionable - highlight information that would influence investment decisions
+4. Formatted for easy reading in an email client
+5. High-value - demonstrate the worth of the tldrSEC service through quality analysis
+
 FILING CONTENT:
 {{content}}
 
@@ -447,62 +454,55 @@ Please structure your response as follows:
 4. Potential Implications (bullet points)
 5. A concluding sentence with the most important takeaway
 
-Your summary should be informative, accurate, and easy to understand for investors.
+Your summary should be informative, accurate, and easy to understand for investors. It should also be concise and formatted for easy reading in email clients. Provide exceptional value and insight in a concise format, making the subscriber feel they're getting insider-level analysis. Highlight information that could impact investment decisions and demonstrate the value of the tldrSEC service through high-quality analysis.
 `;
 
 /**
  * Get the appropriate prompt template for a specific filing type
  * @param filingType The type of filing
- * @param ticker The stock ticker symbol
- * @param companyName The company name
- * @param content The content to insert into the prompt template
- * @returns The complete prompt with content inserted
+ * @param context Additional context like ticker and company name
+ * @returns A function to get the full prompt with content
  */
-export function getPromptForFilingType(filingType: FilingType, ticker: string, companyName: string, content: string): string {
-  const formMetadata = getFormMetadata(filingType);
+export function getPromptForFilingType(filingType: FilingType, context: { ticker?: string; companyName?: string }) {
+  // Normalize the filing type before lookup
+  const normalizedFilingType = filingType.replace(/\//g, '-').toUpperCase();
+  const formMetadata = getFormMetadata(normalizedFilingType);
+  const ticker = context.ticker || '';
+  const companyName = context.companyName || 'the company';
   
   // Create a base prompt with company and ticker info
   const basePromptWithCompanyInfo = `
     You are an expert financial analyst specializing in SEC filings analysis.
     
-    Please analyze the following ${filingType} filing from ${companyName} (${ticker}) and provide key insights.
+    Please analyze the following ${normalizedFilingType} filing from ${companyName} ${ticker ? `(${ticker})` : ''} and provide key insights.
     
     IMPORTANT: Your response MUST be valid JSON. Do not include any text before or after the JSON.
   `;
   
-  // Special case handling for specific filing types
-  if (filingType === '10-K') {
-    return FORM_10K_PROMPT.replace('{{content}}', content)
-      .replace('You are an expert financial analyst specializing in SEC filings analysis.', basePromptWithCompanyInfo);
-  } else if (filingType === '10-Q') {
-    return FORM_10Q_PROMPT.replace('{{content}}', content)
-      .replace('You are an expert financial analyst specializing in SEC filings analysis.', basePromptWithCompanyInfo);
-  } else if (filingType === '8-K') {
-    return FORM_8K_PROMPT.replace('{{content}}', content)
-      .replace('You are an expert financial analyst specializing in SEC filings.', basePromptWithCompanyInfo);
-  } else if (filingType === '4') {
-    return FORM_4_PROMPT.replace('{{content}}', content)
-      .replace('You are an expert financial analyst specializing in SEC filings.', basePromptWithCompanyInfo);
-  }
-  
-  // Fall back to category-based prompts for other filing types
-  if (!formMetadata) {
-    return GENERIC_FILING_PROMPT.replace('{{content}}', content)
-      .replace('You are an expert financial analyst specializing in SEC filings.', basePromptWithCompanyInfo);
-  }
-  
-  switch (formMetadata.summaryPromptType) {
-    case 'financial':
-      return FINANCIAL_REPORT_PROMPT.replace('{{content}}', content);
-    case 'event':
-      return EVENT_FILING_PROMPT.replace('{{content}}', content);
-    case 'ownership':
-      return OWNERSHIP_FILING_PROMPT.replace('{{content}}', content);
-    case 'registration':
-      return REGISTRATION_FILING_PROMPT.replace('{{content}}', content);
-    default:
-      return GENERIC_FILING_PROMPT.replace('{{content}}', content);
-  }
+  return {
+    getFullPrompt: (content: string) => {
+      // Special case handling for specific filing types
+      if (normalizedFilingType === '10-K') {
+        return FORM_10K_PROMPT.replace('{{content}}', content)
+          .replace('You are an expert financial analyst specializing in SEC filings analysis.', basePromptWithCompanyInfo);
+      } else if (normalizedFilingType === '10-Q') {
+        return FORM_10Q_PROMPT.replace('{{content}}', content)
+          .replace('You are an expert financial analyst specializing in SEC filings analysis.', basePromptWithCompanyInfo);
+      } else if (normalizedFilingType === '8-K') {
+        return FORM_8K_PROMPT.replace('{{content}}', content)
+          .replace('You are an expert financial analyst specializing in SEC filings.', basePromptWithCompanyInfo);
+      } else if (normalizedFilingType === '4') {
+        return FORM_4_PROMPT.replace('{{content}}', content)
+          .replace('You are an expert financial analyst specializing in SEC filings.', basePromptWithCompanyInfo);
+      } else if (normalizedFilingType === 'S-1') {
+        return REGISTRATION_FILING_PROMPT.replace('{{content}}', content)
+          .replace('You are an expert financial analyst specializing in SEC filings.', basePromptWithCompanyInfo);
+      } else {
+        return GENERIC_FILING_PROMPT.replace('{{content}}', content)
+          .replace('You are an expert financial analyst specializing in SEC filings.', basePromptWithCompanyInfo);
+      }
+    }
+  };
 }
 
 /**
@@ -513,8 +513,10 @@ export function getPromptForFilingType(filingType: FilingType, ticker: string, c
  * @returns A customized system prompt
  */
 export function generateSystemPrompt(filingType: FilingType, companyName: string, filingDate: string): string {
-  const formMetadata = getFormMetadata(filingType);
-  const formName = formMetadata ? formMetadata.displayName : filingType;
+  // Normalize the filing type before lookup
+  const normalizedFilingType = filingType.replace(/\//g, '-').toUpperCase();
+  const formMetadata = getFormMetadata(normalizedFilingType);
+  const formName = formMetadata ? formMetadata.displayName : normalizedFilingType;
   
   return `
 You are an expert financial analyst specializing in SEC filings analysis.
@@ -522,6 +524,13 @@ You are summarizing a ${formName} filing for ${companyName} filed on ${filingDat
 Your summary should be concise, factual, and highlight the most important information for investors.
 Focus on material information and avoid speculation or opinion.
 Use clear, professional language and organize information logically.
+
+IMPORTANT: Your summary will be delivered via email to tldrSEC subscribers. Create a summary that:
+1. Provides exceptional value and insight in a concise format
+2. Makes the subscriber feel they're getting insider-level analysis
+3. Highlights information that could impact investment decisions
+4. Is formatted for easy reading in email clients
+5. Demonstrates the value of the tldrSEC service through high-quality analysis
 `;
 }
 
@@ -529,8 +538,12 @@ Use clear, professional language and organize information logically.
  * Generate a user prompt for summarizing a specific filing type with content
  * @param filingType The type of filing
  * @param content The content to summarize
+ * @param companyName Optional company name for context
+ * @param ticker Optional ticker symbol for context
  * @returns A customized user prompt with content
  */
-export function generateUserPrompt(filingType: FilingType, content: string): string {
-  return getPromptForFilingType(filingType, content);
+export function generateUserPrompt(filingType: FilingType, content: string, companyName?: string, ticker?: string): string {
+  const context = { ticker, companyName };
+  const promptGenerator = getPromptForFilingType(filingType, context);
+  return promptGenerator.getFullPrompt(content);
 }
