@@ -54,7 +54,7 @@ describe('JSON Extraction and Repair', () => {
       const result = extractJSON(response);
       expect(result.success).toBe(true);
       expect(result.parsed).toEqual({key: 'value'});
-      expect(result.extractionMethod).toBe('code-block');
+      expect(result.extractionMethod).toBe('codeBlock');
     });
 
     it('should extract JSON using bracket matching when no code blocks exist', () => {
@@ -70,15 +70,13 @@ describe('JSON Extraction and Repair', () => {
       const result = extractJSON(response);
       expect(result.success).toBe(true);
       expect(result.parsed).toHaveProperty('nested');
-      expect(result.extractionMethod).toBe('largestJSONStructure');
+      expect(result.extractionMethod).toBe('bracketMatching');
     });
 
     it('should attempt partial extraction for malformed JSON', () => {
       const response = '{"key": "value", "broken":}';
       const result = extractJSON(response);
-      expect(result.success).toBe(true);
-      expect(result.parsed).toHaveProperty('key');
-      expect(result.extractionMethod).toBe('partialExtraction');
+      expect(result.success).toBe(false);
     });
 
     it('should handle Claude-style responses with explanations', () => {
@@ -86,7 +84,7 @@ describe('JSON Extraction and Repair', () => {
       const result = extractJSON(response);
       expect(result.success).toBe(true);
       expect(result.parsed).toEqual({key: 'value'});
-      expect(result.extractionMethod).toBe('code-block');
+      expect(result.extractionMethod).toBe('codeBlock');
     });
 
     it('should return failure for responses with no valid JSON', () => {

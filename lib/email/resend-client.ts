@@ -261,7 +261,7 @@ export class ResendClient {
               if (response.error) {
                 throw createExternalApiError(`Failed to send email: ${response.error.message || 'Unknown error'}`, {
                   response,
-                  errorCode: response.error.code
+                  errorCode: response.error.message ? response.error.message : 'unknown'
                 }, true, requestId);
               }
               
@@ -309,7 +309,8 @@ export class ResendClient {
       
       // Normalize and log error
       const normalizedError = this.normalizeError(error, requestId);
-      logger.error(`Failed to send email: ${normalizedError.message}`, normalizedError, {
+      logger.error(`Failed to send email: ${normalizedError.message}`, {
+        error: normalizedError,
         subject: message.subject,
         to: emailParams.to,
         requestId
@@ -381,28 +382,47 @@ export class ResendClient {
     if (message.html) params.html = message.html;
     if (message.text) params.text = message.text;
     
-    // Format tags as simple strings as expected by the Resend API
-    // Based on our testing and memory, Resend API expects simple strings without special characters
+    // Format tags according to Resend API requirements
+    // Tags must be an array of objects with name and value properties
+    // Both name and value can only contain ASCII letters, numbers, underscores, or dashes
     if (message.tags) {
       // Helper function to sanitize tag values - only allow letters, numbers, underscores, and dashes
       const sanitizeTagValue = (value: string): string => {
         return value.replace(/[^a-zA-Z0-9_-]/g, '_');
       };
       
-      if (Array.isArray(message.tags)) {
-        // Handle array of tags - ensure they're all simple strings
-        params.tags = message.tags.map(tag => {
-          if (typeof tag === 'string') {
-            return sanitizeTagValue(tag);
-          } else if (tag && typeof tag === 'object' && 'name' in tag) {
-            return sanitizeTagValue(String(tag.name));
-          }
-          return sanitizeTagValue(String(tag));
-        });
-      } else {
-        // Single tag case
-        params.tags = [sanitizeTagValue(String(message.tags))];
-      }
+      // Ensure we have an array of tags
+      const tagsArray = Array.isArray(message.tags) ? message.tags : [message.tags];
+      
+      // Convert all tags to the required format with name and value properties
+      params.tags = tagsArray.map(tag => {
+        // If tag is already an object with name and value, sanitize both
+        if (tag && typeof tag === 'object' && 'name' in tag && 'value' in tag) {
+          return {
+            name: sanitizeTagValue(String(tag.name)),
+            value: sanitizeTagValue(String(tag.value))
+          };
+        }
+        
+        // If tag is an object with only name, use name as value too
+        if (tag && typeof tag === 'object' && 'name' in tag) {
+          const sanitizedName = sanitizeTagValue(String(tag.name));
+          return {
+            name: sanitizedName,
+            value: sanitizedName
+          };
+        }
+        
+        // For string tags or any other type, convert to string and use as both name and value
+        const sanitizedTag = sanitizeTagValue(String(tag));
+        return {
+          name: sanitizedTag,
+          value: sanitizedTag
+        };
+      });
+      
+      // Log the sanitized tags for debugging
+      logger.debug('Sanitized email tags:', { tags: params.tags });
     }
     
     // Add CC and BCC if present

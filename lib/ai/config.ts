@@ -37,7 +37,7 @@ export const apiConfig = {
  * Model configuration
  */
 export const modelConfig = {
-  defaultModel: getEnv('CLAUDE_DEFAULT_MODEL', 'claude-3-opus-20240229'),
+  defaultModel: getEnv('CLAUDE_DEFAULT_MODEL', 'claude-sonnet-4-20250514'),
   fallbackModel: getEnv('CLAUDE_FALLBACK_MODEL', 'claude-3-sonnet-20240229'),
   maxInputTokens: parseInt(getEnv('CLAUDE_MAX_INPUT_TOKENS', '100000'), 10),
   maxOutputTokens: parseInt(getEnv('CLAUDE_MAX_OUTPUT_TOKENS', '4096'), 10),
@@ -64,7 +64,7 @@ export const ClaudeConfig = {
   apiKey: process.env.ANTHROPIC_API_KEY || '',
   
   // Model selection - default to Claude 3 Sonnet if not specified
-  model: process.env.ANTHROPIC_MODEL || 'claude-3-sonnet-20240229',
+  model: process.env.ANTHROPIC_MODEL || 'claude-sonnet-4-20250514',
   
   // Request parameters
   maxTokens: parseInt(process.env.ANTHROPIC_MAX_TOKENS || '4000', 10),
@@ -90,6 +90,7 @@ export const ClaudeConfig = {
   
   // Available models
   availableModels: [
+    'claude-sonnet-4-20250514',
     'claude-3-opus-20240229',
     'claude-3-sonnet-20240229',
     'claude-3-haiku-20240307',
@@ -100,6 +101,12 @@ export const ClaudeConfig = {
   
   // Model capabilities and constraints
   modelInfo: {
+    'claude-sonnet-4-20250514': {
+      contextWindow: 200000,
+      costPerInputToken: 0.000003,  // $3 per million input tokens
+      costPerOutputToken: 0.000015, // $15 per million output tokens
+      strengths: 'Latest Claude Sonnet model with improved capabilities',
+    },
     'claude-3-opus-20240229': {
       contextWindow: 200000,
       costPerInputToken: 0.000015,  // $15 per million input tokens
