@@ -7,6 +7,7 @@
 import { logger } from '../../lib/logging';
 import { SEC_CONFIG } from '../../config/sec';
 import axios from 'axios';
+import { SECEdgarClient } from '../../lib/sec-edgar/client';
 
 /**
  * Company information interface
@@ -24,16 +25,54 @@ export interface CompanyInfo {
  */
 export async function getCompanyInfo(ticker: string): Promise<CompanyInfo | null> {
   try {
-    // In a real implementation, this would make an API call to the SEC EDGAR database
-    // For now, we'll return mock data
+    logger.debug(`Getting company information for ticker ${ticker}`);
+    
+    // Create SEC client
+    const secClient = new SECEdgarClient(SEC_CONFIG);
+    
+    // Normalize ticker (uppercase)
+    const normalizedTicker = ticker.toUpperCase();
+    
+    // Build the URL for the SEC ticker lookup API
+    const url = `https://www.sec.gov/files/company_tickers.json`;
+    
+    logger.debug(`Fetching company tickers from ${url}`);
+    
+    // Get the headers for SEC API
+    const headers = getSecApiHeaders();
+    
+    // Make the request
+    const response = await axios.get(url, { headers });
+    
+    if (!response.data) {
+      logger.warn(`No company data found`);
+      return null;
+    }
+    
+    // The SEC API returns an object with numeric keys, each containing company info
+    // We need to find the one matching our ticker
+    const companies = Object.values(response.data);
+    const company = companies.find((c: any) => c.ticker === normalizedTicker);
+    
+    if (!company) {
+      logger.warn(`No company found for ticker ${ticker}`);
+      return null;
+    }
+    
+    // Format the CIK with leading zeros (10 digits)
+    const paddedCik = String(company.cik_str).padStart(10, '0');
+    
+    logger.debug(`Found company ${company.title} with CIK ${paddedCik} for ticker ${ticker}`);
+    
     return {
-      ticker,
-      name: `${ticker} Corporation`, // Mock company name
-      cik: `000${ticker.length}${ticker.charCodeAt(0)}` // Mock CIK
+      ticker: normalizedTicker,
+      name: company.title,
+      cik: paddedCik
     };
   } catch (error: unknown) {
-    logger.error('Error getting company information:', { error });
-    return null;
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    logger.error(`Error getting company information for ${ticker}:`, { error: errorMessage });
+    throw new Error(`Failed to get company information for ${ticker}: ${errorMessage}`);
   }
 }
 

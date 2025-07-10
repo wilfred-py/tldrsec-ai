@@ -230,16 +230,12 @@ export async function sendEmailSummary(
         replyTo: 'no-reply@tldrsec.app'
       };
       
-      // Only send the email if not in debug mode
-      if (debug) {
-        // Create a mock result for testing
-        emailResult = { id: 'debug-mode-' + Date.now(), success: true };
-        console.log(`[DEBUG][FilingService] Debug mode - email would be sent to ${email}`);
-      } else {
-        console.log(`[INFO][FilingService] Sending email summary to: ${email} with ${summaries.length} summaries and ${errors.length} errors`);
-        emailResult = await emailClient.sendEmail(emailParams);
-        console.log(`[INFO][FilingService] Email sent successfully to ${email}`);
-      }
+      // Log email sending details, with debug flag indication if applicable
+      console.log(`[INFO][FilingService] Sending email summary to: ${email} with ${summaries.length} summaries and ${errors.length} errors${debug ? ' (debug mode)' : ''}`);
+      
+      // Always use the real email client
+      emailResult = await emailClient.sendEmail(emailParams);
+      console.log(`[INFO][FilingService] Email sent successfully to ${email}`);
     } catch (error) {
       console.error(`[ERROR][FilingService] Failed to send email:`, error);
       return {

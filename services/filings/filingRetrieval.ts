@@ -8,6 +8,8 @@ import { logger } from '../../lib/logging';
 import { SEC_CONFIG } from '../../config/sec';
 import { FilingType } from '../../types/sec/filing';
 import axios from 'axios';
+import { SECEdgarClient } from '../../lib/sec-edgar/client';
+import { getSecApiHeaders } from './companyInfo';
 
 /**
  * Filing information interface
@@ -33,24 +35,79 @@ export interface FilingInfo {
  */
 export async function getFilings(cik: string, formType: FilingType, limit: number = 10): Promise<FilingInfo[]> {
   try {
-    // In a real implementation, this would make an API call to the SEC EDGAR database
-    // For now, we'll return mock data
-    const mockFiling: FilingInfo = {
-      accessionNumber: `${cik.replace(/^0+/, '')}-${new Date().getFullYear()}-${Math.floor(Math.random() * 1000000).toString().padStart(6, '0')}`,
-      filingDate: new Date().toISOString().split('T')[0],
-      form: formType,
-      fileNumber: `${Math.floor(Math.random() * 1000)}-${Math.floor(Math.random() * 100000)}`,
-      items: ['1.01', '9.01'],
-      primaryDocument: `${formType.toLowerCase().replace('-', '')}.htm`,
-      primaryDocumentUrl: `https://www.sec.gov/Archives/edgar/data/${cik.replace(/^0+/, '')}/${Math.floor(Math.random() * 1000000000)}/${formType.toLowerCase().replace('-', '')}.htm`,
-      filingUrl: `https://www.sec.gov/Archives/edgar/data/${cik.replace(/^0+/, '')}/${Math.floor(Math.random() * 1000000000)}`,
-      htmlUrl: `https://www.sec.gov/ix?doc=/Archives/edgar/data/${cik.replace(/^0+/, '')}/${Math.floor(Math.random() * 1000000000)}/${formType.toLowerCase().replace('-', '')}.htm`
-    };
+    logger.debug(`Getting filings for CIK ${cik} with form type ${formType}`);
     
-    return Array(Math.min(limit, 5)).fill(0).map(() => ({...mockFiling}));
+    // Create SEC client
+    const secClient = new SECEdgarClient(SEC_CONFIG);
+    
+    // Format CIK by removing leading zeros
+    const formattedCik = cik.replace(/^0+/, '');
+    
+    // Build the URL for the SEC EDGAR API
+    // The URL format is typically: https://data.sec.gov/submissions/CIK#########.json
+    // Where CIK######### is the CIK with leading zeros padded to 10 digits
+    const paddedCik = formattedCik.padStart(10, '0');
+    const url = `https://data.sec.gov/submissions/CIK${paddedCik}.json`;
+    
+    logger.debug(`Fetching filings from ${url}`);
+    
+    // Get the headers for SEC API
+    const headers = getSecApiHeaders();
+    
+    // Make the request
+    const response = await axios.get(url, { headers });
+    
+    if (!response.data || !response.data.filings) {
+      logger.warn(`No filings data found for CIK ${cik}`);
+      return [];
+    }
+    
+    // Extract recent filings
+    const recentFilings = response.data.filings.recent;
+    
+    if (!recentFilings || !recentFilings.form || recentFilings.form.length === 0) {
+      logger.warn(`No recent filings found for CIK ${cik}`);
+      return [];
+    }
+    
+    // Filter by form type and map to FilingInfo
+    const filings: FilingInfo[] = [];
+    
+    for (let i = 0; i < recentFilings.form.length; i++) {
+      if (filings.length >= limit) break;
+      
+      const form = recentFilings.form[i];
+      if (form === formType) {
+        const accessionNumber = recentFilings.accessionNumber[i];
+        const filingDate = recentFilings.filingDate[i];
+        const primaryDocument = recentFilings.primaryDocument[i] || '';
+        
+        // Format accession number with dashes (0000000000-00-000000)
+        const formattedAccessionNumber = accessionNumber.replace(/^(\d{10})(\d{2})(\d{6})$/, '$1-$2-$3');
+        
+        // Create filing info
+        const filing: FilingInfo = {
+          accessionNumber: formattedAccessionNumber,
+          filingDate: filingDate,
+          form: formType,
+          primaryDocument: primaryDocument,
+          primaryDocumentUrl: primaryDocument ? 
+            `https://www.sec.gov/Archives/edgar/data/${formattedCik}/${accessionNumber.replace(/-/g, '')}/${primaryDocument}` : undefined,
+          filingUrl: `https://www.sec.gov/Archives/edgar/data/${formattedCik}/${accessionNumber.replace(/-/g, '')}`,
+          htmlUrl: primaryDocument ? 
+            `https://www.sec.gov/ix?doc=/Archives/edgar/data/${formattedCik}/${accessionNumber.replace(/-/g, '')}/${primaryDocument}` : undefined
+        };
+        
+        filings.push(filing);
+      }
+    }
+    
+    logger.debug(`Found ${filings.length} filings of type ${formType} for CIK ${cik}`);
+    return filings;
   } catch (error: unknown) {
-    logger.error('Error getting filings:', { error });
-    return [];
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    logger.error(`Error getting filings for CIK ${cik}:`, { error: errorMessage });
+    throw new Error(`Failed to get filings for CIK ${cik}: ${errorMessage}`);
   }
 }
 
@@ -62,85 +119,35 @@ export async function getFilings(cik: string, formType: FilingType, limit: numbe
  */
 export async function getFilingContent(accessionNumber: string, cik: string): Promise<string> {
   try {
-    // In a real implementation, this would make an API call to the SEC EDGAR database
-    // For now, we'll return mock data
-    const formType = accessionNumber.includes('10-K') ? '10-K' : 
-                    accessionNumber.includes('10-Q') ? '10-Q' : 
-                    accessionNumber.includes('8-K') ? '8-K' : 
-                    accessionNumber.includes('144') ? 'Form 144' : 'GENERIC';
+    logger.debug(`Getting filing content for accession number ${accessionNumber} and CIK ${cik}`);
     
-    return `<SEC-DOCUMENT>
-<DOCUMENT>
-<TYPE>${formType}</TYPE>
-<FILENAME>filing.htm</FILENAME>
-<DESCRIPTION>SEC Filing</DESCRIPTION>
-<TEXT>
-This is a mock filing content for ${formType} with accession number ${accessionNumber}.
-The filing contains important information about the company with CIK ${cik}.
-
-${formType === 'Form 144' ? 
-  `<XML>
-    <form144>
-      <reportingOwner>
-        <reportingOwnerId>
-          <rptOwnerCik>0001234567</rptOwnerCik>
-          <rptOwnerName>John Doe</rptOwnerName>
-        </reportingOwnerId>
-        <reportingOwnerAddress>
-          <rptOwnerStreet1>123 Main Street</rptOwnerStreet1>
-          <rptOwnerCity>New York</rptOwnerCity>
-          <rptOwnerState>NY</rptOwnerState>
-          <rptOwnerZipCode>10001</rptOwnerZipCode>
-        </reportingOwnerAddress>
-        <reportingOwnerRelationship>
-          <directorFlag>1</directorFlag>
-          <officerFlag>1</officerFlag>
-          <officerTitle>CEO</officerTitle>
-        </reportingOwnerRelationship>
-      </reportingOwner>
-      <issuer>
-        <issuerCik>${cik}</issuerCik>
-        <issuerName>Sample Company</issuerName>
-      </issuer>
-      <securityInfo>
-        <securityTitle>Common Stock</securityTitle>
-        <securityType>CS</securityType>
-      </securityInfo>
-      <brokerDealer>
-        <bdName>Example Broker</bdName>
-      </brokerDealer>
-      <salesAmount>
-        <securityAmountSold>10000</securityAmountSold>
-        <securityPriceSold>150.00</securityPriceSold>
-        <securityAmountSoldDollarValue>1500000</securityAmountSoldDollarValue>
-      </salesAmount>
-      <salesDate>
-        <earliestSaleDate>2023-01-15</earliestSaleDate>
-      </salesDate>
-    </form144>
-  </XML>` 
-  : 
-  formType === '10-K' || formType === '10-Q' ? 
-  `<table>
-    <tr>
-      <th>Header 1</th>
-      <th>Header 2</th>
-    </tr>
-    <tr>
-      <td>Data 1</td>
-      <td>Data 2</td>
-    </tr>
-    <tr>
-      <td>Data 3</td>
-      <td>Data 4</td>
-    </tr>
-  </table>` 
-  : ''}
-</TEXT>
-</DOCUMENT>
-</SEC-DOCUMENT>`;
+    // Create SEC client
+    const secClient = new SECEdgarClient(SEC_CONFIG);
+    
+    // Format CIK by removing leading zeros
+    const formattedCik = cik.replace(/^0+/, '');
+    
+    // Format the accession number without dashes for the URL
+    const formattedAccessionNumber = accessionNumber.replace(/-/g, '');
+    
+    // Construct the URL to the filing
+    const filingUrl = `https://www.sec.gov/Archives/edgar/data/${formattedCik}/${formattedAccessionNumber}/0000000000-00-000000.txt`;
+    
+    logger.debug(`Fetching filing content from ${filingUrl}`);
+    
+    // Get the document content
+    const content = await secClient.getFilingDocument(filingUrl, { handleNotFound: true });
+    
+    if (!content) {
+      logger.warn(`No content found for filing ${accessionNumber}`);
+      throw new Error(`No content found for filing ${accessionNumber}`);
+    }
+    
+    logger.debug(`Successfully retrieved content for filing ${accessionNumber} (${content.length} bytes)`);
+    return content;
   } catch (error: unknown) {
-    logger.error('Error getting filing content:', { error });
-    return '';
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    logger.error(`Error getting filing content for ${accessionNumber}:`, { error: errorMessage });
+    throw new Error(`Failed to get filing content for ${accessionNumber}: ${errorMessage}`);
   }
 }

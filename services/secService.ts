@@ -10,11 +10,14 @@
 // Import from filings modules
 import { getFilingSummary as getGenericFilingSummary } from './filings/summaries';
 import { getForm144Summary, getLatestFilingByFormType } from './filings/summaries/form144Summary';
+import { generateFallbackSummary } from './filings/summaries/fallbackSummary';
 import { getFilingDetails } from './filings/filingDetails';
 import { 
   extractNodeTextContent, 
-  extractTextContent 
-} from './filings/extractors/textExtractor';
+  extractTextContent,
+  scrapeDocumentLinksFromFilingPage,
+  fetchDocumentContent
+} from './filings/extractors';
 import { 
   extractTableData, 
   extractFilingTableData 
@@ -23,11 +26,14 @@ import { parseForm144 } from './filings/parsers/form144Parser';
 
 // Import from company service
 import { findCompanyByTicker } from './companyService';
-import { getCompanyInfo, getSecApiHeaders as getSecApiHeadersInternal } from './filings/companyInfo';
+import { getCompanyInfo } from './filings/companyInfo';
 import { getFilings, getFilingContent } from './filings/filingRetrieval';
 
-// Import from API utilities
-import { SEC_CONFIG } from '../config/sec';
+// Import from utils
+import { getSecApiHeaders as getSecApiHeadersInternal, normalizeFormType, getFormTypeDescription, isMajorFilingType } from './filings/utils';
+
+// Import from company module
+import { getLatestFilings } from './company';
 
 // Import types
 import { SecFiling } from '../types/sec';
@@ -35,60 +41,7 @@ import { SecFiling } from '../types/sec';
 // Import logger
 import { logger } from '../lib/logging';
 
-// Import company filings function
-import { getCompanyFilings } from './company/filings';
-
-/**
- * Gets the latest filings for a company
- * @param ticker Company ticker symbol
- * @param limit Maximum number of filings to return
- * @returns Array of latest filings
- */
-export async function getLatestFilings(ticker: string, limit: number = 5): Promise<SecFiling[]> {
-  try {
-    console.log(`[DEBUG][secService] Getting latest filings for ${ticker}, limit: ${limit}`);
-    logger.debug(`Getting latest filings for ${ticker}, limit: ${limit}`);
-    
-    // First, find the company by ticker
-    console.log(`[DEBUG][secService] Finding company by ticker: ${ticker}`);
-    const company = await findCompanyByTicker(ticker);
-    
-    if (!company) {
-      console.log(`[ERROR][secService] Company with ticker ${ticker} not found`);
-      throw new Error(`Company with ticker ${ticker} not found`);
-    }
-    
-    console.log(`[DEBUG][secService] Found company: ${company.name} (CIK: ${company.cik})`);
-    
-    // Get company filings - pass the full company object
-    console.log(`[DEBUG][secService] Getting filings for company: ${company.name} (CIK: ${company.cik})`);
-    const filings = await getCompanyFilings(company);
-    console.log(`[DEBUG][secService] Retrieved ${filings.length} filings for ${ticker}`);
-    
-    // Sort by filing date and take the most recent ones
-    let latestFilings = filings
-      .sort((a, b) => new Date(b.filingDate).getTime() - new Date(a.filingDate).getTime())
-      .slice(0, limit);
-    
-    console.log(`[DEBUG][secService] Returning ${latestFilings.length} latest filings for ${ticker}`);
-    if (latestFilings.length > 0) {
-      console.log(`[DEBUG][secService] First filing: ${JSON.stringify(latestFilings[0])}`);
-    }
-    
-    logger.debug(`Found ${latestFilings.length} latest filings for ${ticker}`);
-    
-    return latestFilings;
-  } catch (error: unknown) {
-    const errorMessage = error instanceof Error ? error.message : String(error);
-    console.error(`[ERROR][secService] Error getting latest filings for ${ticker}:`, errorMessage);
-    if (error instanceof Error && error.stack) {
-      console.error(`[ERROR][secService] Stack trace:`, error.stack);
-    }
-    
-    logger.error(`Error getting latest filings for ${ticker}:`, { error: errorMessage });
-    throw new Error(`Failed to get latest filings for ${ticker}`);
-  }
-}
+// getLatestFilings has been moved to services/company/latestFilings.ts
 
 /**
  * Gets the SEC API headers for making requests
@@ -121,6 +74,7 @@ export {
   // Company information
   findCompanyByTicker,
   getCompanyInfo,
+  getLatestFilings,
   
   // Filing retrieval
   getLatestFilingByFormType,
