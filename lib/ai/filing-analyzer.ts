@@ -51,7 +51,7 @@ class FilingAnalyzerService {
       temperature = 0.2,
       timeout = 30000,
       maxTokens = 2000,
-      model = 'claude-3-opus-20240229'
+      model = 'claude-sonnet-4-20250514'
     } = options;
     
     // Generate a cache key if caching is enabled

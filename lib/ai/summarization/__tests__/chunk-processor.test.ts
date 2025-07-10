@@ -40,7 +40,7 @@ jest.mock('/Users/wilf/Software/Windsurf Projects/tldrsec-ai/lib/ai/enhanced-cla
         id: 'msg_123',
         content: [{ type: 'text', text: JSON.stringify({ summary: 'This is a test summary.', key_points: ['Point 1', 'Point 2'] }) }],
         role: 'assistant',
-        model: 'claude-3-opus-20240229',
+        model: 'claude-sonnet-4-20250514',
         usage: { input_tokens: 100, output_tokens: 50 },
         cost: { totalCost: 0.001 }
       };
@@ -67,7 +67,7 @@ describe('Chunk Processor', () => {
     filingId: 'filing-123',
     summaryId: 'summary-123',
     claudeOptions: {
-      model: 'claude-3-opus-20240229',
+      model: 'claude-sonnet-4-20250514',
       temperature: 0.7,
       maxTokens: 1000
     }
@@ -116,7 +116,7 @@ describe('Chunk Processor', () => {
       id: 'msg_123',
       content: [{ type: 'text', text: JSON.stringify({ summary: 'This is a test summary.', key_points: ['Point 1', 'Point 2'] }) }],
       role: 'assistant',
-      model: 'claude-3-opus-20240229',
+      model: 'claude-sonnet-4-20250514',
       usage: { input_tokens: 100, output_tokens: 50 },
       cost: { totalCost: 0.001 }
     };
@@ -158,7 +158,7 @@ describe('Chunk Processor', () => {
       id: 'msg_123',
       content: [{ type: 'text', text: 'This is not valid JSON' }],
       role: 'assistant',
-      model: 'claude-3-opus-20240229',
+      model: 'claude-sonnet-4-20250514',
       usage: { input_tokens: 100, output_tokens: 50 },
       cost: { totalCost: 0.001 }
     };
