@@ -265,7 +265,7 @@ const scrapeDocumentLinksFromFilingPage = async (filing: any, headers: any): Pro
     }
     
     return null;
-  } catch (error) {
+  } catch (error: unknown) {
     console.error(`[DEBUG][FilingService] ❌ Error scraping document links: ${error}`);
     return null;
   }
@@ -475,7 +475,7 @@ const filingService = {
             console.warn(`[WARN][FilingService] No recent filings found for ${ticker}`);
             errors.push({ ticker, error: 'No recent filings found' });
           }
-        } catch (error) {
+        } catch (error: unknown) {
           // Handle errors for individual tickers
           const errorMessage = error instanceof Error ? error.message : 'Unknown error';
           console.error(`[ERROR][FilingService] Error processing ${ticker}: ${errorMessage}`);
@@ -610,7 +610,7 @@ const filingService = {
         summaries,
         errors
       };
-    } catch (error) {
+    } catch (error: unknown) {
       console.error(`[ERROR][FilingService] Failed to send email summary: ${error instanceof Error ? error.message : 'Unknown error'}`);
       console.error(`[ERROR][FilingService] Stack trace: ${error instanceof Error ? error.stack : 'No stack trace'}`);
       return {
@@ -771,7 +771,7 @@ const filingService = {
           };
           
           return { data: summaryResult };
-        } catch (error) {
+        } catch (error: unknown) {
           const form144Error = error as Error;
           console.error(`[DEBUG][FilingService] Error generating Form 144 summary for ${ticker}:`, form144Error);
           return { data: null, error: `Failed to generate Form 144 summary: ${form144Error.message || 'Unknown error'}` };
@@ -843,7 +843,7 @@ const filingService = {
           hasPrimaryDocument: !!filing.primaryDocument,
           primaryDocument: filing.primaryDocument || 'N/A'
         }));
-      } catch (error) {
+      } catch (error: unknown) {
         const fetchError = error as Error;
         console.error(`[DEBUG][FilingService] Error fetching ${normalizedFormType} filing for ${ticker}:`, fetchError);
         return { data: null, error: `Error fetching filing: ${fetchError.message || 'Unknown error'}` };
@@ -1657,7 +1657,7 @@ const filingService = {
           error: innerError instanceof Error ? innerError.message : `Failed to process filing details for ${ticker}` 
         };
       }
-    } catch (error) {
+    } catch (error: unknown) {
       console.error(`[DEBUG][FilingService] Error generating summary for ${ticker}:`, error);
       console.error(`[DEBUG][FilingService] Error stack:`, error instanceof Error ? error.stack : 'No stack trace available');
       console.error(`[DEBUG][FilingService] Form type that caused error: ${formType}`);

@@ -190,21 +190,59 @@ export class SECEdgarClient {
 
   /**
    * Fetch a specific filing document from SEC EDGAR
+   * @param url The URL of the document to fetch
+   * @param options Options for retrying and handling errors
+   * @returns The document content or null if not found
+   * @throws SECEdgarError for network errors or other issues
    */
-  async getFilingDocument(url: string, options: { retry?: boolean; maxRetries?: number } = {}): Promise<string> {
-    const { retry = true, maxRetries = this.config.maxRetries } = options;
+  async getFilingDocument(url: string, options: { 
+    retry?: boolean; 
+    maxRetries?: number; 
+    handleNotFound?: boolean;
+  } = {}): Promise<string | null> {
+    const { 
+      retry = true, 
+      maxRetries = this.config.maxRetries,
+      handleNotFound = true // Default to handling 404 errors gracefully
+    } = options;
     
     // If the URL is a relative URL, prepend the base URL
     const fullUrl = url.startsWith('http') ? url : `${this.config.baseUrl}${url}`;
     
-    return this.executeRequest<string>(
-      {
-        method: 'GET',
-        url: fullUrl,
-        responseType: 'text',
-      },
-      { retry, maxRetries }
-    );
+    try {
+      return await this.executeRequest<string>(
+        {
+          method: 'GET',
+          url: fullUrl,
+          responseType: 'text',
+          validateStatus: (status) => {
+            // Consider 404 as a valid status if handleNotFound is true
+            return (handleNotFound && status === 404) || (status >= 200 && status < 300);
+          }
+        },
+        { retry, maxRetries }
+      );
+    } catch (error) {
+      const axiosError = error as AxiosError;
+      
+      // Handle 404 errors gracefully if requested
+      if (handleNotFound && axiosError.response?.status === 404) {
+        console.warn(`Document not found at ${fullUrl}`);
+        return null;
+      }
+      
+      // For other errors, add context about the document being fetched
+      if (axiosError.response) {
+        throw new SECEdgarError(
+          `Failed to fetch document: ${axiosError.response.status} ${axiosError.response.statusText} for URL ${fullUrl}`,
+          SECErrorCode.DOCUMENT_FETCH_ERROR,
+          axiosError.response.status
+        );
+      }
+      
+      // Re-throw the original error
+      throw error;
+    }
   }
 
   /**
