@@ -11,8 +11,8 @@ describe('EnhancedSummarizationResult interface', () => {
     const result: EnhancedSummarizationResult = {
       summaryId: 'test-summary-id',
       summaryText: 'This is a test summary',
-      model: 'claude-3-opus-20240229',
-      modelUsed: 'claude-3-opus-20240229',
+      model: 'claude-sonnet-4-20250514',
+      modelUsed: 'claude-sonnet-4-20250514',
       inputTokens: 100,
       outputTokens: 50,
       cost: 0.01,
@@ -21,15 +21,15 @@ describe('EnhancedSummarizationResult interface', () => {
     };
 
     // Verify both properties are accessible
-    expect(result.model).toBe('claude-3-opus-20240229');
-    expect(result.modelUsed).toBe('claude-3-opus-20240229');
+    expect(result.model).toBe('claude-sonnet-4-20250514');
+    expect(result.modelUsed).toBe('claude-sonnet-4-20250514');
   });
 
   it('should allow optional properties', () => {
     const result: EnhancedSummarizationResult = {
       summaryId: 'test-summary-id',
       summaryText: 'This is a test summary',
-      model: 'claude-3-opus-20240229',
+      model: 'claude-sonnet-4-20250514',
       inputTokens: 100,
       outputTokens: 50,
       cost: 0.01,
@@ -63,7 +63,7 @@ describe('EnhancedSummarizationResult interface', () => {
     const baseResult: BaseSummarizationResult = {
       summaryId: 'test-summary-id',
       summaryText: 'This is a test summary',
-      modelUsed: 'claude-3-opus-20240229',
+      modelUsed: 'claude-sonnet-4-20250514',
       inputTokens: 100,
       outputTokens: 50,
       cost: 0.01,
@@ -87,7 +87,7 @@ describe('EnhancedSummarizationResult interface', () => {
     expect(enhancedResult.isPartial).toBe(baseResult.isPartial);
     
     // Verify both model properties
-    expect(enhancedResult.model).toBe('claude-3-opus-20240229');
-    expect(enhancedResult.modelUsed).toBe('claude-3-opus-20240229');
+    expect(enhancedResult.model).toBe('claude-sonnet-4-20250514');
+    expect(enhancedResult.modelUsed).toBe('claude-sonnet-4-20250514');
   });
 });

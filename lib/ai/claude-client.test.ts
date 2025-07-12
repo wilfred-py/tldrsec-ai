@@ -40,15 +40,15 @@ jest.mock('../error-handling/model-fallback', () => ({
     });
   }),
   DefaultClaudeFallback: { 
-    initialModel: 'claude-3-opus-20240229',
+    initialModel: 'claude-sonnet-4-20250514',
     fallbackModels: ['claude-3-sonnet-20240229', 'claude-3-haiku-20240307']
   },
   BatchClaudeFallback: {
-    initialModel: 'claude-3-opus-20240229',
+    initialModel: 'claude-sonnet-4-20250514',
     fallbackModels: ['claude-3-sonnet-20240229']
   },
   PremiumClaudeFallback: {
-    initialModel: 'claude-3-opus-20240229',
+    initialModel: 'claude-sonnet-4-20250514',
     fallbackModels: []
   },
   selectModelByCost: jest.fn(() => ({ id: 'claude-3-sonnet-20240229' })),

@@ -9,7 +9,7 @@ import { jest } from '@jest/globals';
 const mockResponse = {
   id: 'msg_123',
   content: 'Mock summary',
-  model: 'claude-3-opus-20240229',
+  model: 'claude-sonnet-4-20250514',
   usage: { inputTokens: 10, outputTokens: 20 },
   cost: { inputCost: 0.01, outputCost: 0.02, totalCost: 0.03 }
 };
@@ -31,7 +31,7 @@ export class ClaudeClient {
     summaryId: 'mock-summary-id',
     summaryText: 'Mock summary',
     summaryJSON: { key: 'value' },
-    modelUsed: 'claude-3-opus-20240229',
+    modelUsed: 'claude-sonnet-4-20250514',
     duration: 100,
     inputTokens: 50,
     outputTokens: 20,

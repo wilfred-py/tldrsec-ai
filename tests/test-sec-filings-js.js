@@ -184,7 +184,7 @@ async function analyzeFilingWithAI(filingType, content) {
           content: prompt
         }
       ],
-      model: "claude-3-opus-20240229",
+      model: "claude-sonnet-4-20250514",
       temperature: 0.2,
       max_tokens: 4000
     }, {});

@@ -26,7 +26,7 @@ jest.mock('../../claude-client', () => {
   const mockResponse = {
     content: 'Mock response',
     usage: { inputTokens: 10, outputTokens: 20 },
-    model: 'claude-3-opus-20240229',
+    model: 'claude-sonnet-4-20250514',
     cost: { totalCost: 0.01 }
   };
   
@@ -42,7 +42,7 @@ jest.mock('../../enhanced-claude-client', () => {
   const mockResponse = {
     content: 'Mock response',
     usage: { inputTokens: 10, outputTokens: 20 },
-    model: 'claude-3-opus-20240229',
+    model: 'claude-sonnet-4-20250514',
     cost: { totalCost: 0.01 }
   };
   

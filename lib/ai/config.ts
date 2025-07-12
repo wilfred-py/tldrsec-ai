@@ -38,7 +38,7 @@ export const apiConfig = {
  */
 export const modelConfig = {
   defaultModel: getEnv('CLAUDE_DEFAULT_MODEL', 'claude-sonnet-4-20250514'),
-  fallbackModel: getEnv('CLAUDE_FALLBACK_MODEL', 'claude-3-sonnet-20240229'),
+  fallbackModel: getEnv('CLAUDE_FALLBACK_MODEL', 'claude-sonnet-4-20250514'),
   maxInputTokens: parseInt(getEnv('CLAUDE_MAX_INPUT_TOKENS', '100000'), 10),
   maxOutputTokens: parseInt(getEnv('CLAUDE_MAX_OUTPUT_TOKENS', '4096'), 10),
   temperature: parseFloat(getEnv('CLAUDE_TEMPERATURE', '0.2')),
@@ -51,6 +51,8 @@ export const modelConfig = {
  */
 export const costConfig = {
   // Cost per million tokens
+  claudeSonnet4InputCost: parseFloat(getEnv('CLAUDE_SONNET4_INPUT_COST', '3.0')),
+  claudeSonnet4OutputCost: parseFloat(getEnv('CLAUDE_SONNET4_OUTPUT_COST', '15.0')),
   claude3OpusInputCost: parseFloat(getEnv('CLAUDE3_OPUS_INPUT_COST', '15.0')),
   claude3OpusOutputCost: parseFloat(getEnv('CLAUDE3_OPUS_OUTPUT_COST', '75.0')),
   claude3SonnetInputCost: parseFloat(getEnv('CLAUDE3_SONNET_INPUT_COST', '3.0')),
@@ -63,7 +65,7 @@ export const ClaudeConfig = {
   // API key should be set in the .env file
   apiKey: process.env.ANTHROPIC_API_KEY || '',
   
-  // Model selection - default to Claude 3 Sonnet if not specified
+  // Model selection - default to Claude Sonnet 4 if not specified
   model: process.env.ANTHROPIC_MODEL || 'claude-sonnet-4-20250514',
   
   // Request parameters
@@ -91,7 +93,7 @@ export const ClaudeConfig = {
   // Available models
   availableModels: [
     'claude-sonnet-4-20250514',
-    'claude-3-opus-20240229',
+    'claude-3-opus-20240229', // Legacy model kept for backward compatibility
     'claude-3-sonnet-20240229',
     'claude-3-haiku-20240307',
     'claude-2.1',
@@ -107,7 +109,7 @@ export const ClaudeConfig = {
       costPerOutputToken: 0.000015, // $15 per million output tokens
       strengths: 'Latest Claude Sonnet model with improved capabilities',
     },
-    'claude-3-opus-20240229': {
+    'claude-3-opus-20240229': { // Legacy model pricing kept for backward compatibility
       contextWindow: 200000,
       costPerInputToken: 0.000015,  // $15 per million input tokens
       costPerOutputToken: 0.000075, // $75 per million output tokens

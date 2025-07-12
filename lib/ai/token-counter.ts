@@ -65,13 +65,13 @@ export function calculateCost(
   outputTokens: number,
   model: string = 'claude-sonnet-4-20250514'
 ): { inputCost: number; outputCost: number; totalCost: number } {
-  // Claude price structure (as of May 2024)
+  // Claude price structure (as of July 2025)
   const prices: Record<string, { input: number; output: number }> = {
     'claude-sonnet-4-20250514': {
       input: 0.000003,  // $3 per million tokens
       output: 0.000015  // $15 per million tokens
     },
-    'claude-3-opus-20240229': {
+    'claude-3-opus-20240229': { // Legacy model pricing kept for backward compatibility
       input: 0.000015,  // $15 per million tokens
       output: 0.000075  // $75 per million tokens
     },
@@ -90,7 +90,7 @@ export function calculateCost(
     }
   };
   
-  // Use sonnet pricing as default fallback
+  // Use Claude Sonnet 4 pricing as default fallback
   const pricing = prices[model] || prices['claude-sonnet-4-20250514'];
   
   const inputCost = inputTokens * pricing.input;

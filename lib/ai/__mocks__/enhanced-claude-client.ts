@@ -38,7 +38,7 @@ export class EnhancedClaudeClient extends EventEmitter {
     return Promise.resolve({
       id: 'msg_123',
       content: 'Mock enhanced response',
-      model: 'claude-3-opus-20240229',
+      model: 'claude-sonnet-4-20250514',
       usage: { inputTokens: 10, outputTokens: 20 },
       cost: { inputCost: 0.01, outputCost: 0.02, totalCost: 0.03 }
     });
@@ -48,7 +48,7 @@ export class EnhancedClaudeClient extends EventEmitter {
     return Promise.resolve({
       id: 'msg_123',
       content: 'Mock streaming response',
-      model: 'claude-3-opus-20240229',
+      model: 'claude-sonnet-4-20250514',
       usage: { inputTokens: 10, outputTokens: 20 },
       cost: { inputCost: 0.01, outputCost: 0.02, totalCost: 0.03 }
     });
@@ -59,7 +59,7 @@ export class EnhancedClaudeClient extends EventEmitter {
       summaryId: 'mock-summary-id',
       summaryText: 'Mock summary',
       summaryJSON: { key: 'value' },
-      modelUsed: 'claude-3-opus-20240229',
+      modelUsed: 'claude-sonnet-4-20250514',
       duration: 100,
       inputTokens: 50,
       outputTokens: 20,
@@ -74,7 +74,7 @@ export class EnhancedClaudeClient extends EventEmitter {
       summaryId: 'mock-doc-id',
       summaryText: 'Mock document summary',
       summaryJSON: { key: 'value' },
-      modelUsed: 'claude-3-opus-20240229',
+      modelUsed: 'claude-sonnet-4-20250514',
       duration: 200,
       inputTokens: 100,
       outputTokens: 40,
@@ -89,7 +89,7 @@ export class EnhancedClaudeClient extends EventEmitter {
       summaryId: 'mock-batch-id',
       summaryText: 'Mock batch summary',
       summaryJSON: { key: 'value' },
-      modelUsed: 'claude-3-opus-20240229',
+      modelUsed: 'claude-sonnet-4-20250514',
       duration: 500,
       inputTokens: 250,
       outputTokens: 100,

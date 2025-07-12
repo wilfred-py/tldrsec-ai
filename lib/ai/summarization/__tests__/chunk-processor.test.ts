@@ -84,7 +84,7 @@ describe('Chunk Processor', () => {
         text: '{"summary": "This is a test summary.", "key_points": ["Point 1", "Point 2"]}'
       }
     ],
-    model: 'claude-3-opus-20240229',
+    model: 'claude-sonnet-4-20250514',
     usage: {
       input_tokens: 50,
       output_tokens: 10
