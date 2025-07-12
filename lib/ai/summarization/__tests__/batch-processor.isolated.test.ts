@@ -31,7 +31,7 @@ const processSingleChunk = jest.fn().mockImplementation((chunk: string) => {
     summaryId: `chunk-${chunk}`,
     summaryText: `Summary for ${chunk}`,
     summaryJSON: { content: chunk },
-    modelUsed: 'claude-3-opus-20240229',
+    modelUsed: 'claude-sonnet-4-20250514',
     duration: 50,
     inputTokens: 25,
     outputTokens: 10,
@@ -64,7 +64,7 @@ async function processAllChunks(
     summaryJSON: { 
       chunks: chunkResults.map(r => r.summaryJSON)
     },
-    modelUsed: 'claude-3-opus-20240229',
+    modelUsed: 'claude-sonnet-4-20250514',
     duration: chunkResults.reduce((sum, r) => sum + r.duration, 0),
     inputTokens: chunkResults.reduce((sum, r) => sum + r.inputTokens, 0),
     outputTokens: chunkResults.reduce((sum, r) => sum + r.outputTokens, 0),

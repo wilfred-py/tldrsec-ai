@@ -43,7 +43,7 @@ Fetches the latest SEC filings for Tesla (TSLA) and analyzes them using Claude A
     "filingCount": 1,
     "processedCount": 1,
     "aiProvider": "Claude",
-    "aiModel": "claude-3-opus-20240229"
+    "aiModel": "claude-sonnet-4-20250514"
   },
   "usage": {
     "totalInputTokens": 2838,
@@ -115,7 +115,7 @@ GET /api/filings/summary?ticker=AAPL&formType=10-K&limit=2
     "filingCount": 2,
     "processedCount": 2,
     "aiProvider": "Claude",
-    "aiModel": "claude-3-opus-20240229"
+    "aiModel": "claude-sonnet-4-20250514"
   },
   "usage": {
     "totalInputTokens": 5642,

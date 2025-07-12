@@ -117,7 +117,7 @@ export class EnhancedClaudeClient extends EventEmitter {
     
     try {
       // Prepare request parameters
-      const model = options.model || 'claude-3-opus-20240229';
+      const model = options.model || 'claude-sonnet-4-20250514';
       const maxTokens = options.maxTokens || 4096;
       const temperature = options.temperature || 0.7;
       const system = options.system;
@@ -451,7 +451,7 @@ export class EnhancedClaudeClient extends EventEmitter {
     return {
       id: result.summaryId,
       content: typeof result.summaryText === 'string' ? result.summaryText : JSON.stringify(result.summaryText),
-      model: result.modelUsed || 'claude-3-opus-20240229',
+      model: result.modelUsed || 'claude-sonnet-4-20250514',
       usage: {
         inputTokens: result.inputTokens || 0,
         outputTokens: result.outputTokens || 0
@@ -476,9 +476,11 @@ export class EnhancedClaudeClient extends EventEmitter {
    * @returns Pricing information
    */
   private getModelPricing(model: string): { inputPrice: number; outputPrice: number } {
-    // Pricing per 1000 tokens as of May 2023
+    // Pricing per 1000 tokens as of July 2025
     switch (model) {
-      case 'claude-3-opus-20240229':
+      case 'claude-sonnet-4-20250514':
+        return { inputPrice: 0.003, outputPrice: 0.015 };
+      case 'claude-3-opus-20240229': // Legacy model pricing kept for backward compatibility
         return { inputPrice: 0.015, outputPrice: 0.075 };
       case 'claude-3-sonnet-20240229':
         return { inputPrice: 0.003, outputPrice: 0.015 };

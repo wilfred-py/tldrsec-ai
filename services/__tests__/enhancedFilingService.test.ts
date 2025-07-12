@@ -25,7 +25,7 @@ jest.mock('../../lib/ai/enhanced-summarize', () => ({
       summaryId: 'summary-1',
       summaryText: 'Tesla had a strong fiscal year with record revenue and profits.',
       duration: 2500,
-      modelUsed: 'claude-3-opus-20240229',
+      modelUsed: 'claude-sonnet-4-20250514',
       inputTokens: 50000,
       outputTokens: 2000,
       cost: 1.25
@@ -199,7 +199,7 @@ describe('Enhanced Filing Service', () => {
         summaryId: 'cached-summary',
         summaryText: 'Cached Tesla summary from previous request',
         duration: 2000,
-        modelUsed: 'claude-3-opus-20240229',
+        modelUsed: 'claude-sonnet-4-20250514',
         inputTokens: 50000,
         outputTokens: 2000,
         cost: 1.25

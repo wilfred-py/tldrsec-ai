@@ -39,7 +39,7 @@ jest.mock('../streaming/stream-handler', () => ({
 const mockResponse = {
   id: 'msg_123',
   content: 'Hello! How can I help you today?',
-  model: 'claude-3-opus-20240229',
+  model: 'claude-sonnet-4-20250514',
   usage: { inputTokens: 10, outputTokens: 20 },
   cost: { inputCost: 0.01, outputCost: 0.02, totalCost: 0.03 }
 };

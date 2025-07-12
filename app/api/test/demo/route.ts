@@ -17,7 +17,7 @@ export async function GET(request: NextRequest) {
         filingCount: 2,
         processedCount: 2,
         aiProvider: "Claude (Mock)",
-        aiModel: "claude-3-opus-20240229",
+        aiModel: "claude-sonnet-4-20250514",
         cacheInfo: {
           size: 5,
           maxSize: 100,
