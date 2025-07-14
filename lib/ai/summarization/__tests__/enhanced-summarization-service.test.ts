@@ -12,7 +12,7 @@ const mockResultValue: EnhancedSummarizationResult = {
   summaryId: 'test-summary-id',
   summaryText: 'Test summary',
   summaryJSON: { key: 'value' },
-  modelUsed: 'claude-3-opus-20240229', // Required non-optional property
+  modelUsed: 'claude-sonnet-4-20250514', // Required non-optional property
   duration: 1000,
   inputTokens: 500,
   outputTokens: 200,
@@ -139,8 +139,8 @@ describe('EnhancedSummarizationService', () => {
     summaryId: mockOptions.summaryId,
     summaryText: 'Test summary',
     summaryJSON: { key: 'value' },
-    modelUsed: 'claude-3-opus-20240229', // Required non-optional property
-    model: 'claude-3-opus-20240229',
+    modelUsed: 'claude-sonnet-4-20250514', // Required non-optional property
+    model: 'claude-sonnet-4-20250514',
     duration: 1000,
     inputTokens: 500,
     outputTokens: 200,
@@ -152,8 +152,8 @@ describe('EnhancedSummarizationService', () => {
     summaryId: mockOptions.summaryId,
     summaryText: 'Cached summary result',
     summaryJSON: { key: 'cached value' },
-    modelUsed: 'claude-3-opus-20240229', // Required non-optional property
-    model: 'claude-3-opus-20240229',
+    modelUsed: 'claude-sonnet-4-20250514', // Required non-optional property
+    model: 'claude-sonnet-4-20250514',
     duration: 500,
     inputTokens: 300,
     outputTokens: 100,
@@ -252,8 +252,8 @@ describe('EnhancedSummarizationService', () => {
         summaryId: mockOptions.summaryId,
         summaryText: 'Single chunk summary',
         summaryJSON: { key: 'single chunk value' },
-        modelUsed: 'claude-3-opus-20240229', // Required non-optional property
-        model: 'claude-3-opus-20240229',
+        modelUsed: 'claude-sonnet-4-20250514', // Required non-optional property
+        model: 'claude-sonnet-4-20250514',
         duration: 800,
         inputTokens: 400,
         outputTokens: 150,
@@ -301,8 +301,8 @@ describe('EnhancedSummarizationService', () => {
         summaryId: mockOptions.summaryId,
         summaryText: 'Batch processed summary',
         summaryJSON: { key: 'batch processed value' },
-        modelUsed: 'claude-3-opus-20240229', // Required non-optional property
-        model: 'claude-3-opus-20240229',
+        modelUsed: 'claude-sonnet-4-20250514', // Required non-optional property
+        model: 'claude-sonnet-4-20250514',
         duration: 2000,
         inputTokens: 200,
         outputTokens: 100,

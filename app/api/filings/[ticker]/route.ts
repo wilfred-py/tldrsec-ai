@@ -150,7 +150,7 @@ export async function GET(
               temperature: 0.2,
               timeout: 30000, // 30 second timeout
               maxTokens: 2000,
-              model: 'claude-3-opus-20240229'
+              model: 'claude-sonnet-4-20250514'
             }
           );
           
@@ -201,7 +201,7 @@ export async function GET(
         filingCount: results.length,
         processedCount: results.filter(r => !r.error).length,
         aiProvider: 'Claude',
-        aiModel: 'claude-3-opus-20240229',
+        aiModel: 'claude-sonnet-4-20250514',
         cacheInfo: {
           size: cacheStats.size,
           maxSize: cacheStats.maxSize,

@@ -37,7 +37,7 @@ export const apiConfig = {
  * Model configuration
  */
 export const modelConfig = {
-  defaultModel: getEnv('CLAUDE_DEFAULT_MODEL', 'claude-3-opus-20240229'),
+  defaultModel: getEnv('CLAUDE_DEFAULT_MODEL', 'claude-sonnet-4-20250514'),
   fallbackModel: getEnv('CLAUDE_FALLBACK_MODEL', 'claude-3-sonnet-20240229'),
   maxInputTokens: parseInt(getEnv('CLAUDE_MAX_INPUT_TOKENS', '100000'), 10),
   maxOutputTokens: parseInt(getEnv('CLAUDE_MAX_OUTPUT_TOKENS', '4096'), 10),
@@ -90,7 +90,7 @@ export const ClaudeConfig = {
   
   // Available models
   availableModels: [
-    'claude-3-opus-20240229',
+    'claude-sonnet-4-20250514',
     'claude-3-sonnet-20240229',
     'claude-3-haiku-20240307',
     'claude-2.1',
@@ -100,7 +100,7 @@ export const ClaudeConfig = {
   
   // Model capabilities and constraints
   modelInfo: {
-    'claude-3-opus-20240229': {
+    'claude-sonnet-4-20250514': {
       contextWindow: 200000,
       costPerInputToken: 0.000015,  // $15 per million input tokens
       costPerOutputToken: 0.000075, // $75 per million output tokens

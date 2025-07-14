@@ -77,7 +77,7 @@ export async function processSingleChunk(
     
     // Prepare Claude options
     const claudeOptions: EnhancedClaudeOptions = {
-      model: 'claude-3-opus-20240229',
+      model: 'claude-sonnet-4-20250514',
       maxTokens: 4096,
       temperature: 0.2,
       system: promptOptions.system,

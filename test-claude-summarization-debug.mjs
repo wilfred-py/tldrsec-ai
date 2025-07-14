@@ -300,7 +300,7 @@ async function testClaudeSummarization() {
       // Call Claude API
       console.log('Calling Claude API...');
       const response = await claude.messages.create({
-        model: 'claude-3-opus-20240229',
+        model: 'claude-sonnet-4-20250514',
         system: systemPrompt,
         messages: [
           { role: 'user', content: userPrompt }
@@ -342,7 +342,7 @@ async function testClaudeSummarization() {
         // Call Claude API
         console.log('Calling Claude API with module-generated prompts...');
         const response = await claude.messages.create({
-          model: 'claude-3-opus-20240229',
+          model: 'claude-sonnet-4-20250514',
           system: systemPrompt,
           messages: [
             { role: 'user', content: userPrompt }

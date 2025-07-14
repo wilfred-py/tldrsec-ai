@@ -18,7 +18,7 @@ describe('enhancedSummarize', () => {
   const mockText = 'This is a test document for summarization.';
   const mockPrompt = 'Summarize the following text:';
   const mockOptions: EnhancedSummaryOptions = {
-    model: 'claude-3-opus-20240229',
+    model: 'claude-sonnet-4-20250514',
     temperature: 0.7,
     maxTokens: 1000,
     useStreaming: false,
@@ -33,7 +33,7 @@ describe('enhancedSummarize', () => {
   const mockClientResponse = {
     id: 'msg_123',
     content: 'This is a test summary.',
-    model: 'claude-3-opus-20240229',
+    model: 'claude-sonnet-4-20250514',
     inputTokens: 50,
     outputTokens: 10,
     totalTokens: 60,
@@ -50,7 +50,7 @@ describe('enhancedSummarize', () => {
     // Create mock client
     mockClient = new EnhancedClaudeClient({
       apiKey: 'test-api-key',
-      model: 'claude-3-opus-20240229'
+      model: 'claude-sonnet-4-20250514'
     }) as jest.Mocked<EnhancedClaudeClient>;
     
     // Mock the complete method
@@ -61,7 +61,7 @@ describe('enhancedSummarize', () => {
     mockClient.streamComplete = jest.fn().mockImplementation((params, handler) => {
       // Simulate streaming events
       setTimeout(() => {
-        handler.onStart?.({ id: 'msg_123', model: 'claude-3-opus-20240229' });
+        handler.onStart?.({ id: 'msg_123', model: 'claude-sonnet-4-20250514' });
         handler.onContent?.('This is a ');
         handler.onContent?.('test summary.');
         handler.onComplete?.(mockClientResponse);
@@ -91,7 +91,7 @@ describe('enhancedSummarize', () => {
       // Verify result
       expect(result).toEqual({
         summary: 'This is a test summary.',
-        model: 'claude-3-opus-20240229',
+        model: 'claude-sonnet-4-20250514',
         inputTokens: 50,
         outputTokens: 10,
         totalTokens: 60,
@@ -153,7 +153,7 @@ describe('enhancedSummarize', () => {
       // Verify progress callback was called
       expect(mockProgressCallback).toHaveBeenCalledWith({
         type: 'start',
-        data: { id: 'msg_123', model: 'claude-3-opus-20240229' }
+        data: { id: 'msg_123', model: 'claude-sonnet-4-20250514' }
       });
       
       expect(mockProgressCallback).toHaveBeenCalledWith({
@@ -174,7 +174,7 @@ describe('enhancedSummarize', () => {
       // Verify result
       expect(result).toEqual({
         summary: 'This is a test summary.',
-        model: 'claude-3-opus-20240229',
+        model: 'claude-sonnet-4-20250514',
         inputTokens: 50,
         outputTokens: 10,
         totalTokens: 60,
@@ -193,7 +193,7 @@ describe('enhancedSummarize', () => {
       // Mock streamComplete to throw an error
       mockClient.streamComplete = jest.fn().mockImplementation((params, handler) => {
         setTimeout(() => {
-          handler.onStart?.({ id: 'msg_123', model: 'claude-3-opus-20240229' });
+          handler.onStart?.({ id: 'msg_123', model: 'claude-sonnet-4-20250514' });
           handler.onError?.(new Error('Stream error'));
         }, 0);
         
@@ -268,7 +268,7 @@ describe('enhancedSummarize', () => {
       // Verify result includes chunks and final summary
       expect(result).toEqual({
         summary: 'Final combined summary.',
-        model: 'claude-3-opus-20240229',
+        model: 'claude-sonnet-4-20250514',
         inputTokens: 50,
         outputTokens: 10,
         totalTokens: 60,
@@ -277,7 +277,7 @@ describe('enhancedSummarize', () => {
         chunks: [
           {
             summary: 'Summary of chunk 1.',
-            model: 'claude-3-opus-20240229',
+            model: 'claude-sonnet-4-20250514',
             inputTokens: 50,
             outputTokens: 10,
             totalTokens: 60,
@@ -286,7 +286,7 @@ describe('enhancedSummarize', () => {
           },
           {
             summary: 'Summary of chunk 2.',
-            model: 'claude-3-opus-20240229',
+            model: 'claude-sonnet-4-20250514',
             inputTokens: 50,
             outputTokens: 10,
             totalTokens: 60,
@@ -295,7 +295,7 @@ describe('enhancedSummarize', () => {
           },
           {
             summary: 'Summary of chunk 3.',
-            model: 'claude-3-opus-20240229',
+            model: 'claude-sonnet-4-20250514',
             inputTokens: 50,
             outputTokens: 10,
             totalTokens: 60,
@@ -336,7 +336,7 @@ describe('enhancedSummarize', () => {
       // Verify result
       expect(result).toEqual({
         summary: 'Summary of first chunk only.',
-        model: 'claude-3-opus-20240229',
+        model: 'claude-sonnet-4-20250514',
         inputTokens: 50,
         outputTokens: 10,
         totalTokens: 60,
@@ -411,7 +411,7 @@ describe('enhancedSummarize', () => {
         type: 'complete',
         data: expect.objectContaining({
           summary: 'This is a test summary.',
-          model: 'claude-3-opus-20240229'
+          model: 'claude-sonnet-4-20250514'
         })
       });
     });

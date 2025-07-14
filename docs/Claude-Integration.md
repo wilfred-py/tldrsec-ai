@@ -17,7 +17,7 @@ Create or update your `.env` file in the project root with the following variabl
 ```
 # Claude AI Integration
 ANTHROPIC_API_KEY=your-anthropic-api-key
-ANTHROPIC_MODEL=claude-3-sonnet-20240229  # Options: claude-3-opus-20240229, claude-3-sonnet-20240229, claude-3-haiku-20240307
+ANTHROPIC_MODEL=claude-3-sonnet-20240229  # Options: claude-sonnet-4-20250514, claude-3-sonnet-20240229, claude-3-haiku-20240307
 
 # Optional: Anthropic API Configuration
 ANTHROPIC_MAX_TOKENS=4000
@@ -66,7 +66,7 @@ The following Claude models are available:
 
 | Model | Context Window | Input Cost | Output Cost | Strengths |
 |-------|---------------|------------|------------|-----------|
-| claude-3-opus-20240229 | 200K tokens | $15/million | $75/million | Most powerful, best for complex reasoning |
+| claude-sonnet-4-20250514 | 200K tokens | $15/million | $75/million | Most powerful, best for complex reasoning |
 | claude-3-sonnet-20240229 | 180K tokens | $3/million | $15/million | Balanced intelligence and speed |
 | claude-3-haiku-20240307 | 150K tokens | $0.25/million | $1.25/million | Fastest, good for quick responses |
 

@@ -44,8 +44,8 @@ export enum ModelCapability {
  * Claude model information
  */
 export const ClaudeModels: Record<string, ModelInfo> = {
-  'claude-3-opus-20240229': {
-    id: 'claude-3-opus-20240229',
+  'claude-sonnet-4-20250514': {
+    id: 'claude-sonnet-4-20250514',
     name: 'Claude 3 Opus',
     provider: 'anthropic',
     costPerInputToken: 0.000015, // $15 per million tokens
@@ -182,7 +182,7 @@ export const BatchClaudeFallback: FallbackConfig = {
  * Premium fallback chain for high-quality results
  */
 export const PremiumClaudeFallback: FallbackConfig = {
-  initialModel: 'claude-3-opus-20240229',
+  initialModel: 'claude-sonnet-4-20250514',
   fallbackModels: [
     'claude-3-sonnet-20240229',
     'claude-3-haiku-20240307',
@@ -383,7 +383,7 @@ export function parseErrorForFallbackStrategy(error: Error): {
         // Context window exceeded - try a model with larger context window or abort
         return {
           shouldFallback: true,
-          recommendedModel: 'claude-3-opus-20240229', // Has largest context window
+          recommendedModel: 'claude-sonnet-4-20250514', // Has largest context window
           retryStrategy: 'immediate'
         };
         
@@ -428,7 +428,7 @@ export function parseErrorForFallbackStrategy(error: Error): {
   if (errorMsg.includes('context length') || errorMsg.includes('too many tokens')) {
     return {
       shouldFallback: true,
-      recommendedModel: 'claude-3-opus-20240229',
+      recommendedModel: 'claude-sonnet-4-20250514',
       retryStrategy: 'immediate'
     };
   }

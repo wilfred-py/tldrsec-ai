@@ -67,7 +67,7 @@ export function calculateCost(
 ): { inputCost: number; outputCost: number; totalCost: number } {
   // Claude price structure (as of May 2024)
   const prices: Record<string, { input: number; output: number }> = {
-    'claude-3-opus-20240229': {
+    'claude-sonnet-4-20250514': {
       input: 0.000015,  // $15 per million tokens
       output: 0.000075  // $75 per million tokens
     },
