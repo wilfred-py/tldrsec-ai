@@ -152,32 +152,42 @@ function truncateDocumentContent(content: string, maxTokens: number): string {
   return keptSections.join('\n\n');
 }
 
-// TODO: Implement actual cost calculation based on model and token counts
-// This function calculates the estimated cost of an AI operation.
-// Currently, it's a placeholder and returns 0.
-// It needs to be updated with actual pricing models for different AI models.
+/**
+ * Calculate the cost of an AI operation based on model and token usage
+ * Updated with actual pricing for Claude models as of May 2025
+ */
 function calculateCost(model: string, inputTokens: number, outputTokens: number): number {
-  // Example pricing (replace with actual rates)
-  // const claudeHaikuInputCostPerMillion = 0.25;
-  // const claudeHaikuOutputCostPerMillion = 1.25;
-  // const claudeSonnetInputCostPerMillion = 3;
-  // const claudeSonnetOutputCostPerMillion = 15;
-
-  const cost = 0;
-  // A real implementation would look up rates based on the 'model' string
-  // For now, log and return 0
-  componentLogger.debug(`Cost calculation for model '${model}', input tokens: ${inputTokens}, output tokens: ${outputTokens}. Placeholder returning 0.`);
+  // Claude pricing per million tokens (as of May 2025)
+  const pricing: Record<string, { input: number; output: number }> = {
+    'claude-sonnet-4-20250514': {
+      input: 3,      // $3 per million input tokens
+      output: 15     // $15 per million output tokens
+    },
+    'claude-3-opus-20240229': {
+      input: 15,     // $15 per million input tokens
+      output: 75     // $75 per million output tokens
+    },
+    'claude-3-sonnet-20240229': {
+      input: 3,      // $3 per million input tokens
+      output: 15     // $15 per million output tokens
+    },
+    'claude-3-haiku-20240307': {
+      input: 0.25,   // $0.25 per million input tokens
+      output: 1.25   // $1.25 per million output tokens
+    }
+  };
   
-  // Placeholder logic:
-  // if (model.includes('haiku')) {
-  //   cost = (inputTokens / 1000000) * claudeHaikuInputCostPerMillion + (outputTokens / 1000000) * claudeHaikuOutputCostPerMillion;
-  // } else if (model.includes('sonnet')) {
-  //   cost = (inputTokens / 1000000) * claudeSonnetInputCostPerMillion + (outputTokens / 1000000) * claudeSonnetOutputCostPerMillion;
-  // } else {
-  //   // Default or unknown model
-  //   cost = 0; // Or some other default calculation
-  // }
-  return cost;
+  // Default to Claude Sonnet 4 pricing if model not found
+  const modelPricing = pricing[model] || pricing['claude-sonnet-4-20250514'];
+  
+  // Calculate cost in dollars
+  const inputCost = (inputTokens / 1000000) * modelPricing.input;
+  const outputCost = (outputTokens / 1000000) * modelPricing.output;
+  const totalCost = inputCost + outputCost;
+  
+  componentLogger.debug(`Cost calculation for model '${model}', input tokens: ${inputTokens} ($${inputCost.toFixed(6)}), output tokens: ${outputTokens} ($${outputCost.toFixed(6)}), total: $${totalCost.toFixed(6)}`);
+  
+  return totalCost;
 }
 
 // Component logger

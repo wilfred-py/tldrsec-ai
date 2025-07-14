@@ -6,3 +6,4 @@
 
 export * from './textExtractor';
 export * from './tableExtractor';
+export * from './documentScraper';

@@ -17,7 +17,7 @@ Create or update your `.env` file in the project root with the following variabl
 ```
 # Claude AI Integration
 ANTHROPIC_API_KEY=your-anthropic-api-key
-ANTHROPIC_MODEL=claude-3-sonnet-20240229  # Options: claude-sonnet-4-20250514, claude-3-sonnet-20240229, claude-3-haiku-20240307
+ANTHROPIC_MODEL=claude-sonnet-4-20250514  # Options: claude-sonnet-4-20250514, claude-3-sonnet-20240229, claude-3-haiku-20240307
 
 # Optional: Anthropic API Configuration
 ANTHROPIC_MAX_TOKENS=4000

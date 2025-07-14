@@ -476,9 +476,11 @@ export class EnhancedClaudeClient extends EventEmitter {
    * @returns Pricing information
    */
   private getModelPricing(model: string): { inputPrice: number; outputPrice: number } {
-    // Pricing per 1000 tokens as of May 2023
+    // Pricing per 1000 tokens as of July 2025
     switch (model) {
       case 'claude-sonnet-4-20250514':
+        return { inputPrice: 0.003, outputPrice: 0.015 };
+      case 'claude-3-opus-20240229': // Legacy model pricing kept for backward compatibility
         return { inputPrice: 0.015, outputPrice: 0.075 };
       case 'claude-3-sonnet-20240229':
         return { inputPrice: 0.003, outputPrice: 0.015 };
