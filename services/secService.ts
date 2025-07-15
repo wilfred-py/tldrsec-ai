@@ -9,7 +9,7 @@
 
 // Import from filings modules
 import { getFilingSummary as getGenericFilingSummary } from './filings/summaries';
-import { getForm144Summary, getLatestFilingByFormType } from './filings/summaries/form144Summary';
+import { getForm144Summary, getLatestFilingByFormType as getLatestFilingByFormTypeInternal } from './filings/summaries/form144Summary';
 import { generateFallbackSummary } from './filings/summaries/fallbackSummary';
 import { getFilingDetails } from './filings/filingDetails';
 import { 
@@ -51,6 +51,32 @@ export function getSecApiHeaders() {
   return getSecApiHeadersInternal();
 }
 
+/**
+ * Gets the latest filing by form type using ticker symbol
+ * @param ticker Company ticker symbol
+ * @param formType The form type to search for
+ * @returns The latest filing by form type or null if not found
+ */
+export async function getLatestFilingByFormType(ticker: string, formType: string) {
+  try {
+    logger.debug(`Getting latest ${formType} filing for ticker ${ticker}`);
+    
+    // First get company info
+    const companyInfo = await getCompanyInfo(ticker);
+    if (!companyInfo) {
+      logger.error(`Missing CIK for company ${ticker}`);
+      return null;
+    }
+    
+    // Then call the internal function with company info
+    return getLatestFilingByFormTypeInternal(companyInfo, formType);
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    logger.error(`Error getting latest ${formType} filing for ${ticker}:`, { error: errorMessage });
+    return null;
+  }
+}
+
 // Re-export all functions for backward compatibility
 export {
   // Filing summaries
@@ -77,7 +103,6 @@ export {
   getLatestFilings,
   
   // Filing retrieval
-  getLatestFilingByFormType,
   getFilings,
   getFilingContent
 };
