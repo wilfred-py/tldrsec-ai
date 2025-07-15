@@ -2,6 +2,18 @@ import { FilingSummaryResult, FilingError } from '../../filing/types';
 import { getFormMetadata } from '../../../lib/sec-edgar/form-registry';
 import { emailClient } from '../../../lib/email';
 import { prisma } from '../../../lib/db';
+import { monitoring } from '../../../lib/monitoring';
+
+// Define a safe version of recordEmailSent that handles missing function
+const safeRecordEmailSent = (emailType: string, recipient: string, success: boolean, tags: Record<string, string> = {}): void => {
+  try {
+    if (typeof monitoring.recordEmailSent === 'function') {
+      monitoring.recordEmailSent(emailType, recipient, success, tags);
+    }
+  } catch (error) {
+    console.warn('Failed to record email metrics', { error });
+  }
+};
 
 /**
  * Generate an HTML version of the email
@@ -184,6 +196,8 @@ export async function sendSummaryEmail(email: string, summaries: FilingSummaryRe
     
     console.log(`[INFO][EmailGenerator] 📧 Sending email to ${email} with ${summaries.length} summaries and ${errors.length} errors`);
     
+    const startTime = Date.now();
+    
     // Send the email
     const result = await emailClient.sendEmail({
       to: email,
@@ -191,11 +205,22 @@ export async function sendSummaryEmail(email: string, summaries: FilingSummaryRe
       html: emailHtml,
       text: plainText,
       tags: [
-        { name: 'type_summaries', value: 'type_summaries' },
-        { name: 'content_filings', value: 'content_filings' }
+        'type_summaries',
+        'content_filings'
       ],
       replyTo: 'no-reply@tldrsec.app'
     });
+    
+    // Record email sending in monitoring
+    safeRecordEmailSent(
+      'sec_filing_summary',  // emailType
+      email,                 // recipient
+      true,                  // success
+      {                      // tags
+        duration_ms: (Date.now() - startTime).toString(),
+        content_type: 'filings'
+      }
+    );
     
     // Mark summaries as sent in the database
     await markSummariesAsSent(summaries);
@@ -208,6 +233,18 @@ export async function sendSummaryEmail(email: string, summaries: FilingSummaryRe
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     console.error(`[ERROR][EmailGenerator] ❌ Failed to send email: ${errorMessage}`);
+    
+    // Record failed email sending in monitoring
+    safeRecordEmailSent(
+      'sec_filing_summary',  // emailType
+      email,                 // recipient
+      false,                 // success
+      {
+        error: errorMessage,
+        content_type: 'filings'
+      }
+    );
+    
     return { success: false, error: errorMessage };
   }
 }

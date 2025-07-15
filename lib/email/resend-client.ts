@@ -19,11 +19,26 @@ import {
   TimeoutAbortController
 } from '../error-handling/retry';
 import { logger } from '../logging';
+// Import monitoring module
 import { monitoring } from '../monitoring';
+
+// Define a safe version of recordEmailSent that handles missing function
+const safeRecordEmailSent = (emailType: string, recipient: string, success: boolean, tags: Record<string, string> = {}): void => {
+  try {
+    if (typeof monitoring.recordEmailSent === 'function') {
+      monitoring.recordEmailSent(emailType, recipient, success, tags);
+    }
+  } catch (error) {
+    logger.warn('Failed to record email metrics', { error });
+  }
+};
+
 import { resendConfig } from './config';
 import type { 
   EmailMessage, 
   EmailSendResult, 
+  EmailSendSuccess,
+  EmailSendFailure,
   EmailUsage,
   EmailRecipient,
   EmailAttachment,
@@ -92,6 +107,8 @@ export class ResendClient {
       if (process.env.NODE_ENV !== 'production') {
         this.isDummyClient = true;
         logger.warn('No Resend API key provided. Using dummy client that will not send emails.');
+        // Initialize with empty string for dummy client
+        this.resend = new Resend('');
       } else {
         // In production, still create the client but log a warning
         logger.error('No Resend API key provided in production. Set RESEND_API_KEY in your environment variables.');
@@ -151,6 +168,7 @@ export class ResendClient {
         // Return a fake success response
         return {
           id: `dummy-${uuidv4()}`,
+          to: Array.isArray(emailParams.to) ? emailParams.to : [emailParams.to],
           success: true
         };
       }
@@ -191,7 +209,8 @@ export class ResendClient {
                 requestId
               });
               
-              const response = await this.resend.emails.send(emailOptions);
+              // Type assertion to handle potential type mismatch with Resend API
+              const response = await this.resend.emails.send(emailOptions as any);
               
               // Log the raw response for debugging
               logger.debug('Resend API response:', { response, requestId });
@@ -222,15 +241,18 @@ export class ResendClient {
               // Track successful send
               this.totalSent++;
               
-              // Record metric
-              monitoring.recordEmailSent({
-                success: true,
-                duration: Date.now() - startTime
-              });
+              // Record email sent metric with correct signature
+              safeRecordEmailSent(
+                'email_send',
+                Array.isArray(emailParams.to) ? emailParams.to[0] : emailParams.to,
+                true,
+                { duration: `${Date.now() - startTime}`, subject: emailParams.subject || '' }
+              );
               
               // Return success result
               return {
                 id: response.data.id,
+                to: Array.isArray(emailParams.to) ? emailParams.to : [emailParams.to],
                 success: true
               };
             } catch (err) {
@@ -245,29 +267,26 @@ export class ResendClient {
               }, true, requestId);
             }
           },
-          {
-            retry: options.retry || DefaultRetryConfig,
-            circuitBreaker: options.circuitBreaker || DefaultCircuitBreakerConfig,
-            abortSignal: abortController.signal,
-            onRetry: (error, attempt) => {
-              logger.warn(`Retry attempt ${attempt} for email send: ${error.message}`, {
-                error,
-                attempt,
-                requestId
-              });
-            }
-          }
+          'email-service',
+          options.retry || DefaultRetryConfig,
+          options.circuitBreaker || DefaultCircuitBreakerConfig
         );
       });
     } catch (error) {
       // Track failed send
       this.totalFailed++;
       
-      // Record metric
-      monitoring.recordEmailSent({
-        success: false,
-        duration: Date.now() - startTime
-      });
+      // Record email failure metric with correct signature
+      safeRecordEmailSent(
+        'email_send',
+        Array.isArray(emailParams.to) ? emailParams.to[0] : emailParams.to,
+        false,
+        { 
+          duration: `${Date.now() - startTime}`, 
+          subject: emailParams.subject || '',
+          error: error instanceof Error ? error.message : 'Unknown error'
+        }
+      );
       
       // Normalize and log error
       const normalizedError = this.normalizeError(error, requestId);
@@ -280,6 +299,7 @@ export class ResendClient {
       
       // Return failure result
       return {
+        to: Array.isArray(emailParams.to) ? emailParams.to : [emailParams.to],
         success: false,
         error: normalizedError
       };
@@ -294,7 +314,7 @@ export class ResendClient {
     return {
       totalSent: this.totalSent,
       totalFailed: this.totalFailed,
-      lastResetTime: this.lastResetTime
+      lastReset: this.lastResetTime
     };
   }
   
@@ -316,8 +336,9 @@ export class ResendClient {
     // TODO: Implement email verification using Resend API
     // This is a placeholder for future implementation
     return {
-      valid: true,
-      reason: null
+      email,
+      isValid: true,
+      reason: undefined
     };
   }
   
