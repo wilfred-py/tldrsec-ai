@@ -5,6 +5,24 @@
 import { ClaudeRequestOptions } from '../claude-client';
 
 /**
+ * Basic prompt template with variable substitution
+ */
+export interface PromptTemplate {
+  template: string;
+  variables: string[];
+  defaultValues?: Record<string, string>;
+}
+
+/**
+ * Basic prompt template with variable substitution
+ */
+export interface PromptTemplate {
+  template: string;
+  variables: string[];
+  defaultValues?: Record<string, string>;
+}
+
+/**
  * SEC Filing Types supported by the system
  */
 export type SECFilingType = 
