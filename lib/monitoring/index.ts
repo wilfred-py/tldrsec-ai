@@ -325,6 +325,31 @@ class Monitoring {
       });
     }
   }
+
+  /**
+   * Record email sending for monitoring
+   * 
+   * @param emailType - Type of email sent (e.g., 'summary', 'alert')
+   * @param recipient - Email recipient (can be anonymized)
+   * @param success - Whether the email was sent successfully
+   * @param tags - Additional metadata about the email
+   */
+  recordEmailSent(emailType: string, recipient: string, success: boolean, tags: Record<string, string> = {}): void {
+    const recipientDomain = recipient.split('@')[1] || 'unknown';
+    
+    this.incrementCounter('email.sent', 1, { 
+      type: emailType,
+      domain: recipientDomain,
+      success: success.toString(),
+      ...tags
+    });
+    
+    this.componentLogger.info(`Email sent: ${emailType}`, { 
+      success,
+      domain: recipientDomain,
+      ...tags
+    });
+  }
 }
 
 // Create and export a singleton instance
