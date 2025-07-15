@@ -7,7 +7,25 @@
 import { SecFilingDetails, SecFilingDocument } from '../../types/sec/filing';
 import { FilingLog } from '../../types/filing';
 import { secLogger } from '../../utils/logger';
-import filingService from '../filingService';
+import axios from 'axios';
+import { SEC_EDGAR_BASE_URL } from '../../constants/sec';
+
+// Import the Form 4 XML parser if it exists
+let parseForm4Xml: (xmlContent: string) => Promise<any>;
+try {
+  // Dynamic import to avoid circular dependencies
+  import('../filings/parsers/form4Parser').then(module => {
+    parseForm4Xml = module.parseForm4Xml;
+  }).catch(err => {
+    secLogger.warn(`[WARN] Could not import Form 4 parser: ${err instanceof Error ? err.message : String(err)}`);
+    // Provide a fallback implementation
+    parseForm4Xml = async () => ({ parsedSuccessfully: false });
+  });
+} catch (error) {
+  secLogger.warn(`[WARN] Error importing Form 4 parser: ${error instanceof Error ? error.message : String(error)}`);
+  // Provide a fallback implementation
+  parseForm4Xml = async () => ({ parsedSuccessfully: false });
+}
 
 // Extended interface to include additional properties needed for our implementation
 interface ExtendedSecFilingDetails extends SecFilingDetails {
@@ -25,31 +43,70 @@ interface ExtendedSecFilingDetails extends SecFilingDetails {
 export async function getFilingDetails(accessionNumber: string, cik: string): Promise<SecFilingDetails> {
   secLogger.debug(`[DEBUG] getFilingDetails called for accessionNumber: ${accessionNumber}, cik: ${cik}`);
   try {
-    // Get filing details from the filing service
-    secLogger.debug(`[DEBUG] Calling filingService.getFilingById for ${accessionNumber}`);
-    const filingResponse = await filingService.getFilingById(accessionNumber);
-    secLogger.debug(`[DEBUG] filingResponse received: ${JSON.stringify(filingResponse?.data || {}, null, 2)}`);
-    if (!filingResponse?.data) {
+    // Direct SEC API access instead of using filingService to avoid circular dependency
+    secLogger.debug(`[DEBUG] Fetching filing details directly from SEC API for ${accessionNumber}`);
+    
+    // Format the accession number for the URL (remove dashes)
+    const formattedAccessionNumber = accessionNumber.replace(/-/g, '');
+    
+    // Construct the URL for the filing
+    const filingUrl = `${SEC_EDGAR_BASE_URL}/Archives/edgar/data/${cik}/${formattedAccessionNumber}/0000000000-00-000000.txt`;
+    
+    secLogger.debug(`[DEBUG] Requesting filing from URL: ${filingUrl}`);
+    
+    // Fetch the filing directly
+    const response = await axios.get(filingUrl, {
+      headers: {
+        'User-Agent': 'TLDRSec Filing Analyzer (support@tldrsec.app)'
+      }
+    });
+    
+    if (!response.data) {
       throw new Error(`Could not retrieve filing details for ${accessionNumber}`);
     }
-
-    // Extract available data from the filing response
-    // FilingLog interface doesn't have a content property directly
-    // We'll use a fallback approach to get content from wherever it might be available
-    let filingText = '';
     
-    // Try different possible locations for the filing content
-    if (filingResponse.data.content) {
-      filingText = filingResponse.data.content;
-    } else if ((filingResponse.data as any).rawText) {
-      filingText = (filingResponse.data as any).rawText;
-    } else if (filingResponse.data.documents && filingResponse.data.documents.length > 0) {
-      // Try to get content from the first document
-      const firstDoc = filingResponse.data.documents[0];
-      if (firstDoc.content) {
-        filingText = firstDoc.content;
+    // Use the response data directly
+    const filingData = {
+      content: response.data,
+      filingDate: '', // We'll try to extract this from the content later
+      filingCode: '', // We'll try to extract this from the content later
+      company: '',
+      reportDate: ''
+    };
+    
+    secLogger.debug(`[DEBUG] Filing data retrieved, content length: ${typeof filingData.content === 'string' ? filingData.content.length : 0}`);
+    
+    // Extract metadata from the filing content if possible
+    try {
+      const contentStr = typeof filingData.content === 'string' ? filingData.content : '';
+      
+      const filingDateMatch = contentStr.match(/FILED AS OF DATE:\s*(\d{8})/);
+      if (filingDateMatch && filingDateMatch[1]) {
+        const dateStr = filingDateMatch[1];
+        filingData.filingDate = `${dateStr.substring(0, 4)}-${dateStr.substring(4, 6)}-${dateStr.substring(6, 8)}`;
       }
+      
+      const formTypeMatch = contentStr.match(/FORM TYPE:\s*([^\n\r]+)/);
+      if (formTypeMatch && formTypeMatch[1]) {
+        filingData.filingCode = formTypeMatch[1].trim();
+      }
+      
+      const companyMatch = contentStr.match(/COMPANY CONFORMED NAME:\s*([^\n\r]+)/);
+      if (companyMatch && companyMatch[1]) {
+        filingData.company = companyMatch[1].trim();
+      }
+      
+      const reportDateMatch = contentStr.match(/PERIOD OF REPORT:\s*(\d{8})/);
+      if (reportDateMatch && reportDateMatch[1]) {
+        const dateStr = reportDateMatch[1];
+        filingData.reportDate = `${dateStr.substring(0, 4)}-${dateStr.substring(4, 6)}-${dateStr.substring(6, 8)}`;
+      }
+    } catch (metadataError) {
+      secLogger.warn(`[WARN] Error extracting metadata from filing content: ${metadataError instanceof Error ? metadataError.message : String(metadataError)}`);
     }
+
+    // Use the filing content from our direct API call
+    let filingText = typeof filingData.content === 'string' ? filingData.content : '';
     
     if (!filingText) {
       secLogger.warn(`No content found in filing response for ${accessionNumber}`);
@@ -60,156 +117,109 @@ export async function getFilingDetails(accessionNumber: string, cik: string): Pr
     const filingDetails: ExtendedSecFilingDetails = {
       accessionNumber,
       cik,
-      filingDate: filingResponse.data.filingDate || '',
-      form: filingResponse.data.filingCode || '', // Use filingCode as form
-      formType: filingResponse.data.filingCode || '',
-      companyName: filingResponse.data.company || '',
-      reportDate: filingResponse.data.reportDate || '',
+      filingDate: filingData.filingDate || '',
+      form: filingData.filingCode || '', // Use filingCode as form
+      formType: filingData.filingCode || '',
+      companyName: filingData.company || '',
+      reportDate: filingData.reportDate || '',
       content: filingText,
       documents: [],
     };
     
-    // If primaryDocument is available in the response, use it
-    if (filingResponse.data.primaryDocument) {
-      filingDetails.primaryDocument = filingResponse.data.primaryDocument;
-      secLogger.debug(`Using primaryDocument from response: ${filingDetails.primaryDocument}`);
+    // Try to determine if this is a Form 4 filing and extract the primary document
+    const primaryDocMatch = filingText.match(/FILENAME:\s*([^\n\r]+\.xml)/i);
+    if (primaryDocMatch && primaryDocMatch[1]) {
+      const primaryDocument = primaryDocMatch[1].trim();
+      filingDetails.primaryDocument = primaryDocument;
+      secLogger.debug(`Extracted primaryDocument from content: ${filingDetails.primaryDocument}`);
       
       // For Form 4 filings, immediately create a document for the primary XML file
-      if (filingDetails.formType === '4' && filingResponse.data.primaryDocument && filingResponse.data.primaryDocument.endsWith('.xml')) {
-        const xmlFilename = filingResponse.data.primaryDocument;
+      if (filingDetails.formType === '4' && primaryDocument.endsWith('.xml')) {
+        const xmlFilename = primaryDocument;
         secLogger.debug(`Creating document for Form 4 XML file: ${xmlFilename}`);
         
-        // Create document URL for the XML file
-        const documentUrl = `/Archives/edgar/data/${cik}/${accessionNumber.replace(/-/g, '')}/${xmlFilename}`;
-        
-        // Extract XML content - try to find it in the filing text
-        let xmlContent = '';
-        
-        // Method 1: Look for <XML> tags
-        const xmlPattern = /<XML>([\s\S]*?)<\/XML>/i;
-        const xmlMatch = filingText.match(xmlPattern);
-        if (xmlMatch && xmlMatch[1]) {
-          xmlContent = xmlMatch[1].trim();
-          secLogger.debug(`Found XML content between <XML> tags (${xmlContent.length} bytes)`);
-        } else {
-          // Method 2: Look for <?xml declaration
-          const xmlStartIndex = filingText.indexOf('<?xml');
-          if (xmlStartIndex !== -1) {
-            // Try various end tags to find the end of the XML content
-            const possibleEndTags = ['</XML>', '</ownershipDocument>', '</documentType>', '</text>', '</ownershipDocument>'];
-            let endIndex = -1;
-            
-            for (const tag of possibleEndTags) {
-              const tagIndex = filingText.indexOf(tag, xmlStartIndex);
-              if (tagIndex !== -1 && (endIndex === -1 || tagIndex < endIndex)) {
-                endIndex = tagIndex + tag.length;
-              }
-            }
-            
-            if (endIndex !== -1) {
-              xmlContent = filingText.substring(xmlStartIndex, endIndex);
-              secLogger.debug(`Found XML content from <?xml to end tag (${xmlContent.length} bytes)`);
-            }
-          }
-        }
-        
-        // If we still don't have content, use the full filing text
-        if (!xmlContent) {
-          xmlContent = filingText;
-          secLogger.debug(`Using full filing text as content (${xmlContent.length} bytes)`);
-        }
-        
-        // Add as a document
-        filingDetails.documents.push({
+        // Create a document for the XML file
+        const xmlDocument: SecFilingDocument = {
           type: 'XML',
           filename: xmlFilename,
-          description: 'Form 4 XML Data',
-          content: xmlContent,
-          documentUrl,
-          size: xmlContent.length
-        });
+          description: 'Form 4 XML Filing',
+          content: filingText, // Use the same content for now
+          documentUrl: `https://www.sec.gov/Archives/edgar/data/${cik}/${accessionNumber.replace(/-/g, '')}/${xmlFilename}`,
+          size: filingText.length
+        };
         
-        secLogger.debug(`Added Form 4 XML document: ${xmlFilename} with ${xmlContent.length} bytes`);
+        filingDetails.documents.push(xmlDocument);
       }
     }
     
-    // Parse documents from the filing text
-    secLogger.debug(`[DEBUG] Parsing documents from filing text (${filingText.length} bytes)`);
+    // Extract documents from the filing content if available
+    // Since we're now fetching directly, we need to parse the document list from the content
+    const documentMatches = filingText.matchAll(/FILENAME:\s*([^\n\r]+)\s*DESCRIPTION:\s*([^\n\r]+)/gi);
+    const documents: SecFilingDocument[] = [];
     
-    // Check if we already have a primary XML document
-    const hasXmlDocument = filingDetails.documents.some(doc => 
-      doc.type === 'XML' && doc.filename === filingDetails.primaryDocument
-    );
+    // Convert iterator to array for easier processing
+    const documentMatchesArray = Array.from(documentMatches || []);
     
-    // Skip standard document parsing if we already have an XML document for Form 4
-    if (filingDetails.formType === '4' && hasXmlDocument) {
-      secLogger.debug(`Already have XML document for Form 4, skipping standard document parsing`);
-      return filingDetails;
-    }
-    
-    // Initialize document counter
-    let documentsFound = 0;
-    
-    // Look for document tags in the filing text
-    const docTagPattern = /<DOCUMENT>([\s\S]*?)<\/DOCUMENT>/gi;
-    let docMatch;
-    
-    while ((docMatch = docTagPattern.exec(filingText)) !== null) {
-      const docContent = docMatch[1];
+    if (documentMatchesArray.length > 0) {
+      secLogger.debug(`Found ${documentMatchesArray.length} potential documents in filing content`);
       
-      // Extract document type
-      const typeMatch = /<TYPE>(.*?)<\/TYPE>/i.exec(docContent);
-      const docType = typeMatch ? typeMatch[1].trim() : 'UNKNOWN';
-      
-      // Extract document filename
-      const filenameMatch = /<FILENAME>(.*?)<\/FILENAME>/i.exec(docContent);
-      const docFilename = filenameMatch ? filenameMatch[1].trim() : `doc_${documentsFound}.txt`;
-      
-      // Extract document description
-      const descMatch = /<DESCRIPTION>(.*?)<\/DESCRIPTION>/i.exec(docContent);
-      const docDescription = descMatch ? descMatch[1].trim() : docType;
-      
-      // Extract document text (between <TEXT> tags if present, otherwise use the whole document content)
-      const textMatch = /<TEXT>([\s\S]*?)<\/TEXT>/i.exec(docContent);
-      const docText = textMatch ? textMatch[1] : docContent;
-      
-      // Create document URL
-      const documentUrl = `/Archives/edgar/data/${cik}/${accessionNumber.replace(/-/g, '')}/${docFilename}`;
-      
-      // Add document to the list
-      filingDetails.documents.push({
-        type: docType,
-        filename: docFilename,
-        description: docDescription,
-        content: docText,
-        documentUrl,
-        size: docText.length,
-      });
-      
-      // If this is the first document, or if it's an HTML document, set it as the primary
-      if (documentsFound === 0 || docType === 'HTML') {
-        filingDetails.primaryDocument = docFilename;
+      // Process each document match
+      for (const match of documentMatchesArray) {
+        if (match[1]) {
+          const filename = match[1].trim();
+          const description = match[2] ? match[2].trim() : '';
+          
+          // Determine document type from filename extension
+          const fileExtension = filename.split('.').pop()?.toLowerCase() || '';
+          let documentType = '';
+          
+          if (fileExtension === 'htm' || fileExtension === 'html') {
+            documentType = 'HTML';
+          } else if (fileExtension === 'xml') {
+            documentType = 'XML';
+          } else if (fileExtension === 'pdf') {
+            documentType = 'PDF';
+          } else if (fileExtension === 'jpg' || fileExtension === 'jpeg' || fileExtension === 'png') {
+            documentType = 'IMAGE';
+          } else {
+            documentType = fileExtension.toUpperCase();
+          }
+          
+          const document: SecFilingDocument = {
+            type: documentType,
+            filename,
+            description,
+            content: '', // We don't have the content yet
+            documentUrl: `https://www.sec.gov/Archives/edgar/data/${cik}/${accessionNumber.replace(/-/g, '')}/${filename}`,
+            size: 0
+          };
+          
+          filingDetails.documents.push(document);
+        }
       }
-      
-      documentsFound++;
-    }
-    
-    // If no documents were found using the traditional approach, try alternative methods
-    if (documentsFound === 0) {
-      secLogger.debug(`No documents found with traditional approach, trying alternative methods`);
+    } else {
+      // If no documents found in the content, try alternative methods
+      secLogger.debug(`No documents found in filing content, trying alternative methods`);
       
       // For Form 4, SD and similar formats that often use XML
       if (filingText.includes('<XML>') || filingText.includes('<?xml')) {
         secLogger.debug(`Detected potential XML-based filing`);
         
-        // Check if we have a primary document from filingResponse
-        if (filingResponse.data.primaryDocument) {
-          secLogger.debug(`Using primaryDocument from filingResponse: ${filingResponse.data.primaryDocument}`);
-          
-          // For Form 4 filings, handle the special case
-          if (filingDetails.formType === '4' && filingResponse.data.primaryDocument === 'edgardoc.xml') {
-            secLogger.debug(`Special handling for Form 4 with edgardoc.xml`);
+        // Check if we have a Form 4 XML filing
+        if (filingDetails.formType === '4' && filingText.includes('<ownershipDocument>')) {
+          secLogger.debug(`Detected Form 4 XML content for ${accessionNumber}`);
+          // This is a Form 4 XML filing, parse it directly
+          try {
+            const form4Data = await parseForm4Xml(filingText);
+            if (form4Data) {
+              // Add the parsed data to the filing details
+              (filingDetails as any).parsedForm4 = form4Data;
+              secLogger.debug(`Successfully parsed Form 4 XML for ${accessionNumber}`);
+            }
+          } catch (xmlError) {
+            secLogger.error(`Error parsing Form 4 XML: ${xmlError instanceof Error ? xmlError.message : String(xmlError)}`);
           }
+        }
         
         // For Form 4 specifically, look for the primary XML file (often form4.xml)
         const form4Pattern = /filename="(form4\.xml)"/i;
@@ -219,12 +229,12 @@ export async function getFilingDetails(accessionNumber: string, cik: string): Pr
           const xmlFilename = form4Match[1];
           secLogger.debug(`Found Form 4 XML filename: ${xmlFilename}`);
           
-          // Extract the XML content
-          const xmlPattern = /<XML>([\s\S]*?)<\/XML>/i;
-          const xmlMatch = filingText.match(xmlPattern);
+          // Extract the XML content - this is a simplified approach
+          const xmlContentPattern = new RegExp(`<XML>(\\s*${xmlFilename}\\s*)?([\\s\\S]*?)<\\/XML>`, 'i');
+          const xmlContentMatch = filingText.match(xmlContentPattern);
           
-          if (xmlMatch && xmlMatch[1]) {
-            const xmlContent = xmlMatch[1].trim();
+          if (xmlContentMatch && xmlContentMatch[2]) {
+            const xmlContent = xmlContentMatch[2].trim();
             
             // Add as a document
             filingDetails.documents.push({
@@ -232,19 +242,18 @@ export async function getFilingDetails(accessionNumber: string, cik: string): Pr
               filename: xmlFilename,
               description: 'Form 4 XML Data',
               content: xmlContent,
-              documentUrl: `/Archives/edgar/data/${cik}/${accessionNumber.replace(/-/g, '')}/${xmlFilename}`,
+              documentUrl: `https://www.sec.gov/Archives/edgar/data/${cik}/${accessionNumber.replace(/-/g, '')}/${xmlFilename}`,
               size: xmlContent.length
             });
             
             // Set this as the primary document
             filingDetails.primaryDocument = xmlFilename;
-            documentsFound++;
+            secLogger.debug(`Added Form 4 XML document: ${xmlFilename} with ${xmlContent.length} bytes`);
           }
         }
-      }
         
         // If still no documents found or not Form 4, try to find any XML file patterns
-        if (documentsFound === 0) {
+        if (filingDetails.documents.length === 0) {
           secLogger.debug(`Looking for general XML files`);
           const xmlFilePattern = new RegExp('(\\w+\\.xml)', 'gi');
           // Use a more compatible approach to find XML files
@@ -277,7 +286,7 @@ export async function getFilingDetails(accessionNumber: string, cik: string): Pr
                   filename: xmlFilename,
                   description: 'XML Data',
                   content: xmlContent,
-                  documentUrl: `/Archives/edgar/data/${cik}/${accessionNumber.replace(/-/g, '')}/${xmlFilename}`,
+                  documentUrl: `https://www.sec.gov/Archives/edgar/data/${cik}/${accessionNumber.replace(/-/g, '')}/${xmlFilename}`,
                   size: xmlContent.length
                 });
                 
@@ -285,132 +294,30 @@ export async function getFilingDetails(accessionNumber: string, cik: string): Pr
                 if (!filingDetails.primaryDocument) {
                   filingDetails.primaryDocument = xmlFilename;
                 }
-                documentsFound++;
               }
             }
           }
         }
       }
+    }
+    
+    // If we don't have any documents yet, create a fallback document
+    if (filingDetails.documents.length === 0) {
+      secLogger.debug(`No documents found in filing content, creating fallback document`);
       
-      // Special handling for Form 4 filings that have XML data but no standard document tags
-      // Only do this if we haven't already created a document for the primary XML file
-      const hasXmlDocument = filingDetails.documents.some(doc => 
-        doc.type === 'XML' && doc.filename === filingDetails.primaryDocument
-      );
+      // Create a fallback document with the filing content
+      const fallbackDocument: SecFilingDocument = {
+        type: 'TXT',
+        filename: `${accessionNumber}.txt`,
+        description: 'Filing Text',
+        content: filingText,
+        documentUrl: `https://www.sec.gov/Archives/edgar/data/${cik}/${accessionNumber.replace(/-/g, '')}/${accessionNumber}.txt`,
+        size: filingText.length
+      };
       
-      if (filingDetails.documents.length === 0 && filingDetails.formType === '4' && !hasXmlDocument) {
-        secLogger.debug(`Form 4 filing detected with no documents - looking for XML content`);
-        
-        // For Form 4, always create a document regardless of what we find
-        // Use the primaryDocument from filingResponse if available, or create a default name
-        const xmlFilename = filingResponse.data.primaryDocument || 'edgardoc.xml';
-        secLogger.debug(`Using XML filename for Form 4: ${xmlFilename}`);
-        
-        // Create document URL for the XML file
-        const documentUrl = `/Archives/edgar/data/${cik}/${accessionNumber.replace(/-/g, '')}/${xmlFilename}`;
-        
-        // For Form 4, try to extract the XML section
-        // First, look for the XML section between <XML> tags
-        let xmlContent = '';
-        let xmlFound = false;
-        
-        // Method 1: Look for <XML> tags
-        const xmlPattern = /<XML>([\s\S]*?)<\/XML>/i;
-        const xmlMatch = filingText.match(xmlPattern);
-        if (xmlMatch && xmlMatch[1]) {
-          xmlContent = xmlMatch[1].trim();
-          xmlFound = true;
-          secLogger.debug(`Found XML content between <XML> tags (${xmlContent.length} bytes)`);
-        }
-        
-        // Method 2: Look for <?xml declaration
-        if (!xmlFound) {
-          const xmlStartIndex = filingText.indexOf('<?xml');
-          if (xmlStartIndex !== -1) {
-            // Try various end tags to find the end of the XML content
-            const possibleEndTags = ['</XML>', '</ownershipDocument>', '</documentType>', '</text>', '</ownershipDocument>'];
-            let endIndex = -1;
-            
-            for (const tag of possibleEndTags) {
-              const tagIndex = filingText.indexOf(tag, xmlStartIndex);
-              if (tagIndex !== -1 && (endIndex === -1 || tagIndex < endIndex)) {
-                endIndex = tagIndex + tag.length;
-              }
-            }
-            
-            if (endIndex !== -1) {
-              xmlContent = filingText.substring(xmlStartIndex, endIndex);
-              xmlFound = true;
-              secLogger.debug(`Found XML content from <?xml to end tag (${xmlContent.length} bytes)`);
-            }
-          }
-        }
-        
-        // Method 3: If still no XML found, look for <ownershipDocument> tag
-        if (!xmlFound) {
-          const ownershipStartIndex = filingText.indexOf('<ownershipDocument>');
-          if (ownershipStartIndex !== -1) {
-            const ownershipEndIndex = filingText.indexOf('</ownershipDocument>', ownershipStartIndex);
-            if (ownershipEndIndex !== -1) {
-              xmlContent = filingText.substring(ownershipStartIndex, ownershipEndIndex + '</ownershipDocument>'.length);
-              xmlFound = true;
-              secLogger.debug(`Found XML content from <ownershipDocument> (${xmlContent.length} bytes)`);
-            }
-          }
-        }
-        
-        // Method 4: If still no XML found, look for SEC-DOCUMENT section
-        if (!xmlFound) {
-          const secDocStartIndex = filingText.indexOf('<SEC-DOCUMENT>');
-          if (secDocStartIndex !== -1) {
-            const secDocEndIndex = filingText.indexOf('</SEC-DOCUMENT>', secDocStartIndex);
-            if (secDocEndIndex !== -1) {
-              xmlContent = filingText.substring(secDocStartIndex, secDocEndIndex + '</SEC-DOCUMENT>'.length);
-              xmlFound = true;
-              secLogger.debug(`Found content from <SEC-DOCUMENT> (${xmlContent.length} bytes)`);
-            }
-          }
-        }
-        
-        // If we still don't have content, use the full filing text
-        if (!xmlFound || xmlContent.length === 0) {
-          xmlContent = filingText;
-          secLogger.debug(`Using full filing text as content (${xmlContent.length} bytes)`);
-        }
-        
-        // Add as a document
-        filingDetails.documents.push({
-          type: 'XML',
-          filename: xmlFilename,
-          description: 'Form 4 XML Data',
-          content: xmlContent,
-          documentUrl,
-          size: xmlContent.length
-        });
-        
-        // Set this as the primary document
-        filingDetails.primaryDocument = xmlFilename;
-        secLogger.debug(`Added Form 4 XML document: ${xmlFilename} with ${xmlContent.length} bytes`);
-      }
-      
-      // If we still don't have any documents, create a synthetic one for the full filing text
-      if (filingDetails.documents.length === 0) {
-        secLogger.debug(`Creating synthetic document for the full filing`);
-        const syntheticFilename = `filing_${accessionNumber.replace(/-/g, '')}.txt`;
-        const rawUrl = `/Archives/edgar/data/${cik}/${accessionNumber.replace(/-/g, '')}/0000000000-00-000000.txt`;
-        
-        filingDetails.documents.push({
-          type: filingDetails.formType || 'FILING',
-          filename: syntheticFilename,
-          description: 'Complete Filing Text',
-          content: filingText,
-          documentUrl: rawUrl, // Use the raw text URL
-          size: filingText.length,
-        });
-        
-        filingDetails.primaryDocument = syntheticFilename;
-        secLogger.debug(`Added synthetic document: ${syntheticFilename}`);
-      }
+      filingDetails.documents.push(fallbackDocument);
+      filingDetails.primaryDocument = fallbackDocument.filename;
+      secLogger.debug(`Added fallback document: ${fallbackDocument.filename}`);
     }
     
     secLogger.debug(`[DEBUG] Final filingDetails: primaryDocument=${filingDetails.primaryDocument}, documents.length=${filingDetails.documents.length}`);
@@ -432,7 +339,7 @@ export async function getFilingDetails(accessionNumber: string, cik: string): Pr
       };
     }
     
-    secLogger.error(`Error getting filing details for ${accessionNumber}`, error);
+    secLogger.error(`Error getting filing details for ${accessionNumber}: ${error instanceof Error ? error.message : String(error)}`);
     throw new Error(`Failed to get details for filing ${accessionNumber}`);
   }
 }

@@ -1,6 +1,6 @@
 import { findCompanyByTicker } from '../companyService';
 import { getCompanyFilings } from './filings';
-import { SecFiling } from '../../types/sec';
+import { SecFiling, SecCompanyInfo } from '../../types/sec';
 import { logger } from '../../lib/logging';
 
 /**
@@ -28,11 +28,14 @@ export async function getLatestFilings(ticker: string, limit: number = 5): Promi
     // Get company filings - pass the full company object
     console.log(`[DEBUG][secService] Getting filings for company: ${company.name} (CIK: ${company.cik})`);
     const filings = await getCompanyFilings(company);
-    console.log(`[DEBUG][secService] Retrieved ${filings.length} filings for ${ticker}`);
+    
+    // Check if filings is an array (directly returned) or has a recentFilings property
+    const filingsArray = Array.isArray(filings) ? filings : (filings as any).recentFilings || [];
+    console.log(`[DEBUG][secService] Retrieved ${filingsArray.length} filings for ${ticker}`);
     
     // Sort by filing date and take the most recent ones
-    let latestFilings = filings
-      .sort((a, b) => new Date(b.filingDate).getTime() - new Date(a.filingDate).getTime())
+    let latestFilings = filingsArray
+      .sort((a: SecFiling, b: SecFiling) => new Date(b.filingDate).getTime() - new Date(a.filingDate).getTime())
       .slice(0, limit);
     
     console.log(`[DEBUG][secService] Returning ${latestFilings.length} latest filings for ${ticker}`);

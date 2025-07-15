@@ -246,35 +246,49 @@ export class SummarizationError extends Error {
  * Interface for summarization options
  */
 export interface SummarizationOptions {
-  filingId: string;
-  summaryId: string;
+  filingId?: string;
+  summaryId?: string;
   requestId?: string;
   claudeOptions?: ClaudeRequestOptions;
-  documentContent?: string;
+  model?: string;
+  metadata?: {
+    ticker?: string;
+    companyName?: string;
+    formType?: string;
+    filingDate?: string;
+    accessionNumber?: string;
+    cik?: string;
+    documentType?: string;
+    documentDescription?: string;
+  };
 }
-
 /**
  * Interface for summarization result
  */
 export interface SummarizationResult {
-  summaryId: string;
-  summaryText: string | Record<string, unknown>;
-  summaryJSON?: Record<string, unknown>;
+  summaryId?: string;
+  summary: string;
+  summaryText: string;
+  summaryJSON: any;
+  keyPoints?: string[];
   isPartial?: boolean;
   duration: number;
   parsingErrors?: string[];
   // AI metrics
   modelUsed: string;
+  model?: string;
   inputTokens?: number;
   outputTokens?: number;
+  tokensUsed?: number;
   cost?: number;
+  processingTimeMs?: number;
   attempts?: number;
 }
 
 /**
  * Summarize an SEC filing using Claude AI with robust error handling and fallback
  */
-export async function summarizeFiling(options: SummarizationOptions): Promise<SummarizationResult> {
+export async function summarizeFiling(content: string, options: SummarizationOptions): Promise<SummarizationResult> {
   // Define a type that matches the Prisma return structure
   type SECFilingRecord = {
     id: string;
@@ -286,75 +300,86 @@ export async function summarizeFiling(options: SummarizationOptions): Promise<Su
   };
   
   let filingRecordFromDB: SECFilingRecord | null = null;
-  const { filingId, summaryId, requestId, claudeOptions, documentContent } = options; 
-  // filingRecordFromDB is declared above so it's in scope for the catch blocks 
+  const { filingId, summaryId, requestId, claudeOptions, metadata, model: optionsModel } = options; 
   const startTime = Date.now();
   
   const aiClient = claudeClient;
-  const operationId = requestId || `summarize-${summaryId}-${Date.now()}`;
+  const operationId = requestId || `summarize-${summaryId || 'direct'}-${Date.now()}`;
   
-  componentLogger.info(`Starting summarization for summaryId=${summaryId}, filingId=${filingId}, operationId=${operationId}`);
+  componentLogger.info(`Starting summarization${summaryId ? ` for summaryId=${summaryId}` : ''}${filingId ? `, filingId=${filingId}` : ''}, operationId=${operationId}`);
   monitoring.incrementCounter('ai.summarization_started', 1);
   
   try {
-        filingRecordFromDB = await prisma.secFiling.findUnique({
-      where: { id: filingId },
-      include: { ticker: true }
-    });
-    
-    const summary = await prisma.summary.findUnique({
-      where: { id: summaryId }
-    });
-    
-    if (!filingRecordFromDB) {
-      componentLogger.error(`Filing not found for summaryId=${summaryId}, filingId=${filingId}`);
-      monitoring.incrementCounter('ai.summarization_error');
-      throw new SummarizationError(
-        `Filing not found: ${filingId}`,
-        summaryId,
-        'unknown',
-        'FILING_NOT_FOUND',
-        false,
-        'filing_not_found'
-      );
-    }
-    
-    if (!summary) {
-      componentLogger.error(`Summary record not found for summaryId=${summaryId}`);
-      monitoring.incrementCounter('ai.summarization_error');
-      throw new SummarizationError(
-        `Summary record not found: ${summaryId}`,
-        summaryId,
-        filingRecordFromDB.formType,
-        'SUMMARY_NOT_FOUND',
-        false,
-        'summary_not_found'
-      );
-    }
-    
-    // Extract content from the filing
-    let content = documentContent;
-    if (!content) {
-      try {
-        componentLogger.debug(`Extracting content for filing ${filingId}`);
-        // Ensure rawContent is defined before passing to extractFilingContent
-        if (!filingRecordFromDB.rawContent) {
-          throw new Error('Filing content is missing');
-        }
-        content = await extractFilingContent(filingRecordFromDB.rawContent, filingRecordFromDB.formType as SECFilingType);
-        componentLogger.debug(`Content extracted successfully, length=${content.length}`);
-      } catch (extractError) {
-        componentLogger.error(`Failed to extract content from filing ${filingId}: ${extractError instanceof Error ? extractError.message : String(extractError)}`);
-        monitoring.incrementCounter('ai.content_extraction_error', 1);
+    // Only try to fetch filing and summary records if IDs are provided
+    if (filingId) {
+      filingRecordFromDB = await prisma.secFiling.findUnique({
+        where: { id: filingId },
+        include: { ticker: true }
+      });
+      
+      if (!filingRecordFromDB) {
+        componentLogger.error(`Filing not found for filingId=${filingId}`);
+        monitoring.incrementCounter('ai.summarization_error');
         throw new SummarizationError(
-          `Failed to extract content: ${extractError instanceof Error ? extractError.message : String(extractError)}`,
-          summaryId,
-          filingRecordFromDB.formType,
-          'CONTENT_EXTRACTION_FAILED',
-          true,
-          'content_extraction_failed'
+          `Filing not found: ${filingId}`,
+          summaryId || 'unknown',
+          'unknown',
+          'FILING_NOT_FOUND',
+          false,
+          'filing_not_found'
         );
       }
+    } else if (metadata) {
+      // Create a mock filing record from metadata when no filingId is provided
+      filingRecordFromDB = {
+        id: 'direct-summarization',
+        formType: metadata.formType || 'unknown',
+        companyName: metadata.companyName || 'Unknown Company',
+        ticker: { symbol: metadata.ticker || 'UNKNOWN' },
+        accessionNumber: metadata.accessionNumber
+      };
+    } else {
+      // If neither filingId nor metadata is provided, create a minimal record
+      filingRecordFromDB = {
+        id: 'direct-summarization',
+        formType: 'unknown',
+        companyName: 'Unknown Company',
+        ticker: { symbol: 'UNKNOWN' }
+      };
+    }
+    
+    let summary = null;
+    if (summaryId) {
+      summary = await prisma.summary.findUnique({
+        where: { id: summaryId }
+      });
+      
+      if (!summary) {
+        componentLogger.error(`Summary record not found for summaryId=${summaryId}`);
+        monitoring.incrementCounter('ai.summarization_error');
+        throw new SummarizationError(
+          `Summary record not found: ${summaryId}`,
+          summaryId,
+          filingRecordFromDB.formType,
+          'SUMMARY_NOT_FOUND',
+          false,
+          'summary_not_found'
+        );
+      }
+    }
+    
+    // Check if content is provided
+    if (!content) {
+      componentLogger.error(`No content provided for summarization`);
+      monitoring.incrementCounter('ai.content_extraction_error', 1);
+      throw new SummarizationError(
+        `No content provided for summarization`,
+        summaryId || 'unknown',
+        filingRecordFromDB.formType,
+        'CONTENT_MISSING',
+        false,
+        'content_missing'
+      );
     }
     
     // Process document content - handle large documents appropriately
@@ -366,7 +391,7 @@ export async function summarizeFiling(options: SummarizationOptions): Promise<Su
     }
     
     // Use the processed content for the prompt
-    content = processedDoc.processedContent;
+    const processedContent = processedDoc.processedContent;
     
     // Get the appropriate prompt for this filing type
     const promptGenerator = getPromptForFilingType(
@@ -378,7 +403,7 @@ export async function summarizeFiling(options: SummarizationOptions): Promise<Su
     );
     
     // Check if we need to chunk the document due to token limits
-    const estimatedTokens = estimateTokenCount(content);
+    const estimatedTokens = estimateTokenCount(processedContent);
     const maxTokenLimit = 150000; // Claude's max token limit is 200k, but leave buffer for prompt
     
     let prompt: string;
@@ -386,32 +411,33 @@ export async function summarizeFiling(options: SummarizationOptions): Promise<Su
     
     if (estimatedTokens > maxTokenLimit) {
       // Document is too large, we need to truncate or chunk it
-      componentLogger.warn(`Document for filing ${filingId} exceeds token limit (${estimatedTokens} tokens). Truncating to ${maxTokenLimit} tokens.`);
+      componentLogger.warn(`Document for filing ${filingId || 'direct'} exceeds token limit (${estimatedTokens} tokens). Truncating to ${maxTokenLimit} tokens.`);
       monitoring.incrementCounter('ai.document_truncated', 1);
       
       // For now, we'll use a simple truncation approach
-      // A more sophisticated approach would use the chunking mechanism
-      const truncatedContent = truncateDocumentContent(content, maxTokenLimit);
+      const truncatedContent = truncateDocumentContent(processedContent, maxTokenLimit);
       prompt = promptGenerator.getFullPrompt(truncatedContent);
       isChunked = true;
     } else {
       // Document is within token limits
-      prompt = promptGenerator.getFullPrompt(content);
+      prompt = promptGenerator.getFullPrompt(processedContent);
     }
     
-    // Update the summary record to show we're processing
-    await prisma.summary.update({
-      where: { id: summaryId },
-      data: {
-        processingStatus: 'PROCESSING'
-        // Let Prisma handle the updatedAt timestamp automatically
-      }
-    });
+    // Update the summary record to show we're processing (only if summaryId exists)
+    if (summaryId) {
+      await prisma.summary.update({
+        where: { id: summaryId },
+        data: {
+          processingStatus: 'PROCESSING'
+          // Let Prisma handle the updatedAt timestamp automatically
+        }
+      });
+    }
     
     // Configure the Claude request
-    const model = modelConfig.defaultModel;
+    const model = optionsModel || modelConfig.defaultModel;
     const requestOptions = {
-      // Use model config parameters directly since defaultOptions doesn't exist
+      // Use model config parameters directly
       maxInputTokens: modelConfig.maxInputTokens,
       maxOutputTokens: modelConfig.maxOutputTokens,
       temperature: modelConfig.temperature,
@@ -420,7 +446,7 @@ export async function summarizeFiling(options: SummarizationOptions): Promise<Su
       ...claudeOptions
     };
     
-    componentLogger.debug(`Using model ${model} for summaryId=${summaryId}`);
+    componentLogger.debug(`Using model ${model} for ${summaryId ? `summaryId=${summaryId}` : 'direct summarization'}`);
     
     try {
       // Call Claude API to generate the summary
@@ -436,8 +462,8 @@ export async function summarizeFiling(options: SummarizationOptions): Promise<Su
       }, {
         metadata: {
           operationId,
-          summaryId,
-          filingId,
+          ...(summaryId ? { summaryId } : {}),
+          ...(filingId ? { filingId } : {}),
           filingType: filingRecordFromDB.formType
         }
       });
@@ -452,7 +478,7 @@ export async function summarizeFiling(options: SummarizationOptions): Promise<Su
           }
           return '';
         })
-        .filter(text => text.length > 0)
+        .filter((text: string) => text.length > 0)
         .join('\n');
       
       // Access token usage with correct property names from the Anthropic API
@@ -460,7 +486,7 @@ export async function summarizeFiling(options: SummarizationOptions): Promise<Su
       const outputTokens = response.usage?.output_tokens || 0;
       const cost = calculateCost(model, inputTokens, outputTokens);
       
-      componentLogger.info(`Received response for summaryId=${summaryId}, length=${summaryText.length}, inputTokens=${inputTokens}, outputTokens=${outputTokens}`);
+      componentLogger.info(`Received response for ${summaryId ? `summaryId=${summaryId}` : 'direct summarization'}, length=${summaryText.length}, inputTokens=${inputTokens}, outputTokens=${outputTokens}`);
       monitoring.recordTiming('ai.response_time', Date.now() - startTime);
       monitoring.incrementCounter('ai.summarization_completed', 1);
       
@@ -470,82 +496,100 @@ export async function summarizeFiling(options: SummarizationOptions): Promise<Su
       const parsingDuration = Date.now() - parsingStartTime;
       
       if (parsedResult.success && parsedResult.data) {
-        componentLogger.info(`Successfully parsed response for summaryId=${summaryId}, filingType=${filingRecordFromDB.formType}`);
+        componentLogger.info(`Successfully parsed response for ${summaryId ? `summaryId=${summaryId}` : 'direct summarization'}, filingType=${filingRecordFromDB.formType}`);
         monitoring.recordTiming('ai.parsing_duration', parsingDuration);
         monitoring.incrementCounter('ai.summarization_parsing_success', 1);
         
-        // Update the summary record
-        await prisma.summary.update({
-          where: { id: summaryId },
-          data: {
-            summaryText: parsedResult.data.summary,
-            processingStatus: 'COMPLETED',
-            processingCompletedAt: new Date(),
-            isPartialResult: false,
-            processingTimeMs: Date.now() - startTime,
-            tokensUsed: inputTokens + outputTokens,
-            model: response.model,
-            cost,
-            attempts: response.executionMetadata?.attempts || 1
-          }
-        });
+        // Update the summary record if summaryId exists
+        if (summaryId) {
+          await prisma.summary.update({
+            where: { id: summaryId },
+            data: {
+              summaryText: parsedResult.data.summary,
+              processingStatus: 'COMPLETED',
+              processingCompletedAt: new Date(),
+              isPartialResult: false,
+              processingTimeMs: Date.now() - startTime,
+              tokensUsed: inputTokens + outputTokens,
+              model: response.model,
+              cost,
+              attempts: response.executionMetadata?.attempts || 1
+            }
+          });
+        }
+        
         return {
-          summaryId,
+          summaryId: summaryId || undefined,
+          summary: parsedResult.data.summary,
           summaryText: parsedResult.data.summary,
           summaryJSON: parsedResult.data,
+          keyPoints: parsedResult.data.keyPoints || [],
           duration: Date.now() - startTime,
           modelUsed: response.model,
+          model: response.model,
           inputTokens,
           outputTokens,
+          tokensUsed: inputTokens + outputTokens,
           cost,
+          processingTimeMs: Date.now() - startTime,
           attempts: response.executionMetadata?.attempts || 1
         };
       } else {
         monitoring.recordTiming('ai.parsing_duration', parsingDuration);
-        componentLogger.warn(`Failed to parse valid JSON from response for summaryId=${summaryId}, filingType=${filingRecordFromDB!.formType}, errors=${parsedResult.errors?.join('; ')}, operationId=${operationId}`);
+        componentLogger.warn(`Failed to parse valid JSON from response for ${summaryId ? `summaryId=${summaryId}` : 'direct summarization'}, filingType=${filingRecordFromDB.formType}, errors=${parsedResult.errors?.join('; ')}, operationId=${operationId}`);
         monitoring.incrementCounter('ai.summarization_parsing_error', 1);
         
         // Use response-fixer to ensure minimum fields are present
-        const companyName = filingRecordFromDB?.companyName || 
-                           (filingRecordFromDB?.ticker?.symbol ? `${filingRecordFromDB.ticker.symbol} Company` : 'Unknown Company');
-        const fixedData = ensureMinimumFields(summaryText, filingRecordFromDB!.formType as SECFilingType, companyName);
+        const companyName = filingRecordFromDB.companyName || 
+                           (filingRecordFromDB.ticker?.symbol ? `${filingRecordFromDB.ticker.symbol} Company` : 'Unknown Company');
+        const fixedData = ensureMinimumFields(summaryText, filingRecordFromDB.formType as SECFilingType, companyName);
         
-        // Update the summary record with the fixed data
-        await prisma.summary.update({
-          where: { id: summaryId },
-          data: {
-            summaryText: fixedData.summary,
-            processingStatus: 'COMPLETED_WITH_WARNINGS',
-            processingCompletedAt: new Date(),
-            isPartialResult: true,
-            processingTimeMs: Date.now() - startTime,
-            processingError: 'Fixed JSON response: ' + parsedResult.errors?.join('; '),
-            tokensUsed: inputTokens + outputTokens,
-            model: response.model,
-            cost,
-            attempts: response.executionMetadata?.attempts || 1
-          }
-        });
+        // Update the summary record with the fixed data if summaryId exists
+        if (summaryId) {
+          await prisma.summary.update({
+            where: { id: summaryId },
+            data: {
+              summaryText: fixedData.summary,
+              processingStatus: 'COMPLETED_WITH_WARNINGS',
+              processingCompletedAt: new Date(),
+              isPartialResult: true,
+              processingTimeMs: Date.now() - startTime,
+              processingError: 'Fixed JSON response: ' + parsedResult.errors?.join('; '),
+              tokensUsed: inputTokens + outputTokens,
+              model: response.model,
+              cost,
+              attempts: response.executionMetadata?.attempts || 1
+            }
+          });
+        }
+        
         return {
-          summaryId,
+          summaryId: summaryId || undefined,
+          summary: fixedData.summary,
           summaryText: fixedData.summary,
           summaryJSON: fixedData,
+          keyPoints: fixedData.keyPoints || [],
           isPartial: true,
           parsingErrors: parsedResult.errors,
           duration: Date.now() - startTime,
           modelUsed: response.model,
+          model: response.model,
           inputTokens,
           outputTokens,
+          tokensUsed: inputTokens + outputTokens,
           cost,
+          processingTimeMs: Date.now() - startTime,
           attempts: response.executionMetadata?.attempts || 1
         };
       }
     } catch (error) {
-      componentLogger.error(`Error calling Claude API for filing ${filingId}, summary ${summaryId}: ${error instanceof Error ? error.message : String(error)} (filingType: ${filingRecordFromDB!.formType}, operationId: ${operationId})`);
+      componentLogger.error(`Error calling Claude API for ${filingId ? `filing ${filingId}` : 'direct summarization'}, ${summaryId ? `summary ${summaryId}` : ''}: ${error instanceof Error ? error.message : String(error)} (filingType: ${filingRecordFromDB.formType}, operationId: ${operationId})`);
       monitoring.incrementCounter('ai.summarization_error', 1);
       const isRetriable = error instanceof ApiError && error.isRetriable;
       const isRateLimit = error instanceof ApiError && error.code === ErrorCode.RATE_LIMITED;
-      if (!isRetriable || (error instanceof ApiError && error.code === ErrorCode.RETRY_EXHAUSTED)) {
+      
+      // Update the summary record if summaryId exists
+      if (summaryId && (!isRetriable || (error instanceof ApiError && error.code === ErrorCode.RETRY_EXHAUSTED))) {
         await prisma.summary.update({
           where: { id: summaryId },
           data: {
@@ -556,10 +600,11 @@ export async function summarizeFiling(options: SummarizationOptions): Promise<Su
           }
         });
       }
+      
       throw new SummarizationError(
         `Claude API error: ${error instanceof Error ? error.message : String(error)}`,
-        summaryId,
-        filingRecordFromDB!.formType,
+        summaryId || 'unknown',
+        filingRecordFromDB.formType,
         error instanceof ApiError ? error.code : 'AI_ERROR',
         isRetriable || isRateLimit,
         error instanceof ApiError ? error.code : 'ai_error'
@@ -571,7 +616,7 @@ export async function summarizeFiling(options: SummarizationOptions): Promise<Su
     }
     throw new SummarizationError(
       `Summarization failed: ${error instanceof Error ? error.message : String(error)}`,
-      summaryId,
+      summaryId || 'unknown',
       filingRecordFromDB?.formType || 'unknown',
       'SUMMARIZATION_FAILED',
       error instanceof ApiError && error.isRetriable,

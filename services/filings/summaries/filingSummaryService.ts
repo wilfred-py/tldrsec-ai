@@ -141,7 +141,7 @@ export async function getFilingSummary(
       // Set summarization options
       const options: SummarizationOptions = {
         maxRetries: 2,
-        model: 'claude-3-haiku-20240307',
+        model: 'claude-sonnet-4-20250514',
         metadata: {
           ticker: ticker,
           companyName: companyInfo.name || ticker,
