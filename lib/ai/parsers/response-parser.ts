@@ -428,12 +428,10 @@ function postProcessFilingData(data: any, filingType: SECFilingType = 'Generic')
       }
     }
     
-    // Ensure summary doesn't exceed database limits
-    const MAX_SUMMARY_LENGTH = 5000; // Reasonable limit for database storage
-    if (processed.summary.length > MAX_SUMMARY_LENGTH) {
-      processed.summary = processed.summary.substring(0, MAX_SUMMARY_LENGTH - 3) + '...';
-      logger.debug(`${filingType} post-processing: Truncated summary to ${MAX_SUMMARY_LENGTH} chars for database storage`);
-    }
+    // No longer truncating summaries to fixed length
+    // We'll store the full summary in the database
+    logger.debug(`${filingType} post-processing: Preserving full summary length of ${processed.summary.length} chars`);
+    
     
     // Form-specific post-processing to generate summary if missing
     if (!processed.summary) {

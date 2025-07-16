@@ -49,21 +49,21 @@ export async function findExistingSummary(ticker: string, formType: string): Pro
     // Convert to FilingSummaryResult format
     const result: FilingSummaryResult = {
       ticker: ticker,
-      companyName: tickerRecord.name || ticker,
+      companyName: tickerRecord.companyName || ticker,
       filingType: formType as FilingType,
       filingDate: summaryRecord.filingDate.toISOString(),
-      accessionNumber: summaryJSON.accessionNumber || '',
-      summaryText: summaryRecord.summaryText,
-      keyPoints: summaryJSON.keyPoints || [],
+      accessionNumber: summaryJSON?.accessionNumber || '',
+      summaryText: summaryRecord.summaryText || '',
+      keyPoints: summaryJSON?.keyPoints || [],
       url: summaryRecord.filingUrl,
-      model: summaryRecord.model,
-      tokensUsed: summaryJSON.tokensUsed,
-      inputTokens: summaryJSON.inputTokens,
-      outputTokens: summaryJSON.outputTokens,
-      cost: summaryJSON.cost,
-      processingStatus: summaryRecord.processingStatus,
-      processingTimeMs: summaryJSON.processingTimeMs,
-      failureReason: summaryJSON.failureReason
+      model: summaryRecord.model || undefined,
+      tokensUsed: summaryJSON?.tokensUsed,
+      inputTokens: summaryJSON?.inputTokens,
+      outputTokens: summaryJSON?.outputTokens,
+      cost: summaryJSON?.cost,
+      processingStatus: summaryRecord.processingStatus || undefined,
+      processingTimeMs: summaryJSON?.processingTimeMs,
+      failureReason: summaryJSON?.failureReason
     };
     
     console.log(`[DEBUG][FilingDatabase] Found existing summary for ${ticker} - ${formType}`);
@@ -115,12 +115,12 @@ export async function storeSummary(
           keyPoints: keyPoints,
           // Include detailed data for better caching
           parsedContent: metadata.content && typeof metadata.content === 'string' 
-            ? metadata.content.substring(0, 5000) 
-            : null, // Store first 5000 chars of parsed content
+            ? metadata.content 
+            : null, // Store full parsed content
           documentType: metadata.documentType || 'unknown',
           documentDescription: metadata.documentDescription || 'unknown',
           rawData: metadata.filingDetails 
-            ? JSON.stringify(metadata.filingDetails).substring(0, 5000) 
+            ? JSON.stringify(metadata.filingDetails) 
             : null,
           generatedAt: new Date().toISOString(),
           tokensUsed: metadata.tokensUsed,
@@ -167,14 +167,13 @@ export async function getFilingLogs(limit: number = 100): Promise<any[]> {
     return logs.map(log => ({
       id: log.id,
       ticker: log.ticker.symbol,
-      companyName: log.ticker.name,
+      companyName: log.ticker.companyName || log.ticker.symbol,
       filingType: log.filingType,
       filingDate: log.filingDate,
-      createdAt: log.createdAt,
+      createdAt: log.createdAt?.toISOString() || null,
       processingStatus: log.processingStatus,
       model: log.model,
       sentToUser: log.sentToUser,
-      sentAt: log.sentAt,
       url: log.filingUrl
     }));
   } catch (error) {
