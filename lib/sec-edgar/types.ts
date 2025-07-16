@@ -7,21 +7,23 @@ export type FilingType =
   // Current forms
   | '10-K' | '10-Q' | '8-K' | 'Form4' | '4' | 'DEFA14A' | 'SC 13D' | 'SC13D' | '144' | 'Form 144'
   // Annual reports
-  | '10-K/A' | '20-F' | '40-F' | 'N-CSR' | 'N-CSRS'
+  | '10-K/A' | '20-F' | '20-F/A' | '40-F' | 'N-CSR' | 'N-CSRS' | '11-K' | '11-K/A'
   // Quarterly reports
-  | '10-Q/A' | '6-K'
+  | '10-Q/A' | '6-K' | '6-K/A' | 'N-Q'
   // Registration statements
-  | 'S-1' | 'S-3' | 'S-4' | 'S-8' | 'F-1' | 'F-3' | 'F-4'
+  | 'S-1' | 'S-3' | 'S-4' | 'S-8' | 'S-11' | 'S-3ASR' | 'F-1' | 'F-3' | 'F-4'
   // Proxy materials
-  | 'DEF 14A' | 'PRE 14A' | 'DEF 14C' | 'PRE 14C'
+  | 'DEF 14A' | 'PRE 14A' | 'DEF 14C' | 'PRE 14C' | 'PX14A6G'
   // Beneficial ownership
-  | '13F' | '13F-HR' | '13F-NT' | 'SC 13G' | 'SC13G'
+  | '13F' | '13F-HR' | '13F-NT' | 'SC 13G' | 'SC13G' | 'SC 13G/A' | 'SC13G/A'
   // Insider trading
-  | '3' | 'Form3' | '5' | 'Form5'
+  | '3' | 'Form3' | '5' | 'Form5' | '3/A' | '4/A' | '5/A'
   // Investment company forms
   | 'N-1A' | 'N-2' | 'N-MFP' | 'N-PORT' | 'N-PX'
   // Other important forms
-  | 'ARS' | 'SD' | 'D' | 'POS AM' | '424B2' | '424B3' | '424B5' | '497' | 'FWP';
+  | 'ARS' | 'SD' | 'D' | 'POS AM' | '424B2' | '424B3' | '424B5' | '497' | 'FWP'
+  // Correspondence and miscellaneous
+  | 'CORRESP' | 'UPLOAD';
 
 // Basic filing metadata interface
 export interface FilingMetadata {

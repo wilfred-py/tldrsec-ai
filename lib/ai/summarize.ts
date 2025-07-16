@@ -21,8 +21,10 @@ import { ensureMinimumFields } from './parsers/response-fixer';
 
 /**
  * Process document content for summarization
+ * - Validates content before processing
  * - Checks if document needs chunking based on token count
  * - Either returns full document or processes it into chunks
+ * - For large documents, combines important sections from all chunks
  * 
  * @param content - The document content to process
  * @param filingType - The type of SEC filing
@@ -34,7 +36,30 @@ function processDocumentContent(content: string, filingType: SECFilingType, maxT
   isChunked: boolean;
   chunkCount?: number;
   estimatedTokens: number;
+  isMinimalContent?: boolean;
 } {
+  // Validate content first
+  if (!content || content.trim().length === 0) {
+    componentLogger.warn(`Empty content received for ${filingType} filing`);
+    return {
+      processedContent: '',
+      isChunked: false,
+      estimatedTokens: 0,
+      isMinimalContent: true
+    };
+  }
+  
+  // Check for minimal content (less than 500 characters)
+  if (content.trim().length < 500) {
+    componentLogger.warn(`Minimal content (${content.length} chars) received for ${filingType} filing`);
+    return {
+      processedContent: content,
+      isChunked: false,
+      estimatedTokens: estimateTokenCount(content),
+      isMinimalContent: true
+    };
+  }
+  
   // Estimate current token count
   const estimatedTokens = estimateTokenCount(content);
   
@@ -59,11 +84,162 @@ function processDocumentContent(content: string, filingType: SECFilingType, maxT
   // Get chunks using the appropriate strategy
   const chunks = splitDocumentIntoChunks(content, adjustedConfig);
   
-  // For now, we'll just use the first chunk which contains the most important content
-  // In a more advanced implementation, we would process each chunk separately
-  // and then combine the results
+  if (chunks.length === 0) {
+    componentLogger.warn(`Chunking resulted in 0 chunks for ${filingType} filing`);
+    return {
+      processedContent: content.substring(0, Math.min(content.length, 100000)), // Fallback to first 100k chars
+      isChunked: true,
+      chunkCount: 1,
+      estimatedTokens: Math.min(estimatedTokens, maxTokens * 0.85)
+    };
+  }
   
-  // Return the first chunk (most important content) and chunking info
+  // Enhanced approach: Process multiple chunks for large documents
+  // For filings with multiple chunks, combine the most important parts
+  if (chunks.length > 1) {
+    // Always include the first chunk as it typically contains the most important information
+    let combinedContent = chunks[0];
+    
+    // For specific filing types, extract and include key sections from other chunks
+    if (['10-K', '10-Q', '8-K', '20-F', '40-F', '10-K/A', '10-Q/A'].includes(filingType)) {
+      // For financial reports, look for risk factors, MD&A, and financial statements in other chunks
+      const keyPhrases = [
+        'Risk Factors', 'Item 1A', 'Item 7', 'Management Discussion', 
+        'Financial Statements', 'Consolidated Statements', 'Notes to', 
+        'Executive Summary', 'Business Overview'
+      ];
+      
+      // Extract key sections from other chunks
+      let keyContentFromOtherChunks = '';
+      
+      for (let i = 1; i < chunks.length; i++) {
+        const chunk = chunks[i];
+        
+        // Look for key sections in this chunk
+        for (const phrase of keyPhrases) {
+          const phraseIndex = chunk.indexOf(phrase);
+          if (phraseIndex >= 0) {
+            // Extract a reasonable portion around the key phrase (5000 chars)
+            const startPos = Math.max(0, phraseIndex - 500);
+            const endPos = Math.min(chunk.length, phraseIndex + 4500);
+            const section = chunk.substring(startPos, endPos);
+            
+            keyContentFromOtherChunks += `\n\n--- ${phrase} (from document section ${i+1}) ---\n${section}`;
+          }
+        }
+      }
+      
+      // Add key content if we found any, but respect token limits
+      if (keyContentFromOtherChunks) {
+        const firstChunkTokens = estimateTokenCount(combinedContent);
+        const keyContentTokens = estimateTokenCount(keyContentFromOtherChunks);
+        
+        // Only add if we have room within our token budget
+        if (firstChunkTokens + keyContentTokens <= maxTokens * 0.85) {
+          combinedContent += keyContentFromOtherChunks;
+        } else {
+          // If too large, truncate the key content
+          const availableTokens = maxTokens * 0.85 - firstChunkTokens;
+          const truncationRatio = availableTokens / keyContentTokens;
+          const truncatedLength = Math.floor(keyContentFromOtherChunks.length * truncationRatio);
+          
+          combinedContent += keyContentFromOtherChunks.substring(0, truncatedLength) + 
+            '\n\n[Additional content truncated due to token limits]';
+        }
+      }
+    } else if (['424B2', '424B3', '424B5', 'FWP'].includes(filingType)) {
+      // For prospectus filings, look for pricing, risk factors, and terms
+      const keyPhrases = [
+        'Pricing', 'Risk Factors', 'Terms', 'Maturity', 'Interest Rate', 
+        'Redemption', 'Offering', 'Underwriting'
+      ];
+      
+      // Similar extraction logic as above
+      let keyContentFromOtherChunks = '';
+      
+      for (let i = 1; i < chunks.length; i++) {
+        const chunk = chunks[i];
+        
+        for (const phrase of keyPhrases) {
+          const phraseIndex = chunk.indexOf(phrase);
+          if (phraseIndex >= 0) {
+            const startPos = Math.max(0, phraseIndex - 500);
+            const endPos = Math.min(chunk.length, phraseIndex + 4500);
+            const section = chunk.substring(startPos, endPos);
+            
+            keyContentFromOtherChunks += `\n\n--- ${phrase} (from document section ${i+1}) ---\n${section}`;
+          }
+        }
+      }
+      
+      // Add key content with token limit handling
+      if (keyContentFromOtherChunks) {
+        const firstChunkTokens = estimateTokenCount(combinedContent);
+        const keyContentTokens = estimateTokenCount(keyContentFromOtherChunks);
+        
+        if (firstChunkTokens + keyContentTokens <= maxTokens * 0.85) {
+          combinedContent += keyContentFromOtherChunks;
+        } else {
+          const availableTokens = maxTokens * 0.85 - firstChunkTokens;
+          const truncationRatio = availableTokens / keyContentTokens;
+          const truncatedLength = Math.floor(keyContentFromOtherChunks.length * truncationRatio);
+          
+          combinedContent += keyContentFromOtherChunks.substring(0, truncatedLength) + 
+            '\n\n[Additional content truncated due to token limits]';
+        }
+      }
+    } else if (['DEF 14A', 'DEFA14A', 'PRE 14A', 'PX14A6G'].includes(filingType)) {
+      // For proxy statements, look for proposals, compensation, and governance
+      const keyPhrases = [
+        'Proposal', 'Shareholder', 'Executive Compensation', 'Board', 
+        'Director', 'Governance', 'Vote', 'Recommendation'
+      ];
+      
+      // Extract key sections
+      let keyContentFromOtherChunks = '';
+      
+      for (let i = 1; i < chunks.length; i++) {
+        const chunk = chunks[i];
+        
+        for (const phrase of keyPhrases) {
+          const phraseIndex = chunk.indexOf(phrase);
+          if (phraseIndex >= 0) {
+            const startPos = Math.max(0, phraseIndex - 500);
+            const endPos = Math.min(chunk.length, phraseIndex + 4500);
+            const section = chunk.substring(startPos, endPos);
+            
+            keyContentFromOtherChunks += `\n\n--- ${phrase} (from document section ${i+1}) ---\n${section}`;
+          }
+        }
+      }
+      
+      // Add key content with token limit handling
+      if (keyContentFromOtherChunks) {
+        const firstChunkTokens = estimateTokenCount(combinedContent);
+        const keyContentTokens = estimateTokenCount(keyContentFromOtherChunks);
+        
+        if (firstChunkTokens + keyContentTokens <= maxTokens * 0.85) {
+          combinedContent += keyContentFromOtherChunks;
+        } else {
+          const availableTokens = maxTokens * 0.85 - firstChunkTokens;
+          const truncationRatio = availableTokens / keyContentTokens;
+          const truncatedLength = Math.floor(keyContentFromOtherChunks.length * truncationRatio);
+          
+          combinedContent += keyContentFromOtherChunks.substring(0, truncatedLength) + 
+            '\n\n[Additional content truncated due to token limits]';
+        }
+      }
+    }
+    
+    return {
+      processedContent: combinedContent,
+      isChunked: true,
+      chunkCount: chunks.length,
+      estimatedTokens: estimateTokenCount(combinedContent)
+    };
+  }
+  
+  // For single chunk documents, return that chunk
   return {
     processedContent: chunks[0],
     isChunked: true,
@@ -196,7 +372,7 @@ const componentLogger = logger.child('claude-summarizer');
 /**
  * Get the appropriate prompt for a filing type with context
  */
-function getPromptForFilingType(filingType: SECFilingType, context: { ticker?: string; companyName?: string }) {
+function getPromptForFilingType(filingType: SECFilingType, context: { ticker?: string; companyName?: string; accessionNumber?: string }) {
   // Use the filing-prompts module to generate an appropriate prompt
   return {
     getFullPrompt: (content: string) => {
@@ -205,13 +381,65 @@ function getPromptForFilingType(filingType: SECFilingType, context: { ticker?: s
         content,
         companyName: context.companyName || 'Unknown Company',
         ticker: context.ticker || 'Unknown',
-        filingDate: new Date().toISOString().split('T')[0]
+        filingDate: new Date().toISOString().split('T')[0],
+        // Include accession number if available
+        accessionNumber: context.accessionNumber
       });
       
       // Return the user message content as the full prompt
       return messages[0].content;
     }
   };
+}
+
+/**
+ * Generate a prompt for minimal content cases using available metadata
+ * This is used when the filing content is empty, minimal, or couldn't be extracted properly
+ * @param filingRecord - The filing record with metadata
+ * @returns A prompt string focused on metadata
+ */
+function generateMinimalContentPrompt(filingRecord: {
+  id: string;
+  formType: string;
+  companyName: string;
+  ticker?: { symbol?: string };
+  accessionNumber?: string;
+  rawContent?: string;
+}): string {
+  const ticker = filingRecord.ticker?.symbol || 'UNKNOWN';
+  const formType = filingRecord.formType || 'UNKNOWN';
+  const companyName = filingRecord.companyName || 'Unknown Company';
+  const accessionNumber = filingRecord.accessionNumber || 'Unknown';
+  const filingId = filingRecord.id;
+  
+  // Use any available raw content, even if minimal
+  const minimalContent = filingRecord.rawContent || '';
+  
+  // Build a metadata-focused prompt
+  return `
+# SEC Filing Metadata Summary Request
+
+I need to generate a summary for an SEC filing with minimal or no extractable content.
+
+## Available Metadata:
+- Company: ${companyName}
+- Ticker: ${ticker}
+- Form Type: ${formType}
+- Accession Number: ${accessionNumber}
+- Filing ID: ${filingId}
+
+## Limited Available Content:
+${minimalContent.substring(0, 1000)}${minimalContent.length > 1000 ? '...[truncated]' : ''}
+
+## Instructions:
+1. Based on the form type and company information, provide a general description of what this type of filing typically contains.
+2. Explain the purpose and significance of this form type for investors.
+3. Note that the actual content could not be fully extracted or was minimal.
+4. If possible, extract any meaningful information from the limited content provided.
+5. Format your response as a proper summary that acknowledges the limited information available.
+
+Please provide the best possible summary given these constraints.
+`;
 }
 
 /**
@@ -384,10 +612,35 @@ export async function summarizeFiling(content: string, options: SummarizationOpt
     
     // Process document content - handle large documents appropriately
     const processedDoc = processDocumentContent(content, filingRecordFromDB.formType as SECFilingType);
-    if (processedDoc.isChunked) {
-      componentLogger.info(`Document was chunked for processing. Using first chunk of ${processedDoc.chunkCount} chunks. Token estimate: ${processedDoc.estimatedTokens}`);
+    
+    // Handle minimal or empty content cases
+    if (processedDoc.isMinimalContent) {
+      componentLogger.warn(`Minimal or empty content detected for ${filingId || 'direct'} (${filingRecordFromDB.formType}). Using metadata-based fallback.`);
+      monitoring.incrementCounter('ai.minimal_content_detected', 1);
+      
+      try {
+        // For minimal content, we'll create a special prompt that focuses on metadata
+        const minimalContentPrompt = generateMinimalContentPrompt(filingRecordFromDB);
+        
+        // Update the processed content with our minimal content prompt
+        processedDoc.processedContent = minimalContentPrompt;
+        
+        // Record the specific filing type for minimal content cases to track patterns
+        monitoring.incrementCounter(`ai.minimal_content_filing_type.${filingRecordFromDB.formType}`, 1);
+      } catch (error) {
+        componentLogger.error(`Error generating minimal content prompt: ${error instanceof Error ? error.message : String(error)}`);
+        monitoring.incrementCounter('ai.minimal_content_error', 1);
+        
+        // Provide a basic fallback prompt if the minimal content prompt generation fails
+        processedDoc.processedContent = `SEC Filing for ${filingRecordFromDB.companyName} (${filingRecordFromDB.ticker?.symbol || 'Unknown'}), Form Type: ${filingRecordFromDB.formType}. Content could not be extracted properly.`;
+      }
+    } else if (processedDoc.isChunked) {
+      componentLogger.info(`Document was chunked for processing. Using optimized content from ${processedDoc.chunkCount} chunks. Token estimate: ${processedDoc.estimatedTokens}`);
       monitoring.incrementCounter('ai.document_chunked', 1);
       monitoring.recordMetric('ai.document_chunks', processedDoc.chunkCount ? processedDoc.chunkCount : 1);
+      
+      // Record the specific filing type for chunked content to track patterns
+      monitoring.incrementCounter(`ai.chunked_filing_type.${filingRecordFromDB.formType}`, 1);
     }
     
     // Use the processed content for the prompt
@@ -398,23 +651,31 @@ export async function summarizeFiling(content: string, options: SummarizationOpt
       filingRecordFromDB.formType as SECFilingType, 
       { 
         ticker: filingRecordFromDB.ticker?.symbol, 
-        companyName: filingRecordFromDB.companyName 
+        companyName: filingRecordFromDB.companyName,
+        // Add accession number if available
+        accessionNumber: filingRecordFromDB.accessionNumber
       }
     );
     
     // Check if we need to chunk the document due to token limits
     const estimatedTokens = estimateTokenCount(processedContent);
-    const maxTokenLimit = 150000; // Claude's max token limit is 200k, but leave buffer for prompt
+    const maxTokenLimit = 180000; // Claude Sonnet 4's max token limit is 200k, but leave buffer for prompt
     
     let prompt: string;
     let isChunked = false;
     
-    if (estimatedTokens > maxTokenLimit) {
-      // Document is too large, we need to truncate or chunk it
+    // Handle minimal content case specially
+    if (processedDoc.isMinimalContent) {
+      // For minimal content, we already generated a special prompt in processedContent
+      prompt = processedContent;
+      componentLogger.info(`Using minimal content prompt for filing ${filingId || 'direct'} (${filingRecordFromDB.formType})`);
+      monitoring.incrementCounter('ai.minimal_content_prompt_used', 1);
+    } else if (estimatedTokens > maxTokenLimit) {
+      // Document is too large, we need to truncate it further
       componentLogger.warn(`Document for filing ${filingId || 'direct'} exceeds token limit (${estimatedTokens} tokens). Truncating to ${maxTokenLimit} tokens.`);
       monitoring.incrementCounter('ai.document_truncated', 1);
       
-      // For now, we'll use a simple truncation approach
+      // Use the existing truncation function since we've already done smart processing in processDocumentContent
       const truncatedContent = truncateDocumentContent(processedContent, maxTokenLimit);
       prompt = promptGenerator.getFullPrompt(truncatedContent);
       isChunked = true;

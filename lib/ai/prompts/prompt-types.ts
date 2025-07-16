@@ -92,6 +92,7 @@ export interface PromptRequest {
   section?: SECFilingSection;
   fiscalYear?: string;
   fiscalQuarter?: string;
+  accessionNumber?: string;
   promptConfig?: Partial<ClaudeRequestOptions>;
   contextConfig?: Partial<ContextWindowConfig>;
 }
