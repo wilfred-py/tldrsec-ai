@@ -476,25 +476,28 @@ export class EnhancedClaudeClient extends EventEmitter {
    * @returns Pricing information
    */
   private getModelPricing(model: string): { inputPrice: number; outputPrice: number } {
-    // Pricing per 1000 tokens as of July 2025
-    switch (model) {
-      case 'claude-sonnet-4-20250514':
-        return { inputPrice: 0.003, outputPrice: 0.015 };
-      case 'claude-3-opus-20240229': // Legacy model pricing kept for backward compatibility
-        return { inputPrice: 0.015, outputPrice: 0.075 };
-      case 'claude-3-sonnet-20240229':
-        return { inputPrice: 0.003, outputPrice: 0.015 };
-      case 'claude-3-haiku-20240307':
-        return { inputPrice: 0.00025, outputPrice: 0.00125 };
-      case 'claude-2.1':
-        return { inputPrice: 0.008, outputPrice: 0.024 };
-      case 'claude-2.0':
-        return { inputPrice: 0.008, outputPrice: 0.024 };
-      case 'claude-instant-1.2':
-        return { inputPrice: 0.0008, outputPrice: 0.0024 };
-      default:
-        return { inputPrice: 0.01, outputPrice: 0.03 };
+    interface ModelPricing {
+      inputPrice: number;
+      outputPrice: number;
     }
+
+    const defaultPricing: ModelPricing = {
+      inputPrice: 0.003, // $0.003 per 1000 tokens
+      outputPrice: 0.015 // $0.015 per 1000 tokens
+    };
+    
+    const pricingMap: Record<string, ModelPricing> = {
+      'claude-3-opus-20240229': { inputPrice: 0.015, outputPrice: 0.075 },
+      'claude-3-sonnet-20240229': { inputPrice: 0.003, outputPrice: 0.015 },
+      'claude-3-haiku-20240307': { inputPrice: 0.00025, outputPrice: 0.00125 },
+      'claude-2.1': { inputPrice: 0.008, outputPrice: 0.024 },
+      'claude-2.0': { inputPrice: 0.008, outputPrice: 0.024 },
+      'claude-instant-1.2': { inputPrice: 0.0008, outputPrice: 0.0024 },
+      'claude-sonnet-4-20250514': { inputPrice: 0.003, outputPrice: 0.015 }
+    };
+    
+    const matchingModel = Object.keys(pricingMap).find(key => model.includes(key));
+    return matchingModel ? pricingMap[matchingModel] : defaultPricing;
   }
   
   /**
