@@ -17,7 +17,7 @@ import { logger } from '../logging';
 import { monitoring } from '../monitoring';
 import { ApiError, ErrorCode } from '../error-handling';
 import { prisma } from '../db/prisma';
-import { ensureMinimumFields } from './parsers/response-fixer';
+import { ensureMinimumFields, validateRequiredFields } from './parsers/response-fixer';
 
 /**
  * Process document content for summarization
@@ -753,12 +753,22 @@ export async function summarizeFiling(content: string, options: SummarizationOpt
       
       // Parse the response
       const parsingStartTime = Date.now();
-      const parsedResult = parseResponse(summaryText);
+      const parsedResult = parseResponse(summaryText, filingRecordFromDB.formType as SECFilingType, {
+        normalize: true,
+        collectMetrics: true,
+        maxAttempts: 3 // Try multiple parsing attempts
+      });
       const parsingDuration = Date.now() - parsingStartTime;
       
-      if (parsedResult.success && parsedResult.data) {
+      // Validate that the parsed data has all required fields
+      const validationResult = validateRequiredFields(
+        parsedResult.data || {}, 
+        filingRecordFromDB.formType as SECFilingType
+      );
+      
+      if (parsedResult.success && parsedResult.data && validationResult.valid) {
         componentLogger.info(`Successfully parsed response for ${summaryId ? `summaryId=${summaryId}` : 'direct summarization'}, filingType=${filingRecordFromDB.formType}`);
-        monitoring.recordTiming('ai.parsing_duration', parsingDuration);
+        monitoring.recordTiming('ai.parsing_duration', Date.now() - parsingStartTime);
         monitoring.incrementCounter('ai.summarization_parsing_success', 1);
         
         // Update the summary record if summaryId exists
@@ -800,10 +810,49 @@ export async function summarizeFiling(content: string, options: SummarizationOpt
         componentLogger.warn(`Failed to parse valid JSON from response for ${summaryId ? `summaryId=${summaryId}` : 'direct summarization'}, filingType=${filingRecordFromDB.formType}, errors=${parsedResult.errors?.join('; ')}, operationId=${operationId}`);
         monitoring.incrementCounter('ai.summarization_parsing_error', 1);
         
-        // Use response-fixer to ensure minimum fields are present
-        const companyName = filingRecordFromDB.companyName || 
+        // First try to fix the JSON by attempting to extract valid fields
+        let fixedData: Record<string, any> = {};
+        let validationResult = { valid: false, missingFields: [] as string[] };
+        
+        // Try to extract any valid JSON from the response
+        try {
+          // Look for JSON-like structures in the response
+          const jsonPattern = /{[\s\S]*?}/g;
+          const jsonMatches = summaryText.match(jsonPattern);
+          
+          if (jsonMatches) {
+            // Try each match to see if any can be parsed as JSON
+            for (const match of jsonMatches) {
+              try {
+                const parsed = JSON.parse(match);
+                // Check if this parsed object has the required fields
+                validationResult = validateRequiredFields(parsed, filingRecordFromDB.formType as SECFilingType);
+                if (validationResult.valid) {
+                  fixedData = parsed;
+                  componentLogger.info(`Found valid JSON structure in response for ${filingRecordFromDB.formType}`);
+                  break;
+                } else {
+                  // Merge any valid fields we found
+                  Object.assign(fixedData, parsed);
+                  componentLogger.debug(`Found partial JSON structure, missing fields: ${validationResult.missingFields.join(', ')}`);
+                }
+              } catch {
+                // Continue to the next match if this one fails
+                continue;
+              }
+            }
+          }
+        } catch (error) {
+          componentLogger.error(`Error attempting to extract JSON: ${error instanceof Error ? error.message : String(error)}`);
+        }
+        
+        // If we couldn't extract valid JSON or it's missing required fields, use response-fixer
+        if (!validationResult.valid) {
+          const companyName = filingRecordFromDB.companyName || 
                            (filingRecordFromDB.ticker?.symbol ? `${filingRecordFromDB.ticker.symbol} Company` : 'Unknown Company');
-        const fixedData = ensureMinimumFields(summaryText, filingRecordFromDB.formType as SECFilingType, companyName);
+          fixedData = ensureMinimumFields(summaryText, filingRecordFromDB.formType as SECFilingType, companyName);
+          componentLogger.info(`Used fallback data generation for ${filingRecordFromDB.formType}`);
+        }
         
         // Update the summary record with the fixed data if summaryId exists
         if (summaryId) {
