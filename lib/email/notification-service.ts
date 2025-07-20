@@ -3,14 +3,13 @@
  * 
  * Handles sending notifications for SEC filings based on user preferences.
  * Supports immediate notifications and daily digests.
+ * 
+ * Refactored to break circular dependencies
  */
 
-import { EventEmitter } from 'events';
 import { v4 as uuidv4 } from 'uuid';
-import { sendEmail } from './index';
-import { EmailType, EmailMessage } from './types';
+import { EmailType } from './types';
 import { logger } from '../logging';
-import { ResendClient } from './resend-client';
 import { monitoring } from '../monitoring';
 import { JobQueueService, JobType } from '../job-queue';
 import { 
@@ -18,63 +17,43 @@ import {
   FilingTemplateData, 
   BaseTemplateData 
 } from './templates';
-// Import prisma with dynamic import to avoid initialization issues
-import { prisma } from '@/lib/db/prisma';
+// Import prisma with lazy loading pattern to avoid initialization issues
+import { getPrismaClient } from '../db/prisma';
 
-// Notification events
-export enum NotificationEventType {
-  NEW_FILING = 'new_filing',
-  FILING_UPDATE = 'filing_update',
-  SUMMARY_READY = 'summary_ready'
-}
+// Import interfaces from notification-types to break circular dependencies
+import { 
+  NotificationEventType,
+  NotificationPreference,
+  FilingNotificationPayload,
+  UserNotificationPreferences,
+  notificationEvents,
+  EmailSender,
+  NotificationServiceInterface
+} from './notification-types';
 
-// Email notification preferences
-export enum NotificationPreference {
-  IMMEDIATE = 'immediate',
-  DAILY = 'daily',
-  NONE = 'none'
-}
-
-// Filing notification payload
-export interface FilingNotificationPayload {
-  filingId: string;
-  ticker: string;
-  companyName: string;
-  formType: string;
-  filingDate: Date;
-  description?: string;
-  summaryId?: string;
-  summaryText?: string;
-  summaryData?: any; // JSON data from the summary
-  priorityLevel?: 'high' | 'medium' | 'low';
-  url?: string;
-}
-
-// User notification preferences type
-export interface UserNotificationPreferences {
-  userId: string;
-  email: string;
-  emailNotificationPreference: NotificationPreference;
-  watchedTickers?: string[]; // Tickers the user is specifically watching
-  watchedFormTypes?: string[]; // Form types the user wants to be notified about
-}
-
-/**
- * Global notification event emitter
- */
-export const notificationEvents = new EventEmitter();
+// Import from email-core to avoid circular dependency
+import { emailClient, sendEmail } from './email-core';
 
 /**
  * Email Notification Service
  * Handles sending notifications about filings to users
  */
-export class NotificationService {
+export class NotificationService implements NotificationServiceInterface {
   private static instance: NotificationService;
-  private emailClient: any;
+  private emailClient: EmailSender;
+  private emailSender: EmailSender;
   
-  constructor(customEmailClient?: any) {
+  constructor(customEmailClient?: EmailSender) {
     // Use provided client or create a new one
-    this.emailClient = customEmailClient || new ResendClient(process.env.RESEND_API_KEY);
+    this.emailClient = customEmailClient || emailClient;
+    
+    // Set up email sender with lazy loading to break circular dependency
+    this.emailSender = {
+      sendEmail: async (message, options = {}) => {
+        // Use the sendEmail function from email-core to avoid circular dependency
+        return sendEmail(message, options);
+      }
+    };
     
     // Set up event listeners
     this.setupEventListeners();
@@ -119,7 +98,7 @@ export class NotificationService {
    * Handle new filing event
    * @param payload Filing notification payload
    */
-  private async handleNewFilingEvent(payload: FilingNotificationPayload): Promise<void> {
+  public async handleNewFilingEvent(payload: FilingNotificationPayload): Promise<void> {
     try {
       logger.info(`Processing new filing notification for ${payload.ticker} - ${payload.formType}`, { 
         filingId: payload.filingId,
@@ -139,7 +118,10 @@ export class NotificationService {
       
       monitoring.incrementCounter('notification.event.new_filing', 1);
     } catch (error) {
-      logger.error('Error handling new filing event', error, { filingId: payload.filingId });
+      logger.error('Error handling new filing event', { 
+        error: error instanceof Error ? error.message : String(error),
+        filingId: payload.filingId 
+      });
       monitoring.incrementCounter('notification.error.new_filing', 1);
     }
   }
@@ -148,7 +130,7 @@ export class NotificationService {
    * Handle filing update event
    * @param payload Filing notification payload
    */
-  private async handleFilingUpdateEvent(payload: FilingNotificationPayload): Promise<void> {
+  public async handleFilingUpdateEvent(payload: FilingNotificationPayload): Promise<void> {
     try {
       logger.info(`Processing filing update notification for ${payload.ticker} - ${payload.formType}`, { 
         filingId: payload.filingId,
@@ -168,7 +150,10 @@ export class NotificationService {
       
       monitoring.incrementCounter('notification.event.filing_update', 1);
     } catch (error) {
-      logger.error('Error handling filing update event', error, { filingId: payload.filingId });
+      logger.error('Error handling filing update event', { 
+        error: error instanceof Error ? error.message : String(error),
+        filingId: payload.filingId 
+      });
       monitoring.incrementCounter('notification.error.filing_update', 1);
     }
   }
@@ -177,7 +162,7 @@ export class NotificationService {
    * Handle summary ready event
    * @param payload Filing notification payload with summary
    */
-  private async handleSummaryReadyEvent(payload: FilingNotificationPayload): Promise<void> {
+  public async handleSummaryReadyEvent(payload: FilingNotificationPayload): Promise<void> {
     try {
       logger.info(`Processing summary ready notification for ${payload.ticker} - ${payload.formType}`, { 
         filingId: payload.filingId,
@@ -198,7 +183,8 @@ export class NotificationService {
       
       monitoring.incrementCounter('notification.event.summary_ready', 1);
     } catch (error) {
-      logger.error('Error handling summary ready event', error, { 
+      logger.error('Error handling summary ready event', {
+        error: error instanceof Error ? error.message : String(error),
         filingId: payload.filingId,
         summaryId: payload.summaryId
       });
@@ -290,7 +276,8 @@ export class NotificationService {
         failed
       });
     } catch (error) {
-      logger.error('Error sending immediate notifications', error, { 
+      logger.error('Error sending immediate notifications', { 
+        error: error instanceof Error ? error.message : String(error),
         filingId: payload.filingId, 
         ticker: payload.ticker
       });
@@ -313,6 +300,7 @@ export class NotificationService {
       
       // Get users who have immediate notification preference
       // Using new preference structure with JSON preferences field
+      const prisma = getPrismaClient();
       const users = await prisma.user.findMany({
         where: {
           // emailVerified removed - field no longer in schema
@@ -344,6 +332,7 @@ export class NotificationService {
       
       for (const user of users) {
         // Get tickers for this user
+        const prisma = getPrismaClient();
         const tickers = await prisma.ticker.findMany({
           where: { userId: user.id },
           select: { symbol: true }
@@ -423,7 +412,8 @@ export class NotificationService {
           };
         });
     } catch (error) {
-      logger.error('Error getting notification recipients', error, {
+      logger.error('Error getting notification recipients', {
+        error: error instanceof Error ? error.message : String(error),
         filingId: payload.filingId,
         ticker: payload.ticker
       });
@@ -441,23 +431,21 @@ export class NotificationService {
     payload: FilingNotificationPayload
   ): Promise<void> {
     try {
-      // Prepare email content
+      logger.info(`Sending immediate notification to ${recipient.email} for ${payload.ticker} - ${payload.formType}`);
+      
+      // Generate notification content
+      const { html, text } = await this.generateNotificationContent(payload);
+      
+      // Get subject line
       const subject = this.getNotificationSubject(payload);
       
-      // Get email content
-      const { html, text } = this.generateNotificationContent(payload);
-      
-      // Prepare email message
-      const message: EmailMessage = {
+      // Send the email using the injected email sender
+      const result = await this.emailSender.sendEmail({
         to: recipient.email,
         subject,
         html,
         text,
-        tags: [
-          'type:immediate',
-          `ticker:${payload.ticker}`,
-          `form:${payload.formType}`
-        ],
+        tags: ['type:filing_notification', `ticker:${payload.ticker}`, `form:${payload.formType}`],
         metadata: {
           userId: recipient.userId,
           type: 'immediate',
@@ -467,10 +455,7 @@ export class NotificationService {
           filingId: payload.filingId,
           formType: payload.formType
         }
-      };
-      
-      // Send email
-      const result = await sendEmail(message);
+      });
       
       if (!result.success) {
         throw new Error(`Failed to send notification: ${result.error?.message}`);
@@ -501,7 +486,8 @@ export class NotificationService {
       
       // TODO: Update this to use the appropriate model for tracking sent notifications
     } catch (error) {
-      logger.error(`Failed to send notification to ${recipient.email}`, error, {
+      logger.error(`Failed to send notification to ${recipient.email}`, {
+        error: error instanceof Error ? error.message : String(error),
         userId: recipient.userId,
         filingId: payload.filingId
       });
@@ -527,9 +513,9 @@ export class NotificationService {
    * @param payload Filing notification payload
    * @returns HTML and text content
    */
-  private generateNotificationContent(
+  private async generateNotificationContent(
     payload: FilingNotificationPayload
-  ): { html: string, text: string } {
+  ): Promise<{ html: string, text: string }> {
     try {
       // Log that we're using the template system
       logger.debug('Generating email content using template system', {
@@ -567,7 +553,10 @@ export class NotificationService {
         filing: filingData
       });
     } catch (error) {
-      logger.error('Error generating notification content using templates', error);
+      logger.error('Error generating notification content using templates', {
+        error: error instanceof Error ? error.message : String(error),
+        filingId: payload.filingId
+      });
       
       // Fallback to simple content if template generation fails
       return this.generateSimpleNotificationContent(payload);

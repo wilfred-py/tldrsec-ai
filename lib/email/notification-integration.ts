@@ -3,24 +3,38 @@
  * 
  * Connects the SEC Edgar filing system with the notification system,
  * triggering events when new filings are created or updated.
+ * 
+ * Refactored to break circular dependencies
  */
 
 import { ParsedFiling } from '../sec-edgar/types';
 import { 
   notificationEvents, 
   NotificationEventType,
-  FilingNotificationPayload
-} from './notification-service';
-import { notificationProcessor } from './notification-processor';
+  FilingNotificationPayload,
+  NotificationIntegrationInterface
+} from './notification-types';
 import { logger } from '../logging';
 import { monitoring } from '../monitoring';
+
+// Use lazy loading for notification processor to break circular dependency
+let notificationProcessorInstance: any = null;
+
+const getNotificationProcessor = async () => {
+  if (!notificationProcessorInstance) {
+    const { notificationProcessor } = await import('./notification-processor');
+    notificationProcessorInstance = notificationProcessor;
+  }
+  return notificationProcessorInstance;
+};
 
 /**
  * Initialize notification integration with the filing system
  */
-export function initNotificationIntegration(): void {
-  // Start the notification processor
-  notificationProcessor.start();
+export async function initNotificationIntegration(): Promise<void> {
+  // Start the notification processor using lazy loading
+  const processor = await getNotificationProcessor();
+  processor.start();
   
   logger.info('Notification integration initialized');
 }
@@ -44,7 +58,8 @@ export function notifyNewFiling(filing: ParsedFiling): void {
     // Emit event
     notificationEvents.emit(NotificationEventType.NEW_FILING, payload);
   } catch (error) {
-    logger.error('Error triggering new filing notification', error, {
+    logger.error('Error triggering new filing notification', {
+      error: error instanceof Error ? error.message : String(error),
       filingId: filing.id,
       ticker: filing.ticker
     });
@@ -71,7 +86,8 @@ export function notifyFilingUpdate(filing: ParsedFiling): void {
     // Emit event
     notificationEvents.emit(NotificationEventType.FILING_UPDATE, payload);
   } catch (error) {
-    logger.error('Error triggering filing update notification', error, {
+    logger.error('Error triggering filing update notification', {
+      error: error instanceof Error ? error.message : String(error),
       filingId: filing.id,
       ticker: filing.ticker
     });
@@ -107,7 +123,8 @@ export function notifySummaryReady(
     // Emit event
     notificationEvents.emit(NotificationEventType.SUMMARY_READY, payload);
   } catch (error) {
-    logger.error('Error triggering summary ready notification', error, {
+    logger.error('Error triggering summary ready notification', {
+      error: error instanceof Error ? error.message : String(error),
       filingId: filing.id,
       summaryId,
       ticker: filing.ticker
@@ -136,15 +153,28 @@ function convertFilingToPayload(filing: ParsedFiling): FilingNotificationPayload
 /**
  * Stop the notification integration
  */
-export function stopNotificationIntegration(): void {
-  // Stop the notification processor
-  notificationProcessor.stop();
+export async function stopNotificationIntegration(): Promise<void> {
+  // Stop the notification processor using lazy loading
+  const processor = await getNotificationProcessor();
+  processor.stop();
   
   logger.info('Notification integration stopped');
 }
 
-// Export integration components
-export {
-  notificationEvents,
-  notificationProcessor
-}; 
+// Create and export the notification integration singleton
+class NotificationIntegration implements NotificationIntegrationInterface {
+  async sendNotification(payload: any): Promise<void> {
+    const processor = await getNotificationProcessor();
+    return processor.processNotification(payload);
+  }
+  
+  registerHandler(handler: (payload: any) => Promise<void>): void {
+    // Implementation for registering custom handlers
+    notificationEvents.on('custom_notification', handler);
+  }
+}
+
+export const notificationIntegration = new NotificationIntegration();
+
+// Export notification events
+export { notificationEvents };
