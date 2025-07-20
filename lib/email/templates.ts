@@ -7,7 +7,8 @@
 
 import { EmailType } from './types';
 import { renderAsync } from '@react-email/render';
-import SECFilingEmailTemplate from '../../components/email/templates/SECFilingEmailTemplate';
+import * as SECFilingEmailTemplate from '../../components/email/templates/SECFilingEmailTemplate';
+const { default: SECFilingEmailTemplateComponent } = SECFilingEmailTemplate;
 
 // Helper function to generate plain text version of email
 function generatePlainTextEmail(filings: any[], errors: any[]) {
@@ -713,7 +714,7 @@ export async function getEmailTemplate(
 ): Promise<{ html: string; text: string }> {
   switch (templateType) {
     case EmailType.IMMEDIATE: {
-      const html = await renderAsync(SECFilingEmailTemplate({ filing: data.filing }));
+      const html = await renderAsync(SECFilingEmailTemplateComponent({ filing: data.filing }));
       return {
         html,
         text: generatePlainTextEmail([data.filing], [])
@@ -724,7 +725,7 @@ export async function getEmailTemplate(
     case EmailType.WELCOME:
       return welcomeTemplate(data);
     case EmailType.FORM4: {
-      const html = await renderAsync(SECFilingEmailTemplate({ filing: data.filing }));
+      const html = await renderAsync(SECFilingEmailTemplateComponent({ filing: data.filing }));
       return {
         html,
         text: generatePlainTextEmail([data.filing], [])

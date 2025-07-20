@@ -41,3 +41,31 @@ if (process.env.NODE_ENV === 'production') {
 
 // Export the singleton instance
 export { prisma }
+
+/**
+ * Get the Prisma client instance with lazy loading pattern
+ * This prevents build-time errors when the client hasn't been generated yet
+ * @returns PrismaClient instance
+ */
+export function getPrismaClient(): PrismaClient {
+  if (!prisma) {
+    try {
+      if (process.env.NODE_ENV === 'production') {
+        prisma = new PrismaClient({
+          log: ['error', 'warn']
+        })
+      } else {
+        if (!global.prisma) {
+          global.prisma = new PrismaClient({
+            log: ['error', 'warn']
+          })
+        }
+        prisma = global.prisma
+      }
+    } catch (error) {
+      console.error(`Failed to initialize Prisma client: ${error instanceof Error ? error.message : String(error)}`);
+      throw error;
+    }
+  }
+  return prisma;
+}

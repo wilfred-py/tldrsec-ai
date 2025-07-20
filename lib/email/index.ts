@@ -2,43 +2,43 @@
  * Email client module
  * 
  * Provides functionality for sending emails
+ * Refactored to break circular dependencies
  */
 
-import { ResendClient } from './resend-client';
-import { EmailMessage, EmailSendResult } from './types';
-import { resendConfig } from './config';
+// Import core functionality from email-core.ts
+import { emailClient, sendEmail, ResendClient } from './email-core';
 
-// Create the default client with API key from environment
-const RESEND_API_KEY = process.env.RESEND_API_KEY;
-
-// Verify if we have a Resend API key
-if (!RESEND_API_KEY) {
-  console.warn('RESEND_API_KEY is not set in environment variables. Email sending will not work.');
-} else {
-  console.log('Resend client initialized with API key');
-}
-
-// Create the client with the API key
-export const emailClient = new ResendClient(RESEND_API_KEY);
+// Re-export core functionality
+export { emailClient, sendEmail, ResendClient };
 
 // Re-export types
 export * from './types';
 export { resendConfig } from './config';
 
-// Export notification components
-export * from './notification-service';
-export * from './notification-processor';
-export * from './notification-integration';
+// Export notification types to avoid circular dependencies
+export type {
+  FilingNotificationPayload,
+  UserNotificationPreferences
+} from './notification-types';
 
-/**
- * Send an email using the default client
- */
-export async function sendEmail(
-  message: EmailMessage, 
-  options = {}
-): Promise<EmailSendResult> {
-  return emailClient.sendEmail(message, options);
-}
+export {
+  NotificationEventType,
+  NotificationPreference,
+  notificationEvents
+} from './notification-types';
 
-// Export the ResendClient class
-export { ResendClient }; 
+// Use lazy loading for notification components to break circular dependencies
+export const getNotificationService = async () => {
+  const { notificationService } = await import('./notification-service');
+  return notificationService;
+};
+
+export const getNotificationProcessor = async () => {
+  const { notificationProcessor } = await import('./notification-processor');
+  return notificationProcessor;
+};
+
+export const getNotificationIntegration = async () => {
+  const { notificationIntegration } = await import('./notification-integration');
+  return notificationIntegration;
+};
