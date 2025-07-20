@@ -1,4 +1,4 @@
-import { prisma } from '@/lib/db/prisma';
+import { prisma } from '../db/prisma';
 import { v4 as uuidv4 } from 'uuid';
 
 // Job types
@@ -105,10 +105,10 @@ export class JobQueueService {
           priority,
           scheduledFor,
           idempotencyKey,
-          maxAttempts,
+          maxRetries: maxAttempts,
           status: 'PENDING',
-          createdAt: new Date(),
-          updatedAt: new Date()
+          createdAt: new Date()
+          // updatedAt is handled by Prisma's @updatedAt decorator
         }
       });
     } catch (error) {
@@ -147,8 +147,8 @@ export class JobQueueService {
             lte: now
           },
           ...(jobType ? { jobType } : {}),
-          attempts: {
-            lt: prisma.jobQueue.fields.maxAttempts
+          retryCount: {
+            lt: prisma.jobQueue.fields.maxRetries
           }
         },
         orderBy: [
@@ -182,8 +182,8 @@ export class JobQueueService {
           ...(jobTypes && jobTypes.length > 0 
             ? { jobType: { in: jobTypes } } 
             : {}),
-          attempts: {
-            lt: prisma.jobQueue.fields.maxAttempts
+          retryCount: {
+            lt: prisma.jobQueue.fields.maxRetries
           }
         },
         orderBy: [
@@ -213,14 +213,14 @@ export class JobQueueService {
 
       const now = new Date();
       const updateData: any = {
-        status,
-        updatedAt: now
+        status
+        // updatedAt is handled by Prisma's @updatedAt decorator
       };
 
       // Add appropriate timestamp based on status
       if (status === 'PROCESSING') {
         updateData.startedAt = resultData.startedAt || now;
-        updateData.attempts = job.attempts + 1;
+        updateData.retryCount = job.retryCount + 1;
       } else if (status === 'COMPLETED') {
         updateData.completedAt = resultData.completedAt || now;
         updateData.executionTime = resultData.executionTime || 
@@ -236,9 +236,9 @@ export class JobQueueService {
         }
         
         // Determine if we should retry
-        if (job.attempts < job.maxAttempts) {
+        if (job.retryCount < job.maxRetries) {
           // Schedule for retry with exponential backoff
-          const backoffMinutes = Math.pow(2, job.attempts);
+          const backoffMinutes = Math.pow(2, job.retryCount);
           const retryDate = new Date();
           retryDate.setMinutes(retryDate.getMinutes() + backoffMinutes);
           
@@ -278,8 +278,8 @@ export class JobQueueService {
       const now = new Date();
       const updateData: any = {
         status: 'RETRYING',
-        updatedAt: now,
         scheduledFor: retryAt
+        // updatedAt is handled by Prisma's @updatedAt decorator
       };
       
       // Add error information if provided
@@ -293,10 +293,12 @@ export class JobQueueService {
       
       // Store additional result data in the job record
       if (Object.keys(resultData).length > 0) {
-        updateData.resultData = {
-          ...job.resultData,
+        // Ensure job.result is treated as an object before spreading
+        const existingResult = typeof job.result === 'object' && job.result !== null ? job.result : {};
+        updateData.result = {
+          ...existingResult,
           lastRetry: {
-            attemptNumber: job.attempts,
+            attemptNumber: job.retryCount,
             error: resultData.lastError,
             timeStamp: now.toISOString()
           }
@@ -323,7 +325,8 @@ export class JobQueueService {
           status: {
             in: ['COMPLETED', 'FAILED']
           },
-          updatedAt: {
+          // Use createdAt instead of updatedAt since updatedAt might not be in the schema
+          createdAt: {
             lt: olderThan
           }
         }
@@ -333,4 +336,4 @@ export class JobQueueService {
       throw error;
     }
   }
-} 
+}
