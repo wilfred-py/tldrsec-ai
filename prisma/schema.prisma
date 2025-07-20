@@ -136,18 +136,19 @@ model JobLock {
 }
 
 model SecFiling {
-  id              String    @id @default(uuid())
+  id              String           @id @default(uuid())
   tickerId        String
   formType        String
   filingDate      DateTime
   secUrl          String
   accessionNumber String
-  companyName     String
+  companyName     String?
   cik             String
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
-  ticker          Ticker    @relation(fields: [tickerId], references: [id], onDelete: Cascade)
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  ticker          Ticker           @relation(fields: [tickerId], references: [id], onDelete: Cascade)
   summaries       Summary[]
+  fetchAttempts   SecFetchAttempt[]
 
   @@index([tickerId, formType])
   @@index([accessionNumber])
@@ -161,24 +162,12 @@ model SecCompanyCache {
 }
 
 model SecFetchAttempt {
-  id              String   @id @default(cuid())
-  filingId        String
-  ticker          String
-  formType        String
-  successful      Boolean
-  attemptCount    Int
-  successCount    Int
-  timestamp       DateTime
-  hasXmlContent   Boolean  @default(false)
-  xmlSize         Int      @default(0)
-  hasEmbeddedHtml Boolean  @default(false)
-  namespaceCount  Int      @default(0)
-  contextRefCount Int      @default(0)
-  urlAttempts     Json
+  id           String   @id @default(uuid())
+  filingId     String
+  attemptedAt  DateTime
+  status       String
+  errorMessage String?
+  filing       SecFiling @relation(fields: [filingId], references: [id], onDelete: Cascade)
 
   @@index([filingId])
-  @@index([ticker])
-  @@index([formType])
-  @@index([timestamp])
-  @@index([hasXmlContent])
 }

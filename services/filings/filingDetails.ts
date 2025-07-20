@@ -14,8 +14,15 @@ import { SEC_EDGAR_BASE_URL } from '../../constants/sec';
 let parseForm4Xml: (xmlContent: string) => Promise<any>;
 try {
   // Dynamic import to avoid circular dependencies
-  import('../filings/parsers/form4Parser').then(module => {
-    parseForm4Xml = module.parseForm4Xml;
+  import('../../lib/parsers/form-parser').then(module => {
+    // Create a wrapper function that adapts the form parser to our expected interface
+    parseForm4Xml = async (xmlContent: string) => {
+      const parsed = module.parseFormContent(xmlContent, 'Form4');
+      return {
+        parsedSuccessfully: true,
+        ...parsed
+      };
+    };
   }).catch(err => {
     secLogger.warn(`[WARN] Could not import Form 4 parser: ${err instanceof Error ? err.message : String(err)}`);
     // Provide a fallback implementation
