@@ -188,7 +188,8 @@ class Monitoring {
     let overallStatus: 'healthy' | 'degraded' | 'unhealthy' = 'healthy';
 
     // Run all health checks
-    for (const [name, checkFn] of this.healthChecks.entries()) {
+    // Use Array.from() to convert Map entries to an array to avoid downlevelIteration issues
+    for (const [name, checkFn] of Array.from(this.healthChecks.entries())) {
       try {
         const result = await checkFn();
         components[name] = result;

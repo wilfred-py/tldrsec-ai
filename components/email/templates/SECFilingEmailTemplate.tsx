@@ -1,9 +1,9 @@
-import React from 'react';
-import Form11KEmailTemplate from '@/components/ui/email/templates/11k-template';
-import Form144EmailTemplate from '@/components/ui/email/templates/form144-template';
-import FormDEF14AEmailTemplate from '@/components/ui/email/templates/def14a-template';
-import Schedule13DEmailTemplate from '@/components/ui/email/templates/13d-template';
-import { FilingTemplateData } from '@/lib/email/types';
+import * as React from 'react';
+import Form11KEmailTemplate from '../../ui/email/templates/11k-template';
+import Form144EmailTemplate from '../../ui/email/templates/form144-template';
+import FormDEF14AEmailTemplate from '../../ui/email/templates/def14a-template';
+import Schedule13DEmailTemplate from '../../ui/email/templates/13d-template';
+import { FilingTemplateData } from '../../../lib/email/types';
 
 interface SECFilingEmailTemplateProps {
   filing: FilingTemplateData;
