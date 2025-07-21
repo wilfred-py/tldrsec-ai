@@ -632,10 +632,21 @@ export class ClaudeClient {
       }
       
       // Service availability errors
-      if (status >= 500 || type.includes('unavailable') || type.includes('server')) {
+      if (status >= 500 || type.includes('unavailable') || type.includes('server') || type.includes('overloaded')) {
+        // Extract retry-after header if available
+        const retryAfter = error.headers?.get?.('x-should-retry') === 'true' ? 2000 : undefined;
+        
+        // Create AI unavailable error with retry information in details
         return createAiUnavailableError(
           `Claude API service error: ${message}`,
-          { statusCode: status, errorType: type },
+          { 
+            statusCode: status, 
+            errorType: type, 
+            headers: error.headers,
+            error: error.error,
+            shouldRetry: error.headers?.get?.('x-should-retry') === 'true',
+            retryAfter: retryAfter
+          },
           requestId
         );
       }
