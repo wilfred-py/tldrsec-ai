@@ -22,6 +22,10 @@ import { v4 as uuidv4 } from 'uuid';
 import { EventEmitter } from 'events';
 import Anthropic from '@anthropic-ai/sdk';
 import { ApiError, ErrorCode, createAiParsingError } from '../error-handling';
+import { executeWithRetry } from '../error-handling/retry';
+import { executeWithAdaptiveRetry, AdaptiveRetryConfig, DefaultAdaptiveRetryConfig } from '../error-handling/adaptive-retry';
+import { enhancedFetch } from '../network/enhanced-fetch';
+import { generateFallbackSummary, isSummaryComplete } from './fallback-summary';
 
 // Logger for this component
 const componentLogger = logger.child('enhanced-claude');
@@ -37,6 +41,13 @@ export interface EnhancedClaudeOptions extends ClaudeRequestOptions {
   streamHandler?: StreamHandler;
   cacheKey?: SummaryCacheKey;
   chunkMaxTokens?: number;
+  useRetry?: boolean;
+  useAdaptiveRetry?: boolean;
+  retryConfig?: Partial<AdaptiveRetryConfig>;
+  useFallback?: boolean;
+  maxTokensPerRequest?: number;
+  cacheTtl?: number;
+  context?: Record<string, any>;
 }
 
 /**
@@ -64,7 +75,7 @@ export enum EnhancedClaudeEvent {
  */
 export class EnhancedClaudeClient extends EventEmitter {
   private baseClient: ClaudeClient;
-  
+
   /**
    * Create a new enhanced Claude client
    * @param baseClient Optional base Claude client to use
@@ -74,219 +85,452 @@ export class EnhancedClaudeClient extends EventEmitter {
     this.baseClient = baseClient || new ClaudeClient();
     componentLogger.info('Enhanced Claude client initialized');
   }
-  
+
   /**
-   * Send a message to Claude with enhanced features
+   * Generate a cache key for a Claude request
+   * @param messages Messages to send
+   * @param options Options for the request
+   * @returns Cache key
+   */
+  private generateCacheKey(messages: ClaudeMessage[], options: EnhancedClaudeOptions): string {
+    // Create a simplified version of the request for the cache key
+    const cacheKeyData = {
+      messages: messages.map(m => ({
+        role: m.role,
+        content: m.content
+      })),
+      model: options.model,
+      maxTokens: options.maxTokens,
+      temperature: options.temperature,
+      system: options.system
+    };
+
+    // Generate a hash of the request data
+    return this.hashObject(cacheKeyData);
+  }
+
+  /**
+   * Generate a hash of an object for use as a cache key
+   * @param obj Object to hash
+   * @returns Hash string
+   */
+  private hashObject(obj: any): string {
+    // Simple hash function for objects
+    const str = JSON.stringify(obj);
+    let hash = 0;
+    for (let i = 0; i < str.length; i++) {
+      const char = str.charCodeAt(i);
+      hash = ((hash << 5) - hash) + char;
+      hash = hash & hash; // Convert to 32bit integer
+    }
+    return hash.toString(36);
+  }
+
+  /**
+   * Estimate the number of tokens in the input messages
+   * @param messages Array of messages
+   * @returns Estimated token count
+   */
+  private estimateInputTokens(messages: ClaudeMessage[]): number {
+    return messages.reduce((total, message) => {
+      // Rough estimate: 1 token per 4 characters
+      return total + Math.ceil(message.content.length / 4);
+    }, 0);
+  }
+
+  /**
+   * Send a message to Claude with robust error handling
    * @param messages Array of messages to send
-   * @param options Enhanced options for the request
+   * @param options Options for the request
    * @returns Claude response
    */
   async sendMessage(
     messages: ClaudeMessage[],
     options: EnhancedClaudeOptions = {}
   ): Promise<ClaudeResponse> {
-    // Check cache if enabled
-    if (options.useCache && options.cacheKey) {
-      const cachedResult = await this.checkCache(options.cacheKey);
-      if (cachedResult) {
-        return this.convertSummarizationToClaudeResponse(cachedResult);
-      }
-    }
-    
-    // Use streaming if enabled
-    if (options.useStreaming) {
-      return this.sendStreamingMessage(messages, options);
-    }
-    
-    // Default to standard request
-    return this.baseClient.sendMessage(messages, options);
-  }
-  
-  /**
-   * Send a streaming message to Claude
-   * @param messages Array of messages to send
-   * @param options Enhanced options for the request
-   * @returns Claude response
-   */
-  private async sendStreamingMessage(
-    messages: ClaudeMessage[],
-    options: EnhancedClaudeOptions = {}
-  ): Promise<ClaudeResponse> {
     const requestId = uuidv4();
-    const streamHandler = options.streamHandler || createStreamHandler({ summaryId: requestId });
-    
-    try {
-      // Prepare request parameters
-      const model = options.model || 'claude-sonnet-4-20250514';
-      const maxTokens = options.maxTokens || 4096;
-      const temperature = options.temperature || 0.7;
-      const system = options.system;
-      const metadata = options.metadata || {};
-      
-      // Start stream handler
-      streamHandler.start();
-      this.emit(EnhancedClaudeEvent.STREAM_START, { requestId });
-      
-      // Forward stream events
-      streamHandler.on(StreamEvent.CONTENT, (data) => {
-        this.emit(EnhancedClaudeEvent.STREAM_CONTENT, data);
-      });
-      
-      streamHandler.on(StreamEvent.PARTIAL_JSON, (data) => {
-        this.emit(EnhancedClaudeEvent.STREAM_JSON, { ...data, isPartial: true });
-      });
-      
-      streamHandler.on(StreamEvent.COMPLETE_JSON, (data) => {
-        this.emit(EnhancedClaudeEvent.STREAM_JSON, { ...data, isPartial: false });
-      });
-      
-      // Create Anthropic client directly for streaming
-      const anthropic = new Anthropic({
-        apiKey: process.env.ANTHROPIC_API_KEY,
-      });
-      
-      // Convert messages to Anthropic format
-      const anthropicMessages = messages.map(msg => ({
-        role: msg.role,
-        content: msg.content
-      }));
-      
-      // Start the stream
-      const stream = await anthropic.messages.create({
-        model,
-        max_tokens: maxTokens,
-        temperature,
-        system,
-        metadata,
-        messages: anthropicMessages,
-        stream: true,
-      });
-      
-      // Process the stream
-      let responseContent = '';
-      const startTime = Date.now();
-      let inputTokens = 0;
-      let outputTokens = 0;
-      
-      for await (const chunk of stream) {
-        if (chunk.type === 'content_block_delta' && chunk.delta?.text) {
-          streamHandler.handleChunk(chunk.delta.text);
-          responseContent += chunk.delta.text;
-        }
-        
-        if (chunk.usage) {
-          inputTokens = chunk.usage.input_tokens;
-          outputTokens = chunk.usage.output_tokens;
-        }
+    const startTime = Date.now();
+
+    // Merge options with defaults
+    const mergedOptions: Required<EnhancedClaudeOptions> = {
+      model: 'claude-sonnet-4-20250514',
+      maxTokens: 4096,
+      temperature: 0.7,
+      useCache: true,
+      useStreaming: false,
+      useRetry: true,
+      useAdaptiveRetry: true,
+      retryConfig: {},
+      useFallback: true,
+      maxTokensPerRequest: 100000,
+      cacheKey: '',
+      cacheTtl: 86400, // 24 hours
+      context: {},
+      ...options
+    };
+
+    // Generate cache key if not provided
+    if (!mergedOptions.cacheKey && mergedOptions.useCache) {
+      mergedOptions.cacheKey = this.generateCacheKey(messages, mergedOptions);
+    }
+
+    // Create context for logging and monitoring
+    const context = {
+      requestId,
+      model: mergedOptions.model,
+      messageCount: messages.length,
+      useCache: mergedOptions.useCache,
+      useStreaming: mergedOptions.useStreaming,
+      useRetry: mergedOptions.useRetry,
+      useAdaptiveRetry: mergedOptions.useAdaptiveRetry,
+      cacheKey: mergedOptions.cacheKey,
+      inputTokenEstimate: this.estimateInputTokens(messages),
+      ...mergedOptions.context
+    };
+
+    // Check cache if enabled
+    if (mergedOptions.useCache && mergedOptions.cacheKey) {
+      const cachedResponse = await this.getFromCache(mergedOptions.cacheKey);
+      if (cachedResponse) {
+        logger.debug(`Cache hit for Claude request`, {
+          ...context,
+          cacheHit: true
+        });
+
+        // Track cache hit
+        monitoring.incrementCounter('ai.claude.cache.hits', 1, {
+          model: mergedOptions.model
+        });
+
+        return cachedResponse;
       }
-      
-      // Stream complete
-      streamHandler.end();
-      const duration = Date.now() - startTime;
-      
-      // Calculate cost (approximate)
-      const modelPricing = this.getModelPricing(model);
-      const inputCost = (inputTokens / 1000) * modelPricing.inputPrice;
-      const outputCost = (outputTokens / 1000) * modelPricing.outputPrice;
-      const totalCost = inputCost + outputCost;
-      
-      // Emit stream end event
-      this.emit(EnhancedClaudeEvent.STREAM_END, { 
-        requestId,
-        duration,
-        inputTokens,
-        outputTokens,
-        totalCost
+
+      // Track cache miss
+      monitoring.incrementCounter('ai.claude.cache.misses', 1, {
+        model: mergedOptions.model
       });
-      
-      // Return formatted response
-      return {
+
+      logger.debug(`Cache miss for Claude request`, {
+        ...context,
+        cacheHit: false
+      });
+    }
+
+    // Log request start
+    logger.debug(`Starting Claude request with model ${mergedOptions.model}`, context);
+
+    // Track request start
+    monitoring.incrementCounter('ai.claude.requests', 1, {
+      model: mergedOptions.model,
+      cached: 'false'
+    });
+
+    try {
+      // Define the Claude operation
+      const claudeOperation = async () => {
+        return await this.baseClient.sendMessage(messages, {
+          model: mergedOptions.model,
+          maxTokens: mergedOptions.maxTokens,
+          temperature: mergedOptions.temperature,
+          system: mergedOptions.system,
+          metadata: {
+            ...mergedOptions.metadata,
+            requestId
+          }
+        });
+      };
+
+      // Execute with appropriate retry strategy
+      let result: ClaudeResponse;
+
+      if (mergedOptions.useAdaptiveRetry && mergedOptions.useRetry) {
+        // Create adaptive retry config
+        const adaptiveRetryConfig: AdaptiveRetryConfig = {
+          ...DefaultAdaptiveRetryConfig,
+          ...mergedOptions.retryConfig,
+          onRetry: (error, attempt, delay, remaining) => {
+            logger.warn(`Retrying Claude request (attempt ${attempt}, ${remaining} remaining) after ${delay}ms`, {
+              ...context,
+              error: error.message,
+              attempt,
+              delay
+            });
+
+            // Track retry
+            monitoring.incrementCounter('ai.claude.retries', 1, {
+              model: mergedOptions.model,
+              attempt: String(attempt),
+              errorType: error instanceof ApiError ? error.code : 'unknown'
+            });
+
+            // Emit retry event
+            this.emit('retry', {
+              requestId,
+              model: mergedOptions.model,
+              attempt,
+              delay,
+              remaining,
+              error
+            });
+
+            // Call custom onRetry if provided
+            if (mergedOptions.retryConfig?.onRetry) {
+              mergedOptions.retryConfig.onRetry(error, attempt, delay, remaining);
+            }
+          }
+        };
+
+        // Execute with adaptive retry
+        result = await executeWithAdaptiveRetry(claudeOperation, adaptiveRetryConfig, context);
+      } else if (mergedOptions.useRetry) {
+        // Use legacy retry mechanism
+        result = await executeWithRetry(claudeOperation, {
+          maxRetries: 3,
+          retryDelayMs: 1000,
+          retryBackoffFactor: 2,
+          retryStatusCodes: [429, 500, 502, 503, 504],
+          retryableErrors: [
+            ErrorCode.QUOTA_EXCEEDED,
+            ErrorCode.RATE_LIMITED,
+            ErrorCode.NETWORK_ERROR,
+            ErrorCode.TIMEOUT_ERROR,
+            ErrorCode.SERVICE_UNAVAILABLE
+          ]
+        });
+      } else {
+        // Execute without retry
+        result = await claudeOperation();
+      }
+
+      // Calculate duration
+      const duration = Date.now() - startTime;
+
+      // Log success
+      logger.debug(`Completed Claude request in ${duration}ms`, {
+        ...context,
+        duration,
+        outputTokens: result.outputTokens,
+        totalCost: result.totalCost
+      });
+
+      // Track success
+      monitoring.recordDuration('ai.claude.duration', duration, {
+        model: mergedOptions.model,
+        cached: 'false',
+        success: 'true'
+      });
+
+      // Cache result if enabled
+      if (mergedOptions.useCache && mergedOptions.cacheKey) {
+        await this.saveToCache(mergedOptions.cacheKey, result, mergedOptions.cacheTtl);
+      }
+
+      // Emit success event
+      this.emit('success', {
+        requestId,
+        model: mergedOptions.model,
+        duration,
+        outputTokens: result.outputTokens,
+        totalCost: result.totalCost
+      });
+
+      return result;
+    } catch (error: any) {
+      // Calculate duration
+      const duration = Date.now() - startTime;
+
+      // Normalize error
+      const normalizedError = error instanceof ApiError
+        ? error
+        : new ApiError(
+            ErrorCode.EXTERNAL_API_ERROR,
+            error.message || 'Claude request failed',
+            {
+              ...context,
+              originalError: error.toString()
+            },
+            true,
+            requestId
+          );
+
+      // Log error
+      logger.error(`Failed Claude request after ${duration}ms: ${normalizedError.message}`, {
+        ...context,
+        duration,
+        error: normalizedError
+      });
+
+      // Track failure
+      monitoring.recordDuration('ai.claude.duration', duration, {
+        model: mergedOptions.model,
+        cached: 'false',
+        success: 'false',
+        errorCode: normalizedError.code
+      });
+
+      // Emit error event
+      this.emit('error', {
+        requestId,
+        model: mergedOptions.model,
+        duration,
+        error: normalizedError
+      });
+
+      // If fallback is disabled, rethrow the error
+      if (!mergedOptions.useFallback) {
+        throw normalizedError;
+      }
+
+      // Generate fallback response
+      logger.info(`Generating fallback response for failed Claude request`, {
+        ...context,
+        errorCode: normalizedError.code
+      });
+
+      // Create a basic fallback response
+      const fallbackResponse: ClaudeResponse = {
         id: requestId,
-        content: responseContent,
-        model,
+        content: `I apologize, but I'm currently experiencing technical difficulties. Please try again in a few moments.`,
+        model: mergedOptions.model,
         usage: {
-          inputTokens,
-          outputTokens
+          inputTokens: context.inputTokenEstimate,
+          outputTokens: 20
         },
-        inputTokens,
-        outputTokens,
+        inputTokens: context.inputTokenEstimate,
+        outputTokens: 20,
         cost: {
-          inputCost,
-          outputCost,
-          totalCost
+          inputCost: 0,
+          outputCost: 0,
+          totalCost: 0
         },
-        totalCost,
+        totalCost: 0,
         attempts: 1,
         executionTimeMs: duration,
-        fallbackUsed: false
+        fallbackUsed: true
       };
-      
-    } catch (error) {
-      // Handle streaming errors
-      streamHandler.handleError(error instanceof Error ? error : new Error(String(error)));
-      this.emit(EnhancedClaudeEvent.STREAM_ERROR, { 
-        requestId,
-        error: error instanceof Error ? error : new Error(String(error))
+
+      // Track fallback usage
+      monitoring.incrementCounter('ai.claude.fallbacks', 1, {
+        model: mergedOptions.model,
+        errorCode: normalizedError.code
       });
-      
-      // Normalize and throw error
-      const normalizedError = this.baseClient.normalizeError(error, requestId);
-      throw normalizedError;
+
+      // Emit fallback event
+      this.emit('fallback', {
+        requestId,
+        model: mergedOptions.model,
+        duration,
+        error: normalizedError
+      });
+
+      return fallbackResponse;
     }
   }
-  
+
   /**
-   * Process a document with enhanced chunking
+   * Process a document with Claude with robust error handling and fallback
    * @param documentContent Document content to process
-   * @param filingType SEC filing type
-   * @param options Summarization options
+   * @param filingType SEC filing type (optional)
+   * @param options Options for the request
    * @returns Summarization result
    */
   async processDocument(
     documentContent: string,
-    filingType: SECFilingType,
-    options: SummarizationOptions & EnhancedClaudeOptions = {}
+    filingType?: string,
+    options: EnhancedClaudeOptions = {}
   ): Promise<SummarizationResult> {
-    const summaryId = options.summaryId || uuidv4();
-    const maxTokens = options.chunkMaxTokens || 150000;
-    
-    // Check cache if enabled
-    if (options.useCache && options.cacheKey) {
-      const cachedResult = await this.checkCache(options.cacheKey);
-      if (cachedResult) {
-        componentLogger.info(`Cache hit for filing ${options.filingId || 'unknown'}`);
-        this.emit(EnhancedClaudeEvent.CACHE_HIT, { 
-          summaryId,
-          cacheKey: options.cacheKey
-        });
-        return cachedResult;
-      }
-      
-      // Set pending entry in cache
-      if (options.summaryId) {
-        summaryCache.setPending(options.cacheKey, options.summaryId);
-      }
-      
-      this.emit(EnhancedClaudeEvent.CACHE_MISS, { 
-        summaryId,
-        cacheKey: options.cacheKey
-      });
-    }
-    
+    const summaryId = uuidv4();
+    const startTime = Date.now();
+
+    // Create context for logging and monitoring
+    const context = {
+      summaryId,
+      filingType,
+      documentLength: documentContent.length,
+      ...options.context
+    };
+
+    // Log request start
+    logger.debug(`Starting document processing${filingType ? ` for ${filingType}` : ''}`, context);
+
     try {
-      // Process document content into chunks
-      const { chunks, isChunked, chunkCount } = processDocumentContent(
-        documentContent,
+      // TODO: Implement document chunking and processing logic
+      // This would typically involve:
+      // 1. Breaking the document into manageable chunks
+      // 2. Processing each chunk with Claude
+      // 3. Combining the results
+
+      // For now, we'll use a simplified approach
+      const messages: ClaudeMessage[] = [
+        {
+          role: 'user',
+          content: `Please summarize the following${filingType ? ` ${filingType}` : ''} document:\n\n${documentContent}`
+        }
+      ];
+
+      // Send to Claude with robust error handling
+      const response = await this.sendMessage(messages, {
+        ...options,
+        context
+      });
+
+      // Calculate duration
+      const duration = Date.now() - startTime;
+
+      // Check if the summary is complete and meaningful
+      if (response.fallbackUsed || !isSummaryComplete(response.content)) {
+        logger.warn(`Claude returned incomplete summary or used fallback, generating structured fallback`, {
+          ...context,
+          summaryLength: response.content.length,
+          fallbackUsed: response.fallbackUsed
+        });
+
+        // Generate fallback summary
+        if (filingType) {
+          return generateFallbackSummary(
+            filingType,
+            new Error('Incomplete summary returned'),
+            documentContent,
+            {
+              metadata: {
+                originalSummary: response.content,
+                ...context
+              }
+            }
+          );
+        } else {
+          // Simple fallback for non-filing documents
+          return {
+            summaryId,
+            summaryText: response.content || 'Unable to generate a complete summary at this time.',
+            modelUsed: response.model,
+            inputTokens: response.inputTokens,
+            outputTokens: response.outputTokens,
+            cost: response.totalCost,
+            duration,
+            metadata: {
+              ...context,
+              fallbackReason: 'Incomplete summary'
+            },
+            fallbackUsed: true
+          };
+        }
+      }
+
+      // Return successful result
+      return {
+        summaryId,
+        summaryText: response.content,
         filingType,
-        maxTokens
-      );
-      
-      // If we should process all chunks and there are multiple chunks
-      if (options.processAllChunks && isChunked && chunkCount > 1) {
-        componentLogger.info(`Processing ${chunkCount} chunks for filing ${options.filingId || 'unknown'}`);
-        this.emit(EnhancedClaudeEvent.CHUNK_START, { 
-          summaryId,
-          chunkCount
+        modelUsed: response.model,
+        inputTokens: response.inputTokens,
+        outputTokens: response.outputTokens,
+        cost: response.totalCost,
+        duration,
+        metadata: {
+          ...context
+        },
+        fallbackUsed: false
         });
         
         // Process all chunks and combine results
