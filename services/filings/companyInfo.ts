@@ -27,8 +27,15 @@ export async function getCompanyInfo(ticker: string): Promise<CompanyInfo | null
   try {
     logger.debug(`Getting company information for ticker ${ticker}`);
     
-    // Create SEC client
-    const secClient = new SECEdgarClient(SEC_CONFIG);
+    // Create SEC client with proper config that matches SECEdgarConfig type
+    const secEdgarConfig = {
+      userAgent: SEC_CONFIG.HEADERS['User-Agent'],
+      maxRequestsPerSecond: 10, // SEC fair access policy limit
+      baseUrl: 'https://www.sec.gov',
+      maxRetries: 3,
+      retryDelay: 1000
+    };
+    const secClient = new SECEdgarClient(secEdgarConfig);
     
     // Normalize ticker (uppercase)
     const normalizedTicker = ticker.toUpperCase();

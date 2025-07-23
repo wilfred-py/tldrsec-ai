@@ -531,7 +531,7 @@ export class EnhancedClaudeClient extends EventEmitter {
           ...context
         },
         fallbackUsed: false
-        });
+      };
         
         // Process all chunks and combine results
         const result = await processAllChunks(chunks, filingType, options);

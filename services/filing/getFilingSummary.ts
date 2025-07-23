@@ -9,8 +9,11 @@ import { extractKeyPoints, generateSimpleSummary } from './utils';
 import { normalizeFormType } from './formTypeService';
 import { generateFallbackSummary } from './fallbackSummary';
 import { checkSummaryExists, getSummaryFromDatabase, saveSummaryToDatabase, logFilingProcessing } from './databaseService';
-import { scrapeDocumentLinksFromFilingPage, fetchDocumentContent } from './documentScraper';
+import { scrapeDocumentLinksFromFilingPage, fetchDocumentContent } from '../filings/extractors/documentScraper';
 import { generateAISummaryWithRetry } from './summaryGenerationService';
+import { generateEnhancedAISummaryWithRetry } from './enhancedSummaryGeneration';
+import { getCompleteFilingContent } from '../filings/enhancedFilingRetrieval';
+import { SecFiling } from '../../types/sec';
 import * as secService from '../secService';
 
 /**
@@ -88,55 +91,76 @@ export async function getFilingSummary(
     let failureReason = '';
     
     try {
-      // Get document content for AI summarization
-      const documentLink = await scrapeDocumentLinksFromFilingPage(filing, {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-      });
+      // ENHANCED APPROACH: First try to get complete filing content using our enhanced retrieval
+      logger.debug(`Attempting to get complete filing content for ${accessionNumber} using enhanced retrieval`);
+      let completeContent: string | null = null;
       
-      if (documentLink) {
-        const documentContent = await fetchDocumentContent(documentLink, {
+      try {
+        if (filing.cik) {
+          completeContent = await getCompleteFilingContent(accessionNumber, filing.cik);
+          logger.debug(`Successfully retrieved complete filing content (${completeContent?.length} bytes)`);
+        }
+      } catch (retrievalError) {
+        logger.warn(`Enhanced content retrieval failed: ${retrievalError instanceof Error ? retrievalError.message : String(retrievalError)}`);
+        // Continue with fallback approaches
+      }
+      
+      // If enhanced retrieval failed, try the document scraper approach
+      if (!completeContent) {
+        logger.debug(`Falling back to document scraper approach for ${accessionNumber}`);
+        // Create a compatible SecFiling object for the document scraper
+        const secFiling: SecFiling = {
+          accessionNumber: filing.accessionNumber || '',
+          filingDate: filing.filingDate || '',
+          form: filing.formType || '',
+          primaryDocument: '',  // Required by SecFiling type
+          primaryDocUrl: '',    // Required by SecFiling type
+          filingUrl: filing.filingUrl || ''
+        };
+        
+        const documentLink = await scrapeDocumentLinksFromFilingPage(secFiling, {
           'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
         });
         
-        if (documentContent) {
-          // Generate AI summary with retry
-          const aiSummary = await generateAISummaryWithRetry(documentContent, filing, company);
-          
-          if (aiSummary.error) {
-            failureReason = aiSummary.error;
-            // Use the AI-generated summary but note that there was an error
-            summaryText = aiSummary.summary;
-            keyPoints = aiSummary.keyPoints;
-          } else {
-            // Use the AI-generated summary
-            summaryText = aiSummary.summary;
-            keyPoints = aiSummary.keyPoints;
-            
-            // Store AI metrics
-            aiMetrics = {
-              tokensUsed: aiSummary.tokensUsed,
-              inputTokens: aiSummary.inputTokens,
-              outputTokens: aiSummary.outputTokens,
-              model: aiSummary.model,
-              cost: aiSummary.cost
-            };
-          }
+        if (documentLink) {
+          completeContent = await fetchDocumentContent(documentLink);
+        }
+      }
+      
+      // If we have content, generate an enhanced AI summary
+      if (completeContent) {
+        logger.debug(`Generating enhanced AI summary for ${accessionNumber}`);
+        const aiSummary = await generateEnhancedAISummaryWithRetry(completeContent, filing, company);
+        
+        if (aiSummary.error) {
+          failureReason = aiSummary.error;
+          // Use the AI-generated summary but note that there was an error
+          summaryText = aiSummary.summary;
+          keyPoints = aiSummary.keyPoints;
         } else {
-          // Fallback to simple summary if document content couldn't be fetched
-          failureReason = 'Failed to fetch document content';
-          summaryText = generateFallbackSummary(filing, company, normalizedFormType);
-          keyPoints = extractKeyPoints(parsedContent, normalizedFormType);
+          // Use the AI-generated summary
+          summaryText = aiSummary.summary;
+          keyPoints = aiSummary.keyPoints;
+          
+          // Store AI metrics
+          aiMetrics = {
+            tokensUsed: aiSummary.tokensUsed,
+            inputTokens: aiSummary.inputTokens,
+            outputTokens: aiSummary.outputTokens,
+            model: aiSummary.model,
+            cost: aiSummary.cost
+          };
         }
       } else {
-        // Fallback to simple summary if document link couldn't be found
-        failureReason = 'Failed to find document link';
+        // Fallback to simple summary if document content couldn't be fetched
+        failureReason = 'Failed to fetch complete document content';
         summaryText = generateFallbackSummary(filing, company, normalizedFormType);
         keyPoints = extractKeyPoints(parsedContent, normalizedFormType);
       }
     } catch (error) {
       // Fallback to simple summary if AI summarization fails
       failureReason = error instanceof Error ? error.message : String(error);
-      logger.error(`Error generating AI summary: ${failureReason}`);
+      logger.error(`Error generating enhanced AI summary: ${failureReason}`);
       summaryText = generateSimpleSummary(
         parsedContent,
         normalizedFormType,
