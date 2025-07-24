@@ -10,6 +10,7 @@ import { logger } from '../../lib/logging';
 import { SummaryGenerationResult, SECFiling, Company } from './types';
 import { generateFallbackSummary } from './fallbackSummary';
 import { normalizeFormType } from './formTypeService';
+import { emailClient } from '../../lib/email/email-core';
 
 // Initialize Anthropic client
 const anthropic = new Anthropic({
@@ -206,6 +207,108 @@ export async function generateEnhancedAISummary(
  * @param maxRetries Maximum number of retries
  * @returns Summary generation result
  */
+/**
+ * Sends an email notification to the admin when fallback generation is used
+ * @param filing SEC filing information
+ * @param company Company information
+ * @param summaryId ID of the summary (if available)
+ * @param attempts Number of attempts made
+ * @param inputTokens Input tokens used (if available)
+ * @param outputTokens Output tokens used (if available)
+ * @param error Error that caused fallback generation
+ * @returns Promise that resolves when email is sent
+ */
+async function sendFallbackNotificationEmail(
+  filing: SECFiling,
+  company: Company,
+  summaryId?: string,
+  attempts: number = 0,
+  inputTokens?: number,
+  outputTokens?: number,
+  error?: Error | string
+): Promise<void> {
+  try {
+    // Check if admin email is configured
+    const adminEmail = process.env.ADMIN_EMAIL;
+    if (!adminEmail) {
+      logger.warn('No ADMIN_EMAIL configured. Skipping fallback notification.');
+      return;
+    }
+    
+    const companyName = company.name || 'Unknown Company';
+    const ticker = company.ticker || 'Unknown Ticker';
+    const formType = filing.formType || 'UNKNOWN';
+    const filingDate = filing.filingDate ? new Date(filing.filingDate).toLocaleDateString() : 'Unknown date';
+    const filingUrl = filing.filingUrl || filing.filingHtmlUrl || 'No URL available';
+    const creationDate = new Date().toISOString();
+    
+    // Create HTML content for the email
+    const htmlContent = `
+      <h2>⚠️ AI Summary Fallback Generation Alert</h2>
+      <p>The system had to use fallback generation for a filing summary.</p>
+      
+      <h3>Summary Information</h3>
+      <ul>
+        <li><strong>Summary ID:</strong> ${summaryId || 'Not available'}</li>
+        <li><strong>Company:</strong> ${companyName} (${ticker})</li>
+        <li><strong>Filing Type:</strong> ${formType}</li>
+        <li><strong>Filing Date:</strong> ${filingDate}</li>
+        <li><strong>Filing URL:</strong> <a href="${filingUrl}">${filingUrl}</a></li>
+        <li><strong>Creation Date:</strong> ${creationDate}</li>
+        <li><strong>Attempts:</strong> ${attempts}</li>
+      </ul>
+      
+      <h3>Token Usage</h3>
+      <ul>
+        <li><strong>Input Tokens:</strong> ${inputTokens !== undefined ? inputTokens.toLocaleString() : 'Not available'}</li>
+        <li><strong>Output Tokens:</strong> ${outputTokens !== undefined ? outputTokens.toLocaleString() : 'Not available'}</li>
+      </ul>
+      
+      <h3>Error Information</h3>
+      <pre>${error ? (error instanceof Error ? `${error.name}: ${error.message}\n${error.stack || ''}` : error) : 'No error details available'}</pre>
+    `;
+    
+    // Create plain text version
+    const textContent = `
+      AI Summary Fallback Generation Alert
+      
+      The system had to use fallback generation for a filing summary.
+      
+      Summary Information:
+      - Summary ID: ${summaryId || 'Not available'}
+      - Company: ${companyName} (${ticker})
+      - Filing Type: ${formType}
+      - Filing Date: ${filingDate}
+      - Filing URL: ${filingUrl}
+      - Creation Date: ${creationDate}
+      - Attempts: ${attempts}
+      
+      Token Usage:
+      - Input Tokens: ${inputTokens !== undefined ? inputTokens.toLocaleString() : 'Not available'}
+      - Output Tokens: ${outputTokens !== undefined ? outputTokens.toLocaleString() : 'Not available'}
+      
+      Error Information:
+      ${error ? (error instanceof Error ? `${error.name}: ${error.message}` : error) : 'No error details available'}
+    `;
+    
+    // Send the email
+    await emailClient.sendEmail({
+      to: adminEmail,
+      subject: `[ALERT] AI Summary Fallback Used - ${companyName} (${ticker}) - ${formType}`,
+      html: htmlContent,
+      text: textContent,
+      tags: ['type_alert', 'content_fallback_summary']
+    });
+    
+    logger.info('Fallback notification email sent to admin', { adminEmail });
+  } catch (emailError) {
+    // Don't let email errors propagate, just log them
+    logger.error('Failed to send fallback notification email', {
+      error: emailError instanceof Error ? emailError.message : String(emailError)
+    });
+  }
+}
+
 export async function generateEnhancedAISummaryWithRetry(
   content: string, 
   filing: SECFiling, 
@@ -213,14 +316,24 @@ export async function generateEnhancedAISummaryWithRetry(
   maxRetries: number = 2
 ): Promise<SummaryGenerationResult> {
   let lastError: Error | null = null;
+  let attempts = 0;
+  let inputTokens: number | undefined;
+  let outputTokens: number | undefined;
   
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    attempts++;
     try {
       if (attempt > 0) {
         logger.info(`Retry attempt ${attempt} for generating enhanced AI summary for ${company.ticker || 'unknown'} ${filing.formType || 'UNKNOWN'}`);
       }
       
-      return await generateEnhancedAISummary(content, filing, company);
+      const result = await generateEnhancedAISummary(content, filing, company);
+      
+      // If successful, store token usage for monitoring
+      if (result.inputTokens) inputTokens = result.inputTokens;
+      if (result.outputTokens) outputTokens = result.outputTokens;
+      
+      return result;
     } catch (error) {
       lastError = error instanceof Error ? error : new Error(String(error));
       
@@ -239,13 +352,28 @@ export async function generateEnhancedAISummaryWithRetry(
   
   const fallbackSummary = generateFallbackSummary(filing, company, filing.formType || 'UNKNOWN');
   
-  return {
+  const result = {
     summary: fallbackSummary,
     keyPoints: [
       `This is a ${filing.formType || 'UNKNOWN'} filing for ${company.name || 'Unknown Company'}${company.ticker ? ` (${company.ticker})` : ''}.`,
       'Enhanced AI-powered summary generation failed after multiple attempts. This is a fallback summary.',
       'Please review the original filing for complete details.'
     ],
-    error: lastError?.message || 'Unknown error during enhanced AI summary generation'
+    error: lastError?.message || 'Unknown error during enhanced AI summary generation',
+    inputTokens,
+    outputTokens
   };
+  
+  // Send notification email about fallback generation
+  await sendFallbackNotificationEmail(
+    filing,
+    company,
+    filing.id, // Use filing ID as summary ID if available
+    attempts,
+    inputTokens,
+    outputTokens,
+    lastError || undefined
+  );
+  
+  return result;
 }
