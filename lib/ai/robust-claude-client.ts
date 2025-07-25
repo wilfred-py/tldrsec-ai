@@ -13,6 +13,19 @@ import { v4 as uuidv4 } from 'uuid';
 import { ClaudeClient, ClaudeMessage, ClaudeRequestOptions, ClaudeResponse } from './claude-client';
 import { logger } from '../logging';
 import { monitoring } from '../monitoring';
+
+// Create a safe wrapper for monitoring functions
+const safeMonitoring = {
+  recordDuration: function(metric: string, value: number, tags: Record<string, string | boolean> = {}) {
+    try {
+      if (typeof monitoring.recordTiming === 'function') {
+        monitoring.recordTiming(metric, value, tags);
+      }
+    } catch (error) {
+      console.warn('Failed to record timing', { error });
+    }
+  }
+};
 import { ApiError, ErrorCode } from '../error-handling';
 import { executeWithAdaptiveRetry, AdaptiveRetryConfig, DefaultAdaptiveRetryConfig } from '../error-handling/adaptive-retry';
 import { enhancedFetch } from '../network/enhanced-fetch';
@@ -162,7 +175,7 @@ export class RobustClaudeClient {
       });
       
       // Track success
-      monitoring.recordDuration('ai.claude.duration', duration, {
+      safeMonitoring.recordDuration('ai.claude.duration', duration, {
         ...context,
         success: 'true'
       });
@@ -194,7 +207,7 @@ export class RobustClaudeClient {
       });
       
       // Track failure
-      monitoring.recordDuration('ai.claude.duration', duration, {
+      safeMonitoring.recordDuration('ai.claude.duration', duration, {
         ...context,
         success: 'false',
         errorCode: normalizedError.code

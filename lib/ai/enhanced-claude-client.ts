@@ -9,7 +9,7 @@
  * - Improved error recovery with retries and fallbacks
  */
 
-import { ClaudeClient, ClaudeMessage, ClaudeRequestOptions, ClaudeResponse } from './claude-client';
+import { claudeClient, ClaudeMessage, ClaudeRequestOptions, ClaudeResponse, ClaudeClient } from './claude-client';
 import { StreamHandler, StreamEvent, createStreamHandler } from './streaming/stream-handler';
 import { summaryCache, SummaryCacheKey } from './cache/summary-cache';
 import { batchProcessor, BatchJob } from './batch/batch-processor';
@@ -80,9 +80,9 @@ export class EnhancedClaudeClient extends EventEmitter {
    * Create a new enhanced Claude client
    * @param baseClient Optional base Claude client to use
    */
-  constructor(baseClient?: ClaudeClient) {
+  constructor(baseClient?: any) {
     super();
-    this.baseClient = baseClient || new ClaudeClient();
+    this.baseClient = baseClient || claudeClient;
     componentLogger.info('Enhanced Claude client initialized');
   }
 
@@ -132,10 +132,9 @@ export class EnhancedClaudeClient extends EventEmitter {
    * @returns Estimated token count
    */
   private estimateInputTokens(messages: ClaudeMessage[]): number {
-    return messages.reduce((total, message) => {
-      // Rough estimate: 1 token per 4 characters
-      return total + Math.ceil(message.content.length / 4);
-    }, 0);
+    // Simple estimation based on character count (1 token ~= 4 characters)
+    const totalChars = messages.reduce((sum, msg) => sum + msg.content.length, 0);
+    return Math.ceil(totalChars / 4);
   }
 
   /**
@@ -150,116 +149,103 @@ export class EnhancedClaudeClient extends EventEmitter {
   ): Promise<ClaudeResponse> {
     const requestId = uuidv4();
     const startTime = Date.now();
-
-    // Merge options with defaults
-    const mergedOptions: Required<EnhancedClaudeOptions> = {
+    
+    // Merge default options
+    const mergedOptions = {
       model: 'claude-sonnet-4-20250514',
-      maxTokens: 4096,
-      temperature: 0.7,
+      maxTokens: 4000,
+      temperature: 0.3,
       useCache: true,
-      useStreaming: false,
       useRetry: true,
       useAdaptiveRetry: true,
-      retryConfig: {},
-      useFallback: true,
-      maxTokensPerRequest: 100000,
-      cacheKey: '',
-      cacheTtl: 86400, // 24 hours
-      context: {},
       ...options
     };
-
-    // Generate cache key if not provided
-    if (!mergedOptions.cacheKey && mergedOptions.useCache) {
-      mergedOptions.cacheKey = this.generateCacheKey(messages, mergedOptions);
-    }
-
-    // Create context for logging and monitoring
-    const context = {
-      requestId,
-      model: mergedOptions.model,
-      messageCount: messages.length,
-      useCache: mergedOptions.useCache,
-      useStreaming: mergedOptions.useStreaming,
-      useRetry: mergedOptions.useRetry,
-      useAdaptiveRetry: mergedOptions.useAdaptiveRetry,
-      cacheKey: mergedOptions.cacheKey,
-      inputTokenEstimate: this.estimateInputTokens(messages),
-      ...mergedOptions.context
-    };
-
+    
     // Check cache if enabled
-    if (mergedOptions.useCache && mergedOptions.cacheKey) {
-      const cachedResponse = await this.getFromCache(mergedOptions.cacheKey);
-      if (cachedResponse) {
-        logger.debug(`Cache hit for Claude request`, {
-          ...context,
-          cacheHit: true
+    if (mergedOptions.useCache) {
+      const cacheKey = mergedOptions.cacheKey || this.generateCacheKey(messages, mergedOptions);
+      
+      try {
+        const cachedResponse = await summaryCache.checkCache({
+          cacheKey,
+          ttl: mergedOptions.cacheTtl || 86400 // Default 24 hours
         });
-
-        // Track cache hit
-        monitoring.incrementCounter('ai.claude.cache.hits', 1, {
-          model: mergedOptions.model
+        
+        if (cachedResponse) {
+          componentLogger.info(`Cache hit for request ${requestId}`);
+          
+          // Emit cache hit event
+          this.emit(EnhancedClaudeEvent.CACHE_HIT, {
+            requestId,
+            cacheKey,
+            response: cachedResponse
+          });
+          
+          // Return cached response
+          return {
+            id: cachedResponse.id || requestId,
+            content: cachedResponse.content,
+            model: cachedResponse.model || mergedOptions.model,
+            usage: cachedResponse.usage || {
+              inputTokens: this.estimateInputTokens(messages),
+              outputTokens: Math.ceil(cachedResponse.content.length / 4)
+            },
+            inputTokens: cachedResponse.inputTokens || this.estimateInputTokens(messages),
+            outputTokens: cachedResponse.outputTokens || Math.ceil(cachedResponse.content.length / 4),
+            cost: cachedResponse.cost || 0,
+            totalCost: cachedResponse.totalCost || 0,
+            attempts: 1,
+            executionTimeMs: 0,
+            fromCache: true
+          };
+        }
+        
+        // Emit cache miss event
+        this.emit(EnhancedClaudeEvent.CACHE_MISS, {
+          requestId,
+          cacheKey
         });
-
-        return cachedResponse;
+      } catch (cacheError) {
+        componentLogger.warn(`Cache error for request ${requestId}: ${cacheError instanceof Error ? cacheError.message : String(cacheError)}`);
       }
-
-      // Track cache miss
-      monitoring.incrementCounter('ai.claude.cache.misses', 1, {
-        model: mergedOptions.model
-      });
-
-      logger.debug(`Cache miss for Claude request`, {
-        ...context,
-        cacheHit: false
-      });
     }
-
-    // Log request start
-    logger.debug(`Starting Claude request with model ${mergedOptions.model}`, context);
-
-    // Track request start
-    monitoring.incrementCounter('ai.claude.requests', 1, {
-      model: mergedOptions.model,
-      cached: 'false'
-    });
-
+    
+    // Define the Claude operation
+    const claudeOperation = async (): Promise<ClaudeResponse> => {
+      componentLogger.info(`Sending request ${requestId} to Claude API`);
+      
+      // Send the request to Claude
+      const response = await this.baseClient.sendMessage(messages, mergedOptions);
+      
+      // Cache the response if caching is enabled
+      if (mergedOptions.useCache) {
+        try {
+          const cacheKey = mergedOptions.cacheKey || this.generateCacheKey(messages, mergedOptions);
+          await summaryCache.cacheResponse(cacheKey, response, mergedOptions.cacheTtl);
+        } catch (cacheError) {
+          componentLogger.warn(`Failed to cache response for request ${requestId}: ${cacheError instanceof Error ? cacheError.message : String(cacheError)}`);
+        }
+      }
+      
+      return response;
+    };
+    
     try {
-      // Define the Claude operation
-      const claudeOperation = async () => {
-        return await this.baseClient.sendMessage(messages, {
-          model: mergedOptions.model,
-          maxTokens: mergedOptions.maxTokens,
-          temperature: mergedOptions.temperature,
-          system: mergedOptions.system,
-          metadata: {
-            ...mergedOptions.metadata,
-            requestId
-          }
-        });
-      };
-
-      // Execute with appropriate retry strategy
-      let result: ClaudeResponse;
-
-      if (mergedOptions.useAdaptiveRetry && mergedOptions.useRetry) {
-        // Create adaptive retry config
-        const adaptiveRetryConfig: AdaptiveRetryConfig = {
+      let response: ClaudeResponse;
+      
+      // Use adaptive retry if enabled
+      if (mergedOptions.useRetry && mergedOptions.useAdaptiveRetry) {
+        const retryConfig: AdaptiveRetryConfig = {
           ...DefaultAdaptiveRetryConfig,
-          ...mergedOptions.retryConfig,
+          ...(mergedOptions.retryConfig || {}),
           onRetry: (error, attempt, delay, remaining) => {
-            logger.warn(`Retrying Claude request (attempt ${attempt}, ${remaining} remaining) after ${delay}ms`, {
-              ...context,
-              error: error.message,
+            componentLogger.warn(`Retry ${attempt} for request ${requestId} after ${delay}ms. Error: ${error instanceof Error ? error.message : String(error)}`);
+            
+            // Log error details
+            componentLogger.debug(`Retry details for request ${requestId}:`, {
               attempt,
-              delay
-            });
-
-            // Track retry
-            monitoring.incrementCounter('ai.claude.retries', 1, {
-              model: mergedOptions.model,
-              attempt: String(attempt),
+              delay,
+              remaining,
               errorType: error instanceof ApiError ? error.code : 'unknown'
             });
 
@@ -272,158 +258,86 @@ export class EnhancedClaudeClient extends EventEmitter {
               remaining,
               error
             });
-
-            // Call custom onRetry if provided
+            
+            // Call user-provided onRetry if available
             if (mergedOptions.retryConfig?.onRetry) {
               mergedOptions.retryConfig.onRetry(error, attempt, delay, remaining);
             }
           }
         };
-
-        // Execute with adaptive retry
-        result = await executeWithAdaptiveRetry(claudeOperation, adaptiveRetryConfig, context);
-      } else if (mergedOptions.useRetry) {
-        // Use legacy retry mechanism
-        result = await executeWithRetry(claudeOperation, {
-          maxRetries: 3,
-          retryDelayMs: 1000,
-          retryBackoffFactor: 2,
-          retryStatusCodes: [429, 500, 502, 503, 504],
-          retryableErrors: [
-            ErrorCode.QUOTA_EXCEEDED,
-            ErrorCode.RATE_LIMITED,
-            ErrorCode.NETWORK_ERROR,
-            ErrorCode.TIMEOUT_ERROR,
-            ErrorCode.SERVICE_UNAVAILABLE
-          ]
-        });
-      } else {
-        // Execute without retry
-        result = await claudeOperation();
+        
+        response = await executeWithAdaptiveRetry(
+          claudeOperation,
+          retryConfig
+        );
+      } 
+      // Use simple retry if enabled
+      else if (mergedOptions.useRetry) {
+        response = await executeWithRetry(
+          claudeOperation,
+          {
+            maxRetries: 3,
+            retryDelay: 1000,
+            shouldRetry: (error) => {
+              // Retry on rate limit errors and temporary server errors
+              if (error instanceof ApiError) {
+                return error.code === ErrorCode.RATE_LIMIT || 
+                       error.code === ErrorCode.SERVER_ERROR ||
+                       error.code === ErrorCode.TIMEOUT;
+              }
+              return false;
+            }
+          }
+        );
+      } 
+      // No retry
+      else {
+        response = await claudeOperation();
       }
-
-      // Calculate duration
-      const duration = Date.now() - startTime;
-
+      
+      // Calculate execution time
+      const executionTimeMs = Date.now() - startTime;
+      
+      // Add execution time to response
+      response.executionTimeMs = executionTimeMs;
+      
       // Log success
-      logger.debug(`Completed Claude request in ${duration}ms`, {
-        ...context,
-        duration,
-        outputTokens: result.outputTokens,
-        totalCost: result.totalCost
-      });
-
-      // Track success
-      monitoring.recordDuration('ai.claude.duration', duration, {
-        model: mergedOptions.model,
-        cached: 'false',
-        success: 'true'
-      });
-
-      // Cache result if enabled
-      if (mergedOptions.useCache && mergedOptions.cacheKey) {
-        await this.saveToCache(mergedOptions.cacheKey, result, mergedOptions.cacheTtl);
-      }
-
-      // Emit success event
-      this.emit('success', {
-        requestId,
-        model: mergedOptions.model,
-        duration,
-        outputTokens: result.outputTokens,
-        totalCost: result.totalCost
-      });
-
-      return result;
-    } catch (error: any) {
-      // Calculate duration
-      const duration = Date.now() - startTime;
-
-      // Normalize error
-      const normalizedError = error instanceof ApiError
-        ? error
-        : new ApiError(
-            ErrorCode.EXTERNAL_API_ERROR,
-            error.message || 'Claude request failed',
-            {
-              ...context,
-              originalError: error.toString()
-            },
-            true,
-            requestId
-          );
-
+      componentLogger.info(`Request ${requestId} completed in ${executionTimeMs}ms`);
+      
+      // Track metrics
+      monitoring.recordAiApiCall(
+        'claude', 
+        mergedOptions.model, 
+        true, 
+        {
+          input_tokens: response.inputTokens,
+          output_tokens: response.outputTokens,
+          duration_ms: executionTimeMs.toString(),
+          cost: response.totalCost.toFixed(6)
+        }
+      );
+      
+      return response;
+    } catch (error) {
+      // Calculate execution time for failed request
+      const executionTimeMs = Date.now() - startTime;
+      
       // Log error
-      logger.error(`Failed Claude request after ${duration}ms: ${normalizedError.message}`, {
-        ...context,
-        duration,
-        error: normalizedError
-      });
-
-      // Track failure
-      monitoring.recordDuration('ai.claude.duration', duration, {
-        model: mergedOptions.model,
-        cached: 'false',
-        success: 'false',
-        errorCode: normalizedError.code
-      });
-
-      // Emit error event
-      this.emit('error', {
-        requestId,
-        model: mergedOptions.model,
-        duration,
-        error: normalizedError
-      });
-
-      // If fallback is disabled, rethrow the error
-      if (!mergedOptions.useFallback) {
-        throw normalizedError;
-      }
-
-      // Generate fallback response
-      logger.info(`Generating fallback response for failed Claude request`, {
-        ...context,
-        errorCode: normalizedError.code
-      });
-
-      // Create a basic fallback response
-      const fallbackResponse: ClaudeResponse = {
-        id: requestId,
-        content: `I apologize, but I'm currently experiencing technical difficulties. Please try again in a few moments.`,
-        model: mergedOptions.model,
-        usage: {
-          inputTokens: context.inputTokenEstimate,
-          outputTokens: 20
-        },
-        inputTokens: context.inputTokenEstimate,
-        outputTokens: 20,
-        cost: {
-          inputCost: 0,
-          outputCost: 0,
-          totalCost: 0
-        },
-        totalCost: 0,
-        attempts: 1,
-        executionTimeMs: duration,
-        fallbackUsed: true
-      };
-
-      // Track fallback usage
-      monitoring.incrementCounter('ai.claude.fallbacks', 1, {
-        model: mergedOptions.model,
-        errorCode: normalizedError.code
-      });
-
-      // Emit fallback event
-      this.emit('fallback', {
-        requestId,
-        model: mergedOptions.model,
-        duration,
-        error: normalizedError
-      });
-
-      return fallbackResponse;
+      componentLogger.error(`Request ${requestId} failed after ${executionTimeMs}ms: ${error instanceof Error ? error.message : String(error)}`);
+      
+      // Track metrics for failed request
+      monitoring.recordAiApiCall(
+        'claude', 
+        mergedOptions.model, 
+        false, 
+        {
+          error_type: error instanceof ApiError ? error.code : 'unknown',
+          duration_ms: executionTimeMs.toString()
+        }
+      );
+      
+      // Re-throw the error
+      throw error;
     }
   }
 
@@ -439,119 +353,64 @@ export class EnhancedClaudeClient extends EventEmitter {
     filingType?: string,
     options: EnhancedClaudeOptions = {}
   ): Promise<SummarizationResult> {
-    const summaryId = uuidv4();
+    const summaryId = options.summaryId || uuidv4();
     const startTime = Date.now();
-
-    // Create context for logging and monitoring
-    const context = {
-      summaryId,
-      filingType,
-      documentLength: documentContent.length,
-      ...options.context
-    };
-
-    // Log request start
-    logger.debug(`Starting document processing${filingType ? ` for ${filingType}` : ''}`, context);
-
+    
     try {
-      // TODO: Implement document chunking and processing logic
-      // This would typically involve:
-      // 1. Breaking the document into manageable chunks
-      // 2. Processing each chunk with Claude
-      // 3. Combining the results
-
-      // For now, we'll use a simplified approach
-      const messages: ClaudeMessage[] = [
-        {
-          role: 'user',
-          content: `Please summarize the following${filingType ? ` ${filingType}` : ''} document:\n\n${documentContent}`
-        }
-      ];
-
-      // Send to Claude with robust error handling
-      const response = await this.sendMessage(messages, {
-        ...options,
-        context
-      });
-
-      // Calculate duration
-      const duration = Date.now() - startTime;
-
-      // Check if the summary is complete and meaningful
-      if (response.fallbackUsed || !isSummaryComplete(response.content)) {
-        logger.warn(`Claude returned incomplete summary or used fallback, generating structured fallback`, {
-          ...context,
-          summaryLength: response.content.length,
-          fallbackUsed: response.fallbackUsed
+      componentLogger.info(`Processing document for filing ${options.filingId || 'unknown'}`);
+      
+      // Check if we should process all chunks
+      if (options.processAllChunks) {
+        componentLogger.info(`Processing all chunks for filing ${options.filingId || 'unknown'}`);
+        
+        // Get the chunks
+        const chunks = await processAllChunks(documentContent, {
+          maxTokens: options.chunkMaxTokens || 100000,
+          overlapTokens: 1000
         });
-
-        // Generate fallback summary
-        if (filingType) {
-          return generateFallbackSummary(
-            filingType,
-            new Error('Incomplete summary returned'),
-            documentContent,
-            {
-              metadata: {
-                originalSummary: response.content,
-                ...context
-              }
-            }
-          );
-        } else {
-          // Simple fallback for non-filing documents
-          return {
-            summaryId,
-            summaryText: response.content || 'Unable to generate a complete summary at this time.',
-            modelUsed: response.model,
-            inputTokens: response.inputTokens,
-            outputTokens: response.outputTokens,
-            cost: response.totalCost,
-            duration,
-            metadata: {
-              ...context,
-              fallbackReason: 'Incomplete summary'
-            },
-            fallbackUsed: true
-          };
-        }
-      }
-
-      // Return successful result
-      return {
-        summaryId,
-        summaryText: response.content,
-        filingType,
-        modelUsed: response.model,
-        inputTokens: response.inputTokens,
-        outputTokens: response.outputTokens,
-        cost: response.totalCost,
-        duration,
-        metadata: {
-          ...context
-        },
-        fallbackUsed: false
-      };
         
-        // Process all chunks and combine results
-        const result = await processAllChunks(chunks, filingType, options);
+        componentLogger.info(`Generated ${chunks.length} chunks for filing ${options.filingId || 'unknown'}`);
         
-        // Update cache if enabled
-        if (options.useCache && options.cacheKey) {
-          summaryCache.updateStatus(
-            options.cacheKey,
-            'COMPLETED',
-            result
-          );
+        // If there's only one chunk, just process it directly
+        if (chunks.length === 1) {
+          componentLogger.info(`Only one chunk for filing ${options.filingId || 'unknown'}, processing directly`);
+          
+          // Process the single chunk
+          return this.processDocument(chunks[0], filingType, {
+            ...options,
+            processAllChunks: false
+          });
         }
         
-        this.emit(EnhancedClaudeEvent.CHUNK_COMPLETE, { 
+        // Create batch jobs for each chunk
+        const batchJobs = chunks.map((chunk, index) => ({
+          id: `${summaryId}-chunk-${index}`,
+          content: chunk,
+          filingType,
+          options: {
+            ...options,
+            summaryId: `${summaryId}-chunk-${index}`,
+            processAllChunks: false
+          }
+        }));
+        
+        // Process the batch
+        const results = await this.processBatch(batchJobs, options.concurrencyLimit);
+        
+        // Combine the results
+        // This is a placeholder - in a real implementation, you would combine the summaries intelligently
+        const combinedResult: SummarizationResult = {
           summaryId,
-          chunkCount,
-          result
-        });
+          summaryText: results.map(r => r.summaryText).join('\n\n'),
+          inputTokens: results.reduce((sum, r) => sum + (r.inputTokens || 0), 0),
+          outputTokens: results.reduce((sum, r) => sum + (r.outputTokens || 0), 0),
+          cost: results.reduce((sum, r) => sum + (r.cost || 0), 0),
+          duration: Date.now() - startTime,
+          modelUsed: results[0]?.modelUsed,
+          attempts: results.reduce((sum, r) => sum + (r.attempts || 1), 0)
+        };
         
-        return result;
+        return combinedResult;
       }
       
       // Otherwise, just process the first chunk (backward compatibility)
@@ -563,28 +422,32 @@ export class EnhancedClaudeClient extends EventEmitter {
         summaryId,
         summaryText: 'Document processed but not summarized',
         duration: 0,
-        isPartial: true
+        inputTokens: 0,
+        outputTokens: 0,
+        cost: 0
       };
     } catch (error) {
-      // Handle chunking errors
       componentLogger.error(`Error processing document: ${error instanceof Error ? error.message : String(error)}`);
       
-      // Update cache if enabled
-      if (options.useCache && options.cacheKey) {
-        summaryCache.updateStatus(
-          options.cacheKey,
-          'FAILED',
-          undefined,
-          error instanceof Error ? error.message : String(error)
-        );
+      // If fallback is enabled, try to generate a fallback summary
+      if (options.useFallback) {
+        try {
+          componentLogger.info(`Attempting fallback summary generation for filing ${options.filingId || 'unknown'}`);
+          
+          const fallbackResult = await generateFallbackSummary(documentContent, filingType as SECFilingType);
+          
+          return {
+            ...fallbackResult,
+            summaryId,
+            duration: Date.now() - startTime,
+            fallbackUsed: true
+          };
+        } catch (fallbackError) {
+          componentLogger.error(`Fallback summary generation failed: ${fallbackError instanceof Error ? fallbackError.message : String(fallbackError)}`);
+        }
       }
       
-      this.emit(EnhancedClaudeEvent.CHUNK_ERROR, { 
-        summaryId,
-        error: error instanceof Error ? error : new Error(String(error))
-      });
-      
-      // Re-throw the error
+      // Re-throw the original error
       throw error;
     }
   }
@@ -614,25 +477,20 @@ export class EnhancedClaudeClient extends EventEmitter {
       // Process the batch
       const batchResults = await batchProcessor.processBatch(jobs);
       
-      // Track completed jobs
-      let completedJobs = 0;
+      // Log batch completion
+      componentLogger.info(`Batch ${batchId} completed: ${batchResults.results.length} successful, ${batchResults.errors.length} failed`);
       
-      // Set up progress tracking
-      const progressInterval = setInterval(() => {
-        const activeJobs = batchProcessor.getActiveJobs();
-        completedJobs = totalJobs - activeJobs.length;
-        
-        // Emit progress event
-        this.emit(EnhancedClaudeEvent.BATCH_PROGRESS, { 
-          batchId,
-          totalJobs,
-          completedJobs,
-          progress: Math.round((completedJobs / totalJobs) * 100)
-        });
-        
-        // Stop interval when all jobs are complete
-        if (completedJobs === totalJobs) {
-          clearInterval(progressInterval);
+      // Track batch metrics
+      setInterval(() => {
+        try {
+          monitoring.recordBatchProcessing(
+            'document_processing',
+            batchResults.results.length,
+            batchResults.errors.length,
+            batchResults.processingTimeMs
+          );
+        } catch (monitoringError) {
+          componentLogger.warn(`Failed to record batch metrics: ${monitoringError instanceof Error ? monitoringError.message : String(monitoringError)}`);
         }
       }, 1000);
       
