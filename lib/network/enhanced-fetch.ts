@@ -5,6 +5,19 @@
 
 import { logger } from '../logging';
 import { monitoring } from '../monitoring';
+
+// Create a safe wrapper for monitoring functions
+const safeMonitoring = {
+  recordDuration: function(metric: string, value: number, tags: Record<string, string | boolean> = {}) {
+    try {
+      if (typeof monitoring.recordTiming === 'function') {
+        monitoring.recordTiming(metric, value, tags);
+      }
+    } catch (error) {
+      console.warn('Failed to record timing', { error });
+    }
+  }
+};
 import { ApiError, ErrorCode } from '../error-handling';
 import { executeWithAdaptiveRetry, AdaptiveRetryConfig, DefaultAdaptiveRetryConfig } from '../error-handling/adaptive-retry';
 
@@ -125,16 +138,16 @@ export async function enhancedFetch<T = any>(
           
           switch (response.status) {
             case 400:
-              errorCode = ErrorCode.INVALID_REQUEST;
+              errorCode = ErrorCode.BAD_REQUEST;
               isRetriable = false;
               break;
             case 401:
             case 403:
-              errorCode = ErrorCode.INVALID_API_KEY;
+              errorCode = ErrorCode.UNAUTHORIZED;
               isRetriable = false;
               break;
             case 404:
-              errorCode = ErrorCode.RESOURCE_NOT_FOUND;
+              errorCode = ErrorCode.NOT_FOUND;
               isRetriable = false;
               break;
             case 408:
@@ -142,14 +155,14 @@ export async function enhancedFetch<T = any>(
               isRetriable = true;
               break;
             case 429:
-              errorCode = ErrorCode.QUOTA_EXCEEDED;
+              errorCode = ErrorCode.RATE_LIMITED;
               isRetriable = true;
               break;
             case 500:
             case 502:
             case 503:
             case 504:
-              errorCode = ErrorCode.SERVICE_UNAVAILABLE;
+              errorCode = ErrorCode.NETWORK_UNAVAILABLE;
               isRetriable = true;
               break;
             default:
@@ -173,7 +186,7 @@ export async function enhancedFetch<T = any>(
           }
           
           // Create and throw API error
-          throw new ApiError(
+          const apiError = new ApiError(
             errorCode,
             `HTTP error ${response.status}: ${response.statusText}`,
             {
@@ -184,9 +197,15 @@ export async function enhancedFetch<T = any>(
               requestId
             },
             isRetriable,
-            requestId,
-            retryAfter
+            requestId
           );
+          
+          // Set retryAfter if available
+          if (retryAfter !== undefined) {
+            apiError.retryAfter = retryAfter;
+          }
+          
+          throw apiError;
         }
         
         // Parse response based on responseType
@@ -253,7 +272,7 @@ export async function enhancedFetch<T = any>(
     });
     
     // Track success
-    monitoring.recordDuration('network.request.duration', duration, {
+    safeMonitoring.recordDuration('network.request.duration', duration, {
       ...context,
       success: 'true'
     });
@@ -267,7 +286,7 @@ export async function enhancedFetch<T = any>(
     const normalizedError = error instanceof ApiError
       ? error
       : new ApiError(
-          error.name === 'AbortError' ? ErrorCode.TIMEOUT_ERROR : ErrorCode.NETWORK_ERROR,
+          error.name === 'AbortError' ? ErrorCode.TIMEOUT_ERROR : ErrorCode.NETWORK_UNAVAILABLE,
           error.message || 'Network request failed',
           {
             url,
@@ -287,7 +306,7 @@ export async function enhancedFetch<T = any>(
     });
     
     // Track failure
-    monitoring.recordDuration('network.request.duration', duration, {
+    safeMonitoring.recordDuration('network.request.duration', duration, {
       ...context,
       success: 'false',
       errorCode: normalizedError.code

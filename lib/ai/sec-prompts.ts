@@ -542,8 +542,8 @@ IMPORTANT: Your summary will be delivered via email to tldrSEC subscribers. Crea
  * @param ticker Optional ticker symbol for context
  * @returns A customized user prompt with content
  */
-export function generateUserPrompt(filingType: FilingType, content: string, companyName?: string, ticker?: string): string {
+export const generateUserPrompt = (filingType: FilingType, content: string, companyName?: string, ticker?: string): string => {
   const context = { ticker, companyName };
   const promptGenerator = getPromptForFilingType(filingType, context);
   return promptGenerator.getFullPrompt(content);
-}
+};
