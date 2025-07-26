@@ -351,6 +351,28 @@ class Monitoring {
       ...tags
     });
   }
+
+  /**
+   * Record AI API call for monitoring
+   * 
+   * @param provider - AI provider (e.g., 'claude', 'openai')
+   * @param model - Model used (e.g., 'claude-sonnet-4-20250514')
+   * @param success - Whether the call was successful
+   * @param tags - Additional metadata about the call
+   */
+  recordAiApiCall(provider: string, model: string, success: boolean, tags: Record<string, string> = {}): void {
+    this.incrementCounter('ai.api_calls', 1, { 
+      provider,
+      model,
+      success: success.toString(),
+      ...tags
+    });
+    
+    this.componentLogger.info(`AI API call: ${provider}/${model}`, { 
+      success,
+      ...tags
+    });
+  }
 }
 
 // Create and export a singleton instance
