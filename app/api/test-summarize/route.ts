@@ -1,17 +1,16 @@
-import { NextApiRequest, NextApiResponse } from 'next';
-import { FilingType } from '../../lib/sec-edgar/types';
-import { enhancedFetch } from '../../lib/network/enhanced-fetch';
-import { parseFormContentEnhanced } from '../../lib/parsers/enhanced-form-parser';
-// Import form registry for metadata
-import { FormTypeMetadata, getFormMetadata } from '../../lib/sec-edgar/form-registry';
-import { estimateTokenCount } from '../../lib/ai/token-counter';
+import { FilingType } from '../../../lib/sec-edgar/types';
+import { enhancedFetch } from '../../../lib/network/enhanced-fetch';
+import { parseFormContentEnhanced } from '../../../lib/parsers/enhanced-form-parser';
+import { getFormMetadata } from '../../../lib/sec-edgar/form-registry';
+import { estimateTokenCount } from '../../../lib/ai/token-counter';
 import { JSDOM } from 'jsdom';
 import * as cheerio from 'cheerio';
-import { logger } from '../../lib/logging';
-import { getPrismaClient } from '../../lib/db/prisma';
-import { enhancedClaudeClient } from '../../lib/ai/enhanced-claude-client';
-import { ClaudeMessage } from '../../lib/ai/claude-client';
-import { monitoring } from '../../lib/monitoring';
+import { logger } from '../../../lib/logging';
+import { getPrismaClient } from '../../../lib/db/prisma';
+import { enhancedClaudeClient } from '../../../lib/ai/enhanced-claude-client';
+import { ClaudeMessage } from '../../../lib/ai/claude-client';
+import { monitoring } from '../../../lib/monitoring';
+import { NextRequest, NextResponse } from 'next/server';
 
 // Create a safe wrapper for monitoring functions
 const safeMonitoring = {
@@ -127,7 +126,7 @@ function extractDocumentLinksFromDirectoryListing(html: string, baseUrl: string)
     
     return links;
   } catch (error) {
-    apiLogger.error(`Error extracting links from directory listing: ${error instanceof Error ? error.message : String(error)}`);
+    apiLogger.error('Error extracting links from directory listing', { error });
     return [];
   }
 }
@@ -139,14 +138,14 @@ function extractDocumentLinksFromDirectoryListing(html: string, baseUrl: string)
  * @returns Estimated cost in USD
  */
 function calculateCost(inputTokens: number, outputTokens: number): number {
-  // Claude Sonnet pricing: $0.003 per 1K input tokens, $0.015 per 1K output tokens
-  const inputCost = (inputTokens / 1000) * 0.003;
-  const outputCost = (outputTokens / 1000) * 0.015;
+  // Claude Sonnet 4 pricing: $3 per 1M input tokens, $15 per 1M output tokens
+  const inputCost = (inputTokens / 1000000) * 3;
+  const outputCost = (outputTokens / 1000000) * 15;
   return inputCost + outputCost;
 }
 
 // In-memory cache for testing purposes
-const inMemoryCache: Record<string, { data: string, expiresAt: Date }> = {};
+const inMemoryCache: Record<string, { data: any, expiresAt: Date }> = {};
 
 /**
  * Generate a simplified prompt for SEC filing summarization
@@ -157,20 +156,26 @@ const inMemoryCache: Record<string, { data: string, expiresAt: Date }> = {};
  * @returns A customized prompt with content
  */
 function generateSimplifiedPrompt(filingType: FilingType, content: string, companyName?: string, ticker?: string): string {
-  // Normalize the filing type before lookup
-  const normalizedFilingType = filingType.replace(/\//g, '-').toUpperCase();
-  const formMetadata = getFormMetadata(normalizedFilingType);
-  const formName = formMetadata ? formMetadata.displayName : normalizedFilingType;
+  // Get metadata for the filing type
+  const metadata = getFormMetadata(filingType);
+  const filingTypeDisplay = metadata?.displayName || filingType;
   
-  return `
-    You are an expert financial analyst specializing in SEC filings analysis.
-    
-    Please analyze the following ${formName} filing from ${companyName || 'the company'} ${ticker ? `(${ticker})` : ''} and provide key insights.
-    
-    Focus on extracting the most critical financial information, business developments, and risk factors.
-    
-    FILING CONTENT:
-    ${content}
+  // Create context string
+  let contextStr = '';
+  if (companyName) {
+    contextStr += `Company: ${companyName}\n`;
+  }
+  if (ticker) {
+    contextStr += `Ticker: ${ticker}\n`;
+  }
+  
+  // Base prompt with context
+  let prompt = `You are an expert financial analyst tasked with summarizing a ${filingTypeDisplay} SEC filing.
+${contextStr}
+Please analyze the following filing content and extract the most important information:
+
+${content}
+
     
     IMPORTANT: Your response MUST be valid JSON. Do not include any text before or after the JSON.
     
@@ -202,6 +207,8 @@ function generateSimplifiedPrompt(filingType: FilingType, content: string, compa
       "keyTakeaway": "Single most important insight for investors"
     }
   `;
+  
+  return prompt;
 }
 
 /**
@@ -211,18 +218,22 @@ function generateSimplifiedPrompt(filingType: FilingType, content: string, compa
  */
 async function checkCache(filingUrl: string): Promise<any | null> {
   try {
-    // Create a hash of the filing URL to use as a cache key
-    const cacheKey = Buffer.from(filingUrl).toString('base64');
+    // Check in-memory cache first
+    const cacheKey = filingUrl;
+    const cachedItem = inMemoryCache[cacheKey];
     
-    const cachedSummary = inMemoryCache[cacheKey];
+    if (cachedItem && cachedItem.expiresAt > new Date()) {
+      return cachedItem.data;
+    }
     
-    if (cachedSummary && cachedSummary.expiresAt > new Date()) {
-      return JSON.parse(cachedSummary.data);
+    // If not in memory, remove expired items
+    if (cachedItem && cachedItem.expiresAt <= new Date()) {
+      delete inMemoryCache[cacheKey];
     }
     
     return null;
   } catch (error) {
-    apiLogger.warn(`Error checking cache: ${error instanceof Error ? error.message : String(error)}`);
+    apiLogger.error('Error checking cache', { error });
     return null;
   }
 }
@@ -235,138 +246,116 @@ async function checkCache(filingUrl: string): Promise<any | null> {
  */
 async function saveToCache(filingUrl: string, data: any, ttlMinutes: number = 60): Promise<void> {
   try {
-    // Create a hash of the filing URL to use as a cache key
-    const cacheKey = Buffer.from(filingUrl).toString('base64');
-    
-    // Calculate expiration time
+    // Save to in-memory cache
+    const cacheKey = filingUrl;
     const expiresAt = new Date();
     expiresAt.setMinutes(expiresAt.getMinutes() + ttlMinutes);
     
-    // Store in memory cache
     inMemoryCache[cacheKey] = {
-      data: JSON.stringify(data),
-      expiresAt: expiresAt
+      data,
+      expiresAt
     };
     
-    apiLogger.info(`Saved summary to in-memory cache: ${cacheKey}`);
+    apiLogger.debug(`Saved to in-memory cache: ${cacheKey}, expires: ${expiresAt.toISOString()}`);
   } catch (error) {
-    apiLogger.warn(`Error saving to cache: ${error instanceof Error ? error.message : String(error)}`);
+    apiLogger.error('Error saving to cache', { error });
   }
 }
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+export async function POST(request: NextRequest) {
   const startTime = Date.now();
   
-  if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method not allowed' });
-  }
-
   try {
-    const { filingUrl, filingType, companyName, ticker, dryRun = false } = req.body as TestSummarizeRequest;
+    // Parse request body
+    const requestData: TestSummarizeRequest = await request.json();
+    const { filingUrl, filingType, companyName, ticker, dryRun = false } = requestData;
     
     if (!filingUrl) {
-      return res.status(400).json({ error: 'filingUrl is required' });
+      return NextResponse.json(
+        { 
+          success: false, 
+          error: 'Missing required parameter: filingUrl',
+          processingTimeMs: Date.now() - startTime 
+        },
+        { status: 400 }
+      );
     }
     
-    apiLogger.info(`Processing test summarization for ${filingUrl}`, { filingType, companyName, ticker, dryRun });
-    
-    // Check cache first
+    // Step 1: Check cache
     const cachedResult = await checkCache(filingUrl);
     if (cachedResult) {
       apiLogger.info(`Cache hit for ${filingUrl}`);
-      return res.status(200).json({
-        success: true,
+      return NextResponse.json({
         ...cachedResult,
         cacheHit: true,
         processingTimeMs: Date.now() - startTime
       });
     }
     
-    // Step 1: Fetch the filing content
-    apiLogger.debug(`Fetching content from ${filingUrl}`);
+    // Step 2: Fetch filing content
+    apiLogger.debug(`Fetching filing from ${filingUrl}`);
     let content: string;
     let actualUrl = filingUrl;
     
     try {
-      content = await enhancedFetch(filingUrl, { 
-        responseType: 'text',
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (compatible; TldrSEC/1.0; +https://tldrsec.app)'
-        }
-      });
+      const fetchStart = Date.now();
+      const response = await enhancedFetch(filingUrl);
+      content = await response.text();
+      safeMonitoring.recordDuration('sec_filing_fetch_ms', Date.now() - fetchStart, { source: 'test-summarize' });
       
-      // Step 2: Check if it's a directory listing and handle accordingly
+      // Check if this is a directory listing and handle accordingly
       if (isDirectoryListing(content)) {
-        apiLogger.debug(`Found directory listing at ${filingUrl}, extracting document links`);
+        apiLogger.info(`URL ${filingUrl} is a directory listing, looking for document links`);
         const documentLinks = extractDocumentLinksFromDirectoryListing(content, filingUrl);
         
-        if (documentLinks.length === 0) {
-          return res.status(400).json({
-            success: false,
-            error: 'Found directory listing but could not extract any document links',
-            processingTimeMs: Date.now() - startTime
-          });
-        }
-        
-        // Try to find primary document (usually .htm or .html file)
-        const primaryDocLink = documentLinks.find(link => link.endsWith('.htm') || link.endsWith('.html'));
-        
-        if (!primaryDocLink) {
-          apiLogger.debug(`No HTML document found, using first document: ${documentLinks[0]}`);
+        if (documentLinks.length > 0) {
+          // Use the first document link
           actualUrl = documentLinks[0];
-        } else {
-          apiLogger.debug(`Found primary document: ${primaryDocLink}`);
-          actualUrl = primaryDocLink;
+          apiLogger.info(`Using first document from listing: ${actualUrl}`);
+          
+          // Fetch the actual document
+          const docFetchStart = Date.now();
+          const docResponse = await enhancedFetch(actualUrl);
+          content = await docResponse.text();
+          safeMonitoring.recordDuration('sec_filing_fetch_ms', Date.now() - docFetchStart, { source: 'test-summarize', is_directory: 'true' });
         }
-        
-        // Fetch the actual document content
-        content = await enhancedFetch(actualUrl, { 
-          responseType: 'text',
-          headers: {
-            'User-Agent': 'Mozilla/5.0 (compatible; TldrSEC/1.0; +https://tldrsec.app)'
-          }
-        });
       }
-    } catch (error) {
-      return res.status(500).json({
-        success: false,
-        error: `Failed to fetch filing content: ${error instanceof Error ? error.message : String(error)}`,
-        processingTimeMs: Date.now() - startTime
-      });
+    } catch (fetchError) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: `Failed to fetch filing: ${fetchError instanceof Error ? fetchError.message : String(fetchError)}`,
+          processingTimeMs: Date.now() - startTime
+        },
+        { status: 500 }
+      );
     }
     
-    // Step 3: Parse the content
-    apiLogger.debug(`Parsing content from ${actualUrl}`);
-    let parsedContent;
+    // Step 3: Parse filing content
+    apiLogger.debug(`Parsing filing content from ${actualUrl}`);
+    let parsedContent: { sections: Record<string, string>; metadata: Record<string, any> };
+    
     try {
-      // Detect filing type if not provided
-      const detectedFilingType = filingType || 
-        (actualUrl.includes('/10-K/') ? '10-K' : 
-         actualUrl.includes('/10-Q/') ? '10-Q' : 
-         actualUrl.includes('/8-K/') ? '8-K' : 'GENERIC') as FilingType;
+      const parseStart = Date.now();
+      parsedContent = parseFormContentEnhanced(content);
+      safeMonitoring.recordDuration('sec_filing_parse_ms', Date.now() - parseStart, { source: 'test-summarize' });
       
-      parsedContent = await parseFormContentEnhanced(content, detectedFilingType, actualUrl);
-      
-      // Add company name and ticker to metadata if provided
-      if (companyName) {
-        parsedContent.metadata = {
-          ...parsedContent.metadata,
-          companyName
-        };
-      }
-      
-      if (ticker) {
+      // Add ticker to metadata if provided
+      if (ticker && parsedContent.metadata) {
         parsedContent.metadata = {
           ...parsedContent.metadata,
           ticker
         };
       }
     } catch (error) {
-      return res.status(500).json({
-        success: false,
-        error: `Failed to parse filing content: ${error instanceof Error ? error.message : String(error)}`,
-        processingTimeMs: Date.now() - startTime
-      });
+      return NextResponse.json(
+        {
+          success: false,
+          error: `Failed to parse filing content: ${error instanceof Error ? error.message : String(error)}`,
+          processingTimeMs: Date.now() - startTime
+        },
+        { status: 500 }
+      );
     }
     
     // Step 4: Generate prompt
@@ -444,24 +433,30 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         // Save to cache with 1-hour TTL
         await saveToCache(filingUrl, response, 60);
       } catch (claudeError) {
-        return res.status(500).json({
-          success: false,
-          error: `Failed to generate summary: ${claudeError instanceof Error ? claudeError.message : String(claudeError)}`,
-          parsedContent: response.parsedContent,
-          prompt: response.prompt,
-          tokenEstimates: response.tokenEstimates,
-          processingTimeMs: Date.now() - startTime
-        });
+        return NextResponse.json(
+          {
+            success: false,
+            error: `Failed to generate summary: ${claudeError instanceof Error ? claudeError.message : String(claudeError)}`,
+            parsedContent: response.parsedContent,
+            prompt: response.prompt,
+            tokenEstimates: response.tokenEstimates,
+            processingTimeMs: Date.now() - startTime
+          },
+          { status: 500 }
+        );
       }
     }
     
-    return res.status(200).json(response);
+    return NextResponse.json(response);
   } catch (error) {
     apiLogger.error(`Unhandled error in test-summarize API: ${error instanceof Error ? error.message : String(error)}`);
-    return res.status(500).json({ 
-      success: false,
-      error: `An error occurred during test summarization: ${error instanceof Error ? error.message : String(error)}`,
-      processingTimeMs: Date.now() - startTime
-    });
+    return NextResponse.json(
+      { 
+        success: false,
+        error: `An error occurred during test summarization: ${error instanceof Error ? error.message : String(error)}`,
+        processingTimeMs: Date.now() - startTime
+      },
+      { status: 500 }
+    );
   }
 }

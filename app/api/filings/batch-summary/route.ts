@@ -10,14 +10,14 @@
  * - Enhanced chunking for large documents
  */
 
-import { NextApiRequest, NextApiResponse } from 'next';
+import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
-import { authOptions } from '../auth/[...nextauth]';
-import { enhancedFilingService } from '../../../services/enhancedFilingService';
-import { logger } from '../../../lib/logging';
-import { FilingType } from '../../../lib/sec-edgar/types';
-import { getFormMetadata } from '../../../lib/sec-edgar/form-registry';
-import { prisma } from '../../../lib/db';
+import { authOptions } from '../../../../lib/auth/auth-options';
+import { enhancedFilingService } from '../../../../services/enhancedFilingService';
+import { logger } from '../../../../lib/logging';
+import { FilingType } from '../../../../lib/sec-edgar/types';
+import { getFormMetadata } from '../../../../lib/sec-edgar/form-registry';
+import { prisma } from '../../../../lib/db';
 
 // API route logger
 const apiLogger = logger.child('api-batch-summary');
@@ -25,32 +25,31 @@ const apiLogger = logger.child('api-batch-summary');
 // Maximum number of filings that can be requested in a single batch
 const MAX_BATCH_SIZE = 10;
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+export async function POST(request: NextRequest) {
   const startTime = Date.now();
   
   try {
-    // Validate request method
-    if (req.method !== 'POST') {
-      return res.status(405).json({ error: 'Method not allowed' });
-    }
-    
-    // Get user session
-    const session = await getServerSession(req, res, authOptions);
+    // Get user session (Note: getServerSession usage is different in App Router)
+    const session = await getServerSession(authOptions);
     const userId = session?.user?.id;
     
     // Extract request body
-    const { requests, concurrencyLimit = 3, useCache = true, processAllChunks = false } = req.body;
+    const { requests, concurrencyLimit = 3, useCache = true, processAllChunks = false } = await request.json();
     
     // Validate requests array
     if (!Array.isArray(requests)) {
-      return res.status(400).json({ error: 'Requests must be an array' });
+      return NextResponse.json(
+        { error: 'Requests must be an array' },
+        { status: 400 }
+      );
     }
     
     // Enforce batch size limit
     if (requests.length > MAX_BATCH_SIZE) {
-      return res.status(400).json({ 
-        error: `Batch size exceeds maximum of ${MAX_BATCH_SIZE} filings` 
-      });
+      return NextResponse.json(
+        { error: `Batch size exceeds maximum of ${MAX_BATCH_SIZE} filings` },
+        { status: 400 }
+      );
     }
     
     // Validate each request
@@ -86,10 +85,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     
     // If there are invalid requests, return error
     if (invalidRequests.length > 0) {
-      return res.status(400).json({
-        error: 'Invalid requests in batch',
-        invalidRequests
-      });
+      return NextResponse.json(
+        {
+          error: 'Invalid requests in batch',
+          invalidRequests
+        },
+        { status: 400 }
+      );
     }
     
     // Log request
@@ -127,7 +129,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     );
     
     // Return success response
-    return res.status(200).json({
+    return NextResponse.json({
       success: true,
       results: result.results,
       errors: result.errors,
@@ -144,11 +146,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     // Handle known API errors
     if (error instanceof Error && 'statusCode' in error) {
       const apiError = error as Error & { statusCode: number };
-      return res.status(apiError.statusCode).json({ error: apiError.message });
+      return NextResponse.json(
+        { error: apiError.message },
+        { status: apiError.statusCode }
+      );
     }
     
     // Handle unknown errors
     const message = error instanceof Error ? error.message : 'Unknown error';
-    return res.status(500).json({ error: `Failed to process batch summary: ${message}` });
+    return NextResponse.json(
+      { error: `Failed to process batch summary: ${message}` },
+      { status: 500 }
+    );
   }
 }

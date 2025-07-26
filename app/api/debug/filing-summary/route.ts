@@ -1,7 +1,7 @@
-import { NextApiRequest, NextApiResponse } from 'next';
-import filingService from '../../../services/filingService';
-import { findCompanyByTicker, getLatestFilings } from '../../../services/secService';
-import { FilingType } from '../../../lib/sec-edgar/types';
+import { NextRequest, NextResponse } from 'next/server';
+import filingService from '../../../../services/filingService';
+import { findCompanyByTicker, getLatestFilings } from '../../../../services/secService';
+import { FilingType } from '../../../../lib/sec-edgar/types';
 
 // Define interfaces for the data we're working with
 interface Filing {
@@ -24,16 +24,15 @@ interface SummaryResult {
   } | null;
 }
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method not allowed' });
-  }
-
+export async function POST(request: NextRequest) {
   try {
-    const { ticker } = req.body;
+    const { ticker } = await request.json();
     
     if (!ticker) {
-      return res.status(400).json({ error: 'Ticker is required' });
+      return NextResponse.json(
+        { error: 'Ticker is required' },
+        { status: 400 }
+      );
     }
     
     console.log(`[DEBUG API] Starting debug for ticker: ${ticker}`);
@@ -43,7 +42,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const company = await findCompanyByTicker(ticker);
     
     if (!company) {
-      return res.status(404).json({ error: `Company with ticker ${ticker} not found` });
+      return NextResponse.json(
+        { error: `Company with ticker ${ticker} not found` },
+        { status: 404 }
+      );
     }
     
     // Step 2: Get latest filings
@@ -94,7 +96,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
     
     // Return all debug information
-    return res.status(200).json({
+    return NextResponse.json({
       ticker,
       company: {
         name: company.name,
@@ -107,9 +109,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     });
   } catch (error) {
     console.error('[DEBUG API] Unhandled error:', error);
-    return res.status(500).json({ 
-      error: 'An error occurred during debugging',
-      message: error instanceof Error ? error.message : String(error)
-    });
+    return NextResponse.json(
+      { 
+        error: 'An error occurred during debugging',
+        message: error instanceof Error ? error.message : String(error)
+      },
+      { status: 500 }
+    );
   }
 }
