@@ -75,6 +75,14 @@ export type ClaudeResponse = {
     fallbackUsed: boolean;
     originalModel?: string;
   };
+  // Additional top-level properties used by enhanced client
+  inputTokens: number;
+  outputTokens: number;
+  totalCost: number;
+  attempts: number;
+  executionTimeMs: number;
+  fallbackUsed: boolean;
+  originalModel?: string;
 };
 
 // Type for executeWithModelFallback return value
@@ -519,7 +527,16 @@ export class ClaudeClient {
           fallbackUsed: modelUsed !== selectedModel,
           originalModel: useCostOptimization ? model : 
                        (modelUsed !== selectedModel ? selectedModel : undefined)
-        }
+        },
+        // Add top-level properties to match the updated type definition
+        inputTokens: usage.inputTokens,
+        outputTokens: usage.outputTokens,
+        totalCost: cost.totalCost,
+        attempts,
+        executionTimeMs,
+        fallbackUsed: modelUsed !== selectedModel,
+        originalModel: useCostOptimization ? model : 
+                     (modelUsed !== selectedModel ? selectedModel : undefined)
       };
     } catch (error: any) {
       // Record failure metrics
