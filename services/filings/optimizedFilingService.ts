@@ -815,6 +815,133 @@ export class OptimizedFilingService {
   }
 
   /**
+   * Batch processing for multiple filing summaries
+   */
+  async batchGetFilingSummaries(
+    requests: Array<{
+      ticker: string;
+      formType: FilingType;
+      options?: {
+        bypassCache?: boolean;
+        saveToDatabase?: boolean;
+        returnMetadata?: boolean;
+      };
+    }>,
+    batchOptions: {
+      concurrency?: number;
+      failFast?: boolean;
+      progressCallback?: (completed: number, total: number) => void;
+    } = {}
+  ): Promise<Array<{ 
+    data: FilingSummaryResult | null; 
+    error?: string; 
+    metadata?: Record<string, any>;
+  }>> {
+    const { concurrency = 5, failFast = false, progressCallback } = batchOptions;
+    const startTime = Date.now();
+    const batchId = `batch-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`;
+    
+    optimizedLogger.info(`🚀 Starting batch processing: ${requests.length} requests`, {
+      batchId,
+      concurrency,
+      failFast
+    });
+    
+    const results: Array<{ 
+      data: FilingSummaryResult | null; 
+      error?: string; 
+      metadata?: Record<string, any>;
+    }> = [];
+    
+    // Process requests in batches with controlled concurrency
+    for (let i = 0; i < requests.length; i += concurrency) {
+      const batch = requests.slice(i, i + concurrency);
+      
+      const batchPromises = batch.map(async (request, batchIndex) => {
+        const globalIndex = i + batchIndex;
+        
+        try {
+          optimizedLogger.debug(`Processing batch item ${globalIndex + 1}/${requests.length}: ${request.ticker} ${request.formType}`, { batchId });
+          
+          const result = await this.getFilingSummary(
+            request.ticker,
+            request.formType,
+            request.options || {}
+          );
+          
+          if (progressCallback) {
+            progressCallback(globalIndex + 1, requests.length);
+          }
+          
+          return result;
+          
+        } catch (error) {
+          const errorMessage = error instanceof Error ? error.message : String(error);
+          optimizedLogger.error(`❌ Batch item ${globalIndex + 1} failed: ${request.ticker} ${request.formType}`, {
+            error: errorMessage,
+            batchId
+          });
+          
+          if (failFast) {
+            throw error;
+          }
+          
+          return {
+            data: null,
+            error: errorMessage,
+            metadata: { batchError: true, batchIndex: globalIndex }
+          };
+        }
+      });
+      
+      // Wait for current batch to complete
+      const batchResults = await Promise.allSettled(batchPromises);
+      
+      // Process batch results
+      for (const result of batchResults) {
+        if (result.status === 'fulfilled') {
+          results.push(result.value);
+        } else {
+          if (failFast) {
+            throw new Error(`Batch processing failed: ${result.reason}`);
+          }
+          results.push({
+            data: null,
+            error: result.reason instanceof Error ? result.reason.message : String(result.reason),
+            metadata: { batchError: true }
+          });
+        }
+      }
+      
+      // Brief pause between batches to prevent overwhelming the system
+      if (i + concurrency < requests.length) {
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
+    }
+    
+    const totalDuration = Date.now() - startTime;
+    const successful = results.filter(r => r.data).length;
+    const failed = results.length - successful;
+    
+    optimizedLogger.info(`✅ Batch processing completed`, {
+      batchId,
+      total: requests.length,
+      successful,
+      failed,
+      totalDuration,
+      avgDuration: Math.round(totalDuration / requests.length)
+    });
+    
+    safeMonitoring.recordDuration('optimized_batch_processing_ms', totalDuration, {
+      batch_size: requests.length.toString(),
+      concurrency: concurrency.toString(),
+      success_rate: ((successful / requests.length) * 100).toFixed(1)
+    });
+    
+    return results;
+  }
+
+  /**
    * Cleanup method to properly dispose of resources
    * Call this before destroying the instance to prevent memory leaks
    */

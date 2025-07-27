@@ -1,0 +1,212 @@
+# Monitoring Alerts Configuration - Tranche 5
+# 
+# Production monitoring and alerting rules for optimized filing services
+# Compatible with Prometheus, Grafana, and other monitoring systems
+
+groups:
+  - name: optimized_filing_services
+    interval: 30s
+    rules:
+      # Performance Alerts
+      - alert: OptimizedFilingSlowResponse
+        expr: optimized_filing_summary_duration_ms > 45000
+        for: 5m
+        labels:
+          severity: warning
+          service: optimized_filing
+        annotations:
+          summary: "Optimized filing summary response time is slow"
+          description: "Filing summary taking longer than 45 seconds (current: {{ $value }}ms)"
+          runbook_url: "https://docs.company.com/runbooks/slow-filing-response"
+
+      - alert: OptimizedFilingVerySlowResponse
+        expr: optimized_filing_summary_duration_ms > 90000
+        for: 2m
+        labels:
+          severity: critical
+          service: optimized_filing
+        annotations:
+          summary: "Optimized filing summary response time is critically slow"
+          description: "Filing summary taking longer than 90 seconds (current: {{ $value }}ms)"
+          runbook_url: "https://docs.company.com/runbooks/critical-slow-response"
+
+      # Error Rate Alerts
+      - alert: OptimizedFilingHighErrorRate
+        expr: (rate(optimized_filing_errors_total[5m]) / rate(optimized_filing_requests_total[5m])) > 0.1
+        for: 3m
+        labels:
+          severity: warning
+          service: optimized_filing
+        annotations:
+          summary: "High error rate in optimized filing service"
+          description: "Error rate is {{ $value | humanizePercentage }} over the last 5 minutes"
+          runbook_url: "https://docs.company.com/runbooks/high-error-rate"
+
+      - alert: OptimizedFilingCriticalErrorRate
+        expr: (rate(optimized_filing_errors_total[5m]) / rate(optimized_filing_requests_total[5m])) > 0.25
+        for: 1m
+        labels:
+          severity: critical
+          service: optimized_filing
+        annotations:
+          summary: "Critical error rate in optimized filing service"
+          description: "Error rate is {{ $value | humanizePercentage }} - immediate attention required"
+          runbook_url: "https://docs.company.com/runbooks/critical-error-rate"
+
+      # Cache Performance Alerts
+      - alert: OptimizedFilingLowCacheHitRate
+        expr: optimized_filing_cache_hit_rate < 0.6
+        for: 10m
+        labels:
+          severity: warning
+          service: optimized_filing
+        annotations:
+          summary: "Low cache hit rate in optimized filing service"
+          description: "Cache hit rate is {{ $value | humanizePercentage }} (target: >70%)"
+          runbook_url: "https://docs.company.com/runbooks/low-cache-hit-rate"
+
+      - alert: OptimizedFilingCacheFailure
+        expr: optimized_filing_cache_errors_total > 10
+        for: 5m
+        labels:
+          severity: warning
+          service: optimized_filing
+        annotations:
+          summary: "Cache errors detected in optimized filing service"
+          description: "{{ $value }} cache errors in the last 5 minutes"
+          runbook_url: "https://docs.company.com/runbooks/cache-errors"
+
+      # Claude API Alerts
+      - alert: ClaudeAPIRateLimitHit
+        expr: claude_api_rate_limit_hits_total > 5
+        for: 5m
+        labels:
+          severity: warning
+          service: claude_api
+        annotations:
+          summary: "Claude API rate limit being hit frequently"
+          description: "{{ $value }} rate limit hits in the last 5 minutes"
+          runbook_url: "https://docs.company.com/runbooks/claude-rate-limit"
+
+      - alert: ClaudeAPIHighLatency
+        expr: claude_api_request_duration_ms > 30000
+        for: 3m
+        labels:
+          severity: warning
+          service: claude_api
+        annotations:
+          summary: "High latency in Claude API requests"
+          description: "Claude API requests taking longer than 30 seconds"
+          runbook_url: "https://docs.company.com/runbooks/claude-high-latency"
+
+      # Database Alerts
+      - alert: OptimizedFilingDatabaseConnections
+        expr: database_connections_active > 15
+        for: 5m
+        labels:
+          severity: warning
+          service: database
+        annotations:
+          summary: "High number of database connections"
+          description: "{{ $value }} active database connections (target: <10)"
+          runbook_url: "https://docs.company.com/runbooks/high-db-connections"
+
+      - alert: OptimizedFilingDatabaseSlowQueries
+        expr: database_query_duration_ms > 5000
+        for: 2m
+        labels:
+          severity: warning
+          service: database
+        annotations:
+          summary: "Slow database queries detected"
+          description: "Database queries taking longer than 5 seconds"
+          runbook_url: "https://docs.company.com/runbooks/slow-db-queries"
+
+      # Resource Alerts
+      - alert: OptimizedFilingHighMemoryUsage
+        expr: process_memory_usage_bytes > 2147483648  # 2GB
+        for: 10m
+        labels:
+          severity: warning
+          service: optimized_filing
+        annotations:
+          summary: "High memory usage in optimized filing service"
+          description: "Memory usage is {{ $value | humanizeBytes }} (target: <2GB)"
+          runbook_url: "https://docs.company.com/runbooks/high-memory-usage"
+
+      - alert: OptimizedFilingHighCPUUsage
+        expr: process_cpu_usage_percent > 80
+        for: 10m
+        labels:
+          severity: warning
+          service: optimized_filing
+        annotations:
+          summary: "High CPU usage in optimized filing service"
+          description: "CPU usage is {{ $value }}% (target: <80%)"
+          runbook_url: "https://docs.company.com/runbooks/high-cpu-usage"
+
+      # Feature Flag Alerts
+      - alert: OptimizedFilingFeatureFlagDisabled
+        expr: optimized_filing_feature_flag_enabled == 0
+        for: 1m
+        labels:
+          severity: info
+          service: optimized_filing
+        annotations:
+          summary: "Optimized filing feature flag is disabled"
+          description: "ENABLE_OPTIMIZED_FILING feature flag is currently disabled"
+          runbook_url: "https://docs.company.com/runbooks/feature-flag-disabled"
+
+      # Health Check Alerts
+      - alert: OptimizedFilingHealthCheckFailing
+        expr: optimized_filing_health_check_status != 1
+        for: 2m
+        labels:
+          severity: critical
+          service: optimized_filing
+        annotations:
+          summary: "Optimized filing service health check failing"
+          description: "Health check has been failing for 2 minutes"
+          runbook_url: "https://docs.company.com/runbooks/health-check-failure"
+
+  - name: optimized_filing_sla
+    interval: 1m
+    rules:
+      # SLA Metrics
+      - record: optimized_filing_sla_success_rate_1h
+        expr: |
+          (
+            sum(rate(optimized_filing_requests_total{status="success"}[1h])) /
+            sum(rate(optimized_filing_requests_total[1h]))
+          )
+
+      - record: optimized_filing_sla_p95_latency_1h
+        expr: histogram_quantile(0.95, rate(optimized_filing_duration_bucket[1h]))
+
+      - record: optimized_filing_sla_p99_latency_1h
+        expr: histogram_quantile(0.99, rate(optimized_filing_duration_bucket[1h]))
+
+      # SLA Violations
+      - alert: OptimizedFilingSLAViolation
+        expr: optimized_filing_sla_success_rate_1h < 0.95
+        for: 5m
+        labels:
+          severity: critical
+          service: optimized_filing
+          sla: availability
+        annotations:
+          summary: "Optimized filing SLA violation - availability"
+          description: "Success rate ({{ $value | humanizePercentage }}) below SLA target (95%)"
+          runbook_url: "https://docs.company.com/runbooks/sla-violation"
+
+      - alert: OptimizedFilingLatencySLAViolation
+        expr: optimized_filing_sla_p95_latency_1h > 30000  # 30 seconds
+        for: 5m
+        labels:
+          severity: warning
+          service: optimized_filing
+          sla: latency
+        annotations:
+          summary: "Optimized filing SLA violation - latency"
+          description: "P95 latency ({{ $value }}ms) above SLA target (30s)"
+          runbook_url: "https://docs.company.com/runbooks/latency-sla-violation"

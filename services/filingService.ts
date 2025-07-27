@@ -48,7 +48,32 @@ const filingService: FilingService = {
   
   // Get filing summary for a ticker and form type
   getFilingSummary: async (ticker: string, formType: FilingType) => {
-    // Call the imported getFilingSummaryFromService function
+    // Feature flag for optimized filing service (Tranche 3)
+    const useOptimizedService = process.env.ENABLE_OPTIMIZED_FILING === 'true';
+    const trafficPercentage = parseInt(process.env.OPTIMIZED_TRAFFIC_PERCENTAGE || '0', 10);
+    
+    // Determine if we should use optimized service based on feature flag and traffic percentage
+    const shouldUseOptimized = useOptimizedService && 
+      (trafficPercentage >= 100 || Math.random() * 100 < trafficPercentage);
+    
+    if (shouldUseOptimized) {
+      try {
+        // Dynamic import to avoid loading optimized service unless needed
+        const { optimizedFilingService } = await import('./filings/optimizedFilingService');
+        
+        console.log(`[INFO][FilingService] Using optimized service for ${ticker} ${formType}`);
+        return await optimizedFilingService.getFilingSummary(ticker, formType, {
+          returnMetadata: true,
+          saveToDatabase: true
+        });
+      } catch (error) {
+        console.error(`[ERROR][FilingService] Optimized service failed, falling back to legacy: ${error instanceof Error ? error.message : String(error)}`);
+        // Fall back to legacy service on error
+      }
+    }
+    
+    // Call the legacy filing summary service
+    console.log(`[INFO][FilingService] Using legacy service for ${ticker} ${formType}`);
     return await getFilingSummaryFromService(ticker, formType);
   },
   
