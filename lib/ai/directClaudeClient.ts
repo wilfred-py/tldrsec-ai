@@ -37,6 +37,11 @@ export interface ClaudeSummarizationConfig {
   maxRetries?: number;
   enableChunking?: boolean;
   maxTokensPerChunk?: number;
+  enableRateLimit?: boolean;
+  maxRequestsPerMinute?: number;
+  maxTokensPerRequest?: number;
+  singleRequestTokenLimit?: number;
+  chunkMaxTokens?: number;
 }
 
 /**
@@ -64,7 +69,42 @@ function calculateCost(inputTokens: number, outputTokens: number): number {
 }
 
 /**
- * Split content into chunks that fit within token limits
+ * Simple rate limiter using sliding window
+ */
+class RateLimiter {
+  private requests: number[] = [];
+  private maxRequestsPerMinute: number;
+
+  constructor(maxRequestsPerMinute: number = 50) {
+    this.maxRequestsPerMinute = maxRequestsPerMinute;
+  }
+
+  async waitForRateLimit(): Promise<void> {
+    const now = Date.now();
+    const oneMinuteAgo = now - 60000;
+
+    // Remove requests older than 1 minute
+    this.requests = this.requests.filter(timestamp => timestamp > oneMinuteAgo);
+
+    // If we're at the limit, wait until we can make another request
+    if (this.requests.length >= this.maxRequestsPerMinute) {
+      const oldestRequest = this.requests[0];
+      const waitTime = oldestRequest + 60000 - now;
+      
+      if (waitTime > 0) {
+        claudeLogger.info(`Rate limit reached, waiting ${waitTime}ms`);
+        await new Promise(resolve => setTimeout(resolve, waitTime));
+        return this.waitForRateLimit(); // Recursive call to check again
+      }
+    }
+
+    // Record this request
+    this.requests.push(now);
+  }
+}
+
+/**
+ * Enhanced content-aware chunking for SEC filings
  */
 function chunkContent(content: string, maxTokensPerChunk: number = 50000): string[] {
   // Conservative estimate: 1 token ≈ 3 characters for SEC filings
@@ -80,24 +120,68 @@ function chunkContent(content: string, maxTokensPerChunk: number = 50000): strin
   while (currentPos < content.length) {
     let chunkEnd = currentPos + maxCharsPerChunk;
     
-    // Try to break at sensible points
-    if (chunkEnd < content.length) {
-      const breakPoints = [
-        content.lastIndexOf('\n\n', chunkEnd),
-        content.lastIndexOf('</p>', chunkEnd),
-        content.lastIndexOf('</div>', chunkEnd),
-        content.lastIndexOf('. ', chunkEnd)
-      ];
+    // Don't exceed content length
+    if (chunkEnd >= content.length) {
+      chunks.push(content.slice(currentPos));
+      break;
+    }
+    
+    // Find the best breaking point using SEC filing-specific patterns
+    const searchStart = Math.max(currentPos, chunkEnd - maxCharsPerChunk * 0.3);
+    const searchEnd = Math.min(content.length, chunkEnd + maxCharsPerChunk * 0.1);
+    
+    const breakPoints = [
+      // SEC filing section breaks (highest priority)
+      { pos: content.lastIndexOf('\n\nItem ', searchEnd), priority: 10, name: 'SEC Item' },
+      { pos: content.lastIndexOf('\n\nPart ', searchEnd), priority: 9, name: 'SEC Part' },
+      { pos: content.lastIndexOf('\n\nSection ', searchEnd), priority: 8, name: 'Section' },
       
-      const bestBreak = Math.max(...breakPoints.filter(pos => pos > currentPos + maxCharsPerChunk * 0.8));
-      if (bestBreak > currentPos) {
-        chunkEnd = bestBreak + 1;
+      // Financial table breaks
+      { pos: content.lastIndexOf('</table>', searchEnd), priority: 7, name: 'Table end' },
+      { pos: content.lastIndexOf('<table', searchEnd), priority: 6, name: 'Table start' },
+      
+      // Paragraph and division breaks
+      { pos: content.lastIndexOf('\n\n', searchEnd), priority: 5, name: 'Double newline' },
+      { pos: content.lastIndexOf('</div>', searchEnd), priority: 4, name: 'Div end' },
+      { pos: content.lastIndexOf('</p>', searchEnd), priority: 3, name: 'Paragraph end' },
+      
+      // Sentence breaks (lowest priority)
+      { pos: content.lastIndexOf('. ', searchEnd), priority: 2, name: 'Sentence end' },
+      { pos: content.lastIndexOf('.\n', searchEnd), priority: 2, name: 'Sentence end newline' }
+    ];
+    
+    // Filter valid break points and sort by priority
+    const validBreaks = breakPoints
+      .filter(bp => bp.pos > searchStart && bp.pos < searchEnd)
+      .sort((a, b) => b.priority - a.priority || b.pos - a.pos);
+    
+    if (validBreaks.length > 0) {
+      const bestBreak = validBreaks[0];
+      chunkEnd = bestBreak.pos + (bestBreak.name.includes('end') ? bestBreak.name.length : 1);
+      claudeLogger.debug(`Chunking at ${bestBreak.name} (priority ${bestBreak.priority})`);
+    } else {
+      // Fallback: try to break at word boundaries
+      const lastSpace = content.lastIndexOf(' ', searchEnd);
+      if (lastSpace > searchStart) {
+        chunkEnd = lastSpace;
+        claudeLogger.debug('Chunking at word boundary');
+      } else {
+        claudeLogger.debug('Hard chunking - no good break point found');
       }
     }
     
-    chunks.push(content.slice(currentPos, chunkEnd));
+    const chunk = content.slice(currentPos, chunkEnd).trim();
+    if (chunk.length > 0) {
+      chunks.push(chunk);
+    }
     currentPos = chunkEnd;
   }
+  
+  claudeLogger.info(`Content split into ${chunks.length} chunks`, {
+    totalLength: content.length,
+    avgChunkSize: Math.round(content.length / chunks.length),
+    chunkSizes: chunks.map(c => c.length)
+  });
   
   return chunks;
 }
@@ -204,6 +288,7 @@ Respond with a JSON object containing:
 export class DirectClaudeClient {
   private anthropic: Anthropic;
   private defaultConfig: Required<ClaudeSummarizationConfig>;
+  private rateLimiter?: RateLimiter;
 
   constructor(config: ClaudeSummarizationConfig = {}) {
     this.anthropic = new Anthropic({
@@ -216,8 +301,27 @@ export class DirectClaudeClient {
       temperature: config.temperature || 0.3,
       maxRetries: config.maxRetries || 2,
       enableChunking: config.enableChunking ?? true,
-      maxTokensPerChunk: config.maxTokensPerChunk || 50000
+      maxTokensPerChunk: config.maxTokensPerChunk || 50000,
+      enableRateLimit: config.enableRateLimit ?? true,
+      maxRequestsPerMinute: config.maxRequestsPerMinute || 50,
+      maxTokensPerRequest: config.maxTokensPerRequest || 190000,
+      singleRequestTokenLimit: config.singleRequestTokenLimit || 100000,
+      chunkMaxTokens: config.chunkMaxTokens || 2000
     };
+
+    // Initialize rate limiter if enabled
+    if (this.defaultConfig.enableRateLimit) {
+      this.rateLimiter = new RateLimiter(this.defaultConfig.maxRequestsPerMinute);
+    }
+  }
+
+  /**
+   * Apply rate limiting if enabled
+   */
+  private async applyRateLimit(): Promise<void> {
+    if (this.rateLimiter) {
+      await this.rateLimiter.waitForRateLimit();
+    }
   }
 
   /**
@@ -229,6 +333,26 @@ export class DirectClaudeClient {
     context: { ticker?: string; companyName?: string } = {},
     config: Partial<ClaudeSummarizationConfig> = {}
   ): Promise<ClaudeSummarizationResult> {
+    // Input validation
+    if (!content || typeof content !== 'string' || content.trim().length === 0) {
+      throw new Error('Content is required and must be a non-empty string');
+    }
+    
+    if (!filingType || typeof filingType !== 'string') {
+      throw new Error('Filing type is required and must be a string');
+    }
+    
+    if (context && typeof context !== 'object') {
+      throw new Error('Context must be an object if provided');
+    }
+    
+    if (context.ticker && (typeof context.ticker !== 'string' || !/^[A-Z0-9]{1,5}$/i.test(context.ticker.trim()))) {
+      throw new Error('Ticker must be 1-5 alphanumeric characters if provided');
+    }
+    
+    if (context.companyName && (typeof context.companyName !== 'string' || context.companyName.trim().length === 0)) {
+      throw new Error('Company name must be a non-empty string if provided');
+    }
     const startTime = Date.now();
     const finalConfig = { ...this.defaultConfig, ...config };
     
@@ -242,7 +366,7 @@ export class DirectClaudeClient {
       // Generate prompt and estimate tokens
       const prompt = generateOptimizedPrompt(filingType, content, context);
       const inputTokens = estimateTokenCount(prompt);
-      const maxTokensAllowed = 100000; // Conservative limit
+      const maxTokensAllowed = finalConfig.singleRequestTokenLimit; // Conservative limit
 
       let processMode: 'single' | 'chunked' = 'single';
       
@@ -301,6 +425,9 @@ export class DirectClaudeClient {
     config: Required<ClaudeSummarizationConfig>
   ): Promise<ClaudeSummarizationResult> {
     const apiStart = Date.now();
+    
+    // Apply rate limiting before API call
+    await this.applyRateLimit();
     
     const response = await this.anthropic.messages.create({
       model: config.model,
@@ -371,7 +498,7 @@ export class DirectClaudeClient {
       claudeLogger.debug(`Processing chunk ${i + 1}/${chunks.length}, tokens: ${chunkTokens}`);
       
       // Skip chunks that are still too large
-      if (chunkTokens > 190000) {
+      if (chunkTokens > config.maxTokensPerRequest) {
         claudeLogger.warn(`Skipping chunk ${i + 1} - still too large (${chunkTokens} tokens)`);
         chunkSummaries.push({ 
           chunkSummary: `Chunk ${i + 1} was too large to process (${chunkTokens} tokens)`,
@@ -381,9 +508,13 @@ export class DirectClaudeClient {
       }
       
       const apiStart = Date.now();
+      
+      // Apply rate limiting before API call
+      await this.applyRateLimit();
+      
       const chunkResponse = await this.anthropic.messages.create({
         model: config.model,
-        max_tokens: Math.min(config.maxTokens, 2000),
+        max_tokens: Math.min(config.maxTokens, config.chunkMaxTokens),
         temperature: config.temperature,
         messages: [
           {

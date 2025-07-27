@@ -18,6 +18,81 @@ import { prisma } from '../../lib/db';
 
 const optimizedLogger = logger.child('optimized-filing-service');
 
+/**
+ * Input validation utilities
+ */
+class InputValidator {
+  static validateTicker(ticker: string): { isValid: boolean; error?: string } {
+    if (!ticker || typeof ticker !== 'string') {
+      return { isValid: false, error: 'Ticker symbol is required and must be a string' };
+    }
+    
+    const trimmedTicker = ticker.trim().toUpperCase();
+    
+    // Check ticker format: 1-5 characters, alphanumeric only
+    if (!/^[A-Z0-9]{1,5}$/.test(trimmedTicker)) {
+      return { isValid: false, error: 'Ticker symbol must be 1-5 alphanumeric characters' };
+    }
+    
+    // Blacklist known invalid patterns
+    const invalidPatterns = ['TEST', 'NULL', 'TEMP'];
+    if (invalidPatterns.includes(trimmedTicker)) {
+      return { isValid: false, error: `'${trimmedTicker}' is not a valid ticker symbol` };
+    }
+    
+    return { isValid: true };
+  }
+  
+  static validateFormType(formType: FilingType): { isValid: boolean; error?: string } {
+    if (!formType || typeof formType !== 'string') {
+      return { isValid: false, error: 'Form type is required and must be a string' };
+    }
+    
+    const trimmedFormType = formType.trim();
+    
+    // Valid SEC form types
+    const validFormTypes = [
+      '10-K', '10-Q', '8-K', '10-K/A', '10-Q/A', '8-K/A',
+      'DEF 14A', 'FORM 4', 'FORM 3', 'FORM 5', 'SC 13D',
+      'SC 13G', '13F-HR', 'S-1', 'S-3', 'S-4', 'S-8',
+      'PROXY', 'ANNUAL', 'QUARTERLY'
+    ];
+    
+    // Check if form type is in allowed list (case-insensitive)
+    const normalizedFormType = trimmedFormType.toUpperCase();
+    const isValidFormType = validFormTypes.some(valid => 
+      valid.toUpperCase() === normalizedFormType || 
+      valid.toUpperCase().replace(/[\/\s-]/g, '') === normalizedFormType.replace(/[\/\s-]/g, '')
+    );
+    
+    if (!isValidFormType) {
+      return { isValid: false, error: `'${formType}' is not a valid SEC form type. Supported: ${validFormTypes.join(', ')}` };
+    }
+    
+    return { isValid: true };
+  }
+  
+  static validateRequestOptions(options: any): { isValid: boolean; error?: string } {
+    if (options && typeof options !== 'object') {
+      return { isValid: false, error: 'Options must be an object if provided' };
+    }
+    
+    if (options?.bypassCache !== undefined && typeof options.bypassCache !== 'boolean') {
+      return { isValid: false, error: 'bypassCache option must be a boolean' };
+    }
+    
+    if (options?.saveToDatabase !== undefined && typeof options.saveToDatabase !== 'boolean') {
+      return { isValid: false, error: 'saveToDatabase option must be a boolean' };
+    }
+    
+    if (options?.returnMetadata !== undefined && typeof options.returnMetadata !== 'boolean') {
+      return { isValid: false, error: 'returnMetadata option must be a boolean' };
+    }
+    
+    return { isValid: true };
+  }
+}
+
 // Safe monitoring wrapper
 const safeMonitoring = {
   recordDuration: function(metric: string, value: number, tags: Record<string, string | boolean> = {}) {
@@ -111,6 +186,7 @@ export class OptimizedFilingService {
   private cache: CacheInterface;
   private claudeClient: DirectClaudeClient;
   private config: Required<OptimizedFilingConfig>;
+  private cleanupInterval?: NodeJS.Timeout;
 
   constructor(config: OptimizedFilingConfig = {}) {
     this.config = {
@@ -143,7 +219,7 @@ export class OptimizedFilingService {
 
     // Cleanup memory cache periodically (for production Redis, this isn't needed)
     if (this.config.enableInMemoryCache && this.cache instanceof MemoryCache) {
-      setInterval(() => {
+      this.cleanupInterval = setInterval(() => {
         (this.cache as MemoryCache).cleanup();
       }, 300000); // 5 minutes
     }
@@ -173,32 +249,68 @@ export class OptimizedFilingService {
     const requestId = `${ticker}-${formType}-${Date.now()}`;
     const { bypassCache = false, saveToDatabase = true, returnMetadata = false } = options;
     
+    // Input validation
+    const tickerValidation = InputValidator.validateTicker(ticker);
+    if (!tickerValidation.isValid) {
+      optimizedLogger.warn(`❌ Invalid ticker: ${ticker}`, { error: tickerValidation.error, requestId });
+      return { 
+        data: null, 
+        error: `Invalid ticker: ${tickerValidation.error}`,
+        metadata: returnMetadata ? { validationError: true, requestId } : undefined
+      };
+    }
+    
+    const formTypeValidation = InputValidator.validateFormType(formType);
+    if (!formTypeValidation.isValid) {
+      optimizedLogger.warn(`❌ Invalid form type: ${formType}`, { error: formTypeValidation.error, requestId });
+      return { 
+        data: null, 
+        error: `Invalid form type: ${formTypeValidation.error}`,
+        metadata: returnMetadata ? { validationError: true, requestId } : undefined
+      };
+    }
+    
+    const optionsValidation = InputValidator.validateRequestOptions(options);
+    if (!optionsValidation.isValid) {
+      optimizedLogger.warn(`❌ Invalid options`, { error: optionsValidation.error, requestId });
+      return { 
+        data: null, 
+        error: `Invalid options: ${optionsValidation.error}`,
+        metadata: returnMetadata ? { validationError: true, requestId } : undefined
+      };
+    }
+    
     optimizedLogger.info(`🚀 Optimized filing summary request: ${ticker} ${formType}`, { requestId });
     
     try {
       const normalizedFormType = normalizeFormType(formType);
-      const cacheKey = this.getCacheKey(ticker, normalizedFormType);
       
-      // Step 1: Multi-level cache check
+      // Step 1: Get filing information first to create proper cache key
+      const filing = await secService.getLatestFilingByFormType(ticker, normalizedFormType);
+      const filingId = filing?.accessionNumber || filing?.filingDate || 'latest';
+      const cacheKey = this.getCacheKey(ticker, normalizedFormType, filingId);
+      
+      // Step 2: Multi-level cache check
       if (!bypassCache) {
         const cachedResult = await this.getCachedSummary(cacheKey);
         if (cachedResult) {
           safeMonitoring.recordDuration('optimized_filing_summary_cache_hit_ms', Date.now() - startTime, {
             ticker,
             formType: normalizedFormType,
-            cache_source: cachedResult.source
+            cache_source: cachedResult.source,
+            filing_id: filingId
           });
           
-          optimizedLogger.info(`✅ Cache hit (${cachedResult.source}) for ${ticker} ${normalizedFormType}`);
+          optimizedLogger.info(`✅ Cache hit (${cachedResult.source}) for ${ticker} ${normalizedFormType} (${filingId})`);
           return { 
             data: cachedResult.data, 
-            metadata: returnMetadata ? { cacheHit: true, cacheSource: cachedResult.source, requestId } : undefined
+            metadata: returnMetadata ? { cacheHit: true, cacheSource: cachedResult.source, requestId, filingId } : undefined
           };
         }
       }
       
-      // Step 2: Process filing with optimized pipeline
-      const result = await this.processFiling(ticker, normalizedFormType, startTime, requestId);
+      // Step 3: Process filing with optimized pipeline (reuse filing if already fetched)
+      const result = await this.processFiling(ticker, normalizedFormType, startTime, requestId, filing);
       
       if (result.data && !bypassCache) {
         // Cache successful results across all enabled cache layers
@@ -260,13 +372,14 @@ export class OptimizedFilingService {
     ticker: string,
     formType: string,
     startTime: number,
-    requestId: string
+    requestId: string,
+    existingFiling?: any
   ): Promise<{ data: FilingSummaryResult | null; error?: string }> {
     
-    // Get company info and filing in parallel
+    // Get company info and filing in parallel (reuse filing if provided)
     const [companyInfo, filing] = await Promise.all([
       secService.getCompanyInfo(ticker),
-      secService.getLatestFilingByFormType(ticker, formType)
+      existingFiling || secService.getLatestFilingByFormType(ticker, formType)
     ]);
     
     if (!companyInfo) {
@@ -639,10 +752,12 @@ export class OptimizedFilingService {
   }
 
   /**
-   * Generate cache key
+   * Generate cache key with optional filing identifier to prevent collisions
    */
-  private getCacheKey(ticker: string, formType: string): string {
-    return `${ticker.toUpperCase()}-${formType.toUpperCase()}`;
+  private getCacheKey(ticker: string, formType: string, filingId?: string): string {
+    const baseKey = `${ticker.toUpperCase()}-${formType.toUpperCase()}`;
+    // Include filing identifier (accession number or date) to differentiate between different filings
+    return filingId ? `${baseKey}-${filingId}` : `${baseKey}-latest`;
   }
 
   /**
@@ -697,6 +812,18 @@ export class OptimizedFilingService {
     optimizedLogger.info(`✅ Batch processing completed: ${results.length}/${requests.length} processed`);
     
     return results;
+  }
+
+  /**
+   * Cleanup method to properly dispose of resources
+   * Call this before destroying the instance to prevent memory leaks
+   */
+  public dispose(): void {
+    if (this.cleanupInterval) {
+      clearInterval(this.cleanupInterval);
+      this.cleanupInterval = undefined;
+      optimizedLogger.info('OptimizedFilingService cleanup interval cleared');
+    }
   }
 }
 

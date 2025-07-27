@@ -60,8 +60,9 @@ const directSummaryCache: Record<string, {
 /**
  * Cache utilities
  */
-function getCacheKey(ticker: string, formType: string): string {
-  return `${ticker.toUpperCase()}-${formType.toUpperCase()}`;
+function getCacheKey(ticker: string, formType: string, filingDate?: string): string {
+  const baseKey = `${ticker.toUpperCase()}-${formType.toUpperCase()}`;
+  return filingDate ? `${baseKey}-${filingDate}` : baseKey;
 }
 
 function getCachedSummary(ticker: string, formType: string): FilingSummaryResult | null {
