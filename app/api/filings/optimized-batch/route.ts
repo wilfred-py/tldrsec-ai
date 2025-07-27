@@ -73,8 +73,31 @@ export async function POST(request: NextRequest) {
   const requestId = `batch-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
   
   try {
-    // Parse request body
-    const body = await request.json();
+    // Check Content-Length header for payload size limit
+    const contentLength = request.headers.get('content-length');
+    const maxPayloadSize = parseInt(process.env.MAX_BATCH_PAYLOAD_SIZE || '1048576', 10); // 1MB default
+    
+    if (contentLength && parseInt(contentLength, 10) > maxPayloadSize) {
+      const error = `Request payload too large. Maximum allowed: ${maxPayloadSize} bytes`;
+      apiLogger.warn(`❌ ${error}`, { requestId, contentLength });
+      return NextResponse.json({ error, requestId }, { status: 413 });
+    }
+
+    // Parse request body with size validation
+    let body: any;
+    try {
+      const bodyText = await request.text();
+      if (bodyText.length > maxPayloadSize) {
+        const error = `Request payload too large. Maximum allowed: ${maxPayloadSize} bytes`;
+        apiLogger.warn(`❌ ${error}`, { requestId, actualSize: bodyText.length });
+        return NextResponse.json({ error, requestId }, { status: 413 });
+      }
+      body = JSON.parse(bodyText);
+    } catch (parseError) {
+      const error = 'Invalid JSON in request body';
+      apiLogger.warn(`❌ ${error}`, { requestId, parseError });
+      return NextResponse.json({ error, requestId }, { status: 400 });
+    }
     const { 
       requests, 
       concurrency = DEFAULT_CONCURRENCY,
@@ -240,9 +263,12 @@ export async function OPTIONS() {
   return new NextResponse(null, {
     status: 200,
     headers: {
-      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Origin': process.env.NODE_ENV === 'production' 
+        ? (process.env.ALLOWED_ORIGINS || 'https://yourdomain.com')
+        : '*',
       'Access-Control-Allow-Methods': 'POST, OPTIONS',
       'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+      'Access-Control-Max-Age': '86400', // 24 hours
     },
   });
 }

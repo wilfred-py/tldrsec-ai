@@ -206,9 +206,12 @@ export async function OPTIONS() {
   return new NextResponse(null, {
     status: 200,
     headers: {
-      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Origin': process.env.NODE_ENV === 'production' 
+        ? (process.env.ALLOWED_ORIGINS || 'https://yourdomain.com')
+        : '*',
       'Access-Control-Allow-Methods': 'GET, OPTIONS',
       'Access-Control-Allow-Headers': 'Content-Type',
+      'Access-Control-Max-Age': '86400', // 24 hours
     },
   });
 }

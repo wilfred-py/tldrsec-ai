@@ -1,0 +1,743 @@
+openapi: 3.0.3
+info:
+  title: TLDRsec AI - Optimized Filing Services API
+  description: |
+    High-performance SEC filing summary API with optimized architecture.
+    
+    This API provides AI-powered summaries of SEC filings with multi-level caching,
+    batch processing capabilities, and comprehensive monitoring.
+    
+    ## Features
+    - Single filing summaries with sub-second response times
+    - Batch processing for up to 25 concurrent requests  
+    - Multi-level caching (memory, database, Redis)
+    - Circuit breaker protection for external APIs
+    - Real-time health monitoring
+    - Production-ready security controls
+    
+    ## Authentication
+    Currently using Clerk authentication. Include Authorization header with valid session token.
+    
+  version: 4.0.0
+  contact:
+    name: TLDRsec AI Support
+    url: https://github.com/your-org/tldrsec-ai
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+
+servers:
+  - url: https://your-domain.com/api
+    description: Production server
+  - url: http://localhost:3000/api
+    description: Development server
+
+paths:
+  /filings/optimized-summary:
+    get:
+      summary: Get SEC filing summary (optimized)
+      description: |
+        Retrieve an AI-generated summary of a specific SEC filing using the optimized service.
+        
+        This endpoint provides enhanced performance through:
+        - Direct Claude AI integration
+        - Multi-level caching strategy
+        - Content-aware document chunking
+        - Rate limiting and resource management
+        
+      operationId: getOptimizedFilingSummary
+      tags:
+        - Optimized Filing Services
+      parameters:
+        - name: ticker
+          in: query
+          required: true
+          description: Company stock ticker symbol (e.g., AAPL, TSLA)
+          schema:
+            type: string
+            pattern: '^[A-Z]{1,5}$'
+            example: AAPL
+        - name: formType
+          in: query
+          required: true
+          description: SEC form type
+          schema:
+            type: string
+            enum: ['10-K', '10-Q', '8-K', 'Form 4', 'DEF 14A', '13F-HR', 'SC 13D', 'SC 13G']
+            example: 10-K
+        - name: bypassCache
+          in: query
+          required: false
+          description: Skip cache and fetch fresh data
+          schema:
+            type: boolean
+            default: false
+        - name: returnMetadata
+          in: query
+          required: false
+          description: Include detailed processing metadata in response
+          schema:
+            type: boolean
+            default: false
+      responses:
+        '200':
+          description: Filing summary retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OptimizedSummaryResponse'
+              examples:
+                successful_response:
+                  summary: Successful filing summary
+                  value:
+                    success: true
+                    data:
+                      ticker: AAPL
+                      formType: 10-K
+                      summary: "Apple Inc. reported strong financial performance..."
+                      filingDate: "2024-01-15"
+                      keyPoints:
+                        - "Revenue increased 12% year-over-year"
+                        - "iPhone sales remained strong"
+                        - "Services revenue hit record high"
+                    requestId: "opt-1642123456789-abc123def"
+                    performance:
+                      duration: 1234
+                      optimized: true
+                      version: "tranche-4"
+        '400':
+          description: Invalid request parameters
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Filing not found or summary generation failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    options:
+      summary: CORS preflight for optimized summary
+      description: Handle CORS preflight requests
+      tags:
+        - Optimized Filing Services
+      responses:
+        '200':
+          description: CORS preflight successful
+          headers:
+            Access-Control-Allow-Origin:
+              schema:
+                type: string
+            Access-Control-Allow-Methods:
+              schema:
+                type: string
+            Access-Control-Allow-Headers:
+              schema:
+                type: string
+
+  /filings/optimized-batch:
+    post:
+      summary: Process multiple filing summaries (batch optimized)
+      description: |
+        Process multiple SEC filing summaries in a single request with intelligent batching.
+        
+        Features:
+        - Concurrent processing with up to 10 parallel requests
+        - Shared caching across batch requests
+        - Partial result handling for resilient processing
+        - Automatic concurrency optimization based on batch size
+        - Request payload size limits for security
+        
+      operationId: batchOptimizedFilingSummaries
+      tags:
+        - Optimized Filing Services
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BatchRequest'
+            examples:
+              batch_request:
+                summary: Example batch request
+                value:
+                  requests:
+                    - ticker: AAPL
+                      formType: 10-K
+                      id: req-1
+                    - ticker: TSLA
+                      formType: 10-Q
+                      id: req-2
+                    - ticker: MSFT
+                      formType: 8-K
+                      id: req-3
+                  concurrency: 5
+                  bypassCache: false
+                  returnMetadata: true
+      responses:
+        '200':
+          description: Batch processing completed (may include partial failures)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BatchResponse'
+              examples:
+                batch_success:
+                  summary: Successful batch processing
+                  value:
+                    success: true
+                    total: 3
+                    completed: 2
+                    failed: 1
+                    results:
+                      - ticker: AAPL
+                        formType: 10-K
+                        id: req-1
+                        success: true
+                        data:
+                          summary: "Apple Inc. reported..."
+                      - ticker: TSLA
+                        formType: 10-Q
+                        id: req-2
+                        success: true
+                        data:
+                          summary: "Tesla Inc. showed..."
+                      - ticker: MSFT
+                        formType: 8-K
+                        id: req-3
+                        success: false
+                        error: "Filing not available"
+                    performance:
+                      totalDuration: 5432
+                      avgDuration: 1811
+                      cacheHitRate: 67
+                      concurrency: 5
+                      optimized: true
+                      version: "tranche-4"
+                    requestId: "batch-1642123456789-xyz789"
+        '400':
+          description: Invalid request format or validation errors
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '413':
+          description: Request payload too large
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    options:
+      summary: CORS preflight for batch processing
+      description: Handle CORS preflight requests for batch endpoint
+      tags:
+        - Optimized Filing Services
+      responses:
+        '200':
+          description: CORS preflight successful
+
+  /health/optimized:
+    get:
+      summary: Health check for optimized services
+      description: |
+        Comprehensive health monitoring for the optimized filing architecture.
+        
+        Checks:
+        - Service initialization and availability
+        - Cache system health (memory, database, Redis)
+        - Claude AI connectivity and rate limiting
+        - Database connection status
+        - Feature flag configuration
+        - System performance metrics
+        
+      operationId: getOptimizedHealthStatus
+      tags:
+        - Health Monitoring
+      responses:
+        '200':
+          description: Health check completed (may indicate degraded services)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthStatus'
+              examples:
+                healthy:
+                  summary: All systems healthy
+                  value:
+                    status: healthy
+                    timestamp: "2024-01-15T10:30:00.000Z"
+                    version: "tranche-4"
+                    services:
+                      optimizedFilingService:
+                        status: healthy
+                        initialized: true
+                      claudeClient:
+                        status: healthy
+                        rateLimitEnabled: true
+                        model: "claude-3-5-sonnet-20241022"
+                      database:
+                        status: healthy
+                        connectionActive: true
+                      cache:
+                        memory: healthy
+                        database: healthy
+                        redis: disabled
+                    featureFlags:
+                      optimizedFilingEnabled: true
+                      trafficPercentage: 100
+                      environment: production
+                    performance:
+                      uptime: 3600
+                      memoryUsage:
+                        rss: 67108864
+                        heapTotal: 33554432
+                        heapUsed: 16777216
+                degraded:
+                  summary: Some services degraded
+                  value:
+                    status: degraded
+                    timestamp: "2024-01-15T10:30:00.000Z"
+                    version: "tranche-4"
+                    services:
+                      optimizedFilingService:
+                        status: healthy
+                        initialized: true
+                      claudeClient:
+                        status: error
+                        error: "Rate limit exceeded"
+                        rateLimitEnabled: true
+                        model: "claude-3-5-sonnet-20241022"
+                      database:
+                        status: healthy
+                        connectionActive: true
+                      cache:
+                        memory: healthy
+                        database: healthy
+        '503':
+          description: Service unhealthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthStatus'
+    options:
+      summary: CORS preflight for health check
+      description: Handle CORS preflight requests for health endpoint
+      tags:
+        - Health Monitoring
+      responses:
+        '200':
+          description: CORS preflight successful
+
+components:
+  schemas:
+    OptimizedSummaryResponse:
+      type: object
+      required:
+        - success
+        - requestId
+        - performance
+      properties:
+        success:
+          type: boolean
+          description: Whether the request was successful
+        data:
+          $ref: '#/components/schemas/FilingSummary'
+        requestId:
+          type: string
+          description: Unique identifier for this request
+          example: "opt-1642123456789-abc123def"
+        metadata:
+          $ref: '#/components/schemas/ProcessingMetadata'
+        performance:
+          $ref: '#/components/schemas/PerformanceMetrics'
+
+    FilingSummary:
+      type: object
+      properties:
+        ticker:
+          type: string
+          description: Company stock ticker
+          example: AAPL
+        formType:
+          type: string
+          description: SEC form type
+          example: 10-K
+        summary:
+          type: string
+          description: AI-generated summary of the filing
+        filingDate:
+          type: string
+          format: date
+          description: Date the filing was submitted
+        keyPoints:
+          type: array
+          items:
+            type: string
+          description: Key highlights from the filing
+        riskFactors:
+          type: array
+          items:
+            type: string
+          description: Notable risk factors mentioned
+        financialHighlights:
+          type: object
+          description: Key financial metrics and changes
+        metadata:
+          type: object
+          description: Additional filing metadata
+
+    BatchRequest:
+      type: object
+      required:
+        - requests
+      properties:
+        requests:
+          type: array
+          minItems: 1
+          maxItems: 25
+          items:
+            $ref: '#/components/schemas/BatchFilingRequest'
+          description: Array of filing summary requests
+        concurrency:
+          type: integer
+          minimum: 1
+          maximum: 10
+          default: 5
+          description: Number of concurrent requests to process
+        bypassCache:
+          type: boolean
+          default: false
+          description: Skip cache and fetch fresh data for all requests
+        returnMetadata:
+          type: boolean
+          default: false
+          description: Include processing metadata in responses
+
+    BatchFilingRequest:
+      type: object
+      required:
+        - ticker
+        - formType
+      properties:
+        ticker:
+          type: string
+          pattern: '^[A-Z]{1,5}$'
+          description: Company stock ticker
+          example: AAPL
+        formType:
+          type: string
+          enum: ['10-K', '10-Q', '8-K', 'Form 4', 'DEF 14A', '13F-HR', 'SC 13D', 'SC 13G']
+          description: SEC form type
+        id:
+          type: string
+          description: Optional request ID for tracking
+          example: req-1
+
+    BatchResponse:
+      type: object
+      required:
+        - success
+        - total
+        - completed
+        - failed
+        - results
+        - performance
+        - requestId
+      properties:
+        success:
+          type: boolean
+          description: Whether the batch request was processed
+        total:
+          type: integer
+          description: Total number of requests in batch
+        completed:
+          type: integer
+          description: Number of successfully completed requests
+        failed:
+          type: integer
+          description: Number of failed requests
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/BatchResult'
+          description: Results for each request in the batch
+        performance:
+          $ref: '#/components/schemas/BatchPerformanceMetrics'
+        requestId:
+          type: string
+          description: Unique identifier for this batch request
+
+    BatchResult:
+      type: object
+      required:
+        - ticker
+        - formType
+        - success
+      properties:
+        ticker:
+          type: string
+          description: Company stock ticker
+        formType:
+          type: string
+          description: SEC form type
+        id:
+          type: string
+          description: Request ID if provided
+        success:
+          type: boolean
+          description: Whether this individual request succeeded
+        data:
+          $ref: '#/components/schemas/FilingSummary'
+        error:
+          type: string
+          description: Error message if request failed
+        metadata:
+          $ref: '#/components/schemas/ProcessingMetadata'
+
+    HealthStatus:
+      type: object
+      required:
+        - status
+        - timestamp
+        - version
+        - services
+        - featureFlags
+        - performance
+      properties:
+        status:
+          type: string
+          enum: [healthy, degraded, unhealthy]
+          description: Overall system health status
+        timestamp:
+          type: string
+          format: date-time
+          description: Time of health check
+        version:
+          type: string
+          description: Service version
+          example: "tranche-4"
+        services:
+          $ref: '#/components/schemas/ServiceHealthStatus'
+        featureFlags:
+          $ref: '#/components/schemas/FeatureFlagStatus'
+        performance:
+          $ref: '#/components/schemas/SystemPerformance'
+        error:
+          type: string
+          description: Error message if health check failed
+
+    ServiceHealthStatus:
+      type: object
+      required:
+        - optimizedFilingService
+        - claudeClient
+        - database
+        - cache
+      properties:
+        optimizedFilingService:
+          type: object
+          properties:
+            status:
+              type: string
+              enum: [healthy, error]
+            initialized:
+              type: boolean
+            config:
+              type: object
+            error:
+              type: string
+        claudeClient:
+          type: object
+          properties:
+            status:
+              type: string
+              enum: [healthy, error]
+            rateLimitEnabled:
+              type: boolean
+            model:
+              type: string
+            error:
+              type: string
+        database:
+          type: object
+          properties:
+            status:
+              type: string
+              enum: [healthy, error]
+            connectionActive:
+              type: boolean
+            error:
+              type: string
+        cache:
+          type: object
+          properties:
+            memory:
+              type: string
+              enum: [healthy, error]
+            database:
+              type: string
+              enum: [healthy, error]
+            redis:
+              type: string
+              enum: [healthy, error, disabled]
+
+    FeatureFlagStatus:
+      type: object
+      required:
+        - optimizedFilingEnabled
+        - trafficPercentage
+        - environment
+      properties:
+        optimizedFilingEnabled:
+          type: boolean
+          description: Whether optimized filing service is enabled
+        trafficPercentage:
+          type: integer
+          minimum: 0
+          maximum: 100
+          description: Percentage of traffic routed to optimized service
+        environment:
+          type: string
+          description: Current environment
+          example: production
+
+    SystemPerformance:
+      type: object
+      required:
+        - uptime
+      properties:
+        uptime:
+          type: number
+          description: System uptime in seconds
+        memoryUsage:
+          type: object
+          properties:
+            rss:
+              type: integer
+              description: Resident set size
+            heapTotal:
+              type: integer
+              description: Total heap size
+            heapUsed:
+              type: integer
+              description: Used heap size
+            external:
+              type: integer
+              description: External memory usage
+
+    ProcessingMetadata:
+      type: object
+      properties:
+        cacheHit:
+          type: boolean
+          description: Whether data was served from cache
+        cacheSource:
+          type: string
+          enum: [memory, database, redis, none]
+          description: Source of cached data
+        processingTime:
+          type: number
+          description: Time spent processing in milliseconds
+        tokenCount:
+          type: integer
+          description: Number of tokens used for AI processing
+        chunks:
+          type: integer
+          description: Number of document chunks processed
+        filingUrl:
+          type: string
+          description: URL of the source SEC filing
+
+    PerformanceMetrics:
+      type: object
+      required:
+        - duration
+        - optimized
+        - version
+      properties:
+        duration:
+          type: number
+          description: Request duration in milliseconds
+        optimized:
+          type: boolean
+          description: Whether optimized service was used
+          example: true
+        version:
+          type: string
+          description: Service version
+          example: "tranche-4"
+
+    BatchPerformanceMetrics:
+      type: object
+      required:
+        - totalDuration
+        - avgDuration
+        - cacheHitRate
+        - concurrency
+        - optimized
+        - version
+      properties:
+        totalDuration:
+          type: number
+          description: Total batch processing time in milliseconds
+        avgDuration:
+          type: number
+          description: Average processing time per request
+        cacheHitRate:
+          type: number
+          description: Percentage of requests served from cache
+        concurrency:
+          type: integer
+          description: Actual concurrency used for processing
+        optimized:
+          type: boolean
+          description: Whether optimized service was used
+        version:
+          type: string
+          description: Service version
+
+    ErrorResponse:
+      type: object
+      required:
+        - error
+      properties:
+        error:
+          type: string
+          description: Error message
+        requestId:
+          type: string
+          description: Request identifier for debugging
+        metadata:
+          type: object
+          description: Additional error context
+        performance:
+          $ref: '#/components/schemas/PerformanceMetrics'
+
+  securitySchemes:
+    ClerkAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Clerk session token
+
+security:
+  - ClerkAuth: []
+
+tags:
+  - name: Optimized Filing Services
+    description: High-performance SEC filing summary APIs with full optimization stack
+  - name: Health Monitoring
+    description: System health and status monitoring endpoints
