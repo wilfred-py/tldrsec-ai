@@ -21,6 +21,7 @@ model User {
   tutorialProgress    Int       @default(0)
   tutorialSteps       Json?
   tickers             Ticker[]
+  notificationsSent   NotificationSent[]
 }
 
 model Ticker {
@@ -170,4 +171,22 @@ model SecFetchAttempt {
   filing       SecFiling @relation(fields: [filingId], references: [id], onDelete: Cascade)
 
   @@index([filingId])
+}
+
+model NotificationSent {
+  id              String   @id @default(uuid())
+  userId          String
+  filingId        String?
+  summaryId       String?
+  notificationType String   // NEW_FILING, FILING_UPDATE, SUMMARY_READY, DAILY_DIGEST
+  emailId         String?  // ID from email service (e.g., Resend)
+  emailAddress    String
+  sentAt          DateTime @default(now())
+  deliveryStatus  String   @default("sent") // sent, delivered, bounced, complained
+  metadata        Json?    // Additional tracking data
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, sentAt])
+  @@index([notificationType, sentAt])
+  @@index([emailId])
 }

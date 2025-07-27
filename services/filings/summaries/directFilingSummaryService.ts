@@ -339,9 +339,75 @@ export async function getDirectFilingSummary(
         }
       }
     } else {
-      // TODO: Fall back to legacy AI summarization if direct Claude is disabled
+      // Fall back to legacy AI summarization if direct Claude is disabled
       directLogger.warn(`⚠️ Direct Claude disabled, falling back to legacy AI summarization`);
-      return { data: null, error: 'Direct Claude disabled and legacy AI fallback not implemented in this tranche' };
+      
+      try {
+        const legacySummaryResult = await generateLegacyAISummary(
+          content,
+          ticker,
+          normalizedFormType,
+          filing,
+          companyInfo,
+          htmlViewerUrl,
+          fetchMethod,
+          startTime
+        );
+        
+        // Save to database if enabled
+        if (saveToDatabase) {
+          await storeSummary(
+            ticker,
+            normalizedFormType,
+            filing.filingDate || new Date().toISOString(),
+            htmlViewerUrl,
+            legacySummaryResult.summaryText,
+            legacySummaryResult.keyPoints,
+            {
+              accessionNumber: filing.accessionNumber,
+              content: content.substring(0, 5000),
+              model: 'legacy-ai',
+              processingTimeMs: Date.now() - startTime,
+              fetchMethod,
+              ...contentMetadata
+            }
+          );
+        }
+        
+        // Cache the result
+        if (cacheResults) {
+          setCachedSummary(ticker, normalizedFormType, legacySummaryResult);
+        }
+        
+        safeMonitoring.recordDuration('direct_filing_summary_total_ms', Date.now() - startTime, {
+          ticker,
+          formType: normalizedFormType,
+          fetchMethod,
+          result: 'success',
+          legacy_ai: 'true'
+        });
+        
+        directLogger.info(`✅ Legacy AI summary completed for ${ticker} - ${normalizedFormType}`, {
+          fetchMethod,
+          processingTimeMs: Date.now() - startTime,
+          model: 'legacy-ai'
+        });
+        
+        return { data: legacySummaryResult };
+        
+      } catch (legacyError) {
+        directLogger.error(`❌ Legacy AI summarization failed:`, legacyError);
+        
+        if (enableFallbacks) {
+          directLogger.warn(`🔄 Falling back to fallback summary after legacy AI failure`);
+          return await createFallbackSummary(
+            ticker, normalizedFormType, filing, companyInfo, htmlViewerUrl,
+            saveToDatabase, cacheResults, startTime, fetchMethod
+          );
+        } else {
+          return { data: null, error: `Legacy AI summarization failed: ${legacyError instanceof Error ? legacyError.message : String(legacyError)}` };
+        }
+      }
     }
     
   } catch (error: unknown) {
@@ -466,6 +532,169 @@ function extractKeyPointsFromSummary(summary: string | Record<string, any>): str
   }
   
   return ['Unable to extract key points from summary'];
+}
+
+/**
+ * Generate summary using legacy AI client (fallback)
+ */
+async function generateLegacyAISummary(
+  content: string,
+  ticker: string,
+  normalizedFormType: string,
+  filing: any,
+  companyInfo: any,
+  htmlViewerUrl: string,
+  fetchMethod: string,
+  startTime: number
+): Promise<FilingSummaryResult> {
+  directLogger.info(`🔄 Using legacy AI summarization for ${ticker} - ${normalizedFormType}`);
+  
+  // Import legacy AI client if available
+  let aiClient;
+  try {
+    // Try to import the legacy AI client
+    const { claudeAI } = await import('../../../lib/ai/claude');
+    aiClient = claudeAI;
+  } catch (importError) {
+    directLogger.warn('Legacy AI client not available, using simple text processing');
+    
+    // Fallback to simple text processing
+    return {
+      ticker: ticker,
+      companyName: companyInfo.name || ticker,
+      filingType: normalizedFormType as FilingType,
+      filingDate: filing.filingDate || new Date().toISOString(),
+      accessionNumber: filing.accessionNumber || '',
+      summaryText: generateSimpleTextSummary(content, normalizedFormType, companyInfo),
+      keyPoints: extractKeyPointsFromContent(content),
+      url: htmlViewerUrl,
+      filingUrl: filing.filingUrl,
+      model: 'simple-text-processing',
+      processingStatus: 'COMPLETED',
+      processingTimeMs: Date.now() - startTime
+    };
+  }
+  
+  try {
+    // Use legacy AI client to generate summary
+    const legacyResult = await aiClient.summarizeFiling(content, {
+      formType: normalizedFormType,
+      ticker: ticker,
+      companyName: companyInfo.name || ticker
+    });
+    
+    return {
+      ticker: ticker,
+      companyName: companyInfo.name || ticker,
+      filingType: normalizedFormType as FilingType,
+      filingDate: filing.filingDate || new Date().toISOString(),
+      accessionNumber: filing.accessionNumber || '',
+      summaryText: legacyResult.summary || 'Summary generated using legacy AI client',
+      keyPoints: legacyResult.keyPoints || extractKeyPointsFromContent(content),
+      url: htmlViewerUrl,
+      filingUrl: filing.filingUrl,
+      tokensUsed: legacyResult.tokensUsed || 0,
+      model: 'legacy-ai',
+      processingStatus: 'COMPLETED',
+      processingTimeMs: Date.now() - startTime
+    };
+  } catch (legacyError) {
+    directLogger.error('Legacy AI client failed, falling back to text processing', legacyError);
+    
+    // Final fallback to simple text processing
+    return {
+      ticker: ticker,
+      companyName: companyInfo.name || ticker,
+      filingType: normalizedFormType as FilingType,
+      filingDate: filing.filingDate || new Date().toISOString(),
+      accessionNumber: filing.accessionNumber || '',
+      summaryText: generateSimpleTextSummary(content, normalizedFormType, companyInfo),
+      keyPoints: extractKeyPointsFromContent(content),
+      url: htmlViewerUrl,
+      filingUrl: filing.filingUrl,
+      model: 'simple-text-processing',
+      processingStatus: 'COMPLETED',
+      processingTimeMs: Date.now() - startTime,
+      failureReason: 'Legacy AI client failed, used simple text processing'
+    };
+  }
+}
+
+/**
+ * Generate a simple text-based summary when AI is not available
+ */
+function generateSimpleTextSummary(content: string, formType: string, companyInfo: any): string {
+  const companyName = companyInfo.name || 'Unknown Company';
+  const contentLength = content.length;
+  
+  // Basic content analysis
+  const paragraphs = content.split('\n').filter(p => p.trim().length > 50).length;
+  const words = content.split(/\s+/).length;
+  
+  let summary = `${formType} filing for ${companyName}\n\n`;
+  summary += `This document contains ${words.toLocaleString()} words across ${paragraphs} substantial paragraphs. `;
+  
+  // Look for common SEC filing sections
+  const sections = [];
+  if (content.toLowerCase().includes('business overview') || content.toLowerCase().includes('business description')) {
+    sections.push('business overview');
+  }
+  if (content.toLowerCase().includes('risk factors')) {
+    sections.push('risk factors');
+  }
+  if (content.toLowerCase().includes('financial statements') || content.toLowerCase().includes('consolidated statements')) {
+    sections.push('financial statements');
+  }
+  if (content.toLowerCase().includes('management discussion') || content.toLowerCase().includes('md&a')) {
+    sections.push("management's discussion and analysis");
+  }
+  
+  if (sections.length > 0) {
+    summary += `The filing includes sections on: ${sections.join(', ')}. `;
+  }
+  
+  summary += `\n\nNote: This is a basic summary generated without AI analysis. `;
+  summary += `For detailed insights, please review the full filing document.`;
+  
+  return summary;
+}
+
+/**
+ * Extract key points from content using simple text analysis
+ */
+function extractKeyPointsFromContent(content: string): string[] {
+  const keyPoints: string[] = [];
+  
+  // Look for bullet points or numbered lists
+  const bulletRegex = /^[\s]*[•\-*\d+\.]\s*(.+)$/gm;
+  const bullets = [...content.matchAll(bulletRegex)];
+  
+  bullets.slice(0, 5).forEach(match => {
+    const point = match[1]?.trim();
+    if (point && point.length > 10 && point.length < 200) {
+      keyPoints.push(point);
+    }
+  });
+  
+  // Look for sentences with financial keywords
+  const financialKeywords = ['revenue', 'income', 'profit', 'loss', 'earnings', 'sales', 'growth', 'margin'];
+  const sentences = content.split(/[.!?]+/);
+  
+  sentences.forEach(sentence => {
+    const lowerSentence = sentence.toLowerCase();
+    if (financialKeywords.some(keyword => lowerSentence.includes(keyword)) && 
+        sentence.trim().length > 20 && sentence.trim().length < 150) {
+      keyPoints.push(sentence.trim());
+    }
+  });
+  
+  // Ensure we have at least a few key points
+  if (keyPoints.length === 0) {
+    keyPoints.push('No specific key points identified in automated analysis');
+    keyPoints.push('Manual review of the filing is recommended for detailed insights');
+  }
+  
+  return keyPoints.slice(0, 8); // Limit to 8 key points
 }
 
 /**

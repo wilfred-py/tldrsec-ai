@@ -333,13 +333,76 @@ export class ResendClient {
    * @returns Verification result
    */
   async verifyEmail(email: string): Promise<EmailVerificationResult> {
-    // TODO: Implement email verification using Resend API
-    // This is a placeholder for future implementation
-    return {
-      email,
-      isValid: true,
-      reason: undefined
-    };
+    // Basic email format validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    
+    if (!email || typeof email !== 'string') {
+      return {
+        email,
+        isValid: false,
+        reason: 'Invalid email format: email is required and must be a string'
+      };
+    }
+    
+    if (!emailRegex.test(email)) {
+      return {
+        email,
+        isValid: false,
+        reason: 'Invalid email format: does not match email pattern'
+      };
+    }
+    
+    // Check for common invalid domains
+    const invalidDomains = [
+      'example.com',
+      'test.com',
+      'localhost',
+      'invalid.com',
+      'fake.com'
+    ];
+    
+    const domain = email.split('@')[1]?.toLowerCase();
+    if (invalidDomains.includes(domain)) {
+      return {
+        email,
+        isValid: false,
+        reason: `Invalid domain: ${domain} is not a valid email domain`
+      };
+    }
+    
+    // If in dummy mode, return basic validation result
+    if (this.isDummyClient) {
+      logger.info(`[DUMMY] Email verification for ${email}: valid`);
+      return {
+        email,
+        isValid: true,
+        reason: undefined
+      };
+    }
+    
+    // Note: Resend doesn't have a direct email verification API endpoint
+    // This implementation provides basic validation and could be extended
+    // with third-party email verification services if needed
+    try {
+      // For now, we'll perform basic validation and assume valid emails
+      // In the future, this could integrate with services like:
+      // - Email validation APIs
+      // - DNS MX record checking
+      // - Disposable email detection
+      
+      return {
+        email,
+        isValid: true,
+        reason: undefined
+      };
+    } catch (error) {
+      logger.error('Email verification failed', { email, error });
+      return {
+        email,
+        isValid: false,
+        reason: `Verification failed: ${error instanceof Error ? error.message : 'Unknown error'}`
+      };
+    }
   }
   
   /**
