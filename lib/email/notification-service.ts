@@ -469,22 +469,24 @@ export class NotificationService implements NotificationServiceInterface {
       });
       
       // Record in database that we sent this notification
-      // sentNotification model no longer exists in Prisma schema
-      // This functionality needs to be updated to use the current schema
-      /*
-      await prisma.sentNotification.create({
+      const prisma = getPrismaClient();
+      await prisma.notificationSent.create({
         data: {
           id: uuidv4(),
           userId: recipient.userId,
           filingId: payload.filingId,
-          type: NotificationEventType.NEW_FILING,
+          summaryId: payload.summaryId || null,
+          notificationType: payload.summaryId ? NotificationEventType.SUMMARY_READY : NotificationEventType.NEW_FILING,
           emailId: result.id,
-          sentAt: new Date()
+          emailAddress: recipient.email,
+          metadata: {
+            formType: payload.formType,
+            ticker: payload.ticker,
+            companyName: payload.companyName,
+            filingDate: payload.filingDate.toISOString()
+          }
         }
       });
-      */
-      
-      // TODO: Update this to use the appropriate model for tracking sent notifications
     } catch (error) {
       logger.error(`Failed to send notification to ${recipient.email}`, {
         error: error instanceof Error ? error.message : String(error),

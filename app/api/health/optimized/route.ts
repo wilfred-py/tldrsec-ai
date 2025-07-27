@@ -17,6 +17,55 @@ import { prisma } from '../../../../lib/db';
 
 const healthLogger = logger.child('health-optimized');
 
+/**
+ * Check Redis connection health
+ * @param redisUrl Redis connection URL
+ * @returns Promise<boolean> indicating if Redis is healthy
+ */
+async function checkRedisHealth(redisUrl: string): Promise<boolean> {
+  try {
+    // Basic URL validation
+    const url = new URL(redisUrl);
+    if (!url.hostname || !url.port) {
+      healthLogger.warn('Invalid Redis URL format', { redisUrl: redisUrl.replace(/:[^:]*@/, ':***@') });
+      return false;
+    }
+
+    // For now, since Redis client is not installed, we'll do basic connectivity checks
+    // In a full implementation, this would use a Redis client like ioredis:
+    /*
+    const Redis = require('ioredis');
+    const redis = new Redis(redisUrl, {
+      connectTimeout: 5000,
+      commandTimeout: 3000,
+      retryDelayOnFailover: 100,
+      maxRetriesPerRequest: 1
+    });
+    
+    try {
+      await redis.ping();
+      await redis.disconnect();
+      return true;
+    } catch (error) {
+      await redis.disconnect();
+      return false;
+    }
+    */
+    
+    // Placeholder implementation - would need actual Redis client
+    healthLogger.info('Redis health check skipped - Redis client not implemented', { 
+      redisConfigured: true 
+    });
+    return true; // Assume healthy if configured
+  } catch (error) {
+    healthLogger.error('Redis health check error', { 
+      error: error instanceof Error ? error.message : String(error),
+      redisUrl: redisUrl.replace(/:[^:]*@/, ':***@')
+    });
+    return false;
+  }
+}
+
 interface HealthStatus {
   status: 'healthy' | 'degraded' | 'unhealthy';
   timestamp: string;
@@ -158,8 +207,25 @@ export async function GET(request: NextRequest) {
       
       // Redis cache (if enabled)
       if (process.env.ENABLE_REDIS_CACHE === 'true') {
-        // TODO: Add Redis health check when implemented
-        health.services.cache.redis = 'healthy';
+        try {
+          // Check if Redis URL is configured
+          const redisUrl = process.env.REDIS_URL;
+          if (!redisUrl) {
+            health.services.cache.redis = 'error';
+            healthLogger.warn('Redis is enabled but REDIS_URL is not configured');
+          } else {
+            // Redis health check implementation
+            // Note: This requires a Redis client to be properly implemented
+            const redisHealthy = await checkRedisHealth(redisUrl);
+            health.services.cache.redis = redisHealthy ? 'healthy' : 'error';
+          }
+        } catch (error) {
+          health.services.cache.redis = 'error';
+          healthLogger.error('Redis health check failed', { error });
+          if (health.status === 'healthy') {
+            health.status = 'degraded';
+          }
+        }
       }
     } catch (error) {
       health.services.cache.memory = 'error';

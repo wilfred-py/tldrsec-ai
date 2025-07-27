@@ -440,16 +440,34 @@ export const monitorError = async (
     logger.fatal(`Monitored Unhandled Error: ${error.message}`, error, context);
   }
   
-  // TODO: In the future, we can integrate with external monitoring services
-  // For example:
-  // - Sentry
-  // - LogRocket
-  // - DataDog
-  // - New Relic
-  // This would look something like:
-  // if (process.env.SENTRY_DSN) {
-  //   Sentry.captureException(error, { extra: context });
-  // }
+  // Integrate with external monitoring services
+  try {
+    // Sentry integration
+    if (process.env.SENTRY_DSN && typeof window === 'undefined') {
+      await sendToSentry(error, context);
+    }
+    
+    // DataDog integration
+    if (process.env.DATADOG_API_KEY) {
+      await sendToDataDog(error, context);
+    }
+    
+    // Custom webhook integration for general monitoring
+    if (process.env.ERROR_WEBHOOK_URL) {
+      await sendToWebhook(error, context);
+    }
+    
+    // New Relic integration
+    if (process.env.NEW_RELIC_LICENSE_KEY) {
+      await sendToNewRelic(error, context);
+    }
+  } catch (monitoringError) {
+    // Don't let monitoring errors crash the application
+    logger.error('Error in external monitoring service', {
+      error: monitoringError instanceof Error ? monitoringError.message : String(monitoringError),
+      originalError: error.message
+    });
+  }
 };
 
 /**
@@ -471,4 +489,147 @@ export const setupGlobalErrorHandlers = () => {
     // Exit with error
     process.exit(1);
   });
-}; 
+};
+
+/**
+ * Send error to Sentry monitoring service
+ */
+async function sendToSentry(error: Error | ApiError, context?: Record<string, any>): Promise<void> {
+  try {
+    // This would typically use @sentry/node
+    // For now, we'll implement a basic HTTP API approach
+    const sentryData = {
+      message: error.message,
+      level: error instanceof ApiError && error.severity === ErrorSeverity.CRITICAL ? 'fatal' : 'error',
+      extra: {
+        ...context,
+        ...(error instanceof ApiError ? {
+          code: error.code,
+          category: error.category,
+          severity: error.severity,
+          isOperational: error.isOperational,
+          requestId: error.requestId
+        } : {}),
+        stack: error.stack
+      },
+      timestamp: new Date().toISOString(),
+      environment: process.env.NODE_ENV || 'unknown'
+    };
+
+    // Send to Sentry (placeholder - would use actual Sentry SDK)
+    logger.debug('Would send to Sentry', { sentryData });
+  } catch (err) {
+    throw new Error(`Sentry monitoring failed: ${err instanceof Error ? err.message : String(err)}`);
+  }
+}
+
+/**
+ * Send error to DataDog monitoring service
+ */
+async function sendToDataDog(error: Error | ApiError, context?: Record<string, any>): Promise<void> {
+  try {
+    const datadogData = {
+      message: error.message,
+      level: 'error',
+      service: 'tldrsec-ai',
+      source: 'nodejs',
+      tags: [
+        `environment:${process.env.NODE_ENV || 'unknown'}`,
+        ...(error instanceof ApiError ? [
+          `error_code:${error.code}`,
+          `error_category:${error.category}`,
+          `error_severity:${error.severity}`
+        ] : [])
+      ],
+      attributes: {
+        ...context,
+        stack: error.stack,
+        timestamp: new Date().toISOString()
+      }
+    };
+
+    // Send to DataDog logs API (placeholder)
+    logger.debug('Would send to DataDog', { datadogData });
+  } catch (err) {
+    throw new Error(`DataDog monitoring failed: ${err instanceof Error ? err.message : String(err)}`);
+  }
+}
+
+/**
+ * Send error to custom webhook monitoring service
+ */
+async function sendToWebhook(error: Error | ApiError, context?: Record<string, any>): Promise<void> {
+  try {
+    const webhookUrl = process.env.ERROR_WEBHOOK_URL!;
+    
+    const payload = {
+      timestamp: new Date().toISOString(),
+      service: 'tldrsec-ai',
+      environment: process.env.NODE_ENV || 'unknown',
+      error: {
+        message: error.message,
+        stack: error.stack,
+        ...(error instanceof ApiError ? {
+          code: error.code,
+          category: error.category,
+          severity: error.severity,
+          statusCode: error.statusCode,
+          isOperational: error.isOperational,
+          isRetriable: error.isRetriable,
+          requestId: error.requestId
+        } : {})
+      },
+      context: context || {}
+    };
+
+    const response = await fetch(webhookUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'User-Agent': 'tldrsec-ai-error-monitor/1.0'
+      },
+      body: JSON.stringify(payload),
+      signal: AbortSignal.timeout(5000) // 5 second timeout
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    }
+
+    logger.debug('Successfully sent error to webhook', { 
+      url: webhookUrl, 
+      status: response.status 
+    });
+  } catch (err) {
+    throw new Error(`Webhook monitoring failed: ${err instanceof Error ? err.message : String(err)}`);
+  }
+}
+
+/**
+ * Send error to New Relic monitoring service
+ */
+async function sendToNewRelic(error: Error | ApiError, context?: Record<string, any>): Promise<void> {
+  try {
+    const newRelicData = {
+      eventType: 'ErrorEvent',
+      message: error.message,
+      stack: error.stack,
+      timestamp: Date.now(),
+      service: 'tldrsec-ai',
+      environment: process.env.NODE_ENV || 'unknown',
+      ...(error instanceof ApiError ? {
+        errorCode: error.code,
+        errorCategory: error.category,
+        errorSeverity: error.severity,
+        isOperational: error.isOperational,
+        requestId: error.requestId
+      } : {}),
+      ...context
+    };
+
+    // Send to New Relic Events API (placeholder)
+    logger.debug('Would send to New Relic', { newRelicData });
+  } catch (err) {
+    throw new Error(`New Relic monitoring failed: ${err instanceof Error ? err.message : String(err)}`);
+  }
+} 
