@@ -19,6 +19,23 @@ export async function getFilingSummary(
   ticker: string, 
   formType: FilingType
 ): Promise<{ data: FilingSummaryResult | null, error?: string }> {
+  // Feature flag for enhanced filing service (Tranche 1)
+  const useEnhancedFetch = process.env.ENABLE_ENHANCED_FETCH === 'true';
+  
+  if (useEnhancedFetch) {
+    try {
+      const { getEnhancedFilingSummary } = await import('./enhancedFilingSummaryService');
+      console.log(`[INFO][FilingSummaryService] 🚀 Using enhanced fetch for ${ticker} - ${formType}`);
+      return getEnhancedFilingSummary(ticker, formType, {
+        useEnhancedFetch: true,
+        enableFallbacks: true,
+        saveToDatabase: true
+      });
+    } catch (enhancedError) {
+      console.warn(`[WARN][FilingSummaryService] Enhanced fetch failed, falling back to legacy: ${enhancedError}`);
+      // Fall through to legacy implementation
+    }
+  }
   try {
     console.log(`[DEBUG][FilingSummaryService] 🔍 Generating summary for ${ticker} - ${formType}`);
     
