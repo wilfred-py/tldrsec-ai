@@ -107,6 +107,7 @@ function isDirectoryListing(content: string): boolean {
 
 /**
  * Intelligent document prioritization based on SEC filing patterns
+ * Prioritizes XML files for cost efficiency and uses generic SEC patterns
  * @param links Array of document links to prioritize
  * @param accessionNumber Accession number for pattern matching
  * @param baseUrl Base URL for context
@@ -114,55 +115,86 @@ function isDirectoryListing(content: string): boolean {
  */
 function prioritizeDocuments(links: string[], accessionNumber: string | null, baseUrl: string): string[] {
   const priorityLevels = {
-    critical: [] as string[],    // Main filing documents
-    high: [] as string[],        // Likely main documents  
+    critical: [] as string[],    // Primary XML documents (most cost-effective)
+    high: [] as string[],        // Main filing documents (HTML/TXT)
     medium: [] as string[],      // Other filing documents
-    low: [] as string[]          // Exhibits and supplementary
+    low: [] as string[],         // Exhibits and supplementary
+    exhibits: [] as string[]     // Clearly exhibit files (lowest priority)
   };
   
   const accessionClean = accessionNumber ? accessionNumber.replace(/-/g, '') : '';
+  
+  // Track categorization for debugging
+  const categorization: { [key: string]: string } = {};
   
   links.forEach(link => {
     const filename = link.split('/').pop()?.toLowerCase() || '';
     const href = filename;
     
-    // Critical: Main document patterns
+    // CRITICAL: Primary XML documents (most cost-effective)
     if (
-      // Contains clean accession number
-      (accessionClean && href.includes(accessionClean)) ||
-      // Tesla-specific patterns: tsla-YYYYMMDD.htm
-      href.match(/^[a-z]{2,5}-\d{8}\.html?$/i) ||
-      // Common 8-K pattern: d123456d8k.htm
-      href.match(/^d\d+d(8k|10k|10q)\.html?$/i) ||
-      // Date-based patterns: YYYYMMDD.htm
-      href.match(/^\d{8}\.html?$/i)
+      // Common SEC XML documents
+      href === 'primary_doc.xml' ||
+      href === 'filing.xml' ||
+      href === 'document.xml' ||
+      href === 'form.xml' ||
+      // XML files with accession numbers
+      (accessionClean && href.includes(accessionClean) && href.endsWith('.xml'))
     ) {
       priorityLevels.critical.push(link);
+      categorization[filename] = 'critical-xml';
     }
-    // High: HTML files with meaningful names (but not exhibits/index)
+    // HIGH: Main filing documents with accession numbers or standard patterns
     else if (
-      href.endsWith('.htm') && 
-      href.includes('-') &&
-      !href.includes('index') && 
+      // Contains clean accession number (HTML/TXT)
+      (accessionClean && href.includes(accessionClean) && href.match(/\.(html?|txt)$/i)) ||
+      // Generic SEC patterns: d123456d[formtype].htm
+      href.match(/^d\d+d(8k|10k|10q|144|3|4|5)\.html?$/i) ||
+      // Date-based patterns: YYYYMMDD.htm or similar
+      href.match(/^\d{8}\.html?$/i) ||
+      // Filing with company ticker: [ticker]-[date].htm (generic pattern)
+      href.match(/^[a-z]{2,6}-\d{6,8}\.html?$/i)
+    ) {
+      priorityLevels.high.push(link);
+      categorization[filename] = 'high-main';
+    }
+    // MEDIUM: XML files (cost-effective but not primary documents)
+    else if (
+      href.endsWith('.xml') &&
       !href.includes('exhibit') && 
       !href.includes('ex-') &&
       !href.includes('ex_')
     ) {
-      priorityLevels.high.push(link);
+      priorityLevels.medium.push(link);
+      categorization[filename] = 'medium-xml';
     }
-    // Medium: Other HTML/TXT documents (not exhibits)
+    // MEDIUM: Other HTML/TXT documents (not exhibits)
     else if (
       href.match(/\.(html?|txt)$/i) && 
       !href.includes('exhibit') && 
       !href.includes('ex-') &&
       !href.includes('ex_') &&
-      !href.includes('index')
+      !href.includes('index') &&
+      href.includes('-') // Has meaningful structure
     ) {
       priorityLevels.medium.push(link);
+      categorization[filename] = 'medium-structured';
     }
-    // Low: Everything else (exhibits, XML, etc.)
-    else {
+    // LOW: Basic documents without clear structure
+    else if (
+      href.match(/\.(html?|txt|xml)$/i) && 
+      !href.includes('exhibit') && 
+      !href.includes('ex-') &&
+      !href.includes('ex_') &&
+      !href.includes('index')
+    ) {
       priorityLevels.low.push(link);
+      categorization[filename] = 'low-basic';
+    }
+    // EXHIBITS: Clearly exhibit files (lowest priority)
+    else {
+      priorityLevels.exhibits.push(link);
+      categorization[filename] = 'exhibits';
     }
   });
   
@@ -170,18 +202,28 @@ function prioritizeDocuments(links: string[], accessionNumber: string | null, ba
     ...priorityLevels.critical,
     ...priorityLevels.high,
     ...priorityLevels.medium,
-    ...priorityLevels.low
+    ...priorityLevels.low,
+    ...priorityLevels.exhibits
   ];
   
-  apiLogger.debug(`Document prioritization results`, {
+  apiLogger.info(`Document prioritization results`, {
     baseUrl,
     accessionNumber,
-    critical: priorityLevels.critical.length,
-    high: priorityLevels.high.length,
-    medium: priorityLevels.medium.length,
-    low: priorityLevels.low.length,
-    topCritical: priorityLevels.critical.slice(0, 2),
-    topHigh: priorityLevels.high.slice(0, 2)
+    totals: {
+      critical: priorityLevels.critical.length,
+      high: priorityLevels.high.length,
+      medium: priorityLevels.medium.length,
+      low: priorityLevels.low.length,
+      exhibits: priorityLevels.exhibits.length
+    },
+    topResults: {
+      critical: priorityLevels.critical.slice(0, 3).map(url => url.split('/').pop()),
+      high: priorityLevels.high.slice(0, 3).map(url => url.split('/').pop()),
+      medium: priorityLevels.medium.slice(0, 3).map(url => url.split('/').pop())
+    },
+    categorization: Object.fromEntries(
+      Object.entries(categorization).slice(0, 10) // Limit for readability
+    )
   });
   
   return result;
@@ -242,8 +284,8 @@ function extractDocumentLinksFromDirectoryListing(html: string, baseUrl: string)
         continue;
       }
       
-      // Only include filing-related document types
-      if (href.endsWith('.txt') || href.endsWith('.xml') || 
+      // Only include filing-related document types (prioritize XML for cost efficiency)
+      if (href.endsWith('.xml') || href.endsWith('.txt') || 
           href.endsWith('.html') || href.endsWith('.htm') ||
           href.endsWith('.xsd') || href.endsWith('.xbrl')) {
         
@@ -259,16 +301,19 @@ function extractDocumentLinksFromDirectoryListing(html: string, baseUrl: string)
     const transformedUrls: string[] = [...prioritizedLinks];
     
     // If we don't have any critical documents, try to construct them
-    if (prioritizedLinks.length === 0 || !prioritizedLinks[0].includes(accessionNumber?.replace(/-/g, '') || '')) {
+    if (prioritizedLinks.length === 0 || 
+        (prioritizedLinks[0] && !prioritizedLinks.some(url => url.includes(accessionNumber?.replace(/-/g, '') || '')))) {
       if (accessionNumber) {
         const basePath = baseUrl.endsWith('/') ? baseUrl : baseUrl + '/';
         const accessionClean = accessionNumber.replace(/-/g, '');
         
-        // Try common patterns for Tesla and generic filings
+        // Try common SEC filing patterns (prioritize XML for cost efficiency)
         const possibleUrls = [
-          `${basePath}tsla-${extractDateFromAccession(accessionNumber)}.htm`, // Tesla pattern
-          `${basePath}${accessionClean}.htm`, // Generic accession pattern
-          `${basePath}d${accessionClean}.htm`, // 8-K pattern variation
+          `${basePath}primary_doc.xml`, // Most common XML pattern
+          `${basePath}filing.xml`, // Alternative XML pattern
+          `${basePath}${accessionClean}.xml`, // Accession-based XML
+          `${basePath}${accessionClean}.htm`, // Generic HTML pattern
+          `${basePath}d${accessionClean}.htm`, // Alternative HTML pattern
         ];
         
         transformedUrls.unshift(...possibleUrls);
@@ -291,17 +336,6 @@ function extractDocumentLinksFromDirectoryListing(html: string, baseUrl: string)
   }
 }
 
-/**
- * Extract date from accession number for Tesla filing pattern
- * @param accessionNumber Accession number in format XXXXXXXXXX-XX-XXXXXX
- * @returns Date string in YYYYMMDD format
- */
-function extractDateFromAccession(accessionNumber: string): string {
-  // For Tesla filings, we often see patterns where the date corresponds to fiscal year end
-  // This is a simplified approach - in practice, you'd need more sophisticated date extraction
-  const year = new Date().getFullYear();
-  return `${year}1231`; // Default to Dec 31 of current year
-}
 
 /**
  * Calculate estimated cost based on token counts
@@ -757,10 +791,13 @@ export async function POST(request: NextRequest) {
               continue;
             }
             
-            // Must be a filing document type
-            if (filename.match(/\.(html?|txt)$/i)) {
+            // Must be a filing document type (prioritize XML for cost efficiency)
+            if (filename.match(/\.(xml|html?|txt|xbrl)$/i)) {
               selectedUrl = link;
-              break;
+              // Prefer XML files if found
+              if (filename.endsWith('.xml')) {
+                break;
+              }
             }
           }
           
