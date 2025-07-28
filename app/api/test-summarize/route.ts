@@ -107,6 +107,7 @@ function isDirectoryListing(content: string): boolean {
 
 /**
  * Extract document links from a directory listing HTML, prioritizing main filing documents
+ * Enhanced version with robust filtering to exclude navigation links
  * @param html HTML content of the directory listing
  * @param baseUrl Base URL for resolving relative links
  * @returns Array of document links, sorted by priority (main filing first)
@@ -118,36 +119,89 @@ function extractDocumentLinksFromDirectoryListing(html: string, baseUrl: string)
     const links: string[] = [];
     const priorityLinks: string[] = [];
     
-    // Get all links in the document
+    // Extract accession number from base URL for filtering
+    const accessionMatch = baseUrl.match(/(\d{10}-\d{2}-\d{6})/);
+    const accessionNumber = accessionMatch ? accessionMatch[1] : null;
+    
     const anchors = document.querySelectorAll('a');
     
     for (let i = 0; i < anchors.length; i++) {
       const anchor = anchors[i];
       const href = anchor.getAttribute('href');
       
-      if (href && !href.includes('?') && !href.includes('..')) {
-        // Filter for common filing document extensions
-        if (href.endsWith('.txt') || 
-            href.endsWith('.xml') || 
-            href.endsWith('.html') || 
-            href.endsWith('.htm')) {
-          
-          // Resolve relative URLs to absolute URLs
-          const absoluteUrl = new URL(href, baseUrl).href;
-          
-          // Prioritize main filing documents (usually .htm files with company ticker or date)
-          if (href.endsWith('.htm') && 
-              (href.includes('tsla-') || href.includes('tesla') || href.match(/\d{8}\.htm$/))) {
-            priorityLinks.push(absoluteUrl);
-          } else {
-            links.push(absoluteUrl);
-          }
+      if (!href || href.includes('?') || href.includes('..')) {
+        continue;
+      }
+      
+      // Skip navigation links that go outside the current directory
+      if (href.startsWith('http') && !href.includes(baseUrl.split('/').slice(-2, -1)[0])) {
+        continue;
+      }
+      
+      // Skip common navigation links
+      if (href.includes('sec.gov/index') || 
+          href.includes('sec.gov/search') || 
+          href.includes('sec.gov/news') ||
+          href.includes('sec.gov/newsroom') ||
+          href === '/' || 
+          href === '../' ||
+          href.startsWith('/index') ||
+          href.startsWith('/search')) {
+        continue;
+      }
+      
+      // Only include filing-related document types
+      if (href.endsWith('.txt') || href.endsWith('.xml') || 
+          href.endsWith('.html') || href.endsWith('.htm') ||
+          href.endsWith('.xsd') || href.endsWith('.xbrl')) {
+        
+        const absoluteUrl = new URL(href, baseUrl).href;
+        
+        // High priority: Main filing document (usually contains accession number)
+        if (accessionNumber && href.includes(accessionNumber.replace(/-/g, ''))) {
+          priorityLinks.push(absoluteUrl);
+        }
+        // Medium priority: HTML/HTM files with dashes (likely main documents)  
+        else if (href.endsWith('.htm') && href.includes('-')) {
+          priorityLinks.push(absoluteUrl);
+        }
+        // Medium priority: Files with 10-K or 10-Q patterns
+        else if (href.match(/10-[kq]/i)) {
+          priorityLinks.push(absoluteUrl);
+        }
+        // Lower priority: Other filing documents
+        else {
+          links.push(absoluteUrl);
         }
       }
     }
     
-    // Return priority links first, then regular links
-    return [...priorityLinks, ...links];
+    // Additional smart URL transformation for common SEC patterns
+    const transformedUrls: string[] = [];
+    
+    for (const link of [...priorityLinks, ...links]) {
+      // Handle different SEC URL formats
+      let transformedUrl = link;
+      
+      // Convert index.htm to main document if it looks like a filing
+      if (link.endsWith('index.htm') && accessionNumber) {
+        const basePath = link.replace('index.htm', '');
+        const possibleMainDoc = `${basePath}${accessionNumber.replace(/-/g, '')}.htm`;
+        transformedUrls.push(possibleMainDoc);
+      }
+      
+      transformedUrls.push(transformedUrl);
+    }
+    
+    apiLogger.debug(`Extracted ${transformedUrls.length} document links from directory listing`, {
+      baseUrl,
+      accessionNumber,
+      priorityCount: priorityLinks.length,
+      totalCount: transformedUrls.length,
+      firstFew: transformedUrls.slice(0, 3)
+    });
+    
+    return transformedUrls;
   } catch (error) {
     apiLogger.error('Error extracting links from directory listing', { error });
     return [];
@@ -252,9 +306,6 @@ Respond with a JSON object containing:
 }`;
 }
 
-// In-memory cache for testing purposes
-const inMemoryCache: Record<string, { data: any, expiresAt: Date }> = {};
-
 /**
  * Find or create a ticker for testing purposes
  * For test summaries, we'll create a temporary ticker if it doesn't exist
@@ -316,81 +367,6 @@ async function findOrCreateTestTicker(symbol: string, companyName?: string): Pro
   }
 }
 
-/**
- * Save summary to database
- * @param summary Summary data from Claude API
- * @param filingType Filing type
- * @param filingUrl Filing URL
- * @param ticker Ticker symbol
- * @param companyName Company name
- * @param processingTimeMs Processing time in milliseconds
- * @returns Saved summary ID
- */
-async function saveSummaryToDatabase(
-  summary: { text: string | Record<string, any>; inputTokens: number; outputTokens: number; cost: number; duration: number; chunksProcessed?: number },
-  filingType: string,
-  filingUrl: string,
-  ticker?: string,
-  companyName?: string,
-  processingTimeMs?: number
-): Promise<string> {
-  try {
-    // Validate that ticker is provided when saving to database
-    if (!ticker) {
-      throw new Error('Ticker symbol is required when saving to database');
-    }
-    
-    // Get or create ticker
-    const tickerId = await findOrCreateTestTicker(ticker, companyName);
-
-    // Extract filing date from URL or use current date
-    let filingDate = new Date();
-    
-    // Try to extract date from URL pattern like /Archives/edgar/data/.../.../0000789019-24-000023-index.htm
-    const dateMatch = filingUrl.match(/(\d{4})-(\d{2})-(\d{2})/);
-    if (dateMatch) {
-      filingDate = new Date(`${dateMatch[1]}-${dateMatch[2]}-${dateMatch[3]}`);
-    }
-
-    // Prepare summary text
-    const summaryText = typeof summary.text === 'string' ? summary.text : JSON.stringify(summary.text, null, 2);
-    const summaryJSON = typeof summary.text === 'object' ? summary.text : null;
-
-    // Save to database
-    const savedSummary = await prisma.summary.create({
-      data: {
-        tickerId,
-        filingType: filingType.toUpperCase(),
-        filingDate,
-        filingUrl,
-        summaryText,
-        summaryJSON,
-        cost: summary.cost,
-        tokensUsed: summary.inputTokens + summary.outputTokens,
-        attempts: 1,
-        processingTimeMs: processingTimeMs || summary.duration,
-        processingStatus: 'COMPLETED',
-        processingCompletedAt: new Date(),
-        model: 'claude-3-5-sonnet-20241022',
-        isPartialResult: false,
-        sentToUser: false
-      }
-    });
-
-    apiLogger.info(`Saved test summary to database: ${savedSummary.id}`, {
-      ticker: ticker,
-      filingType,
-      cost: summary.cost,
-      tokensUsed: summary.inputTokens + summary.outputTokens,
-      chunksProcessed: summary.chunksProcessed
-    });
-
-    return savedSummary.id;
-  } catch (error) {
-    apiLogger.error(`Error saving summary to database: ${error instanceof Error ? error.message : String(error)}`);
-    throw error;
-  }
-}
 
 /**
  * Generate a simplified prompt for SEC filing summarization
@@ -457,53 +433,155 @@ ${content}
 }
 
 /**
- * Check if a summary exists in the cache
+ * Check if a summary exists in the database cache
  * @param filingUrl URL of the filing
- * @returns Cached summary or null if not found
+ * @returns Cached summary data or null if not found
  */
 async function checkCache(filingUrl: string): Promise<any | null> {
   try {
-    // Check in-memory cache first
-    const cacheKey = filingUrl;
-    const cachedItem = inMemoryCache[cacheKey];
-    
-    if (cachedItem && cachedItem.expiresAt > new Date()) {
-      return cachedItem.data;
-    }
-    
-    // If not in memory, remove expired items
-    if (cachedItem && cachedItem.expiresAt <= new Date()) {
-      delete inMemoryCache[cacheKey];
+    // Look for existing summary by filing URL, include ticker relation
+    const existingSummary = await prisma.summary.findFirst({
+      where: {
+        filingUrl: filingUrl
+      },
+      include: {
+        ticker: true
+      },
+      orderBy: {
+        createdAt: 'desc'
+      }
+    });
+
+    if (existingSummary) {
+      apiLogger.debug(`Database cache hit for ${filingUrl}`, { 
+        summaryId: existingSummary.id,
+        createdAt: existingSummary.createdAt 
+      });
+
+      // Reconstruct the cached response format
+      const cachedData = {
+        success: true,
+        parsedContent: {
+          sections: {},
+          metadata: {
+            filingType: existingSummary.filingType,
+            companyName: existingSummary.ticker?.companyName || 'Unknown Company',
+            ticker: existingSummary.ticker?.symbol || 'UNKNOWN'
+          }
+        },
+        summary: {
+          text: existingSummary.summaryJSON || existingSummary.summaryText,
+          inputTokens: Math.floor((existingSummary.tokensUsed || 0) * 0.7), // Estimate split
+          outputTokens: Math.floor((existingSummary.tokensUsed || 0) * 0.3), // Estimate split
+          cost: existingSummary.cost || 0,
+          duration: existingSummary.processingTimeMs || 0
+        },
+        tokenEstimates: {
+          inputTokens: Math.floor((existingSummary.tokensUsed || 0) * 0.7),
+          estimatedOutputTokens: Math.floor((existingSummary.tokensUsed || 0) * 0.3),
+          totalTokens: existingSummary.tokensUsed || 0,
+          estimatedCost: existingSummary.cost || 0
+        },
+        savedSummaryId: existingSummary.id
+      };
+
+      return cachedData;
     }
     
     return null;
   } catch (error) {
-    apiLogger.error('Error checking cache', { error });
+    apiLogger.error('Error checking database cache', { error, filingUrl });
     return null;
   }
 }
 
 /**
- * Save a summary to the cache
+ * Save a summary response to the database cache (with idempotency)
  * @param filingUrl URL of the filing
- * @param data Summary data to cache
- * @param ttlMinutes Time to live in minutes
+ * @param data Complete response data to cache
+ * @returns The saved summary ID or existing ID if already cached
  */
-async function saveToCache(filingUrl: string, data: any, ttlMinutes: number = 60): Promise<void> {
+async function saveToCache(filingUrl: string, data: any): Promise<string | null> {
   try {
-    // Save to in-memory cache
-    const cacheKey = filingUrl;
-    const expiresAt = new Date();
-    expiresAt.setMinutes(expiresAt.getMinutes() + ttlMinutes);
-    
-    inMemoryCache[cacheKey] = {
-      data,
-      expiresAt
-    };
-    
-    apiLogger.debug(`Saved to in-memory cache: ${cacheKey}, expires: ${expiresAt.toISOString()}`);
+    // Check if summary already exists (idempotency check)
+    const existingSummary = await prisma.summary.findFirst({
+      where: {
+        filingUrl: filingUrl
+      }
+    });
+
+    if (existingSummary) {
+      apiLogger.debug(`Summary already exists in database cache: ${existingSummary.id}`);
+      return existingSummary.id;
+    }
+
+    // Only save if we have summary data
+    if (!data.summary) {
+      apiLogger.debug('No summary data to cache, skipping database save');
+      return null;
+    }
+
+    // Extract metadata for database fields
+    const filingType = data.parsedContent?.metadata?.filingType || 'UNKNOWN';
+    const companyName = data.parsedContent?.metadata?.companyName;
+    const ticker = data.parsedContent?.metadata?.ticker;
+
+    // Get or create ticker if available
+    let tickerId: string;
+    if (ticker) {
+      tickerId = await findOrCreateTestTicker(ticker, companyName);
+    } else {
+      // Create a generic test ticker for unknown filings
+      tickerId = await findOrCreateTestTicker('TEST', companyName || 'Test Company');
+    }
+
+    // Extract filing date from URL or use current date
+    let filingDate = new Date();
+    const dateMatch = filingUrl.match(/(\d{4})-(\d{2})-(\d{2})/);
+    if (dateMatch) {
+      filingDate = new Date(`${dateMatch[1]}-${dateMatch[2]}-${dateMatch[3]}`);
+    }
+
+    // Prepare summary text and JSON
+    const summaryText = typeof data.summary.text === 'string' 
+      ? data.summary.text 
+      : JSON.stringify(data.summary.text, null, 2);
+    const summaryJSON = typeof data.summary.text === 'object' ? data.summary.text : null;
+
+    // Save to database
+    const savedSummary = await prisma.summary.create({
+      data: {
+        tickerId,
+        filingType: filingType.toUpperCase(),
+        filingDate,
+        filingUrl,
+        summaryText,
+        summaryJSON,
+        cost: data.summary.cost || 0,
+        tokensUsed: (data.summary.inputTokens || 0) + (data.summary.outputTokens || 0),
+        attempts: 1,
+        processingTimeMs: data.summary.duration || 0,
+        processingStatus: 'COMPLETED',
+        processingCompletedAt: new Date(),
+        model: 'claude-3-5-sonnet-20241022',
+        isPartialResult: false,
+        sentToUser: false
+      }
+    });
+
+    apiLogger.info(`Saved summary to database cache: ${savedSummary.id}`, {
+      filingUrl,
+      filingType,
+      cost: data.summary.cost,
+      tokensUsed: savedSummary.tokensUsed,
+      chunksProcessed: data.summary.chunksProcessed
+    });
+
+    return savedSummary.id;
   } catch (error) {
-    apiLogger.error('Error saving to cache', { error });
+    apiLogger.error('Error saving to database cache', { error, filingUrl });
+    // Don't throw error - caching is not critical for functionality
+    return null;
   }
 }
 
@@ -526,17 +604,8 @@ export async function POST(request: NextRequest) {
       );
     }
     
-    // Validate required parameters for database saving
-    if (saveToDatabase && !ticker) {
-      return NextResponse.json(
-        { 
-          success: false, 
-          error: 'Missing required parameter: ticker is required when saveToDatabase is true',
-          processingTimeMs: Date.now() - startTime 
-        },
-        { status: 400 }
-      );
-    }
+    // Note: saveToDatabase is now handled automatically by the cache layer
+    // The parameter is kept for backward compatibility but not strictly required
     
     // Step 1: Check cache
     const cachedResult = await checkCache(filingUrl);
@@ -576,9 +645,31 @@ export async function POST(request: NextRequest) {
         apiLogger.info(`Found ${documentLinks.length} document links:`, { links: documentLinks.slice(0, 3) });
         
         if (documentLinks.length > 0) {
-          // Use the first document link
-          actualUrl = documentLinks[0];
-          apiLogger.info(`Using first document from listing: ${actualUrl}`);
+          // Find the first valid filing document (not SEC homepage or navigation)
+          let selectedUrl = null;
+          for (const link of documentLinks) {
+            if (!link.includes('sec.gov/index.htm') && 
+                !link.includes('sec.gov/search') && 
+                !link.includes('sec.gov/news') &&
+                !link.endsWith('/')) {
+              selectedUrl = link;
+              break;
+            }
+          }
+          
+          if (selectedUrl) {
+            actualUrl = selectedUrl;
+            apiLogger.info(`Using selected document from listing: ${actualUrl}`, {
+              totalLinks: documentLinks.length,
+              selectedIndex: documentLinks.indexOf(selectedUrl),
+              firstFewLinks: documentLinks.slice(0, 5)
+            });
+          } else {
+            apiLogger.warn('No valid filing documents found in directory listing', {
+              totalLinks: documentLinks.length,
+              allLinks: documentLinks
+            });
+          }
           
           // Fetch the actual document
           const docFetchStart = Date.now();
@@ -617,7 +708,7 @@ export async function POST(request: NextRequest) {
     
     try {
       const parseStart = Date.now();
-      parsedContent = parseFormContentEnhanced(content);
+      parsedContent = await parseFormContentEnhanced(content);
       safeMonitoring.recordDuration('sec_filing_parse_ms', Date.now() - parseStart, { source: 'test-summarize' });
       
       // Add ticker to metadata if provided
@@ -748,7 +839,7 @@ export async function POST(request: NextRequest) {
               ]
             });
             
-            const chunkText = chunkResponse.content[0]?.text || '';
+            const chunkText = chunkResponse.content[0]?.type === 'text' ? chunkResponse.content[0].text : '';
             totalInputTokens += chunkResponse.usage.input_tokens;
             totalOutputTokens += chunkResponse.usage.output_tokens;
             
@@ -781,28 +872,13 @@ export async function POST(request: NextRequest) {
             inputTokens: totalInputTokens,
             outputTokens: totalOutputTokens,
             cost: totalCost,
-            duration: 0,
-            chunksProcessed: contentChunks.length
+            duration: 0
           };
           
-          // Save to database if requested
-          if (saveToDatabase) {
-            try {
-              const savedSummaryId = await saveSummaryToDatabase(
-                response.summary,
-                actualFilingType,
-                filingUrl,
-                actualTicker,
-                actualCompanyName,
-                Date.now() - startTime
-              );
-              response.savedSummaryId = savedSummaryId;
-              apiLogger.info(`Saved chunked summary to database: ${savedSummaryId}`);
-            } catch (dbError) {
-              apiLogger.error(`Failed to save chunked summary to database: ${dbError instanceof Error ? dbError.message : String(dbError)}`);
-              // Don't fail the entire request if database save fails
-            }
-          }
+          // Add chunksProcessed as additional metadata
+          (response.summary as any).chunksProcessed = contentChunks.length;
+          
+          // Database saving is now handled by the cache layer
           
         } else {
           // Single prompt processing
@@ -819,7 +895,7 @@ export async function POST(request: NextRequest) {
           });
           
           // Extract text content from Claude response
-          const responseText = claudeResponse.content[0]?.text || '';
+          const responseText = claudeResponse.content[0]?.type === 'text' ? claudeResponse.content[0].text : '';
           
           // Try to parse the response as JSON
           let summaryText: string | Record<string, any> = responseText;
@@ -844,28 +920,14 @@ export async function POST(request: NextRequest) {
             duration: 0
           };
           
-          // Save to database if requested
-          if (saveToDatabase) {
-            try {
-              const savedSummaryId = await saveSummaryToDatabase(
-                response.summary,
-                actualFilingType,
-                filingUrl,
-                actualTicker,
-                actualCompanyName,
-                Date.now() - startTime
-              );
-              response.savedSummaryId = savedSummaryId;
-              apiLogger.info(`Saved single summary to database: ${savedSummaryId}`);
-            } catch (dbError) {
-              apiLogger.error(`Failed to save single summary to database: ${dbError instanceof Error ? dbError.message : String(dbError)}`);
-              // Don't fail the entire request if database save fails
-            }
-          }
+          // Database saving is now handled by the cache layer
         }
         
-        // Save to cache with 1-hour TTL
-        await saveToCache(filingUrl, response, 60);
+        // Save to database cache
+        const cacheId = await saveToCache(filingUrl, response);
+        if (cacheId && !response.savedSummaryId) {
+          response.savedSummaryId = cacheId;
+        }
       } catch (claudeError) {
         return NextResponse.json(
           {
