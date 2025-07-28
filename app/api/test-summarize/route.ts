@@ -107,6 +107,7 @@ function isDirectoryListing(content: string): boolean {
 
 /**
  * Extract document links from a directory listing HTML, prioritizing main filing documents
+ * Enhanced version with robust filtering to exclude navigation links
  * @param html HTML content of the directory listing
  * @param baseUrl Base URL for resolving relative links
  * @returns Array of document links, sorted by priority (main filing first)
@@ -118,36 +119,89 @@ function extractDocumentLinksFromDirectoryListing(html: string, baseUrl: string)
     const links: string[] = [];
     const priorityLinks: string[] = [];
     
-    // Get all links in the document
+    // Extract accession number from base URL for filtering
+    const accessionMatch = baseUrl.match(/(\d{10}-\d{2}-\d{6})/);
+    const accessionNumber = accessionMatch ? accessionMatch[1] : null;
+    
     const anchors = document.querySelectorAll('a');
     
     for (let i = 0; i < anchors.length; i++) {
       const anchor = anchors[i];
       const href = anchor.getAttribute('href');
       
-      if (href && !href.includes('?') && !href.includes('..')) {
-        // Filter for common filing document extensions
-        if (href.endsWith('.txt') || 
-            href.endsWith('.xml') || 
-            href.endsWith('.html') || 
-            href.endsWith('.htm')) {
-          
-          // Resolve relative URLs to absolute URLs
-          const absoluteUrl = new URL(href, baseUrl).href;
-          
-          // Prioritize main filing documents (usually .htm files with company ticker or date)
-          if (href.endsWith('.htm') && 
-              (href.includes('tsla-') || href.includes('tesla') || href.match(/\d{8}\.htm$/))) {
-            priorityLinks.push(absoluteUrl);
-          } else {
-            links.push(absoluteUrl);
-          }
+      if (!href || href.includes('?') || href.includes('..')) {
+        continue;
+      }
+      
+      // Skip navigation links that go outside the current directory
+      if (href.startsWith('http') && !href.includes(baseUrl.split('/').slice(-2, -1)[0])) {
+        continue;
+      }
+      
+      // Skip common navigation links
+      if (href.includes('sec.gov/index') || 
+          href.includes('sec.gov/search') || 
+          href.includes('sec.gov/news') ||
+          href.includes('sec.gov/newsroom') ||
+          href === '/' || 
+          href === '../' ||
+          href.startsWith('/index') ||
+          href.startsWith('/search')) {
+        continue;
+      }
+      
+      // Only include filing-related document types
+      if (href.endsWith('.txt') || href.endsWith('.xml') || 
+          href.endsWith('.html') || href.endsWith('.htm') ||
+          href.endsWith('.xsd') || href.endsWith('.xbrl')) {
+        
+        const absoluteUrl = new URL(href, baseUrl).href;
+        
+        // High priority: Main filing document (usually contains accession number)
+        if (accessionNumber && href.includes(accessionNumber.replace(/-/g, ''))) {
+          priorityLinks.push(absoluteUrl);
+        }
+        // Medium priority: HTML/HTM files with dashes (likely main documents)  
+        else if (href.endsWith('.htm') && href.includes('-')) {
+          priorityLinks.push(absoluteUrl);
+        }
+        // Medium priority: Files with 10-K or 10-Q patterns
+        else if (href.match(/10-[kq]/i)) {
+          priorityLinks.push(absoluteUrl);
+        }
+        // Lower priority: Other filing documents
+        else {
+          links.push(absoluteUrl);
         }
       }
     }
     
-    // Return priority links first, then regular links
-    return [...priorityLinks, ...links];
+    // Additional smart URL transformation for common SEC patterns
+    const transformedUrls: string[] = [];
+    
+    for (const link of [...priorityLinks, ...links]) {
+      // Handle different SEC URL formats
+      let transformedUrl = link;
+      
+      // Convert index.htm to main document if it looks like a filing
+      if (link.endsWith('index.htm') && accessionNumber) {
+        const basePath = link.replace('index.htm', '');
+        const possibleMainDoc = `${basePath}${accessionNumber.replace(/-/g, '')}.htm`;
+        transformedUrls.push(possibleMainDoc);
+      }
+      
+      transformedUrls.push(transformedUrl);
+    }
+    
+    apiLogger.debug(`Extracted ${transformedUrls.length} document links from directory listing`, {
+      baseUrl,
+      accessionNumber,
+      priorityCount: priorityLinks.length,
+      totalCount: transformedUrls.length,
+      firstFew: transformedUrls.slice(0, 3)
+    });
+    
+    return transformedUrls;
   } catch (error) {
     apiLogger.error('Error extracting links from directory listing', { error });
     return [];
@@ -591,9 +645,31 @@ export async function POST(request: NextRequest) {
         apiLogger.info(`Found ${documentLinks.length} document links:`, { links: documentLinks.slice(0, 3) });
         
         if (documentLinks.length > 0) {
-          // Use the first document link
-          actualUrl = documentLinks[0];
-          apiLogger.info(`Using first document from listing: ${actualUrl}`);
+          // Find the first valid filing document (not SEC homepage or navigation)
+          let selectedUrl = null;
+          for (const link of documentLinks) {
+            if (!link.includes('sec.gov/index.htm') && 
+                !link.includes('sec.gov/search') && 
+                !link.includes('sec.gov/news') &&
+                !link.endsWith('/')) {
+              selectedUrl = link;
+              break;
+            }
+          }
+          
+          if (selectedUrl) {
+            actualUrl = selectedUrl;
+            apiLogger.info(`Using selected document from listing: ${actualUrl}`, {
+              totalLinks: documentLinks.length,
+              selectedIndex: documentLinks.indexOf(selectedUrl),
+              firstFewLinks: documentLinks.slice(0, 5)
+            });
+          } else {
+            apiLogger.warn('No valid filing documents found in directory listing', {
+              totalLinks: documentLinks.length,
+              allLinks: documentLinks
+            });
+          }
           
           // Fetch the actual document
           const docFetchStart = Date.now();
