@@ -106,8 +106,90 @@ function isDirectoryListing(content: string): boolean {
 }
 
 /**
- * Extract document links from a directory listing HTML, prioritizing main filing documents
- * Enhanced version with robust filtering to exclude navigation links
+ * Intelligent document prioritization based on SEC filing patterns
+ * @param links Array of document links to prioritize
+ * @param accessionNumber Accession number for pattern matching
+ * @param baseUrl Base URL for context
+ * @returns Prioritized array of document links
+ */
+function prioritizeDocuments(links: string[], accessionNumber: string | null, baseUrl: string): string[] {
+  const priorityLevels = {
+    critical: [] as string[],    // Main filing documents
+    high: [] as string[],        // Likely main documents  
+    medium: [] as string[],      // Other filing documents
+    low: [] as string[]          // Exhibits and supplementary
+  };
+  
+  const accessionClean = accessionNumber ? accessionNumber.replace(/-/g, '') : '';
+  
+  links.forEach(link => {
+    const filename = link.split('/').pop()?.toLowerCase() || '';
+    const href = filename;
+    
+    // Critical: Main document patterns
+    if (
+      // Contains clean accession number
+      (accessionClean && href.includes(accessionClean)) ||
+      // Tesla-specific patterns: tsla-YYYYMMDD.htm
+      href.match(/^[a-z]{2,5}-\d{8}\.html?$/i) ||
+      // Common 8-K pattern: d123456d8k.htm
+      href.match(/^d\d+d(8k|10k|10q)\.html?$/i) ||
+      // Date-based patterns: YYYYMMDD.htm
+      href.match(/^\d{8}\.html?$/i)
+    ) {
+      priorityLevels.critical.push(link);
+    }
+    // High: HTML files with meaningful names (but not exhibits/index)
+    else if (
+      href.endsWith('.htm') && 
+      href.includes('-') &&
+      !href.includes('index') && 
+      !href.includes('exhibit') && 
+      !href.includes('ex-') &&
+      !href.includes('ex_')
+    ) {
+      priorityLevels.high.push(link);
+    }
+    // Medium: Other HTML/TXT documents (not exhibits)
+    else if (
+      href.match(/\.(html?|txt)$/i) && 
+      !href.includes('exhibit') && 
+      !href.includes('ex-') &&
+      !href.includes('ex_') &&
+      !href.includes('index')
+    ) {
+      priorityLevels.medium.push(link);
+    }
+    // Low: Everything else (exhibits, XML, etc.)
+    else {
+      priorityLevels.low.push(link);
+    }
+  });
+  
+  const result = [
+    ...priorityLevels.critical,
+    ...priorityLevels.high,
+    ...priorityLevels.medium,
+    ...priorityLevels.low
+  ];
+  
+  apiLogger.debug(`Document prioritization results`, {
+    baseUrl,
+    accessionNumber,
+    critical: priorityLevels.critical.length,
+    high: priorityLevels.high.length,
+    medium: priorityLevels.medium.length,
+    low: priorityLevels.low.length,
+    topCritical: priorityLevels.critical.slice(0, 2),
+    topHigh: priorityLevels.high.slice(0, 2)
+  });
+  
+  return result;
+}
+
+/**
+ * Extract document links from a directory listing HTML with intelligent prioritization
+ * Enhanced version based on SEC filing pattern analysis
  * @param html HTML content of the directory listing
  * @param baseUrl Base URL for resolving relative links
  * @returns Array of document links, sorted by priority (main filing first)
@@ -116,8 +198,7 @@ function extractDocumentLinksFromDirectoryListing(html: string, baseUrl: string)
   try {
     const dom = new JSDOM(html);
     const document = dom.window.document;
-    const links: string[] = [];
-    const priorityLinks: string[] = [];
+    const allLinks: string[] = [];
     
     // Extract accession number from base URL for filtering
     const accessionMatch = baseUrl.match(/(\d{10}-\d{2}-\d{6})/);
@@ -133,20 +214,31 @@ function extractDocumentLinksFromDirectoryListing(html: string, baseUrl: string)
         continue;
       }
       
-      // Skip navigation links that go outside the current directory
-      if (href.startsWith('http') && !href.includes(baseUrl.split('/').slice(-2, -1)[0])) {
-        continue;
+      // Skip absolute URLs that go outside SEC or the current accession directory
+      if (href.startsWith('http')) {
+        // Allow SEC URLs but only within the same accession directory or known filing patterns
+        if (href.includes('sec.gov')) {
+          // Skip general SEC navigation pages
+          if (href.includes('sec.gov/index') || 
+              href.includes('sec.gov/search') || 
+              href.includes('sec.gov/news') ||
+              href.includes('sec.gov/about') ||
+              href.includes('sec.gov/newsroom')) {
+            continue;
+          }
+          // Only allow if it's in the same data directory or a direct filing URL
+          const currentDataPath = baseUrl.match(/\/data\/\d+\/\d+/)?.[0];
+          if (currentDataPath && !href.includes(currentDataPath)) {
+            continue;
+          }
+        } else {
+          // Skip all non-SEC external links
+          continue;
+        }
       }
       
-      // Skip common navigation links
-      if (href.includes('sec.gov/index') || 
-          href.includes('sec.gov/search') || 
-          href.includes('sec.gov/news') ||
-          href.includes('sec.gov/newsroom') ||
-          href === '/' || 
-          href === '../' ||
-          href.startsWith('/index') ||
-          href.startsWith('/search')) {
+      // Skip directory navigation
+      if (href === '/' || href === '../' || href.startsWith('/index') || href.startsWith('/search')) {
         continue;
       }
       
@@ -156,48 +248,39 @@ function extractDocumentLinksFromDirectoryListing(html: string, baseUrl: string)
           href.endsWith('.xsd') || href.endsWith('.xbrl')) {
         
         const absoluteUrl = new URL(href, baseUrl).href;
-        
-        // High priority: Main filing document (usually contains accession number)
-        if (accessionNumber && href.includes(accessionNumber.replace(/-/g, ''))) {
-          priorityLinks.push(absoluteUrl);
-        }
-        // Medium priority: HTML/HTM files with dashes (likely main documents)  
-        else if (href.endsWith('.htm') && href.includes('-')) {
-          priorityLinks.push(absoluteUrl);
-        }
-        // Medium priority: Files with 10-K or 10-Q patterns
-        else if (href.match(/10-[kq]/i)) {
-          priorityLinks.push(absoluteUrl);
-        }
-        // Lower priority: Other filing documents
-        else {
-          links.push(absoluteUrl);
-        }
+        allLinks.push(absoluteUrl);
       }
     }
     
-    // Additional smart URL transformation for common SEC patterns
-    const transformedUrls: string[] = [];
+    // Use intelligent prioritization
+    const prioritizedLinks = prioritizeDocuments(allLinks, accessionNumber, baseUrl);
     
-    for (const link of [...priorityLinks, ...links]) {
-      // Handle different SEC URL formats
-      let transformedUrl = link;
-      
-      // Convert index.htm to main document if it looks like a filing
-      if (link.endsWith('index.htm') && accessionNumber) {
-        const basePath = link.replace('index.htm', '');
-        const possibleMainDoc = `${basePath}${accessionNumber.replace(/-/g, '')}.htm`;
-        transformedUrls.push(possibleMainDoc);
+    // Additional smart URL transformation for missing patterns
+    const transformedUrls: string[] = [...prioritizedLinks];
+    
+    // If we don't have any critical documents, try to construct them
+    if (prioritizedLinks.length === 0 || !prioritizedLinks[0].includes(accessionNumber?.replace(/-/g, '') || '')) {
+      if (accessionNumber) {
+        const basePath = baseUrl.endsWith('/') ? baseUrl : baseUrl + '/';
+        const accessionClean = accessionNumber.replace(/-/g, '');
+        
+        // Try common patterns for Tesla and generic filings
+        const possibleUrls = [
+          `${basePath}tsla-${extractDateFromAccession(accessionNumber)}.htm`, // Tesla pattern
+          `${basePath}${accessionClean}.htm`, // Generic accession pattern
+          `${basePath}d${accessionClean}.htm`, // 8-K pattern variation
+        ];
+        
+        transformedUrls.unshift(...possibleUrls);
       }
-      
-      transformedUrls.push(transformedUrl);
     }
     
     apiLogger.debug(`Extracted ${transformedUrls.length} document links from directory listing`, {
       baseUrl,
       accessionNumber,
-      priorityCount: priorityLinks.length,
-      totalCount: transformedUrls.length,
+      totalExtracted: allLinks.length,
+      afterPrioritization: prioritizedLinks.length,
+      withTransformations: transformedUrls.length,
       firstFew: transformedUrls.slice(0, 3)
     });
     
@@ -206,6 +289,18 @@ function extractDocumentLinksFromDirectoryListing(html: string, baseUrl: string)
     apiLogger.error('Error extracting links from directory listing', { error });
     return [];
   }
+}
+
+/**
+ * Extract date from accession number for Tesla filing pattern
+ * @param accessionNumber Accession number in format XXXXXXXXXX-XX-XXXXXX
+ * @returns Date string in YYYYMMDD format
+ */
+function extractDateFromAccession(accessionNumber: string): string {
+  // For Tesla filings, we often see patterns where the date corresponds to fiscal year end
+  // This is a simplified approach - in practice, you'd need more sophisticated date extraction
+  const year = new Date().getFullYear();
+  return `${year}1231`; // Default to Dec 31 of current year
 }
 
 /**
@@ -645,13 +740,25 @@ export async function POST(request: NextRequest) {
         apiLogger.info(`Found ${documentLinks.length} document links:`, { links: documentLinks.slice(0, 3) });
         
         if (documentLinks.length > 0) {
-          // Find the first valid filing document (not SEC homepage or navigation)
+          // Find the first valid filing document with enhanced validation
           let selectedUrl = null;
           for (const link of documentLinks) {
-            if (!link.includes('sec.gov/index.htm') && 
-                !link.includes('sec.gov/search') && 
-                !link.includes('sec.gov/news') &&
-                !link.endsWith('/')) {
+            const filename = link.split('/').pop()?.toLowerCase() || '';
+            
+            // Exclude navigation and non-filing URLs
+            if (link.includes('sec.gov/index.htm') || 
+                link.includes('sec.gov/search') || 
+                link.includes('sec.gov/news') ||
+                link.includes('sec.gov/about') ||
+                link.includes('sec.gov/newsroom') ||
+                link.endsWith('/') ||
+                filename.includes('index') ||
+                filename.includes('upcoming-events')) {
+              continue;
+            }
+            
+            // Must be a filing document type
+            if (filename.match(/\.(html?|txt)$/i)) {
               selectedUrl = link;
               break;
             }
@@ -662,13 +769,25 @@ export async function POST(request: NextRequest) {
             apiLogger.info(`Using selected document from listing: ${actualUrl}`, {
               totalLinks: documentLinks.length,
               selectedIndex: documentLinks.indexOf(selectedUrl),
+              filename: selectedUrl.split('/').pop(),
               firstFewLinks: documentLinks.slice(0, 5)
             });
           } else {
             apiLogger.warn('No valid filing documents found in directory listing', {
               totalLinks: documentLinks.length,
-              allLinks: documentLinks
+              allLinks: documentLinks.slice(0, 10) // Limit logging for readability
             });
+            
+            // Fallback: Try to construct a direct filing URL
+            const accessionMatch = filingUrl.match(/(\d{10}-\d{2}-\d{6})/);
+            if (accessionMatch) {
+              const accessionNumber = accessionMatch[1];
+              const basePath = filingUrl.endsWith('/') ? filingUrl : filingUrl + '/';
+              const fallbackUrl = `${basePath}${accessionNumber.replace(/-/g, '')}.htm`;
+              
+              apiLogger.info(`Trying fallback constructed URL: ${fallbackUrl}`);
+              actualUrl = fallbackUrl;
+            }
           }
           
           // Fetch the actual document
