@@ -106,8 +106,8 @@ function isDirectoryListing(content: string): boolean {
 }
 
 /**
- * Intelligent document prioritization based on SEC filing patterns
- * Prioritizes XML files for cost efficiency and uses generic SEC patterns
+ * Intelligent document prioritization based on SEC filing analysis
+ * Prioritizes HTML files for AI cost-efficiency and material shareholder content
  * @param links Array of document links to prioritize
  * @param accessionNumber Accession number for pattern matching
  * @param baseUrl Base URL for context
@@ -115,11 +115,11 @@ function isDirectoryListing(content: string): boolean {
  */
 function prioritizeDocuments(links: string[], accessionNumber: string | null, baseUrl: string): string[] {
   const priorityLevels = {
-    critical: [] as string[],    // Primary XML documents (most cost-effective)
-    high: [] as string[],        // Main filing documents (HTML/TXT)
-    medium: [] as string[],      // Other filing documents
-    low: [] as string[],         // Exhibits and supplementary
-    exhibits: [] as string[]     // Clearly exhibit files (lowest priority)
+    critical: [] as string[],    // Main SEC filing documents (95% relevance)
+    high: [] as string[],        // Navigation and index documents (85-90% relevance)
+    medium: [] as string[],      // Report sections and material announcements (50-60% relevance)
+    low: [] as string[],         // XML and supplementary files (30-35% relevance)
+    exhibits: [] as string[]     // Exhibit files and schemas (0-25% relevance)
   };
   
   const accessionClean = accessionNumber ? accessionNumber.replace(/-/g, '') : '';
@@ -131,70 +131,84 @@ function prioritizeDocuments(links: string[], accessionNumber: string | null, ba
     const filename = link.split('/').pop()?.toLowerCase() || '';
     const href = filename;
     
-    // CRITICAL: Primary XML documents (most cost-effective)
+    // CRITICAL: Main SEC filing documents (95% shareholder relevance)
     if (
-      // Common SEC XML documents
-      href === 'primary_doc.xml' ||
-      href === 'filing.xml' ||
-      href === 'document.xml' ||
-      href === 'form.xml' ||
-      // XML files with accession numbers
-      (accessionClean && href.includes(accessionClean) && href.endsWith('.xml'))
+      // Primary pattern: d{accession}.htm - most reliable main document
+      (accessionClean && href === `d${accessionClean}.htm`) ||
+      // Alternative main document patterns
+      (accessionClean && href.includes(accessionClean) && href.match(/^d\d+\.html?$/i)) ||
+      // Generic SEC form patterns: d123456d[formtype].htm
+      href.match(/^d\d+d(8k|10k|10q|144|3|4|5)\.html?$/i)
     ) {
       priorityLevels.critical.push(link);
-      categorization[filename] = 'critical-xml';
+      categorization[filename] = 'critical-main-filing';
     }
-    // HIGH: Main filing documents with accession numbers or standard patterns
+    // HIGH: Index and navigation documents (85-90% relevance)
     else if (
-      // Contains clean accession number (HTML/TXT)
-      (accessionClean && href.includes(accessionClean) && href.match(/\.(html?|txt)$/i)) ||
-      // Generic SEC patterns: d123456d[formtype].htm
-      href.match(/^d\d+d(8k|10k|10q|144|3|4|5)\.html?$/i) ||
-      // Date-based patterns: YYYYMMDD.htm or similar
-      href.match(/^\d{8}\.html?$/i) ||
-      // Filing with company ticker: [ticker]-[date].htm (generic pattern)
-      href.match(/^[a-z]{2,6}-\d{6,8}\.html?$/i)
+      // Index documents
+      href.includes('index.html') ||
+      href.includes('index.htm') ||
+      // Complete submission text files
+      (accessionClean && href === `${accessionClean}.txt`) ||
+      // Alternative main document patterns
+      (accessionClean && href.includes(accessionClean) && href.match(/\.(html?|txt)$/i))
     ) {
       priorityLevels.high.push(link);
-      categorization[filename] = 'high-main';
+      categorization[filename] = 'high-navigation';
     }
-    // MEDIUM: XML files (cost-effective but not primary documents)
+    // MEDIUM: Material content documents (50-60% relevance)
     else if (
-      href.endsWith('.xml') &&
-      !href.includes('exhibit') && 
-      !href.includes('ex-') &&
-      !href.includes('ex_')
+      // Report sections
+      href.match(/^r\d+\.html?$/i) ||
+      // Material announcements
+      href.match(/^ex-99\.\d+\.html?$/i) ||
+      // Material contracts
+      href.match(/^ex-10\.\d+\.html?$/i) ||
+      // Other meaningful HTML/TXT files
+      (href.match(/\.(html?|txt)$/i) && 
+       !href.includes('exhibit') && 
+       !href.includes('ex-') &&
+       !href.includes('ex_') &&
+       href.includes('-'))
     ) {
       priorityLevels.medium.push(link);
-      categorization[filename] = 'medium-xml';
+      categorization[filename] = 'medium-material';
     }
-    // MEDIUM: Other HTML/TXT documents (not exhibits)
+    // LOW: XML and supplementary files (30-35% relevance)
     else if (
-      href.match(/\.(html?|txt)$/i) && 
-      !href.includes('exhibit') && 
-      !href.includes('ex-') &&
-      !href.includes('ex_') &&
-      !href.includes('index') &&
-      href.includes('-') // Has meaningful structure
-    ) {
-      priorityLevels.medium.push(link);
-      categorization[filename] = 'medium-structured';
-    }
-    // LOW: Basic documents without clear structure
-    else if (
-      href.match(/\.(html?|txt|xml)$/i) && 
-      !href.includes('exhibit') && 
-      !href.includes('ex-') &&
-      !href.includes('ex_') &&
-      !href.includes('index')
+      // Primary XML documents (structured but less AI-friendly)
+      href === 'primary_doc.xml' ||
+      href === 'filing.xml' ||
+      href === 'filingsummary.xml' ||
+      // Other XML files
+      (href.endsWith('.xml') && 
+       !href.includes('exhibit') && 
+       !href.includes('ex-') &&
+       !href.includes('.xsd'))
     ) {
       priorityLevels.low.push(link);
-      categorization[filename] = 'low-basic';
+      categorization[filename] = 'low-xml';
     }
-    // EXHIBITS: Clearly exhibit files (lowest priority)
-    else {
+    // EXHIBITS: Low value files (0-25% relevance)
+    else if (
+      // Schema definitions (avoid completely)
+      href.endsWith('.xsd') ||
+      // Clear exhibit patterns
+      href.includes('exhibit') ||
+      href.includes('ex-') ||
+      href.includes('ex_') ||
+      href.match(/^ex-\d+/) ||
+      // Technical metadata
+      href === 'metalinks.json' ||
+      href.includes('schema')
+    ) {
       priorityLevels.exhibits.push(link);
-      categorization[filename] = 'exhibits';
+      categorization[filename] = 'exhibits-schemas';
+    }
+    // DEFAULT: Other files
+    else {
+      priorityLevels.low.push(link);
+      categorization[filename] = 'low-other';
     }
   });
   
@@ -206,7 +220,7 @@ function prioritizeDocuments(links: string[], accessionNumber: string | null, ba
     ...priorityLevels.exhibits
   ];
   
-  apiLogger.info(`Document prioritization results`, {
+  apiLogger.info(`Document prioritization results (HTML-first approach)`, {
     baseUrl,
     accessionNumber,
     totals: {
@@ -221,6 +235,7 @@ function prioritizeDocuments(links: string[], accessionNumber: string | null, ba
       high: priorityLevels.high.slice(0, 3).map(url => url.split('/').pop()),
       medium: priorityLevels.medium.slice(0, 3).map(url => url.split('/').pop())
     },
+    materiality_focus: 'HTML documents prioritized for AI processing efficiency',
     categorization: Object.fromEntries(
       Object.entries(categorization).slice(0, 10) // Limit for readability
     )
@@ -284,9 +299,9 @@ function extractDocumentLinksFromDirectoryListing(html: string, baseUrl: string)
         continue;
       }
       
-      // Only include filing-related document types (prioritize XML for cost efficiency)
-      if (href.endsWith('.xml') || href.endsWith('.txt') || 
-          href.endsWith('.html') || href.endsWith('.htm') ||
+      // Only include filing-related document types (prioritize HTML for AI efficiency)
+      if (href.endsWith('.htm') || href.endsWith('.html') || 
+          href.endsWith('.txt') || href.endsWith('.xml') ||
           href.endsWith('.xsd') || href.endsWith('.xbrl')) {
         
         const absoluteUrl = new URL(href, baseUrl).href;
@@ -307,13 +322,13 @@ function extractDocumentLinksFromDirectoryListing(html: string, baseUrl: string)
         const basePath = baseUrl.endsWith('/') ? baseUrl : baseUrl + '/';
         const accessionClean = accessionNumber.replace(/-/g, '');
         
-        // Try common SEC filing patterns (prioritize XML for cost efficiency)
+        // Try common SEC filing patterns (prioritize HTML for AI efficiency)
         const possibleUrls = [
-          `${basePath}primary_doc.xml`, // Most common XML pattern
-          `${basePath}filing.xml`, // Alternative XML pattern
-          `${basePath}${accessionClean}.xml`, // Accession-based XML
+          `${basePath}d${accessionClean}.htm`, // Primary pattern: most reliable main document
+          `${basePath}${accessionClean}-index.html`, // Index document pattern
+          `${basePath}${accessionClean}.txt`, // Complete submission text
           `${basePath}${accessionClean}.htm`, // Generic HTML pattern
-          `${basePath}d${accessionClean}.htm`, // Alternative HTML pattern
+          `${basePath}primary_doc.xml`, // XML fallback (less AI-friendly)
         ];
         
         transformedUrls.unshift(...possibleUrls);
@@ -791,11 +806,11 @@ export async function POST(request: NextRequest) {
               continue;
             }
             
-            // Must be a filing document type (prioritize XML for cost efficiency)
-            if (filename.match(/\.(xml|html?|txt|xbrl)$/i)) {
+            // Must be a filing document type (prioritize HTML for AI efficiency)
+            if (filename.match(/\.(html?|txt|xml|xbrl)$/i)) {
               selectedUrl = link;
-              // Prefer XML files if found
-              if (filename.endsWith('.xml')) {
+              // Prefer HTML files if found (better for AI)
+              if (filename.endsWith('.htm') || filename.endsWith('.html')) {
                 break;
               }
             }
