@@ -2,19 +2,19 @@
   "crons": [
     {
       "path": "/api/cron/monitor-sec-filings",
-      "schedule": "*/30 * * * *"
+      "schedule": "0 9 * * 1-5"
     },
     {
       "path": "/api/cron/check-filings",
-      "schedule": "0 */6 * * *"
+      "schedule": "0 10 * * 1-5"
     },
     {
       "path": "/api/cron/process-filings", 
-      "schedule": "15 */4 * * *"
+      "schedule": "0 11 * * 1-5"
     },
     {
       "path": "/api/cron/process-jobs",
-      "schedule": "*/5 * * * *"
+      "schedule": "0 12 * * 1-5"
     }
   ],
   "functions": {

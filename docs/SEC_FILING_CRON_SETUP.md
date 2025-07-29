@@ -24,7 +24,7 @@ Cost-optimized serverless cron system for monitoring SEC filings using RSS feeds
 - **Single Job Per Ticker**: One monitoring job for all tickers, ignoring user tiers
 - **RSS-Based Detection**: Uses SEC's RSS feeds (updated every 10 minutes)
 - **Cost Optimization**: Batch processing, rate limiting, efficient caching
-- **Real-time Processing**: 30-minute intervals during market hours
+- **Daily Processing**: Once per day during market hours (Vercel Hobby plan)
 - **Automatic Scaling**: Serverless architecture scales with subscription growth
 
 ## Database Schema
@@ -144,7 +144,8 @@ https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK={CIK}&output=atom
 ```
 
 ### RSS Update Schedule
-- **Frequency**: Every 10 minutes
+- **Frequency**: Every 10 minutes (SEC updates)
+- **Cron Frequency**: Daily (Vercel Hobby limitation)
 - **Operating Hours**: Monday-Friday, 6am-10pm EST
 - **Content**: New filings with accession numbers and URLs
 
@@ -209,7 +210,7 @@ npm run db:test
 ## Cost Analysis
 
 ### Current Costs (Monthly)
-- **Vercel Cron**: Free tier (up to 1000 invocations)
+- **Vercel Cron**: Free tier (Hobby plan - daily crons only)
 - **Database**: ~$25/month (Neon Pro)
 - **Claude API**: ~$50/month (5000 summaries)
 - **Email**: ~$5/month (Resend)
@@ -217,8 +218,13 @@ npm run db:test
 **Total**: ~$80/month for 5000 summaries across 100 tickers
 
 ### Cost Per User
-- **Free Users**: $0.40/month (weekly summaries)
-- **Premium Users**: $1.60/month (daily summaries)
+- **All Users**: Daily summary processing due to Hobby plan limitations
 - **Marginal Cost**: $0.016 per summary
+- **Upgrade Path**: Vercel Pro ($20/month) enables 30-minute real-time processing
 
-This system achieves 90% cost efficiency compared to per-user cron jobs while maintaining real-time filing detection and processing.
+### Scaling Strategy
+- **Phase 1**: Hobby plan with daily processing for validation
+- **Phase 2**: Upgrade to Pro plan when paying customers validate demand
+- **Phase 3**: Real-time 30-minute processing for premium experience
+
+This approach minimizes upfront costs while maintaining growth flexibility.
