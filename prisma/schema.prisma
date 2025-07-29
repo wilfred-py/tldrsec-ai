@@ -20,8 +20,15 @@ model User {
   tutorialCompletedAt DateTime?
   tutorialProgress    Int       @default(0)
   tutorialSteps       Json?
+  subscriptionTier    SubscriptionTier @default(FREE)
   tickers             Ticker[]
   notificationsSent   NotificationSent[]
+}
+
+enum SubscriptionTier {
+  FREE
+  PREMIUM
+  ENTERPRISE
 }
 
 model Ticker {
@@ -189,4 +196,41 @@ model NotificationSent {
   @@index([userId, sentAt])
   @@index([notificationType, sentAt])
   @@index([emailId])
+}
+
+model TickerMonitoring {
+  id                String   @id @default(uuid())
+  cik               String   @unique
+  symbol            String
+  companyName       String
+  isActive          Boolean  @default(true)
+  rssUrl            String
+  lastChecked       DateTime?
+  lastAccessionSeen String?
+  subscriberCount   Int      @default(0)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  
+  filingChecks      RssFilingCheck[]
+
+  @@index([isActive, lastChecked])
+  @@index([cik])
+}
+
+model RssFilingCheck {
+  id               String   @id @default(uuid())
+  tickerMonitoringId String
+  accessionNumber  String
+  filingType       String
+  filingDate       DateTime
+  filingUrl        String
+  rssEntryDate     DateTime
+  processed        Boolean  @default(false)
+  createdAt        DateTime @default(now())
+  
+  tickerMonitoring TickerMonitoring @relation(fields: [tickerMonitoringId], references: [id], onDelete: Cascade)
+
+  @@unique([accessionNumber])
+  @@index([processed, createdAt])
+  @@index([tickerMonitoringId, processed])
 }
