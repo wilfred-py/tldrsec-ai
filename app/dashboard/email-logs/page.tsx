@@ -7,7 +7,7 @@ import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogClose } from '@/components/ui/dialog';
 import { XIcon, SearchIcon } from 'lucide-react';
 import { LogsHeader, LogsTabs } from "@/components/logs-header";
-import filingService from '@/services/filingService';
+// import filingService from '@/services/filingService';
 import { FilingLog } from '@/types/filing';
 
 export default function LogsPage() {
@@ -24,8 +24,10 @@ export default function LogsPage() {
 
   const fetchLogs = async () => {
     try {
-      const response = await filingService.getFilingLogs();
-      setLogs(response.data || []);
+      // TODO: Replace with API route call
+      // const response = await filingService.getFilingLogs();
+      // setLogs(response.data || []);
+      setLogs([]);
     } catch (error) {
       console.error('Error fetching logs:', error);
       setLogs([]);

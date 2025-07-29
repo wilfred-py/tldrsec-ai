@@ -11,8 +11,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '../../../../lib/auth/auth-options';
+import { auth } from '@clerk/nextjs/server';
 import { enhancedFilingService } from '../../../../services/enhancedFilingService';
 import { logger } from '../../../../lib/logging';
 import { FilingType } from '../../../../lib/sec-edgar/types';
@@ -29,9 +28,8 @@ export async function POST(request: NextRequest) {
   const startTime = Date.now();
   
   try {
-    // Get user session (Note: getServerSession usage is different in App Router)
-    const session = await getServerSession(authOptions);
-    const userId = session?.user?.id;
+    // Get user session using Clerk
+    const { userId } = await auth();
     
     // Extract request body
     const { requests, concurrencyLimit = 3, useCache = true, processAllChunks = false } = await request.json();
