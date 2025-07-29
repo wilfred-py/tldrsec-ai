@@ -28,7 +28,7 @@ import { monitoring } from '@/lib/monitoring';
 import { v4 as uuidv4 } from 'uuid';
 import { PrismaClient } from '@prisma/client';
 import { summarizeFiling, SummarizationResult, SummarizationError } from '@/lib/ai/summarize';
-import { ClaudeClient } from '@/lib/ai/claude-client';
+import { claudeClient } from '@/lib/ai/claude-client';
 
 // Define an interface for the job object structure returned from the database
 interface JobQueueItem {
@@ -67,8 +67,7 @@ const processId = uuidv4();
 // Component logger
 const componentLogger = logger.child('job-processor');
 
-// Initialize Claude client for AI processing
-const claudeClient = new ClaudeClient();
+// Use singleton Claude client for AI processing
 
 // Process-specific circuit breaker configuration
 const jobCircuitBreakerConfig: CircuitBreakerConfig = {

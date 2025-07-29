@@ -736,5 +736,61 @@ export class ClaudeClient {
   }
 }
 
+/**
+ * Generate a summary for SEC filing content
+ * @param params Filing parameters including type, content, and metadata
+ * @returns Summary response with text and cost information
+ */
+export async function generateSummary(params: {
+  filingType: string;
+  content: any;
+  metadata: {
+    companyName: string;
+    ticker: string;
+    filingDate: Date;
+    accessionNumber?: string;
+  };
+}): Promise<{ text: string; cost: number }> {
+  const { generateSystemPrompt, generateUserPrompt } = await import('./sec-prompts');
+  
+  try {
+    const systemPrompt = generateSystemPrompt(
+      params.filingType as any,
+      params.metadata.companyName,
+      params.metadata.filingDate.toISOString()
+    );
+    
+    const userPrompt = generateUserPrompt(
+      params.filingType as any,
+      typeof params.content === 'string' ? params.content : JSON.stringify(params.content),
+      params.metadata.companyName,
+      params.metadata.ticker
+    );
+
+    const response = await claudeClient.sendMessage(
+      [{ role: 'user', content: userPrompt }],
+      {
+        system: systemPrompt,
+        model: 'claude-3-5-sonnet-20241022',
+        maxTokens: 3000,
+        temperature: 0.1
+      }
+    );
+
+    return {
+      text: response.content,
+      cost: response.cost || 0
+    };
+  } catch (error) {
+    logger.error('Error generating summary', { error, params: { filingType: params.filingType, ticker: params.metadata.ticker } });
+    
+    // Return fallback summary
+    return {
+      text: `Summary for ${params.metadata.companyName} (${params.metadata.ticker}) ${params.filingType} filing filed on ${params.metadata.filingDate.toDateString()}. Please check the original filing for details.`,
+      cost: 0
+    };
+  }
+}
+
 // Export a singleton instance for convenience
 export const claudeClient = new ClaudeClient(); 

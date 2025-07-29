@@ -628,3 +628,6 @@ export class NotificationService implements NotificationServiceInterface {
 
 // Export the singleton instance
 export const notificationService = NotificationService.getInstance();
+
+// Re-export types from notification-types for backwards compatibility
+export { NotificationPreference } from './notification-types';
