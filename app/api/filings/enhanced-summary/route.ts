@@ -9,8 +9,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '../../../../lib/auth/auth-options';
+import { auth } from '@clerk/nextjs/server';
 import { enhancedFilingService } from '../../../../services/enhancedFilingService';
 import { logger } from '../../../../lib/logging';
 import { FilingType } from '../../../../lib/sec-edgar/types';
@@ -25,8 +24,7 @@ export async function GET(request: NextRequest) {
   
   try {
     // Get user session
-    const session = await getServerSession(authOptions);
-    const userId = session?.user?.id;
+    const { userId } = await auth();
     
     // Extract query parameters
     const searchParams = request.nextUrl.searchParams;

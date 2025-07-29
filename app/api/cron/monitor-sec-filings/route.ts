@@ -11,7 +11,7 @@ import { parseFormContentEnhanced } from '../../../../lib/parsers/enhanced-form-
 import { generateSummary } from '../../../../lib/ai/claude-client';
 import { getPrismaClient } from '../../../../lib/db/prisma';
 import { logger } from '../../../../lib/logging';
-import { sendFilingSummaryEmail } from '../../../../lib/email/filing-summary';
+import { sendFilingSummaryEmail } from '../../../../lib/email/summary-service';
 
 const prisma = getPrismaClient();
 const cronLogger = logger.child('cron-sec-monitoring');

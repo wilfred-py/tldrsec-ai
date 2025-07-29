@@ -209,4 +209,83 @@ export async function sendLatestSummariesEmail(): Promise<{ success: boolean; er
       error: error instanceof Error ? error.message : 'Failed to send summaries email' 
     };
   }
+}
+
+/**
+ * Send a filing summary email for a specific filing
+ */
+export async function sendFilingSummaryEmail(
+  recipientEmail: string, 
+  filingData: {
+    companyName: string;
+    ticker: string;
+    filingType: string;
+    filingDate: Date;
+    summary: string;
+    filingUrl: string;
+  }
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    // Generate email content using filing data
+    const { html, text } = getEmailTemplate(EmailType.FILING_NOTIFICATION, {
+      recipientName: 'Investor',
+      recipientEmail,
+      companyName: filingData.companyName,
+      ticker: filingData.ticker,
+      filingType: filingData.filingType,
+      filingDate: filingData.filingDate,
+      summary: filingData.summary,
+      filingUrl: filingData.filingUrl,
+      unsubscribeUrl: `${process.env.NEXT_PUBLIC_APP_URL}/settings/notifications`,
+      preferencesUrl: `${process.env.NEXT_PUBLIC_APP_URL}/settings`
+    });
+    
+    // Prepare email message
+    const message: EmailMessage = {
+      to: recipientEmail,
+      subject: `New ${filingData.filingType} Filing: ${filingData.companyName} (${filingData.ticker})`,
+      html,
+      text,
+      tags: [
+        'type:filing-notification',
+        `filing-type:${filingData.filingType.toLowerCase()}`,
+        `ticker:${filingData.ticker}`
+      ],
+      metadata: {
+        type: 'filing-notification',
+        ticker: filingData.ticker,
+        filingType: filingData.filingType,
+        companyName: filingData.companyName
+      }
+    };
+    
+    // Send email
+    const result = await sendEmail(message);
+    
+    if (!result.success) {
+      logger.warn(`Filing notification email failed: ${result.error?.message}`, {
+        recipientEmail,
+        ticker: filingData.ticker
+      });
+      return { success: false, error: result.error?.message || 'Failed to send email' };
+    }
+    
+    logger.info(`Sent filing notification email to ${recipientEmail}`, {
+      ticker: filingData.ticker,
+      emailId: result.id
+    });
+    
+    return { success: true };
+  } catch (error) {
+    logger.error('Error sending filing summary email', {
+      error: error instanceof Error ? error.message : 'Unknown error',
+      recipientEmail,
+      ticker: filingData.ticker
+    });
+    
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to send filing summary email'
+    };
+  }
 } 

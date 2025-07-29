@@ -3,14 +3,13 @@
 import React, { useState, useEffect } from 'react';
 import ReactConfetti from 'react-confetti';
 import { useWindowSize } from 'react-use';
-import ConfettiExplosion from 'react-confetti-explosion';
 
 interface ConfettiProps {
   active: boolean;
   duration?: number; // Duration in milliseconds
   particleCount?: number;
   recycle?: boolean;
-  explosion?: boolean; // Whether to use ConfettiExplosion instead of full screen confetti
+  explosion?: boolean; // Whether to use explosion style (centered confetti)
 }
 
 export function Confetti({ 
@@ -41,33 +40,19 @@ export function Confetti({
 
   if (!isActive) return null;
   
-  // Use explosion style confetti if requested
-  if (explosion) {
-    return (
-      <div className="fixed top-1/3 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-50">
-        <ConfettiExplosion
-          force={0.8}
-          duration={duration}
-          particleCount={particleCount}
-          width={1600}
-        />
-      </div>
-    );
-  }
+  // Use explosion style (more concentrated confetti) if requested
+  const confettiSource = explosion 
+    ? { x: width / 2, y: height / 3, w: 10, h: 10 }
+    : { x: width / 2, y: height / 3, w: 0, h: 0 };
   
-  // Otherwise use full screen confetti
+  // Use full screen confetti with adjusted source
   return (
     <ReactConfetti
       width={width}
       height={height}
       numberOfPieces={particleCount}
       recycle={recycle}
-      confettiSource={{
-        x: width / 2,
-        y: height / 3,
-        w: 0,
-        h: 0
-      }}
+      confettiSource={confettiSource}
       className="fixed inset-0 z-50 pointer-events-none"
     />
   );

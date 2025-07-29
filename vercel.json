@@ -21,8 +21,5 @@
     "app/api/cron/monitor-sec-filings/route.ts": {
       "maxDuration": 300
     }
-  },
-  "env": {
-    "CRON_SECRET": "@cron-secret"
   }
 }
