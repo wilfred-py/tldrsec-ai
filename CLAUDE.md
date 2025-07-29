@@ -2,6 +2,18 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Plan & Review
+
+### Before starting work
+- Always start in plan mode to make a plan. 
+- Write a plan to .claude/tasks/TASK_NAME.md.
+- The plan should be a detailed implementation plan and the reasoning behind them, as well as tasks broken down into subtasks.
+- Review the plan with me.
+
+### While implementing
+- You should update the plan as you work. 
+- After you complete tasks in the plan, you should update and append detailed descriptions of the changes you made, so following tasks can be easily handed over to other engineers. 
+
 ## Development Commands
 
 ### Core Development

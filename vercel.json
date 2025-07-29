@@ -1,8 +1,28 @@
 {
   "crons": [
     {
+      "path": "/api/cron/monitor-sec-filings",
+      "schedule": "*/30 * * * *"
+    },
+    {
       "path": "/api/cron/check-filings",
-      "schedule": "0 * * * *"
+      "schedule": "0 */6 * * *"
+    },
+    {
+      "path": "/api/cron/process-filings", 
+      "schedule": "15 */4 * * *"
+    },
+    {
+      "path": "/api/cron/process-jobs",
+      "schedule": "*/5 * * * *"
     }
-  ]
-} 
+  ],
+  "functions": {
+    "app/api/cron/monitor-sec-filings/route.ts": {
+      "maxDuration": 300
+    }
+  },
+  "env": {
+    "CRON_SECRET": "@cron-secret"
+  }
+}
