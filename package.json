@@ -28,7 +28,7 @@
     "db:migrate": "prisma migrate dev",
     "db:push": "prisma db push",
     "db:studio": "prisma studio",
-    "db:test": "node lib/test-db.js",
+    "db:test": "npx tsx lib/test-db.ts",
     "test:samples": "node scripts/parsers/sample-content-reader.js",
     "test:extract-xbrl": "node scripts/parsers/extract-xbrl.js",
     "test:watch": "jest --watch --config=jest.config.mjs"
