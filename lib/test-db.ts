@@ -39,7 +39,6 @@ async function main() {
         console.log('Disconnected.');
     }
 }
-
 // Check if this file is being run directly
 if (typeof require !== 'undefined' && require.main === module) {
     main()
