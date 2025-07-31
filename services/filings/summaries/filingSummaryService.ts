@@ -19,20 +19,43 @@ export async function getFilingSummary(
   ticker: string, 
   formType: FilingType
 ): Promise<{ data: FilingSummaryResult | null, error?: string }> {
-  // Feature flag for enhanced filing service (Tranche 1)
-  const useEnhancedFetch = process.env.ENABLE_ENHANCED_FETCH === 'true';
+  // Feature flag for enhanced filing service (Unified Flow)
+  const useEnhancedSummarization = process.env.ENABLE_ENHANCED_SUMMARIZATION === 'true';
   
-  if (useEnhancedFetch) {
+  if (useEnhancedSummarization) {
     try {
-      const { getEnhancedFilingSummary } = await import('./enhancedFilingSummaryService');
-      console.log(`[INFO][FilingSummaryService] 🚀 Using enhanced fetch for ${ticker} - ${formType}`);
-      return getEnhancedFilingSummary(ticker, formType, {
+      const { getEnhancedFilingSummary } = await import('../enhanced/enhancedFilingSummaryService');
+      console.log(`[INFO][FilingSummaryService] 🚀 Using enhanced summarization for ${ticker} - ${formType}`);
+      const result = await getEnhancedFilingSummary(ticker, formType, {
         useEnhancedFetch: true,
         enableFallbacks: true,
-        saveToDatabase: true
+        saveToDatabase: true,
+        chunkingOptions: {
+          maxTokensPerChunk: parseInt(process.env.ENHANCED_CHUNK_SIZE || '50000'),
+          preserveStructure: true
+        },
+        summarizationOptions: {
+          model: 'claude-3-5-sonnet-20241022',
+          maxRetries: 2,
+          enableFallback: true
+        }
       });
+      
+      // Log enhanced processing metadata for monitoring
+      if (result.metadata) {
+        console.log(`[INFO][FilingSummaryService] Enhanced processing completed`, {
+          strategy: result.metadata.processingStrategy,
+          cacheHit: result.metadata.cacheHit,
+          chunksProcessed: result.metadata.chunkingResult?.totalChunks,
+          totalTokens: result.metadata.summarizationResult.metadata.totalTokens,
+          cost: result.metadata.summarizationResult.metadata.cost,
+          processingTimeMs: result.metadata.totalProcessingTimeMs
+        });
+      }
+      
+      return result;
     } catch (enhancedError) {
-      console.warn(`[WARN][FilingSummaryService] Enhanced fetch failed, falling back to legacy: ${enhancedError}`);
+      console.warn(`[WARN][FilingSummaryService] Enhanced summarization failed, falling back to legacy: ${enhancedError}`);
       // Fall through to legacy implementation
     }
   }
