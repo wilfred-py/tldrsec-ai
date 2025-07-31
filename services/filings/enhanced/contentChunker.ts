@@ -15,6 +15,43 @@ export interface ChunkingOptions {
 }
 
 /**
+ * Predefined chunking strategies
+ */
+export const CHUNKING_STRATEGIES = {
+  // Aggressive chunking for large documents - high token usage
+  AGGRESSIVE: {
+    maxTokensPerChunk: 50000,
+    overlapTokens: 500,
+    preserveStructure: true,
+    minChunkSize: 1000
+  } as ChunkingOptions,
+  
+  // Balanced chunking - moderate token usage
+  BALANCED: {
+    maxTokensPerChunk: 25000,
+    overlapTokens: 300,
+    preserveStructure: true,
+    minChunkSize: 800
+  } as ChunkingOptions,
+  
+  // Conservative chunking for rate limit management - low token usage
+  CONSERVATIVE: {
+    maxTokensPerChunk: 15000,
+    overlapTokens: 200,
+    preserveStructure: true,
+    minChunkSize: 600
+  } as ChunkingOptions,
+  
+  // Minimal chunking for testing/debugging - very low token usage
+  MINIMAL: {
+    maxTokensPerChunk: 8000,
+    overlapTokens: 100,
+    preserveStructure: true,
+    minChunkSize: 400
+  } as ChunkingOptions
+};
+
+/**
  * Content chunk metadata
  */
 export interface ContentChunk {

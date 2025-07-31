@@ -13,7 +13,8 @@ import {
   chunkContent, 
   ChunkingOptions, 
   ChunkingResult,
-  estimateProcessingCost 
+  estimateProcessingCost,
+  CHUNKING_STRATEGIES 
 } from './contentChunker';
 import { 
   summarizeWithChunking, 
@@ -26,6 +27,14 @@ import {
   saveToEnhancedCache,
   CacheEntry 
 } from './enhancedCache';
+import {
+  optimizeTokens,
+  OptimizationLevel,
+  SubscriptionTier,
+  getOptimizationLevelForTier,
+  TokenOptimizationResult,
+  validateOptimization
+} from './tokenOptimizer';
 
 // Create a module-specific logger
 const enhancedLogger = logger.child('enhanced-filing-summary-service');
@@ -41,6 +50,10 @@ export interface EnhancedFilingSummaryOptions {
   chunkingOptions?: ChunkingOptions;
   summarizationOptions?: SummarizationOptions;
   documentProcessingOptions?: DocumentProcessingOptions;
+  // Token optimization options
+  subscriptionTier?: SubscriptionTier;
+  optimizationLevel?: OptimizationLevel;
+  enableTokenOptimization?: boolean;
 }
 
 /**
@@ -55,6 +68,7 @@ export interface EnhancedFilingSummaryResult {
     documentProcessing: DocumentProcessingResult;
     chunkingResult?: ChunkingResult;
     summarizationResult: SummarizationResult;
+    tokenOptimizationResult?: TokenOptimizationResult;
     totalProcessingTimeMs: number;
   };
 }
@@ -81,9 +95,9 @@ function convertToLegacyFormat(
     accessionNumber: accessionNumber || '',
     summaryText: summary.summary,
     keyPoints: [
-      ...summary.financialPerformance.map(fp => `${fp.metric}: ${fp.value} - ${fp.insight}`),
-      ...summary.businessHighlights.map(bh => `${bh.topic}: ${bh.detail} (Impact: ${bh.impact})`),
-      ...summary.riskFactors.map(rf => `Risk - ${rf.category}: ${rf.description}`),
+      ...(summary.financialPerformance || []).map(fp => `${fp.metric}: ${fp.value} - ${fp.insight}`),
+      ...(summary.businessHighlights || []).map(bh => `${bh.topic}: ${bh.detail} (Impact: ${bh.impact})`),
+      ...(summary.riskFactors || []).map(rf => `Risk - ${rf.category}: ${rf.description}`),
       summary.keyTakeaway
     ].filter(Boolean),
     url: filingUrl,
@@ -110,13 +124,21 @@ export async function getEnhancedFilingSummary(
   options: EnhancedFilingSummaryOptions = {}
 ): Promise<EnhancedFilingSummaryResult> {
   const startTime = Date.now();
+  
+  // Get chunking strategy from environment or use conservative default
+  const chunkingStrategy = process.env.ENHANCED_CHUNKING_STRATEGY as keyof typeof CHUNKING_STRATEGIES || 'CONSERVATIVE';
+  const defaultChunkingOptions = CHUNKING_STRATEGIES[chunkingStrategy] || CHUNKING_STRATEGIES.CONSERVATIVE;
+  
   const {
     enableFallbacks = true,
     saveToDatabase = true,
     maxRetries = 2,
-    chunkingOptions = {},
+    chunkingOptions = defaultChunkingOptions,
     summarizationOptions = {},
-    documentProcessingOptions = {}
+    documentProcessingOptions = {},
+    subscriptionTier = 'basic',
+    optimizationLevel,
+    enableTokenOptimization = true
   } = options;
 
   enhancedLogger.info(`Starting enhanced filing summary`, {
@@ -191,6 +213,7 @@ export async function getEnhancedFilingSummary(
               metadata: cacheEntry.metadata,
               success: true
             },
+            tokenOptimizationResult: undefined, // Not available for cached results
             totalProcessingTimeMs: Date.now() - startTime
           }
         };
@@ -230,23 +253,68 @@ export async function getEnhancedFilingSummary(
             success: false,
             error: 'No content available'
           },
+          tokenOptimizationResult: undefined,
           totalProcessingTimeMs: Date.now() - startTime
         }
       };
     }
 
-    // Step 6: Parse content for metadata (optional)
+    // Step 6: Apply token optimization if enabled
+    let optimizedContent = documentResult.content;
+    let tokenOptimizationResult: TokenOptimizationResult | undefined;
+    
+    if (enableTokenOptimization) {
+      const actualOptimizationLevel = optimizationLevel || getOptimizationLevelForTier(subscriptionTier);
+      
+      enhancedLogger.info(`Applying token optimization`, {
+        level: actualOptimizationLevel,
+        subscriptionTier,
+        originalTokens: estimateTokenCount(documentResult.content)
+      });
+      
+      try {
+        tokenOptimizationResult = await optimizeTokens(documentResult.content, {
+          level: actualOptimizationLevel,
+          preserveFinancialData: true,
+          preserveRiskFactors: true,
+          preserveMDA: true
+        });
+        
+        // Validate optimization result
+        const validation = validateOptimization(tokenOptimizationResult);
+        if (!validation.isValid) {
+          enhancedLogger.warn(`Token optimization validation failed`, {
+            issues: validation.issues,
+            fallbackToOriginal: true
+          });
+          // Keep original content if optimization is invalid
+        } else {
+          optimizedContent = tokenOptimizationResult.optimizedContent;
+          enhancedLogger.info(`Token optimization successful`, {
+            originalTokens: tokenOptimizationResult.originalTokens,
+            optimizedTokens: tokenOptimizationResult.optimizedTokens,
+            reduction: tokenOptimizationResult.reductionPercentage.toFixed(1) + '%',
+            qualityScore: tokenOptimizationResult.qualityScore
+          });
+        }
+      } catch (optimizationError) {
+        enhancedLogger.warn(`Token optimization failed, using original content: ${optimizationError}`);
+        // Continue with original content
+      }
+    }
+
+    // Step 7: Parse content for metadata (optional)
     let parsedMetadata: any = {};
     try {
-      const parsedContent = await parseFormContentEnhanced(documentResult.content);
+      const parsedContent = await parseFormContentEnhanced(optimizedContent);
       parsedMetadata = parsedContent.metadata || {};
     } catch (parseError) {
       enhancedLogger.warn(`Content parsing failed, continuing without metadata: ${parseError}`);
     }
 
-    // Step 7: Determine processing strategy based on content size
-    const tokenCount = estimateTokenCount(documentResult.content);
-    const maxTokensForSingle = 100000; // Conservative limit
+    // Step 8: Determine processing strategy based on content size
+    const tokenCount = estimateTokenCount(optimizedContent);
+    const maxTokensForSingle = parseInt(process.env.ENHANCED_SINGLE_LIMIT || '75000'); // Conservative limit to avoid rate limits
     const processingStrategy: 'single' | 'chunked' = tokenCount > maxTokensForSingle ? 'chunked' : 'single';
 
     enhancedLogger.info(`Using ${processingStrategy} processing strategy`, {
@@ -257,10 +325,10 @@ export async function getEnhancedFilingSummary(
     let summarizationResult: SummarizationResult;
     let chunkingResult: ChunkingResult | undefined;
 
-    // Step 8: Process content based on strategy
+    // Step 9: Process content based on strategy
     if (processingStrategy === 'chunked') {
-      // Chunk the content
-      chunkingResult = chunkContent(documentResult.content, chunkingOptions);
+      // Chunk the optimized content
+      chunkingResult = chunkContent(optimizedContent, chunkingOptions);
       enhancedLogger.info(`Content chunked into ${chunkingResult.totalChunks} chunks`);
 
       // Summarize with chunking
@@ -272,9 +340,9 @@ export async function getEnhancedFilingSummary(
         summarizationOptions
       );
     } else {
-      // Single summarization
+      // Single summarization with optimized content
       summarizationResult = await summarizeSingle(
-        documentResult.content,
+        optimizedContent,
         formType,
         companyInfo.name,
         ticker,
@@ -297,6 +365,7 @@ export async function getEnhancedFilingSummary(
           documentProcessing: documentResult,
           chunkingResult,
           summarizationResult,
+          tokenOptimizationResult,
           totalProcessingTimeMs: Date.now() - startTime
         }
       };
@@ -346,6 +415,7 @@ export async function getEnhancedFilingSummary(
         documentProcessing: documentResult,
         chunkingResult,
         summarizationResult,
+        tokenOptimizationResult,
         totalProcessingTimeMs
       }
     };
@@ -387,6 +457,7 @@ export async function getEnhancedFilingSummary(
           success: false,
           error: error instanceof Error ? error.message : String(error)
         },
+        tokenOptimizationResult: undefined,
         totalProcessingTimeMs: Date.now() - startTime
       }
     };
