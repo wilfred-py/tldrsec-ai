@@ -23,12 +23,21 @@ model User {
   subscriptionTier    SubscriptionTier @default(FREE)
   tickers             Ticker[]
   notificationsSent   NotificationSent[]
+  userSubscription    UserSubscription?
+  filingUsage         FilingUsage[]
+  usagePeriods        UsagePeriod[]
 }
 
 enum SubscriptionTier {
   FREE
   PREMIUM
   ENTERPRISE
+}
+
+enum PlanType {
+  BASIC
+  PROFESSIONAL
+  PREMIUM
 }
 
 model Ticker {
@@ -233,4 +242,60 @@ model RssFilingCheck {
   @@unique([accessionNumber])
   @@index([processed, createdAt])
   @@index([tickerMonitoringId, processed])
+}
+
+model UserSubscription {
+  id                    String   @id @default(uuid())
+  userId                String   @unique
+  planType              PlanType @default(BASIC)
+  isActive              Boolean  @default(true)
+  currentPeriodStart    DateTime @default(now())
+  currentPeriodEnd      DateTime
+  cancelAtPeriodEnd     Boolean  @default(false)
+  stripeCustomerId      String?  @unique
+  stripeSubscriptionId  String?  @unique
+  stripePriceId         String?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+  user                  User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([planType, isActive])
+}
+
+model FilingUsage {
+  id                   String   @id @default(uuid())
+  userId               String
+  filingType           String
+  ticker               String
+  accessionNumber      String?
+  optimizationLevel    String
+  originalTokens       Int?
+  optimizedTokens      Int?
+  reductionPercentage  Float?
+  cost                 Float?
+  processingTimeMs     Int?
+  subscriptionTier     String
+  createdAt            DateTime @default(now())
+  user                 User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@index([subscriptionTier, createdAt])
+  @@index([filingType, createdAt])
+}
+
+model UsagePeriod {
+  id           String   @id @default(uuid())
+  userId       String
+  periodStart  DateTime
+  periodEnd    DateTime
+  planType     PlanType
+  filingLimit  Int
+  filingsUsed  Int      @default(0)
+  resetAt      DateTime
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, periodStart])
+  @@index([userId, periodEnd])
 }
