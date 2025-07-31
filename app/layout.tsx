@@ -8,6 +8,7 @@ import { PageViewTracker } from '@/components/analytics/page-view-tracker';
 import { MouseFollowEffect } from '@/components/landing/mouse-follow-effect';
 import { JsonLd } from '@/components/structured-data';
 import { AuthProvider } from '@/lib/context/auth-context';
+import { Suspense } from 'react';
 
 const geistSans = Geist({
   variable: '--font-geist-sans',
@@ -65,7 +66,9 @@ export default function RootLayout({
         >
           <PostHogProvider>
             <AuthProvider>
-              <PageViewTracker />
+              <Suspense fallback={null}>
+                <PageViewTracker />
+              </Suspense>
               <MouseFollowEffect />
               <JsonLd />
               <main className="min-h-screen">

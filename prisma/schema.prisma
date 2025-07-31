@@ -75,6 +75,7 @@ model Summary {
   processingTimeMs      Int?
   secFilingId           String?
   tokensUsed            Int?
+  metadata              Json?      // Enhanced processing metadata (chunks, strategy, etc.)
   secFiling             SecFiling? @relation(fields: [secFilingId], references: [id])
   ticker                Ticker     @relation(fields: [tickerId], references: [id], onDelete: Cascade)
 }

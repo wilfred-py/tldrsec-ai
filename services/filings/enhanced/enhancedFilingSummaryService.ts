@@ -13,7 +13,8 @@ import {
   chunkContent, 
   ChunkingOptions, 
   ChunkingResult,
-  estimateProcessingCost 
+  estimateProcessingCost,
+  CHUNKING_STRATEGIES 
 } from './contentChunker';
 import { 
   summarizeWithChunking, 
@@ -94,9 +95,9 @@ function convertToLegacyFormat(
     accessionNumber: accessionNumber || '',
     summaryText: summary.summary,
     keyPoints: [
-      ...summary.financialPerformance.map(fp => `${fp.metric}: ${fp.value} - ${fp.insight}`),
-      ...summary.businessHighlights.map(bh => `${bh.topic}: ${bh.detail} (Impact: ${bh.impact})`),
-      ...summary.riskFactors.map(rf => `Risk - ${rf.category}: ${rf.description}`),
+      ...(summary.financialPerformance || []).map(fp => `${fp.metric}: ${fp.value} - ${fp.insight}`),
+      ...(summary.businessHighlights || []).map(bh => `${bh.topic}: ${bh.detail} (Impact: ${bh.impact})`),
+      ...(summary.riskFactors || []).map(rf => `Risk - ${rf.category}: ${rf.description}`),
       summary.keyTakeaway
     ].filter(Boolean),
     url: filingUrl,
@@ -123,11 +124,16 @@ export async function getEnhancedFilingSummary(
   options: EnhancedFilingSummaryOptions = {}
 ): Promise<EnhancedFilingSummaryResult> {
   const startTime = Date.now();
+  
+  // Get chunking strategy from environment or use conservative default
+  const chunkingStrategy = process.env.ENHANCED_CHUNKING_STRATEGY as keyof typeof CHUNKING_STRATEGIES || 'CONSERVATIVE';
+  const defaultChunkingOptions = CHUNKING_STRATEGIES[chunkingStrategy] || CHUNKING_STRATEGIES.CONSERVATIVE;
+  
   const {
     enableFallbacks = true,
     saveToDatabase = true,
     maxRetries = 2,
-    chunkingOptions = {},
+    chunkingOptions = defaultChunkingOptions,
     summarizationOptions = {},
     documentProcessingOptions = {},
     subscriptionTier = 'basic',
@@ -308,7 +314,7 @@ export async function getEnhancedFilingSummary(
 
     // Step 8: Determine processing strategy based on content size
     const tokenCount = estimateTokenCount(optimizedContent);
-    const maxTokensForSingle = 100000; // Conservative limit
+    const maxTokensForSingle = parseInt(process.env.ENHANCED_SINGLE_LIMIT || '75000'); // Conservative limit to avoid rate limits
     const processingStrategy: 'single' | 'chunked' = tokenCount > maxTokensForSingle ? 'chunked' : 'single';
 
     enhancedLogger.info(`Using ${processingStrategy} processing strategy`, {
