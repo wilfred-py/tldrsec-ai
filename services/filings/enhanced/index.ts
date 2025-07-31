@@ -6,6 +6,8 @@
  * - Smart content chunking for large documents
  * - Structured AI summarization with fallback handling
  * - Advanced caching with performance tracking
+ * - Token optimization based on subscription tiers
+ * - Subscription-aware processing limits
  */
 
 // Main service
@@ -61,6 +63,32 @@ export {
   type CacheStats
 } from './enhancedCache';
 
+// Token optimization
+export {
+  optimizeTokens,
+  getOptimizationLevelForTier,
+  validateOptimization,
+  type OptimizationLevel,
+  type SubscriptionTier,
+  type TokenOptimizationOptions,
+  type TokenOptimizationResult
+} from './tokenOptimizer';
+
+// Subscription management
+export {
+  getUserSubscription,
+  canProcessFiling,
+  getOptimizationLevelForUser,
+  recordFilingUsage,
+  getSubscriptionTierInfo,
+  hasFeatureAccess,
+  formatSubscriptionInfo,
+  getSubscriptionAnalytics,
+  updateUserSubscription,
+  type UserSubscription,
+  SUBSCRIPTION_FEATURES
+} from './subscriptionService';
+
 // Version info
 export const ENHANCED_SERVICES_VERSION = '1.0.0';
 
@@ -83,5 +111,67 @@ export const ENHANCED_DEFAULTS = {
   MAX_CHUNKS: parseInt(process.env.ENHANCED_MAX_CHUNKS || '10'),
   SINGLE_PROCESSING_LIMIT: parseInt(process.env.ENHANCED_SINGLE_LIMIT || '100000'),
   CACHE_TTL_DAYS: parseInt(process.env.ENHANCED_CACHE_TTL || '30'),
-  MAX_RETRIES: parseInt(process.env.ENHANCED_MAX_RETRIES || '3')
+  MAX_RETRIES: parseInt(process.env.ENHANCED_MAX_RETRIES || '3'),
+  ENABLE_TOKEN_OPTIMIZATION: process.env.ENABLE_TOKEN_OPTIMIZATION !== 'false'
 } as const;
+
+/**
+ * Convenience function that integrates subscription-aware filing processing
+ */
+export async function processFilingWithSubscription(
+  ticker: string,
+  formType: string,
+  userId: string,
+  options: Partial<EnhancedFilingSummaryOptions> = {}
+): Promise<EnhancedFilingSummaryResult> {
+  const { 
+    canProcessFiling: canProcess, 
+    getOptimizationLevelForUser,
+    recordFilingUsage 
+  } = await import('./subscriptionService');
+  
+  const { getEnhancedFilingSummary } = await import('./enhancedFilingSummaryService');
+  
+  // Check if user can process this filing
+  const eligibility = await canProcess(userId);
+  if (!eligibility.canProcess) {
+    return {
+      data: null,
+      error: eligibility.reason || 'Cannot process filing due to subscription limits'
+    };
+  }
+  
+  // Get user's optimization level based on subscription tier
+  const optimizationLevel = await getOptimizationLevelForUser(userId);
+  
+  // Process the filing with subscription-appropriate optimization
+  const result = await getEnhancedFilingSummary(ticker, formType as any, {
+    ...options,
+    optimizationLevel,
+    enableTokenOptimization: ENHANCED_DEFAULTS.ENABLE_TOKEN_OPTIMIZATION,
+    subscriptionTier: undefined // Will be determined by optimizationLevel
+  });
+  
+  // Record usage if processing was successful
+  if (result.data && result.metadata?.tokenOptimizationResult) {
+    await recordFilingUsage(
+      userId, 
+      formType, 
+      ticker,
+      result.data.accessionNumber,
+      {
+        level: result.metadata.tokenOptimizationResult.optimizationLevel,
+        originalTokens: result.metadata.tokenOptimizationResult.originalTokens,
+        optimizedTokens: result.metadata.tokenOptimizationResult.optimizedTokens,
+        reductionPercentage: result.metadata.tokenOptimizationResult.reductionPercentage,
+        cost: result.data.cost,
+        processingTimeMs: result.metadata.totalProcessingTimeMs
+      }
+    );
+  } else if (result.data) {
+    // Record basic usage without optimization data
+    await recordFilingUsage(userId, formType, ticker);
+  }
+  
+  return result;
+}
