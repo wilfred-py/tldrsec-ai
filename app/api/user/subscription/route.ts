@@ -3,7 +3,6 @@
  * Addresses UX issue: missing subscription management endpoints
  */
 
-import { auth } from '@clerk/nextjs';
 import { NextRequest, NextResponse } from 'next/server';
 import { 
   getUserSubscription, 
