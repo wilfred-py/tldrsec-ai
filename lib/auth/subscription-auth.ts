@@ -3,7 +3,7 @@
  * Addresses security vulnerability: missing authorization checks
  */
 
-import { auth } from '@clerk/nextjs';
+import { currentUser } from '@clerk/nextjs';
 import { prisma } from '../db';
 import { logger } from '../logging';
 
@@ -57,15 +57,15 @@ export async function verifyUsageRecordingPermission(
 /**
  * Get authenticated user ID from Clerk
  */
-export function getAuthenticatedUserId(): string {
-  const { userId } = auth();
-  if (!userId) {
+export async function getAuthenticatedUserId(): Promise<string> {
+  const user = await currentUser();
+  if (!user) {
     throw new SubscriptionAuthError(
       'Authentication required',
       'UNAUTHENTICATED'
     );
   }
-  return userId;
+  return user.id;
 }
 
 /**

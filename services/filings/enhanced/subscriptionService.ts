@@ -515,61 +515,6 @@ export function formatSubscriptionInfo(subscription: UserSubscription): {
 }
 
 /**
- * Get subscription analytics for user
- */
-export async function getSubscriptionAnalytics(userId: string, periodDays: number = 30): Promise<{
-  totalFilings: number;
-  filingsByType: Record<string, number>;
-  tokensSaved: number;
-  avgReduction: number;
-  costSavings: number;
-}> {
-  try {
-    const since = new Date();
-    since.setDate(since.getDate() - periodDays);
-
-    const usage = await prisma.filingUsage.findMany({
-      where: {
-        userId,
-        createdAt: { gte: since }
-      }
-    });
-
-    const filingsByType = usage.reduce((acc, filing) => {
-      acc[filing.filingType] = (acc[filing.filingType] || 0) + 1;
-      return acc;
-    }, {} as Record<string, number>);
-
-    const totalTokensSaved = usage.reduce((sum, filing) => {
-      return sum + ((filing.originalTokens || 0) - (filing.optimizedTokens || 0));
-    }, 0);
-
-    const avgReduction = usage.length > 0 
-      ? usage.reduce((sum, filing) => sum + (filing.reductionPercentage || 0), 0) / usage.length
-      : 0;
-
-    const costSavings = usage.reduce((sum, filing) => sum + (filing.cost || 0), 0);
-
-    return {
-      totalFilings: usage.length,
-      filingsByType,
-      tokensSaved: totalTokensSaved,
-      avgReduction,
-      costSavings
-    };
-  } catch (error) {
-    subscriptionLogger.error(`Failed to get analytics for user ${userId}: ${error}`);
-    return {
-      totalFilings: 0,
-      filingsByType: {},
-      tokensSaved: 0,
-      avgReduction: 0,
-      costSavings: 0
-    };
-  }
-}
-
-/**
  * Get comprehensive subscription analytics for a user
  */
 export async function getSubscriptionAnalytics(

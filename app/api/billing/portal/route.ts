@@ -20,8 +20,15 @@ import {
  */
 export async function POST(request: NextRequest) {
   try {
-    const userId = getAuthenticatedUserId();
+    const userId = await getAuthenticatedUserId();
     await verifyUserExists(userId);
+
+    if (!stripe) {
+      return NextResponse.json(
+        { error: 'Billing portal not configured' },
+        { status: 503 }
+      );
+    }
 
     const subscription = await getUserSubscription(userId);
     if (!subscription) {
@@ -68,14 +75,19 @@ export async function POST(request: NextRequest) {
 
 // Helper function to get the raw subscription record with Stripe data
 async function getUserSubscriptionRecord(userId: string) {
-  const { prisma } = await import('../../../../lib/db');
+  const { PrismaClient } = await import('@prisma/client');
+  const prisma = new PrismaClient();
   
-  return await prisma.userSubscription.findUnique({
-    where: { userId },
-    select: {
-      stripeCustomerId: true,
-      stripeSubscriptionId: true,
-      stripePriceId: true
-    }
-  });
+  try {
+    return await prisma.userSubscription.findUnique({
+      where: { userId },
+      select: {
+        stripeCustomerId: true,
+        stripeSubscriptionId: true,
+        stripePriceId: true
+      }
+    });
+  } finally {
+    await prisma.$disconnect();
+  }
 }

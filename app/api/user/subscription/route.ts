@@ -26,7 +26,7 @@ import {
  */
 export async function GET(request: NextRequest) {
   try {
-    const userId = getAuthenticatedUserId();
+    const userId = await getAuthenticatedUserId();
     await verifyUserExists(userId);
 
     const subscription = await getUserSubscription(userId);
@@ -67,7 +67,7 @@ export async function GET(request: NextRequest) {
  */
 export async function PUT(request: NextRequest) {
   try {
-    const userId = getAuthenticatedUserId();
+    const userId = await getAuthenticatedUserId();
     await verifyUserExists(userId);
 
     const body = await request.json();
@@ -109,7 +109,7 @@ export async function PUT(request: NextRequest) {
  */
 export async function POST(request: NextRequest) {
   try {
-    const userId = getAuthenticatedUserId();
+    const userId = await getAuthenticatedUserId();
     await verifyUserExists(userId);
 
     const body = await request.json();

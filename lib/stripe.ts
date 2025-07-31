@@ -6,13 +6,13 @@
 import Stripe from 'stripe';
 
 if (!process.env.STRIPE_SECRET_KEY) {
-  throw new Error('STRIPE_SECRET_KEY is required');
+  console.warn('STRIPE_SECRET_KEY not configured - Stripe features will be disabled');
 }
 
-export const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
+export const stripe = process.env.STRIPE_SECRET_KEY ? new Stripe(process.env.STRIPE_SECRET_KEY, {
   apiVersion: '2023-10-16',
   typescript: true,
-});
+}) : null;
 
 // Stripe webhook configuration
 export const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;

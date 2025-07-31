@@ -23,7 +23,7 @@ import {
  */
 export async function GET(request: NextRequest) {
   try {
-    const userId = getAuthenticatedUserId();
+    const userId = await getAuthenticatedUserId();
     await verifyUserExists(userId);
 
     const url = new URL(request.url);
