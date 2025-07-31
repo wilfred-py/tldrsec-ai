@@ -84,3 +84,19 @@ logs
 # Added by Claude Task Master
 # Logs
 *.log
+
+# Token optimization files and outputs
+token-optimization-outputs/
+*token*optimization*
+*tesla*filing*
+test-tesla-filing-extraction.js
+
+# SEC filing optimization results
+*aggressive*.txt
+*balanced*.txt
+*conservative*.txt
+*_metrics.json
+
+# Tesla 10-K related files
+*tsla*10k*
+*tesla*10k*
