@@ -1,6 +1,20 @@
 import { logger } from '../../../lib/logging';
 import { PrismaClient, PlanType, UserSubscription as PrismaUserSubscription } from '@prisma/client';
 import { SubscriptionTier, OptimizationLevel, getOptimizationLevelForTier } from './tokenOptimizer';
+import { 
+  validateSubscriptionUpdate, 
+  validateFilingUsage, 
+  validateUsagePeriod,
+  type SubscriptionUpdateInput,
+  type FilingUsageInput 
+} from '../../../lib/validation/subscription-validation';
+import {
+  verifySubscriptionOwnership,
+  verifyUsageRecordingPermission,
+  verifyUserExists,
+  checkSubscriptionRateLimit,
+  SubscriptionAuthError
+} from '../../../lib/auth/subscription-auth';
 
 // Initialize Prisma client
 const prisma = new PrismaClient();
@@ -239,62 +253,115 @@ export async function recordFilingUsage(
   }
 ): Promise<void> {
   try {
+    // Validate inputs
+    await verifyUserExists(userId);
+    await verifyUsageRecordingPermission(userId, userId);
+    checkSubscriptionRateLimit(userId, 1000); // Allow 1000 operations per hour
+    
+    const usageData: FilingUsageInput = {
+      filingType,
+      ticker: ticker || '',
+      accessionNumber,
+      optimizationLevel: (optimizationData?.level as any) || 'balanced',
+      originalTokens: optimizationData?.originalTokens,
+      optimizedTokens: optimizationData?.optimizedTokens,
+      reductionPercentage: optimizationData?.reductionPercentage,
+      cost: optimizationData?.cost,
+      processingTimeMs: optimizationData?.processingTimeMs
+    };
+    
+    const validation = validateFilingUsage(usageData);
+    if (!validation.success) {
+      subscriptionLogger.error('Invalid filing usage data', {
+        userId,
+        errors: validation.error.errors
+      });
+      throw new SubscriptionAuthError('Invalid usage data', 'INVALID_INPUT');
+    }
+
     subscriptionLogger.info(`Recording filing usage for user ${userId}`, {
       filingType,
       ticker,
       timestamp: new Date().toISOString()
     });
     
-    // Get user's subscription to determine tier
-    const subscription = await getUserSubscription(userId);
-    if (!subscription) {
-      subscriptionLogger.warn(`No subscription found for user ${userId}, skipping usage tracking`);
-      return;
-    }
-
-    // Record detailed filing usage
-    await prisma.filingUsage.create({
-      data: {
-        userId,
-        filingType,
-        ticker: ticker || 'UNKNOWN',
-        accessionNumber,
-        optimizationLevel: optimizationData?.level || 'unknown',
-        originalTokens: optimizationData?.originalTokens,
-        optimizedTokens: optimizationData?.optimizedTokens,
-        reductionPercentage: optimizationData?.reductionPercentage,
-        cost: optimizationData?.cost,
-        processingTimeMs: optimizationData?.processingTimeMs,
-        subscriptionTier: subscription.tier
+    // Use database transaction to prevent race conditions
+    await prisma.$transaction(async (tx) => {
+      // Get user's subscription to determine tier
+      const userSubscription = await tx.userSubscription.findUnique({
+        where: { userId },
+        select: { planType: true, isActive: true, currentPeriodEnd: true }
+      });
+      
+      if (!userSubscription || !userSubscription.isActive) {
+        subscriptionLogger.warn(`No active subscription found for user ${userId}, skipping usage tracking`);
+        return;
       }
-    });
 
-    // Increment usage count in current period
-    const userSubscription = await prisma.userSubscription.findUnique({
-      where: { userId }
-    });
-
-    if (userSubscription) {
-      await prisma.usagePeriod.updateMany({
+      // Get current usage period with row-level locking
+      const now = new Date();
+      const currentPeriod = await tx.usagePeriod.findFirst({
         where: {
           userId,
-          periodStart: { lte: new Date() },
-          periodEnd: { gte: new Date() }
+          periodStart: { lte: now },
+          periodEnd: { gte: now }
         },
+        select: { id: true, filingsUsed: true, filingLimit: true }
+      });
+
+      if (!currentPeriod) {
+        subscriptionLogger.warn(`No current usage period found for user ${userId}`);
+        return;
+      }
+
+      // Check if usage limit would be exceeded
+      if (optimizationData && currentPeriod.filingsUsed >= currentPeriod.filingLimit) {
+        throw new SubscriptionAuthError(
+          'Monthly filing limit exceeded',
+          'USAGE_LIMIT_EXCEEDED'
+        );
+      }
+
+      // Record detailed filing usage
+      await tx.filingUsage.create({
         data: {
-          filingsUsed: { increment: 1 }
+          userId,
+          filingType: validation.data.filingType,
+          ticker: validation.data.ticker,
+          accessionNumber: validation.data.accessionNumber,
+          optimizationLevel: validation.data.optimizationLevel,
+          originalTokens: validation.data.originalTokens,
+          optimizedTokens: validation.data.optimizedTokens,
+          reductionPercentage: validation.data.reductionPercentage,
+          cost: validation.data.cost,
+          processingTimeMs: validation.data.processingTimeMs,
+          subscriptionTier: mapPlanTypeToSubscriptionTier(userSubscription.planType)
         }
       });
-    }
+
+      // Update usage period counter atomically if we have optimization data
+      if (optimizationData) {
+        await tx.usagePeriod.update({
+          where: { id: currentPeriod.id },
+          data: { filingsUsed: { increment: 1 } }
+        });
+      }
+    }, {
+      isolationLevel: 'Serializable', // Highest isolation level to prevent race conditions
+      timeout: 10000 // 10 second timeout
+    });
     
     subscriptionLogger.debug(`Filing usage recorded for user ${userId}`, {
       filingType,
-      tier: subscription.tier,
       optimizationLevel: optimizationData?.level
     });
   } catch (error) {
+    if (error instanceof SubscriptionAuthError) {
+      // Re-throw auth errors as they should block processing
+      throw error;
+    }
     subscriptionLogger.error(`Failed to record filing usage for user ${userId}: ${error}`);
-    // Don't throw error - usage tracking failure shouldn't block filing processing
+    // Don't throw other errors - usage tracking failure shouldn't block filing processing
   }
 }
 
@@ -499,6 +566,129 @@ export async function getSubscriptionAnalytics(userId: string, periodDays: numbe
       avgReduction: 0,
       costSavings: 0
     };
+  }
+}
+
+/**
+ * Get comprehensive subscription analytics for a user
+ */
+export async function getSubscriptionAnalytics(
+  userId: string, 
+  startDate: Date, 
+  endDate: Date,
+  options: { includeDailyBreakdown?: boolean } = {}
+) {
+  try {
+    await verifyUserExists(userId);
+    await verifyUsageRecordingPermission(userId, userId);
+
+    subscriptionLogger.info(`Getting analytics for user ${userId}`, {
+      startDate: startDate.toISOString(),
+      endDate: endDate.toISOString(),
+      includeDailyBreakdown: options.includeDailyBreakdown
+    });
+
+    // Get filing usage data
+    const usage = await prisma.filingUsage.findMany({
+      where: {
+        userId,
+        createdAt: {
+          gte: startDate,
+          lte: endDate
+        }
+      },
+      orderBy: { createdAt: 'asc' }
+    });
+
+    if (usage.length === 0) {
+      return {
+        totalFilings: 0,
+        totalTokensOriginal: 0,
+        totalTokensOptimized: 0,
+        averageReduction: 0,
+        totalCost: 0,
+        costSavings: 0,
+        averageProcessingTime: 0,
+        filingsByType: {},
+        ...(options.includeDailyBreakdown && { dailyUsage: [] })
+      };
+    }
+
+    // Calculate aggregated metrics
+    const totalFilings = usage.length;
+    const totalTokensOriginal = usage.reduce((sum, filing) => sum + (filing.originalTokens || 0), 0);
+    const totalTokensOptimized = usage.reduce((sum, filing) => sum + (filing.optimizedTokens || 0), 0);
+    const totalCost = usage.reduce((sum, filing) => sum + (filing.cost || 0), 0);
+    const totalProcessingTime = usage.reduce((sum, filing) => sum + (filing.processingTimeMs || 0), 0);
+
+    // Calculate average reduction percentage
+    const validReductions = usage
+      .filter(filing => filing.reductionPercentage && filing.reductionPercentage > 0)
+      .map(filing => filing.reductionPercentage!);
+    const averageReduction = validReductions.length > 0 
+      ? validReductions.reduce((sum, reduction) => sum + reduction, 0) / validReductions.length
+      : 0;
+
+    // Calculate cost savings (tokens saved * estimated cost per token)
+    const tokensSaved = totalTokensOriginal - totalTokensOptimized;
+    const estimatedCostPerToken = 0.00001; // Rough estimate
+    const costSavings = tokensSaved * estimatedCostPerToken;
+
+    // Group by filing type
+    const filingsByType: Record<string, number> = {};
+    usage.forEach(filing => {
+      filingsByType[filing.filingType] = (filingsByType[filing.filingType] || 0) + 1;
+    });
+
+    const result = {
+      totalFilings,
+      totalTokensOriginal,
+      totalTokensOptimized,
+      averageReduction,
+      totalCost,
+      costSavings,
+      averageProcessingTime: totalProcessingTime / totalFilings,
+      filingsByType
+    };
+
+    // Add daily breakdown if requested
+    if (options.includeDailyBreakdown) {
+      const dailyMap = new Map<string, { filings: number; tokensOptimized: number }>();
+      
+      // Initialize all days in range with zero values
+      const currentDate = new Date(startDate);
+      while (currentDate <= endDate) {
+        const dateKey = currentDate.toISOString().split('T')[0];
+        dailyMap.set(dateKey, { filings: 0, tokensOptimized: 0 });
+        currentDate.setDate(currentDate.getDate() + 1);
+      }
+
+      // Populate with actual usage data
+      usage.forEach(filing => {
+        const dateKey = filing.createdAt.toISOString().split('T')[0];
+        const existing = dailyMap.get(dateKey) || { filings: 0, tokensOptimized: 0 };
+        dailyMap.set(dateKey, {
+          filings: existing.filings + 1,
+          tokensOptimized: existing.tokensOptimized + (filing.optimizedTokens || 0)
+        });
+      });
+
+      const dailyUsage = Array.from(dailyMap.entries()).map(([date, data]) => ({
+        date,
+        ...data
+      }));
+
+      return { ...result, dailyUsage };
+    }
+
+    return result;
+
+  } catch (error) {
+    if (error instanceof SubscriptionAuthError) {
+      throw error;
+    }
+    subscriptionLogger.error(`Failed to get analytics for user ${userId}: ${error}`);
+    throw new Error('Failed to retrieve analytics');
   }
 }
 

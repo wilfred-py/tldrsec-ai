@@ -3,6 +3,7 @@ import { FilingType } from '../../../types/sec/filing';
 import { getFormMetadata } from '../../../lib/sec-edgar/form-registry';
 import { logger } from '../../../lib/logging';
 import { ContentChunk, ChunkingResult, calculateTokenCost } from './contentChunker';
+import { defaultRateLimiter, conservativeRateLimiter, SmartRateLimiter } from './rateLimiter';
 
 // Create a module-specific logger
 const aiLogger = logger.child('enhanced-ai-summarizer');
@@ -286,17 +287,22 @@ async function processChunk(
   });
   
   try {
-    const response = await anthropic.messages.create({
-      model,
-      max_tokens: maxTokens,
-      temperature,
-      messages: [
-        {
-          role: 'user',
-          content: prompt
-        }
-      ]
-    });
+    // Use conservative rate limiter for chunk processing to avoid overwhelming the API
+    const response = await conservativeRateLimiter.executeRequest(
+      () => anthropic.messages.create({
+        model,
+        max_tokens: maxTokens,
+        temperature,
+        messages: [
+          {
+            role: 'user',
+            content: prompt
+          }
+        ]
+      }),
+      chunk.tokenCount + maxTokens, // Estimate total tokens (input + expected output)
+      3 // Medium priority (lower = higher priority)
+    );
     
     const responseText = response.content[0]?.type === 'text' ? response.content[0].text : '';
     const parsedSummary = parseAIResponse<ChunkSummary>(responseText, {
@@ -494,18 +500,24 @@ export async function summarizeSingle(
   try {
     const anthropic = createAnthropicClient();
     const prompt = generateStructuredPrompt(filingType, content, companyName, ticker);
+    const estimatedInputTokens = Math.ceil(prompt.length / 3); // Rough token estimation
     
-    const response = await anthropic.messages.create({
-      model,
-      max_tokens: maxTokens,
-      temperature,
-      messages: [
-        {
-          role: 'user',
-          content: prompt
-        }
-      ]
-    });
+    // Use default rate limiter for single processing (higher priority than chunked)
+    const response = await defaultRateLimiter.executeRequest(
+      () => anthropic.messages.create({
+        model,
+        max_tokens: maxTokens,
+        temperature,
+        messages: [
+          {
+            role: 'user',
+            content: prompt
+          }
+        ]
+      }),
+      estimatedInputTokens + maxTokens, // Estimate total tokens
+      1 // High priority for single processing
+    );
     
     const responseText = response.content[0]?.type === 'text' ? response.content[0].text : '';
     const parsedSummary = parseAIResponse<StructuredSummary>(responseText, {
