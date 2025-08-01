@@ -10,7 +10,7 @@ import {
   ErrorCode,
   ErrorCategory,
   ErrorSeverity
-} from '../../../../lib/error-handling';
+} from '../../../../lib/error-handling/index';
 import { 
   executeWithRetry, 
   RetryConfig, 
@@ -40,7 +40,7 @@ interface JobQueueItem {
 }
 
 // Extend the JobResultData interface to include our AI metrics
-declare module '@/lib/job-queue' {
+declare module '../../../../lib/job-queue' {
   interface JobResultData {
     duration?: number;
     modelUsed?: string;
