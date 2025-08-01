@@ -1,5 +1,3 @@
-import { Navigation } from "@/components/navigation";
-
 export default function MarketingLayout({
   children,
 }: {
@@ -7,7 +5,6 @@ export default function MarketingLayout({
 }) {
   return (
     <>
-      <Navigation />
       {children}
     </>
   );
