@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server';
-import { JobQueueService, JobType, JobResultData } from '@/lib/job-queue';
-import { LockService } from '@/lib/job-queue/lock-service';
-import { DeadLetterQueueService } from '@/lib/job-queue/dead-letter-queue';
-import { logger } from '@/lib/logging';
+import { JobQueueService, JobType, JobResultData } from '../../../../lib/job-queue';
+import { LockService } from '../../../../lib/job-queue/lock-service';
+import { DeadLetterQueueService } from '../../../../lib/job-queue/dead-letter-queue';
+import { logger } from '../../../../lib/logging';
 import { 
   appRouterAsyncHandler, 
   createInternalError,
@@ -10,7 +10,7 @@ import {
   ErrorCode,
   ErrorCategory,
   ErrorSeverity
-} from '@/lib/error-handling';
+} from '../../../../lib/error-handling';
 import { 
   executeWithRetry, 
   RetryConfig, 
@@ -18,17 +18,17 @@ import {
   CircuitBreakerConfig,
   DefaultCircuitBreakerConfig,
   TimeoutAbortController
-} from '@/lib/error-handling/retry';
+} from '../../../../lib/error-handling/retry';
 import { 
   executeWithModelFallback, 
   BatchClaudeFallback, 
   ModelCapability
-} from '@/lib/error-handling/model-fallback';
-import { monitoring } from '@/lib/monitoring';
+} from '../../../../lib/error-handling/model-fallback';
+import { monitoring } from '../../../../lib/monitoring';
 import { v4 as uuidv4 } from 'uuid';
 import { PrismaClient } from '@prisma/client';
-import { summarizeFiling, SummarizationResult, SummarizationError } from '@/lib/ai/summarize';
-import { claudeClient } from '@/lib/ai/claude-client';
+import { summarizeFiling, SummarizationResult, SummarizationError } from '../../../../lib/ai/summarize';
+import { claudeClient } from '../../../../lib/ai/claude-client';
 
 // Define an interface for the job object structure returned from the database
 interface JobQueueItem {
