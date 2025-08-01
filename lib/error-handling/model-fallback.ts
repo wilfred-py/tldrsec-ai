@@ -4,7 +4,8 @@
  * cost-based selection and adaptive retry strategies depending on the error type.
  */
 
-import { ApiError, ErrorCode, ErrorCategory, createAiModelError } from './index';
+import { ErrorCode, ErrorCategory } from './constants';
+import { ApiError, createAiModelError } from './index';
 import { executeWithRetry, RetryConfig, DefaultRetryConfig, CircuitBreakerConfig, DefaultCircuitBreakerConfig } from './retry';
 import { logger } from '../logging';
 import { monitoring } from '../monitoring';

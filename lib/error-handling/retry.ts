@@ -5,7 +5,8 @@
  */
 
 import { v4 as uuidv4 } from 'uuid';
-import { ApiError, ErrorCode, ErrorCategory, createRetryExhaustedError, createCircuitOpenError, createTimeoutError } from './index';
+import { ErrorCode, ErrorCategory } from './constants'; 
+import { ApiError, createRetryExhaustedError, createCircuitOpenError, createTimeoutError } from './index';
 import { logger } from '../logging';
 
 /**

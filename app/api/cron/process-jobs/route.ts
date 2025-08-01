@@ -7,10 +7,9 @@ import {
   appRouterAsyncHandler, 
   createInternalError,
   ApiError,
-  ErrorCode,
-  ErrorCategory,
-  ErrorSeverity
+  ErrorCode
 } from '../../../../lib/error-handling/index';
+import { ErrorCategory, ErrorSeverity } from '../../../../lib/error-handling/constants';
 import { 
   executeWithRetry, 
   RetryConfig, 
