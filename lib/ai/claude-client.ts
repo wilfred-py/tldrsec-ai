@@ -793,7 +793,4 @@ export async function generateSummary(params: {
 }
 
 // Export a singleton instance for convenience
-export const claudeClient = new ClaudeClient();
-
-// Export generateSummary function for backward compatibility
-export { generateSummary }; 
+export const claudeClient = new ClaudeClient(); 
