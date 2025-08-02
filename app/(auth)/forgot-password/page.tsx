@@ -57,9 +57,12 @@ export default function ForgotPasswordPage() {
       setEmailSent(true);
       toast.success("Password reset email sent. Please check your inbox.");
       
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Password reset error:", err);
-      toast.error(err.errors?.[0]?.message || "Failed to send reset email. Please try again.");
+      const errorMessage = err && typeof err === 'object' && 'errors' in err && Array.isArray((err as { errors: unknown[] }).errors) && (err as { errors: { message?: string }[] }).errors[0]?.message
+        ? (err as { errors: { message: string }[] }).errors[0].message
+        : "Failed to send reset email. Please try again.";
+      toast.error(errorMessage);
     } finally {
       setIsLoading(false);
     }
@@ -80,11 +83,11 @@ export default function ForgotPasswordPage() {
           {emailSent ? (
             <div className="text-center space-y-4">
               <p>
-                We've sent password reset instructions to your email.
+                We&apos;ve sent password reset instructions to your email.
                 Please check your inbox and follow the link to reset your password.
               </p>
               <p className="text-sm text-muted-foreground">
-                If you don't see the email, check your spam folder.
+                If you don&apos;t see the email, check your spam folder.
               </p>
             </div>
           ) : (

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import Script from "next/script";
-import { ArrowRight, BarChart3, BookOpenText, Coins, Search } from "lucide-react";
+import { ArrowRight, BarChart3, BookOpenText, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 export default function Home() {
@@ -143,7 +143,7 @@ export default function Home() {
             </div>
             <h3 className="text-xl font-bold text-center">Add Your Tickers</h3>
             <p className="text-center text-muted-foreground">
-              Simply add the company symbols you want to track. We'll monitor their SEC filings automatically.
+              Simply add the company symbols you want to track. We&apos;ll monitor their SEC filings automatically.
             </p>
           </div>
           <div className="flex flex-col items-center space-y-2 p-4">
@@ -152,7 +152,7 @@ export default function Home() {
             </div>
             <h3 className="text-xl font-bold text-center">Receive Summaries</h3>
             <p className="text-center text-muted-foreground">
-              Our AI analyzes and summarizes new filings as they're published, highlighting key information.
+              Our AI analyzes and summarizes new filings as they&apos;re published, highlighting key information.
             </p>
           </div>
           <div className="flex flex-col items-center space-y-2 p-4">

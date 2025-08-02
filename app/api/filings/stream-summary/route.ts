@@ -72,7 +72,7 @@ export async function GET(request: NextRequest) {
     const stream = new ReadableStream({
       start(controller) {
         // Helper function to send SSE events
-        const sendEvent = (event: string, data: any) => {
+        const sendEvent = (event: string, data: unknown) => {
           const eventString = `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
           controller.enqueue(new TextEncoder().encode(eventString));
         };
@@ -103,7 +103,7 @@ export async function GET(request: NextRequest) {
         }
         
         // Set up event listeners for streaming updates
-        const onProgress = (data: any) => {
+        const onProgress = (data: { ticker: string; formType: string; [key: string]: unknown }) => {
           if (data.ticker === ticker && data.formType === formType) {
             sendEvent('progress', {
               ...data,
@@ -112,7 +112,7 @@ export async function GET(request: NextRequest) {
           }
         };
         
-        const onCompleted = (data: any) => {
+        const onCompleted = (data: { ticker: string; formType: string; [key: string]: unknown }) => {
           if (data.ticker === ticker && data.formType === formType) {
             sendEvent('complete', {
               ...data,
@@ -125,7 +125,7 @@ export async function GET(request: NextRequest) {
           }
         };
         
-        const onError = (data: any) => {
+        const onError = (data: { ticker: string; formType: string; [key: string]: unknown }) => {
           if (data.ticker === ticker && data.formType === formType) {
             sendEvent('error', {
               ...data,

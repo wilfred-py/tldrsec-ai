@@ -36,13 +36,13 @@ export async function GET() {
       message: 'Email test completed successfully!',
       result 
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error sending test email:', error);
     
     return NextResponse.json({ 
       success: false, 
-      error: error.message,
-      details: error.response?.data || {} 
+      error: error instanceof Error ? error.message : 'Unknown error',
+      details: (error as { response?: { data?: unknown } })?.response?.data || {} 
     }, { status: 500 });
   }
 }

@@ -74,7 +74,12 @@ interface HealthStatus {
     optimizedFilingService: {
       status: 'healthy' | 'error';
       initialized: boolean;
-      config?: any;
+      config?: {
+        enableInMemoryCache?: boolean;
+        enableDatabaseCache?: boolean;
+        useDirectClaude?: boolean;
+        enableChunking?: boolean;
+      };
       error?: string;
     };
     claudeClient: {
@@ -154,12 +159,13 @@ export async function GET(request: NextRequest) {
         health.services.optimizedFilingService.status = 'healthy';
         
         // Get service configuration (if available)
-        if (typeof (optimizedFilingService as any).config === 'object') {
+        if (typeof (optimizedFilingService as { config?: unknown }).config === 'object') {
+          const config = (optimizedFilingService as { config: Record<string, unknown> }).config;
           health.services.optimizedFilingService.config = {
-            enableInMemoryCache: (optimizedFilingService as any).config.enableInMemoryCache,
-            enableDatabaseCache: (optimizedFilingService as any).config.enableDatabaseCache,
-            useDirectClaude: (optimizedFilingService as any).config.useDirectClaude,
-            enableChunking: (optimizedFilingService as any).config.enableChunking
+            enableInMemoryCache: Boolean(config.enableInMemoryCache),
+            enableDatabaseCache: Boolean(config.enableDatabaseCache),
+            useDirectClaude: Boolean(config.useDirectClaude),
+            enableChunking: Boolean(config.enableChunking)
           };
         }
       }

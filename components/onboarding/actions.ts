@@ -71,7 +71,11 @@ export async function getUserOnboardingStatus(): Promise<{
   onboardingCompleted?: boolean;
   tutorialCompleted?: boolean;
   tutorialProgress?: number;
-  tutorialSteps?: any;
+  tutorialSteps?: {
+    currentStep: number;
+    currentSubstep: number;
+    completed: boolean;
+  };
 }> {
   try {
     const { userId } = await auth();

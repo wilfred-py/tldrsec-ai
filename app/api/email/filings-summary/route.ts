@@ -25,7 +25,7 @@ export async function POST(request: NextRequest) {
   try {
     // Parse request body
     const body = await request.json().catch(() => ({}));
-    const { tickers, email } = body;
+    const { tickers } = body;
     
     // Get the authenticated user
     const user = await currentUser();

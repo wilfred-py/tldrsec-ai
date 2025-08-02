@@ -10,7 +10,7 @@ const componentLogger = logger.child('health-api');
  * Health check endpoint
  * GET /api/health
  */
-export const GET = appRouterAsyncHandler(async (request: Request) => {
+export const GET = appRouterAsyncHandler(async (_request: Request) => {
   const startTime = Date.now();
   
   // Get detailed health status

@@ -142,7 +142,7 @@ const equitiesBySector = {
 };
 
 export default function OnboardingPage() {
-  const { isAuthenticated, isLoading, userName, userId } = useAuthContext();
+  const { isAuthenticated, isLoading, userName } = useAuthContext();
   const router = useRouter();
   const [initializing, setInitializing] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -156,16 +156,16 @@ export default function OnboardingPage() {
   const [isTransitioning, setIsTransitioning] = useState(false);
 
   // Default preferences
-  const [emailFrequency, setEmailFrequency] = useState<NotificationPreference>(
+  const [emailFrequency] = useState<NotificationPreference>(
     DEFAULT_NOTIFICATION_PREFERENCES.emailFrequency
   );
-  const [filingTypes, setFilingTypes] = useState<FilingTypePreferences>(
+  const [filingTypes] = useState<FilingTypePreferences>(
     DEFAULT_NOTIFICATION_PREFERENCES.filingTypes
   );
-  const [contentPreferences, setContentPreferences] = useState<NotificationContentPreferences>(
+  const [contentPreferences] = useState<NotificationContentPreferences>(
     DEFAULT_NOTIFICATION_PREFERENCES.contentPreferences
   );
-  const [uiPreferences, setUiPreferences] = useState<UIPreferences>(DEFAULT_UI_PREFERENCES);
+  const [uiPreferences] = useState<UIPreferences>(DEFAULT_UI_PREFERENCES);
 
   // Initialize with user's name if available
   useEffect(() => {
@@ -380,7 +380,7 @@ export default function OnboardingPage() {
           <div className="mb-8 text-center">
            
             <h1 className="mt-10 mb-2 text-2xl font-bold">Welcome to tldrSEC!</h1>
-            <p className="text-muted-foreground">Let's personalize your experience in just 2 quick steps.</p>
+            <p className="text-muted-foreground">Let&apos;s personalize your experience in just 2 quick steps.</p>
           </div>
 
           {/* Progress */}
@@ -406,7 +406,7 @@ export default function OnboardingPage() {
                     <div className="text-center mb-6">
                       <h2 className="text-xl font-bold">What sectors interest you?</h2>
                       <p className="text-muted-foreground">
-                        Select the industries you'd like to track. You can always change this later.
+                        Select the industries you&apos;d like to track. You can always change this later.
                       </p>
                     </div>
 

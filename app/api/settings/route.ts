@@ -40,7 +40,7 @@ export async function GET(request: NextRequest) {
     }
     
     // Parse preferences with defaults
-    const preferences = (dbUser.preferences as any) || {};
+    const preferences = (dbUser.preferences as Record<string, unknown>) || {};
     const defaultPreferences = {
       notifications: {
         emailFrequency: 'immediate',

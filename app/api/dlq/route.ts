@@ -104,7 +104,7 @@ export const POST = appRouterAsyncHandler(async (request: Request) => {
   }
   
   // Function to add job back to main queue
-  const addJobFunction = async (jobType: JobType, payload: Record<string, any>) => {
+  const addJobFunction = async (jobType: JobType, payload: Record<string, unknown>) => {
     const job = await JobQueueService.addJob({
       jobType,
       payload,
