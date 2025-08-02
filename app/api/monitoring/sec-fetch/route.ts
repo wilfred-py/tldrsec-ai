@@ -91,8 +91,12 @@ export async function POST(request: NextRequest) {
       let xmlAnalysis = null;
       if (fetchAttempt && fetchAttempt.hasXmlContent && includeXmlSummary) {
         // Extract XML summary from URL attempts
-        const urlAttempts = JSON.parse(fetchAttempt.urlAttempts as string);
-        const successfulAttempts = urlAttempts.filter((a: any) => a.success && a.xmlSummary);
+        const urlAttempts = JSON.parse(fetchAttempt.urlAttempts as string) as Array<{
+          success: boolean;
+          xmlSummary?: unknown;
+          parsingStages?: unknown;
+        }>;
+        const successfulAttempts = urlAttempts.filter(a => a.success && a.xmlSummary);
         
         if (successfulAttempts.length > 0) {
           const lastSuccessful = successfulAttempts[successfulAttempts.length - 1];

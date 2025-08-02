@@ -6,7 +6,7 @@ import { appRouterAsyncHandler } from '@/lib/error-handling';
  * Simple liveness probe for Kubernetes/container environments
  * GET /api/health/liveness
  */
-export const GET = appRouterAsyncHandler(async (request: Request) => {
+export const GET = appRouterAsyncHandler(async (_request: Request) => {
   const startTime = Date.now();
   
   // For liveness, we just check if the application is running
