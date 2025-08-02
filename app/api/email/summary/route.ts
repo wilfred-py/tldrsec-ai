@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { prisma } from '@/lib/db/prisma';
-import { Prisma } from '@prisma/client';
+import { PrismaClient } from '@prisma/client';
 import { sendEmail, EmailSendResult } from '@/lib/email';
 
 /**
@@ -75,7 +75,7 @@ async function createTestDataForUser(userId: string, email: string) {
  * API endpoint to send an email summary of the latest filings for all tracked tickers
  * POST /api/email/summary
  */
-export async function POST(req: NextRequest) {
+export async function POST(_req: NextRequest) {
   try {
     // Verify authentication
     const authResult = await auth();
@@ -286,7 +286,7 @@ export async function POST(req: NextRequest) {
         );
         
         // Use the withRetry wrapper to handle potential connection issues
-        await prisma.$withRetry(async () => {
+        await (prisma as { $withRetry: (fn: () => Promise<void>) => Promise<void> }).$withRetry(async () => {
           // Use the interactive transaction API with timeout
           await prisma.$transaction(async (tx: PrismaClient) => {
             // Mark summaries as sent
