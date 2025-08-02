@@ -155,9 +155,7 @@ export async function GET(request: NextRequest) {
  */
 export async function OPTIONS() {
   // Production-safe CORS configuration
-  const allowedOrigins = process.env.ALLOWED_ORIGINS?.split(',') || ['http://localhost:3000'];
-  const origin = '*'; // In production, this should be restricted to specific domains
-  
+  // const allowedOrigins = process.env.ALLOWED_ORIGINS?.split(',') || ['http://localhost:3000'];
   // In production, implement proper origin checking:
   // const origin = allowedOrigins.includes(request.headers.get('origin')) 
   //   ? request.headers.get('origin') 

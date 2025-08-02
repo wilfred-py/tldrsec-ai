@@ -24,8 +24,8 @@ export async function GET(request: NextRequest) {
     // Collect results
     const results = {
       ticker,
-      summaries: [] as any[],
-      errors: [] as any[]
+      summaries: [] as Array<{ formType: string; summary: unknown }>,
+      errors: [] as Array<{ formType: string; error: string }>
     };
     
     // Try to get a summary for each form type

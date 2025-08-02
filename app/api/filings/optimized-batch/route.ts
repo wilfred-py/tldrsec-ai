@@ -53,9 +53,9 @@ interface BatchResponse {
     formType: FilingType;
     id?: string;
     success: boolean;
-    data?: any;
+    data?: unknown;
     error?: string;
-    metadata?: any;
+    metadata?: unknown;
   }>;
   performance: {
     totalDuration: number;
@@ -84,7 +84,12 @@ export async function POST(request: NextRequest) {
     }
 
     // Parse request body with size validation
-    let body: any;
+    let body: {
+      requests?: BatchRequest[];
+      concurrency?: number;
+      bypassCache?: boolean;
+      returnMetadata?: boolean;
+    };
     try {
       const bodyText = await request.text();
       if (bodyText.length > maxPayloadSize) {
