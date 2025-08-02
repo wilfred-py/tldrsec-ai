@@ -33,9 +33,10 @@ import { claudeClient } from '../../../../lib/ai/claude-client';
 interface JobQueueItem {
   id: string;
   jobType: JobType;
-  payload: any;
+  payload: Record<string, unknown>;
   attempts: number;
-  [key: string]: any; // For other properties we don't explicitly need to type
+  maxAttempts?: number;
+  [key: string]: unknown; // For other properties we don't explicitly need to type
 }
 
 // Extend the JobResultData interface to include our AI metrics
@@ -451,7 +452,7 @@ export const GET = appRouterAsyncHandler(async (request: Request) => {
   
   try {
     // Get jobs to process
-    const jobs = await JobQueueService.getJobsToProcess(limit, jobTypes ? jobTypes[0] as any : undefined);
+    const jobs = await JobQueueService.getJobsToProcess(limit, jobTypes ? jobTypes[0] as JobType : undefined);
     
     // If no jobs, return early
     if (jobs.length === 0) {
@@ -566,8 +567,8 @@ export const GET = appRouterAsyncHandler(async (request: Request) => {
     );
     
     // Compile results
-    const succeeded = results.filter(r => r.status === 'fulfilled' && (r.value as any).success).length;
-    const failed = results.filter(r => r.status === 'rejected' || !(r.value as any).success).length;
+    const succeeded = results.filter(r => r.status === 'fulfilled' && (r.value as { success: boolean }).success).length;
+    const failed = results.filter(r => r.status === 'rejected' || !(r.value as { success: boolean }).success).length;
     
     // Calculate duration
     const duration = Date.now() - startTime;

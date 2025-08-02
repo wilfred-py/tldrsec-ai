@@ -8,7 +8,6 @@ import {
 } from '../../../../lib/sec-edgar/ticker-monitoring';
 import { enhancedFetch } from '../../../../lib/network/enhanced-fetch';
 import { parseFormContentEnhanced } from '../../../../lib/parsers/enhanced-form-parser';
-// import { generateSummary } from '../../../../lib/ai/claude-client';
 import { getPrismaClient } from '../../../../lib/db/prisma';
 import { logger } from '../../../../lib/logging';
 import { sendFilingSummaryEmail } from '../../../../lib/email/summary-service';
@@ -204,7 +203,17 @@ async function processUnprocessedFilings(stats: ProcessingStats): Promise<void> 
 /**
  * Process a single filing: fetch, parse, summarize, store, email
  */
-async function processSingleFiling(filing: any, stats: ProcessingStats): Promise<void> {
+async function processSingleFiling(filing: {
+  id: string;
+  accessionNumber: string;
+  filingType: string;
+  filingDate: Date;
+  filingUrl: string;
+  ticker: {
+    symbol: string;
+    companyName: string;
+  };
+}, stats: ProcessingStats): Promise<void> {
   cronLogger.debug(`Processing filing ${filing.accessionNumber}`, {
     ticker: filing.ticker.symbol,
     filingType: filing.filingType,
@@ -230,7 +239,7 @@ async function processSingleFiling(filing: any, stats: ProcessingStats): Promise
     cost: 0
   };
   /* const summary = await generateSummary({
-    filingType: filing.filingType as any,
+    filingType: filing.filingType,
     content: parsedContent.sections,
     metadata: {
       ...parsedContent.metadata,
@@ -254,7 +263,7 @@ async function processSingleFiling(filing: any, stats: ProcessingStats): Promise
       summaryText: typeof summary.text === 'string' ? summary.text : JSON.stringify(summary.text),
       summaryJSON: typeof summary.text === 'object' ? summary.text : null,
       cost: summary.cost,
-      tokensUsed: summary.inputTokens + summary.outputTokens,
+      tokensUsed: (summary.inputTokens || 0) + (summary.outputTokens || 0),
       processingTimeMs: summary.duration,
       processingStatus: 'COMPLETED',
       processingCompletedAt: new Date(),
