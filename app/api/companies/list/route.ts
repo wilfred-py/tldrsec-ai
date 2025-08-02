@@ -27,7 +27,7 @@ interface CompanyData {
 /**
  * GET handler to fetch and cache the list of all SEC companies
  */
-export async function GET(request: NextRequest) {
+export async function GET(_request: NextRequest) {
   try {
     // Check if we have cached data in the database
     const cachedData = await prisma.secCompanyCache.findFirst({
