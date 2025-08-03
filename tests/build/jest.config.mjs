@@ -1,8 +1,8 @@
 export default {
   displayName: 'Build Tests',
-  testMatch: ['<rootDir>/tests/build/**/*.test.ts'],
+  testMatch: ['<rootDir>/**/*.test.ts'],
   testEnvironment: 'node',
-  setupFilesAfterEnv: ['<rootDir>/tests/build/setup.ts'],
+  setupFilesAfterEnv: ['<rootDir>/../../tests/build/setup.ts'],
   collectCoverageFrom: [
     'app/**/*.{ts,tsx}',
     'lib/**/*.{ts,tsx}',
@@ -20,8 +20,8 @@ export default {
     }],
   },
   extensionsToTreatAsEsm: ['.ts'],
-  moduleNameMapping: {
-    '^@/(.*)$': '<rootDir>/$1',
+  moduleNameMapper: {
+    '^@/(.*)$': '<rootDir>/../../$1',
   },
-  testSequencer: '<rootDir>/tests/build/test-sequencer.mjs'
+  testSequencer: '<rootDir>/test-sequencer.mjs'
 };
