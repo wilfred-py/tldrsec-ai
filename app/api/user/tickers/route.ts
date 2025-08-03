@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { auth, currentUser } from '@clerk/nextjs/server';
 import { prisma } from '@/lib/db/prisma';
+import { dbRetry } from '@/lib/db/retry-wrapper';
 import { revalidatePath } from 'next/cache';
 
 /**
@@ -23,13 +24,15 @@ export async function GET() {
 
     const primaryEmail = user.emailAddresses[0].emailAddress;
 
-    // Find user in database
-    const dbUser = await prisma.user.findUnique({
-      where: { email: primaryEmail },
-      include: {
-        tickers: true
-      }
-    });
+    // Find user in database with retry logic for cold start issues
+    const dbUser = await dbRetry.query(() => 
+      prisma.user.findUnique({
+        where: { email: primaryEmail },
+        include: {
+          tickers: true
+        }
+      })
+    );
 
     if (!dbUser) {
       return NextResponse.json({ error: 'User not found in database' }, { status: 404 });
