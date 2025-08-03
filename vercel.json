@@ -1,4 +1,5 @@
 {
+  "buildCommand": "npm run build",
   "crons": [
     {
       "path": "/api/cron/monitor-sec-filings",

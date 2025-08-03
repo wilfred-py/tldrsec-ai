@@ -3,6 +3,7 @@ import Script from "next/script";
 import { ArrowRight, BarChart3, BookOpenText, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
+// Force server component
 export default function Home() {
   const structuredData = {
     "@context": "https://schema.org",
