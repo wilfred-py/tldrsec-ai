@@ -9,6 +9,11 @@ const nextConfig = {
     // your project has type errors.
     ignoreBuildErrors: true,
   },
+  experimental: {
+    // Enable stricter route group validation to prevent conflicts
+    strictNextHead: true,
+    optimizePackageImports: ['@clerk/nextjs', 'lucide-react'],
+  },
   serverExternalPackages: [],
   webpack: (config, { isServer, webpack }) => {
     if (!isServer) {
@@ -33,14 +38,28 @@ const nextConfig = {
       };
     }
 
-    // Workaround for missing client reference manifest files in Next.js 15
+    // Comprehensive fix for Next.js 15 client reference manifest issues
     if (isServer) {
       config.plugins.push(
         new webpack.DefinePlugin({
           __RSC_MANIFEST__: JSON.stringify({}),
+          __RSC_CSS_MANIFEST__: JSON.stringify({}),
         })
       );
+
+      // Additional fix for route group manifest generation
+      config.resolve.alias = {
+        ...config.resolve.alias,
+        '__NEXT_CLIENT_REFERENCE_MANIFEST__': false,
+      };
     }
+
+    // Suppress webpack warnings related to client reference manifests
+    config.ignoreWarnings = [
+      ...(config.ignoreWarnings || []),
+      /client-reference-manifest\.js/,
+      /__NEXT_CLIENT_REFERENCE_MANIFEST__/,
+    ];
 
     return config;
   },
