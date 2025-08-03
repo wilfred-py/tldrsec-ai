@@ -9,7 +9,8 @@ const nextConfig = {
     // your project has type errors.
     ignoreBuildErrors: true,
   },
-  webpack: (config, { isServer }) => {
+  serverExternalPackages: [],
+  webpack: (config, { isServer, webpack }) => {
     if (!isServer) {
       // Don't resolve server-side modules on the client
       config.resolve.fallback = {
@@ -31,6 +32,16 @@ const nextConfig = {
         zlib: false,
       };
     }
+
+    // Workaround for missing client reference manifest files in Next.js 15
+    if (isServer) {
+      config.plugins.push(
+        new webpack.DefinePlugin({
+          __RSC_MANIFEST__: JSON.stringify({}),
+        })
+      );
+    }
+
     return config;
   },
 };
