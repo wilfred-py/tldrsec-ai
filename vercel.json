@@ -6,14 +6,6 @@
       "schedule": "0 9 * * 1-5"
     },
     {
-      "path": "/api/cron/check-filings",
-      "schedule": "0 10 * * 1-5"
-    },
-    {
-      "path": "/api/cron/process-filings", 
-      "schedule": "0 11 * * 1-5"
-    },
-    {
       "path": "/api/cron/process-jobs",
       "schedule": "0 12 * * 1-5"
     }
