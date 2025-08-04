@@ -4,7 +4,7 @@ import * as secService from '../../secService';
 import { getFilingSummary } from '../summaries/filingSummaryService';
 import { sendSummaryEmail } from './emailGenerator';
 import { logger } from '../../../lib/logging';
-import { monitoring } from '../../../lib/monitoring';
+import { monitoring } from '@/lib/monitoring';
 
 const emailSummaryLogger = logger.child('email-summary');
 

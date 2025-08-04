@@ -2,7 +2,7 @@ import { FilingSummaryResult, FilingError } from '../../filing/types';
 import { getFormMetadata } from '../../../lib/sec-edgar/form-registry';
 import { emailClient } from '../../../lib/email';
 import { prisma } from '../../../lib/db';
-import { monitoring } from '../../../lib/monitoring';
+import { monitoring } from '@/lib/monitoring';
 
 // Define a safe version of recordEmailSent that handles missing function
 const safeRecordEmailSent = (emailType: string, recipient: string, success: boolean, tags: Record<string, string> = {}): void => {
