@@ -45,14 +45,26 @@ export async function sendEmailSummary(
           
           // Generate a summary for this filing
           console.log(`[INFO][EmailSummary] 🤖 Generating summary for ${ticker} - ${formType}...`);
+          const summaryStartTime = Date.now();
           const result = await getFilingSummary(ticker, formType);
+          const summaryDuration = Math.round((Date.now() - summaryStartTime) / 1000);
           
           if (result.data) {
-            console.log(`[INFO][EmailSummary] ✅ Successfully generated summary for ${ticker} - ${formType}`);
+            console.log(`[INFO][EmailSummary] ✅ Successfully generated summary for ${ticker} - ${formType} (${summaryDuration}s)`);
             summaries.push(result.data);
           } else {
-            console.error(`[ERROR][EmailSummary] ❌ Failed to generate summary for ${ticker}: ${result.error}`);
-            errors.push({ ticker, error: result.error || 'Unknown error' });
+            const errorMessage = result.error || 'Unknown error';
+            
+            // Check if this is a rate limit related error
+            if (errorMessage.toLowerCase().includes('rate limit') || 
+                errorMessage.toLowerCase().includes('quota') ||
+                errorMessage.toLowerCase().includes('usage limit')) {
+              console.warn(`[WARN][EmailSummary] ⏳ Rate limit detected for ${ticker} - ${formType}: ${errorMessage} (waited ${summaryDuration}s)`);
+            } else {
+              console.error(`[ERROR][EmailSummary] ❌ Failed to generate summary for ${ticker} - ${formType}: ${errorMessage} (${summaryDuration}s)`);
+            }
+            
+            errors.push({ ticker, error: errorMessage });
           }
         } else {
           console.warn(`[WARN][EmailSummary] No recent filings found for ${ticker}`);
@@ -61,10 +73,60 @@ export async function sendEmailSummary(
       } catch (error: unknown) {
         // Handle errors for individual tickers
         const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-        console.error(`[ERROR][EmailSummary] Error processing ${ticker}: ${errorMessage}`);
+        
+        // Enhanced error context for different types of failures
+        if (errorMessage.toLowerCase().includes('rate limit') || 
+            errorMessage.toLowerCase().includes('quota') ||
+            errorMessage.toLowerCase().includes('usage limit')) {
+          console.warn(`[WARN][EmailSummary] ⏳ Rate limit or quota error processing ${ticker}: ${errorMessage}`);
+        } else if (errorMessage.toLowerCase().includes('timeout') ||
+                   errorMessage.toLowerCase().includes('network') ||
+                   errorMessage.toLowerCase().includes('connection')) {
+          console.warn(`[WARN][EmailSummary] 🌐 Network/timeout error processing ${ticker}: ${errorMessage}`);
+        } else if (errorMessage.toLowerCase().includes('database') ||
+                   errorMessage.toLowerCase().includes('prisma')) {
+          console.error(`[ERROR][EmailSummary] 🗄️ Database error processing ${ticker}: ${errorMessage}`);
+        } else {
+          console.error(`[ERROR][EmailSummary] ❌ Unexpected error processing ${ticker}: ${errorMessage}`);
+        }
+        
         errors.push({ ticker, error: errorMessage });
       }
     }
+    
+    // Log summary of processing results
+    const rateLimitErrors = errors.filter(e => 
+      e.error.toLowerCase().includes('rate limit') || 
+      e.error.toLowerCase().includes('quota') ||
+      e.error.toLowerCase().includes('usage limit')
+    );
+    
+    const networkErrors = errors.filter(e => 
+      e.error.toLowerCase().includes('timeout') || 
+      e.error.toLowerCase().includes('network') ||
+      e.error.toLowerCase().includes('connection')
+    );
+    
+    const databaseErrors = errors.filter(e => 
+      e.error.toLowerCase().includes('database') || 
+      e.error.toLowerCase().includes('prisma')
+    );
+    
+    const otherErrors = errors.filter(e => 
+      !rateLimitErrors.includes(e) && 
+      !networkErrors.includes(e) && 
+      !databaseErrors.includes(e)
+    );
+    
+    console.log(`[INFO][EmailSummary] 📊 Processing completed for ${tickers.length} tickers:`, {
+      successful: summaries.length,
+      failed: errors.length,
+      rateLimitErrors: rateLimitErrors.length,
+      networkErrors: networkErrors.length, 
+      databaseErrors: databaseErrors.length,
+      otherErrors: otherErrors.length,
+      successRate: `${Math.round((summaries.length / tickers.length) * 100)}%`
+    });
     
     if (summaries.length === 0 && !debug) {
       // Instead of throwing an error, return a graceful failure response
