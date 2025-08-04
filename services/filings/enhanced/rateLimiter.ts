@@ -1,4 +1,5 @@
 import { logger } from '../../../lib/logging';
+import { monitoring } from '../../../lib/monitoring';
 
 const rateLimitLogger = logger.child('rate-limiter');
 
@@ -10,6 +11,11 @@ export interface RateLimitConfig {
   requestsPerMinute: number;
   dailyTokenLimit?: number;
   dailyRequestLimit?: number;
+  maxQueueSize?: number; // Maximum number of queued requests
+  logFrequencyMs?: number; // How often to log queue status (default: 30000ms)
+  maxWaitTimeMs?: number; // Maximum wait time per iteration (default: 60000ms)
+  requestDelayMs?: number; // Delay between processing requests (default: 100ms)
+  staleJobThresholdMs?: number; // Threshold for stale job warnings (default: 300000ms = 5min)
 }
 
 /**
@@ -51,8 +57,23 @@ interface UsageWindow {
 /**
  * Smart rate limiter with exponential backoff and request queuing
  */
+/**
+ * Internal configuration with defaults applied
+ */
+interface ResolvedRateLimitConfig {
+  tokensPerMinute: number;
+  requestsPerMinute: number;
+  dailyTokenLimit: number | null;
+  dailyRequestLimit: number | null;
+  maxQueueSize: number;
+  logFrequencyMs: number;
+  maxWaitTimeMs: number;
+  requestDelayMs: number;
+  staleJobThresholdMs: number;
+}
+
 export class SmartRateLimiter {
-  private config: RateLimitConfig;
+  private config: ResolvedRateLimitConfig;
   private currentWindow: UsageWindow;
   private dailyUsage: { tokens: number; requests: number; date: string };
   private requestQueue: QueuedRequest[] = [];
@@ -63,7 +84,19 @@ export class SmartRateLimiter {
   private lastQueueStatusLog: Date | null = null;
 
   constructor(config: RateLimitConfig) {
-    this.config = config;
+    // Apply defaults for optional configuration
+    this.config = {
+      tokensPerMinute: config.tokensPerMinute,
+      requestsPerMinute: config.requestsPerMinute,
+      dailyTokenLimit: config.dailyTokenLimit || null,
+      dailyRequestLimit: config.dailyRequestLimit || null,
+      maxQueueSize: config.maxQueueSize || 1000, // Default max 1000 queued requests
+      logFrequencyMs: config.logFrequencyMs || 30000, // Default 30 seconds
+      maxWaitTimeMs: config.maxWaitTimeMs || 60000, // Default 1 minute max wait
+      requestDelayMs: config.requestDelayMs || 100, // Default 100ms between requests
+      staleJobThresholdMs: config.staleJobThresholdMs || 300000 // Default 5 minutes
+    };
+    
     this.currentWindow = this.createNewWindow();
     this.dailyUsage = {
       tokens: 0,
@@ -212,18 +245,28 @@ export class SmartRateLimiter {
     rateLimitLogger.info(`Queue status report`, queueDetails);
     this.lastQueueStatusLog = now;
 
+    // Record current metrics
+    monitoring.recordValue('rate_limiter.queue_length_current', this.requestQueue.length);
+    monitoring.recordValue('rate_limiter.oldest_job_age_seconds', Math.round((now.getTime() - oldestRequest.queuedAt.getTime()) / 1000));
+    monitoring.recordValue('rate_limiter.average_wait_time_seconds', Math.round(avgWaitTime / 1000));
+    monitoring.recordValue('rate_limiter.tokens_used_current_window', this.currentWindow.tokens);
+    monitoring.recordValue('rate_limiter.requests_used_current_window', this.currentWindow.requests);
+    monitoring.recordValue('rate_limiter.backoff_multiplier', this.backoffMultiplier);
+
     // Log warnings for jobs that have been waiting too long
     const staleJobs = this.requestQueue.filter(req => 
-      (now.getTime() - req.queuedAt.getTime()) > 300000 // 5 minutes
+      (now.getTime() - req.queuedAt.getTime()) > this.config.staleJobThresholdMs
     );
     
     if (staleJobs.length > 0) {
-      rateLimitLogger.warn(`Found ${staleJobs.length} jobs waiting over 5 minutes`, {
+      const thresholdMinutes = Math.round(this.config.staleJobThresholdMs / 60000);
+      rateLimitLogger.warn(`Found ${staleJobs.length} jobs waiting over ${thresholdMinutes} minutes`, {
         staleJobs: staleJobs.map(job => ({
           id: job.id,
           ticker: job.ticker,
           waitingFor: Math.round((now.getTime() - job.queuedAt.getTime()) / 1000)
-        }))
+        })),
+        thresholdMs: this.config.staleJobThresholdMs
       });
     }
   }
@@ -238,7 +281,7 @@ export class SmartRateLimiter {
       if (this.requestQueue.length > 0) {
         this.logQueueStatus('periodic');
       }
-    }, 30000); // Log every 30 seconds
+    }, this.config.logFrequencyMs);
   }
 
   /**
@@ -300,10 +343,28 @@ export class SmartRateLimiter {
         }
       });
 
+      // Track rate limit metrics
+      monitoring.incrementCounter('rate_limiter.requests_queued', 1, {
+        errorType: rateLimitError.type,
+        ticker: ticker || 'unknown'
+      });
+      monitoring.recordValue('rate_limiter.queue_length', this.requestQueue.length + 1);
+      monitoring.recordValue('rate_limiter.estimated_wait_time_ms', estimatedWaitTime);
+
+      // Check queue size limit before adding
+      if (this.requestQueue.length >= this.config.maxQueueSize) {
+        rateLimitLogger.error('Queue size limit reached, rejecting request', {
+          currentQueueSize: this.requestQueue.length,
+          maxQueueSize: this.config.maxQueueSize,
+          ticker
+        });
+        throw new Error(`Rate limiter queue is full (${this.config.maxQueueSize} requests). Try again later.`);
+      }
+
       // Queue the request if rate limited
       return new Promise<T>((resolve, reject) => {
         const queuedRequest: QueuedRequest = {
-          id: Math.random().toString(36).substr(2, 9),
+          id: Math.random().toString(36).slice(2, 11),
           tokens,
           priority,
           queuedAt: new Date(),
@@ -334,8 +395,21 @@ export class SmartRateLimiter {
 
     // Execute immediately if within limits
     try {
+      const timerName = monitoring.startTimer('rate_limiter.request_processing');
       const result = await request();
+      const duration = monitoring.stopTimer(timerName, { ticker: ticker || 'unknown' });
+      
       this.updateUsage(tokens);
+      
+      // Track successful request metrics
+      monitoring.incrementCounter('rate_limiter.requests_processed', 1, {
+        ticker: ticker || 'unknown',
+        processedImmediately: 'true'
+      });
+      if (duration) {
+        monitoring.recordValue('rate_limiter.processing_duration_ms', duration);
+      }
+      
       return result;
     } catch (error: any) {
       // Handle rate limit errors from API
@@ -347,10 +421,20 @@ export class SmartRateLimiter {
           error: error.message
         });
 
+        // Check queue size limit before retrying
+        if (this.requestQueue.length >= this.config.maxQueueSize) {
+          rateLimitLogger.error('Queue size limit reached during retry, rejecting request', {
+            currentQueueSize: this.requestQueue.length,
+            maxQueueSize: this.config.maxQueueSize,
+            ticker
+          });
+          throw new Error(`Rate limiter queue is full (${this.config.maxQueueSize} requests). Cannot retry.`);
+        }
+
         // Queue for retry
         return new Promise<T>((resolve, reject) => {
           const queuedRequest: QueuedRequest = {
-            id: Math.random().toString(36).substr(2, 9),
+            id: Math.random().toString(36).slice(2, 11),
             tokens,
             priority,
             queuedAt: new Date(),
@@ -454,7 +538,7 @@ export class SmartRateLimiter {
         }
 
         // Wait and continue processing
-        await new Promise(resolve => setTimeout(resolve, Math.min(waitTime, 60000))); // Max 1 minute wait per iteration
+        await new Promise(resolve => setTimeout(resolve, Math.min(waitTime, this.config.maxWaitTimeMs)));
         continue;
       }
 
@@ -475,6 +559,7 @@ export class SmartRateLimiter {
         const startTime = Date.now();
         const result = await request.request();
         const processingTime = Date.now() - startTime;
+        const totalWaitTime = Date.now() - request.queuedAt.getTime();
         
         this.updateUsage(request.tokens);
         request.resolve(result);
@@ -482,7 +567,7 @@ export class SmartRateLimiter {
         rateLimitLogger.info(`Queued request completed successfully`, {
           requestId: request.id,
           ticker: request.ticker,
-          totalWaitTime: Math.round((Date.now() - request.queuedAt.getTime()) / 1000),
+          totalWaitTime: Math.round(totalWaitTime / 1000),
           processingTime: Math.round(processingTime / 1000),
           retryAttempts: request.retryAttempts || 0,
           remainingQueue: this.requestQueue.length,
@@ -491,6 +576,16 @@ export class SmartRateLimiter {
             requests: this.currentWindow.requests
           }
         });
+
+        // Track queued request completion metrics
+        monitoring.incrementCounter('rate_limiter.requests_processed', 1, {
+          ticker: request.ticker || 'unknown',
+          processedImmediately: 'false',
+          retryAttempts: (request.retryAttempts || 0).toString()
+        });
+        monitoring.recordValue('rate_limiter.processing_duration_ms', processingTime);
+        monitoring.recordValue('rate_limiter.total_wait_time_ms', totalWaitTime);
+        monitoring.recordValue('rate_limiter.queue_length', this.requestQueue.length);
       } catch (error) {
         if (this.isRateLimitError(error)) {
           // Put request back at front of queue for retry
@@ -517,11 +612,18 @@ export class SmartRateLimiter {
             error: (error as Error).message,
             errorStack: (error as Error).stack
           });
+
+          // Track failed request metrics
+          monitoring.incrementCounter('rate_limiter.requests_failed', 1, {
+            ticker: request.ticker || 'unknown',
+            errorType: 'non_rate_limit',
+            retryAttempts: (request.retryAttempts || 0).toString()
+          });
         }
       }
 
-      // Small delay between requests to avoid overwhelming
-      await new Promise(resolve => setTimeout(resolve, 100));
+      // Configurable delay between requests to avoid overwhelming
+      await new Promise(resolve => setTimeout(resolve, this.config.requestDelayMs));
     }
 
     this.isProcessingQueue = false;
@@ -536,6 +638,13 @@ export class SmartRateLimiter {
         backoffMultiplier: this.backoffMultiplier
       });
     }
+  }
+
+  /**
+   * Get current configuration settings
+   */
+  getConfiguration(): ResolvedRateLimitConfig {
+    return { ...this.config };
   }
 
   /**
