@@ -3,6 +3,10 @@ import { FilingType } from '../../../types/sec/filing';
 import * as secService from '../../secService';
 import { getFilingSummary } from '../summaries/filingSummaryService';
 import { sendSummaryEmail } from './emailGenerator';
+import { logger } from '../../../lib/logging';
+import { monitoring } from '../../../lib/monitoring';
+
+const emailSummaryLogger = logger.child('email-summary');
 
 /**
  * Sends an email summary of the latest filings for a list of tickers
@@ -22,17 +26,31 @@ export async function sendEmailSummary(
     const errors: FilingError[] = [];
     
     // Log the start of the process with ticker count
-    console.log(`[INFO][EmailSummary] 🚀 Starting email summary generation for ${tickers.length} tickers: ${tickers.join(', ')}`);
+    emailSummaryLogger.info('Starting email summary generation', {
+      tickerCount: tickers.length,
+      tickers: tickers.join(', ')
+    });
+
+    // Track email summary start metrics
+    monitoring.incrementCounter('email_summary.started', 1);
+    monitoring.recordValue('email_summary.ticker_count', tickers.length);
+    const summaryTimerName = monitoring.startTimer('email_summary.total_duration');
     
     // Process each ticker
     for (let i = 0; i < tickers.length; i++) {
       const ticker = tickers[i];
       const progressPercent = Math.round(((i + 1) / tickers.length) * 100);
-      console.log(`[INFO][EmailSummary] 🔍 Processing ticker ${i+1}/${tickers.length} (${progressPercent}%): ${ticker}`);
+      emailSummaryLogger.info('Processing ticker', {
+        ticker,
+        progress: `${i+1}/${tickers.length}`,
+        progressPercent,
+        index: i + 1,
+        total: tickers.length
+      });
       
       try {
         // Get the latest filing for this ticker regardless of form type
-        console.log(`[INFO][EmailSummary] 🔗 Fetching latest filings for ${ticker}...`);
+        emailSummaryLogger.debug('Fetching latest filings', { ticker });
         const latestFilings = await secService.getLatestFilings(ticker, 3);
         
         if (latestFilings && latestFilings.length > 0) {
@@ -41,16 +59,24 @@ export async function sendEmailSummary(
           // The property is named 'form' in the filing object, not 'formType'
           const formType = latestFiling.form as FilingType;
           
-          console.log(`[INFO][EmailSummary] 📄 Latest filing for ${ticker} is ${formType} from ${latestFiling.filingDate}`);
+          emailSummaryLogger.info('Latest filing found', {
+            ticker,
+            formType,
+            filingDate: latestFiling.filingDate
+          });
           
           // Generate a summary for this filing
-          console.log(`[INFO][EmailSummary] 🤖 Generating summary for ${ticker} - ${formType}...`);
+          emailSummaryLogger.debug('Generating summary', { ticker, formType });
           const summaryStartTime = Date.now();
           const result = await getFilingSummary(ticker, formType);
           const summaryDuration = Math.round((Date.now() - summaryStartTime) / 1000);
           
           if (result.data) {
-            console.log(`[INFO][EmailSummary] ✅ Successfully generated summary for ${ticker} - ${formType} (${summaryDuration}s)`);
+            emailSummaryLogger.info('Successfully generated summary', {
+              ticker,
+              formType,
+              duration: summaryDuration
+            });
             summaries.push(result.data);
           } else {
             const errorMessage = result.error || 'Unknown error';
@@ -59,15 +85,25 @@ export async function sendEmailSummary(
             if (errorMessage.toLowerCase().includes('rate limit') || 
                 errorMessage.toLowerCase().includes('quota') ||
                 errorMessage.toLowerCase().includes('usage limit')) {
-              console.warn(`[WARN][EmailSummary] ⏳ Rate limit detected for ${ticker} - ${formType}: ${errorMessage} (waited ${summaryDuration}s)`);
+              emailSummaryLogger.warn('Rate limit detected during summary generation', {
+                ticker,
+                formType,
+                error: errorMessage,
+                duration: summaryDuration
+              });
             } else {
-              console.error(`[ERROR][EmailSummary] ❌ Failed to generate summary for ${ticker} - ${formType}: ${errorMessage} (${summaryDuration}s)`);
+              emailSummaryLogger.error('Failed to generate summary', {
+                ticker,
+                formType,
+                error: errorMessage,
+                duration: summaryDuration
+              });
             }
             
             errors.push({ ticker, error: errorMessage });
           }
         } else {
-          console.warn(`[WARN][EmailSummary] No recent filings found for ${ticker}`);
+          emailSummaryLogger.warn('No recent filings found', { ticker });
           errors.push({ ticker, error: 'No recent filings found' });
         }
       } catch (error: unknown) {
@@ -78,16 +114,32 @@ export async function sendEmailSummary(
         if (errorMessage.toLowerCase().includes('rate limit') || 
             errorMessage.toLowerCase().includes('quota') ||
             errorMessage.toLowerCase().includes('usage limit')) {
-          console.warn(`[WARN][EmailSummary] ⏳ Rate limit or quota error processing ${ticker}: ${errorMessage}`);
+          emailSummaryLogger.warn('Rate limit or quota error during ticker processing', {
+            ticker,
+            error: errorMessage,
+            errorType: 'rateLimit'
+          });
         } else if (errorMessage.toLowerCase().includes('timeout') ||
                    errorMessage.toLowerCase().includes('network') ||
                    errorMessage.toLowerCase().includes('connection')) {
-          console.warn(`[WARN][EmailSummary] 🌐 Network/timeout error processing ${ticker}: ${errorMessage}`);
+          emailSummaryLogger.warn('Network/timeout error during ticker processing', {
+            ticker,
+            error: errorMessage,
+            errorType: 'network'
+          });
         } else if (errorMessage.toLowerCase().includes('database') ||
                    errorMessage.toLowerCase().includes('prisma')) {
-          console.error(`[ERROR][EmailSummary] 🗄️ Database error processing ${ticker}: ${errorMessage}`);
+          emailSummaryLogger.error('Database error during ticker processing', {
+            ticker,
+            error: errorMessage,
+            errorType: 'database'
+          });
         } else {
-          console.error(`[ERROR][EmailSummary] ❌ Unexpected error processing ${ticker}: ${errorMessage}`);
+          emailSummaryLogger.error('Unexpected error during ticker processing', {
+            ticker,
+            error: errorMessage,
+            errorType: 'unknown'
+          });
         }
         
         errors.push({ ticker, error: errorMessage });
@@ -118,19 +170,34 @@ export async function sendEmailSummary(
       !databaseErrors.includes(e)
     );
     
-    console.log(`[INFO][EmailSummary] 📊 Processing completed for ${tickers.length} tickers:`, {
+    emailSummaryLogger.info('Processing completed for all tickers', {
+      tickerCount: tickers.length,
       successful: summaries.length,
       failed: errors.length,
       rateLimitErrors: rateLimitErrors.length,
       networkErrors: networkErrors.length, 
       databaseErrors: databaseErrors.length,
       otherErrors: otherErrors.length,
-      successRate: `${Math.round((summaries.length / tickers.length) * 100)}%`
+      successRate: Math.round((summaries.length / tickers.length) * 100)
     });
+
+    // Track completion metrics
+    const totalDuration = monitoring.stopTimer(summaryTimerName);
+    monitoring.incrementCounter('email_summary.completed', 1);
+    monitoring.recordValue('email_summary.successful_summaries', summaries.length);
+    monitoring.recordValue('email_summary.failed_summaries', errors.length);
+    monitoring.recordValue('email_summary.rate_limit_errors', rateLimitErrors.length);
+    monitoring.recordValue('email_summary.network_errors', networkErrors.length);
+    monitoring.recordValue('email_summary.database_errors', databaseErrors.length);
+    monitoring.recordValue('email_summary.other_errors', otherErrors.length);
+    monitoring.recordValue('email_summary.success_rate_percent', Math.round((summaries.length / tickers.length) * 100));
     
     if (summaries.length === 0 && !debug) {
       // Instead of throwing an error, return a graceful failure response
-      console.warn(`[WARN][EmailSummary] No filing summaries could be generated for any of the ${tickers.length} tickers`);
+      emailSummaryLogger.warn('No filing summaries could be generated', {
+        tickerCount: tickers.length,
+        errorCount: errors.length
+      });
       return { 
         success: false, 
         message: `No filing summaries could be generated for any of the ${tickers.length} tickers` 
@@ -138,17 +205,27 @@ export async function sendEmailSummary(
     }
     
     // Send the email with summaries and errors
-    console.log(`[INFO][EmailSummary] 📧 Sending email to ${email} with ${summaries.length} summaries and ${errors.length} errors`);
+    emailSummaryLogger.info('Sending email with summaries', {
+      email,
+      summaryCount: summaries.length,
+      errorCount: errors.length
+    });
     const emailResult = await sendSummaryEmail(email, summaries, errors, debug);
     
     if (emailResult.success) {
-      console.log(`[INFO][EmailSummary] ✅ Email sent successfully to ${email}`);
+      emailSummaryLogger.info('Email sent successfully', {
+        email,
+        summaryCount: summaries.length
+      });
       return { 
         success: true, 
         message: `Email sent successfully to ${email} with ${summaries.length} summaries` 
       };
     } else {
-      console.error(`[ERROR][EmailSummary] ❌ Failed to send email: ${emailResult.error}`);
+      emailSummaryLogger.error('Failed to send email', {
+        email,
+        error: emailResult.error
+      });
       return { 
         success: false, 
         error: `Failed to send email: ${emailResult.error}` 
@@ -156,7 +233,10 @@ export async function sendEmailSummary(
     }
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    console.error(`[ERROR][EmailSummary] ❌ Error sending email summary: ${errorMessage}`);
+    emailSummaryLogger.error('Error sending email summary', {
+      error: errorMessage,
+      stack: error instanceof Error ? error.stack : undefined
+    });
     return { 
       success: false, 
       error: `Error sending email summary: ${errorMessage}` 
