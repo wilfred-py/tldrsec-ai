@@ -31,6 +31,9 @@ interface QueuedRequest {
   tokens: number;
   priority: number;
   queuedAt: Date;
+  lastStatusUpdate?: Date;
+  retryAttempts?: number;
+  ticker?: string; // For better tracking in email summaries
   resolve: (value: any) => void;
   reject: (error: any) => void;
   request: () => Promise<any>;
@@ -56,6 +59,8 @@ export class SmartRateLimiter {
   private isProcessingQueue = false;
   private backoffMultiplier = 1;
   private lastRateLimitTime: Date | null = null;
+  private statusLoggerInterval: NodeJS.Timeout | null = null;
+  private lastQueueStatusLog: Date | null = null;
 
   constructor(config: RateLimitConfig) {
     this.config = config;
@@ -167,21 +172,132 @@ export class SmartRateLimiter {
   }
 
   /**
+   * Log detailed queue status with job information
+   */
+  private logQueueStatus(reason: string = 'periodic'): void {
+    if (this.requestQueue.length === 0) return;
+
+    const now = new Date();
+    const oldestRequest = this.requestQueue[0];
+    const newestRequest = this.requestQueue[this.requestQueue.length - 1];
+    const avgWaitTime = this.requestQueue.reduce((sum, req) => 
+      sum + (now.getTime() - req.queuedAt.getTime()), 0) / this.requestQueue.length;
+
+    const queueDetails = {
+      reason,
+      queueLength: this.requestQueue.length,
+      isProcessing: this.isProcessingQueue,
+      oldestJobAge: Math.round((now.getTime() - oldestRequest.queuedAt.getTime()) / 1000),
+      newestJobAge: Math.round((now.getTime() - newestRequest.queuedAt.getTime()) / 1000),
+      averageWaitTime: Math.round(avgWaitTime / 1000),
+      backoffMultiplier: this.backoffMultiplier,
+      lastRateLimitAgo: this.lastRateLimitTime ? 
+        Math.round((now.getTime() - this.lastRateLimitTime.getTime()) / 1000) : null,
+      currentUsage: {
+        tokens: this.currentWindow.tokens,
+        requests: this.currentWindow.requests,
+        tokensRemaining: this.config.tokensPerMinute - this.currentWindow.tokens,
+        requestsRemaining: this.config.requestsPerMinute - this.currentWindow.requests
+      },
+      queueJobs: this.requestQueue.slice(0, 5).map(req => ({
+        id: req.id,
+        ticker: req.ticker,
+        tokens: req.tokens,
+        priority: req.priority,
+        waitingFor: Math.round((now.getTime() - req.queuedAt.getTime()) / 1000),
+        retryAttempts: req.retryAttempts || 0
+      }))
+    };
+
+    rateLimitLogger.info(`Queue status report`, queueDetails);
+    this.lastQueueStatusLog = now;
+
+    // Log warnings for jobs that have been waiting too long
+    const staleJobs = this.requestQueue.filter(req => 
+      (now.getTime() - req.queuedAt.getTime()) > 300000 // 5 minutes
+    );
+    
+    if (staleJobs.length > 0) {
+      rateLimitLogger.warn(`Found ${staleJobs.length} jobs waiting over 5 minutes`, {
+        staleJobs: staleJobs.map(job => ({
+          id: job.id,
+          ticker: job.ticker,
+          waitingFor: Math.round((now.getTime() - job.queuedAt.getTime()) / 1000)
+        }))
+      });
+    }
+  }
+
+  /**
+   * Start periodic queue status logging
+   */
+  private startStatusLogger(): void {
+    if (this.statusLoggerInterval) return;
+    
+    this.statusLoggerInterval = setInterval(() => {
+      if (this.requestQueue.length > 0) {
+        this.logQueueStatus('periodic');
+      }
+    }, 30000); // Log every 30 seconds
+  }
+
+  /**
+   * Stop periodic queue status logging
+   */
+  private stopStatusLogger(): void {
+    if (this.statusLoggerInterval) {
+      clearInterval(this.statusLoggerInterval);
+      this.statusLoggerInterval = null;
+    }
+  }
+
+  /**
+   * Calculate estimated time until next processing attempt
+   */
+  private getEstimatedProcessingTime(): number {
+    if (this.requestQueue.length === 0) return 0;
+    
+    const rateLimitError = this.checkRateLimits(this.requestQueue[0].tokens);
+    if (!rateLimitError) return 0;
+    
+    if (rateLimitError.type === 'DAILY_LIMIT') {
+      const tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      tomorrow.setHours(0, 0, 0, 0);
+      return tomorrow.getTime() - Date.now();
+    }
+    
+    return this.calculateBackoffDelay();
+  }
+
+  /**
    * Execute a request with rate limiting and queuing
    */
   async executeRequest<T>(
     request: () => Promise<T>,
     tokens: number,
-    priority: number = 5
+    priority: number = 5,
+    ticker?: string
   ): Promise<T> {
     const rateLimitError = this.checkRateLimits(tokens);
     
     if (rateLimitError) {
+      const estimatedWaitTime = this.getEstimatedProcessingTime();
+      
       rateLimitLogger.warn(`Rate limit detected, queueing request`, {
+        ticker,
         errorType: rateLimitError.type,
         retryAfter: rateLimitError.retryAfter,
         resetTime: rateLimitError.resetTime,
-        queueLength: this.requestQueue.length
+        queueLength: this.requestQueue.length,
+        estimatedWaitTimeMs: estimatedWaitTime,
+        estimatedWaitTimeMinutes: Math.round(estimatedWaitTime / 60000),
+        currentUsage: {
+          tokens: this.currentWindow.tokens,
+          requests: this.currentWindow.requests,
+          tokensRemaining: this.config.tokensPerMinute - this.currentWindow.tokens,
+          requestsRemaining: this.config.requestsPerMinute - this.currentWindow.requests
+        }
       });
 
       // Queue the request if rate limited
@@ -191,6 +307,8 @@ export class SmartRateLimiter {
           tokens,
           priority,
           queuedAt: new Date(),
+          ticker,
+          retryAttempts: 0,
           resolve,
           reject,
           request: request as () => Promise<any>
@@ -202,6 +320,12 @@ export class SmartRateLimiter {
           this.requestQueue.push(queuedRequest);
         } else {
           this.requestQueue.splice(insertIndex, 0, queuedRequest);
+        }
+
+        // Start status logging if this is the first queued item
+        if (this.requestQueue.length === 1) {
+          this.startStatusLogger();
+          this.logQueueStatus('initial_queue');
         }
 
         this.processQueue();
@@ -230,12 +354,21 @@ export class SmartRateLimiter {
             tokens,
             priority,
             queuedAt: new Date(),
+            ticker,
+            retryAttempts: 1,
             resolve,
             reject,
             request: request as () => Promise<any>
           };
 
           this.requestQueue.unshift(queuedRequest); // Add to front for retry
+          
+          // Start status logging if this is the first queued item
+          if (this.requestQueue.length === 1) {
+            this.startStatusLogger();
+            this.logQueueStatus('retry_queue');
+          }
+          
           this.processQueue();
         });
       }
@@ -265,6 +398,10 @@ export class SmartRateLimiter {
     }
 
     this.isProcessingQueue = true;
+    rateLimitLogger.info(`Starting queue processing`, {
+      queueLength: this.requestQueue.length,
+      backoffMultiplier: this.backoffMultiplier
+    });
 
     while (this.requestQueue.length > 0) {
       const request = this.requestQueue[0];
@@ -283,18 +420,36 @@ export class SmartRateLimiter {
           tomorrow.setHours(0, 0, 0, 0);
           waitTime = tomorrow.getTime() - Date.now();
           
-          rateLimitLogger.info(`Daily limit reached, waiting until tomorrow`, {
+          rateLimitLogger.warn(`Daily limit reached, waiting until tomorrow`, {
             waitTimeHours: Math.ceil(waitTime / (1000 * 60 * 60)),
-            queueLength: this.requestQueue.length
+            queueLength: this.requestQueue.length,
+            nextJob: {
+              id: request.id,
+              ticker: request.ticker,
+              tokens: request.tokens,
+              priority: request.priority,
+              waitingFor: Math.round((Date.now() - request.queuedAt.getTime()) / 1000)
+            }
           });
         } else {
           // Use exponential backoff for rate limits
           waitTime = this.calculateBackoffDelay();
           
-          rateLimitLogger.debug(`Rate limited, waiting before retry`, {
+          rateLimitLogger.info(`Rate limited, waiting before retry`, {
             waitTimeMs: waitTime,
+            waitTimeSeconds: Math.round(waitTime / 1000),
             backoffMultiplier: this.backoffMultiplier,
-            queueLength: this.requestQueue.length
+            queueLength: this.requestQueue.length,
+            nextJob: {
+              id: request.id,
+              ticker: request.ticker,
+              tokens: request.tokens,
+              priority: request.priority,
+              waitingFor: Math.round((Date.now() - request.queuedAt.getTime()) / 1000),
+              retryAttempts: request.retryAttempts || 0
+            },
+            rateLimitType: rateLimitError.type,
+            retryAfter: rateLimitError.retryAfter
           });
         }
 
@@ -306,24 +461,49 @@ export class SmartRateLimiter {
       // Remove request from queue and execute
       this.requestQueue.shift();
       
+      rateLimitLogger.info(`Processing queued request`, {
+        requestId: request.id,
+        ticker: request.ticker,
+        tokens: request.tokens,
+        priority: request.priority,
+        totalWaitTime: Math.round((Date.now() - request.queuedAt.getTime()) / 1000),
+        retryAttempts: request.retryAttempts || 0,
+        remainingQueue: this.requestQueue.length
+      });
+      
       try {
+        const startTime = Date.now();
         const result = await request.request();
+        const processingTime = Date.now() - startTime;
+        
         this.updateUsage(request.tokens);
         request.resolve(result);
         
-        rateLimitLogger.debug(`Queued request completed successfully`, {
+        rateLimitLogger.info(`Queued request completed successfully`, {
           requestId: request.id,
-          queueLength: this.requestQueue.length,
-          waitTime: Date.now() - request.queuedAt.getTime()
+          ticker: request.ticker,
+          totalWaitTime: Math.round((Date.now() - request.queuedAt.getTime()) / 1000),
+          processingTime: Math.round(processingTime / 1000),
+          retryAttempts: request.retryAttempts || 0,
+          remainingQueue: this.requestQueue.length,
+          currentUsage: {
+            tokens: this.currentWindow.tokens,
+            requests: this.currentWindow.requests
+          }
         });
       } catch (error) {
         if (this.isRateLimitError(error)) {
           // Put request back at front of queue for retry
+          request.retryAttempts = (request.retryAttempts || 0) + 1;
           this.requestQueue.unshift(request);
           this.increaseBackoff();
           
           rateLimitLogger.warn(`Queued request hit rate limit, requeueing`, {
             requestId: request.id,
+            ticker: request.ticker,
+            retryAttempts: request.retryAttempts,
+            totalWaitTime: Math.round((Date.now() - request.queuedAt.getTime()) / 1000),
+            backoffMultiplier: this.backoffMultiplier,
             error: (error as Error).message
           });
         } else {
@@ -331,7 +511,11 @@ export class SmartRateLimiter {
           
           rateLimitLogger.error(`Queued request failed with non-rate-limit error`, {
             requestId: request.id,
-            error: (error as Error).message
+            ticker: request.ticker,
+            retryAttempts: request.retryAttempts || 0,
+            totalWaitTime: Math.round((Date.now() - request.queuedAt.getTime()) / 1000),
+            error: (error as Error).message,
+            errorStack: (error as Error).stack
           });
         }
       }
@@ -341,6 +525,17 @@ export class SmartRateLimiter {
     }
 
     this.isProcessingQueue = false;
+    
+    // Stop status logging if queue is empty
+    if (this.requestQueue.length === 0) {
+      this.stopStatusLogger();
+      rateLimitLogger.info(`Queue processing completed, all requests processed`);
+    } else {
+      rateLimitLogger.info(`Queue processing paused`, {
+        remainingQueue: this.requestQueue.length,
+        backoffMultiplier: this.backoffMultiplier
+      });
+    }
   }
 
   /**

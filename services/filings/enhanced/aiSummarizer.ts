@@ -301,7 +301,8 @@ async function processChunk(
         ]
       }),
       chunk.tokenCount + maxTokens, // Estimate total tokens (input + expected output)
-      3 // Medium priority (lower = higher priority)
+      3, // Medium priority (lower = higher priority)
+      ticker // Pass ticker for logging
     );
     
     const responseText = response.content[0]?.type === 'text' ? response.content[0].text : '';
@@ -516,7 +517,8 @@ export async function summarizeSingle(
         ]
       }),
       estimatedInputTokens + maxTokens, // Estimate total tokens
-      1 // High priority for single processing
+      1, // High priority for single processing
+      ticker // Pass ticker for logging
     );
     
     const responseText = response.content[0]?.type === 'text' ? response.content[0].text : '';
