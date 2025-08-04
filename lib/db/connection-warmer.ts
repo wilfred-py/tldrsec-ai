@@ -6,21 +6,30 @@
 
 import { prisma } from './prisma';
 import { dbRetry } from './retry-wrapper';
+import { databaseMonitoring } from './monitoring';
 
 /**
  * Warm up the database connection pool
  * This helps prevent cold start issues by establishing connections early
  */
 export async function warmupDatabaseConnection(): Promise<boolean> {
+  const startTime = Date.now();
+  
   try {
     // Execute a simple query to establish connection
     await dbRetry.healthCheck(async () => {
       await prisma.$queryRaw`SELECT 1 as warmup`;
     });
     
+    const responseTime = Date.now() - startTime;
+    databaseMonitoring.trackWarmupOperation(true, responseTime);
+    
     console.log('✅ Database connection warmed up successfully');
     return true;
   } catch (error) {
+    const responseTime = Date.now() - startTime;
+    databaseMonitoring.trackWarmupOperation(false, responseTime);
+    
     console.error('⚠️ Database warmup failed:', error instanceof Error ? error.message : String(error));
     return false;
   }
