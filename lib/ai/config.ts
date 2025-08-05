@@ -34,11 +34,12 @@ export const apiConfig = {
 };
 
 /**
- * Model configuration
+ * Model configuration - centralized model selection
  */
 export const modelConfig = {
-  defaultModel: getEnv('CLAUDE_DEFAULT_MODEL', 'claude-sonnet-4-20250514'),
-  fallbackModel: getEnv('CLAUDE_FALLBACK_MODEL', 'claude-sonnet-4-20250514'),
+  // Use ANTHROPIC_MODEL as the primary environment variable for consistency
+  defaultModel: getEnv('ANTHROPIC_MODEL', 'claude-sonnet-4-20250514'),
+  fallbackModel: getEnv('ANTHROPIC_FALLBACK_MODEL', getEnv('ANTHROPIC_MODEL', 'claude-sonnet-4-20250514')),
   maxInputTokens: parseInt(getEnv('CLAUDE_MAX_INPUT_TOKENS', '100000'), 10),
   maxOutputTokens: parseInt(getEnv('CLAUDE_MAX_OUTPUT_TOKENS', '4096'), 10),
   temperature: parseFloat(getEnv('CLAUDE_TEMPERATURE', '0.2')),
@@ -61,12 +62,27 @@ export const costConfig = {
   claude3HaikuOutputCost: parseFloat(getEnv('CLAUDE3_HAIKU_OUTPUT_COST', '1.25'))
 };
 
+/**
+ * Get the current Claude model from environment variable
+ * This is the centralized function all code should use to get the model
+ */
+export function getClaudeModel(): string {
+  return getEnv('ANTHROPIC_MODEL', 'claude-sonnet-4-20250514');
+}
+
+/**
+ * Get fallback model for error handling
+ */
+export function getFallbackModel(): string {
+  return getEnv('ANTHROPIC_FALLBACK_MODEL', getClaudeModel());
+}
+
 export const ClaudeConfig = {
   // API key should be set in the .env file
   apiKey: process.env.ANTHROPIC_API_KEY || '',
   
-  // Model selection - default to Claude Sonnet 4 if not specified
-  model: process.env.ANTHROPIC_MODEL || 'claude-sonnet-4-20250514',
+  // Model selection - use centralized function
+  model: getClaudeModel(),
   
   // Request parameters
   maxTokens: parseInt(process.env.ANTHROPIC_MAX_TOKENS || '4000', 10),

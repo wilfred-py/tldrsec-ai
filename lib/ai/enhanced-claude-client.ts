@@ -18,6 +18,7 @@ import { SummarizationOptions, SummarizationResult } from './summarize';
 import { SECFilingType } from './prompts/prompt-types';
 import { logger } from '../logging';
 import { monitoring } from '../monitoring';
+import { getClaudeModel } from './config';
 import { v4 as uuidv4 } from 'uuid';
 import { EventEmitter } from 'events';
 import Anthropic from '@anthropic-ai/sdk';
@@ -152,7 +153,7 @@ export class EnhancedClaudeClient extends EventEmitter {
     
     // Merge default options
     const mergedOptions = {
-      model: 'claude-sonnet-4-20250514',
+      model: getClaudeModel(),
       maxTokens: 4000,
       temperature: 0.3,
       useCache: true,
@@ -553,7 +554,7 @@ export class EnhancedClaudeClient extends EventEmitter {
     return {
       id: result.summaryId,
       content: typeof result.summaryText === 'string' ? result.summaryText : JSON.stringify(result.summaryText),
-      model: result.modelUsed || 'claude-sonnet-4-20250514',
+      model: result.modelUsed || getClaudeModel(),
       usage: {
         inputTokens: result.inputTokens || 0,
         outputTokens: result.outputTokens || 0

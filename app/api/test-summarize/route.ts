@@ -10,6 +10,7 @@ import { getPrismaClient } from '../../../lib/db/prisma';
 const prisma = getPrismaClient();
 import Anthropic from '@anthropic-ai/sdk';
 import { monitoring } from '@/lib/monitoring';
+import { getClaudeModel } from '@/lib/ai/config';
 import { NextRequest, NextResponse } from 'next/server';
 
 // Create a safe wrapper for monitoring functions
@@ -707,7 +708,7 @@ async function saveToCache(filingUrl: string, data: any): Promise<string | null>
         processingTimeMs: data.summary.duration || 0,
         processingStatus: 'COMPLETED',
         processingCompletedAt: new Date(),
-        model: 'claude-3-5-sonnet-20241022',
+        model: getClaudeModel(),
         isPartialResult: false,
         sentToUser: false
       }
@@ -999,7 +1000,7 @@ export async function POST(request: NextRequest) {
             }
             
             const chunkResponse = await anthropic.messages.create({
-              model: 'claude-3-5-sonnet-20241022',
+              model: getClaudeModel(),
               max_tokens: 2000,
               temperature: 0.3,
               messages: [
@@ -1054,7 +1055,7 @@ export async function POST(request: NextRequest) {
         } else {
           // Single prompt processing
           const claudeResponse = await anthropic.messages.create({
-            model: 'claude-3-5-sonnet-20241022',
+            model: getClaudeModel(),
             max_tokens: 4000,
             temperature: 0.3,
             messages: [

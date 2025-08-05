@@ -7,6 +7,7 @@ import { scrapeDocumentLinksFromFilingPage, fetchDocumentContent } from '../extr
 import { generateFallbackSummary, generateFallbackKeyPoints } from './fallbackSummaryGenerator';
 import { normalizeFormType } from '../utils/formTypeUtils';
 import { getSecApiHeaders } from '../utils/apiHeaders';
+import { getClaudeModel } from '../../../lib/ai/config';
 
 /**
  * Gets a filing summary for a ticker and form type
@@ -35,7 +36,7 @@ export async function getFilingSummary(
           preserveStructure: true
         },
         summarizationOptions: {
-          model: 'claude-3-5-sonnet-20241022',
+          model: getClaudeModel(),
           maxRetries: 2,
           enableFallback: true
         }
@@ -181,7 +182,7 @@ export async function getFilingSummary(
       // Set summarization options
       const options: SummarizationOptions = {
         maxRetries: 2,
-        model: 'claude-sonnet-4-20250514',
+        model: getClaudeModel(),
         metadata: {
           ticker: ticker,
           companyName: companyInfo.name || ticker,

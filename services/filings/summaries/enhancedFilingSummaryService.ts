@@ -15,6 +15,7 @@ import { generateFallbackSummary, generateFallbackKeyPoints } from './fallbackSu
 import { normalizeFormType } from '../utils/formTypeUtils';
 import { logger } from '../../../lib/logging';
 import { monitoring } from '../../../lib/monitoring';
+import { getClaudeModel } from '../../../lib/ai/config';
 
 const enhancedLogger = logger.child('enhanced-filing-summary-service');
 
@@ -225,7 +226,7 @@ export async function getEnhancedFilingSummary(
     
     const options: SummarizationOptions = {
       maxRetries: 2,
-      model: 'claude-sonnet-4-20250514',
+      model: getClaudeModel(),
       metadata: {
         ticker: ticker,
         companyName: companyInfo.name || ticker,

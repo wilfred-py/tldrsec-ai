@@ -4,6 +4,7 @@ import { getFormMetadata } from '../../../lib/sec-edgar/form-registry';
 import { logger } from '../../../lib/logging';
 import { ContentChunk, ChunkingResult, calculateTokenCost } from './contentChunker';
 import { defaultRateLimiter, conservativeRateLimiter, SmartRateLimiter } from './rateLimiter';
+import { getClaudeModel } from '../../../lib/ai/config';
 
 // Create a module-specific logger
 const aiLogger = logger.child('enhanced-ai-summarizer');
@@ -255,7 +256,7 @@ async function processChunk(
   ticker?: string,
   options: SummarizationOptions = {}
 ): Promise<{ summary: ChunkSummary; inputTokens: number; outputTokens: number }> {
-  const { model = 'claude-3-5-sonnet-20241022', maxTokens = 2000, temperature = 0.3 } = options;
+  const { model = getClaudeModel(), maxTokens = 2000, temperature = 0.3 } = options;
   
   const anthropic = createAnthropicClient();
   
@@ -447,7 +448,7 @@ export async function summarizeWithChunking(
         totalTokens: totalInputTokens + totalOutputTokens,
         cost: totalCost,
         processingTimeMs,
-        model: options.model || 'claude-3-5-sonnet-20241022',
+        model: options.model || getClaudeModel(),
         chunksProcessed: chunkingResult.totalChunks,
         chunkingStrategy: chunkingResult.chunkingStrategy
       },
@@ -469,7 +470,7 @@ export async function summarizeWithChunking(
         totalTokens: 0,
         cost: 0,
         processingTimeMs: Date.now() - startTime,
-        model: options.model || 'claude-3-5-sonnet-20241022',
+        model: options.model || getClaudeModel(),
         chunksProcessed: 0
       },
       success: false,
@@ -489,7 +490,7 @@ export async function summarizeSingle(
   options: SummarizationOptions = {}
 ): Promise<SummarizationResult> {
   const startTime = Date.now();
-  const { model = 'claude-3-5-sonnet-20241022', maxTokens = 4000, temperature = 0.3 } = options;
+  const { model = getClaudeModel(), maxTokens = 4000, temperature = 0.3 } = options;
   
   aiLogger.info(`Starting single summarization`, {
     contentLength: content.length,

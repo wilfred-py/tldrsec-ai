@@ -1,6 +1,6 @@
 import Anthropic from '@anthropic-ai/sdk';
 import type { MessageParam } from '@anthropic-ai/sdk/resources/messages';
-import { ClaudeConfig } from './config';
+import { ClaudeConfig, getClaudeModel } from './config';
 import Bottleneck from 'bottleneck';
 import { v4 as uuidv4 } from 'uuid';
 import { 
@@ -771,7 +771,7 @@ export async function generateSummary(params: {
       [{ role: 'user', content: userPrompt }],
       {
         system: systemPrompt,
-        model: 'claude-3-5-sonnet-20241022',
+        model: getClaudeModel(),
         maxTokens: 3000,
         temperature: 0.1
       }
