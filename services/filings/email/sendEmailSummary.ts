@@ -5,8 +5,90 @@ import { getFilingSummary } from '../summaries/filingSummaryService';
 import { sendSummaryEmail } from './emailGenerator';
 import { logger } from '../../../lib/logging';
 import { monitoring } from '@/lib/monitoring';
+import { RateLimitError } from '../enhanced/rateLimiter';
 
 const emailSummaryLogger = logger.child('email-summary');
+
+/**
+ * Enhanced error classification types
+ */
+type ErrorCategory = 'rateLimit' | 'network' | 'database' | 'api' | 'unknown';
+
+/**
+ * Classify errors using multiple detection methods for better accuracy
+ */
+function classifyError(error: unknown): { category: ErrorCategory; details?: Record<string, unknown> } {
+  if (!error) return { category: 'unknown' };
+  
+  // Check for RateLimitError interface first (most reliable)
+  if (typeof error === 'object' && error !== null && 'type' in error) {
+    const rateLimitError = error as RateLimitError;
+    if (rateLimitError.type === 'RATE_LIMIT' || 
+        rateLimitError.type === 'DAILY_LIMIT' || 
+        rateLimitError.type === 'QUOTA_EXCEEDED') {
+      return { 
+        category: 'rateLimit', 
+        details: { 
+          type: rateLimitError.type, 
+          retryAfter: rateLimitError.retryAfter,
+          resetTime: rateLimitError.resetTime
+        }
+      };
+    }
+  }
+  
+  // Check for HTTP status codes if available
+  if (typeof error === 'object' && error !== null) {
+    const errorWithStatus = error as Record<string, unknown>;
+    if (errorWithStatus.status === 429 || errorWithStatus.statusCode === 429) {
+      return { category: 'rateLimit', details: { httpStatus: 429 } };
+    }
+    if (errorWithStatus.status >= 500 || errorWithStatus.statusCode >= 500) {
+      return { category: 'api', details: { httpStatus: errorWithStatus.status || errorWithStatus.statusCode } };
+    }
+  }
+  
+  // Fallback to string-based classification (enhanced patterns)
+  const errorMessage = error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase();
+  
+  // Rate limit patterns (more comprehensive)
+  const rateLimitPatterns = [
+    'rate limit', 'quota', 'usage limit', 'too many requests', 
+    'api limit', 'throttled', 'quota exceeded', 'rate exceeded'
+  ];
+  if (rateLimitPatterns.some(pattern => errorMessage.includes(pattern))) {
+    return { category: 'rateLimit', details: { detectedBy: 'stringPattern' } };
+  }
+  
+  // Network/timeout patterns
+  const networkPatterns = [
+    'timeout', 'network', 'connection', 'enotfound', 'econnrefused', 
+    'econnreset', 'socket hang up', 'request failed', 'fetch failed'
+  ];
+  if (networkPatterns.some(pattern => errorMessage.includes(pattern))) {
+    return { category: 'network', details: { detectedBy: 'stringPattern' } };
+  }
+  
+  // Database patterns
+  const databasePatterns = [
+    'database', 'prisma', 'connection pool', 'sql', 'query', 
+    'transaction', 'unique constraint', 'foreign key'
+  ];
+  if (databasePatterns.some(pattern => errorMessage.includes(pattern))) {
+    return { category: 'database', details: { detectedBy: 'stringPattern' } };
+  }
+  
+  // API-specific patterns
+  const apiPatterns = [
+    'bad request', 'unauthorized', 'forbidden', 'not found', 
+    'internal server error', 'service unavailable', 'bad gateway'
+  ];
+  if (apiPatterns.some(pattern => errorMessage.includes(pattern))) {
+    return { category: 'api', details: { detectedBy: 'stringPattern' } };
+  }
+  
+  return { category: 'unknown', details: { detectedBy: 'fallback' } };
+}
 
 /**
  * Sends an email summary of the latest filings for a list of tickers
@@ -80,24 +162,28 @@ export async function sendEmailSummary(
             summaries.push(result.data);
           } else {
             const errorMessage = result.error || 'Unknown error';
+            const classification = classifyError(new Error(errorMessage));
             
-            // Check if this is a rate limit related error
-            if (errorMessage.toLowerCase().includes('rate limit') || 
-                errorMessage.toLowerCase().includes('quota') ||
-                errorMessage.toLowerCase().includes('usage limit')) {
-              emailSummaryLogger.warn('Rate limit detected during summary generation', {
-                ticker,
-                formType,
-                error: errorMessage,
-                duration: summaryDuration
-              });
+            // Log based on error classification
+            const logData = {
+              ticker,
+              formType,
+              error: errorMessage,
+              duration: summaryDuration,
+              errorCategory: classification.category,
+              errorDetails: classification.details
+            };
+            
+            if (classification.category === 'rateLimit') {
+              emailSummaryLogger.warn('Rate limit detected during summary generation', logData);
+            } else if (classification.category === 'network') {
+              emailSummaryLogger.warn('Network error during summary generation', logData);
+            } else if (classification.category === 'database') {
+              emailSummaryLogger.error('Database error during summary generation', logData);
+            } else if (classification.category === 'api') {
+              emailSummaryLogger.warn('API error during summary generation', logData);
             } else {
-              emailSummaryLogger.error('Failed to generate summary', {
-                ticker,
-                formType,
-                error: errorMessage,
-                duration: summaryDuration
-              });
+              emailSummaryLogger.error('Failed to generate summary', logData);
             }
             
             errors.push({ ticker, error: errorMessage });
@@ -107,89 +193,76 @@ export async function sendEmailSummary(
           errors.push({ ticker, error: 'No recent filings found' });
         }
       } catch (error: unknown) {
-        // Handle errors for individual tickers
+        // Handle errors for individual tickers using enhanced classification
         const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        const classification = classifyError(error);
         
-        // Enhanced error context for different types of failures
-        if (errorMessage.toLowerCase().includes('rate limit') || 
-            errorMessage.toLowerCase().includes('quota') ||
-            errorMessage.toLowerCase().includes('usage limit')) {
-          emailSummaryLogger.warn('Rate limit or quota error during ticker processing', {
-            ticker,
-            error: errorMessage,
-            errorType: 'rateLimit'
-          });
-        } else if (errorMessage.toLowerCase().includes('timeout') ||
-                   errorMessage.toLowerCase().includes('network') ||
-                   errorMessage.toLowerCase().includes('connection')) {
-          emailSummaryLogger.warn('Network/timeout error during ticker processing', {
-            ticker,
-            error: errorMessage,
-            errorType: 'network'
-          });
-        } else if (errorMessage.toLowerCase().includes('database') ||
-                   errorMessage.toLowerCase().includes('prisma')) {
-          emailSummaryLogger.error('Database error during ticker processing', {
-            ticker,
-            error: errorMessage,
-            errorType: 'database'
-          });
-        } else {
-          emailSummaryLogger.error('Unexpected error during ticker processing', {
-            ticker,
-            error: errorMessage,
-            errorType: 'unknown'
-          });
+        // Create enhanced log data with classification details
+        const logData = {
+          ticker,
+          error: errorMessage,
+          errorCategory: classification.category,
+          errorDetails: classification.details
+        };
+        
+        // Log based on error classification with appropriate severity
+        switch (classification.category) {
+          case 'rateLimit':
+            emailSummaryLogger.warn('Rate limit error during ticker processing', logData);
+            break;
+          case 'network':
+            emailSummaryLogger.warn('Network error during ticker processing', logData);
+            break;
+          case 'database':
+            emailSummaryLogger.error('Database error during ticker processing', logData);
+            break;
+          case 'api':
+            emailSummaryLogger.warn('API error during ticker processing', logData);
+            break;
+          default:
+            emailSummaryLogger.error('Unexpected error during ticker processing', logData);
         }
         
         errors.push({ ticker, error: errorMessage });
       }
     }
     
-    // Log summary of processing results
-    const rateLimitErrors = errors.filter(e => 
-      e.error.toLowerCase().includes('rate limit') || 
-      e.error.toLowerCase().includes('quota') ||
-      e.error.toLowerCase().includes('usage limit')
-    );
-    
-    const networkErrors = errors.filter(e => 
-      e.error.toLowerCase().includes('timeout') || 
-      e.error.toLowerCase().includes('network') ||
-      e.error.toLowerCase().includes('connection')
-    );
-    
-    const databaseErrors = errors.filter(e => 
-      e.error.toLowerCase().includes('database') || 
-      e.error.toLowerCase().includes('prisma')
-    );
-    
-    const otherErrors = errors.filter(e => 
-      !rateLimitErrors.includes(e) && 
-      !networkErrors.includes(e) && 
-      !databaseErrors.includes(e)
-    );
+    // Log summary of processing results using enhanced error classification
+    const errorsByCategory = errors.reduce((acc, e) => {
+      const classification = classifyError(new Error(e.error));
+      acc[classification.category] = (acc[classification.category] || 0) + 1;
+      return acc;
+    }, {} as Record<ErrorCategory, number>);
+
+    const rateLimitErrors = errorsByCategory.rateLimit || 0;
+    const networkErrors = errorsByCategory.network || 0;
+    const databaseErrors = errorsByCategory.database || 0;
+    const apiErrors = errorsByCategory.api || 0;
+    const unknownErrors = errorsByCategory.unknown || 0;
     
     emailSummaryLogger.info('Processing completed for all tickers', {
       tickerCount: tickers.length,
       successful: summaries.length,
       failed: errors.length,
-      rateLimitErrors: rateLimitErrors.length,
-      networkErrors: networkErrors.length, 
-      databaseErrors: databaseErrors.length,
-      otherErrors: otherErrors.length,
-      successRate: Math.round((summaries.length / tickers.length) * 100)
+      rateLimitErrors,
+      networkErrors, 
+      databaseErrors,
+      apiErrors,
+      unknownErrors,
+      successRate: Math.round((summaries.length / tickers.length) * 100),
+      errorsByCategory: errorsByCategory
     });
 
-    // Track completion metrics
-    const totalDuration = monitoring.stopTimer(summaryTimerName);
+    // Track completion metrics with enhanced categorization
+    monitoring.stopTimer(summaryTimerName);
     monitoring.incrementCounter('email_summary.completed', 1);
     monitoring.recordValue('email_summary.successful_summaries', summaries.length);
     monitoring.recordValue('email_summary.failed_summaries', errors.length);
-    monitoring.recordValue('email_summary.rate_limit_errors', rateLimitErrors.length);
-    monitoring.recordValue('email_summary.network_errors', networkErrors.length);
-    monitoring.recordValue('email_summary.database_errors', databaseErrors.length);
-    monitoring.recordValue('email_summary.other_errors', otherErrors.length);
+    monitoring.recordValue('email_summary.rate_limit_errors', rateLimitErrors);
+    monitoring.recordValue('email_summary.network_errors', networkErrors);
+    monitoring.recordValue('email_summary.database_errors', databaseErrors);
+    monitoring.recordValue('email_summary.api_errors', apiErrors);
+    monitoring.recordValue('email_summary.unknown_errors', unknownErrors);
     monitoring.recordValue('email_summary.success_rate_percent', Math.round((summaries.length / tickers.length) * 100));
     
     if (summaries.length === 0 && !debug) {

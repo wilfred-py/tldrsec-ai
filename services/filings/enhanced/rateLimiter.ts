@@ -40,9 +40,9 @@ interface QueuedRequest {
   lastStatusUpdate?: Date;
   retryAttempts?: number;
   ticker?: string; // For better tracking in email summaries
-  resolve: (value: any) => void;
-  reject: (error: any) => void;
-  request: () => Promise<any>;
+  resolve: (value: unknown) => void;
+  reject: (error: unknown) => void;
+  request: () => Promise<unknown>;
 }
 
 /**
@@ -82,6 +82,7 @@ export class SmartRateLimiter {
   private lastRateLimitTime: Date | null = null;
   private statusLoggerInterval: NodeJS.Timeout | null = null;
   private lastQueueStatusLog: Date | null = null;
+  private queueLock = false; // Simple lock to prevent race conditions on queue operations
 
   constructor(config: RateLimitConfig) {
     // Apply defaults for optional configuration
@@ -295,6 +296,43 @@ export class SmartRateLimiter {
   }
 
   /**
+   * Atomically add request to queue with size check
+   * Returns true if added successfully, false if queue is full
+   */
+  private async tryAddToQueue(queuedRequest: QueuedRequest, addToFront: boolean = false): Promise<boolean> {
+    // Simple lock mechanism to prevent race conditions
+    while (this.queueLock) {
+      await new Promise(resolve => setTimeout(resolve, 1));
+    }
+    
+    this.queueLock = true;
+    
+    try {
+      // Check queue size limit
+      if (this.requestQueue.length >= this.config.maxQueueSize) {
+        return false;
+      }
+      
+      if (addToFront) {
+        // Add to front for retries (highest priority)
+        this.requestQueue.unshift(queuedRequest);
+      } else {
+        // Insert by priority (lower numbers = higher priority)
+        const insertIndex = this.requestQueue.findIndex(item => item.priority > queuedRequest.priority);
+        if (insertIndex === -1) {
+          this.requestQueue.push(queuedRequest);
+        } else {
+          this.requestQueue.splice(insertIndex, 0, queuedRequest);
+        }
+      }
+      
+      return true;
+    } finally {
+      this.queueLock = false;
+    }
+  }
+
+  /**
    * Calculate estimated time until next processing attempt
    */
   private getEstimatedProcessingTime(): number {
@@ -351,18 +389,8 @@ export class SmartRateLimiter {
       monitoring.recordValue('rate_limiter.queue_length', this.requestQueue.length + 1);
       monitoring.recordValue('rate_limiter.estimated_wait_time_ms', estimatedWaitTime);
 
-      // Check queue size limit before adding
-      if (this.requestQueue.length >= this.config.maxQueueSize) {
-        rateLimitLogger.error('Queue size limit reached, rejecting request', {
-          currentQueueSize: this.requestQueue.length,
-          maxQueueSize: this.config.maxQueueSize,
-          ticker
-        });
-        throw new Error(`Rate limiter queue is full (${this.config.maxQueueSize} requests). Try again later.`);
-      }
-
       // Queue the request if rate limited
-      return new Promise<T>((resolve, reject) => {
+      return new Promise<T>(async (resolve, reject) => {
         const queuedRequest: QueuedRequest = {
           id: Math.random().toString(36).slice(2, 11),
           tokens,
@@ -372,15 +400,19 @@ export class SmartRateLimiter {
           retryAttempts: 0,
           resolve,
           reject,
-          request: request as () => Promise<any>
+          request: request as () => Promise<unknown>
         };
 
-        // Insert by priority (lower numbers = higher priority)
-        const insertIndex = this.requestQueue.findIndex(item => item.priority > priority);
-        if (insertIndex === -1) {
-          this.requestQueue.push(queuedRequest);
-        } else {
-          this.requestQueue.splice(insertIndex, 0, queuedRequest);
+        // Atomically try to add to queue
+        const added = await this.tryAddToQueue(queuedRequest);
+        if (!added) {
+          rateLimitLogger.error('Queue size limit reached, rejecting request', {
+            currentQueueSize: this.requestQueue.length,
+            maxQueueSize: this.config.maxQueueSize,
+            ticker
+          });
+          reject(new Error(`Rate limiter queue is full (${this.config.maxQueueSize} requests). Try again later.`));
+          return;
         }
 
         // Start status logging if this is the first queued item
@@ -411,28 +443,18 @@ export class SmartRateLimiter {
       }
       
       return result;
-    } catch (error: any) {
+    } catch (error: unknown) {
       // Handle rate limit errors from API
       if (this.isRateLimitError(error)) {
         this.increaseBackoff();
         
         rateLimitLogger.warn(`API rate limit hit, backing off`, {
           backoffMultiplier: this.backoffMultiplier,
-          error: error.message
+          error: error instanceof Error ? error.message : String(error)
         });
 
-        // Check queue size limit before retrying
-        if (this.requestQueue.length >= this.config.maxQueueSize) {
-          rateLimitLogger.error('Queue size limit reached during retry, rejecting request', {
-            currentQueueSize: this.requestQueue.length,
-            maxQueueSize: this.config.maxQueueSize,
-            ticker
-          });
-          throw new Error(`Rate limiter queue is full (${this.config.maxQueueSize} requests). Cannot retry.`);
-        }
-
         // Queue for retry
-        return new Promise<T>((resolve, reject) => {
+        return new Promise<T>(async (resolve, reject) => {
           const queuedRequest: QueuedRequest = {
             id: Math.random().toString(36).slice(2, 11),
             tokens,
@@ -442,10 +464,20 @@ export class SmartRateLimiter {
             retryAttempts: 1,
             resolve,
             reject,
-            request: request as () => Promise<any>
+            request: request as () => Promise<unknown>
           };
 
-          this.requestQueue.unshift(queuedRequest); // Add to front for retry
+          // Atomically try to add to front of queue for retry
+          const added = await this.tryAddToQueue(queuedRequest, true);
+          if (!added) {
+            rateLimitLogger.error('Queue size limit reached during retry, rejecting request', {
+              currentQueueSize: this.requestQueue.length,
+              maxQueueSize: this.config.maxQueueSize,
+              ticker
+            });
+            reject(new Error(`Rate limiter queue is full (${this.config.maxQueueSize} requests). Cannot retry.`));
+            return;
+          }
           
           // Start status logging if this is the first queued item
           if (this.requestQueue.length === 1) {
@@ -461,11 +493,12 @@ export class SmartRateLimiter {
     }
   }
 
-  private isRateLimitError(error: any): boolean {
+  private isRateLimitError(error: unknown): boolean {
     if (!error) return false;
     
-    const errorMessage = error.message?.toLowerCase() || '';
-    const errorStatus = error.status || error.statusCode;
+    const errorObj = error as Record<string, unknown>;
+    const errorMessage = (typeof errorObj.message === 'string' ? errorObj.message : '').toLowerCase();
+    const errorStatus = errorObj.status || errorObj.statusCode;
     
     return (
       errorStatus === 429 ||
@@ -538,7 +571,14 @@ export class SmartRateLimiter {
         }
 
         // Wait and continue processing
-        await new Promise(resolve => setTimeout(resolve, Math.min(waitTime, this.config.maxWaitTimeMs)));
+        if (rateLimitError.type === 'DAILY_LIMIT') {
+          // For daily limits, wait the full time until reset (don't cap with maxWaitTimeMs)
+          // This prevents inefficient retries when daily limit reset is hours away
+          await new Promise(resolve => setTimeout(resolve, waitTime));
+        } else {
+          // For rate limits, respect maxWaitTimeMs to avoid blocking too long
+          await new Promise(resolve => setTimeout(resolve, Math.min(waitTime, this.config.maxWaitTimeMs)));
+        }
         continue;
       }
 
@@ -692,6 +732,28 @@ export class SmartRateLimiter {
     this.requestQueue = [];
     
     rateLimitLogger.info(`Cleared ${queuedCount} queued requests`);
+  }
+
+  /**
+   * Destroy the rate limiter and clean up resources
+   * Call this when the rate limiter is no longer needed to prevent memory leaks
+   */
+  destroy(): void {
+    rateLimitLogger.info('Destroying rate limiter and cleaning up resources');
+    
+    // Stop periodic status logging
+    this.stopStatusLogger();
+    
+    // Clear and reject all queued requests
+    this.clearQueue();
+    
+    // Reset state
+    this.isProcessingQueue = false;
+    this.backoffMultiplier = 1;
+    this.lastRateLimitTime = null;
+    this.lastQueueStatusLog = null;
+    
+    rateLimitLogger.info('Rate limiter destroyed successfully');
   }
 }
 
