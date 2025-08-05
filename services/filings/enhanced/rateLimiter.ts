@@ -1,5 +1,5 @@
 import { logger } from '../../../lib/logging';
-import { monitoring } from '../../../lib/monitoring';
+import { monitoring } from '@/lib/monitoring';
 
 const rateLimitLogger = logger.child('rate-limiter');
 

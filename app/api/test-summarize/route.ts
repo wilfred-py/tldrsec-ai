@@ -9,7 +9,7 @@ import { logger } from '../../../lib/logging';
 import { getPrismaClient } from '../../../lib/db/prisma';
 const prisma = getPrismaClient();
 import Anthropic from '@anthropic-ai/sdk';
-import { monitoring } from '../../../lib/monitoring';
+import { monitoring } from '@/lib/monitoring';
 import { NextRequest, NextResponse } from 'next/server';
 
 // Create a safe wrapper for monitoring functions

@@ -23,7 +23,7 @@ import {
   BatchClaudeFallback, 
   ModelCapability
 } from '../../../../lib/error-handling/model-fallback';
-import { monitoring } from '../../../../lib/monitoring';
+import { monitoring } from '@/lib/monitoring';
 import { v4 as uuidv4 } from 'uuid';
 import { PrismaClient } from '@prisma/client';
 import { summarizeFiling, SummarizationResult, SummarizationError } from '../../../../lib/ai/summarize';
