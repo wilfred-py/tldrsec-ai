@@ -16,6 +16,8 @@ export interface RateLimitConfig {
   maxWaitTimeMs?: number; // Maximum wait time per iteration (default: 60000ms)
   requestDelayMs?: number; // Delay between processing requests (default: 100ms)
   staleJobThresholdMs?: number; // Threshold for stale job warnings (default: 300000ms = 5min)
+  maxRetryAttempts?: number; // Maximum retry attempts per request (default: 20)
+  maxTotalWaitTimeMs?: number; // Maximum total wait time per request (default: 600000ms = 10min)
 }
 
 /**
@@ -70,6 +72,8 @@ interface ResolvedRateLimitConfig {
   maxWaitTimeMs: number;
   requestDelayMs: number;
   staleJobThresholdMs: number;
+  maxRetryAttempts: number;
+  maxTotalWaitTimeMs: number;
 }
 
 export class SmartRateLimiter {
@@ -95,7 +99,9 @@ export class SmartRateLimiter {
       logFrequencyMs: config.logFrequencyMs || 30000, // Default 30 seconds
       maxWaitTimeMs: config.maxWaitTimeMs || 60000, // Default 1 minute max wait
       requestDelayMs: config.requestDelayMs || 100, // Default 100ms between requests
-      staleJobThresholdMs: config.staleJobThresholdMs || 300000 // Default 5 minutes
+      staleJobThresholdMs: config.staleJobThresholdMs || 300000, // Default 5 minutes
+      maxRetryAttempts: config.maxRetryAttempts || 20, // Default max 20 retry attempts
+      maxTotalWaitTimeMs: config.maxTotalWaitTimeMs || 600000 // Default 10 minutes total wait
     };
     
     this.currentWindow = this.createNewWindow();
@@ -136,6 +142,13 @@ export class SmartRateLimiter {
   private checkRateLimits(tokens: number): RateLimitError | null {
     this.resetWindowIfNeeded();
     this.resetDailyUsageIfNeeded();
+
+    // Check if request is impossible to fulfill (exceeds per-minute limits even when window is empty)
+    if (tokens > this.config.tokensPerMinute) {
+      const error = new Error(`Request too large: ${tokens} tokens exceeds per-minute limit of ${this.config.tokensPerMinute}`) as RateLimitError;
+      error.type = 'QUOTA_EXCEEDED';
+      return error;
+    }
 
     // Check per-minute limits
     if (this.currentWindow.tokens + tokens > this.config.tokensPerMinute) {
@@ -363,6 +376,16 @@ export class SmartRateLimiter {
     const rateLimitError = this.checkRateLimits(tokens);
     
     if (rateLimitError) {
+      // If request is too large to ever succeed, reject immediately
+      if (rateLimitError.type === 'QUOTA_EXCEEDED') {
+        rateLimitLogger.error(`Request rejected - exceeds aggregate API limits`, {
+          ticker,
+          requestTokens: tokens,
+          limitPerMinute: this.config.tokensPerMinute,
+          errorMessage: rateLimitError.message
+        });
+        throw rateLimitError;
+      }
       const estimatedWaitTime = this.getEstimatedProcessingTime();
       
       rateLimitLogger.warn(`Rate limit detected, queueing request`, {
@@ -522,6 +545,30 @@ export class SmartRateLimiter {
 
     while (this.requestQueue.length > 0) {
       const request = this.requestQueue[0];
+      
+      // Check retry limits to prevent infinite loops
+      const totalWaitTime = Date.now() - request.queuedAt.getTime();
+      if ((request.retryAttempts || 0) >= this.config.maxRetryAttempts || 
+          totalWaitTime >= this.config.maxTotalWaitTimeMs) {
+        
+        // Remove failed request from queue
+        this.requestQueue.shift();
+        
+        const timeoutReason = totalWaitTime >= this.config.maxTotalWaitTimeMs ? 'total wait time' : 'retry attempts';
+        const error = new Error(`Request failed: exceeded maximum ${timeoutReason} (${request.retryAttempts || 0} attempts, ${Math.round(totalWaitTime/1000)}s wait)`);
+        
+        rateLimitLogger.error(`Request abandoned due to ${timeoutReason} limit`, {
+          requestId: request.id,
+          ticker: request.ticker,
+          retryAttempts: request.retryAttempts || 0,
+          totalWaitTimeMs: totalWaitTime,
+          maxRetryAttempts: this.config.maxRetryAttempts,
+          maxTotalWaitTimeMs: this.config.maxTotalWaitTimeMs
+        });
+        
+        request.reject(error);
+        continue;
+      }
       
       // Check if we can process this request
       const rateLimitError = this.checkRateLimits(request.tokens);
@@ -759,21 +806,28 @@ export class SmartRateLimiter {
 
 /**
  * Default rate limiter instance for Claude API
- * Based on Claude's current limits: 80k tokens/minute for most tiers
+ * Based on Anthropic Tier 2 limits for Claude Sonnet 4:
+ * - Input tokens: 450,000 tokens/minute
+ * - Output tokens: 90,000 tokens/minute  
+ * - Requests: 1,000 requests/minute
  */
 export const defaultRateLimiter = new SmartRateLimiter({
-  tokensPerMinute: 75000, // Slightly below limit for safety
-  requestsPerMinute: 50,   // Conservative request limit
-  dailyTokenLimit: 1000000, // 1M tokens per day (adjust based on your plan)
-  dailyRequestLimit: 5000   // 5k requests per day
+  tokensPerMinute: 450000,  // Tier 2 input token limit for Claude Sonnet 4
+  requestsPerMinute: 1000,  // Tier 2 request limit
+  dailyTokenLimit: 5000000, // Conservative daily limit (adjust based on usage)
+  dailyRequestLimit: 50000, // Conservative daily request limit
+  maxRetryAttempts: 15,     // Max 15 retry attempts
+  maxTotalWaitTimeMs: 600000 // Max 10 minutes total wait per request
 });
 
 /**
  * Conservative rate limiter for high-usage scenarios
  */
 export const conservativeRateLimiter = new SmartRateLimiter({
-  tokensPerMinute: 40000,   // More conservative token limit
-  requestsPerMinute: 25,    // Lower request rate
-  dailyTokenLimit: 500000,  // 500k tokens per day
-  dailyRequestLimit: 2500   // 2.5k requests per day
+  tokensPerMinute: 225000,  // Half of Tier 2 limit for conservative usage
+  requestsPerMinute: 500,   // Half of Tier 2 limit
+  dailyTokenLimit: 2500000, // 2.5M tokens per day
+  dailyRequestLimit: 25000, // 25k requests per day
+  maxRetryAttempts: 10,     // Lower retry limit for conservative usage
+  maxTotalWaitTimeMs: 300000 // Max 5 minutes total wait per request
 });

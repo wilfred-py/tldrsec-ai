@@ -296,7 +296,7 @@ export class DirectClaudeClient {
     });
 
     this.defaultConfig = {
-      model: config.model || 'claude-3-5-sonnet-20241022',
+      model: config.model || 'claude-sonnet-4-20250514',
       maxTokens: config.maxTokens || 4000,
       temperature: config.temperature || 0.3,
       maxRetries: config.maxRetries || 2,

@@ -14,6 +14,7 @@ import { optimizedFilingService } from '../../../../services/filings/optimizedFi
 import { DirectClaudeClient } from '../../../../lib/ai/directClaudeClient';
 import { logger } from '../../../../lib/logging';
 import { prisma } from '../../../../lib/db';
+import { getClaudeModel } from '@/lib/ai';
 
 const healthLogger = logger.child('health-optimized');
 
@@ -183,7 +184,7 @@ export async function GET(request: NextRequest) {
       });
       
       health.services.claudeClient.rateLimitEnabled = true;
-      health.services.claudeClient.model = 'claude-3-5-sonnet-20241022';
+      health.services.claudeClient.model = getClaudeModel();
       health.services.claudeClient.status = 'healthy';
     } catch (error) {
       health.services.claudeClient.status = 'error';

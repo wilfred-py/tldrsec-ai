@@ -94,7 +94,7 @@ interface ChunkingOptions {
 ### Summarization Options
 ```typescript
 interface SummarizationOptions {
-  model?: string;                 // Default: 'claude-3-5-sonnet-20241022'
+  model?: string;                 // Default: 'claude-sonnet-4-20250514'
   maxTokens?: number;            // Default: 4000
   temperature?: number;          // Default: 0.3
   maxRetries?: number;           // Default: 2
