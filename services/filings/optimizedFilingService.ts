@@ -200,7 +200,7 @@ export class OptimizedFilingService {
       enableAsyncProcessing: config.enableAsyncProcessing ?? false,
       enableBatchProcessing: config.enableBatchProcessing ?? false,
       prioritizeSpeed: config.prioritizeSpeed ?? true,
-      claudeModel: config.claudeModel ?? 'claude-3-5-sonnet-20241022',
+      claudeModel: config.claudeModel ?? 'claude-sonnet-4-20250514',
       claudeTemperature: config.claudeTemperature ?? 0.3,
       claudeMaxTokens: config.claudeMaxTokens ?? 4000
     };

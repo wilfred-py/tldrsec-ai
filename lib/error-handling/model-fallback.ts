@@ -9,6 +9,7 @@ import { ApiError, createAiModelError } from './index';
 import { executeWithRetry, RetryConfig, DefaultRetryConfig, CircuitBreakerConfig, DefaultCircuitBreakerConfig } from './retry';
 import { logger } from '../logging';
 import { monitoring } from '../monitoring';
+import { getClaudeModel, getFallbackModel } from '../ai/config';
 import { v4 as uuidv4 } from 'uuid';
 
 /**
@@ -183,7 +184,7 @@ export const BatchClaudeFallback: FallbackConfig = {
  * Premium fallback chain for high-quality results
  */
 export const PremiumClaudeFallback: FallbackConfig = {
-  initialModel: 'claude-sonnet-4-20250514',
+  initialModel: getClaudeModel(),
   fallbackModels: [
     'claude-3-sonnet-20240229',
     'claude-3-haiku-20240307',
@@ -384,7 +385,7 @@ export function parseErrorForFallbackStrategy(error: Error): {
         // Context window exceeded - try a model with larger context window or abort
         return {
           shouldFallback: true,
-          recommendedModel: 'claude-sonnet-4-20250514', // Has largest context window
+          recommendedModel: getClaudeModel(), // Has largest context window
           retryStrategy: 'immediate'
         };
         
@@ -429,7 +430,7 @@ export function parseErrorForFallbackStrategy(error: Error): {
   if (errorMsg.includes('context length') || errorMsg.includes('too many tokens')) {
     return {
       shouldFallback: true,
-      recommendedModel: 'claude-sonnet-4-20250514',
+      recommendedModel: getClaudeModel(),
       retryStrategy: 'immediate'
     };
   }
