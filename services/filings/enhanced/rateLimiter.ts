@@ -9,8 +9,6 @@ const rateLimitLogger = logger.child('rate-limiter');
 export interface RateLimitConfig {
   tokensPerMinute: number;
   requestsPerMinute: number;
-  dailyTokenLimit?: number;
-  dailyRequestLimit?: number;
   maxQueueSize?: number; // Maximum number of queued requests
   logFrequencyMs?: number; // How often to log queue status (default: 30000ms)
   maxWaitTimeMs?: number; // Maximum wait time per iteration (default: 60000ms)
@@ -65,8 +63,6 @@ interface UsageWindow {
 interface ResolvedRateLimitConfig {
   tokensPerMinute: number;
   requestsPerMinute: number;
-  dailyTokenLimit: number | null;
-  dailyRequestLimit: number | null;
   maxQueueSize: number;
   logFrequencyMs: number;
   maxWaitTimeMs: number;
@@ -79,7 +75,6 @@ interface ResolvedRateLimitConfig {
 export class SmartRateLimiter {
   private config: ResolvedRateLimitConfig;
   private currentWindow: UsageWindow;
-  private dailyUsage: { tokens: number; requests: number; date: string };
   private requestQueue: QueuedRequest[] = [];
   private isProcessingQueue = false;
   private backoffMultiplier = 1;
@@ -93,8 +88,6 @@ export class SmartRateLimiter {
     this.config = {
       tokensPerMinute: config.tokensPerMinute,
       requestsPerMinute: config.requestsPerMinute,
-      dailyTokenLimit: config.dailyTokenLimit || null,
-      dailyRequestLimit: config.dailyRequestLimit || null,
       maxQueueSize: config.maxQueueSize || 1000, // Default max 1000 queued requests
       logFrequencyMs: config.logFrequencyMs || 30000, // Default 30 seconds
       maxWaitTimeMs: config.maxWaitTimeMs || 60000, // Default 1 minute max wait
@@ -105,11 +98,6 @@ export class SmartRateLimiter {
     };
     
     this.currentWindow = this.createNewWindow();
-    this.dailyUsage = {
-      tokens: 0,
-      requests: 0,
-      date: new Date().toISOString().split('T')[0]
-    };
   }
 
   private createNewWindow(): UsageWindow {
@@ -132,16 +120,8 @@ export class SmartRateLimiter {
     }
   }
 
-  private resetDailyUsageIfNeeded(): void {
-    const today = new Date().toISOString().split('T')[0];
-    if (this.dailyUsage.date !== today) {
-      this.dailyUsage = { tokens: 0, requests: 0, date: today };
-    }
-  }
-
   private checkRateLimits(tokens: number): RateLimitError | null {
     this.resetWindowIfNeeded();
-    this.resetDailyUsageIfNeeded();
 
     // Check if request is impossible to fulfill (exceeds per-minute limits even when window is empty)
     if (tokens > this.config.tokensPerMinute) {
@@ -165,38 +145,14 @@ export class SmartRateLimiter {
       return error;
     }
 
-    // Check daily limits
-    if (this.config.dailyTokenLimit && this.dailyUsage.tokens + tokens > this.config.dailyTokenLimit) {
-      const error = new Error(`Daily token limit exceeded: ${this.dailyUsage.tokens + tokens}/${this.config.dailyTokenLimit}`) as RateLimitError;
-      error.type = 'DAILY_LIMIT';
-      const tomorrow = new Date();
-      tomorrow.setDate(tomorrow.getDate() + 1);
-      tomorrow.setHours(0, 0, 0, 0);
-      error.resetTime = tomorrow;
-      return error;
-    }
-
-    if (this.config.dailyRequestLimit && this.dailyUsage.requests + 1 > this.config.dailyRequestLimit) {
-      const error = new Error(`Daily request limit exceeded: ${this.dailyUsage.requests + 1}/${this.config.dailyRequestLimit}`) as RateLimitError;
-      error.type = 'DAILY_LIMIT';
-      const tomorrow = new Date();
-      tomorrow.setDate(tomorrow.getDate() + 1);
-      tomorrow.setHours(0, 0, 0, 0);
-      error.resetTime = tomorrow;
-      return error;
-    }
-
     return null;
   }
 
   private updateUsage(tokens: number): void {
     this.resetWindowIfNeeded();
-    this.resetDailyUsageIfNeeded();
 
     this.currentWindow.tokens += tokens;
     this.currentWindow.requests += 1;
-    this.dailyUsage.tokens += tokens;
-    this.dailyUsage.requests += 1;
 
     // Reset backoff multiplier on successful request
     this.backoffMultiplier = 1;
@@ -574,58 +530,28 @@ export class SmartRateLimiter {
       const rateLimitError = this.checkRateLimits(request.tokens);
       
       if (rateLimitError) {
-        // Wait based on rate limit type
-        let waitTime: number;
+        // Use exponential backoff for rate limits
+        const waitTime = this.calculateBackoffDelay();
         
-        if (rateLimitError.type === 'DAILY_LIMIT') {
-          // Wait until tomorrow for daily limits
-          const tomorrow = new Date();
-          tomorrow.setDate(tomorrow.getDate() + 1);
-          tomorrow.setHours(0, 0, 0, 0);
-          waitTime = tomorrow.getTime() - Date.now();
-          
-          rateLimitLogger.warn(`Daily limit reached, waiting until tomorrow`, {
-            waitTimeHours: Math.ceil(waitTime / (1000 * 60 * 60)),
-            queueLength: this.requestQueue.length,
-            nextJob: {
-              id: request.id,
-              ticker: request.ticker,
-              tokens: request.tokens,
-              priority: request.priority,
-              waitingFor: Math.round((Date.now() - request.queuedAt.getTime()) / 1000)
-            }
-          });
-        } else {
-          // Use exponential backoff for rate limits
-          waitTime = this.calculateBackoffDelay();
-          
-          rateLimitLogger.info(`Rate limited, waiting before retry`, {
-            waitTimeMs: waitTime,
-            waitTimeSeconds: Math.round(waitTime / 1000),
-            backoffMultiplier: this.backoffMultiplier,
-            queueLength: this.requestQueue.length,
-            nextJob: {
-              id: request.id,
-              ticker: request.ticker,
-              tokens: request.tokens,
-              priority: request.priority,
-              waitingFor: Math.round((Date.now() - request.queuedAt.getTime()) / 1000),
-              retryAttempts: request.retryAttempts || 0
-            },
-            rateLimitType: rateLimitError.type,
-            retryAfter: rateLimitError.retryAfter
-          });
-        }
+        rateLimitLogger.info(`Rate limited, waiting before retry`, {
+          waitTimeMs: waitTime,
+          waitTimeSeconds: Math.round(waitTime / 1000),
+          backoffMultiplier: this.backoffMultiplier,
+          queueLength: this.requestQueue.length,
+          nextJob: {
+            id: request.id,
+            ticker: request.ticker,
+            tokens: request.tokens,
+            priority: request.priority,
+            waitingFor: Math.round((Date.now() - request.queuedAt.getTime()) / 1000),
+            retryAttempts: request.retryAttempts || 0
+          },
+          rateLimitType: rateLimitError.type,
+          retryAfter: rateLimitError.retryAfter
+        });
 
-        // Wait and continue processing
-        if (rateLimitError.type === 'DAILY_LIMIT') {
-          // For daily limits, wait the full time until reset (don't cap with maxWaitTimeMs)
-          // This prevents inefficient retries when daily limit reset is hours away
-          await new Promise(resolve => setTimeout(resolve, waitTime));
-        } else {
-          // For rate limits, respect maxWaitTimeMs to avoid blocking too long
-          await new Promise(resolve => setTimeout(resolve, Math.min(waitTime, this.config.maxWaitTimeMs)));
-        }
+        // Wait and continue processing (respect maxWaitTimeMs to avoid blocking too long)
+        await new Promise(resolve => setTimeout(resolve, Math.min(waitTime, this.config.maxWaitTimeMs)));
         continue;
       }
 
@@ -739,7 +665,6 @@ export class SmartRateLimiter {
    */
   getUsageStats() {
     this.resetWindowIfNeeded();
-    this.resetDailyUsageIfNeeded();
 
     return {
       currentWindow: {
@@ -748,13 +673,6 @@ export class SmartRateLimiter {
         tokensRemaining: this.config.tokensPerMinute - this.currentWindow.tokens,
         requestsRemaining: this.config.requestsPerMinute - this.currentWindow.requests,
         windowStart: this.currentWindow.windowStart
-      },
-      daily: {
-        tokens: this.dailyUsage.tokens,
-        requests: this.dailyUsage.requests,
-        tokensRemaining: this.config.dailyTokenLimit ? this.config.dailyTokenLimit - this.dailyUsage.tokens : null,
-        requestsRemaining: this.config.dailyRequestLimit ? this.config.dailyRequestLimit - this.dailyUsage.requests : null,
-        date: this.dailyUsage.date
       },
       queue: {
         length: this.requestQueue.length,
@@ -805,29 +723,86 @@ export class SmartRateLimiter {
 }
 
 /**
+ * Load rate limiter configuration from environment variables
+ */
+function getRateLimiterConfigFromEnv(): RateLimitConfig {
+  const tokensPerMinute = parseInt(process.env.ANTHROPIC_TOKENS_PER_MINUTE || '450000');
+  const requestsPerMinute = parseInt(process.env.ANTHROPIC_REQUESTS_PER_MINUTE || '1000');
+  const burstMultiplier = parseFloat(process.env.ANTHROPIC_BURST_MULTIPLIER || '1.5');
+  const burstTriggerQueueLength = parseInt(process.env.ANTHROPIC_BURST_TRIGGER_QUEUE_LENGTH || '10');
+  const burstDeactivateQueueLength = parseInt(process.env.ANTHROPIC_BURST_DEACTIVATE_QUEUE_LENGTH || '5');
+  const maxRetryAttempts = parseInt(process.env.ANTHROPIC_MAX_RETRY_ATTEMPTS || '15');
+  const maxTotalWaitTimeMs = parseInt(process.env.ANTHROPIC_MAX_TOTAL_WAIT_TIME_MS || '600000');
+
+  // Validate configuration
+  if (tokensPerMinute <= 0 || requestsPerMinute <= 0) {
+    rateLimitLogger.error('Invalid rate limit configuration', {
+      tokensPerMinute,
+      requestsPerMinute
+    });
+    throw new Error('Invalid rate limit configuration: tokens and requests per minute must be positive');
+  }
+
+  if (burstMultiplier < 1.0 || burstMultiplier > 10.0) {
+    rateLimitLogger.error('Invalid burst multiplier', { burstMultiplier });
+    throw new Error('Invalid burst multiplier: must be between 1.0 and 10.0');
+  }
+
+  rateLimitLogger.info('Rate limiter configuration loaded from environment', {
+    tokensPerMinute,
+    requestsPerMinute,
+    burstMultiplier,
+    burstTriggerQueueLength,
+    burstDeactivateQueueLength,
+    maxRetryAttempts,
+    maxTotalWaitTimeMs
+  });
+
+  return {
+    tokensPerMinute,
+    requestsPerMinute,
+    maxRetryAttempts,
+    maxTotalWaitTimeMs,
+    // Store burst config for future use
+    maxQueueSize: 1000,
+    logFrequencyMs: 30000,
+    maxWaitTimeMs: 60000,
+    requestDelayMs: 100,
+    staleJobThresholdMs: 300000
+  };
+}
+
+/**
  * Default rate limiter instance for Claude API
  * Based on Anthropic Tier 2 limits for Claude Sonnet 4:
- * - Input tokens: 450,000 tokens/minute
+ * - Input tokens: 450,000 tokens/minute (configurable via ANTHROPIC_TOKENS_PER_MINUTE)
  * - Output tokens: 90,000 tokens/minute  
- * - Requests: 1,000 requests/minute
+ * - Requests: 1,000 requests/minute (configurable via ANTHROPIC_REQUESTS_PER_MINUTE)
  */
-export const defaultRateLimiter = new SmartRateLimiter({
-  tokensPerMinute: 450000,  // Tier 2 input token limit for Claude Sonnet 4
-  requestsPerMinute: 1000,  // Tier 2 request limit
-  dailyTokenLimit: 5000000, // Conservative daily limit (adjust based on usage)
-  dailyRequestLimit: 50000, // Conservative daily request limit
-  maxRetryAttempts: 15,     // Max 15 retry attempts
-  maxTotalWaitTimeMs: 600000 // Max 10 minutes total wait per request
-});
+export const defaultRateLimiter = new SmartRateLimiter(getRateLimiterConfigFromEnv());
+
+/**
+ * Load conservative rate limiter configuration from environment variables
+ */
+function getConservativeRateLimiterConfigFromEnv(): RateLimitConfig {
+  const baseConfig = getRateLimiterConfigFromEnv();
+  const conservativeMultiplier = parseFloat(process.env.ANTHROPIC_CONSERVATIVE_MULTIPLIER || '0.8');
+  
+  return {
+    tokensPerMinute: Math.floor(baseConfig.tokensPerMinute * conservativeMultiplier),
+    requestsPerMinute: Math.floor(baseConfig.requestsPerMinute * conservativeMultiplier),
+    maxRetryAttempts: Math.floor(baseConfig.maxRetryAttempts * 0.7), // Fewer retries for conservative usage
+    maxTotalWaitTimeMs: Math.floor(baseConfig.maxTotalWaitTimeMs * 0.5), // Shorter wait time
+    maxQueueSize: 500, // Smaller queue for conservative usage
+    logFrequencyMs: 30000,
+    maxWaitTimeMs: 30000, // Shorter max wait per iteration
+    requestDelayMs: 200, // Longer delay between requests
+    staleJobThresholdMs: 180000 // 3 minutes instead of 5
+  };
+}
 
 /**
  * Conservative rate limiter for high-usage scenarios
+ * Uses 80% of the main rate limiter limits by default (configurable via ANTHROPIC_CONSERVATIVE_MULTIPLIER)
  */
-export const conservativeRateLimiter = new SmartRateLimiter({
-  tokensPerMinute: 225000,  // Half of Tier 2 limit for conservative usage
-  requestsPerMinute: 500,   // Half of Tier 2 limit
-  dailyTokenLimit: 2500000, // 2.5M tokens per day
-  dailyRequestLimit: 25000, // 25k requests per day
-  maxRetryAttempts: 10,     // Lower retry limit for conservative usage
-  maxTotalWaitTimeMs: 300000 // Max 5 minutes total wait per request
-});
+export const conservativeRateLimiter = new SmartRateLimiter(getConservativeRateLimiterConfigFromEnv());
