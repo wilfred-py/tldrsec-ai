@@ -5,9 +5,107 @@ import { logger } from '../../../lib/logging';
 import { ContentChunk, ChunkingResult, calculateTokenCost } from './contentChunker';
 import { defaultRateLimiter, conservativeRateLimiter, SmartRateLimiter } from './rateLimiter';
 import { getClaudeModel } from '../../../lib/ai/config';
+import { 
+  getTickerSubscriptionInfo, 
+  getFilingPriority, 
+  estimateTokenUsage,
+  type TickerSubscriptionInfo 
+} from '../../../lib/subscription';
 
 // Create a module-specific logger
 const aiLogger = logger.child('enhanced-ai-summarizer');
+
+/**
+ * Subscription-aware processing configuration
+ */
+interface ProcessingConfig {
+  rateLimiter: SmartRateLimiter;
+  priority: number;
+  estimatedTokens: number;
+  subscriptionInfo: TickerSubscriptionInfo;
+}
+
+/**
+ * Get subscription-aware processing configuration for a ticker
+ */
+async function getProcessingConfig(
+  ticker: string | undefined,
+  baseTokens: number
+): Promise<ProcessingConfig> {
+  if (!ticker) {
+    // Default configuration for requests without ticker
+    return {
+      rateLimiter: defaultRateLimiter,
+      priority: 5,
+      estimatedTokens: baseTokens,
+      subscriptionInfo: {
+        ticker: 'UNKNOWN',
+        totalSubscribers: 0,
+        hasProUsers: false,
+        hasPremiumUsers: false,
+        tierMix: { basic: 0, professional: 0, premium: 0 },
+        estimatedTokenMultiplier: 0.6,
+        priority: 5
+      }
+    };
+  }
+
+  try {
+    // Get subscription information for the ticker
+    const subscriptionInfo = await getTickerSubscriptionInfo(ticker);
+    const priority = getFilingPriority(subscriptionInfo);
+    const estimatedTokens = estimateTokenUsage(baseTokens, subscriptionInfo);
+
+    // Select rate limiter based on subscription tier and priority
+    let rateLimiter: SmartRateLimiter;
+    if (subscriptionInfo.hasPremiumUsers) {
+      // Premium users get default (fastest) rate limiter
+      rateLimiter = defaultRateLimiter;
+      aiLogger.debug(`Using default rate limiter for premium users`, { ticker, priority });
+    } else if (subscriptionInfo.hasProUsers) {
+      // Professional users get default rate limiter with medium priority  
+      rateLimiter = defaultRateLimiter;
+      aiLogger.debug(`Using default rate limiter for professional users`, { ticker, priority });
+    } else {
+      // Basic/free users get conservative rate limiter
+      rateLimiter = conservativeRateLimiter;
+      aiLogger.debug(`Using conservative rate limiter for basic users`, { ticker, priority });
+    }
+
+    aiLogger.info(`Configured subscription-aware processing`, {
+      ticker,
+      totalSubscribers: subscriptionInfo.totalSubscribers,
+      hasProUsers: subscriptionInfo.hasProUsers,
+      hasPremiumUsers: subscriptionInfo.hasPremiumUsers,
+      priority,
+      estimatedTokens: `${estimatedTokens} (${subscriptionInfo.estimatedTokenMultiplier}x multiplier)`,
+      rateLimiterType: rateLimiter === defaultRateLimiter ? 'default' : 'conservative'
+    });
+
+    return {
+      rateLimiter,
+      priority,
+      estimatedTokens,
+      subscriptionInfo
+    };
+  } catch (error) {
+    aiLogger.warn(`Failed to get subscription info for ${ticker}, using default config: ${error}`);
+    return {
+      rateLimiter: conservativeRateLimiter,
+      priority: 5,
+      estimatedTokens: Math.ceil(baseTokens * 0.6), // Default to basic tier multiplier
+      subscriptionInfo: {
+        ticker: ticker.toUpperCase(),
+        totalSubscribers: 0,
+        hasProUsers: false,
+        hasPremiumUsers: false,
+        tierMix: { basic: 1, professional: 0, premium: 0 },
+        estimatedTokenMultiplier: 0.6,
+        priority: 5
+      }
+    };
+  }
+}
 
 /**
  * AI summarization options
@@ -284,12 +382,26 @@ async function processChunk(
   
   aiLogger.debug(`Processing chunk ${chunk.index + 1}/${totalChunks}`, {
     tokenCount: chunk.tokenCount,
-    breakType: chunk.breakType
+    breakType: chunk.breakType,
+    ticker
   });
   
   try {
-    // Use conservative rate limiter for chunk processing to avoid overwhelming the API
-    const response = await conservativeRateLimiter.executeRequest(
+    // Get subscription-aware processing configuration
+    const baseTokens = chunk.tokenCount + maxTokens;
+    const config = await getProcessingConfig(ticker, baseTokens);
+    
+    aiLogger.debug(`Using subscription-aware chunk processing`, {
+      ticker,
+      priority: config.priority,
+      estimatedTokens: config.estimatedTokens,
+      rateLimiterType: config.rateLimiter === defaultRateLimiter ? 'default' : 'conservative',
+      hasProUsers: config.subscriptionInfo.hasProUsers,
+      hasPremiumUsers: config.subscriptionInfo.hasPremiumUsers
+    });
+    
+    // Use subscription-aware rate limiter and priority for chunk processing
+    const response = await config.rateLimiter.executeRequest(
       () => anthropic.messages.create({
         model,
         max_tokens: maxTokens,
@@ -301,8 +413,8 @@ async function processChunk(
           }
         ]
       }),
-      chunk.tokenCount + maxTokens, // Estimate total tokens (input + expected output)
-      3, // Medium priority (lower = higher priority)
+      config.estimatedTokens, // Use subscription-aware token estimation
+      config.priority + 1, // Slightly lower priority for chunks vs single processing
       ticker // Pass ticker for logging
     );
     
@@ -392,12 +504,26 @@ export async function summarizeWithChunking(
 ): Promise<SummarizationResult> {
   const startTime = Date.now();
   
-  aiLogger.info(`Starting chunked summarization`, {
+  // Get subscription info for enhanced logging
+  let subscriptionInfo: TickerSubscriptionInfo | undefined;
+  try {
+    if (ticker) {
+      subscriptionInfo = await getTickerSubscriptionInfo(ticker);
+    }
+  } catch (error) {
+    aiLogger.warn(`Could not get subscription info for chunked processing: ${error}`);
+  }
+  
+  aiLogger.info(`Starting subscription-aware chunked summarization`, {
     totalChunks: chunkingResult.totalChunks,
     totalTokens: chunkingResult.totalTokens,
     filingType,
     companyName,
-    ticker
+    ticker,
+    subscriptionTier: subscriptionInfo?.hasPremiumUsers ? 'premium' : 
+                      subscriptionInfo?.hasProUsers ? 'professional' : 'basic',
+    totalSubscribers: subscriptionInfo?.totalSubscribers || 0,
+    priority: subscriptionInfo?.priority || 5
   });
   
   try {
@@ -431,13 +557,18 @@ export async function summarizeWithChunking(
     const totalCost = calculateTokenCost(totalInputTokens, totalOutputTokens);
     const processingTimeMs = Date.now() - startTime;
     
-    aiLogger.info(`Chunked summarization completed`, {
+    aiLogger.info(`Subscription-aware chunked summarization completed`, {
+      ticker,
       totalChunks: chunkingResult.totalChunks,
       processedChunks: chunkSummaries.filter(s => !s.skipped).length,
       totalInputTokens,
       totalOutputTokens,
       totalCost,
-      processingTimeMs
+      processingTimeMs,
+      subscriptionTier: subscriptionInfo?.hasPremiumUsers ? 'premium' : 
+                        subscriptionInfo?.hasProUsers ? 'professional' : 'basic',
+      priorityLevel: subscriptionInfo?.priority || 5,
+      tokenMultiplier: subscriptionInfo?.estimatedTokenMultiplier || 0.6
     });
     
     return {
@@ -492,7 +623,7 @@ export async function summarizeSingle(
   const startTime = Date.now();
   const { model = getClaudeModel(), maxTokens = 4000, temperature = 0.3 } = options;
   
-  aiLogger.info(`Starting single summarization`, {
+  aiLogger.info(`Starting subscription-aware single summarization`, {
     contentLength: content.length,
     filingType,
     companyName,
@@ -504,8 +635,22 @@ export async function summarizeSingle(
     const prompt = generateStructuredPrompt(filingType, content, companyName, ticker);
     const estimatedInputTokens = Math.ceil(prompt.length / 3); // Rough token estimation
     
-    // Use default rate limiter for single processing (higher priority than chunked)
-    const response = await defaultRateLimiter.executeRequest(
+    // Get subscription-aware processing configuration
+    const baseTokens = estimatedInputTokens + maxTokens;
+    const config = await getProcessingConfig(ticker, baseTokens);
+    
+    aiLogger.info(`Using subscription-aware single processing`, {
+      ticker,
+      priority: config.priority,
+      estimatedTokens: config.estimatedTokens,
+      rateLimiterType: config.rateLimiter === defaultRateLimiter ? 'default' : 'conservative',
+      subscriptionTier: config.subscriptionInfo.hasPremiumUsers ? 'premium' : 
+                        config.subscriptionInfo.hasProUsers ? 'professional' : 'basic',
+      tokenMultiplier: `${config.subscriptionInfo.estimatedTokenMultiplier}x`
+    });
+    
+    // Use subscription-aware rate limiter and priority for single processing
+    const response = await config.rateLimiter.executeRequest(
       () => anthropic.messages.create({
         model,
         max_tokens: maxTokens,
@@ -517,8 +662,8 @@ export async function summarizeSingle(
           }
         ]
       }),
-      estimatedInputTokens + maxTokens, // Estimate total tokens
-      1, // High priority for single processing
+      config.estimatedTokens, // Use subscription-aware token estimation
+      config.priority, // Use subscription-aware priority (highest priority for single processing)
       ticker // Pass ticker for logging
     );
     
