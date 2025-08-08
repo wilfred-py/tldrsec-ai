@@ -13,17 +13,6 @@ export {
   type TickerSubscriptionInfo
 } from './tickerSubscriptionInfo';
 
-// Re-export existing subscription service for convenience
-export {
-  getUserSubscription,
-  canProcessFiling,
-  getOptimizationLevelForUser,
-  recordFilingUsage,
-  getSubscriptionTierInfo,
-  hasFeatureAccess,
-  updateUserSubscription,
-  getSubscriptionAnalytics,
-  formatSubscriptionInfo,
-  SUBSCRIPTION_FEATURES,
-  type UserSubscription
-} from '../../services/filings/enhanced/subscriptionService';
+// Note: Existing subscription service exports are available separately
+// from '../../services/filings/enhanced/subscriptionService' to avoid
+// server-only import conflicts in client components

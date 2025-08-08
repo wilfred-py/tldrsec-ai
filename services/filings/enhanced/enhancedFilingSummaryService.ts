@@ -35,6 +35,11 @@ import {
   TokenOptimizationResult,
   validateOptimization
 } from './tokenOptimizer';
+import { 
+  getTickerSubscriptionInfo, 
+  getFilingPriority,
+  type TickerSubscriptionInfo 
+} from '../../../lib/subscription';
 
 // Create a module-specific logger
 const enhancedLogger = logger.child('enhanced-filing-summary-service');
@@ -141,12 +146,32 @@ export async function getEnhancedFilingSummary(
     enableTokenOptimization = true
   } = options;
 
-  enhancedLogger.info(`Starting enhanced filing summary`, {
-    ticker,
-    formType,
-    enableFallbacks,
-    saveToDatabase
-  });
+  // Get subscription information early for intelligent processing decisions
+  let subscriptionInfo: TickerSubscriptionInfo | undefined;
+  try {
+    subscriptionInfo = await getTickerSubscriptionInfo(ticker);
+    const priority = getFilingPriority(subscriptionInfo);
+    
+    enhancedLogger.info(`Starting subscription-aware enhanced filing summary`, {
+      ticker,
+      formType,
+      enableFallbacks,
+      saveToDatabase,
+      totalSubscribers: subscriptionInfo.totalSubscribers,
+      hasProUsers: subscriptionInfo.hasProUsers,
+      hasPremiumUsers: subscriptionInfo.hasPremiumUsers,
+      priority,
+      tokenMultiplier: subscriptionInfo.estimatedTokenMultiplier
+    });
+  } catch (error) {
+    enhancedLogger.warn(`Could not get subscription info for ${ticker}: ${error}`);
+    enhancedLogger.info(`Starting enhanced filing summary (fallback mode)`, {
+      ticker,
+      formType,
+      enableFallbacks,
+      saveToDatabase
+    });
+  }
 
   try {
     // Step 1: Get company info
@@ -259,18 +284,49 @@ export async function getEnhancedFilingSummary(
       };
     }
 
-    // Step 6: Apply token optimization if enabled
+    // Step 6: Apply subscription-aware token optimization if enabled
     let optimizedContent = documentResult.content;
     let tokenOptimizationResult: TokenOptimizationResult | undefined;
     
     if (enableTokenOptimization) {
-      const actualOptimizationLevel = optimizationLevel || getOptimizationLevelForTier(subscriptionTier);
+      // Use subscription information to determine optimal optimization level
+      let actualOptimizationLevel: OptimizationLevel;
+      let actualSubscriptionTier: SubscriptionTier;
       
-      enhancedLogger.info(`Applying token optimization`, {
-        level: actualOptimizationLevel,
-        subscriptionTier,
-        originalTokens: estimateTokenCount(documentResult.content)
-      });
+      if (subscriptionInfo) {
+        // Map subscription info to optimization settings
+        if (subscriptionInfo.hasPremiumUsers) {
+          actualOptimizationLevel = optimizationLevel || 'minimal';
+          actualSubscriptionTier = 'premium';
+        } else if (subscriptionInfo.hasProUsers) {
+          actualOptimizationLevel = optimizationLevel || 'conservative';
+          actualSubscriptionTier = 'professional';
+        } else {
+          actualOptimizationLevel = optimizationLevel || 'balanced';
+          actualSubscriptionTier = 'basic';
+        }
+        
+        enhancedLogger.info(`Applying subscription-aware token optimization`, {
+          ticker,
+          level: actualOptimizationLevel,
+          subscriptionTier: actualSubscriptionTier,
+          originalTokens: estimateTokenCount(documentResult.content),
+          totalSubscribers: subscriptionInfo.totalSubscribers,
+          hasProUsers: subscriptionInfo.hasProUsers,
+          hasPremiumUsers: subscriptionInfo.hasPremiumUsers,
+          expectedTokenMultiplier: subscriptionInfo.estimatedTokenMultiplier
+        });
+      } else {
+        // Fallback to provided options or defaults
+        actualOptimizationLevel = optimizationLevel || getOptimizationLevelForTier(subscriptionTier);
+        actualSubscriptionTier = subscriptionTier;
+        
+        enhancedLogger.info(`Applying default token optimization (fallback)`, {
+          level: actualOptimizationLevel,
+          subscriptionTier: actualSubscriptionTier,
+          originalTokens: estimateTokenCount(documentResult.content)
+        });
+      }
       
       try {
         tokenOptimizationResult = await optimizeTokens(documentResult.content, {
@@ -312,14 +368,31 @@ export async function getEnhancedFilingSummary(
       enhancedLogger.warn(`Content parsing failed, continuing without metadata: ${parseError}`);
     }
 
-    // Step 8: Determine processing strategy based on content size
+    // Step 8: Determine subscription-aware processing strategy based on content size
     const tokenCount = estimateTokenCount(optimizedContent);
-    const maxTokensForSingle = parseInt(process.env.ENHANCED_SINGLE_LIMIT || '75000'); // Conservative limit to avoid rate limits
+    
+    // Use subscription-aware token thresholds
+    let maxTokensForSingle: number;
+    if (subscriptionInfo?.hasPremiumUsers) {
+      // Premium users can handle larger single requests
+      maxTokensForSingle = parseInt(process.env.ENHANCED_SINGLE_LIMIT_PREMIUM || '100000');
+    } else if (subscriptionInfo?.hasProUsers) {
+      // Professional users get moderate limits
+      maxTokensForSingle = parseInt(process.env.ENHANCED_SINGLE_LIMIT_PRO || '85000');  
+    } else {
+      // Basic users get conservative limits
+      maxTokensForSingle = parseInt(process.env.ENHANCED_SINGLE_LIMIT || '75000');
+    }
+    
     const processingStrategy: 'single' | 'chunked' = tokenCount > maxTokensForSingle ? 'chunked' : 'single';
 
-    enhancedLogger.info(`Using ${processingStrategy} processing strategy`, {
+    enhancedLogger.info(`Using subscription-aware ${processingStrategy} processing strategy`, {
+      ticker,
       tokenCount,
-      threshold: maxTokensForSingle
+      threshold: maxTokensForSingle,
+      subscriptionTier: subscriptionInfo?.hasPremiumUsers ? 'premium' : 
+                        subscriptionInfo?.hasProUsers ? 'professional' : 'basic',
+      totalSubscribers: subscriptionInfo?.totalSubscribers || 0
     });
 
     let summarizationResult: SummarizationResult;
@@ -398,13 +471,18 @@ export async function getEnhancedFilingSummary(
 
     const totalProcessingTimeMs = Date.now() - startTime;
     
-    enhancedLogger.info(`Enhanced filing summary completed`, {
+    enhancedLogger.info(`Subscription-aware enhanced filing summary completed`, {
       ticker,
       formType,
       processingStrategy,
       totalTokens: summarizationResult.metadata.totalTokens,
       cost: summarizationResult.metadata.cost,
-      totalProcessingTimeMs
+      totalProcessingTimeMs,
+      subscriptionTier: subscriptionInfo?.hasPremiumUsers ? 'premium' : 
+                        subscriptionInfo?.hasProUsers ? 'professional' : 'basic',
+      priorityLevel: subscriptionInfo?.priority || 5,
+      tokenMultiplier: subscriptionInfo?.estimatedTokenMultiplier || 0.6,
+      totalSubscribers: subscriptionInfo?.totalSubscribers || 0
     });
 
     return {
