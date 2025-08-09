@@ -1,15 +1,28 @@
 import { describe, it, expect, jest, beforeEach } from '@jest/globals';
 
-// Mock the database module before importing the function under test
+// Create mock functions first
 const mockFindMany = jest.fn();
 const mockFindFirst = jest.fn();
 
+// Mock the database and logger modules
 jest.mock('../../../lib/db', () => ({
   prisma: {
     ticker: {
       findMany: mockFindMany,
       findFirst: mockFindFirst
     }
+  }
+}));
+
+// Mock the logger to prevent console output during tests
+jest.mock('../../../lib/logging', () => ({
+  logger: {
+    child: () => ({
+      debug: jest.fn(),
+      info: jest.fn(),
+      warn: jest.fn(),
+      error: jest.fn()
+    })
   }
 }));
 
