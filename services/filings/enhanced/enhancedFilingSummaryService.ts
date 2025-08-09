@@ -157,11 +157,10 @@ export async function getEnhancedFilingSummary(
       formType,
       enableFallbacks,
       saveToDatabase,
-      totalSubscribers: subscriptionInfo.totalSubscribers,
-      hasProUsers: subscriptionInfo.hasProUsers,
-      hasPremiumUsers: subscriptionInfo.hasPremiumUsers,
+      processingTier: subscriptionInfo.hasPremiumUsers ? 'premium' : 
+                      subscriptionInfo.hasProUsers ? 'professional' : 'basic',
       priority,
-      tokenMultiplier: subscriptionInfo.estimatedTokenMultiplier
+      // Sensitive subscription metrics removed from logs
     });
   } catch (error) {
     enhancedLogger.warn(`Could not get subscription info for ${ticker}: ${error}`);
@@ -311,10 +310,9 @@ export async function getEnhancedFilingSummary(
           level: actualOptimizationLevel,
           subscriptionTier: actualSubscriptionTier,
           originalTokens: estimateTokenCount(documentResult.content),
-          totalSubscribers: subscriptionInfo.totalSubscribers,
-          hasProUsers: subscriptionInfo.hasProUsers,
-          hasPremiumUsers: subscriptionInfo.hasPremiumUsers,
-          expectedTokenMultiplier: subscriptionInfo.estimatedTokenMultiplier
+          processingTier: subscriptionInfo.hasPremiumUsers ? 'premium' : 
+                          subscriptionInfo.hasProUsers ? 'professional' : 'basic',
+          // Sensitive subscription metrics removed from logs
         });
       } else {
         // Fallback to provided options or defaults
@@ -478,11 +476,10 @@ export async function getEnhancedFilingSummary(
       totalTokens: summarizationResult.metadata.totalTokens,
       cost: summarizationResult.metadata.cost,
       totalProcessingTimeMs,
-      subscriptionTier: subscriptionInfo?.hasPremiumUsers ? 'premium' : 
-                        subscriptionInfo?.hasProUsers ? 'professional' : 'basic',
+      processingTier: subscriptionInfo?.hasPremiumUsers ? 'premium' : 
+                      subscriptionInfo?.hasProUsers ? 'professional' : 'basic',
       priorityLevel: subscriptionInfo?.priority || 5,
-      tokenMultiplier: subscriptionInfo?.estimatedTokenMultiplier || 0.6,
-      totalSubscribers: subscriptionInfo?.totalSubscribers || 0
+      // Sensitive subscription metrics removed from logs
     });
 
     return {

@@ -74,12 +74,12 @@ async function getProcessingConfig(
 
     aiLogger.info(`Configured subscription-aware processing`, {
       ticker,
-      totalSubscribers: subscriptionInfo.totalSubscribers,
-      hasProUsers: subscriptionInfo.hasProUsers,
-      hasPremiumUsers: subscriptionInfo.hasPremiumUsers,
+      processingTier: subscriptionInfo.hasPremiumUsers ? 'premium' : 
+                      subscriptionInfo.hasProUsers ? 'professional' : 'basic',
       priority,
-      estimatedTokens: `${estimatedTokens} (${subscriptionInfo.estimatedTokenMultiplier}x multiplier)`,
-      rateLimiterType: rateLimiter === defaultRateLimiter ? 'default' : 'conservative'
+      estimatedTokens,
+      rateLimiterType: rateLimiter === defaultRateLimiter ? 'default' : 'conservative',
+      // Sensitive subscription metrics removed from logs
     });
 
     return {
