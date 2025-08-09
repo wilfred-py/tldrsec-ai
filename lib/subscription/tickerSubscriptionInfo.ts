@@ -1,8 +1,52 @@
 import { logger } from '../logging';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '../db';
 
 const subscriptionLogger = logger.child('ticker-subscription-info');
-const prisma = new PrismaClient();
+
+/**
+ * Custom error for authorization failures
+ */
+export class TickerAccessError extends Error {
+  constructor(message: string, public readonly code: string = 'UNAUTHORIZED_TICKER_ACCESS') {
+    super(message);
+    this.name = 'TickerAccessError';
+  }
+}
+
+/**
+ * Validate that a user has access to subscription information for a ticker
+ * Users can only access subscription info for tickers they are subscribed to
+ */
+async function validateUserAccessToTicker(userId: string, ticker: string): Promise<void> {
+  try {
+    const userTicker = await prisma.ticker.findFirst({
+      where: {
+        userId,
+        symbol: ticker.toUpperCase()
+      }
+    });
+
+    if (!userTicker) {
+      subscriptionLogger.warn(`User ${userId} attempted to access subscription info for ticker ${ticker} they're not subscribed to`);
+      throw new TickerAccessError(
+        `Access denied: You must be subscribed to ${ticker} to view its subscription statistics`,
+        'NOT_SUBSCRIBED'
+      );
+    }
+
+    subscriptionLogger.debug(`User ${userId} authorized to access ${ticker} subscription info`);
+  } catch (error) {
+    if (error instanceof TickerAccessError) {
+      throw error;
+    }
+    
+    subscriptionLogger.error(`Error validating user access to ticker: ${error}`);
+    throw new TickerAccessError(
+      'Unable to verify ticker access permissions',
+      'VALIDATION_ERROR'
+    );
+  }
+}
 
 /**
  * Subscription tier information for a ticker
@@ -41,13 +85,65 @@ const PRIORITY_WEIGHTS = {
 } as const;
 
 /**
+ * Tier counts interface for type safety
+ */
+interface TierCounts {
+  basic: number;
+  professional: number;
+  premium: number;
+}
+
+/**
+ * Calculate weighted token multiplier with proper bounds checking and validation
+ */
+function calculateWeightedMultiplier(tierCounts: TierCounts): number {
+  // Validate inputs
+  const basic = Math.max(0, Math.floor(tierCounts.basic || 0));
+  const professional = Math.max(0, Math.floor(tierCounts.professional || 0));
+  const premium = Math.max(0, Math.floor(tierCounts.premium || 0));
+  
+  const totalWeight = basic + professional + premium;
+  
+  if (totalWeight === 0) {
+    return TOKEN_MULTIPLIERS.basic;
+  }
+  
+  const weightedMultiplier = (
+    (basic * TOKEN_MULTIPLIERS.basic) +
+    (professional * TOKEN_MULTIPLIERS.professional) +
+    (premium * TOKEN_MULTIPLIERS.premium)
+  ) / totalWeight;
+  
+  // Bounds checking
+  const result = Math.max(TOKEN_MULTIPLIERS.basic, Math.min(TOKEN_MULTIPLIERS.premium, weightedMultiplier));
+  
+  if (!Number.isFinite(result) || result < 0) {
+    subscriptionLogger.error('Invalid weighted multiplier calculation', { tierCounts, result });
+    return TOKEN_MULTIPLIERS.basic;
+  }
+  
+  return parseFloat(result.toFixed(2));
+}
+
+/**
  * Get subscription information for a specific ticker
  * @param ticker The ticker symbol (e.g., 'TSLA', 'KO')
+ * @param requestingUserId Optional user ID for authorization checks
  * @returns Subscription info including user count, tier mix, and priority data
  */
-export async function getTickerSubscriptionInfo(ticker: string): Promise<TickerSubscriptionInfo> {
+export async function getTickerSubscriptionInfo(
+  ticker: string, 
+  requestingUserId?: string
+): Promise<TickerSubscriptionInfo> {
   try {
-    subscriptionLogger.debug(`Looking up subscription info for ticker: ${ticker}`);
+    subscriptionLogger.debug(`Looking up subscription info for ticker: ${ticker}`, {
+      requestingUserId: requestingUserId ? '[REDACTED]' : 'none'
+    });
+    
+    // Authorization check: If a user ID is provided, verify they have access to this ticker
+    if (requestingUserId) {
+      await validateUserAccessToTicker(requestingUserId, ticker);
+    }
     
     // Query the database to get all users subscribed to this ticker
     // Join with UserSubscription to get their subscription tiers
@@ -70,7 +166,7 @@ export async function getTickerSubscriptionInfo(ticker: string): Promise<TickerS
     }
 
     // Count users by subscription tier
-    const tierCounts = {
+    const tierCounts: TierCounts = {
       basic: 0,
       professional: 0,
       premium: 0
@@ -107,13 +203,9 @@ export async function getTickerSubscriptionInfo(ticker: string): Promise<TickerS
       }
     }
 
-    // Calculate weighted token multiplier
+    // Calculate weighted token multiplier with bounds checking
     const totalWeight = tierCounts.basic + tierCounts.professional + tierCounts.premium;
-    const weightedMultiplier = totalWeight > 0 ? (
-      (tierCounts.basic * TOKEN_MULTIPLIERS.basic) +
-      (tierCounts.professional * TOKEN_MULTIPLIERS.professional) +
-      (tierCounts.premium * TOKEN_MULTIPLIERS.premium)
-    ) / totalWeight : TOKEN_MULTIPLIERS.basic;
+    const weightedMultiplier = calculateWeightedMultiplier(tierCounts);
 
     // Calculate priority score (1-10 scale)
     const priorityScore = totalWeight > 0 ? Math.min(10, Math.ceil(
@@ -133,12 +225,10 @@ export async function getTickerSubscriptionInfo(ticker: string): Promise<TickerS
     };
 
     subscriptionLogger.info(`Retrieved subscription info for ${ticker}`, {
-      totalSubscribers: result.totalSubscribers,
-      tierMix: result.tierMix,
-      estimatedTokenMultiplier: result.estimatedTokenMultiplier,
+      processingTier: result.hasPremiumUsers ? 'premium' : 
+                      result.hasProUsers ? 'professional' : 'basic',
       priority: result.priority,
-      hasProUsers: result.hasProUsers,
-      hasPremiumUsers: result.hasPremiumUsers
+      // Sensitive subscription counts and business metrics removed from logs
     });
 
     return result;
@@ -231,15 +321,16 @@ function getMockTickerSubscriptionInfo(ticker: string): TickerSubscriptionInfo {
     premium: Math.floor(Math.random() * 2)                 // 0-2 premium users  
   };
 
-  // Calculate weighted token multiplier
-  const totalWeight = mockData.basic + mockData.professional + mockData.premium;
-  const weightedMultiplier = totalWeight > 0 ? (
-    (mockData.basic * TOKEN_MULTIPLIERS.basic) +
-    (mockData.professional * TOKEN_MULTIPLIERS.professional) +
-    (mockData.premium * TOKEN_MULTIPLIERS.premium)
-  ) / totalWeight : TOKEN_MULTIPLIERS.basic;
+  // Calculate weighted token multiplier with bounds checking
+  const tierCounts: TierCounts = {
+    basic: mockData.basic,
+    professional: mockData.professional,
+    premium: mockData.premium
+  };
+  const weightedMultiplier = calculateWeightedMultiplier(tierCounts);
 
   // Calculate priority score
+  const totalWeight = mockData.basic + mockData.professional + mockData.premium;
   const priorityScore = totalWeight > 0 ? Math.min(10, Math.ceil(
     ((mockData.basic * PRIORITY_WEIGHTS.basic) +
      (mockData.professional * PRIORITY_WEIGHTS.professional) +
