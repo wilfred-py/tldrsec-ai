@@ -1,0 +1,171 @@
+{
+  "timestamp": "2025-08-11T01:31:26.920Z",
+  "summary": {
+    "total": 32,
+    "passed": 27,
+    "failed": 5,
+    "successRate": 84.375
+  },
+  "tests": [
+    {
+      "name": "RSS URL for CIK 1318605",
+      "passed": true,
+      "error": null
+    },
+    {
+      "name": "RSS URL for CIK 320193",
+      "passed": true,
+      "error": null
+    },
+    {
+      "name": "RSS feed HTTP response",
+      "passed": true,
+      "error": null
+    },
+    {
+      "name": "Response content type is XML",
+      "passed": true,
+      "error": null
+    },
+    {
+      "name": "RSS content retrieved",
+      "passed": true,
+      "error": null
+    },
+    {
+      "name": "RSS content starts with XML declaration",
+      "passed": true,
+      "error": null
+    },
+    {
+      "name": "RSS contains feed element",
+      "passed": true,
+      "error": null
+    },
+    {
+      "name": "RSS contains Apple company name",
+      "passed": true,
+      "error": null
+    },
+    {
+      "name": "XML parsing succeeds",
+      "passed": true,
+      "error": null
+    },
+    {
+      "name": "Parsed XML has feed element",
+      "passed": true,
+      "error": null
+    },
+    {
+      "name": "Feed has title",
+      "passed": true,
+      "error": null
+    },
+    {
+      "name": "Company name extracted",
+      "passed": true,
+      "error": null
+    },
+    {
+      "name": "Feed has entries",
+      "passed": true,
+      "error": null
+    },
+    {
+      "name": "Accession number extracted from first entry",
+      "passed": false,
+      "error": null
+    },
+    {
+      "name": "Filing type extracted from first entry",
+      "passed": true,
+      "error": null
+    },
+    {
+      "name": "Filing URL extracted from first entry",
+      "passed": "https://www.sec.gov/Archives/edgar/data/320193/000196922325000586/0001969223-25-000586-index.htm",
+      "error": null
+    },
+    {
+      "name": "Entry date extracted",
+      "passed": true,
+      "error": null
+    },
+    {
+      "name": "Entry date is valid",
+      "passed": true,
+      "error": null
+    },
+    {
+      "name": "New filing detection",
+      "passed": true,
+      "error": null
+    },
+    {
+      "name": "Duplicate filtering",
+      "passed": true,
+      "error": null
+    },
+    {
+      "name": "Invalid CIK handled",
+      "passed": false,
+      "error": null
+    },
+    {
+      "name": "XML parsing error handling",
+      "passed": true,
+      "error": null
+    },
+    {
+      "name": "Batch processing creates correct number of batches",
+      "passed": true,
+      "error": null
+    },
+    {
+      "name": "Each batch respects size limit",
+      "passed": true,
+      "error": null
+    },
+    {
+      "name": "All tickers processed",
+      "passed": true,
+      "error": null
+    },
+    {
+      "name": "DATABASE_URL environment variable",
+      "passed": false,
+      "error": null
+    },
+    {
+      "name": "ANTHROPIC_API_KEY environment variable",
+      "passed": false,
+      "error": null
+    },
+    {
+      "name": "CRON_SECRET configured",
+      "passed": false,
+      "error": null
+    },
+    {
+      "name": "Required file exists: app/api/cron/monitor-sec-filings/route.ts",
+      "passed": true,
+      "error": null
+    },
+    {
+      "name": "Required file exists: lib/sec-edgar/ticker-monitoring.ts",
+      "passed": true,
+      "error": null
+    },
+    {
+      "name": "Required file exists: lib/sec-edgar/rss-parser.ts",
+      "passed": true,
+      "error": null
+    },
+    {
+      "name": "Required file exists: prisma/schema.prisma",
+      "passed": true,
+      "error": null
+    }
+  ]
+}

@@ -38,6 +38,9 @@
     "db:push": "prisma db push",
     "db:studio": "prisma studio",
     "db:test": "npx tsx lib/test-db.ts",
+    "seed:cik-mappings": "npx tsx scripts/seed-cik-mappings.ts",
+    "test:cron-performance": "npx tsx scripts/test-cron-performance.ts",
+    "test:cron-endpoint": "npx tsx scripts/test-cron-endpoint.ts",
     "test:samples": "node scripts/parsers/sample-content-reader.js",
     "test:extract-xbrl": "node scripts/parsers/extract-xbrl.js",
     "test:watch": "jest --watch --config=jest.config.mjs"
@@ -135,6 +138,7 @@
     "tailwindcss": "^4",
     "ts-jest": "^29.3.4",
     "ts-node": "^10.9.2",
+    "tsx": "^4.20.3",
     "tw-animate-css": "^1.2.9",
     "typescript": "^5.8.3",
     "whatwg-fetch": "^3.6.20"
