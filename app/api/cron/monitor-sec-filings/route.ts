@@ -11,6 +11,7 @@ import { parseFormContentEnhanced } from '../../../../lib/parsers/enhanced-form-
 import { getPrismaClient } from '../../../../lib/db/prisma';
 import { logger } from '../../../../lib/logging';
 import { sendFilingSummaryEmail } from '../../../../lib/email/summary-service';
+import { getClaudeModel } from '@/lib/ai';
 
 const prisma = getPrismaClient();
 const cronLogger = logger.child('cron-sec-monitoring');
@@ -267,7 +268,7 @@ async function processSingleFiling(filing: {
       processingTimeMs: summary.duration,
       processingStatus: 'COMPLETED',
       processingCompletedAt: new Date(),
-      model: 'claude-3-5-sonnet-20241022',
+      model: getClaudeModel(),
       sentToUser: false
     }
   });
