@@ -12,6 +12,8 @@ import { getPrismaClient } from '../../../../lib/db/prisma';
 import { logger } from '../../../../lib/logging';
 import { sendFilingSummaryEmail } from '../../../../lib/email/summary-service';
 import { getClaudeModel } from '@/lib/ai';
+import { generateAISummaryWithRetry } from '../../../../services/filing/summaryGenerationService';
+import { FilingType } from '../../../../types/sec/filing';
 
 const prisma = getPrismaClient();
 const cronLogger = logger.child('cron-sec-monitoring');
@@ -231,25 +233,26 @@ async function processSingleFiling(filing: {
   });
 
   // Step 2: Parse filing content
-  const parsedContent = await parseFormContentEnhanced(content);
+  const parsedContent = await parseFormContentEnhanced(content, filing.filingType as FilingType, filing.filingUrl);
 
   // Step 3: Generate AI summary
-  // TODO: Fix generateSummary import issue
-  const summary = {
-    text: `Summary for ${filing.ticker.companyName} (${filing.ticker.symbol}) ${filing.filingType} filing`,
-    cost: 0
-  };
-  /* const summary = await generateSummary({
-    filingType: filing.filingType,
-    content: parsedContent.sections,
-    metadata: {
-      ...parsedContent.metadata,
-      companyName: filing.ticker.companyName,
-      ticker: filing.ticker.symbol,
-      filingDate: filing.filingDate,
+  const summaryResult = await generateAISummaryWithRetry(
+    typeof parsedContent.sections === 'string' ? parsedContent.sections : JSON.stringify(parsedContent.sections),
+    {
+      formType: filing.filingType,
+      filingDate: filing.filingDate.toISOString(),
       accessionNumber: filing.accessionNumber
+    },
+    {
+      name: filing.ticker.companyName,
+      ticker: filing.ticker.symbol
     }
-  }); */
+  );
+
+  const summary = {
+    text: summaryResult.summary,
+    cost: summaryResult.cost || 0
+  };
 
   // Step 4: Find or create ticker in database
   const dbTicker = await findOrCreateTicker(filing.ticker);
@@ -262,10 +265,10 @@ async function processSingleFiling(filing: {
       filingDate: filing.filingDate,
       filingUrl: filing.filingUrl,
       summaryText: typeof summary.text === 'string' ? summary.text : JSON.stringify(summary.text),
-      summaryJSON: typeof summary.text === 'object' ? summary.text : null,
-      cost: summary.cost,
-      tokensUsed: (summary.inputTokens || 0) + (summary.outputTokens || 0),
-      processingTimeMs: summary.duration,
+      summaryJSON: typeof summary.text === 'object' ? summary.text : undefined,
+      cost: summary.cost || 0,
+      tokensUsed: 0, // Token usage is not available in current generateSummary interface
+      processingTimeMs: 0, // Duration is not available in current generateSummary interface  
       processingStatus: 'COMPLETED',
       processingCompletedAt: new Date(),
       model: getClaudeModel(),
