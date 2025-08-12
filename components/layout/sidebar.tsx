@@ -13,6 +13,7 @@ import {
   SettingsIcon,
   CrownIcon,
   ClipboardListIcon,
+  ActivityIcon,
 } from "lucide-react";
 import UserButton from "@/components/auth/user-button";
 import { useUser } from "@clerk/nextjs";
@@ -28,6 +29,9 @@ export function Sidebar({ className }: SidebarProps) {
   // For demo purposes - in a real app, this would come from user's database record
   const userPlan = "Pro Plan";
   const isProPlan = userPlan === "Pro Plan";
+  
+  // Check if user is admin
+  const isAdmin = user?.emailAddresses[0]?.emailAddress === process.env.NEXT_PUBLIC_ADMIN_EMAIL;
   
   const navItems = [
     {
@@ -45,6 +49,11 @@ export function Sidebar({ className }: SidebarProps) {
       href: "/dashboard/email-logs",
       icon: ClipboardListIcon,
     },
+    ...(isAdmin ? [{
+      name: "Monitoring",
+      href: "/dashboard/monitoring",
+      icon: ActivityIcon,
+    }] : []),
     {
       name: "Settings",
       href: "/dashboard/settings",
