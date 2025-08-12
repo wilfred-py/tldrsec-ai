@@ -301,3 +301,226 @@ model UsagePeriod {
   @@unique([userId, periodStart])
   @@index([userId, periodEnd])
 }
+
+// Cron Job Monitoring Models
+model CronJobExecution {
+  id                  String                @id @default(uuid())
+  jobName             String                // "monitor-sec-filings"
+  executionId         String                @unique // UUID for this specific run
+  status              CronJobStatus         // STARTED, SUCCESS, FAILED, TIMEOUT
+  startedAt           DateTime
+  completedAt         DateTime?
+  durationMs          Int?
+  
+  // Environment & Configuration
+  environment         String                // "production", "staging" 
+  cronExpression      String?               // "0 */30 6-22 * * 1-5"
+  batchSize           Int?                  // 5
+  maxConcurrent       Int?                  // 3
+  timeoutMs           Int?                  // 240000
+  
+  // High-level Results  
+  tickersChecked      Int                   @default(0)
+  newFilingsFound     Int                   @default(0)
+  filingsProcessed    Int                   @default(0)
+  emailsSent          Int                   @default(0)
+  errorsCount         Int                   @default(0)
+  
+  // Resource Usage
+  memoryUsageMb       Float?
+  cpuUsagePercent     Float?
+  
+  // Error Information
+  errorMessage        String?
+  errorStack          String?
+  
+  // Relationships
+  metrics             CronJobMetrics[]
+  alerts              CronJobAlert[]
+  performance         CronJobPerformance[]
+  
+  createdAt           DateTime              @default(now())
+  
+  @@index([jobName, startedAt])
+  @@index([status, startedAt]) 
+  @@index([startedAt])
+  @@index([executionId])
+}
+
+model CronJobMetrics {
+  id                    String              @id @default(uuid())
+  executionId           String
+  execution             CronJobExecution    @relation(fields: [executionId], references: [id], onDelete: Cascade)
+  
+  // Filing Activity Metrics
+  filingsByType         Json?               // {"10-K": 2, "10-Q": 1, "8-K": 3}
+  companiesProcessed    Json?               // ["TSLA", "AAPL", "MSFT"]
+  filingDates           Json?               // Array of filing dates processed
+  avgProcessingTimeMs   Float?
+  
+  // User Impact Metrics
+  usersAffected         Int                 @default(0)
+  uniqueEmailRecipients Int                 @default(0)
+  emailDeliveryRate     Float?              // Percentage successful
+  emailBounceRate       Float?
+  
+  // Cost Analysis
+  aiCostTotal           Float               @default(0)
+  aiTokensUsed          Int                 @default(0)
+  aiTokensInput         Int                 @default(0)
+  aiTokensOutput        Int                 @default(0)
+  emailCostTotal        Float               @default(0)
+  operationalCostTotal  Float               @default(0)
+  costPerFiling         Float?
+  costPerUser           Float?
+  
+  // Performance Metrics
+  avgMemoryUsageMb      Float?
+  peakMemoryUsageMb     Float?
+  dbQueryCount          Int?
+  avgDbQueryTimeMs      Float?
+  apiCallCount          Int?
+  avgApiResponseTimeMs  Float?
+  secApiCallCount       Int?
+  avgSecApiResponseMs   Float?
+  
+  // Throughput Metrics
+  filingsPerMinute      Float?
+  emailsPerMinute       Float?
+  
+  createdAt             DateTime            @default(now())
+  
+  @@index([executionId])
+}
+
+model CronJobAlert {
+  id                String              @id @default(uuid())
+  executionId       String?
+  execution         CronJobExecution?   @relation(fields: [executionId], references: [id], onDelete: Cascade)
+  
+  alertType         CronAlertType       // EXECUTION_FAILED, HIGH_ERROR_RATE, COST_THRESHOLD, PERFORMANCE_DEGRADED
+  severity          AlertSeverity       // LOW, MEDIUM, HIGH, CRITICAL
+  title             String
+  description       String
+  
+  // Alert Configuration
+  threshold         Json?               // Threshold values that triggered alert
+  actualValue       Json?               // Actual values that triggered the alert
+  
+  // Alert Lifecycle
+  triggeredAt       DateTime            @default(now())
+  acknowledgedAt    DateTime?
+  acknowledgedBy    String?             // User ID or system
+  resolvedAt        DateTime?
+  resolvedBy        String?
+  
+  // Notification
+  notificationsSent Json?               // Channels where alert was sent
+  notificationStatus String?            // "sent", "failed", "pending"
+  
+  // Metadata
+  jobName           String?
+  environment       String?
+  
+  @@index([alertType, triggeredAt])
+  @@index([severity, triggeredAt])
+  @@index([jobName, triggeredAt])
+  @@index([resolvedAt])
+}
+
+model CronJobPerformance {
+  id                  String              @id @default(uuid())
+  executionId         String
+  execution           CronJobExecution    @relation(fields: [executionId], references: [id], onDelete: Cascade)
+  
+  // Time-series data points
+  timestamp           DateTime
+  phase               String              // "rss_check", "filing_processing", "email_sending", "cleanup"
+  
+  // Performance Metrics
+  memoryUsageMb       Float
+  cpuUsagePercent     Float?
+  activeConnections   Int?
+  queueDepth          Int?
+  
+  // Operation-specific metrics  
+  operationType       String?             // "filing_fetch", "ai_summary", "email_send", "db_query"
+  operationDurationMs Int?
+  operationSuccess    Boolean?
+  operationError      String?
+  
+  // Throughput at this point
+  itemsProcessed      Int?
+  itemsRemaining      Int?
+  
+  @@index([executionId, timestamp])
+  @@index([phase, timestamp])
+  @@index([operationType, timestamp])
+}
+
+// Aggregated views for faster dashboard queries
+model CronJobDailySummary {
+  id                    String   @id @default(uuid())
+  date                  DateTime @unique @db.Date
+  jobName               String   
+  
+  // Execution Statistics
+  totalExecutions       Int      @default(0)
+  successfulExecutions  Int      @default(0)
+  failedExecutions      Int      @default(0)
+  avgDurationMs         Float?
+  totalDurationMs       Int      @default(0)
+  
+  // Processing Statistics  
+  totalFilingsProcessed Int      @default(0)
+  totalEmailsSent       Int      @default(0)
+  totalUsersAffected    Int      @default(0)
+  
+  // Cost Statistics
+  totalAiCost           Float    @default(0)
+  totalEmailCost        Float    @default(0)
+  totalOperationalCost  Float    @default(0)
+  
+  // Performance Statistics
+  avgMemoryUsageMb      Float?
+  peakMemoryUsageMb     Float?
+  totalApiCalls         Int      @default(0)
+  
+  // Alert Statistics
+  totalAlerts           Int      @default(0)
+  criticalAlerts        Int      @default(0)
+  
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+  
+  @@index([date, jobName])
+  @@index([jobName, date])
+}
+
+enum CronJobStatus {
+  STARTED
+  SUCCESS  
+  FAILED
+  TIMEOUT
+  CANCELLED
+}
+
+enum CronAlertType {
+  EXECUTION_FAILED
+  HIGH_ERROR_RATE
+  COST_THRESHOLD_EXCEEDED
+  PERFORMANCE_DEGRADED
+  NO_FILINGS_PROCESSED
+  EMAIL_DELIVERY_FAILED
+  TIMEOUT_EXCEEDED
+  MEMORY_LIMIT_EXCEEDED
+  API_RATE_LIMIT_HIT
+  DATABASE_CONNECTION_FAILED
+}
+
+enum AlertSeverity {
+  LOW
+  MEDIUM  
+  HIGH
+  CRITICAL
+}
