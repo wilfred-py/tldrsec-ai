@@ -65,12 +65,16 @@ export class CronJobMonitor {
       await prisma.cronJobExecution.create({
         data: {
           id: this.executionId,
+          executionId: this.executionId, // The existing schema has this field
           jobName: this.jobName,
-          status: 'RUNNING',
-          startTime: this.startTime,
-          triggerSource,
+          status: 'STARTED',
+          startedAt: this.startTime,
           environment: process.env.NODE_ENV || 'development',
-          ...this.metrics
+          tickersChecked: this.metrics.tickersChecked,
+          newFilingsFound: this.metrics.newFilingsFound,
+          filingsProcessed: this.metrics.filingsProcessed,
+          emailsSent: this.metrics.emailsSent,
+          errorsCount: this.metrics.errorCount
         }
       });
 
@@ -92,8 +96,11 @@ export class CronJobMonitor {
       await prisma.cronJobExecution.update({
         where: { id: this.executionId },
         data: {
-          ...updates,
-          updatedAt: new Date()
+          tickersChecked: this.metrics.tickersChecked,
+          newFilingsFound: this.metrics.newFilingsFound,
+          filingsProcessed: this.metrics.filingsProcessed,
+          emailsSent: this.metrics.emailsSent,
+          errorsCount: this.metrics.errorCount
         }
       });
     } catch (error) {
@@ -197,23 +204,28 @@ export class CronJobMonitor {
     const endTime = new Date();
     const durationMs = endTime.getTime() - this.startTime.getTime();
 
+    const finalStatus = status === 'COMPLETED' ? 'SUCCESS' : 'FAILED';
+
     try {
       await prisma.cronJobExecution.update({
         where: { id: this.executionId },
         data: {
-          status,
-          endTime,
+          status: finalStatus,
+          completedAt: endTime,
           durationMs,
           errorMessage,
-          totalCostUSD: this.metrics.aiCostUSD + this.metrics.emailCostUSD,
-          updatedAt: new Date()
+          tickersChecked: this.metrics.tickersChecked,
+          newFilingsFound: this.metrics.newFilingsFound,
+          filingsProcessed: this.metrics.filingsProcessed,
+          emailsSent: this.metrics.emailsSent,
+          errorsCount: this.metrics.errorCount
         }
       });
 
       cronLogger.info(`Completed cron job monitoring`, {
         executionId: this.executionId,
         jobName: this.jobName,
-        status,
+        status: finalStatus,
         durationMs,
         metrics: this.metrics
       });
@@ -221,7 +233,7 @@ export class CronJobMonitor {
       return {
         executionId: this.executionId,
         duration: durationMs,
-        status,
+        status: finalStatus,
         metrics: this.metrics
       };
 
@@ -245,7 +257,7 @@ export class CronJobAnalytics {
   
   static async getRecentExecutions(limit: number = 10) {
     return prisma.cronJobExecution.findMany({
-      orderBy: { startTime: 'desc' },
+      orderBy: { startedAt: 'desc' },
       take: limit,
       include: {
         filingProcessingLogs: {
@@ -276,17 +288,17 @@ export class CronJobAnalytics {
         createdAt: {
           gte: startDate
         },
-        status: 'COMPLETED'
+        status: 'SUCCESS'
       },
       _sum: {
-        totalCostUSD: true,
-        aiCostUSD: true,
-        emailCostUSD: true,
-        tokensUsed: true
+        filingsProcessed: true,
+        emailsSent: true
+      },
+      _avg: {
+        durationMs: true
       },
       _count: {
-        filingsProcessed: true,
-        usersNotified: true
+        id: true
       }
     });
   }
@@ -320,22 +332,22 @@ export class CronJobAnalytics {
   static async getCurrentJobStatus() {
     const runningJobs = await prisma.cronJobExecution.findMany({
       where: {
-        status: 'RUNNING'
+        status: 'STARTED'
       },
-      orderBy: { startTime: 'desc' }
+      orderBy: { startedAt: 'desc' }
     });
 
     const lastCompletedJob = await prisma.cronJobExecution.findFirst({
       where: {
-        status: { in: ['COMPLETED', 'FAILED'] }
+        status: { in: ['SUCCESS', 'FAILED'] }
       },
-      orderBy: { endTime: 'desc' }
+      orderBy: { completedAt: 'desc' }
     });
 
     return {
       runningJobs,
       lastCompletedJob,
-      isHealthy: runningJobs.length === 0 && lastCompletedJob?.status === 'COMPLETED'
+      isHealthy: runningJobs.length === 0 && lastCompletedJob?.status === 'SUCCESS'
     };
   }
 }

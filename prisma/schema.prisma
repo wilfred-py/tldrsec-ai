@@ -27,6 +27,7 @@ model User {
   userSubscription    UserSubscription?
   filingUsage         FilingUsage[]
   usagePeriods        UsagePeriod[]
+  userNotificationLogs UserNotificationLog[]
 }
 
 enum SubscriptionTier {
@@ -338,6 +339,9 @@ model CronJobExecution {
   metrics             CronJobMetrics[]
   alerts              CronJobAlert[]
   performance         CronJobPerformance[]
+  filingProcessingLogs FilingProcessingLog[]
+  userNotificationLogs UserNotificationLog[]
+  healthMetrics       CronJobHealthMetric[]
   
   createdAt           DateTime              @default(now())
   
@@ -523,4 +527,94 @@ enum AlertSeverity {
   MEDIUM  
   HIGH
   CRITICAL
+}
+
+// Additional models to complement existing CronJobExecution
+model FilingProcessingLog {
+  id                    String              @id @default(uuid())
+  cronJobExecutionId    String
+  accessionNumber       String
+  ticker                String
+  companyName           String
+  filingType            String
+  filingDate            DateTime
+  filingUrl             String
+  
+  // Processing Status
+  status                String              // 'DISCOVERED', 'FETCHED', 'PARSED', 'SUMMARIZED', 'STORED', 'EMAILED', 'FAILED'
+  processedAt           DateTime
+  processingTimeMs      Int?
+  
+  // AI Processing
+  summaryGenerated      Boolean             @default(false)
+  summaryTokens         Int                 @default(0)
+  summaryCostUSD        Float               @default(0)
+  aiModel               String?
+  
+  // Email Delivery
+  emailsSent            Int                 @default(0)
+  emailDeliveryStatus   String?             // 'SENT', 'FAILED', 'BOUNCED', 'PENDING'
+  
+  errorMessage          String?
+  metadata              Json?
+  createdAt             DateTime            @default(now())
+
+  // Relations
+  cronJobExecution      CronJobExecution    @relation(fields: [cronJobExecutionId], references: [id], onDelete: Cascade)
+  userNotificationLogs  UserNotificationLog[]
+
+  @@index([cronJobExecutionId])
+  @@index([ticker, processedAt])
+  @@index([status, createdAt])
+}
+
+model UserNotificationLog {
+  id                    String              @id @default(uuid())
+  cronJobExecutionId    String
+  filingProcessingLogId String
+  userId                String
+  userEmail             String
+  ticker                String
+  
+  // Notification Details
+  notificationType      String              // 'FILING_SUMMARY', 'DIGEST', 'ALERT'
+  deliveryStatus        String              // 'SENT', 'FAILED', 'BOUNCED', 'OPENED', 'CLICKED'
+  sentAt                DateTime
+  deliveredAt           DateTime?
+  openedAt              DateTime?
+  clickedAt             DateTime?
+  
+  // Cost Tracking
+  deliveryCostUSD       Float               @default(0)
+  
+  errorMessage          String?
+  metadata              Json?
+  createdAt             DateTime            @default(now())
+
+  // Relations
+  cronJobExecution      CronJobExecution    @relation(fields: [cronJobExecutionId], references: [id], onDelete: Cascade)
+  filingProcessingLog   FilingProcessingLog @relation(fields: [filingProcessingLogId], references: [id], onDelete: Cascade)
+  user                  User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([cronJobExecutionId])
+  @@index([userId, sentAt])
+  @@index([deliveryStatus, sentAt])
+}
+
+model CronJobHealthMetric {
+  id                    String              @id @default(uuid())
+  jobName               String
+  metricName            String
+  metricValue           Float
+  metricUnit            String
+  recordedAt            DateTime
+  cronJobExecutionId    String?
+  
+  metadata              Json?
+  createdAt             DateTime            @default(now())
+
+  // Relations
+  cronJobExecution      CronJobExecution?   @relation(fields: [cronJobExecutionId], references: [id], onDelete: Cascade)
+
+  @@index([jobName, metricName, recordedAt])
 }
