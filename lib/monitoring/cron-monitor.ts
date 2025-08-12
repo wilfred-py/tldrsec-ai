@@ -245,7 +245,7 @@ export class CronJobAnalytics {
   
   static async getRecentExecutions(limit: number = 10) {
     return prisma.cronJobExecution.findMany({
-      orderBy: { startTime: 'desc' },
+      orderBy: { startedAt: 'desc' },
       take: limit,
       include: {
         filingProcessingLogs: {
@@ -320,22 +320,22 @@ export class CronJobAnalytics {
   static async getCurrentJobStatus() {
     const runningJobs = await prisma.cronJobExecution.findMany({
       where: {
-        status: 'RUNNING'
+        status: 'STARTED'
       },
-      orderBy: { startTime: 'desc' }
+      orderBy: { startedAt: 'desc' }
     });
 
     const lastCompletedJob = await prisma.cronJobExecution.findFirst({
       where: {
-        status: { in: ['COMPLETED', 'FAILED'] }
+        status: { in: ['SUCCESS', 'FAILED'] }
       },
-      orderBy: { endTime: 'desc' }
+      orderBy: { completedAt: 'desc' }
     });
 
     return {
       runningJobs,
       lastCompletedJob,
-      isHealthy: runningJobs.length === 0 && lastCompletedJob?.status === 'COMPLETED'
+      isHealthy: runningJobs.length === 0 && lastCompletedJob?.status === 'SUCCESS'
     };
   }
 }
