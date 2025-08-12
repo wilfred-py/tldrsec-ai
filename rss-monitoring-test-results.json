@@ -1,0 +1,247 @@
+{
+  "timestamp": "2025-08-11T01:29:59.230Z",
+  "summary": {
+    "total": 46,
+    "passed": 44,
+    "failed": 2,
+    "successRate": 95.65217391304348
+  },
+  "tests": [
+    {
+      "name": "CIK 1318605 URL generation",
+      "passed": true,
+      "error": null
+    },
+    {
+      "name": "CIK 123 URL generation",
+      "passed": true,
+      "error": null
+    },
+    {
+      "name": "CIK 0001234567 URL generation",
+      "passed": true,
+      "error": null
+    },
+    {
+      "name": "Valid RSS XML parsing",
+      "passed": true,
+      "error": null
+    },
+    {
+      "name": "Company name extraction",
+      "passed": true,
+      "error": null
+    },
+    {
+      "name": "Entry count verification",
+      "passed": true,
+      "error": null
+    },
+    {
+      "name": "Accession number extraction",
+      "passed": true,
+      "error": null
+    },
+    {
+      "name": "First entry accession number",
+      "passed": true,
+      "error": null
+    },
+    {
+      "name": "Filing type extraction",
+      "passed": true,
+      "error": null
+    },
+    {
+      "name": "Invalid RSS handling",
+      "passed": false,
+      "error": "Should have thrown error"
+    },
+    {
+      "name": "Successful HTTP response simulation",
+      "passed": true,
+      "error": null
+    },
+    {
+      "name": "Response text extraction",
+      "passed": true,
+      "error": null
+    },
+    {
+      "name": "HTTP error response simulation",
+      "passed": true,
+      "error": null
+    },
+    {
+      "name": "Network error handling",
+      "passed": true,
+      "error": null
+    },
+    {
+      "name": "Entry processing count",
+      "passed": false,
+      "error": null
+    },
+    {
+      "name": "Deduplication filtering",
+      "passed": true,
+      "error": null
+    },
+    {
+      "name": "Duplicate exclusion",
+      "passed": true,
+      "error": null
+    },
+    {
+      "name": "New entries inclusion",
+      "passed": true,
+      "error": null
+    },
+    {
+      "name": "XML parsing error handling",
+      "passed": true,
+      "error": null
+    },
+    {
+      "name": "Empty feed handling",
+      "passed": true,
+      "error": null
+    },
+    {
+      "name": "TickerMonitoring model exists",
+      "passed": true,
+      "error": null
+    },
+    {
+      "name": "RssFilingCheck model exists",
+      "passed": true,
+      "error": null
+    },
+    {
+      "name": "CikMapping model exists",
+      "passed": true,
+      "error": null
+    },
+    {
+      "name": "TickerMonitoring.cik field exists",
+      "passed": true,
+      "error": null
+    },
+    {
+      "name": "TickerMonitoring.symbol field exists",
+      "passed": true,
+      "error": null
+    },
+    {
+      "name": "TickerMonitoring.companyName field exists",
+      "passed": true,
+      "error": null
+    },
+    {
+      "name": "TickerMonitoring.isActive field exists",
+      "passed": true,
+      "error": null
+    },
+    {
+      "name": "TickerMonitoring.rssUrl field exists",
+      "passed": true,
+      "error": null
+    },
+    {
+      "name": "TickerMonitoring.lastChecked field exists",
+      "passed": true,
+      "error": null
+    },
+    {
+      "name": "TickerMonitoring.lastAccessionSeen field exists",
+      "passed": true,
+      "error": null
+    },
+    {
+      "name": "TickerMonitoring.subscriberCount field exists",
+      "passed": true,
+      "error": null
+    },
+    {
+      "name": "RssFilingCheck.tickerMonitoringId field exists",
+      "passed": true,
+      "error": null
+    },
+    {
+      "name": "RssFilingCheck.accessionNumber field exists",
+      "passed": true,
+      "error": null
+    },
+    {
+      "name": "RssFilingCheck.filingType field exists",
+      "passed": true,
+      "error": null
+    },
+    {
+      "name": "RssFilingCheck.filingDate field exists",
+      "passed": true,
+      "error": null
+    },
+    {
+      "name": "RssFilingCheck.filingUrl field exists",
+      "passed": true,
+      "error": null
+    },
+    {
+      "name": "RssFilingCheck.processed field exists",
+      "passed": true,
+      "error": null
+    },
+    {
+      "name": "RssFilingCheck -> TickerMonitoring relationship exists",
+      "passed": true,
+      "error": null
+    },
+    {
+      "name": "Batch size configuration exists",
+      "passed": true,
+      "error": null
+    },
+    {
+      "name": "Rate limiting configuration exists",
+      "passed": true,
+      "error": null
+    },
+    {
+      "name": "Timeout configuration exists",
+      "passed": true,
+      "error": null
+    },
+    {
+      "name": "Cron authentication check exists",
+      "passed": true,
+      "error": null
+    },
+    {
+      "name": "RSS check phase exists",
+      "passed": true,
+      "error": null
+    },
+    {
+      "name": "Filing processing phase exists",
+      "passed": true,
+      "error": null
+    },
+    {
+      "name": "Cleanup phase exists",
+      "passed": true,
+      "error": null
+    },
+    {
+      "name": "Error handling exists",
+      "passed": true,
+      "error": null
+    }
+  ],
+  "errors": [
+    {
+      "name": "Invalid RSS handling",
+      "error": "Should have thrown error"
+    }
+  ]
+}

@@ -14,6 +14,7 @@ import { sendFilingSummaryEmail } from '../../../../lib/email/summary-service';
 import { getClaudeModel } from '@/lib/ai';
 import { generateAISummaryWithRetry } from '../../../../services/filing/summaryGenerationService';
 import { FilingType } from '../../../../types/sec/filing';
+import { CronJobMonitor } from '../../../../lib/monitoring/cron-monitor';
 
 const prisma = getPrismaClient();
 const cronLogger = logger.child('cron-sec-monitoring');
@@ -38,16 +39,9 @@ interface ProcessingStats {
  * Runs every 30 minutes during market hours (Mon-Fri 6am-10pm EST)
  */
 export async function GET(request: NextRequest) {
-  const startTime = Date.now();
-  const stats: ProcessingStats = {
-    tickersChecked: 0,
-    newFilingsFound: 0,
-    filingsProcessed: 0,
-    emailsSent: 0,
-    errors: 0,
-    startTime: new Date()
-  };
-
+  // Initialize monitoring
+  const monitor = new CronJobMonitor('sec-filing-monitor', 'VERCEL_CRON');
+  
   try {
     cronLogger.info('Starting SEC filing monitoring cron job');
 
@@ -55,31 +49,29 @@ export async function GET(request: NextRequest) {
     const authHeader = request.headers.get('authorization');
     if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
       cronLogger.warn('Unauthorized cron request');
+      await monitor.complete('FAILED', 'Unauthorized access attempt');
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     // Phase 1: Check for new filings via RSS
-    await checkForNewFilings(stats);
+    await checkForNewFilings(monitor);
     
     // Phase 2: Process unprocessed filings
-    await processUnprocessedFilings(stats);
+    await processUnprocessedFilings(monitor);
     
     // Phase 3: Cleanup old data
     await cleanupOldMonitoringData();
-    
-    stats.endTime = new Date();
-    const duration = Date.now() - startTime;
 
-    cronLogger.info('SEC filing monitoring completed successfully', {
-      ...stats,
-      durationMs: duration,
-      avgTimePerTicker: stats.tickersChecked > 0 ? duration / stats.tickersChecked : 0
-    });
+    // Complete monitoring
+    const result = await monitor.complete('COMPLETED');
+    
+    cronLogger.info('SEC filing monitoring completed successfully', result);
 
     return NextResponse.json({
       success: true,
-      stats,
-      durationMs: duration
+      executionId: result.executionId,
+      duration: result.duration,
+      metrics: result.metrics
     });
 
   } catch (error) {
