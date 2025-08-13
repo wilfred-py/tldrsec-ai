@@ -184,14 +184,14 @@ function formatDuration(ms: number): string {
   return `${Math.round(ms / 60000)}m ${Math.round((ms % 60000) / 1000)}s`;
 }
 
-function groupFilingsByType(filings: any[]): Record<string, number> {
+function groupFilingsByType(filings: { filingType: string }[]): Record<string, number> {
   return filings.reduce((acc, filing) => {
     acc[filing.filingType] = (acc[filing.filingType] || 0) + 1;
     return acc;
   }, {});
 }
 
-function getEmailStats(notifications: any[]): { sent: number; failed: number; pending: number } {
+function getEmailStats(notifications: { deliveryStatus: string }[]): { sent: number; failed: number; pending: number } {
   return notifications.reduce((acc, notif) => {
     if (notif.deliveryStatus === 'SENT') acc.sent++;
     else if (notif.deliveryStatus === 'FAILED') acc.failed++;
