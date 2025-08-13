@@ -2,6 +2,8 @@
 
 import { Sidebar } from "@/components/layout/sidebar";
 import { ProtectedRoute } from "@/components/auth";
+import { ErrorHandler } from "@/components/ui/error-handler";
+import { Suspense } from "react";
 
 interface DashboardLayoutProps {
   children: React.ReactNode;
@@ -12,6 +14,9 @@ export default function DashboardLayout({
 }: DashboardLayoutProps) {
   return (
     <ProtectedRoute>
+      <Suspense fallback={null}>
+        <ErrorHandler />
+      </Suspense>
       <div className="flex min-h-screen flex-col">
         <div className="flex flex-1">
           <Sidebar className="fixed inset-y-0 z-30 w-64 border-r" />

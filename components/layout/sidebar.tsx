@@ -13,9 +13,14 @@ import {
   SettingsIcon,
   CrownIcon,
   ClipboardListIcon,
+  ActivityIcon,
 } from "lucide-react";
 import UserButton from "@/components/auth/user-button";
 import { useUser } from "@clerk/nextjs";
+import { useAdminStatus } from "@/lib/hooks/use-admin-status";
+import { Badge } from "@/components/ui/badge";
+import { Separator } from "@/components/ui/separator";
+import { ShieldIcon } from "lucide-react";
 
 interface SidebarProps extends React.HTMLAttributes<HTMLDivElement> {
   className?: string;
@@ -24,6 +29,7 @@ interface SidebarProps extends React.HTMLAttributes<HTMLDivElement> {
 export function Sidebar({ className }: SidebarProps) {
   const pathname = usePathname();
   const { user } = useUser();
+  const { isAdmin, loading: adminLoading } = useAdminStatus();
 
   // For demo purposes - in a real app, this would come from user's database record
   const userPlan = "Pro Plan";
@@ -102,6 +108,34 @@ export function Sidebar({ className }: SidebarProps) {
                   {item.name}
                 </Link>
               ))}
+              
+              {/* Admin Section */}
+              {!adminLoading && isAdmin && (
+                <>
+                  <Separator className="my-2" />
+                  <div className="px-3 py-2">
+                    <h4 className="text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Administration
+                    </h4>
+                  </div>
+                  <Link
+                    href="/dashboard/monitoring"
+                    aria-label="Monitoring dashboard (Admin only)"
+                    className={cn(
+                      "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium hover:bg-accent hover:text-accent-foreground",
+                      (pathname === "/dashboard/monitoring" || pathname.startsWith("/dashboard/monitoring"))
+                        ? "bg-blue-100 text-blue-800"
+                        : "transparent"
+                    )}
+                  >
+                    <ActivityIcon className="h-4 w-4" aria-hidden="true" />
+                    Monitoring
+                    <Badge variant="secondary" className="ml-auto text-xs">
+                      Admin
+                    </Badge>
+                  </Link>
+                </>
+              )}
             </nav>
           </ScrollArea>
           <div className="border-t p-4">
@@ -111,7 +145,8 @@ export function Sidebar({ className }: SidebarProps) {
                 <span className="font-medium">{user?.fullName || "User"}</span>
                 <div className="flex items-center text-xs text-muted-foreground">
                   {isProPlan && <CrownIcon className="h-3 w-3 mr-1 text-yellow-500" />}
-                  {userPlan}
+                  {!adminLoading && isAdmin && <ShieldIcon className="h-3 w-3 mr-1 text-blue-500" />}
+                  {userPlan} {!adminLoading && isAdmin && "• Admin"}
                 </div>
               </div>
             </div>
@@ -130,6 +165,7 @@ function MobileSidebar({
   pathname: string;
 }) {
   const { user } = useUser();
+  const { isAdmin, loading: adminLoading } = useAdminStatus();
   
   // For demo purposes - in a real app, this would come from user's database record
   const userPlan = "Pro Plan";
@@ -162,6 +198,34 @@ function MobileSidebar({
               {item.name}
             </Link>
           ))}
+          
+          {/* Admin Section - Mobile */}
+          {!adminLoading && isAdmin && (
+            <>
+              <Separator className="my-2" />
+              <div className="px-3 py-2">
+                <h4 className="text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Administration
+                </h4>
+              </div>
+              <Link
+                href="/dashboard/monitoring"
+                aria-label="Monitoring dashboard (Admin only)"
+                className={cn(
+                  "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium hover:bg-accent hover:text-accent-foreground",
+                  (pathname === "/dashboard/monitoring" || pathname.startsWith("/dashboard/monitoring"))
+                    ? "bg-blue-100 text-blue-800"
+                    : "transparent"
+                )}
+              >
+                <ActivityIcon className="h-4 w-4" aria-hidden="true" />
+                Monitoring
+                <Badge variant="secondary" className="ml-auto text-xs">
+                  Admin
+                </Badge>
+              </Link>
+            </>
+          )}
         </nav>
       </ScrollArea>
       <div className="border-t p-4">
@@ -171,7 +235,8 @@ function MobileSidebar({
             <span className="font-medium">{user?.fullName || "User"}</span>
             <div className="flex items-center text-xs text-muted-foreground">
               {isProPlan && <CrownIcon className="h-3 w-3 mr-1 text-yellow-500" />}
-              {userPlan}
+              {!adminLoading && isAdmin && <ShieldIcon className="h-3 w-3 mr-1 text-blue-500" />}
+              {userPlan} {!adminLoading && isAdmin && "• Admin"}
             </div>
           </div>
         </div>

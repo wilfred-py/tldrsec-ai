@@ -28,6 +28,17 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    // Check if user is admin
+    const adminEmail = process.env.ADMIN_EMAIL;
+    const userEmail = user.emailAddresses[0]?.emailAddress;
+    
+    if (!adminEmail || userEmail !== adminEmail) {
+      return NextResponse.json(
+        { error: 'Access forbidden' },
+        { status: 403 }
+      );
+    }
+
     // Parse query parameters
     const searchParams = request.nextUrl.searchParams;
     const days = parseInt(searchParams.get('days') || '7');
@@ -43,18 +54,16 @@ export async function GET(request: NextRequest) {
     const [
       recentExecutions,
       currentStatus,
-      costSummary,
       tickerActivity
     ] = await Promise.all([
       CronJobAnalytics.getRecentExecutions(limit),
       CronJobAnalytics.getCurrentJobStatus(),
-      CronJobAnalytics.getDailyCostSummary(days),
       CronJobAnalytics.getTickerActivity(days)
     ]);
 
     // Calculate summary metrics
     const totalExecutions = recentExecutions.length;
-    const successfulExecutions = recentExecutions.filter(e => e.status === 'COMPLETED').length;
+    const successfulExecutions = recentExecutions.filter(e => e.status === 'SUCCESS').length;
     const failedExecutions = recentExecutions.filter(e => e.status === 'FAILED').length;
     const successRate = totalExecutions > 0 ? (successfulExecutions / totalExecutions) * 100 : 0;
 
@@ -63,7 +72,7 @@ export async function GET(request: NextRequest) {
     const totalUsers = recentExecutions.reduce((sum, e) => sum + (e.usersNotified || 0), 0);
 
     // Calculate average processing metrics
-    const completedExecutions = recentExecutions.filter(e => e.status === 'COMPLETED' && e.durationMs);
+    const completedExecutions = recentExecutions.filter(e => e.status === 'SUCCESS' && e.durationMs);
     const avgDuration = completedExecutions.length > 0 
       ? completedExecutions.reduce((sum, e) => sum + (e.durationMs || 0), 0) / completedExecutions.length
       : 0;
@@ -80,7 +89,7 @@ export async function GET(request: NextRequest) {
           isHealthy: currentStatus.isHealthy,
           runningJobs: currentStatus.runningJobs.length,
           lastJobStatus: currentStatus.lastCompletedJob?.status || 'UNKNOWN',
-          lastJobTime: currentStatus.lastCompletedJob?.endTime || null,
+          lastJobTime: currentStatus.lastCompletedJob?.completedAt || null,
           nextScheduledRun: getNextCronRun() // Helper function for Vercel cron schedule
         },
 
@@ -103,8 +112,8 @@ export async function GET(request: NextRequest) {
           id: execution.id,
           jobName: execution.jobName,
           status: execution.status,
-          startTime: execution.startTime,
-          endTime: execution.endTime,
+          startTime: execution.startedAt,
+          endTime: execution.completedAt,
           durationMs: execution.durationMs,
           durationHuman: formatDuration(execution.durationMs || 0),
           
@@ -116,14 +125,15 @@ export async function GET(request: NextRequest) {
           emailsSent: execution.emailsSent,
           
           // Costs
-          totalCost: execution.totalCostUSD,
-          aiCost: execution.aiCostUSD,
-          emailCost: execution.emailCostUSD,
-          tokensUsed: execution.tokensUsed,
+          totalCost: (execution.filingProcessingLogs?.reduce((sum, f) => sum + (f.summaryCostUSD || 0), 0) || 0) + 
+                    (execution.userNotificationLogs?.reduce((sum, n) => sum + (n.deliveryCostUSD || 0), 0) || 0),
+          aiCost: execution.filingProcessingLogs?.reduce((sum, f) => sum + (f.summaryCostUSD || 0), 0) || 0,
+          emailCost: execution.userNotificationLogs?.reduce((sum, n) => sum + (n.deliveryCostUSD || 0), 0) || 0,
+          tokensUsed: execution.filingProcessingLogs?.reduce((sum, f) => sum + (f.summaryTokens || 0), 0) || 0,
           
           // Health
-          errorCount: execution.errorCount,
-          warningCount: execution.warningCount,
+          errorCount: execution.errorsCount,
+          warningCount: 0, // Not tracked in current schema
           errorMessage: execution.errorMessage,
 
           // Filing breakdown
@@ -133,16 +143,7 @@ export async function GET(request: NextRequest) {
 
         // Cost Analysis
         costAnalysis: {
-          dailyCosts: costSummary.map(day => ({
-            date: day.createdAt,
-            totalCost: day._sum.totalCostUSD || 0,
-            aiCost: day._sum.aiCostUSD || 0,
-            emailCost: day._sum.emailCostUSD || 0,
-            tokensUsed: day._sum.tokensUsed || 0,
-            filingsProcessed: day._count.filingsProcessed || 0,
-            usersNotified: day._count.usersNotified || 0
-          })),
-          projectedMonthlyCost: projectMonthlyCost(costSummary)
+          projectedMonthlyCost: projectMonthlyCost(recentExecutions)
         },
 
         // Ticker Activity
@@ -183,14 +184,14 @@ function formatDuration(ms: number): string {
   return `${Math.round(ms / 60000)}m ${Math.round((ms % 60000) / 1000)}s`;
 }
 
-function groupFilingsByType(filings: any[]): Record<string, number> {
+function groupFilingsByType(filings: { filingType: string }[]): Record<string, number> {
   return filings.reduce((acc, filing) => {
     acc[filing.filingType] = (acc[filing.filingType] || 0) + 1;
     return acc;
   }, {});
 }
 
-function getEmailStats(notifications: any[]): { sent: number; failed: number; pending: number } {
+function getEmailStats(notifications: { deliveryStatus: string }[]): { sent: number; failed: number; pending: number } {
   return notifications.reduce((acc, notif) => {
     if (notif.deliveryStatus === 'SENT') acc.sent++;
     else if (notif.deliveryStatus === 'FAILED') acc.failed++;
@@ -199,11 +200,17 @@ function getEmailStats(notifications: any[]): { sent: number; failed: number; pe
   }, { sent: 0, failed: 0, pending: 0 });
 }
 
-function projectMonthlyCost(dailyCosts: any[]): number {
-  if (dailyCosts.length === 0) return 0;
+function projectMonthlyCost(executions: { filingProcessingLogs?: { summaryCostUSD?: number }[]; userNotificationLogs?: { deliveryCostUSD?: number }[] }[]): number {
+  if (executions.length === 0) return 0;
   
-  const totalCost = dailyCosts.reduce((sum, day) => sum + (day._sum.totalCostUSD || 0), 0);
-  const avgDailyCost = totalCost / dailyCosts.length;
+  const totalCost = executions.reduce((sum, execution) => {
+    const aiCost = execution.filingProcessingLogs?.reduce((acc, f) => acc + (f.summaryCostUSD || 0), 0) || 0;
+    const emailCost = execution.userNotificationLogs?.reduce((acc, n) => acc + (n.deliveryCostUSD || 0), 0) || 0;
+    return sum + aiCost + emailCost;
+  }, 0);
+  
+  // Assuming daily execution, project monthly cost
+  const avgDailyCost = totalCost / Math.max(executions.length, 1);
   return Math.round(avgDailyCost * 30 * 100) / 100;
 }
 
