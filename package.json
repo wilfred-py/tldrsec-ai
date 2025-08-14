@@ -27,6 +27,7 @@
     "test:extraction:direct": "ts-node scripts/parsers/test-extraction-direct.ts",
     "test:extraction:compile": "node scripts/utilities/compile-test.js",
     "test:onboarding": "node scripts/test-onboarding.js",
+    "test:cron": "node scripts/test-cron-endpoints.js",
     "test:enhanced": "node --loader ts-node/esm scripts/test-enhanced-summarization.ts",
     "test:enhanced:performance": "node --loader ts-node/esm scripts/test-enhanced-summarization.ts --performance",
     "test:enhanced:integration": "node scripts/test-enhanced-integration.js",

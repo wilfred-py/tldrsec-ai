@@ -22,7 +22,7 @@ const cronLogger = logger.child('cron-sec-monitoring');
 // Rate limiting config
 const BATCH_SIZE = 5; // Process max 5 filings per run
 const MAX_CONCURRENT_RSS_CHECKS = 3; // Check max 3 tickers simultaneously
-const PROCESSING_TIMEOUT_MS = 4 * 60 * 1000; // 4 minutes (Vercel limit is 10 minutes)
+const PROCESSING_TIMEOUT_MS = 4 * 60 * 1000; // 4 minutes (Railway/Vercel timeout)
 
 interface ProcessingStats {
   tickersChecked: number;
@@ -39,8 +39,9 @@ interface ProcessingStats {
  * Runs every 30 minutes during market hours (Mon-Fri 6am-10pm EST)
  */
 export async function GET(request: NextRequest) {
-  // Initialize monitoring
-  const monitor = new CronJobMonitor('sec-filing-monitor', 'VERCEL_CRON');
+  // Initialize monitoring - detect platform
+  const platform = process.env.RAILWAY_ENVIRONMENT ? 'RAILWAY_CRON' : 'VERCEL_CRON';
+  const monitor = new CronJobMonitor('sec-filing-monitor', platform);
   
   try {
     cronLogger.info('Starting SEC filing monitoring cron job');
