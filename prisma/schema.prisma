@@ -36,6 +36,7 @@ model User {
   userSubscription    UserSubscription?
   filingUsage         FilingUsage[]
   usagePeriods        UsagePeriod[]
+  auditLogs           AuditLog[]
 }
 
 enum SubscriptionTier {
@@ -649,4 +650,26 @@ model CronExecutionContext {
   
   @@index([executionId])
   @@index([isMarketHours, createdAt])
+}
+
+// Audit logging for financial and security operations
+model AuditLog {
+  id                    String              @id @default(uuid())
+  userId                String
+  action                String              // BUDGET_UPDATE, TIER_CHANGE, COST_CALCULATION, etc.
+  details               Json                // Structured details of the operation
+  ipAddress             String?
+  userAgent             String?
+  success               Boolean             @default(true)
+  errorMessage          String?
+  
+  // Timestamps
+  createdAt             DateTime            @default(now())
+  
+  // Relationships
+  user                  User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([userId, createdAt])
+  @@index([action, createdAt])
+  @@index([createdAt])
 }

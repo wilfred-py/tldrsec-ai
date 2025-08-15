@@ -356,7 +356,7 @@ async function processTierBatch(
           });
           
           // Audit log for financial operations
-          await tx.auditLog?.create({
+          await tx.auditLog.create({
             data: {
               userId: userStatus.userId,
               action: 'BUDGET_UPDATE',
@@ -366,11 +366,9 @@ async function processTierBatch(
                 costAdded: userResult.cost,
                 tier,
                 timestamp: new Date().toISOString()
-              })
+              }),
+              success: true
             }
-          }).catch(() => {
-            // Audit logging is optional, don't fail the transaction
-            cronLogger.warn('Failed to create audit log entry');
           });
         });
 
