@@ -1,5 +1,13 @@
-import { Redis } from 'ioredis';
 import { logger } from '../logging';
+
+// Optional Redis dependency - will use in-memory fallback if not available
+let Redis: any;
+try {
+  Redis = require('ioredis').Redis;
+} catch (error) {
+  Redis = null;
+  logger.child('rate-limiter').info('Redis not available, using in-memory rate limiting');
+}
 
 const rateLimitLogger = logger.child('rate-limiter');
 
@@ -10,17 +18,18 @@ interface RateLimitResult {
 }
 
 class RateLimiter {
-  private redis: Redis | null = null;
+  private redis: any | null = null;
   private inMemoryCache = new Map<string, { count: number; resetTime: number }>();
 
   constructor() {
     // Initialize Redis if available, otherwise use in-memory cache
-    if (process.env.REDIS_URL) {
+    if (Redis && process.env.REDIS_URL) {
       try {
         this.redis = new Redis(process.env.REDIS_URL);
         rateLimitLogger.info('Rate limiter initialized with Redis');
       } catch (error) {
         rateLimitLogger.warn('Failed to connect to Redis, using in-memory cache', { error });
+        this.redis = null;
       }
     } else {
       rateLimitLogger.info('Rate limiter initialized with in-memory cache');
