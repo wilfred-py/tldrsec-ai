@@ -94,10 +94,32 @@ export function getMarketHoursContext(now = new Date()): MarketHoursContext {
     nextMarketOpen: null
   };
 
-  // Convert to EST/EDT
-  const easternTime = new Date(now.toLocaleString('en-US', { timeZone: 'America/New_York' }));
+  // Convert to EST/EDT timezone 
+  const formatter = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/New_York',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false
+  });
+  
+  const parts = formatter.formatToParts(now);
+  const easternYear = parts.find(p => p.type === 'year')!.value;
+  const easternMonth = parts.find(p => p.type === 'month')!.value;
+  const easternDay = parts.find(p => p.type === 'day')!.value;
+  const easternHour = parts.find(p => p.type === 'hour')!.value;
+  const easternMinute = parts.find(p => p.type === 'minute')!.value;
+  const easternSecond = parts.find(p => p.type === 'second')!.value;
+  
+  // Create a new Date object for Eastern time (this is for day of week calculation)
+  const easternTime = new Date(`${easternYear}-${easternMonth}-${easternDay}T${easternHour}:${easternMinute}:${easternSecond}`);
   const dayOfWeek = easternTime.getDay(); // 0 = Sunday, 6 = Saturday
-  const dateString = easternTime.toISOString().split('T')[0];
+  
+  // Date string for holiday check
+  const dateString = `${easternYear}-${easternMonth}-${easternDay}`;
 
   // Check if it's a holiday
   context.isHoliday = MARKET_HOLIDAYS_2025.has(dateString);
@@ -141,9 +163,11 @@ export function calculateProcessingEligibility(
   lastProcessedAt: Date | null,
   marketContext: MarketHoursContext
 ): ProcessingEligibility {
+  // Handle invalid tiers by falling back to FREE tier
+  const validTier = TIER_FREQUENCIES[tier] ? tier : 'FREE';
   const frequency = marketContext.isMarketHours 
-    ? TIER_FREQUENCIES[tier].market 
-    : TIER_FREQUENCIES[tier].offMarket;
+    ? TIER_FREQUENCIES[validTier].market 
+    : TIER_FREQUENCIES[validTier].offMarket;
 
   // If never processed, user is eligible
   if (!lastProcessedAt) {
@@ -195,7 +219,7 @@ export function getUserProcessingStatuses(
       marketContext
     );
 
-    const monthlyBudget = TIER_BUDGETS[user.subscriptionTier];
+    const monthlyBudget = TIER_BUDGETS[user.subscriptionTier] || TIER_BUDGETS.FREE;
     const budgetRemaining = monthlyBudget - user.budgetUsed;
     const budgetUtilization = (user.budgetUsed / monthlyBudget) * 100;
 
@@ -204,7 +228,7 @@ export function getUserProcessingStatuses(
       tier: user.subscriptionTier,
       lastProcessedAt: user.lastProcessedAt,
       eligibility,
-      priority: TIER_PRIORITIES[user.subscriptionTier],
+      priority: TIER_PRIORITIES[user.subscriptionTier] || TIER_PRIORITIES.FREE,
       budgetStatus: {
         monthlyBudget,
         budgetUsed: user.budgetUsed,

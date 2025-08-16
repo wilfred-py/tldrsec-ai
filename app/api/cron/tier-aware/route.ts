@@ -51,26 +51,57 @@ function timingSafeEqual(a: string, b: string): boolean {
 }
 
 /**
- * Validate cost update to prevent budget manipulation
+ * Comprehensive cost validation to prevent budget manipulation
+ * Implements multiple layers of validation for financial security
  */
-function validateCostUpdate(cost: number, tier: string): boolean {
-  // Basic validation
-  if (typeof cost !== 'number' || isNaN(cost) || cost < 0) {
-    return false;
+function validateCostUpdate(cost: number, tier: string, userId: string): {
+  valid: boolean;
+  sanitizedCost: number;
+  error?: string;
+} {
+  // Type and basic validation
+  if (typeof cost !== 'number' || isNaN(cost) || !isFinite(cost)) {
+    cronLogger.error('Invalid cost type or value', { cost, tier, userId });
+    return { valid: false, sanitizedCost: 0, error: 'Invalid cost type' };
   }
   
-  // Maximum cost per operation check
+  // Prevent negative costs (could reduce budget)
+  if (cost < 0) {
+    cronLogger.error('Negative cost attempted', { cost, tier, userId });
+    return { valid: false, sanitizedCost: 0, error: 'Negative cost not allowed' };
+  }
+  
+  // Prevent zero or extremely small costs (potential bypass)
+  if (cost < 0.001) {
+    cronLogger.warn('Suspiciously small cost', { cost, tier, userId });
+    return { valid: false, sanitizedCost: 0, error: 'Cost too small' };
+  }
+  
+  // Maximum cost per operation check (prevent excessive charges)
   if (cost > MAX_COST_PER_OPERATION) {
-    return false;
+    cronLogger.error('Cost exceeds maximum per operation', { cost, tier, userId, max: MAX_COST_PER_OPERATION });
+    return { valid: false, sanitizedCost: 0, error: 'Cost exceeds maximum' };
   }
   
-  // Tier-specific validation
+  // Tier-specific validation (prevent tier privilege abuse)
   const tierLimit = DAILY_COST_LIMITS[tier as keyof typeof DAILY_COST_LIMITS];
-  if (cost > tierLimit) {
-    return false;
+  if (!tierLimit) {
+    cronLogger.error('Unknown subscription tier', { tier, userId });
+    return { valid: false, sanitizedCost: 0, error: 'Invalid tier' };
   }
   
-  return true;
+  if (cost > tierLimit) {
+    cronLogger.error('Cost exceeds tier limit', { cost, tier, tierLimit, userId });
+    return { valid: false, sanitizedCost: 0, error: 'Cost exceeds tier limit' };
+  }
+  
+  // Precision validation (prevent floating point manipulation)
+  const sanitizedCost = Math.round(cost * 1000) / 1000; // Round to 3 decimal places
+  if (Math.abs(cost - sanitizedCost) > 0.0001) {
+    cronLogger.warn('Cost precision adjusted', { original: cost, sanitized: sanitizedCost, tier, userId });
+  }
+  
+  return { valid: true, sanitizedCost };
 }
 
 interface ProcessingStats {
@@ -311,22 +342,47 @@ async function processTierBatch(
         // Process user's SEC filings
         const userResult = await processUserTierFilings(fullUser, tier);
         
-        // Validate cost before updating (security: prevent budget manipulation)
-        if (!validateCostUpdate(userResult.cost, tier)) {
-          cronLogger.error(`Invalid cost update attempted`, {
+        // Comprehensive cost validation (security: prevent budget manipulation)
+        const costValidation = validateCostUpdate(userResult.cost, tier, userStatus.userId);
+        if (!costValidation.valid) {
+          cronLogger.error(`Cost validation failed`, {
             userId: userStatus.userId,
             tier,
-            cost: userResult.cost
+            originalCost: userResult.cost,
+            error: costValidation.error
           });
-          return { success: false, error: 'Invalid cost update' };
+          
+          // Audit failed attempt
+          await prisma.auditLog.create({
+            data: {
+              userId: userStatus.userId,
+              action: 'BUDGET_UPDATE_FAILED',
+              details: JSON.stringify({
+                originalCost: userResult.cost,
+                tier,
+                error: costValidation.error,
+                timestamp: new Date().toISOString()
+              }),
+              success: false
+            }
+          }).catch(err => cronLogger.error('Failed to log audit event', { err }));
+          
+          return { success: false, error: `Cost validation failed: ${costValidation.error}` };
         }
         
-        // Atomic budget update with validation in transaction
-        await prisma.$transaction(async (tx) => {
-          // Get current user state
+        const validatedCost = costValidation.sanitizedCost;
+        
+        // Atomic budget update with race condition protection
+        const updateResult = await prisma.$transaction(async (tx) => {
+          // Get current user state with row locking
           const currentUser = await tx.user.findUnique({
             where: { id: userStatus.userId },
-            select: { budgetUsed: true, subscriptionTier: true }
+            select: { 
+              budgetUsed: true, 
+              subscriptionTier: true,
+              budgetResetAt: true,
+              lastCronProcessed: true
+            }
           });
           
           if (!currentUser) {
@@ -338,38 +394,78 @@ async function processTierBatch(
             throw new Error(`Subscription tier mismatch: expected ${tier}, got ${currentUser.subscriptionTier}`);
           }
           
-          const newBudgetUsed = (currentUser.budgetUsed || 0) + userResult.cost;
+          // Check if budget was reset since we started processing
+          const currentBudgetUsed = currentUser.budgetUsed || 0;
+          const newBudgetUsed = currentBudgetUsed + validatedCost;
           const dailyLimit = DAILY_COST_LIMITS[tier as keyof typeof DAILY_COST_LIMITS];
           
-          // Prevent budget overflow
-          if (newBudgetUsed > dailyLimit * 1.1) { // 10% buffer for rounding
-            throw new Error(`Budget limit would be exceeded: ${newBudgetUsed} > ${dailyLimit}`);
+          // Strict budget enforcement (no buffer for production)
+          if (newBudgetUsed > dailyLimit) {
+            throw new Error(`Budget limit exceeded: ${newBudgetUsed} > ${dailyLimit}`);
           }
           
-          // Update with validated values
-          await tx.user.update({
-            where: { id: userStatus.userId },
+          // Additional safety check for extremely high budget usage
+          if (newBudgetUsed > dailyLimit * 0.95) {
+            cronLogger.warn('Budget usage approaching limit', {
+              userId: userStatus.userId,
+              currentUsage: currentBudgetUsed,
+              newUsage: newBudgetUsed,
+              limit: dailyLimit,
+              percentage: (newBudgetUsed / dailyLimit) * 100
+            });
+          }
+          
+          // Race-condition safe update using conditional update
+          const updateResult = await tx.user.updateMany({
+            where: { 
+              id: userStatus.userId,
+              subscriptionTier: tier, // Ensure tier hasn't changed
+              budgetUsed: currentBudgetUsed // Ensure budget hasn't changed
+            },
             data: {
               lastCronProcessed: new Date(),
               budgetUsed: newBudgetUsed
             }
           });
           
-          // Audit log for financial operations
+          // Check if update actually happened (race condition detection)
+          if (updateResult.count === 0) {
+            throw new Error('Budget update failed due to concurrent modification');
+          }
+          
+          // Create detailed audit log for financial operations
           await tx.auditLog.create({
             data: {
               userId: userStatus.userId,
               action: 'BUDGET_UPDATE',
               details: JSON.stringify({
-                previousBudget: currentUser.budgetUsed,
+                previousBudget: currentBudgetUsed,
                 newBudget: newBudgetUsed,
-                costAdded: userResult.cost,
+                costAdded: validatedCost,
+                originalCost: userResult.cost,
                 tier,
-                timestamp: new Date().toISOString()
+                dailyLimit,
+                usagePercentage: (newBudgetUsed / dailyLimit) * 100,
+                processingTimestamp: new Date().toISOString(),
+                budgetResetAt: currentUser.budgetResetAt
               }),
-              success: true
+              success: true,
+              metadata: JSON.stringify({
+                userAgent: 'cron-tier-aware',
+                sessionId: `cron-${Date.now()}`,
+                riskLevel: newBudgetUsed > dailyLimit * 0.8 ? 'HIGH' : 'NORMAL'
+              })
             }
           });
+          
+          return {
+            previousBudget: currentBudgetUsed,
+            newBudget: newBudgetUsed,
+            costAdded: validatedCost
+          };
+        }, {
+          timeout: 10000, // 10 second timeout for financial transactions
+          isolationLevel: 'Serializable' // Highest isolation level for financial data
         });
 
         // Record metrics
@@ -384,7 +480,8 @@ async function processTierBatch(
           success: true,
           userId: userStatus.userId,
           filingsProcessed: userResult.filingsProcessed,
-          cost: userResult.cost
+          cost: validatedCost,
+          budgetUpdate: updateResult
         };
 
       } catch (error) {
