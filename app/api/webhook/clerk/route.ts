@@ -1,6 +1,7 @@
 import { headers } from 'next/headers';
 import { WebhookEvent } from '@clerk/nextjs/server';
 import { NextResponse } from 'next/server';
+import { prisma } from '@/lib/db/prisma';
 
 // This endpoint handles Clerk webhook events
 // See https://clerk.com/docs/integration/webhooks for more information
@@ -54,17 +55,50 @@ export async function POST(req: Request) {
 
   switch (eventType) {
     case 'user.created':
-      // Handle user creation event
-      // e.g. Create a new user in your database
-      console.log('User created:', evt.data);
+      // Handle user creation event - sync Clerk user to database
+      try {
+        const userData = evt.data;
+        const primaryEmail = userData.email_addresses?.[0]?.email_address;
+        
+        if (primaryEmail && userData.id) {
+          const newUser = await prisma.user.create({
+            data: {
+              id: userData.id, // Use Clerk user ID as primary key
+              email: primaryEmail,
+              authProvider: 'clerk',
+              authProviderId: userData.id,
+              name: userData.first_name ? `${userData.first_name} ${userData.last_name || ''}`.trim() : undefined,
+              subscriptionTier: 'FREE', // Default tier for new users
+              budgetUsed: 0,
+              processingBudget: 0.20, // Default FREE tier budget
+            }
+          });
+          console.log('User created in database:', newUser.id);
+        } else {
+          console.error('Missing required user data in webhook:', { id: userData.id, email: primaryEmail });
+        }
+      } catch (error) {
+        console.error('Failed to create user in database from webhook:', error);
+      }
       break;
     case 'user.updated':
       // Handle user update event
       console.log('User updated:', evt.data);
       break;
     case 'user.deleted':
-      // Handle user deletion event
-      console.log('User deleted:', evt.data);
+      // Handle user deletion event - remove user from database
+      try {
+        const userData = evt.data;
+        if (userData.id) {
+          // Delete user and their related data (cascading deletes handled by schema)
+          await prisma.user.delete({
+            where: { id: userData.id }
+          });
+          console.log('User deleted from database:', userData.id);
+        }
+      } catch (error) {
+        console.error('Failed to delete user from database:', error);
+      }
       break;
     // Add other event types as needed
     default:
