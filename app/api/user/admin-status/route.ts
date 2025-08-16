@@ -1,63 +1,68 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { currentUser } from '@clerk/nextjs/server';
+import { validateAdminAccess } from '@/lib/auth/admin-security';
 import { logger } from '@/lib/logging';
 
 const adminLogger = logger.child('admin-status-api');
 
 /**
- * API endpoint to check if current user has admin privileges
+ * Secure API endpoint to check admin privileges with comprehensive security validation
  * 
  * GET /api/user/admin-status
  * 
- * Returns admin status for the authenticated user without exposing
- * admin email or other sensitive configuration to the client.
+ * Returns admin status with security context, warnings, and audit logging.
+ * Implements fail-secure access control with timing-safe comparisons.
  */
 export async function GET(request: NextRequest) {
+  const startTime = Date.now();
+  
   try {
-    // Check authentication
-    const user = await currentUser();
-    if (!user) {
-      return NextResponse.json(
-        { error: 'Authentication required' },
-        { status: 401 }
-      );
-    }
-
-    // Check if user is admin (server-side only)
-    const adminEmail = process.env.ADMIN_EMAIL;
-    const userEmail = user.emailAddresses[0]?.emailAddress;
+    // Comprehensive admin access validation
+    const adminContext = await validateAdminAccess(request, 'READ_ONLY', 'ADMIN_STATUS_CHECK');
     
-    if (!adminEmail) {
-      adminLogger.warn('ADMIN_EMAIL environment variable not configured');
-      return NextResponse.json({ isAdmin: false });
-    }
-
-    const isAdmin = userEmail === adminEmail;
-
-    // Audit log admin status checks
-    adminLogger.info('Admin status check', {
-      userId: user.id,
-      userEmail: userEmail,
-      isAdmin,
+    // Always return consistent response structure (prevent timing attacks)
+    const response = {
+      isAdmin: adminContext.isAdmin,
+      adminLevel: adminContext.isAdmin ? adminContext.adminLevel : 'NONE',
+      sessionValid: adminContext.sessionValid,
       timestamp: new Date().toISOString(),
-      userAgent: request.headers.get('user-agent'),
-      ip: request.ip || request.headers.get('x-forwarded-for')
+      // Include security warnings for admin users only
+      securityWarnings: adminContext.isAdmin ? adminContext.securityWarnings : undefined,
+      // Session info for admin users
+      lastActivity: adminContext.isAdmin ? adminContext.lastActivity : undefined,
+      mfaRequired: adminContext.mfaRequired
+    };
+    
+    // Add processing time for monitoring (but not exposed to client)
+    const processingTime = Date.now() - startTime;
+    adminLogger.info('Admin status check completed', {
+      isAdmin: adminContext.isAdmin,
+      adminLevel: adminContext.adminLevel,
+      processingTime,
+      securityWarnings: adminContext.securityWarnings?.length || 0,
+      timestamp: new Date().toISOString()
     });
+    
+    return NextResponse.json(response);
 
-    return NextResponse.json({ 
-      isAdmin,
+  } catch (error) {
+    const processingTime = Date.now() - startTime;
+    
+    adminLogger.error('Admin status check failed', { 
+      error: error instanceof Error ? error.message : 'unknown',
+      processingTime,
       timestamp: new Date().toISOString()
     });
 
-  } catch (error) {
-    adminLogger.error('Error checking admin status', { error });
-
+    // Always return consistent error response (prevent information leakage)
     return NextResponse.json(
       { 
-        error: 'Failed to check admin status',
-        isAdmin: false
+        isAdmin: false,
+        adminLevel: 'NONE',
+        sessionValid: false,
+        timestamp: new Date().toISOString(),
+        error: 'Access validation failed'
       },
-      { status: 500 }
+      { status: 403 } // Use 403 instead of 500 for security
     );
   }
 }

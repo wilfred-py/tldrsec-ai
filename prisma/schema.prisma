@@ -21,18 +21,29 @@ model User {
   tutorialCompletedAt DateTime?
   tutorialProgress    Int       @default(0)
   tutorialSteps       Json?
-  subscriptionTier    SubscriptionTier @default(FREE)
+  subscriptionTier       SubscriptionTier @default(FREE)
+  lastProcessedAt        DateTime?        // Last time this user was processed by cron
+  lastCronProcessed      DateTime?        // Last time processed by tier-aware cron
+  processingBudget       Int              @default(0) // Monthly token budget
+  budgetUsed             Int              @default(0) // Current month usage
+  budgetResetAt          DateTime?        // Budget reset date
+  dailyProcessingBudget  Int              @default(0) // Daily processing minutes used
+  dailyBudgetResetAt     DateTime?        // Daily budget reset timestamp
+  tierProcessingCount    Int              @default(0) // Total tier-based processings
+  lastTierUpgrade        DateTime?        // Last subscription tier upgrade
   tickers             Ticker[]
   notificationsSent   NotificationSent[]
   userSubscription    UserSubscription?
   filingUsage         FilingUsage[]
   usagePeriods        UsagePeriod[]
+  auditLogs           AuditLog[]
 }
 
 enum SubscriptionTier {
   FREE
-  PREMIUM
+  PROFESSIONAL
   ENTERPRISE
+  INSTITUTION
 }
 
 enum PlanType {
@@ -523,4 +534,142 @@ enum AlertSeverity {
   MEDIUM  
   HIGH
   CRITICAL
+}
+
+// Tier-aware processing models
+model TierProcessingMetrics {
+  id                    String              @id @default(uuid())
+  date                  DateTime            @default(now()) @db.Date
+  tier                  SubscriptionTier    // FREE, PROFESSIONAL, ENTERPRISE, INSTITUTION
+  
+  // Processing Statistics
+  usersProcessed        Int                 @default(0)
+  usersEligible         Int                 @default(0)
+  usersSkipped          Int                 @default(0)
+  avgProcessingTime     Float?              // milliseconds
+  filingsProcessed      Int                 @default(0)
+  
+  // Cost and Budget Tracking
+  budgetUsed            Float               @default(0)   // Processing minutes used
+  budgetLimit           Float               @default(0)   // Daily budget limit
+  costPerUser           Float?              // Average cost per user
+  
+  // Performance Metrics
+  marketHoursRuns       Int                 @default(0)
+  offHoursRuns          Int                 @default(0)
+  priorityProcessed     Int                 @default(0)   // Users processed at high priority
+  
+  // Error Tracking
+  errorCount            Int                 @default(0)
+  timeoutCount          Int                 @default(0)
+  
+  createdAt             DateTime            @default(now())
+  updatedAt             DateTime            @updatedAt
+  
+  @@unique([date, tier])
+  @@index([date, tier])
+  @@index([tier, createdAt])
+}
+
+model TierProcessingExecution {
+  id                    String              @id @default(uuid())
+  executionId           String              // Links to main cron execution
+  tier                  SubscriptionTier
+  
+  // Execution Context
+  isMarketHours         Boolean
+  startedAt             DateTime            @default(now())
+  completedAt           DateTime?
+  status                ExecutionStatus     @default(RUNNING)
+  
+  // User Processing
+  usersEligible         Int                 @default(0)
+  usersProcessed        Int                 @default(0)
+  usersSkipped          Int                 @default(0)
+  userErrors            Int                 @default(0)
+  
+  // Filing Processing
+  filingsFound          Int                 @default(0)
+  filingsProcessed      Int                 @default(0)
+  filingsErrors         Int                 @default(0)
+  
+  // Resource Usage
+  processingTimeMs      Int?                // Total processing time
+  budgetUsed            Float               @default(0)
+  avgTimePerUser        Float?              // Average time per user
+  
+  // Performance Metrics
+  batchSize             Int                 @default(0)
+  priority              Int                 @default(0)
+  frequency             Int                 @default(0)  // Minutes between runs
+  
+  errorMessage          String?
+  errorStack            String?
+  
+  @@index([executionId])
+  @@index([tier, startedAt])
+  @@index([isMarketHours, tier])
+}
+
+enum ExecutionStatus {
+  RUNNING
+  COMPLETED
+  FAILED
+  SKIPPED
+}
+
+model CronExecutionContext {
+  id                    String              @id @default(uuid())
+  executionId           String              @unique // Links to CronJobExecution
+  
+  // Market Context
+  isMarketHours         Boolean
+  marketTimeZone        String              @default("America/New_York")
+  
+  // Processing Context
+  totalUsersEligible    Int                 @default(0)
+  tierBreakdown         Json?               // {"FREE": 100, "PROFESSIONAL": 50, ...}
+  
+  // Budget Context
+  globalBudgetLimit     Decimal             @default(0)
+  globalBudgetUsed      Decimal             @default(0)
+  budgetAlerts          Json?               // Active budget alerts
+  
+  // Processing Results
+  usersProcessedByTier  Json?               // {"FREE": 10, "PROFESSIONAL": 25, ...}
+  avgProcessingByTier   Json?               // Processing times per tier
+  
+  // Performance Metrics
+  budgetUtilization     Float?              // percentage of budget used
+  avgLatency            Int                 @default(0) // milliseconds
+  errorCount            Int                 @default(0)
+  successRate           Float?              // percentage
+  
+  createdAt             DateTime            @default(now())
+  updatedAt             DateTime            @updatedAt
+  
+  @@index([executionId])
+  @@index([isMarketHours, createdAt])
+}
+
+// Audit logging for financial and security operations
+model AuditLog {
+  id                    String              @id @default(uuid())
+  userId                String
+  action                String              // BUDGET_UPDATE, TIER_CHANGE, COST_CALCULATION, etc.
+  details               Json                // Structured details of the operation
+  ipAddress             String?
+  userAgent             String?
+  success               Boolean             @default(true)
+  errorMessage          String?
+  
+  // Timestamps
+  createdAt             DateTime            @default(now())
+  
+  // Relationships
+  user                  User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([userId, createdAt])
+  @@index([action, createdAt])
+  @@index([createdAt])
 }
