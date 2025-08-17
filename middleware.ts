@@ -1,6 +1,13 @@
 import { clerkMiddleware } from '@clerk/nextjs/server'
 
-export default clerkMiddleware()
+export default clerkMiddleware({
+  publicRoutes: [
+    '/api/cron/tier-aware',
+    '/api/cron/unified', 
+    '/api/health',
+    '/api/health/database'
+  ]
+})
 
 export const config = {
   matcher: [
