@@ -1,5 +1,11 @@
 import { parseStringPromise } from 'xml2js';
 import { logger } from '../logging';
+import { 
+  CIKValidationResult,
+  CIKValidationError,
+  CIKErrorCode,
+  ValidationResult
+} from '../../types/validation';
 
 const rssLogger = logger.child('sec-rss-parser');
 
@@ -140,26 +146,137 @@ function parseRSSEntry(entry: any): RSSFilingEntry | null {
 }
 
 /**
+ * Validate and format CIK number
+ */
+export function validateCIK(cik: string): CIKValidationResult {
+  const startTime = Date.now();
+  
+  // Basic validation
+  if (!cik || typeof cik !== 'string') {
+    return {
+      isValid: false,
+      error: {
+        code: CIKErrorCode.EMPTY_VALUE,
+        message: 'CIK must be a non-empty string',
+        details: `Received: ${typeof cik} - ${cik}`
+      },
+      metadata: {
+        originalValue: String(cik),
+        validationTimestamp: new Date(),
+        validationMethod: 'FORMAT_CHECK',
+        processingTimeMs: Date.now() - startTime
+      }
+    };
+  }
+  
+  // Remove any whitespace
+  const trimmedCik = cik.trim();
+  
+  if (trimmedCik.length === 0) {
+    return {
+      isValid: false,
+      error: {
+        code: CIKErrorCode.EMPTY_VALUE,
+        message: 'CIK cannot be empty or whitespace only'
+      },
+      metadata: {
+        originalValue: cik,
+        validationTimestamp: new Date(),
+        validationMethod: 'FORMAT_CHECK',
+        processingTimeMs: Date.now() - startTime
+      }
+    };
+  }
+  
+  // Check if it's numeric
+  if (!/^\d+$/.test(trimmedCik)) {
+    return {
+      isValid: false,
+      error: {
+        code: CIKErrorCode.NON_NUMERIC,
+        message: 'CIK must contain only numeric characters',
+        details: `Invalid characters found in: ${trimmedCik}`
+      },
+      metadata: {
+        originalValue: cik,
+        validationTimestamp: new Date(),
+        validationMethod: 'FORMAT_CHECK',
+        processingTimeMs: Date.now() - startTime
+      }
+    };
+  }
+  
+  // Check length (CIK should be 1-10 digits)
+  if (trimmedCik.length > 10) {
+    return {
+      isValid: false,
+      error: {
+        code: CIKErrorCode.INVALID_LENGTH,
+        message: 'CIK cannot be longer than 10 digits',
+        details: `Length: ${trimmedCik.length}, Value: ${trimmedCik}`
+      },
+      metadata: {
+        originalValue: cik,
+        validationTimestamp: new Date(),
+        validationMethod: 'FORMAT_CHECK',
+        processingTimeMs: Date.now() - startTime
+      }
+    };
+  }
+  
+  // Format with leading zeros (10 digits)
+  const formattedCik = trimmedCik.padStart(10, '0');
+  
+  return {
+    isValid: true,
+    formattedCIK: formattedCik,
+    metadata: {
+      originalValue: cik,
+      validationTimestamp: new Date(),
+      validationMethod: 'FORMAT_CHECK',
+      processingTimeMs: Date.now() - startTime
+    }
+  };
+}
+
+/**
  * Generate SEC RSS URL for a company by CIK
  */
 export function generateSecRssUrl(cik: string): string {
-  if (!cik || typeof cik !== 'string') {
-    throw new Error(`Invalid CIK provided: ${cik}. CIK must be a non-empty string.`);
+  const validation = validateCIK(cik);
+  
+  if (!validation.isValid) {
+    throw new Error(`Invalid CIK provided: ${validation.error?.message}. Details: ${validation.error?.details}`);
   }
   
-  // Ensure CIK is properly formatted (10 digits with leading zeros)
-  const formattedCik = cik.padStart(10, '0');
-  return `https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=${formattedCik}&output=atom`;
+  return `https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=${validation.formattedCIK}&output=atom`;
 }
 
 /**
  * Fetch and parse SEC RSS feed for a company
  */
 export async function fetchSecCompanyRSS(cik: string): Promise<CompanyRSSFeed> {
+  // Validate CIK first
+  const validation = validateCIK(cik);
+  if (!validation.isValid) {
+    const error = new Error(`Invalid CIK provided: ${validation.error?.message}`);
+    rssLogger.error('CIK validation failed', { 
+      originalCik: cik, 
+      error: validation.error,
+      metadata: validation.metadata 
+    });
+    throw error;
+  }
+  
+  const formattedCik = validation.formattedCIK!;
   const rssUrl = generateSecRssUrl(cik);
   
   try {
-    rssLogger.debug(`Fetching RSS feed for CIK ${cik}`, { rssUrl });
+    rssLogger.debug(`Fetching RSS feed for CIK ${formattedCik}`, { 
+      rssUrl, 
+      originalCik: cik,
+      validationMetadata: validation.metadata 
+    });
     
     const response = await fetch(rssUrl, {
       headers: {
@@ -173,10 +290,15 @@ export async function fetchSecCompanyRSS(cik: string): Promise<CompanyRSSFeed> {
     }
 
     const xmlContent = await response.text();
-    return await parseSecCompanyRSS(xmlContent, cik);
+    return await parseSecCompanyRSS(xmlContent, formattedCik);
 
   } catch (error) {
-    rssLogger.error(`Failed to fetch RSS feed for CIK ${cik}`, { error, rssUrl });
+    rssLogger.error(`Failed to fetch RSS feed for CIK ${formattedCik}`, { 
+      error, 
+      rssUrl,
+      originalCik: cik,
+      formattedCik
+    });
     throw error;
   }
 }
