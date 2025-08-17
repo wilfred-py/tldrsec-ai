@@ -143,6 +143,10 @@ function parseRSSEntry(entry: any): RSSFilingEntry | null {
  * Generate SEC RSS URL for a company by CIK
  */
 export function generateSecRssUrl(cik: string): string {
+  if (!cik || typeof cik !== 'string') {
+    throw new Error(`Invalid CIK provided: ${cik}. CIK must be a non-empty string.`);
+  }
+  
   // Ensure CIK is properly formatted (10 digits with leading zeros)
   const formattedCik = cik.padStart(10, '0');
   return `https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=${formattedCik}&output=atom`;
