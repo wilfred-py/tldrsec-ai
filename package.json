@@ -44,7 +44,13 @@
     "test:cron-endpoint": "npx tsx scripts/test-cron-endpoint.ts",
     "test:samples": "node scripts/parsers/sample-content-reader.js",
     "test:extract-xbrl": "node scripts/parsers/extract-xbrl.js",
-    "test:watch": "jest --watch --config=jest.config.mjs"
+    "test:watch": "jest --watch --config=jest.config.mjs",
+    "security:generate-keys": "npx tsx scripts/security/generate-api-keys.ts generate-keys",
+    "security:generate-config": "npx tsx scripts/security/generate-api-keys.ts generate-config",
+    "security:validate-env": "npx tsx scripts/security/generate-api-keys.ts validate-env",
+    "security:test-signature": "npx tsx scripts/security/generate-api-keys.ts test-signature",
+    "security:audit": "npx tsx scripts/security/generate-api-keys.ts security-audit",
+    "test:security": "jest tests/security/ --config=jest.config.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.51.0",
@@ -81,6 +87,7 @@
     "dotenv": "^16.5.0",
     "fast-xml-parser": "^5.2.3",
     "framer-motion": "^12.12.2",
+    "ioredis": "^5.7.0",
     "lucide-react": "^0.510.0",
     "next": "15.3.2",
     "next-auth": "^4.24.11",

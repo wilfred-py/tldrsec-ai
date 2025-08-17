@@ -1,5 +1,5 @@
 import { logger } from '../logging';
-import crypto from 'crypto';
+import * as crypto from 'crypto';
 
 // Optional Redis dependency - will use in-memory fallback if not available
 let Redis: any;

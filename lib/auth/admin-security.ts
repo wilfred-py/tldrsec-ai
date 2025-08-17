@@ -304,14 +304,41 @@ async function getAdminSecurityWarnings(userId: string, securityCheck: AdminSecu
 
 async function logSecurityEvent(event: string, data: any) {
   try {
-    await prisma.securityEvent.create({
+    // Only log audit events if we have a valid userId
+    // Security events without authenticated users will be logged via the logger only
+    if (!data.userId) {
+      adminSecurityLogger.info('Security event (unauthenticated)', { event, ...data });
+      return;
+    }
+
+    // Verify user exists in database before creating audit log
+    // This prevents foreign key constraint violations when Clerk users
+    // exist in authentication but haven't been synced to database yet
+    const userExists = await prisma.user.findUnique({
+      where: { id: data.userId },
+      select: { id: true }
+    });
+
+    if (!userExists) {
+      adminSecurityLogger.warn('Cannot create audit log - user not found in database', { 
+        event, 
+        userId: data.userId,
+        userIdHash: crypto.createHash('sha256').update(data.userId).digest('hex').substring(0, 8)
+      });
+      // Still log the security event via logger for monitoring
+      adminSecurityLogger.info('Security event (user not in database)', { event, ...data });
+      return;
+    }
+
+    await prisma.auditLog.create({
       data: {
-        event,
-        data: JSON.stringify(data),
-        timestamp: new Date(),
-        ipAddress: data.ipAddress,
-        userAgent: data.userAgent,
-        userId: data.userId || null
+        userId: data.userId,
+        action: event,
+        details: data,
+        ipAddress: data.ipAddress || null,
+        userAgent: data.userAgent || null,
+        success: !event.includes('FAILED') && !event.includes('DENIED') && !event.includes('ERROR'),
+        errorMessage: data.error || data.reason || null
       }
     });
   } catch (error) {

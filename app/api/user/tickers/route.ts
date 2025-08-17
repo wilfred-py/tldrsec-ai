@@ -35,7 +35,37 @@ export async function GET() {
     );
 
     if (!dbUser) {
-      return NextResponse.json({ error: 'User not found in database' }, { status: 404 });
+      // Auto-create user if they don't exist in database
+      console.log(`User not found. Creating new user for ${primaryEmail} with auth ID ${userId}`);
+      
+      try {
+        const newUser = await dbRetry.transaction(() =>
+          prisma.user.create({
+            data: {
+              id: userId, // Use Clerk user ID as primary key for consistency
+              email: primaryEmail,
+              authProvider: 'clerk',
+              authProviderId: userId,
+              name: user.firstName ? `${user.firstName} ${user.lastName || ''}`.trim() : undefined,
+              subscriptionTier: 'FREE', // Default tier
+              budgetUsed: 0,
+              processingBudget: 0.20, // Default FREE tier budget
+            },
+            include: {
+              tickers: true
+            }
+          })
+        );
+        
+        console.log('User created successfully:', newUser.id);
+        return NextResponse.json({ 
+          tickers: newUser.tickers,
+          message: 'User created and initialized'
+        });
+      } catch (createError) {
+        console.error('Failed to create user:', createError);
+        return NextResponse.json({ error: 'Failed to initialize user account' }, { status: 500 });
+      }
     }
 
     // Return user tickers
@@ -99,13 +129,17 @@ export async function POST(request: Request) {
       // If no user found, create one
       console.log(`User not found. Creating new user for ${primaryEmail} with auth ID ${userId}`);
       
-      // Create new user
+      // Create new user with consistent schema
       const newUser = await prisma.user.create({
         data: {
+          id: userId, // Use Clerk user ID as primary key for consistency
           email: primaryEmail,
           authProvider: 'clerk',
           authProviderId: userId,
           name: user.firstName ? `${user.firstName} ${user.lastName || ''}`.trim() : undefined,
+          subscriptionTier: 'FREE', // Default tier
+          budgetUsed: 0,
+          processingBudget: 0.20, // Default FREE tier budget
         }
       });
       
