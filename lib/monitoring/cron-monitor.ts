@@ -38,6 +38,8 @@ export class CronJobMonitor {
   private jobName: string;
   private startTime: Date;
   private metrics: CronExecutionMetrics;
+  private initialized: boolean = false;
+  private initializationPromise: Promise<void>;
 
   constructor(jobName: string, triggerSource: 'VERCEL_CRON' | 'RAILWAY_CRON' | 'MANUAL' | 'EXTERNAL' = 'VERCEL_CRON') {
     this.executionId = uuidv4();
@@ -57,7 +59,13 @@ export class CronJobMonitor {
       warningCount: 0
     };
 
-    this.initializeExecution(triggerSource);
+    this.initializationPromise = this.initializeExecution(triggerSource);
+  }
+
+  async ensureInitialized() {
+    if (!this.initialized) {
+      await this.initializationPromise;
+    }
   }
 
   private async initializeExecution(triggerSource: string) {
@@ -77,6 +85,7 @@ export class CronJobMonitor {
         }
       });
 
+      this.initialized = true;
       cronLogger.info(`Started cron job monitoring`, {
         executionId: this.executionId,
         jobName: this.jobName,
@@ -85,6 +94,7 @@ export class CronJobMonitor {
       });
     } catch (error) {
       cronLogger.error('Failed to initialize cron job execution tracking', { error });
+      this.initialized = false;
     }
   }
 
@@ -92,6 +102,13 @@ export class CronJobMonitor {
     Object.assign(this.metrics, updates);
     
     try {
+      await this.ensureInitialized();
+      
+      if (!this.initialized) {
+        cronLogger.warn('Skipping metrics update - initialization failed', { executionId: this.executionId });
+        return;
+      }
+      
       const updateData: any = {};
       if (updates.tickersChecked !== undefined) updateData.tickersChecked = updates.tickersChecked;
       if (updates.newFilingsFound !== undefined) updateData.newFilingsFound = updates.newFilingsFound;
@@ -174,6 +191,22 @@ export class CronJobMonitor {
     const durationMs = completedAt.getTime() - this.startTime.getTime();
 
     try {
+      await this.ensureInitialized();
+      
+      if (!this.initialized) {
+        cronLogger.warn('Skipping completion update - initialization failed', { 
+          executionId: this.executionId, 
+          status,
+          durationMs 
+        });
+        return {
+          executionId: this.executionId,
+          duration: durationMs,
+          status,
+          metrics: this.metrics
+        };
+      }
+      
       await prisma.cronJobExecution.update({
         where: { executionId: this.executionId },
         data: {
@@ -255,7 +288,7 @@ export class CronJobAnalytics {
         createdAt: {
           gte: startDate
         },
-        status: 'COMPLETED'
+        status: 'SUCCESS'
       },
       _sum: {
         totalCostUSD: true,
