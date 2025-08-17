@@ -64,7 +64,7 @@ export async function GET(request: NextRequest) {
     await cleanupOldMonitoringData();
 
     // Complete monitoring
-    const result = await monitor.complete('COMPLETED');
+    const result = await monitor.complete('SUCCESS');
     
     cronLogger.info('SEC filing monitoring completed successfully', result);
 

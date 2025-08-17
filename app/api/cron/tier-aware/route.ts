@@ -228,7 +228,7 @@ export async function GET(request: NextRequest) {
     const results = await processEligibleUsers(eligibleUsers, allUsers, monitor);
     
     // Complete monitoring
-    const monitorResult = await monitor.complete('COMPLETED');
+    const monitorResult = await monitor.complete('SUCCESS');
     
     cronLogger.info('Tier-aware cron job completed successfully', {
       ...results,
