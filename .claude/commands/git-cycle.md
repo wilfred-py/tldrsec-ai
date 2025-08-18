@@ -56,6 +56,7 @@ With options:
 - Follows present tense, imperative mood
 - Keeps first line under 72 characters
 - Uses appropriate emoji and type for each change
+- Does not ask user whether they want to proceed with git commit -m "" commands
 
 ### 4. Branch Management
 - If on main branch, creates new feature branch with descriptive name

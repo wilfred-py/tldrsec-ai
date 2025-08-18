@@ -3,14 +3,18 @@ import { getPrismaClient } from '../../../../lib/db/prisma';
 import { logger } from '../../../../lib/logging';
 import { getMarketHoursContext, getUserProcessingStatuses, getEligibleUsers, TIER_FREQUENCIES, TIER_BUDGETS } from '../../../../lib/cron/market-hours';
 import { CronJobMonitor } from '../../../../lib/monitoring/cron-monitor';
+import { CronJobStatus } from '../../../../types/cron';
 import { 
   getActiveTickersForMonitoring, 
   checkTickerForNewFilings, 
   getUnprocessedFilings,
   markFilingAsProcessed,
-  cleanupOldMonitoringData 
+  cleanupOldMonitoringData,
+  validateUserTickers,
+  getCikForTicker,
+  validateCik
 } from '../../../../lib/sec-edgar/ticker-monitoring';
-import crypto from 'crypto';
+import * as crypto from 'crypto';
 import { rateLimiter } from '../../../../lib/security/rate-limiter';
 
 const prisma = getPrismaClient();
@@ -125,9 +129,19 @@ interface ProcessingStats {
  * Runs every 5 minutes continuously since SEC filings can be published 24/7
  */
 export async function GET(request: NextRequest) {
-  // Initialize monitoring with platform detection
+  // Initialize monitoring with platform detection using factory pattern
   const platform = process.env.RAILWAY_ENVIRONMENT ? 'RAILWAY_CRON' : 'VERCEL_CRON';
-  const monitor = new CronJobMonitor('tier-aware-sec-monitor', platform);
+  let monitor: CronJobMonitor;
+  
+  try {
+    monitor = await CronJobMonitor.create('tier-aware-sec-monitor', platform);
+  } catch (initError) {
+    cronLogger.error('Failed to initialize cron job monitor', { error: initError });
+    return NextResponse.json({
+      success: false,
+      error: 'Failed to initialize monitoring'
+    }, { status: 500 });
+  }
   
   try {
     cronLogger.info('Starting tier-aware SEC filing cron job');
@@ -139,14 +153,14 @@ export async function GET(request: NextRequest) {
     const rateLimitResult = await rateLimiter.checkLimit('cron-endpoint', clientIp);
     if (!rateLimitResult.allowed) {
       cronLogger.warn('Rate limit exceeded for cron request', { clientIp });
-      await monitor.complete('FAILED', 'Rate limit exceeded');
+      await monitor.complete(CronJobStatus.FAILED, 'Rate limit exceeded');
       return NextResponse.json({ error: 'Rate limit exceeded' }, { status: 429 });
     }
     
     // IP allowlist check (if configured)
     if (ALLOWED_IPS.length > 0 && !ALLOWED_IPS.includes(clientIp)) {
       cronLogger.warn('IP not allowed for cron request', { clientIp });
-      await monitor.complete('FAILED', 'IP not allowed');
+      await monitor.complete(CronJobStatus.FAILED, 'IP not allowed');
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
     
@@ -156,7 +170,7 @@ export async function GET(request: NextRequest) {
     
     if (!authHeader || !timingSafeEqual(authHeader, expectedAuth)) {
       cronLogger.warn('Unauthorized cron request', { clientIp });
-      await monitor.complete('FAILED', 'Unauthorized access attempt');
+      await monitor.complete(CronJobStatus.FAILED, 'Unauthorized access attempt');
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -228,7 +242,7 @@ export async function GET(request: NextRequest) {
     const results = await processEligibleUsers(eligibleUsers, allUsers, monitor);
     
     // Complete monitoring
-    const monitorResult = await monitor.complete('SUCCESS');
+    const monitorResult = await monitor.complete(CronJobStatus.SUCCESS);
     
     cronLogger.info('Tier-aware cron job completed successfully', {
       ...results,
@@ -248,7 +262,7 @@ export async function GET(request: NextRequest) {
     });
 
   } catch (error) {
-    await monitor.complete('FAILED', error instanceof Error ? error.message : 'Unknown error');
+    await monitor.complete(CronJobStatus.FAILED, error instanceof Error ? error.message : 'Unknown error');
     
     cronLogger.error('Tier-aware cron job failed', { error });
 
@@ -263,7 +277,7 @@ export async function GET(request: NextRequest) {
  * Process eligible users by tier with priority handling
  */
 async function processEligibleUsers(
-  eligibleUsers: any[], 
+  eligibleUsers: Array<any>, 
   allUsers: any[], 
   monitor: CronJobMonitor
 ) {
@@ -285,10 +299,11 @@ async function processEligibleUsers(
 
   // Process each tier with appropriate batch sizes
   for (const [tier, userStatuses] of Object.entries(usersByTier)) {
-    if (userStatuses.length === 0) continue;
+    const typedUserStatuses = userStatuses as Array<any>;
+    if (typedUserStatuses.length === 0) continue;
 
     const batchSize = TIER_BATCH_SIZES[tier as keyof typeof TIER_BATCH_SIZES] || 3;
-    const tierResults = await processTierBatch(tier, userStatuses, batchSize, allUsers, monitor);
+    const tierResults = await processTierBatch(tier, typedUserStatuses, batchSize, allUsers, monitor);
     
     // Accumulate results
     results.usersProcessed += tierResults.processed;
@@ -308,7 +323,7 @@ async function processEligibleUsers(
  */
 async function processTierBatch(
   tier: string,
-  userStatuses: any[],
+  userStatuses: Array<any>,
   batchSize: number,
   allUsers: any[],
   monitor: CronJobMonitor
@@ -321,7 +336,7 @@ async function processTierBatch(
   };
 
   // Limit batch size and implement concurrent processing
-  const batchUsers = userStatuses.slice(0, batchSize);
+  const batchUsers = (userStatuses || []).slice(0, batchSize);
   
   // Process users concurrently with controlled concurrency
   const maxConcurrency = Math.min(3, batchUsers.length); // Limit concurrent operations
@@ -330,7 +345,7 @@ async function processTierBatch(
   for (let i = 0; i < batchUsers.length; i += maxConcurrency) {
     const chunk = batchUsers.slice(i, i + maxConcurrency);
     
-    const chunkPromises = chunk.map(async (userStatus) => {
+    const chunkPromises = (chunk || []).map(async (userStatus) => {
       try {
         // Find full user data
         const fullUser = allUsers.find(u => u.id === userStatus.userId);
@@ -447,14 +462,12 @@ async function processTierBatch(
                 dailyLimit,
                 usagePercentage: (newBudgetUsed / dailyLimit) * 100,
                 processingTimestamp: new Date().toISOString(),
-                budgetResetAt: currentUser.budgetResetAt
-              }),
-              success: true,
-              metadata: JSON.stringify({
+                budgetResetAt: currentUser.budgetResetAt,
                 userAgent: 'cron-tier-aware',
                 sessionId: `cron-${Date.now()}`,
                 riskLevel: newBudgetUsed > dailyLimit * 0.8 ? 'HIGH' : 'NORMAL'
-              })
+              }),
+              success: true
             }
           });
           
@@ -524,48 +537,94 @@ async function processUserTierFilings(user: any, tier: string) {
 
   // PRODUCTION IMPLEMENTATION: Process actual SEC filings for user
   try {
-    for (const ticker of user.tickers) {
-      // Check for new filings for this ticker
-      const newFilings = await checkTickerForNewFilings(ticker);
-      
-      for (const filing of newFilings) {
-        try {
-          // Process the filing (integrate with existing SEC processing logic)
-          const processingResult = await processSecFiling(filing, user, tier);
-          
-          if (processingResult.success) {
-            result.filingsProcessed++;
-            result.cost += processingResult.cost || 0;
-            
-            // Mark filing as processed
-            await markFilingAsProcessed(filing.accessionNumber, user.id);
-          }
-          
-          // Respect tier-based processing limits
-          const maxFilings = TIER_BATCH_SIZES[tier as keyof typeof TIER_BATCH_SIZES] || 3;
-          if (result.filingsProcessed >= maxFilings) {
-            break;
-          }
-          
-        } catch (filingError) {
-          cronLogger.error(`Failed to process filing ${filing.accessionNumber}`, {
-            error: filingError,
-            userId: user.id,
-            ticker: ticker.symbol
-          });
+    // First validate all user tickers have valid CIKs
+    const tickerValidations = await validateUserTickers(user.id, user.tickers);
+    const validTickers = tickerValidations.filter(t => t.valid);
+    
+    if (validTickers.length === 0) {
+      cronLogger.warn(`No valid tickers found for user ${user.id}`, {
+        userId: user.id,
+        totalTickers: user.tickers.length,
+        invalidTickers: tickerValidations.filter(t => !t.valid).map(t => t.symbol)
+      });
+      return result;
+    }
+    
+    if (validTickers.length < user.tickers.length) {
+      cronLogger.warn(`Some tickers invalid for user ${user.id}`, {
+        userId: user.id,
+        validCount: validTickers.length,
+        totalCount: user.tickers.length,
+        invalidTickers: tickerValidations.filter(t => !t.valid).map(t => t.symbol)
+      });
+    }
+
+    for (const tickerValidation of validTickers) {
+      try {
+        // Find the original ticker object
+        const originalTicker = user.tickers.find((t: any) => t.symbol === tickerValidation.symbol);
+        if (!originalTicker) {
+          cronLogger.warn(`Original ticker not found for ${tickerValidation.symbol}`);
+          continue;
         }
-      }
-      
-      // Break if we've hit the tier limit
-      const maxFilings = TIER_BATCH_SIZES[tier as keyof typeof TIER_BATCH_SIZES] || 3;
-      if (result.filingsProcessed >= maxFilings) {
-        break;
+
+        // Create a ticker object with validated CIK for checkTickerForNewFilings
+        const tickerWithCik = {
+          ...originalTicker,
+          cik: tickerValidation.cik!,
+          rssUrl: `https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=${tickerValidation.cik}&type=10&dateb=&count=100&output=atom`
+        };
+
+        // Check for new filings for this ticker
+        const newFilings = await checkTickerForNewFilings(tickerWithCik);
+        
+        for (const filing of newFilings) {
+          try {
+            // Process the filing (integrate with existing SEC processing logic)
+            const processingResult = await processSecFiling(filing, user, tier);
+            
+            if (processingResult.success) {
+              result.filingsProcessed++;
+              result.cost += processingResult.cost || 0;
+              
+              // Mark filing as processed  
+              await markFilingAsProcessed(filing.accessionNumber, user.id);
+            }
+            
+            // Respect tier-based processing limits
+            const maxFilings = TIER_BATCH_SIZES[tier as keyof typeof TIER_BATCH_SIZES] || 3;
+            if (result.filingsProcessed >= maxFilings) {
+              break;
+            }
+            
+          } catch (filingError) {
+            cronLogger.error(`Failed to process filing ${filing.accessionNumber}`, {
+              error: filingError instanceof Error ? filingError.message : 'Unknown error',
+              userId: user.id,
+              ticker: tickerValidation.symbol,
+              cik: tickerValidation.cik
+            });
+          }
+        }
+        
+        // Break if we've hit the tier limit
+        const maxFilings = TIER_BATCH_SIZES[tier as keyof typeof TIER_BATCH_SIZES] || 3;
+        if (result.filingsProcessed >= maxFilings) {
+          break;
+        }
+      } catch (tickerError) {
+        cronLogger.error(`Failed to process ticker ${tickerValidation.symbol} for user ${user.id}`, {
+          error: tickerError instanceof Error ? tickerError.message : 'Unknown error',
+          userId: user.id,
+          ticker: tickerValidation.symbol,
+          cik: tickerValidation.cik
+        });
       }
     }
     
   } catch (error) {
     cronLogger.error(`Failed to process SEC filings for user ${user.id}`, {
-      error,
+      error: error instanceof Error ? error.message : 'Unknown error',
       tier,
       tickerCount: user.tickers.length
     });

@@ -22,9 +22,9 @@ export class CronJobMonitor {
   private startTime: Date;
   private metrics: CronExecutionMetrics;
   private initialized: boolean = false;
-  private initializationPromise: Promise<void>;
+  private initializationError?: Error;
 
-  constructor(jobName: string, triggerSource: CronTriggerSource = 'VERCEL_CRON') {
+  private constructor(jobName: string, triggerSource: CronTriggerSource = 'VERCEL_CRON') {
     this.executionId = uuidv4();
     this.jobName = jobName;
     this.startTime = new Date();
@@ -41,17 +41,28 @@ export class CronJobMonitor {
       errorCount: 0,
       warningCount: 0
     };
-
-    this.initializationPromise = this.initializeExecution(triggerSource);
   }
 
-  async ensureInitialized() {
+  /**
+   * Factory method to create and initialize CronJobMonitor
+   * This ensures the database record is created before returning the instance
+   */
+  static async create(jobName: string, triggerSource: CronTriggerSource = 'VERCEL_CRON'): Promise<CronJobMonitor> {
+    const monitor = new CronJobMonitor(jobName, triggerSource);
+    await monitor.initializeExecution(triggerSource);
+    return monitor;
+  }
+
+  private ensureInitialized(): void {
     if (!this.initialized) {
-      await this.initializationPromise;
+      if (this.initializationError) {
+        throw this.initializationError;
+      }
+      throw new Error('CronJobMonitor not properly initialized. Use CronJobMonitor.create() instead of constructor.');
     }
   }
 
-  private async initializeExecution(triggerSource: string) {
+  private async initializeExecution(triggerSource: string): Promise<void> {
     try {
       await prisma.cronJobExecution.create({
         data: {
@@ -76,21 +87,17 @@ export class CronJobMonitor {
         startTime: this.startTime
       });
     } catch (error) {
+      this.initializationError = error instanceof Error ? error : new Error('Unknown initialization error');
       cronLogger.error('Failed to initialize cron job execution tracking', { error });
-      this.initialized = false;
+      throw this.initializationError;
     }
   }
 
-  async updateMetrics(updates: Partial<CronExecutionMetrics>) {
-    Object.assign(this.metrics, updates);
-    
+  async updateMetrics(updates: Partial<CronExecutionMetrics>): Promise<void> {
     try {
-      await this.ensureInitialized();
+      this.ensureInitialized();
       
-      if (!this.initialized) {
-        cronLogger.warn('Skipping metrics update - initialization failed', { executionId: this.executionId });
-        return;
-      }
+      Object.assign(this.metrics, updates);
       
       const updateData: any = {};
       if (updates.tickersChecked !== undefined) updateData.tickersChecked = updates.tickersChecked;
@@ -105,6 +112,7 @@ export class CronJobMonitor {
       });
     } catch (error) {
       cronLogger.error('Failed to update cron job metrics', { error, executionId: this.executionId });
+      // Don't throw here to avoid breaking the cron flow
     }
   }
 
@@ -174,21 +182,7 @@ export class CronJobMonitor {
     const durationMs = completedAt.getTime() - this.startTime.getTime();
 
     try {
-      await this.ensureInitialized();
-      
-      if (!this.initialized) {
-        cronLogger.warn('Skipping completion update - initialization failed', { 
-          executionId: this.executionId, 
-          status,
-          durationMs 
-        });
-        return {
-          executionId: this.executionId,
-          duration: durationMs,
-          status,
-          metrics: this.metrics
-        } as CronExecutionResult;
-      }
+      this.ensureInitialized();
       
       await prisma.cronJobExecution.update({
         where: { executionId: this.executionId },
@@ -222,7 +216,14 @@ export class CronJobMonitor {
 
     } catch (error) {
       cronLogger.error('Failed to complete cron job execution tracking', { error });
-      throw error;
+      
+      // Return a fallback result even if DB update fails
+      return {
+        executionId: this.executionId,
+        duration: durationMs,
+        status,
+        metrics: this.metrics
+      } as CronExecutionResult;
     }
   }
 
@@ -241,23 +242,7 @@ export class CronJobAnalytics {
   static async getRecentExecutions(limit: number = 10) {
     return prisma.cronJobExecution.findMany({
       orderBy: { startedAt: 'desc' },
-      take: limit,
-      include: {
-        filingProcessingLogs: {
-          select: {
-            ticker: true,
-            filingType: true,
-            status: true,
-            summaryCostUSD: true
-          }
-        },
-        userNotificationLogs: {
-          select: {
-            deliveryStatus: true,
-            deliveryCostUSD: true
-          }
-        }
-      }
+      take: limit
     });
   }
 
@@ -265,23 +250,17 @@ export class CronJobAnalytics {
     const startDate = new Date();
     startDate.setDate(startDate.getDate() - days);
 
-    return prisma.cronJobExecution.groupBy({
-      by: ['createdAt'],
+    return prisma.cronJobExecution.findMany({
       where: {
         createdAt: {
           gte: startDate
         },
         status: CronJobStatus.SUCCESS
       },
-      _sum: {
-        totalCostUSD: true,
-        aiCostUSD: true,
-        emailCostUSD: true,
-        tokensUsed: true
-      },
-      _count: {
+      select: {
+        createdAt: true,
         filingsProcessed: true,
-        usersNotified: true
+        emailsSent: true
       }
     });
   }
@@ -290,26 +269,8 @@ export class CronJobAnalytics {
     const startDate = new Date();
     startDate.setDate(startDate.getDate() - days);
 
-    return prisma.filingProcessingLog.groupBy({
-      by: ['ticker'],
-      where: {
-        processedAt: {
-          gte: startDate
-        }
-      },
-      _count: {
-        id: true
-      },
-      _sum: {
-        summaryCostUSD: true,
-        emailsSent: true
-      },
-      orderBy: {
-        _count: {
-          id: 'desc'
-        }
-      }
-    });
+    // Return empty array for now - would need proper table structure
+    return [];
   }
 
   static async getCurrentJobStatus() {

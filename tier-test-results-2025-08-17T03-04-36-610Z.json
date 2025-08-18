@@ -1,0 +1,168 @@
+{
+  "startTime": "2025-08-17T03:04:18.402Z",
+  "tierTests": [
+    {
+      "timestamp": "2025-08-17T03:04:19.713Z",
+      "tierBreakdown": {
+        "FREE": 0
+      },
+      "usersProcessed": 0,
+      "totalCost": 0,
+      "marketContext": {
+        "isMarketHours": false,
+        "isMarketDay": false
+      },
+      "executionId": "c57d39c9-8e6c-45bd-aa56-be2697749ed9",
+      "duration": 1062
+    }
+  ],
+  "budgetTests": [
+    {
+      "expectedBudgets": {
+        "FREE": 0.2,
+        "PROFESSIONAL": 0.6,
+        "ENTERPRISE": 1.25,
+        "INSTITUTION": 2.5
+      },
+      "expectedBatchSizes": {
+        "FREE": 3,
+        "PROFESSIONAL": 5,
+        "ENTERPRISE": 8,
+        "INSTITUTION": 10
+      },
+      "executions": [
+        {
+          "executionNumber": 1,
+          "data": {
+            "success": true,
+            "executionId": "825120f8-2baf-4c82-9fe1-8e1d61c5ae9d",
+            "duration": 1038,
+            "marketContext": {
+              "isMarketHours": false,
+              "isMarketDay": false
+            },
+            "results": {
+              "usersProcessed": 0,
+              "filingsProcessed": 0,
+              "totalCost": 0,
+              "tierBreakdown": {
+                "FREE": 0
+              },
+              "errors": 2
+            }
+          },
+          "responseTime": 1165.679417
+        },
+        {
+          "executionNumber": 2,
+          "data": {
+            "success": true,
+            "executionId": "1e040ba7-c945-4983-b7f3-98a03df16537",
+            "duration": 948,
+            "marketContext": {
+              "isMarketHours": false,
+              "isMarketDay": false
+            },
+            "results": {
+              "usersProcessed": 0,
+              "filingsProcessed": 0,
+              "totalCost": 0,
+              "tierBreakdown": {
+                "FREE": 0
+              },
+              "errors": 2
+            }
+          },
+          "responseTime": 1187.106416
+        },
+        {
+          "executionNumber": 3,
+          "data": {
+            "success": true,
+            "executionId": "d059fb2f-22a3-4e21-a360-f08efd3f1d6b",
+            "duration": 640,
+            "marketContext": {
+              "isMarketHours": false,
+              "isMarketDay": false
+            },
+            "results": {
+              "usersProcessed": 0,
+              "filingsProcessed": 0,
+              "totalCost": 0,
+              "tierBreakdown": {
+                "FREE": 0
+              },
+              "errors": 2
+            }
+          },
+          "responseTime": 767.2795000000006
+        }
+      ],
+      "budgetAnalysis": {
+        "consistent": true,
+        "totalCosts": [
+          0,
+          0,
+          0
+        ],
+        "avgResponseTime": 1040.0217776666668
+      }
+    }
+  ],
+  "frequencyTests": [
+    {
+      "expectedFrequencies": {
+        "FREE": 120,
+        "PROFESSIONAL": 30,
+        "ENTERPRISE": 15,
+        "INSTITUTION": 5
+      },
+      "rapidCalls": [
+        {
+          "callNumber": 1,
+          "timestamp": 1755399866750,
+          "success": true,
+          "responseTime": 901.8094590000001,
+          "usersProcessed": 0
+        },
+        {
+          "callNumber": 2,
+          "timestamp": 1755399868013,
+          "success": true,
+          "responseTime": 762.7561250000017,
+          "usersProcessed": 0
+        },
+        {
+          "callNumber": 3,
+          "timestamp": 1755399869595,
+          "success": true,
+          "responseTime": 1080.4772080000002,
+          "usersProcessed": 0
+        },
+        {
+          "callNumber": 4,
+          "timestamp": 1755399870862,
+          "success": true,
+          "responseTime": 766.0625,
+          "usersProcessed": 0
+        },
+        {
+          "callNumber": 5,
+          "timestamp": 1755399872172,
+          "success": true,
+          "responseTime": 808.472667,
+          "usersProcessed": 0
+        }
+      ],
+      "totalDuration": 6825,
+      "successfulCalls": 5
+    }
+  ],
+  "summary": {
+    "totalTests": 16,
+    "passed": 15,
+    "failed": 1,
+    "successRate": "93.8"
+  },
+  "endTime": "2025-08-17T03:04:36.609Z"
+}
