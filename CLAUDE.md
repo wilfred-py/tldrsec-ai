@@ -34,8 +34,42 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ### Specialized Testing
 - `npm run test:parsers` - Run SEC filing parser tests
 - `npm run test:tesla` - Test Tesla filing parsing
+- `npm run test:tesla:simple` - Simplified Tesla filing tests
 - `npm run test:extraction` - Test content extraction
+- `npm run test:extraction:ts` - TypeScript extraction tests
+- `npm run test:extraction:simple` - Simplified extraction tests
+- `npm run test:extraction:direct` - Direct extraction tests
 - `npm run test:onboarding` - Test onboarding flow
+
+### Cron & Background Job Testing
+- `npm run test:cron` - Test cron job functionality
+- `npm run test:cron-performance` - Performance tests for cron jobs
+- `npm run test:cron-endpoint` - Test cron API endpoints
+
+### Enhanced Summarization Testing
+- `npm run test:enhanced:performance` - Performance tests for enhanced summaries
+- `npm run test:enhanced:integration` - Integration tests for enhanced features
+- `npm run test:enhanced:functionality` - Functional tests for enhanced summaries
+
+### Parser-Specific Testing
+- `npm run test:pdf` - Test PDF parser functionality
+- `npm run test:xbrl` - Test XBRL parser functionality
+
+### Build Pipeline Testing
+- `npm run test:build` - Test build pipeline
+- `npm run test:build:performance` - Build performance tests
+- `npm run test:build:integration` - Build integration tests
+
+### Security Testing
+- `npm run test:security` - Run security test suite
+
+### Security Operations
+- API key generation and management for secure access
+- Security configuration validation and setup
+- Environment variable validation for security compliance
+- Signature testing for authentication mechanisms
+- Security auditing and vulnerability assessment
+- Access control validation and authorization testing
 
 ## Project Architecture
 

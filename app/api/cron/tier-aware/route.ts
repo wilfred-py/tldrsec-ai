@@ -14,7 +14,7 @@ import {
   getCikForTicker,
   validateCik
 } from '../../../../lib/sec-edgar/ticker-monitoring';
-import * as crypto from 'crypto';
+// Web Crypto API for Edge Runtime compatibility
 import { rateLimiter } from '../../../../lib/security/rate-limiter';
 
 const prisma = getPrismaClient();
@@ -48,10 +48,15 @@ function timingSafeEqual(a: string, b: string): boolean {
     return false;
   }
   
-  return crypto.timingSafeEqual(
-    Buffer.from(a, 'utf8'),
-    Buffer.from(b, 'utf8')
-  );
+  const encoder = new TextEncoder();
+  const aBytes = encoder.encode(a);
+  const bBytes = encoder.encode(b);
+  
+  let result = 0;
+  for (let i = 0; i < aBytes.length; i++) {
+    result |= aBytes[i] ^ bBytes[i];
+  }
+  return result === 0;
 }
 
 /**

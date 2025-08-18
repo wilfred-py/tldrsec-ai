@@ -21,16 +21,22 @@ import { executeWithAdaptiveRetry, AdaptiveRetryConfig, DefaultAdaptiveRetryConf
 import { generateFallbackSummary, isSummaryComplete } from './fallback-summary';
 import { SummarizationResult } from './summarize';
 import { SECFilingType } from './prompts/prompt-types';
-import crypto from 'crypto';
+// Web Crypto API for Edge Runtime compatibility
 
 /**
- * Generate a hash of an object for use as a cache key
+ * Generate a hash of an object for use as a cache key using Web Crypto API
  * @param obj Object to hash
  * @returns Hash string
  */
-export function hashObject(obj: any): string {
+export async function hashObject(obj: any): Promise<string> {
   const str = JSON.stringify(obj);
-  return crypto.createHash('md5').update(str).digest('hex');
+  const encoder = new TextEncoder();
+  const data = encoder.encode(str);
+  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+  return Array.from(new Uint8Array(hashBuffer))
+    .map(b => b.toString(16).padStart(2, '0'))
+    .join('')
+    .substring(0, 32); // Take first 32 chars to match MD5 length
 }
 
 /**

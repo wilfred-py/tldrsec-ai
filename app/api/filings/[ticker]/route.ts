@@ -13,7 +13,7 @@ import xpath from 'xpath';
 import { TickerResolver } from '@/lib/sec-edgar/ticker-service/ticker-resolver';
 import { SECDataClient } from '@/lib/sec-edgar/ticker-service/sec-client';
 import { filingAnalyzer } from '@/lib/ai/filing-analyzer';
-import { createHash } from 'crypto';
+// Web Crypto API for Edge Runtime compatibility
 
 // Initialize SEC Edgar client
 const secClient = new SECEdgarClient({
@@ -128,10 +128,13 @@ export async function GET(
         
         const documentContent = await secClient.getFilingDocument(link);
         
-        // Generate a document hash for caching
-        const documentHash = createHash('sha256')
-          .update(`${ticker}-${filingType}-${updated}-${documentContent.length}`)
-          .digest('hex');
+        // Generate a document hash for caching using Web Crypto API
+        const encoder = new TextEncoder();
+        const data = encoder.encode(`${ticker}-${filingType}-${updated}-${documentContent.length}`);
+        const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+        const documentHash = Array.from(new Uint8Array(hashBuffer))
+          .map(b => b.toString(16).padStart(2, '0'))
+          .join('');
         
         // Analyze the filing with Claude AI using our optimized service
         console.log(`Analyzing ${filingType} filing with Claude AI...`);
