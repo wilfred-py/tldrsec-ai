@@ -1,6 +1,7 @@
 import { getPrismaClient } from '../db/prisma';
 import { fetchSecCompanyRSS, generateSecRssUrl, type RSSFilingEntry } from './rss-parser';
 import { logger } from '../logging';
+import { upsertTickerMonitoringWithLock, updateTickerMonitoringWithLock, ConcurrencyOptions } from '../db/concurrency';
 
 const prisma = getPrismaClient();
 const monitoringLogger = logger.child('ticker-monitoring');
@@ -78,27 +79,47 @@ export async function getActiveTickersForMonitoring(): Promise<ActiveTicker[]> {
               return null;
             }
 
-            // Get or create TickerMonitoring record with retry logic
-            const monitoring = await retryDatabaseOperation(async () => {
-              return await prisma.tickerMonitoring.upsert({
-                where: { cik: cikMapping.cik },
-                update: {
-                  subscriberCount,
-                  isActive: true,
-                  symbol: cikMapping.ticker,
-                  companyName: cikMapping.companyName || `Company ${cikMapping.ticker}`,
-                  updatedAt: new Date()
-                },
-                create: {
-                  cik: cikMapping.cik,
-                  symbol: cikMapping.ticker,
-                  companyName: cikMapping.companyName || `Company ${cikMapping.ticker}`,
-                  rssUrl: generateSecRssUrl(cikMapping.cik),
-                  subscriberCount,
-                  isActive: true
-                }
-              });
-            }, 3, `upsert TickerMonitoring for ${symbol}`);
+            // Get or create TickerMonitoring record with optimistic locking
+            const monitoringResult = await upsertTickerMonitoringWithLock(
+              cikMapping.cik,
+              {
+                symbol: cikMapping.ticker,
+                companyName: cikMapping.companyName || `Company ${cikMapping.ticker}`,
+                rssUrl: generateSecRssUrl(cikMapping.cik),
+                subscriberCount,
+                isActive: true
+              },
+              {
+                subscriberCount,
+                isActive: true,
+                symbol: cikMapping.ticker,
+                companyName: cikMapping.companyName || `Company ${cikMapping.ticker}`
+              },
+              {
+                maxRetries: 3,
+                baseDelay: 100,
+                maxDelay: 1000
+              }
+            );
+            
+            // Get the full monitoring record for return
+            const monitoring = await prisma.tickerMonitoring.findUnique({
+              where: { id: monitoringResult.id },
+              select: {
+                id: true,
+                cik: true,
+                symbol: true,
+                companyName: true,
+                rssUrl: true,
+                lastChecked: true,
+                lastAccessionSeen: true,
+                subscriberCount: true
+              }
+            });
+            
+            if (!monitoring) {
+              throw new Error(`Failed to retrieve TickerMonitoring record ${monitoringResult.id}`);
+            }
 
             return {
               id: monitoring.id,
@@ -175,29 +196,42 @@ export async function checkTickerForNewFilings(ticker: ActiveTicker): Promise<RS
       !existingAccessions.has(entry.accessionNumber)
     );
 
-    // Update last checked time and latest accession with upsert fallback
+    // Update last checked time and latest accession with optimistic locking
     if (rssFeed.entries.length > 0) {
       const latestAccession = rssFeed.entries[0].accessionNumber;
       
-      await retryDatabaseOperation(async () => {
-        return await prisma.tickerMonitoring.update({
-          where: { id: ticker.id },
-          data: {
-            lastChecked: new Date(),
-            lastAccessionSeen: latestAccession
-          }
-        });
-      }, 3, `update ticker monitoring for ${ticker.symbol}`);
+      await updateTickerMonitoringWithLock(
+        ticker.id,
+        {
+          lastChecked: new Date(),
+          lastAccessionSeen: latestAccession
+        },
+        {
+          maxRetries: 3,
+          baseDelay: 100,
+          maxDelay: 1000
+        }
+      );
     } else {
       // Update last checked even if no new filings
-      await retryDatabaseOperation(async () => {
-        return await prisma.tickerMonitoring.update({
-          where: { id: ticker.id },
-          data: {
+      try {
+        await updateTickerMonitoringWithLock(
+          ticker.id,
+          {
             lastChecked: new Date()
+          },
+          {
+            maxRetries: 2,
+            baseDelay: 100,
+            maxDelay: 500
           }
+        );
+      } catch (error) {
+        // Allow silent failure for lastChecked updates to avoid breaking the flow
+        monitoringLogger.warn(`Failed to update lastChecked for ${ticker.symbol}, continuing`, {
+          error: error instanceof Error ? error.message : 'Unknown error'
         });
-      }, 3, `update last checked for ${ticker.symbol}`, true); // Allow silent failure
+      }
     }
 
     // Save new entries to database
@@ -240,10 +274,15 @@ export async function checkTickerForNewFilings(ticker: ActiveTicker): Promise<RS
     
     // Update last checked even on error to avoid getting stuck, but don't throw if this fails
     try {
-      await prisma.tickerMonitoring.update({
-        where: { id: ticker.id },
-        data: { lastChecked: new Date() }
-      });
+      await updateTickerMonitoringWithLock(
+        ticker.id,
+        { lastChecked: new Date() },
+        { 
+          maxRetries: 1, 
+          baseDelay: 50, 
+          maxDelay: 200 
+        }
+      );
     } catch (updateError) {
       monitoringLogger.warn(`Failed to update lastChecked for ${ticker.symbol} after error`, {
         updateError: updateError instanceof Error ? updateError.message : 'Unknown error'
