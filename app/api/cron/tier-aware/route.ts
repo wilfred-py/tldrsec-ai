@@ -21,6 +21,7 @@ const cronLogger = logger.child('tier-aware-cron');
 interface User {
   id: string;
   tickers: Array<{ symbol: string; [key: string]: unknown }>;
+  email?: string;
   [key: string]: unknown;
 }
 
@@ -256,6 +257,7 @@ export async function GET(request: NextRequest) {
       },
       select: {
         id: true,
+        email: true,
         subscriptionTier: true,
         lastCronProcessed: true,
         processingBudget: true,
@@ -727,30 +729,128 @@ async function processUserTierFilings(user: User, tier: string) {
  */
 async function processSecFiling(filing: { accessionNumber: string; formType: string; [key: string]: unknown }, user: User, tier: string) {
   try {
-    // Integrate with existing SEC filing processing logic
-    // This would typically involve:
-    // 1. Fetching the filing content
-    // 2. Parsing and analyzing the filing
-    // 3. Generating summaries or alerts
-    // 4. Sending notifications to the user
+    // PRODUCTION IMPLEMENTATION: Call actual summarization and email services
+    const { generateAISummaryWithRetry } = await import('../../../../services/filing/summaryGenerationService');
+    const { sendEmailSummary } = await import('../../../../services/filing/sendEmailSummary');
     
-    // For now, return a basic structure
-    // TODO: Replace with actual implementation
-    const estimatedCost = calculateFilingProcessingCost(filing, tier);
-    
-    cronLogger.debug(`Processing filing ${filing.accessionNumber} for user ${user.id}`, {
+    cronLogger.info(`Processing filing ${filing.accessionNumber} for user ${user.id}`, {
       tier,
       filingType: filing.formType,
-      estimatedCost
+      userId: user.id
+    });
+
+    // 1. Generate AI summary for the filing
+    const summaryResult = await generateAISummaryWithRetry(
+      '', // Content will be fetched within the service
+      {
+        accessionNumber: filing.accessionNumber,
+        formType: filing.formType,
+        filingDate: new Date().toISOString() // Use current date as fallback
+      },
+      {
+        name: 'Company', // Will be resolved from ticker
+        ticker: user.tickers[0]?.symbol || 'UNKNOWN'
+      },
+      2 // max retries
+    );
+
+    let actualCost = summaryResult.cost || 0;
+
+    // 2. Store the summary in database
+    try {
+      const tickerRecord = await prisma.ticker.findFirst({
+        where: { symbol: user.tickers[0]?.symbol || 'UNKNOWN' }
+      });
+
+      if (tickerRecord) {
+        await prisma.summary.create({
+          data: {
+            tickerId: tickerRecord.id,
+            filingType: filing.formType,
+            summaryText: summaryResult.summary,
+            summaryJSON: {
+              ticker: user.tickers[0]?.symbol || 'UNKNOWN',
+              accessionNumber: filing.accessionNumber,
+              filingType: filing.formType,
+              summaryText: summaryResult.summary,
+              keyPoints: summaryResult.keyPoints || [],
+              cost: actualCost,
+              inputTokens: summaryResult.inputTokens || 0,
+              outputTokens: summaryResult.outputTokens || 0
+            },
+            tokensUsed: summaryResult.tokensUsed || 0,
+            cost: actualCost,
+            sentToUser: false
+          }
+        });
+
+        cronLogger.info(`Summary stored for filing ${filing.accessionNumber}`, {
+          userId: user.id,
+          ticker: user.tickers[0]?.symbol,
+          cost: actualCost
+        });
+      }
+    } catch (dbError) {
+      cronLogger.error(`Failed to store summary for filing ${filing.accessionNumber}`, { 
+        error: dbError,
+        userId: user.id 
+      });
+      // Don't fail the whole process for DB storage errors
+    }
+
+    // 3. Send email notification if user has email
+    if (user.email) {
+      try {
+        const emailResult = await sendEmailSummary(
+          user.email,
+          [user.tickers[0]?.symbol || 'UNKNOWN'],
+          false // not debug mode
+        );
+        
+        if (emailResult.success) {
+          cronLogger.info(`Email sent successfully for filing ${filing.accessionNumber}`, {
+            userId: user.id,
+            email: user.email,
+            ticker: user.tickers[0]?.symbol
+          });
+        } else {
+          cronLogger.warn(`Email sending failed for filing ${filing.accessionNumber}`, {
+            userId: user.id,
+            email: user.email,
+            error: emailResult.error
+          });
+        }
+      } catch (emailError) {
+        cronLogger.error(`Email service error for filing ${filing.accessionNumber}`, {
+          error: emailError,
+          userId: user.id,
+          email: user.email
+        });
+        // Don't fail the whole process for email errors
+      }
+    } else {
+      cronLogger.debug(`No email address for user ${user.id}, skipping email notification`);
+    }
+    
+    cronLogger.info(`Successfully processed filing ${filing.accessionNumber} for user ${user.id}`, {
+      tier,
+      filingType: filing.formType,
+      actualCost,
+      summaryGenerated: !!summaryResult.summary
     });
     
     return {
       success: true,
-      cost: estimatedCost
+      cost: actualCost
     };
     
   } catch (error) {
-    cronLogger.error(`Failed to process filing ${filing.accessionNumber}`, { error });
+    cronLogger.error(`Failed to process filing ${filing.accessionNumber}`, { 
+      error,
+      userId: user.id,
+      tier,
+      filingType: filing.formType
+    });
     return {
       success: false,
       cost: 0
