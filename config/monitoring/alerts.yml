@@ -1,0 +1,163 @@
+# Production Monitoring and Alerting Configuration
+# PR #173: Enhanced monitoring for concurrency, security, and Edge Runtime
+# Deploy: Railway Production Environment
+
+version: "1.0"
+environment: "production"
+
+# Database Concurrency Monitoring
+database:
+  concurrency_conflicts:
+    metric: "db_concurrency_conflicts_total"
+    threshold: 10
+    window: "5m"
+    severity: "warning"
+    alert: "High number of database concurrency conflicts detected"
+    
+  optimistic_lock_failures:
+    metric: "db_optimistic_lock_failures_total"
+    threshold: 20
+    window: "10m"
+    severity: "critical"
+    alert: "Excessive optimistic locking failures - potential race condition issues"
+    
+  transaction_duration:
+    metric: "db_transaction_duration_seconds"
+    threshold: 30
+    window: "1m"
+    severity: "warning"
+    alert: "Database transactions taking too long"
+
+# Budget and Financial Monitoring
+financial:
+  budget_conflicts:
+    metric: "budget_update_conflicts_total"
+    threshold: 5
+    window: "15m"
+    severity: "critical"
+    alert: "Budget update conflicts - potential financial integrity issue"
+    
+  cost_validation_failures:
+    metric: "cost_validation_failures_total"
+    threshold: 3
+    window: "5m"
+    severity: "critical"
+    alert: "Cost validation failures - potential security breach attempt"
+    
+  tier_mismatch_errors:
+    metric: "tier_mismatch_errors_total"
+    threshold: 2
+    window: "10m"
+    severity: "high"
+    alert: "Subscription tier mismatches detected"
+
+# Security Monitoring
+security:
+  timing_attack_attempts:
+    metric: "timing_attack_attempts_total"
+    threshold: 1
+    window: "1m"
+    severity: "critical"
+    alert: "Potential timing attack detected"
+    
+  rate_limit_violations:
+    metric: "rate_limit_violations_total"
+    threshold: 100
+    window: "5m"
+    severity: "high"
+    alert: "High rate of rate limit violations"
+    
+  unauthorized_cron_access:
+    metric: "unauthorized_cron_access_total"
+    threshold: 1
+    window: "1m"
+    severity: "critical"
+    alert: "Unauthorized cron endpoint access attempt"
+
+# Edge Runtime Monitoring
+edge_runtime:
+  web_crypto_errors:
+    metric: "web_crypto_errors_total"
+    threshold: 5
+    window: "5m"
+    severity: "high"
+    alert: "Web Crypto API errors detected"
+    
+  crypto_performance_degradation:
+    metric: "crypto_operation_duration_seconds"
+    threshold: 1.0
+    window: "5m"
+    severity: "warning"
+    alert: "Crypto operations taking longer than expected"
+
+# Cron Job Monitoring
+cron_jobs:
+  execution_failures:
+    metric: "cron_execution_failures_total"
+    threshold: 2
+    window: "30m"
+    severity: "critical"
+    alert: "Cron job execution failures"
+    
+  execution_duration:
+    metric: "cron_execution_duration_seconds"
+    threshold: 300
+    window: "1m"
+    severity: "warning"
+    alert: "Cron job taking too long to complete"
+    
+  processing_errors:
+    metric: "cron_user_processing_errors_total"
+    threshold: 10
+    window: "15m"
+    severity: "high"
+    alert: "High error rate in user processing"
+
+# Application Performance
+performance:
+  response_time:
+    metric: "http_request_duration_seconds"
+    threshold: 5.0
+    window: "5m"
+    severity: "warning"
+    alert: "API response times degraded"
+    
+  memory_usage:
+    metric: "process_memory_usage_bytes"
+    threshold: 800000000  # 800MB
+    window: "5m"
+    severity: "warning"
+    alert: "High memory usage detected"
+    
+  error_rate:
+    metric: "http_requests_total{status=~'5..'}"
+    threshold: 5
+    window: "5m"
+    severity: "high"
+    alert: "High error rate detected"
+
+# Notification Channels
+notifications:
+  slack:
+    webhook_url: "${SLACK_WEBHOOK_URL}"
+    channel: "#alerts-production"
+    
+  email:
+    smtp_server: "${SMTP_SERVER}"
+    recipients:
+      - "devops@company.com"
+      - "security@company.com"
+      
+  pagerduty:
+    integration_key: "${PAGERDUTY_INTEGRATION_KEY}"
+    
+# Alert Routing
+routing:
+  critical:
+    channels: ["slack", "email", "pagerduty"]
+    
+  high:
+    channels: ["slack", "email"]
+    
+  warning:
+    channels: ["slack"]
