@@ -46,6 +46,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - `npm run test:cron-performance` - Performance tests for cron jobs
 - `npm run test:cron-endpoint` - Test cron API endpoints
 
+### End-to-End Testing
+- `npm run test:e2e` - **MANDATORY** end-to-end test with email summarization flow
+
 ### Enhanced Summarization Testing
 - `npm run test:enhanced:performance` - Performance tests for enhanced summaries
 - `npm run test:enhanced:integration` - Integration tests for enhanced features
@@ -159,3 +162,58 @@ Required environment variables:
 - Cron jobs for SEC filing monitoring (`/api/cron/`)
 - Job queue system with retry logic and dead letter queue
 - Processing job status tracking and metrics
+
+## Git Workflow & Pre-Commit Requirements
+
+### Mandatory Pre-Commit Testing
+
+**CRITICAL: Before any commit or deployment, you MUST run the end-to-end test to ensure the complete summarization pipeline is working:**
+
+```bash
+npm run test:e2e
+```
+
+This test validates:
+- ✅ Environment configuration (API keys, database connection)
+- ✅ SEC filing retrieval functionality  
+- ✅ AI summarization pipeline
+- ✅ Email delivery to TEST_EMAIL address
+
+### Environment Setup for Testing
+
+Required environment variables for E2E testing:
+- `TEST_EMAIL` - Email address to receive test summaries
+- `ANTHROPIC_API_KEY` - Claude AI integration
+- `DATABASE_URL` - PostgreSQL connection
+- `RESEND_API_KEY` - Email service
+
+### Git Commit Workflow
+
+1. **Complete your code changes**
+2. **Run comprehensive tests:**
+   ```bash
+   npm run lint          # Code quality
+   npm run test           # Unit tests  
+   npm run test:e2e       # End-to-end email test
+   ```
+3. **Verify TEST_EMAIL received summary** - Check your inbox
+4. **Only commit if ALL tests pass** - No exceptions
+5. **Create commit with descriptive message**
+
+### Pre-Deployment Checklist
+
+- [ ] All linting passes (`npm run lint`)
+- [ ] Unit tests pass (`npm run test`)
+- [ ] **E2E test passes (`npm run test:e2e`)**
+- [ ] **TEST_EMAIL received summary email**
+- [ ] Environment variables are properly configured
+- [ ] No sensitive data in commit
+
+**⚠️ WARNING: Never deploy without successful E2E test completion**
+
+### Production Deployment Safety
+
+- E2E test acts as final safety net before production
+- Validates entire user-facing workflow end-to-end
+- Catches integration issues that unit tests might miss
+- Ensures email notifications work for real users
