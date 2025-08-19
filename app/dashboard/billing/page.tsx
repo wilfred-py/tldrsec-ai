@@ -13,14 +13,13 @@ import { Separator } from '@/components/ui/separator';
 import { Switch } from '@/components/ui/switch';
 import { 
   CreditCard, 
-  Calendar, 
-  TrendingUp, 
   CheckCircle, 
   ArrowRight,
   AlertTriangle,
   Zap,
   Shield,
-  Clock
+  Clock,
+  FileText
 } from 'lucide-react';
 import { formatDistanceToNow, format } from 'date-fns';
 import { useUser } from '@clerk/nextjs';

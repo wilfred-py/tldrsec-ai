@@ -1,5 +1,5 @@
 import { logger } from '../logging';
-import * as crypto from 'crypto';
+// Web Crypto API for Edge Runtime compatibility
 
 // Optional Redis dependency - will use in-memory fallback if not available
 let Redis: any;
@@ -63,7 +63,16 @@ class RateLimiter {
       return { allowed: false, remaining: 0, resetTime: Date.now() + windowMs, errorOccurred: true };
     }
 
-    const cacheKey = `rate_limit:${key}:${crypto.createHash('sha256').update(identifier).digest('hex').substring(0, 16)}`;
+    // Create cache key using Web Crypto API
+    const encoder = new TextEncoder();
+    const data = encoder.encode(identifier);
+    const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+    const hashHex = Array.from(new Uint8Array(hashBuffer))
+      .map(b => b.toString(16).padStart(2, '0'))
+      .join('')
+      .substring(0, 16);
+    
+    const cacheKey = `rate_limit:${key}:${hashHex}`;
     const now = Date.now();
     const resetTime = now + windowMs;
 

@@ -1,0 +1,188 @@
+{
+  "startTime": "2025-08-17T02:52:55.023Z",
+  "summary": {
+    "totalTests": 21,
+    "passed": 15,
+    "failed": 6,
+    "errors": [
+      {
+        "testName": "/api/cron/unified accepts valid authentication",
+        "details": {
+          "responseTime": 8.471708999999919,
+          "statusCode": 401,
+          "success": false
+        }
+      },
+      {
+        "testName": "/api/cron/tier-aware blocks invalid authentication",
+        "details": {
+          "responseTime": 232.12604100000044,
+          "statusCode": 500
+        }
+      },
+      {
+        "testName": "/api/health handles concurrent load",
+        "details": {
+          "concurrentRequests": 10,
+          "successfulRequests": 0,
+          "failedRequests": 10,
+          "successRate": "0.0%",
+          "avgResponseTime": "NaN"
+        }
+      },
+      {
+        "testName": "/api/health/database handles concurrent load",
+        "details": {
+          "concurrentRequests": 10,
+          "successfulRequests": 0,
+          "failedRequests": 10,
+          "successRate": "0.0%",
+          "avgResponseTime": "NaN"
+        }
+      },
+      {
+        "testName": "Health endpoint response structure",
+        "details": {
+          "error": "Endpoint not accessible",
+          "statusCode": 503
+        }
+      },
+      {
+        "testName": "Database health endpoint response structure",
+        "details": {
+          "error": "Endpoint not accessible",
+          "statusCode": 429
+        }
+      }
+    ],
+    "successRate": "71.4"
+  },
+  "performance": {
+    "endpoints": {
+      "/api/health": {
+        "requests": 1,
+        "totalTime": 2210.203791,
+        "successCount": 1,
+        "errorCount": 0,
+        "avgResponseTime": 2210.203791,
+        "minResponseTime": 2210.203791,
+        "maxResponseTime": 2210.203791
+      },
+      "/api/health/database": {
+        "requests": 1,
+        "totalTime": 1570.378208,
+        "successCount": 1,
+        "errorCount": 0,
+        "avgResponseTime": 1570.378208,
+        "minResponseTime": 1570.378208,
+        "maxResponseTime": 1570.378208
+      },
+      "/api/cron/unified": {
+        "requests": 1,
+        "totalTime": 8.471708999999919,
+        "successCount": 0,
+        "errorCount": 1,
+        "avgResponseTime": 8.471708999999919,
+        "minResponseTime": 8.471708999999919,
+        "maxResponseTime": 8.471708999999919
+      },
+      "/api/cron/tier-aware": {
+        "requests": 1,
+        "totalTime": 334.26737500000036,
+        "successCount": 0,
+        "errorCount": 1,
+        "avgResponseTime": 334.26737500000036,
+        "minResponseTime": 334.26737500000036,
+        "maxResponseTime": 334.26737500000036
+      },
+      "/api/health_load_test": {
+        "requests": 1,
+        "totalTime": null,
+        "successCount": 0,
+        "errorCount": 1,
+        "avgResponseTime": null,
+        "minResponseTime": null,
+        "maxResponseTime": null
+      },
+      "/api/health/database_load_test": {
+        "requests": 1,
+        "totalTime": null,
+        "successCount": 0,
+        "errorCount": 1,
+        "avgResponseTime": null,
+        "minResponseTime": null,
+        "maxResponseTime": null
+      }
+    }
+  },
+  "security": {
+    "authenticationTests": [
+      {
+        "endpoint": "/api/cron/unified",
+        "test": "unauthenticated_access",
+        "blocked": true,
+        "statusCode": 401
+      },
+      {
+        "endpoint": "/api/cron/unified",
+        "test": "invalid_authentication",
+        "blocked": true,
+        "statusCode": 401
+      },
+      {
+        "endpoint": "/api/cron/unified",
+        "test": "valid_authentication",
+        "allowed": false,
+        "statusCode": 401,
+        "responseTime": 8.471708999999919
+      },
+      {
+        "endpoint": "/api/cron/tier-aware",
+        "test": "unauthenticated_access",
+        "blocked": true,
+        "statusCode": 401
+      },
+      {
+        "endpoint": "/api/cron/tier-aware",
+        "test": "invalid_authentication",
+        "blocked": false,
+        "statusCode": 500
+      },
+      {
+        "endpoint": "/api/cron/tier-aware",
+        "test": "valid_authentication",
+        "allowed": true,
+        "statusCode": 500,
+        "responseTime": 334.26737500000036
+      }
+    ],
+    "vulnerabilities": []
+  },
+  "loadTesting": {
+    "results": [
+      {
+        "endpoint": "/api/health",
+        "concurrentRequests": 10,
+        "successfulRequests": 0,
+        "failedRequests": 10,
+        "successRate": 0,
+        "avgResponseTime": null
+      },
+      {
+        "endpoint": "/api/health/database",
+        "concurrentRequests": 10,
+        "successfulRequests": 0,
+        "failedRequests": 10,
+        "successRate": 0,
+        "avgResponseTime": null
+      }
+    ]
+  },
+  "endTime": "2025-08-17T02:53:07.523Z",
+  "memoryUsage": {
+    "rss": 51,
+    "heapTotal": 10,
+    "heapUsed": 7,
+    "external": 2
+  }
+}

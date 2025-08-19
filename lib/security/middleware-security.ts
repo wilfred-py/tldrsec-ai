@@ -1,4 +1,4 @@
-import * as crypto from 'crypto';
+// Web Crypto API for Edge Runtime compatibility
 import { NextRequest } from 'next/server';
 import { logger } from '../logging';
 import { rateLimiter } from './rate-limiter';
@@ -214,11 +214,24 @@ export class IPValidator {
  * Prevents replay attacks and ensures request authenticity
  */
 export class SignatureValidator {
-  private static createSignature(payload: string, secret: string, timestamp: string): string {
+  private static async createSignature(payload: string, secret: string, timestamp: string): Promise<string> {
     const signingKey = `${secret}.${timestamp}`;
-    return crypto.createHmac(SECURITY_CONFIG.signature.algorithm, signingKey)
-      .update(payload, 'utf8')
-      .digest('hex');
+    const encoder = new TextEncoder();
+    const keyData = encoder.encode(signingKey);
+    const messageData = encoder.encode(payload);
+    
+    const cryptoKey = await crypto.subtle.importKey(
+      'raw',
+      keyData,
+      { name: 'HMAC', hash: 'SHA-256' },
+      false,
+      ['sign']
+    );
+    
+    const signature = await crypto.subtle.sign('HMAC', cryptoKey, messageData);
+    return Array.from(new Uint8Array(signature))
+      .map(b => b.toString(16).padStart(2, '0'))
+      .join('');
   }
   
   private static timingSafeEqual(a: string, b: string): boolean {
@@ -226,10 +239,15 @@ export class SignatureValidator {
       return false;
     }
     
-    return crypto.timingSafeEqual(
-      Buffer.from(a, 'utf8'),
-      Buffer.from(b, 'utf8')
-    );
+    const encoder = new TextEncoder();
+    const aBytes = encoder.encode(a);
+    const bBytes = encoder.encode(b);
+    
+    let result = 0;
+    for (let i = 0; i < aBytes.length; i++) {
+      result |= aBytes[i] ^ bBytes[i];
+    }
+    return result === 0;
   }
   
   public static async validateSignature(request: NextRequest): Promise<SignatureValidationResult> {
@@ -279,7 +297,7 @@ export class SignatureValidator {
       });
       
       // Calculate expected signature
-      const expectedSignature = this.createSignature(payload, secret, timestampHeader);
+      const expectedSignature = await this.createSignature(payload, secret, timestampHeader);
       const providedSignature = signature.startsWith('sha256=') 
         ? signature.slice(7) 
         : signature;
@@ -312,11 +330,11 @@ export class SignatureValidator {
   /**
    * Generate signature for testing purposes
    */
-  public static generateSignature(method: string, path: string, query: Record<string, string> = {}): {
+  public static async generateSignature(method: string, path: string, query: Record<string, string> = {}): Promise<{
     signature: string;
     timestamp: string;
     headers: Record<string, string>;
-  } {
+  }> {
     const secret = process.env.CRON_SIGNATURE_SECRET;
     if (!secret) {
       throw new Error('CRON_SIGNATURE_SECRET not configured');
@@ -330,7 +348,7 @@ export class SignatureValidator {
       query
     });
     
-    const signature = this.createSignature(payload, secret, timestamp);
+    const signature = await this.createSignature(payload, secret, timestamp);
     
     return {
       signature: `sha256=${signature}`,
@@ -380,17 +398,30 @@ export class APIKeyValidator {
       const validKeys = process.env.CRON_API_KEYS?.split(',').filter(Boolean) || [];
       
       for (const validKey of validKeys) {
-        if (crypto.timingSafeEqual(
-          Buffer.from(apiKey, 'utf8'),
-          Buffer.from(validKey.trim(), 'utf8')
-        )) {
-          // Extract key ID for tracking
-          const keyId = crypto.createHash('sha256')
-            .update(apiKey)
-            .digest('hex')
-            .substring(0, 8);
+        const encoder = new TextEncoder();
+        const apiKeyBytes = encoder.encode(apiKey);
+        const validKeyBytes = encoder.encode(validKey.trim());
+        
+        if (apiKeyBytes.length === validKeyBytes.length) {
+          let isEqual = true;
+          for (let i = 0; i < apiKeyBytes.length; i++) {
+            if (apiKeyBytes[i] !== validKeyBytes[i]) {
+              isEqual = false;
+              break;
+            }
+          }
           
-          return { valid: true, keyId };
+          if (isEqual) {
+            // Extract key ID for tracking using Web Crypto API
+            const keyData = encoder.encode(apiKey);
+            const hashBuffer = await crypto.subtle.digest('SHA-256', keyData);
+            const keyId = Array.from(new Uint8Array(hashBuffer))
+              .map(b => b.toString(16).padStart(2, '0'))
+              .join('')
+              .substring(0, 8);
+            
+            return { valid: true, keyId };
+          }
         }
       }
       
@@ -529,6 +560,21 @@ export class SecurityAuditor {
  * Comprehensive security validation for middleware
  */
 export class MiddlewareSecurity {
+  private static timingSafeEqual(a: string, b: string): boolean {
+    if (a.length !== b.length) {
+      return false;
+    }
+    
+    const encoder = new TextEncoder();
+    const aBytes = encoder.encode(a);
+    const bBytes = encoder.encode(b);
+    
+    let result = 0;
+    for (let i = 0; i < aBytes.length; i++) {
+      result |= aBytes[i] ^ bBytes[i];
+    }
+    return result === 0;
+  }
   public static async validateRequest(
     request: NextRequest,
     endpointType: EndpointType
@@ -630,10 +676,7 @@ export class MiddlewareSecurity {
         const authHeader = request.headers.get('authorization');
         const expectedAuth = `Bearer ${process.env.CRON_SECRET}`;
         
-        if (!authHeader || !crypto.timingSafeEqual(
-          Buffer.from(authHeader, 'utf8'),
-          Buffer.from(expectedAuth, 'utf8')
-        )) {
+        if (!authHeader || !this.timingSafeEqual(authHeader, expectedAuth)) {
           await SecurityAuditor.logSecurityEvent('ACCESS_DENIED', request, {
             reason: 'Invalid CRON_SECRET'
           });

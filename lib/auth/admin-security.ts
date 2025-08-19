@@ -1,7 +1,20 @@
 import { currentUser } from '@clerk/nextjs/server';
 import { logger } from '@/lib/logging';
 import { prisma } from '@/lib/db';
-import crypto from 'crypto';
+// Web Crypto API for Edge Runtime compatibility
+
+/**
+ * Create SHA256 hash using Web Crypto API
+ */
+async function createHashSHA256(input: string, length: number = 8): Promise<string> {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(input);
+  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+  return Array.from(new Uint8Array(hashBuffer))
+    .map(b => b.toString(16).padStart(2, '0'))
+    .join('')
+    .substring(0, length);
+}
 
 const adminSecurityLogger = logger.child('admin-security');
 
@@ -95,7 +108,7 @@ export async function validateAdminAccess(
       await logSecurityEvent('ADMIN_ACCESS_DENIED', { 
         ...securityCheck, 
         reason: 'not_admin_email',
-        emailHash: crypto.createHash('sha256').update(securityCheck.userEmail).digest('hex').substring(0, 8)
+        emailHash: await createHashSHA256(securityCheck.userEmail, 8)
       });
       return createDeniedContext('Insufficient privileges');
     }
@@ -196,7 +209,16 @@ function determineAdminLevel(
     const buffer1 = Buffer.from(email1.toLowerCase(), 'utf8');
     const buffer2 = Buffer.from(email2.toLowerCase(), 'utf8');
     
-    return crypto.timingSafeEqual(buffer1, buffer2);
+    // Timing-safe comparison using manual implementation
+    if (buffer1.length !== buffer2.length) {
+      return false;
+    }
+    
+    let result = 0;
+    for (let i = 0; i < buffer1.length; i++) {
+      result |= buffer1[i] ^ buffer2[i];
+    }
+    return result === 0;
   };
 
   // Check super admin (highest level)
@@ -323,7 +345,7 @@ async function logSecurityEvent(event: string, data: any) {
       adminSecurityLogger.warn('Cannot create audit log - user not found in database', { 
         event, 
         userId: data.userId,
-        userIdHash: crypto.createHash('sha256').update(data.userId).digest('hex').substring(0, 8)
+        userIdHash: await createHashSHA256(data.userId, 8)
       });
       // Still log the security event via logger for monitoring
       adminSecurityLogger.info('Security event (user not in database)', { event, ...data });

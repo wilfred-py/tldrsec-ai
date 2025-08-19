@@ -1,0 +1,175 @@
+{
+  "startTime": "2025-08-17T03:06:05.339Z",
+  "tests": [
+    {
+      "endpoint": "/api/health",
+      "testName": "Health Endpoint",
+      "totalRequests": 11,
+      "successfulRequests": 0,
+      "failedRequests": 11,
+      "avgResponseTime": 25.72860599999998,
+      "minResponseTime": 21.210665999999947,
+      "maxResponseTime": 26.75008300000013,
+      "p50": 26.6920419999999,
+      "p90": 26.73183300000005,
+      "p95": 26.75008300000013,
+      "p99": 26.75008300000013,
+      "errorRate": 100,
+      "throughput": 229.16666666666666
+    },
+    {
+      "endpoint": "/api/health/database",
+      "testName": "Database Health Endpoint",
+      "totalRequests": 11,
+      "successfulRequests": 10,
+      "failedRequests": 1,
+      "avgResponseTime": 284.96961000000005,
+      "minResponseTime": 38.277459000000135,
+      "maxResponseTime": 370.58804199999986,
+      "p50": 332.965833,
+      "p90": 369.58670900000016,
+      "p95": 370.58804199999986,
+      "p99": 370.58804199999986,
+      "errorRate": 9.090909090909092,
+      "throughput": 15.625000000000002
+    },
+    {
+      "endpoint": "/api/cron/tier-aware",
+      "testName": "Tier-Aware Cron Endpoint",
+      "totalRequests": 11,
+      "successfulRequests": 11,
+      "failedRequests": 0,
+      "avgResponseTime": 1387.8371325454546,
+      "minResponseTime": 815.9319580000001,
+      "maxResponseTime": 2320.0797499999994,
+      "p50": 1192.9236250000001,
+      "p90": 2015.386834,
+      "p95": 2320.0797499999994,
+      "p99": 2320.0797499999994,
+      "errorRate": 0,
+      "throughput": 3.130335799658509
+    },
+    {
+      "endpoint": "/api/health",
+      "testName": "Health Endpoint (Load Test)",
+      "totalRequests": 297,
+      "successfulRequests": 272,
+      "failedRequests": 25,
+      "avgResponseTime": 16.45495485185181,
+      "minResponseTime": 6.768083000002662,
+      "maxResponseTime": 70.59504199999719,
+      "p50": 16.441791999997804,
+      "p90": 19.423084000000017,
+      "p95": 20.79712500000005,
+      "p99": 37.82341699999961,
+      "errorRate": 8.417508417508419,
+      "throughput": 9.884514260991114,
+      "actualDuration": 30.047,
+      "maxConcurrency": 20
+    }
+  ],
+  "summary": {
+    "totalRequests": 330,
+    "successfulRequests": 293,
+    "failedRequests": 37,
+    "avgResponseTime": 428.7475758493266,
+    "minResponseTime": 6.768083000002662,
+    "maxResponseTime": 2320.0797499999994,
+    "p95": 684.5537499999998,
+    "avgThroughput": 64.45162918182906,
+    "avgErrorRate": 29.377104377104377
+  },
+  "memoryAnalysis": {
+    "snapshots": [
+      {
+        "timestamp": 2002,
+        "rss": 48,
+        "heapTotal": 7,
+        "heapUsed": 6,
+        "external": 2
+      },
+      {
+        "timestamp": 4003,
+        "rss": 48,
+        "heapTotal": 7,
+        "heapUsed": 6,
+        "external": 2
+      },
+      {
+        "timestamp": 6004,
+        "rss": 48,
+        "heapTotal": 7,
+        "heapUsed": 6,
+        "external": 2
+      },
+      {
+        "timestamp": 8005,
+        "rss": 48,
+        "heapTotal": 7,
+        "heapUsed": 6,
+        "external": 2
+      },
+      {
+        "timestamp": 10006,
+        "rss": 48,
+        "heapTotal": 7,
+        "heapUsed": 6,
+        "external": 2
+      },
+      {
+        "timestamp": 12006,
+        "rss": 48,
+        "heapTotal": 7,
+        "heapUsed": 6,
+        "external": 2
+      },
+      {
+        "timestamp": 14008,
+        "rss": 48,
+        "heapTotal": 7,
+        "heapUsed": 6,
+        "external": 2
+      },
+      {
+        "timestamp": 16009,
+        "rss": 47,
+        "heapTotal": 7,
+        "heapUsed": 6,
+        "external": 2
+      },
+      {
+        "timestamp": 18010,
+        "rss": 45,
+        "heapTotal": 7,
+        "heapUsed": 6,
+        "external": 2
+      },
+      {
+        "timestamp": 20010,
+        "rss": 45,
+        "heapTotal": 7,
+        "heapUsed": 6,
+        "external": 2
+      },
+      {
+        "timestamp": 22012,
+        "rss": 45,
+        "heapTotal": 7,
+        "heapUsed": 6,
+        "external": 2
+      }
+    ],
+    "avgMemory": {
+      "rss": 47.09090909090909,
+      "heapUsed": 6,
+      "heapTotal": 7
+    },
+    "maxMemory": {
+      "rss": 48,
+      "heapUsed": 6,
+      "heapTotal": 7
+    },
+    "monitoringDuration": 20
+  },
+  "endTime": "2025-08-17T03:07:02.735Z"
+}

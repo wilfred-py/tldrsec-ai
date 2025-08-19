@@ -50,7 +50,8 @@
     "security:validate-env": "npx tsx scripts/security/generate-api-keys.ts validate-env",
     "security:test-signature": "npx tsx scripts/security/generate-api-keys.ts test-signature",
     "security:audit": "npx tsx scripts/security/generate-api-keys.ts security-audit",
-    "test:security": "jest tests/security/ --config=jest.config.mjs"
+    "test:security": "jest tests/security/ --config=jest.config.mjs",
+    "test:e2e": "npx tsx scripts/test-e2e-email.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.51.0",
