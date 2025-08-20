@@ -13,8 +13,8 @@ variables = {}
 
 # Resource allocation for production workloads
 [resources]
-memory = "1GB"
-cpu = "1 vCPU"
+memory = "2GB"
+cpu = "2 vCPU"
 
 # Database migration and deployment hooks
 [hooks]
@@ -41,5 +41,5 @@ regions = ["us-west-2"]
 name = "tier-aware-cron"
 source = "."
 build.command = "npm run build"
-start.command = "node -e \"setInterval(() => fetch(process.env.RAILWAY_PUBLIC_DOMAIN + '/api/cron/tier-aware', { headers: { Authorization: 'Bearer ' + process.env.CRON_SECRET } }), 300000)\""
+start.command = "node -e \"const fetch = require('node-fetch'); const runCron = async () => { try { const response = await fetch(process.env.RAILWAY_PUBLIC_DOMAIN + '/api/cron/tier-aware', { headers: { Authorization: 'Bearer ' + process.env.CRON_SECRET } }); console.log('Cron executed:', response.status); } catch (error) { console.error('Cron error:', error); } }; setInterval(runCron, 300000); console.log('Cron scheduler started');\""
 variables = { CRON_TYPE = "tier-aware" }
