@@ -4,6 +4,9 @@ import { appRouterAsyncHandler } from '@/lib/error-handling';
 import { logger } from '@/lib/logging';
 import { getPrismaClient } from '@/lib/db/prisma';
 
+// Enable Edge Runtime for this route specifically
+export const runtime = 'edge';
+
 // Component logger
 const componentLogger = logger.child('health-api');
 const prisma = getPrismaClient();
