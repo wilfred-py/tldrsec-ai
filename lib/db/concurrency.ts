@@ -256,12 +256,13 @@ export async function upsertTickerMonitoringWithLock(
 export async function updateUserBudgetWithLock(
   userId: string,
   costToAdd: number,
-  expectedCurrentBudget: number,
+  expectedCurrentBudget: number | null,
   dailyLimit: number,
   options: ConcurrencyOptions & {
     tier?: string;
     originalCost?: number;
     enableAuditLogging?: boolean;
+    atomicBudgetRead?: boolean;
   } = {}
 ): Promise<{ previousBudget: number; newBudget: number; success: boolean }> {
   // Input validation
@@ -271,7 +272,7 @@ export async function updateUserBudgetWithLock(
   if (typeof costToAdd !== 'number' || !isFinite(costToAdd)) {
     throw new Error('Invalid cost amount provided');
   }
-  if (typeof expectedCurrentBudget !== 'number' || !isFinite(expectedCurrentBudget)) {
+  if (expectedCurrentBudget !== null && (typeof expectedCurrentBudget !== 'number' || !isFinite(expectedCurrentBudget))) {
     throw new Error('Invalid expected budget provided');
   }
   if (typeof dailyLimit !== 'number' || !isFinite(dailyLimit) || dailyLimit <= 0) {
@@ -298,7 +299,8 @@ export async function updateUserBudgetWithLock(
       const currentBudgetUsed = currentUser.budgetUsed || 0;
       
       // Check if budget has changed since we last checked (race condition)
-      if (Math.abs(currentBudgetUsed - expectedCurrentBudget) > 0.001) {
+      // Skip this check if atomic read is enabled (expectedCurrentBudget is null)
+      if (expectedCurrentBudget !== null && Math.abs(currentBudgetUsed - expectedCurrentBudget) > 0.001) {
         throw createOptimisticLockError('UserBudget', userId, expectedCurrentBudget, currentBudgetUsed);
       }
       
@@ -335,7 +337,7 @@ export async function updateUserBudgetWithLock(
       
       // Check if update actually happened (race condition detection)
       if (updateResult.count === 0) {
-        throw createOptimisticLockError('UserBudget', userId, expectedCurrentBudget);
+        throw createOptimisticLockError('UserBudget', userId, expectedCurrentBudget || currentBudgetUsed);
       }
       
       // Create audit log if enabled
@@ -390,7 +392,8 @@ export async function updateUserBudgetWithLock(
                 processingTimestamp: new Date().toISOString(),
                 userAgent: 'cron-tier-aware',
                 sessionId: `cron-${Date.now()}`,
-                riskLevel: 'HIGH' // Failed operations are high risk
+                riskLevel: 'HIGH', // Failed operations are high risk
+                atomicRead: options.atomicBudgetRead || false
               }),
               success: false
             }
