@@ -1,11 +1,8 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  // Edge Runtime compatibility for Railway deployment
-  experimental: {
-    // Enable Edge Runtime for API routes
-    runtime: 'edge',
-  },
+  // Production optimization for Railway deployment
+  // Note: Edge Runtime should be configured per-route, not globally
   
   // Production optimization for Railway
   compiler: {
