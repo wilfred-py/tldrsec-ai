@@ -6,3 +6,40 @@ startCommand = "npm start"
 healthcheckPath = "/api/health"
 healthcheckTimeout = 300
 restartPolicyType = "always"
+
+# Production environment configuration
+[environments.production]
+variables = {}
+
+# Resource allocation for production workloads
+[resources]
+memory = "2GB"
+cpu = "2 vCPU"
+
+# Database migration and deployment hooks
+[hooks]
+prebuild = "npm run db:generate"
+predeploy = "npm run db:migrate"
+
+# Monitoring and observability
+[observability]
+logging = true
+metrics = true
+
+# Network configuration for security
+[networking]
+http2 = true
+compression = true
+
+# Edge Runtime specific configuration
+[edge]
+runtime = "edge"
+regions = ["us-west-2"]
+
+# Cron job configuration for Railway
+[[services]]
+name = "tier-aware-cron"
+source = "."
+build.command = "npm run build"
+start.command = "node -e \"const fetch = require('node-fetch'); const runCron = async () => { try { const response = await fetch(process.env.RAILWAY_PUBLIC_DOMAIN + '/api/cron/tier-aware', { headers: { Authorization: 'Bearer ' + process.env.CRON_SECRET } }); console.log('Cron executed:', response.status); } catch (error) { console.error('Cron error:', error); } }; setInterval(runCron, 300000); console.log('Cron scheduler started');\""
+variables = { CRON_TYPE = "tier-aware" }
