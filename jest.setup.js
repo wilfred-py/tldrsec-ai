@@ -186,6 +186,55 @@ jest.mock('sonner', () => ({
   },
 }));
 
+// Mock Web Crypto API for Edge Runtime compatibility
+global.crypto = {
+  subtle: {
+    digest: jest.fn().mockImplementation(async (algorithm, data) => {
+      // Mock SHA-256 digest for testing
+      const encoder = new TextEncoder();
+      const hashInput = typeof data === 'string' ? encoder.encode(data) : data;
+      // Return a mock hash buffer (32 bytes for SHA-256)
+      return new ArrayBuffer(32);
+    }),
+    importKey: jest.fn().mockImplementation(async (format, keyData, algorithm, extractable, keyUsages) => {
+      // Mock key import for HMAC operations
+      return { type: 'secret', algorithm, extractable, usages: keyUsages };
+    }),
+    sign: jest.fn().mockImplementation(async (algorithm, key, data) => {
+      // Mock HMAC signature generation
+      return new ArrayBuffer(32);
+    }),
+    verify: jest.fn().mockImplementation(async (algorithm, key, signature, data) => {
+      // Mock signature verification (always return true for tests)
+      return true;
+    }),
+    generateKey: jest.fn().mockImplementation(async (algorithm, extractable, keyUsages) => {
+      // Mock key generation
+      return { type: 'secret', algorithm, extractable, usages: keyUsages };
+    })
+  },
+  getRandomValues: jest.fn().mockImplementation((array) => {
+    // Mock random values generation
+    for (let i = 0; i < array.length; i++) {
+      array[i] = Math.floor(Math.random() * 256);
+    }
+    return array;
+  })
+};
+
+// Mock TextEncoder and TextDecoder for Edge Runtime compatibility
+global.TextEncoder = global.TextEncoder || class TextEncoder {
+  encode(string) {
+    return new Uint8Array(Buffer.from(string, 'utf8'));
+  }
+};
+
+global.TextDecoder = global.TextDecoder || class TextDecoder {
+  decode(uint8Array) {
+    return Buffer.from(uint8Array).toString('utf8');
+  }
+};
+
 // Reset all mocks between tests
 beforeEach(() => {
   jest.clearAllMocks();
