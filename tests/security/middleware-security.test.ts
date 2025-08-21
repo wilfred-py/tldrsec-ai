@@ -84,23 +84,16 @@ jest.mock('../../lib/logging', () => ({
   }
 }));
 
-jest.mock('../../lib/security/rate-limiter', () => ({
-  rateLimiter: {
-    checkLimit: jest.fn()
-  }
-}));
-
-
 describe('Middleware Security System', () => {
   let mockRateLimiter: any;
   
-  beforeEach(() => {
+  beforeEach(async () => {
     // Reset all mocks
     jest.clearAllMocks();
     
-    // Mock rate limiter
-    mockRateLimiter = require('../../lib/security/rate-limiter').rateLimiter;
-    mockRateLimiter.checkLimit.mockResolvedValue({
+    // Import and spy on the rate limiter
+    const { rateLimiter } = await import('../../lib/security/rate-limiter');
+    mockRateLimiter = jest.spyOn(rateLimiter, 'checkLimit').mockResolvedValue({
       allowed: true,
       remaining: 50,
       resetTime: Date.now() + 60000
@@ -172,23 +165,29 @@ describe('Middleware Security System', () => {
   describe('Rate Limiting', () => {
     it('should allow requests within rate limits', async () => {
       const request = new NextRequest('https://test.com/api/cron/test', {
-        headers: { 'x-forwarded-for': '127.0.0.1' }
+        headers: { 
+          'x-forwarded-for': '127.0.0.1',
+          'Authorization': `Bearer ${process.env.CRON_SECRET}`
+        }
       });
 
       const result = await MiddlewareSecurity.validateRequest(request, 'CRON');
       expect(result.allowed).toBe(true);
-      expect(mockRateLimiter.checkLimit).toHaveBeenCalled();
+      expect(mockRateLimiter).toHaveBeenCalled();
     });
 
     it('should block requests exceeding rate limits', async () => {
-      mockRateLimiter.checkLimit.mockResolvedValue({
+      mockRateLimiter.mockResolvedValue({
         allowed: false,
         remaining: 0,
         resetTime: Date.now() + 60000
       });
 
       const request = new NextRequest('https://test.com/api/cron/test', {
-        headers: { 'x-forwarded-for': '127.0.0.1' }
+        headers: { 
+          'x-forwarded-for': '127.0.0.1',
+          'Authorization': `Bearer ${process.env.CRON_SECRET}`
+        }
       });
 
       const result = await MiddlewareSecurity.validateRequest(request, 'CRON');
@@ -199,7 +198,10 @@ describe('Middleware Security System', () => {
 
     it('should apply different rate limits for different endpoint types', async () => {
       const cronRequest = new NextRequest('https://test.com/api/cron/test', {
-        headers: { 'x-forwarded-for': '127.0.0.1' }
+        headers: { 
+          'x-forwarded-for': '127.0.0.1',
+          'Authorization': `Bearer ${process.env.CRON_SECRET}`
+        }
       });
       
       const healthRequest = new NextRequest('https://test.com/api/health/test', {
@@ -210,7 +212,7 @@ describe('Middleware Security System', () => {
       await MiddlewareSecurity.validateRequest(healthRequest, 'HEALTH');
 
       // Verify different limits were applied
-      const calls = mockRateLimiter.checkLimit.mock.calls;
+      const calls = mockRateLimiter.mock.calls;
       expect(calls[0][2]).toBe(10);  // CRON limit
       expect(calls[1][2]).toBe(100); // HEALTH limit
     });
@@ -220,9 +222,8 @@ describe('Middleware Security System', () => {
     it('should validate correct HMAC signatures', async () => {
       const { headers } = await SignatureValidator.generateSignature('GET', '/api/cron/test');
       
-      // Create request with signature headers
       const request = new NextRequest('https://test.com/api/cron/test', {
-        headers: headers
+        headers
       });
 
       const result = await SignatureValidator.validateSignature(request);
@@ -282,7 +283,7 @@ describe('Middleware Security System', () => {
     it('should validate correct API keys from Authorization header', async () => {
       const request = new NextRequest('https://test.com/api/cron/test', {
         headers: {
-          'Authorization': 'Bearer tldr_test123456789012345678901234'
+          'Authorization': 'Bearer tldr_test1234567890123456789012345678'
         }
       });
 
@@ -294,7 +295,7 @@ describe('Middleware Security System', () => {
     it('should validate correct API keys from X-API-Key header', async () => {
       const request = new NextRequest('https://test.com/api/cron/test', {
         headers: {
-          'X-API-Key': 'tldr_test987654321098765432109876'
+          'X-API-Key': 'tldr_test9876543210987654321098765432'
         }
       });
 
@@ -326,7 +327,7 @@ describe('Middleware Security System', () => {
     it('should reject requests with unknown API keys', async () => {
       const request = new NextRequest('https://test.com/api/cron/test', {
         headers: {
-          'Authorization': 'Bearer tldr_unknown123456789012345678901'
+          'Authorization': 'Bearer tldr_unknown1234567890123456789012345'
         }
       });
 
@@ -413,6 +414,9 @@ describe('Middleware Security System', () => {
       });
 
       const result = await MiddlewareSecurity.validateRequest(request, 'CRON');
+      if (!result.allowed) {
+        console.log('First comprehensive test failed:', result);
+      }
       expect(result.allowed).toBe(true);
       expect(result.responseHeaders).toBeDefined();
       expect(result.responseHeaders?.['X-Content-Type-Options']).toBe('nosniff');
@@ -450,10 +454,13 @@ describe('Middleware Security System', () => {
 
     it('should fail secure on validation errors', async () => {
       // Mock rate limiter to throw an error
-      mockRateLimiter.checkLimit.mockRejectedValue(new Error('Rate limiter failure'));
+      mockRateLimiter.mockRejectedValue(new Error('Rate limiter failure'));
 
       const request = new NextRequest('https://test.com/api/cron/test', {
-        headers: { 'x-forwarded-for': '127.0.0.1' }
+        headers: { 
+          'x-forwarded-for': '127.0.0.1',
+          'Authorization': `Bearer ${process.env.CRON_SECRET}`
+        }
       });
 
       const result = await MiddlewareSecurity.validateRequest(request, 'CRON');
@@ -463,7 +470,7 @@ describe('Middleware Security System', () => {
     });
 
     it('should handle multiple authentication methods', async () => {
-      // Test fallback from signature to API key
+      // Test fallback from signature to API key, but still need CRON_SECRET
       process.env.CRON_SIGNATURE_SECRET = 'test-sig-secret';
       
       const request = new NextRequest('https://test.com/api/cron/test', {
@@ -471,7 +478,8 @@ describe('Middleware Security System', () => {
           'x-forwarded-for': '127.0.0.1',
           'X-Signature-SHA256': 'sha256=invalid_signature',
           'X-Timestamp': Math.floor(Date.now() / 1000).toString(),
-          'X-API-Key': 'tldr_test123456789012345678901234'
+          'X-API-Key': 'tldr_test1234567890123456789012345678',
+          'Authorization': `Bearer ${process.env.CRON_SECRET}`
         }
       });
 

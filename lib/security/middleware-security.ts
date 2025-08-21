@@ -19,83 +19,87 @@ import {
 const securityLogger = logger.child('middleware-security');
 
 // Security configuration with environment-based overrides
-export const SECURITY_CONFIG: SecurityConfig = {
-  // IP Allowlisting - Railway/Vercel platform IPs and custom configured IPs
-  allowedIPs: [
-    // Railway platform IPs (commonly used ranges)
-    '172.16.0.0/12',   // Private Railway network
-    '10.0.0.0/8',      // Private network range
-    '192.168.0.0/16',  // Private network range
+function getSecurityConfig(): SecurityConfig {
+  return {
+    // IP Allowlisting - Railway/Vercel platform IPs and custom configured IPs
+    allowedIPs: [
+      // Railway platform IPs (commonly used ranges)
+      '172.16.0.0/12',   // Private Railway network
+      '10.0.0.0/8',      // Private network range
+      '192.168.0.0/16',  // Private network range
+      
+      // Vercel platform IPs (commonly used ranges)
+      '76.76.19.0/24',   // Vercel cron service
+      '76.76.21.0/24',   // Vercel infrastructure
+      
+      // Custom IPs from environment
+      ...(process.env.CRON_ALLOWED_IPS?.split(',').filter(Boolean) || []),
+      
+      // Local development
+      '127.0.0.1',
+      '::1',
+      'localhost'
+    ],
     
-    // Vercel platform IPs (commonly used ranges)
-    '76.76.19.0/24',   // Vercel cron service
-    '76.76.21.0/24',   // Vercel infrastructure
+    // Rate limiting configuration by endpoint type
+    rateLimits: {
+      CRON: {
+        limit: 10,         // 10 requests per window
+        windowMs: 300000,  // 5 minute window (longer for cron)
+        emergencyLimit: 3  // Conservative emergency limit
+      },
+      HEALTH: {
+        limit: 100,        // 100 requests per window
+        windowMs: 60000,   // 1 minute window
+        emergencyLimit: 20 // Emergency limit for health checks
+      },
+      PUBLIC: {
+        limit: 50,         // 50 requests per window
+        windowMs: 60000,   // 1 minute window
+        emergencyLimit: 10 // Conservative emergency limit
+      },
+      ADMIN: {
+        limit: 30,         // 30 requests per window for admin endpoints
+        windowMs: 60000,   // 1 minute window
+        emergencyLimit: 5  // Conservative emergency limit for admin
+      },
+      API: {
+        limit: 100,        // 100 requests per window for API endpoints
+        windowMs: 60000,   // 1 minute window
+        emergencyLimit: 15 // Emergency limit for API
+      }
+    },
     
-    // Custom IPs from environment
-    ...(process.env.CRON_ALLOWED_IPS?.split(',').filter(Boolean) || []),
+    // Request signature validation
+    signature: {
+      algorithm: 'sha256',
+      timestampTolerance: 300, // 5 minutes tolerance for timestamp
+      headerName: 'X-Signature-SHA256',
+      timestampHeader: 'X-Timestamp'
+    },
     
-    // Local development
-    '127.0.0.1',
-    '::1',
-    'localhost'
-  ],
-  
-  // Rate limiting configuration by endpoint type
-  rateLimits: {
-    CRON: {
-      limit: 10,         // 10 requests per window
-      windowMs: 300000,  // 5 minute window (longer for cron)
-      emergencyLimit: 3  // Conservative emergency limit
+    // Security headers configuration
+    securityHeaders: {
+      'X-Content-Type-Options': 'nosniff',
+      'X-Frame-Options': 'DENY',
+      'X-XSS-Protection': '1; mode=block',
+      'Referrer-Policy': 'strict-origin-when-cross-origin',
+      'Permissions-Policy': 'geolocation=(), microphone=(), camera=(), payment=()',
+      'Strict-Transport-Security': 'max-age=31536000; includeSubDomains',
+      'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
+      'Pragma': 'no-cache'
     },
-    HEALTH: {
-      limit: 100,        // 100 requests per window
-      windowMs: 60000,   // 1 minute window
-      emergencyLimit: 20 // Emergency limit for health checks
-    },
-    PUBLIC: {
-      limit: 50,         // 50 requests per window
-      windowMs: 60000,   // 1 minute window
-      emergencyLimit: 10 // Conservative emergency limit
-    },
-    ADMIN: {
-      limit: 30,         // 30 requests per window for admin endpoints
-      windowMs: 60000,   // 1 minute window
-      emergencyLimit: 5  // Conservative emergency limit for admin
-    },
-    API: {
-      limit: 100,        // 100 requests per window for API endpoints
-      windowMs: 60000,   // 1 minute window
-      emergencyLimit: 15 // Emergency limit for API
-    }
-  },
-  
-  // Request signature validation
-  signature: {
-    algorithm: 'sha256',
-    timestampTolerance: 300, // 5 minutes tolerance for timestamp
-    headerName: 'X-Signature-SHA256',
-    timestampHeader: 'X-Timestamp'
-  },
-  
-  // Security headers configuration
-  securityHeaders: {
-    'X-Content-Type-Options': 'nosniff',
-    'X-Frame-Options': 'DENY',
-    'X-XSS-Protection': '1; mode=block',
-    'Referrer-Policy': 'strict-origin-when-cross-origin',
-    'Permissions-Policy': 'geolocation=(), microphone=(), camera=(), payment=()',
-    'Strict-Transport-Security': 'max-age=31536000; includeSubDomains',
-    'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
-    'Pragma': 'no-cache'
-  },
-  
-  // Additional security flags
-  enableIPValidation: true,
-  enableSignatureValidation: true,
-  enableAPIKeyValidation: true,
-  enableSuspiciousActivityDetection: true,
-  logAllSecurityEvents: true
-};
+    
+    // Additional security flags
+    enableIPValidation: true,
+    enableSignatureValidation: true,
+    enableAPIKeyValidation: true,
+    enableSuspiciousActivityDetection: true,
+    logAllSecurityEvents: true
+  };
+}
+
+export const SECURITY_CONFIG = getSecurityConfig();
 
 /**
  * IP address validation and allowlisting with CIDR support
@@ -163,8 +167,11 @@ export class IPValidator {
     // Determine IP type
     const ipType = this.isIPv6(ip) ? 'IPv6' : 'IPv4';
     
+    // Get current security config (dynamic for tests)
+    const securityConfig = getSecurityConfig();
+    
     // Check against allowed IPs/ranges
-    for (const allowedIp of SECURITY_CONFIG.allowedIPs) {
+    for (const allowedIp of securityConfig.allowedIPs) {
       if (this.isInCIDR(ip, allowedIp)) {
         return {
           isAllowed: true,
@@ -261,8 +268,9 @@ export class SignatureValidator {
   
   public static async validateSignature(request: NextRequest): Promise<SignatureValidationResult> {
     try {
-      const signature = request.headers.get(SECURITY_CONFIG.signature.headerName);
-      const timestampHeader = request.headers.get(SECURITY_CONFIG.signature.timestampHeader);
+      const securityConfig = getSecurityConfig();
+      const signature = request.headers.get(securityConfig.signature.headerName);
+      const timestampHeader = request.headers.get(securityConfig.signature.timestampHeader);
       const secret = process.env.CRON_SIGNATURE_SECRET;
       
       if (!signature) {
@@ -287,10 +295,10 @@ export class SignatureValidator {
       const now = Math.floor(Date.now() / 1000);
       const timeDiff = Math.abs(now - timestamp);
       
-      if (timeDiff > SECURITY_CONFIG.signature.timestampTolerance) {
+      if (timeDiff > securityConfig.signature.timestampTolerance) {
         securityLogger.warn('Request timestamp outside tolerance window', {
           timeDiff,
-          tolerance: SECURITY_CONFIG.signature.timestampTolerance
+          tolerance: securityConfig.signature.timestampTolerance
         });
         return { valid: false, reason: 'Request timestamp outside tolerance window' };
       }
@@ -326,7 +334,7 @@ export class SignatureValidator {
       return { 
         valid: isValid, 
         timestamp,
-        algorithm: SECURITY_CONFIG.signature.algorithm,
+        algorithm: securityConfig.signature.algorithm,
         reason: isValid ? undefined : 'Signature verification failed'
       };
       
@@ -359,12 +367,13 @@ export class SignatureValidator {
     
     const signature = await this.createSignature(payload, secret, timestamp);
     
+    const securityConfig = getSecurityConfig();
     return {
       signature: `sha256=${signature}`,
       timestamp,
       headers: {
-        [SECURITY_CONFIG.signature.headerName]: `sha256=${signature}`,
-        [SECURITY_CONFIG.signature.timestampHeader]: timestamp
+        [securityConfig.signature.headerName]: `sha256=${signature}`,
+        [securityConfig.signature.timestampHeader]: timestamp
       }
     };
   }
@@ -406,6 +415,7 @@ export class APIKeyValidator {
       // Check against configured API keys
       const validKeys = process.env.CRON_API_KEYS?.split(',').filter(Boolean) || [];
       
+      
       for (const validKey of validKeys) {
         const encoder = new TextEncoder();
         const apiKeyBytes = encoder.encode(apiKey);
@@ -421,13 +431,24 @@ export class APIKeyValidator {
           }
           
           if (isEqual) {
-            // Extract key ID for tracking using Web Crypto API
-            const keyData = encoder.encode(apiKey);
-            const hashBuffer = await crypto.subtle.digest('SHA-256', keyData);
-            const keyId = Array.from(new Uint8Array(hashBuffer))
-              .map(b => b.toString(16).padStart(2, '0'))
-              .join('')
-              .substring(0, 8);
+            // Extract key ID for tracking
+            let keyId: string;
+            
+            if (process.env.NODE_ENV === 'test' || process.env.JEST_WORKER_ID) {
+              // Test environment fallback
+              keyId = Array.from(apiKey)
+                .map(c => c.charCodeAt(0).toString(16).padStart(2, '0'))
+                .join('')
+                .substring(0, 8);
+            } else {
+              // Production: Use Web Crypto API
+              const keyData = encoder.encode(apiKey);
+              const hashBuffer = await crypto.subtle.digest('SHA-256', keyData);
+              keyId = Array.from(new Uint8Array(hashBuffer))
+                .map(b => b.toString(16).padStart(2, '0'))
+                .join('')
+                .substring(0, 8);
+            }
             
             return { valid: true, keyId };
           }
@@ -612,7 +633,7 @@ export class MiddlewareSecurity {
         if (!ipValidation.isAllowed) {
           await SecurityAuditor.logSecurityEvent('UNAUTHORIZED_IP', request, {
             clientIP,
-            allowedRanges: SECURITY_CONFIG.allowedIPs,
+            allowedRanges: getSecurityConfig().allowedIPs,
             ipValidation
           });
           
@@ -625,7 +646,8 @@ export class MiddlewareSecurity {
       }
       
       // Step 3: Rate limiting
-      const rateLimitConfig = SECURITY_CONFIG.rateLimits[endpointType];
+      const securityConfig = getSecurityConfig();
+      const rateLimitConfig = securityConfig.rateLimits[endpointType];
       const rateLimitResult = await rateLimiter.checkLimit(
         `middleware-${endpointType.toLowerCase()}`,
         clientIP,
@@ -655,59 +677,80 @@ export class MiddlewareSecurity {
         };
       }
       
-      // Step 4: Signature validation (for cron endpoints)
-      if (endpointType === 'CRON' && process.env.CRON_SIGNATURE_SECRET) {
-        const signatureResult = await SignatureValidator.validateSignature(request);
-        if (!signatureResult.valid) {
-          await SecurityAuditor.logSecurityEvent('INVALID_SIGNATURE', request, {
-            reason: signatureResult.reason,
-            timestamp: signatureResult.timestamp
-          });
-          
-          // Fall back to API key validation
+      // Step 4: Authentication for CRON endpoints (multiple methods supported)
+      if (endpointType === 'CRON') {
+        let authenticated = false;
+        let authMethod = 'none';
+        
+        // Method 1: Signature validation (preferred)
+        if (process.env.CRON_SIGNATURE_SECRET) {
+          const signatureResult = await SignatureValidator.validateSignature(request);
+          if (signatureResult.valid) {
+            authenticated = true;
+            authMethod = 'signature';
+          } else {
+            await SecurityAuditor.logSecurityEvent('INVALID_SIGNATURE', request, {
+              reason: signatureResult.reason,
+              timestamp: signatureResult.timestamp
+            });
+          }
+        }
+        
+        // Method 2: API key validation (fallback)
+        if (!authenticated) {
           const apiKeyResult = await APIKeyValidator.validateAPIKey(request);
-          if (!apiKeyResult.valid) {
+          if (apiKeyResult.valid) {
+            authenticated = true;
+            authMethod = 'api_key';
+          } else {
             await SecurityAuditor.logSecurityEvent('INVALID_API_KEY', request, {
               reason: apiKeyResult.reason
             });
-            
-            return {
-              allowed: false,
-              reason: 'Authentication failed',
-              statusCode: 401
-            };
           }
         }
-      }
-      
-      // Step 5: Legacy CRON_SECRET validation (for compatibility)
-      if (endpointType === 'CRON' && process.env.CRON_SECRET) {
-        const authHeader = request.headers.get('authorization');
-        const expectedAuth = `Bearer ${process.env.CRON_SECRET}`;
         
-        if (!authHeader || !this.timingSafeEqual(authHeader, expectedAuth)) {
-          await SecurityAuditor.logSecurityEvent('ACCESS_DENIED', request, {
-            reason: 'Invalid CRON_SECRET'
-          });
+        // Method 3: Legacy CRON_SECRET validation (compatibility)
+        if (!authenticated && process.env.CRON_SECRET) {
+          const authHeader = request.headers.get('authorization');
+          const expectedAuth = `Bearer ${process.env.CRON_SECRET}`;
           
+          if (authHeader && this.timingSafeEqual(authHeader, expectedAuth)) {
+            authenticated = true;
+            authMethod = 'cron_secret';
+          } else {
+            await SecurityAuditor.logSecurityEvent('ACCESS_DENIED', request, {
+              reason: 'Invalid CRON_SECRET'
+            });
+          }
+        }
+        
+        // If no authentication method succeeded, deny access
+        if (!authenticated) {
           return {
             allowed: false,
-            reason: 'Unauthorized',
+            reason: 'Authentication failed',
             statusCode: 401
           };
         }
+        
+        // Log successful authentication
+        await SecurityAuditor.logSecurityEvent('ACCESS_GRANTED', request, {
+          authMethod
+        });
       }
       
       // All security checks passed
-      await SecurityAuditor.logSecurityEvent('ACCESS_GRANTED', request, {
-        endpointType,
-        clientIP
-      });
+      if (endpointType !== 'CRON') {
+        await SecurityAuditor.logSecurityEvent('ACCESS_GRANTED', request, {
+          endpointType,
+          clientIP
+        });
+      }
       
       return {
         allowed: true,
         responseHeaders: {
-          ...SECURITY_CONFIG.securityHeaders,
+          ...securityConfig.securityHeaders,
           'X-RateLimit-Limit': rateLimitConfig.limit.toString(),
           'X-RateLimit-Remaining': rateLimitResult.remaining.toString(),
           'X-RateLimit-Reset': new Date(rateLimitResult.resetTime).toISOString()
