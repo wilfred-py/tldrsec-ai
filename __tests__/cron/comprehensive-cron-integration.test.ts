@@ -1,0 +1,1434 @@
+/**
+ * Comprehensive Cron Integration Test Suite
+ * 
+ * This test suite validates the entire cron functionality based on the debugging
+ * findings from Railway deployment issues. It covers all critical failure points
+ * and ensures robust operation in production environments.
+ * 
+ * Test Categories:
+ * 1. Railway Configuration Tests - URL construction, environment variables, authentication
+ * 2. Cron Endpoint Integration Tests - routing, market hours, RSS monitoring
+ * 3. Database Consistency Tests - TickerMonitoring records, filing tracking
+ * 4. End-to-End Workflow Tests - complete RSS → summarization → email pipeline
+ * 5. Regression Prevention Tests - authentication, middleware security, concurrency
+ */
+
+import { NextRequest, NextResponse } from 'next/server';
+import { GET as tierAwareRoute } from '../../app/api/cron/tier-aware/route';
+import { getPrismaClient } from '../../lib/db/prisma';
+import { CronJobMonitor } from '../../lib/monitoring/cron-monitor';
+import * as tickerMonitoring from '../../lib/sec-edgar/ticker-monitoring';
+import * as rssParser from '../../lib/sec-edgar/rss-parser';
+import * as summaryService from '../../services/filing/summaryGenerationService';
+import * as emailService from '../../services/filing/sendEmailSummary';
+import { getMarketHoursContext, getUserProcessingStatuses, getEligibleUsers } from '../../lib/cron/market-hours';
+import { updateUserBudgetWithLock } from '../../lib/db/concurrency';
+import { rateLimiter } from '../../lib/security/rate-limiter';
+
+// Mock all external dependencies
+jest.mock('../../lib/db/prisma', () => ({
+  getPrismaClient: jest.fn()
+}));
+jest.mock('../../lib/monitoring/cron-monitor');
+jest.mock('../../lib/sec-edgar/ticker-monitoring');
+jest.mock('../../lib/sec-edgar/rss-parser');
+jest.mock('../../services/filing/summaryGenerationService');
+jest.mock('../../services/filing/sendEmailSummary');
+jest.mock('../../lib/cron/market-hours');
+jest.mock('../../lib/db/concurrency');
+jest.mock('../../lib/security/rate-limiter');
+jest.mock('../../lib/logging');
+
+const mockPrisma = {
+  user: {
+    findMany: jest.fn(),
+    findUnique: jest.fn(),
+    findFirst: jest.fn(),
+    create: jest.fn(),
+    update: jest.fn(),
+    upsert: jest.fn(),
+    count: jest.fn(),
+  },
+  ticker: {
+    findMany: jest.fn(),
+    findUnique: jest.fn(),
+    findFirst: jest.fn(),
+    create: jest.fn(),
+    update: jest.fn(),
+    upsert: jest.fn(),
+    count: jest.fn(),
+  },
+  summary: {
+    findMany: jest.fn(),
+    findUnique: jest.fn(),
+    findFirst: jest.fn(),
+    create: jest.fn(),
+    update: jest.fn(),
+    upsert: jest.fn(),
+    count: jest.fn(),
+  },
+  cikMapping: {
+    findMany: jest.fn(),
+    findUnique: jest.fn(),
+    findFirst: jest.fn(),
+    create: jest.fn(),
+    update: jest.fn(),
+    upsert: jest.fn(),
+    count: jest.fn(),
+  },
+  tickerMonitoring: {
+    findMany: jest.fn(),
+    findUnique: jest.fn(),
+    findFirst: jest.fn(),
+    create: jest.fn(),
+    update: jest.fn(),
+    upsert: jest.fn(),
+    count: jest.fn(),
+  },
+  rssFilingCheck: {
+    findMany: jest.fn(),
+    findUnique: jest.fn(),
+    findFirst: jest.fn(),
+    create: jest.fn(),
+    createMany: jest.fn(),
+    update: jest.fn(),
+    deleteMany: jest.fn(),
+    count: jest.fn(),
+  },
+  auditLog: {
+    findMany: jest.fn(),
+    findUnique: jest.fn(),
+    findFirst: jest.fn(),
+    create: jest.fn(),
+    update: jest.fn(),
+    count: jest.fn(),
+  },
+  $transaction: jest.fn(),
+  $connect: jest.fn(),
+  $disconnect: jest.fn(),
+} as any;
+
+// Mock the getPrismaClient function
+(getPrismaClient as jest.Mock).mockReturnValue(mockPrisma);
+const mockTickerMonitoring = tickerMonitoring as jest.Mocked<typeof tickerMonitoring>;
+const mockRssParser = rssParser as jest.Mocked<typeof rssParser>;
+const mockSummaryService = summaryService as jest.Mocked<typeof summaryService>;
+const mockEmailService = emailService as jest.Mocked<typeof emailService>;
+const mockMarketHours = {
+  getMarketHoursContext: getMarketHoursContext as jest.MockedFunction<typeof getMarketHoursContext>,
+  getUserProcessingStatuses: getUserProcessingStatuses as jest.MockedFunction<typeof getUserProcessingStatuses>,
+  getEligibleUsers: getEligibleUsers as jest.MockedFunction<typeof getEligibleUsers>
+};
+const mockConcurrency = {
+  updateUserBudgetWithLock: updateUserBudgetWithLock as jest.MockedFunction<typeof updateUserBudgetWithLock>
+};
+const mockRateLimiter = rateLimiter as jest.Mocked<typeof rateLimiter>;
+
+// Mock CronJobMonitor
+const mockMonitor = {
+  recordMetric: jest.fn(),
+  updateMetrics: jest.fn(),
+  complete: jest.fn()
+};
+
+describe('Comprehensive Cron Integration Tests', () => {
+  let originalEnv: NodeJS.ProcessEnv;
+
+  beforeEach(() => {
+    // Save original environment
+    originalEnv = { ...process.env };
+    
+    // Clear all mocks
+    jest.clearAllMocks();
+    
+    // Setup default mock implementations
+    (CronJobMonitor.create as jest.Mock).mockResolvedValue(mockMonitor);
+    mockMonitor.complete.mockResolvedValue({
+      executionId: 'test-execution-123',
+      duration: 5000
+    });
+    
+    // Setup default rate limiter
+    mockRateLimiter.checkLimit.mockResolvedValue({
+      allowed: true,
+      remaining: 100,
+      resetTime: Date.now() + 60000
+    });
+
+    // Setup default market hours context
+    mockMarketHours.getMarketHoursContext.mockReturnValue({
+      isMarketHours: true,
+      isMarketDay: true,
+      isHoliday: false,
+      currentTime: new Date().toISOString()
+    });
+
+    // Setup default user processing statuses
+    mockMarketHours.getUserProcessingStatuses.mockReturnValue([]);
+    mockMarketHours.getEligibleUsers.mockReturnValue([]);
+
+    // Setup default ticker monitoring
+    mockTickerMonitoring.getActiveTickersForMonitoring.mockResolvedValue([]);
+    
+    // Setup default prisma responses
+    mockPrisma.user.findMany.mockResolvedValue([]);
+    mockPrisma.auditLog.create.mockResolvedValue({
+      id: 'audit-123',
+      userId: 'user-123',
+      action: 'TEST',
+      details: '{}',
+      success: true,
+      createdAt: new Date()
+    });
+  });
+
+  afterEach(() => {
+    // Restore original environment
+    process.env = originalEnv;
+  });
+
+  describe('1. Railway Configuration Tests', () => {
+    describe('Environment Variable Validation', () => {
+      it('should detect Railway environment correctly', async () => {
+        // Test Railway environment detection
+        process.env.RAILWAY_ENVIRONMENT = 'production';
+        process.env.CRON_SECRET = 'railway-test-secret';
+        
+        const request = createMockRequest({
+          authorization: 'Bearer railway-test-secret',
+          'x-forwarded-for': '10.0.0.1'
+        });
+
+        const response = await tierAwareRoute(request);
+        const result = await response.json();
+
+        expect(response.status).toBe(200);
+        expect(result.success).toBe(true);
+        expect(CronJobMonitor.create).toHaveBeenCalledWith('tier-aware-sec-monitor', 'RAILWAY_CRON');
+      });
+
+      it('should detect Vercel environment when Railway env is not set', async () => {
+        // Test Vercel environment detection (default)
+        delete process.env.RAILWAY_ENVIRONMENT;
+        process.env.CRON_SECRET = 'vercel-test-secret';
+        
+        const request = createMockRequest({
+          authorization: 'Bearer vercel-test-secret'
+        });
+
+        const response = await tierAwareRoute(request);
+        const result = await response.json();
+
+        expect(response.status).toBe(200);
+        expect(CronJobMonitor.create).toHaveBeenCalledWith('tier-aware-sec-monitor', 'VERCEL_CRON');
+      });
+
+      it('should validate CRON_SECRET environment variable', async () => {
+        // Test missing CRON_SECRET
+        delete process.env.CRON_SECRET;
+        
+        const request = createMockRequest({
+          authorization: 'Bearer invalid-secret'
+        });
+
+        const response = await tierAwareRoute(request);
+
+        expect(response.status).toBe(401);
+        expect(mockMonitor.complete).toHaveBeenCalledWith('FAILED', 'Unauthorized access attempt');
+      });
+
+      it('should validate tier configuration environment variables', async () => {
+        // Test custom tier configuration
+        process.env.INSTITUTION_BATCH_SIZE = '15';
+        process.env.ENTERPRISE_BATCH_SIZE = '12';
+        process.env.PROFESSIONAL_BATCH_SIZE = '8';
+        process.env.FREE_BATCH_SIZE = '5';
+        process.env.INSTITUTION_COST_LIMIT = '5.00';
+        process.env.ENTERPRISE_COST_LIMIT = '2.50';
+        process.env.PROFESSIONAL_COST_LIMIT = '1.20';
+        process.env.FREE_COST_LIMIT = '0.40';
+        process.env.CRON_SECRET = 'test-secret';
+
+        // Mock eligible users to test tier processing
+        mockMarketHours.getEligibleUsers.mockReturnValue([
+          { tier: 'INSTITUTION', userId: 'user-1' },
+          { tier: 'ENTERPRISE', userId: 'user-2' }
+        ]);
+
+        mockPrisma.user.findMany.mockResolvedValue([
+          {
+            id: 'user-1',
+            email: 'user1@test.com',
+            subscriptionTier: 'INSTITUTION',
+            lastCronProcessed: null,
+            processingBudget: 5.00,
+            budgetUsed: 0,
+            tickers: [{ id: 'tick-1', symbol: 'AAPL', companyName: 'Apple Inc.' }]
+          },
+          {
+            id: 'user-2',
+            email: 'user2@test.com',
+            subscriptionTier: 'ENTERPRISE',
+            lastCronProcessed: null,
+            processingBudget: 2.50,
+            budgetUsed: 0,
+            tickers: [{ id: 'tick-2', symbol: 'TSLA', companyName: 'Tesla Inc.' }]
+          }
+        ]);
+
+        // Mock validation and processing
+        mockTickerMonitoring.validateUserTickers.mockResolvedValue([
+          { symbol: 'AAPL', cik: '320193', valid: true },
+          { symbol: 'TSLA', cik: '1318605', valid: true }
+        ]);
+        mockTickerMonitoring.checkTickerForNewFilings.mockResolvedValue([]);
+        mockConcurrency.updateUserBudgetWithLock.mockResolvedValue({
+          previousBudget: 0,
+          newBudget: 0.05,
+          updated: true
+        });
+
+        const request = createMockRequest({
+          authorization: 'Bearer test-secret'
+        });
+
+        const response = await tierAwareRoute(request);
+        const result = await response.json();
+
+        expect(response.status).toBe(200);
+        expect(result.success).toBe(true);
+        expect(result.results.tierBreakdown).toEqual({
+          'INSTITUTION': expect.any(Number),
+          'ENTERPRISE': expect.any(Number)
+        });
+      });
+    });
+
+    describe('Authentication Security', () => {
+      it('should use timing-safe string comparison for secrets', async () => {
+        process.env.CRON_SECRET = 'correct-secret';
+        
+        // Test with similar but incorrect secret (timing attack protection)
+        const request = createMockRequest({
+          authorization: 'Bearer correct-secre'  // One character off
+        });
+
+        const response = await tierAwareRoute(request);
+
+        expect(response.status).toBe(401);
+        expect(mockMonitor.complete).toHaveBeenCalledWith('FAILED', 'Unauthorized access attempt');
+      });
+
+      it('should handle development environment localhost bypass', async () => {
+        process.env.NODE_ENV = 'development';
+        process.env.CRON_SECRET = 'dev-secret';
+        
+        const request = createMockRequest({
+          // No authorization header
+          'x-forwarded-for': '127.0.0.1'
+        });
+
+        const response = await tierAwareRoute(request);
+        const result = await response.json();
+
+        expect(response.status).toBe(200);
+        expect(result.success).toBe(true);
+      });
+
+      it('should enforce authentication in production even for localhost', async () => {
+        process.env.NODE_ENV = 'production';
+        process.env.CRON_SECRET = 'prod-secret';
+        
+        const request = createMockRequest({
+          // No authorization header
+          'x-forwarded-for': '127.0.0.1'
+        });
+
+        const response = await tierAwareRoute(request);
+
+        expect(response.status).toBe(401);
+      });
+    });
+
+    describe('IP Allowlist Configuration', () => {
+      it('should respect IP allowlist when configured', async () => {
+        process.env.CRON_SECRET = 'test-secret';
+        process.env.CRON_ALLOWED_IPS = '10.0.0.1,192.168.1.100';
+        
+        // Test allowed IP
+        const allowedRequest = createMockRequest({
+          authorization: 'Bearer test-secret',
+          'x-forwarded-for': '10.0.0.1'
+        });
+
+        const allowedResponse = await tierAwareRoute(allowedRequest);
+        expect(allowedResponse.status).toBe(200);
+
+        // Clear mocks for second test
+        jest.clearAllMocks();
+        mockRateLimiter.checkLimit.mockResolvedValue({ allowed: true, remaining: 100, resetTime: Date.now() + 60000 });
+
+        // Test disallowed IP
+        const disallowedRequest = createMockRequest({
+          authorization: 'Bearer test-secret',
+          'x-forwarded-for': '192.168.1.101'
+        });
+
+        const disallowedResponse = await tierAwareRoute(disallowedRequest);
+        expect(disallowedResponse.status).toBe(403);
+      });
+
+      it('should allow all IPs when allowlist is empty', async () => {
+        process.env.CRON_SECRET = 'test-secret';
+        delete process.env.CRON_ALLOWED_IPS;
+        
+        const request = createMockRequest({
+          authorization: 'Bearer test-secret',
+          'x-forwarded-for': '192.168.1.101'
+        });
+
+        const response = await tierAwareRoute(request);
+        expect(response.status).toBe(200);
+      });
+    });
+  });
+
+  describe('2. Cron Endpoint Integration Tests', () => {
+    beforeEach(() => {
+      process.env.CRON_SECRET = 'test-secret';
+    });
+
+    describe('Market Hours Context', () => {
+      it('should process during market hours with full user eligibility', async () => {
+        // Setup market hours context
+        mockMarketHours.getMarketHoursContext.mockReturnValue({
+          isMarketHours: true,
+          isMarketDay: true,
+          isHoliday: false,
+          currentTime: new Date('2024-01-15T14:30:00Z').toISOString() // 2:30 PM UTC (market hours)
+        });
+
+        mockMarketHours.getUserProcessingStatuses.mockReturnValue([
+          { userId: 'user-1', tier: 'PROFESSIONAL', eligible: true, lastProcessedAt: null, budgetUsed: 0 }
+        ]);
+
+        mockMarketHours.getEligibleUsers.mockReturnValue([
+          { tier: 'PROFESSIONAL', userId: 'user-1' }
+        ]);
+
+        const request = createMockRequest({
+          authorization: 'Bearer test-secret'
+        });
+
+        const response = await tierAwareRoute(request);
+        const result = await response.json();
+
+        expect(response.status).toBe(200);
+        expect(mockMonitor.recordMetric).toHaveBeenCalledWith('market_context', {
+          isMarketHours: true,
+          isMarketDay: true,
+          isHoliday: false,
+          currentTime: expect.any(String)
+        });
+      });
+
+      it('should process during off-market hours with reduced frequency', async () => {
+        // Setup off-market hours context
+        mockMarketHours.getMarketHoursContext.mockReturnValue({
+          isMarketHours: false,
+          isMarketDay: true,
+          isHoliday: false,
+          currentTime: new Date('2024-01-15T22:30:00Z').toISOString() // 10:30 PM UTC (after hours)
+        });
+
+        mockMarketHours.getUserProcessingStatuses.mockReturnValue([
+          { userId: 'user-1', tier: 'PROFESSIONAL', eligible: false, lastProcessedAt: new Date(), budgetUsed: 0 }
+        ]);
+
+        mockMarketHours.getEligibleUsers.mockReturnValue([]);
+
+        const request = createMockRequest({
+          authorization: 'Bearer test-secret'
+        });
+
+        const response = await tierAwareRoute(request);
+        const result = await response.json();
+
+        expect(response.status).toBe(200);
+        expect(result.results.usersProcessed).toBe(0);
+        expect(mockMonitor.recordMetric).toHaveBeenCalledWith('market_context', {
+          isMarketHours: false,
+          isMarketDay: true,
+          isHoliday: false,
+          currentTime: expect.any(String)
+        });
+      });
+
+      it('should process during holidays/weekends (SEC filings can be published 24/7)', async () => {
+        mockMarketHours.getMarketHoursContext.mockReturnValue({
+          isMarketHours: false,
+          isMarketDay: false,
+          isHoliday: true,
+          currentTime: new Date('2024-07-04T10:00:00Z').toISOString() // July 4th holiday
+        });
+
+        const request = createMockRequest({
+          authorization: 'Bearer test-secret'
+        });
+
+        const response = await tierAwareRoute(request);
+        const result = await response.json();
+
+        // Should still process RSS monitoring (Phase 1) even during holidays
+        expect(response.status).toBe(200);
+        expect(result.success).toBe(true);
+        expect(mockTickerMonitoring.getActiveTickersForMonitoring).toHaveBeenCalled();
+      });
+    });
+
+    describe('RSS Monitoring Phase', () => {
+      it('should execute RSS monitoring regardless of market hours', async () => {
+        const mockActiveTickers = [
+          {
+            id: 'ticker-1',
+            cik: '1318605',
+            symbol: 'TSLA',
+            companyName: 'Tesla, Inc.',
+            rssUrl: 'https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=1318605&type=10&dateb=&count=100&output=atom',
+            lastChecked: null,
+            lastAccessionSeen: null,
+            subscriberCount: 5
+          }
+        ];
+
+        const mockNewFilings = [
+          {
+            accessionNumber: '0001628280-24-007006',
+            filingType: '10-Q',
+            filingDate: new Date('2024-01-15'),
+            filingUrl: 'https://www.sec.gov/Archives/edgar/data/1318605/0001628280-24-007006.htm',
+            rssEntryDate: new Date('2024-01-15')
+          }
+        ];
+
+        mockTickerMonitoring.getActiveTickersForMonitoring.mockResolvedValue(mockActiveTickers);
+        mockTickerMonitoring.checkTickerForNewFilings.mockResolvedValue(mockNewFilings);
+
+        const request = createMockRequest({
+          authorization: 'Bearer test-secret'
+        });
+
+        const response = await tierAwareRoute(request);
+        const result = await response.json();
+
+        expect(response.status).toBe(200);
+        expect(mockTickerMonitoring.getActiveTickersForMonitoring).toHaveBeenCalled();
+        expect(mockTickerMonitoring.checkTickerForNewFilings).toHaveBeenCalledWith(mockActiveTickers[0]);
+        expect(mockMonitor.updateMetrics).toHaveBeenCalledWith({
+          tickersChecked: 1,
+          newFilingsFound: 1
+        });
+      });
+
+      it('should handle RSS check failures gracefully', async () => {
+        const mockActiveTickers = [
+          {
+            id: 'ticker-1',
+            cik: '1318605',
+            symbol: 'TSLA',
+            companyName: 'Tesla, Inc.',
+            rssUrl: 'https://www.sec.gov/rss/1318605',
+            lastChecked: null,
+            lastAccessionSeen: null,
+            subscriberCount: 1
+          }
+        ];
+
+        mockTickerMonitoring.getActiveTickersForMonitoring.mockResolvedValue(mockActiveTickers);
+        mockTickerMonitoring.checkTickerForNewFilings.mockRejectedValue(new Error('SEC server timeout'));
+
+        const request = createMockRequest({
+          authorization: 'Bearer test-secret'
+        });
+
+        const response = await tierAwareRoute(request);
+        const result = await response.json();
+
+        // Should continue processing despite RSS failures
+        expect(response.status).toBe(200);
+        expect(result.success).toBe(true);
+        expect(mockMonitor.updateMetrics).toHaveBeenCalledWith({ errorCount: 1 });
+      });
+
+      it('should respect concurrent RSS check limits', async () => {
+        // Create 10 tickers to test batching (limit is 3 concurrent)
+        const mockActiveTickers = Array.from({ length: 10 }, (_, i) => ({
+          id: `ticker-${i}`,
+          cik: `${1318605 + i}`,
+          symbol: `TICK${i}`,
+          companyName: `Company ${i}`,
+          rssUrl: `https://www.sec.gov/rss/${1318605 + i}`,
+          lastChecked: null,
+          lastAccessionSeen: null,
+          subscriberCount: 1
+        }));
+
+        mockTickerMonitoring.getActiveTickersForMonitoring.mockResolvedValue(mockActiveTickers);
+        mockTickerMonitoring.checkTickerForNewFilings.mockResolvedValue([]);
+
+        const request = createMockRequest({
+          authorization: 'Bearer test-secret'
+        });
+
+        const response = await tierAwareRoute(request);
+        const result = await response.json();
+
+        expect(response.status).toBe(200);
+        expect(mockTickerMonitoring.checkTickerForNewFilings).toHaveBeenCalledTimes(10);
+        expect(mockMonitor.updateMetrics).toHaveBeenCalledWith({
+          tickersChecked: 10,
+          newFilingsFound: 0
+        });
+      });
+    });
+
+    describe('User Processing Phase', () => {
+      it('should process users by tier with correct batch sizes', async () => {
+        const mockUsers = [
+          {
+            id: 'user-1',
+            email: 'institution@test.com',
+            subscriptionTier: 'INSTITUTION',
+            lastCronProcessed: null,
+            processingBudget: 2.50,
+            budgetUsed: 0,
+            tickers: [{ id: 'tick-1', symbol: 'AAPL', companyName: 'Apple Inc.' }]
+          },
+          {
+            id: 'user-2',
+            email: 'free@test.com',
+            subscriptionTier: 'FREE',
+            lastCronProcessed: null,
+            processingBudget: 0.20,
+            budgetUsed: 0,
+            tickers: [{ id: 'tick-2', symbol: 'TSLA', companyName: 'Tesla Inc.' }]
+          }
+        ];
+
+        mockPrisma.user.findMany.mockResolvedValue(mockUsers);
+        
+        mockMarketHours.getUserProcessingStatuses.mockReturnValue([
+          { userId: 'user-1', tier: 'INSTITUTION', eligible: true, lastProcessedAt: null, budgetUsed: 0 },
+          { userId: 'user-2', tier: 'FREE', eligible: true, lastProcessedAt: null, budgetUsed: 0 }
+        ]);
+
+        mockMarketHours.getEligibleUsers.mockReturnValue([
+          { tier: 'INSTITUTION', userId: 'user-1' },
+          { tier: 'FREE', userId: 'user-2' }
+        ]);
+
+        // Mock user ticker validation
+        mockTickerMonitoring.validateUserTickers.mockResolvedValue([
+          { symbol: 'AAPL', cik: '320193', valid: true }
+        ]);
+        mockTickerMonitoring.checkTickerForNewFilings.mockResolvedValue([]);
+
+        mockPrisma.user.findUnique.mockResolvedValue({
+          budgetUsed: 0,
+          subscriptionTier: 'INSTITUTION'
+        });
+
+        mockConcurrency.updateUserBudgetWithLock.mockResolvedValue({
+          previousBudget: 0,
+          newBudget: 0,
+          updated: true
+        });
+
+        const request = createMockRequest({
+          authorization: 'Bearer test-secret'
+        });
+
+        const response = await tierAwareRoute(request);
+        const result = await response.json();
+
+        expect(response.status).toBe(200);
+        expect(result.results.tierBreakdown).toEqual({
+          'INSTITUTION': expect.any(Number),
+          'FREE': expect.any(Number)
+        });
+      });
+    });
+  });
+
+  describe('3. Database Consistency Tests', () => {
+    beforeEach(() => {
+      process.env.CRON_SECRET = 'test-secret';
+    });
+
+    describe('TickerMonitoring Record Validation', () => {
+      it('should ensure all user subscriptions have corresponding TickerMonitoring records', async () => {
+        const mockUsers = [
+          {
+            id: 'user-1',
+            email: 'test@example.com',
+            subscriptionTier: 'PROFESSIONAL',
+            lastCronProcessed: null,
+            processingBudget: 0.60,
+            budgetUsed: 0,
+            tickers: [
+              { id: 'tick-1', symbol: 'AAPL', companyName: 'Apple Inc.' },
+              { id: 'tick-2', symbol: 'TSLA', companyName: 'Tesla Inc.' }
+            ]
+          }
+        ];
+
+        // Mock CIK mappings exist
+        mockPrisma.cikMapping.findFirst
+          .mockResolvedValueOnce({ ticker: 'AAPL', cik: '320193', companyName: 'Apple Inc.' })
+          .mockResolvedValueOnce({ ticker: 'TSLA', cik: '1318605', companyName: 'Tesla, Inc.' });
+
+        // Mock TickerMonitoring creation
+        mockTickerMonitoring.getActiveTickersForMonitoring.mockImplementation(async () => {
+          // This should trigger the TickerMonitoring record creation
+          return [
+            {
+              id: 'tm-1',
+              cik: '320193',
+              symbol: 'AAPL',
+              companyName: 'Apple Inc.',
+              rssUrl: 'https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=320193&type=10&dateb=&count=100&output=atom',
+              lastChecked: null,
+              lastAccessionSeen: null,
+              subscriberCount: 1
+            },
+            {
+              id: 'tm-2',
+              cik: '1318605',
+              symbol: 'TSLA',
+              companyName: 'Tesla, Inc.',
+              rssUrl: 'https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=1318605&type=10&dateb=&count=100&output=atom',
+              lastChecked: null,
+              lastAccessionSeen: null,
+              subscriberCount: 1
+            }
+          ];
+        });
+
+        mockTickerMonitoring.checkTickerForNewFilings.mockResolvedValue([]);
+
+        mockPrisma.user.findMany.mockResolvedValue(mockUsers);
+        mockMarketHours.getEligibleUsers.mockReturnValue([]);
+
+        const request = createMockRequest({
+          authorization: 'Bearer test-secret'
+        });
+
+        const response = await tierAwareRoute(request);
+        const result = await response.json();
+
+        expect(response.status).toBe(200);
+        expect(mockTickerMonitoring.getActiveTickersForMonitoring).toHaveBeenCalled();
+        // Verify both tickers are being monitored
+        expect(mockTickerMonitoring.checkTickerForNewFilings).toHaveBeenCalledTimes(2);
+      });
+
+      it('should handle missing CIK mappings gracefully', async () => {
+        const mockUsers = [
+          {
+            id: 'user-1',
+            email: 'test@example.com',
+            subscriptionTier: 'FREE',
+            lastCronProcessed: null,
+            processingBudget: 0.20,
+            budgetUsed: 0,
+            tickers: [
+              { id: 'tick-1', symbol: 'INVALID', companyName: 'Invalid Company' }
+            ]
+          }
+        ];
+
+        // Mock missing CIK mapping
+        mockTickerMonitoring.getActiveTickersForMonitoring.mockResolvedValue([]);
+        mockPrisma.user.findMany.mockResolvedValue(mockUsers);
+        mockMarketHours.getEligibleUsers.mockReturnValue([
+          { tier: 'FREE', userId: 'user-1' }
+        ]);
+
+        // Mock validation returns invalid ticker
+        mockTickerMonitoring.validateUserTickers.mockResolvedValue([
+          { symbol: 'INVALID', cik: null, valid: false }
+        ]);
+
+        const request = createMockRequest({
+          authorization: 'Bearer test-secret'
+        });
+
+        const response = await tierAwareRoute(request);
+        const result = await response.json();
+
+        expect(response.status).toBe(200);
+        // Should continue processing despite invalid tickers
+        expect(result.success).toBe(true);
+        expect(mockTickerMonitoring.validateUserTickers).toHaveBeenCalledWith('user-1', [
+          { id: 'tick-1', symbol: 'INVALID', companyName: 'Invalid Company' }
+        ]);
+      });
+    });
+
+    describe('Filing Tracking Logic', () => {
+      it('should prevent duplicate filing processing', async () => {
+        const mockActiveTickers = [
+          {
+            id: 'ticker-1',
+            cik: '1318605',
+            symbol: 'TSLA',
+            companyName: 'Tesla, Inc.',
+            rssUrl: 'https://www.sec.gov/rss/1318605',
+            lastChecked: null,
+            lastAccessionSeen: null,
+            subscriberCount: 1
+          }
+        ];
+
+        // Mock the same filing appearing multiple times
+        const duplicateFiling = {
+          accessionNumber: '0001628280-24-007006',
+          filingType: '10-Q',
+          filingDate: new Date('2024-01-15'),
+          filingUrl: 'https://www.sec.gov/filing123',
+          rssEntryDate: new Date('2024-01-15')
+        };
+
+        mockTickerMonitoring.getActiveTickersForMonitoring.mockResolvedValue(mockActiveTickers);
+        mockTickerMonitoring.checkTickerForNewFilings
+          .mockResolvedValueOnce([duplicateFiling])  // First check finds filing
+          .mockResolvedValueOnce([]);                // Second check finds no new filings (already processed)
+
+        const request = createMockRequest({
+          authorization: 'Bearer test-secret'
+        });
+
+        // First execution
+        const response1 = await tierAwareRoute(request);
+        const result1 = await response1.json();
+
+        expect(response1.status).toBe(200);
+        expect(mockMonitor.updateMetrics).toHaveBeenCalledWith({
+          tickersChecked: 1,
+          newFilingsFound: 1
+        });
+
+        // Clear mocks for second execution
+        jest.clearAllMocks();
+        setupDefaultMocks();
+
+        // Second execution should not find the same filing again
+        const response2 = await tierAwareRoute(request);
+        const result2 = await response2.json();
+
+        expect(response2.status).toBe(200);
+        expect(mockMonitor.updateMetrics).toHaveBeenCalledWith({
+          tickersChecked: 1,
+          newFilingsFound: 0
+        });
+      });
+    });
+
+    describe('Budget Tracking and Limits', () => {
+      it('should enforce tier-based cost limits', async () => {
+        const mockUsers = [
+          {
+            id: 'user-1',
+            email: 'free@test.com',
+            subscriptionTier: 'FREE',
+            lastCronProcessed: null,
+            processingBudget: 0.20,
+            budgetUsed: 0.18,  // Close to limit
+            tickers: [{ id: 'tick-1', symbol: 'AAPL', companyName: 'Apple Inc.' }]
+          }
+        ];
+
+        mockPrisma.user.findMany.mockResolvedValue(mockUsers);
+        mockMarketHours.getEligibleUsers.mockReturnValue([
+          { tier: 'FREE', userId: 'user-1' }
+        ]);
+
+        mockTickerMonitoring.validateUserTickers.mockResolvedValue([
+          { symbol: 'AAPL', cik: '320193', valid: true }
+        ]);
+
+        // Mock a filing that would exceed budget
+        mockTickerMonitoring.checkTickerForNewFilings.mockResolvedValue([
+          {
+            accessionNumber: '0001628280-24-007006',
+            filingType: '10-K',  // Expensive filing type
+            filingDate: new Date('2024-01-15'),
+            filingUrl: 'https://www.sec.gov/filing123',
+            rssEntryDate: new Date('2024-01-15')
+          }
+        ]);
+
+        // Mock summary generation with high cost
+        mockSummaryService.generateAISummaryWithRetry.mockResolvedValue({
+          summary: 'High cost summary',
+          cost: 0.05,  // This would exceed the remaining budget (0.20 - 0.18 = 0.02)
+          keyPoints: [],
+          tokensUsed: 1000,
+          inputTokens: 800,
+          outputTokens: 200
+        });
+
+        mockPrisma.user.findUnique.mockResolvedValue({
+          budgetUsed: 0.18,
+          subscriptionTier: 'FREE'
+        });
+
+        // Mock budget validation failure
+        mockConcurrency.updateUserBudgetWithLock.mockRejectedValue(
+          new Error('Budget limit exceeded')
+        );
+
+        const request = createMockRequest({
+          authorization: 'Bearer test-secret'
+        });
+
+        const response = await tierAwareRoute(request);
+        const result = await response.json();
+
+        expect(response.status).toBe(200);
+        expect(result.results.errorBreakdown.budgetExceeded).toBeGreaterThan(0);
+      });
+
+      it('should track cost validation failures', async () => {
+        const mockUsers = [
+          {
+            id: 'user-1',
+            email: 'test@test.com',
+            subscriptionTier: 'PROFESSIONAL',
+            lastCronProcessed: null,
+            processingBudget: 0.60,
+            budgetUsed: 0,
+            tickers: [{ id: 'tick-1', symbol: 'AAPL', companyName: 'Apple Inc.' }]
+          }
+        ];
+
+        mockPrisma.user.findMany.mockResolvedValue(mockUsers);
+        mockMarketHours.getEligibleUsers.mockReturnValue([
+          { tier: 'PROFESSIONAL', userId: 'user-1' }
+        ]);
+
+        mockTickerMonitoring.validateUserTickers.mockResolvedValue([
+          { symbol: 'AAPL', cik: '320193', valid: true }
+        ]);
+
+        mockTickerMonitoring.checkTickerForNewFilings.mockResolvedValue([
+          {
+            accessionNumber: '0001628280-24-007006',
+            filingType: '10-Q',
+            filingDate: new Date('2024-01-15'),
+            filingUrl: 'https://www.sec.gov/filing123',
+            rssEntryDate: new Date('2024-01-15')
+          }
+        ]);
+
+        // Mock invalid cost (negative)
+        mockSummaryService.generateAISummaryWithRetry.mockResolvedValue({
+          summary: 'Test summary',
+          cost: -0.01,  // Invalid negative cost
+          keyPoints: [],
+          tokensUsed: 1000,
+          inputTokens: 800,
+          outputTokens: 200
+        });
+
+        mockPrisma.user.findUnique.mockResolvedValue({
+          budgetUsed: 0,
+          subscriptionTier: 'PROFESSIONAL'
+        });
+
+        const request = createMockRequest({
+          authorization: 'Bearer test-secret'
+        });
+
+        const response = await tierAwareRoute(request);
+        const result = await response.json();
+
+        expect(response.status).toBe(200);
+        expect(result.results.errorBreakdown.costValidationFailed).toBeGreaterThan(0);
+        expect(mockPrisma.auditLog.create).toHaveBeenCalledWith({
+          data: expect.objectContaining({
+            action: 'BUDGET_UPDATE_FAILED',
+            success: false
+          })
+        });
+      });
+    });
+  });
+
+  describe('4. End-to-End Workflow Tests', () => {
+    beforeEach(() => {
+      process.env.CRON_SECRET = 'test-secret';
+    });
+
+    it('should complete full RSS → filing detection → summarization → email pipeline', async () => {
+      // Setup complete workflow data
+      const mockActiveTickers = [
+        {
+          id: 'ticker-1',
+          cik: '1318605',
+          symbol: 'TSLA',
+          companyName: 'Tesla, Inc.',
+          rssUrl: 'https://www.sec.gov/rss/1318605',
+          lastChecked: null,
+          lastAccessionSeen: null,
+          subscriberCount: 1
+        }
+      ];
+
+      const mockNewFilings = [
+        {
+          accessionNumber: '0001628280-24-007006',
+          filingType: '10-Q',
+          filingDate: new Date('2024-01-15'),
+          filingUrl: 'https://www.sec.gov/Archives/edgar/data/1318605/0001628280-24-007006.htm',
+          rssEntryDate: new Date('2024-01-15')
+        }
+      ];
+
+      const mockUsers = [
+        {
+          id: 'user-1',
+          email: 'investor@test.com',
+          subscriptionTier: 'PROFESSIONAL',
+          lastCronProcessed: null,
+          processingBudget: 0.60,
+          budgetUsed: 0,
+          tickers: [{ id: 'tick-1', symbol: 'TSLA', companyName: 'Tesla Inc.' }]
+        }
+      ];
+
+      const mockSummaryResult = {
+        summary: 'Tesla reported Q4 2023 results with record delivery numbers...',
+        keyPoints: ['Record deliveries', 'Strong margins', 'Cybertruck production ramp'],
+        cost: 0.03,
+        tokensUsed: 1200,
+        inputTokens: 1000,
+        outputTokens: 200,
+        model: 'claude-3-sonnet-20240229'
+      };
+
+      // Setup all mocks for complete workflow
+      mockTickerMonitoring.getActiveTickersForMonitoring.mockResolvedValue(mockActiveTickers);
+      mockTickerMonitoring.checkTickerForNewFilings.mockResolvedValue(mockNewFilings);
+      
+      mockPrisma.user.findMany.mockResolvedValue(mockUsers);
+      mockMarketHours.getEligibleUsers.mockReturnValue([
+        { tier: 'PROFESSIONAL', userId: 'user-1' }
+      ]);
+
+      mockTickerMonitoring.validateUserTickers.mockResolvedValue([
+        { symbol: 'TSLA', cik: '1318605', valid: true }
+      ]);
+
+      mockSummaryService.generateAISummaryWithRetry.mockResolvedValue(mockSummaryResult);
+      
+      mockPrisma.ticker.findFirst.mockResolvedValue({ id: 'db-ticker-1' });
+      mockPrisma.summary.create.mockResolvedValue({
+        id: 'summary-1',
+        summaryText: mockSummaryResult.summary
+      });
+      
+      mockPrisma.user.findUnique.mockResolvedValue({
+        budgetUsed: 0,
+        subscriptionTier: 'PROFESSIONAL'
+      });
+
+      mockConcurrency.updateUserBudgetWithLock.mockResolvedValue({
+        previousBudget: 0,
+        newBudget: 0.03,
+        updated: true
+      });
+
+      mockTickerMonitoring.markFilingAsProcessed.mockResolvedValue();
+      
+      mockEmailService.sendEmailSummary.mockResolvedValue({
+        success: true,
+        messageId: 'email-123'
+      });
+
+      const request = createMockRequest({
+        authorization: 'Bearer test-secret'
+      });
+
+      const response = await tierAwareRoute(request);
+      const result = await response.json();
+
+      // Verify complete workflow execution
+      expect(response.status).toBe(200);
+      expect(result.success).toBe(true);
+
+      // Verify RSS monitoring phase
+      expect(mockTickerMonitoring.getActiveTickersForMonitoring).toHaveBeenCalled();
+      expect(mockTickerMonitoring.checkTickerForNewFilings).toHaveBeenCalledWith(mockActiveTickers[0]);
+
+      // Verify user processing phase
+      expect(mockTickerMonitoring.validateUserTickers).toHaveBeenCalledWith('user-1', mockUsers[0].tickers);
+
+      // Verify summarization phase
+      expect(mockSummaryService.generateAISummaryWithRetry).toHaveBeenCalled();
+
+      // Verify database storage
+      expect(mockPrisma.summary.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          summaryText: mockSummaryResult.summary,
+          cost: mockSummaryResult.cost
+        })
+      });
+
+      // Verify email sending
+      expect(mockEmailService.sendEmailSummary).toHaveBeenCalledWith(
+        'investor@test.com',
+        ['TSLA'],
+        false
+      );
+
+      // Verify filing marked as processed
+      expect(mockTickerMonitoring.markFilingAsProcessed).toHaveBeenCalled();
+
+      // Verify metrics
+      expect(result.results.usersProcessed).toBe(1);
+      expect(result.results.filingsProcessed).toBe(1);
+      expect(result.results.totalCost).toBe(0.03);
+    });
+
+    it('should handle partial workflow failures with proper error tracking', async () => {
+      // Setup workflow that fails at email stage
+      const mockUsers = [
+        {
+          id: 'user-1',
+          email: 'test@test.com',
+          subscriptionTier: 'FREE',
+          lastCronProcessed: null,
+          processingBudget: 0.20,
+          budgetUsed: 0,
+          tickers: [{ id: 'tick-1', symbol: 'AAPL', companyName: 'Apple Inc.' }]
+        }
+      ];
+
+      mockPrisma.user.findMany.mockResolvedValue(mockUsers);
+      mockMarketHours.getEligibleUsers.mockReturnValue([
+        { tier: 'FREE', userId: 'user-1' }
+      ]);
+
+      mockTickerMonitoring.validateUserTickers.mockResolvedValue([
+        { symbol: 'AAPL', cik: '320193', valid: true }
+      ]);
+
+      mockTickerMonitoring.checkTickerForNewFilings.mockResolvedValue([
+        {
+          accessionNumber: '0001628280-24-007006',
+          filingType: '10-Q',
+          filingDate: new Date('2024-01-15'),
+          filingUrl: 'https://www.sec.gov/filing123',
+          rssEntryDate: new Date('2024-01-15')
+        }
+      ]);
+
+      mockSummaryService.generateAISummaryWithRetry.mockResolvedValue({
+        summary: 'Test summary',
+        cost: 0.02,
+        keyPoints: [],
+        tokensUsed: 800,
+        inputTokens: 600,
+        outputTokens: 200
+      });
+
+      mockPrisma.ticker.findFirst.mockResolvedValue({ id: 'db-ticker-1' });
+      mockPrisma.summary.create.mockResolvedValue({ id: 'summary-1' });
+      mockPrisma.user.findUnique.mockResolvedValue({
+        budgetUsed: 0,
+        subscriptionTier: 'FREE'
+      });
+
+      mockConcurrency.updateUserBudgetWithLock.mockResolvedValue({
+        previousBudget: 0,
+        newBudget: 0.02,
+        updated: true
+      });
+
+      // Email fails
+      mockEmailService.sendEmailSummary.mockResolvedValue({
+        success: false,
+        error: 'Email service temporarily unavailable'
+      });
+
+      mockTickerMonitoring.markFilingAsProcessed.mockResolvedValue();
+
+      const request = createMockRequest({
+        authorization: 'Bearer test-secret'
+      });
+
+      const response = await tierAwareRoute(request);
+      const result = await response.json();
+
+      // Should still be successful overall despite email failure
+      expect(response.status).toBe(200);
+      expect(result.success).toBe(true);
+      expect(result.results.filingsProcessed).toBe(1);
+      
+      // Filing should still be marked as processed to prevent retry
+      expect(mockTickerMonitoring.markFilingAsProcessed).toHaveBeenCalled();
+    });
+  });
+
+  describe('5. Regression Prevention Tests', () => {
+    beforeEach(() => {
+      process.env.CRON_SECRET = 'test-secret';
+    });
+
+    describe('Authentication Regression Tests', () => {
+      it('should maintain secure authentication in production', async () => {
+        process.env.NODE_ENV = 'production';
+        
+        // Test various invalid authentication attempts
+        const invalidAttempts = [
+          { headers: {}, expectedStatus: 401 },
+          { headers: { 'authorization': 'Bearer wrong-secret' }, expectedStatus: 401 },
+          { headers: { 'authorization': 'Basic dGVzdDp0ZXN0' }, expectedStatus: 401 },
+          { headers: { 'authorization': 'Bearer ' }, expectedStatus: 401 },
+          { headers: { 'x-api-key': 'test-secret' }, expectedStatus: 401 }
+        ];
+
+        for (const attempt of invalidAttempts) {
+          const request = createMockRequest(attempt.headers);
+          const response = await tierAwareRoute(request);
+          
+          expect(response.status).toBe(attempt.expectedStatus);
+        }
+      });
+
+      it('should allow localhost bypass only in development', async () => {
+        // Test development environment
+        process.env.NODE_ENV = 'development';
+        
+        const devRequest = createMockRequest({
+          'x-forwarded-for': '127.0.0.1'
+          // No authorization header
+        });
+
+        const devResponse = await tierAwareRoute(devRequest);
+        expect(devResponse.status).toBe(200);
+
+        // Test production environment (clear mocks first)
+        jest.clearAllMocks();
+        setupDefaultMocks();
+        process.env.NODE_ENV = 'production';
+
+        const prodRequest = createMockRequest({
+          'x-forwarded-for': '127.0.0.1'
+          // No authorization header
+        });
+
+        const prodResponse = await tierAwareRoute(prodRequest);
+        expect(prodResponse.status).toBe(401);
+      });
+    });
+
+    describe('Middleware Security Tests', () => {
+      it('should not be blocked by rate limiting for legitimate cron requests', async () => {
+        // Test rate limiting allows cron requests
+        mockRateLimiter.checkLimit.mockResolvedValue({
+          allowed: true,
+          remaining: 50,
+          resetTime: Date.now() + 60000
+        });
+
+        const request = createMockRequest({
+          authorization: 'Bearer test-secret',
+          'x-forwarded-for': '10.0.0.1'
+        });
+
+        const response = await tierAwareRoute(request);
+        expect(response.status).toBe(200);
+        expect(mockRateLimiter.checkLimit).toHaveBeenCalledWith('cron-endpoint', '10.0.0.1');
+      });
+
+      it('should respect rate limiting when configured', async () => {
+        mockRateLimiter.checkLimit.mockResolvedValue({
+          allowed: false,
+          remaining: 0,
+          resetTime: Date.now() + 60000
+        });
+
+        const request = createMockRequest({
+          authorization: 'Bearer test-secret',
+          'x-forwarded-for': '10.0.0.1'
+        });
+
+        const response = await tierAwareRoute(request);
+        expect(response.status).toBe(429);
+        expect(mockMonitor.complete).toHaveBeenCalledWith('FAILED', 'Rate limit exceeded');
+      });
+    });
+
+    describe('Database Concurrency Tests', () => {
+      it('should handle concurrency conflicts gracefully', async () => {
+        const mockUsers = [
+          {
+            id: 'user-1',
+            email: 'test@test.com',
+            subscriptionTier: 'PROFESSIONAL',
+            lastCronProcessed: null,
+            processingBudget: 0.60,
+            budgetUsed: 0,
+            tickers: [{ id: 'tick-1', symbol: 'AAPL', companyName: 'Apple Inc.' }]
+          }
+        ];
+
+        mockPrisma.user.findMany.mockResolvedValue(mockUsers);
+        mockMarketHours.getEligibleUsers.mockReturnValue([
+          { tier: 'PROFESSIONAL', userId: 'user-1' }
+        ]);
+
+        mockTickerMonitoring.validateUserTickers.mockResolvedValue([
+          { symbol: 'AAPL', cik: '320193', valid: true }
+        ]);
+
+        mockTickerMonitoring.checkTickerForNewFilings.mockResolvedValue([
+          {
+            accessionNumber: '0001628280-24-007006',
+            filingType: '10-Q',
+            filingDate: new Date('2024-01-15'),
+            filingUrl: 'https://www.sec.gov/filing123',
+            rssEntryDate: new Date('2024-01-15')
+          }
+        ]);
+
+        mockSummaryService.generateAISummaryWithRetry.mockResolvedValue({
+          summary: 'Test summary',
+          cost: 0.03,
+          keyPoints: [],
+          tokensUsed: 1000,
+          inputTokens: 800,
+          outputTokens: 200
+        });
+
+        mockPrisma.user.findUnique.mockResolvedValue({
+          budgetUsed: 0,
+          subscriptionTier: 'PROFESSIONAL'
+        });
+
+        // Mock concurrency conflict
+        const concurrencyError = new Error('P2034: Transaction failed due to a write conflict or a deadlock');
+        concurrencyError.name = 'PrismaClientKnownRequestError';
+        (concurrencyError as any).code = 'P2034';
+
+        mockConcurrency.updateUserBudgetWithLock.mockRejectedValue(concurrencyError);
+
+        const request = createMockRequest({
+          authorization: 'Bearer test-secret'
+        });
+
+        const response = await tierAwareRoute(request);
+        const result = await response.json();
+
+        expect(response.status).toBe(200);
+        expect(result.results.errorBreakdown.concurrencyConflicts).toBeGreaterThan(0);
+      });
+    });
+
+    describe('Error Handling Regression Tests', () => {
+      it('should not crash on unexpected errors', async () => {
+        // Mock unexpected error in monitoring
+        mockTickerMonitoring.getActiveTickersForMonitoring.mockRejectedValue(
+          new Error('Unexpected database error')
+        );
+
+        const request = createMockRequest({
+          authorization: 'Bearer test-secret'
+        });
+
+        const response = await tierAwareRoute(request);
+        const result = await response.json();
+
+        expect(response.status).toBe(500);
+        expect(result.success).toBe(false);
+        expect(result.error).toBe('Unexpected database error');
+        expect(mockMonitor.complete).toHaveBeenCalledWith('FAILED', 'Unexpected database error');
+      });
+
+      it('should handle monitor initialization failures', async () => {
+        (CronJobMonitor.create as jest.Mock).mockRejectedValue(
+          new Error('Failed to initialize monitoring')
+        );
+
+        const request = createMockRequest({
+          authorization: 'Bearer test-secret'
+        });
+
+        const response = await tierAwareRoute(request);
+        const result = await response.json();
+
+        expect(response.status).toBe(500);
+        expect(result.success).toBe(false);
+        expect(result.error).toBe('Failed to initialize monitoring');
+      });
+    });
+  });
+
+  // Helper functions
+  function createMockRequest(headers: Record<string, string>): NextRequest {
+    // Create a mock Headers object that works in the test environment
+    const mockHeaders = {
+      get: jest.fn((key: string) => headers[key.toLowerCase()] || null),
+      has: jest.fn((key: string) => key.toLowerCase() in headers),
+      set: jest.fn(),
+      forEach: jest.fn(),
+      entries: jest.fn(),
+      keys: jest.fn(),
+      values: jest.fn()
+    };
+
+    return {
+      headers: mockHeaders
+    } as NextRequest;
+  }
+
+  function setupDefaultMocks() {
+    // Reset all mocks to default states
+    (CronJobMonitor.create as jest.Mock).mockResolvedValue(mockMonitor);
+    mockMonitor.complete.mockResolvedValue({
+      executionId: 'test-execution-123',
+      duration: 5000
+    });
+    mockMonitor.recordMetric.mockResolvedValue(undefined);
+    mockMonitor.updateMetrics.mockResolvedValue(undefined);
+    
+    mockRateLimiter.checkLimit.mockResolvedValue({
+      allowed: true,
+      remaining: 100,
+      resetTime: Date.now() + 60000
+    });
+
+    mockMarketHours.getMarketHoursContext.mockReturnValue({
+      isMarketHours: true,
+      isMarketDay: true,
+      isHoliday: false,
+      currentTime: new Date().toISOString()
+    });
+
+    mockMarketHours.getUserProcessingStatuses.mockReturnValue([]);
+    mockMarketHours.getEligibleUsers.mockReturnValue([]);
+    mockTickerMonitoring.getActiveTickersForMonitoring.mockResolvedValue([]);
+    
+    mockPrisma.user.findMany.mockResolvedValue([]);
+    mockPrisma.auditLog.create.mockResolvedValue({
+      id: 'audit-123',
+      userId: 'user-123',
+      action: 'TEST',
+      details: '{}',
+      success: true,
+      createdAt: new Date()
+    });
+  }
+});

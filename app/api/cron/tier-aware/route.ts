@@ -223,11 +223,17 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
     
-    // Timing-safe authorization check
+    // Timing-safe authorization check with development bypass
     const authHeader = request.headers.get('authorization');
     const expectedAuth = `Bearer ${process.env.CRON_SECRET}`;
     
-    if (!authHeader || !timingSafeEqual(authHeader, expectedAuth)) {
+    // Development environment bypass for localhost testing
+    const isDevelopment = process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test';
+    const isLocalhost = clientIp === '127.0.0.1' || clientIp === '::1' || clientIp === 'localhost';
+    
+    if (isDevelopment && isLocalhost) {
+      cronLogger.debug('Bypassing authentication for localhost in development', { clientIp });
+    } else if (!authHeader || !timingSafeEqual(authHeader, expectedAuth)) {
       cronLogger.warn('Unauthorized cron request', { clientIp });
       await monitor.complete(CronJobStatus.FAILED, 'Unauthorized access attempt');
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
