@@ -41,5 +41,5 @@ regions = ["us-west-2"]
 name = "tier-aware-cron"
 source = "."
 build.command = "npm run build"
-start.command = "node -e \"const fetch = require('node-fetch'); const runCron = async () => { try { const response = await fetch('https://' + process.env.RAILWAY_STATIC_URL + '/api/cron/unified', { method: 'POST', headers: { 'Authorization': 'Bearer ' + process.env.CRON_SECRET, 'Content-Type': 'application/json' } }); const text = await response.text(); console.log('Cron executed:', response.status, text); } catch (error) { console.error('Cron error:', error); } }; setInterval(runCron, 900000); console.log('Cron scheduler started (15min intervals)');\""
+start.command = "node -e \"const fetch = require('node-fetch'); const runCron = async () => { try { const response = await fetch('https://' + process.env.RAILWAY_PUBLIC_DOMAIN + '/api/cron/unified', { method: 'POST', headers: { 'Authorization': 'Bearer ' + process.env.CRON_SECRET, 'Content-Type': 'application/json' } }); const text = await response.text(); console.log('Cron executed:', response.status, text); } catch (error) { console.error('Cron error:', error); } }; setInterval(runCron, 900000); console.log('Cron scheduler started (15min intervals)');\""
 variables = { CRON_TYPE = "tier-aware" }
