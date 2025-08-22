@@ -218,16 +218,16 @@ Required environment variables for E2E testing:
 
 ```bash
 CRON_SECRET=your_secure_cron_secret_here
-RAILWAY_STATIC_URL=your-app.railway.app
 ANTHROPIC_API_KEY=your_anthropic_api_key
 DATABASE_URL=your_database_url
 RESEND_API_KEY=your_resend_api_key
+# Note: RAILWAY_PUBLIC_DOMAIN is automatically provided by Railway
 ```
 
 **Railway cron configuration (in railway.toml) must use:**
 - ✅ Correct endpoint: `/api/cron/unified`
-- ✅ Proper URL construction: `https://${RAILWAY_STATIC_URL}`
-- ✅ POST method with Authorization header
+- ✅ Proper URL construction: `https://${RAILWAY_PUBLIC_DOMAIN}` (auto-provided)
+- ✅ GET method with Authorization header
 - ✅ 15-minute intervals (900000ms)
 
 **⚠️ WARNING: Never deploy without successful E2E test completion**
