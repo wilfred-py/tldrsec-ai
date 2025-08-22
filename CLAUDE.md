@@ -45,6 +45,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - `npm run test:cron` - Test cron job functionality
 - `npm run test:cron-performance` - Performance tests for cron jobs
 - `npm run test:cron-endpoint` - Test cron API endpoints
+- `npm run test:cron-comprehensive` - **MANDATORY** comprehensive cron integration tests
 
 ### End-to-End Testing
 - `npm run test:e2e` - **MANDATORY** end-to-end test with email summarization flow
@@ -192,9 +193,10 @@ Required environment variables for E2E testing:
 1. **Complete your code changes**
 2. **Run comprehensive tests:**
    ```bash
-   npm run lint          # Code quality
-   npm run test           # Unit tests  
-   npm run test:e2e       # End-to-end email test
+   npm run lint                    # Code quality
+   npm run test                    # Unit tests  
+   npm run test:e2e               # End-to-end email test
+   npm run test:cron-comprehensive # Cron integration tests
    ```
 3. **Verify TEST_EMAIL received summary** - Check your inbox
 4. **Only commit if ALL tests pass** - No exceptions
@@ -205,9 +207,28 @@ Required environment variables for E2E testing:
 - [ ] All linting passes (`npm run lint`)
 - [ ] Unit tests pass (`npm run test`)
 - [ ] **E2E test passes (`npm run test:e2e`)**
+- [ ] **Cron integration tests pass (`npm run test:cron-comprehensive`)**
 - [ ] **TEST_EMAIL received summary email**
 - [ ] Environment variables are properly configured
 - [ ] No sensitive data in commit
+
+### Railway/Production Cron Configuration
+
+**CRITICAL: Before deploying to Railway, ensure these environment variables are set:**
+
+```bash
+CRON_SECRET=your_secure_cron_secret_here
+RAILWAY_STATIC_URL=your-app.railway.app
+ANTHROPIC_API_KEY=your_anthropic_api_key
+DATABASE_URL=your_database_url
+RESEND_API_KEY=your_resend_api_key
+```
+
+**Railway cron configuration (in railway.toml) must use:**
+- ✅ Correct endpoint: `/api/cron/unified`
+- ✅ Proper URL construction: `https://${RAILWAY_STATIC_URL}`
+- ✅ POST method with Authorization header
+- ✅ 15-minute intervals (900000ms)
 
 **⚠️ WARNING: Never deploy without successful E2E test completion**
 
