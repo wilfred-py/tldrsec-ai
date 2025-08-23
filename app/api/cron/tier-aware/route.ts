@@ -8,7 +8,6 @@ import {
   getActiveTickersForMonitoring, 
   checkTickerForNewFilings, 
   markFilingAsProcessed,
-  validateUserTickers,
   getUnprocessedFilings
 } from '../../../../lib/sec-edgar/ticker-monitoring';
 // Web Crypto API for Edge Runtime compatibility
