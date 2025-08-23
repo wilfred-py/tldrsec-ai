@@ -8,7 +8,8 @@ import {
   getActiveTickersForMonitoring, 
   checkTickerForNewFilings, 
   markFilingAsProcessed,
-  validateUserTickers
+  validateUserTickers,
+  getUnprocessedFilings
 } from '../../../../lib/sec-edgar/ticker-monitoring';
 // Web Crypto API for Edge Runtime compatibility
 import { rateLimiter } from '../../../../lib/security/rate-limiter';
@@ -625,6 +626,7 @@ async function processTierBatch(
 
 /**
  * Process SEC filings for a specific user with tier-aware optimization
+ * FIXED: Now processes unprocessed filings from RssFilingCheck table (the missing link!)
  */
 async function processUserTierFilings(user: User, tier: string) {
   const result = {
@@ -632,98 +634,107 @@ async function processUserTierFilings(user: User, tier: string) {
     cost: 0
   };
 
-  // PRODUCTION IMPLEMENTATION: Process actual SEC filings for user
   try {
-    // First validate all user tickers have valid CIKs
-    const tickerValidations = await validateUserTickers(user.id, user.tickers);
-    const validTickers = tickerValidations.filter(t => t.valid);
+    // Get tier-based processing limit
+    const maxFilings = TIER_BATCH_SIZES[tier as keyof typeof TIER_BATCH_SIZES] || 3;
     
-    if (validTickers.length === 0) {
-      cronLogger.warn(`No valid tickers found for user ${user.id}`, {
-        userId: user.id,
-        totalTickers: user.tickers.length,
-        invalidTickers: tickerValidations.filter(t => !t.valid).map(t => t.symbol)
-      });
+    cronLogger.info(`Processing filings for user ${user.id}`, {
+      userId: user.id,
+      tier,
+      maxFilings,
+      userTickers: user.tickers.map(t => t.symbol)
+    });
+
+    // Get unprocessed filings that match user's tickers
+    const unprocessedFilings = await getUnprocessedFilings(maxFilings * 2); // Get more than needed for filtering
+    
+    if (unprocessedFilings.length === 0) {
+      cronLogger.info(`No unprocessed filings found for processing`, { userId: user.id });
       return result;
     }
     
-    if (validTickers.length < user.tickers.length) {
-      cronLogger.warn(`Some tickers invalid for user ${user.id}`, {
-        userId: user.id,
-        validCount: validTickers.length,
-        totalCount: user.tickers.length,
-        invalidTickers: tickerValidations.filter(t => !t.valid).map(t => t.symbol)
-      });
-    }
+    cronLogger.info(`Found ${unprocessedFilings.length} unprocessed filings`, { userId: user.id });
 
-    for (const tickerValidation of validTickers) {
+    // Filter filings to only those for tickers the user subscribes to
+    const userTickerSymbols = user.tickers.map(t => t.symbol.toUpperCase());
+    const relevantFilings = unprocessedFilings.filter(filing => 
+      userTickerSymbols.includes(filing.ticker.symbol.toUpperCase())
+    );
+
+    cronLogger.info(`Filtered to ${relevantFilings.length} relevant filings for user`, {
+      userId: user.id,
+      userTickers: userTickerSymbols,
+      relevantFilings: relevantFilings.map(f => ({ symbol: f.ticker.symbol, accessionNumber: f.accessionNumber, type: f.filingType }))
+    });
+
+    // Process relevant filings up to tier limit
+    const filingsToProcess = relevantFilings.slice(0, maxFilings);
+    
+    for (const filing of filingsToProcess) {
       try {
-        // Find the original ticker object
-        const originalTicker = user.tickers.find(t => t.symbol === tickerValidation.symbol);
-        if (!originalTicker) {
-          cronLogger.warn(`Original ticker not found for ${tickerValidation.symbol}`);
-          continue;
-        }
+        cronLogger.info(`Processing filing ${filing.accessionNumber} for user ${user.id}`, {
+          filingType: filing.filingType,
+          ticker: filing.ticker.symbol,
+          filingDate: filing.filingDate
+        });
 
-        // Create a ticker object with validated CIK for checkTickerForNewFilings
-        const tickerWithCik = {
-          ...originalTicker,
-          cik: tickerValidation.cik!,
-          rssUrl: `https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=${tickerValidation.cik}&type=10&dateb=&count=100&output=atom`
+        // Create filing object compatible with processSecFiling
+        const filingForProcessing = {
+          accessionNumber: filing.accessionNumber,
+          formType: filing.filingType,
+          filingDate: filing.filingDate.toISOString(),
+          filingUrl: filing.filingUrl,
+          ticker: filing.ticker
         };
 
-        // Check for new filings for this ticker
-        const newFilings = await checkTickerForNewFilings(tickerWithCik);
+        // Process the filing (generate summary and send email)
+        const processingResult = await processSecFiling(filingForProcessing, user, tier);
         
-        for (const filing of newFilings) {
-          try {
-            // Process the filing (integrate with existing SEC processing logic)
-            const processingResult = await processSecFiling(filing, user, tier);
-            
-            if (processingResult.success) {
-              result.filingsProcessed++;
-              result.cost += processingResult.cost || 0;
-              
-              // Mark filing as processed  
-              await markFilingAsProcessed(filing.accessionNumber, user.id);
-            }
-            
-            // Respect tier-based processing limits
-            const maxFilings = TIER_BATCH_SIZES[tier as keyof typeof TIER_BATCH_SIZES] || 3;
-            if (result.filingsProcessed >= maxFilings) {
-              break;
-            }
-            
-          } catch (filingError) {
-            cronLogger.error(`Failed to process filing ${filing.accessionNumber}`, {
-              error: filingError instanceof Error ? filingError.message : 'Unknown error',
-              userId: user.id,
-              ticker: tickerValidation.symbol,
-              cik: tickerValidation.cik
-            });
-          }
+        if (processingResult.success) {
+          result.filingsProcessed++;
+          result.cost += processingResult.cost || 0;
+          
+          // Mark filing as processed using the correct RssFilingCheck ID
+          await markFilingAsProcessed(filing.id, user.id);
+          
+          cronLogger.info(`Successfully processed filing ${filing.accessionNumber}`, {
+            userId: user.id,
+            ticker: filing.ticker.symbol,
+            cost: processingResult.cost,
+            filingsProcessed: result.filingsProcessed
+          });
+        } else {
+          cronLogger.warn(`Failed to process filing ${filing.accessionNumber}`, {
+            userId: user.id,
+            ticker: filing.ticker.symbol,
+            error: processingResult.error || 'Unknown error'
+          });
         }
         
-        // Break if we've hit the tier limit
-        const maxFilings = TIER_BATCH_SIZES[tier as keyof typeof TIER_BATCH_SIZES] || 3;
-        if (result.filingsProcessed >= maxFilings) {
-          break;
-        }
-      } catch (tickerError) {
-        cronLogger.error(`Failed to process ticker ${tickerValidation.symbol} for user ${user.id}`, {
-          error: tickerError instanceof Error ? tickerError.message : 'Unknown error',
+      } catch (filingError) {
+        cronLogger.error(`Exception processing filing ${filing.accessionNumber}`, {
+          error: filingError instanceof Error ? filingError.message : 'Unknown error',
           userId: user.id,
-          ticker: tickerValidation.symbol,
-          cik: tickerValidation.cik
+          ticker: filing.ticker.symbol,
+          filingType: filing.filingType,
+          stack: filingError instanceof Error ? filingError.stack : undefined
         });
       }
     }
+    
+    cronLogger.info(`Completed filing processing for user ${user.id}`, {
+      filingsProcessed: result.filingsProcessed,
+      totalCost: result.cost,
+      tier,
+      maxFilings
+    });
     
   } catch (error) {
     cronLogger.error(`Failed to process SEC filings for user ${user.id}`, {
       error: error instanceof Error ? error.message : 'Unknown error',
       tier,
-      tickerCount: user.tickers.length
+      tickerCount: user.tickers.length,
+      stack: error instanceof Error ? error.stack : undefined
     });
   }
   

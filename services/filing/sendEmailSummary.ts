@@ -11,11 +11,13 @@ import { sanitizeForEmail, generatePlainTextEmail } from './utils';
  * @param email Recipient email address
  * @param tickers List of tickers to include in the summary
  * @param debug Debug mode flag
+ * @param userId User ID to filter tickers (optional for backward compatibility)
  */
 export async function sendEmailSummary(
   email: string,
   tickers: string[] = ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'META'],
-  debug: boolean = false
+  debug: boolean = false,
+  userId?: string
 ) {
   try {
     console.log(`[INFO][FilingService] Starting email summary process for ${email}`);
@@ -27,10 +29,11 @@ export async function sendEmailSummary(
     
     for (const ticker of tickers) {
       try {
-        // Find the ticker record
+        // Find the ticker record (user-specific if userId provided)
         const tickerRecord = await prisma.ticker.findFirst({
           where: {
-            symbol: ticker.toUpperCase()
+            symbol: ticker.toUpperCase(),
+            ...(userId && { userId: userId })
           }
         });
         
@@ -260,10 +263,11 @@ export async function sendEmailSummary(
       // Update the summary records in the database to mark them as sent
       if (summaries.length > 0) {
         for (const summary of summaries) {
-          // Find the ticker record
+          // Find the ticker record (user-specific if userId provided)
           const tickerRecord = await prisma.ticker.findFirst({
             where: {
-              symbol: summary.ticker.toUpperCase()
+              symbol: summary.ticker.toUpperCase(),
+              ...(userId && { userId: userId })
             }
           });
           
