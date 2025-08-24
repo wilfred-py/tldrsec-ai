@@ -8,11 +8,13 @@ import {
   getActiveTickersForMonitoring, 
   checkTickerForNewFilings, 
   markFilingAsProcessed,
-  getUnprocessedFilings
+  validateUserTickers
 } from '../../../../lib/sec-edgar/ticker-monitoring';
 // Web Crypto API for Edge Runtime compatibility
 import { rateLimiter } from '../../../../lib/security/rate-limiter';
 import { updateUserBudgetWithLock, isConcurrencyError } from '../../../../lib/db/concurrency';
+import { FilingTransactionManager } from '../../../../lib/db/transaction-manager';
+import { withLock } from '../../../../lib/db/distributed-lock';
 
 const prisma = getPrismaClient();
 const cronLogger = logger.child('tier-aware-cron');
@@ -223,21 +225,34 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
     
-    // Timing-safe authorization check with development bypass
+    // Mandatory timing-safe authorization check - NO BYPASSES
     const authHeader = request.headers.get('authorization');
     const expectedAuth = `Bearer ${process.env.CRON_SECRET}`;
     
-    // Development environment bypass for localhost testing
-    const isDevelopment = process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test';
-    const isLocalhost = clientIp === '127.0.0.1' || clientIp === '::1' || clientIp === 'localhost';
+    // Validate CRON_SECRET exists
+    if (!process.env.CRON_SECRET) {
+      cronLogger.error('CRON_SECRET environment variable not configured');
+      await monitor.complete(CronJobStatus.FAILED, 'Server configuration error');
+      return NextResponse.json({ error: 'Server configuration error' }, { status: 500 });
+    }
     
-    if (isDevelopment && isLocalhost) {
-      cronLogger.debug('Bypassing authentication for localhost in development', { clientIp });
-    } else if (!authHeader || !timingSafeEqual(authHeader, expectedAuth)) {
-      cronLogger.warn('Unauthorized cron request', { clientIp });
+    // All requests must provide valid authorization - no exceptions
+    if (!authHeader || !timingSafeEqual(authHeader, expectedAuth)) {
+      cronLogger.warn('Unauthorized cron request', { 
+        clientIp, 
+        hasAuthHeader: !!authHeader,
+        environment: process.env.NODE_ENV 
+      });
       await monitor.complete(CronJobStatus.FAILED, 'Unauthorized access attempt');
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+    
+    // Security audit logging for all successful authentications
+    cronLogger.info('Cron request authenticated successfully', {
+      clientIp,
+      environment: process.env.NODE_ENV,
+      timestamp: new Date().toISOString()
+    });
 
     // Get market context and user processing statuses
     const marketContext = getMarketHoursContext();
@@ -625,7 +640,6 @@ async function processTierBatch(
 
 /**
  * Process SEC filings for a specific user with tier-aware optimization
- * FIXED: Now processes unprocessed filings from RssFilingCheck table (the missing link!)
  */
 async function processUserTierFilings(user: User, tier: string) {
   const result = {
@@ -633,107 +647,153 @@ async function processUserTierFilings(user: User, tier: string) {
     cost: 0
   };
 
+  // PRODUCTION IMPLEMENTATION: Process actual SEC filings for user
   try {
-    // Get tier-based processing limit
-    const maxFilings = TIER_BATCH_SIZES[tier as keyof typeof TIER_BATCH_SIZES] || 3;
+    // First validate all user tickers have valid CIKs
+    const tickerValidations = await validateUserTickers(user.id, user.tickers);
+    const validTickers = tickerValidations.filter(t => t.valid);
     
-    cronLogger.info(`Processing filings for user ${user.id}`, {
-      userId: user.id,
-      tier,
-      maxFilings,
-      userTickers: user.tickers.map(t => t.symbol)
-    });
-
-    // Get unprocessed filings that match user's tickers
-    const unprocessedFilings = await getUnprocessedFilings(maxFilings * 2); // Get more than needed for filtering
-    
-    if (unprocessedFilings.length === 0) {
-      cronLogger.info(`No unprocessed filings found for processing`, { userId: user.id });
+    if (validTickers.length === 0) {
+      cronLogger.warn(`No valid tickers found for user ${user.id}`, {
+        userId: user.id,
+        totalTickers: user.tickers.length,
+        invalidTickers: tickerValidations.filter(t => !t.valid).map(t => t.symbol)
+      });
       return result;
     }
     
-    cronLogger.info(`Found ${unprocessedFilings.length} unprocessed filings`, { userId: user.id });
+    if (validTickers.length < user.tickers.length) {
+      cronLogger.warn(`Some tickers invalid for user ${user.id}`, {
+        userId: user.id,
+        validCount: validTickers.length,
+        totalCount: user.tickers.length,
+        invalidTickers: tickerValidations.filter(t => !t.valid).map(t => t.symbol)
+      });
+    }
 
-    // Filter filings to only those for tickers the user subscribes to
-    const userTickerSymbols = user.tickers.map(t => t.symbol.toUpperCase());
-    const relevantFilings = unprocessedFilings.filter(filing => 
-      userTickerSymbols.includes(filing.ticker.symbol.toUpperCase())
-    );
-
-    cronLogger.info(`Filtered to ${relevantFilings.length} relevant filings for user`, {
-      userId: user.id,
-      userTickers: userTickerSymbols,
-      relevantFilings: relevantFilings.map(f => ({ symbol: f.ticker.symbol, accessionNumber: f.accessionNumber, type: f.filingType }))
-    });
-
-    // Process relevant filings up to tier limit
-    const filingsToProcess = relevantFilings.slice(0, maxFilings);
-    
-    for (const filing of filingsToProcess) {
+    for (const tickerValidation of validTickers) {
       try {
-        cronLogger.info(`Processing filing ${filing.accessionNumber} for user ${user.id}`, {
-          filingType: filing.filingType,
-          ticker: filing.ticker.symbol,
-          filingDate: filing.filingDate
-        });
+        // Find the original ticker object
+        const originalTicker = user.tickers.find(t => t.symbol === tickerValidation.symbol);
+        if (!originalTicker) {
+          cronLogger.warn(`Original ticker not found for ${tickerValidation.symbol}`);
+          continue;
+        }
 
-        // Create filing object compatible with processSecFiling
-        const filingForProcessing = {
-          accessionNumber: filing.accessionNumber,
-          formType: filing.filingType,
-          filingDate: filing.filingDate.toISOString(),
-          filingUrl: filing.filingUrl,
-          ticker: filing.ticker
+        // Create a ticker object with validated CIK for checkTickerForNewFilings
+        const tickerWithCik = {
+          ...originalTicker,
+          cik: tickerValidation.cik!,
+          rssUrl: `https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=${tickerValidation.cik}&type=10&dateb=&count=100&output=atom`
         };
 
-        // Process the filing (generate summary and send email)
-        const processingResult = await processSecFiling(filingForProcessing, user, tier);
+        // Check for new filings for this ticker
+        const newFilings = await checkTickerForNewFilings(tickerWithCik);
         
-        if (processingResult.success) {
-          result.filingsProcessed++;
-          result.cost += processingResult.cost || 0;
-          
-          // Mark filing as processed using the correct RssFilingCheck ID
-          await markFilingAsProcessed(filing.id, user.id);
-          
-          cronLogger.info(`Successfully processed filing ${filing.accessionNumber}`, {
-            userId: user.id,
-            ticker: filing.ticker.symbol,
-            cost: processingResult.cost,
-            filingsProcessed: result.filingsProcessed
-          });
-        } else {
-          cronLogger.warn(`Failed to process filing ${filing.accessionNumber}`, {
-            userId: user.id,
-            ticker: filing.ticker.symbol,
-            error: processingResult.error || 'Unknown error'
-          });
+        for (const filing of newFilings) {
+          try {
+            // Create a unique filing ID for transaction tracking
+            const filingForProcessing = {
+              id: filing.accessionNumber,
+              accessionNumber: filing.accessionNumber,
+              formType: filing.formType || 'Unknown',
+              filingDate: filing.filingDate || new Date(),
+              tickerData: {
+                symbol: tickerValidation.symbol,
+                cik: tickerValidation.cik!,
+                companyName: tickerValidation.companyName || user.tickers[0]?.companyName || 'Unknown'
+              }
+            };
+
+            // Process filing with full transaction boundaries
+            const transactionResult = await FilingTransactionManager.processFilingWithTransaction(
+              filing.accessionNumber,
+              user.id,
+              async (tx, filingRecord) => {
+                // Execute the actual filing processing within the transaction
+                const processingResult = await processSecFilingWithinTransaction(
+                  filingForProcessing,
+                  user,
+                  tier,
+                  tx
+                );
+                
+                if (processingResult.success) {
+                  // Update filing as processed is already handled by the transaction manager
+                  cronLogger.info(`Successfully processed filing ${filing.accessionNumber} for user ${user.id}`, {
+                    ticker: tickerValidation.symbol,
+                    cost: processingResult.cost
+                  });
+                  
+                  return {
+                    success: true,
+                    cost: processingResult.cost || 0
+                  };
+                } else {
+                  throw new Error(`Filing processing failed: ${processingResult.error || 'Unknown error'}`);
+                }
+              },
+              {
+                timeout: 60000, // 1 minute timeout for filing processing
+                description: `Process filing ${filing.accessionNumber} for user ${user.id}`
+              }
+            );
+            
+            if (transactionResult.success && transactionResult.data) {
+              result.filingsProcessed++;
+              result.cost += transactionResult.data.cost;
+              
+              cronLogger.info(`Filing processed successfully with transaction`, {
+                filingId: filing.accessionNumber,
+                userId: user.id,
+                transactionId: transactionResult.transactionId,
+                cost: transactionResult.data.cost
+              });
+            } else {
+              cronLogger.error(`Filing transaction failed`, {
+                filingId: filing.accessionNumber,
+                userId: user.id,
+                error: transactionResult.error?.message,
+                transactionId: transactionResult.transactionId
+              });
+            }
+            
+            // Respect tier-based processing limits
+            const maxFilings = TIER_BATCH_SIZES[tier as keyof typeof TIER_BATCH_SIZES] || 3;
+            if (result.filingsProcessed >= maxFilings) {
+              break;
+            }
+            
+          } catch (filingError) {
+            cronLogger.error(`Failed to process filing ${filing.accessionNumber}`, {
+              error: filingError instanceof Error ? filingError.message : 'Unknown error',
+              userId: user.id,
+              ticker: tickerValidation.symbol,
+              cik: tickerValidation.cik
+            });
+          }
         }
         
-      } catch (filingError) {
-        cronLogger.error(`Exception processing filing ${filing.accessionNumber}`, {
-          error: filingError instanceof Error ? filingError.message : 'Unknown error',
+        // Break if we've hit the tier limit
+        const maxFilings = TIER_BATCH_SIZES[tier as keyof typeof TIER_BATCH_SIZES] || 3;
+        if (result.filingsProcessed >= maxFilings) {
+          break;
+        }
+      } catch (tickerError) {
+        cronLogger.error(`Failed to process ticker ${tickerValidation.symbol} for user ${user.id}`, {
+          error: tickerError instanceof Error ? tickerError.message : 'Unknown error',
           userId: user.id,
-          ticker: filing.ticker.symbol,
-          filingType: filing.filingType,
-          stack: filingError instanceof Error ? filingError.stack : undefined
+          ticker: tickerValidation.symbol,
+          cik: tickerValidation.cik
         });
       }
     }
-    
-    cronLogger.info(`Completed filing processing for user ${user.id}`, {
-      filingsProcessed: result.filingsProcessed,
-      totalCost: result.cost,
-      tier,
-      maxFilings
-    });
     
   } catch (error) {
     cronLogger.error(`Failed to process SEC filings for user ${user.id}`, {
       error: error instanceof Error ? error.message : 'Unknown error',
       tier,
-      tickerCount: user.tickers.length,
-      stack: error instanceof Error ? error.stack : undefined
+      tickerCount: user.tickers.length
     });
   }
   

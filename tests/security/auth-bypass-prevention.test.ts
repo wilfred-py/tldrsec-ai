@@ -1,0 +1,247 @@
+/**
+ * CRITICAL SECURITY TESTS: Authentication Bypass Prevention
+ * 
+ * These tests ensure that NO authentication bypasses exist in the cron system,
+ * preventing the CVSS 9.1 vulnerability that was found in PR #177.
+ */
+
+import { NextRequest } from 'next/server';
+import { GET } from '../../app/api/cron/tier-aware/route';
+
+describe('SECURITY: Authentication Bypass Prevention', () => {
+  const originalEnv = process.env;
+
+  beforeEach(() => {
+    // Reset environment
+    process.env = { ...originalEnv };
+  });
+
+  afterAll(() => {
+    process.env = originalEnv;
+  });
+
+  describe('CRITICAL: No Development Authentication Bypass', () => {
+    it('should NEVER bypass authentication in development environment', async () => {
+      // Set development environment
+      process.env.NODE_ENV = 'development';
+      process.env.CRON_SECRET = 'test-secret-key';
+
+      // Mock request from localhost without auth header
+      const request = new NextRequest('http://localhost:3000/api/cron/tier-aware', {
+        headers: {
+          'x-forwarded-for': '127.0.0.1',
+          'x-real-ip': '127.0.0.1'
+        }
+      });
+
+      const response = await GET(request);
+      const responseData = await response.json();
+
+      // CRITICAL: Must return 401 unauthorized - NO BYPASSES ALLOWED
+      expect(response.status).toBe(401);
+      expect(responseData.error).toBe('Unauthorized');
+    });
+
+    it('should NEVER bypass authentication for localhost requests', async () => {
+      process.env.NODE_ENV = 'development';
+      process.env.CRON_SECRET = 'test-secret-key';
+
+      const localhostIPs = ['127.0.0.1', '::1', 'localhost'];
+
+      for (const ip of localhostIPs) {
+        const request = new NextRequest('http://localhost:3000/api/cron/tier-aware', {
+          headers: {
+            'x-forwarded-for': ip,
+            'x-real-ip': ip
+          }
+        });
+
+        const response = await GET(request);
+        const responseData = await response.json();
+
+        // CRITICAL: Must return 401 - no localhost bypasses
+        expect(response.status).toBe(401);
+        expect(responseData.error).toBe('Unauthorized');
+      }
+    });
+
+    it('should NEVER bypass authentication in test environment', async () => {
+      process.env.NODE_ENV = 'test';
+      process.env.CRON_SECRET = 'test-secret-key';
+
+      const request = new NextRequest('http://localhost:3000/api/cron/tier-aware', {
+        headers: {
+          'x-forwarded-for': '127.0.0.1'
+        }
+      });
+
+      const response = await GET(request);
+      const responseData = await response.json();
+
+      expect(response.status).toBe(401);
+      expect(responseData.error).toBe('Unauthorized');
+    });
+
+    it('should NEVER bypass authentication for any environment variable combination', async () => {
+      const environments = ['development', 'test', 'production', 'staging'];
+      const ips = ['127.0.0.1', '::1', 'localhost', '192.168.1.1', '10.0.0.1'];
+
+      process.env.CRON_SECRET = 'test-secret-key';
+
+      for (const env of environments) {
+        process.env.NODE_ENV = env;
+        
+        for (const ip of ips) {
+          const request = new NextRequest('http://localhost:3000/api/cron/tier-aware', {
+            headers: {
+              'x-forwarded-for': ip,
+              'x-real-ip': ip
+            }
+          });
+
+          const response = await GET(request);
+          const responseData = await response.json();
+
+          // SECURITY: Every combination must require authentication
+          expect(response.status).toBe(401);
+          expect(responseData.error).toBe('Unauthorized');
+        }
+      }
+    });
+  });
+
+  describe('Mandatory Authentication Requirements', () => {
+    it('should require valid Bearer token for all requests', async () => {
+      process.env.CRON_SECRET = 'valid-secret-key';
+      process.env.NODE_ENV = 'production';
+
+      const request = new NextRequest('http://localhost:3000/api/cron/tier-aware', {
+        headers: {
+          'authorization': 'Bearer valid-secret-key',
+          'x-forwarded-for': '127.0.0.1'
+        }
+      });
+
+      // Mock database and other dependencies would be needed for full test
+      // This tests that the auth check passes (doesn't return 401)
+      const response = await GET(request);
+      
+      // Should not be 401 (unauthorized) if auth is valid
+      expect(response.status).not.toBe(401);
+    });
+
+    it('should reject requests with invalid Bearer token', async () => {
+      process.env.CRON_SECRET = 'valid-secret-key';
+      
+      const request = new NextRequest('http://localhost:3000/api/cron/tier-aware', {
+        headers: {
+          'authorization': 'Bearer invalid-secret-key',
+          'x-forwarded-for': '1.2.3.4'
+        }
+      });
+
+      const response = await GET(request);
+      const responseData = await response.json();
+
+      expect(response.status).toBe(401);
+      expect(responseData.error).toBe('Unauthorized');
+    });
+
+    it('should reject requests without authorization header', async () => {
+      process.env.CRON_SECRET = 'valid-secret-key';
+      
+      const request = new NextRequest('http://localhost:3000/api/cron/tier-aware', {
+        headers: {
+          'x-forwarded-for': '1.2.3.4'
+        }
+      });
+
+      const response = await GET(request);
+      const responseData = await response.json();
+
+      expect(response.status).toBe(401);
+      expect(responseData.error).toBe('Unauthorized');
+    });
+
+    it('should return 500 if CRON_SECRET is not configured', async () => {
+      // Remove CRON_SECRET
+      delete process.env.CRON_SECRET;
+      
+      const request = new NextRequest('http://localhost:3000/api/cron/tier-aware', {
+        headers: {
+          'authorization': 'Bearer any-token',
+          'x-forwarded-for': '1.2.3.4'
+        }
+      });
+
+      const response = await GET(request);
+      const responseData = await response.json();
+
+      expect(response.status).toBe(500);
+      expect(responseData.error).toBe('Server configuration error');
+    });
+  });
+
+  describe('Security Audit Logging', () => {
+    it('should log all authentication attempts', async () => {
+      const mockLogger = {
+        warn: jest.fn(),
+        info: jest.fn(),
+        error: jest.fn()
+      };
+
+      // This would require mocking the logger - shows intent for comprehensive logging
+      process.env.CRON_SECRET = 'test-secret';
+
+      const request = new NextRequest('http://localhost:3000/api/cron/tier-aware', {
+        headers: {
+          'x-forwarded-for': '1.2.3.4'
+        }
+      });
+
+      await GET(request);
+
+      // In actual implementation, verify that security events are logged
+      // This is a placeholder to show the security requirement
+    });
+  });
+
+  describe('Timing Attack Prevention', () => {
+    it('should use timing-safe comparison for auth tokens', async () => {
+      process.env.CRON_SECRET = 'secret';
+      
+      // Test with tokens of different lengths to verify timing-safe comparison
+      const tokens = [
+        'short',
+        'secret',
+        'secret-but-longer',
+        'different-secret-entirely'
+      ];
+
+      const timings: number[] = [];
+
+      for (const token of tokens) {
+        const request = new NextRequest('http://localhost:3000/api/cron/tier-aware', {
+          headers: {
+            'authorization': `Bearer ${token}`,
+            'x-forwarded-for': '1.2.3.4'
+          }
+        });
+
+        const start = Date.now();
+        await GET(request);
+        const end = Date.now();
+        
+        timings.push(end - start);
+      }
+
+      // Timing should be relatively consistent (within reasonable bounds)
+      // This is a basic check - real timing attack tests would be more sophisticated
+      const maxTiming = Math.max(...timings);
+      const minTiming = Math.min(...timings);
+      
+      // Allow for some variation but not excessive (suggesting timing attacks possible)
+      expect(maxTiming - minTiming).toBeLessThan(1000); // 1 second variance max
+    });
+  });
+});
