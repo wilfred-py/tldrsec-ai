@@ -7,6 +7,92 @@ import { EmailType } from '../../lib/email/types';
 import { sanitizeForEmail, generatePlainTextEmail } from './utils';
 
 /**
+ * SECURITY: Comprehensive input validation to prevent SQL injection and other attacks
+ */
+export function validateAndSanitizeTicker(ticker: string): { valid: boolean; sanitizedValue: string; error?: string } {
+  // Type validation
+  if (typeof ticker !== 'string') {
+    return { valid: false, sanitizedValue: '', error: 'Ticker must be a string' };
+  }
+  
+  // Length validation - tickers are typically 1-5 characters
+  if (ticker.length < 1 || ticker.length > 10) {
+    return { valid: false, sanitizedValue: '', error: 'Ticker length invalid (1-10 chars)' };
+  }
+  
+  // Character validation - only alphanumeric characters allowed
+  const tickerRegex = /^[A-Z0-9]+$/;
+  const upperTicker = ticker.toUpperCase().trim();
+  
+  if (!tickerRegex.test(upperTicker)) {
+    return { valid: false, sanitizedValue: '', error: 'Ticker contains invalid characters' };
+  }
+  
+  // Additional security: prevent common SQL injection patterns
+  const dangerousPatterns = [
+    /['";]/,                    // Quotes and semicolons
+    /\b(DROP|DELETE|INSERT|UPDATE|CREATE|ALTER|EXEC|EXECUTE)\b/i, // SQL keywords
+    /--/,                       // SQL comments
+    /\/\*/,                     // Block comments
+    /\*\//,
+    /\bunion\b/i,              // Union attacks
+    /\bselect\b/i,             // Select statements
+    /\bwhere\b/i,              // Where clauses
+    /[<>]/                      // HTML/XSS prevention
+  ];
+  
+  for (const pattern of dangerousPatterns) {
+    if (pattern.test(upperTicker)) {
+      return { valid: false, sanitizedValue: '', error: 'Ticker contains potentially malicious content' };
+    }
+  }
+  
+  return { valid: true, sanitizedValue: upperTicker };
+}
+
+/**
+ * SECURITY: Validate user ID to prevent injection attacks
+ */
+export function validateUserId(userId: string): { valid: boolean; sanitizedValue: string; error?: string } {
+  // Type validation
+  if (typeof userId !== 'string') {
+    return { valid: false, sanitizedValue: '', error: 'User ID must be a string' };
+  }
+  
+  // Length validation - UUIDs are typically 36 characters, but allow some flexibility
+  if (userId.length < 10 || userId.length > 50) {
+    return { valid: false, sanitizedValue: '', error: 'User ID length invalid' };
+  }
+  
+  // Character validation - allow alphanumeric, hyphens, underscores
+  const userIdRegex = /^[a-zA-Z0-9_-]+$/;
+  const trimmedUserId = userId.trim();
+  
+  if (!userIdRegex.test(trimmedUserId)) {
+    return { valid: false, sanitizedValue: '', error: 'User ID contains invalid characters' };
+  }
+  
+  // Prevent SQL injection patterns
+  const dangerousPatterns = [
+    /['";]/,
+    /\b(DROP|DELETE|INSERT|UPDATE|CREATE|ALTER|EXEC|EXECUTE)\b/i,
+    /--/,
+    /\/\*/,
+    /\*\//,
+    /\bunion\b/i,
+    /\bselect\b/i
+  ];
+  
+  for (const pattern of dangerousPatterns) {
+    if (pattern.test(trimmedUserId)) {
+      return { valid: false, sanitizedValue: '', error: 'User ID contains potentially malicious content' };
+    }
+  }
+  
+  return { valid: true, sanitizedValue: trimmedUserId };
+}
+
+/**
  * Send an email summary of the latest filings
  * @param email Recipient email address
  * @param tickers List of tickers to include in the summary
@@ -27,10 +113,21 @@ export async function sendEmailSummary(
     
     for (const ticker of tickers) {
       try {
-        // Find the ticker record
+        // Input validation and sanitization - prevent SQL injection
+        const sanitizedTicker = validateAndSanitizeTicker(ticker);
+        if (!sanitizedTicker.valid) {
+          console.log(`[SECURITY][FilingService] Invalid ticker input: ${ticker}`);
+          errors.push({
+            ticker,
+            error: `Invalid ticker format: ${sanitizedTicker.error}`
+          });
+          continue;
+        }
+        
+        // Find the ticker record with validated input
         const tickerRecord = await prisma.ticker.findFirst({
           where: {
-            symbol: ticker.toUpperCase()
+            symbol: sanitizedTicker.sanitizedValue
           }
         });
         

@@ -36,10 +36,5 @@ compression = true
 runtime = "edge"
 regions = ["us-west-2"]
 
-# Cron job configuration for Railway
-[[services]]
-name = "tier-aware-cron"
-source = "."
-build.command = "npm run build"
-start.command = "node -e \"const fetch = require('node-fetch'); const runCron = async () => { try { const response = await fetch('https://' + process.env.RAILWAY_PUBLIC_DOMAIN + '/api/cron/unified', { method: 'POST', headers: { 'Authorization': 'Bearer ' + process.env.CRON_SECRET, 'Content-Type': 'application/json' } }); const text = await response.text(); console.log('Cron executed:', response.status, text); } catch (error) { console.error('Cron error:', error); } }; setInterval(runCron, 900000); console.log('Cron scheduler started (15min intervals)');\""
-variables = { CRON_TYPE = "tier-aware" }
+# Railway native cron jobs will be configured in the Railway dashboard
+# This eliminates the need for persistent services with setInterval

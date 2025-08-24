@@ -27,7 +27,16 @@ import { rateLimiter } from '../../lib/security/rate-limiter';
 
 // Mock all external dependencies
 jest.mock('../../lib/db/prisma', () => ({
-  getPrismaClient: jest.fn()
+  getPrismaClient: jest.fn(),
+  prisma: {
+    user: { findMany: jest.fn() },
+    ticker: { findFirst: jest.fn() },
+    summary: { create: jest.fn() },
+    auditLog: { create: jest.fn() },
+    $transaction: jest.fn(),
+    $connect: jest.fn(),
+    $disconnect: jest.fn()
+  }
 }));
 jest.mock('../../lib/monitoring/cron-monitor');
 jest.mock('../../lib/sec-edgar/ticker-monitoring');
@@ -38,6 +47,23 @@ jest.mock('../../lib/cron/market-hours');
 jest.mock('../../lib/db/concurrency');
 jest.mock('../../lib/security/rate-limiter');
 jest.mock('../../lib/logging');
+
+// Mock Prisma Client to prevent real database connections
+jest.mock('@prisma/client', () => ({
+  PrismaClient: jest.fn().mockImplementation(() => ({
+    user: {
+      findMany: jest.fn().mockResolvedValue([]),
+      findUnique: jest.fn().mockResolvedValue(null),
+      updateMany: jest.fn().mockResolvedValue({ count: 0 })
+    },
+    auditLog: {
+      create: jest.fn().mockResolvedValue({})
+    },
+    $connect: jest.fn().mockResolvedValue(undefined),
+    $disconnect: jest.fn().mockResolvedValue(undefined),
+    $transaction: jest.fn().mockImplementation((callback: Function) => callback({}))
+  }))
+}));
 
 const mockPrisma = {
   user: {
@@ -110,6 +136,15 @@ const mockPrisma = {
 
 // Mock the getPrismaClient function
 (getPrismaClient as jest.Mock).mockReturnValue(mockPrisma);
+
+// Set up proper mock implementations
+mockPrisma.$transaction.mockImplementation(async (callback: Function) => {
+  // For transactions, just execute the callback with the mock prisma
+  return await callback(mockPrisma);
+});
+
+mockPrisma.$connect.mockResolvedValue(undefined);
+mockPrisma.$disconnect.mockResolvedValue(undefined);
 const mockTickerMonitoring = tickerMonitoring as jest.Mocked<typeof tickerMonitoring>;
 const mockRssParser = rssParser as jest.Mocked<typeof rssParser>;
 const mockSummaryService = summaryService as jest.Mocked<typeof summaryService>;
@@ -141,12 +176,20 @@ describe('Comprehensive Cron Integration Tests', () => {
     // Clear all mocks
     jest.clearAllMocks();
     
+    // Set up required environment variables
+    process.env.CRON_SECRET = 'test-secret';
+    process.env.CRON_SIGNATURE_SECRET = 'test-signature-secret';
+    process.env.DATABASE_URL = 'postgresql://test:test@localhost:5432/testdb';
+    process.env.NODE_ENV = 'test';
+    
     // Setup default mock implementations
     (CronJobMonitor.create as jest.Mock).mockResolvedValue(mockMonitor);
     mockMonitor.complete.mockResolvedValue({
       executionId: 'test-execution-123',
       duration: 5000
     });
+    mockMonitor.recordMetric.mockResolvedValue(undefined);
+    mockMonitor.updateMetrics.mockResolvedValue(undefined);
     
     // Setup default rate limiter
     mockRateLimiter.checkLimit.mockResolvedValue({
@@ -169,9 +212,16 @@ describe('Comprehensive Cron Integration Tests', () => {
 
     // Setup default ticker monitoring
     mockTickerMonitoring.getActiveTickersForMonitoring.mockResolvedValue([]);
+    mockTickerMonitoring.checkTickerForNewFilings.mockResolvedValue([]);
+    mockTickerMonitoring.validateUserTickers.mockResolvedValue([]);
+    mockTickerMonitoring.markFilingAsProcessed.mockResolvedValue(undefined);
     
     // Setup default prisma responses
     mockPrisma.user.findMany.mockResolvedValue([]);
+    mockPrisma.user.findUnique.mockResolvedValue(null);
+    mockPrisma.user.findFirst.mockResolvedValue(null);
+    mockPrisma.ticker.findFirst.mockResolvedValue(null);
+    mockPrisma.summary.create.mockResolvedValue({ id: 'summary-123' });
     mockPrisma.auditLog.create.mockResolvedValue({
       id: 'audit-123',
       userId: 'user-123',
@@ -179,6 +229,29 @@ describe('Comprehensive Cron Integration Tests', () => {
       details: '{}',
       success: true,
       createdAt: new Date()
+    });
+    
+    // Setup default summary service mocks
+    mockSummaryService.generateAISummaryWithRetry = jest.fn().mockResolvedValue({
+      summary: 'Test summary',
+      cost: 0.02,
+      keyPoints: [],
+      tokensUsed: 800,
+      inputTokens: 600,
+      outputTokens: 200
+    });
+    
+    // Setup default email service mocks
+    mockEmailService.sendEmailSummary = jest.fn().mockResolvedValue({
+      success: true,
+      messageId: 'email-123'
+    });
+    
+    // Setup default concurrency mocks
+    mockConcurrency.updateUserBudgetWithLock.mockResolvedValue({
+      previousBudget: 0,
+      newBudget: 0.02,
+      updated: true
     });
   });
 
@@ -319,20 +392,20 @@ describe('Comprehensive Cron Integration Tests', () => {
         expect(mockMonitor.complete).toHaveBeenCalledWith('FAILED', 'Unauthorized access attempt');
       });
 
-      it('should handle development environment localhost bypass', async () => {
+      it('should NOT allow localhost bypass in any environment', async () => {
         process.env.NODE_ENV = 'development';
         process.env.CRON_SECRET = 'dev-secret';
         
         const request = createMockRequest({
-          // No authorization header
+          // No authorization header - should fail
           'x-forwarded-for': '127.0.0.1'
         });
 
         const response = await tierAwareRoute(request);
-        const result = await response.json();
 
-        expect(response.status).toBe(200);
-        expect(result.success).toBe(true);
+        // Should be unauthorized - no bypasses allowed
+        expect(response.status).toBe(401);
+        expect(mockMonitor.complete).toHaveBeenCalledWith('FAILED', 'Unauthorized access attempt');
       });
 
       it('should enforce authentication in production even for localhost', async () => {
@@ -1207,8 +1280,8 @@ describe('Comprehensive Cron Integration Tests', () => {
         }
       });
 
-      it('should allow localhost bypass only in development', async () => {
-        // Test development environment
+      it('should enforce authentication in all environments', async () => {
+        // Test development environment - should NOT bypass
         process.env.NODE_ENV = 'development';
         
         const devRequest = createMockRequest({
@@ -1217,7 +1290,7 @@ describe('Comprehensive Cron Integration Tests', () => {
         });
 
         const devResponse = await tierAwareRoute(devRequest);
-        expect(devResponse.status).toBe(200);
+        expect(devResponse.status).toBe(401);
 
         // Test production environment (clear mocks first)
         jest.clearAllMocks();

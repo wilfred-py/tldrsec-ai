@@ -227,7 +227,7 @@ RESEND_API_KEY=your_resend_api_key
 **Railway cron configuration (in railway.toml) must use:**
 - ✅ Correct endpoint: `/api/cron/unified`
 - ✅ Proper URL construction: `https://${RAILWAY_PUBLIC_DOMAIN}` (auto-provided)
-- ✅ POST method with Authorization header
+- ✅ GET method with Authorization header
 - ✅ 15-minute intervals (900000ms)
 
 **⚠️ WARNING: Never deploy without successful E2E test completion**

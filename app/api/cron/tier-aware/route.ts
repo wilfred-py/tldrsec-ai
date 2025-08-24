@@ -13,6 +13,8 @@ import {
 // Web Crypto API for Edge Runtime compatibility
 import { rateLimiter } from '../../../../lib/security/rate-limiter';
 import { updateUserBudgetWithLock, isConcurrencyError } from '../../../../lib/db/concurrency';
+import { FilingTransactionManager } from '../../../../lib/db/transaction-manager';
+import { withLock } from '../../../../lib/db/distributed-lock';
 
 const prisma = getPrismaClient();
 const cronLogger = logger.child('tier-aware-cron');
@@ -223,21 +225,34 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
     
-    // Timing-safe authorization check with development bypass
+    // Mandatory timing-safe authorization check - NO BYPASSES
     const authHeader = request.headers.get('authorization');
     const expectedAuth = `Bearer ${process.env.CRON_SECRET}`;
     
-    // Development environment bypass for localhost testing
-    const isDevelopment = process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test';
-    const isLocalhost = clientIp === '127.0.0.1' || clientIp === '::1' || clientIp === 'localhost';
+    // Validate CRON_SECRET exists
+    if (!process.env.CRON_SECRET) {
+      cronLogger.error('CRON_SECRET environment variable not configured');
+      await monitor.complete(CronJobStatus.FAILED, 'Server configuration error');
+      return NextResponse.json({ error: 'Server configuration error' }, { status: 500 });
+    }
     
-    if (isDevelopment && isLocalhost) {
-      cronLogger.debug('Bypassing authentication for localhost in development', { clientIp });
-    } else if (!authHeader || !timingSafeEqual(authHeader, expectedAuth)) {
-      cronLogger.warn('Unauthorized cron request', { clientIp });
+    // All requests must provide valid authorization - no exceptions
+    if (!authHeader || !timingSafeEqual(authHeader, expectedAuth)) {
+      cronLogger.warn('Unauthorized cron request', { 
+        clientIp, 
+        hasAuthHeader: !!authHeader,
+        environment: process.env.NODE_ENV 
+      });
       await monitor.complete(CronJobStatus.FAILED, 'Unauthorized access attempt');
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+    
+    // Security audit logging for all successful authentications
+    cronLogger.info('Cron request authenticated successfully', {
+      clientIp,
+      environment: process.env.NODE_ENV,
+      timestamp: new Date().toISOString()
+    });
 
     // Get market context and user processing statuses
     const marketContext = getMarketHoursContext();
@@ -677,15 +692,70 @@ async function processUserTierFilings(user: User, tier: string) {
         
         for (const filing of newFilings) {
           try {
-            // Process the filing (integrate with existing SEC processing logic)
-            const processingResult = await processSecFiling(filing, user, tier);
+            // Create a unique filing ID for transaction tracking
+            const filingForProcessing = {
+              id: filing.accessionNumber,
+              accessionNumber: filing.accessionNumber,
+              formType: filing.formType || 'Unknown',
+              filingDate: filing.filingDate || new Date(),
+              tickerData: {
+                symbol: tickerValidation.symbol,
+                cik: tickerValidation.cik!,
+                companyName: tickerValidation.companyName || user.tickers[0]?.companyName || 'Unknown'
+              }
+            };
+
+            // Process filing with full transaction boundaries
+            const transactionResult = await FilingTransactionManager.processFilingWithTransaction(
+              filing.accessionNumber,
+              user.id,
+              async (tx, filingRecord) => {
+                // Execute the actual filing processing within the transaction
+                const processingResult = await processSecFilingWithinTransaction(
+                  filingForProcessing,
+                  user,
+                  tier,
+                  tx
+                );
+                
+                if (processingResult.success) {
+                  // Update filing as processed is already handled by the transaction manager
+                  cronLogger.info(`Successfully processed filing ${filing.accessionNumber} for user ${user.id}`, {
+                    ticker: tickerValidation.symbol,
+                    cost: processingResult.cost
+                  });
+                  
+                  return {
+                    success: true,
+                    cost: processingResult.cost || 0
+                  };
+                } else {
+                  throw new Error(`Filing processing failed: ${processingResult.error || 'Unknown error'}`);
+                }
+              },
+              {
+                timeout: 60000, // 1 minute timeout for filing processing
+                description: `Process filing ${filing.accessionNumber} for user ${user.id}`
+              }
+            );
             
-            if (processingResult.success) {
+            if (transactionResult.success && transactionResult.data) {
               result.filingsProcessed++;
-              result.cost += processingResult.cost || 0;
+              result.cost += transactionResult.data.cost;
               
-              // Mark filing as processed  
-              await markFilingAsProcessed(filing.accessionNumber, user.id);
+              cronLogger.info(`Filing processed successfully with transaction`, {
+                filingId: filing.accessionNumber,
+                userId: user.id,
+                transactionId: transactionResult.transactionId,
+                cost: transactionResult.data.cost
+              });
+            } else {
+              cronLogger.error(`Filing transaction failed`, {
+                filingId: filing.accessionNumber,
+                userId: user.id,
+                error: transactionResult.error?.message,
+                transactionId: transactionResult.transactionId
+              });
             }
             
             // Respect tier-based processing limits

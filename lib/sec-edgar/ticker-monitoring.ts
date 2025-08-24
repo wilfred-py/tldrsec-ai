@@ -424,34 +424,71 @@ export async function getCikForTicker(ticker: string): Promise<string | null> {
  * Validate user tickers and ensure they have valid CIKs
  */
 export async function validateUserTickers(userId: string, tickers: Array<{symbol: string}>): Promise<Array<{symbol: string; cik: string | null; valid: boolean}>> {
+  // SECURITY: Validate userId parameter to prevent injection attacks
+  if (!userId || typeof userId !== 'string') {
+    throw new Error('Invalid userId: must be a non-empty string');
+  }
+  
+  // Sanitize userId to prevent log injection and other attacks
+  const sanitizedUserId = userId.replace(/[^\w-]/g, '').substring(0, 50);
+  if (sanitizedUserId !== userId || sanitizedUserId.length < 10) {
+    throw new Error('Invalid userId format: contains invalid characters or too short');
+  }
+  
   const results = [];
   
   for (const ticker of tickers) {
     try {
-      const cik = await getCikForTicker(ticker.symbol);
+      // SECURITY: Validate ticker symbol to prevent injection attacks
+      if (!ticker || !ticker.symbol || typeof ticker.symbol !== 'string') {
+        results.push({
+          symbol: 'INVALID',
+          cik: null,
+          valid: false
+        });
+        continue;
+      }
+      
+      // Sanitize ticker symbol - only allow alphanumeric characters, 1-10 chars
+      const sanitizedSymbol = ticker.symbol.toUpperCase().replace(/[^A-Z0-9]/g, '').substring(0, 10);
+      if (sanitizedSymbol.length === 0 || sanitizedSymbol !== ticker.symbol.toUpperCase()) {
+        monitoringLogger.warn(`Invalid ticker symbol format: ${ticker.symbol}`, {
+          userId: sanitizedUserId,
+          originalSymbol: ticker.symbol,
+          sanitizedSymbol
+        });
+        results.push({
+          symbol: ticker.symbol,
+          cik: null,
+          valid: false
+        });
+        continue;
+      }
+      
+      const cik = await getCikForTicker(sanitizedSymbol);
       const valid = cik !== null;
       
       results.push({
-        symbol: ticker.symbol,
+        symbol: sanitizedSymbol,
         cik,
         valid
       });
       
       if (!valid) {
-        monitoringLogger.warn(`Ticker ${ticker.symbol} for user ${userId} has no valid CIK`, {
-          userId,
-          ticker: ticker.symbol
+        monitoringLogger.warn(`Ticker ${sanitizedSymbol} for user ${sanitizedUserId} has no valid CIK`, {
+          userId: sanitizedUserId,
+          ticker: sanitizedSymbol
         });
       }
     } catch (error) {
-      monitoringLogger.error(`Failed to validate ticker ${ticker.symbol} for user ${userId}`, {
+      monitoringLogger.error(`Failed to validate ticker ${sanitizedSymbol} for user ${sanitizedUserId}`, {
         error: error instanceof Error ? error.message : 'Unknown error',
-        userId,
-        ticker: ticker.symbol
+        userId: sanitizedUserId,
+        ticker: sanitizedSymbol
       });
       
       results.push({
-        symbol: ticker.symbol,
+        symbol: sanitizedSymbol,
         cik: null,
         valid: false
       });
