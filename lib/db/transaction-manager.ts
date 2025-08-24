@@ -511,5 +511,4 @@ export const transactionUtils = {
   }
 };
 
-// Export the main transaction manager for direct use
-export { TransactionManager, FilingTransactionManager };
+// Classes are already exported above with their declarations
