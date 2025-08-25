@@ -1,20 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getPrismaClient } from '../../../../lib/db/prisma';
+import { Prisma } from '@prisma/client';
 import { logger } from '../../../../lib/logging';
 import { getMarketHoursContext, getUserProcessingStatuses, getEligibleUsers } from '../../../../lib/cron/market-hours';
 import { CronJobMonitor } from '../../../../lib/monitoring/cron-monitor';
 import { CronJobStatus } from '../../../../types/cron';
 import { 
   getActiveTickersForMonitoring, 
-  checkTickerForNewFilings, 
-  markFilingAsProcessed,
+  checkTickerForNewFilings,
   validateUserTickers
 } from '../../../../lib/sec-edgar/ticker-monitoring';
 // Web Crypto API for Edge Runtime compatibility
 import { rateLimiter } from '../../../../lib/security/rate-limiter';
 import { updateUserBudgetWithLock, isConcurrencyError } from '../../../../lib/db/concurrency';
 import { FilingTransactionManager } from '../../../../lib/db/transaction-manager';
-import { withLock } from '../../../../lib/db/distributed-lock';
 
 const prisma = getPrismaClient();
 const cronLogger = logger.child('tier-aware-cron');
@@ -709,7 +708,7 @@ async function processUserTierFilings(user: User, tier: string) {
             const transactionResult = await FilingTransactionManager.processFilingWithTransaction(
               filing.accessionNumber,
               user.id,
-              async (tx, filingRecord) => {
+              async (tx) => {
                 // Execute the actual filing processing within the transaction
                 const processingResult = await processSecFilingWithinTransaction(
                   filingForProcessing,
@@ -801,53 +800,69 @@ async function processUserTierFilings(user: User, tier: string) {
 }
 
 /**
- * Process a single SEC filing for a user
+ * Process SEC filing within a database transaction context
  */
-async function processSecFiling(filing: { accessionNumber: string; formType: string; [key: string]: unknown }, user: User, tier: string) {
+async function processSecFilingWithinTransaction(
+  filingForProcessing: {
+    id: string;
+    accessionNumber: string;
+    formType: string;
+    filingDate: Date;
+    tickerData: {
+      symbol: string;
+      cik: string;
+      companyName: string;
+    };
+  },
+  user: User,
+  tier: string,
+  tx: Prisma.TransactionClient
+): Promise<{ success: boolean; cost?: number; error?: string }> {
   try {
     // PRODUCTION IMPLEMENTATION: Call actual summarization and email services
     const { generateAISummaryWithRetry } = await import('../../../../services/filing/summaryGenerationService');
     const { sendEmailSummary } = await import('../../../../services/filing/sendEmailSummary');
     
-    cronLogger.info(`Processing filing ${filing.accessionNumber} for user ${user.id}`, {
+    cronLogger.info(`Processing filing ${filingForProcessing.accessionNumber} for user ${user.id} within transaction`, {
       tier,
-      filingType: filing.formType,
-      userId: user.id
+      filingType: filingForProcessing.formType,
+      userId: user.id,
+      ticker: filingForProcessing.tickerData.symbol
     });
 
     // 1. Generate AI summary for the filing
     const summaryResult = await generateAISummaryWithRetry(
       '', // Content will be fetched within the service
       {
-        accessionNumber: filing.accessionNumber,
-        formType: filing.formType,
-        filingDate: new Date().toISOString() // Use current date as fallback
+        accessionNumber: filingForProcessing.accessionNumber,
+        formType: filingForProcessing.formType,
+        filingDate: filingForProcessing.filingDate.toISOString()
       },
       {
-        name: 'Company', // Will be resolved from ticker
-        ticker: user.tickers[0]?.symbol || 'UNKNOWN'
+        name: filingForProcessing.tickerData.companyName,
+        ticker: filingForProcessing.tickerData.symbol
       },
       2 // max retries
     );
 
-    let actualCost = summaryResult.cost || 0;
+    const actualCost = summaryResult.cost || 0;
 
-    // 2. Store the summary in database
+    // 2. Store the summary in database using transaction context
     try {
-      const tickerRecord = await prisma.ticker.findFirst({
-        where: { symbol: user.tickers[0]?.symbol || 'UNKNOWN' }
+      const tickerRecord = await tx.ticker.findFirst({
+        where: { symbol: filingForProcessing.tickerData.symbol }
       });
 
       if (tickerRecord) {
-        await prisma.summary.create({
+        await tx.summary.create({
           data: {
             tickerId: tickerRecord.id,
-            filingType: filing.formType,
+            filingType: filingForProcessing.formType,
             summaryText: summaryResult.summary,
             summaryJSON: {
-              ticker: user.tickers[0]?.symbol || 'UNKNOWN',
-              accessionNumber: filing.accessionNumber,
-              filingType: filing.formType,
+              ticker: filingForProcessing.tickerData.symbol,
+              accessionNumber: filingForProcessing.accessionNumber,
+              filingType: filingForProcessing.formType,
               summaryText: summaryResult.summary,
               keyPoints: summaryResult.keyPoints || [],
               cost: actualCost,
@@ -860,18 +875,19 @@ async function processSecFiling(filing: { accessionNumber: string; formType: str
           }
         });
 
-        cronLogger.info(`Summary stored for filing ${filing.accessionNumber}`, {
+        cronLogger.info(`Summary stored for filing ${filingForProcessing.accessionNumber}`, {
           userId: user.id,
-          ticker: user.tickers[0]?.symbol,
+          ticker: filingForProcessing.tickerData.symbol,
           cost: actualCost
         });
       }
     } catch (dbError) {
-      cronLogger.error(`Failed to store summary for filing ${filing.accessionNumber}`, { 
+      cronLogger.error(`Failed to store summary for filing ${filingForProcessing.accessionNumber}`, { 
         error: dbError,
         userId: user.id 
       });
-      // Don't fail the whole process for DB storage errors
+      // Don't fail the whole process for DB storage errors in transaction context
+      // The transaction will be rolled back if this function throws
     }
 
     // 3. Send email notification if user has email
@@ -879,25 +895,25 @@ async function processSecFiling(filing: { accessionNumber: string; formType: str
       try {
         const emailResult = await sendEmailSummary(
           user.email,
-          [user.tickers[0]?.symbol || 'UNKNOWN'],
+          [filingForProcessing.tickerData.symbol],
           false // not debug mode
         );
         
         if (emailResult.success) {
-          cronLogger.info(`Email sent successfully for filing ${filing.accessionNumber}`, {
+          cronLogger.info(`Email sent successfully for filing ${filingForProcessing.accessionNumber}`, {
             userId: user.id,
             email: user.email,
-            ticker: user.tickers[0]?.symbol
+            ticker: filingForProcessing.tickerData.symbol
           });
         } else {
-          cronLogger.warn(`Email sending failed for filing ${filing.accessionNumber}`, {
+          cronLogger.warn(`Email sending failed for filing ${filingForProcessing.accessionNumber}`, {
             userId: user.id,
             email: user.email,
             error: emailResult.error
           });
         }
       } catch (emailError) {
-        cronLogger.error(`Email service error for filing ${filing.accessionNumber}`, {
+        cronLogger.error(`Email service error for filing ${filingForProcessing.accessionNumber}`, {
           error: emailError,
           userId: user.id,
           email: user.email
@@ -908,9 +924,9 @@ async function processSecFiling(filing: { accessionNumber: string; formType: str
       cronLogger.debug(`No email address for user ${user.id}, skipping email notification`);
     }
     
-    cronLogger.info(`Successfully processed filing ${filing.accessionNumber} for user ${user.id}`, {
+    cronLogger.info(`Successfully processed filing ${filingForProcessing.accessionNumber} for user ${user.id} within transaction`, {
       tier,
-      filingType: filing.formType,
+      filingType: filingForProcessing.formType,
       actualCost,
       summaryGenerated: !!summaryResult.summary
     });
@@ -921,47 +937,21 @@ async function processSecFiling(filing: { accessionNumber: string; formType: str
     };
     
   } catch (error) {
-    cronLogger.error(`Failed to process filing ${filing.accessionNumber}`, { 
+    cronLogger.error(`Failed to process filing ${filingForProcessing.accessionNumber} within transaction`, { 
       error,
       userId: user.id,
       tier,
-      filingType: filing.formType
+      filingType: filingForProcessing.formType
     });
     return {
       success: false,
-      cost: 0
+      cost: 0,
+      error: error instanceof Error ? error.message : 'Unknown error'
     };
   }
 }
 
-/**
- * Calculate the cost of processing a filing based on tier
- */
-function calculateFilingProcessingCost(filing: { formType: string; [key: string]: unknown }, tier: string): number {
-  const baseCost = 0.02; // Base cost per filing
-  
-  // Tier-based cost multipliers
-  const tierMultipliers = {
-    FREE: 1.0,
-    PROFESSIONAL: 0.8,    // More efficient processing
-    ENTERPRISE: 0.6,      // Bulk discount
-    INSTITUTION: 0.4      // Best rates
-  };
-  
-  const multiplier = tierMultipliers[tier as keyof typeof tierMultipliers] || 1.0;
-  
-  // Form type complexity multiplier
-  const complexityMultipliers = {
-    '10-K': 3.0,      // Most complex
-    '10-Q': 2.0,      // Moderately complex
-    '8-K': 1.5,       // Standard
-    'Form 4': 1.0     // Simple
-  };
-  
-  const complexityMultiplier = complexityMultipliers[filing.formType as keyof typeof complexityMultipliers] || 1.0;
-  
-  return baseCost * multiplier * complexityMultiplier;
-}
+
 
 /**
  * Core SEC filing monitoring - always runs regardless of market hours
