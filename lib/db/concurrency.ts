@@ -8,6 +8,7 @@ import { PrismaClientKnownRequestError } from '@prisma/client/runtime/library';
 import { getPrismaClient } from './prisma';
 import { logger } from '../logging';
 import { RetryOptions } from './retry-wrapper';
+import { createAsyncAuditLog } from './async-audit';
 import type { PrismaClient } from '@prisma/client';
 
 const prisma = getPrismaClient();
@@ -37,10 +38,12 @@ const DEFAULT_CONCURRENCY_OPTIONS: Required<ConcurrencyOptions> = {
   isolationLevel: 'ReadCommitted'
 };
 
+// Budget concurrency options have been moved to budget-operations module
+
 /**
  * Creates an optimistic lock error
  */
-function createOptimisticLockError(
+export function createOptimisticLockError(
   model: string, 
   id: string, 
   expectedVersion?: number, 
@@ -59,18 +62,62 @@ function createOptimisticLockError(
  * Checks if an error is a database concurrency conflict
  */
 export function isConcurrencyError(error: unknown): boolean {
-  if (error instanceof PrismaClientKnownRequestError) {
+  // Check for optimistic lock errors first
+  if (error && typeof error === 'object' && 'code' in error) {
+    const errorCode = (error as any).code;
+    if (errorCode === 'OPTIMISTIC_LOCK_FAILED') {
+      return true;
+    }
+  }
+  
+  if (error instanceof PrismaClientKnownRequestError || 
+      (error && typeof error === 'object' && 'code' in error && 
+       typeof (error as any).code === 'string')) {
     // P2002: Unique constraint failed
     // P2034: Transaction failed due to write conflict
     // P2025: Record to update not found (can indicate race condition)
-    return ['P2002', 'P2034', 'P2025'].includes(error.code);
+    // P2024: Timed out waiting for connection from pool
+    // P5008: Queries timed out  
+    const errorCode = (error as any).code;
+    return ['P2002', 'P2034', 'P2025', 'P2024', 'P5008'].includes(errorCode);
   }
-  
-  if (error && typeof error === 'object' && 'code' in error) {
-    return (error as OptimisticLockError).code === 'OPTIMISTIC_LOCK_FAILED';
+
+  // Check for deadlock errors in error message
+  const errorMessage = (error as Error)?.message?.toLowerCase() || '';
+  if (errorMessage.includes('deadlock') || 
+      errorMessage.includes('serialization failure') ||
+      errorMessage.includes('could not serialize access')) {
+    return true;
   }
   
   return false;
+}
+
+/**
+ * Enhanced deadlock recovery with intelligent backoff
+ */
+export function calculateIntelligentBackoff(
+  attempt: number,
+  error: unknown,
+  baseDelay: number = 50
+): number {
+  // Identify error type for specialized backoff
+  const isDeadlock = error instanceof Error && 
+    error.message.toLowerCase().includes('deadlock');
+  const isTimeout = error instanceof PrismaClientKnownRequestError && 
+    ['P2024', 'P5008'].includes(error.code);
+  
+  // Use different strategies based on error type
+  if (isDeadlock) {
+    // Deadlocks need random jitter to break synchronization
+    return Math.random() * baseDelay * Math.pow(1.8, attempt);
+  } else if (isTimeout) {
+    // Timeouts need longer delays
+    return baseDelay * Math.pow(2.5, attempt) + Math.random() * 100;
+  } else {
+    // Standard optimistic locking conflicts
+    return baseDelay * Math.pow(1.5, attempt) + Math.random() * 25;
+  }
 }
 
 /**
@@ -94,10 +141,9 @@ export async function withOptimisticLocking<T>(
         throw error;
       }
       
-      // Add jitter to reduce thundering herd
-      const jitter = Math.random() * config.jitterMs;
+      // Use intelligent backoff based on error type
       const delay = Math.min(
-        config.baseDelay * Math.pow(config.backoffMultiplier, attempt - 1) + jitter,
+        calculateIntelligentBackoff(attempt - 1, error, config.baseDelay),
         config.maxDelay
       );
       
@@ -250,164 +296,9 @@ export async function upsertTickerMonitoringWithLock(
   }, options);
 }
 
-/**
- * Updates user budget with race condition protection
- */
-export async function updateUserBudgetWithLock(
-  userId: string,
-  costToAdd: number,
-  expectedCurrentBudget: number | null,
-  dailyLimit: number,
-  options: ConcurrencyOptions & {
-    tier?: string;
-    originalCost?: number;
-    enableAuditLogging?: boolean;
-    atomicBudgetRead?: boolean;
-  } = {}
-): Promise<{ previousBudget: number; newBudget: number; success: boolean }> {
-  // Input validation
-  if (!userId || typeof userId !== 'string' || userId.trim() === '') {
-    throw new Error('Invalid user ID provided');
-  }
-  if (typeof costToAdd !== 'number' || !isFinite(costToAdd)) {
-    throw new Error('Invalid cost amount provided');
-  }
-  if (expectedCurrentBudget !== null && (typeof expectedCurrentBudget !== 'number' || !isFinite(expectedCurrentBudget))) {
-    throw new Error('Invalid expected budget provided');
-  }
-  if (typeof dailyLimit !== 'number' || !isFinite(dailyLimit) || dailyLimit <= 0) {
-    throw new Error('Invalid daily limit provided');
-  }
-
-  return withOptimisticLocking(async () => {
-    try {
-      return await prisma.$transaction(async (tx) => {
-      // Get current user state with row lock
-      const currentUser = await tx.user.findUnique({
-        where: { id: userId },
-        select: { 
-          budgetUsed: true, 
-          subscriptionTier: true,
-          budgetResetAt: true
-        }
-      });
-      
-      if (!currentUser) {
-        throw new Error(`User ${userId} not found`);
-      }
-      
-      const currentBudgetUsed = currentUser.budgetUsed || 0;
-      
-      // Check if budget has changed since we last checked (race condition)
-      // Skip this check if atomic read is enabled (expectedCurrentBudget is null)
-      if (expectedCurrentBudget !== null && Math.abs(currentBudgetUsed - expectedCurrentBudget) > 0.001) {
-        throw createOptimisticLockError('UserBudget', userId, expectedCurrentBudget, currentBudgetUsed);
-      }
-      
-      const newBudgetUsed = currentBudgetUsed + costToAdd;
-      
-      // Strict budget enforcement
-      if (newBudgetUsed > dailyLimit) {
-        throw new Error(`Budget limit exceeded: ${newBudgetUsed} > ${dailyLimit}`);
-      }
-      
-      // Warning for high budget usage
-      if (newBudgetUsed > dailyLimit * 0.95) {
-        concurrencyLogger.warn('Budget usage approaching limit', {
-          userId,
-          currentUsage: currentBudgetUsed,
-          newUsage: newBudgetUsed,
-          limit: dailyLimit,
-          percentage: (newBudgetUsed / dailyLimit) * 100,
-          tier: options.tier
-        });
-      }
-      
-      // Atomic update with condition
-      const updateResult = await tx.user.updateMany({
-        where: { 
-          id: userId,
-          budgetUsed: currentBudgetUsed // Ensure budget hasn't changed
-        },
-        data: {
-          budgetUsed: newBudgetUsed,
-          lastCronProcessed: new Date()
-        }
-      });
-      
-      // Check if update actually happened (race condition detection)
-      if (updateResult.count === 0) {
-        throw createOptimisticLockError('UserBudget', userId, expectedCurrentBudget || currentBudgetUsed);
-      }
-      
-      // Create audit log if enabled
-      if (options.enableAuditLogging !== false) {
-        await tx.auditLog.create({
-          data: {
-            userId,
-            action: 'BUDGET_UPDATE',
-            details: JSON.stringify({
-              previousBudget: currentBudgetUsed,
-              newBudget: newBudgetUsed,
-              costAdded: costToAdd,
-              originalCost: options.originalCost || costToAdd,
-              tier: options.tier,
-              dailyLimit,
-              usagePercentage: (newBudgetUsed / dailyLimit) * 100,
-              processingTimestamp: new Date().toISOString(),
-              budgetResetAt: currentUser.budgetResetAt,
-              userAgent: 'cron-tier-aware',
-              sessionId: `cron-${Date.now()}`,
-              riskLevel: newBudgetUsed > dailyLimit * 0.8 ? 'HIGH' : 'NORMAL'
-            }),
-            success: true
-          }
-        });
-      }
-      
-        return {
-          previousBudget: currentBudgetUsed,
-          newBudget: newBudgetUsed,
-          success: true
-        };
-      }, {
-        isolationLevel: options.isolationLevel || 'Serializable',
-        timeout: 10000
-      });
-    } catch (error) {
-      // Create audit log for failed attempts if enabled
-      if (options.enableAuditLogging !== false) {
-        try {
-          await prisma.auditLog.create({
-            data: {
-              userId,
-              action: 'BUDGET_UPDATE_FAILED',
-              details: JSON.stringify({
-                error: error instanceof Error ? error.message : 'Unknown error',
-                expectedBudget: expectedCurrentBudget,
-                costToAdd,
-                originalCost: options.originalCost || costToAdd,
-                tier: options.tier,
-                dailyLimit,
-                processingTimestamp: new Date().toISOString(),
-                userAgent: 'cron-tier-aware',
-                sessionId: `cron-${Date.now()}`,
-                riskLevel: 'HIGH', // Failed operations are high risk
-                atomicRead: options.atomicBudgetRead || false
-              }),
-              success: false
-            }
-          });
-        } catch (auditError) {
-          concurrencyLogger.error('Failed to create audit log for failed budget update', { 
-            userId, error: auditError 
-          });
-        }
-      }
-      throw error;
-    }
-  }, options);
-}
+// Budget operations have been moved to dedicated module for better organization
+// Import and re-export for backwards compatibility
+export { updateUserBudgetWithLock } from './budget-operations';
 
 /**
  * Executes multiple operations in parallel with individual failure isolation
@@ -532,87 +423,12 @@ export function calculateBackoffWithJitter(
   return exponentialDelay + Math.random() * jitterMs;
 }
 
-// Cost validation constants for security testing
-const DAILY_COST_LIMITS = {
-  INSTITUTION: Number(process.env.INSTITUTION_COST_LIMIT) || 2.50,
-  ENTERPRISE: Number(process.env.ENTERPRISE_COST_LIMIT) || 1.25,
-  PROFESSIONAL: Number(process.env.PROFESSIONAL_COST_LIMIT) || 0.60,
-  FREE: Number(process.env.FREE_COST_LIMIT) || 0.20
-} as const;
-
-const MAX_COST_PER_OPERATION = 10.0; // Maximum cost allowed per operation
+// Note: Cost validation has been moved to a dedicated module
+// Import from the shared validation module instead
+import { validateCostUpdate as sharedValidateCostUpdate } from './cost-validation';
 
 /**
- * Comprehensive cost validation to prevent budget manipulation
- * Implements multiple layers of validation for financial security
+ * Re-export cost validation for backwards compatibility
+ * @deprecated Use direct import from './cost-validation' instead
  */
-export function validateCostUpdate(cost: number, tier: string, userId: string): {
-  valid: boolean;
-  sanitizedCost: number;
-  error?: string;
-} {
-  // Type and basic validation
-  if (typeof cost !== 'number' || isNaN(cost) || !isFinite(cost)) {
-    concurrencyLogger.error('Invalid cost type or value', { cost, tier, userId });
-    return { valid: false, sanitizedCost: 0, error: 'Invalid cost type' };
-  }
-  
-  // Prevent negative costs (could reduce budget)
-  if (cost < 0) {
-    concurrencyLogger.error('Negative cost attempted', { cost, tier, userId });
-    return { valid: false, sanitizedCost: 0, error: 'Negative cost not allowed' };
-  }
-  
-  // Environment-aware cost validation
-  const isProduction = process.env.NODE_ENV === 'production';
-  const isTestEnvironment = process.env.NODE_ENV === 'test' || process.env.JEST_WORKER_ID !== undefined;
-  
-  if (cost < 0.001) {
-    // Allow $0 costs in development/test environments
-    if (!isProduction || isTestEnvironment) {
-      if (cost === 0) {
-        concurrencyLogger.debug('Zero cost allowed in non-production environment', { 
-          cost, tier, userId, 
-          environment: process.env.NODE_ENV,
-          isTest: isTestEnvironment 
-        });
-        return { valid: true, sanitizedCost: 0 };
-      }
-    }
-    
-    // Reject extremely small non-zero costs in all environments (potential bypass)
-    concurrencyLogger.warn('Suspiciously small cost rejected', { 
-      cost, tier, userId, 
-      environment: process.env.NODE_ENV,
-      isProduction,
-      isTest: isTestEnvironment 
-    });
-    return { valid: false, sanitizedCost: 0, error: 'Cost too small' };
-  }
-  
-  // Maximum cost per operation check (prevent excessive charges)
-  if (cost > MAX_COST_PER_OPERATION) {
-    concurrencyLogger.error('Cost exceeds maximum per operation', { cost, tier, userId, max: MAX_COST_PER_OPERATION });
-    return { valid: false, sanitizedCost: 0, error: 'Cost exceeds maximum' };
-  }
-  
-  // Tier-specific validation (prevent tier privilege abuse)
-  const tierLimit = DAILY_COST_LIMITS[tier as keyof typeof DAILY_COST_LIMITS];
-  if (!tierLimit) {
-    concurrencyLogger.error('Unknown subscription tier', { tier, userId });
-    return { valid: false, sanitizedCost: 0, error: 'Invalid tier' };
-  }
-  
-  if (cost > tierLimit) {
-    concurrencyLogger.error('Cost exceeds tier limit', { cost, tier, tierLimit, userId });
-    return { valid: false, sanitizedCost: 0, error: 'Cost exceeds tier limit' };
-  }
-  
-  // Precision validation (prevent floating point manipulation)
-  const sanitizedCost = Math.round(cost * 1000) / 1000; // Round to 3 decimal places
-  if (Math.abs(cost - sanitizedCost) > 0.0001) {
-    concurrencyLogger.warn('Cost precision adjusted', { original: cost, sanitized: sanitizedCost, tier, userId });
-  }
-  
-  return { valid: true, sanitizedCost };
-}
+export const validateCostUpdate = sharedValidateCostUpdate;
