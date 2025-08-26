@@ -14,6 +14,8 @@ import {
 import { rateLimiter } from '../../../../lib/security/rate-limiter';
 import { updateUserBudgetWithLock, isConcurrencyError } from '../../../../lib/db/concurrency';
 import { FilingTransactionManager } from '../../../../lib/db/transaction-manager';
+import { createAsyncAuditLog } from '../../../../lib/db/async-audit';
+import { validateCostUpdate } from '../../../../lib/db/cost-validation';
 
 const prisma = getPrismaClient();
 const cronLogger = logger.child('tier-aware-cron');
@@ -100,80 +102,7 @@ function timingSafeEqual(a: string, b: string): boolean {
   return result === 0;
 }
 
-/**
- * Comprehensive cost validation to prevent budget manipulation
- * Implements multiple layers of validation for financial security
- */
-function validateCostUpdate(cost: number, tier: string, userId: string): {
-  valid: boolean;
-  sanitizedCost: number;
-  error?: string;
-} {
-  // Type and basic validation
-  if (typeof cost !== 'number' || isNaN(cost) || !isFinite(cost)) {
-    cronLogger.error('Invalid cost type or value', { cost, tier, userId });
-    return { valid: false, sanitizedCost: 0, error: 'Invalid cost type' };
-  }
-  
-  // Prevent negative costs (could reduce budget)
-  if (cost < 0) {
-    cronLogger.error('Negative cost attempted', { cost, tier, userId });
-    return { valid: false, sanitizedCost: 0, error: 'Negative cost not allowed' };
-  }
-  
-  // Environment-aware cost validation
-  const isProduction = process.env.NODE_ENV === 'production';
-  const isTestEnvironment = process.env.NODE_ENV === 'test' || process.env.JEST_WORKER_ID !== undefined;
-  
-  if (cost < 0.001) {
-    // Allow $0 costs in development/test environments
-    if (!isProduction || isTestEnvironment) {
-      if (cost === 0) {
-        cronLogger.debug('Zero cost allowed in non-production environment', { 
-          cost, tier, userId, 
-          environment: process.env.NODE_ENV,
-          isTest: isTestEnvironment 
-        });
-        return { valid: true, sanitizedCost: 0 };
-      }
-    }
-    
-    // Reject extremely small non-zero costs in all environments (potential bypass)
-    cronLogger.warn('Suspiciously small cost rejected', { 
-      cost, tier, userId, 
-      environment: process.env.NODE_ENV,
-      isProduction,
-      isTest: isTestEnvironment 
-    });
-    return { valid: false, sanitizedCost: 0, error: 'Cost too small' };
-  }
-  
-  // Maximum cost per operation check (prevent excessive charges)
-  if (cost > MAX_COST_PER_OPERATION) {
-    cronLogger.error('Cost exceeds maximum per operation', { cost, tier, userId, max: MAX_COST_PER_OPERATION });
-    return { valid: false, sanitizedCost: 0, error: 'Cost exceeds maximum' };
-  }
-  
-  // Tier-specific validation (prevent tier privilege abuse)
-  const tierLimit = DAILY_COST_LIMITS[tier as keyof typeof DAILY_COST_LIMITS];
-  if (!tierLimit) {
-    cronLogger.error('Unknown subscription tier', { tier, userId });
-    return { valid: false, sanitizedCost: 0, error: 'Invalid tier' };
-  }
-  
-  if (cost > tierLimit) {
-    cronLogger.error('Cost exceeds tier limit', { cost, tier, tierLimit, userId });
-    return { valid: false, sanitizedCost: 0, error: 'Cost exceeds tier limit' };
-  }
-  
-  // Precision validation (prevent floating point manipulation)
-  const sanitizedCost = Math.round(cost * 1000) / 1000; // Round to 3 decimal places
-  if (Math.abs(cost - sanitizedCost) > 0.0001) {
-    cronLogger.warn('Cost precision adjusted', { original: cost, sanitized: sanitizedCost, tier, userId });
-  }
-  
-  return { valid: true, sanitizedCost };
-}
+// Cost validation is now handled by the dedicated cost-validation module
 
 
 /**
@@ -461,7 +390,10 @@ async function processTierBatch(
         const userResult = await processUserTierFilings(fullUser, tier);
         
         // Comprehensive cost validation (security: prevent budget manipulation)
-        const costValidation = validateCostUpdate(userResult.cost, tier, userStatus.userId);
+        const costValidation = validateCostUpdate(userResult.cost, tier, {
+          userId: userStatus.userId,
+          operation: 'tier-aware-cron-processing'
+        });
         if (!costValidation.valid) {
           cronLogger.error(`Cost validation failed`, {
             userId: userStatus.userId,
@@ -470,20 +402,20 @@ async function processTierBatch(
             error: costValidation.error
           });
           
-          // Audit failed attempt
-          await prisma.auditLog.create({
-            data: {
+          // Queue audit log for failed cost validation asynchronously  
+          setImmediate(() => {
+            createAsyncAuditLog({
               userId: userStatus.userId,
               action: 'BUDGET_UPDATE_FAILED',
-              details: JSON.stringify({
+              details: {
                 originalCost: userResult.cost,
                 tier,
                 error: costValidation.error,
                 timestamp: new Date().toISOString()
-              }),
+              },
               success: false
-            }
-          }).catch(err => cronLogger.error('Failed to log audit event', { err }));
+            }).catch(err => cronLogger.error('Failed to create async audit log', { err }));
+          });
           
           return { success: false, error: `Cost validation failed: ${costValidation.error}` };
         }
@@ -511,20 +443,20 @@ async function processTierBatch(
         const currentBudgetUsed = currentUser.budgetUsed || 0;
         const dailyLimit = DAILY_COST_LIMITS[tier as keyof typeof DAILY_COST_LIMITS];
         
-        // Atomic budget update with race condition protection and audit logging
+        // Atomic budget update with race condition protection and async audit logging
         const updateResult = await updateUserBudgetWithLock(
           userStatus.userId,
           validatedCost,
           currentBudgetUsed,
           dailyLimit,
           {
-            maxRetries: 3,
-            baseDelay: 100,
+            maxRetries: 5, // Increased retries for optimistic locking
+            baseDelay: 50, // Faster retry for reduced lock contention
             maxDelay: 1000,
-            isolationLevel: 'Serializable',
+            isolationLevel: 'ReadCommitted', // Changed from Serializable to prevent deadlocks
             tier,
             originalCost: userResult.cost,
-            enableAuditLogging: true
+            enableAuditLogging: true // Now handled asynchronously
           }
         );
 
