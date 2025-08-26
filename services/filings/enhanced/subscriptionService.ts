@@ -1,5 +1,6 @@
 import { logger } from '../../../lib/logging';
-import { PrismaClient, PlanType, UserSubscription as PrismaUserSubscription } from '@prisma/client';
+import { getPrismaClient } from '../../../lib/db/prisma';
+import { PlanType, UserSubscription as PrismaUserSubscription } from '@prisma/client';
 import { SubscriptionTier, OptimizationLevel, getOptimizationLevelForTier } from './tokenOptimizer';
 import { 
   validateSubscriptionUpdate, 
@@ -16,8 +17,8 @@ import {
   SubscriptionAuthError
 } from '../../../lib/auth/subscription-auth';
 
-// Initialize Prisma client
-const prisma = new PrismaClient();
+// Use singleton Prisma client
+const prisma = getPrismaClient();
 
 // Create a module-specific logger
 const subscriptionLogger = logger.child('subscription-service');
@@ -347,8 +348,8 @@ export async function recordFilingUsage(
         });
       }
     }, {
-      isolationLevel: 'Serializable', // Highest isolation level to prevent race conditions
-      timeout: 10000 // 10 second timeout
+      isolationLevel: 'ReadCommitted', // Use lighter isolation to prevent deadlocks
+      timeout: 5000 // Reduced timeout to prevent long locks
     });
     
     subscriptionLogger.debug(`Filing usage recorded for user ${userId}`, {

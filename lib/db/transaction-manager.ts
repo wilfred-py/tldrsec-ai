@@ -10,6 +10,7 @@ import { PrismaClient, Prisma } from '@prisma/client';
 import { getPrismaClient } from './prisma';
 import { logger } from '../logging';
 import { monitoring } from '../monitoring';
+import { createAsyncAuditLog } from './async-audit';
 import { v4 as uuidv4 } from 'uuid';
 
 const prisma = getPrismaClient();
@@ -20,7 +21,7 @@ export interface TransactionContext {
   startTime: Date;
   isolationLevel: Prisma.TransactionIsolationLevel;
   description?: string;
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
 }
 
 export interface TransactionOptions {
@@ -28,7 +29,7 @@ export interface TransactionOptions {
   timeout?: number;
   maxWait?: number;
   description?: string;
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
   retryOnConflict?: boolean;
   maxRetries?: number;
 }
@@ -296,7 +297,7 @@ export class FilingTransactionManager {
         return result;
       },
       {
-        isolationLevel: 'Serializable', // Highest isolation for filing processing
+        isolationLevel: 'ReadCommitted', // Use lighter isolation to prevent deadlocks
         description: `Process filing ${filingId} for user ${userId}`,
         metadata: { filingId, userId },
         ...options
@@ -353,9 +354,9 @@ export class FilingTransactionManager {
           }
         });
 
-        // Step 4: Create audit log
-        await tx.auditLog.create({
-          data: {
+        // Step 4: Queue audit log asynchronously to avoid extending transaction
+        setImmediate(() => {
+          createAsyncAuditLog({
             userId,
             action: 'BUDGET_UPDATE',
             details: {
@@ -366,8 +367,11 @@ export class FilingTransactionManager {
               tier: currentUser.subscriptionTier,
               timestamp: new Date().toISOString()
             },
-            success: true
-          }
+            success: true,
+            correlationId: context.id
+          }).catch(err => {
+            transactionLogger.error('Failed to create async audit log', { userId, error: err });
+          });
         });
 
         return {
@@ -376,7 +380,7 @@ export class FilingTransactionManager {
         };
       },
       {
-        isolationLevel: 'Serializable',
+        isolationLevel: 'ReadCommitted', // Use lighter isolation to prevent deadlocks
         description: `Update budget for user ${userId}`,
         metadata: { userId, costToAdd },
         ...options
