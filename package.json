@@ -52,7 +52,8 @@
     "security:test-signature": "npx tsx scripts/security/generate-api-keys.ts test-signature",
     "security:audit": "npx tsx scripts/security/generate-api-keys.ts security-audit",
     "test:security": "jest tests/security/ --config=jest.config.mjs",
-    "test:e2e": "npx tsx scripts/test-e2e-email.ts"
+    "test:e2e": "npx tsx scripts/test-e2e-email.ts",
+    "test:e2e:multi-ticker": "npx tsx scripts/test-e2e-multi-ticker.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.51.0",
