@@ -45,12 +45,15 @@ Ensure these environment variables are set in Railway:
 
 ### Required Variables
 ```bash
+PUBLIC_URL=https://your-app-name.railway.app
 CRON_SECRET=your-secure-secret-key
 DATABASE_URL=postgresql://...
 ANTHROPIC_API_KEY=sk-ant-api03-...
 RESEND_API_KEY=re_...
 RAILWAY_ENVIRONMENT=production
 ```
+
+⚠️ **CRITICAL**: The `PUBLIC_URL` environment variable must be set to your Railway domain. Railway native cron jobs don't automatically have access to `RAILWAY_PUBLIC_DOMAIN`, causing the cron to fall back to `localhost` which fails.
 
 Check via CLI:
 ```bash
@@ -120,14 +123,22 @@ LIMIT 10;
 
 ### Common Issues
 
-#### 1. Unauthorized Cron Request
+#### 1. Connection to localhost Error
+**Symptom**: `Unable to connect. Is the computer able to access the url?` with `"baseUrl": "http://localhost:8080"`
+
+**Solution**: 
+- Set the `PUBLIC_URL` environment variable in Railway to your deployed domain
+- Example: `PUBLIC_URL=https://your-app-name.railway.app`
+- Railway native cron jobs run separately and don't automatically have `RAILWAY_PUBLIC_DOMAIN`
+
+#### 2. Unauthorized Cron Request
 **Symptom**: `401 Unauthorized` or `Unauthorized cron request` in logs
 
 **Solution**: 
 - Verify `CRON_SECRET` is set correctly
 - Make sure the secret matches in your test calls
 
-#### 2. Database Schema Errors
+#### 3. Database Schema Errors
 **Symptom**: `Unknown argument 'attempts'` or similar Prisma errors
 
 **Solution**:
@@ -135,7 +146,7 @@ LIMIT 10;
 - Fixed in latest deployment
 - Run `railway run npx prisma db push` if needed
 
-#### 3. Cron Jobs Not Triggering
+#### 4. Cron Jobs Not Triggering
 **Symptom**: No cron execution logs
 
 **Solution**:
@@ -143,7 +154,7 @@ LIMIT 10;
 - Verify Railway cron schedule is saved correctly
 - Ensure minimum 5-minute interval (Railway limitation)
 
-#### 4. API Endpoint Errors
+#### 5. API Endpoint Errors
 **Symptom**: 500 errors when testing endpoints
 
 **Solution**:
