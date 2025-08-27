@@ -526,9 +526,51 @@ export class SecurityAuditor {
     const userAgent = request.headers.get('user-agent') || '';
     const url = new URL(request.url);
     
-    // Check for suspicious user agents
+    // Railway native cron whitelist - bypass suspicious activity detection
+    if (url.pathname.startsWith('/api/cron/')) {
+      // Check if this is a Railway native cron job
+      const clientIP = IPValidator.extractClientIP(request);
+      
+      // Use a simpler approach - check if IP starts with known Railway network prefixes
+      const railwayNetworkPrefixes = ['10.', '172.', '192.168.'];
+      
+      for (const prefix of railwayNetworkPrefixes) {
+        if (clientIP.startsWith(prefix)) {
+          // This is likely from Railway's infrastructure, allow it to bypass suspicious activity detection
+          return {
+            suspicious: false,
+            reasons: [],
+            riskScore: 0,
+            detectionRules: ['railway-cron-whitelist'],
+            recommendedAction: 'ALLOW'
+          };
+        }
+      }
+      
+      // For cron endpoints, be more lenient with user agents since Railway native cron
+      // might use different user agents than typical browser requests
+      const legitCronUserAgents = [
+        /railway/i,
+        /vercel/i,
+        /github-actions/i,
+        /cron/i
+      ];
+      
+      for (const pattern of legitCronUserAgents) {
+        if (pattern.test(userAgent)) {
+          return {
+            suspicious: false,
+            reasons: [],
+            riskScore: 0,
+            detectionRules: ['legitimate-cron-user-agent'],
+            recommendedAction: 'ALLOW'
+          };
+        }
+      }
+    }
+    
+    // Check for suspicious user agents (excluding curl for cron endpoints)
     const suspiciousUAPatterns = [
-      /curl/i,
       /wget/i,
       /scanner/i,
       /bot/i,
@@ -539,6 +581,11 @@ export class SecurityAuditor {
       /sqlmap/i,
       /nikto/i
     ];
+    
+    // For non-cron endpoints, still consider curl suspicious
+    if (!url.pathname.startsWith('/api/cron/')) {
+      suspiciousUAPatterns.push(/curl/i);
+    }
     
     for (const pattern of suspiciousUAPatterns) {
       if (pattern.test(userAgent)) {
