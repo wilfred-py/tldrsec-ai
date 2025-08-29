@@ -28,6 +28,13 @@ function getSecurityConfig(): SecurityConfig {
       '10.0.0.0/8',      // Private network range
       '192.168.0.0/16',  // Private network range
       
+      // Railway uses Google Cloud Platform - add GCP cron service ranges
+      '35.235.0.0/16',   // Google Cloud US regions
+      '34.102.0.0/16',   // Google Cloud US-West
+      '35.247.0.0/16',   // Google Cloud US-Central
+      '34.68.0.0/16',    // Google Cloud additional ranges
+      '35.184.0.0/16',   // Google Cloud regional ranges
+      
       // Vercel platform IPs (commonly used ranges)
       '76.76.19.0/24',   // Vercel cron service
       '76.76.21.0/24',   // Vercel infrastructure
@@ -674,21 +681,35 @@ export class MiddlewareSecurity {
         };
       }
       
-      // Step 2: IP allowlisting (for cron endpoints)
+      // Step 2: IP allowlisting (for cron endpoints) with CRON_SECRET bypass
       if (endpointType === 'CRON') {
-        const ipValidation = IPValidator.isAllowed(clientIP);
-        if (!ipValidation.isAllowed) {
-          await SecurityAuditor.logSecurityEvent('UNAUTHORIZED_IP', request, {
+        // Check for valid CRON_SECRET authentication first - allows Railway cron service
+        const authHeader = request.headers.get('authorization');
+        const validCronSecret = authHeader === `Bearer ${process.env.CRON_SECRET}`;
+        
+        if (validCronSecret) {
+          // Valid CRON_SECRET bypasses IP allowlisting for Railway cron service
+          securityLogger.debug('CRON_SECRET authentication successful, bypassing IP validation', {
             clientIP,
-            allowedRanges: getSecurityConfig().allowedIPs,
-            ipValidation
+            endpoint: url.pathname
           });
-          
-          return {
-            allowed: false,
-            reason: 'IP not allowed',
-            statusCode: 403
-          };
+        } else {
+          // No valid CRON_SECRET, apply IP allowlisting
+          const ipValidation = IPValidator.isAllowed(clientIP);
+          if (!ipValidation.isAllowed) {
+            await SecurityAuditor.logSecurityEvent('UNAUTHORIZED_IP', request, {
+              clientIP,
+              allowedRanges: getSecurityConfig().allowedIPs,
+              ipValidation,
+              hasCronSecret: !!authHeader
+            });
+            
+            return {
+              allowed: false,
+              reason: 'IP not allowed and invalid/missing CRON_SECRET',
+              statusCode: 403
+            };
+          }
         }
       }
       
@@ -761,7 +782,7 @@ export class MiddlewareSecurity {
           const authHeader = request.headers.get('authorization');
           const expectedAuth = `Bearer ${process.env.CRON_SECRET}`;
           
-          if (authHeader && this.timingSafeEqual(authHeader, expectedAuth)) {
+          if (authHeader && SignatureValidator.timingSafeEqual(authHeader, expectedAuth)) {
             authenticated = true;
             authMethod = 'cron_secret';
           } else {
