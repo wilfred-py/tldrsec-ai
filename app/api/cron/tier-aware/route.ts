@@ -8,7 +8,9 @@ import { CronJobStatus } from '../../../../types/cron';
 import { 
   getActiveTickersForMonitoring, 
   checkTickerForNewFilings,
-  validateUserTickers
+  validateUserTickers,
+  getUnprocessedFilingsForTicker,
+  markFilingAsProcessedByAccession
 } from '../../../../lib/sec-edgar/ticker-monitoring';
 // Web Crypto API for Edge Runtime compatibility
 import { rateLimiter } from '../../../../lib/security/rate-limiter';
@@ -611,15 +613,34 @@ async function processUserTierFilings(user: User, tier: string) {
           continue;
         }
 
-        // Create a ticker object with validated CIK for checkTickerForNewFilings
-        const tickerWithCik = {
-          ...originalTicker,
-          cik: tickerValidation.cik!,
-          rssUrl: `https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=${tickerValidation.cik}&type=10&dateb=&count=100&output=atom`
-        };
-
-        // Check for new filings for this ticker
-        const newFilings = await checkTickerForNewFilings(tickerWithCik);
+        // Get unprocessed filings for this ticker from Phase 1 (RSS monitoring)
+        // This replaces the second call to checkTickerForNewFilings which was finding no "new" filings
+        // because they were already detected and stored in the rssFilingCheck table during Phase 1
+        cronLogger.debug(`Phase 2: Getting unprocessed filings for ${tickerValidation.symbol}`, {
+          userId: user.id,
+          cik: tickerValidation.cik
+        });
+        
+        let newFilings;
+        try {
+          newFilings = await getUnprocessedFilingsForTicker(tickerValidation.symbol, user.id);
+        } catch (filingFetchError) {
+          cronLogger.error(`Failed to get unprocessed filings for ${tickerValidation.symbol}`, {
+            error: filingFetchError instanceof Error ? filingFetchError.message : 'Unknown error',
+            userId: user.id,
+            ticker: tickerValidation.symbol
+          });
+          continue; // Skip this ticker and continue with next one
+        }
+        
+        cronLogger.info(`Phase 2: Found ${newFilings.length} unprocessed filings for ${tickerValidation.symbol}`, {
+          userId: user.id,
+          filingsFound: newFilings.map(f => ({
+            accession: f.accessionNumber,
+            type: f.filingType,
+            date: f.filingDate
+          }))
+        });
         
         for (const filing of newFilings) {
           try {
@@ -673,6 +694,26 @@ async function processUserTierFilings(user: User, tier: string) {
             if (transactionResult.success && transactionResult.data) {
               result.filingsProcessed++;
               result.cost += transactionResult.data.cost;
+              
+              // Mark the filing as processed in the rssFilingCheck table
+              try {
+                await markFilingAsProcessedByAccession(
+                  filing.accessionNumber, 
+                  tickerValidation.symbol, 
+                  user.id
+                );
+                cronLogger.debug(`Marked filing as processed: ${filing.accessionNumber} for ${tickerValidation.symbol}`, {
+                  userId: user.id
+                });
+              } catch (markError) {
+                // Log error but don't fail the entire processing - the filing was successfully processed
+                cronLogger.warn(`Failed to mark filing as processed, but filing processing was successful`, {
+                  filingId: filing.accessionNumber,
+                  userId: user.id,
+                  ticker: tickerValidation.symbol,
+                  error: markError instanceof Error ? markError.message : 'Unknown error'
+                });
+              }
               
               cronLogger.info(`Filing processed successfully with transaction`, {
                 filingId: filing.accessionNumber,

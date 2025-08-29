@@ -348,6 +348,88 @@ export async function getUnprocessedFilings(limit: number = 10): Promise<Array<{
 }
 
 /**
+ * Get unprocessed filings for a specific ticker symbol
+ * This replaces the second call to checkTickerForNewFilings in the cron job pipeline
+ */
+export async function getUnprocessedFilingsForTicker(
+  tickerSymbol: string, 
+  userId?: string
+): Promise<RSSFilingEntry[]> {
+  try {
+    // SECURITY: Validate ticker symbol parameter
+    if (!tickerSymbol || typeof tickerSymbol !== 'string') {
+      throw new Error('Invalid ticker symbol: must be a non-empty string');
+    }
+
+    // Sanitize ticker symbol - only allow alphanumeric characters, 1-10 chars
+    const sanitizedSymbol = tickerSymbol.toUpperCase().replace(/[^A-Z0-9]/g, '').substring(0, 10);
+    if (sanitizedSymbol.length === 0 || sanitizedSymbol !== tickerSymbol.toUpperCase()) {
+      monitoringLogger.warn(`Invalid ticker symbol format: ${tickerSymbol}`, {
+        originalSymbol: tickerSymbol,
+        sanitizedSymbol,
+        userId
+      });
+      throw new Error(`Invalid ticker symbol format: ${tickerSymbol}`);
+    }
+
+    monitoringLogger.debug(`Getting unprocessed filings for ticker: ${sanitizedSymbol}`, {
+      userId
+    });
+
+    // Find unprocessed filings for this specific ticker
+    const unprocessedFilings = await prisma.rssFilingCheck.findMany({
+      where: {
+        processed: false,
+        tickerMonitoring: {
+          symbol: sanitizedSymbol
+        }
+      },
+      include: {
+        tickerMonitoring: {
+          select: {
+            cik: true,
+            symbol: true,
+            companyName: true
+          }
+        }
+      },
+      orderBy: {
+        rssEntryDate: 'desc'
+      }
+    });
+
+    // Convert database records to RSSFilingEntry format
+    const rssEntries: RSSFilingEntry[] = unprocessedFilings.map(filing => ({
+      accessionNumber: filing.accessionNumber,
+      filingType: filing.filingType,
+      filingDate: filing.filingDate,
+      filingUrl: filing.filingUrl,
+      rssEntryDate: filing.rssEntryDate,
+      title: `${filing.filingType} - ${filing.tickerMonitoring.companyName}`
+    }));
+
+    monitoringLogger.info(`Found ${rssEntries.length} unprocessed filings for ${sanitizedSymbol}`, {
+      userId,
+      filings: rssEntries.map(f => ({
+        accession: f.accessionNumber,
+        type: f.filingType,
+        date: f.filingDate
+      }))
+    });
+
+    return rssEntries;
+
+  } catch (error) {
+    monitoringLogger.error(`Failed to get unprocessed filings for ticker: ${tickerSymbol}`, {
+      error: error instanceof Error ? error.message : 'Unknown error',
+      tickerSymbol,
+      userId
+    });
+    throw error;
+  }
+}
+
+/**
  * Mark a filing as processed
  */
 export async function markFilingAsProcessed(rssFilingCheckId: string, userId?: string): Promise<void> {
@@ -364,6 +446,49 @@ export async function markFilingAsProcessed(rssFilingCheckId: string, userId?: s
     monitoringLogger.error('Failed to mark filing as processed', { 
       error: error instanceof Error ? error.message : 'Unknown error', 
       rssFilingCheckId,
+      userId 
+    });
+    throw error;
+  }
+}
+
+/**
+ * Mark a filing as processed by accession number for a specific ticker
+ * This is used when we only have the accession number and need to find the corresponding RssFilingCheck record
+ */
+export async function markFilingAsProcessedByAccession(
+  accessionNumber: string, 
+  tickerSymbol: string, 
+  userId?: string
+): Promise<void> {
+  try {
+    monitoringLogger.debug(`Marking filing as processed: ${accessionNumber} for ${tickerSymbol}`, {
+      userId
+    });
+
+    await retryDatabaseOperation(async () => {
+      return await prisma.rssFilingCheck.updateMany({
+        where: { 
+          accessionNumber,
+          tickerMonitoring: {
+            symbol: tickerSymbol.toUpperCase()
+          }
+        },
+        data: { 
+          processed: true
+        }
+      });
+    }, 3, `mark filing ${accessionNumber} as processed for ${tickerSymbol}`);
+
+    monitoringLogger.info(`Successfully marked filing as processed: ${accessionNumber} for ${tickerSymbol}`, {
+      userId
+    });
+
+  } catch (error) {
+    monitoringLogger.error('Failed to mark filing as processed by accession', { 
+      error: error instanceof Error ? error.message : 'Unknown error', 
+      accessionNumber,
+      tickerSymbol,
       userId 
     });
     throw error;
