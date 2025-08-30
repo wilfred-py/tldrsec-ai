@@ -1,174 +1,111 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { fetchSecCompanyRSS, generateSecRssUrl } from '../../../../lib/sec-edgar/rss-parser';
-import { logger } from '../../../../lib/logging';
-
-const diagLogger = logger.child('sec-connectivity-diagnostic');
 
 /**
- * SEC Connectivity Diagnostic Endpoint for Railway Debugging
- * Tests direct SEC.gov RSS feed access from Railway infrastructure
- * 
- * Usage: GET /api/debug/sec-connectivity?cik=0000320193 (Apple)
+ * Debug endpoint to test SEC.gov connectivity from Railway production
+ * This helps diagnose why the cron job can't fetch SEC filings
  */
 export async function GET(request: NextRequest) {
-  const startTime = Date.now();
+  const { searchParams } = new URL(request.url);
+  const cik = searchParams.get('cik') || '1318605'; // Default to Tesla
   
-  try {
-    // Get test CIK from query params (default to Tesla)
-    const { searchParams } = new URL(request.url);
-    const testCik = searchParams.get('cik') || '0001318605'; // Tesla
-    
-    diagLogger.info('Starting SEC connectivity diagnostic', {
-      testCik,
-      environment: process.env.NODE_ENV,
-      railwayDomain: process.env.RAILWAY_PUBLIC_DOMAIN,
-      timestamp: new Date().toISOString()
-    });
-
-    // Test 1: Generate RSS URL
-    const rssUrl = generateSecRssUrl(testCik);
-    diagLogger.info('Generated RSS URL', { rssUrl });
-
-    // Test 2: Basic network connectivity test
-    const connectivityTest = await testBasicConnectivity(rssUrl);
-    
-    // Test 3: Full RSS fetch test
-    const rssFetchTest = await testRssFetch(testCik);
-    
-    // Test 4: Environment analysis
-    const envAnalysis = analyzeEnvironment();
-    
-    const duration = Date.now() - startTime;
-    
-    const diagnostics = {
-      success: true,
-      duration,
-      testCik,
-      rssUrl,
-      tests: {
-        connectivity: connectivityTest,
-        rssFetch: rssFetchTest
-      },
-      environment: envAnalysis,
-      timestamp: new Date().toISOString()
-    };
-
-    diagLogger.info('SEC connectivity diagnostic completed', diagnostics);
-    
-    return NextResponse.json(diagnostics);
-    
-  } catch (error) {
-    const duration = Date.now() - startTime;
-    
-    diagLogger.error('SEC connectivity diagnostic failed', {
-      error: error instanceof Error ? error.message : String(error),
-      duration,
-      stack: error instanceof Error ? error.stack : undefined
-    });
-
-    return NextResponse.json({
-      success: false,
-      error: error instanceof Error ? error.message : String(error),
-      duration,
-      timestamp: new Date().toISOString()
-    }, { status: 500 });
-  }
-}
-
-/**
- * Test basic HTTP connectivity to SEC.gov
- */
-async function testBasicConnectivity(rssUrl: string) {
-  const startTime = Date.now();
+  const tests = [];
   
+  // Test 1: Basic ticker.txt access
   try {
-    diagLogger.info('Testing basic connectivity to SEC.gov', { rssUrl });
-    
-    const response = await fetch(rssUrl, {
-      method: 'HEAD', // Just test connectivity, don't download content
+    const response = await fetch('https://www.sec.gov/include/ticker.txt', {
+      method: 'HEAD',
       headers: {
-        'User-Agent': 'tldrSEC-AI Railway Connectivity Test (contact@tldrsec.com)',
-      },
-      signal: AbortSignal.timeout(10000) // 10 second timeout
+        'User-Agent': 'tldrSEC Research Tool (wilfredchen1@gmail.com)',
+        'Accept': 'text/plain',
+        'Connection': 'keep-alive'
+      }
     });
-
-    const duration = Date.now() - startTime;
-
-    return {
-      success: response.ok,
-      status: response.status,
-      statusText: response.statusText,
-      headers: Object.fromEntries(response.headers.entries()),
-      duration,
-      url: rssUrl
-    };
     
+    tests.push({
+      test: 'SEC ticker.txt access',
+      status: response.ok ? 'PASS' : 'FAIL',
+      httpStatus: response.status,
+      headers: Object.fromEntries(response.headers.entries())
+    });
   } catch (error) {
-    const duration = Date.now() - startTime;
-    
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : String(error),
-      duration,
-      url: rssUrl,
-      errorType: error instanceof TypeError ? 'NetworkError' : 'UnknownError'
-    };
+    tests.push({
+      test: 'SEC ticker.txt access',
+      status: 'ERROR',
+      error: error instanceof Error ? error.message : 'Unknown error'
+    });
   }
-}
-
-/**
- * Test full RSS feed fetch and parsing
- */
-async function testRssFetch(cik: string) {
-  const startTime = Date.now();
   
+  // Test 2: Company filings API
   try {
-    diagLogger.info('Testing full RSS fetch and parse', { cik });
+    const response = await fetch(`https://data.sec.gov/submissions/CIK${cik.padStart(10, '0')}.json`, {
+      method: 'HEAD',
+      headers: {
+        'User-Agent': 'tldrSEC Research Tool (wilfredchen1@gmail.com)',
+        'Accept': 'application/json',
+        'Host': 'data.sec.gov'
+      }
+    });
     
-    const rssFeed = await fetchSecCompanyRSS(cik);
-    const duration = Date.now() - startTime;
-
-    return {
-      success: true,
-      cik: rssFeed.cik,
-      companyName: rssFeed.companyName,
-      entriesCount: rssFeed.entries.length,
-      firstEntries: rssFeed.entries.slice(0, 3).map(entry => ({
-        accessionNumber: entry.accessionNumber,
-        filingType: entry.filingType,
-        filingDate: entry.filingDate,
-        title: entry.title
-      })),
-      lastUpdated: rssFeed.lastUpdated,
-      duration
-    };
-    
+    tests.push({
+      test: 'SEC Data API access',
+      status: response.ok ? 'PASS' : 'FAIL',
+      httpStatus: response.status,
+      url: `https://data.sec.gov/submissions/CIK${cik.padStart(10, '0')}.json`
+    });
   } catch (error) {
-    const duration = Date.now() - startTime;
-    
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : String(error),
-      duration,
-      errorType: error instanceof TypeError ? 'NetworkError' : 
-                 error instanceof SyntaxError ? 'ParseError' : 'UnknownError'
-    };
+    tests.push({
+      test: 'SEC Data API access',
+      status: 'ERROR',
+      error: error instanceof Error ? error.message : 'Unknown error'
+    });
   }
-}
-
-/**
- * Analyze current environment for networking issues
- */
-function analyzeEnvironment() {
-  return {
-    nodeVersion: process.version,
-    platform: process.platform,
-    environment: process.env.NODE_ENV,
-    isRailway: !!process.env.RAILWAY_PUBLIC_DOMAIN,
-    railwayDomain: process.env.RAILWAY_PUBLIC_DOMAIN,
-    dnsResolvers: process.env.DNS_SERVERS,
-    userAgent: 'tldrSEC-AI Railway Connectivity Test (contact@tldrsec.com)',
-    timeout: 10000,
-    timestamp: new Date().toISOString()
+  
+  // Test 3: RSS Feed access
+  try {
+    const response = await fetch('https://www.sec.gov/cgi-bin/browse-edgar?action=getcurrent&CIK=&type=10-k&company=&dateb=&owner=include&start=0&count=10&output=atom', {
+      method: 'HEAD',
+      headers: {
+        'User-Agent': 'tldrSEC Research Tool (wilfredchen1@gmail.com)',
+        'Accept': 'application/atom+xml'
+      }
+    });
+    
+    tests.push({
+      test: 'SEC RSS Feed access',
+      status: response.ok ? 'PASS' : 'FAIL',
+      httpStatus: response.status
+    });
+  } catch (error) {
+    tests.push({
+      test: 'SEC RSS Feed access', 
+      status: 'ERROR',
+      error: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+  
+  // Test 4: Check Railway environment
+  const railwayInfo = {
+    isRailway: !!process.env.RAILWAY_ENVIRONMENT,
+    region: process.env.RAILWAY_REGION || 'unknown',
+    nodeEnv: process.env.NODE_ENV,
+    publicDomain: process.env.RAILWAY_PUBLIC_DOMAIN
   };
+  
+  const summary = {
+    timestamp: new Date().toISOString(),
+    railwayEnvironment: railwayInfo,
+    testResults: tests,
+    overallStatus: tests.every(t => t.status === 'PASS') ? 'HEALTHY' : 'BLOCKED',
+    diagnosis: tests.some(t => t.httpStatus === 403) ? 
+      'SEC.gov is blocking Railway IP addresses - this is the root cause of filing fetch failures' :
+      'Further investigation needed'
+  };
+  
+  return NextResponse.json(summary, { 
+    status: 200,
+    headers: {
+      'Cache-Control': 'no-cache, no-store, must-revalidate',
+      'Content-Type': 'application/json'
+    }
+  });
 }

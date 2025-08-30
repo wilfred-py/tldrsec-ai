@@ -165,6 +165,7 @@ export default clerkMiddleware(
       '/api/health/readiness',
       '/api/health/optimized',
       '/api/health/railway-cron',
+      '/api/debug/sec-connectivity',
       
       // Marketing pages
       '/',
