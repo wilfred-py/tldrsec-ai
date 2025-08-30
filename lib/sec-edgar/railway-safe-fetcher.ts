@@ -1,9 +1,12 @@
 /**
  * Railway-safe SEC filing fetcher
  * Uses SEC EDGAR REST API instead of RSS feeds since Railway IPs are blocked from RSS
+ * Provides data format compatibility with existing RSS parser interfaces
  */
 
 import { logger } from '../logging';
+import { resolveTicker, formatCIK, isValidCIK } from './cik-resolver';
+import type { RSSFilingEntry } from './rss-parser';
 
 const railwayLogger = logger.child('railway-sec-fetcher');
 
@@ -15,6 +18,45 @@ export interface RailwaySafeFiling {
   filingUrl: string;
   reportDate?: string;
   description: string;
+}
+
+// SEC EDGAR API response interfaces
+interface SECFilingData {
+  accessionNumber: string[];
+  filingDate: string[];
+  reportDate?: string[];
+  form: string[];
+  fileNumber?: string[];
+  filmNumber?: string[];
+  items?: string[];
+  size?: number[];
+  primaryDocument: string[];
+  primaryDocDescription?: string[];
+}
+
+interface SECCompanySubmissions {
+  name: string;
+  cik: string;
+  entityType: string;
+  sic?: string;
+  sicDescription?: string;
+  ownerOrg?: string;
+  stateOfIncorporation?: string;
+  fiscalYearEnd?: string;
+  formerNames?: Array<{
+    name: string;
+    from: string;
+    to: string;
+  }>;
+  filings: {
+    recent: SECFilingData;
+    files?: Array<{
+      name: string;
+      filingCount: number;
+      filingFrom: string;
+      filingTo: string;
+    }>;
+  };
 }
 
 /**
@@ -100,24 +142,150 @@ export function shouldUseRailwaySafeFetching(): boolean {
 }
 
 /**
- * Railway-safe RSS alternative: fetch recent filings for multiple tickers
+ * Convert SEC EDGAR API filing data to RSS-compatible format
+ * Maintains backward compatibility with existing RSS parser interfaces
  */
-export async function fetchRecentFilingsRailwaySafe(tickers: string[], limit: number = 5): Promise<Map<string, RailwaySafeFiling[]>> {
-  const results = new Map<string, RailwaySafeFiling[]>();
+export function convertToRSSFilingEntry(
+  railwayFiling: RailwaySafeFiling,
+  companyName: string = 'Unknown'
+): RSSFilingEntry {
+  return {
+    accessionNumber: railwayFiling.accessionNumber,
+    filingType: railwayFiling.form,
+    filingDate: new Date(railwayFiling.filingDate),
+    filingUrl: railwayFiling.primaryDocUrl || railwayFiling.filingUrl,
+    rssEntryDate: new Date(railwayFiling.filingDate), // Use filing date as RSS entry date
+    title: `${railwayFiling.form} - ${railwayFiling.description || 'SEC Filing'}`
+  };
+}
+
+/**
+ * Fetch company filings by ticker using SEC EDGAR API with CIK resolution
+ * Returns data in RSS-compatible format for seamless integration
+ */
+export async function fetchCompanyFilingsByTicker(
+  ticker: string, 
+  limit: number = 10
+): Promise<{ 
+  success: boolean; 
+  filings: RSSFilingEntry[]; 
+  companyName: string;
+  cik?: string;
+  error?: string;
+}> {
+  try {
+    railwayLogger.info('Fetching company filings by ticker via SEC EDGAR API', { 
+      ticker, 
+      limit,
+      isRailway: !!process.env.RAILWAY_ENVIRONMENT 
+    });
+
+    // Step 1: Resolve ticker to CIK
+    const cikResolution = await resolveTicker(ticker);
+    
+    if (!cikResolution.success || !cikResolution.cik) {
+      return {
+        success: false,
+        filings: [],
+        companyName: 'Unknown',
+        error: `CIK resolution failed: ${cikResolution.error}`
+      };
+    }
+
+    const { cik, companyName } = cikResolution;
+
+    // Step 2: Fetch filings using CIK
+    const railwayFilings = await fetchCompanyFilingsViaSECAPI(cik, limit);
+
+    // Step 3: Convert to RSS-compatible format
+    const rssFilings = railwayFilings.map(filing => 
+      convertToRSSFilingEntry(filing, companyName)
+    );
+
+    railwayLogger.info('Successfully converted SEC EDGAR data to RSS format', {
+      ticker,
+      cik,
+      companyName,
+      filingsFound: rssFilings.length
+    });
+
+    return {
+      success: true,
+      filings: rssFilings,
+      companyName,
+      cik
+    };
+
+  } catch (error) {
+    railwayLogger.error('Failed to fetch company filings by ticker', {
+      ticker,
+      error: error instanceof Error ? error.message : 'Unknown error',
+      isRailway: !!process.env.RAILWAY_ENVIRONMENT
+    });
+
+    return {
+      success: false,
+      filings: [],
+      companyName: 'Unknown',
+      error: error instanceof Error ? error.message : 'Unknown error'
+    };
+  }
+}
+
+/**
+ * Railway-safe RSS alternative: fetch recent filings for multiple tickers
+ * Now fully implemented with CIK lookup and RSS format compatibility
+ */
+export async function fetchRecentFilingsRailwaySafe(
+  tickers: string[], 
+  limit: number = 5
+): Promise<Map<string, RSSFilingEntry[]>> {
+  const results = new Map<string, RSSFilingEntry[]>();
   
-  for (const ticker of tickers) {
-    try {
-      // This would need CIK lookup first - simplified for now
-      railwayLogger.warn('CIK lookup not implemented yet for Railway-safe fetching', { ticker });
-      results.set(ticker, []);
-    } catch (error) {
-      railwayLogger.error('Failed to fetch Railway-safe filings for ticker', {
-        ticker,
-        error: error instanceof Error ? error.message : 'Unknown error'
-      });
-      results.set(ticker, []);
+  railwayLogger.info('Fetching recent filings for multiple tickers', {
+    tickerCount: tickers.length,
+    limit,
+    isRailway: !!process.env.RAILWAY_ENVIRONMENT
+  });
+
+  // Process tickers with some concurrency control
+  const BATCH_SIZE = 3; // Respect SEC rate limits
+  
+  for (let i = 0; i < tickers.length; i += BATCH_SIZE) {
+    const batch = tickers.slice(i, i + BATCH_SIZE);
+    
+    const batchPromises = batch.map(async (ticker) => {
+      try {
+        const result = await fetchCompanyFilingsByTicker(ticker, limit);
+        
+        if (result.success) {
+          railwayLogger.debug(`Successfully fetched ${result.filings.length} filings for ${ticker}`);
+          results.set(ticker, result.filings);
+        } else {
+          railwayLogger.warn(`Failed to fetch filings for ${ticker}`, { error: result.error });
+          results.set(ticker, []);
+        }
+      } catch (error) {
+        railwayLogger.error('Failed to fetch Railway-safe filings for ticker', {
+          ticker,
+          error: error instanceof Error ? error.message : 'Unknown error'
+        });
+        results.set(ticker, []);
+      }
+    });
+
+    await Promise.all(batchPromises);
+    
+    // Brief pause between batches to respect SEC rate limits
+    if (i + BATCH_SIZE < tickers.length) {
+      await new Promise(resolve => setTimeout(resolve, 200));
     }
   }
+  
+  railwayLogger.info('Completed Railway-safe filing fetch for all tickers', {
+    processedTickers: results.size,
+    totalFilings: Array.from(results.values()).reduce((sum, filings) => sum + filings.length, 0)
+  });
   
   return results;
 }

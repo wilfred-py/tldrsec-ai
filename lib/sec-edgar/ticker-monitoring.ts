@@ -1,5 +1,6 @@
 import { getPrismaClient } from '../db/prisma';
 import { fetchSecCompanyRSS, generateSecRssUrl, type RSSFilingEntry } from './rss-parser';
+import { fetchCompanyFilingsUnified, isRailwayEnvironment } from './environment-aware-fetcher';
 import { logger } from '../logging';
 import { upsertTickerMonitoringWithLock, updateTickerMonitoringWithLock, ConcurrencyOptions } from '../db/concurrency';
 
@@ -161,7 +162,8 @@ export async function getActiveTickersForMonitoring(): Promise<ActiveTicker[]> {
 }
 
 /**
- * Check for new filings for a specific ticker using RSS feed
+ * Check for new filings for a specific ticker using environment-aware fetcher
+ * Automatically uses RSS (local) or REST API (Railway) based on environment
  */
 export async function checkTickerForNewFilings(ticker: ActiveTicker): Promise<RSSFilingEntry[]> {
   try {
@@ -172,12 +174,26 @@ export async function checkTickerForNewFilings(ticker: ActiveTicker): Promise<RS
 
     monitoringLogger.debug(`Checking for new filings: ${ticker.symbol}`, {
       cik: ticker.cik,
+      symbol: ticker.symbol,
       lastChecked: ticker.lastChecked,
-      lastAccessionSeen: ticker.lastAccessionSeen
+      lastAccessionSeen: ticker.lastAccessionSeen,
+      environment: isRailwayEnvironment() ? 'Railway' : 'Local'
     });
 
-    // Fetch RSS feed with error handling
-    const rssFeed = await fetchSecCompanyRSS(ticker.cik);
+    // Use environment-aware fetcher (RSS for local, REST API for Railway)
+    const filingResponse = await fetchCompanyFilingsUnified(ticker.cik, 20); // Get more entries for better filtering
+    
+    if (!filingResponse.success) {
+      throw new Error(`Environment-aware fetch failed: ${filingResponse.error}`);
+    }
+
+    // Convert unified response to RSS feed format for compatibility
+    const rssFeed = {
+      cik: filingResponse.cik,
+      companyName: filingResponse.companyName,
+      entries: filingResponse.entries,
+      lastUpdated: filingResponse.lastUpdated
+    };
     
     // Get existing accession numbers from database
     const existingChecks = await prisma.rssFilingCheck.findMany({
@@ -253,6 +269,9 @@ export async function checkTickerForNewFilings(ticker: ActiveTicker): Promise<RS
 
       monitoringLogger.info(`Found ${newEntries.length} new filings for ${ticker.symbol}`, {
         cik: ticker.cik,
+        fetchMethod: filingResponse.source,
+        environment: isRailwayEnvironment() ? 'Railway' : 'Local',
+        companyName: filingResponse.companyName,
         newFilings: newEntries.map(e => ({
           accession: e.accessionNumber,
           type: e.filingType,
@@ -260,7 +279,11 @@ export async function checkTickerForNewFilings(ticker: ActiveTicker): Promise<RS
         }))
       });
     } else {
-      monitoringLogger.debug(`No new filings found for ${ticker.symbol}`, { cik: ticker.cik });
+      monitoringLogger.debug(`No new filings found for ${ticker.symbol}`, { 
+        cik: ticker.cik,
+        fetchMethod: filingResponse.source,
+        totalEntries: rssFeed.entries.length
+      });
     }
 
     return newEntries;
