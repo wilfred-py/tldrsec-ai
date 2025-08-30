@@ -144,6 +144,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - Filing summary email notifications
 - Welcome email automation
 - Email template system with React components
+- **MCP Resend Server**: Available at `/mcp-send-email/` with `list-audiences` and `send-email` tools ✅
+  - Verified domain: `tldrsec.app`
+  - API key validated and functional
+  - Built and ready for use
 
 ### Testing Strategy
 - Jest with ESM configuration
@@ -157,7 +161,7 @@ Required environment variables:
 - `DATABASE_URL` - PostgreSQL connection string
 - `CLERK_SECRET_KEY` / `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` - Clerk auth
 - `ANTHROPIC_API_KEY` - Claude AI integration
-- `RESEND_API_KEY` - Email service
+- `RESEND_API_KEY` - Email service (validated and working ✅)
 
 ### Background Jobs
 - Cron jobs for SEC filing monitoring (`/api/cron/`)

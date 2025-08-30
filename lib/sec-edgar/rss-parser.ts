@@ -278,27 +278,93 @@ export async function fetchSecCompanyRSS(cik: string): Promise<CompanyRSSFeed> {
       validationMetadata: validation.metadata 
     });
     
+    // Railway-enhanced SEC fetch with detailed diagnostics
+    const isRailway = !!process.env.RAILWAY_PUBLIC_DOMAIN;
+    const userAgent = isRailway 
+      ? 'tldrSEC-AI Railway Monitor (contact@tldrsec.com)'
+      : 'tldrSEC-AI RSS Monitor (contact@tldrsec.com)';
+    
+    rssLogger.info(`[SEC-FETCH] Starting RSS fetch`, {
+      cik: formattedCik,
+      url: rssUrl,
+      environment: process.env.NODE_ENV,
+      isRailway,
+      userAgent,
+      timestamp: new Date().toISOString()
+    });
+
     const response = await fetch(rssUrl, {
       headers: {
-        'User-Agent': 'tldrSEC-AI RSS Monitor (contact@tldrsec.com)',
+        'User-Agent': userAgent,
         'Accept': 'application/atom+xml, application/xml, text/xml',
-      }
+        'Accept-Encoding': 'gzip, deflate',
+        'Connection': 'keep-alive',
+        'Cache-Control': 'no-cache'
+      },
+      signal: AbortSignal.timeout(15000) // 15 second timeout for Railway
+    });
+
+    rssLogger.info(`[SEC-FETCH] Response received`, {
+      cik: formattedCik,
+      status: response.status,
+      statusText: response.statusText,
+      headers: Object.fromEntries(response.headers.entries()),
+      url: rssUrl
     });
 
     if (!response.ok) {
-      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      const errorDetails = {
+        status: response.status,
+        statusText: response.statusText,
+        url: rssUrl,
+        cik: formattedCik,
+        isRailway,
+        responseHeaders: Object.fromEntries(response.headers.entries())
+      };
+      
+      rssLogger.error(`[SEC-FETCH] HTTP error response`, errorDetails);
+      throw new Error(`SEC RSS fetch failed - HTTP ${response.status}: ${response.statusText} for CIK ${formattedCik}`);
     }
 
     const xmlContent = await response.text();
     return await parseSecCompanyRSS(xmlContent, formattedCik);
 
   } catch (error) {
-    rssLogger.error(`Failed to fetch RSS feed for CIK ${formattedCik}`, { 
-      error, 
+    const isRailway = !!process.env.RAILWAY_PUBLIC_DOMAIN;
+    const errorDetails = {
+      error: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
       rssUrl,
       originalCik: cik,
-      formattedCik
-    });
+      formattedCik,
+      environment: process.env.NODE_ENV,
+      isRailway,
+      railwayDomain: process.env.RAILWAY_PUBLIC_DOMAIN,
+      errorType: error instanceof TypeError ? 'NetworkError' : 
+                 error instanceof Error && error.name === 'AbortError' ? 'TimeoutError' :
+                 error instanceof SyntaxError ? 'ParseError' : 'UnknownError',
+      timestamp: new Date().toISOString()
+    };
+    
+    rssLogger.error(`[SEC-FETCH] Failed to fetch RSS feed for CIK ${formattedCik}`, errorDetails);
+    
+    // Railway-specific debugging
+    if (isRailway) {
+      rssLogger.error(`[RAILWAY-DEBUG] SEC connectivity issue detected`, {
+        possibleCauses: [
+          'Railway IP range blocked by SEC.gov',
+          'DNS resolution failure for sec.gov',
+          'Firewall/egress restrictions',
+          'SEC rate limiting Railway IPs',
+          'SSL/TLS certificate issues'
+        ],
+        troubleshooting: {
+          testEndpoint: '/api/debug/sec-connectivity?cik=' + formattedCik,
+          railwayDomain: process.env.RAILWAY_PUBLIC_DOMAIN
+        }
+      });
+    }
+    
     throw error;
   }
 }

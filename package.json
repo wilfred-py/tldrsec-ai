@@ -53,7 +53,21 @@
     "security:audit": "npx tsx scripts/security/generate-api-keys.ts security-audit",
     "test:security": "jest tests/security/ --config=jest.config.mjs",
     "test:e2e": "npx tsx scripts/test-e2e-email.ts",
-    "test:e2e:multi-ticker": "npx tsx scripts/test-e2e-multi-ticker.ts"
+    "test:e2e:multi-ticker": "npx tsx scripts/test-e2e-multi-ticker.ts",
+    "test:production:validation": "npx tsx scripts/production-validation-test.ts",
+    "test:production:pipeline": "npx tsx scripts/production-pipeline-test.ts",
+    "test:production:pipeline:live": "npx tsx scripts/production-pipeline-test.ts --live",
+    "test:production:comprehensive": "npx tsx scripts/production-validation-comprehensive.ts",
+    "validate:post-deployment": "npx tsx scripts/post-deployment-validation.ts",
+    "validate:quick-check": "npx tsx scripts/quick-deployment-check.ts",
+    "validate:deployment-status": "npx tsx scripts/check-deployment-status.ts",
+    "monitor:pipeline": "npx tsx scripts/production-pipeline-monitor.ts",
+    "monitor:pipeline:fast": "npx tsx scripts/production-pipeline-monitor.ts 15",
+    "test:railway:production": "npx tsx scripts/test-railway-production.ts",
+    "test:railway:local": "npx tsx scripts/test-railway-production.ts --local",
+    "test:railway:health": "curl -s https://${RAILWAY_PUBLIC_DOMAIN}/api/health/railway-cron | jq .",
+    "test:railway:full": "npm run test:railway:production",
+    "diagnose:railway": "npm run test:railway:health && npm run test:railway:production"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.51.0",
