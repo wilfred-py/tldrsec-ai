@@ -124,14 +124,14 @@ export async function sendEmailSummary(
           continue;
         }
         
-        // Find the ticker record with validated input
-        const tickerRecord = await prisma.ticker.findFirst({
+        // Find ALL ticker records with this symbol (there might be duplicates from different users)
+        const tickerRecords = await prisma.ticker.findMany({
           where: {
             symbol: sanitizedTicker.sanitizedValue
           }
         });
         
-        if (!tickerRecord) {
+        if (tickerRecords.length === 0) {
           console.log(`[INFO][FilingService] No ticker record found for ${ticker}`);
           errors.push({
             ticker,
@@ -140,10 +140,12 @@ export async function sendEmailSummary(
           continue;
         }
         
-        // Get the latest summaries for this ticker that haven't been sent to the user yet
+        // Get the latest summaries from ALL ticker records for this symbol that haven't been sent to the user yet
         const latestSummaries = await prisma.summary.findMany({
           where: {
-            tickerId: tickerRecord.id,
+            tickerId: {
+              in: tickerRecords.map(t => t.id)
+            },
             sentToUser: false
           },
           orderBy: {
@@ -357,18 +359,20 @@ export async function sendEmailSummary(
       // Update the summary records in the database to mark them as sent
       if (summaries.length > 0) {
         for (const summary of summaries) {
-          // Find the ticker record
-          const tickerRecord = await prisma.ticker.findFirst({
+          // Find ALL ticker records for this symbol
+          const tickerRecords = await prisma.ticker.findMany({
             where: {
-              symbol: summary.ticker.toUpperCase()
+              symbol: (summary.ticker || '').toUpperCase()
             }
           });
           
-          if (tickerRecord) {
-            // Find the summary record
+          if (tickerRecords.length > 0) {
+            // Find the summary record across all ticker records for this symbol
             const summaryRecord = await prisma.summary.findFirst({
               where: {
-                tickerId: tickerRecord.id,
+                tickerId: {
+                  in: tickerRecords.map(t => t.id)
+                },
                 filingType: summary.filingType as string,
                 summaryJSON: {
                   path: ['accessionNumber'],
@@ -401,12 +405,17 @@ export async function sendEmailSummary(
     
     // Log each filing's status
     for (const summary of summaries) {
-      console.log(`[INFO][FilingService] | ${summary.ticker.padEnd(6)} | ${String(summary.filingType).padEnd(10)} | Success     | ${String(summary.inputTokens || 'N/A').padEnd(4)} | ${String(summary.outputTokens || 'N/A').padEnd(4)} | ${String(summary.cost?.toFixed(4) || '0.0000').padEnd(7)} | `);
+      const ticker = (summary.ticker || 'N/A').padEnd(6);
+      const filingType = String(summary.filingType || 'N/A').padEnd(10);
+      const inputTokens = String(summary.inputTokens || 'N/A').padEnd(4);
+      const outputTokens = String(summary.outputTokens || 'N/A').padEnd(4);
+      const cost = String(summary.cost?.toFixed(4) || '0.0000').padEnd(7);
+      console.log(`[INFO][FilingService] | ${ticker} | ${filingType} | Success     | ${inputTokens} | ${outputTokens} | ${cost} | `);
     }
     
     // Add each error to the table
     for (const error of errors) {
-      const ticker = error.ticker.padEnd(6);
+      const ticker = (error.ticker || 'N/A').padEnd(6);
       const filingType = 'N/A'.padEnd(10);
       const status = 'Failed'.padEnd(11);
       const inTokens = 'N/A'.padEnd(4);
