@@ -34,16 +34,17 @@ export function isRailwayEnvironment(): boolean {
 
 /**
  * Detect if we should use RSS feeds 
- * FIXED: Railway production can access RSS feeds but REST API is blocked
+ * CRITICAL FIX: RSS monitoring does NOT work in Railway - SEC gives errors
+ * Railway must use REST API, local can use RSS
  */
 export function shouldUseRSSFeeds(): boolean {
-  // Use RSS in Railway production and local development
   const isLocal = process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test';
   const isRailway = isRailwayEnvironment();
   
-  // CORRECTED: RSS feeds work in Railway production, REST API is blocked (403)
+  // CRITICAL: RSS monitoring does NOT work in Railway (SEC website gives errors)
+  // Use REST API for Railway, RSS for local development
   if (isRailway) {
-    return true; // Use RSS feeds in Railway since they work (200 OK)
+    return false; // Use REST API in Railway since RSS monitoring fails
   }
   
   // Allow manual override via environment variable
@@ -55,8 +56,8 @@ export function shouldUseRSSFeeds(): boolean {
     return true;
   }
   
-  // Default: use RSS for both Railway and local development
-  return true; // RSS is now the preferred method everywhere
+  // Default: use RSS for local development, REST API gets used for Railway above
+  return isLocal; // RSS for local, REST API for Railway
 }
 
 /**
