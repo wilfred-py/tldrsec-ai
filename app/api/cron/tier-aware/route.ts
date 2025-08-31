@@ -646,7 +646,7 @@ async function processUserTierFilings(user: User, tier: string) {
           try {
             // Create a unique filing ID for transaction tracking
             const filingForProcessing = {
-              id: filing.accessionNumber,
+              id: filing.id, // Use database ID for transaction
               accessionNumber: filing.accessionNumber,
               formType: filing.formType || 'Unknown',
               filingDate: filing.filingDate || new Date(),
@@ -659,7 +659,7 @@ async function processUserTierFilings(user: User, tier: string) {
 
             // Process filing with full transaction boundaries
             const transactionResult = await FilingTransactionManager.processFilingWithTransaction(
-              filing.accessionNumber,
+              filing.id, // Use database ID instead of accession number
               user.id,
               async (tx) => {
                 // Execute the actual filing processing within the transaction

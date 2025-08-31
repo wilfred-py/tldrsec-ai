@@ -18,6 +18,10 @@ export interface ActiveTicker {
   subscriberCount: number;
 }
 
+export interface RSSFilingEntryWithId extends RSSFilingEntry {
+  id: string; // Database ID for transaction processing
+}
+
 /**
  * Get all active tickers that need monitoring
  * A ticker is active if it has at least one user subscription
@@ -377,7 +381,7 @@ export async function getUnprocessedFilings(limit: number = 10): Promise<Array<{
 export async function getUnprocessedFilingsForTicker(
   tickerSymbol: string, 
   userId?: string
-): Promise<RSSFilingEntry[]> {
+): Promise<RSSFilingEntryWithId[]> {
   try {
     // SECURITY: Validate ticker symbol parameter
     if (!tickerSymbol || typeof tickerSymbol !== 'string') {
@@ -421,8 +425,9 @@ export async function getUnprocessedFilingsForTicker(
       }
     });
 
-    // Convert database records to RSSFilingEntry format
-    const rssEntries: RSSFilingEntry[] = unprocessedFilings.map(filing => ({
+    // Convert database records to RSSFilingEntryWithId format (includes database ID)
+    const rssEntries: RSSFilingEntryWithId[] = unprocessedFilings.map(filing => ({
+      id: filing.id, // Include database ID for transaction processing
       accessionNumber: filing.accessionNumber,
       filingType: filing.filingType,
       filingDate: filing.filingDate,
