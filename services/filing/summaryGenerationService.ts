@@ -1,7 +1,6 @@
 import { Anthropic } from '@anthropic-ai/sdk';
 import { logger } from '../../lib/logging';
 import { SummaryGenerationResult, SECFiling, Company } from './types';
-import { generateFallbackSummary } from './fallbackSummary';
 import { normalizeFormType } from './formTypeService';
 
 // Initialize Anthropic client
@@ -171,18 +170,8 @@ export async function generateAISummary(
   } catch (error) {
     logger.error(`Error generating AI summary: ${error instanceof Error ? error.message : String(error)}`);
     
-    // Generate a fallback summary
-    const fallbackSummary = generateFallbackSummary(filing, company, filing.formType || 'UNKNOWN');
-    
-    return {
-      summary: fallbackSummary,
-      keyPoints: [
-        `This is a ${filing.formType || 'UNKNOWN'} filing for ${company.name || 'Unknown Company'}${company.ticker ? ` (${company.ticker})` : ''}.`,
-        'AI-powered summary generation failed. This is a fallback summary.',
-        'Please review the original filing for complete details.'
-      ],
-      error: error instanceof Error ? error.message : String(error)
-    };
+    // Fail completely without generating fallback summaries per user specification
+    throw new Error(`AI summary generation failed: ${error instanceof Error ? error.message : String(error)}`);
   }
 }
 
@@ -222,18 +211,9 @@ export async function generateAISummaryWithRetry(
     }
   }
   
-  // If all retries failed, generate a fallback summary
+  // If all retries failed, fail gracefully without fallback summaries
   logger.error(`All ${maxRetries + 1} attempts to generate AI summary failed`);
   
-  const fallbackSummary = generateFallbackSummary(filing, company, filing.formType || 'UNKNOWN');
-  
-  return {
-    summary: fallbackSummary,
-    keyPoints: [
-      `This is a ${filing.formType || 'UNKNOWN'} filing for ${company.name || 'Unknown Company'}${company.ticker ? ` (${company.ticker})` : ''}.`,
-      'AI-powered summary generation failed after multiple attempts. This is a fallback summary.',
-      'Please review the original filing for complete details.'
-    ],
-    error: lastError?.message || 'Unknown error during AI summary generation'
-  };
+  // No fallback summaries - fail completely per user requirements
+  throw new Error(`AI summary generation failed after ${maxRetries + 1} attempts: ${lastError?.message || 'Unknown error'}`);
 }

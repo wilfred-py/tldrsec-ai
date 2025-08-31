@@ -43,7 +43,8 @@ export interface CostValidationContext {
 const EnvironmentUtils = {
   isProduction: () => process.env.NODE_ENV === 'production',
   isTest: () => process.env.NODE_ENV === 'test' || process.env.JEST_WORKER_ID !== undefined,
-  isDevelopment: () => process.env.NODE_ENV === 'development'
+  isDevelopment: () => process.env.NODE_ENV === 'development',
+  isRailway: () => !!process.env.RAILWAY_ENVIRONMENT
 };
 
 /**
@@ -75,8 +76,9 @@ const ValidationRules = {
    */
   validateMinimumCost: (cost: number): { valid: boolean; error?: string; allowZero?: boolean } => {
     if (cost < MIN_COST_THRESHOLD) {
-      // Allow $0 costs in development/test environments
-      if ((!EnvironmentUtils.isProduction() || EnvironmentUtils.isTest()) && cost === 0) {
+      // Allow $0 costs for legitimate zero-cost operations (e.g., cached summaries)
+      // This includes development, test, and production environments
+      if (cost === 0) {
         return { valid: true, allowZero: true };
       }
       

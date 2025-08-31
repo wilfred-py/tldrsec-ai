@@ -650,6 +650,7 @@ async function processUserTierFilings(user: User, tier: string) {
               accessionNumber: filing.accessionNumber,
               formType: filing.formType || 'Unknown',
               filingDate: filing.filingDate || new Date(),
+              filingUrl: filing.filingUrl, // ✅ ADD THIS LINE
               tickerData: {
                 symbol: tickerValidation.symbol,
                 cik: tickerValidation.cik!,
@@ -781,6 +782,7 @@ async function processSecFilingWithinTransaction(
     accessionNumber: string;
     formType: string;
     filingDate: Date;
+    filingUrl?: string; // ✅ ADD THIS LINE
     tickerData: {
       symbol: string;
       cik: string;
@@ -831,6 +833,8 @@ async function processSecFilingWithinTransaction(
           data: {
             tickerId: tickerRecord.id,
             filingType: filingForProcessing.formType,
+            filingDate: filingForProcessing.filingDate, // ✅ ADD THIS LINE
+            filingUrl: filingForProcessing.filingUrl,   // ✅ ADD THIS LINE
             summaryText: summaryResult.summary,
             summaryJSON: {
               ticker: filingForProcessing.tickerData.symbol,
