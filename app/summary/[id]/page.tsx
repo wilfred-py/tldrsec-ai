@@ -153,14 +153,14 @@ export default async function SummaryPage({ params }: SummaryPageProps) {
                   <AlertCircle className="h-4 w-4" />
                   <AlertTitle>Access Denied</AlertTitle>
                   <AlertDescription>
-                    You don't have permission to view this summary. To view summaries for a company, you must add its ticker to your watchlist.
+                    You don&apos;t have permission to view this summary. To view summaries for a company, you must add its ticker to your watchlist.
                   </AlertDescription>
                 </Alert>
                 
                 <div className="bg-white rounded-lg shadow p-6">
                   <div className="text-center">
                     <h2 className="text-xl font-semibold mb-4">Want to see this summary?</h2>
-                    <p className="mb-6">Add this company's ticker to your watchlist to gain access to all of its summaries.</p>
+                    <p className="mb-6">Add this company&apos;s ticker to your watchlist to gain access to all of its summaries.</p>
                     <Link href="/dashboard/settings">
                       <Button>Go to Watchlist Settings</Button>
                     </Link>

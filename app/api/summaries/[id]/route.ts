@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { currentUser } from '@clerk/nextjs/server';
-import { prisma } from '@/lib/db';
+// prisma imported but not used in this endpoint
 import { getMockSummaries } from '@/lib/api/summary-service';
 import { checkSummaryAccess, AccessDeniedError, ResourceNotFoundError, createRedactedSummary } from '@/lib/auth/access-control';
 import { logger } from '@/lib/logging';

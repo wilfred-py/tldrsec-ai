@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { logger } from '../../../../lib/logging';
 import { testEnvironmentFilingFetch, isRailwayEnvironment } from '../../../../lib/sec-edgar/environment-aware-fetcher';
 import { resolveTicker } from '../../../../lib/sec-edgar/cik-resolver';
@@ -9,7 +9,7 @@ const healthLogger = logger.child('sec-edgar-health');
  * SEC EDGAR health check endpoint
  * Tests both environment detection and filing fetch capabilities
  */
-export async function GET(request: NextRequest) {
+export async function GET() {
   const startTime = Date.now();
   
   try {

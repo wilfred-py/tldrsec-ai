@@ -2,13 +2,14 @@ import { NextRequest, NextResponse } from 'next/server';
 import { currentUser } from '@clerk/nextjs/server';
 import { PreferenceService } from '@/lib/user/preference-service';
 import { logger } from '@/lib/logging';
-import { PreferenceUpdateResponse, UserPreferences } from '@/lib/user/preference-types';
+// PreferenceUpdateResponse, UserPreferences imported but not used
+// import { PreferenceUpdateResponse, UserPreferences } from '@/lib/user/preference-types';
 
 /**
  * GET /api/user/preferences
  * Returns the current user's preferences
  */
-export async function GET(request: NextRequest) {
+export async function GET() {
   try {
     // Get current user
     const user = await currentUser();
@@ -62,7 +63,7 @@ export async function PATCH(request: NextRequest) {
     let updates;
     try {
       updates = await request.json();
-    } catch (error) {
+    } catch (_error) {
       return NextResponse.json({
         success: false,
         message: 'Invalid JSON in request body'

@@ -1,7 +1,7 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { defaultRateLimiter, conservativeRateLimiter } from '../../../services/filings/enhanced/rateLimiter';
 
-export async function GET(request: NextRequest) {
+export async function GET() {
   try {
     // Test configuration
     const defaultConfig = defaultRateLimiter.getConfiguration();
@@ -20,9 +20,9 @@ export async function GET(request: NextRequest) {
       // This should NOT throw a QUOTA_EXCEEDED error with new limits
       await defaultRateLimiter.executeRequest(mockRequest, koTokens, 1, 'KO-TEST');
       koTestResult = 'ACCEPTED - Will process successfully';
-    } catch (error: any) {
-      if (error.type === 'QUOTA_EXCEEDED') {
-        koTestResult = `REJECTED - ${error.message}`;
+    } catch (error: unknown) {
+      if (error && typeof error === 'object' && 'type' in error && error.type === 'QUOTA_EXCEEDED') {
+        koTestResult = `REJECTED - ${error instanceof Error ? error.message : String(error)}`;
       } else {
         koTestResult = `QUEUED - ${error.message}`;
       }
@@ -39,9 +39,9 @@ export async function GET(request: NextRequest) {
       
       await defaultRateLimiter.executeRequest(mockOversizedRequest, oversizedTokens, 1, 'OVERSIZED-TEST');
       oversizedTestResult = 'ACCEPTED - Should have been rejected!';
-    } catch (error: any) {
-      if (error.type === 'QUOTA_EXCEEDED') {
-        oversizedTestResult = `PROPERLY REJECTED - ${error.message}`;
+    } catch (error: unknown) {
+      if (error && typeof error === 'object' && 'type' in error && error.type === 'QUOTA_EXCEEDED') {
+        oversizedTestResult = `PROPERLY REJECTED - ${error instanceof Error ? error.message : String(error)}`;
       } else {
         oversizedTestResult = `UNEXPECTED - ${error.message}`;
       }
@@ -99,10 +99,10 @@ export async function GET(request: NextRequest) {
       }
     });
     
-  } catch (error: any) {
+  } catch (error: unknown) {
     return NextResponse.json({
       success: false,
-      error: error.message,
+      error: error instanceof Error ? error.message : String(error),
       stack: error.stack
     }, { status: 500 });
   }

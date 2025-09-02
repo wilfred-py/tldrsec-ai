@@ -16,7 +16,7 @@ const prisma = getPrismaClient();
  * Includes Edge Runtime, concurrency systems, and security validation
  * GET /api/health
  */
-export const GET = appRouterAsyncHandler(async (_request: Request) => {
+export const GET = appRouterAsyncHandler(async () => {
   const startTime = Date.now();
   
   // Get base health status
@@ -73,7 +73,7 @@ export const GET = appRouterAsyncHandler(async (_request: Request) => {
  * Perform PR #173 specific infrastructure health checks
  */
 async function performPR173HealthChecks() {
-  const checks: { [key: string]: any } = {};
+  const checks: { [key: string]: unknown } = {};
   let overallStatus = 'healthy';
   
   try {

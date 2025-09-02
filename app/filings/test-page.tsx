@@ -1,8 +1,10 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
+// useEffect imported but not used
 import { FilingType } from '@/lib/sec-edgar/types';
-import { getFormsByCategory, getHighImportanceForms } from '@/lib/sec-edgar/form-registry';
+import { getFormsByCategory } from '@/lib/sec-edgar/form-registry';
+// getHighImportanceForms imported but not used
 
 // Filing summary result interface
 interface FilingSummaryResult {
@@ -101,7 +103,7 @@ export default function TestPage() {
       }
       
       if (data.success && data.data) {
-        const allSummaries = data.data.summaries.map((item: any) => item.summary);
+        const allSummaries = data.data.summaries.map((item: { summary: FilingSummaryResult }) => item.summary);
         setSummaries(allSummaries);
         
         if (data.data.errors.length > 0) {

@@ -10,9 +10,9 @@ import {
   canProcessFiling 
 } from '../../../../services/filings/enhanced/subscriptionService';
 import { 
-  validateSubscriptionUpdate,
-  type SubscriptionUpdateInput 
+  validateSubscriptionUpdate
 } from '../../../../lib/validation/subscription-validation';
+// SubscriptionUpdateInput type imported but not used
 import {
   getAuthenticatedUserId,
   verifyUserExists,
@@ -23,7 +23,7 @@ import {
  * GET /api/user/subscription
  * Retrieve user's current subscription information
  */
-export async function GET(request: NextRequest) {
+export async function GET() {
   try {
     const userId = await getAuthenticatedUserId();
     await verifyUserExists(userId);

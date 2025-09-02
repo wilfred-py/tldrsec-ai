@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
-import { prisma } from '@/lib/db/prisma';
+// prisma imported but not used in this endpoint
 import { sendEmail, EmailSendResult } from '@/lib/email';
 import { getForm144Summary } from '@/services/secService';
 

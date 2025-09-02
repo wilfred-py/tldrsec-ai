@@ -30,7 +30,7 @@ export async function GET() {
   try {
     // Tesla's CIK number and ticker
     const teslaCIK = '0001318605';
-    const teslaTicker = 'TSLA';
+    // const teslaTicker = 'TSLA'; // Reserved for future ticker processing
     
     // Fetch recent filings for Tesla
     console.log('Fetching recent filings for Tesla...');

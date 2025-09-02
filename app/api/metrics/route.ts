@@ -73,7 +73,7 @@ export const GET = appRouterAsyncHandler(async (request: Request) => {
       
       // Add metric values
       for (const value of metric.values) {
-        let metricName = metric.name;
+        const metricName = metric.name;
         
         // Add labels if present
         let labels = '';

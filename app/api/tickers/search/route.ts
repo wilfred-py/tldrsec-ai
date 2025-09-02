@@ -7,7 +7,8 @@ import { logger } from '@/lib/logging';
 const prisma = new PrismaClient();
 const tickerResolver = new TickerResolver({ prisma });
 
-// Define the ticker interface based on what's in the database
+// Define the ticker interface based on what's in the database - currently unused
+/*
 interface TickerData {
   id: string;
   symbol: string;
@@ -16,6 +17,7 @@ interface TickerData {
   exchangeCodes: string[];
   aliases?: string[];
 }
+*/
 
 /**
  * GET /api/tickers/search
@@ -98,7 +100,7 @@ export async function GET(request: NextRequest) {
     }
     
     // Format results
-    const results = tickers.map((ticker: any) => ({
+    const results = tickers.map((ticker: { id: string; symbol: string; companyName: string; cik: string; exchangeCodes: string[] }) => ({
       id: ticker.id,
       symbol: ticker.symbol,
       companyName: ticker.companyName,

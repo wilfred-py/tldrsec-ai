@@ -5,7 +5,7 @@
  * and returns the results for verification.
  */
 
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { generateXmlSummary, formatXmlSummary, visualizeContextReferences } from '../../../../lib/xmlLogging';
 import { logger } from '../../../../lib/logging';
 
@@ -39,7 +39,7 @@ const sampleXml = `<?xml version="1.0" encoding="UTF-8"?>
  * @param request NextRequest object
  * @returns JSON response with XML monitoring test results
  */
-export async function GET(request: NextRequest) {
+export async function GET() {
   try {
     logger.info('Testing XML logging utility...');
     

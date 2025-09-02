@@ -2,13 +2,14 @@ import { NextRequest, NextResponse } from 'next/server';
 import { currentUser } from '@clerk/nextjs/server';
 import { PreferenceService } from '@/lib/user/preference-service';
 import { logger } from '@/lib/logging';
-import { NotificationPreferences } from '@/lib/user/preference-types';
+// NotificationPreferences imported but not used
+// import { NotificationPreferences } from '@/lib/user/preference-types';
 
 /**
  * GET /api/user/subscriptions
  * Returns the current user's ticker subscriptions
  */
-export async function GET(request: NextRequest) {
+export async function GET() {
   try {
     // Get current user
     const user = await currentUser();
@@ -62,7 +63,7 @@ export async function POST(request: NextRequest) {
     let body;
     try {
       body = await request.json();
-    } catch (error) {
+    } catch (_error) {
       return NextResponse.json({
         success: false,
         message: 'Invalid JSON in request body'
@@ -123,7 +124,7 @@ export async function PATCH(request: NextRequest) {
     let body;
     try {
       body = await request.json();
-    } catch (error) {
+    } catch (_error) {
       return NextResponse.json({
         success: false,
         message: 'Invalid JSON in request body'

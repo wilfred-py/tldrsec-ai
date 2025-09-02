@@ -1,9 +1,9 @@
 import { currentUser } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
 import { 
-  DashboardHeader, 
-  EmptyPlaceholder 
+  DashboardHeader
 } from "@/components/dashboard";
+// EmptyPlaceholder imported but not used
 import { SummariesClient } from "@/components/dashboard/summaries-client";
 
 export default async function SummariesPage() {

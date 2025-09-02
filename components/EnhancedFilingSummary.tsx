@@ -38,14 +38,14 @@ export function EnhancedFilingSummary({
   processAllChunks = true,
   className = ''
 }: EnhancedFilingSummaryProps) {
-  // Track progress events for debugging
-  const [progressEvents, setProgressEvents] = useState<any[]>([]);
+  // Track progress events for debugging - currently unused
+  // const [progressEvents, setProgressEvents] = useState<unknown[]>([]);
   
   // Use the enhanced filing summary hook
   const {
     data,
     partialData,
-    status,
+    // status, // Unused variable - tracking via hook state
     progress,
     error,
     isPartial,
