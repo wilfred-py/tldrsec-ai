@@ -81,8 +81,8 @@ const DAILY_COST_LIMITS = {
   FREE: Number(process.env.FREE_COST_LIMIT) || 0.20
 } as const;
 
-// Security constants
-const MAX_COST_PER_OPERATION = 10.0; // Maximum cost allowed per operation
+// Security constants - reserved for future cost validation
+// const MAX_COST_PER_OPERATION = 10.0; // Maximum cost allowed per operation
 const ALLOWED_IPS = process.env.CRON_ALLOWED_IPS?.split(',') || [];
 
 /**
@@ -394,7 +394,10 @@ async function processTierBatch(
         // Comprehensive cost validation (security: prevent budget manipulation)
         const costValidation = validateCostUpdate(userResult.cost, tier, {
           userId: userStatus.userId,
-          operation: 'tier-aware-cron-processing'
+          tier,
+          operation: 'tier-aware-cron-processing',
+          operationType: userResult.cost === 0 ? 'cached_summary' : 'ai_generation',
+          isCached: userResult.cost === 0
         });
         if (!costValidation.valid) {
           cronLogger.error(`Cost validation failed`, {

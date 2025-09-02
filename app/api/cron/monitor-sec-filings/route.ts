@@ -22,7 +22,7 @@ const cronLogger = logger.child('cron-sec-monitoring');
 // Rate limiting config
 const BATCH_SIZE = 5; // Process max 5 filings per run
 const MAX_CONCURRENT_RSS_CHECKS = 3; // Check max 3 tickers simultaneously
-const PROCESSING_TIMEOUT_MS = 4 * 60 * 1000; // 4 minutes (Railway/Vercel timeout)
+// const PROCESSING_TIMEOUT_MS = 4 * 60 * 1000; // 4 minutes (Railway/Vercel timeout) - Reserved for future use
 
 interface ProcessingStats {
   tickersChecked: number;
@@ -76,20 +76,19 @@ export async function GET(request: NextRequest) {
     });
 
   } catch (error) {
-    stats.endTime = new Date();
-    const duration = Date.now() - startTime;
+    const errorResult = await monitor.complete('FAILED', error instanceof Error ? error.message : 'Unknown error');
     
     cronLogger.error('SEC filing monitoring failed', {
       error,
-      stats,
-      durationMs: duration
+      executionId: errorResult.executionId,
+      duration: errorResult.duration
     });
 
     return NextResponse.json({
       success: false,
       error: error instanceof Error ? error.message : 'Unknown error',
-      stats,
-      durationMs: duration
+      executionId: errorResult.executionId,
+      duration: errorResult.duration
     }, { status: 500 });
   }
 }
@@ -97,7 +96,15 @@ export async function GET(request: NextRequest) {
 /**
  * Phase 1: Check active tickers for new filings via RSS
  */
-async function checkForNewFilings(stats: ProcessingStats): Promise<void> {
+async function checkForNewFilings(_monitor: CronJobMonitor): Promise<void> {
+  const stats: ProcessingStats = {
+    tickersChecked: 0,
+    newFilingsFound: 0,
+    filingsProcessed: 0,
+    emailsSent: 0,
+    errors: 0,
+    startTime: new Date()
+  };
   try {
     const activeTickers = await getActiveTickersForMonitoring();
     stats.tickersChecked = activeTickers.length;
@@ -148,7 +155,15 @@ async function checkForNewFilings(stats: ProcessingStats): Promise<void> {
 /**
  * Phase 2: Process unprocessed filings (fetch, parse, summarize, email)
  */
-async function processUnprocessedFilings(stats: ProcessingStats): Promise<void> {
+async function processUnprocessedFilings(_monitor: CronJobMonitor): Promise<void> {
+  const stats: ProcessingStats = {
+    tickersChecked: 0,
+    newFilingsFound: 0,
+    filingsProcessed: 0,
+    emailsSent: 0,
+    errors: 0,
+    startTime: new Date()
+  };
   try {
     const unprocessedFilings = await getUnprocessedFilings(BATCH_SIZE);
     

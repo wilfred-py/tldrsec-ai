@@ -47,6 +47,17 @@ jest.mock('../../lib/cron/market-hours');
 jest.mock('../../lib/db/concurrency');
 jest.mock('../../lib/security/rate-limiter');
 jest.mock('../../lib/logging');
+jest.mock('../../lib/db/cost-validation', () => ({
+  validateCostUpdate: jest.fn().mockReturnValue({ valid: true })
+}));
+jest.mock('../../lib/db/transaction-manager', () => ({
+  FilingTransactionManager: jest.fn().mockImplementation(() => ({
+    processFilingWithinTransaction: jest.fn()
+  }))
+}));
+jest.mock('../../lib/db/async-audit', () => ({
+  createAsyncAuditLog: jest.fn().mockResolvedValue(undefined)
+}));
 
 // Mock Prisma Client to prevent real database connections
 jest.mock('@prisma/client', () => ({
@@ -72,6 +83,7 @@ const mockPrisma = {
     findFirst: jest.fn(),
     create: jest.fn(),
     update: jest.fn(),
+    updateMany: jest.fn(),
     upsert: jest.fn(),
     count: jest.fn(),
   },
@@ -83,6 +95,7 @@ const mockPrisma = {
     update: jest.fn(),
     upsert: jest.fn(),
     count: jest.fn(),
+    groupBy: jest.fn(),
   },
   summary: {
     findMany: jest.fn(),
@@ -159,6 +172,7 @@ const mockConcurrency = {
 };
 const mockRateLimiter = rateLimiter as jest.Mocked<typeof rateLimiter>;
 
+
 // Mock CronJobMonitor
 const mockMonitor = {
   recordMetric: jest.fn(),
@@ -206,21 +220,114 @@ describe('Comprehensive Cron Integration Tests', () => {
       currentTime: new Date().toISOString()
     });
 
-    // Setup default user processing statuses
-    mockMarketHours.getUserProcessingStatuses.mockReturnValue([]);
-    mockMarketHours.getEligibleUsers.mockReturnValue([]);
+    // Setup default user processing statuses - matching the actual return structure
+    const mockUserProcessingStatuses = [
+      {
+        userId: 'user1',
+        tier: 'FREE',
+        lastProcessedAt: null,
+        eligibility: {
+          canProcess: true,
+          nextEligibleTime: null,
+          frequency: 120,
+          reason: 'Test user'
+        },
+        priority: 1,
+        budgetStatus: {
+          monthlyBudget: 2.0,
+          budgetUsed: 0,
+          budgetRemaining: 2.0,
+          budgetUtilization: 0
+        }
+      }
+    ];
+    mockMarketHours.getUserProcessingStatuses.mockReturnValue(mockUserProcessingStatuses);
+    mockMarketHours.getEligibleUsers.mockReturnValue(mockUserProcessingStatuses);
 
-    // Setup default ticker monitoring
-    mockTickerMonitoring.getActiveTickersForMonitoring.mockResolvedValue([]);
+    // Setup default ticker monitoring with more comprehensive responses
+    mockTickerMonitoring.getActiveTickersForMonitoring.mockResolvedValue([
+      { symbol: 'AAPL', cik: '320193' }
+    ]);
     mockTickerMonitoring.checkTickerForNewFilings.mockResolvedValue([]);
-    mockTickerMonitoring.validateUserTickers.mockResolvedValue([]);
+    mockTickerMonitoring.validateUserTickers.mockResolvedValue([
+      { symbol: 'AAPL', valid: true, cik: '320193' }
+    ]);
     mockTickerMonitoring.markFilingAsProcessed.mockResolvedValue(undefined);
+    mockTickerMonitoring.getUnprocessedFilingsForTicker.mockResolvedValue([]);
+    mockTickerMonitoring.markFilingAsProcessedByAccession.mockResolvedValue(undefined);
     
-    // Setup default prisma responses
-    mockPrisma.user.findMany.mockResolvedValue([]);
-    mockPrisma.user.findUnique.mockResolvedValue(null);
-    mockPrisma.user.findFirst.mockResolvedValue(null);
+    // Setup default prisma responses with realistic user data
+    const mockUsers = [
+      {
+        id: 'user1',
+        email: 'test@example.com',
+        subscriptionTier: 'FREE',
+        lastCronProcessed: null,
+        processingBudget: 2.0,
+        budgetUsed: 0,
+        tickers: [
+          {
+            id: 'ticker1',
+            symbol: 'AAPL',
+            companyName: 'Apple Inc.'
+          }
+        ]
+      }
+    ];
+    
+    mockPrisma.user.findMany.mockResolvedValue(mockUsers);
+    mockPrisma.user.findUnique.mockResolvedValue(mockUsers[0]);
+    mockPrisma.user.findFirst.mockResolvedValue(mockUsers[0]);
+    mockPrisma.user.updateMany.mockResolvedValue({ count: 1 });
+    
+    // Mock Prisma transaction with comprehensive mock
+    const mockTransactionUser = {
+      findUnique: jest.fn().mockResolvedValue({
+        budgetUsed: 0,
+        subscriptionTier: 'FREE',
+        budgetResetAt: new Date()
+      }),
+      update: jest.fn().mockResolvedValue({
+        id: 'user1',
+        budgetUsed: 0.5
+      })
+    };
+    
+    const mockTransactionSummary = {
+      create: jest.fn().mockResolvedValue({ id: 'summary-123' }),
+      update: jest.fn().mockResolvedValue({ id: 'summary-123' })
+    };
+    
+    const mockTransactionRssFiling = {
+      upsert: jest.fn().mockResolvedValue({ id: 'rss-filing-123' }),
+      findMany: jest.fn().mockResolvedValue([]),
+      create: jest.fn().mockResolvedValue({ id: 'rss-filing-123' })
+    };
+    
+    mockPrisma.$transaction.mockImplementation(async (callback) => {
+      // Create a comprehensive mock transaction object
+      const tx = {
+        user: mockTransactionUser,
+        summary: mockTransactionSummary,
+        rssFilingCheck: mockTransactionRssFiling,
+        secFiling: {
+          findMany: jest.fn().mockResolvedValue([]),
+          create: jest.fn().mockResolvedValue({ id: 'sec-filing-123' })
+        }
+      };
+      return await callback(tx);
+    });
     mockPrisma.ticker.findFirst.mockResolvedValue(null);
+    mockPrisma.ticker.groupBy.mockResolvedValue([
+      { 
+        symbol: 'AAPL',
+        _count: { id: 2 }
+      },
+      {
+        symbol: 'TSLA', 
+        _count: { id: 1 }
+      }
+    ]);
     mockPrisma.summary.create.mockResolvedValue({ id: 'summary-123' });
     mockPrisma.auditLog.create.mockResolvedValue({
       id: 'audit-123',
@@ -274,6 +381,12 @@ describe('Comprehensive Cron Integration Tests', () => {
 
         const response = await tierAwareRoute(request);
         const result = await response.json();
+
+        // Debug logging
+        if (response.status !== 200) {
+          console.log('Railway test failed. Status:', response.status);
+          console.log('Error response:', JSON.stringify(result, null, 2));
+        }
 
         expect(response.status).toBe(200);
         expect(result.success).toBe(true);
