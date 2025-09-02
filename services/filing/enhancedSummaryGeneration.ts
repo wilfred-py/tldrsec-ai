@@ -182,8 +182,16 @@ export async function generateEnhancedAISummary(
   } catch (error) {
     logger.error(`Error generating enhanced AI summary: ${error instanceof Error ? error.message : String(error)}`);
     
-    // Fail completely without generating fallback summaries per user specification
-    throw new Error(`Enhanced AI summary generation failed: ${error instanceof Error ? error.message : String(error)}`);
+    // Return error information instead of throwing, so we can create a summary record with error state
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    return {
+      summary: '', // Empty summary indicates failure
+      keyPoints: [],
+      error: `Enhanced AI summary generation failed: ${errorMessage}`,
+      processingStatus: 'FAILED',
+      processingError: errorMessage,
+      processingErrorCode: error instanceof Error && error.name ? error.name : 'UNKNOWN_ERROR'
+    };
   }
 }
 
@@ -234,9 +242,18 @@ export async function generateEnhancedAISummaryWithRetry(
     }
   }
   
-  // If all retries failed, fail completely without fallback summaries
+  // If all retries failed, return error information instead of throwing
   logger.error(`All ${maxRetries + 1} attempts to generate enhanced AI summary failed`);
   
-  // No fallback summaries - fail completely per user requirements
-  throw new Error(`Enhanced AI summary generation failed after ${maxRetries + 1} attempts: ${lastError?.message || 'Unknown error'}`);
+  // Return error information so we can create a summary record with error state
+  const errorMessage = lastError?.message || 'Unknown error';
+  return {
+    summary: '', // Empty summary indicates failure
+    keyPoints: [],
+    error: `Enhanced AI summary generation failed after ${maxRetries + 1} attempts: ${errorMessage}`,
+    processingStatus: 'FAILED',
+    processingError: errorMessage,
+    processingErrorCode: lastError?.name || 'UNKNOWN_ERROR',
+    attempts: maxRetries + 1
+  };
 }

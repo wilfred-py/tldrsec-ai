@@ -34,6 +34,9 @@ export interface CostValidationContext {
   userId: string;
   tier: string;
   operation?: string;
+  operationType?: 'cached_summary' | 'ai_generation' | 'test_operation' | 'manual_retry';
+  isCached?: boolean;
+  isRetry?: boolean;
   metadata?: Record<string, any>;
 }
 
@@ -72,18 +75,35 @@ const ValidationRules = {
   },
 
   /**
-   * Validates minimum cost thresholds with environment awareness
+   * Validates minimum cost thresholds with context awareness
    */
-  validateMinimumCost: (cost: number): { valid: boolean; error?: string; allowZero?: boolean } => {
+  validateMinimumCost: (cost: number, context?: CostValidationContext): { valid: boolean; error?: string; allowZero?: boolean } => {
     if (cost < MIN_COST_THRESHOLD) {
-      // Allow $0 costs for legitimate zero-cost operations (e.g., cached summaries)
-      // This includes development, test, and production environments
+      // Context-aware validation for zero costs
       if (cost === 0) {
-        return { valid: true, allowZero: true };
+        // Allow $0 costs for legitimate operations with proper context
+        if (context?.operationType === 'cached_summary' || 
+            context?.operationType === 'test_operation' ||
+            context?.isCached === true) {
+          return { valid: true, allowZero: true };
+        }
+        
+        // In production, require context for zero-cost operations
+        if (EnvironmentUtils.isProduction() && !context) {
+          return { valid: false, error: 'Zero cost requires operation context in production' };
+        }
+        
+        // Allow in development/test without strict context requirements
+        if (EnvironmentUtils.isDevelopment() || EnvironmentUtils.isTest()) {
+          return { valid: true, allowZero: true };
+        }
+        
+        // Default: require context for zero costs
+        return { valid: false, error: 'Zero cost operation requires valid context' };
       }
       
       // Reject extremely small non-zero costs in all environments (potential bypass)
-      return { valid: false, error: 'Cost too small' };
+      return { valid: false, error: 'Cost too small - potential bypass attempt' };
     }
     return { valid: true };
   },

@@ -15,6 +15,7 @@ import CopyToClipboard from 'react-copy-to-clipboard';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
+import { SummaryErrorState } from './summary-error-state';
 
 // Extend the Summary type to include redacted properties
 interface RedactedSummary {
@@ -37,7 +38,20 @@ interface SummaryContentProps {
       symbol: string;
       companyName: string;
     }
-  }) | RedactedSummary;
+  }) | RedactedSummary | {
+    id: string;
+    filingType: string;
+    filingDate: Date;
+    ticker: {
+      symbol: string;
+      companyName: string;
+    };
+    summaryText: string;
+    summaryJSON: any;
+    processingStatus?: string;
+    processingError?: string;
+    processingErrorCode?: string;
+  };
 }
 
 export function SummaryContent({ summary }: SummaryContentProps) {
@@ -64,6 +78,25 @@ export function SummaryContent({ summary }: SummaryContentProps) {
           </Link>
         </div>
       </div>
+    );
+  }
+  
+  // Check if the summary generation failed
+  if ('processingStatus' in summary && summary.processingStatus === 'FAILED' || 
+      ('processingError' in summary && summary.processingError) ||
+      summary.summaryText === '' || summary.summaryText.length < 10) {
+    return (
+      <SummaryErrorState
+        error={summary.processingError || 'Summary generation failed'}
+        filingType={summary.filingType}
+        companyName={summary.ticker.companyName}
+        ticker={summary.ticker.symbol}
+        onRetry={() => {
+          // TODO: Implement retry logic
+          window.location.reload();
+        }}
+        retryDisabled={false}
+      />
     );
   }
   
