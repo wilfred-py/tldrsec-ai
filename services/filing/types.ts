@@ -100,4 +100,79 @@ export interface SummaryGenerationResult {
   model?: string;
   cost?: number;
   error?: string;
+  processingStatus?: 'SUCCESS' | 'FAILED' | 'FALLBACK' | 'RETRYING';
+  processingError?: string;
+  processingErrorCode?: string;
+  attempts?: number;
+  fallbackReason?: string;
+  isFallback?: boolean;
+}
+
+/**
+ * Error categories for classification and alerting
+ */
+export type ErrorCategory = 
+  | 'AI_SERVICE_ERROR'
+  | 'RATE_LIMIT_ERROR'
+  | 'AUTHENTICATION_ERROR'
+  | 'TIMEOUT_ERROR'
+  | 'PARSING_ERROR'
+  | 'COST_VALIDATION_ERROR'
+  | 'NETWORK_ERROR'
+  | 'UNKNOWN_ERROR';
+
+/**
+ * Alert severity levels
+ */
+export type AlertSeverity = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
+
+/**
+ * Alert interface for production monitoring
+ */
+export interface ProductionAlert {
+  id: string;
+  severity: AlertSeverity;
+  category: ErrorCategory;
+  message: string;
+  context: Record<string, any>;
+  timestamp: Date;
+  service: string;
+  userId?: string;
+  actionRequired: boolean;
+}
+
+/**
+ * Fallback summary generation options
+ */
+export interface FallbackSummaryOptions {
+  includeBasicInfo: boolean;
+  includeMetadata: boolean;
+  templateType: 'basic' | 'structured' | 'minimal';
+  reason: string;
+}
+
+/**
+ * Circuit breaker state
+ */
+export type CircuitBreakerState = 'CLOSED' | 'OPEN' | 'HALF_OPEN';
+
+/**
+ * Circuit breaker configuration
+ */
+export interface CircuitBreakerConfig {
+  failureThreshold: number;
+  timeout: number;
+  halfOpenMaxCalls: number;
+  resetTimeout: number;
+}
+
+/**
+ * Retry configuration with exponential backoff
+ */
+export interface RetryConfig {
+  maxRetries: number;
+  baseDelay: number;
+  maxDelay: number;
+  backoffMultiplier: number;
+  jitter: boolean;
 }
