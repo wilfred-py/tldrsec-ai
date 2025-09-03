@@ -175,6 +175,15 @@ export async function getTickerSubscriptionInfo(
     let totalValidSubscribers = 0;
 
     for (const subscription of tickerSubscriptions) {
+      // Add null safety for user object
+      if (!subscription || !subscription.user) {
+        subscriptionLogger.warn('Subscription missing user data', { 
+          subscriptionId: subscription?.id || 'unknown',
+          userId: subscription?.userId || 'unknown'
+        });
+        continue;
+      }
+      
       const userSub = subscription.user.userSubscription;
       
       if (userSub && userSub.isActive && userSub.currentPeriodEnd >= new Date()) {

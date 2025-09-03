@@ -3,6 +3,8 @@ import { monitoring } from '@/lib/monitoring';
 import { appRouterAsyncHandler } from '@/lib/error-handling';
 import { logger } from '@/lib/logging';
 import { getPrismaClient } from '@/lib/db/prisma';
+import { CircuitBreakerRegistry } from '@/lib/resilience/circuit-breaker';
+import { GlobalErrorHandler } from '@/lib/resilience/error-handling';
 
 // Enable Edge Runtime for this route specifically
 export const runtime = 'edge';
@@ -25,20 +27,24 @@ export const GET = appRouterAsyncHandler(async () => {
   // Add PR #173 specific health checks
   const pr173Checks = await performPR173HealthChecks();
   
-  // Merge health status with PR #173 checks
+  // Add resilience system status
+  const resilienceStatus = getResilienceSystemStatus();
+  
+  // Merge health status with PR #173 checks and resilience monitoring
   const enhancedHealthStatus = {
     ...healthStatus,
     pr173_infrastructure: pr173Checks,
-    version: '1.1',
-    pr_version: 'PR #173: Edge Runtime compatibility and concurrency enhancements',
+    resilience_systems: resilienceStatus,
+    version: '1.2',
+    pr_version: 'PR #173+: Edge Runtime, concurrency, and enhanced error handling with circuit breakers',
     timestamp: new Date().toISOString()
   };
   
-  // Determine overall status considering PR #173 components
+  // Determine overall status considering PR #173 components and resilience systems
   let overallStatus = healthStatus.status;
-  if (pr173Checks.overall_status === 'unhealthy') {
+  if (pr173Checks.overall_status === 'unhealthy' || resilienceStatus.overall_status === 'unhealthy') {
     overallStatus = 'unhealthy';
-  } else if (pr173Checks.overall_status === 'degraded' && overallStatus === 'healthy') {
+  } else if ((pr173Checks.overall_status === 'degraded' || resilienceStatus.overall_status === 'degraded') && overallStatus === 'healthy') {
     overallStatus = 'degraded';
   }
   
@@ -204,6 +210,107 @@ async function performPR173HealthChecks() {
     };
   }
 
+  return {
+    overall_status: overallStatus,
+    checks,
+    timestamp: new Date().toISOString()
+  };
+}
+
+/**
+ * Get resilience system status including circuit breakers and error monitoring
+ */
+function getResilienceSystemStatus() {
+  const checks: { [key: string]: unknown } = {};
+  let overallStatus = 'healthy';
+  
+  try {
+    // Get circuit breaker registry
+    const circuitBreakerRegistry = CircuitBreakerRegistry.getInstance();
+    const circuitBreakerMetrics = circuitBreakerRegistry.getAllMetrics();
+    
+    // Check circuit breaker status
+    let openCircuitBreakers = 0;
+    let degradedCircuitBreakers = 0;
+    const circuitBreakerStatuses: { [key: string]: unknown } = {};
+    
+    for (const [name, metrics] of Object.entries(circuitBreakerMetrics)) {
+      circuitBreakerStatuses[name] = {
+        state: metrics.state,
+        totalCalls: metrics.totalCalls,
+        successRate: metrics.totalCalls > 0 
+          ? ((metrics.successfulCalls / metrics.totalCalls) * 100).toFixed(2) + '%'
+          : '100%',
+        averageResponseTime: Math.round(metrics.averageResponseTime) + 'ms',
+        lastStateChange: metrics.lastStateChange
+      };
+      
+      if (metrics.state === 'OPEN') {
+        openCircuitBreakers++;
+      } else if (metrics.state === 'HALF_OPEN') {
+        degradedCircuitBreakers++;
+      }
+    }
+    
+    checks.circuit_breakers = {
+      status: openCircuitBreakers > 0 ? 'degraded' : 'healthy',
+      total: Object.keys(circuitBreakerMetrics).length,
+      open: openCircuitBreakers,
+      half_open: degradedCircuitBreakers,
+      closed: Object.keys(circuitBreakerMetrics).length - openCircuitBreakers - degradedCircuitBreakers,
+      details: circuitBreakerStatuses
+    };
+    
+    if (openCircuitBreakers > 0 && overallStatus === 'healthy') {
+      overallStatus = 'degraded';
+    }
+    
+    // Get global error handler statistics
+    const errorHandler = GlobalErrorHandler.getInstance();
+    const errorStats = errorHandler.getStatistics();
+    
+    // Calculate recent error rate (errors in last 10)
+    const recentErrors = errorStats.recentErrors;
+    const criticalErrorsRecent = recentErrors.filter(e => e.severity === 'CRITICAL' || e.severity === 'HIGH').length;
+    
+    checks.error_monitoring = {
+      status: criticalErrorsRecent > 5 ? 'degraded' : 'healthy',
+      total_errors: errorStats.totalErrors,
+      recent_errors: recentErrors.length,
+      critical_recent: criticalErrorsRecent,
+      error_categories: errorStats.errorsByCategory,
+      error_severities: errorStats.errorsBySeverity,
+      retryable_errors: errorStats.retryableErrors,
+      transient_errors: errorStats.transientErrors
+    };
+    
+    if (criticalErrorsRecent > 5 && overallStatus === 'healthy') {
+      overallStatus = 'degraded';
+    }
+    if (criticalErrorsRecent > 10) {
+      overallStatus = 'unhealthy';
+    }
+    
+    // System resilience configuration status
+    checks.resilience_config = {
+      status: 'healthy',
+      circuit_breaker_registry: 'active',
+      global_error_handler: 'active',
+      retry_mechanisms: 'enabled',
+      timeout_protection: 'enabled',
+      correlation_tracking: 'enabled'
+    };
+    
+  } catch (error) {
+    componentLogger.error('Resilience system health check failed', { error });
+    overallStatus = 'unhealthy';
+    
+    checks.general_error = {
+      status: 'unhealthy',
+      error: error instanceof Error ? error.message : 'Resilience system check failed'
+    };
+  }
+  
   return {
     overall_status: overallStatus,
     checks,
