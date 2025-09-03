@@ -27,6 +27,10 @@ interface User {
   id: string;
   tickers: Array<{ symbol: string; [key: string]: unknown }>;
   email?: string;
+  subscriptionTier?: string;
+  lastCronProcessed?: Date | null;
+  processingBudget?: number;
+  budgetUsed?: number;
   [key: string]: unknown;
 }
 
@@ -34,6 +38,21 @@ interface EligibleUser {
   tier: string;
   userId: string;
   [key: string]: unknown;
+}
+
+// Full user data retrieved from database
+interface DatabaseUser {
+  id: string;
+  email: string | null;
+  subscriptionTier: string;
+  lastCronProcessed: Date | null;
+  processingBudget: number | null;
+  budgetUsed: number | null;
+  tickers: Array<{
+    id: string;
+    symbol: string;
+    companyName: string | null;
+  }>;
 }
 
 interface ProcessUserResult {
@@ -120,12 +139,18 @@ function timingSafeEqual(a: string, b: string): boolean {
  * Runs every 5 minutes continuously since SEC filings can be published 24/7
  */
 export async function GET(request: NextRequest) {
+  // DEBUG: Start logging immediately
+  cronLogger.debug('Checkpoint 0: GET function entry');
+  
   // Initialize monitoring with platform detection using factory pattern
   const platform = process.env.RAILWAY_ENVIRONMENT ? 'RAILWAY_CRON' : 'VERCEL_CRON';
+  cronLogger.debug('Checkpoint 0.1: Platform determined', { platform });
   let monitor: CronJobMonitor;
   
   try {
+    cronLogger.debug('Checkpoint 0.2: About to create CronJobMonitor');
     monitor = await CronJobMonitor.create('tier-aware-sec-monitor', platform);
+    cronLogger.debug('Checkpoint 0.3: CronJobMonitor created successfully');
   } catch (initError) {
     cronLogger.error('Failed to initialize cron job monitor', { error: initError });
     return NextResponse.json({
@@ -136,6 +161,9 @@ export async function GET(request: NextRequest) {
   
   try {
     cronLogger.info('Starting tier-aware SEC filing cron job');
+    
+    // DEBUG: Add comprehensive logging to isolate error location
+    cronLogger.debug('Checkpoint 1: Route function started');
 
     // Enhanced security validation
     const clientIp = request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || 'unknown';
@@ -185,7 +213,9 @@ export async function GET(request: NextRequest) {
     });
 
     // Get market context and user processing statuses
+    cronLogger.debug('Checkpoint 2: Starting market context retrieval');
     const marketContext = getMarketHoursContext();
+    cronLogger.debug('Checkpoint 3: Market context retrieved successfully');
     cronLogger.info(`Processing during ${marketContext.isMarketHours ? 'market' : 'off'} hours`, {
       isMarketDay: marketContext.isMarketDay,
       isHoliday: marketContext.isHoliday
@@ -200,6 +230,7 @@ export async function GET(request: NextRequest) {
     });
 
     // Get all users with subscription tiers and last processing times
+    cronLogger.debug('Checkpoint 4: Starting user query');
     const allUsers = await prisma.user.findMany({
       where: {
         tickers: {
@@ -221,21 +252,28 @@ export async function GET(request: NextRequest) {
           }
         }
       }
-    });
+    }) as DatabaseUser[];
+    cronLogger.debug('Checkpoint 5: User query completed', { userCount: allUsers.length });
 
-    // Get processing statuses with eligibility
+    // Get processing statuses with eligibility (with null safety)
+    cronLogger.debug('Checkpoint 6: Starting getUserProcessingStatuses');
     const userStatuses = getUserProcessingStatuses(
-      allUsers.map(u => ({
-        id: u.id,
-        subscriptionTier: u.subscriptionTier,
-        lastProcessedAt: u.lastCronProcessed,
-        budgetUsed: u.budgetUsed || 0
-      })),
+      allUsers
+        .filter(u => u && u.id && u.subscriptionTier) // Filter out invalid users
+        .map(u => ({
+          id: u.id,
+          subscriptionTier: u.subscriptionTier as 'FREE' | 'PROFESSIONAL' | 'ENTERPRISE' | 'INSTITUTION', // Type assertion for Prisma enum compatibility
+          lastProcessedAt: u.lastCronProcessed,
+          budgetUsed: u.budgetUsed || 0
+        })),
       marketContext
     );
+    cronLogger.debug('Checkpoint 7: getUserProcessingStatuses completed', { statusCount: userStatuses.length });
 
     // PHASE 1: Core SEC Filing Monitoring (always runs - filings can be published 24/7)
+    cronLogger.debug('Checkpoint 8: Starting SEC filing monitoring');
     await runSecFilingMonitoring(monitor);
+    cronLogger.debug('Checkpoint 9: SEC filing monitoring completed');
     
     // PHASE 2: Tier-aware user processing
     const eligibleUsers = getEligibleUsers(userStatuses, {
@@ -289,7 +327,7 @@ export async function GET(request: NextRequest) {
  */
 async function processEligibleUsers(
   eligibleUsers: EligibleUser[], 
-  allUsers: EligibleUser[], 
+  allUsers: DatabaseUser[], 
   monitor: CronJobMonitor
 ) {
   const results = {
@@ -352,7 +390,7 @@ async function processTierBatch(
   tier: string,
   userStatuses: EligibleUser[],
   batchSize: number,
-  allUsers: EligibleUser[],
+  allUsers: DatabaseUser[],
   monitor: CronJobMonitor
 ): Promise<TierStatus> {
   const results = {
@@ -381,15 +419,45 @@ async function processTierBatch(
     
     const chunkPromises = (chunk || []).map(async (userStatus) => {
       try {
-        // Find full user data
-        const fullUser = allUsers.find(u => u.id === userStatus.userId);
-        if (!fullUser) {
-          cronLogger.warn(`User ${userStatus.userId} not found in full user data`);
-          return { success: false, error: 'User not found' };
+        // Validate userStatus object structure
+        if (!userStatus || !userStatus.userId) {
+          cronLogger.error('Invalid userStatus object', { userStatus });
+          return { success: false, error: 'Invalid userStatus object', userId: 'unknown' };
         }
 
+        // Find full user data with null safety
+        const fullUser = (allUsers || []).find(u => u && u.id === userStatus.userId);
+        if (!fullUser) {
+          cronLogger.warn(`User ${userStatus.userId} not found in full user data`, {
+            userId: userStatus.userId,
+            availableUserIds: (allUsers || []).map(u => u?.id).filter(Boolean)
+          });
+          return { success: false, error: 'User not found', userId: userStatus.userId };
+        }
+
+        // Validate user data structure before processing
+        if (!fullUser.tickers || !Array.isArray(fullUser.tickers)) {
+          cronLogger.error(`User ${userStatus.userId} has invalid tickers data`, {
+            userId: userStatus.userId,
+            tickersType: typeof fullUser.tickers,
+            tickersValue: fullUser.tickers
+          });
+          return { success: false, error: 'Invalid user tickers data', userId: userStatus.userId };
+        }
+
+        // Convert DatabaseUser to User interface for processing
+        const userForProcessing: User = {
+          id: fullUser.id,
+          email: fullUser.email || undefined,
+          tickers: fullUser.tickers || [],
+          subscriptionTier: fullUser.subscriptionTier,
+          lastCronProcessed: fullUser.lastCronProcessed,
+          processingBudget: fullUser.processingBudget || 0,
+          budgetUsed: fullUser.budgetUsed || 0
+        };
+
         // Process user's SEC filings
-        const userResult = await processUserTierFilings(fullUser, tier);
+        const userResult = await processUserTierFilings(userForProcessing, tier);
         
         // Comprehensive cost validation (security: prevent budget manipulation)
         const costValidation = validateCostUpdate(userResult.cost, tier, {
@@ -427,16 +495,26 @@ async function processTierBatch(
         
         const validatedCost = costValidation.sanitizedCost;
         
-        // Get current user budget first
-        const currentUser = await prisma.user.findUnique({
-          where: { id: userStatus.userId },
-          select: { 
-            budgetUsed: true, 
-            subscriptionTier: true
-          }
-        });
+        // Get current user budget first with proper error handling
+        let currentUser;
+        try {
+          currentUser = await prisma.user.findUnique({
+            where: { id: userStatus.userId },
+            select: { 
+              budgetUsed: true, 
+              subscriptionTier: true
+            }
+          });
+        } catch (dbError) {
+          cronLogger.error(`Database error fetching user ${userStatus.userId}`, {
+            error: dbError instanceof Error ? dbError.message : 'Unknown database error',
+            userId: userStatus.userId
+          });
+          throw new Error(`Database error: Unable to fetch user ${userStatus.userId}`);
+        }
         
         if (!currentUser) {
+          cronLogger.error(`User ${userStatus.userId} not found in database during budget check`);
           throw new Error(`User ${userStatus.userId} not found`);
         }
         
@@ -476,13 +554,13 @@ async function processTierBatch(
         return {
           success: true,
           userId: userStatus.userId,
-          filingsProcessed: userResult.filingsProcessed,
+          filingsProcessed: userResult?.filingsProcessed || 0,
           cost: validatedCost,
-          budgetUpdate: {
-            previousBudget: updateResult.previousBudget,
-            newBudget: updateResult.newBudget,
+          budgetUpdate: updateResult ? {
+            previousBudget: updateResult.previousBudget || 0,
+            newBudget: updateResult.newBudget || 0,
             costAdded: validatedCost
-          }
+          } : undefined
         };
 
       } catch (error) {
@@ -525,7 +603,7 @@ async function processTierBatch(
         
         return { 
           success: false, 
-          userId: userStatus.userId, 
+          userId: userStatus?.userId || 'unknown', 
           error: errorMessage,
           errorType 
         };
@@ -538,36 +616,46 @@ async function processTierBatch(
   // Wait for all processing to complete
   const processingResults = await Promise.allSettled(processingPromises);
   
-  // Aggregate results
-  for (const result of processingResults) {
-    if (result.status === 'fulfilled' && result.value.success) {
-      results.processed++;
-      results.filings += result.value.filingsProcessed || 0;
-      results.cost += result.value.cost || 0;
-    } else {
-      results.errors++;
-      
-      // Track error breakdown
-      if (result.status === 'fulfilled' && result.value.errorType) {
-        switch (result.value.errorType) {
-          case 'CONCURRENCY_CONFLICT':
-            results.errorBreakdown.concurrencyConflicts++;
-            break;
-          case 'BUDGET_EXCEEDED':
-            results.errorBreakdown.budgetExceeded++;
-            break;
-          case 'COST_VALIDATION_FAILED':
-            results.errorBreakdown.costValidationFailed++;
-            break;
-          case 'TIER_MISMATCH':
-            results.errorBreakdown.tierMismatch++;
-            break;
-          default:
-            results.errorBreakdown.unknownErrors++;
-        }
+  // Aggregate results with comprehensive null safety
+  for (const result of processingResults || []) {
+    try {
+      if (result && result.status === 'fulfilled' && result.value && result.value.success) {
+        results.processed++;
+        results.filings += result.value.filingsProcessed || 0;
+        results.cost += result.value.cost || 0;
       } else {
-        results.errorBreakdown.unknownErrors++;
+        results.errors++;
+        
+        // Track error breakdown with null safety
+        if (result && result.status === 'fulfilled' && result.value && result.value.errorType) {
+          switch (result.value.errorType) {
+            case 'CONCURRENCY_CONFLICT':
+              results.errorBreakdown.concurrencyConflicts++;
+              break;
+            case 'BUDGET_EXCEEDED':
+              results.errorBreakdown.budgetExceeded++;
+              break;
+            case 'COST_VALIDATION_FAILED':
+              results.errorBreakdown.costValidationFailed++;
+              break;
+            case 'TIER_MISMATCH':
+              results.errorBreakdown.tierMismatch++;
+              break;
+            default:
+              results.errorBreakdown.unknownErrors++;
+          }
+        } else {
+          results.errorBreakdown.unknownErrors++;
+        }
       }
+    } catch (aggregationError) {
+      cronLogger.error('Error during result aggregation', {
+        error: aggregationError instanceof Error ? aggregationError.message : 'Unknown aggregation error',
+        resultStatus: result?.status,
+        resultValue: result?.status === 'fulfilled' ? result.value : undefined
+      });
+      results.errors++;
+      results.errorBreakdown.unknownErrors++;
     }
   }
 
@@ -585,34 +673,68 @@ async function processUserTierFilings(user: User, tier: string) {
 
   // PRODUCTION IMPLEMENTATION: Process actual SEC filings for user
   try {
-    // First validate all user tickers have valid CIKs
-    const tickerValidations = await validateUserTickers(user.id, user.tickers);
-    const validTickers = tickerValidations.filter(t => t.valid);
+    // Validate user object structure
+    if (!user || !user.id || !user.tickers) {
+      cronLogger.error('Invalid user object passed to processUserTierFilings', {
+        userId: user?.id || 'unknown',
+        hasId: !!user?.id,
+        hasTickers: !!user?.tickers,
+        tickersType: typeof user?.tickers
+      });
+      return result;
+    }
+
+    // First validate all user tickers have valid CIKs with null safety
+    let tickerValidations;
+    try {
+      tickerValidations = await validateUserTickers(user.id, user.tickers || []);
+    } catch (validationError) {
+      cronLogger.error(`Failed to validate tickers for user ${user.id}`, {
+        error: validationError instanceof Error ? validationError.message : 'Unknown validation error',
+        userId: user.id,
+        tickerCount: user.tickers?.length || 0
+      });
+      return result;
+    }
+    const validTickers = (tickerValidations || []).filter(t => t && t.valid);
     
     if (validTickers.length === 0) {
       cronLogger.warn(`No valid tickers found for user ${user.id}`, {
         userId: user.id,
-        totalTickers: user.tickers.length,
-        invalidTickers: tickerValidations.filter(t => !t.valid).map(t => t.symbol)
+        totalTickers: user.tickers?.length || 0,
+        invalidTickers: (tickerValidations || []).filter(t => t && !t.valid).map(t => t.symbol).filter(Boolean)
       });
       return result;
     }
     
-    if (validTickers.length < user.tickers.length) {
+    if (validTickers.length < (user.tickers?.length || 0)) {
       cronLogger.warn(`Some tickers invalid for user ${user.id}`, {
         userId: user.id,
         validCount: validTickers.length,
-        totalCount: user.tickers.length,
-        invalidTickers: tickerValidations.filter(t => !t.valid).map(t => t.symbol)
+        totalCount: user.tickers?.length || 0,
+        invalidTickers: (tickerValidations || []).filter(t => t && !t.valid).map(t => t.symbol).filter(Boolean)
       });
     }
 
-    for (const tickerValidation of validTickers) {
+    for (const tickerValidation of validTickers || []) {
       try {
-        // Find the original ticker object
-        const originalTicker = user.tickers.find(t => t.symbol === tickerValidation.symbol);
+        // Validate ticker validation object
+        if (!tickerValidation || !tickerValidation.symbol) {
+          cronLogger.warn('Invalid ticker validation object encountered', {
+            userId: user.id,
+            tickerValidation
+          });
+          continue;
+        }
+
+        // Find the original ticker object with null safety
+        const originalTicker = (user.tickers || []).find(t => t && t.symbol === tickerValidation.symbol);
         if (!originalTicker) {
-          cronLogger.warn(`Original ticker not found for ${tickerValidation.symbol}`);
+          cronLogger.warn(`Original ticker not found for ${tickerValidation.symbol}`, {
+            userId: user.id,
+            searchedSymbol: tickerValidation.symbol,
+            availableSymbols: (user.tickers || []).map(t => t?.symbol).filter(Boolean)
+          });
           continue;
         }
 
@@ -626,38 +748,72 @@ async function processUserTierFilings(user: User, tier: string) {
         
         let newFilings;
         try {
+          // Validate CIK exists before processing
+          if (!tickerValidation.cik) {
+            cronLogger.warn(`No CIK available for ${tickerValidation.symbol}, skipping`, {
+              userId: user.id,
+              ticker: tickerValidation.symbol
+            });
+            continue;
+          }
+
           newFilings = await getUnprocessedFilingsForTicker(tickerValidation.symbol, user.id);
+          
+          // Ensure we got a valid array response
+          if (!Array.isArray(newFilings)) {
+            cronLogger.error(`Invalid response from getUnprocessedFilingsForTicker for ${tickerValidation.symbol}`, {
+              userId: user.id,
+              ticker: tickerValidation.symbol,
+              responseType: typeof newFilings,
+              response: newFilings
+            });
+            continue;
+          }
+          
         } catch (filingFetchError) {
           cronLogger.error(`Failed to get unprocessed filings for ${tickerValidation.symbol}`, {
             error: filingFetchError instanceof Error ? filingFetchError.message : 'Unknown error',
             userId: user.id,
-            ticker: tickerValidation.symbol
+            ticker: tickerValidation.symbol,
+            errorStack: filingFetchError instanceof Error ? filingFetchError.stack : undefined
           });
           continue; // Skip this ticker and continue with next one
         }
         
         cronLogger.info(`Phase 2: Found ${newFilings.length} unprocessed filings for ${tickerValidation.symbol}`, {
           userId: user.id,
-          filingsFound: newFilings.map(f => ({
-            accession: f.accessionNumber,
-            type: f.filingType,
-            date: f.filingDate
-          }))
+          filingsFound: (newFilings || []).map(f => ({
+            accession: f?.accessionNumber || 'unknown',
+            type: f?.filingType || 'unknown',
+            date: f?.filingDate || 'unknown'
+          })).filter(f => f.accession !== 'unknown')
         });
         
-        for (const filing of newFilings) {
+        for (const filing of newFilings || []) {
           try {
+            // Validate filing object structure
+            if (!filing || !filing.id || !filing.accessionNumber) {
+              cronLogger.warn('Invalid filing object encountered', {
+                userId: user.id,
+                ticker: tickerValidation.symbol,
+                filing: filing,
+                hasId: !!filing?.id,
+                hasAccessionNumber: !!filing?.accessionNumber
+              });
+              continue;
+            }
+
             // Create a unique filing ID for transaction tracking
             const filingForProcessing = {
               id: filing.id, // Use database ID for transaction
               accessionNumber: filing.accessionNumber,
-              formType: filing.formType || 'Unknown',
+              formType: filing.formType || filing.filingType || 'Unknown',
               filingDate: filing.filingDate || new Date(),
-              filingUrl: filing.filingUrl, // ✅ ADD THIS LINE
+              filingUrl: filing.filingUrl, 
               tickerData: {
                 symbol: tickerValidation.symbol,
-                cik: tickerValidation.cik!,
-                companyName: tickerValidation.companyName || user.tickers[0]?.companyName || 'Unknown'
+                cik: tickerValidation.cik,
+                companyName: tickerValidation.companyName || originalTicker?.companyName || 'Unknown Company'
               }
             };
 

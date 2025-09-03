@@ -59,22 +59,23 @@ jest.mock('../../lib/db/async-audit', () => ({
   createAsyncAuditLog: jest.fn().mockResolvedValue(undefined)
 }));
 
-// Mock Prisma Client to prevent real database connections
-jest.mock('@prisma/client', () => ({
-  PrismaClient: jest.fn().mockImplementation(() => ({
-    user: {
-      findMany: jest.fn().mockResolvedValue([]),
-      findUnique: jest.fn().mockResolvedValue(null),
-      updateMany: jest.fn().mockResolvedValue({ count: 0 })
-    },
-    auditLog: {
-      create: jest.fn().mockResolvedValue({})
-    },
-    $connect: jest.fn().mockResolvedValue(undefined),
-    $disconnect: jest.fn().mockResolvedValue(undefined),
-    $transaction: jest.fn().mockImplementation((callback: Function) => callback({}))
-  }))
-}));
+// Simplify Prisma Client mock to avoid conflicts
+// Comment out the complex PrismaClient mock that might be causing issues
+// jest.mock('@prisma/client', () => ({
+//   PrismaClient: jest.fn().mockImplementation(() => ({
+//     user: {
+//       findMany: jest.fn().mockResolvedValue([]),
+//       findUnique: jest.fn().mockResolvedValue(null),
+//       updateMany: jest.fn().mockResolvedValue({ count: 0 })
+//     },
+//     auditLog: {
+//       create: jest.fn().mockResolvedValue({})
+//     },
+//     $connect: jest.fn().mockResolvedValue(undefined),
+//     $disconnect: jest.fn().mockResolvedValue(undefined),
+//     $transaction: jest.fn().mockImplementation((callback: Function) => callback({}))
+//   }))
+// }));
 
 const mockPrisma = {
   user: {
@@ -227,7 +228,7 @@ describe('Comprehensive Cron Integration Tests', () => {
         tier: 'FREE',
         lastProcessedAt: null,
         eligibility: {
-          canProcess: true,
+          isEligible: true,
           nextEligibleTime: null,
           frequency: 120,
           reason: 'Test user'
@@ -242,7 +243,12 @@ describe('Comprehensive Cron Integration Tests', () => {
       }
     ];
     mockMarketHours.getUserProcessingStatuses.mockReturnValue(mockUserProcessingStatuses);
-    mockMarketHours.getEligibleUsers.mockReturnValue(mockUserProcessingStatuses);
+    mockMarketHours.getEligibleUsers.mockReturnValue([
+      {
+        tier: 'FREE',
+        userId: 'user1'
+      }
+    ]);
 
     // Setup default ticker monitoring with more comprehensive responses
     mockTickerMonitoring.getActiveTickersForMonitoring.mockResolvedValue([
@@ -595,7 +601,14 @@ describe('Comprehensive Cron Integration Tests', () => {
         });
 
         mockMarketHours.getUserProcessingStatuses.mockReturnValue([
-          { userId: 'user-1', tier: 'PROFESSIONAL', eligible: true, lastProcessedAt: null, budgetUsed: 0 }
+          { 
+            userId: 'user-1', 
+            tier: 'PROFESSIONAL', 
+            lastProcessedAt: null,
+            eligibility: { isEligible: true, nextEligibleTime: null, frequency: 30 },
+            priority: 2,
+            budgetStatus: { monthlyBudget: 10.0, budgetUsed: 0, budgetRemaining: 10.0, budgetUtilization: 0 }
+          }
         ]);
 
         mockMarketHours.getEligibleUsers.mockReturnValue([
@@ -628,7 +641,14 @@ describe('Comprehensive Cron Integration Tests', () => {
         });
 
         mockMarketHours.getUserProcessingStatuses.mockReturnValue([
-          { userId: 'user-1', tier: 'PROFESSIONAL', eligible: false, lastProcessedAt: new Date(), budgetUsed: 0 }
+          { 
+            userId: 'user-1', 
+            tier: 'PROFESSIONAL', 
+            lastProcessedAt: new Date(),
+            eligibility: { isEligible: false, nextEligibleTime: new Date(), frequency: 120 },
+            priority: 2,
+            budgetStatus: { monthlyBudget: 10.0, budgetUsed: 0, budgetRemaining: 10.0, budgetUtilization: 0 }
+          }
         ]);
 
         mockMarketHours.getEligibleUsers.mockReturnValue([]);
@@ -804,8 +824,22 @@ describe('Comprehensive Cron Integration Tests', () => {
         mockPrisma.user.findMany.mockResolvedValue(mockUsers);
         
         mockMarketHours.getUserProcessingStatuses.mockReturnValue([
-          { userId: 'user-1', tier: 'INSTITUTION', eligible: true, lastProcessedAt: null, budgetUsed: 0 },
-          { userId: 'user-2', tier: 'FREE', eligible: true, lastProcessedAt: null, budgetUsed: 0 }
+          { 
+            userId: 'user-1', 
+            tier: 'INSTITUTION', 
+            lastProcessedAt: null,
+            eligibility: { isEligible: true, nextEligibleTime: null, frequency: 5 },
+            priority: 4,
+            budgetStatus: { monthlyBudget: 100.0, budgetUsed: 0, budgetRemaining: 100.0, budgetUtilization: 0 }
+          },
+          { 
+            userId: 'user-2', 
+            tier: 'FREE', 
+            lastProcessedAt: null,
+            eligibility: { isEligible: true, nextEligibleTime: null, frequency: 120 },
+            priority: 1,
+            budgetStatus: { monthlyBudget: 2.0, budgetUsed: 0, budgetRemaining: 2.0, budgetUtilization: 0 }
+          }
         ]);
 
         mockMarketHours.getEligibleUsers.mockReturnValue([
