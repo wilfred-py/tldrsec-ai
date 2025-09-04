@@ -102,7 +102,6 @@ const DAILY_COST_LIMITS = {
 
 // Security constants - reserved for future cost validation
 // const MAX_COST_PER_OPERATION = 10.0; // Maximum cost allowed per operation
-const ALLOWED_IPS = process.env.CRON_ALLOWED_IPS?.split(',') || [];
 
 /**
  * Timing-safe string comparison to prevent timing attacks
@@ -176,9 +175,10 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Rate limit exceeded' }, { status: 429 });
     }
     
-    // IP allowlist check (if configured)
-    if (ALLOWED_IPS.length > 0 && !ALLOWED_IPS.includes(clientIp)) {
-      cronLogger.warn('IP not allowed for cron request', { clientIp });
+    // IP allowlist check (if configured) - read dynamically to support testing
+    const allowedIPs = process.env.CRON_ALLOWED_IPS?.split(',') || [];
+    if (allowedIPs.length > 0 && !allowedIPs.includes(clientIp)) {
+      cronLogger.warn('IP not allowed for cron request', { clientIp, allowedIPs });
       await monitor.complete(CronJobStatus.FAILED, 'IP not allowed');
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
