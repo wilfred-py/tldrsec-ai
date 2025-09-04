@@ -5,16 +5,16 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Summary } from '@/lib/generated/prisma';
 import { Badge } from '@/components/ui/badge';
-import { ArrowDown, ArrowUp, Info, AlertTriangle, BarChart, Briefcase, Calendar, DollarSign, FileText, TrendingUp, Search, Copy, Download, Check, ChevronDown, ChevronRight, X, ShieldAlert } from 'lucide-react';
+import { ArrowDown, ArrowUp, Info, AlertTriangle, BarChart, Briefcase, Calendar, DollarSign, FileText, TrendingUp, Search, Copy, Download, Check, X, ShieldAlert } from 'lucide-react';
 import { format } from 'date-fns';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { coldarkDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
-import { atomDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import { JSONTree } from 'react-json-tree';
 import CopyToClipboard from 'react-copy-to-clipboard';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
+import { SummaryErrorState } from './summary-error-state';
 
 // Extend the Summary type to include redacted properties
 interface RedactedSummary {
@@ -37,33 +37,69 @@ interface SummaryContentProps {
       symbol: string;
       companyName: string;
     }
-  }) | RedactedSummary;
+  }) | RedactedSummary | {
+    id: string;
+    filingType: string;
+    filingDate: Date;
+    ticker: {
+      symbol: string;
+      companyName: string;
+    };
+    summaryText: string;
+    summaryJSON: string | Record<string, unknown> | null;
+    processingStatus?: string;
+    processingError?: string;
+    processingErrorCode?: string;
+  };
 }
 
 export function SummaryContent({ summary }: SummaryContentProps) {
   const [activeTab, setActiveTab] = useState('formatted');
   const [searchQuery, setSearchQuery] = useState('');
   const [copied, setCopied] = useState(false);
-  const [expandedNodes, setExpandedNodes] = useState<string[]>([]);
   const rawTextRef = useRef<HTMLDivElement>(null);
   const jsonRef = useRef<HTMLDivElement>(null);
 
   // Check if the summary is redacted due to access restrictions
   if ('isRedacted' in summary && summary.isRedacted) {
     return (
-      <div className="bg-gray-50 p-6 rounded-lg border border-gray-200">
+      <div className="bg-gray-50 p-6 rounded-lg border border-gray-200" role="alert" aria-labelledby="access-restricted-heading">
         <div className="flex items-center space-x-2 mb-4">
-          <ShieldAlert className="h-5 w-5 text-red-500" />
-          <h2 className="text-lg font-semibold">Access Restricted</h2>
+          <ShieldAlert className="h-5 w-5 text-red-500" aria-label="Access restriction indicator" />
+          <h2 id="access-restricted-heading" className="text-lg font-semibold">Access Restricted</h2>
         </div>
         <p className="mb-4 text-gray-700">{summary.summaryText}</p>
         <p className="text-sm text-gray-500">{summary.accessDeniedReason}</p>
         <div className="mt-4">
           <Link href="/dashboard/settings">
-            <Button>Add to Watchlist</Button>
+            <Button 
+              className="focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+              aria-label="Add this company to your watchlist to gain access"
+            >
+              Add to Watchlist
+            </Button>
           </Link>
         </div>
       </div>
+    );
+  }
+  
+  // Check if the summary generation failed
+  if ('processingStatus' in summary && summary.processingStatus === 'FAILED' || 
+      ('processingError' in summary && summary.processingError) ||
+      summary.summaryText === '' || summary.summaryText.length < 10) {
+    return (
+      <SummaryErrorState
+        error={summary.processingError || 'Summary generation failed'}
+        filingType={summary.filingType}
+        companyName={summary.ticker.companyName}
+        ticker={summary.ticker.symbol}
+        onRetry={() => {
+          // TODO: Implement retry logic
+          window.location.reload();
+        }}
+        retryDisabled={false}
+      />
     );
   }
   
@@ -96,21 +132,6 @@ export function SummaryContent({ summary }: SummaryContentProps) {
     URL.revokeObjectURL(url);
   };
 
-  // Highlighted search in text
-  const highlightSearchText = (text: string) => {
-    if (!searchQuery || searchQuery.trim() === '') return text;
-    
-    const parts = text.split(new RegExp(`(${searchQuery})`, 'gi'));
-    return (
-      <>
-        {parts.map((part, i) => 
-          part.toLowerCase() === searchQuery.toLowerCase() ? 
-            <span key={i} className="bg-yellow-200 text-black font-medium">{part}</span> : 
-            part
-        )}
-      </>
-    );
-  };
 
   // JSON search handler
   const handleSearchInJson = () => {
@@ -197,19 +218,19 @@ export function SummaryContent({ summary }: SummaryContentProps) {
 
   // Update this section only:
   // Fix the ref type issue in the SyntaxHighlighter
-  const customSyntaxHighlighterRef = (el: any) => {
+  const customSyntaxHighlighterRef = (el: HTMLElement | null) => {
     if (rawTextRef.current && el) {
-      // @ts-ignore - We're just using this ref to get access to the DOM node
+      // @ts-expect-error - We're just using this ref to get access to the DOM node
       rawTextRef.current = el;
     }
   };
 
   return (
     <Tabs defaultValue="formatted" onValueChange={setActiveTab}>
-      <TabsList className="mb-4">
-        <TabsTrigger value="formatted">Formatted</TabsTrigger>
-        <TabsTrigger value="raw">Raw Text</TabsTrigger>
-        {parsedSummary && <TabsTrigger value="json">JSON</TabsTrigger>}
+      <TabsList className="mb-4" aria-label="Summary display format options">
+        <TabsTrigger value="formatted" aria-label="View formatted summary">Formatted</TabsTrigger>
+        <TabsTrigger value="raw" aria-label="View raw text content">Raw Text</TabsTrigger>
+        {parsedSummary && <TabsTrigger value="json" aria-label="View JSON structure">JSON</TabsTrigger>}
       </TabsList>
 
       <TabsContent value="formatted">
@@ -240,13 +261,20 @@ export function SummaryContent({ summary }: SummaryContentProps) {
                     onChange={(e) => setSearchQuery(e.target.value)}
                     onKeyDown={handleSearchKeyDown}
                     className="pr-8"
+                    aria-label="Search in raw text content"
+                    aria-describedby="search-instructions"
                   />
+                  <div id="search-instructions" className="sr-only">
+                    Press Enter to search, or use the search button
+                  </div>
                   {searchQuery && (
                     <button 
-                      className="absolute right-2 top-1/2 transform -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                      className="absolute right-2 top-1/2 transform -translate-y-1/2 text-muted-foreground hover:text-foreground focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 rounded"
                       onClick={clearSearch}
+                      aria-label="Clear search query"
+                      type="button"
                     >
-                      <X className="h-4 w-4" />
+                      <X className="h-4 w-4" aria-hidden="true" />
                     </button>
                   )}
                 </div>
@@ -254,12 +282,21 @@ export function SummaryContent({ summary }: SummaryContentProps) {
                   variant="outline" 
                   size="icon" 
                   onClick={handleSearchInRaw}
-                  disabled={!searchQuery}>
-                  <Search className="h-4 w-4" />
+                  disabled={!searchQuery}
+                  aria-label="Search in raw text"
+                >
+                  <Search className="h-4 w-4" aria-hidden="true" />
                 </Button>
                 <CopyToClipboard text={summary.summaryText} onCopy={handleCopy}>
-                  <Button variant="outline" size="icon">
-                    {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                  <Button 
+                    variant="outline" 
+                    size="icon"
+                    aria-label={copied ? "Text copied to clipboard" : "Copy raw text to clipboard"}
+                  >
+                    {copied ? 
+                      <Check className="h-4 w-4" aria-hidden="true" /> : 
+                      <Copy className="h-4 w-4" aria-hidden="true" />
+                    }
                   </Button>
                 </CopyToClipboard>
                 <Button 
@@ -269,8 +306,10 @@ export function SummaryContent({ summary }: SummaryContentProps) {
                     summary.summaryText, 
                     `${summary.ticker.symbol}_${summary.filingType}_raw.txt`, 
                     'text/plain'
-                  )}>
-                  <Download className="h-4 w-4" />
+                  )}
+                  aria-label="Download raw text as file"
+                >
+                  <Download className="h-4 w-4" aria-hidden="true" />
                 </Button>
               </div>
             </div>
@@ -312,13 +351,20 @@ export function SummaryContent({ summary }: SummaryContentProps) {
                       onChange={(e) => setSearchQuery(e.target.value)}
                       onKeyDown={handleSearchKeyDown}
                       className="pr-8"
+                      aria-label="Search in JSON structure"
+                      aria-describedby="json-search-instructions"
                     />
+                    <div id="json-search-instructions" className="sr-only">
+                      Press Enter to search, or use the search button
+                    </div>
                     {searchQuery && (
                       <button 
-                        className="absolute right-2 top-1/2 transform -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                        className="absolute right-2 top-1/2 transform -translate-y-1/2 text-muted-foreground hover:text-foreground focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 rounded"
                         onClick={clearSearch}
+                        aria-label="Clear search query"
+                        type="button"
                       >
-                        <X className="h-4 w-4" />
+                        <X className="h-4 w-4" aria-hidden="true" />
                       </button>
                     )}
                   </div>
@@ -326,12 +372,21 @@ export function SummaryContent({ summary }: SummaryContentProps) {
                     variant="outline" 
                     size="icon" 
                     onClick={handleSearchInJson}
-                    disabled={!searchQuery}>
-                    <Search className="h-4 w-4" />
+                    disabled={!searchQuery}
+                    aria-label="Search in JSON structure"
+                  >
+                    <Search className="h-4 w-4" aria-hidden="true" />
                   </Button>
                   <CopyToClipboard text={JSON.stringify(parsedSummary, null, 2)} onCopy={handleCopy}>
-                    <Button variant="outline" size="icon">
-                      {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                    <Button 
+                      variant="outline" 
+                      size="icon"
+                      aria-label={copied ? "JSON copied to clipboard" : "Copy JSON to clipboard"}
+                    >
+                      {copied ? 
+                        <Check className="h-4 w-4" aria-hidden="true" /> : 
+                        <Copy className="h-4 w-4" aria-hidden="true" />
+                      }
                     </Button>
                   </CopyToClipboard>
                   <Button 
@@ -341,8 +396,10 @@ export function SummaryContent({ summary }: SummaryContentProps) {
                       JSON.stringify(parsedSummary, null, 2), 
                       `${summary.ticker.symbol}_${summary.filingType}.json`, 
                       'application/json'
-                    )}>
-                    <Download className="h-4 w-4" />
+                    )}
+                    aria-label="Download JSON as file"
+                  >
+                    <Download className="h-4 w-4" aria-hidden="true" />
                   </Button>
                 </div>
               </div>
@@ -369,7 +426,7 @@ export function SummaryContent({ summary }: SummaryContentProps) {
 }
 
 interface FormattedSummaryProps {
-  summaryData: any;
+  summaryData: Record<string, unknown>;
   filingType: string;
   summaryText: string;
   ticker: {
@@ -445,7 +502,7 @@ function FinancialReportSummary({ summaryData, filingType, ticker, filingDate }:
               </div>
               
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                {financials.map((item: any, index: number) => (
+                {financials.map((item: { label: string; value: string | number }, index: number) => (
                   <div key={index} className="bg-muted/50 p-4 rounded-lg">
                     <div className="text-sm text-muted-foreground mb-1">{item.label}</div>
                     <div className="text-xl font-bold">{item.value}</div>
@@ -524,7 +581,6 @@ function FinancialReportSummary({ summaryData, filingType, ticker, filingDate }:
 
 // Specialized component for 8-K reports
 function CurrentReportSummary({ summaryData, ticker, filingDate }: Omit<FormattedSummaryProps, 'filingType' | 'summaryText'>) {
-  const reportDate = summaryData.reportDate || format(new Date(filingDate), 'PPP');
   const eventType = summaryData.eventType || 'Material Event';
   
   return (

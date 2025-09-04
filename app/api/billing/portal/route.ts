@@ -3,7 +3,7 @@
  * Addresses UX issue: missing billing portal integration
  */
 
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { stripe } from '../../../../lib/stripe';
 import { 
   getUserSubscription 
@@ -18,7 +18,7 @@ import {
  * POST /api/billing/portal
  * Create Stripe billing portal session
  */
-export async function POST(_request: NextRequest) {
+export async function POST() {
   try {
     const userId = await getAuthenticatedUserId();
     await verifyUserExists(userId);

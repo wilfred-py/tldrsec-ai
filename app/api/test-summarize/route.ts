@@ -45,7 +45,7 @@ interface TestSummarizeResponse {
   error?: string;
   parsedContent?: {
     sections: Record<string, string>;
-    metadata: Record<string, any>;
+    metadata: Record<string, unknown>;
   };
   prompt?: string;
   tokenEstimates?: {
@@ -55,7 +55,7 @@ interface TestSummarizeResponse {
     estimatedCost: number;
   };
   summary?: {
-    text: string | Record<string, any>;
+    text: string | Record<string, unknown>;
     inputTokens: number;
     outputTokens: number;
     cost: number;
@@ -101,7 +101,7 @@ function isDirectoryListing(content: string): boolean {
     });
     
     return hasDirectoryTable || (links.length > 5 && directoryLinkCount > links.length * 0.7);
-  } catch (error) {
+  } catch (_error) {
     return false; // If we can't parse the HTML, assume it's not a directory listing
   }
 }
@@ -468,7 +468,7 @@ async function findOrCreateTestTicker(symbol: string, companyName?: string): Pro
           email: 'test@tldrsec.com'
         }
       });
-    } catch (error) {
+    } catch (_error) {
       apiLogger.debug('Test user not found, creating one');
     }
 
@@ -536,7 +536,7 @@ function generateSimplifiedPrompt(filingType: FilingType, content: string, compa
   }
   
   // Base prompt with context
-  let prompt = `You are an expert financial analyst tasked with summarizing a ${filingTypeDisplay} SEC filing.
+  const prompt = `You are an expert financial analyst tasked with summarizing a ${filingTypeDisplay} SEC filing.
 ${contextStr}
 Please analyze the following filing content and extract the most important information:
 
@@ -646,7 +646,7 @@ async function checkCache(filingUrl: string): Promise<any | null> {
  * @param data Complete response data to cache
  * @returns The saved summary ID or existing ID if already cached
  */
-async function saveToCache(filingUrl: string, data: any): Promise<string | null> {
+async function saveToCache(filingUrl: string, data: unknown): Promise<string | null> {
   try {
     // Check if summary already exists (idempotency check)
     const existingSummary = await prisma.summary.findFirst({
@@ -736,7 +736,8 @@ export async function POST(request: NextRequest) {
   try {
     // Parse request body
     const requestData: TestSummarizeRequest = await request.json();
-    const { filingUrl, filingType, companyName, ticker, dryRun = false, saveToDatabase = false } = requestData;
+    const { filingUrl, filingType, companyName, ticker, dryRun = false } = requestData;
+    // saveToDatabase parameter removed - handled automatically by cache layer
     
     if (!filingUrl) {
       return NextResponse.json(
@@ -970,7 +971,7 @@ export async function POST(request: NextRequest) {
         if (processMode === 'chunked') {
           // Process content in chunks
           const contentChunks = chunkContent(content);
-          const chunkSummaries: any[] = [];
+          const chunkSummaries: unknown[] = [];
           let totalInputTokens = 0;
           let totalOutputTokens = 0;
           
@@ -1022,7 +1023,7 @@ export async function POST(request: NextRequest) {
               } else {
                 chunkSummaries.push({ chunkSummary: chunkText });
               }
-            } catch (jsonError) {
+            } catch (_jsonError) {
               chunkSummaries.push({ chunkSummary: chunkText });
             }
           }
@@ -1048,7 +1049,9 @@ export async function POST(request: NextRequest) {
           };
           
           // Add chunksProcessed as additional metadata
-          (response.summary as any).chunksProcessed = contentChunks.length;
+          if (response.summary && typeof response.summary === 'object') {
+            (response.summary as Record<string, unknown>).chunksProcessed = contentChunks.length;
+          }
           
           // Database saving is now handled by the cache layer
           
@@ -1070,15 +1073,15 @@ export async function POST(request: NextRequest) {
           const responseText = claudeResponse.content[0]?.type === 'text' ? claudeResponse.content[0].text : '';
           
           // Try to parse the response as JSON
-          let summaryText: string | Record<string, any> = responseText;
+          let summaryText: string | Record<string, unknown> = responseText;
           try {
             // Check if the response is valid JSON
             if (responseText.trim().startsWith('{') && responseText.trim().endsWith('}')) {
               summaryText = JSON.parse(responseText);
             }
-          } catch (jsonError) {
+          } catch (_jsonError) {
             // If parsing fails, use the raw text
-            apiLogger.warn(`Failed to parse Claude response as JSON: ${jsonError instanceof Error ? jsonError.message : String(jsonError)}`);
+            apiLogger.warn(`Failed to parse Claude response as JSON`);
           }
           
           // Calculate cost

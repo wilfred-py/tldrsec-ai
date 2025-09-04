@@ -79,8 +79,12 @@ export default async function SummaryPage({ params }: SummaryPageProps) {
               <div className="flex flex-col space-y-2">
                 <div className="flex items-center space-x-2">
                   <Link href="/dashboard">
-                    <Button variant="ghost" size="icon">
-                      <ArrowLeft className="h-4 w-4" />
+                    <Button 
+                      variant="ghost" 
+                      size="icon"
+                      aria-label="Back to dashboard"
+                    >
+                      <ArrowLeft className="h-4 w-4" aria-hidden="true" />
                       <span className="sr-only">Back to dashboard</span>
                     </Button>
                   </Link>
@@ -97,7 +101,8 @@ export default async function SummaryPage({ params }: SummaryPageProps) {
                     href={summary.filingUrl}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-blue-600 hover:underline text-sm"
+                    className="text-blue-600 hover:underline text-sm focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 rounded"
+                    aria-label="View original SEC filing document (opens in new tab)"
                   >
                     View Original Filing
                   </a>
@@ -141,28 +146,37 @@ export default async function SummaryPage({ params }: SummaryPageProps) {
                 
                 <div className="flex items-center space-x-2 mb-6">
                   <Link href="/dashboard/summaries">
-                    <Button variant="ghost" size="icon">
-                      <ArrowLeft className="h-4 w-4" />
+                    <Button 
+                      variant="ghost" 
+                      size="icon"
+                      aria-label="Back to summaries list"
+                    >
+                      <ArrowLeft className="h-4 w-4" aria-hidden="true" />
                       <span className="sr-only">Back to summaries</span>
                     </Button>
                   </Link>
                   <h1 className="text-2xl font-bold">Summary Access Denied</h1>
                 </div>
                 
-                <Alert variant="destructive" className="mb-6">
-                  <AlertCircle className="h-4 w-4" />
+                <Alert variant="destructive" className="mb-6" role="alert">
+                  <AlertCircle className="h-4 w-4" aria-label="Access denied indicator" />
                   <AlertTitle>Access Denied</AlertTitle>
                   <AlertDescription>
-                    You don't have permission to view this summary. To view summaries for a company, you must add its ticker to your watchlist.
+                    You don&apos;t have permission to view this summary. To view summaries for a company, you must add its ticker to your watchlist.
                   </AlertDescription>
                 </Alert>
                 
                 <div className="bg-white rounded-lg shadow p-6">
                   <div className="text-center">
                     <h2 className="text-xl font-semibold mb-4">Want to see this summary?</h2>
-                    <p className="mb-6">Add this company's ticker to your watchlist to gain access to all of its summaries.</p>
+                    <p className="mb-6">Add this company&apos;s ticker to your watchlist to gain access to all of its summaries.</p>
                     <Link href="/dashboard/settings">
-                      <Button>Go to Watchlist Settings</Button>
+                      <Button 
+                        className="focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                        aria-label="Go to watchlist settings to add this company"
+                      >
+                        Go to Watchlist Settings
+                      </Button>
                     </Link>
                   </div>
                 </div>

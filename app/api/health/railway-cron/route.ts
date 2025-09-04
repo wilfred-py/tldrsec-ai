@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { logger } from '../../../../lib/logging';
 import { getPrismaClient } from '../../../../lib/db/prisma';
 
@@ -10,7 +10,7 @@ const prisma = getPrismaClient();
  * Specifically validates all components needed for the cron email pipeline
  * GET /api/health/railway-cron
  */
-export async function GET(request: NextRequest) {
+export async function GET() {
   const startTime = Date.now();
   
   try {
@@ -55,7 +55,7 @@ export async function GET(request: NextRequest) {
  * Perform comprehensive health checks for Railway cron pipeline
  */
 async function performRailwayCronHealthChecks() {
-  const checks: { [key: string]: any } = {};
+  const checks: { [key: string]: unknown } = {};
 
   // 1. Environment Variables Check
   try {
@@ -598,7 +598,7 @@ async function analyzeCronJobHistory() {
 /**
  * Determine overall health status from individual checks
  */
-function determineOverallStatus(checks: { [key: string]: any }): 'healthy' | 'degraded' | 'unhealthy' {
+function determineOverallStatus(checks: { [key: string]: unknown }): 'healthy' | 'degraded' | 'unhealthy' {
   let hasUnhealthy = false;
   let hasDegraded = false;
 

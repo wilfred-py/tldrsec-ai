@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { currentUser } from '@clerk/nextjs/server';
 import filingService from '@/services/filingService';
 import { logger } from '@/lib/logging';
-import { resendClient } from '@/lib/email/resend-client';
+// resendClient imported but not used - reserved for future email functionality
+// import { resendClient } from '@/lib/email/resend-client';
 
 /**
  * API endpoint to request the latest filing summaries via email

@@ -453,3 +453,114 @@ export async function sendEmailSummary(
     };
   }
 }
+
+/**
+ * Send email notification when summary generation fails
+ */
+export async function sendSummaryFailureNotification(
+  userEmail: string,
+  companyName: string,
+  ticker: string,
+  filingType: string,
+  error: string
+): Promise<{ success: boolean; messageId?: string; error?: string }> {
+  try {
+    const displayName = `${companyName} (${ticker})`;
+    
+    // Create HTML content for error notification
+    const htmlContent = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+        <div style="background-color: #fef2f2; border-left: 4px solid #ef4444; padding: 16px; margin-bottom: 20px;">
+          <div style="display: flex; align-items: center; margin-bottom: 12px;">
+            <div style="width: 20px; height: 20px; color: #ef4444; margin-right: 8px;">⚠️</div>
+            <h3 style="margin: 0; color: #991b1b; font-size: 16px;">Summary Generation Failed</h3>
+          </div>
+          
+          <p style="color: #991b1b; margin: 8px 0; font-size: 14px;">
+            We encountered an issue generating the AI summary for the <strong>${filingType}</strong> filing from <strong>${displayName}</strong>.
+          </p>
+          
+          <p style="color: #7f1d1d; margin: 8px 0; font-size: 12px;">
+            Our team has been automatically notified and is working to resolve the issue. 
+            You can view the original filing or try again later through your dashboard.
+          </p>
+          
+          <div style="background-color: #fee2e2; padding: 8px; border-radius: 4px; margin-top: 12px;">
+            <p style="color: #7f1d1d; margin: 0; font-size: 11px; font-family: monospace;">
+              Technical details: ${error}
+            </p>
+          </div>
+        </div>
+        
+        <div style="background-color: #f0f9ff; border: 1px solid #bfdbfe; padding: 16px; border-radius: 8px;">
+          <p style="color: #1e40af; margin: 0; font-size: 12px;">
+            <strong>💡 What you can do:</strong> You can still access the original SEC filing document for complete details. 
+            Summary generation typically resolves within 15-30 minutes, after which you can try accessing the summary again from your dashboard.
+          </p>
+        </div>
+        
+        <div style="text-align: center; margin-top: 24px; padding-top: 16px; border-top: 1px solid #e5e7eb;">
+          <a href="https://tldrsec.app/dashboard" 
+             style="background-color: #2563eb; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-size: 14px;">
+            Visit Dashboard
+          </a>
+        </div>
+        
+        <div style="text-align: center; margin-top: 16px;">
+          <p style="color: #6b7280; font-size: 12px; margin: 0;">
+            Need help? Contact us at 
+            <a href="mailto:support@tldrsec.app" style="color: #2563eb;">support@tldrsec.app</a>
+          </p>
+        </div>
+      </div>
+    `;
+
+    // Create plain text version
+    const textContent = `
+Summary Generation Failed
+
+We encountered an issue generating the AI summary for the ${filingType} filing from ${displayName}.
+
+Our team has been automatically notified and is working to resolve the issue. You can view the original filing or try again later through your dashboard.
+
+Technical details: ${error}
+
+What you can do:
+You can still access the original SEC filing document for complete details. Summary generation typically resolves within 15-30 minutes, after which you can try accessing the summary again from your dashboard.
+
+Visit your dashboard: https://tldrsec.app/dashboard
+
+Need help? Contact us at support@tldrsec.app
+    `;
+
+    // Send the email notification
+    const emailResult = await emailClient.sendEmail({
+      to: userEmail,
+      subject: `Summary Generation Issue - ${displayName} ${filingType}`,
+      html: htmlContent,
+      text: textContent,
+      tags: ['type_notification', 'content_error', 'priority_low']
+    });
+
+    if (emailResult.success) {
+      console.log(`[INFO] Summary failure notification sent to ${userEmail} for ${ticker} ${filingType}`);
+      return {
+        success: true,
+        messageId: emailResult.messageId
+      };
+    } else {
+      console.error(`[ERROR] Failed to send summary failure notification: ${emailResult.error}`);
+      return {
+        success: false,
+        error: emailResult.error
+      };
+    }
+
+  } catch (error) {
+    console.error(`[ERROR] Error sending summary failure notification: ${error instanceof Error ? error.message : String(error)}`);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to send notification'
+    };
+  }
+}

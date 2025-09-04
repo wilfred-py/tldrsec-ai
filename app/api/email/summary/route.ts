@@ -1,8 +1,9 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { prisma } from '@/lib/db/prisma';
 import { PrismaClient } from '@prisma/client';
-import { sendEmail, EmailSendResult } from '@/lib/email';
+import { sendEmail } from '@/lib/email';
+// EmailSendResult imported but not used
 
 /**
  * Helper function to create test data for a user
@@ -75,7 +76,7 @@ async function createTestDataForUser(userId: string, email: string) {
  * API endpoint to send an email summary of the latest filings for all tracked tickers
  * POST /api/email/summary
  */
-export async function POST(_req: NextRequest) {
+export async function POST() {
   try {
     // Verify authentication
     const authResult = await auth();
@@ -216,7 +217,7 @@ export async function POST(_req: NextRequest) {
     }
 
     // Prepare email content
-    const emailSubject = `Your SEC Filing Summaries - ${new Date().toLocaleDateString()}`;
+    // const emailSubject = `Your SEC Filing Summaries - ${new Date().toLocaleDateString()}`;
     
     // Create HTML content for email
     let emailHtml = `

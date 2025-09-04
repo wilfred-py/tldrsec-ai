@@ -9,9 +9,9 @@
  * - Feature flag status and configuration validation
  */
 
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { optimizedFilingService } from '../../../../services/filings/optimizedFilingService';
-import { DirectClaudeClient } from '../../../../lib/ai/directClaudeClient';
+// DirectClaudeClient import removed - not used in active code paths
 import { logger } from '../../../../lib/logging';
 import { prisma } from '../../../../lib/db';
 import { getClaudeModel } from '@/lib/ai';
@@ -111,7 +111,7 @@ interface HealthStatus {
   };
 }
 
-export async function GET(request: NextRequest) {
+export async function GET() {
   const startTime = Date.now();
   
   try {
@@ -178,17 +178,18 @@ export async function GET(request: NextRequest) {
     
     // Check Claude Client
     try {
-      const testClient = new DirectClaudeClient({
-        enableRateLimit: true,
-        maxRequestsPerMinute: 1 // Low rate for health check
-      });
+      // Test client instantiation - reserved for actual Claude API testing
+      // const testClient = new DirectClaudeClient({
+      //   enableRateLimit: true,
+      //   maxRequestsPerMinute: 1
+      // });
       
       health.services.claudeClient.rateLimitEnabled = true;
       health.services.claudeClient.model = getClaudeModel();
       health.services.claudeClient.status = 'healthy';
-    } catch (error) {
+    } catch (_error) {
       health.services.claudeClient.status = 'error';
-      health.services.claudeClient.error = error instanceof Error ? error.message : String(error);
+      health.services.claudeClient.error = _error instanceof Error ? _error.message : String(_error);
       health.status = 'degraded';
     }
     

@@ -30,13 +30,11 @@ export async function GET(request: NextRequest) {
     // SEC filings can be published 24/7, so always use tier-aware processing
     // Market context only affects processing frequencies, not whether to process
     
-    let targetEndpoint: string;
-    let jobType: string;
-    let routingReason: string;
-    
     // Always route to tier-aware processing
     // Market hours only affect processing frequency within tier-aware logic
-    targetEndpoint = 'tier-aware';
+    const targetEndpoint = 'tier-aware';
+    let jobType: string;
+    let routingReason: string;
     
     if (isMarketDay && isMarketHours) {
       jobType = 'TIER_AWARE_MARKET_HOURS';

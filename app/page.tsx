@@ -7,7 +7,7 @@ import { PricingSection } from '@/components/landing/pricing-section';
 import { CTASection } from '@/components/landing/cta-section';
 
 export async function generateMetadata(
-  _: any,
+  _: unknown,
   parent: ResolvingMetadata
 ): Promise<Metadata> {
   const previousMetadata = await parent;

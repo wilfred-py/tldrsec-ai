@@ -383,7 +383,7 @@ export default function UsageAnalyticsPage() {
           </CardHeader>
           <CardContent>
             <div className="space-y-2">
-              {analytics.dailyUsage.slice(-14).map((day, index) => (
+              {analytics.dailyUsage.slice(-14).map((day) => (
                 <div key={day.date} className="flex items-center justify-between text-sm">
                   <span className="w-20">
                     {format(new Date(day.date), 'MMM d')}

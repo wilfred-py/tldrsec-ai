@@ -8,14 +8,28 @@
 import { Anthropic } from '@anthropic-ai/sdk';
 import { logger } from '../../lib/logging';
 import { SummaryGenerationResult, SECFiling, Company } from './types';
-import { generateFallbackSummary } from './fallbackSummary';
 import { normalizeFormType } from './formTypeService';
-import { emailClient } from '../../lib/email/email-core';
+import { RetryWrapper, ErrorType } from '../../lib/resilience/retry-utility';
+import { CircuitBreakerRegistry, CIRCUIT_BREAKER_CONFIGS } from '../../lib/resilience/circuit-breaker';
+import { 
+  ExternalServiceError, 
+  TimeoutError, 
+  RateLimitError,
+  ErrorClassifier,
+  GlobalErrorHandler
+} from '../../lib/resilience/error-handling';
 
 // Initialize Anthropic client
 const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY || ''
 });
+
+// Initialize circuit breaker for Anthropic API
+const circuitBreakerRegistry = CircuitBreakerRegistry.getInstance();
+const anthropicCircuitBreaker = circuitBreakerRegistry.getCircuitBreaker(CIRCUIT_BREAKER_CONFIGS.ANTHROPIC_API);
+
+// Global error handler instance
+const errorHandler = GlobalErrorHandler.getInstance();
 
 // Claude model to use (updated to Sonnet 4 per organization standards)
 const CLAUDE_MODEL = 'claude-sonnet-4-20250514';
@@ -75,7 +89,7 @@ ${content.substring(0, 32000)}`;
 }
 
 /**
- * Generates an enhanced summary of a filing using Claude Sonnet 4
+ * Generates an enhanced summary of a filing using Claude Sonnet 4 with comprehensive retry and circuit breaker protection
  * @param content Document content to summarize
  * @param filing SEC filing information
  * @param company Company information
@@ -86,31 +100,99 @@ export async function generateEnhancedAISummary(
   filing: SECFiling, 
   company: Company
 ): Promise<SummaryGenerationResult> {
+  const correlationId = `ai_summary_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+  const context = {
+    correlationId,
+    operation: 'enhanced-ai-summary',
+    service: 'anthropic-api',
+    metadata: {
+      ticker: company.ticker,
+      formType: filing.formType,
+      contentLength: content.length
+    }
+  };
+
   try {
     if (!process.env.ANTHROPIC_API_KEY) {
-      throw new Error('ANTHROPIC_API_KEY not set');
+      const configError = new ExternalServiceError('ANTHROPIC_API_KEY not set', context, 'CONFIG_ERROR');
+      throw errorHandler.handleError(configError, context);
     }
     
     const formType = normalizeFormType(filing.formType || 'UNKNOWN');
     const prompt = generateEnhancedSummaryPrompt(content, filing, company);
     
-    logger.debug(`Generating enhanced AI summary for ${company.ticker || 'unknown'} ${formType} filing using ${CLAUDE_MODEL}`);
-    
-    // Call the Anthropic API with Claude Sonnet 4
-    const response = await anthropic.messages.create({
+    logger.info(`Starting enhanced AI summary generation`, {
+      correlationId,
+      ticker: company.ticker,
+      formType,
       model: CLAUDE_MODEL,
-      max_tokens: 4000,
-      temperature: 0.1, // Lower temperature for more consistent outputs
-      system: 'You are a financial expert specializing in SEC filing analysis. Provide accurate, comprehensive summaries in valid JSON format with detailed insights that would be valuable to investors.',
-      messages: [
-        { role: 'user', content: prompt }
-      ]
+      contentLength: content.length
+    });
+    
+    // Execute AI API call through circuit breaker and retry logic
+    const aiOperation = async () => {
+      return await anthropicCircuitBreaker.execute(async () => {
+        try {
+          const response = await anthropic.messages.create({
+            model: CLAUDE_MODEL,
+            max_tokens: 4000,
+            temperature: 0.1,
+            system: 'You are a financial expert specializing in SEC filing analysis. Provide accurate, comprehensive summaries in valid JSON format with detailed insights that would be valuable to investors.',
+            messages: [
+              { role: 'user', content: prompt }
+            ]
+          });
+          
+          return response;
+        } catch (error) {
+          // Transform Anthropic API errors into structured errors
+          const structuredError = transformAnthropicError(error, context);
+          throw structuredError;
+        }
+      });
+    };
+
+    // Execute with retry logic
+    const retryResult = await RetryWrapper.retryAIOperation(
+      aiOperation,
+      'enhanced-summary-generation',
+      {
+        correlationId,
+        retryCondition: (error) => {
+          const errorType = ErrorClassifier.classifyError(error);
+          return [ErrorType.TRANSIENT, ErrorType.TIMEOUT, ErrorType.RATE_LIMITED, ErrorType.NETWORK].includes(errorType as any);
+        },
+        onRetry: (attempt, error, delay) => {
+          logger.warn(`Retrying AI summary generation`, {
+            correlationId,
+            attempt,
+            error: error.message,
+            delay,
+            ticker: company.ticker
+          });
+        }
+      }
+    );
+
+    if (!retryResult.success || !retryResult.result) {
+      const error = retryResult.error || new Error('AI summary generation failed');
+      const structuredError = errorHandler.handleError(error, context);
+      throw structuredError;
+    }
+
+    const response = retryResult.result;
+    logger.info(`AI API call successful`, {
+      correlationId,
+      attempts: retryResult.attempts,
+      duration: retryResult.totalDuration,
+      inputTokens: response.usage.input_tokens,
+      outputTokens: response.usage.output_tokens
     });
     
     // Extract the response content
     const responseContent = response.content[0].text;
     
-    // Parse the JSON response
+    // Parse the JSON response with enhanced error handling
     let summaryJSON: Record<string, unknown>;
     try {
       // Extract JSON from the response (it might be wrapped in markdown code blocks)
@@ -123,8 +205,17 @@ export async function generateEnhancedAISummary(
         summaryJSON = JSON.parse(responseContent);
       }
     } catch (error) {
-      logger.error(`Error parsing enhanced AI summary JSON: ${error instanceof Error ? error.message : String(error)}`);
-      throw new Error('Failed to parse enhanced AI summary response');
+      const parseError = new ExternalServiceError(
+        'Failed to parse AI summary response JSON',
+        { ...context, responseContent: responseContent.substring(0, 500) },
+        'JSON_PARSE_ERROR'
+      );
+      logger.error(`JSON parsing failed`, {
+        correlationId,
+        error: error instanceof Error ? error.message : String(error),
+        responsePreview: responseContent.substring(0, 200)
+      });
+      throw errorHandler.handleError(parseError, context);
     }
     
     // Extract summary and key points
@@ -172,6 +263,16 @@ export async function generateEnhancedAISummary(
     const outputCost = (outputTokens / 1000000) * 15; // $15 per 1M output tokens
     const totalCost = inputCost + outputCost;
     
+    logger.info(`Enhanced AI summary generation completed successfully`, {
+      correlationId,
+      ticker: company.ticker,
+      formType,
+      tokensUsed: totalTokens,
+      cost: totalCost,
+      attempts: retryResult.attempts,
+      duration: retryResult.totalDuration
+    });
+
     return {
       summary,
       keyPoints,
@@ -179,201 +280,81 @@ export async function generateEnhancedAISummary(
       inputTokens,
       outputTokens,
       model: CLAUDE_MODEL,
-      cost: totalCost
+      cost: totalCost,
+      correlationId,
+      processingStatus: 'SUCCESS'
     };
   } catch (error) {
-    logger.error(`Error generating enhanced AI summary: ${error instanceof Error ? error.message : String(error)}`);
+    const structuredError = errorHandler.handleError(error instanceof Error ? error : new Error(String(error)), context);
     
-    // Generate a fallback summary
-    const fallbackSummary = generateFallbackSummary(filing, company, filing.formType || 'UNKNOWN');
+    logger.error(`Enhanced AI summary generation failed completely`, {
+      correlationId,
+      ticker: company.ticker,
+      error: structuredError.message,
+      category: structuredError.category,
+      severity: structuredError.severity
+    });
     
+    // Return structured error information instead of throwing - NO FALLBACK SUMMARIES
     return {
-      summary: fallbackSummary,
-      keyPoints: [
-        `This is a ${filing.formType || 'UNKNOWN'} filing for ${company.name || 'Unknown Company'}${company.ticker ? ` (${company.ticker})` : ''}.`,
-        'Enhanced AI-powered summary generation failed. This is a fallback summary.',
-        'Please review the original filing for complete details.'
-      ],
-      error: error instanceof Error ? error.message : String(error)
+      summary: '', // Empty summary indicates failure - no fallback
+      keyPoints: [],
+      error: `Enhanced AI summary generation failed: ${structuredError.message}`,
+      processingStatus: 'FAILED',
+      processingError: structuredError.message,
+      processingErrorCode: structuredError.code || structuredError.name,
+      correlationId,
+      errorCategory: structuredError.category,
+      isRetryable: structuredError.isRetryable
     };
   }
 }
 
 /**
- * Attempts to generate an enhanced AI summary with retries
+ * Legacy retry wrapper - now uses the new resilience utilities internally
  * @param content Document content to summarize
  * @param filing SEC filing information
  * @param company Company information
- * @param maxRetries Maximum number of retries
+ * @param maxRetries Maximum number of retries (ignored - uses intelligent retry logic)
  * @returns Summary generation result
  */
-/**
- * Sends an email notification to the admin when fallback generation is used
- * @param filing SEC filing information
- * @param company Company information
- * @param summaryId ID of the summary (if available)
- * @param attempts Number of attempts made
- * @param inputTokens Input tokens used (if available)
- * @param outputTokens Output tokens used (if available)
- * @param error Error that caused fallback generation
- * @returns Promise that resolves when email is sent
- */
-async function sendFallbackNotificationEmail(
-  filing: SECFiling,
-  company: Company,
-  summaryId?: string,
-  attempts: number = 0,
-  inputTokens?: number,
-  outputTokens?: number,
-  error?: Error | string
-): Promise<void> {
-  try {
-    // Check if admin email is configured
-    const adminEmail = process.env.ADMIN_EMAIL;
-    if (!adminEmail) {
-      logger.warn('No ADMIN_EMAIL configured. Skipping fallback notification.');
-      return;
-    }
-    
-    const companyName = company.name || 'Unknown Company';
-    const ticker = company.ticker || 'Unknown Ticker';
-    const formType = filing.formType || 'UNKNOWN';
-    const filingDate = filing.filingDate ? new Date(filing.filingDate).toLocaleDateString() : 'Unknown date';
-    const filingUrl = filing.filingUrl || filing.filingHtmlUrl || 'No URL available';
-    const creationDate = new Date().toISOString();
-    
-    // Create HTML content for the email
-    const htmlContent = `
-      <h2>⚠️ AI Summary Fallback Generation Alert</h2>
-      <p>The system had to use fallback generation for a filing summary.</p>
-      
-      <h3>Summary Information</h3>
-      <ul>
-        <li><strong>Summary ID:</strong> ${summaryId || 'Not available'}</li>
-        <li><strong>Company:</strong> ${companyName} (${ticker})</li>
-        <li><strong>Filing Type:</strong> ${formType}</li>
-        <li><strong>Filing Date:</strong> ${filingDate}</li>
-        <li><strong>Filing URL:</strong> <a href="${filingUrl}">${filingUrl}</a></li>
-        <li><strong>Creation Date:</strong> ${creationDate}</li>
-        <li><strong>Attempts:</strong> ${attempts}</li>
-      </ul>
-      
-      <h3>Token Usage</h3>
-      <ul>
-        <li><strong>Input Tokens:</strong> ${inputTokens !== undefined ? inputTokens.toLocaleString() : 'Not available'}</li>
-        <li><strong>Output Tokens:</strong> ${outputTokens !== undefined ? outputTokens.toLocaleString() : 'Not available'}</li>
-      </ul>
-      
-      <h3>Error Information</h3>
-      <pre>${error ? (error instanceof Error ? `${error.name}: ${error.message}\n${error.stack || ''}` : error) : 'No error details available'}</pre>
-    `;
-    
-    // Create plain text version
-    const textContent = `
-      AI Summary Fallback Generation Alert
-      
-      The system had to use fallback generation for a filing summary.
-      
-      Summary Information:
-      - Summary ID: ${summaryId || 'Not available'}
-      - Company: ${companyName} (${ticker})
-      - Filing Type: ${formType}
-      - Filing Date: ${filingDate}
-      - Filing URL: ${filingUrl}
-      - Creation Date: ${creationDate}
-      - Attempts: ${attempts}
-      
-      Token Usage:
-      - Input Tokens: ${inputTokens !== undefined ? inputTokens.toLocaleString() : 'Not available'}
-      - Output Tokens: ${outputTokens !== undefined ? outputTokens.toLocaleString() : 'Not available'}
-      
-      Error Information:
-      ${error ? (error instanceof Error ? `${error.name}: ${error.message}` : error) : 'No error details available'}
-    `;
-    
-    // Send the email
-    await emailClient.sendEmail({
-      to: adminEmail,
-      subject: `[ALERT] AI Summary Fallback Used - ${companyName} (${ticker}) - ${formType}`,
-      html: htmlContent,
-      text: textContent,
-      tags: ['type_alert', 'content_fallback_summary']
-    });
-    
-    logger.info('Fallback notification email sent to admin', { adminEmail });
-  } catch (emailError) {
-    // Don't let email errors propagate, just log them
-    logger.error('Failed to send fallback notification email', {
-      error: emailError instanceof Error ? emailError.message : String(emailError)
-    });
-  }
-}
-
 export async function generateEnhancedAISummaryWithRetry(
   content: string, 
   filing: SECFiling, 
   company: Company, 
   maxRetries: number = 2
 ): Promise<SummaryGenerationResult> {
-  let lastError: Error | null = null;
-  let attempts = 0;
-  let inputTokens: number | undefined;
-  let outputTokens: number | undefined;
+  // Delegate to the enhanced function which now includes retry logic
+  return generateEnhancedAISummary(content, filing, company);
+}
+
+/**
+ * Transform Anthropic API errors into structured errors
+ */
+function transformAnthropicError(error: any, context: any): Error {
+  const message = error?.message || error?.toString() || 'Unknown Anthropic API error';
   
-  for (let attempt = 0; attempt <= maxRetries; attempt++) {
-    attempts++;
-    try {
-      if (attempt > 0) {
-        logger.info(`Retry attempt ${attempt} for generating enhanced AI summary for ${company.ticker || 'unknown'} ${filing.formType || 'UNKNOWN'}`);
-      }
-      
-      const result = await generateEnhancedAISummary(content, filing, company);
-      
-      // If successful, store token usage for monitoring
-      if (result.inputTokens) inputTokens = result.inputTokens;
-      if (result.outputTokens) outputTokens = result.outputTokens;
-      
-      return result;
-    } catch (error) {
-      lastError = error instanceof Error ? error : new Error(String(error));
-      
-      // If this is the last attempt, don't wait
-      if (attempt < maxRetries) {
-        // Exponential backoff: 2^attempt * 1000ms (2s, 4s, 8s, etc.)
-        const backoffTime = Math.pow(2, attempt) * 1000;
-        logger.info(`Waiting ${backoffTime}ms before retry ${attempt + 1}`);
-        await new Promise(resolve => setTimeout(resolve, backoffTime));
-      }
-    }
+  // Check for specific Anthropic error types
+  if (error?.status === 401 || message.includes('authentication')) {
+    return new ExternalServiceError('Anthropic API authentication failed', context, 'AUTH_ERROR', false, false);
   }
   
-  // If all retries failed, generate a fallback summary
-  logger.error(`All ${maxRetries + 1} attempts to generate enhanced AI summary failed`);
+  if (error?.status === 429 || message.includes('rate limit')) {
+    return new RateLimitError('Anthropic API rate limit exceeded', context, 'RATE_LIMIT');
+  }
   
-  const fallbackSummary = generateFallbackSummary(filing, company, filing.formType || 'UNKNOWN');
+  if (error?.status >= 500 || message.includes('server error')) {
+    return new ExternalServiceError('Anthropic API server error', context, 'SERVER_ERROR', true, true);
+  }
   
-  const result = {
-    summary: fallbackSummary,
-    keyPoints: [
-      `This is a ${filing.formType || 'UNKNOWN'} filing for ${company.name || 'Unknown Company'}${company.ticker ? ` (${company.ticker})` : ''}.`,
-      'Enhanced AI-powered summary generation failed after multiple attempts. This is a fallback summary.',
-      'Please review the original filing for complete details.'
-    ],
-    error: lastError?.message || 'Unknown error during enhanced AI summary generation',
-    inputTokens,
-    outputTokens
-  };
+  if (error?.status === 400 || message.includes('bad request')) {
+    return new ExternalServiceError('Anthropic API bad request', context, 'BAD_REQUEST', false, false);
+  }
   
-  // Send notification email about fallback generation
-  await sendFallbackNotificationEmail(
-    filing,
-    company,
-    filing.id, // Use filing ID as summary ID if available
-    attempts,
-    inputTokens,
-    outputTokens,
-    lastError || undefined
-  );
+  if (message.includes('timeout') || error?.code === 'ECONNRESET') {
+    return new TimeoutError('Anthropic API timeout', context, 'TIMEOUT');
+  }
   
-  return result;
+  // Default to retryable external service error
+  return new ExternalServiceError(message, context, 'UNKNOWN_API_ERROR', true, true);
 }

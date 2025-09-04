@@ -7,7 +7,7 @@ import { logger } from '@/lib/logging';
  * GET /api/settings
  * Returns the current user's settings and account information
  */
-export async function GET(request: NextRequest) {
+export async function GET() {
   try {
     const { userId } = await auth();
     const user = await currentUser();

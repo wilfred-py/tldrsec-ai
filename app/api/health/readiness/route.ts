@@ -6,7 +6,7 @@ import { appRouterAsyncHandler } from '@/lib/error-handling';
  * Readiness probe for Kubernetes/container environments
  * GET /api/health/readiness
  */
-export const GET = appRouterAsyncHandler(async (_request: Request) => {
+export const GET = appRouterAsyncHandler(async () => {
   const startTime = Date.now();
   
   // For readiness, we check critical components

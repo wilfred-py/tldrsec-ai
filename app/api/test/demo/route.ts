@@ -1,10 +1,10 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 
 /**
  * Demo API endpoint that returns sample SEC filing data
  * This endpoint doesn't require any API keys and is useful for testing
  */
-export async function GET(request: NextRequest) {
+export async function GET() {
   try {
     // Return a mock response
     return NextResponse.json({

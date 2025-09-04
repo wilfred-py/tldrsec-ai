@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import filingService from '@/services/filingService';
 import { FilingType } from '@/lib/sec-edgar/types';
-import { getFormsByCategory, getHighImportanceForms } from '@/lib/sec-edgar/form-registry';
+import { getFormsByCategory } from '@/lib/sec-edgar/form-registry';
+// getHighImportanceForms import removed - not used
 
 /**
  * Test endpoint for demonstrating multi-form support
@@ -13,8 +14,8 @@ export async function GET(request: NextRequest) {
     const searchParams = request.nextUrl.searchParams;
     const ticker = searchParams.get('ticker') || 'AAPL';
     
-    // Get high importance forms
-    const highImportanceForms = getHighImportanceForms();
+    // Get high importance forms - reserved for future filtering
+    // const highImportanceForms = getHighImportanceForms();
     
     // Get forms by category for demonstration
     const financialReportForms = getFormsByCategory('annual').slice(0, 2);

@@ -70,7 +70,7 @@ function checkRateLimit(ip: string): boolean {
  * GET /api/health/database
  * Secured database health check endpoint with access controls
  */
-export async function GET(request: Request) {
+export async function GET() {
   const startTime = Date.now();
   
   // Get client IP address
