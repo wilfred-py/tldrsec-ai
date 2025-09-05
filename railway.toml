@@ -4,17 +4,17 @@ builder = "nixpacks"
 [deploy]
 startCommand = "npm start"
 healthcheckPath = "/api/health"
-healthcheckTimeout = 300
+healthcheckTimeout = 600
 restartPolicyType = "always"
 
 # Production environment configuration
 [environments.production]
 variables = {}
 
-# Resource allocation for production workloads
+# Resource allocation for production workloads - optimized for cron performance
 [resources]
-memory = "2GB"
-cpu = "2 vCPU"
+memory = "4GB"
+cpu = "4 vCPU"
 
 # Database migration and deployment hooks
 [hooks]

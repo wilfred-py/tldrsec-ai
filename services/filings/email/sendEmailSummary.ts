@@ -6,6 +6,7 @@ import { sendSummaryEmail } from './emailGenerator';
 import { logger } from '../../../lib/logging';
 import { monitoring } from '@/lib/monitoring';
 import { RateLimitError } from '../enhanced/rateLimiter';
+import { checkIfFilingProcessed } from '../utils/filingProcessingStatus';
 
 const emailSummaryLogger = logger.child('email-summary');
 
@@ -150,7 +151,24 @@ export async function sendEmailSummary(
           // Generate a summary for this filing
           emailSummaryLogger.debug('Generating summary', { ticker, formType });
           const summaryStartTime = Date.now();
-          const result = await getFilingSummary(ticker, formType);
+          
+          // Smart cache bypass: only bypass if this specific filing hasn't been processed yet
+          // This preserves cost-sharing between users while ensuring fresh filings get processed
+          const hasBeenProcessed = await checkIfFilingProcessed(ticker, formType, latestFiling.accessionNumber);
+          const shouldBypassCache = !hasBeenProcessed;
+          
+          emailSummaryLogger.debug('Cache bypass decision', { 
+            ticker, 
+            formType, 
+            accessionNumber: latestFiling.accessionNumber,
+            hasBeenProcessed,
+            shouldBypassCache
+          });
+          
+          const result = await getFilingSummary(ticker, formType, { 
+            bypassCache: shouldBypassCache, 
+            fromCron: false 
+          });
           const summaryDuration = Math.round((Date.now() - summaryStartTime) / 1000);
           
           if (result.data) {

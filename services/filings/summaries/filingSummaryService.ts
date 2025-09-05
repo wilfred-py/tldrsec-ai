@@ -14,11 +14,13 @@ import { getClaudeModel } from '../../../lib/ai/config';
  * 
  * @param ticker The company ticker symbol
  * @param formType The SEC form type
+ * @param options Options for summary generation
  * @returns Object containing the summary data or an error
  */
 export async function getFilingSummary(
   ticker: string, 
-  formType: FilingType
+  formType: FilingType,
+  options: { bypassCache?: boolean; fromCron?: boolean } = {}
 ): Promise<{ data: FilingSummaryResult | null, error?: string }> {
   // Feature flag for enhanced filing service (Unified Flow)
   const useEnhancedSummarization = process.env.ENABLE_ENHANCED_SUMMARIZATION === 'true';
@@ -67,7 +69,9 @@ export async function getFilingSummary(
     const normalizedFormType = normalizeFormType(formType);
     
     // Check if we already have a summary for this ticker and form type
-    const existingSummary = await findExistingSummary(ticker, normalizedFormType);
+    // Bypass cache if explicitly requested or when called from cron processing
+    const shouldBypassCache = options.bypassCache || options.fromCron || false;
+    const existingSummary = await findExistingSummary(ticker, normalizedFormType, shouldBypassCache);
     if (existingSummary) {
       console.log(`[DEBUG][FilingSummaryService] ✅ Found existing summary for ${ticker} - ${normalizedFormType}`);
       return { data: existingSummary };

@@ -54,7 +54,11 @@ async function testDirectSecEmailSending() {
       
       try {
         // Need to cast the form to FilingType to satisfy TypeScript
-        const result = await filingService.getFilingSummary(ticker, filing.form as FilingType);
+        // CRITICAL: Use bypassCache=true to force fresh API calls instead of returning cached summaries
+        const result = await filingService.getFilingSummary(ticker, filing.form as FilingType, { 
+          bypassCache: true,
+          fromCron: false // This is manual testing, not automated cron
+        });
         if (result.data) {
           console.log(`SUCCESS: Generated summary for ${filing.form}`);
           console.log(`Summary preview: ${result.data.summaryText.substring(0, 100)}...`);

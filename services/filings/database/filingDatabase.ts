@@ -7,10 +7,17 @@ import { FilingType } from '../../../types/sec/filing';
  * 
  * @param ticker The company ticker symbol
  * @param formType The SEC form type
+ * @param bypassCache If true, ignores cached summaries and forces fresh generation
  * @returns The existing summary or null if not found
  */
-export async function findExistingSummary(ticker: string, formType: string): Promise<FilingSummaryResult | null> {
+export async function findExistingSummary(ticker: string, formType: string, bypassCache: boolean = false): Promise<FilingSummaryResult | null> {
   try {
+    // Check if we should bypass cache for fresh summaries
+    if (bypassCache || process.env.FORCE_FRESH_SUMMARIES === 'true') {
+      console.log(`[DEBUG][FilingDatabase] 🚫 Bypassing cache for fresh summary: ${ticker} - ${formType} (bypassCache=${bypassCache}, FORCE_FRESH_SUMMARIES=${process.env.FORCE_FRESH_SUMMARIES})`);
+      return null; // Force fresh API call and summary generation
+    }
+
     // Find the ticker record
     const tickerRecord = await prisma.ticker.findFirst({
       where: {
