@@ -68,7 +68,7 @@ export async function sendWelcomeEmail(): Promise<{ success: boolean; error?: st
       };
     }
     
-    const data = await response.json();
+    await response.json();
     
     logger.info('Welcome email sent', {
       userId: dbUser.id

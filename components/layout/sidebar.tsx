@@ -161,7 +161,7 @@ function MobileSidebar({
   navItems,
   pathname,
 }: {
-  navItems: { name: string; href: string; icon: any }[];
+  navItems: { name: string; href: string; icon: React.ComponentType<{ className?: string }> }[];
   pathname: string;
 }) {
   const { user } = useUser();

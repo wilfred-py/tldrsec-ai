@@ -1,10 +1,8 @@
 "use client";
 
-import { useState } from "react";
-import { Button } from "@/components/ui/button";
 import { EmailSummaryButton } from "@/components/email-summary-button";
 import { Heading } from "@/components/ui/heading";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 /**
  * Header component for the logs page with email summary functionality

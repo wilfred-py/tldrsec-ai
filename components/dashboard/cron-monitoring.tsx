@@ -6,17 +6,14 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { 
-  Activity, 
   Clock, 
   DollarSign, 
-  FileText, 
   Mail, 
   TrendingUp, 
   AlertCircle, 
   CheckCircle,
   RefreshCw,
-  Users,
-  BarChart3
+  Users
 } from 'lucide-react';
 
 interface CronStatusData {

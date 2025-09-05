@@ -18,7 +18,6 @@ import {
   ArrowRight,
   ArrowLeft,
   X,
-  CheckCircle,
   ThumbsUp,
   ThumbsDown
 } from 'lucide-react';
@@ -31,13 +30,6 @@ interface TutorialGuideProps {
 }
 
 // Define the tutorial steps with selectors for highlighting elements
-interface TutorialStep {
-  title: string;
-  description: string;
-  selector: string; // CSS selector for the element to highlight
-  icon: React.ReactNode;
-  position?: 'top' | 'right' | 'bottom' | 'left' | 'center'; // Position of tooltip relative to highlighted element
-}
 
 export function TutorialGuide({ 
   active, 

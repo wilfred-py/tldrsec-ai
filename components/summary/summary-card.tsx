@@ -30,7 +30,7 @@ interface SummaryCardProps {
   variant?: 'default' | 'compact';
   showPreview?: boolean;
   previewLength?: number;
-  [key: string]: any; // Allow additional props like data-tutorial
+  [key: string]: unknown; // Allow additional props like data-tutorial
 }
 
 export function SummaryCard({
@@ -59,12 +59,12 @@ export function SummaryCard({
     }
   };
 
-  // Get the badge color based on filing type
-  const getBadgeVariant = (type: string) => {
+  // Get the badge variant based on filing type
+  const getBadgeVariant = (type: string): 'default' | 'secondary' | 'destructive' | 'outline' => {
     const upperType = type.toUpperCase();
-    if (upperType.includes('10-K') || upperType.includes('10K')) return 'blue';
-    if (upperType.includes('10-Q') || upperType.includes('10Q')) return 'green';
-    if (upperType.includes('8-K') || upperType.includes('8K')) return 'yellow';
+    if (upperType.includes('10-K') || upperType.includes('10K')) return 'default';
+    if (upperType.includes('10-Q') || upperType.includes('10Q')) return 'secondary';
+    if (upperType.includes('8-K') || upperType.includes('8K')) return 'outline';
     return 'secondary';
   };
   
@@ -98,7 +98,7 @@ export function SummaryCard({
               {summary.ticker.symbol}: {formatFilingType(summary.filingType)}
             </span>
           </div>
-          <Badge variant={getBadgeVariant(summary.filingType) as any}>
+          <Badge variant={getBadgeVariant(summary.filingType)}>
             {formatFilingType(summary.filingType)}
           </Badge>
         </div>
@@ -142,7 +142,7 @@ export function SummaryCard({
             </TooltipProvider>
           </div>
           
-          <Badge variant={getBadgeVariant(summary.filingType) as any}>
+          <Badge variant={getBadgeVariant(summary.filingType)}>
             {formatFilingType(summary.filingType)}
           </Badge>
         </div>

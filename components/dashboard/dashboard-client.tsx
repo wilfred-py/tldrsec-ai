@@ -1,11 +1,10 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { DashboardHeader } from "@/components/dashboard";
 import { CompanySearch } from "@/components/dashboard/company-search";
-import { Input } from "@/components/ui/input";
-import { SearchIcon, SettingsIcon, Trash2Icon, PlusIcon, ArrowUpDown, ChevronDown, ChevronUp, Mail as EnvelopeIcon } from "lucide-react";
+import { SettingsIcon, Trash2Icon, PlusIcon, ArrowUpDown, Mail as EnvelopeIcon } from "lucide-react";
 
 import {
   Table,
@@ -34,11 +33,9 @@ import {
   getSortedRowModel,
   SortingState,
   useReactTable,
-  FilterFn,
-  getFilteredRowModel
 } from "@tanstack/react-table";
-import { Company, TickerSearchResult } from "@/lib/api/types";
-import { getTrackedCompanies, searchCompanies, addTrackedCompany, deleteTrackedCompany, updateCompanyPreferences } from "@/lib/api/ticker-service";
+import { Company } from "@/lib/api/types";
+import { getTrackedCompanies, addTrackedCompany, deleteTrackedCompany, updateCompanyPreferences } from "@/lib/api/ticker-service";
 import { useAsync } from "@/lib/hooks/use-async";
 import { TutorialGuide } from "@/components/onboarding/tutorial-guide";
 
@@ -53,8 +50,6 @@ export function DashboardClient() {
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [isAddTickerOpen, setIsAddTickerOpen] = useState(false);
   const [isPreferencesOpen, setIsPreferencesOpen] = useState(false);
-  const [newTickerSearch, setNewTickerSearch] = useState("");
-  const [searchResults, setSearchResults] = useState<TickerSearchResult[]>([]);
 
   const [showTutorial, setShowTutorial] = useState(false);
   const [tutorialProgress, setTutorialProgress] = useState(0);
@@ -64,15 +59,12 @@ export function DashboardClient() {
   
   // Async hooks for API calls
   const { execute: executeGetCompanies, status: companiesStatus, error: companiesError } = useAsync(getTrackedCompanies);
-  const { execute: executeSearchTickers, status: searchStatus } = useAsync(searchCompanies);
-  const { execute: executeAddTicker, status: addStatus } = useAsync(addTrackedCompany);
+  const { execute: executeAddTicker } = useAsync(addTrackedCompany);
   const { execute: executeDeleteTicker, status: deleteStatus } = useAsync(deleteTrackedCompany);
   const { execute: executeUpdatePreferences, status: updateStatus } = useAsync(updateCompanyPreferences);
   const { execute: executeEmailRequest } = useAsync();
   
   const isLoadingCompanies = companiesStatus === 'pending';
-  const isSearchingTickers = searchStatus === 'pending';
-  const isAddingTicker = addStatus === 'pending';
   const isDeletingTicker = deleteStatus === 'pending';
   const isUpdatingPreferences = updateStatus === 'pending';
   
@@ -94,7 +86,7 @@ export function DashboardClient() {
     if (savedProgress) {
       setTutorialProgress(parseInt(savedProgress, 10));
     }
-  }, []);
+  }, [loadCompanies]);
   
   // Save tutorial progress when it changes
   useEffect(() => {
@@ -104,7 +96,7 @@ export function DashboardClient() {
   }, [tutorialProgress]);
   
   // Load tracked companies
-  const loadCompanies = async () => {
+  const loadCompanies = useCallback(async () => {
     try {
       const response = await executeGetCompanies(() => getTrackedCompanies());
       if (response && 'data' in response && Array.isArray(response.data)) {
@@ -116,7 +108,7 @@ export function DashboardClient() {
       console.error("Error loading companies:", error);
       toast.error("Failed to load tracked companies");
     }
-  };
+  }, [executeGetCompanies, setCompanies]);
   
 
 
@@ -234,7 +226,7 @@ export function DashboardClient() {
   };
   
   // Handle preference toggle changes
-  const handlePreferenceChange = (key: keyof Company['preferences'], value: any) => {
+  const handlePreferenceChange = (key: keyof Company['preferences'], value: boolean) => {
     if (!currentCompany) return;
     
     setCurrentCompany({

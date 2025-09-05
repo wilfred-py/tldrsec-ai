@@ -22,7 +22,7 @@ export function UnauthorizedView({ ticker, filingType, filingDate }: Unauthorize
         <ShieldAlert className="h-4 w-4" />
         <AlertTitle>Access Restricted</AlertTitle>
         <AlertDescription>
-          You don't have permission to view the full content of this {filingType} filing for {ticker.symbol}.
+          You don&apos;t have permission to view the full content of this {filingType} filing for {ticker.symbol}.
         </AlertDescription>
       </Alert>
       

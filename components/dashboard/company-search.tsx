@@ -11,7 +11,7 @@ interface CompanySearchProps {
   onCancel: () => void;
 }
 
-export function CompanySearch({ onSelect, onCancel }: CompanySearchProps) {
+export function CompanySearch({ onSelect }: CompanySearchProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [results, setResults] = useState<TickerSearchResult[]>([]);
   const [allCompanies, setAllCompanies] = useState<TickerSearchResult[]>([]);
