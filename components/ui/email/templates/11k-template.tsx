@@ -1,4 +1,4 @@
-import { FilingTemplateData } from '../../../../lib/email/types';
+import { FilingTemplateData } from &apos;../../../../lib/email/types&apos;;
 
 interface Form11KTemplateProps {
   filing: FilingTemplateData;
@@ -8,26 +8,26 @@ export default function Form11KEmailTemplate({ filing }: Form11KTemplateProps) {
   return (
     <div
       style={{
-        fontFamily: "Arial, sans-serif",
-        maxWidth: "600px",
-        margin: "0 auto",
-        backgroundColor: "#ffffff",
-        border: "1px solid #e5e7eb",
+        fontFamily: &quot;Arial, sans-serif&quot;,
+        maxWidth: &quot;600px&quot;,
+        margin: &quot;0 auto&quot;,
+        backgroundColor: &quot;#ffffff&quot;,
+        border: &quot;1px solid #e5e7eb&quot;,
       }}
     >
       {/* Header */}
       <div
         style={{
-          background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
-          color: "white",
-          padding: "24px",
-          textAlign: "center" as const,
-          borderRadius: "8px 8px 0 0",
-          boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.1)",
+          background: &quot;linear-gradient(135deg, #667eea 0%, #764ba2 100%)&quot;,
+          color: &quot;white&quot;,
+          padding: &quot;24px&quot;,
+          textAlign: &quot;center&quot; as const,
+          borderRadius: &quot;8px 8px 0 0&quot;,
+          boxShadow: &quot;0 4px 6px -1px rgba(0, 0, 0, 0.1)&quot;,
         }}
       >
-        <h1 style={{ margin: "0 0 8px 0", fontSize: "24px", fontWeight: "bold" }}>📊 Form 11-K Filed</h1>
-        <p style={{ margin: "0", fontSize: "16px", opacity: 0.9 }}>
+        <h1 style={{ margin: &quot;0 0 8px 0&quot;, fontSize: &quot;24px&quot;, fontWeight: &quot;bold&quot; }}>📊 Form 11-K Filed</h1>
+        <p style={{ margin: &quot;0&quot;, fontSize: &quot;16px&quot;, opacity: 0.9 }}>
           Annual Report of Employee Stock Purchase, Savings, and Similar Plans
         </p>
       </div>
@@ -35,33 +35,33 @@ export default function Form11KEmailTemplate({ filing }: Form11KTemplateProps) {
       {/* Company Info */}
       <div
         style={{
-          padding: "20px",
-          background: "linear-gradient(to right, #f8fafc, #f1f5f9)",
-          borderBottom: "1px solid #e2e8f0",
-          boxShadow: "inset 0 1px 3px rgba(0, 0, 0, 0.1)",
+          padding: &quot;20px&quot;,
+          background: &quot;linear-gradient(to right, #f8fafc, #f1f5f9)&quot;,
+          borderBottom: &quot;1px solid #e2e8f0&quot;,
+          boxShadow: &quot;inset 0 1px 3px rgba(0, 0, 0, 0.1)&quot;,
         }}
       >
-        <table style={{ width: "100%", borderCollapse: "collapse" as const }}>
+        <table style={{ width: &quot;100%&quot;, borderCollapse: &quot;collapse&quot; as const }}>
           <tbody>
             <tr>
-              <td style={{ padding: "4px 0", fontWeight: "bold", color: "#1f2937" }}>Company:</td>
-              <td style={{ padding: "4px 0", color: "#374151" }}>{filing.companyName}</td>
+              <td style={{ padding: &quot;4px 0&quot;, fontWeight: &quot;bold&quot;, color: &quot;#1f2937&quot; }}>Company:</td>
+              <td style={{ padding: &quot;4px 0&quot;, color: &quot;#374151&quot; }}>{filing.companyName}</td>
             </tr>
             <tr>
-              <td style={{ padding: "4px 0", fontWeight: "bold", color: "#1f2937" }}>Plan Name:</td>
-              <td style={{ padding: "4px 0", color: "#374151" }}>{filing.summaryData?.planName || 'N/A'}</td>
+              <td style={{ padding: &quot;4px 0&quot;, fontWeight: &quot;bold&quot;, color: &quot;#1f2937&quot; }}>Plan Name:</td>
+              <td style={{ padding: &quot;4px 0&quot;, color: &quot;#374151&quot; }}>{filing.summaryData?.planName || &apos;N/A&apos;}</td>
             </tr>
             <tr>
-              <td style={{ padding: "4px 0", fontWeight: "bold", color: "#1f2937" }}>Plan Year:</td>
-              <td style={{ padding: "4px 0", color: "#374151" }}>{filing.summaryData?.planYear || 'N/A'}</td>
+              <td style={{ padding: &quot;4px 0&quot;, fontWeight: &quot;bold&quot;, color: &quot;#1f2937&quot; }}>Plan Year:</td>
+              <td style={{ padding: &quot;4px 0&quot;, color: &quot;#374151&quot; }}>{filing.summaryData?.planYear || &apos;N/A&apos;}</td>
             </tr>
             <tr>
-              <td style={{ padding: "4px 0", fontWeight: "bold", color: "#1f2937" }}>Filing Date:</td>
-              <td style={{ padding: "4px 0", color: "#374151" }}>{new Date(filing.filingDate).toLocaleDateString()}</td>
+              <td style={{ padding: &quot;4px 0&quot;, fontWeight: &quot;bold&quot;, color: &quot;#1f2937&quot; }}>Filing Date:</td>
+              <td style={{ padding: &quot;4px 0&quot;, color: &quot;#374151&quot; }}>{new Date(filing.filingDate).toLocaleDateString()}</td>
             </tr>
             <tr>
-              <td style={{ padding: "4px 0", fontWeight: "bold", color: "#1f2937" }}>Total Participants:</td>
-              <td style={{ padding: "4px 0", color: "#374151" }}>{filing.summaryData?.totalParticipants?.toLocaleString() || 'N/A'}</td>
+              <td style={{ padding: &quot;4px 0&quot;, fontWeight: &quot;bold&quot;, color: &quot;#1f2937&quot; }}>Total Participants:</td>
+              <td style={{ padding: &quot;4px 0&quot;, color: &quot;#374151&quot; }}>{filing.summaryData?.totalParticipants?.toLocaleString() || &apos;N/A&apos;}</td>
             </tr>
           </tbody>
         </table>
@@ -70,20 +70,20 @@ export default function Form11KEmailTemplate({ filing }: Form11KTemplateProps) {
       {/* Plan Assets Summary */}
       <div
         style={{
-          padding: "20px",
-          background: "linear-gradient(135deg, #f9fafb 0%, #f3f4f6 100%)",
-          borderBottom: "1px solid #e5e7eb",
-          boxShadow: "0 2px 4px rgba(0, 0, 0, 0.05)",
+          padding: &quot;20px&quot;,
+          background: &quot;linear-gradient(135deg, #f9fafb 0%, #f3f4f6 100%)&quot;,
+          borderBottom: &quot;1px solid #e5e7eb&quot;,
+          boxShadow: &quot;0 2px 4px rgba(0, 0, 0, 0.05)&quot;,
         }}
       >
         <h3
           style={{
-            margin: "0 0 16px 0",
-            fontSize: "18px",
-            fontWeight: "bold",
-            color: "#000000",
-            borderBottom: "2px solid #667eea",
-            paddingBottom: "8px",
+            margin: &quot;0 0 16px 0&quot;,
+            fontSize: &quot;18px&quot;,
+            fontWeight: &quot;bold&quot;,
+            color: &quot;#000000&quot;,
+            borderBottom: &quot;2px solid #667eea&quot;,
+            paddingBottom: &quot;8px&quot;,
           }}
         >
           💰 Plan Assets Summary
@@ -91,56 +91,56 @@ export default function Form11KEmailTemplate({ filing }: Form11KTemplateProps) {
 
         <table
           style={{
-            width: "100%",
-            borderCollapse: "collapse" as const,
-            backgroundColor: "white",
-            borderRadius: "8px",
-            overflow: "hidden",
-            boxShadow: "0 1px 3px rgba(0, 0, 0, 0.1)",
+            width: &quot;100%&quot;,
+            borderCollapse: &quot;collapse&quot; as const,
+            backgroundColor: &quot;white&quot;,
+            borderRadius: &quot;8px&quot;,
+            overflow: &quot;hidden&quot;,
+            boxShadow: &quot;0 1px 3px rgba(0, 0, 0, 0.1)&quot;,
           }}
         >
           <thead>
-            <tr style={{ backgroundColor: "#f8fafc" }}>
+            <tr style={{ backgroundColor: &quot;#f8fafc&quot; }}>
               <th
                 style={{
-                  padding: "12px",
-                  textAlign: "left" as const,
-                  fontWeight: "bold",
-                  color: "#374151",
-                  borderBottom: "1px solid #e5e7eb",
+                  padding: &quot;12px&quot;,
+                  textAlign: &quot;left&quot; as const,
+                  fontWeight: &quot;bold&quot;,
+                  color: &quot;#374151&quot;,
+                  borderBottom: &quot;1px solid #e5e7eb&quot;,
                 }}
               >
                 Asset Category
               </th>
               <th
                 style={{
-                  padding: "12px",
-                  textAlign: "right" as const,
-                  fontWeight: "bold",
-                  color: "#374151",
-                  borderBottom: "1px solid #e5e7eb",
+                  padding: &quot;12px&quot;,
+                  textAlign: &quot;right&quot; as const,
+                  fontWeight: &quot;bold&quot;,
+                  color: &quot;#374151&quot;,
+                  borderBottom: &quot;1px solid #e5e7eb&quot;,
                 }}
               >
                 2023 Value
               </th>
               <th
                 style={{
-                  padding: "12px",
-                  textAlign: "right" as const,
-                  fontWeight: "bold",
-                  color: "#374151",
-                  borderBottom: "1px solid #e5e7eb",
+                  padding: &quot;12px&quot;,
+                  textAlign: &quot;right&quot; as const,
+                  fontWeight: &quot;bold&quot;,
+                  color: &quot;#374151&quot;,
+                  borderBottom: &quot;1px solid #e5e7eb&quot;,
                 }}
               >
                 2022 Value
               </th>
               <th
                 style={{
-                  padding: "12px",
-                  textAlign: "right" as const,
-                  fontWeight: "bold",
-                  color: "#374151",
-                  borderBottom: "1px solid #e5e7eb",
+                  padding: &quot;12px&quot;,
+                  textAlign: &quot;right&quot; as const,
+                  fontWeight: &quot;bold&quot;,
+                  color: &quot;#374151&quot;,
+                  borderBottom: &quot;1px solid #e5e7eb&quot;,
                 }}
               >
                 Change
@@ -149,35 +149,35 @@ export default function Form11KEmailTemplate({ filing }: Form11KTemplateProps) {
           </thead>
           <tbody>
             {filing.summaryData?.planAssets?.map((asset, index) => (
-              <tr key={index} style={{ backgroundColor: index % 2 === 0 ? "#ffffff" : "#f9fafb" }}>
-                <td style={{ padding: "12px", borderBottom: "1px solid #f1f5f9" }}>{asset.category}</td>
-                <td style={{ padding: "12px", textAlign: "right" as const, borderBottom: "1px solid #f1f5f9" }}>${asset.value2023.toLocaleString()}</td>
-                <td style={{ padding: "12px", textAlign: "right" as const, borderBottom: "1px solid #f1f5f9" }}>${asset.value2022.toLocaleString()}</td>
+              <tr key={index} style={{ backgroundColor: index % 2 === 0 ? &quot;#ffffff&quot; : &quot;#f9fafb&quot; }}>
+                <td style={{ padding: &quot;12px&quot;, borderBottom: &quot;1px solid #f1f5f9&quot; }}>{asset.category}</td>
+                <td style={{ padding: &quot;12px&quot;, textAlign: &quot;right&quot; as const, borderBottom: &quot;1px solid #f1f5f9&quot; }}>${asset.value2023.toLocaleString()}</td>
+                <td style={{ padding: &quot;12px&quot;, textAlign: &quot;right&quot; as const, borderBottom: &quot;1px solid #f1f5f9&quot; }}>${asset.value2022.toLocaleString()}</td>
                 <td
                   style={{
-                    padding: "12px",
-                    textAlign: "right" as const,
-                    borderBottom: "1px solid #f1f5f9",
-                    color: asset.change > 0 ? "#059669" : "#dc2626",
+                    padding: &quot;12px&quot;,
+                    textAlign: &quot;right&quot; as const,
+                    borderBottom: &quot;1px solid #f1f5f9&quot;,
+                    color: asset.change > 0 ? &quot;#059669&quot; : &quot;#dc2626&quot;,
                   }}
                 >
-                  {asset.change > 0 ? "↗ " : "↘ "} {asset.change.toFixed(2)}%
+                  {asset.change > 0 ? &quot;↗ &quot; : &quot;↘ &quot;} {asset.change.toFixed(2)}%
                 </td>
               </tr>
             ))}
-            <tr style={{ backgroundColor: "#ffffff", fontWeight: "bold" }}>
-              <td style={{ padding: "12px", borderTop: "2px solid #e5e7eb" }}>Total Plan Assets</td>
-              <td style={{ padding: "12px", textAlign: "right" as const, borderTop: "2px solid #e5e7eb" }}>${filing.summaryData?.totalPlanAssets?.toLocaleString() || 'N/A'}</td>
-              <td style={{ padding: "12px", textAlign: "right" as const, borderTop: "2px solid #e5e7eb" }}>${filing.summaryData?.totalPlanAssets2022?.toLocaleString() || 'N/A'}</td>
+            <tr style={{ backgroundColor: &quot;#ffffff&quot;, fontWeight: &quot;bold&quot; }}>
+              <td style={{ padding: &quot;12px&quot;, borderTop: &quot;2px solid #e5e7eb&quot; }}>Total Plan Assets</td>
+              <td style={{ padding: &quot;12px&quot;, textAlign: &quot;right&quot; as const, borderTop: &quot;2px solid #e5e7eb&quot; }}>${filing.summaryData?.totalPlanAssets?.toLocaleString() || &apos;N/A&apos;}</td>
+              <td style={{ padding: &quot;12px&quot;, textAlign: &quot;right&quot; as const, borderTop: &quot;2px solid #e5e7eb&quot; }}>${filing.summaryData?.totalPlanAssets2022?.toLocaleString() || &apos;N/A&apos;}</td>
               <td
                 style={{
-                  padding: "12px",
-                  textAlign: "right" as const,
-                  borderTop: "2px solid #e5e7eb",
-                  color: "#059669",
+                  padding: &quot;12px&quot;,
+                  textAlign: &quot;right&quot; as const,
+                  borderTop: &quot;2px solid #e5e7eb&quot;,
+                  color: &quot;#059669&quot;,
                 }}
               >
-                {filing.summaryData?.totalPlanAssetsChange ? `↗ ${filing.summaryData.totalPlanAssetsChange.toFixed(2)}%` : 'N/A'}
+                {filing.summaryData?.totalPlanAssetsChange ? `↗ ${filing.summaryData.totalPlanAssetsChange.toFixed(2)}%` : &apos;N/A&apos;}
               </td>
             </tr>
           </tbody>
@@ -187,20 +187,20 @@ export default function Form11KEmailTemplate({ filing }: Form11KTemplateProps) {
       {/* Investment Performance */}
       <div
         style={{
-          padding: "20px",
-          background: "linear-gradient(135deg, #f9fafb 0%, #f3f4f6 100%)",
-          borderBottom: "1px solid #e5e7eb",
-          boxShadow: "0 2px 4px rgba(0, 0, 0, 0.05)",
+          padding: &quot;20px&quot;,
+          background: &quot;linear-gradient(135deg, #f9fafb 0%, #f3f4f6 100%)&quot;,
+          borderBottom: &quot;1px solid #e5e7eb&quot;,
+          boxShadow: &quot;0 2px 4px rgba(0, 0, 0, 0.05)&quot;,
         }}
       >
         <h3
           style={{
-            margin: "0 0 16px 0",
-            fontSize: "18px",
-            fontWeight: "bold",
-            color: "#000000",
-            borderBottom: "2px solid #667eea",
-            paddingBottom: "8px",
+            margin: &quot;0 0 16px 0&quot;,
+            fontSize: &quot;18px&quot;,
+            fontWeight: &quot;bold&quot;,
+            color: &quot;#000000&quot;,
+            borderBottom: &quot;2px solid #667eea&quot;,
+            paddingBottom: &quot;8px&quot;,
           }}
         >
           📈 Top Investment Options Performance
@@ -208,45 +208,45 @@ export default function Form11KEmailTemplate({ filing }: Form11KTemplateProps) {
 
         <table
           style={{
-            width: "100%",
-            borderCollapse: "collapse" as const,
-            backgroundColor: "white",
-            borderRadius: "8px",
-            overflow: "hidden",
-            boxShadow: "0 1px 3px rgba(0, 0, 0, 0.1)",
+            width: &quot;100%&quot;,
+            borderCollapse: &quot;collapse&quot; as const,
+            backgroundColor: &quot;white&quot;,
+            borderRadius: &quot;8px&quot;,
+            overflow: &quot;hidden&quot;,
+            boxShadow: &quot;0 1px 3px rgba(0, 0, 0, 0.1)&quot;,
           }}
         >
           <thead>
-            <tr style={{ backgroundColor: "#f8fafc" }}>
+            <tr style={{ backgroundColor: &quot;#f8fafc&quot; }}>
               <th
                 style={{
-                  padding: "12px",
-                  textAlign: "left" as const,
-                  fontWeight: "bold",
-                  color: "#374151",
-                  borderBottom: "1px solid #e5e7eb",
+                  padding: &quot;12px&quot;,
+                  textAlign: &quot;left&quot; as const,
+                  fontWeight: &quot;bold&quot;,
+                  color: &quot;#374151&quot;,
+                  borderBottom: &quot;1px solid #e5e7eb&quot;,
                 }}
               >
                 Investment Option
               </th>
               <th
                 style={{
-                  padding: "12px",
-                  textAlign: "right" as const,
-                  fontWeight: "bold",
-                  color: "#374151",
-                  borderBottom: "1px solid #e5e7eb",
+                  padding: &quot;12px&quot;,
+                  textAlign: &quot;right&quot; as const,
+                  fontWeight: &quot;bold&quot;,
+                  color: &quot;#374151&quot;,
+                  borderBottom: &quot;1px solid #e5e7eb&quot;,
                 }}
               >
                 1-Year Return
               </th>
               <th
                 style={{
-                  padding: "12px",
-                  textAlign: "right" as const,
-                  fontWeight: "bold",
-                  color: "#374151",
-                  borderBottom: "1px solid #e5e7eb",
+                  padding: &quot;12px&quot;,
+                  textAlign: &quot;right&quot; as const,
+                  fontWeight: &quot;bold&quot;,
+                  color: &quot;#374151&quot;,
+                  borderBottom: &quot;1px solid #e5e7eb&quot;,
                 }}
               >
                 Assets
@@ -255,19 +255,19 @@ export default function Form11KEmailTemplate({ filing }: Form11KTemplateProps) {
           </thead>
           <tbody>
             {filing.summaryData?.investmentOptions?.map((option, index) => (
-              <tr key={index} style={{ backgroundColor: index % 2 === 0 ? "#ffffff" : "#f9fafb" }}>
-                <td style={{ padding: "12px", borderBottom: "1px solid #f1f5f9" }}>{option.name}</td>
+              <tr key={index} style={{ backgroundColor: index % 2 === 0 ? &quot;#ffffff&quot; : &quot;#f9fafb&quot; }}>
+                <td style={{ padding: &quot;12px&quot;, borderBottom: &quot;1px solid #f1f5f9&quot; }}>{option.name}</td>
                 <td
                   style={{
-                    padding: "12px",
-                    textAlign: "right" as const,
-                    borderBottom: "1px solid #f1f5f9",
-                    color: option.return > 0 ? "#059669" : "#dc2626",
+                    padding: &quot;12px&quot;,
+                    textAlign: &quot;right&quot; as const,
+                    borderBottom: &quot;1px solid #f1f5f9&quot;,
+                    color: option.return > 0 ? &quot;#059669&quot; : &quot;#dc2626&quot;,
                   }}
                 >
-                  {option.return > 0 ? "↗ " : "↘ "} {option.return.toFixed(2)}%
+                  {option.return > 0 ? &quot;↗ &quot; : &quot;↘ &quot;} {option.return.toFixed(2)}%
                 </td>
-                <td style={{ padding: "12px", textAlign: "right" as const, borderBottom: "1px solid #f1f5f9" }}>${option.assets.toLocaleString()}</td>
+                <td style={{ padding: &quot;12px&quot;, textAlign: &quot;right&quot; as const, borderBottom: &quot;1px solid #f1f5f9&quot; }}>${option.assets.toLocaleString()}</td>
               </tr>
             ))}
           </tbody>
@@ -277,20 +277,20 @@ export default function Form11KEmailTemplate({ filing }: Form11KTemplateProps) {
       {/* Plan Highlights */}
       <div
         style={{
-          padding: "20px",
-          background: "linear-gradient(135deg, #f9fafb 0%, #f3f4f6 100%)",
-          borderBottom: "1px solid #e5e7eb",
-          boxShadow: "0 2px 4px rgba(0, 0, 0, 0.05)",
+          padding: &quot;20px&quot;,
+          background: &quot;linear-gradient(135deg, #f9fafb 0%, #f3f4f6 100%)&quot;,
+          borderBottom: &quot;1px solid #e5e7eb&quot;,
+          boxShadow: &quot;0 2px 4px rgba(0, 0, 0, 0.05)&quot;,
         }}
       >
         <h3
           style={{
-            margin: "0 0 16px 0",
-            fontSize: "18px",
-            fontWeight: "bold",
-            color: "#000000",
-            borderBottom: "2px solid #667eea",
-            paddingBottom: "8px",
+            margin: &quot;0 0 16px 0&quot;,
+            fontSize: &quot;18px&quot;,
+            fontWeight: &quot;bold&quot;,
+            color: &quot;#000000&quot;,
+            borderBottom: &quot;2px solid #667eea&quot;,
+            paddingBottom: &quot;8px&quot;,
           }}
         >
           ✨ 2023 Plan Highlights
@@ -298,33 +298,33 @@ export default function Form11KEmailTemplate({ filing }: Form11KTemplateProps) {
 
         <div
           style={{
-            backgroundColor: "white",
-            borderRadius: "8px",
-            padding: "16px",
-            boxShadow: "0 1px 3px rgba(0, 0, 0, 0.1)",
+            backgroundColor: &quot;white&quot;,
+            borderRadius: &quot;8px&quot;,
+            padding: &quot;16px&quot;,
+            boxShadow: &quot;0 1px 3px rgba(0, 0, 0, 0.1)&quot;,
           }}
         >
-          <div style={{ marginBottom: "12px" }}>
-            <strong style={{ color: "#000000" }}>Participation Rate:</strong>
-            <span style={{ color: "#374151", marginLeft: "8px" }}>{filing.summaryData?.participationRate ?? 'N/A'}</span>
+          <div style={{ marginBottom: &quot;12px&quot; }}>
+            <strong style={{ color: &quot;#000000&quot; }}>Participation Rate:</strong>
+            <span style={{ color: &quot;#374151&quot;, marginLeft: &quot;8px&quot; }}>{filing.summaryData?.participationRate ?? &apos;N/A&apos;}</span>
           </div>
-          <div style={{ marginBottom: "12px" }}>
-            <strong style={{ color: "#000000" }}>Average Account Balance:</strong>
-            <span style={{ color: "#374151", marginLeft: "8px" }}>${filing.summaryData?.averageAccountBalance?.toLocaleString() ?? 'N/A'}</span>
+          <div style={{ marginBottom: &quot;12px&quot; }}>
+            <strong style={{ color: &quot;#000000&quot; }}>Average Account Balance:</strong>
+            <span style={{ color: &quot;#374151&quot;, marginLeft: &quot;8px&quot; }}>${filing.summaryData?.averageAccountBalance?.toLocaleString() ?? &apos;N/A&apos;}</span>
           </div>
-          <div style={{ marginBottom: "12px" }}>
-            <strong style={{ color: "#000000" }}>Company Match:</strong>
-            <span style={{ color: "#374151", marginLeft: "8px" }}>
-              ${filing.summaryData?.companyMatch?.toLocaleString() ?? 'N/A'} (6% match on first 6% of salary)
+          <div style={{ marginBottom: &quot;12px&quot; }}>
+            <strong style={{ color: &quot;#000000&quot; }}>Company Match:</strong>
+            <span style={{ color: &quot;#374151&quot;, marginLeft: &quot;8px&quot; }}>
+              ${filing.summaryData?.companyMatch?.toLocaleString() ?? &apos;N/A&apos;} (6% match on first 6% of salary)
             </span>
           </div>
-          <div style={{ marginBottom: "12px" }}>
-            <strong style={{ color: "#000000" }}>New Investment Options:</strong>
-            <span style={{ color: "#374151", marginLeft: "8px" }}>{filing.summaryData?.newInvestmentOptions || 'N/A'}</span>
+          <div style={{ marginBottom: &quot;12px&quot; }}>
+            <strong style={{ color: &quot;#000000&quot; }}>New Investment Options:</strong>
+            <span style={{ color: &quot;#374151&quot;, marginLeft: &quot;8px&quot; }}>{filing.summaryData?.newInvestmentOptions || &apos;N/A&apos;}</span>
           </div>
           <div>
-            <strong style={{ color: "#000000" }}>Plan Expenses:</strong>
-            <span style={{ color: "#374151", marginLeft: "8px" }}>{filing.summaryData?.planExpenses || 'N/A'}</span>
+            <strong style={{ color: &quot;#000000&quot; }}>Plan Expenses:</strong>
+            <span style={{ color: &quot;#374151&quot;, marginLeft: &quot;8px&quot; }}>{filing.summaryData?.planExpenses || &apos;N/A&apos;}</span>
           </div>
         </div>
       </div>
@@ -332,20 +332,20 @@ export default function Form11KEmailTemplate({ filing }: Form11KTemplateProps) {
       {/* Participant Statistics */}
       <div
         style={{
-          padding: "20px",
-          background: "linear-gradient(135deg, #f9fafb 0%, #f3f4f6 100%)",
-          borderBottom: "1px solid #e5e7eb",
-          boxShadow: "0 2px 4px rgba(0, 0, 0, 0.05)",
+          padding: &quot;20px&quot;,
+          background: &quot;linear-gradient(135deg, #f9fafb 0%, #f3f4f6 100%)&quot;,
+          borderBottom: &quot;1px solid #e5e7eb&quot;,
+          boxShadow: &quot;0 2px 4px rgba(0, 0, 0, 0.05)&quot;,
         }}
       >
         <h3
           style={{
-            margin: "0 0 16px 0",
-            fontSize: "18px",
-            fontWeight: "bold",
-            color: "#000000",
-            borderBottom: "2px solid #667eea",
-            paddingBottom: "8px",
+            margin: &quot;0 0 16px 0&quot;,
+            fontSize: &quot;18px&quot;,
+            fontWeight: &quot;bold&quot;,
+            color: &quot;#000000&quot;,
+            borderBottom: &quot;2px solid #667eea&quot;,
+            paddingBottom: &quot;8px&quot;,
           }}
         >
           👥 Participant Demographics
@@ -353,78 +353,78 @@ export default function Form11KEmailTemplate({ filing }: Form11KTemplateProps) {
 
         <table
           style={{
-            width: "100%",
-            borderCollapse: "collapse" as const,
-            backgroundColor: "white",
-            borderRadius: "8px",
-            overflow: "hidden",
-            boxShadow: "0 1px 3px rgba(0, 0, 0, 0.1)",
+            width: &quot;100%&quot;,
+            borderCollapse: &quot;collapse&quot; as const,
+            backgroundColor: &quot;white&quot;,
+            borderRadius: &quot;8px&quot;,
+            overflow: &quot;hidden&quot;,
+            boxShadow: &quot;0 1px 3px rgba(0, 0, 0, 0.1)&quot;,
           }}
         >
           <tbody>
-            <tr style={{ backgroundColor: "#f8fafc" }}>
-              <td style={{ padding: "12px", fontWeight: "bold", color: "#374151", borderBottom: "1px solid #e5e7eb" }}>
+            <tr style={{ backgroundColor: &quot;#f8fafc&quot; }}>
+              <td style={{ padding: &quot;12px&quot;, fontWeight: &quot;bold&quot;, color: &quot;#374151&quot;, borderBottom: &quot;1px solid #e5e7eb&quot; }}>
                 Active Participants
               </td>
               <td
                 style={{
-                  padding: "12px",
-                  textAlign: "right" as const,
-                  color: "#374151",
-                  borderBottom: "1px solid #e5e7eb",
+                  padding: &quot;12px&quot;,
+                  textAlign: &quot;right&quot; as const,
+                  color: &quot;#374151&quot;,
+                  borderBottom: &quot;1px solid #e5e7eb&quot;,
                 }}
               >
-                {filing.summaryData?.activeParticipants || 'N/A'}
+                {filing.summaryData?.activeParticipants || &apos;N/A&apos;}
               </td>
             </tr>
-            <tr style={{ backgroundColor: "#ffffff" }}>
-              <td style={{ padding: "12px", color: "#374151", borderBottom: "1px solid #f1f5f9" }}>
+            <tr style={{ backgroundColor: &quot;#ffffff&quot; }}>
+              <td style={{ padding: &quot;12px&quot;, color: &quot;#374151&quot;, borderBottom: &quot;1px solid #f1f5f9&quot; }}>
                 Participants with Loans
               </td>
               <td
                 style={{
-                  padding: "12px",
-                  textAlign: "right" as const,
-                  color: "#374151",
-                  borderBottom: "1px solid #f1f5f9",
+                  padding: &quot;12px&quot;,
+                  textAlign: &quot;right&quot; as const,
+                  color: &quot;#374151&quot;,
+                  borderBottom: &quot;1px solid #f1f5f9&quot;,
                 }}
               >
                 12,300 (8%)
               </td>
             </tr>
-            <tr style={{ backgroundColor: "#f9fafb" }}>
-              <td style={{ padding: "12px", color: "#374151", borderBottom: "1px solid #f1f5f9" }}>
+            <tr style={{ backgroundColor: &quot;#f9fafb&quot; }}>
+              <td style={{ padding: &quot;12px&quot;, color: &quot;#374151&quot;, borderBottom: &quot;1px solid #f1f5f9&quot; }}>
                 Participants with Hardship Withdrawals
               </td>
               <td
                 style={{
-                  padding: "12px",
-                  textAlign: "right" as const,
-                  color: "#374151",
-                  borderBottom: "1px solid #f1f5f9",
+                  padding: &quot;12px&quot;,
+                  textAlign: &quot;right&quot; as const,
+                  color: &quot;#374151&quot;,
+                  borderBottom: &quot;1px solid #f1f5f9&quot;,
                 }}
               >
                 2,100 (1.4%)
               </td>
             </tr>
-            <tr style={{ backgroundColor: "#ffffff" }}>
-              <td style={{ padding: "12px", color: "#374151", borderBottom: "1px solid #f1f5f9" }}>
+            <tr style={{ backgroundColor: &quot;#ffffff&quot; }}>
+              <td style={{ padding: &quot;12px&quot;, color: &quot;#374151&quot;, borderBottom: &quot;1px solid #f1f5f9&quot; }}>
                 New Participants in 2023
               </td>
               <td
                 style={{
-                  padding: "12px",
-                  textAlign: "right" as const,
-                  color: "#374151",
-                  borderBottom: "1px solid #f1f5f9",
+                  padding: &quot;12px&quot;,
+                  textAlign: &quot;right&quot; as const,
+                  color: &quot;#374151&quot;,
+                  borderBottom: &quot;1px solid #f1f5f9&quot;,
                 }}
               >
                 18,500
               </td>
             </tr>
-            <tr style={{ backgroundColor: "#f9fafb" }}>
-              <td style={{ padding: "12px", color: "#374151" }}>Average Contribution Rate</td>
-              <td style={{ padding: "12px", textAlign: "right" as const, color: "#374151" }}>8.2% of salary</td>
+            <tr style={{ backgroundColor: &quot;#f9fafb&quot; }}>
+              <td style={{ padding: &quot;12px&quot;, color: &quot;#374151&quot; }}>Average Contribution Rate</td>
+              <td style={{ padding: &quot;12px&quot;, textAlign: &quot;right&quot; as const, color: &quot;#374151&quot; }}>8.2% of salary</td>
             </tr>
           </tbody>
         </table>
@@ -433,19 +433,19 @@ export default function Form11KEmailTemplate({ filing }: Form11KTemplateProps) {
       {/* Compliance & Regulatory */}
       <div
         style={{
-          padding: "20px",
-          background: "linear-gradient(135deg, #f9fafb 0%, #f3f4f6 100%)",
-          boxShadow: "0 2px 4px rgba(0, 0, 0, 0.05)",
+          padding: &quot;20px&quot;,
+          background: &quot;linear-gradient(135deg, #f9fafb 0%, #f3f4f6 100%)&quot;,
+          boxShadow: &quot;0 2px 4px rgba(0, 0, 0, 0.05)&quot;,
         }}
       >
         <h3
           style={{
-            margin: "0 0 16px 0",
-            fontSize: "18px",
-            fontWeight: "bold",
-            color: "#000000",
-            borderBottom: "2px solid #667eea",
-            paddingBottom: "8px",
+            margin: &quot;0 0 16px 0&quot;,
+            fontSize: &quot;18px&quot;,
+            fontWeight: &quot;bold&quot;,
+            color: &quot;#000000&quot;,
+            borderBottom: &quot;2px solid #667eea&quot;,
+            paddingBottom: &quot;8px&quot;,
           }}
         >
           ⚖️ Compliance & Regulatory Updates
@@ -453,31 +453,31 @@ export default function Form11KEmailTemplate({ filing }: Form11KTemplateProps) {
 
         <div
           style={{
-            backgroundColor: "white",
-            borderRadius: "8px",
-            padding: "16px",
-            boxShadow: "0 1px 3px rgba(0, 0, 0, 0.1)",
+            backgroundColor: &quot;white&quot;,
+            borderRadius: &quot;8px&quot;,
+            padding: &quot;16px&quot;,
+            boxShadow: &quot;0 1px 3px rgba(0, 0, 0, 0.1)&quot;,
           }}
         >
-          <div style={{ marginBottom: "12px" }}>
-            <strong style={{ color: "#000000" }}>ERISA Compliance:</strong>
-            <span style={{ color: "#374151", marginLeft: "8px" }}>
+          <div style={{ marginBottom: &quot;12px&quot; }}>
+            <strong style={{ color: &quot;#000000&quot; }}>ERISA Compliance:</strong>
+            <span style={{ color: &quot;#374151&quot;, marginLeft: &quot;8px&quot; }}>
               Plan passed all required non-discrimination tests
             </span>
           </div>
-          <div style={{ marginBottom: "12px" }}>
-            <strong style={{ color: "#000000" }}>Audit Status:</strong>
-            <span style={{ color: "#374151", marginLeft: "8px" }}>
+          <div style={{ marginBottom: &quot;12px&quot; }}>
+            <strong style={{ color: &quot;#000000&quot; }}>Audit Status:</strong>
+            <span style={{ color: &quot;#374151&quot;, marginLeft: &quot;8px&quot; }}>
               Clean audit opinion received from independent auditors
             </span>
           </div>
-          <div style={{ marginBottom: "12px" }}>
-            <strong style={{ color: "#000000" }}>SECURE Act 2.0:</strong>
-            <span style={{ color: "#374151", marginLeft: "8px" }}>Implemented automatic enrollment for new hires</span>
+          <div style={{ marginBottom: &quot;12px&quot; }}>
+            <strong style={{ color: &quot;#000000&quot; }}>SECURE Act 2.0:</strong>
+            <span style={{ color: &quot;#374151&quot;, marginLeft: &quot;8px&quot; }}>Implemented automatic enrollment for new hires</span>
           </div>
           <div>
-            <strong style={{ color: "#000000" }}>Fiduciary Review:</strong>
-            <span style={{ color: "#374151", marginLeft: "8px" }}>Annual investment committee review completed</span>
+            <strong style={{ color: &quot;#000000&quot; }}>Fiduciary Review:</strong>
+            <span style={{ color: &quot;#374151&quot;, marginLeft: &quot;8px&quot; }}>Annual investment committee review completed</span>
           </div>
         </div>
       </div>
@@ -485,15 +485,15 @@ export default function Form11KEmailTemplate({ filing }: Form11KTemplateProps) {
       {/* Footer */}
       <div
         style={{
-          padding: "16px",
-          backgroundColor: "#f8fafc",
-          textAlign: "center" as const,
-          fontSize: "12px",
-          color: "#6b7280",
-          borderTop: "1px solid #e5e7eb",
+          padding: &quot;16px&quot;,
+          backgroundColor: &quot;#f8fafc&quot;,
+          textAlign: &quot;center&quot; as const,
+          fontSize: &quot;12px&quot;,
+          color: &quot;#6b7280&quot;,
+          borderTop: &quot;1px solid #e5e7eb&quot;,
         }}
       >
-        <p style={{ margin: "0" }}>
+        <p style={{ margin: &quot;0&quot; }}>
           This summary is based on the official Form 11-K filing. For complete details, please refer to the full SEC
           filing.
         </p>

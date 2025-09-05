@@ -1,24 +1,24 @@
 export default function Form3EmailTemplate() {
   return (
-    <div style={{ maxWidth: "600px", margin: "0 auto", fontFamily: "Arial, sans-serif", backgroundColor: "#f8fafc" }}>
+    <div style={{ maxWidth: &quot;600px&quot;, margin: &quot;0 auto&quot;, fontFamily: &quot;Arial, sans-serif&quot;, backgroundColor: &quot;#f8fafc&quot; }}>
       {/* Header with gradient background */}
       <table
-        width="100%"
-        cellPadding="0"
-        cellSpacing="0"
+        width=&quot;100%&quot;
+        cellPadding=&quot;0&quot;
+        cellSpacing=&quot;0&quot;
         style={{
-          background: "linear-gradient(135deg, #7C3AED 0%, #EC4899 100%)",
-          color: "white",
-          borderRadius: "12px 12px 0 0",
+          background: &quot;linear-gradient(135deg, #7C3AED 0%, #EC4899 100%)&quot;,
+          color: &quot;white&quot;,
+          borderRadius: &quot;12px 12px 0 0&quot;,
         }}
       >
         <tbody>
           <tr>
-            <td style={{ padding: "24px", textAlign: "center" }}>
-              <h1 style={{ margin: "0", fontSize: "32px", fontWeight: "bold", letterSpacing: "-0.5px" }}>
+            <td style={{ padding: &quot;24px&quot;, textAlign: &quot;center&quot; }}>
+              <h1 style={{ margin: &quot;0&quot;, fontSize: &quot;32px&quot;, fontWeight: &quot;bold&quot;, letterSpacing: &quot;-0.5px&quot; }}>
                 SEC Filing Summaries
               </h1>
-              <p style={{ margin: "12px 0 0", fontSize: "18px", opacity: "0.9" }}>6/6/2025</p>
+              <p style={{ margin: &quot;12px 0 0&quot;, fontSize: &quot;18px&quot;, opacity: &quot;0.9&quot; }}>6/6/2025</p>
             </td>
           </tr>
         </tbody>
@@ -26,32 +26,32 @@ export default function Form3EmailTemplate() {
 
       {/* Filing Information */}
       <table
-        width="100%"
-        cellPadding="0"
-        cellSpacing="0"
-        style={{ backgroundColor: "white", border: "1px solid #e2e8f0", borderTop: "none" }}
+        width=&quot;100%&quot;
+        cellPadding=&quot;0&quot;
+        cellSpacing=&quot;0&quot;
+        style={{ backgroundColor: &quot;white&quot;, border: &quot;1px solid #e2e8f0&quot;, borderTop: &quot;none&quot; }}
       >
         <tbody>
           <tr>
-            <td style={{ padding: "24px" }}>
-              <table width="100%" cellPadding="0" cellSpacing="0">
+            <td style={{ padding: &quot;24px&quot; }}>
+              <table width=&quot;100%&quot; cellPadding=&quot;0&quot; cellSpacing=&quot;0&quot;>
                 <tbody>
                   <tr>
                     <td>
                       <h2
                         style={{
-                          margin: "0",
-                          background: "linear-gradient(135deg, #7C3AED 0%, #EC4899 100%)",
-                          WebkitBackgroundClip: "text",
-                          WebkitTextFillColor: "transparent",
-                          backgroundClip: "text",
-                          fontSize: "24px",
-                          fontWeight: "bold",
+                          margin: &quot;0&quot;,
+                          background: &quot;linear-gradient(135deg, #7C3AED 0%, #EC4899 100%)&quot;,
+                          WebkitBackgroundClip: &quot;text&quot;,
+                          WebkitTextFillColor: &quot;transparent&quot;,
+                          backgroundClip: &quot;text&quot;,
+                          fontSize: &quot;24px&quot;,
+                          fontWeight: &quot;bold&quot;,
                         }}
                       >
                         Palantir Technologies Inc. (PLTR) - Form 3 Filing
                       </h2>
-                      <p style={{ margin: "8px 0 20px", color: "#64748b", fontSize: "14px" }}>Filed on: 6/5/2025</p>
+                      <p style={{ margin: &quot;8px 0 20px&quot;, color: &quot;#64748b&quot;, fontSize: &quot;14px&quot; }}>Filed on: 6/5/2025</p>
                     </td>
                   </tr>
                 </tbody>
@@ -59,90 +59,90 @@ export default function Form3EmailTemplate() {
 
               {/* Summary Box */}
               <table
-                width="100%"
-                cellPadding="0"
-                cellSpacing="0"
+                width=&quot;100%&quot;
+                cellPadding=&quot;0&quot;
+                cellSpacing=&quot;0&quot;
                 style={{
-                  backgroundColor: "#fafafa",
-                  border: "1px solid #e2e8f0",
-                  borderRadius: "8px",
-                  marginBottom: "20px",
-                  boxShadow: "0 2px 4px rgba(0,0,0,0.05), 0 0 1px rgba(0,0,0,0.1)",
-                  backgroundImage: "linear-gradient(to bottom, #ffffff, #f9fafb)",
+                  backgroundColor: &quot;#fafafa&quot;,
+                  border: &quot;1px solid #e2e8f0&quot;,
+                  borderRadius: &quot;8px&quot;,
+                  marginBottom: &quot;20px&quot;,
+                  boxShadow: &quot;0 2px 4px rgba(0,0,0,0.05), 0 0 1px rgba(0,0,0,0.1)&quot;,
+                  backgroundImage: &quot;linear-gradient(to bottom, #ffffff, #f9fafb)&quot;,
                 }}
               >
                 <tbody>
                   <tr>
-                    <td style={{ padding: "20px" }}>
+                    <td style={{ padding: &quot;20px&quot; }}>
                       <h3
                         style={{
-                          margin: "0 0 16px",
-                          color: "#000000",
-                          fontSize: "18px",
-                          fontWeight: "bold",
-                          borderBottom: "2px solid #f1f5f9",
-                          paddingBottom: "8px",
+                          margin: &quot;0 0 16px&quot;,
+                          color: &quot;#000000&quot;,
+                          fontSize: &quot;18px&quot;,
+                          fontWeight: &quot;bold&quot;,
+                          borderBottom: &quot;2px solid #f1f5f9&quot;,
+                          paddingBottom: &quot;8px&quot;,
                         }}
                       >
                         📋 Summary
                       </h3>
 
-                      <table width="100%" cellPadding="0" cellSpacing="0" style={{ borderCollapse: "collapse" }}>
+                      <table width=&quot;100%&quot; cellPadding=&quot;0&quot; cellSpacing=&quot;0&quot; style={{ borderCollapse: &quot;collapse&quot; }}>
                         <tbody>
                           <tr>
-                            <td style={{ padding: "8px 0", width: "120px", verticalAlign: "top" }}>
-                              <p style={{ margin: "0", color: "#6B7280", fontSize: "14px", fontWeight: "500" }}>
+                            <td style={{ padding: &quot;8px 0&quot;, width: &quot;120px&quot;, verticalAlign: &quot;top&quot; }}>
+                              <p style={{ margin: &quot;0&quot;, color: &quot;#6B7280&quot;, fontSize: &quot;14px&quot;, fontWeight: &quot;500&quot; }}>
                                 Reporting Person:
                               </p>
                             </td>
-                            <td style={{ padding: "8px 0", verticalAlign: "top" }}>
-                              <p style={{ margin: "0", color: "#374151", fontSize: "14px", fontWeight: "600" }}>
+                            <td style={{ padding: &quot;8px 0&quot;, verticalAlign: &quot;top&quot; }}>
+                              <p style={{ margin: &quot;0&quot;, color: &quot;#374151&quot;, fontSize: &quot;14px&quot;, fontWeight: &quot;600&quot; }}>
                                 Dr. Jennifer Martinez
                               </p>
                             </td>
                           </tr>
                           <tr>
-                            <td style={{ padding: "8px 0", width: "120px", verticalAlign: "top" }}>
-                              <p style={{ margin: "0", color: "#6B7280", fontSize: "14px", fontWeight: "500" }}>
+                            <td style={{ padding: &quot;8px 0&quot;, width: &quot;120px&quot;, verticalAlign: &quot;top&quot; }}>
+                              <p style={{ margin: &quot;0&quot;, color: &quot;#6B7280&quot;, fontSize: &quot;14px&quot;, fontWeight: &quot;500&quot; }}>
                                 Position:
                               </p>
                             </td>
-                            <td style={{ padding: "8px 0", verticalAlign: "top" }}>
-                              <p style={{ margin: "0", color: "#374151", fontSize: "14px" }}>
+                            <td style={{ padding: &quot;8px 0&quot;, verticalAlign: &quot;top&quot; }}>
+                              <p style={{ margin: &quot;0&quot;, color: &quot;#374151&quot;, fontSize: &quot;14px&quot; }}>
                                 Chief Technology Officer
                               </p>
                             </td>
                           </tr>
                           <tr>
-                            <td style={{ padding: "8px 0", width: "120px", verticalAlign: "top" }}>
-                              <p style={{ margin: "0", color: "#6B7280", fontSize: "14px", fontWeight: "500" }}>
+                            <td style={{ padding: &quot;8px 0&quot;, width: &quot;120px&quot;, verticalAlign: &quot;top&quot; }}>
+                              <p style={{ margin: &quot;0&quot;, color: &quot;#6B7280&quot;, fontSize: &quot;14px&quot;, fontWeight: &quot;500&quot; }}>
                                 Form Type:
                               </p>
                             </td>
-                            <td style={{ padding: "8px 0", verticalAlign: "top" }}>
-                              <p style={{ margin: "0", color: "#374151", fontSize: "14px" }}>
+                            <td style={{ padding: &quot;8px 0&quot;, verticalAlign: &quot;top&quot; }}>
+                              <p style={{ margin: &quot;0&quot;, color: &quot;#374151&quot;, fontSize: &quot;14px&quot; }}>
                                 Form 3 (Initial Ownership Statement)
                               </p>
                             </td>
                           </tr>
                           <tr>
-                            <td style={{ padding: "8px 0", width: "120px", verticalAlign: "top" }}>
-                              <p style={{ margin: "0", color: "#6B7280", fontSize: "14px", fontWeight: "500" }}>
+                            <td style={{ padding: &quot;8px 0&quot;, width: &quot;120px&quot;, verticalAlign: &quot;top&quot; }}>
+                              <p style={{ margin: &quot;0&quot;, color: &quot;#6B7280&quot;, fontSize: &quot;14px&quot;, fontWeight: &quot;500&quot; }}>
                                 Appointment Date:
                               </p>
                             </td>
-                            <td style={{ padding: "8px 0", verticalAlign: "top" }}>
-                              <p style={{ margin: "0", color: "#374151", fontSize: "14px" }}>June 1, 2025</p>
+                            <td style={{ padding: &quot;8px 0&quot;, verticalAlign: &quot;top&quot; }}>
+                              <p style={{ margin: &quot;0&quot;, color: &quot;#374151&quot;, fontSize: &quot;14px&quot; }}>June 1, 2025</p>
                             </td>
                           </tr>
                           <tr>
-                            <td style={{ padding: "8px 0", width: "120px", verticalAlign: "top" }}>
-                              <p style={{ margin: "0", color: "#6B7280", fontSize: "14px", fontWeight: "500" }}>
+                            <td style={{ padding: &quot;8px 0&quot;, width: &quot;120px&quot;, verticalAlign: &quot;top&quot; }}>
+                              <p style={{ margin: &quot;0&quot;, color: &quot;#6B7280&quot;, fontSize: &quot;14px&quot;, fontWeight: &quot;500&quot; }}>
                                 Filed Date:
                               </p>
                             </td>
-                            <td style={{ padding: "8px 0", verticalAlign: "top" }}>
-                              <p style={{ margin: "0", color: "#374151", fontSize: "14px" }}>June 5, 2025</p>
+                            <td style={{ padding: &quot;8px 0&quot;, verticalAlign: &quot;top&quot; }}>
+                              <p style={{ margin: &quot;0&quot;, color: &quot;#374151&quot;, fontSize: &quot;14px&quot; }}>June 5, 2025</p>
                             </td>
                           </tr>
                         </tbody>
@@ -154,91 +154,91 @@ export default function Form3EmailTemplate() {
 
               {/* Initial Holdings */}
               <table
-                width="100%"
-                cellPadding="0"
-                cellSpacing="0"
+                width=&quot;100%&quot;
+                cellPadding=&quot;0&quot;
+                cellSpacing=&quot;0&quot;
                 style={{
-                  backgroundColor: "#fafafa",
-                  border: "1px solid #e2e8f0",
-                  borderRadius: "8px",
-                  marginBottom: "20px",
-                  boxShadow: "0 2px 4px rgba(0,0,0,0.05), 0 0 1px rgba(0,0,0,0.1)",
-                  backgroundImage: "linear-gradient(to bottom, #ffffff, #f9fafb)",
+                  backgroundColor: &quot;#fafafa&quot;,
+                  border: &quot;1px solid #e2e8f0&quot;,
+                  borderRadius: &quot;8px&quot;,
+                  marginBottom: &quot;20px&quot;,
+                  boxShadow: &quot;0 2px 4px rgba(0,0,0,0.05), 0 0 1px rgba(0,0,0,0.1)&quot;,
+                  backgroundImage: &quot;linear-gradient(to bottom, #ffffff, #f9fafb)&quot;,
                 }}
               >
                 <tbody>
                   <tr>
-                    <td style={{ padding: "20px" }}>
+                    <td style={{ padding: &quot;20px&quot; }}>
                       <h3
                         style={{
-                          margin: "0 0 16px",
-                          color: "#000000",
-                          fontSize: "18px",
-                          fontWeight: "bold",
-                          borderBottom: "2px solid #f1f5f9",
-                          paddingBottom: "8px",
+                          margin: &quot;0 0 16px&quot;,
+                          color: &quot;#000000&quot;,
+                          fontSize: &quot;18px&quot;,
+                          fontWeight: &quot;bold&quot;,
+                          borderBottom: &quot;2px solid #f1f5f9&quot;,
+                          paddingBottom: &quot;8px&quot;,
                         }}
                       >
                         📊 Initial Beneficial Ownership
                       </h3>
 
                       <table
-                        width="100%"
-                        cellPadding="0"
-                        cellSpacing="0"
+                        width=&quot;100%&quot;
+                        cellPadding=&quot;0&quot;
+                        cellSpacing=&quot;0&quot;
                         style={{
-                          borderCollapse: "collapse",
-                          border: "1px solid #e2e8f0",
-                          borderRadius: "6px",
-                          boxShadow: "0 1px 2px rgba(0,0,0,0.05)",
+                          borderCollapse: &quot;collapse&quot;,
+                          border: &quot;1px solid #e2e8f0&quot;,
+                          borderRadius: &quot;6px&quot;,
+                          boxShadow: &quot;0 1px 2px rgba(0,0,0,0.05)&quot;,
                         }}
                       >
                         <thead>
-                          <tr style={{ backgroundColor: "#f1f5f9" }}>
+                          <tr style={{ backgroundColor: &quot;#f1f5f9&quot; }}>
                             <th
                               style={{
-                                padding: "12px",
-                                textAlign: "left",
-                                fontSize: "12px",
-                                fontWeight: "bold",
-                                color: "#6B7280",
-                                borderBottom: "1px solid #e2e8f0",
+                                padding: &quot;12px&quot;,
+                                textAlign: &quot;left&quot;,
+                                fontSize: &quot;12px&quot;,
+                                fontWeight: &quot;bold&quot;,
+                                color: &quot;#6B7280&quot;,
+                                borderBottom: &quot;1px solid #e2e8f0&quot;,
                               }}
                             >
                               SECURITY TYPE
                             </th>
                             <th
                               style={{
-                                padding: "12px",
-                                textAlign: "right",
-                                fontSize: "12px",
-                                fontWeight: "bold",
-                                color: "#6B7280",
-                                borderBottom: "1px solid #e2e8f0",
+                                padding: &quot;12px&quot;,
+                                textAlign: &quot;right&quot;,
+                                fontSize: &quot;12px&quot;,
+                                fontWeight: &quot;bold&quot;,
+                                color: &quot;#6B7280&quot;,
+                                borderBottom: &quot;1px solid #e2e8f0&quot;,
                               }}
                             >
                               SHARES/UNITS
                             </th>
                             <th
                               style={{
-                                padding: "12px",
-                                textAlign: "center",
-                                fontSize: "12px",
-                                fontWeight: "bold",
-                                color: "#6B7280",
-                                borderBottom: "1px solid #e2e8f0",
+                                padding: &quot;12px&quot;,
+                                textAlign: &quot;center&quot;,
+                                fontSize: &quot;12px&quot;,
+                                fontWeight: &quot;bold&quot;,
+                                color: &quot;#6B7280&quot;,
+                                borderBottom: &quot;1px solid #e2e8f0&quot;,
                               }}
                             >
                               OWNERSHIP
                             </th>
                             <th
                               style={{
-                                padding: "12px",
-                                textAlign: "right",
-                                fontSize: "12px",
-                                fontWeight: "bold",
-                                color: "#6B7280",
-                                borderBottom: "1px solid #e2e8f0",
+                                padding: &quot;12px&quot;,
+                                textAlign: &quot;right&quot;,
+                                fontSize: &quot;12px&quot;,
+                                fontWeight: &quot;bold&quot;,
+                                color: &quot;#6B7280&quot;,
+                                borderBottom: &quot;1px solid #e2e8f0&quot;,
                               }}
                             >
                               VALUE*
@@ -249,48 +249,48 @@ export default function Form3EmailTemplate() {
                           <tr>
                             <td
                               style={{
-                                padding: "12px",
-                                fontSize: "14px",
-                                color: "#374151",
-                                borderBottom: "1px solid #f1f5f9",
-                                backgroundColor: "#ffffff",
+                                padding: &quot;12px&quot;,
+                                fontSize: &quot;14px&quot;,
+                                color: &quot;#374151&quot;,
+                                borderBottom: &quot;1px solid #f1f5f9&quot;,
+                                backgroundColor: &quot;#ffffff&quot;,
                               }}
                             >
                               Common Stock
                             </td>
                             <td
                               style={{
-                                padding: "12px",
-                                textAlign: "right",
-                                fontSize: "14px",
-                                fontWeight: "bold",
-                                color: "#374151",
-                                borderBottom: "1px solid #f1f5f9",
-                                backgroundColor: "#ffffff",
+                                padding: &quot;12px&quot;,
+                                textAlign: &quot;right&quot;,
+                                fontSize: &quot;14px&quot;,
+                                fontWeight: &quot;bold&quot;,
+                                color: &quot;#374151&quot;,
+                                borderBottom: &quot;1px solid #f1f5f9&quot;,
+                                backgroundColor: &quot;#ffffff&quot;,
                               }}
                             >
                               0
                             </td>
                             <td
                               style={{
-                                padding: "12px",
-                                textAlign: "center",
-                                fontSize: "14px",
-                                color: "#374151",
-                                borderBottom: "1px solid #f1f5f9",
-                                backgroundColor: "#ffffff",
+                                padding: &quot;12px&quot;,
+                                textAlign: &quot;center&quot;,
+                                fontSize: &quot;14px&quot;,
+                                color: &quot;#374151&quot;,
+                                borderBottom: &quot;1px solid #f1f5f9&quot;,
+                                backgroundColor: &quot;#ffffff&quot;,
                               }}
                             >
                               Direct
                             </td>
                             <td
                               style={{
-                                padding: "12px",
-                                textAlign: "right",
-                                fontSize: "14px",
-                                color: "#374151",
-                                borderBottom: "1px solid #f1f5f9",
-                                backgroundColor: "#ffffff",
+                                padding: &quot;12px&quot;,
+                                textAlign: &quot;right&quot;,
+                                fontSize: &quot;14px&quot;,
+                                color: &quot;#374151&quot;,
+                                borderBottom: &quot;1px solid #f1f5f9&quot;,
+                                backgroundColor: &quot;#ffffff&quot;,
                               }}
                             >
                               $0
@@ -299,48 +299,48 @@ export default function Form3EmailTemplate() {
                           <tr>
                             <td
                               style={{
-                                padding: "12px",
-                                fontSize: "14px",
-                                color: "#374151",
-                                borderBottom: "1px solid #f1f5f9",
-                                backgroundColor: "#f8fafc",
+                                padding: &quot;12px&quot;,
+                                fontSize: &quot;14px&quot;,
+                                color: &quot;#374151&quot;,
+                                borderBottom: &quot;1px solid #f1f5f9&quot;,
+                                backgroundColor: &quot;#f8fafc&quot;,
                               }}
                             >
                               Stock Options (Vesting)
                             </td>
                             <td
                               style={{
-                                padding: "12px",
-                                textAlign: "right",
-                                fontSize: "14px",
-                                fontWeight: "bold",
-                                color: "#374151",
-                                borderBottom: "1px solid #f1f5f9",
-                                backgroundColor: "#f8fafc",
+                                padding: &quot;12px&quot;,
+                                textAlign: &quot;right&quot;,
+                                fontSize: &quot;14px&quot;,
+                                fontWeight: &quot;bold&quot;,
+                                color: &quot;#374151&quot;,
+                                borderBottom: &quot;1px solid #f1f5f9&quot;,
+                                backgroundColor: &quot;#f8fafc&quot;,
                               }}
                             >
                               250,000
                             </td>
                             <td
                               style={{
-                                padding: "12px",
-                                textAlign: "center",
-                                fontSize: "14px",
-                                color: "#374151",
-                                borderBottom: "1px solid #f1f5f9",
-                                backgroundColor: "#f8fafc",
+                                padding: &quot;12px&quot;,
+                                textAlign: &quot;center&quot;,
+                                fontSize: &quot;14px&quot;,
+                                color: &quot;#374151&quot;,
+                                borderBottom: &quot;1px solid #f1f5f9&quot;,
+                                backgroundColor: &quot;#f8fafc&quot;,
                               }}
                             >
                               Direct
                             </td>
                             <td
                               style={{
-                                padding: "12px",
-                                textAlign: "right",
-                                fontSize: "14px",
-                                color: "#374151",
-                                borderBottom: "1px solid #f1f5f9",
-                                backgroundColor: "#f8fafc",
+                                padding: &quot;12px&quot;,
+                                textAlign: &quot;right&quot;,
+                                fontSize: &quot;14px&quot;,
+                                color: &quot;#374151&quot;,
+                                borderBottom: &quot;1px solid #f1f5f9&quot;,
+                                backgroundColor: &quot;#f8fafc&quot;,
                               }}
                             >
                               $4.8M**
@@ -349,44 +349,44 @@ export default function Form3EmailTemplate() {
                           <tr>
                             <td
                               style={{
-                                padding: "12px",
-                                fontSize: "14px",
-                                color: "#374151",
-                                backgroundColor: "#ffffff",
+                                padding: &quot;12px&quot;,
+                                fontSize: &quot;14px&quot;,
+                                color: &quot;#374151&quot;,
+                                backgroundColor: &quot;#ffffff&quot;,
                               }}
                             >
                               Restricted Stock Units
                             </td>
                             <td
                               style={{
-                                padding: "12px",
-                                textAlign: "right",
-                                fontSize: "14px",
-                                fontWeight: "bold",
-                                color: "#374151",
-                                backgroundColor: "#ffffff",
+                                padding: &quot;12px&quot;,
+                                textAlign: &quot;right&quot;,
+                                fontSize: &quot;14px&quot;,
+                                fontWeight: &quot;bold&quot;,
+                                color: &quot;#374151&quot;,
+                                backgroundColor: &quot;#ffffff&quot;,
                               }}
                             >
                               75,000
                             </td>
                             <td
                               style={{
-                                padding: "12px",
-                                textAlign: "center",
-                                fontSize: "14px",
-                                color: "#374151",
-                                backgroundColor: "#ffffff",
+                                padding: &quot;12px&quot;,
+                                textAlign: &quot;center&quot;,
+                                fontSize: &quot;14px&quot;,
+                                color: &quot;#374151&quot;,
+                                backgroundColor: &quot;#ffffff&quot;,
                               }}
                             >
                               Direct
                             </td>
                             <td
                               style={{
-                                padding: "12px",
-                                textAlign: "right",
-                                fontSize: "14px",
-                                color: "#374151",
-                                backgroundColor: "#ffffff",
+                                padding: &quot;12px&quot;,
+                                textAlign: &quot;right&quot;,
+                                fontSize: &quot;14px&quot;,
+                                color: &quot;#374151&quot;,
+                                backgroundColor: &quot;#ffffff&quot;,
                               }}
                             >
                               $1.4M
@@ -397,10 +397,10 @@ export default function Form3EmailTemplate() {
 
                       <p
                         style={{
-                          margin: "12px 0 0",
-                          fontSize: "12px",
-                          color: "#6B7280",
-                          fontStyle: "italic",
+                          margin: &quot;12px 0 0&quot;,
+                          fontSize: &quot;12px&quot;,
+                          color: &quot;#6B7280&quot;,
+                          fontStyle: &quot;italic&quot;,
                         }}
                       >
                         * Based on closing price of $19.25 on June 5, 2025
@@ -414,29 +414,29 @@ export default function Form3EmailTemplate() {
 
               {/* Appointment Details */}
               <table
-                width="100%"
-                cellPadding="0"
-                cellSpacing="0"
+                width=&quot;100%&quot;
+                cellPadding=&quot;0&quot;
+                cellSpacing=&quot;0&quot;
                 style={{
-                  backgroundColor: "#fafafa",
-                  border: "1px solid #e2e8f0",
-                  borderRadius: "8px",
-                  marginBottom: "20px",
-                  boxShadow: "0 2px 4px rgba(0,0,0,0.05), 0 0 1px rgba(0,0,0,0.1)",
-                  backgroundImage: "linear-gradient(to bottom, #ffffff, #f9fafb)",
+                  backgroundColor: &quot;#fafafa&quot;,
+                  border: &quot;1px solid #e2e8f0&quot;,
+                  borderRadius: &quot;8px&quot;,
+                  marginBottom: &quot;20px&quot;,
+                  boxShadow: &quot;0 2px 4px rgba(0,0,0,0.05), 0 0 1px rgba(0,0,0,0.1)&quot;,
+                  backgroundImage: &quot;linear-gradient(to bottom, #ffffff, #f9fafb)&quot;,
                 }}
               >
                 <tbody>
                   <tr>
-                    <td style={{ padding: "20px" }}>
+                    <td style={{ padding: &quot;20px&quot; }}>
                       <h3
                         style={{
-                          margin: "0 0 16px",
-                          color: "#000000",
-                          fontSize: "18px",
-                          fontWeight: "bold",
-                          borderBottom: "2px solid #f1f5f9",
-                          paddingBottom: "8px",
+                          margin: &quot;0 0 16px&quot;,
+                          color: &quot;#000000&quot;,
+                          fontSize: &quot;18px&quot;,
+                          fontWeight: &quot;bold&quot;,
+                          borderBottom: &quot;2px solid #f1f5f9&quot;,
+                          paddingBottom: &quot;8px&quot;,
                         }}
                       >
                         👤 Appointment Details
@@ -444,13 +444,13 @@ export default function Form3EmailTemplate() {
 
                       <div
                         style={{
-                          padding: "12px",
-                          backgroundColor: "#f8fafc",
-                          borderRadius: "6px",
-                          marginBottom: "12px",
+                          padding: &quot;12px&quot;,
+                          backgroundColor: &quot;#f8fafc&quot;,
+                          borderRadius: &quot;6px&quot;,
+                          marginBottom: &quot;12px&quot;,
                         }}
                       >
-                        <p style={{ margin: "0 0 8px", color: "#374151", fontSize: "14px", lineHeight: "1.6" }}>
+                        <p style={{ margin: &quot;0 0 8px&quot;, color: &quot;#374151&quot;, fontSize: &quot;14px&quot;, lineHeight: &quot;1.6&quot; }}>
                           <strong>Background:</strong> Dr. Jennifer Martinez joins Palantir as Chief Technology Officer,
                           bringing over 15 years of experience in artificial intelligence and machine learning from her
                           previous role as VP of AI Research at Google.
@@ -459,15 +459,15 @@ export default function Form3EmailTemplate() {
 
                       <div
                         style={{
-                          padding: "12px",
-                          backgroundColor: "#f8fafc",
-                          borderRadius: "6px",
+                          padding: &quot;12px&quot;,
+                          backgroundColor: &quot;#f8fafc&quot;,
+                          borderRadius: &quot;6px&quot;,
                         }}
                       >
-                        <p style={{ margin: "0", color: "#374151", fontSize: "14px", lineHeight: "1.6" }}>
-                          <strong>Compensation Package:</strong> Dr. Martinez's initial equity grant includes 250,000
+                        <p style={{ margin: &quot;0&quot;, color: &quot;#374151&quot;, fontSize: &quot;14px&quot;, lineHeight: &quot;1.6&quot; }}>
+                          <strong>Compensation Package:</strong> Dr. Martinez&apos;s initial equity grant includes 250,000
                           stock options and 75,000 RSUs, with a 4-year vesting schedule and 1-year cliff. The package
-                          reflects Palantir's commitment to attracting top-tier technology talent.
+                          reflects Palantir&apos;s commitment to attracting top-tier technology talent.
                         </p>
                       </div>
                     </td>
@@ -477,50 +477,50 @@ export default function Form3EmailTemplate() {
 
               {/* Filing Requirements */}
               <table
-                width="100%"
-                cellPadding="0"
-                cellSpacing="0"
+                width=&quot;100%&quot;
+                cellPadding=&quot;0&quot;
+                cellSpacing=&quot;0&quot;
                 style={{
-                  backgroundColor: "#fafafa",
-                  border: "1px solid #e2e8f0",
-                  borderRadius: "8px",
-                  boxShadow: "0 2px 4px rgba(0,0,0,0.05), 0 0 1px rgba(0,0,0,0.1)",
-                  backgroundImage: "linear-gradient(to bottom, #ffffff, #f9fafb)",
+                  backgroundColor: &quot;#fafafa&quot;,
+                  border: &quot;1px solid #e2e8f0&quot;,
+                  borderRadius: &quot;8px&quot;,
+                  boxShadow: &quot;0 2px 4px rgba(0,0,0,0.05), 0 0 1px rgba(0,0,0,0.1)&quot;,
+                  backgroundImage: &quot;linear-gradient(to bottom, #ffffff, #f9fafb)&quot;,
                 }}
               >
                 <tbody>
                   <tr>
-                    <td style={{ padding: "20px" }}>
+                    <td style={{ padding: &quot;20px&quot; }}>
                       <h3
                         style={{
-                          margin: "0 0 12px",
-                          color: "#000000",
-                          fontSize: "18px",
-                          fontWeight: "bold",
-                          borderBottom: "2px solid #f1f5f9",
-                          paddingBottom: "8px",
+                          margin: &quot;0 0 12px&quot;,
+                          color: &quot;#000000&quot;,
+                          fontSize: &quot;18px&quot;,
+                          fontWeight: &quot;bold&quot;,
+                          borderBottom: &quot;2px solid #f1f5f9&quot;,
+                          paddingBottom: &quot;8px&quot;,
                         }}
                       >
                         ℹ️ Filing Information
                       </h3>
                       <ul
                         style={{
-                          margin: "0",
-                          paddingLeft: "20px",
-                          color: "#374151",
-                          fontSize: "14px",
-                          lineHeight: "1.6",
+                          margin: &quot;0&quot;,
+                          paddingLeft: &quot;20px&quot;,
+                          color: &quot;#374151&quot;,
+                          fontSize: &quot;14px&quot;,
+                          lineHeight: &quot;1.6&quot;,
                         }}
                       >
-                        <li style={{ marginBottom: "8px" }}>
+                        <li style={{ marginBottom: &quot;8px&quot; }}>
                           <strong>Filing Requirement:</strong> Form 3 must be filed within 10 days of becoming an
                           officer, director, or 10% shareholder.
                         </li>
-                        <li style={{ marginBottom: "8px" }}>
+                        <li style={{ marginBottom: &quot;8px&quot; }}>
                           <strong>Purpose:</strong> Establishes baseline ownership for future Form 4 and Form 5 filings
                           tracking changes in beneficial ownership.
                         </li>
-                        <li style={{ marginBottom: "8px" }}>
+                        <li style={{ marginBottom: &quot;8px&quot; }}>
                           <strong>Next Steps:</strong> Dr. Martinez will be required to file Form 4 within two business
                           days of any future transactions in Palantir securities.
                         </li>
@@ -540,35 +540,35 @@ export default function Form3EmailTemplate() {
 
       {/* Footer */}
       <table
-        width="100%"
-        cellPadding="0"
-        cellSpacing="0"
+        width=&quot;100%&quot;
+        cellPadding=&quot;0&quot;
+        cellSpacing=&quot;0&quot;
         style={{
-          backgroundColor: "white",
-          borderRadius: "0 0 12px 12px",
-          border: "1px solid #e2e8f0",
-          borderTop: "none",
+          backgroundColor: &quot;white&quot;,
+          borderRadius: &quot;0 0 12px 12px&quot;,
+          border: &quot;1px solid #e2e8f0&quot;,
+          borderTop: &quot;none&quot;,
         }}
       >
         <tbody>
           <tr>
-            <td style={{ padding: "20px", textAlign: "center" }}>
+            <td style={{ padding: &quot;20px&quot;, textAlign: &quot;center&quot; }}>
               <a
-                href="#"
+                href=&quot;#&quot;
                 style={{
-                  display: "inline-block",
-                  padding: "12px 24px",
-                  background: "linear-gradient(135deg, #7C3AED 0%, #EC4899 100%)",
-                  color: "white",
-                  textDecoration: "none",
-                  borderRadius: "8px",
-                  fontSize: "14px",
-                  fontWeight: "bold",
+                  display: &quot;inline-block&quot;,
+                  padding: &quot;12px 24px&quot;,
+                  background: &quot;linear-gradient(135deg, #7C3AED 0%, #EC4899 100%)&quot;,
+                  color: &quot;white&quot;,
+                  textDecoration: &quot;none&quot;,
+                  borderRadius: &quot;8px&quot;,
+                  fontSize: &quot;14px&quot;,
+                  fontWeight: &quot;bold&quot;,
                 }}
               >
                 View on SEC Website
               </a>
-              <p style={{ margin: "16px 0 0", color: "#6B7280", fontSize: "12px" }}>
+              <p style={{ margin: &quot;16px 0 0&quot;, color: &quot;#6B7280&quot;, fontSize: &quot;12px&quot; }}>
                 © 2025 tldrSEC. All rights reserved.
               </p>
             </td>
