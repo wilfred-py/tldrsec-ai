@@ -235,7 +235,7 @@ export async function GET() {
           }
         }
       }
-    } catch (error) {
+    } catch {
       health.services.cache.memory = 'error';
       if (health.status === 'healthy') {
         health.status = 'degraded';

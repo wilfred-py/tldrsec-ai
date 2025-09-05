@@ -63,7 +63,7 @@ export async function POST(request: NextRequest) {
     let body;
     try {
       body = await request.json();
-    } catch (_error) {
+    } catch {
       return NextResponse.json({
         success: false,
         message: 'Invalid JSON in request body'
@@ -124,7 +124,7 @@ export async function PATCH(request: NextRequest) {
     let body;
     try {
       body = await request.json();
-    } catch (_error) {
+    } catch {
       return NextResponse.json({
         success: false,
         message: 'Invalid JSON in request body'

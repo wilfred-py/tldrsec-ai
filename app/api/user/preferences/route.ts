@@ -63,7 +63,7 @@ export async function PATCH(request: NextRequest) {
     let updates;
     try {
       updates = await request.json();
-    } catch (_error) {
+    } catch {
       return NextResponse.json({
         success: false,
         message: 'Invalid JSON in request body'

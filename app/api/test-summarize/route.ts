@@ -101,7 +101,7 @@ function isDirectoryListing(content: string): boolean {
     });
     
     return hasDirectoryTable || (links.length > 5 && directoryLinkCount > links.length * 0.7);
-  } catch (_error) {
+  } catch {
     return false; // If we can't parse the HTML, assume it's not a directory listing
   }
 }
@@ -468,7 +468,7 @@ async function findOrCreateTestTicker(symbol: string, companyName?: string): Pro
           email: 'test@tldrsec.com'
         }
       });
-    } catch (_error) {
+    } catch {
       apiLogger.debug('Test user not found, creating one');
     }
 
@@ -582,7 +582,7 @@ ${content}
  * @param filingUrl URL of the filing
  * @returns Cached summary data or null if not found
  */
-async function checkCache(filingUrl: string): Promise<any | null> {
+async function checkCache(filingUrl: string): Promise<{ summary: string; companyName: string; ticker: string; filingType: string; filingDate: Date } | null> {
   try {
     // Look for existing summary by filing URL, include ticker relation
     const existingSummary = await prisma.summary.findFirst({
@@ -877,7 +877,7 @@ export async function POST(request: NextRequest) {
     
     // Step 3: Parse filing content
     apiLogger.debug(`Parsing filing content from ${actualUrl}`);
-    let parsedContent: { sections: Record<string, string>; metadata: Record<string, any> };
+    let parsedContent: { sections: Record<string, string>; metadata: Record<string, unknown> };
     
     try {
       const parseStart = Date.now();
@@ -1023,7 +1023,7 @@ export async function POST(request: NextRequest) {
               } else {
                 chunkSummaries.push({ chunkSummary: chunkText });
               }
-            } catch (_jsonError) {
+            } catch {
               chunkSummaries.push({ chunkSummary: chunkText });
             }
           }
@@ -1079,7 +1079,7 @@ export async function POST(request: NextRequest) {
             if (responseText.trim().startsWith('{') && responseText.trim().endsWith('}')) {
               summaryText = JSON.parse(responseText);
             }
-          } catch (_jsonError) {
+          } catch {
             // If parsing fails, use the raw text
             apiLogger.warn(`Failed to parse Claude response as JSON`);
           }
