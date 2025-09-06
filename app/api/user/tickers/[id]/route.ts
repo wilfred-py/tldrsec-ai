@@ -8,11 +8,11 @@ import { prisma } from '@/lib/db/prisma';
  */
 export async function DELETE(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const tickerId = params.id;
-    
+    const tickerId = (await params).id;
+      
     if (!tickerId) {
       return NextResponse.json(
         { error: 'Ticker ID is required' }, 

@@ -54,21 +54,35 @@ export function DashboardClient() {
   const [showTutorial, setShowTutorial] = useState(false);
   const [tutorialProgress, setTutorialProgress] = useState(0);
   
+  // State for search functionality
+  const [newTickerSearch, setNewTickerSearch] = useState("");
+  const [searchResults, setSearchResults] = useState<any[]>([]);
+  
+  // Async hooks for API calls
+  const { execute: executeGetCompanies, isLoading: isLoadingCompanies, error: companiesError } = useAsync([]);
+  const { execute: executeAddTicker } = useAsync();
+  const { execute: executeDeleteTicker, isLoading: isDeletingTicker } = useAsync();
+  const { execute: executeUpdatePreferences, isLoading: isUpdatingPreferences } = useAsync();
+  const { execute: executeEmailRequest } = useAsync();
+  
   // State for email request
   const [isEmailRequestLoading, setIsEmailRequestLoading] = useState(false);
   
-  // Async hooks for API calls
-  const { execute: executeGetCompanies, status: companiesStatus, error: companiesError } = useAsync(getTrackedCompanies);
-  const { execute: executeAddTicker } = useAsync(addTrackedCompany);
-  const { execute: executeDeleteTicker, status: deleteStatus } = useAsync(deleteTrackedCompany);
-  const { execute: executeUpdatePreferences, status: updateStatus } = useAsync(updateCompanyPreferences);
-  const { execute: executeEmailRequest } = useAsync();
-  
-  const isLoadingCompanies = companiesStatus === 'pending';
-  const isDeletingTicker = deleteStatus === 'pending';
-  const isUpdatingPreferences = updateStatus === 'pending';
-  
 
+  // Load tracked companies
+  const loadCompanies = useCallback(async () => {
+    try {
+      const response = await executeGetCompanies(() => getTrackedCompanies());
+      if (response && 'data' in response && Array.isArray(response.data)) {
+        setCompanies(response.data);
+      } else {
+        setCompanies([]);
+      }
+    } catch (error) {
+      console.error("Error loading companies:", error);
+      toast.error("Failed to load tracked companies");
+    }
+  }, [executeGetCompanies, setCompanies]);
 
   // Load tracked companies on component mount
   useEffect(() => {
@@ -87,28 +101,6 @@ export function DashboardClient() {
       setTutorialProgress(parseInt(savedProgress, 10));
     }
   }, [loadCompanies]);
-  
-  // Save tutorial progress when it changes
-  useEffect(() => {
-    if (tutorialProgress > 0) {
-      localStorage.setItem('tutorialProgress', tutorialProgress.toString());
-    }
-  }, [tutorialProgress]);
-  
-  // Load tracked companies
-  const loadCompanies = useCallback(async () => {
-    try {
-      const response = await executeGetCompanies(() => getTrackedCompanies());
-      if (response && 'data' in response && Array.isArray(response.data)) {
-        setCompanies(response.data);
-      } else {
-        setCompanies([]);
-      }
-    } catch (error) {
-      console.error("Error loading companies:", error);
-      toast.error("Failed to load tracked companies");
-    }
-  }, [executeGetCompanies, setCompanies]);
   
 
 
@@ -192,11 +184,11 @@ export function DashboardClient() {
     if (!currentCompany) return;
     
     try {
-      await executeDeleteTicker(currentCompany.symbol);
+      await executeDeleteTicker(() => deleteTrackedCompany(currentCompany.id));
       toast.success(`Removed ${currentCompany.symbol} from tracked companies`);
       
       // Remove from local state
-      setCompanies(prev => prev.filter(c => c.symbol !== currentCompany.symbol));
+      setCompanies(prev => prev.filter(c => c.id !== currentCompany.id));
       setIsDeleteDialogOpen(false);
       setCurrentCompany(null);
     } catch (error) {
@@ -210,7 +202,7 @@ export function DashboardClient() {
     if (!currentCompany) return;
     
     try {
-      await executeUpdatePreferences(currentCompany.symbol, currentCompany.preferences);
+      await executeUpdatePreferences(() => updateCompanyPreferences(currentCompany.symbol, currentCompany.preferences));
       toast.success(`Updated preferences for ${currentCompany.symbol}`);
       
       // Update in local state
@@ -584,29 +576,71 @@ export function DashboardClient() {
           <div className="space-y-4 py-2">
             <div className="flex items-center justify-between">
               <div className="space-y-0.5">
-                <Label htmlFor="email-alerts">Email Alerts</Label>
+                <Label htmlFor="tenK">10-K Filings</Label>
                 <p className="text-sm text-muted-foreground">
-                  Receive email alerts for new filings
+                  Annual reports
                 </p>
               </div>
               <Switch
-                id="email-alerts"
-                checked={currentCompany?.preferences?.emailAlerts}
-                onCheckedChange={(checked) => handlePreferenceChange('emailAlerts', checked)}
+                id="tenK"
+                checked={currentCompany?.preferences?.tenK}
+                onCheckedChange={(checked) => handlePreferenceChange('tenK', checked)}
               />
             </div>
             
             <div className="flex items-center justify-between">
               <div className="space-y-0.5">
-                <Label htmlFor="push-notifications">Push Notifications</Label>
+                <Label htmlFor="tenQ">10-Q Filings</Label>
                 <p className="text-sm text-muted-foreground">
-                  Receive push notifications for new filings
+                  Quarterly reports
                 </p>
               </div>
               <Switch
-                id="push-notifications"
-                checked={currentCompany?.preferences?.pushNotifications}
-                onCheckedChange={(checked) => handlePreferenceChange('pushNotifications', checked)}
+                id="tenQ"
+                checked={currentCompany?.preferences?.tenQ}
+                onCheckedChange={(checked) => handlePreferenceChange('tenQ', checked)}
+              />
+            </div>
+
+            <div className="flex items-center justify-between">
+              <div className="space-y-0.5">
+                <Label htmlFor="eightK">8-K Filings</Label>
+                <p className="text-sm text-muted-foreground">
+                  Current reports
+                </p>
+              </div>
+              <Switch
+                id="eightK"
+                checked={currentCompany?.preferences?.eightK}
+                onCheckedChange={(checked) => handlePreferenceChange('eightK', checked)}
+              />
+            </div>
+
+            <div className="flex items-center justify-between">
+              <div className="space-y-0.5">
+                <Label htmlFor="form4">Form 4 Filings</Label>
+                <p className="text-sm text-muted-foreground">
+                  Insider trading reports
+                </p>
+              </div>
+              <Switch
+                id="form4"
+                checked={currentCompany?.preferences?.form4}
+                onCheckedChange={(checked) => handlePreferenceChange('form4', checked)}
+              />
+            </div>
+
+            <div className="flex items-center justify-between">
+              <div className="space-y-0.5">
+                <Label htmlFor="other">Other Filings</Label>
+                <p className="text-sm text-muted-foreground">
+                  All other SEC filings
+                </p>
+              </div>
+              <Switch
+                id="other"
+                checked={currentCompany?.preferences?.other}
+                onCheckedChange={(checked) => handlePreferenceChange('other', checked)}
               />
             </div>
           </div>

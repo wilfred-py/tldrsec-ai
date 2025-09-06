@@ -21,6 +21,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL('https://tldrsec.com'),
   title: "tldrSEC - AI-Powered SEC Filing Summaries",
   description: "Save hours analyzing SEC filings with AI-generated summaries. Get instant insights from 10-K, 10-Q, and 8-K reports for better investment decisions.",
   keywords: "SEC filing summarizer, analyze SEC filing, summarize US financial statements, summarize US company filings, AI financial analysis",
