@@ -6,25 +6,25 @@ interface Form144TemplateProps {
 
 export default function Form144EmailTemplate({ filing }: Form144TemplateProps) {
   return (
-    <div style={{ maxWidth: "600px", margin: "0 auto", fontFamily: "Arial, sans-serif", backgroundColor: "#f8fafc" }}>
+    <div style={{ maxWidth: &quot;600px&quot;, margin: &quot;0 auto&quot;, fontFamily: &quot;Arial, sans-serif&quot;, backgroundColor: &quot;#f8fafc&quot; }}>
       {/* Header with gradient background */}
       <table
-        width="100%"
-        cellPadding="0"
-        cellSpacing="0"
+        width=&quot;100%&quot;
+        cellPadding=&quot;0&quot;
+        cellSpacing=&quot;0&quot;
         style={{
-          background: "linear-gradient(135deg, #7C3AED 0%, #EC4899 100%)",
-          color: "white",
-          borderRadius: "12px 12px 0 0",
+          background: &quot;linear-gradient(135deg, #7C3AED 0%, #EC4899 100%)&quot;,
+          color: &quot;white&quot;,
+          borderRadius: &quot;12px 12px 0 0&quot;,
         }}
       >
         <tbody>
           <tr>
-            <td style={{ padding: "24px", textAlign: "center" }}>
-              <h1 style={{ margin: "0", fontSize: "32px", fontWeight: "bold", letterSpacing: "-0.5px" }}>
+            <td style={{ padding: &quot;24px&quot;, textAlign: &quot;center&quot; }}>
+              <h1 style={{ margin: &quot;0&quot;, fontSize: &quot;32px&quot;, fontWeight: &quot;bold&quot;, letterSpacing: &quot;-0.5px&quot; }}>
                 SEC Filing Summaries
               </h1>
-              <p style={{ margin: "12px 0 0", fontSize: "18px", opacity: "0.9" }}>{new Date().toLocaleDateString()}</p>
+              <p style={{ margin: &quot;12px 0 0&quot;, fontSize: &quot;18px&quot;, opacity: &quot;0.9&quot; }}>{new Date().toLocaleDateString()}</p>
             </td>
           </tr>
         </tbody>
@@ -32,32 +32,32 @@ export default function Form144EmailTemplate({ filing }: Form144TemplateProps) {
 
       {/* Filing Information */}
       <table
-        width="100%"
-        cellPadding="0"
-        cellSpacing="0"
-        style={{ backgroundColor: "white", border: "1px solid #e2e8f0", borderTop: "none" }}
+        width=&quot;100%&quot;
+        cellPadding=&quot;0&quot;
+        cellSpacing=&quot;0&quot;
+        style={{ backgroundColor: &quot;white&quot;, border: &quot;1px solid #e2e8f0&quot;, borderTop: &quot;none&quot; }}
       >
         <tbody>
           <tr>
-            <td style={{ padding: "24px" }}>
-              <table width="100%" cellPadding="0" cellSpacing="0">
+            <td style={{ padding: &quot;24px&quot; }}>
+              <table width=&quot;100%&quot; cellPadding=&quot;0&quot; cellSpacing=&quot;0&quot;>
                 <tbody>
                   <tr>
                     <td>
                       <h2
                         style={{
-                          margin: "0",
-                          background: "linear-gradient(135deg, #7C3AED 0%, #EC4899 100%)",
-                          WebkitBackgroundClip: "text",
-                          WebkitTextFillColor: "transparent",
-                          backgroundClip: "text",
-                          fontSize: "24px",
-                          fontWeight: "bold",
+                          margin: &quot;0&quot;,
+                          background: &quot;linear-gradient(135deg, #7C3AED 0%, #EC4899 100%)&quot;,
+                          WebkitBackgroundClip: &quot;text&quot;,
+                          WebkitTextFillColor: &quot;transparent&quot;,
+                          backgroundClip: &quot;text&quot;,
+                          fontSize: &quot;24px&quot;,
+                          fontWeight: &quot;bold&quot;,
                         }}
                       >
                         {filing.companyName} ({filing.symbol || filing.ticker}) - Form 144 Filing
                       </h2>
-                      <p style={{ margin: "8px 0 20px", color: "#64748b", fontSize: "14px" }}>Filed on: {new Date(filing.filingDate).toLocaleDateString()}</p>
+                      <p style={{ margin: &quot;8px 0 20px&quot;, color: &quot;#64748b&quot;, fontSize: &quot;14px&quot; }}>Filed on: {new Date(filing.filingDate).toLocaleDateString()}</p>
                     </td>
                   </tr>
                 </tbody>
@@ -65,90 +65,90 @@ export default function Form144EmailTemplate({ filing }: Form144TemplateProps) {
 
               {/* Summary Box */}
               <table
-                width="100%"
-                cellPadding="0"
-                cellSpacing="0"
+                width=&quot;100%&quot;
+                cellPadding=&quot;0&quot;
+                cellSpacing=&quot;0&quot;
                 style={{
-                  backgroundColor: "#fafafa",
-                  border: "1px solid #e2e8f0",
-                  borderRadius: "8px",
-                  marginBottom: "20px",
-                  boxShadow: "0 2px 4px rgba(0,0,0,0.05), 0 0 1px rgba(0,0,0,0.1)",
-                  backgroundImage: "linear-gradient(to bottom, #ffffff, #f9fafb)",
+                  backgroundColor: &quot;#fafafa&quot;,
+                  border: &quot;1px solid #e2e8f0&quot;,
+                  borderRadius: &quot;8px&quot;,
+                  marginBottom: &quot;20px&quot;,
+                  boxShadow: &quot;0 2px 4px rgba(0,0,0,0.05), 0 0 1px rgba(0,0,0,0.1)&quot;,
+                  backgroundImage: &quot;linear-gradient(to bottom, #ffffff, #f9fafb)&quot;,
                 }}
               >
                 <tbody>
                   <tr>
-                    <td style={{ padding: "20px" }}>
+                    <td style={{ padding: &quot;20px&quot; }}>
                       <h3
                         style={{
-                          margin: "0 0 16px",
-                          color: "#000000",
-                          fontSize: "18px",
-                          fontWeight: "bold",
-                          borderBottom: "2px solid #f1f5f9",
-                          paddingBottom: "8px",
+                          margin: &quot;0 0 16px&quot;,
+                          color: &quot;#000000&quot;,
+                          fontSize: &quot;18px&quot;,
+                          fontWeight: &quot;bold&quot;,
+                          borderBottom: &quot;2px solid #f1f5f9&quot;,
+                          paddingBottom: &quot;8px&quot;,
                         }}
                       >
                         📋 Summary
                       </h3>
 
-                      <table width="100%" cellPadding="0" cellSpacing="0" style={{ borderCollapse: "collapse" }}>
+                      <table width=&quot;100%&quot; cellPadding=&quot;0&quot; cellSpacing=&quot;0&quot; style={{ borderCollapse: &quot;collapse&quot; }}>
                         <tbody>
                           <tr>
-                            <td style={{ padding: "8px 0", width: "140px", verticalAlign: "top" }}>
-                              <p style={{ margin: "0", color: "#6B7280", fontSize: "14px", fontWeight: "500" }}>
+                            <td style={{ padding: &quot;8px 0&quot;, width: &quot;140px&quot;, verticalAlign: &quot;top&quot; }}>
+                              <p style={{ margin: &quot;0&quot;, color: &quot;#6B7280&quot;, fontSize: &quot;14px&quot;, fontWeight: &quot;500&quot; }}>
                                 Reporting Person:
                               </p>
                             </td>
-                            <td style={{ padding: "8px 0", verticalAlign: "top" }}>
-                              <p style={{ margin: "0", color: "#374151", fontSize: "14px", fontWeight: "600" }}>
-                                {filing.summaryData?.reportingPerson || 'N/A'}
+                            <td style={{ padding: &quot;8px 0&quot;, verticalAlign: &quot;top&quot; }}>
+                              <p style={{ margin: &quot;0&quot;, color: &quot;#374151&quot;, fontSize: &quot;14px&quot;, fontWeight: &quot;600&quot; }}>
+                                {filing.summaryData?.reportingPerson || &apos;N/A&apos;}
                               </p>
                             </td>
                           </tr>
                           <tr>
-                            <td style={{ padding: "8px 0", width: "140px", verticalAlign: "top" }}>
-                              <p style={{ margin: "0", color: "#6B7280", fontSize: "14px", fontWeight: "500" }}>
+                            <td style={{ padding: &quot;8px 0&quot;, width: &quot;140px&quot;, verticalAlign: &quot;top&quot; }}>
+                              <p style={{ margin: &quot;0&quot;, color: &quot;#6B7280&quot;, fontSize: &quot;14px&quot;, fontWeight: &quot;500&quot; }}>
                                 Position:
                               </p>
                             </td>
-                            <td style={{ padding: "8px 0", verticalAlign: "top" }}>
-                              <p style={{ margin: "0", color: "#374151", fontSize: "14px" }}>
-                                {filing.summaryData?.position || 'N/A'}
+                            <td style={{ padding: &quot;8px 0&quot;, verticalAlign: &quot;top&quot; }}>
+                              <p style={{ margin: &quot;0&quot;, color: &quot;#374151&quot;, fontSize: &quot;14px&quot; }}>
+                                {filing.summaryData?.position || &apos;N/A&apos;}
                               </p>
                             </td>
                           </tr>
                           <tr>
-                            <td style={{ padding: "8px 0", width: "140px", verticalAlign: "top" }}>
-                              <p style={{ margin: "0", color: "#6B7280", fontSize: "14px", fontWeight: "500" }}>
+                            <td style={{ padding: &quot;8px 0&quot;, width: &quot;140px&quot;, verticalAlign: &quot;top&quot; }}>
+                              <p style={{ margin: &quot;0&quot;, color: &quot;#6B7280&quot;, fontSize: &quot;14px&quot;, fontWeight: &quot;500&quot; }}>
                                 Transaction Type:
                               </p>
                             </td>
-                            <td style={{ padding: "8px 0", verticalAlign: "top" }}>
-                              <p style={{ margin: "0", color: "#374151", fontSize: "14px" }}>
-                                {filing.summaryData?.transactionType || 'Sale of Common Stock'}
+                            <td style={{ padding: &quot;8px 0&quot;, verticalAlign: &quot;top&quot; }}>
+                              <p style={{ margin: &quot;0&quot;, color: &quot;#374151&quot;, fontSize: &quot;14px&quot; }}>
+                                {filing.summaryData?.transactionType || &apos;Sale of Common Stock&apos;}
                               </p>
                             </td>
                           </tr>
                           <tr>
-                            <td style={{ padding: "8px 0", width: "140px", verticalAlign: "top" }}>
-                              <p style={{ margin: "0", color: "#6B7280", fontSize: "14px", fontWeight: "500" }}>
+                            <td style={{ padding: &quot;8px 0&quot;, width: &quot;140px&quot;, verticalAlign: &quot;top&quot; }}>
+                              <p style={{ margin: &quot;0&quot;, color: &quot;#6B7280&quot;, fontSize: &quot;14px&quot;, fontWeight: &quot;500&quot; }}>
                                 Sale Date:
                               </p>
                             </td>
-                            <td style={{ padding: "8px 0", verticalAlign: "top" }}>
-                              <p style={{ margin: "0", color: "#374151", fontSize: "14px" }}>{filing.summaryData?.saleDate || filing.summaryData?.transactionDate || new Date(filing.filingDate).toLocaleDateString()}</p>
+                            <td style={{ padding: &quot;8px 0&quot;, verticalAlign: &quot;top&quot; }}>
+                              <p style={{ margin: &quot;0&quot;, color: &quot;#374151&quot;, fontSize: &quot;14px&quot; }}>{filing.summaryData?.saleDate || filing.summaryData?.transactionDate || new Date(filing.filingDate).toLocaleDateString()}</p>
                             </td>
                           </tr>
                           <tr>
-                            <td style={{ padding: "8px 0", width: "140px", verticalAlign: "top" }}>
-                              <p style={{ margin: "0", color: "#6B7280", fontSize: "14px", fontWeight: "500" }}>
+                            <td style={{ padding: &quot;8px 0&quot;, width: &quot;140px&quot;, verticalAlign: &quot;top&quot; }}>
+                              <p style={{ margin: &quot;0&quot;, color: &quot;#6B7280&quot;, fontSize: &quot;14px&quot;, fontWeight: &quot;500&quot; }}>
                                 Filing Date:
                               </p>
                             </td>
-                            <td style={{ padding: "8px 0", verticalAlign: "top" }}>
-                              <p style={{ margin: "0", color: "#374151", fontSize: "14px" }}>{new Date(filing.filingDate).toLocaleDateString()}</p>
+                            <td style={{ padding: &quot;8px 0&quot;, verticalAlign: &quot;top&quot; }}>
+                              <p style={{ margin: &quot;0&quot;, color: &quot;#374151&quot;, fontSize: &quot;14px&quot; }}>{new Date(filing.filingDate).toLocaleDateString()}</p>
                             </td>
                           </tr>
                         </tbody>
@@ -160,79 +160,79 @@ export default function Form144EmailTemplate({ filing }: Form144TemplateProps) {
 
               {/* Sale Details */}
               <table
-                width="100%"
-                cellPadding="0"
-                cellSpacing="0"
+                width=&quot;100%&quot;
+                cellPadding=&quot;0&quot;
+                cellSpacing=&quot;0&quot;
                 style={{
-                  backgroundColor: "#fafafa",
-                  border: "1px solid #e2e8f0",
-                  borderRadius: "8px",
-                  marginBottom: "20px",
-                  boxShadow: "0 2px 4px rgba(0,0,0,0.05), 0 0 1px rgba(0,0,0,0.1)",
-                  backgroundImage: "linear-gradient(to bottom, #ffffff, #f9fafb)",
+                  backgroundColor: &quot;#fafafa&quot;,
+                  border: &quot;1px solid #e2e8f0&quot;,
+                  borderRadius: &quot;8px&quot;,
+                  marginBottom: &quot;20px&quot;,
+                  boxShadow: &quot;0 2px 4px rgba(0,0,0,0.05), 0 0 1px rgba(0,0,0,0.1)&quot;,
+                  backgroundImage: &quot;linear-gradient(to bottom, #ffffff, #f9fafb)&quot;,
                 }}
               >
                 <tbody>
                   <tr>
-                    <td style={{ padding: "20px" }}>
+                    <td style={{ padding: &quot;20px&quot; }}>
                       <h3
                         style={{
-                          margin: "0 0 16px",
-                          color: "#000000",
-                          fontSize: "18px",
-                          fontWeight: "bold",
-                          borderBottom: "2px solid #f1f5f9",
-                          paddingBottom: "8px",
+                          margin: &quot;0 0 16px&quot;,
+                          color: &quot;#000000&quot;,
+                          fontSize: &quot;18px&quot;,
+                          fontWeight: &quot;bold&quot;,
+                          borderBottom: &quot;2px solid #f1f5f9&quot;,
+                          paddingBottom: &quot;8px&quot;,
                         }}
                       >
                         💰 Intended Sale Details
                       </h3>
 
                       <table
-                        width="100%"
-                        cellPadding="0"
-                        cellSpacing="0"
+                        width=&quot;100%&quot;
+                        cellPadding=&quot;0&quot;
+                        cellSpacing=&quot;0&quot;
                         style={{
-                          borderCollapse: "collapse",
-                          border: "1px solid #e2e8f0",
-                          borderRadius: "6px",
-                          boxShadow: "0 1px 2px rgba(0,0,0,0.05)",
+                          borderCollapse: &quot;collapse&quot;,
+                          border: &quot;1px solid #e2e8f0&quot;,
+                          borderRadius: &quot;6px&quot;,
+                          boxShadow: &quot;0 1px 2px rgba(0,0,0,0.05)&quot;,
                         }}
                       >
                         <thead>
-                          <tr style={{ backgroundColor: "#f1f5f9" }}>
+                          <tr style={{ backgroundColor: &quot;#f1f5f9&quot; }}>
                             <th
                               style={{
-                                padding: "12px",
-                                textAlign: "left",
-                                fontSize: "12px",
-                                fontWeight: "bold",
-                                color: "#6B7280",
-                                borderBottom: "1px solid #e2e8f0",
+                                padding: &quot;12px&quot;,
+                                textAlign: &quot;left&quot;,
+                                fontSize: &quot;12px&quot;,
+                                fontWeight: &quot;bold&quot;,
+                                color: &quot;#6B7280&quot;,
+                                borderBottom: &quot;1px solid #e2e8f0&quot;,
                               }}
                             >
                               SECURITY TYPE
                             </th>
                             <th
                               style={{
-                                padding: "12px",
-                                textAlign: "right",
-                                fontSize: "12px",
-                                fontWeight: "bold",
-                                color: "#6B7280",
-                                borderBottom: "1px solid #e2e8f0",
+                                padding: &quot;12px&quot;,
+                                textAlign: &quot;right&quot;,
+                                fontSize: &quot;12px&quot;,
+                                fontWeight: &quot;bold&quot;,
+                                color: &quot;#6B7280&quot;,
+                                borderBottom: &quot;1px solid #e2e8f0&quot;,
                               }}
                             >
                               SHARES
                             </th>
                             <th
                               style={{
-                                padding: "12px",
-                                textAlign: "right",
-                                fontSize: "12px",
-                                fontWeight: "bold",
-                                color: "#6B7280",
-                                borderBottom: "1px solid #e2e8f0",
+                                padding: &quot;12px&quot;,
+                                textAlign: &quot;right&quot;,
+                                fontSize: &quot;12px&quot;,
+                                fontWeight: &quot;bold&quot;,
+                                color: &quot;#6B7280&quot;,
+                                borderBottom: &quot;1px solid #e2e8f0&quot;,
                               }}
                             >
                               EST. VALUE*
@@ -243,34 +243,34 @@ export default function Form144EmailTemplate({ filing }: Form144TemplateProps) {
                           <tr>
                             <td
                               style={{
-                                padding: "12px",
-                                fontSize: "14px",
-                                color: "#374151",
-                                backgroundColor: "#ffffff",
+                                padding: &quot;12px&quot;,
+                                fontSize: &quot;14px&quot;,
+                                color: &quot;#374151&quot;,
+                                backgroundColor: &quot;#ffffff&quot;,
                               }}
                             >
                               Common Stock
                             </td>
                             <td
                               style={{
-                                padding: "12px",
-                                textAlign: "right",
-                                fontSize: "14px",
-                                fontWeight: "bold",
-                                color: "#EF4444",
-                                backgroundColor: "#ffffff",
+                                padding: &quot;12px&quot;,
+                                textAlign: &quot;right&quot;,
+                                fontSize: &quot;14px&quot;,
+                                fontWeight: &quot;bold&quot;,
+                                color: &quot;#EF4444&quot;,
+                                backgroundColor: &quot;#ffffff&quot;,
                               }}
                             >
                               120,000
                             </td>
                             <td
                               style={{
-                                padding: "12px",
-                                textAlign: "right",
-                                fontSize: "14px",
-                                fontWeight: "bold",
-                                color: "#374151",
-                                backgroundColor: "#ffffff",
+                                padding: &quot;12px&quot;,
+                                textAlign: &quot;right&quot;,
+                                fontSize: &quot;14px&quot;,
+                                fontWeight: &quot;bold&quot;,
+                                color: &quot;#374151&quot;,
+                                backgroundColor: &quot;#ffffff&quot;,
                               }}
                             >
                               $144.0M
@@ -281,10 +281,10 @@ export default function Form144EmailTemplate({ filing }: Form144TemplateProps) {
 
                       <p
                         style={{
-                          margin: "12px 0 0",
-                          fontSize: "12px",
-                          color: "#6B7280",
-                          fontStyle: "italic",
+                          margin: &quot;12px 0 0&quot;,
+                          fontSize: &quot;12px&quot;,
+                          color: &quot;#6B7280&quot;,
+                          fontStyle: &quot;italic&quot;,
                         }}
                       >
                         * Based on approximate market price of $1,200 per share
@@ -296,29 +296,29 @@ export default function Form144EmailTemplate({ filing }: Form144TemplateProps) {
 
               {/* Rule 144 Compliance */}
               <table
-                width="100%"
-                cellPadding="0"
-                cellSpacing="0"
+                width=&quot;100%&quot;
+                cellPadding=&quot;0&quot;
+                cellSpacing=&quot;0&quot;
                 style={{
-                  backgroundColor: "#fafafa",
-                  border: "1px solid #e2e8f0",
-                  borderRadius: "8px",
-                  marginBottom: "20px",
-                  boxShadow: "0 2px 4px rgba(0,0,0,0.05), 0 0 1px rgba(0,0,0,0.1)",
-                  backgroundImage: "linear-gradient(to bottom, #ffffff, #f9fafb)",
+                  backgroundColor: &quot;#fafafa&quot;,
+                  border: &quot;1px solid #e2e8f0&quot;,
+                  borderRadius: &quot;8px&quot;,
+                  marginBottom: &quot;20px&quot;,
+                  boxShadow: &quot;0 2px 4px rgba(0,0,0,0.05), 0 0 1px rgba(0,0,0,0.1)&quot;,
+                  backgroundImage: &quot;linear-gradient(to bottom, #ffffff, #f9fafb)&quot;,
                 }}
               >
                 <tbody>
                   <tr>
-                    <td style={{ padding: "20px" }}>
+                    <td style={{ padding: &quot;20px&quot; }}>
                       <h3
                         style={{
-                          margin: "0 0 16px",
-                          color: "#000000",
-                          fontSize: "18px",
-                          fontWeight: "bold",
-                          borderBottom: "2px solid #f1f5f9",
-                          paddingBottom: "8px",
+                          margin: &quot;0 0 16px&quot;,
+                          color: &quot;#000000&quot;,
+                          fontSize: &quot;18px&quot;,
+                          fontWeight: &quot;bold&quot;,
+                          borderBottom: &quot;2px solid #f1f5f9&quot;,
+                          paddingBottom: &quot;8px&quot;,
                         }}
                       >
                         ✅ Rule 144 Compliance
@@ -326,23 +326,23 @@ export default function Form144EmailTemplate({ filing }: Form144TemplateProps) {
 
                       <div
                         style={{
-                          padding: "12px",
-                          backgroundColor: "#f8fafc",
-                          borderRadius: "6px",
-                          marginBottom: "12px",
+                          padding: &quot;12px&quot;,
+                          backgroundColor: &quot;#f8fafc&quot;,
+                          borderRadius: &quot;6px&quot;,
+                          marginBottom: &quot;12px&quot;,
                         }}
                       >
                         <h4
                           style={{
-                            margin: "0 0 8px",
-                            color: "#374151",
-                            fontSize: "16px",
-                            fontWeight: "bold",
+                            margin: &quot;0 0 8px&quot;,
+                            color: &quot;#374151&quot;,
+                            fontSize: &quot;16px&quot;,
+                            fontWeight: &quot;bold&quot;,
                           }}
                         >
                           Holding Period Requirements
                         </h4>
-                        <p style={{ margin: "0", color: "#374151", fontSize: "14px", lineHeight: "1.6" }}>
+                        <p style={{ margin: &quot;0&quot;, color: &quot;#374151&quot;, fontSize: &quot;14px&quot;, lineHeight: &quot;1.6&quot; }}>
                           ✓ Securities have been held for more than six months, satisfying the minimum holding period
                           requirement for restricted securities under Rule 144.
                         </p>
@@ -350,24 +350,24 @@ export default function Form144EmailTemplate({ filing }: Form144TemplateProps) {
 
                       <div
                         style={{
-                          padding: "12px",
-                          backgroundColor: "#f8fafc",
-                          borderRadius: "6px",
-                          marginBottom: "12px",
+                          padding: &quot;12px&quot;,
+                          backgroundColor: &quot;#f8fafc&quot;,
+                          borderRadius: &quot;6px&quot;,
+                          marginBottom: &quot;12px&quot;,
                         }}
                       >
                         <h4
                           style={{
-                            margin: "0 0 8px",
-                            color: "#374151",
-                            fontSize: "16px",
-                            fontWeight: "bold",
+                            margin: &quot;0 0 8px&quot;,
+                            color: &quot;#374151&quot;,
+                            fontSize: &quot;16px&quot;,
+                            fontWeight: &quot;bold&quot;,
                           }}
                         >
                           Volume Limitations
                         </h4>
-                        <p style={{ margin: "0", color: "#374151", fontSize: "14px", lineHeight: "1.6" }}>
-                          ✓ The 120,000 shares represent less than 1% of NVIDIA's outstanding shares and comply with the
+                        <p style={{ margin: &quot;0&quot;, color: &quot;#374151&quot;, fontSize: &quot;14px&quot;, lineHeight: &quot;1.6&quot; }}>
+                          ✓ The 120,000 shares represent less than 1% of NVIDIA&apos;s outstanding shares and comply with the
                           greater of 1% of outstanding shares or average weekly trading volume over the prior four
                           weeks.
                         </p>
@@ -375,24 +375,24 @@ export default function Form144EmailTemplate({ filing }: Form144TemplateProps) {
 
                       <div
                         style={{
-                          padding: "12px",
-                          backgroundColor: "#f8fafc",
-                          borderRadius: "6px",
+                          padding: &quot;12px&quot;,
+                          backgroundColor: &quot;#f8fafc&quot;,
+                          borderRadius: &quot;6px&quot;,
                         }}
                       >
                         <h4
                           style={{
-                            margin: "0 0 8px",
-                            color: "#374151",
-                            fontSize: "16px",
-                            fontWeight: "bold",
+                            margin: &quot;0 0 8px&quot;,
+                            color: &quot;#374151&quot;,
+                            fontSize: &quot;16px&quot;,
+                            fontWeight: &quot;bold&quot;,
                           }}
                         >
                           Manner of Sale
                         </h4>
-                        <p style={{ margin: "0", color: "#374151", fontSize: "14px", lineHeight: "1.6" }}>
+                        <p style={{ margin: &quot;0&quot;, color: &quot;#374151&quot;, fontSize: &quot;14px&quot;, lineHeight: &quot;1.6&quot; }}>
                           ✓ Sales will be conducted through ordinary brokerage transactions on NASDAQ, satisfying the
-                          "manner of sale" requirements under Rule 144.
+                          &quot;manner of sale&quot; requirements under Rule 144.
                         </p>
                       </div>
                     </td>
@@ -402,80 +402,80 @@ export default function Form144EmailTemplate({ filing }: Form144TemplateProps) {
 
               {/* Broker Information */}
               <table
-                width="100%"
-                cellPadding="0"
-                cellSpacing="0"
+                width=&quot;100%&quot;
+                cellPadding=&quot;0&quot;
+                cellSpacing=&quot;0&quot;
                 style={{
-                  backgroundColor: "#fafafa",
-                  border: "1px solid #e2e8f0",
-                  borderRadius: "8px",
-                  marginBottom: "20px",
-                  boxShadow: "0 2px 4px rgba(0,0,0,0.05), 0 0 1px rgba(0,0,0,0.1)",
-                  backgroundImage: "linear-gradient(to bottom, #ffffff, #f9fafb)",
+                  backgroundColor: &quot;#fafafa&quot;,
+                  border: &quot;1px solid #e2e8f0&quot;,
+                  borderRadius: &quot;8px&quot;,
+                  marginBottom: &quot;20px&quot;,
+                  boxShadow: &quot;0 2px 4px rgba(0,0,0,0.05), 0 0 1px rgba(0,0,0,0.1)&quot;,
+                  backgroundImage: &quot;linear-gradient(to bottom, #ffffff, #f9fafb)&quot;,
                 }}
               >
                 <tbody>
                   <tr>
-                    <td style={{ padding: "20px" }}>
+                    <td style={{ padding: &quot;20px&quot; }}>
                       <h3
                         style={{
-                          margin: "0 0 16px",
-                          color: "#000000",
-                          fontSize: "18px",
-                          fontWeight: "bold",
-                          borderBottom: "2px solid #f1f5f9",
-                          paddingBottom: "8px",
+                          margin: &quot;0 0 16px&quot;,
+                          color: &quot;#000000&quot;,
+                          fontSize: &quot;18px&quot;,
+                          fontWeight: &quot;bold&quot;,
+                          borderBottom: &quot;2px solid #f1f5f9&quot;,
+                          paddingBottom: &quot;8px&quot;,
                         }}
                       >
                         🏦 Broker Information
                       </h3>
 
-                      <table width="100%" cellPadding="0" cellSpacing="0" style={{ borderCollapse: "collapse" }}>
+                      <table width=&quot;100%&quot; cellPadding=&quot;0&quot; cellSpacing=&quot;0&quot; style={{ borderCollapse: &quot;collapse&quot; }}>
                         <tbody>
                           <tr>
-                            <td style={{ padding: "8px 0", width: "140px", verticalAlign: "top" }}>
-                              <p style={{ margin: "0", color: "#6B7280", fontSize: "14px", fontWeight: "500" }}>
+                            <td style={{ padding: &quot;8px 0&quot;, width: &quot;140px&quot;, verticalAlign: &quot;top&quot; }}>
+                              <p style={{ margin: &quot;0&quot;, color: &quot;#6B7280&quot;, fontSize: &quot;14px&quot;, fontWeight: &quot;500&quot; }}>
                                 Broker Name:
                               </p>
                             </td>
-                            <td style={{ padding: "8px 0", verticalAlign: "top" }}>
-                              <p style={{ margin: "0", color: "#374151", fontSize: "14px", fontWeight: "600" }}>
+                            <td style={{ padding: &quot;8px 0&quot;, verticalAlign: &quot;top&quot; }}>
+                              <p style={{ margin: &quot;0&quot;, color: &quot;#374151&quot;, fontSize: &quot;14px&quot;, fontWeight: &quot;600&quot; }}>
                                 Goldman Sachs & Co. LLC
                               </p>
                             </td>
                           </tr>
                           <tr>
-                            <td style={{ padding: "8px 0", width: "140px", verticalAlign: "top" }}>
-                              <p style={{ margin: "0", color: "#6B7280", fontSize: "14px", fontWeight: "500" }}>
+                            <td style={{ padding: &quot;8px 0&quot;, width: &quot;140px&quot;, verticalAlign: &quot;top&quot; }}>
+                              <p style={{ margin: &quot;0&quot;, color: &quot;#6B7280&quot;, fontSize: &quot;14px&quot;, fontWeight: &quot;500&quot; }}>
                                 Broker Address:
                               </p>
                             </td>
-                            <td style={{ padding: "8px 0", verticalAlign: "top" }}>
-                              <p style={{ margin: "0", color: "#374151", fontSize: "14px" }}>
+                            <td style={{ padding: &quot;8px 0&quot;, verticalAlign: &quot;top&quot; }}>
+                              <p style={{ margin: &quot;0&quot;, color: &quot;#374151&quot;, fontSize: &quot;14px&quot; }}>
                                 200 West Street, New York, NY 10282
                               </p>
                             </td>
                           </tr>
                           <tr>
-                            <td style={{ padding: "8px 0", width: "140px", verticalAlign: "top" }}>
-                              <p style={{ margin: "0", color: "#6B7280", fontSize: "14px", fontWeight: "500" }}>
+                            <td style={{ padding: &quot;8px 0&quot;, width: &quot;140px&quot;, verticalAlign: &quot;top&quot; }}>
+                              <p style={{ margin: &quot;0&quot;, color: &quot;#6B7280&quot;, fontSize: &quot;14px&quot;, fontWeight: &quot;500&quot; }}>
                                 Sale Method:
                               </p>
                             </td>
-                            <td style={{ padding: "8px 0", verticalAlign: "top" }}>
-                              <p style={{ margin: "0", color: "#374151", fontSize: "14px" }}>
+                            <td style={{ padding: &quot;8px 0&quot;, verticalAlign: &quot;top&quot; }}>
+                              <p style={{ margin: &quot;0&quot;, color: &quot;#374151&quot;, fontSize: &quot;14px&quot; }}>
                                 Ordinary brokerage transactions
                               </p>
                             </td>
                           </tr>
                           <tr>
-                            <td style={{ padding: "8px 0", width: "140px", verticalAlign: "top" }}>
-                              <p style={{ margin: "0", color: "#6B7280", fontSize: "14px", fontWeight: "500" }}>
+                            <td style={{ padding: &quot;8px 0&quot;, width: &quot;140px&quot;, verticalAlign: &quot;top&quot; }}>
+                              <p style={{ margin: &quot;0&quot;, color: &quot;#6B7280&quot;, fontSize: &quot;14px&quot;, fontWeight: &quot;500&quot; }}>
                                 Trading Plan:
                               </p>
                             </td>
-                            <td style={{ padding: "8px 0", verticalAlign: "top" }}>
-                              <p style={{ margin: "0", color: "#374151", fontSize: "14px" }}>
+                            <td style={{ padding: &quot;8px 0&quot;, verticalAlign: &quot;top&quot; }}>
+                              <p style={{ margin: &quot;0&quot;, color: &quot;#374151&quot;, fontSize: &quot;14px&quot; }}>
                                 10b5-1 Trading Plan (adopted 12/15/2024)
                               </p>
                             </td>
@@ -489,52 +489,52 @@ export default function Form144EmailTemplate({ filing }: Form144TemplateProps) {
 
               {/* Market Impact */}
               <table
-                width="100%"
-                cellPadding="0"
-                cellSpacing="0"
+                width=&quot;100%&quot;
+                cellPadding=&quot;0&quot;
+                cellSpacing=&quot;0&quot;
                 style={{
-                  backgroundColor: "#fafafa",
-                  border: "1px solid #e2e8f0",
-                  borderRadius: "8px",
-                  boxShadow: "0 2px 4px rgba(0,0,0,0.05), 0 0 1px rgba(0,0,0,0.1)",
-                  backgroundImage: "linear-gradient(to bottom, #ffffff, #f9fafb)",
+                  backgroundColor: &quot;#fafafa&quot;,
+                  border: &quot;1px solid #e2e8f0&quot;,
+                  borderRadius: &quot;8px&quot;,
+                  boxShadow: &quot;0 2px 4px rgba(0,0,0,0.05), 0 0 1px rgba(0,0,0,0.1)&quot;,
+                  backgroundImage: &quot;linear-gradient(to bottom, #ffffff, #f9fafb)&quot;,
                 }}
               >
                 <tbody>
                   <tr>
-                    <td style={{ padding: "20px" }}>
+                    <td style={{ padding: &quot;20px&quot; }}>
                       <h3
                         style={{
-                          margin: "0 0 12px",
-                          color: "#000000",
-                          fontSize: "18px",
-                          fontWeight: "bold",
-                          borderBottom: "2px solid #f1f5f9",
-                          paddingBottom: "8px",
+                          margin: &quot;0 0 12px&quot;,
+                          color: &quot;#000000&quot;,
+                          fontSize: &quot;18px&quot;,
+                          fontWeight: &quot;bold&quot;,
+                          borderBottom: &quot;2px solid #f1f5f9&quot;,
+                          paddingBottom: &quot;8px&quot;,
                         }}
                       >
                         📊 Market Context
                       </h3>
                       <ul
                         style={{
-                          margin: "0",
-                          paddingLeft: "20px",
-                          color: "#374151",
-                          fontSize: "14px",
-                          lineHeight: "1.6",
+                          margin: &quot;0&quot;,
+                          paddingLeft: &quot;20px&quot;,
+                          color: &quot;#374151&quot;,
+                          fontSize: &quot;14px&quot;,
+                          lineHeight: &quot;1.6&quot;,
                         }}
                       >
-                        <li style={{ marginBottom: "8px" }}>
-                          <strong>Planned Sale:</strong> {filing.summaryData?.plannedSaleNote || 'This Form 144 represents a notice of intent to sell, not a completed transaction. The actual sale may occur over the specified time period.'}
+                        <li style={{ marginBottom: &quot;8px&quot; }}>
+                          <strong>Planned Sale:</strong> {filing.summaryData?.plannedSaleNote || &apos;This Form 144 represents a notice of intent to sell, not a completed transaction. The actual sale may occur over the specified time period.&apos;}
                         </li>
-                        <li style={{ marginBottom: "8px" }}>
-                          <strong>Trading Plan:</strong> {filing.summaryData?.tradingPlanNote || 'The sale may be part of a pre-established trading plan, indicating it was planned in advance.'}
+                        <li style={{ marginBottom: &quot;8px&quot; }}>
+                          <strong>Trading Plan:</strong> {filing.summaryData?.tradingPlanNote || &apos;The sale may be part of a pre-established trading plan, indicating it was planned in advance.&apos;}
                         </li>
-                        <li style={{ marginBottom: "8px" }}>
-                          <strong>Transaction Context:</strong> {filing.summaryData?.transactionContext || 'Insider stock transactions are common for diversification and liquidity purposes and do not necessarily indicate sentiment about the company.'}
+                        <li style={{ marginBottom: &quot;8px&quot; }}>
+                          <strong>Transaction Context:</strong> {filing.summaryData?.transactionContext || &apos;Insider stock transactions are common for diversification and liquidity purposes and do not necessarily indicate sentiment about the company.&apos;}
                         </li>
                         <li>
-                          <strong>Transparency:</strong> {filing.summaryData?.transparencyNote || 'Form 144 filings provide advance notice to the market of potential insider selling, promoting transparency and fair markets.'}
+                          <strong>Transparency:</strong> {filing.summaryData?.transparencyNote || &apos;Form 144 filings provide advance notice to the market of potential insider selling, promoting transparency and fair markets.&apos;}
                         </li>
                       </ul>
                     </td>
@@ -548,35 +548,35 @@ export default function Form144EmailTemplate({ filing }: Form144TemplateProps) {
 
       {/* Footer */}
       <table
-        width="100%"
-        cellPadding="0"
-        cellSpacing="0"
+        width=&quot;100%&quot;
+        cellPadding=&quot;0&quot;
+        cellSpacing=&quot;0&quot;
         style={{
-          backgroundColor: "white",
-          borderRadius: "0 0 12px 12px",
-          border: "1px solid #e2e8f0",
-          borderTop: "none",
+          backgroundColor: &quot;white&quot;,
+          borderRadius: &quot;0 0 12px 12px&quot;,
+          border: &quot;1px solid #e2e8f0&quot;,
+          borderTop: &quot;none&quot;,
         }}
       >
         <tbody>
           <tr>
-            <td style={{ padding: "20px", textAlign: "center" }}>
+            <td style={{ padding: &quot;20px&quot;, textAlign: &quot;center&quot; }}>
               <a
                 href={filing.filingUrl || filing.url}
                 style={{
-                  display: "inline-block",
-                  padding: "12px 24px",
-                  background: "linear-gradient(135deg, #7C3AED 0%, #EC4899 100%)",
-                  color: "white",
-                  textDecoration: "none",
-                  borderRadius: "8px",
-                  fontSize: "14px",
-                  fontWeight: "bold",
+                  display: &quot;inline-block&quot;,
+                  padding: &quot;12px 24px&quot;,
+                  background: &quot;linear-gradient(135deg, #7C3AED 0%, #EC4899 100%)&quot;,
+                  color: &quot;white&quot;,
+                  textDecoration: &quot;none&quot;,
+                  borderRadius: &quot;8px&quot;,
+                  fontSize: &quot;14px&quot;,
+                  fontWeight: &quot;bold&quot;,
                 }}
               >
                 View on SEC Website
               </a>
-              <p style={{ margin: "16px 0 0", color: "#6B7280", fontSize: "12px" }}>
+              <p style={{ margin: &quot;16px 0 0&quot;, color: &quot;#6B7280&quot;, fontSize: &quot;12px&quot; }}>
                 © 2025 tldrSEC. All rights reserved.
               </p>
             </td>

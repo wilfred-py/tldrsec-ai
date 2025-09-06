@@ -26,7 +26,7 @@ interface FilingService {
   getFilingLogs(): Promise<{ data: any }>;
   getFilingById(accessionNumber: string): Promise<any>;
   sendEmailSummary(email: string, tickers?: string[], debug?: boolean): Promise<any>;
-  getFilingSummary(ticker: string, formType: FilingType): Promise<{ data: FilingSummaryResult | null, error?: string }>;
+  getFilingSummary(ticker: string, formType: FilingType, options?: { bypassCache?: boolean; fromCron?: boolean }): Promise<{ data: FilingSummaryResult | null, error?: string }>;
 }
 
 /**
@@ -47,7 +47,7 @@ const filingService: FilingService = {
   },
   
   // Get filing summary for a ticker and form type
-  getFilingSummary: async (ticker: string, formType: FilingType) => {
+  getFilingSummary: async (ticker: string, formType: FilingType, options: { bypassCache?: boolean; fromCron?: boolean } = {}) => {
     // Feature flag for optimized filing service (Tranche 3)
     const useOptimizedService = process.env.ENABLE_OPTIMIZED_FILING === 'true';
     const trafficPercentage = parseInt(process.env.OPTIMIZED_TRAFFIC_PERCENTAGE || '0', 10);
@@ -73,8 +73,8 @@ const filingService: FilingService = {
     }
     
     // Call the legacy filing summary service
-    console.log(`[INFO][FilingService] Using legacy service for ${ticker} ${formType}`);
-    return await getFilingSummaryFromService(ticker, formType);
+    console.log(`[INFO][FilingService] Using legacy service for ${ticker} ${formType} (bypassCache=${options.bypassCache}, fromCron=${options.fromCron})`);
+    return await getFilingSummaryFromService(ticker, formType, options);
   },
   
   // Get filing by ID

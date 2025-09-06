@@ -132,11 +132,6 @@ export function TierStatusWidget({ user, onUpgrade }: TierStatusWidgetProps) {
     return <IconComponent className="h-5 w-5" />;
   };
 
-  const getBudgetStatusColor = () => {
-    if (isBudgetExhausted) return 'bg-red-500';
-    if (isNearBudgetLimit) return 'bg-yellow-500';
-    return 'bg-green-500';
-  };
 
   const getBudgetResetText = () => {
     if (!user.budgetResetAt) return 'Unknown';

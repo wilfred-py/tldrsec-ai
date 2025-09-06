@@ -10,22 +10,10 @@ import {
   UserPreferences, 
   FilingTypePreferences, 
   NotificationContentPreferences,
-  AnnualReportFilingPreferences,
-  QuarterlyReportFilingPreferences,
-  CurrentEventFilingPreferences,
-  InsiderTradingFilingPreferences,
-  BeneficialOwnershipFilingPreferences,
-  ProxyFilingPreferences,
-  RegistrationFilingPreferences,
-  OtherFilingPreferences
 } from '@/lib/user/preference-types';
 import { toast } from 'sonner';
 
-interface SettingsFormProps {
-  userId: string;
-}
-
-export default function SettingsForm({ userId }: SettingsFormProps) {
+export default function SettingsForm() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [preferences, setPreferences] = useState<UserPreferences | null>(null);
@@ -100,29 +88,7 @@ export default function SettingsForm({ userId }: SettingsFormProps) {
     });
   };
   
-  const handleThemeChange = (value: string) => {
-    if (!preferences) return;
-    
-    setPreferences({
-      ...preferences,
-      ui: {
-        ...preferences.ui,
-        theme: value as 'light' | 'dark' | 'system',
-      }
-    });
-  };
   
-  const handleDashboardLayoutChange = (value: string) => {
-    if (!preferences) return;
-    
-    setPreferences({
-      ...preferences,
-      ui: {
-        ...preferences.ui,
-        dashboardLayout: value as 'compact' | 'detailed',
-      }
-    });
-  };
   
   const savePreferences = async () => {
     if (!preferences) return;
@@ -207,7 +173,7 @@ export default function SettingsForm({ userId }: SettingsFormProps) {
             </div>
             <div className="flex items-center space-x-2">
               <RadioGroupItem value={NotificationPreference.NONE} id="none" />
-              <Label htmlFor="none">None - Don't send email notifications</Label>
+              <Label htmlFor="none">None - Don&apos;t send email notifications</Label>
             </div>
           </RadioGroup>
         </div>

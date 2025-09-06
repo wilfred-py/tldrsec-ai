@@ -7,11 +7,7 @@ import { TickerSubscription } from '@/lib/user/preference-types';
 import { Plus, Trash } from 'lucide-react';
 import { toast } from 'sonner';
 
-interface SubscriptionManagerProps {
-  userId: string;
-}
-
-export default function SubscriptionManager({ userId }: SubscriptionManagerProps) {
+export default function SubscriptionManager() {
   const [subscriptions, setSubscriptions] = useState<TickerSubscription[]>([]);
   const [loading, setLoading] = useState(true);
   const [adding, setAdding] = useState(false);

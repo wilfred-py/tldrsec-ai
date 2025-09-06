@@ -17,14 +17,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { SearchIcon, RefreshCw, FileTextIcon, InfoIcon } from "lucide-react";
+import { SearchIcon, RefreshCw, FileTextIcon } from "lucide-react";
 import { SummaryCard } from "@/components/summary/summary-card";
-import { Summary } from "@/lib/generated/prisma";
 import { useAsync } from "@/lib/hooks/use-async";
 import { getRecentSummaries, SummaryWithTicker as ApiSummaryWithTicker } from "@/lib/api/summary-service";
-import { ApiResponse } from "@/lib/api/types";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
 
 // Use the API type directly to avoid type mismatches
 type SummaryWithTicker = ApiSummaryWithTicker;
@@ -37,7 +34,7 @@ export function SummariesClient() {
   const [summaries, setSummaries] = useState<SummaryWithTicker[]>([]);
 
   // Use the useAsync hook
-  const { data, isLoading, error, execute } = useAsync<SummaryWithTicker[]>(null);
+  const { isLoading, execute } = useAsync<SummaryWithTicker[]>(null);
 
   // Load summaries on mount
   useEffect(() => {
@@ -210,7 +207,7 @@ function renderSummaryList(
   return (
     <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
       {summariesArray.map((summary) => (
-        <SummaryCard key={summary.id} summary={summary as any} />
+        <SummaryCard key={summary.id} summary={summary} />
       ))}
     </div>
   );

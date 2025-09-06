@@ -28,12 +28,23 @@ let prisma: PrismaClient
 
 if (process.env.NODE_ENV === 'production') {
   prisma = new PrismaClient({
-    log: ['error', 'warn']
+    log: ['error', 'warn'],
+    // Optimize for high-concurrency cron jobs
+    datasources: {
+      db: {
+        url: process.env.DATABASE_URL
+      }
+    }
   })
 } else {
   if (!global.prisma) {
     global.prisma = new PrismaClient({
-      log: ['error', 'warn']
+      log: ['error', 'warn'],
+      datasources: {
+        db: {
+          url: process.env.DATABASE_URL
+        }
+      }
     })
   }
   prisma = global.prisma
@@ -52,12 +63,22 @@ export function getPrismaClient(): PrismaClient {
     try {
       if (process.env.NODE_ENV === 'production') {
         prisma = new PrismaClient({
-          log: ['error', 'warn']
+          log: ['error', 'warn'],
+          datasources: {
+            db: {
+              url: process.env.DATABASE_URL
+            }
+          }
         })
       } else {
         if (!global.prisma) {
           global.prisma = new PrismaClient({
-            log: ['error', 'warn']
+            log: ['error', 'warn'],
+            datasources: {
+              db: {
+                url: process.env.DATABASE_URL
+              }
+            }
           })
         }
         prisma = global.prisma

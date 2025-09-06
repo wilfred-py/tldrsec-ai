@@ -70,7 +70,7 @@ export function SummaryErrorState({
             
             <div className="text-red-700 text-sm space-y-2 mb-4">
               <p>
-                We're experiencing technical difficulties generating a summary for this{" "}
+                We&apos;re experiencing technical difficulties generating a summary for this{" "}
                 {filingType} filing from {displayName}.
               </p>
               <p>

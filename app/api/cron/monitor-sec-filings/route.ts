@@ -55,10 +55,10 @@ export async function GET(request: NextRequest) {
     }
 
     // Phase 1: Check for new filings via RSS
-    await checkForNewFilings(monitor);
+    await checkForNewFilings();
     
     // Phase 2: Process unprocessed filings
-    await processUnprocessedFilings(monitor);
+    await processUnprocessedFilings();
     
     // Phase 3: Cleanup old data
     await cleanupOldMonitoringData();
@@ -96,7 +96,7 @@ export async function GET(request: NextRequest) {
 /**
  * Phase 1: Check active tickers for new filings via RSS
  */
-async function checkForNewFilings(_monitor: CronJobMonitor): Promise<void> {
+async function checkForNewFilings(): Promise<void> {
   const stats: ProcessingStats = {
     tickersChecked: 0,
     newFilingsFound: 0,
@@ -155,7 +155,7 @@ async function checkForNewFilings(_monitor: CronJobMonitor): Promise<void> {
 /**
  * Phase 2: Process unprocessed filings (fetch, parse, summarize, email)
  */
-async function processUnprocessedFilings(_monitor: CronJobMonitor): Promise<void> {
+async function processUnprocessedFilings(): Promise<void> {
   const stats: ProcessingStats = {
     tickersChecked: 0,
     newFilingsFound: 0,

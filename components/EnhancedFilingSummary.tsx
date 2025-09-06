@@ -9,7 +9,7 @@
  * - Error handling with retry support
  */
 
-import React, { useState } from 'react';
+import React from 'react';
 import { useEnhancedFilingSummary } from '../hooks/useEnhancedFilingSummary';
 import { FilingType } from '../lib/sec-edgar/types';
 import { getFormMetadata } from '../lib/sec-edgar/form-registry';
@@ -50,7 +50,6 @@ export function EnhancedFilingSummary({
     error,
     isPartial,
     isLoading,
-    isSuccess,
     isError,
     refetch
   } = useEnhancedFilingSummary(ticker, formType, {

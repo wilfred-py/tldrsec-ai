@@ -13,7 +13,7 @@ import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { 
   CreditCard, 
-  Calendar, 
+ 
   TrendingUp, 
   FileText, 
   Zap,
@@ -251,7 +251,7 @@ export function SubscriptionStatus({ userId }: SubscriptionStatusProps) {
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-base">
               <Zap className="h-4 w-4" />
-              This Month's Impact
+              This Month&apos;s Impact
             </CardTitle>
           </CardHeader>
           <CardContent>
