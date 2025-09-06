@@ -43,7 +43,6 @@ describe('enhancedSummarize', () => {
   
   // Setup mocks
   let mockClient: jest.Mocked<EnhancedClaudeClient>;
-  let _mockEventEmitter: EventEmitter;
   
   beforeEach(() => {
     jest.clearAllMocks();

@@ -153,7 +153,7 @@ export default function FormS3EmailTemplate() {
                             </td>
                             <td style={{ padding: "8px 0", verticalAlign: "top" }}>
                               <p style={{ margin: "0", color: "#374151", fontSize: "14px" }}>
-                                AAA (S&P) / Aaa (Moody's)
+                                AAA (S&amp;P) / Aaa (Moody&apos;s)
                               </p>
                             </td>
                           </tr>
@@ -414,7 +414,7 @@ export default function FormS3EmailTemplate() {
                         </h4>
                         <p style={{ margin: "0", color: "#374151", fontSize: "14px", lineHeight: "1.6" }}>
                           Working capital, capital expenditures, research and development activities, and other general
-                          corporate purposes to support J&J's diversified healthcare portfolio.
+                          corporate purposes to support J&amp;J&apos;s diversified healthcare portfolio.
                         </p>
                       </div>
 
@@ -438,7 +438,7 @@ export default function FormS3EmailTemplate() {
                         </h4>
                         <p style={{ margin: "0", color: "#374151", fontSize: "14px", lineHeight: "1.6" }}>
                           Potential acquisitions of complementary businesses, technologies, or products that align with
-                          J&J's pharmaceutical, medical device, and consumer health strategies.
+                          J&amp;J&apos;s pharmaceutical, medical device, and consumer health strategies.
                         </p>
                       </div>
 
@@ -523,7 +523,7 @@ export default function FormS3EmailTemplate() {
                           opportunities and strategic initiatives.
                         </li>
                         <li>
-                          <strong>Credit Profile:</strong> J&J's AAA credit rating provides access to the most favorable
+                          <strong>Credit Profile:</strong> J&amp;J&apos;s AAA credit rating provides access to the most favorable
                           borrowing terms in the market.
                         </li>
                       </ul>

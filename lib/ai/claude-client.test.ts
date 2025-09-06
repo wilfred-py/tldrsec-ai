@@ -31,7 +31,7 @@ const mockApiResponse = {
 };
 
 jest.mock('../error-handling/model-fallback', () => ({
-  executeWithModelFallback: jest.fn((fn) => {
+  executeWithModelFallback: jest.fn(() => {
     return Promise.resolve({
       result: mockApiResponse,
       modelUsed: 'claude-3-sonnet-20240229',

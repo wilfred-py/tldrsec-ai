@@ -654,7 +654,7 @@ export default function Schedule13GEmailTemplate() {
                         }}
                       >
                         <li style={{ marginBottom: "8px" }}>
-                          <strong>Issuer Location:</strong> Coinbase Global, Inc.'s principal executive office is
+                          <strong>Issuer Location:</strong> Coinbase Global, Inc.&apos;s principal executive office is
                           located at 1 Madison Avenue, Suite 2400, New York, NY 10010.
                         </li>
                         <li style={{ marginBottom: "8px" }}>
@@ -663,12 +663,12 @@ export default function Schedule13GEmailTemplate() {
                           Blvd., Malvern, PA 19355.
                         </li>
                         <li style={{ marginBottom: "8px" }}>
-                          <strong>Client Rights:</strong> The Vanguard Group's clients have the right to receive or the
+                          <strong>Client Rights:</strong> The Vanguard Group&apos;s clients have the right to receive or the
                           power to direct the receipt of dividends from, or the proceeds from the sale of, the reported
                           securities.
                         </li>
                         <li>
-                          <strong>Client Ownership:</strong> No single client's interest in the securities is more than
+                          <strong>Client Ownership:</strong> No single client&apos;s interest in the securities is more than
                           5%.
                         </li>
                       </ul>

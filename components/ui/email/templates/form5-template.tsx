@@ -646,7 +646,7 @@ export default function Form5EmailTemplate() {
                       >
                         <li style={{ marginBottom: "8px" }}>
                           <strong>Annual Filing:</strong> Form 5 must be filed within 45 days after the end of the
-                          company's fiscal year (by March 17, 2025 for Salesforce).
+                          company&apos;s fiscal year (by March 17, 2025 for Salesforce).
                         </li>
                         <li style={{ marginBottom: "8px" }}>
                           <strong>Unreported Transactions:</strong> Reports transactions that were not required to be

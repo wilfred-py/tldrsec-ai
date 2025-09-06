@@ -54,9 +54,6 @@ export function DashboardClient() {
   const [showTutorial, setShowTutorial] = useState(false);
   const [tutorialProgress, setTutorialProgress] = useState(0);
   
-  // State for search functionality
-  const [newTickerSearch, setNewTickerSearch] = useState("");
-  const [searchResults, setSearchResults] = useState<any[]>([]);
   
   // Async hooks for API calls
   const { execute: executeGetCompanies, isLoading: isLoadingCompanies, error: companiesError } = useAsync([]);

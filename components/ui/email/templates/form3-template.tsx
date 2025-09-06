@@ -465,9 +465,9 @@ export default function Form3EmailTemplate() {
                         }}
                       >
                         <p style={{ margin: "0", color: "#374151", fontSize: "14px", lineHeight: "1.6" }}>
-                          <strong>Compensation Package:</strong> Dr. Martinez's initial equity grant includes 250,000
+                          <strong>Compensation Package:</strong> Dr. Martinez&apos;s initial equity grant includes 250,000
                           stock options and 75,000 RSUs, with a 4-year vesting schedule and 1-year cliff. The package
-                          reflects Palantir's commitment to attracting top-tier technology talent.
+                          reflects Palantir&apos;s commitment to attracting top-tier technology talent.
                         </p>
                       </div>
                     </td>

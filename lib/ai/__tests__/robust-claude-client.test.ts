@@ -4,10 +4,9 @@
  */
 
 import { jest } from '@jest/globals';
-import { robustClaudeClient, RobustClaudeClient } from '../robust-claude-client';
+import { RobustClaudeClient } from '../robust-claude-client';
 import { ClaudeClient, ClaudeMessage } from '../claude-client';
 import { ApiError, ErrorCode } from '../../error-handling';
-import { logger } from '../../logging';
 import { monitoring } from '../../monitoring';
 import { generateFallbackSummary } from '../fallback-summary';
 

@@ -184,7 +184,7 @@ export function combineChunkResults(
   // Extract and combine JSON data if available
   let combinedJSON: Record<string, unknown> = {};
   let combinedText = '';
-  let modelUsed = results[0].modelUsed; // Use the model from the first result
+  const modelUsed = results[0].modelUsed; // Use the model from the first result
   
   // Combine JSON data
   results.forEach((result, index) => {
@@ -270,8 +270,6 @@ export function truncateDocumentContent(content: string, maxTokens: number): str
   // Split document into sections/paragraphs
   const sections = content.split(/\n\n+/);
   
-  // Calculate approximate ratio to keep
-  const keepRatio = maxTokens / currentTokens;
   
   // Prioritize important sections based on keywords
   const prioritizedSections = sections.map((section, index) => {

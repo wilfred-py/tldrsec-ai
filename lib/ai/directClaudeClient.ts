@@ -453,7 +453,7 @@ export class DirectClaudeClient {
       if (responseText.trim().startsWith('{') && responseText.trim().endsWith('}')) {
         summaryText = JSON.parse(responseText);
       }
-    } catch (jsonError) {
+    } catch {
       claudeLogger.warn(`Failed to parse Claude response as JSON, using raw text`);
     }
 
@@ -540,7 +540,7 @@ export class DirectClaudeClient {
         } else {
           chunkSummaries.push({ chunkSummary: chunkText });
         }
-      } catch (jsonError) {
+      } catch {
         chunkSummaries.push({ chunkSummary: chunkText });
       }
     }

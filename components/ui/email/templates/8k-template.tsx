@@ -203,7 +203,7 @@ export default function Form8KEmailTemplate() {
                         <p style={{ margin: "0", color: "#374151", fontSize: "14px", lineHeight: "1.6" }}>
                           Microsoft Corporation completed the acquisition of Quantum Computing Inc., a leader in quantum
                           computing software solutions, for $3.2 billion in cash. The acquisition is expected to enhance
-                          Microsoft's quantum computing capabilities and accelerate the development of practical quantum
+                          Microsoft&apos;s quantum computing capabilities and accelerate the development of practical quantum
                           applications.
                         </p>
                       </div>
@@ -227,8 +227,8 @@ export default function Form8KEmailTemplate() {
                           Item 5.02 - Departure/Election of Directors
                         </h4>
                         <p style={{ margin: "0", color: "#374151", fontSize: "14px", lineHeight: "1.6" }}>
-                          Dr. Sarah Chen, CEO of Quantum Computing Inc., has been appointed to Microsoft's Board of
-                          Directors, effective immediately. Dr. Chen will also join Microsoft's executive leadership
+                          Dr. Sarah Chen, CEO of Quantum Computing Inc., has been appointed to Microsoft&apos;s Board of
+                          Directors, effective immediately. Dr. Chen will also join Microsoft&apos;s executive leadership
                           team as Corporate Vice President of Quantum Technologies.
                         </p>
                       </div>
@@ -251,7 +251,7 @@ export default function Form8KEmailTemplate() {
                           Item 7.01 - Regulation FD Disclosure
                         </h4>
                         <p style={{ margin: "0 0 8px", color: "#374151", fontSize: "14px", lineHeight: "1.6" }}>
-                          Microsoft announced plans to integrate Quantum Computing Inc.'s software solutions into Azure
+                          Microsoft announced plans to integrate Quantum Computing Inc.&apos;s software solutions into Azure
                           Quantum, creating a comprehensive quantum computing platform for enterprise customers. The
                           company expects the integration to be completed by Q4 2025.
                         </p>
@@ -295,12 +295,12 @@ export default function Form8KEmailTemplate() {
                         📈 Market Impact
                       </h3>
                       <p style={{ margin: "0 0 12px", color: "#374151", fontSize: "14px", lineHeight: "1.6" }}>
-                        Following the announcement, Microsoft's stock (MSFT) rose 2.3% in after-hours trading. Analysts
+                        Following the announcement, Microsoft&apos;s stock (MSFT) rose 2.3% in after-hours trading. Analysts
                         have responded positively to the acquisition, highlighting the strategic importance of quantum
-                        computing for Microsoft's long-term growth.
+                        computing for Microsoft&apos;s long-term growth.
                       </p>
                       <p style={{ margin: "0", color: "#374151", fontSize: "14px", lineHeight: "1.6" }}>
-                        The acquisition represents Microsoft's largest investment in quantum computing to date and
+                        The acquisition represents Microsoft&apos;s largest investment in quantum computing to date and
                         positions the company as a leader in the emerging quantum technology market, which is projected
                         to reach $65 billion by 2030.
                       </p>

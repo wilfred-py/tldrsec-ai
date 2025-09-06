@@ -41,15 +41,6 @@ import type { SummaryCacheKey } from '../cache/summary-cache';
 import type { SummarizationResult } from '../summarize';
 import { SECFilingType } from '../prompts/prompt-types';
 
-// Simple type for our mock response object
-type MockResponseType = {
-  id: string;
-  content: string;
-  model: string;
-  usage: { inputTokens: number; outputTokens: number };
-  cost: { inputCost: number; outputCost: number; totalCost: number };
-};
-
 // We'll use direct type assertions in the tests instead of trying to extend types
 
 // Define cache related types to avoid type errors
@@ -119,13 +110,6 @@ describe('EnhancedClaudeClient', () => {
     cost: 0.01
   };
 
-  // Disable unused variable warning by prefixing with underscore
-  const _mockCacheEntry = {
-    summaryId: 'summary-123',
-    status: 'COMPLETED',
-    result: mockSummarizationResult,
-    lastUpdated: new Date()
-  };
 
   let enhancedClient: EnhancedClaudeClient;
   let mockBaseClient: jest.Mocked<ClaudeClient>;

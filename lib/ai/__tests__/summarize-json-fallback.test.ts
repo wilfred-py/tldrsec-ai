@@ -36,7 +36,7 @@ jest.mock('../claude-client', () => ({
 
 // Mock parseResponse to simulate actual behavior
 jest.mock('../parsers/response-parser', () => ({
-  parseResponse: jest.fn().mockImplementation((text, filingType) => {
+  parseResponse: jest.fn().mockImplementation((text) => {
     // For testing different scenarios
     if (text.includes('```json')) {
       // Valid JSON in code block
@@ -50,7 +50,7 @@ jest.mock('../parsers/response-parser', () => ({
             extractionMethod: 'codeBlock'
           };
         }
-      } catch (e) {
+      } catch {
         // Fall through to fallback
       }
     }
@@ -203,7 +203,7 @@ describe('SEC Filing JSON Parsing Fallback', () => {
   
   it('should use fallback for exceptions during processing', async () => {
     // Mock parseResponse to throw an exception
-    const mockParseResponse = jest.spyOn(require('../parsers/response-parser'), 'parseResponse')
+    const mockParseResponse = jest.spyOn({ parseResponse }, 'parseResponse')
       .mockImplementation(() => {
         throw new Error('Unexpected error during parsing');
       });

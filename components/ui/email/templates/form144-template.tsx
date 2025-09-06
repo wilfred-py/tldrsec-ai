@@ -367,7 +367,7 @@ export default function Form144EmailTemplate({ filing }: Form144TemplateProps) {
                           Volume Limitations
                         </h4>
                         <p style={{ margin: "0", color: "#374151", fontSize: "14px", lineHeight: "1.6" }}>
-                          ✓ The 120,000 shares represent less than 1% of NVIDIA's outstanding shares and comply with the
+                          ✓ The 120,000 shares represent less than 1% of NVIDIA&apos;s outstanding shares and comply with the
                           greater of 1% of outstanding shares or average weekly trading volume over the prior four
                           weeks.
                         </p>
@@ -392,7 +392,7 @@ export default function Form144EmailTemplate({ filing }: Form144TemplateProps) {
                         </h4>
                         <p style={{ margin: "0", color: "#374151", fontSize: "14px", lineHeight: "1.6" }}>
                           ✓ Sales will be conducted through ordinary brokerage transactions on NASDAQ, satisfying the
-                          "manner of sale" requirements under Rule 144.
+                          &quot;manner of sale&quot; requirements under Rule 144.
                         </p>
                       </div>
                     </td>

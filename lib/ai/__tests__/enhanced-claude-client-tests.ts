@@ -120,8 +120,8 @@ describe('EnhancedClaudeClient - Direct Testing', () => {
       const messages = [{ role: 'user', content: 'Hello' }];
       
       // Mock the private streaming method to directly call the handlers
-      const _streamingSpy = jest.spyOn(client as unknown as { sendStreamingMessage: (...args: unknown[]) => Promise<unknown> }, 'sendStreamingMessage')
-        .mockImplementation((_msgs, _options) => {
+      const streamingSpy = jest.spyOn(client as unknown as { sendStreamingMessage: (...args: unknown[]) => Promise<unknown> }, 'sendStreamingMessage')
+        .mockImplementation(() => {
           // Simulate streaming events
           mockStreamHandler.onStart();
           mockStreamHandler.onContent('Partial content');
@@ -138,8 +138,9 @@ describe('EnhancedClaudeClient - Direct Testing', () => {
       expect(emitSpy).toHaveBeenCalledWith(EnhancedClaudeEvent.STREAM_CONTENT, 'Partial content');
       expect(emitSpy).toHaveBeenCalledWith(EnhancedClaudeEvent.STREAM_COMPLETE, mockResponse);
       
-      // Restore the spy
+      // Restore the spies
       emitSpy.mockRestore();
+      streamingSpy.mockRestore();
     });
   });
 });
