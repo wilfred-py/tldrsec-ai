@@ -1,24 +1,24 @@
 export default function SECFilingEmailTemplate() {
   return (
-    <div style={{ maxWidth: &quot;600px&quot;, margin: &quot;0 auto&quot;, fontFamily: &quot;Arial, sans-serif&quot;, backgroundColor: &quot;#f8fafc&quot; }}>
+    <div style={{ maxWidth: "600px", margin: "0 auto", fontFamily: "Arial, sans-serif", backgroundColor: "#f8fafc" }}>
       {/* Header with gradient background */}
       <table
-        width=&quot;100%&quot;
-        cellPadding=&quot;0&quot;
-        cellSpacing=&quot;0&quot;
+        width="100%"
+        cellPadding="0"
+        cellSpacing="0"
         style={{
-          background: &quot;linear-gradient(135deg, #7C3AED 0%, #EC4899 100%)&quot;,
-          color: &quot;white&quot;,
-          borderRadius: &quot;12px 12px 0 0&quot;,
+          background: "linear-gradient(135deg, #7C3AED 0%, #EC4899 100%)",
+          color: "white",
+          borderRadius: "12px 12px 0 0",
         }}
       >
         <tbody>
           <tr>
-            <td style={{ padding: &quot;24px&quot;, textAlign: &quot;center&quot; }}>
-              <h1 style={{ margin: &quot;0&quot;, fontSize: &quot;32px&quot;, fontWeight: &quot;bold&quot;, letterSpacing: &quot;-0.5px&quot; }}>
+            <td style={{ padding: "24px", textAlign: "center" }}>
+              <h1 style={{ margin: "0", fontSize: "32px", fontWeight: "bold", letterSpacing: "-0.5px" }}>
                 SEC Filing Summaries
               </h1>
-              <p style={{ margin: &quot;12px 0 0&quot;, fontSize: &quot;18px&quot;, opacity: &quot;0.9&quot; }}>6/6/2025</p>
+              <p style={{ margin: "12px 0 0", fontSize: "18px", opacity: "0.9" }}>6/6/2025</p>
             </td>
           </tr>
         </tbody>
@@ -26,32 +26,32 @@ export default function SECFilingEmailTemplate() {
 
       {/* Filing Information */}
       <table
-        width=&quot;100%&quot;
-        cellPadding=&quot;0&quot;
-        cellSpacing=&quot;0&quot;
-        style={{ backgroundColor: &quot;white&quot;, border: &quot;1px solid #e2e8f0&quot;, borderTop: &quot;none&quot; }}
+        width="100%"
+        cellPadding="0"
+        cellSpacing="0"
+        style={{ backgroundColor: "white", border: "1px solid #e2e8f0", borderTop: "none" }}
       >
         <tbody>
           <tr>
-            <td style={{ padding: &quot;24px&quot; }}>
-              <table width=&quot;100%&quot; cellPadding=&quot;0&quot; cellSpacing=&quot;0&quot;>
+            <td style={{ padding: "24px" }}>
+              <table width="100%" cellPadding="0" cellSpacing="0">
                 <tbody>
                   <tr>
                     <td>
                       <h2
                         style={{
-                          margin: &quot;0&quot;,
-                          background: &quot;linear-gradient(135deg, #7C3AED 0%, #EC4899 100%)&quot;,
-                          WebkitBackgroundClip: &quot;text&quot;,
-                          WebkitTextFillColor: &quot;transparent&quot;,
-                          backgroundClip: &quot;text&quot;,
-                          fontSize: &quot;24px&quot;,
-                          fontWeight: &quot;bold&quot;,
+                          margin: "0",
+                          background: "linear-gradient(135deg, #7C3AED 0%, #EC4899 100%)",
+                          WebkitBackgroundClip: "text",
+                          WebkitTextFillColor: "transparent",
+                          backgroundClip: "text",
+                          fontSize: "24px",
+                          fontWeight: "bold",
                         }}
                       >
                         Tesla, Inc. (TSLA) - Form 4 Filing
                       </h2>
-                      <p style={{ margin: &quot;8px 0 20px&quot;, color: &quot;#64748b&quot;, fontSize: &quot;14px&quot; }}>Filed on: 6/4/2025</p>
+                      <p style={{ margin: "8px 0 20px", color: "#64748b", fontSize: "14px" }}>Filed on: 6/4/2025</p>
                     </td>
                   </tr>
                 </tbody>
@@ -59,83 +59,83 @@ export default function SECFilingEmailTemplate() {
 
               {/* Summary Box */}
               <table
-                width=&quot;100%&quot;
-                cellPadding=&quot;0&quot;
-                cellSpacing=&quot;0&quot;
+                width="100%"
+                cellPadding="0"
+                cellSpacing="0"
                 style={{
-                  backgroundColor: &quot;#fefefe&quot;,
-                  border: &quot;1px solid #e2e8f0&quot;,
-                  borderRadius: &quot;8px&quot;,
-                  marginBottom: &quot;20px&quot;,
-                  boxShadow: &quot;0 1px 3px rgba(0,0,0,0.1)&quot;,
+                  backgroundColor: "#fefefe",
+                  border: "1px solid #e2e8f0",
+                  borderRadius: "8px",
+                  marginBottom: "20px",
+                  boxShadow: "0 1px 3px rgba(0,0,0,0.1)",
                 }}
               >
                 <tbody>
                   <tr>
-                    <td style={{ padding: &quot;20px&quot; }}>
+                    <td style={{ padding: "20px" }}>
                       <h3
                         style={{
-                          margin: &quot;0 0 16px&quot;,
-                          color: &quot;#000000&quot;,
-                          fontSize: &quot;18px&quot;,
-                          fontWeight: &quot;bold&quot;,
+                          margin: "0 0 16px",
+                          color: "#000000",
+                          fontSize: "18px",
+                          fontWeight: "bold",
                         }}
                       >
                         📋 Summary
                       </h3>
 
-                      <table width=&quot;100%&quot; cellPadding=&quot;0&quot; cellSpacing=&quot;0&quot; style={{ borderCollapse: &quot;collapse&quot; }}>
+                      <table width="100%" cellPadding="0" cellSpacing="0" style={{ borderCollapse: "collapse" }}>
                         <tbody>
                           <tr>
-                            <td style={{ padding: &quot;8px 0&quot;, width: &quot;120px&quot;, verticalAlign: &quot;top&quot; }}>
-                              <p style={{ margin: &quot;0&quot;, color: &quot;#6B7280&quot;, fontSize: &quot;14px&quot;, fontWeight: &quot;500&quot; }}>
+                            <td style={{ padding: "8px 0", width: "120px", verticalAlign: "top" }}>
+                              <p style={{ margin: "0", color: "#6B7280", fontSize: "14px", fontWeight: "500" }}>
                                 Name:
                               </p>
                             </td>
-                            <td style={{ padding: &quot;8px 0&quot;, verticalAlign: &quot;top&quot; }}>
-                              <p style={{ margin: &quot;0&quot;, color: &quot;#374151&quot;, fontSize: &quot;14px&quot;, fontWeight: &quot;600&quot; }}>
+                            <td style={{ padding: "8px 0", verticalAlign: "top" }}>
+                              <p style={{ margin: "0", color: "#374151", fontSize: "14px", fontWeight: "600" }}>
                                 Vaibhav Taneja
                               </p>
                             </td>
                           </tr>
                           <tr>
-                            <td style={{ padding: &quot;8px 0&quot;, width: &quot;120px&quot;, verticalAlign: &quot;top&quot; }}>
-                              <p style={{ margin: &quot;0&quot;, color: &quot;#6B7280&quot;, fontSize: &quot;14px&quot;, fontWeight: &quot;500&quot; }}>
+                            <td style={{ padding: "8px 0", width: "120px", verticalAlign: "top" }}>
+                              <p style={{ margin: "0", color: "#6B7280", fontSize: "14px", fontWeight: "500" }}>
                                 Position:
                               </p>
                             </td>
-                            <td style={{ padding: &quot;8px 0&quot;, verticalAlign: &quot;top&quot; }}>
-                              <p style={{ margin: &quot;0&quot;, color: &quot;#374151&quot;, fontSize: &quot;14px&quot; }}>Chief Financial Officer</p>
+                            <td style={{ padding: "8px 0", verticalAlign: "top" }}>
+                              <p style={{ margin: "0", color: "#374151", fontSize: "14px" }}>Chief Financial Officer</p>
                             </td>
                           </tr>
                           <tr>
-                            <td style={{ padding: &quot;8px 0&quot;, width: &quot;120px&quot;, verticalAlign: &quot;top&quot; }}>
-                              <p style={{ margin: &quot;0&quot;, color: &quot;#6B7280&quot;, fontSize: &quot;14px&quot;, fontWeight: &quot;500&quot; }}>
+                            <td style={{ padding: "8px 0", width: "120px", verticalAlign: "top" }}>
+                              <p style={{ margin: "0", color: "#6B7280", fontSize: "14px", fontWeight: "500" }}>
                                 Form Type:
                               </p>
                             </td>
-                            <td style={{ padding: &quot;8px 0&quot;, verticalAlign: &quot;top&quot; }}>
-                              <p style={{ margin: &quot;0&quot;, color: &quot;#374151&quot;, fontSize: &quot;14px&quot; }}>Form 4</p>
+                            <td style={{ padding: "8px 0", verticalAlign: "top" }}>
+                              <p style={{ margin: "0", color: "#374151", fontSize: "14px" }}>Form 4</p>
                             </td>
                           </tr>
                           <tr>
-                            <td style={{ padding: &quot;8px 0&quot;, width: &quot;120px&quot;, verticalAlign: &quot;top&quot; }}>
-                              <p style={{ margin: &quot;0&quot;, color: &quot;#6B7280&quot;, fontSize: &quot;14px&quot;, fontWeight: &quot;500&quot; }}>
+                            <td style={{ padding: "8px 0", width: "120px", verticalAlign: "top" }}>
+                              <p style={{ margin: "0", color: "#6B7280", fontSize: "14px", fontWeight: "500" }}>
                                 Report Date:
                               </p>
                             </td>
-                            <td style={{ padding: &quot;8px 0&quot;, verticalAlign: &quot;top&quot; }}>
-                              <p style={{ margin: &quot;0&quot;, color: &quot;#374151&quot;, fontSize: &quot;14px&quot; }}>June 4, 2025</p>
+                            <td style={{ padding: "8px 0", verticalAlign: "top" }}>
+                              <p style={{ margin: "0", color: "#374151", fontSize: "14px" }}>June 4, 2025</p>
                             </td>
                           </tr>
                           <tr>
-                            <td style={{ padding: &quot;8px 0&quot;, width: &quot;120px&quot;, verticalAlign: &quot;top&quot; }}>
-                              <p style={{ margin: &quot;0&quot;, color: &quot;#6B7280&quot;, fontSize: &quot;14px&quot;, fontWeight: &quot;500&quot; }}>
+                            <td style={{ padding: "8px 0", width: "120px", verticalAlign: "top" }}>
+                              <p style={{ margin: "0", color: "#6B7280", fontSize: "14px", fontWeight: "500" }}>
                                 Trading Plan:
                               </p>
                             </td>
-                            <td style={{ padding: &quot;8px 0&quot;, verticalAlign: &quot;top&quot; }}>
-                              <p style={{ margin: &quot;0&quot;, color: &quot;#374151&quot;, fontSize: &quot;14px&quot; }}>
+                            <td style={{ padding: "8px 0", verticalAlign: "top" }}>
+                              <p style={{ margin: "0", color: "#374151", fontSize: "14px" }}>
                                 Rule 10b5-1 plan adopted on May 1, 2024
                               </p>
                             </td>
@@ -149,89 +149,89 @@ export default function SECFilingEmailTemplate() {
 
               {/* Transactions Box with Graphics */}
               <table
-                width=&quot;100%&quot;
-                cellPadding=&quot;0&quot;
-                cellSpacing=&quot;0&quot;
+                width="100%"
+                cellPadding="0"
+                cellSpacing="0"
                 style={{
-                  backgroundColor: &quot;#fefefe&quot;,
-                  border: &quot;1px solid #e2e8f0&quot;,
-                  borderRadius: &quot;8px&quot;,
-                  marginBottom: &quot;20px&quot;,
-                  boxShadow: &quot;0 1px 3px rgba(0,0,0,0.1)&quot;,
+                  backgroundColor: "#fefefe",
+                  border: "1px solid #e2e8f0",
+                  borderRadius: "8px",
+                  marginBottom: "20px",
+                  boxShadow: "0 1px 3px rgba(0,0,0,0.1)",
                 }}
               >
                 <tbody>
                   <tr>
-                    <td style={{ padding: &quot;20px&quot; }}>
+                    <td style={{ padding: "20px" }}>
                       <h3
                         style={{
-                          margin: &quot;0 0 16px&quot;,
-                          color: &quot;#000000&quot;,
-                          fontSize: &quot;18px&quot;,
-                          fontWeight: &quot;bold&quot;,
+                          margin: "0 0 16px",
+                          color: "#000000",
+                          fontSize: "18px",
+                          fontWeight: "bold",
                         }}
                       >
                         💼 Notable Transactions
                       </h3>
 
-                      <table width=&quot;100%&quot; cellPadding=&quot;0&quot; cellSpacing=&quot;0&quot; style={{ borderCollapse: &quot;collapse&quot; }}>
+                      <table width="100%" cellPadding="0" cellSpacing="0" style={{ borderCollapse: "collapse" }}>
                         <tbody>
                           <tr>
-                            <td style={{ padding: &quot;12px 0&quot;, borderBottom: &quot;1px solid #f1f5f9&quot; }}>
-                              <div style={{ display: &quot;flex&quot;, alignItems: &quot;center&quot;, marginBottom: &quot;8px&quot; }}>
-                                <p style={{ margin: &quot;0&quot;, color: &quot;#374151&quot;, fontSize: &quot;14px&quot;, fontWeight: &quot;bold&quot; }}>
+                            <td style={{ padding: "12px 0", borderBottom: "1px solid #f1f5f9" }}>
+                              <div style={{ display: "flex", alignItems: "center", marginBottom: "8px" }}>
+                                <p style={{ margin: "0", color: "#374151", fontSize: "14px", fontWeight: "bold" }}>
                                   June 2, 2025
                                 </p>
                               </div>
                               <ul
                                 style={{
-                                  margin: &quot;0&quot;,
-                                  paddingLeft: &quot;32px&quot;,
-                                  color: &quot;#374151&quot;,
-                                  fontSize: &quot;14px&quot;,
-                                  lineHeight: &quot;1.6&quot;,
+                                  margin: "0",
+                                  paddingLeft: "32px",
+                                  color: "#374151",
+                                  fontSize: "14px",
+                                  lineHeight: "1.6",
                                 }}
                               >
-                                <li style={{ marginBottom: &quot;4px&quot; }}>
-                                  <span style={{ color: &quot;#10B981&quot;, fontWeight: &quot;bold&quot; }}>+6,000 shares</span> acquired
+                                <li style={{ marginBottom: "4px" }}>
+                                  <span style={{ color: "#10B981", fontWeight: "bold" }}>+6,000 shares</span> acquired
                                   through stock option exercise at $18.22/share
                                 </li>
-                                <li style={{ marginBottom: &quot;4px&quot; }}>
-                                  <span style={{ color: &quot;#EF4444&quot;, fontWeight: &quot;bold&quot; }}>-6,000 shares</span> sold at
+                                <li style={{ marginBottom: "4px" }}>
+                                  <span style={{ color: "#EF4444", fontWeight: "bold" }}>-6,000 shares</span> sold at
                                   $333.77-$347.22/share
                                 </li>
                                 <li>
-                                  <span style={{ color: &quot;#6B7280&quot; }}>~2,733 shares sold for tax obligations</span>
+                                  <span style={{ color: "#6B7280" }}>~2,733 shares sold for tax obligations</span>
                                 </li>
                               </ul>
                             </td>
                           </tr>
                           <tr>
-                            <td style={{ padding: &quot;12px 0&quot; }}>
-                              <div style={{ display: &quot;flex&quot;, alignItems: &quot;center&quot;, marginBottom: &quot;8px&quot; }}>
-                                <p style={{ margin: &quot;0&quot;, color: &quot;#374151&quot;, fontSize: &quot;14px&quot;, fontWeight: &quot;bold&quot; }}>
+                            <td style={{ padding: "12px 0" }}>
+                              <div style={{ display: "flex", alignItems: "center", marginBottom: "8px" }}>
+                                <p style={{ margin: "0", color: "#374151", fontSize: "14px", fontWeight: "bold" }}>
                                   June 3, 2025
                                 </p>
                               </div>
                               <ul
                                 style={{
-                                  margin: &quot;0&quot;,
-                                  paddingLeft: &quot;32px&quot;,
-                                  color: &quot;#374151&quot;,
-                                  fontSize: &quot;14px&quot;,
-                                  lineHeight: &quot;1.6&quot;,
+                                  margin: "0",
+                                  paddingLeft: "32px",
+                                  color: "#374151",
+                                  fontSize: "14px",
+                                  lineHeight: "1.6",
                                 }}
                               >
-                                <li style={{ marginBottom: &quot;4px&quot; }}>
-                                  <span style={{ color: &quot;#10B981&quot;, fontWeight: &quot;bold&quot; }}>+1,000 shares</span> acquired
+                                <li style={{ marginBottom: "4px" }}>
+                                  <span style={{ color: "#10B981", fontWeight: "bold" }}>+1,000 shares</span> acquired
                                   through stock option exercise at $18.22/share
                                 </li>
-                                <li style={{ marginBottom: &quot;4px&quot; }}>
-                                  <span style={{ color: &quot;#EF4444&quot;, fontWeight: &quot;bold&quot; }}>-1,000 shares</span> sold at
+                                <li style={{ marginBottom: "4px" }}>
+                                  <span style={{ color: "#EF4444", fontWeight: "bold" }}>-1,000 shares</span> sold at
                                   $350.00/share
                                 </li>
                                 <li>
-                                  <span style={{ color: &quot;#6B7280&quot; }}>~455 shares sold for tax obligations</span>
+                                  <span style={{ color: "#6B7280" }}>~455 shares sold for tax obligations</span>
                                 </li>
                               </ul>
                             </td>
@@ -245,87 +245,87 @@ export default function SECFilingEmailTemplate() {
 
               {/* Holdings Table */}
               <table
-                width=&quot;100%&quot;
-                cellPadding=&quot;0&quot;
-                cellSpacing=&quot;0&quot;
+                width="100%"
+                cellPadding="0"
+                cellSpacing="0"
                 style={{
-                  backgroundColor: &quot;#fefefe&quot;,
-                  border: &quot;1px solid #e2e8f0&quot;,
-                  borderRadius: &quot;8px&quot;,
-                  marginBottom: &quot;20px&quot;,
-                  boxShadow: &quot;0 1px 3px rgba(0,0,0,0.1)&quot;,
+                  backgroundColor: "#fefefe",
+                  border: "1px solid #e2e8f0",
+                  borderRadius: "8px",
+                  marginBottom: "20px",
+                  boxShadow: "0 1px 3px rgba(0,0,0,0.1)",
                 }}
               >
                 <tbody>
                   <tr>
-                    <td style={{ padding: &quot;20px&quot; }}>
+                    <td style={{ padding: "20px" }}>
                       <h3
                         style={{
-                          margin: &quot;0 0 16px&quot;,
-                          color: &quot;#000000&quot;,
-                          fontSize: &quot;18px&quot;,
-                          fontWeight: &quot;bold&quot;,
+                          margin: "0 0 16px",
+                          color: "#000000",
+                          fontSize: "18px",
+                          fontWeight: "bold",
                         }}
                       >
                         📊 Post-Transaction Holdings
                       </h3>
 
                       <table
-                        width=&quot;100%&quot;
-                        cellPadding=&quot;0&quot;
-                        cellSpacing=&quot;0&quot;
+                        width="100%"
+                        cellPadding="0"
+                        cellSpacing="0"
                         style={{
-                          borderCollapse: &quot;collapse&quot;,
-                          border: &quot;1px solid #e2e8f0&quot;,
-                          borderRadius: &quot;6px&quot;,
+                          borderCollapse: "collapse",
+                          border: "1px solid #e2e8f0",
+                          borderRadius: "6px",
                         }}
                       >
                         <thead>
-                          <tr style={{ backgroundColor: &quot;#f8fafc&quot; }}>
+                          <tr style={{ backgroundColor: "#f8fafc" }}>
                             <th
                               style={{
-                                padding: &quot;12px&quot;,
-                                textAlign: &quot;left&quot;,
-                                fontSize: &quot;12px&quot;,
-                                fontWeight: &quot;bold&quot;,
-                                color: &quot;#6B7280&quot;,
-                                borderBottom: &quot;1px solid #e2e8f0&quot;,
+                                padding: "12px",
+                                textAlign: "left",
+                                fontSize: "12px",
+                                fontWeight: "bold",
+                                color: "#6B7280",
+                                borderBottom: "1px solid #e2e8f0",
                               }}
                             >
                               HOLDING TYPE
                             </th>
                             <th
                               style={{
-                                padding: &quot;12px&quot;,
-                                textAlign: &quot;right&quot;,
-                                fontSize: &quot;12px&quot;,
-                                fontWeight: &quot;bold&quot;,
-                                color: &quot;#6B7280&quot;,
-                                borderBottom: &quot;1px solid #e2e8f0&quot;,
+                                padding: "12px",
+                                textAlign: "right",
+                                fontSize: "12px",
+                                fontWeight: "bold",
+                                color: "#6B7280",
+                                borderBottom: "1px solid #e2e8f0",
                               }}
                             >
                               SHARES
                             </th>
                             <th
                               style={{
-                                padding: &quot;12px&quot;,
-                                textAlign: &quot;center&quot;,
-                                fontSize: &quot;12px&quot;,
-                                fontWeight: &quot;bold&quot;,
-                                color: &quot;#6B7280&quot;,
-                                borderBottom: &quot;1px solid #e2e8f0&quot;,
+                                padding: "12px",
+                                textAlign: "center",
+                                fontSize: "12px",
+                                fontWeight: "bold",
+                                color: "#6B7280",
+                                borderBottom: "1px solid #e2e8f0",
                               }}
                             >
                               CHANGE
                             </th>
                             <th
                               style={{
-                                padding: &quot;12px&quot;,
-                                textAlign: &quot;right&quot;,
-                                fontSize: &quot;12px&quot;,
-                                fontWeight: &quot;bold&quot;,
-                                color: &quot;#6B7280&quot;,
-                                borderBottom: &quot;1px solid #e2e8f0&quot;,
+                                padding: "12px",
+                                textAlign: "right",
+                                fontSize: "12px",
+                                fontWeight: "bold",
+                                color: "#6B7280",
+                                borderBottom: "1px solid #e2e8f0",
                               }}
                             >
                               % CHANGE
@@ -336,40 +336,40 @@ export default function SECFilingEmailTemplate() {
                           <tr>
                             <td
                               style={{
-                                padding: &quot;12px&quot;,
-                                fontSize: &quot;14px&quot;,
-                                color: &quot;#374151&quot;,
-                                borderBottom: &quot;1px solid #f1f5f9&quot;,
+                                padding: "12px",
+                                fontSize: "14px",
+                                color: "#374151",
+                                borderBottom: "1px solid #f1f5f9",
                               }}
                             >
                               Direct Ownership
                             </td>
                             <td
                               style={{
-                                padding: &quot;12px&quot;,
-                                textAlign: &quot;right&quot;,
-                                fontSize: &quot;14px&quot;,
-                                fontWeight: &quot;bold&quot;,
-                                color: &quot;#374151&quot;,
-                                borderBottom: &quot;1px solid #f1f5f9&quot;,
+                                padding: "12px",
+                                textAlign: "right",
+                                fontSize: "14px",
+                                fontWeight: "bold",
+                                color: "#374151",
+                                borderBottom: "1px solid #f1f5f9",
                               }}
                             >
                               1,949.50
                             </td>
                             <td
                               style={{
-                                padding: &quot;12px&quot;,
-                                textAlign: &quot;center&quot;,
-                                borderBottom: &quot;1px solid #f1f5f9&quot;,
+                                padding: "12px",
+                                textAlign: "center",
+                                borderBottom: "1px solid #f1f5f9",
                               }}
                             >
                               <span
                                 style={{
-                                  display: &quot;inline-flex&quot;,
-                                  alignItems: &quot;center&quot;,
-                                  color: &quot;#EF4444&quot;,
-                                  fontSize: &quot;14px&quot;,
-                                  fontWeight: &quot;bold&quot;,
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  color: "#EF4444",
+                                  fontSize: "14px",
+                                  fontWeight: "bold",
                                 }}
                               >
                                 ↓ -3,267
@@ -377,12 +377,12 @@ export default function SECFilingEmailTemplate() {
                             </td>
                             <td
                               style={{
-                                padding: &quot;12px&quot;,
-                                textAlign: &quot;right&quot;,
-                                fontSize: &quot;14px&quot;,
-                                fontWeight: &quot;bold&quot;,
-                                color: &quot;#EF4444&quot;,
-                                borderBottom: &quot;1px solid #f1f5f9&quot;,
+                                padding: "12px",
+                                textAlign: "right",
+                                fontSize: "14px",
+                                fontWeight: "bold",
+                                color: "#EF4444",
+                                borderBottom: "1px solid #f1f5f9",
                               }}
                             >
                               -62.6%
@@ -391,39 +391,39 @@ export default function SECFilingEmailTemplate() {
                           <tr>
                             <td
                               style={{
-                                padding: &quot;12px&quot;,
-                                fontSize: &quot;14px&quot;,
-                                color: &quot;#374151&quot;,
-                                borderBottom: &quot;1px solid #f1f5f9&quot;,
+                                padding: "12px",
+                                fontSize: "14px",
+                                color: "#374151",
+                                borderBottom: "1px solid #f1f5f9",
                               }}
                             >
                               Indirect - Taneja GRATs
                             </td>
                             <td
                               style={{
-                                padding: &quot;12px&quot;,
-                                textAlign: &quot;right&quot;,
-                                fontSize: &quot;14px&quot;,
-                                fontWeight: &quot;bold&quot;,
-                                color: &quot;#374151&quot;,
-                                borderBottom: &quot;1px solid #f1f5f9&quot;,
+                                padding: "12px",
+                                textAlign: "right",
+                                fontSize: "14px",
+                                fontWeight: "bold",
+                                color: "#374151",
+                                borderBottom: "1px solid #f1f5f9",
                               }}
                             >
                               55,500
                             </td>
                             <td
                               style={{
-                                padding: &quot;12px&quot;,
-                                textAlign: &quot;center&quot;,
-                                borderBottom: &quot;1px solid #f1f5f9&quot;,
+                                padding: "12px",
+                                textAlign: "center",
+                                borderBottom: "1px solid #f1f5f9",
                               }}
                             >
                               <span
                                 style={{
-                                  display: &quot;inline-flex&quot;,
-                                  alignItems: &quot;center&quot;,
-                                  color: &quot;#6B7280&quot;,
-                                  fontSize: &quot;14px&quot;,
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  color: "#6B7280",
+                                  fontSize: "14px",
                                 }}
                               >
                                 → No Change
@@ -431,11 +431,11 @@ export default function SECFilingEmailTemplate() {
                             </td>
                             <td
                               style={{
-                                padding: &quot;12px&quot;,
-                                textAlign: &quot;right&quot;,
-                                fontSize: &quot;14px&quot;,
-                                color: &quot;#6B7280&quot;,
-                                borderBottom: &quot;1px solid #f1f5f9&quot;,
+                                padding: "12px",
+                                textAlign: "right",
+                                fontSize: "14px",
+                                color: "#6B7280",
+                                borderBottom: "1px solid #f1f5f9",
                               }}
                             >
                               0.0%
@@ -444,39 +444,39 @@ export default function SECFilingEmailTemplate() {
                           <tr>
                             <td
                               style={{
-                                padding: &quot;12px&quot;,
-                                fontSize: &quot;14px&quot;,
-                                color: &quot;#374151&quot;,
-                                borderBottom: &quot;1px solid #f1f5f9&quot;,
+                                padding: "12px",
+                                fontSize: "14px",
+                                color: "#374151",
+                                borderBottom: "1px solid #f1f5f9",
                               }}
                             >
                               Indirect - Spouse GRATs
                             </td>
                             <td
                               style={{
-                                padding: &quot;12px&quot;,
-                                textAlign: &quot;right&quot;,
-                                fontSize: &quot;14px&quot;,
-                                fontWeight: &quot;bold&quot;,
-                                color: &quot;#374151&quot;,
-                                borderBottom: &quot;1px solid #f1f5f9&quot;,
+                                padding: "12px",
+                                textAlign: "right",
+                                fontSize: "14px",
+                                fontWeight: "bold",
+                                color: "#374151",
+                                borderBottom: "1px solid #f1f5f9",
                               }}
                             >
                               55,500
                             </td>
                             <td
                               style={{
-                                padding: &quot;12px&quot;,
-                                textAlign: &quot;center&quot;,
-                                borderBottom: &quot;1px solid #f1f5f9&quot;,
+                                padding: "12px",
+                                textAlign: "center",
+                                borderBottom: "1px solid #f1f5f9",
                               }}
                             >
                               <span
                                 style={{
-                                  display: &quot;inline-flex&quot;,
-                                  alignItems: &quot;center&quot;,
-                                  color: &quot;#6B7280&quot;,
-                                  fontSize: &quot;14px&quot;,
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  color: "#6B7280",
+                                  fontSize: "14px",
                                 }}
                               >
                                 → No Change
@@ -484,11 +484,11 @@ export default function SECFilingEmailTemplate() {
                             </td>
                             <td
                               style={{
-                                padding: &quot;12px&quot;,
-                                textAlign: &quot;right&quot;,
-                                fontSize: &quot;14px&quot;,
-                                color: &quot;#6B7280&quot;,
-                                borderBottom: &quot;1px solid #f1f5f9&quot;,
+                                padding: "12px",
+                                textAlign: "right",
+                                fontSize: "14px",
+                                color: "#6B7280",
+                                borderBottom: "1px solid #f1f5f9",
                               }}
                             >
                               0.0%
@@ -497,37 +497,37 @@ export default function SECFilingEmailTemplate() {
                           <tr>
                             <td
                               style={{
-                                padding: &quot;12px&quot;,
-                                fontSize: &quot;14px&quot;,
-                                color: &quot;#374151&quot;,
+                                padding: "12px",
+                                fontSize: "14px",
+                                color: "#374151",
                               }}
                             >
                               Stock Options ($18.22)
                             </td>
                             <td
                               style={{
-                                padding: &quot;12px&quot;,
-                                textAlign: &quot;right&quot;,
-                                fontSize: &quot;14px&quot;,
-                                fontWeight: &quot;bold&quot;,
-                                color: &quot;#374151&quot;,
+                                padding: "12px",
+                                textAlign: "right",
+                                fontSize: "14px",
+                                fontWeight: "bold",
+                                color: "#374151",
                               }}
                             >
                               719,920
                             </td>
                             <td
                               style={{
-                                padding: &quot;12px&quot;,
-                                textAlign: &quot;center&quot;,
+                                padding: "12px",
+                                textAlign: "center",
                               }}
                             >
                               <span
                                 style={{
-                                  display: &quot;inline-flex&quot;,
-                                  alignItems: &quot;center&quot;,
-                                  color: &quot;#EF4444&quot;,
-                                  fontSize: &quot;14px&quot;,
-                                  fontWeight: &quot;bold&quot;,
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  color: "#EF4444",
+                                  fontSize: "14px",
+                                  fontWeight: "bold",
                                 }}
                               >
                                 ↓ -7,000
@@ -535,11 +535,11 @@ export default function SECFilingEmailTemplate() {
                             </td>
                             <td
                               style={{
-                                padding: &quot;12px&quot;,
-                                textAlign: &quot;right&quot;,
-                                fontSize: &quot;14px&quot;,
-                                fontWeight: &quot;bold&quot;,
-                                color: &quot;#EF4444&quot;,
+                                padding: "12px",
+                                textAlign: "right",
+                                fontSize: "14px",
+                                fontWeight: "bold",
+                                color: "#EF4444",
                               }}
                             >
                               -0.96%
@@ -550,10 +550,10 @@ export default function SECFilingEmailTemplate() {
 
                       <p
                         style={{
-                          margin: &quot;12px 0 0&quot;,
-                          fontSize: &quot;12px&quot;,
-                          color: &quot;#6B7280&quot;,
-                          fontStyle: &quot;italic&quot;,
+                          margin: "12px 0 0",
+                          fontSize: "12px",
+                          color: "#6B7280",
+                          fontStyle: "italic",
                         }}
                       >
                         * Stock options expire April 19, 2029
@@ -565,30 +565,30 @@ export default function SECFilingEmailTemplate() {
 
               {/* Additional Details Box */}
               <table
-                width=&quot;100%&quot;
-                cellPadding=&quot;0&quot;
-                cellSpacing=&quot;0&quot;
+                width="100%"
+                cellPadding="0"
+                cellSpacing="0"
                 style={{
-                  backgroundColor: &quot;#fefefe&quot;,
-                  border: &quot;1px solid #e2e8f0&quot;,
-                  borderRadius: &quot;8px&quot;,
-                  boxShadow: &quot;0 1px 3px rgba(0,0,0,0.1)&quot;,
+                  backgroundColor: "#fefefe",
+                  border: "1px solid #e2e8f0",
+                  borderRadius: "8px",
+                  boxShadow: "0 1px 3px rgba(0,0,0,0.1)",
                 }}
               >
                 <tbody>
                   <tr>
-                    <td style={{ padding: &quot;20px&quot; }}>
+                    <td style={{ padding: "20px" }}>
                       <h3
                         style={{
-                          margin: &quot;0 0 12px&quot;,
-                          color: &quot;#000000&quot;,
-                          fontSize: &quot;18px&quot;,
-                          fontWeight: &quot;bold&quot;,
+                          margin: "0 0 12px",
+                          color: "#000000",
+                          fontSize: "18px",
+                          fontWeight: "bold",
                         }}
                       >
                         ℹ️ Additional Details
                       </h3>
-                      <p style={{ margin: &quot;0&quot;, color: &quot;#374151&quot;, fontSize: &quot;14px&quot;, lineHeight: &quot;1.6&quot; }}>
+                      <p style={{ margin: "0", color: "#374151", fontSize: "14px", lineHeight: "1.6" }}>
                         The stock options exercised by Taneja were granted on April 19, 2019, with a vesting schedule of
                         1/8th of the shares vesting on September 13, 2019, and an additional 1/48th vesting each month
                         thereafter, becoming fully vested on March 13, 2023.
@@ -604,35 +604,35 @@ export default function SECFilingEmailTemplate() {
 
       {/* Footer */}
       <table
-        width=&quot;100%&quot;
-        cellPadding=&quot;0&quot;
-        cellSpacing=&quot;0&quot;
+        width="100%"
+        cellPadding="0"
+        cellSpacing="0"
         style={{
-          backgroundColor: &quot;white&quot;,
-          borderRadius: &quot;0 0 12px 12px&quot;,
-          border: &quot;1px solid #e2e8f0&quot;,
-          borderTop: &quot;none&quot;,
+          backgroundColor: "white",
+          borderRadius: "0 0 12px 12px",
+          border: "1px solid #e2e8f0",
+          borderTop: "none",
         }}
       >
         <tbody>
           <tr>
-            <td style={{ padding: &quot;20px&quot;, textAlign: &quot;center&quot; }}>
+            <td style={{ padding: "20px", textAlign: "center" }}>
               <a
-                href=&quot;#&quot;
+                href="#"
                 style={{
-                  display: &quot;inline-block&quot;,
-                  padding: &quot;12px 24px&quot;,
-                  background: &quot;linear-gradient(135deg, #7C3AED 0%, #EC4899 100%)&quot;,
-                  color: &quot;white&quot;,
-                  textDecoration: &quot;none&quot;,
-                  borderRadius: &quot;8px&quot;,
-                  fontSize: &quot;14px&quot;,
-                  fontWeight: &quot;bold&quot;,
+                  display: "inline-block",
+                  padding: "12px 24px",
+                  background: "linear-gradient(135deg, #7C3AED 0%, #EC4899 100%)",
+                  color: "white",
+                  textDecoration: "none",
+                  borderRadius: "8px",
+                  fontSize: "14px",
+                  fontWeight: "bold",
                 }}
               >
                 View on SEC Website
               </a>
-              <p style={{ margin: &quot;16px 0 0&quot;, color: &quot;#6B7280&quot;, fontSize: &quot;12px&quot; }}>
+              <p style={{ margin: "16px 0 0", color: "#6B7280", fontSize: "12px" }}>
                 © 2025 tldrSEC. All rights reserved.
               </p>
             </td>

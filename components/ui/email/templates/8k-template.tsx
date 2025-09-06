@@ -1,24 +1,24 @@
 export default function Form8KEmailTemplate() {
   return (
-    <div style={{ maxWidth: &quot;600px&quot;, margin: &quot;0 auto&quot;, fontFamily: &quot;Arial, sans-serif&quot;, backgroundColor: &quot;#f8fafc&quot; }}>
+    <div style={{ maxWidth: "600px", margin: "0 auto", fontFamily: "Arial, sans-serif", backgroundColor: "#f8fafc" }}>
       {/* Header with gradient background */}
       <table
-        width=&quot;100%&quot;
-        cellPadding=&quot;0&quot;
-        cellSpacing=&quot;0&quot;
+        width="100%"
+        cellPadding="0"
+        cellSpacing="0"
         style={{
-          background: &quot;linear-gradient(135deg, #7C3AED 0%, #EC4899 100%)&quot;,
-          color: &quot;white&quot;,
-          borderRadius: &quot;12px 12px 0 0&quot;,
+          background: "linear-gradient(135deg, #7C3AED 0%, #EC4899 100%)",
+          color: "white",
+          borderRadius: "12px 12px 0 0",
         }}
       >
         <tbody>
           <tr>
-            <td style={{ padding: &quot;24px&quot;, textAlign: &quot;center&quot; }}>
-              <h1 style={{ margin: &quot;0&quot;, fontSize: &quot;32px&quot;, fontWeight: &quot;bold&quot;, letterSpacing: &quot;-0.5px&quot; }}>
+            <td style={{ padding: "24px", textAlign: "center" }}>
+              <h1 style={{ margin: "0", fontSize: "32px", fontWeight: "bold", letterSpacing: "-0.5px" }}>
                 SEC Filing Summaries
               </h1>
-              <p style={{ margin: &quot;12px 0 0&quot;, fontSize: &quot;18px&quot;, opacity: &quot;0.9&quot; }}>6/6/2025</p>
+              <p style={{ margin: "12px 0 0", fontSize: "18px", opacity: "0.9" }}>6/6/2025</p>
             </td>
           </tr>
         </tbody>
@@ -26,32 +26,32 @@ export default function Form8KEmailTemplate() {
 
       {/* Filing Information */}
       <table
-        width=&quot;100%&quot;
-        cellPadding=&quot;0&quot;
-        cellSpacing=&quot;0&quot;
-        style={{ backgroundColor: &quot;white&quot;, border: &quot;1px solid #e2e8f0&quot;, borderTop: &quot;none&quot; }}
+        width="100%"
+        cellPadding="0"
+        cellSpacing="0"
+        style={{ backgroundColor: "white", border: "1px solid #e2e8f0", borderTop: "none" }}
       >
         <tbody>
           <tr>
-            <td style={{ padding: &quot;24px&quot; }}>
-              <table width=&quot;100%&quot; cellPadding=&quot;0&quot; cellSpacing=&quot;0&quot;>
+            <td style={{ padding: "24px" }}>
+              <table width="100%" cellPadding="0" cellSpacing="0">
                 <tbody>
                   <tr>
                     <td>
                       <h2
                         style={{
-                          margin: &quot;0&quot;,
-                          background: &quot;linear-gradient(135deg, #7C3AED 0%, #EC4899 100%)&quot;,
-                          WebkitBackgroundClip: &quot;text&quot;,
-                          WebkitTextFillColor: &quot;transparent&quot;,
-                          backgroundClip: &quot;text&quot;,
-                          fontSize: &quot;24px&quot;,
-                          fontWeight: &quot;bold&quot;,
+                          margin: "0",
+                          background: "linear-gradient(135deg, #7C3AED 0%, #EC4899 100%)",
+                          WebkitBackgroundClip: "text",
+                          WebkitTextFillColor: "transparent",
+                          backgroundClip: "text",
+                          fontSize: "24px",
+                          fontWeight: "bold",
                         }}
                       >
                         Microsoft Corp. (MSFT) - Form 8-K Filing
                       </h2>
-                      <p style={{ margin: &quot;8px 0 20px&quot;, color: &quot;#64748b&quot;, fontSize: &quot;14px&quot; }}>Filed on: 6/5/2025</p>
+                      <p style={{ margin: "8px 0 20px", color: "#64748b", fontSize: "14px" }}>Filed on: 6/5/2025</p>
                     </td>
                   </tr>
                 </tbody>
@@ -59,88 +59,88 @@ export default function Form8KEmailTemplate() {
 
               {/* Summary Box */}
               <table
-                width=&quot;100%&quot;
-                cellPadding=&quot;0&quot;
-                cellSpacing=&quot;0&quot;
+                width="100%"
+                cellPadding="0"
+                cellSpacing="0"
                 style={{
-                  backgroundColor: &quot;#fafafa&quot;,
-                  border: &quot;1px solid #e2e8f0&quot;,
-                  borderRadius: &quot;8px&quot;,
-                  marginBottom: &quot;20px&quot;,
-                  boxShadow: &quot;0 2px 4px rgba(0,0,0,0.05), 0 0 1px rgba(0,0,0,0.1)&quot;,
-                  backgroundImage: &quot;linear-gradient(to bottom, #ffffff, #f9fafb)&quot;,
+                  backgroundColor: "#fafafa",
+                  border: "1px solid #e2e8f0",
+                  borderRadius: "8px",
+                  marginBottom: "20px",
+                  boxShadow: "0 2px 4px rgba(0,0,0,0.05), 0 0 1px rgba(0,0,0,0.1)",
+                  backgroundImage: "linear-gradient(to bottom, #ffffff, #f9fafb)",
                 }}
               >
                 <tbody>
                   <tr>
-                    <td style={{ padding: &quot;20px&quot; }}>
+                    <td style={{ padding: "20px" }}>
                       <h3
                         style={{
-                          margin: &quot;0 0 16px&quot;,
-                          color: &quot;#000000&quot;,
-                          fontSize: &quot;18px&quot;,
-                          fontWeight: &quot;bold&quot;,
-                          borderBottom: &quot;2px solid #f1f5f9&quot;,
-                          paddingBottom: &quot;8px&quot;,
+                          margin: "0 0 16px",
+                          color: "#000000",
+                          fontSize: "18px",
+                          fontWeight: "bold",
+                          borderBottom: "2px solid #f1f5f9",
+                          paddingBottom: "8px",
                         }}
                       >
                         📋 Summary
                       </h3>
 
-                      <table width=&quot;100%&quot; cellPadding=&quot;0&quot; cellSpacing=&quot;0&quot; style={{ borderCollapse: &quot;collapse&quot; }}>
+                      <table width="100%" cellPadding="0" cellSpacing="0" style={{ borderCollapse: "collapse" }}>
                         <tbody>
                           <tr>
-                            <td style={{ padding: &quot;8px 0&quot;, width: &quot;120px&quot;, verticalAlign: &quot;top&quot; }}>
-                              <p style={{ margin: &quot;0&quot;, color: &quot;#6B7280&quot;, fontSize: &quot;14px&quot;, fontWeight: &quot;500&quot; }}>
+                            <td style={{ padding: "8px 0", width: "120px", verticalAlign: "top" }}>
+                              <p style={{ margin: "0", color: "#6B7280", fontSize: "14px", fontWeight: "500" }}>
                                 Company:
                               </p>
                             </td>
-                            <td style={{ padding: &quot;8px 0&quot;, verticalAlign: &quot;top&quot; }}>
-                              <p style={{ margin: &quot;0&quot;, color: &quot;#374151&quot;, fontSize: &quot;14px&quot;, fontWeight: &quot;600&quot; }}>
+                            <td style={{ padding: "8px 0", verticalAlign: "top" }}>
+                              <p style={{ margin: "0", color: "#374151", fontSize: "14px", fontWeight: "600" }}>
                                 Microsoft Corporation
                               </p>
                             </td>
                           </tr>
                           <tr>
-                            <td style={{ padding: &quot;8px 0&quot;, width: &quot;120px&quot;, verticalAlign: &quot;top&quot; }}>
-                              <p style={{ margin: &quot;0&quot;, color: &quot;#6B7280&quot;, fontSize: &quot;14px&quot;, fontWeight: &quot;500&quot; }}>
+                            <td style={{ padding: "8px 0", width: "120px", verticalAlign: "top" }}>
+                              <p style={{ margin: "0", color: "#6B7280", fontSize: "14px", fontWeight: "500" }}>
                                 Form Type:
                               </p>
                             </td>
-                            <td style={{ padding: &quot;8px 0&quot;, verticalAlign: &quot;top&quot; }}>
-                              <p style={{ margin: &quot;0&quot;, color: &quot;#374151&quot;, fontSize: &quot;14px&quot; }}>
+                            <td style={{ padding: "8px 0", verticalAlign: "top" }}>
+                              <p style={{ margin: "0", color: "#374151", fontSize: "14px" }}>
                                 Form 8-K (Current Report)
                               </p>
                             </td>
                           </tr>
                           <tr>
-                            <td style={{ padding: &quot;8px 0&quot;, width: &quot;120px&quot;, verticalAlign: &quot;top&quot; }}>
-                              <p style={{ margin: &quot;0&quot;, color: &quot;#6B7280&quot;, fontSize: &quot;14px&quot;, fontWeight: &quot;500&quot; }}>
+                            <td style={{ padding: "8px 0", width: "120px", verticalAlign: "top" }}>
+                              <p style={{ margin: "0", color: "#6B7280", fontSize: "14px", fontWeight: "500" }}>
                                 Event Date:
                               </p>
                             </td>
-                            <td style={{ padding: &quot;8px 0&quot;, verticalAlign: &quot;top&quot; }}>
-                              <p style={{ margin: &quot;0&quot;, color: &quot;#374151&quot;, fontSize: &quot;14px&quot; }}>June 3, 2025</p>
+                            <td style={{ padding: "8px 0", verticalAlign: "top" }}>
+                              <p style={{ margin: "0", color: "#374151", fontSize: "14px" }}>June 3, 2025</p>
                             </td>
                           </tr>
                           <tr>
-                            <td style={{ padding: &quot;8px 0&quot;, width: &quot;120px&quot;, verticalAlign: &quot;top&quot; }}>
-                              <p style={{ margin: &quot;0&quot;, color: &quot;#6B7280&quot;, fontSize: &quot;14px&quot;, fontWeight: &quot;500&quot; }}>
+                            <td style={{ padding: "8px 0", width: "120px", verticalAlign: "top" }}>
+                              <p style={{ margin: "0", color: "#6B7280", fontSize: "14px", fontWeight: "500" }}>
                                 Filed Date:
                               </p>
                             </td>
-                            <td style={{ padding: &quot;8px 0&quot;, verticalAlign: &quot;top&quot; }}>
-                              <p style={{ margin: &quot;0&quot;, color: &quot;#374151&quot;, fontSize: &quot;14px&quot; }}>June 5, 2025</p>
+                            <td style={{ padding: "8px 0", verticalAlign: "top" }}>
+                              <p style={{ margin: "0", color: "#374151", fontSize: "14px" }}>June 5, 2025</p>
                             </td>
                           </tr>
                           <tr>
-                            <td style={{ padding: &quot;8px 0&quot;, width: &quot;120px&quot;, verticalAlign: &quot;top&quot; }}>
-                              <p style={{ margin: &quot;0&quot;, color: &quot;#6B7280&quot;, fontSize: &quot;14px&quot;, fontWeight: &quot;500&quot; }}>
+                            <td style={{ padding: "8px 0", width: "120px", verticalAlign: "top" }}>
+                              <p style={{ margin: "0", color: "#6B7280", fontSize: "14px", fontWeight: "500" }}>
                                 Items Reported:
                               </p>
                             </td>
-                            <td style={{ padding: &quot;8px 0&quot;, verticalAlign: &quot;top&quot; }}>
-                              <p style={{ margin: &quot;0&quot;, color: &quot;#374151&quot;, fontSize: &quot;14px&quot; }}>
+                            <td style={{ padding: "8px 0", verticalAlign: "top" }}>
+                              <p style={{ margin: "0", color: "#374151", fontSize: "14px" }}>
                                 Item 2.01, 5.02, 7.01, 9.01
                               </p>
                             </td>
@@ -154,29 +154,29 @@ export default function Form8KEmailTemplate() {
 
               {/* Event Details */}
               <table
-                width=&quot;100%&quot;
-                cellPadding=&quot;0&quot;
-                cellSpacing=&quot;0&quot;
+                width="100%"
+                cellPadding="0"
+                cellSpacing="0"
                 style={{
-                  backgroundColor: &quot;#fafafa&quot;,
-                  border: &quot;1px solid #e2e8f0&quot;,
-                  borderRadius: &quot;8px&quot;,
-                  marginBottom: &quot;20px&quot;,
-                  boxShadow: &quot;0 2px 4px rgba(0,0,0,0.05), 0 0 1px rgba(0,0,0,0.1)&quot;,
-                  backgroundImage: &quot;linear-gradient(to bottom, #ffffff, #f9fafb)&quot;,
+                  backgroundColor: "#fafafa",
+                  border: "1px solid #e2e8f0",
+                  borderRadius: "8px",
+                  marginBottom: "20px",
+                  boxShadow: "0 2px 4px rgba(0,0,0,0.05), 0 0 1px rgba(0,0,0,0.1)",
+                  backgroundImage: "linear-gradient(to bottom, #ffffff, #f9fafb)",
                 }}
               >
                 <tbody>
                   <tr>
-                    <td style={{ padding: &quot;20px&quot; }}>
+                    <td style={{ padding: "20px" }}>
                       <h3
                         style={{
-                          margin: &quot;0 0 16px&quot;,
-                          color: &quot;#000000&quot;,
-                          fontSize: &quot;18px&quot;,
-                          fontWeight: &quot;bold&quot;,
-                          borderBottom: &quot;2px solid #f1f5f9&quot;,
-                          paddingBottom: &quot;8px&quot;,
+                          margin: "0 0 16px",
+                          color: "#000000",
+                          fontSize: "18px",
+                          fontWeight: "bold",
+                          borderBottom: "2px solid #f1f5f9",
+                          paddingBottom: "8px",
                         }}
                       >
                         🔔 Event Details
@@ -184,78 +184,78 @@ export default function Form8KEmailTemplate() {
 
                       <div
                         style={{
-                          padding: &quot;12px&quot;,
-                          backgroundColor: &quot;#f8fafc&quot;,
-                          borderRadius: &quot;6px&quot;,
-                          marginBottom: &quot;16px&quot;,
+                          padding: "12px",
+                          backgroundColor: "#f8fafc",
+                          borderRadius: "6px",
+                          marginBottom: "16px",
                         }}
                       >
                         <h4
                           style={{
-                            margin: &quot;0 0 8px&quot;,
-                            color: &quot;#374151&quot;,
-                            fontSize: &quot;16px&quot;,
-                            fontWeight: &quot;bold&quot;,
+                            margin: "0 0 8px",
+                            color: "#374151",
+                            fontSize: "16px",
+                            fontWeight: "bold",
                           }}
                         >
                           Item 2.01 - Completion of Acquisition
                         </h4>
-                        <p style={{ margin: &quot;0&quot;, color: &quot;#374151&quot;, fontSize: &quot;14px&quot;, lineHeight: &quot;1.6&quot; }}>
+                        <p style={{ margin: "0", color: "#374151", fontSize: "14px", lineHeight: "1.6" }}>
                           Microsoft Corporation completed the acquisition of Quantum Computing Inc., a leader in quantum
                           computing software solutions, for $3.2 billion in cash. The acquisition is expected to enhance
-                          Microsoft&apos;s quantum computing capabilities and accelerate the development of practical quantum
+                          Microsoft's quantum computing capabilities and accelerate the development of practical quantum
                           applications.
                         </p>
                       </div>
 
                       <div
                         style={{
-                          padding: &quot;12px&quot;,
-                          backgroundColor: &quot;#f8fafc&quot;,
-                          borderRadius: &quot;6px&quot;,
-                          marginBottom: &quot;16px&quot;,
+                          padding: "12px",
+                          backgroundColor: "#f8fafc",
+                          borderRadius: "6px",
+                          marginBottom: "16px",
                         }}
                       >
                         <h4
                           style={{
-                            margin: &quot;0 0 8px&quot;,
-                            color: &quot;#374151&quot;,
-                            fontSize: &quot;16px&quot;,
-                            fontWeight: &quot;bold&quot;,
+                            margin: "0 0 8px",
+                            color: "#374151",
+                            fontSize: "16px",
+                            fontWeight: "bold",
                           }}
                         >
                           Item 5.02 - Departure/Election of Directors
                         </h4>
-                        <p style={{ margin: &quot;0&quot;, color: &quot;#374151&quot;, fontSize: &quot;14px&quot;, lineHeight: &quot;1.6&quot; }}>
-                          Dr. Sarah Chen, CEO of Quantum Computing Inc., has been appointed to Microsoft&apos;s Board of
-                          Directors, effective immediately. Dr. Chen will also join Microsoft&apos;s executive leadership
+                        <p style={{ margin: "0", color: "#374151", fontSize: "14px", lineHeight: "1.6" }}>
+                          Dr. Sarah Chen, CEO of Quantum Computing Inc., has been appointed to Microsoft's Board of
+                          Directors, effective immediately. Dr. Chen will also join Microsoft's executive leadership
                           team as Corporate Vice President of Quantum Technologies.
                         </p>
                       </div>
 
                       <div
                         style={{
-                          padding: &quot;12px&quot;,
-                          backgroundColor: &quot;#f8fafc&quot;,
-                          borderRadius: &quot;6px&quot;,
+                          padding: "12px",
+                          backgroundColor: "#f8fafc",
+                          borderRadius: "6px",
                         }}
                       >
                         <h4
                           style={{
-                            margin: &quot;0 0 8px&quot;,
-                            color: &quot;#374151&quot;,
-                            fontSize: &quot;16px&quot;,
-                            fontWeight: &quot;bold&quot;,
+                            margin: "0 0 8px",
+                            color: "#374151",
+                            fontSize: "16px",
+                            fontWeight: "bold",
                           }}
                         >
                           Item 7.01 - Regulation FD Disclosure
                         </h4>
-                        <p style={{ margin: &quot;0 0 8px&quot;, color: &quot;#374151&quot;, fontSize: &quot;14px&quot;, lineHeight: &quot;1.6&quot; }}>
-                          Microsoft announced plans to integrate Quantum Computing Inc.&apos;s software solutions into Azure
+                        <p style={{ margin: "0 0 8px", color: "#374151", fontSize: "14px", lineHeight: "1.6" }}>
+                          Microsoft announced plans to integrate Quantum Computing Inc.'s software solutions into Azure
                           Quantum, creating a comprehensive quantum computing platform for enterprise customers. The
                           company expects the integration to be completed by Q4 2025.
                         </p>
-                        <p style={{ margin: &quot;0&quot;, color: &quot;#374151&quot;, fontSize: &quot;14px&quot;, lineHeight: &quot;1.6&quot; }}>
+                        <p style={{ margin: "0", color: "#374151", fontSize: "14px", lineHeight: "1.6" }}>
                           Microsoft also reaffirmed its financial guidance for fiscal year 2025, stating that the
                           acquisition is expected to be slightly dilutive to non-GAAP earnings per share in fiscal years
                           2025 and 2026.
@@ -268,39 +268,39 @@ export default function Form8KEmailTemplate() {
 
               {/* Market Impact */}
               <table
-                width=&quot;100%&quot;
-                cellPadding=&quot;0&quot;
-                cellSpacing=&quot;0&quot;
+                width="100%"
+                cellPadding="0"
+                cellSpacing="0"
                 style={{
-                  backgroundColor: &quot;#fafafa&quot;,
-                  border: &quot;1px solid #e2e8f0&quot;,
-                  borderRadius: &quot;8px&quot;,
-                  boxShadow: &quot;0 2px 4px rgba(0,0,0,0.05), 0 0 1px rgba(0,0,0,0.1)&quot;,
-                  backgroundImage: &quot;linear-gradient(to bottom, #ffffff, #f9fafb)&quot;,
+                  backgroundColor: "#fafafa",
+                  border: "1px solid #e2e8f0",
+                  borderRadius: "8px",
+                  boxShadow: "0 2px 4px rgba(0,0,0,0.05), 0 0 1px rgba(0,0,0,0.1)",
+                  backgroundImage: "linear-gradient(to bottom, #ffffff, #f9fafb)",
                 }}
               >
                 <tbody>
                   <tr>
-                    <td style={{ padding: &quot;20px&quot; }}>
+                    <td style={{ padding: "20px" }}>
                       <h3
                         style={{
-                          margin: &quot;0 0 12px&quot;,
-                          color: &quot;#000000&quot;,
-                          fontSize: &quot;18px&quot;,
-                          fontWeight: &quot;bold&quot;,
-                          borderBottom: &quot;2px solid #f1f5f9&quot;,
-                          paddingBottom: &quot;8px&quot;,
+                          margin: "0 0 12px",
+                          color: "#000000",
+                          fontSize: "18px",
+                          fontWeight: "bold",
+                          borderBottom: "2px solid #f1f5f9",
+                          paddingBottom: "8px",
                         }}
                       >
                         📈 Market Impact
                       </h3>
-                      <p style={{ margin: &quot;0 0 12px&quot;, color: &quot;#374151&quot;, fontSize: &quot;14px&quot;, lineHeight: &quot;1.6&quot; }}>
-                        Following the announcement, Microsoft&apos;s stock (MSFT) rose 2.3% in after-hours trading. Analysts
+                      <p style={{ margin: "0 0 12px", color: "#374151", fontSize: "14px", lineHeight: "1.6" }}>
+                        Following the announcement, Microsoft's stock (MSFT) rose 2.3% in after-hours trading. Analysts
                         have responded positively to the acquisition, highlighting the strategic importance of quantum
-                        computing for Microsoft&apos;s long-term growth.
+                        computing for Microsoft's long-term growth.
                       </p>
-                      <p style={{ margin: &quot;0&quot;, color: &quot;#374151&quot;, fontSize: &quot;14px&quot;, lineHeight: &quot;1.6&quot; }}>
-                        The acquisition represents Microsoft&apos;s largest investment in quantum computing to date and
+                      <p style={{ margin: "0", color: "#374151", fontSize: "14px", lineHeight: "1.6" }}>
+                        The acquisition represents Microsoft's largest investment in quantum computing to date and
                         positions the company as a leader in the emerging quantum technology market, which is projected
                         to reach $65 billion by 2030.
                       </p>
@@ -315,35 +315,35 @@ export default function Form8KEmailTemplate() {
 
       {/* Footer */}
       <table
-        width=&quot;100%&quot;
-        cellPadding=&quot;0&quot;
-        cellSpacing=&quot;0&quot;
+        width="100%"
+        cellPadding="0"
+        cellSpacing="0"
         style={{
-          backgroundColor: &quot;white&quot;,
-          borderRadius: &quot;0 0 12px 12px&quot;,
-          border: &quot;1px solid #e2e8f0&quot;,
-          borderTop: &quot;none&quot;,
+          backgroundColor: "white",
+          borderRadius: "0 0 12px 12px",
+          border: "1px solid #e2e8f0",
+          borderTop: "none",
         }}
       >
         <tbody>
           <tr>
-            <td style={{ padding: &quot;20px&quot;, textAlign: &quot;center&quot; }}>
+            <td style={{ padding: "20px", textAlign: "center" }}>
               <a
-                href=&quot;#&quot;
+                href="#"
                 style={{
-                  display: &quot;inline-block&quot;,
-                  padding: &quot;12px 24px&quot;,
-                  background: &quot;linear-gradient(135deg, #7C3AED 0%, #EC4899 100%)&quot;,
-                  color: &quot;white&quot;,
-                  textDecoration: &quot;none&quot;,
-                  borderRadius: &quot;8px&quot;,
-                  fontSize: &quot;14px&quot;,
-                  fontWeight: &quot;bold&quot;,
+                  display: "inline-block",
+                  padding: "12px 24px",
+                  background: "linear-gradient(135deg, #7C3AED 0%, #EC4899 100%)",
+                  color: "white",
+                  textDecoration: "none",
+                  borderRadius: "8px",
+                  fontSize: "14px",
+                  fontWeight: "bold",
                 }}
               >
                 View on SEC Website
               </a>
-              <p style={{ margin: &quot;16px 0 0&quot;, color: &quot;#6B7280&quot;, fontSize: &quot;12px&quot; }}>
+              <p style={{ margin: "16px 0 0", color: "#6B7280", fontSize: "12px" }}>
                 © 2025 tldrSEC. All rights reserved.
               </p>
             </td>
