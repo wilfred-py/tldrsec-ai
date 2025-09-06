@@ -7,7 +7,7 @@
 import { prisma } from '../../db/prisma';
 import { logger } from '../../logging';
 import { monitoring } from '../../monitoring';
-import { SummarizationResult } from '../summarize';
+// import { SummarizationResult } from '../summarize'; // Currently unused
 import { EnhancedSummarizationResult } from './types';
 
 // Component logger
@@ -32,7 +32,7 @@ export async function updateSummaryWithPartialResult(
       summaryJSON,
       modelUsed,
       inputTokens,
-      outputTokens,
+      outputTokens: _outputTokens,
       cost,
       duration,
       isPartial = true
@@ -83,7 +83,7 @@ export async function updateSummaryWithResult(
       summaryJSON,
       modelUsed,
       inputTokens,
-      outputTokens,
+      outputTokens: _outputTokens2,
       cost,
       duration,
       isPartial = false,

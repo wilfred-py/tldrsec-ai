@@ -292,7 +292,7 @@ export class ClaudeClient {
           originalModel: modelUsed !== params.model ? params.model : undefined
         }
       };
-    } catch (error: any) {
+    } catch (error: unknown) {
       // Record failure metrics
       monitoring.stopTimer(`claude.request.${requestType}`);
       monitoring.recordTiming('claude.request.duration', Date.now() - startTime);
@@ -538,7 +538,7 @@ export class ClaudeClient {
         originalModel: useCostOptimization ? model : 
                      (modelUsed !== selectedModel ? selectedModel : undefined)
       };
-    } catch (error: any) {
+    } catch (error: unknown) {
       // Record failure metrics
       monitoring.stopTimer(`claude.request.${requestType}`);
       monitoring.recordTiming('claude.request.duration', Date.now() - startTime);
@@ -597,7 +597,7 @@ export class ClaudeClient {
    * @param requestId Request ID for tracking
    * @returns Normalized ApiError
    */
-  private normalizeError(error: any, requestId?: string): ApiError {
+  private normalizeError(error: unknown, requestId?: string): ApiError {
     // If it's already an ApiError, just return it
     if (error instanceof ApiError) {
       return error;
@@ -743,7 +743,7 @@ export class ClaudeClient {
  */
 export async function generateSummary(params: {
   filingType: string;
-  content: any;
+  content: string | Record<string, unknown>;
   metadata: {
     companyName: string;
     ticker: string;

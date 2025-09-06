@@ -59,7 +59,7 @@ describe('EnhancedClaudeClient - Direct Testing', () => {
   
   beforeEach(() => {
     jest.clearAllMocks();
-    client = new EnhancedClaudeClient(mockBaseClient as any);
+    client = new EnhancedClaudeClient(mockBaseClient as unknown as import('../claude-client').ClaudeClient);
   });
 
   describe('sendMessage', () => {
@@ -98,7 +98,7 @@ describe('EnhancedClaudeClient - Direct Testing', () => {
     
     it('should handle streaming option', async () => {
       // Setup a spy on the client's private method
-      const streamingSpy = jest.spyOn(client as any, 'sendStreamingMessage')
+      const streamingSpy = jest.spyOn(client as unknown as { sendStreamingMessage: (...args: unknown[]) => Promise<unknown> }, 'sendStreamingMessage')
         .mockResolvedValueOnce(mockResponse);
       
       // Call with streaming option
@@ -120,8 +120,8 @@ describe('EnhancedClaudeClient - Direct Testing', () => {
       const messages = [{ role: 'user', content: 'Hello' }];
       
       // Mock the private streaming method to directly call the handlers
-      const streamingSpy = jest.spyOn(client as any, 'sendStreamingMessage')
-        .mockImplementation((msgs, options) => {
+      const _streamingSpy = jest.spyOn(client as unknown as { sendStreamingMessage: (...args: unknown[]) => Promise<unknown> }, 'sendStreamingMessage')
+        .mockImplementation((_msgs, _options) => {
           // Simulate streaming events
           mockStreamHandler.onStart();
           mockStreamHandler.onContent('Partial content');

@@ -41,7 +41,7 @@ export enum SummarizationEvent {
 export interface EnhancedSummarizationOptions extends SummarizationOptions {
   filingId: string;
   summaryId: string;
-  claudeOptions?: any;
+  claudeOptions?: { temperature?: number; maxTokens?: number; [key: string]: unknown };
   useStreaming?: boolean;
   useCache?: boolean;
   cacheKey?: SummaryCacheKey;
@@ -323,7 +323,7 @@ export class EnhancedSummarizationService extends EventEmitter {
   private async _processSingleChunk(
     chunk: string,
     filingType: SECFilingType,
-    filingRecord: any,
+    filingRecord: { ticker?: string; companyName?: string; [key: string]: unknown },
     options: EnhancedSummarizationOptions
   ): Promise<EnhancedSummarizationResult> {
     // Import here to avoid circular dependencies
@@ -364,7 +364,7 @@ export class EnhancedSummarizationService extends EventEmitter {
   private async _processAllChunks(
     chunks: string[],
     filingType: SECFilingType,
-    filingRecord: any,
+    filingRecord: { ticker?: string; companyName?: string; [key: string]: unknown },
     options: EnhancedSummarizationOptions
   ): Promise<EnhancedSummarizationResult> {
     return processAllChunks(

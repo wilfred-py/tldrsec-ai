@@ -15,19 +15,41 @@ export type EnhancedClaudeOptions = {
   maxTokens?: number;
   useStreaming?: boolean;
   useCache?: boolean;
-  cacheKey?: any;
+  cacheKey?: string | Record<string, unknown>;
 };
 
-export type ClaudeMessage = any;
-export type ClaudeResponse = any;
-export type ClaudeRequestOptions = any;
+export type ClaudeMessage = {
+  role: 'user' | 'assistant';
+  content: string;
+};
+
+export type ClaudeResponse = {
+  id: string;
+  content: string;
+  model: string;
+  usage: {
+    inputTokens: number;
+    outputTokens: number;
+  };
+  cost: {
+    inputCost: number;
+    outputCost: number;
+    totalCost: number;
+  };
+};
+
+export type ClaudeRequestOptions = {
+  temperature?: number;
+  maxTokens?: number;
+  [key: string]: unknown;
+};
 
 // Create a mock for EnhancedClaudeClient
 export class EnhancedClaudeClient extends EventEmitter {
   // Store the base client
-  private baseClient: any;
+  private baseClient: ClaudeClient;
   
-  constructor(baseClient?: any) {
+  constructor(baseClient?: ClaudeClient) {
     super();
     // Create a new ClaudeClient if none provided
     this.baseClient = baseClient || new ClaudeClient();

@@ -36,7 +36,6 @@ import { jest } from '@jest/globals';
 import { ClaudeClient } from '../claude-client';
 import type { ClaudeMessage, ClaudeResponse } from '../claude-client';
 import { EnhancedClaudeClient, EnhancedClaudeEvent } from '../enhanced-claude-client';
-import type { EnhancedClaudeOptions } from '../enhanced-claude-client';
 import { summaryCache } from '../cache/summary-cache';
 import type { SummaryCacheKey } from '../cache/summary-cache';
 import type { SummarizationResult } from '../summarize';
@@ -120,8 +119,8 @@ describe('EnhancedClaudeClient', () => {
     cost: 0.01
   };
 
-  // Mock cache entry with type definition
-  const mockCacheEntry = {
+  // Disable unused variable warning by prefixing with underscore
+  const _mockCacheEntry = {
     summaryId: 'summary-123',
     status: 'COMPLETED',
     result: mockSummarizationResult,
@@ -134,9 +133,9 @@ describe('EnhancedClaudeClient', () => {
   beforeEach(() => {
     jest.clearAllMocks();
 
-    // Setup mock base client with ts-ignore to bypass complex type issues
+    // Setup mock base client with ts-expect-error to bypass complex type issues
     // This is a pragmatic approach in tests where we know the mock is correct
-    // @ts-ignore - Bypassing strict typing for test mocks
+    // @ts-expect-error - Bypassing strict typing for test mocks
     const sendMessageMock = jest.fn().mockResolvedValue(mockResponse);
     
     mockBaseClient = {
@@ -207,7 +206,7 @@ describe('EnhancedClaudeClient', () => {
       });
 
       // Add the mock method to the instance
-      (enhancedClient as any).sendStreamingMessage = sendStreamingMessageMock;
+      (enhancedClient as unknown as { sendStreamingMessage: (...args: unknown[]) => Promise<unknown> }).sendStreamingMessage = sendStreamingMessageMock;
 
       const response = await enhancedClient.sendMessage(mockMessages, {
         useStreaming: true
@@ -221,8 +220,8 @@ describe('EnhancedClaudeClient', () => {
   describe('event emission', () => {
     it('should emit events properly', () => {
       // Using a different approach to test event emission
-      // Cast the enhancedClient to any to bypass TypeScript restrictions on emit
-      const client = enhancedClient as any;
+      // Cast the enhancedClient to access emit method
+      const client = enhancedClient as unknown as { emit: (...args: unknown[]) => boolean };
       const eventSpy = jest.spyOn(client, 'emit');
       
       // Emit events

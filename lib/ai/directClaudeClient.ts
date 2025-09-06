@@ -479,7 +479,7 @@ export class DirectClaudeClient {
     config: Required<ClaudeSummarizationConfig>
   ): Promise<ClaudeSummarizationResult> {
     const chunks = chunkContent(content, config.maxTokensPerChunk);
-    const chunkSummaries: any[] = [];
+    const chunkSummaries: ClaudeSummarizationResult[] = [];
     let totalInputTokens = 0;
     let totalOutputTokens = 0;
 

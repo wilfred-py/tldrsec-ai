@@ -40,8 +40,8 @@ export async function processSingleChunk(
     maxRetries?: number;
     useStreaming?: boolean;
     useCache?: boolean;
-    cacheKey?: any;
-    streamHandler?: any;
+    cacheKey?: string | Record<string, unknown>;
+    streamHandler?: { onContent?: (content: string) => void; onComplete?: (result: unknown) => void; onError?: (error: unknown) => void };
     claudeOptions?: EnhancedClaudeOptions;
   }
 ): Promise<EnhancedSummarizationResult> {
@@ -194,7 +194,7 @@ export async function processSingleChunk(
  * @returns Array of missing field names
  */
 export function identifyMissingFields(
-  parsedResult: any,
+  parsedResult: { data?: Record<string, unknown> } | null,
   filingType: SECFilingType
 ): string[] {
   // If parsing failed entirely or data is missing, return generic fields

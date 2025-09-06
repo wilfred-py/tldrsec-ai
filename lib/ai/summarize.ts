@@ -12,7 +12,7 @@ import { SECFilingType } from './prompts/prompt-types';
 import { generateFilingPrompt } from './prompts/filing-prompts';
 import { estimateTokenCount, splitDocumentIntoChunks, getContextConfig } from './prompts/context-manager';
 import type { ContentBlock } from '@anthropic-ai/sdk/resources/messages';
-import { extractFilingContent } from '../parsers/filing-extractor';
+// import { extractFilingContent } from '../parsers/filing-extractor'; // Currently unused
 import { logger } from '../logging';
 import { monitoring } from '../monitoring';
 import { ApiError, ErrorCode } from '../error-handling';
@@ -269,7 +269,7 @@ function truncateDocumentContent(content: string, maxTokens: number): string {
   const sections = content.split(/\n\n+/);
   
   // Calculate approximate ratio to keep
-  const keepRatio = maxTokens / currentTokens;
+  const _keepRatio = maxTokens / currentTokens;
   
   // Prioritize important sections based on keywords
   const prioritizedSections = sections.map((section, index) => {
@@ -497,7 +497,7 @@ export interface SummarizationResult {
   summaryId?: string;
   summary: string;
   summaryText: string;
-  summaryJSON: any;
+  summaryJSON: Record<string, unknown> | null;
   keyPoints?: string[];
   isPartial?: boolean;
   duration: number;
@@ -678,7 +678,7 @@ export async function summarizeFiling(content: string, options: SummarizationOpt
       // Use the existing truncation function since we've already done smart processing in processDocumentContent
       const truncatedContent = truncateDocumentContent(processedContent, maxTokenLimit);
       prompt = promptGenerator.getFullPrompt(truncatedContent);
-      isChunked = true;
+      const _isChunked = true;
     } else {
       // Document is within token limits
       prompt = promptGenerator.getFullPrompt(processedContent);
@@ -811,7 +811,7 @@ export async function summarizeFiling(content: string, options: SummarizationOpt
         monitoring.incrementCounter('ai.summarization_parsing_error', 1);
         
         // First try to fix the JSON by attempting to extract valid fields
-        let fixedData: Record<string, any> = {};
+        let fixedData: Record<string, unknown> = {};
         let validationResult = { valid: false, missingFields: [] as string[] };
         
         // Try to extract any valid JSON from the response

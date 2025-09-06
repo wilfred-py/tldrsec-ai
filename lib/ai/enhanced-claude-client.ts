@@ -81,7 +81,7 @@ export class EnhancedClaudeClient extends EventEmitter {
    * Create a new enhanced Claude client
    * @param baseClient Optional base Claude client to use
    */
-  constructor(baseClient?: any) {
+  constructor(baseClient?: typeof claudeClient) {
     super();
     this.baseClient = baseClient || claudeClient;
     componentLogger.info('Enhanced Claude client initialized');
@@ -115,7 +115,7 @@ export class EnhancedClaudeClient extends EventEmitter {
    * @param obj Object to hash
    * @returns Hash string
    */
-  private hashObject(obj: any): string {
+  private hashObject(obj: unknown): string {
     // Simple hash function for objects
     const str = JSON.stringify(obj);
     let hash = 0;

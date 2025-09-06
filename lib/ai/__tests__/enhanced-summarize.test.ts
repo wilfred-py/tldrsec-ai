@@ -9,6 +9,7 @@ import { enhancedSummarize, EnhancedSummaryOptions } from '../enhanced-summarize
 import { EnhancedClaudeClient } from '../enhanced-claude-client';
 import { jest } from '@jest/globals';
 import { EventEmitter } from 'events';
+import * as tokenCounter from '../token-counter';
 
 // Mock the enhanced Claude client
 jest.mock('../enhanced-claude-client');
@@ -42,7 +43,7 @@ describe('enhancedSummarize', () => {
   
   // Setup mocks
   let mockClient: jest.Mocked<EnhancedClaudeClient>;
-  let mockEventEmitter: EventEmitter;
+  let _mockEventEmitter: EventEmitter;
   
   beforeEach(() => {
     jest.clearAllMocks();
@@ -224,8 +225,8 @@ describe('enhancedSummarize', () => {
       const longText = 'a'.repeat(50000);
       
       // Mock estimateTokenCount to force chunking
-      const originalEstimateTokenCount = require('../token-utils').estimateTokenCount;
-      require('../token-utils').estimateTokenCount = jest.fn()
+      const originalEstimateTokenCount = tokenCounter.estimateTokenCount;
+      (tokenCounter as { estimateTokenCount: jest.Mock }).estimateTokenCount = jest.fn()
         .mockImplementationOnce(() => 20000) // First call for the whole text
         .mockImplementationOnce(() => 9000)  // First chunk
         .mockImplementationOnce(() => 9000)  // Second chunk
@@ -260,7 +261,7 @@ describe('enhancedSummarize', () => {
       });
       
       // Restore original function
-      require('../token-utils').estimateTokenCount = originalEstimateTokenCount;
+      (tokenCounter as { estimateTokenCount: typeof tokenCounter.estimateTokenCount }).estimateTokenCount = originalEstimateTokenCount;
       
       // Verify client was called for each chunk and for the final summary
       expect(mockClient.complete).toHaveBeenCalledTimes(4);
@@ -311,8 +312,8 @@ describe('enhancedSummarize', () => {
       const longText = 'a'.repeat(50000);
       
       // Mock estimateTokenCount to force chunking
-      const originalEstimateTokenCount = require('../token-utils').estimateTokenCount;
-      require('../token-utils').estimateTokenCount = jest.fn()
+      const originalEstimateTokenCount = tokenCounter.estimateTokenCount;
+      (tokenCounter as { estimateTokenCount: jest.Mock }).estimateTokenCount = jest.fn()
         .mockImplementationOnce(() => 20000) // First call for the whole text
         .mockImplementationOnce(() => 9000); // First chunk
       
@@ -328,7 +329,7 @@ describe('enhancedSummarize', () => {
       });
       
       // Restore original function
-      require('../token-utils').estimateTokenCount = originalEstimateTokenCount;
+      (tokenCounter as { estimateTokenCount: typeof tokenCounter.estimateTokenCount }).estimateTokenCount = originalEstimateTokenCount;
       
       // Verify client was called only once
       expect(mockClient.complete).toHaveBeenCalledTimes(1);
@@ -421,8 +422,8 @@ describe('enhancedSummarize', () => {
       const longText = 'a'.repeat(50000);
       
       // Mock estimateTokenCount to force chunking
-      const originalEstimateTokenCount = require('../token-utils').estimateTokenCount;
-      require('../token-utils').estimateTokenCount = jest.fn()
+      const originalEstimateTokenCount = tokenCounter.estimateTokenCount;
+      (tokenCounter as { estimateTokenCount: jest.Mock }).estimateTokenCount = jest.fn()
         .mockImplementationOnce(() => 20000) // First call for the whole text
         .mockImplementationOnce(() => 9000)  // First chunk
         .mockImplementationOnce(() => 9000)  // Second chunk
@@ -455,7 +456,7 @@ describe('enhancedSummarize', () => {
       }, mockProgressCallback);
       
       // Restore original function
-      require('../token-utils').estimateTokenCount = originalEstimateTokenCount;
+      (tokenCounter as { estimateTokenCount: typeof tokenCounter.estimateTokenCount }).estimateTokenCount = originalEstimateTokenCount;
       
       // Verify progress callbacks for chunks
       expect(mockProgressCallback).toHaveBeenCalledWith({

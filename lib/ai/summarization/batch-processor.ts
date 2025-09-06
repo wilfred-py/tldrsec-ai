@@ -99,7 +99,7 @@ export async function processAllChunks(
   
   // Process all chunks in parallel with concurrency limit
   // Need to cast batchJobs to any to work around type incompatibility with BatchProcessor
-  const batchResults = await batchProcessor.processBatch(batchJobs as any);
+  const batchResults = await batchProcessor.processBatch(batchJobs as unknown as Parameters<typeof batchProcessor.processBatch>[0]);
   
   // Convert batch results to array of EnhancedSummarizationResult
   const results = batchResults.results as unknown as EnhancedSummarizationResult[];
@@ -152,7 +152,7 @@ export function combineChunkResults(
   }
   
   // Combine multiple results
-  const combinedJSON: any = {};
+  const combinedJSON: Record<string, unknown> = {};
   const successfulChunks: EnhancedSummarizationResult[] = [];
   const failedChunks: EnhancedSummarizationResult[] = [];
   
