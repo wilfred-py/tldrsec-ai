@@ -31,9 +31,9 @@ metrics = true
 http2 = true
 compression = true
 
-# Edge Runtime specific configuration
-[edge]
-runtime = "edge"
+# Runtime configuration for Prisma compatibility
+[runtime]
+runtime = "nodejs"
 regions = ["us-west-2"]
 
 # Railway native cron jobs will be configured in the Railway dashboard
