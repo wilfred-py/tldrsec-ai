@@ -174,7 +174,7 @@ export function validateCostUpdate(
   }
 
   // Rule 3: Minimum cost validation
-  const minValidation = ValidationRules.validateMinimumCost(cost);
+  const minValidation = ValidationRules.validateMinimumCost(cost, context as CostValidationContext);
   if (!minValidation.valid) {
     costValidationLogger.warn('Cost minimum validation failed', { 
       cost, tier, userId, operation, 
