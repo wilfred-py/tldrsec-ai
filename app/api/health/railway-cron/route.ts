@@ -108,10 +108,12 @@ async function performRailwayCronHealthChecks() {
       }
     });
 
-    // Check backlogged filings
+    // Check backlogged filings (filings without summaries)
     const backloggedFilings = await prisma.secFiling.count({
       where: {
-        processed: false
+        summaries: {
+          none: {}
+        }
       }
     });
 
@@ -270,7 +272,7 @@ async function testSecApiConnectivity() {
     const response = await fetch('https://www.sec.gov/include/ticker.txt', {
       method: 'HEAD',
       headers: {
-        'User-Agent': process.env.SEC_USER_AGENT || 'tldrSEC Health Check'
+        'User-Agent': process.env.SEC_USER_AGENT || 'tldrSEC Health Check (contact@tldrsec.app)'
       }
     });
     
@@ -376,7 +378,7 @@ async function testSecRssFeedConnectivity() {
         const response = await fetch(feed, {
           method: 'HEAD',
           headers: {
-            'User-Agent': process.env.SEC_USER_AGENT || 'tldrSEC Railway Health Check'
+            'User-Agent': process.env.SEC_USER_AGENT || 'tldrSEC Railway Health Check (contact@tldrsec.app)'
           }
         });
         
