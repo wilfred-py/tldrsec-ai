@@ -235,7 +235,7 @@ async function processSingleFiling(filing: {
   const content = await enhancedFetch(filing.filingUrl, {
     responseType: 'text',
     headers: {
-      'User-Agent': 'tldrSEC-AI Cron Monitor (contact@tldrsec.com)',
+      'User-Agent': 'tldrsec.app contact@tldrsec.app',
     },
     operationName: 'sec-filing-cron-fetch'
   });

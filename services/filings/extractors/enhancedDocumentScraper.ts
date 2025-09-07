@@ -32,7 +32,7 @@ const safeMonitoring = {
  */
 export function getEnhancedSecApiHeaders(): Record<string, string> {
   return {
-    'User-Agent': 'tldrSEC-AI Bot (contact@tldrsec.com)',
+    'User-Agent': 'tldrsec.app contact@tldrsec.app',
     'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,text/plain;q=0.8,*/*;q=0.7',
     'Accept-Encoding': 'gzip, deflate, br',
     'Accept-Language': 'en-US,en;q=0.9'
