@@ -29,10 +29,19 @@ let prisma: PrismaClient
 if (process.env.NODE_ENV === 'production') {
   prisma = new PrismaClient({
     log: ['error', 'warn'],
-    // Optimize for high-concurrency cron jobs
+    // Optimize for high-concurrency cron jobs with better connection management
     datasources: {
       db: {
         url: process.env.DATABASE_URL
+      }
+    },
+    // Enable connection pooling optimizations for Railway/production
+    __internal: {
+      engine: {
+        // Reduce connection overhead for cron jobs
+        config: {
+          engineType: 'binary'
+        }
       }
     }
   })
@@ -67,6 +76,14 @@ export function getPrismaClient(): PrismaClient {
           datasources: {
             db: {
               url: process.env.DATABASE_URL
+            }
+          },
+          // Enable connection pooling optimizations for Railway/production
+          __internal: {
+            engine: {
+              config: {
+                engineType: 'binary'
+              }
             }
           }
         })

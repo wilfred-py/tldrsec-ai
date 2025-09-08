@@ -319,14 +319,6 @@ export async function GET(request: NextRequest) {
       success: false,
       error: error instanceof Error ? error.message : 'Unknown error'
     }, { status: 500 });
-  } finally {
-    // CRITICAL: Always disconnect Prisma client to prevent connection pool exhaustion
-    try {
-      await prisma.$disconnect();
-      cronLogger.debug('Prisma client disconnected successfully');
-    } catch (disconnectError) {
-      cronLogger.warn('Warning: Failed to disconnect Prisma client', { error: disconnectError });
-    }
   }
 }
 
