@@ -34,15 +34,6 @@ if (process.env.NODE_ENV === 'production') {
       db: {
         url: process.env.DATABASE_URL
       }
-    },
-    // Enable connection pooling optimizations for Railway/production
-    __internal: {
-      engine: {
-        // Reduce connection overhead for cron jobs
-        config: {
-          engineType: 'binary'
-        }
-      }
     }
   })
 } else {
