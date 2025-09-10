@@ -10,6 +10,193 @@ import { getSecApiHeaders } from '../utils/apiHeaders';
 import { getClaudeModel } from '../../../lib/ai/config';
 
 /**
+ * General content validation rules for all SEC forms
+ */
+const CONTENT_VALIDATION_RULES = {
+  minBytes: 50,        // Very permissive minimum - even brief notices can be valid
+  maxBytes: 100000000  // 100MB maximum - handles even the largest annual reports
+};
+
+/**
+ * Validates content before AI processing with general rules for all forms
+ */
+function validateContentForProcessing(content: string, ticker: string, formType: string): { isValid: boolean; reason?: string; contentLength: number } {
+  const contentLength = content?.length || 0;
+  
+  // Basic empty content check
+  if (contentLength === 0) {
+    return {
+      isValid: false,
+      reason: 'Content is empty (contentLength: 0)',
+      contentLength: 0
+    };
+  }
+  
+  // General length validation - applies to all forms
+  if (contentLength < CONTENT_VALIDATION_RULES.minBytes) {
+    return {
+      isValid: false,
+      reason: `Content too short (${contentLength} bytes, minimum ${CONTENT_VALIDATION_RULES.minBytes} required)`,
+      contentLength
+    };
+  }
+  
+  if (contentLength > CONTENT_VALIDATION_RULES.maxBytes) {
+    return {
+      isValid: false,
+      reason: `Content too large (${contentLength} bytes, maximum ${CONTENT_VALIDATION_RULES.maxBytes} allowed)`,
+      contentLength
+    };
+  }
+  
+  // Content type validation - check if it looks like valid filing content
+  const htmlIndicators = ['<html', '<body', '<div', '<table', '<p>', '<br>', '<span', '<td>', '<tr>'];
+  const xmlIndicators = ['<?xml', '<xbrl', '<us-gaap:', '<dei:', '<document>'];
+  const formIndicators = ['SEC FORM', 'FORM ', formType.toUpperCase(), 'SECURITIES AND EXCHANGE COMMISSION'];
+  const textIndicators = ['UNITED STATES', 'WASHINGTON', 'COMMISSION FILE NUMBER']; // Plain text filings
+  
+  const lowerContent = content.toLowerCase().substring(0, 10000); // Check first 10KB for indicators
+  const hasHtmlIndicators = htmlIndicators.some(indicator => lowerContent.includes(indicator.toLowerCase()));
+  const hasXmlIndicators = xmlIndicators.some(indicator => lowerContent.includes(indicator.toLowerCase()));
+  const hasFormIndicators = formIndicators.some(indicator => lowerContent.includes(indicator.toLowerCase()));
+  const hasTextIndicators = textIndicators.some(indicator => lowerContent.includes(indicator.toLowerCase()));
+  
+  // Must have at least one type of content indicator
+  if (!hasHtmlIndicators && !hasXmlIndicators && !hasFormIndicators && !hasTextIndicators) {
+    return {
+      isValid: false,
+      reason: 'Content does not appear to be a valid SEC filing (no recognizable filing indicators found)',
+      contentLength
+    };
+  }
+  
+  // Check for common error indicators (more comprehensive)
+  const errorIndicators = [
+    'not found',
+    '404 error',
+    'access denied', 
+    'file not found',
+    'document not available',
+    'temporarily unavailable',
+    'server error',
+    'internal server error',
+    'bad request',
+    'forbidden'
+  ];
+  
+  const hasErrorIndicators = errorIndicators.some(indicator => lowerContent.includes(indicator));
+  if (hasErrorIndicators) {
+    return {
+      isValid: false,
+      reason: 'Content contains error indicators suggesting document retrieval failure',
+      contentLength
+    };
+  }
+  
+  // All validations passed
+  return {
+    isValid: true,
+    contentLength
+  };
+}
+
+/**
+ * Validates AI-generated summary to ensure quality and completeness
+ */
+function validateAISummary(summaryText: string, keyPoints: string[], ticker: string, formType: string): { isValid: boolean; reason?: string; suggestions?: string[] } {
+  const suggestions: string[] = [];
+  
+  // Basic content checks
+  if (!summaryText || summaryText.trim().length === 0) {
+    return {
+      isValid: false,
+      reason: 'Summary text is empty or only whitespace'
+    };
+  }
+  
+  // Check for minimum summary length based on form type
+  const minSummaryLengths = {
+    '10-K': 300,    // Annual reports need substantial summaries
+    '10-Q': 200,    // Quarterly reports need good detail
+    '8-K': 100,     // Current reports can be brief
+    'DEFA14A': 150, // Proxy materials need reasonable detail
+    'FORM4': 50,    // Insider trading can be very brief
+    '144': 30,      // Notice of sale can be minimal
+    'DEFAULT': 50   // General minimum
+  };
+  
+  const minLength = minSummaryLengths[formType.toUpperCase()] || minSummaryLengths['DEFAULT'];
+  if (summaryText.trim().length < minLength) {
+    return {
+      isValid: false,
+      reason: `Summary too brief for ${formType} (${summaryText.trim().length} chars, minimum ${minLength} required)`
+    };
+  }
+  
+  // Check for truncated summary indicators
+  const truncationIndicators = [
+    'summary was cut off',
+    'content truncated',
+    '...[truncated]',
+    'response limit reached',
+    'token limit exceeded',
+    'incomplete summary',
+    '[TRUNCATED]'
+  ];
+  
+  const lowerSummary = summaryText.toLowerCase();
+  const hasTruncationIndicators = truncationIndicators.some(indicator => lowerSummary.includes(indicator));
+  if (hasTruncationIndicators) {
+    return {
+      isValid: false,
+      reason: 'Summary appears to be truncated or incomplete'
+    };
+  }
+  
+  // Check for generic/placeholder content
+  const placeholderIndicators = [
+    'unable to generate summary',
+    'summary not available',
+    'content could not be processed',
+    'failed to analyze',
+    'error in processing',
+    'no summary available'
+  ];
+  
+  const hasPlaceholderContent = placeholderIndicators.some(indicator => lowerSummary.includes(indicator));
+  if (hasPlaceholderContent) {
+    return {
+      isValid: false,
+      reason: 'Summary contains placeholder or error content instead of actual analysis'
+    };
+  }
+  
+  // Check key points quality
+  if (!keyPoints || keyPoints.length === 0) {
+    suggestions.push('No key points provided - consider regenerating with key points extraction');
+  } else if (keyPoints.length === 1 && keyPoints[0].trim().length < 20) {
+    suggestions.push('Key points appear too brief or generic');
+  }
+  
+  // Check for form-specific content expectations
+  if (formType.toUpperCase().includes('10-K') || formType.toUpperCase().includes('10-Q')) {
+    if (!lowerSummary.includes('financial') && !lowerSummary.includes('revenue') && !lowerSummary.includes('earnings')) {
+      suggestions.push('Financial filing summary lacks financial terminology - may need regeneration');
+    }
+  }
+  
+  // Check for company/ticker relevance
+  if (!lowerSummary.includes(ticker.toLowerCase()) && ticker.length > 1) {
+    suggestions.push(`Summary does not mention ticker ${ticker} - verify relevance`);
+  }
+  
+  return {
+    isValid: true,
+    suggestions: suggestions.length > 0 ? suggestions : undefined
+  };
+}
+
+/**
  * Gets a filing summary for a ticker and form type
  * 
  * @param ticker The company ticker symbol
@@ -124,7 +311,7 @@ export async function getFilingSummary(
         
         if (mainDocument) {
           console.log(`[DEBUG][FilingSummaryService] 📄 Found main document: ${mainDocument.description || mainDocument.type}`);
-          content = await secService.getFilingContent(filing.accessionNumber, mainDocument.sequence);
+          content = await secService.getFilingContent(filing.accessionNumber, mainDocument.sequence, filing.cik);
         }
       }
       
@@ -180,8 +367,52 @@ export async function getFilingSummary(
         return { data: summaryResult };
       }
       
-      // We have content, generate a summary using AI
-      console.log(`[DEBUG][FilingSummaryService] 🤖 Generating AI summary for ${ticker} - ${normalizedFormType}`);
+      // Validate content before AI processing
+      const validation = validateContentForProcessing(content, ticker, normalizedFormType);
+      if (!validation.isValid) {
+        console.warn(`[DEBUG][FilingSummaryService] ⚠️ Content validation failed: ${validation.reason}`);
+        
+        // Generate a fallback summary with validation failure reason
+        const summaryText = generateFallbackSummary(filing, companyInfo, normalizedFormType);
+        const keyPoints = generateFallbackKeyPoints(filing, companyInfo, normalizedFormType);
+        
+        // Create the summary result
+        const summaryResult: FilingSummaryResult = {
+          ticker: ticker,
+          companyName: companyInfo.name || ticker,
+          filingType: normalizedFormType as FilingType,
+          filingDate: filing.filingDate || new Date().toISOString(),
+          accessionNumber: filing.accessionNumber || '',
+          summaryText: summaryText,
+          keyPoints: keyPoints,
+          url: htmlViewerUrl,
+          filingUrl: filing.filingUrl,
+          model: 'fallback',
+          failureReason: `Content validation failed: ${validation.reason}`
+        };
+        
+        // Store the fallback summary
+        await storeSummary(
+          ticker,
+          normalizedFormType,
+          filing.filingDate || new Date().toISOString(),
+          htmlViewerUrl,
+          summaryText,
+          keyPoints,
+          {
+            accessionNumber: filing.accessionNumber,
+            model: 'fallback',
+            failureReason: `Content validation failed: ${validation.reason}`,
+            contentLength: validation.contentLength,
+            filingDetails: filingDetails
+          }
+        );
+        
+        return { data: summaryResult };
+      }
+
+      // We have valid content, generate a summary using AI
+      console.log(`[DEBUG][FilingSummaryService] 🤖 Generating AI summary for ${ticker} - ${normalizedFormType} (content: ${validation.contentLength} bytes)`);
       
       // Set summarization options
       const options: SummarizationOptions = {
@@ -195,7 +426,8 @@ export async function getFilingSummary(
           accessionNumber: filing.accessionNumber || '',
           cik: filing.cik || companyInfo.cik || '',
           documentType: mainDocument?.type || normalizedFormType,
-          documentDescription: mainDocument?.description || `Form ${normalizedFormType}`
+          documentDescription: mainDocument?.description || `Form ${normalizedFormType}`,
+          contentLength: validation.contentLength
         }
       };
       
@@ -242,6 +474,54 @@ export async function getFilingSummary(
         );
         
         return { data: summaryResult };
+      }
+      
+      // Validate AI-generated summary for quality and completeness
+      const summaryValidation = validateAISummary(summaryJSON.summary, summaryJSON.keyPoints || [], ticker, normalizedFormType);
+      if (!summaryValidation.isValid) {
+        console.warn(`[DEBUG][FilingSummaryService] ⚠️ AI summary validation failed: ${summaryValidation.reason}`);
+        
+        // Generate a fallback summary since AI output is invalid
+        const summaryText = generateFallbackSummary(filing, companyInfo, normalizedFormType);
+        const keyPoints = generateFallbackKeyPoints(filing, companyInfo, normalizedFormType);
+        
+        // Create the summary result with fallback content
+        const summaryResult: FilingSummaryResult = {
+          ticker: ticker,
+          companyName: companyInfo.name || ticker,
+          filingType: normalizedFormType as FilingType,
+          filingDate: filing.filingDate || new Date().toISOString(),
+          accessionNumber: filing.accessionNumber || '',
+          summaryText: summaryText,
+          keyPoints: keyPoints,
+          url: htmlViewerUrl,
+          filingUrl: filing.filingUrl,
+          model: 'fallback',
+          failureReason: `AI summary validation failed: ${summaryValidation.reason}`
+        };
+        
+        // Store the fallback summary
+        await storeSummary(
+          ticker,
+          normalizedFormType,
+          filing.filingDate || new Date().toISOString(),
+          htmlViewerUrl,
+          summaryText,
+          keyPoints,
+          {
+            accessionNumber: filing.accessionNumber,
+            model: 'fallback',
+            failureReason: `AI summary validation failed: ${summaryValidation.reason}`,
+            filingDetails: filingDetails
+          }
+        );
+        
+        return { data: summaryResult };
+      }
+      
+      // Log any validation suggestions for monitoring
+      if (summaryValidation.suggestions && summaryValidation.suggestions.length > 0) {
+        console.log(`[DEBUG][FilingSummaryService] 💡 AI summary validation suggestions for ${ticker}-${normalizedFormType}:`, summaryValidation.suggestions);
       }
       
       // Create the summary result
