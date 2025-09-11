@@ -67,6 +67,19 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ### Security Testing
 - `npm run test:security` - Run security test suite
 
+### Railway Deployment Commands
+- `railway status` - Check Railway service status
+- `railway logs` - View Railway deployment logs  
+- `railway variables` - List environment variables
+- `railway domain` - View Railway domain configuration
+- `node scripts/railway-cron.cjs` - Test cron script locally (requires env vars)
+
+### Vercel Deployment Commands  
+- `vercel` - Deploy to Vercel
+- `vercel ls` - List Vercel deployments
+- `vercel domain ls` - List custom domains
+- `vercel env` - Manage environment variables
+
 ### Security Operations
 - API key generation and management for secure access
 - Security configuration validation and setup
@@ -83,6 +96,29 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **Prisma ORM** with PostgreSQL (Neon)
 - **Clerk** for authentication
 - **shadcn/ui** components with Tailwind CSS
+
+### Deployment Architecture
+
+#### Dual-Service Deployment Model
+- **Vercel** (Primary): Hosts the web application for users
+  - Domain: `https://tldrsec.app`
+  - Serves user dashboard, authentication, API endpoints
+  - Handles SEC filing summarization pipeline via `/api/cron/unified`
+  - Connected to Neon PostgreSQL database
+  - Available 24/7 for user interactions
+
+- **Railway** (Cron Only): Executes scheduled SEC filing monitoring
+  - Runs `node scripts/railway-cron.cjs` every 15 minutes
+  - Calls Vercel endpoint: `https://tldrsec.app/api/cron/unified`
+  - Exits after completion (allows Railway to restart for next cron)
+  - No web server or user-facing components
+  - Configured via Railway dashboard cron schedule: `*/15 * * * *`
+
+#### Why This Architecture?
+- **Separation of Concerns**: Web serving vs scheduled tasks
+- **Cost Optimization**: Railway resources only used for cron execution
+- **Reliability**: Vercel provides excellent uptime for users
+- **Scalability**: Each service optimized for its specific role
 
 ### Key Directory Structure
 
@@ -216,25 +252,25 @@ Required environment variables for E2E testing:
 - [ ] Environment variables are properly configured
 - [ ] No sensitive data in commit
 
-### Railway/Production Cron Configuration
+### Railway Cron-Only Service Configuration
 
-**CRITICAL: Before deploying to Railway, ensure these environment variables are set:**
+**Railway Service Purpose:** Executes scheduled SEC filing monitoring by calling Vercel endpoint.
+
+**CRITICAL: Railway environment variables required:**
 
 ```bash
 CRON_SECRET=your_secure_cron_secret_here
-ANTHROPIC_API_KEY=your_anthropic_api_key
-DATABASE_URL=your_database_url
-RESEND_API_KEY=your_resend_api_key
-# Note: RAILWAY_PUBLIC_DOMAIN is automatically provided by Railway
+PUBLIC_URL=https://tldrsec.app  # Target Vercel endpoint
+# Database and API keys are handled by Vercel deployment
 ```
 
-**Railway cron configuration (in railway.toml) must use:**
-- ✅ Correct endpoint: `/api/cron/unified`
-- ✅ Proper URL construction: `https://${RAILWAY_PUBLIC_DOMAIN}` (auto-provided)
-- ✅ GET method with Authorization header
-- ✅ 15-minute intervals (900000ms)
+**Railway service configuration (railway.toml):**
+- ✅ Start command: `node scripts/railway-cron.cjs`
+- ✅ Cron schedule: `*/15 * * * *` (Every 15 minutes)
+- ✅ Target endpoint: `https://tldrsec.app/api/cron/unified`
+- ✅ Service exits after completion to allow next scheduled run
 
-**⚠️ WARNING: Never deploy without successful E2E test completion**
+**⚠️ WARNING: Test E2E pipeline against Vercel before Railway deployment**
 
 ### Production Deployment Safety
 

@@ -145,7 +145,7 @@ function validateAISummary(summaryText: string, keyPoints: string[], ticker: str
   ];
   
   const lowerSummary = summaryText.toLowerCase();
-  const hasTruncationIndicators = truncationIndicators.some(indicator => lowerSummary.includes(indicator));
+  const hasTruncationIndicators = truncationIndicators.some(indicator => lowerSummary.includes(indicator.toLowerCase()));
   if (hasTruncationIndicators) {
     return {
       isValid: false,

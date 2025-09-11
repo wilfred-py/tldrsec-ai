@@ -2,39 +2,36 @@
 builder = "nixpacks"
 
 [deploy]
-startCommand = "npm start"
-healthcheckPath = "/api/health"
-healthcheckTimeout = 600
-restartPolicyType = "always"
+startCommand = "node scripts/railway-cron.cjs"
+# No healthcheck needed for cron-only service
+# No restart policy needed - Railway handles cron restarts
 
 # Production environment configuration
 [environments.production]
 variables = {}
 
-# Resource allocation for production workloads - optimized for cron performance
+# Resource allocation for cron jobs - reduced from web server requirements
 [resources]
-memory = "4GB"
-cpu = "4 vCPU"
+memory = "2GB"
+cpu = "2 vCPU"
 
-# Database migration and deployment hooks
-[hooks]
-prebuild = "npm run db:generate"
-predeploy = "npm run db:migrate"
+# Database hooks not needed for cron-only service
+# Database operations handled by Vercel deployment
 
 # Monitoring and observability
 [observability]
 logging = true
 metrics = true
 
-# Network configuration for security
-[networking]
-http2 = true
-compression = true
+# Network configuration not needed for cron-only service
 
 # Runtime configuration for Prisma compatibility
 [runtime]
 runtime = "nodejs"
 regions = ["us-west-2"]
 
-# Railway native cron jobs will be configured in the Railway dashboard
-# This eliminates the need for persistent services with setInterval
+# Railway Cron Configuration:
+# - Schedule: */15 * * * * (Every 15 minutes)
+# - Calls Vercel endpoint: https://tldrsec.app/api/cron/unified
+# - Executes SEC filing monitoring and summarization pipeline
+# - Exits after completion to allow next scheduled run
