@@ -1,10 +1,12 @@
-# Railway Cron Jobs Setup Guide
+# Railway Cron-Only Service Setup Guide
 
-This guide covers setting up and testing cron jobs on Railway for the tldrsec-ai application.
+This guide covers configuring Railway as a cron-only service that calls the Vercel-hosted tldrsec-ai application.
 
-## Overview
+## Architecture Overview
 
-Railway handles cron jobs directly through the service settings, not through separate services as originally planned. Here's how to set them up properly.
+- **Vercel**: Hosts the main web application at `https://tldrsec.app`
+- **Railway**: Runs ONLY cron jobs that call Vercel endpoints
+- **Purpose**: Railway executes `node scripts/railway-cron.cjs` every 15 minutes to trigger SEC filing processing
 
 ## Step 1: Access Railway Dashboard
 
@@ -12,73 +14,59 @@ Railway handles cron jobs directly through the service settings, not through sep
 2. Navigate to your project: **tldrsec-ai**
 3. Click on your service (should be named **tldrsec-ai**)
 
-## Step 2: Configure Cron Jobs
+## Step 2: Configure Railway Service as Cron-Only
 
-### Method 1: Via Railway Dashboard
+### Railway Dashboard Configuration
 
 1. **Click on your service**
 2. **Go to "Settings" tab**
-3. **Scroll to "Cron Schedule" section**
-4. **Add your cron expressions**:
+3. **Configure the following sections**:
 
-#### SEC Filing Monitor Cron Job
-- **Cron Expression**: `0 9 * * 1-5`
-- **Description**: Monitors SEC filings (9am weekdays UTC)
-- **What it does**: Calls `/api/cron/monitor-sec-filings` endpoint
+#### Start Command (Deploy Section)
+- **Custom Start Command**: `node scripts/railway-cron.cjs`
+- **Remove**: Any healthcheck configuration (not needed for cron)
 
-#### Job Processor Cron Job  
-- **Cron Expression**: `0 12 * * 1-5`
-- **Description**: Processes background jobs (12pm weekdays UTC)
-- **What it does**: Calls `/api/cron/process-jobs` endpoint
+#### Cron Schedule
+- **Cron Expression**: `*/15 * * * *`
+- **Description**: Executes SEC filing pipeline every 15 minutes
+- **What it does**: Calls `https://tldrsec.app/api/cron/unified` endpoint
 
-### Method 2: Via Railway CLI
+#### Resource Limits  
+- **Memory**: 2GB (reduced from web server requirements)
+- **CPU**: 2 vCPU (sufficient for cron execution)
 
+## Step 3: Configure Environment Variables
+
+### Required Variables for Railway Cron Service
 ```bash
-# Set cron schedule via CLI (if supported)
-railway service set-cron "0 9 * * 1-5" --path "/api/cron/monitor-sec-filings"
-railway service set-cron "0 12 * * 1-5" --path "/api/cron/process-jobs"
-```
-
-## Step 3: Verify Environment Variables
-
-Ensure these environment variables are set in Railway:
-
-### Required Variables
-```bash
-PUBLIC_URL=https://your-app-name.railway.app
+PUBLIC_URL=https://tldrsec.app
 CRON_SECRET=your-secure-secret-key
-DATABASE_URL=postgresql://...
-ANTHROPIC_API_KEY=sk-ant-api03-...
-RESEND_API_KEY=re_...
-RAILWAY_ENVIRONMENT=production
+# Note: Database and API keys are handled by Vercel deployment
 ```
 
-⚠️ **CRITICAL**: The `PUBLIC_URL` environment variable must be set to your Railway domain. Railway native cron jobs don't automatically have access to `RAILWAY_PUBLIC_DOMAIN`, causing the cron to fall back to `localhost` which fails.
+⚠️ **CRITICAL**: The `PUBLIC_URL` must point to your Vercel domain (`https://tldrsec.app`), not Railway domain, since Railway only executes the cron script that calls Vercel.
 
 Check via CLI:
 ```bash
 railway variables
 ```
 
-## Step 4: Test Cron Endpoints Manually
+## Step 4: Test Cron Configuration
 
-Get your Railway domain:
+### Test Local Cron Script
 ```bash
-railway domain
+# Set required environment variables first
+export PUBLIC_URL=https://tldrsec.app
+export CRON_SECRET=your-cron-secret
+
+# Test the Railway cron script locally
+node scripts/railway-cron.cjs
 ```
 
-Test the endpoints manually:
-
-### Test SEC Filing Monitor
+### Test Vercel Endpoint Directly
 ```bash
 curl -H "Authorization: Bearer YOUR_CRON_SECRET" \
-     https://your-app.railway.app/api/cron/monitor-sec-filings
-```
-
-### Test Job Processor
-```bash
-curl -H "Authorization: Bearer YOUR_CRON_SECRET" \
-     https://your-app.railway.app/api/cron/process-jobs
+     https://tldrsec.app/api/cron/unified
 ```
 
 Expected response for success:
@@ -92,44 +80,38 @@ Expected response for success:
 
 ## Step 5: Monitor Cron Job Execution
 
-### View Logs
+### View Railway Logs
 ```bash
 railway logs
 ```
 
-### Check for Errors
-Look for these log patterns:
-- ✅ `Starting SEC filing monitoring cron job`
-- ✅ `Starting job processor`
+### Expected Log Patterns
+Look for these Railway cron execution patterns:
+- ✅ `Starting Railway cron job execution`
+- ✅ `Executing SEC Filing Monitoring & User Processing`
+- ✅ `Cron execution summary`
+- ✅ `Railway cron execution completed`
 - ❌ `Unauthorized cron request`
-- ❌ `Failed to process jobs`
+- ❌ `Connection refused - service may not be running`
 
-## Step 6: Verify Cron Jobs Are Running
-
-### Check Railway Dashboard
-1. Go to your service in Railway dashboard
-2. Check "Deployments" tab for cron execution logs
-3. Look for scheduled job runs in the activity log
-
-### Monitor Database
-Cron jobs create execution records. Check if they're being created:
-```sql
-SELECT * FROM "CronJobExecution" 
-ORDER BY "createdAt" DESC 
-LIMIT 10;
-```
+### Check Vercel Endpoint Processing
+Monitor the actual pipeline execution in Vercel logs:
+- ✅ `Starting tier-aware SEC filing cron job`
+- ✅ `SEC filing RSS monitoring completed`
+- ✅ `Found X eligible users for processing`
+- ✅ `Tier-aware cron job completed successfully`
 
 ## Troubleshooting
 
 ### Common Issues
 
-#### 1. Connection to localhost Error
-**Symptom**: `Unable to connect. Is the computer able to access the url?` with `"baseUrl": "http://localhost:8080"`
+#### 1. Connection to Vercel Error
+**Symptom**: `Unable to connect. Is the computer able to access the url?` or connection timeouts
 
 **Solution**: 
-- Set the `PUBLIC_URL` environment variable in Railway to your deployed domain
-- Example: `PUBLIC_URL=https://your-app-name.railway.app`
-- Railway native cron jobs run separately and don't automatically have `RAILWAY_PUBLIC_DOMAIN`
+- Verify `PUBLIC_URL=https://tldrsec.app` is set correctly in Railway
+- Test Vercel endpoint directly: `curl https://tldrsec.app/api/cron/unified`
+- Check Vercel deployment status
 
 #### 2. Unauthorized Cron Request
 **Symptom**: `401 Unauthorized` or `Unauthorized cron request` in logs
@@ -138,16 +120,16 @@ LIMIT 10;
 - Verify `CRON_SECRET` is set correctly
 - Make sure the secret matches in your test calls
 
-#### 3. Database Schema Errors
-**Symptom**: `Unknown argument 'attempts'` or similar Prisma errors
+#### 3. Railway Service Not Exiting
+**Symptom**: Subsequent cron runs are skipped, "Active" status in Railway dashboard
 
 **Solution**:
-- Schema mismatch between code and database
-- Fixed in latest deployment
-- Run `railway run npx prisma db push` if needed
+- Ensure start command is `node scripts/railway-cron.cjs` not `npm start`
+- Railway cron script should exit after completion
+- Check logs for successful "Railway cron execution completed" message
 
 #### 4. Cron Jobs Not Triggering
-**Symptom**: No cron execution logs
+**Symptom**: No cron execution logs every 15 minutes
 
 **Solution**:
 - Check cron expression syntax (use https://crontab.guru)
@@ -175,23 +157,24 @@ Railway uses standard cron expressions (UTC time):
 
 | Expression | Description |
 |------------|-------------|
-| `0 9 * * 1-5` | 9am weekdays |
-| `0 12 * * 1-5` | 12pm weekdays |
+| `*/15 * * * *` | Every 15 minutes (Current setup) |
 | `*/30 * * * *` | Every 30 minutes |
 | `0 */4 * * *` | Every 4 hours |
+| `0 */6 * * *` | Every 6 hours |
 
 **Important**: Railway minimum interval is 5 minutes.
 
 ## Success Verification Checklist
 
-- [ ] Railway deployment successful
-- [ ] Environment variables configured
-- [ ] Cron schedules set in Railway dashboard
-- [ ] Manual endpoint tests pass
-- [ ] Cron execution logs appear
-- [ ] Database records created
-- [ ] No error messages in logs
-- [ ] Email notifications working (if applicable)
+- [ ] Railway cron-only service deployed
+- [ ] Environment variables configured (`PUBLIC_URL`, `CRON_SECRET`)
+- [ ] Cron schedule `*/15 * * * *` set in Railway dashboard  
+- [ ] Start command set to `node scripts/railway-cron.cjs`
+- [ ] Local cron script test passes
+- [ ] Vercel endpoint responds successfully
+- [ ] Railway cron execution logs appear every 15 minutes
+- [ ] Vercel logs show successful SEC filing processing
+- [ ] Email notifications working (check TEST_EMAIL)
 
 ## Next Steps
 
@@ -208,4 +191,4 @@ Railway uses standard cron expressions (UTC time):
 
 ---
 
-Your cron jobs should now be running automatically on Railway! 🚂
+Your Railway cron service should now be calling Vercel every 15 minutes! 🚂➡️🔄
