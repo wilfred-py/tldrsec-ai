@@ -1,0 +1,16 @@
+name = "cloudflare-cron"
+main = "index.js"
+compatibility_date = "2024-09-12"
+workers_dev = true
+
+[triggers]
+crons = ["*/10 * * * *"]
+
+[vars]
+PUBLIC_URL = "https://tldrsec.app"
+# wrangler.toml (wrangler v3.88.0^)
+[observability.logs]
+enabled = true
+
+
+
