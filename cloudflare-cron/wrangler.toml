@@ -7,7 +7,7 @@ workers_dev = true
 crons = ["*/10 * * * *"]
 
 [vars]
-PUBLIC_URL = "https://tldrsec-jolyoflzl-wilfreds-projects-a4d41883.vercel.app"
+PUBLIC_URL = "https://tldrsec.app"
 # wrangler.toml (wrangler v3.88.0^)
 [observability.logs]
 enabled = true
