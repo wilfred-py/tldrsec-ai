@@ -5,15 +5,29 @@
  * that replaces Railway cron execution.
  */
 
-import { describe, test, expect, jest, beforeEach, afterEach } from '@jest/globals';
+import { describe, test, expect, jest, beforeEach, afterEach, beforeAll, afterAll } from '@jest/globals';
 
 // Mock the global fetch function
 global.fetch = jest.fn();
 const mockFetch = global.fetch as jest.MockedFunction<typeof fetch>;
 
 // Mock console methods
-const mockConsoleLog = jest.spyOn(console, 'log').mockImplementation();
-const mockConsoleError = jest.spyOn(console, 'error').mockImplementation();
+const mockConsoleLog = jest.fn();
+const mockConsoleError = jest.fn();
+
+// Override console methods for testing
+const originalConsoleLog = console.log;
+const originalConsoleError = console.error;
+
+beforeAll(() => {
+  console.log = mockConsoleLog;
+  console.error = mockConsoleError;
+});
+
+afterAll(() => {
+  console.log = originalConsoleLog;
+  console.error = originalConsoleError;
+});
 
 // Import the worker code (we'll need to export the handler function)
 // For now, we'll simulate the worker logic inline
@@ -21,6 +35,11 @@ const mockConsoleError = jest.spyOn(console, 'error').mockImplementation();
 interface Env {
   PUBLIC_URL: string;
   CRON_SECRET: string;
+}
+
+interface ScheduledEvent {
+  scheduledTime?: Date;
+  cron?: string;
 }
 
 // Simulated worker handler based on the actual implementation
@@ -261,6 +280,11 @@ describe('Cloudflare Worker Cron Execution', () => {
 
       for (const baseUrl of testCases) {
         mockFetch.mockClear();
+        mockFetch.mockResolvedValueOnce({
+          ok: true,
+          status: 200
+        } as Response);
+        
         const testEnv = { ...mockEnv, PUBLIC_URL: baseUrl };
         const mockEvent = {} as ScheduledEvent;
         
@@ -299,7 +323,8 @@ describe('Cloudflare Worker Cron Execution', () => {
       const errorCodes = [400, 401, 403, 404, 500, 502, 503];
       
       for (const statusCode of errorCodes) {
-        mockFetch.mockClear();
+        // Reset mocks for each iteration
+        mockFetch.mockReset();
         mockConsoleError.mockClear();
         
         mockFetch.mockResolvedValueOnce({
@@ -381,6 +406,7 @@ describe('Cloudflare Worker Cron Execution', () => {
 
     test('logs errors with sufficient detail', async () => {
       const testError = new Error('Test error with details');
+      mockFetch.mockReset();
       mockFetch.mockRejectedValueOnce(testError);
 
       const mockEvent = {} as ScheduledEvent;
