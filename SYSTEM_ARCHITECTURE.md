@@ -26,18 +26,17 @@ tldrSEC-AI is a dual-deployment system that monitors SEC filings, generates AI-p
 - Processes SEC filings and generates summaries
 - Sends email notifications to subscribers
 
-#### 2. Railway (Cron Execution)
+#### 2. Cloudflare Workers (Cron Execution)
 **Purpose:** Scheduled task execution only
 
 **Responsibilities:**
-- Executes `node scripts/railway-cron.cjs` every 15 minutes
+- Executes the Worker script every 10 minutes
 - Calls Vercel endpoint: `https://tldrsec.app/api/cron/unified`
-- Exits after completion (allows Railway to restart for next execution)
 - No web server or user-facing components
 
 **Configuration:**
-- Start Command: `node scripts/railway-cron.cjs`
-- Cron Schedule: `*/15 * * * *` (Every 15 minutes)
+- Worker Script: `index.js`
+- Cron Schedule: `*/10 * * * *` (Every 10 minutes)
 - Environment: `PUBLIC_URL=https://tldrsec.app`, `CRON_SECRET=<secure-key>`
 
 ## Data Flow
@@ -45,7 +44,7 @@ tldrSEC-AI is a dual-deployment system that monitors SEC filings, generates AI-p
 ### SEC Filing Processing Workflow
 
 ```
-Railway Cron (Every 15 min)
+Cloudflare Cron (Every 10 min)
     ↓
 HTTP Request to Vercel
     ↓
@@ -60,9 +59,9 @@ HTTP Request to Vercel
 5. Store summaries in database (Neon PostgreSQL)
 6. Send email notifications (Resend)
     ↓
-Response back to Railway
+Response back to Cloudflare
     ↓
-Railway process exits
+Cloudflare Worker exits
 ```
 
 ### User Interaction Flow
@@ -98,7 +97,7 @@ User receives summaries via email (Resend)
 
 ### Deployment Platforms
 - **Vercel** - Web application hosting
-- **Railway** - Cron job execution
+- **Cloudflare Workers** - Cron job execution
 
 ## Database Schema
 
@@ -128,7 +127,7 @@ User receives summaries via email (Resend)
 ## Monitoring & Observability
 
 ### Logging
-- **Railway Logs** - Cron execution monitoring
+- **Cloudflare Logs** - Cron execution monitoring
 - **Vercel Logs** - Web application monitoring
 - **Database Logs** - Neon PostgreSQL monitoring
 
@@ -147,7 +146,7 @@ User receives summaries via email (Resend)
 
 ### Resource Allocation
 - **Vercel** - Optimized for web traffic patterns
-- **Railway** - Minimal resources for cron execution only
+- **Cloudflare Workers** - Minimal resources for cron execution only
 - **Database** - Connection pooling and query optimization
 - **AI API** - Token usage tracking and limits
 
@@ -166,7 +165,7 @@ User receives summaries via email (Resend)
 
 ### Service Recovery
 - **Vercel** - Automatic scaling and recovery
-- **Railway** - Automatic restart on failure
+- **Cloudflare Workers** - Automatic execution on schedule
 - **Database** - Multi-region availability (Neon)
 
 ## Development Workflow
