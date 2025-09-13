@@ -4,7 +4,7 @@ import { useState, useMemo, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { DashboardHeader } from "@/components/dashboard";
 import { CompanySearch } from "@/components/dashboard/company-search";
-import { SettingsIcon, Trash2Icon, PlusIcon, ArrowUpDown, Mail as EnvelopeIcon } from "lucide-react";
+import { SettingsIcon, Trash2Icon, PlusIcon, ArrowUpDown } from "lucide-react";
 
 import {
   Table,
@@ -362,8 +362,8 @@ export function DashboardClient() {
             </div>
             
             <div className="flex gap-2">
-              {/* Email Latest Filings Button */}
-              <Button
+              {/* Email Latest Filings Button - HIDDEN */}
+              {/* <Button
                 onClick={handleRequestEmailSummary}
                 disabled={isEmailRequestLoading}
                 className="gap-1"
@@ -371,7 +371,7 @@ export function DashboardClient() {
                 <EnvelopeIcon className="h-4 w-4 mr-2" />
                 <span className="hidden sm:inline">Email Latest Filings</span>
                 <span className="inline sm:hidden">Email</span>
-              </Button>
+              </Button> */}
               
               <Dialog open={isAddTickerOpen} onOpenChange={setIsAddTickerOpen}>
                 <DialogTrigger asChild>
