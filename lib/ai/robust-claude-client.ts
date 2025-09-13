@@ -8,7 +8,6 @@
  * - Detailed logging and monitoring
  */
 
-import Anthropic from '@anthropic-ai/sdk';
 import { v4 as uuidv4 } from 'uuid';
 import { ClaudeClient, ClaudeMessage, ClaudeRequestOptions, ClaudeResponse } from './claude-client';
 import { logger } from '../logging';

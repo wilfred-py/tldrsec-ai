@@ -9,10 +9,7 @@ import { usePathname } from "next/navigation";
 import {
   LayoutDashboardIcon,
   Menu,
-  FileTextIcon,
-  SettingsIcon,
   CrownIcon,
-  ClipboardListIcon,
   ActivityIcon,
 } from "lucide-react";
 import UserButton from "@/components/auth/user-button";
@@ -40,21 +37,6 @@ export function Sidebar({ className }: SidebarProps) {
       name: "Dashboard",
       href: "/dashboard",
       icon: LayoutDashboardIcon,
-    },
-    {
-      name: "Summaries",
-      href: "/dashboard/summaries",
-      icon: FileTextIcon,
-    },
-    {
-      name: "Filing Logs",
-      href: "/dashboard/email-logs",
-      icon: ClipboardListIcon,
-    },
-    {
-      name: "Settings",
-      href: "/dashboard/settings",
-      icon: SettingsIcon,
     },
   ];
 

@@ -34,7 +34,7 @@ export async function getLatestFilings(ticker: string, limit: number = 5): Promi
     console.log(`[DEBUG][secService] Retrieved ${filingsArray.length} filings for ${ticker}`);
     
     // Sort by filing date and take the most recent ones
-    let latestFilings = filingsArray
+    const latestFilings = filingsArray
       .sort((a: SecFiling, b: SecFiling) => new Date(b.filingDate).getTime() - new Date(a.filingDate).getTime())
       .slice(0, limit);
     

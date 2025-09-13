@@ -14,16 +14,16 @@ export function DashboardHeader({
   ...props
 }: DashboardHeaderProps) {
   return (
-    <div className={cn("mb-8", className)} {...props}>
-      <div className="flex items-center justify-between">
-        <div className="space-y-1">
-          <h1 className="text-2xl font-bold tracking-tight">{heading}</h1>
-          {description && (
-            <p className="text-muted-foreground">{description}</p>
-          )}
-        </div>
-        {actions && <div className="flex items-center gap-2">{actions}</div>}
-      </div>
+<div className={cn("mb-8", className)} {...props}>
+  <div className="flex flex-col items-center justify-center text-center">
+    <div className="space-y-1">
+      <h1 className="text-2xl font-bold tracking-tight">{heading}</h1>
+      {description && (
+        <p className="text-muted-foreground">{description}</p>
+      )}
     </div>
+    {actions && <div className="mt-4 flex items-center gap-2">{actions}</div>}
+  </div>
+</div>
   );
-} 
+}

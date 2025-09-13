@@ -2,9 +2,10 @@
 
 import { useState, useMemo, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 import { DashboardHeader } from "@/components/dashboard";
 import { CompanySearch } from "@/components/dashboard/company-search";
-import { SettingsIcon, Trash2Icon, PlusIcon, ArrowUpDown, Mail as EnvelopeIcon } from "lucide-react";
+import { SettingsIcon, Trash2Icon, PlusIcon, ArrowUpDown } from "lucide-react";
 
 import {
   Table,
@@ -60,10 +61,7 @@ export function DashboardClient() {
   const { execute: executeAddTicker } = useAsync();
   const { execute: executeDeleteTicker, isLoading: isDeletingTicker } = useAsync();
   const { execute: executeUpdatePreferences, isLoading: isUpdatingPreferences } = useAsync();
-  const { execute: executeEmailRequest } = useAsync();
   
-  // State for email request
-  const [isEmailRequestLoading, setIsEmailRequestLoading] = useState(false);
   
 
   // Load tracked companies
@@ -106,8 +104,6 @@ export function DashboardClient() {
   // Handle adding a ticker
   const handleAddTicker = async (symbol: string, name: string) => {
     setIsAddTickerOpen(false);
-    setNewTickerSearch("");
-    setSearchResults([]);
     
     // Create a new company object for optimistic update
     const newCompany: Company = {
@@ -227,43 +223,6 @@ export function DashboardClient() {
     });
   };
   
-  // Handle requesting email summary
-  const handleRequestEmailSummary = async () => {
-    try {
-      // Get tickers from tracked companies
-      const tickers = companies ? companies.map(company => company.symbol) : [];
-      
-      // Execute the API request
-      setIsEmailRequestLoading(true);
-      const result = await executeEmailRequest(async () => {
-        const response = await fetch('/api/email/filings-summary', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ tickers }),
-        });
-        
-        if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.message || 'Failed to send email');
-        }
-        
-        return response.json();
-      }, {
-        errorMessage: 'Failed to send filing summaries email.'
-      });
-      
-      if (result?.success) {
-        toast.success('Filing summaries email sent! Check your inbox.');
-      }
-    } catch (error) {
-      console.error('Error sending email:', error);
-      toast.error(error instanceof Error ? error.message : 'Failed to send email');
-    } finally {
-      setIsEmailRequestLoading(false);
-    }
-  };
   
   // Table columns definition
   const columns = useMemo(() => [
@@ -353,17 +312,17 @@ export function DashboardClient() {
       />
       
       {/* Tracked Tickers - Removed border */}
-      <div>
-        <div className="mb-6">
+      <Card className="p-6">
+        <div className="mb-6 text-center">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <div>
+            <div className="mx-auto sm:mx-0">
               <h2 className="text-lg font-semibold">Tracked Tickers</h2>
               <p className="text-sm text-muted-foreground">Manage your tracked companies.</p>
             </div>
             
             <div className="flex gap-2">
-              {/* Email Latest Filings Button */}
-              <Button
+              {/* Email Latest Filings Button - HIDDEN */}
+              {/* <Button
                 onClick={handleRequestEmailSummary}
                 disabled={isEmailRequestLoading}
                 className="gap-1"
@@ -371,7 +330,7 @@ export function DashboardClient() {
                 <EnvelopeIcon className="h-4 w-4 mr-2" />
                 <span className="hidden sm:inline">Email Latest Filings</span>
                 <span className="inline sm:hidden">Email</span>
-              </Button>
+              </Button> */}
               
               <Dialog open={isAddTickerOpen} onOpenChange={setIsAddTickerOpen}>
                 <DialogTrigger asChild>
@@ -402,8 +361,6 @@ export function DashboardClient() {
                   
                   <DialogFooter className="flex-col sm:flex-row gap-2 sm:gap-0">
                     <Button variant="outline" onClick={() => {
-                      setNewTickerSearch("");
-                      setSearchResults([]);
                       setIsAddTickerOpen(false);
                     }}>
                       Cancel
@@ -420,9 +377,9 @@ export function DashboardClient() {
             <p className="text-sm text-muted-foreground">Loading tracked companies...</p>
           </div>
         ) : showEmptyState ? (
-          <div className="flex min-h-[200px] flex-col items-center justify-center rounded-md border border-dashed p-4 sm:p-8 text-center">
+          <div className="flex min-h-[200px] flex-col items-center justify-center rounded-md border border-dashed p-4 sm:p-8 text-center space-y-4">
             <h3 className="text-base font-medium">No companies tracked yet</h3>
-            <p className="mt-2 text-sm text-muted-foreground">
+            <p className="text-sm text-muted-foreground">
               Start tracking companies to receive SEC filing summaries.
             </p>
             <Dialog open={isAddTickerOpen} onOpenChange={setIsAddTickerOpen}>
@@ -446,8 +403,6 @@ export function DashboardClient() {
                 
                 <DialogFooter className="flex-col sm:flex-row gap-2 sm:gap-0">
                   <Button variant="outline" onClick={() => {
-                    setNewTickerSearch("");
-                    setSearchResults([]);
                     setIsAddTickerOpen(false);
                   }}>
                     Cancel
@@ -538,7 +493,7 @@ export function DashboardClient() {
             </div>
           </>
         )}
-      </div>
+      </Card>
       
       {/* Delete Confirmation Dialog */}
       <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
@@ -649,7 +604,7 @@ export function DashboardClient() {
             <Button onClick={handleUpdatePreferences} disabled={isUpdatingPreferences}>
               {isUpdatingPreferences ? "Saving..." : "Save Changes"}
             </Button>
-          </DialogFooter>
+          </DialogFooter>  
         </DialogContent>
       </Dialog>
 

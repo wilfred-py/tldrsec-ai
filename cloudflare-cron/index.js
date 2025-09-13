@@ -2,7 +2,8 @@
 
 export default {
   async scheduled(event, env, ctx) {
-    const url = `${env.PUBLIC_URL}/api/cron/unified`;
+    // Point directly to tier-aware endpoint (bypassing unified router since Railway has single cron limitation)
+    const url = `${env.PUBLIC_URL}/api/cron/tier-aware`;
     try {
       const response = await fetch(url, {
         method: 'GET',
@@ -12,10 +13,10 @@ export default {
           'User-Agent': 'tldrSEC-AI Cloudflare Cron'
         }
       });
-      if (!response.ok) throw new Error(`Failed: ${response.status}`);
-      console.log('Pipeline triggered successfully');
+      if (!response.ok) throw new Error(`Failed: ${response.status} ${response.statusText}`);
+      console.log('SEC filing pipeline triggered successfully from Cloudflare Worker');
     } catch (error) {
-      console.error('Error:', error);
+      console.error('Cloudflare cron error:', error);
       throw error;
     }
   }

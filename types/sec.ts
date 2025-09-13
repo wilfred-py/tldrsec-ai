@@ -1,4 +1,3 @@
-import { DOMParser } from '@xmldom/xmldom';
 
 export interface SecCompanyInfo {
   cik: string;
@@ -47,7 +46,7 @@ export interface FilingSearchResponse {
   };
   phone: string;
   flags: string;
-  formerNames: any[];
+  formerNames: unknown[];
   filings: {
     recent: {
       accessionNumber: string[];

@@ -6,10 +6,12 @@
 import { describe, it, expect, beforeEach, afterEach, jest } from '@jest/globals';
 
 // Set environment variables before module imports
+process.env.NODE_ENV = 'test';
 process.env.CRON_ALLOWED_IPS = '203.0.113.1,198.51.100.0/24';
 process.env.CRON_SECRET = 'test-secret-key';
 process.env.CRON_SIGNATURE_SECRET = 'test-signature-secret';
 process.env.CRON_API_KEYS = 'tldr_test123456789012345678901234,tldr_test987654321098765432109876';
+process.env.DATABASE_URL = 'postgresql://test:test@localhost:5432/testdb';
 
 // Web Crypto API polyfill for Edge Runtime compatibility in tests
 if (!global.crypto) {
@@ -103,45 +105,102 @@ describe('Middleware Security System', () => {
   });
 
   afterEach(() => {
-    // Clean up environment variables
-    delete process.env.CRON_ALLOWED_IPS;
-    delete process.env.CRON_SECRET;
-    delete process.env.CRON_SIGNATURE_SECRET;
-    delete process.env.CRON_API_KEYS;
+    // Restore environment variables for subsequent tests
+    process.env.CRON_ALLOWED_IPS = '203.0.113.1,198.51.100.0/24';
+    process.env.CRON_SECRET = 'test-secret-key';
+    process.env.CRON_SIGNATURE_SECRET = 'test-signature-secret';
+    process.env.CRON_API_KEYS = 'tldr_test123456789012345678901234,tldr_test987654321098765432109876';
   });
 
   describe('IP Validation', () => {
     it('should allow requests from Railway platform IPs', () => {
-      expect(IPValidator.isAllowed('172.16.10.5').isAllowed).toBe(true);
-      expect(IPValidator.isAllowed('10.0.0.100').isAllowed).toBe(true);
-      expect(IPValidator.isAllowed('192.168.1.50').isAllowed).toBe(true);
+      expect(IPValidator.isAllowedSync('172.16.10.5').isAllowed).toBe(true);
+      expect(IPValidator.isAllowedSync('10.0.0.100').isAllowed).toBe(true);
+      expect(IPValidator.isAllowedSync('192.168.1.50').isAllowed).toBe(true);
     });
 
     it('should allow requests from Vercel platform IPs', () => {
-      expect(IPValidator.isAllowed('76.76.19.100').isAllowed).toBe(true);
-      expect(IPValidator.isAllowed('76.76.21.200').isAllowed).toBe(true);
+      expect(IPValidator.isAllowedSync('76.76.19.100').isAllowed).toBe(true);
+      expect(IPValidator.isAllowedSync('76.76.21.200').isAllowed).toBe(true);
+    });
+
+    it('should allow requests from Cloudflare Workers IP ranges', () => {
+      // Test all major Cloudflare IP ranges added in PR #194
+      const cloudflareIPs = [
+        '173.245.48.1',    // 173.245.48.0/20
+        '173.245.63.255',  // Last IP in range
+        '103.21.244.1',    // 103.21.244.0/22
+        '103.21.247.255',  // Last IP in range
+        '103.22.200.1',    // 103.22.200.0/22
+        '103.31.4.1',      // 103.31.4.0/22
+        '141.101.64.1',    // 141.101.64.0/18
+        '141.101.127.255', // Last IP in range
+        '108.162.192.1',   // 108.162.192.0/18
+        '190.93.240.1',    // 190.93.240.0/20
+        '188.114.96.1',    // 188.114.96.0/20
+        '197.234.240.1',   // 197.234.240.0/22
+        '198.41.128.1',    // 198.41.128.0/17
+        '198.41.255.255',  // Last IP in range
+        '162.158.0.1',     // 162.158.0.0/15
+        '162.159.255.255', // Last IP in range
+        '104.16.0.1',      // 104.16.0.0/13
+        '104.23.255.255',  // Last IP in range
+        '104.24.0.1',      // 104.24.0.0/14
+        '104.27.255.255',  // Last IP in range
+        '172.64.0.1',      // 172.64.0.0/13
+        '172.71.255.255',  // Last IP in range
+        '131.0.72.1'       // 131.0.72.0/22
+      ];
+
+      cloudflareIPs.forEach(ip => {
+        const result = IPValidator.isAllowedSync(ip);
+        expect(result.isAllowed).toBe(true);
+        expect(result.matchedRange).toMatch(/^(173\.245\.48\.0\/20|103\.21\.244\.0\/22|103\.22\.200\.0\/22|103\.31\.4\.0\/22|141\.101\.64\.0\/18|108\.162\.192\.0\/18|190\.93\.240\.0\/20|188\.114\.96\.0\/20|197\.234\.240\.0\/22|198\.41\.128\.0\/17|162\.158\.0\.0\/15|104\.16\.0\.0\/13|104\.24\.0\.0\/14|172\.64\.0\.0\/13|131\.0\.72\.0\/22)$/);
+      });
+    });
+
+    it('should reject IPs outside Cloudflare Workers ranges', () => {
+      // Test IPs just outside the Cloudflare ranges
+      const outsideCloudflareIPs = [
+        '173.245.47.255',  // Just before 173.245.48.0/20
+        '173.245.64.0',    // Just after 173.245.48.0/20
+        '103.21.243.255',  // Just before 103.21.244.0/22
+        '103.21.248.0',    // Just after 103.21.244.0/22
+        '141.101.63.255',  // Just before 141.101.64.0/18
+        '141.101.128.0',   // Just after 141.101.64.0/18
+        '104.15.255.255',  // Just before 104.16.0.0/13
+        '104.28.0.0',      // Just after 104.24.0.0/14
+        '172.63.255.255',  // Just before 172.64.0.0/13
+        '172.72.0.0'       // Just after 172.64.0.0/13
+      ];
+
+      outsideCloudflareIPs.forEach(ip => {
+        const result = IPValidator.isAllowedSync(ip);
+        expect(result.isAllowed).toBe(false);
+        expect(result.reason).toBe('IP not in allowed ranges');
+      });
     });
 
     it('should allow localhost requests', () => {
-      expect(IPValidator.isAllowed('127.0.0.1').isAllowed).toBe(true);
-      expect(IPValidator.isAllowed('::1').isAllowed).toBe(true);
+      expect(IPValidator.isAllowedSync('127.0.0.1').isAllowed).toBe(true);
+      expect(IPValidator.isAllowedSync('::1').isAllowed).toBe(true);
     });
 
     it('should allow custom configured IPs', () => {
-      expect(IPValidator.isAllowed('203.0.113.1').isAllowed).toBe(true);
-      expect(IPValidator.isAllowed('198.51.100.50').isAllowed).toBe(true);
+      expect(IPValidator.isAllowedSync('203.0.113.1').isAllowed).toBe(true);
+      expect(IPValidator.isAllowedSync('198.51.100.50').isAllowed).toBe(true);
     });
 
     it('should block unauthorized IPs', () => {
-      expect(IPValidator.isAllowed('8.8.8.8').isAllowed).toBe(false);
-      expect(IPValidator.isAllowed('1.1.1.1').isAllowed).toBe(false);
-      expect(IPValidator.isAllowed('malicious.com').isAllowed).toBe(false);
+      expect(IPValidator.isAllowedSync('8.8.8.8').isAllowed).toBe(false);
+      expect(IPValidator.isAllowedSync('1.1.1.1').isAllowed).toBe(false);
+      expect(IPValidator.isAllowedSync('malicious.com').isAllowed).toBe(false);
     });
 
     it('should handle CIDR notation correctly', () => {
-      expect(IPValidator.isAllowed('198.51.100.1').isAllowed).toBe(true);
-      expect(IPValidator.isAllowed('198.51.100.255').isAllowed).toBe(true);
-      expect(IPValidator.isAllowed('198.51.101.1').isAllowed).toBe(false);
+      expect(IPValidator.isAllowedSync('198.51.100.1').isAllowed).toBe(true);
+      expect(IPValidator.isAllowedSync('198.51.100.255').isAllowed).toBe(true);
+      expect(IPValidator.isAllowedSync('198.51.101.1').isAllowed).toBe(false);
     });
 
     it('should extract client IP from various headers', () => {
@@ -220,6 +279,9 @@ describe('Middleware Security System', () => {
 
   describe('Signature Validation', () => {
     it('should validate correct HMAC signatures', async () => {
+      // Ensure CRON_SIGNATURE_SECRET is set for this test
+      process.env.CRON_SIGNATURE_SECRET = 'test-signature-secret';
+      
       const { headers } = await SignatureValidator.generateSignature('GET', '/api/cron/test');
       
       const request = new NextRequest('https://test.com/api/cron/test', {
@@ -283,7 +345,7 @@ describe('Middleware Security System', () => {
     it('should validate correct API keys from Authorization header', async () => {
       const request = new NextRequest('https://test.com/api/cron/test', {
         headers: {
-          'Authorization': 'Bearer tldr_test1234567890123456789012345678'
+          'Authorization': 'Bearer tldr_test123456789012345678901234'
         }
       });
 
@@ -295,7 +357,7 @@ describe('Middleware Security System', () => {
     it('should validate correct API keys from X-API-Key header', async () => {
       const request = new NextRequest('https://test.com/api/cron/test', {
         headers: {
-          'X-API-Key': 'tldr_test9876543210987654321098765432'
+          'X-API-Key': 'tldr_test987654321098765432109876'
         }
       });
 

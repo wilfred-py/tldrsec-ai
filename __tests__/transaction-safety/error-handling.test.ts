@@ -204,7 +204,7 @@ describe('Error Handling and Recovery Tests', () => {
 
     it('should implement random jitter for deadlock recovery', async () => {
       const delays: number[] = [];
-      let calculateBackoffCallCount = 0;
+      const calculateBackoffCallCount = 0;
 
       // Import the function to test
       const { calculateIntelligentBackoff } = require('../../lib/db/concurrency');

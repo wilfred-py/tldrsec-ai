@@ -48,7 +48,7 @@ function generateEnhancedSummaryPrompt(content: string, filing: SECFiling, compa
   const filingDate = filing.filingDate ? new Date(filing.filingDate).toLocaleDateString() : 'Unknown date';
   
   // Create a detailed prompt for the AI
-  let prompt = `You are an expert financial analyst specializing in SEC filings analysis. 
+  const prompt = `You are an expert financial analyst specializing in SEC filings analysis. 
 Provide a comprehensive analysis of the following ${formType} filing for ${companyName}${ticker ? ` (${ticker})` : ''} filed on ${filingDate}.
 
 Your analysis should be 300-500 words and include:

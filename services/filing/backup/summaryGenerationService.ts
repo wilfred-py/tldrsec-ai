@@ -23,7 +23,7 @@ function generateSummaryPrompt(content: string, filing: SECFiling, company: Comp
   const filingDate = filing.filingDate ? new Date(filing.filingDate).toLocaleDateString() : 'Unknown date';
   
   // Create a prompt for the AI
-  let prompt = `You are an expert financial analyst specializing in SEC filings. 
+  const prompt = `You are an expert financial analyst specializing in SEC filings. 
 Summarize the following ${formType} filing for ${companyName}${ticker ? ` (${ticker})` : ''} filed on ${filingDate}.
 
 Focus on:

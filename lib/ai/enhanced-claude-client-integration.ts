@@ -12,11 +12,11 @@
 
 import { v4 as uuidv4 } from 'uuid';
 import { ClaudeClient, ClaudeMessage, ClaudeRequestOptions, ClaudeResponse } from './claude-client';
-import { EnhancedClaudeClient, EnhancedClaudeOptions, EnhancedClaudeEvent } from './enhanced-claude-client';
+import { EnhancedClaudeClient, EnhancedClaudeOptions } from './enhanced-claude-client';
 import { summaryCache, SummaryCacheKey } from './cache/summary-cache';
 import { logger } from '../logging';
 import { monitoring } from '../monitoring';
-import { ApiError, ErrorCode, ErrorCategory } from '../error-handling';
+import { ApiError, ErrorCode } from '../error-handling';
 import { executeWithAdaptiveRetry, AdaptiveRetryConfig, DefaultAdaptiveRetryConfig } from '../error-handling/adaptive-retry';
 import { generateFallbackSummary, isSummaryComplete } from './fallback-summary';
 import { SummarizationResult } from './summarize';
@@ -28,7 +28,7 @@ import { SECFilingType } from './prompts/prompt-types';
  * @param obj Object to hash
  * @returns Hash string
  */
-export async function hashObject(obj: any): Promise<string> {
+export async function hashObject(obj: unknown): Promise<string> {
   const str = JSON.stringify(obj);
   const encoder = new TextEncoder();
   const data = encoder.encode(str);
@@ -107,7 +107,7 @@ export async function saveToCache(key: SummaryCacheKey | string, result: Summari
 export async function withRobustErrorHandling<T>(
   operation: () => Promise<T>,
   options: EnhancedClaudeOptions = {},
-  context: Record<string, any> = {}
+  context: Record<string, unknown> = {}
 ): Promise<T> {
   const requestId = context.requestId || uuidv4();
   const startTime = Date.now();
@@ -154,7 +154,7 @@ export async function withRobustErrorHandling<T>(
             if (mergedOptions.retryConfig.onRetry.length >= 4) {
               mergedOptions.retryConfig.onRetry(error, attempt, delay, remaining);
             } else {
-              // @ts-ignore - Handle legacy retry function with 3 params
+              // @ts-expect-error - Handle legacy retry function with 3 params
               mergedOptions.retryConfig.onRetry(error, attempt, delay);
             }
           }
@@ -183,7 +183,7 @@ export async function withRobustErrorHandling<T>(
     });
     
     return result;
-  } catch (error: any) {
+  } catch (error: unknown) {
     // Calculate duration
     const duration = Date.now() - startTime;
     
@@ -315,7 +315,7 @@ export async function processDocumentWithRobustHandling(
       duration,
       processingTimeMs: duration
     };
-  } catch (error: any) {
+  } catch (error: unknown) {
     // Calculate duration
     const duration = Date.now() - startTime;
     
@@ -391,12 +391,16 @@ export function enhanceWithRobustErrorHandling(client: ClaudeClient): ClaudeClie
  */
 export function integrateRobustErrorHandling(client: EnhancedClaudeClient): void {
   // Add utility methods to the client
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   (client as any).hashObject = hashObject;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   (client as any).getFromCache = getFromCache;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   (client as any).saveToCache = saveToCache;
   
   // Enhance the base client with robust error handling
   // Access the base client using type assertion since TypeScript doesn't know about this method
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const baseClient = (client as any).getBaseClient ? (client as any).getBaseClient() : client;
   enhanceWithRobustErrorHandling(baseClient);
   

@@ -13,7 +13,7 @@ import {
   markFilingAsProcessedByAccession
 } from '../../../../lib/sec-edgar/ticker-monitoring';
 // Web Crypto API for Edge Runtime compatibility
-import { rateLimiter } from '../../../../lib/security/rate-limiter';
+import { MiddlewareSecurity } from '../../../../lib/security/middleware-security';
 import { updateUserBudgetWithLock, isConcurrencyError } from '../../../../lib/db/concurrency';
 import { FilingTransactionManager } from '../../../../lib/db/transaction-manager';
 import { createAsyncAuditLog } from '../../../../lib/db/async-audit';
@@ -164,50 +164,20 @@ export async function GET(request: NextRequest) {
     // DEBUG: Add comprehensive logging to isolate error location
     cronLogger.debug('Checkpoint 1: Route function started');
 
-    // Enhanced security validation
-    const clientIp = request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || 'unknown';
+    // Comprehensive security validation using middleware security system
+    const securityResult = await MiddlewareSecurity.validateRequest(request, 'CRON');
     
-    // Rate limiting
-    const rateLimitResult = await rateLimiter.checkLimit('cron-endpoint', clientIp);
-    if (!rateLimitResult.allowed) {
-      cronLogger.warn('Rate limit exceeded for cron request', { clientIp });
-      await monitor.complete(CronJobStatus.FAILED, 'Rate limit exceeded');
-      return NextResponse.json({ error: 'Rate limit exceeded' }, { status: 429 });
-    }
-    
-    // IP allowlist check (if configured) - read dynamically to support testing
-    const allowedIPs = process.env.CRON_ALLOWED_IPS?.split(',') || [];
-    if (allowedIPs.length > 0 && !allowedIPs.includes(clientIp)) {
-      cronLogger.warn('IP not allowed for cron request', { clientIp, allowedIPs });
-      await monitor.complete(CronJobStatus.FAILED, 'IP not allowed');
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-    }
-    
-    // Mandatory timing-safe authorization check - NO BYPASSES
-    const authHeader = request.headers.get('authorization');
-    const expectedAuth = `Bearer ${process.env.CRON_SECRET}`;
-    
-    // Validate CRON_SECRET exists
-    if (!process.env.CRON_SECRET) {
-      cronLogger.error('CRON_SECRET environment variable not configured');
-      await monitor.complete(CronJobStatus.FAILED, 'Server configuration error');
-      return NextResponse.json({ error: 'Server configuration error' }, { status: 500 });
-    }
-    
-    // All requests must provide valid authorization - no exceptions
-    if (!authHeader || !timingSafeEqual(authHeader, expectedAuth)) {
-      cronLogger.warn('Unauthorized cron request', { 
-        clientIp, 
-        hasAuthHeader: !!authHeader,
-        environment: process.env.NODE_ENV 
+    if (!securityResult.allowed) {
+      cronLogger.warn('Security validation failed for cron request', { 
+        reason: securityResult.reason,
+        statusCode: securityResult.statusCode 
       });
-      await monitor.complete(CronJobStatus.FAILED, 'Unauthorized access attempt');
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      await monitor.complete(CronJobStatus.FAILED, `Security validation failed: ${securityResult.reason}`);
+      return NextResponse.json({ error: securityResult.reason }, { status: securityResult.statusCode });
     }
     
     // Security audit logging for all successful authentications
-    cronLogger.info('Cron request authenticated successfully', {
-      clientIp,
+    cronLogger.info('Cron request security validation successful', {
       environment: process.env.NODE_ENV,
       timestamp: new Date().toISOString()
     });
@@ -311,7 +281,10 @@ export async function GET(request: NextRequest) {
     });
 
   } catch (error) {
-    await monitor.complete(CronJobStatus.FAILED, error instanceof Error ? error.message : 'Unknown error');
+    // Only call monitor.complete if monitor was successfully initialized
+    if (monitor) {
+      await monitor.complete(CronJobStatus.FAILED, error instanceof Error ? error.message : 'Unknown error');
+    }
     
     cronLogger.error('Tier-aware cron job failed', { error });
 

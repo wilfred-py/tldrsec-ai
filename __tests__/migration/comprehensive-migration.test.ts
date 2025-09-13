@@ -21,7 +21,7 @@ const IMPROVEMENT_THRESHOLD = 0.15; // Expect at least 15% improvement
 
 describe('Comprehensive Migration Test Suite', () => {
   
-  let performanceResults: Array<{
+  const performanceResults: Array<{
     ticker: string;
     formType: FilingType;
     method: string;

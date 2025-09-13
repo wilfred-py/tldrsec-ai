@@ -48,14 +48,14 @@ export interface ClaudeSummarizationConfig {
  * Result from Claude summarization
  */
 export interface ClaudeSummarizationResult {
-  summary: string | Record<string, any>;
+  summary: string | Record<string, unknown>;
   inputTokens: number;
   outputTokens: number;
   cost: number;
   duration: number;
   model: string;
   chunksProcessed?: number;
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
 }
 
 /**
@@ -448,7 +448,7 @@ export class DirectClaudeClient {
     const responseText = response.content[0]?.text || '';
     
     // Try to parse as JSON
-    let summaryText: string | Record<string, any> = responseText;
+    let summaryText: string | Record<string, unknown> = responseText;
     try {
       if (responseText.trim().startsWith('{') && responseText.trim().endsWith('}')) {
         summaryText = JSON.parse(responseText);

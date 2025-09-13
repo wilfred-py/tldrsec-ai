@@ -412,7 +412,7 @@ export function form4Template(
   });
 
   // HTML content
-  let htmlContent = `
+  const htmlContent = `
     <h1>Insider Transaction – Form 4</h1>
     <p>Hello ${name},</p>
     <p>A new Form 4 filing has been submitted for ${filing.companyName} (${filing.symbol}).</p>

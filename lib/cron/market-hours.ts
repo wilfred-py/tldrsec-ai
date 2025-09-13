@@ -310,7 +310,7 @@ export function getEligibleUsers(
  */
 function calculateNextMarketOpen(now: Date): Date | null {
   const easternTime = new Date(now.toLocaleString('en-US', { timeZone: 'America/New_York' }));
-  let nextOpen = new Date(easternTime);
+  const nextOpen = new Date(easternTime);
 
   // Start looking from today
   for (let i = 0; i < 10; i++) { // Look up to 10 days ahead

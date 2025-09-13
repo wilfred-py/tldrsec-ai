@@ -662,7 +662,7 @@ export async function summarizeFiling(content: string, options: SummarizationOpt
     const maxTokenLimit = 180000; // Claude Sonnet 4's max token limit is 200k, but leave buffer for prompt
     
     let prompt: string;
-    let isChunked = false;
+    const isChunked = false;
     
     // Handle minimal content case specially
     if (processedDoc.isMinimalContent) {

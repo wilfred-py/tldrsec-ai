@@ -25,7 +25,7 @@ export interface FallbackSummaryOptions {
   templates?: Record<string, string>;
   
   // Custom metadata to include in the result
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
 }
 
 // Default fallback templates by filing type
@@ -76,7 +76,7 @@ export function generateFallbackSummary(
   const template = templates[filingType] || templates.DEFAULT;
   
   // Generate basic metadata from document content if available
-  let extractedMetadata: Record<string, any> = {};
+  let extractedMetadata: Record<string, unknown> = {};
   if (documentContent) {
     extractedMetadata = extractBasicMetadata(documentContent, filingType);
   }
@@ -167,8 +167,8 @@ export function generateFallbackSummary(
  * This function attempts to extract key information like dates, company names,
  * and filing-specific details using regex patterns
  */
-function extractBasicMetadata(content: string, filingType: SECFilingType): Record<string, any> {
-  const metadata: Record<string, any> = {};
+function extractBasicMetadata(content: string, filingType: SECFilingType): Record<string, unknown> {
+  const metadata: Record<string, unknown> = {};
   
   try {
     // Extract date (common pattern in SEC filings)

@@ -40,7 +40,7 @@ export interface CIKValidationMetadata {
 }
 
 // Generic validation result interface
-export interface ValidationResult<T = any> {
+export interface ValidationResult<T = unknown> {
   isValid: boolean;
   value?: T;
   errors: ValidationError[];
@@ -53,7 +53,7 @@ export interface ValidationError {
   code: string;
   message: string;
   field?: string;
-  details?: any;
+  details?: unknown;
   severity: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
 }
 
@@ -62,7 +62,7 @@ export interface ValidationWarning {
   code: string;
   message: string;
   field?: string;
-  details?: any;
+  details?: unknown;
 }
 
 // Validation metadata
@@ -77,8 +77,8 @@ export interface ValidationMetadata {
 // Data sanitization result
 export interface SanitizationResult {
   sanitized: boolean;
-  originalValue: any;
-  sanitizedValue: any;
+  originalValue: unknown;
+  sanitizedValue: unknown;
   operations: SanitizationOperation[];
   warnings?: string[];
 }
@@ -108,13 +108,13 @@ export interface ValidationRule {
   max?: number;
   minLength?: number;
   maxLength?: number;
-  allowedValues?: any[];
+  allowedValues?: unknown[];
   customValidator?: string;
   errorMessage?: string;
 }
 
 // Custom validator function type
-export type CustomValidator = (value: any, context?: any) => ValidationResult;
+export type CustomValidator = (value: unknown, context?: unknown) => ValidationResult;
 
 // Form validation result for UI components
 export interface FormValidationResult {
@@ -122,7 +122,7 @@ export interface FormValidationResult {
   fieldErrors: Record<string, string[]>;
   generalErrors: string[];
   warnings: Record<string, string[]>;
-  validatedData?: Record<string, any>;
+  validatedData?: Record<string, unknown>;
 }
 
 // File validation result
