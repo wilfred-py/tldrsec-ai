@@ -339,8 +339,8 @@ export class IPValidator {
       }
     }
     
-    // Fallback to request IP if available
-    return request.ip || 'unknown';
+    // Fallback to request IP if available (NextRequest doesn't have .ip property)
+    return 'unknown';
   }
 }
 
@@ -616,9 +616,9 @@ export class SecurityAuditor {
         path: url.pathname,
         query: Object.fromEntries(url.searchParams.entries()),
         headers: {
-          'x-forwarded-for': request.headers.get('x-forwarded-for'),
-          'x-real-ip': request.headers.get('x-real-ip'),
-          'cf-connecting-ip': request.headers.get('cf-connecting-ip'),
+          'x-forwarded-for': request.headers.get('x-forwarded-for') || '',
+          'x-real-ip': request.headers.get('x-real-ip') || '',
+          'cf-connecting-ip': request.headers.get('cf-connecting-ip') || '',
           'authorization': request.headers.get('authorization') ? 'present' : 'absent',
           'x-api-key': request.headers.get('x-api-key') ? 'present' : 'absent'
         },
@@ -938,7 +938,7 @@ export class MiddlewareSecurity {
         if (!authenticated) {
           return {
             allowed: false,
-            reason: 'Authentication failed',
+            reason: 'Unauthorized',
             statusCode: 401
           };
         }

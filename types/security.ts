@@ -4,13 +4,14 @@
  */
 
 // Security event types for audit logging
-export type SecurityEventType = 
-  | 'ACCESS_DENIED' 
-  | 'RATE_LIMIT_EXCEEDED' 
-  | 'INVALID_SIGNATURE' 
-  | 'UNAUTHORIZED_IP' 
-  | 'INVALID_API_KEY' 
-  | 'ACCESS_GRANTED' 
+export type SecurityEventType =
+  | 'ACCESS_DENIED'
+  | 'RATE_LIMIT_EXCEEDED'
+  | 'INVALID_SIGNATURE'
+  | 'UNAUTHORIZED_IP'
+  | 'IP_VALIDATION_FAILURE'
+  | 'INVALID_API_KEY'
+  | 'ACCESS_GRANTED'
   | 'SUSPICIOUS_ACTIVITY';
 
 // Endpoint types for different security profiles
