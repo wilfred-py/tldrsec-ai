@@ -2,6 +2,7 @@
 
 import { useState, useMemo, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 import { DashboardHeader } from "@/components/dashboard";
 import { CompanySearch } from "@/components/dashboard/company-search";
 import { SettingsIcon, Trash2Icon, PlusIcon, ArrowUpDown } from "lucide-react";
@@ -311,10 +312,10 @@ export function DashboardClient() {
       />
       
       {/* Tracked Tickers - Removed border */}
-      <div>
-        <div className="mb-6">
+      <Card className="p-6">
+        <div className="mb-6 text-center">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <div>
+            <div className="mx-auto sm:mx-0">
               <h2 className="text-lg font-semibold">Tracked Tickers</h2>
               <p className="text-sm text-muted-foreground">Manage your tracked companies.</p>
             </div>
@@ -376,9 +377,9 @@ export function DashboardClient() {
             <p className="text-sm text-muted-foreground">Loading tracked companies...</p>
           </div>
         ) : showEmptyState ? (
-          <div className="flex min-h-[200px] flex-col items-center justify-center rounded-md border border-dashed p-4 sm:p-8 text-center">
+          <div className="flex min-h-[200px] flex-col items-center justify-center rounded-md border border-dashed p-4 sm:p-8 text-center space-y-4">
             <h3 className="text-base font-medium">No companies tracked yet</h3>
-            <p className="mt-2 text-sm text-muted-foreground">
+            <p className="text-sm text-muted-foreground">
               Start tracking companies to receive SEC filing summaries.
             </p>
             <Dialog open={isAddTickerOpen} onOpenChange={setIsAddTickerOpen}>
@@ -492,7 +493,7 @@ export function DashboardClient() {
             </div>
           </>
         )}
-      </div>
+      </Card>
       
       {/* Delete Confirmation Dialog */}
       <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
@@ -603,7 +604,7 @@ export function DashboardClient() {
             <Button onClick={handleUpdatePreferences} disabled={isUpdatingPreferences}>
               {isUpdatingPreferences ? "Saving..." : "Save Changes"}
             </Button>
-          </DialogFooter>
+          </DialogFooter>  
         </DialogContent>
       </Dialog>
 
