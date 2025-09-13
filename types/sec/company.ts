@@ -45,7 +45,7 @@ export interface FilingSearchResponse {
   };
   phone: string;
   flags: string;
-  formerNames: any[];
+  formerNames: unknown[];
   filings: {
     recent: {
       accessionNumber: string[];
@@ -63,7 +63,7 @@ export interface FilingSearchResponse {
       primaryDocument: string[];
       primaryDocDescription: string[];
     };
-    files: any[];
+    files: unknown[];
   };
 }
 

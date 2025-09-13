@@ -23,7 +23,7 @@ export function normalizeDate(dateStr: string): string {
     // Handle "Month DD, YYYY" format (e.g., "January 15, 2023")
     const longMonthMatch = dateStr.match(/([A-Za-z]+)\s+(\d{1,2}),?\s+(\d{4})/);
     if (longMonthMatch) {
-      const [_, month, day, year] = longMonthMatch;
+      const [, month, day, year] = longMonthMatch;
       const monthIndex = getMonthIndex(month);
       return `${year}-${String(monthIndex + 1).padStart(2, '0')}-${String(parseInt(day, 10)).padStart(2, '0')}`;
     }
@@ -31,21 +31,21 @@ export function normalizeDate(dateStr: string): string {
     // Handle "MM/DD/YYYY" format
     const slashMatch = dateStr.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/);
     if (slashMatch) {
-      const [_, month, day, year] = slashMatch;
+      const [, month, day, year] = slashMatch;
       return `${year}-${String(parseInt(month, 10)).padStart(2, '0')}-${String(parseInt(day, 10)).padStart(2, '0')}`;
     }
     
     // Handle "MM-DD-YYYY" format
     const dashMatch = dateStr.match(/(\d{1,2})-(\d{1,2})-(\d{4})/);
     if (dashMatch) {
-      const [_, month, day, year] = dashMatch;
+      const [, month, day, year] = dashMatch;
       return `${year}-${String(parseInt(month, 10)).padStart(2, '0')}-${String(parseInt(day, 10)).padStart(2, '0')}`;
     }
     
     // Handle "DD MMM YYYY" format (e.g., "15 Jan 2023")
     const shortMonthMatch = dateStr.match(/(\d{1,2})\s+([A-Za-z]{3})\s+(\d{4})/);
     if (shortMonthMatch) {
-      const [_, day, month, year] = shortMonthMatch;
+      const [, day, month, year] = shortMonthMatch;
       const monthIndex = getMonthIndex(month);
       return `${year}-${String(monthIndex + 1).padStart(2, '0')}-${String(parseInt(day, 10)).padStart(2, '0')}`;
     }
@@ -58,7 +58,7 @@ export function normalizeDate(dateStr: string): string {
     
     // If all else fails, return the original
     return dateStr;
-  } catch (error) {
+  } catch {
     // If parsing fails, return the original
     return dateStr;
   }
@@ -107,7 +107,7 @@ export function normalizeCurrency(valueStr: string | number): string {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2
     })}`;
-  } catch (error) {
+  } catch {
     // If parsing fails, return the original with $ prefix if needed
     return typeof valueStr === 'string' 
       ? (valueStr.includes('$') ? valueStr : `$${valueStr}`) 
@@ -144,7 +144,7 @@ export function normalizePercentage(valueStr: string | number): string {
     }
     
     // Remove all non-numeric characters except decimal point and minus sign
-    let numericStr = str.replace(/[^\d.-]/g, '');
+    const numericStr = str.replace(/[^\d.-]/g, '');
     
     // Parse the number
     const value = parseFloat(numericStr);
@@ -159,7 +159,7 @@ export function normalizePercentage(valueStr: string | number): string {
     }
     
     return `${value.toFixed(2)}%`;
-  } catch (error) {
+  } catch {
     // If parsing fails, return the original with % suffix if needed
     return typeof valueStr === 'string' 
       ? (valueStr.includes('%') ? valueStr : `${valueStr}%`) 

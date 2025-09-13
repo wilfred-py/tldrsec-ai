@@ -48,6 +48,7 @@ jest.mock('../../lib/sec-edgar/ticker-monitoring', () => ({
   validateUserTickers: jest.fn().mockResolvedValue([])
 }));
 
+// Mock rate limiter properly to match the singleton export pattern
 jest.mock('../../lib/security/rate-limiter', () => ({
   rateLimiter: {
     checkLimit: jest.fn().mockResolvedValue({ 
@@ -95,6 +96,8 @@ describe('Cron Endpoint Security Tests', () => {
     process.env.CRON_SIGNATURE_SECRET = 'test-signature-secret';
     process.env.DATABASE_URL = 'postgresql://test:test@localhost:5432/testdb';
     process.env.NODE_ENV = 'test';
+    // Ensure JEST_WORKER_ID is set for test environment detection
+    process.env.JEST_WORKER_ID = '1';
   });
   
   afterEach(() => {
@@ -112,6 +115,11 @@ describe('Cron Endpoint Security Tests', () => {
 
       const response = await GET(request);
       const data = await response.json();
+
+      // Debug: Log the response for troubleshooting
+      if (response.status !== 401) {
+        console.log('Expected 401 but got:', response.status, 'Error:', data.error);
+      }
 
       expect(response.status).toBe(401);
       expect(data.error).toBe('Unauthorized');
@@ -255,7 +263,11 @@ describe('Cron Endpoint Security Tests', () => {
     test('SECURITY: Must enforce rate limiting', async () => {
       // Mock rate limiter to deny requests
       const { rateLimiter } = require('../../lib/security/rate-limiter');
-      rateLimiter.checkLimit.mockResolvedValueOnce({ allowed: false });
+      rateLimiter.checkLimit.mockResolvedValueOnce({ 
+        allowed: false, 
+        remaining: 0, 
+        resetTime: Date.now() + 60000 
+      });
 
       const request = new NextRequest('http://localhost:3000/api/cron/tier-aware', {
         method: 'GET',

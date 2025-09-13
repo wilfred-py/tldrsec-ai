@@ -98,7 +98,7 @@ function extractFromStructuredResponse(text: string): ExtractedJSON {
             extractionMethod: 'structuredResponse',
             success: true
           };
-        } catch (parseError) {
+        } catch {
           // Try to repair and parse again
           const repaired = repairJSON(jsonCandidate);
           try {
@@ -167,7 +167,7 @@ function extractFromCodeBlocks(text: string): ExtractedJSON {
             extractionMethod: 'codeBlock',
             success: true
           };
-        } catch (parseError) {
+        } catch {
           // Continue to the next match if this one fails
           continue;
         }
@@ -360,7 +360,7 @@ function attemptPartialExtraction(text: string): ExtractedJSON {
     }
     
     // Look for key-value pairs in the text with improved regex
-    const keyValuePairs: Record<string, any> = {};
+    const keyValuePairs: Record<string, unknown> = {};
     const keyValueRegex = /"([^"]+)"\s*:\s*(?:"([^"]*)"|(\{[^{}]*\})|(\[[^\[\]]*\])|([^,}\]]+))/g;
     
     let match;
@@ -442,8 +442,8 @@ function attemptPartialExtraction(text: string): ExtractedJSON {
 /**
  * Extract structured data from common patterns in Claude's responses
  */
-function extractStructuredData(text: string): Record<string, any> {
-  const result: Record<string, any> = {};
+function extractStructuredData(text: string): Record<string, unknown> {
+  const result: Record<string, unknown> = {};
   
   // Look for sections with headings that might contain structured data
   const sections = text.split(/\n\s*#{1,3}\s+|\n\s*\*\*[^*]+\*\*\s*:\s*|\n\s*\d+\.\s+/);

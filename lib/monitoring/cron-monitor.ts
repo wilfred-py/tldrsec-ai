@@ -65,13 +65,18 @@ export class CronJobMonitor {
   private async initializeExecution(triggerSource: string): Promise<void> {
     try {
       // Skip database operations in test mode to enable proper mocking
-      if (process.env.NODE_ENV === 'test') {
+      // Detect test environment via NODE_ENV or JEST_WORKER_ID
+      const isTestEnvironment = process.env.NODE_ENV === 'test' || process.env.JEST_WORKER_ID;
+      
+      if (isTestEnvironment) {
         this.initialized = true;
         cronLogger.info(`Started cron job monitoring (test mode)`, {
           executionId: this.executionId,
           jobName: this.jobName,
           triggerSource,
-          startTime: this.startTime
+          startTime: this.startTime,
+          testEnv: process.env.NODE_ENV,
+          jestWorker: !!process.env.JEST_WORKER_ID
         });
         return;
       }
@@ -112,7 +117,8 @@ export class CronJobMonitor {
       Object.assign(this.metrics, updates);
       
       // Skip database operations in test mode
-      if (process.env.NODE_ENV === 'test') {
+      const isTestEnvironment = process.env.NODE_ENV === 'test' || process.env.JEST_WORKER_ID;
+      if (isTestEnvironment) {
         cronLogger.debug('Updated cron job metrics (test mode)', {
           executionId: this.executionId,
           updates
@@ -206,7 +212,8 @@ export class CronJobMonitor {
       this.ensureInitialized();
       
       // Skip database operations in test mode
-      if (process.env.NODE_ENV === 'test') {
+      const isTestEnvironment = process.env.NODE_ENV === 'test' || process.env.JEST_WORKER_ID;
+      if (isTestEnvironment) {
         cronLogger.info(`Completed cron job monitoring (test mode)`, {
           executionId: this.executionId,
           jobName: this.jobName,

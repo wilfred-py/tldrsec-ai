@@ -1,6 +1,7 @@
 import Anthropic from '@anthropic-ai/sdk';
 import type { MessageParam } from '@anthropic-ai/sdk/resources/messages';
 import { ClaudeConfig, getClaudeModel } from './config';
+import { FilingType } from '../sec-edgar/types';
 import Bottleneck from 'bottleneck';
 import { v4 as uuidv4 } from 'uuid';
 import { 
@@ -754,13 +755,13 @@ export async function generateSummary(params: {
   
   try {
     const systemPrompt = generateSystemPrompt(
-      params.filingType as any,
+      params.filingType as FilingType,
       params.metadata.companyName,
       params.metadata.filingDate.toISOString()
     );
     
     const userPrompt = generateUserPrompt(
-      params.filingType as any,
+      params.filingType as FilingType,
       typeof params.content === 'string' ? params.content : JSON.stringify(params.content),
       params.metadata.companyName,
       params.metadata.ticker

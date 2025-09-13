@@ -14,6 +14,12 @@ describe('SECURITY: Authentication Bypass Prevention', () => {
   beforeEach(() => {
     // Reset environment
     process.env = { ...originalEnv };
+    // Ensure NODE_ENV is always set to test for security tests
+    process.env.NODE_ENV = 'test';
+    // Provide test database URL to prevent Prisma connection issues
+    process.env.DATABASE_URL = 'postgresql://test:test@localhost:5432/testdb';
+    // Ensure JEST_WORKER_ID is set for test environment detection
+    process.env.JEST_WORKER_ID = '1';
   });
 
   afterAll(() => {
@@ -36,6 +42,11 @@ describe('SECURITY: Authentication Bypass Prevention', () => {
 
       const response = await GET(request);
       const responseData = await response.json();
+
+      // Debug: Log the actual response for troubleshooting
+      if (response.status !== 401) {
+        console.log('Expected 401 but got:', response.status, responseData);
+      }
 
       // CRITICAL: Must return 401 unauthorized - NO BYPASSES ALLOWED
       expect(response.status).toBe(401);

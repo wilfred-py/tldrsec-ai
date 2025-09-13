@@ -2,6 +2,8 @@
 import { NextRequest } from 'next/server';
 import { logger } from '../logging';
 import { rateLimiter } from './rate-limiter';
+import { cloudflareIPService } from './cloudflare-ip-service';
+import { securityMonitoring } from './security-monitoring';
 import { 
   SecurityConfig,
   SecurityEventType,
@@ -39,22 +41,23 @@ function getSecurityConfig(): SecurityConfig {
       '76.76.19.0/24',   // Vercel cron service
       '76.76.21.0/24',   // Vercel infrastructure
       
-      // Cloudflare Workers IP ranges (for cron triggers)
-      '173.245.48.0/20',   // Cloudflare IPv4 ranges
-      '103.21.244.0/22',
-      '103.22.200.0/22',
-      '103.31.4.0/22',
-      '141.101.64.0/18',
-      '108.162.192.0/18',
-      '190.93.240.0/20',
-      '188.114.96.0/20',
-      '197.234.240.0/22',
-      '198.41.128.0/17',
-      '162.158.0.0/15',
-      '104.16.0.0/13',
-      '104.24.0.0/14',
-      '172.64.0.0/13',
-      '131.0.72.0/22',
+      // Cloudflare IP ranges (also dynamically fetched via cloudflareIPService)
+      // Static ranges for synchronous validation fallback
+      '173.245.48.0/20',   // Cloudflare
+      '103.21.244.0/22',   // Cloudflare
+      '103.22.200.0/22',   // Cloudflare
+      '103.31.4.0/22',     // Cloudflare
+      '141.101.64.0/18',   // Cloudflare
+      '108.162.192.0/18',  // Cloudflare
+      '190.93.240.0/20',   // Cloudflare
+      '188.114.96.0/20',   // Cloudflare
+      '197.234.240.0/22',  // Cloudflare
+      '198.41.128.0/17',   // Cloudflare
+      '162.158.0.0/15',    // Cloudflare
+      '104.16.0.0/13',     // Cloudflare
+      '104.24.0.0/14',     // Cloudflare
+      '172.64.0.0/13',     // Cloudflare
+      '131.0.72.0/22',     // Cloudflare
       
       // Custom IPs from environment
       ...(process.env.CRON_ALLOWED_IPS?.split(',').filter(Boolean) || []),
@@ -128,6 +131,7 @@ export const SECURITY_CONFIG = getSecurityConfig();
 /**
  * IP address validation and allowlisting with CIDR support
  * Implements defense against IP spoofing and unauthorized access
+ * Now includes dynamic Cloudflare IP validation with security monitoring
  */
 export class IPValidator {
   private static ipToNumber(ip: string): number | null {
@@ -178,7 +182,106 @@ export class IPValidator {
     return (ipNum & mask) === (networkNum & mask);
   }
   
-  public static isAllowed(ip: string): IPValidationResult {
+  public static async isAllowed(ip: string): Promise<IPValidationResult> {
+    if (!ip || ip === 'unknown') {
+      securityLogger.warn('Unknown IP address in request');
+      return {
+        isAllowed: false,
+        reason: 'Unknown or missing IP address',
+        ipType: 'Unknown'
+      };
+    }
+    
+    // Determine IP type
+    const ipType = this.isIPv6(ip) ? 'IPv6' : 'IPv4';
+    
+    // Get current security config (dynamic for tests)
+    const securityConfig = getSecurityConfig();
+    
+    // First check static allowed IPs/ranges (Railway, Vercel, etc.)
+    for (const allowedIp of securityConfig.allowedIPs) {
+      if (this.isInCIDR(ip, allowedIp)) {
+        securityLogger.debug('IP matched static allowlist', { 
+          ip, 
+          matchedRange: allowedIp,
+          source: 'static'
+        });
+        return {
+          isAllowed: true,
+          matchedRange: allowedIp,
+          ipType,
+          source: 'static'
+        };
+      }
+    }
+    
+    // Check dynamic Cloudflare IP ranges with security monitoring
+    try {
+      const startTime = Date.now();
+      const isCloudflareIP = await cloudflareIPService.isCloudflareIP(ip);
+      const duration = Date.now() - startTime;
+      
+      if (isCloudflareIP) {
+        securityLogger.info('IP validated as Cloudflare via dynamic service', {
+          ip,
+          ipType,
+          validation_time_ms: duration,
+          source: 'cloudflare_dynamic'
+        });
+        
+        return {
+          isAllowed: true,
+          matchedRange: 'cloudflare_dynamic',
+          ipType,
+          source: 'cloudflare_dynamic',
+          metadata: {
+            validation_time_ms: duration,
+            service_metrics: cloudflareIPService.getMetrics()
+          }
+        };
+      }
+      
+      // Log failed Cloudflare validation for monitoring
+      securityLogger.debug('IP not found in Cloudflare ranges', {
+        ip,
+        ipType,
+        validation_time_ms: duration,
+        cloudflare_metrics: cloudflareIPService.getMetrics()
+      });
+      
+    } catch (error) {
+      // Log Cloudflare service error but continue with static validation
+      securityLogger.error('Cloudflare IP validation service error', {
+        ip,
+        error: error instanceof Error ? error.message : 'Unknown error',
+        fallback: 'static_validation_only'
+      });
+    }
+    
+    // IP not found in any allowed ranges
+    securityLogger.warn('IP blocked - not in any allowed ranges', {
+      ip,
+      ipType,
+      static_ranges_checked: securityConfig.allowedIPs.length,
+      cloudflare_check_attempted: true
+    });
+    
+    return {
+      isAllowed: false,
+      reason: 'IP not in allowed ranges (static or Cloudflare)',
+      ipType,
+      metadata: {
+        static_ranges_checked: securityConfig.allowedIPs.length,
+        cloudflare_validation_attempted: true
+      }
+    };
+  }
+  
+  /**
+   * Legacy synchronous method for backward compatibility
+   * @deprecated Use isAllowed() instead for dynamic Cloudflare validation
+   */
+  public static isAllowedSync(ip: string): IPValidationResult {
     if (!ip || ip === 'unknown') {
       securityLogger.warn('Unknown IP address in request');
       return {
@@ -200,7 +303,8 @@ export class IPValidator {
         return {
           isAllowed: true,
           matchedRange: allowedIp,
-          ipType
+          ipType,
+          source: 'static'
         };
       }
     }
@@ -522,6 +626,14 @@ export class SecurityAuditor {
         metadata: details
       };
       
+      // Record event in monitoring system
+      securityMonitoring.recordSecurityEvent(eventType, {
+        clientIP,
+        userAgent,
+        path: url.pathname,
+        ...details
+      });
+      
       // Log security event
       if (eventType === 'ACCESS_GRANTED') {
         securityLogger.info(`Security event: ${eventType}`, securityEvent);
@@ -529,12 +641,29 @@ export class SecurityAuditor {
         securityLogger.warn(`Security event: ${eventType}`, securityEvent);
       }
       
-      // TODO: In production, consider sending high-priority events to external monitoring
-      // systems like Datadog, New Relic, or custom alerting services
-      
+      // Enhanced alerting for critical events
       if (eventType === 'SUSPICIOUS_ACTIVITY') {
         securityLogger.error('SECURITY ALERT: Suspicious activity detected', securityEvent);
-        // TODO: Trigger immediate alerting for suspicious activity
+        
+        // Check if system is under attack
+        if (securityMonitoring.isUnderAttack()) {
+          securityLogger.error('CRITICAL SECURITY ALERT: System appears to be under attack', {
+            threat_summary: securityMonitoring.getThreatSummary(),
+            current_event: securityEvent
+          });
+        }
+      }
+      
+      // Alert on multiple failed IP validations
+      if (eventType === 'UNAUTHORIZED_IP' || eventType === 'IP_VALIDATION_FAILURE') {
+        const threatSummary = securityMonitoring.getThreatSummary();
+        if (threatSummary.ip_validation_failures > 5) {
+          securityLogger.warn('Multiple IP validation failures detected', {
+            failures_last_hour: threatSummary.ip_validation_failures,
+            unique_blocked_ips: threatSummary.blocked_ips.length,
+            current_event: securityEvent
+          });
+        }
       }
       
     } catch (error) {
@@ -698,36 +827,32 @@ export class MiddlewareSecurity {
         };
       }
       
-      // Step 2: IP allowlisting (for cron endpoints) with CRON_SECRET bypass
+      // Step 2: IP allowlisting (for cron endpoints) - always enforced for security
       if (endpointType === 'CRON') {
-        // Check for valid CRON_SECRET authentication first - allows Railway cron service
-        const authHeader = request.headers.get('authorization');
-        const validCronSecret = authHeader === `Bearer ${process.env.CRON_SECRET}`;
-        
-        if (validCronSecret) {
-          // Valid CRON_SECRET bypasses IP allowlisting for Railway cron service
-          securityLogger.debug('CRON_SECRET authentication successful, bypassing IP validation', {
+        // IP allowlisting is always enforced regardless of authentication method
+        const ipValidation = await IPValidator.isAllowed(clientIP);
+        if (!ipValidation.isAllowed) {
+          await SecurityAuditor.logSecurityEvent('UNAUTHORIZED_IP', request, {
             clientIP,
-            endpoint: url.pathname
+            allowedRanges: getSecurityConfig().allowedIPs,
+            ipValidation,
+            cloudflare_metrics: cloudflareIPService.getMetrics()
           });
-        } else {
-          // No valid CRON_SECRET, apply IP allowlisting
-          const ipValidation = IPValidator.isAllowed(clientIP);
-          if (!ipValidation.isAllowed) {
-            await SecurityAuditor.logSecurityEvent('UNAUTHORIZED_IP', request, {
-              clientIP,
-              allowedRanges: getSecurityConfig().allowedIPs,
-              ipValidation,
-              hasCronSecret: !!authHeader
-            });
-            
-            return {
-              allowed: false,
-              reason: 'IP not allowed and invalid/missing CRON_SECRET',
-              statusCode: 403
-            };
-          }
+          
+          return {
+            allowed: false,
+            reason: 'IP not allowed',
+            statusCode: 403
+          };
         }
+        
+        // Log successful IP validation for monitoring
+        securityLogger.info('IP validation successful for CRON endpoint', {
+          clientIP,
+          ipType: ipValidation.ipType,
+          source: ipValidation.source,
+          matchedRange: ipValidation.matchedRange
+        });
       }
       
       // Step 3: Rate limiting
@@ -799,7 +924,7 @@ export class MiddlewareSecurity {
           const authHeader = request.headers.get('authorization');
           const expectedAuth = `Bearer ${process.env.CRON_SECRET}`;
           
-          if (authHeader && SignatureValidator.timingSafeEqual(authHeader, expectedAuth)) {
+          if (authHeader && this.timingSafeEqual(authHeader, expectedAuth)) {
             authenticated = true;
             authMethod = 'cron_secret';
           } else {

@@ -60,10 +60,7 @@ export function DashboardClient() {
   const { execute: executeAddTicker } = useAsync();
   const { execute: executeDeleteTicker, isLoading: isDeletingTicker } = useAsync();
   const { execute: executeUpdatePreferences, isLoading: isUpdatingPreferences } = useAsync();
-  const { execute: executeEmailRequest } = useAsync();
   
-  // State for email request
-  const [isEmailRequestLoading, setIsEmailRequestLoading] = useState(false);
   
 
   // Load tracked companies
@@ -106,8 +103,6 @@ export function DashboardClient() {
   // Handle adding a ticker
   const handleAddTicker = async (symbol: string, name: string) => {
     setIsAddTickerOpen(false);
-    setNewTickerSearch("");
-    setSearchResults([]);
     
     // Create a new company object for optimistic update
     const newCompany: Company = {
@@ -227,43 +222,6 @@ export function DashboardClient() {
     });
   };
   
-  // Handle requesting email summary
-  const handleRequestEmailSummary = async () => {
-    try {
-      // Get tickers from tracked companies
-      const tickers = companies ? companies.map(company => company.symbol) : [];
-      
-      // Execute the API request
-      setIsEmailRequestLoading(true);
-      const result = await executeEmailRequest(async () => {
-        const response = await fetch('/api/email/filings-summary', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ tickers }),
-        });
-        
-        if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.message || 'Failed to send email');
-        }
-        
-        return response.json();
-      }, {
-        errorMessage: 'Failed to send filing summaries email.'
-      });
-      
-      if (result?.success) {
-        toast.success('Filing summaries email sent! Check your inbox.');
-      }
-    } catch (error) {
-      console.error('Error sending email:', error);
-      toast.error(error instanceof Error ? error.message : 'Failed to send email');
-    } finally {
-      setIsEmailRequestLoading(false);
-    }
-  };
   
   // Table columns definition
   const columns = useMemo(() => [
@@ -402,8 +360,6 @@ export function DashboardClient() {
                   
                   <DialogFooter className="flex-col sm:flex-row gap-2 sm:gap-0">
                     <Button variant="outline" onClick={() => {
-                      setNewTickerSearch("");
-                      setSearchResults([]);
                       setIsAddTickerOpen(false);
                     }}>
                       Cancel
@@ -446,8 +402,6 @@ export function DashboardClient() {
                 
                 <DialogFooter className="flex-col sm:flex-row gap-2 sm:gap-0">
                   <Button variant="outline" onClick={() => {
-                    setNewTickerSearch("");
-                    setSearchResults([]);
                     setIsAddTickerOpen(false);
                   }}>
                     Cancel

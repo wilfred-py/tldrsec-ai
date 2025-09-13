@@ -41,7 +41,7 @@ export interface FilingSummary {
   keyPoints: string[];
   filingUrl: string;
   url: string;
-  rawData?: any;
+  rawData?: unknown;
   // Additional properties used in filingService.ts
   accessionNumber?: string;
   processingStatus?: string;

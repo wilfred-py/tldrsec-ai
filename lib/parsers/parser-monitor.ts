@@ -369,7 +369,7 @@ export async function monitoredParsing<T>(
   // Start monitoring the operation
   const operationId = startParseOperation(parserType, sourceType);
   let usedRetry = false;
-  let retryCount = 0;
+  const retryCount = 0;
   let usedFallback = false;
   
   try {

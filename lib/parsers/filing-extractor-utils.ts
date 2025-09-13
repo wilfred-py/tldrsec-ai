@@ -168,7 +168,7 @@ export function cleanHtmlContent(html: string, options: { preserveFormatting?: b
     });
     
     // Process the body content
-    let bodyContent = $('body').length ? $('body') : $.root();
+    const bodyContent = $('body').length ? $('body') : $.root();
     
     // Handle tables specially to preserve structure
     bodyContent.find('table').each(function() {

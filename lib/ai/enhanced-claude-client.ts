@@ -10,23 +10,21 @@
  */
 
 import { claudeClient, ClaudeMessage, ClaudeRequestOptions, ClaudeResponse, ClaudeClient } from './claude-client';
-import { StreamHandler, StreamEvent, createStreamHandler } from './streaming/stream-handler';
+import { StreamHandler } from './streaming/stream-handler';
 import { summaryCache, SummaryCacheKey } from './cache/summary-cache';
 import { batchProcessor, BatchJob } from './batch/batch-processor';
-import { processDocumentContent, processAllChunks } from './chunking/enhanced-chunker';
-import { SummarizationOptions, SummarizationResult } from './summarize';
+import { processAllChunks } from './chunking/enhanced-chunker';
+import { SummarizationResult } from './summarize';
 import { SECFilingType } from './prompts/prompt-types';
 import { logger } from '../logging';
 import { monitoring } from '../monitoring';
 import { getClaudeModel } from './config';
 import { v4 as uuidv4 } from 'uuid';
 import { EventEmitter } from 'events';
-import Anthropic from '@anthropic-ai/sdk';
-import { ApiError, ErrorCode, createAiParsingError } from '../error-handling';
+import { ApiError, ErrorCode } from '../error-handling';
 import { executeWithRetry } from '../error-handling/retry';
 import { executeWithAdaptiveRetry, AdaptiveRetryConfig, DefaultAdaptiveRetryConfig } from '../error-handling/adaptive-retry';
-import { enhancedFetch } from '../network/enhanced-fetch';
-import { generateFallbackSummary, isSummaryComplete } from './fallback-summary';
+import { generateFallbackSummary } from './fallback-summary';
 
 // Logger for this component
 const componentLogger = logger.child('enhanced-claude');
@@ -48,7 +46,7 @@ export interface EnhancedClaudeOptions extends ClaudeRequestOptions {
   useFallback?: boolean;
   maxTokensPerRequest?: number;
   cacheTtl?: number;
-  context?: Record<string, any>;
+  context?: Record<string, unknown>;
 }
 
 /**

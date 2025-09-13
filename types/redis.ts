@@ -31,7 +31,7 @@ export enum RedisConnectionStatus {
 }
 
 // Redis operation result interface
-export interface RedisOperationResult<T = any> {
+export interface RedisOperationResult<T = unknown> {
   success: boolean;
   data?: T;
   error?: string;

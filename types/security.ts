@@ -61,6 +61,8 @@ export interface IPValidationResult {
   matchedRange?: string;
   reason?: string;
   ipType: 'IPv4' | 'IPv6' | 'Unknown';
+  source?: 'static' | 'cloudflare_dynamic' | 'cache' | 'fallback';
+  metadata?: Record<string, unknown>;
 }
 
 // Signature validation result
@@ -89,13 +91,13 @@ export interface SecurityAuditEvent {
   userAgent: string;
   method: string;
   path: string;
-  query: Record<string, any>;
+  query: Record<string, unknown>;
   headers: Record<string, string>;
   userId?: string;
   sessionId?: string;
   result: 'ALLOWED' | 'DENIED';
   reason?: string;
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
 }
 
 // Suspicious activity detection result

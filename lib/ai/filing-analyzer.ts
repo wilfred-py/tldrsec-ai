@@ -9,7 +9,7 @@ import { FilingType } from '../sec-edgar/types';
 
 // Simple in-memory cache for filing analyses
 type CacheEntry = {
-  analysis: any;
+  analysis: unknown;
   timestamp: number;
   documentHash: string;
 };
@@ -43,7 +43,7 @@ class FilingAnalyzerService {
       maxTokens?: number;
       model?: string;
     } = {}
-  ): Promise<any> {
+  ): Promise<unknown> {
     const {
       maxContentLength = 15000,
       useCaching = true,
@@ -145,7 +145,7 @@ class FilingAnalyzerService {
    * @param analysis The analysis result
    * @param documentHash The document hash
    */
-  private addToCache(key: string, analysis: any, documentHash: string): void {
+  private addToCache(key: string, analysis: unknown, documentHash: string): void {
     // Evict old entries if cache is too large
     if (this.cache.size >= this.cacheMaxSize) {
       // Remove oldest entries (first 10% of cache)
@@ -167,7 +167,7 @@ class FilingAnalyzerService {
    * 
    * @returns The usage statistics
    */
-  getUsageStats(): any {
+  getUsageStats(): unknown {
     try {
       return claudeClient.getUsage();
     } catch (error) {
@@ -188,7 +188,7 @@ class FilingAnalyzerService {
    * 
    * @returns Cache statistics
    */
-  getCacheStats(): any {
+  getCacheStats(): unknown {
     return {
       size: this.cache.size,
       maxSize: this.cacheMaxSize,
