@@ -10,7 +10,7 @@ export default {
         headers: {
           'Authorization': `Bearer ${env.CRON_SECRET}`,
           'Content-Type': 'application/json',
-          'User-Agent': 'TLDRSEC wilfred.chen.python@gmail.com'
+          'User-Agent': 'TLDRSEC wilfredchen1@gmail.com'
         }
       });
       if (!response.ok) throw new Error(`Failed: ${response.status} ${response.statusText}`);
