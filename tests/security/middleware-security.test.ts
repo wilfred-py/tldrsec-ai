@@ -66,12 +66,12 @@ if (!global.crypto) {
   } as any;
 }
 import { NextRequest } from 'next/server';
-import { 
-  MiddlewareSecurity, 
-  IPValidator, 
-  SignatureValidator, 
+import {
+  MiddlewareSecurity,
+  IPValidator,
+  SignatureValidator,
   APIKeyValidator,
-  SecurityAuditor 
+  SecurityAuditor
 } from '../../lib/security/middleware-security';
 
 // Mock the dependencies
@@ -88,11 +88,11 @@ jest.mock('../../lib/logging', () => ({
 
 describe('Middleware Security System', () => {
   let mockRateLimiter: any;
-  
+
   beforeEach(async () => {
     // Reset all mocks
     jest.clearAllMocks();
-    
+
     // Import and spy on the rate limiter
     const { rateLimiter } = await import('../../lib/security/rate-limiter');
     mockRateLimiter = jest.spyOn(rateLimiter, 'checkLimit').mockResolvedValue({
@@ -204,7 +204,7 @@ describe('Middleware Security System', () => {
     });
 
     it('should extract client IP from various headers', () => {
-      const createRequest = (headers: Record<string, string>) => 
+      const createRequest = (headers: Record<string, string>) =>
         new NextRequest('https://test.com/api/cron/test', { headers });
 
       expect(IPValidator.extractClientIP(
@@ -224,7 +224,7 @@ describe('Middleware Security System', () => {
   describe('Rate Limiting', () => {
     it('should allow requests within rate limits', async () => {
       const request = new NextRequest('https://test.com/api/cron/test', {
-        headers: { 
+        headers: {
           'x-forwarded-for': '127.0.0.1',
           'Authorization': `Bearer ${process.env.CRON_SECRET}`
         }
@@ -243,7 +243,7 @@ describe('Middleware Security System', () => {
       });
 
       const request = new NextRequest('https://test.com/api/cron/test', {
-        headers: { 
+        headers: {
           'x-forwarded-for': '127.0.0.1',
           'Authorization': `Bearer ${process.env.CRON_SECRET}`
         }
@@ -257,12 +257,12 @@ describe('Middleware Security System', () => {
 
     it('should apply different rate limits for different endpoint types', async () => {
       const cronRequest = new NextRequest('https://test.com/api/cron/test', {
-        headers: { 
+        headers: {
           'x-forwarded-for': '127.0.0.1',
           'Authorization': `Bearer ${process.env.CRON_SECRET}`
         }
       });
-      
+
       const healthRequest = new NextRequest('https://test.com/api/health/test', {
         headers: { 'x-forwarded-for': '127.0.0.1' }
       });
@@ -281,9 +281,9 @@ describe('Middleware Security System', () => {
     it('should validate correct HMAC signatures', async () => {
       // Ensure CRON_SIGNATURE_SECRET is set for this test
       process.env.CRON_SIGNATURE_SECRET = 'test-signature-secret';
-      
+
       const { headers } = await SignatureValidator.generateSignature('GET', '/api/cron/test');
-      
+
       const request = new NextRequest('https://test.com/api/cron/test', {
         headers
       });
@@ -294,7 +294,7 @@ describe('Middleware Security System', () => {
 
     it('should reject requests with missing signatures', async () => {
       const request = new NextRequest('https://test.com/api/cron/test');
-      
+
       const result = await SignatureValidator.validateSignature(request);
       expect(result.valid).toBe(false);
       expect(result.reason).toContain('Missing signature header');
@@ -307,7 +307,7 @@ describe('Middleware Security System', () => {
           'X-Timestamp': Math.floor(Date.now() / 1000).toString()
         }
       });
-      
+
       const result = await SignatureValidator.validateSignature(request);
       expect(result.valid).toBe(false);
       expect(result.reason).toContain('Signature verification failed');
@@ -321,7 +321,7 @@ describe('Middleware Security System', () => {
           'X-Timestamp': staleTimestamp.toString()
         }
       });
-      
+
       const result = await SignatureValidator.validateSignature(request);
       expect(result.valid).toBe(false);
       expect(result.reason).toContain('timestamp outside tolerance window');
@@ -329,7 +329,7 @@ describe('Middleware Security System', () => {
 
     it('should generate valid signatures for testing', async () => {
       const { signature, timestamp, headers } = await SignatureValidator.generateSignature(
-        'GET', 
+        'GET',
         '/api/cron/test',
         { param1: 'value1' }
       );
@@ -505,7 +505,7 @@ describe('Middleware Security System', () => {
 
       const result = await MiddlewareSecurity.validateRequest(request, 'HEALTH');
       expect(result.allowed).toBe(true);
-      
+
       const headers = result.responseHeaders;
       expect(headers?.['X-Content-Type-Options']).toBe('nosniff');
       expect(headers?.['X-Frame-Options']).toBe('DENY');
@@ -519,7 +519,7 @@ describe('Middleware Security System', () => {
       mockRateLimiter.mockRejectedValue(new Error('Rate limiter failure'));
 
       const request = new NextRequest('https://test.com/api/cron/test', {
-        headers: { 
+        headers: {
           'x-forwarded-for': '127.0.0.1',
           'Authorization': `Bearer ${process.env.CRON_SECRET}`
         }
@@ -534,7 +534,7 @@ describe('Middleware Security System', () => {
     it('should handle multiple authentication methods', async () => {
       // Test fallback from signature to API key, but still need CRON_SECRET
       process.env.CRON_SIGNATURE_SECRET = 'test-sig-secret';
-      
+
       const request = new NextRequest('https://test.com/api/cron/test', {
         headers: {
           'x-forwarded-for': '127.0.0.1',
@@ -568,7 +568,7 @@ describe('Middleware Security System', () => {
     });
 
     it('should handle concurrent requests efficiently', async () => {
-      const requests = Array.from({ length: 10 }, (_, i) => 
+      const requests = Array.from({ length: 10 }, (_, i) =>
         new NextRequest(`https://test.com/api/health/test?id=${i}`, {
           headers: { 'x-forwarded-for': '127.0.0.1' }
         })
@@ -582,7 +582,7 @@ describe('Middleware Security System', () => {
 
       // All requests should be allowed
       expect(results.every(r => r.allowed)).toBe(true);
-      
+
       // Concurrent processing should be efficient
       expect(duration).toBeLessThan(500);
     });
@@ -606,15 +606,15 @@ describe('Integration Tests', () => {
       new NextRequest('https://test.com/api/cron/test', {
         headers: { 'x-forwarded-for': '8.8.8.8' }
       }),
-      
-      // SQL injection attack  
+
+      // SQL injection attack
       new NextRequest("https://test.com/api/health?id=1' OR '1'='1", {
         headers: { 'x-forwarded-for': '127.0.0.1' }
       }),
-      
+
       // Suspicious user agent attack
       new NextRequest('https://test.com/api/health', {
-        headers: { 
+        headers: {
           'x-forwarded-for': '127.0.0.1',
           'User-Agent': 'sqlmap/1.5.2'
         }
@@ -630,7 +630,7 @@ describe('Integration Tests', () => {
 
     // All attacks should be blocked
     expect(results.every(r => !r.allowed)).toBe(true);
-    
+
     // Verify different blocking reasons
     expect(results[0].reason).toBe('IP not allowed');
     expect(results[1].reason).toBe('Suspicious activity detected');

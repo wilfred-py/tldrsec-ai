@@ -37,10 +37,10 @@ export interface RateLimitConfig {
 export interface SecurityConfig {
   // IP Allowlisting configuration
   allowedIPs: string[];
-  
+
   // Rate limiting configuration by endpoint type
   rateLimits: Record<EndpointType, RateLimitConfig>;
-  
+
   // Request signature validation
   signature: {
     algorithm: string;
@@ -48,10 +48,10 @@ export interface SecurityConfig {
     headerName: string;
     timestampHeader: string;
   };
-  
+
   // Security headers configuration
   securityHeaders: Record<string, string>;
-  
+
   // Additional security options
   enableIPValidation: boolean;
   enableSignatureValidation: boolean;

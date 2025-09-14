@@ -4,7 +4,7 @@ import { logger } from '../logging';
 import { rateLimiter } from './rate-limiter';
 import { cloudflareIPService } from './cloudflare-ip-service';
 import { securityMonitoring } from './security-monitoring';
-import { 
+import {
   SecurityConfig,
   SecurityEventType,
   EndpointType,
@@ -32,18 +32,18 @@ function getSecurityConfig(): SecurityConfig {
       '172.16.0.0/12',   // Private Railway network
       '10.0.0.0/8',      // Private network range
       '192.168.0.0/16',  // Private network range
-      
+
       // Railway uses Google Cloud Platform - add GCP cron service ranges
       '35.235.0.0/16',   // Google Cloud US regions
       '34.102.0.0/16',   // Google Cloud US-West
       '35.247.0.0/16',   // Google Cloud US-Central
       '34.68.0.0/16',    // Google Cloud additional ranges
       '35.184.0.0/16',   // Google Cloud regional ranges
-      
+
       // Vercel platform IPs (commonly used ranges)
       '76.76.19.0/24',   // Vercel cron service
       '76.76.21.0/24',   // Vercel infrastructure
-      
+
       // Cloudflare IP ranges (also dynamically fetched via cloudflareIPService)
       // Static ranges for synchronous validation fallback
       '173.245.48.0/20',   // Cloudflare
@@ -61,16 +61,16 @@ function getSecurityConfig(): SecurityConfig {
       '104.24.0.0/14',     // Cloudflare
       '172.64.0.0/13',     // Cloudflare
       '131.0.72.0/22',     // Cloudflare
-      
+
       // Custom IPs from environment
       ...(process.env.CRON_ALLOWED_IPS?.split(',').filter(Boolean) || []),
-      
+
       // Local development
       '127.0.0.1',
       '::1',
       'localhost'
     ],
-    
+
     // Rate limiting configuration by endpoint type
     rateLimits: {
       CRON: {
@@ -99,7 +99,7 @@ function getSecurityConfig(): SecurityConfig {
         emergencyLimit: 15 // Emergency limit for API
       }
     },
-    
+
     // Request signature validation
     signature: {
       algorithm: 'sha256',
@@ -107,7 +107,7 @@ function getSecurityConfig(): SecurityConfig {
       headerName: 'X-Signature-SHA256',
       timestampHeader: 'X-Timestamp'
     },
-    
+
     // Security headers configuration
     securityHeaders: {
       'X-Content-Type-Options': 'nosniff',
@@ -119,11 +119,11 @@ function getSecurityConfig(): SecurityConfig {
       'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
       'Pragma': 'no-cache'
     },
-    
+
     // SECURITY CRITICAL: All security features enabled with no bypass options
     // These settings CANNOT be disabled via environment variables
     enableIPValidation: true,
-    enableSignatureValidation: true, 
+    enableSignatureValidation: true,
     enableAPIKeyValidation: true,
     enableSuspiciousActivityDetection: true,
     logAllSecurityEvents: true,
@@ -143,18 +143,18 @@ export class IPValidator {
   private static ipToNumber(ip: string): number | null {
     const parts = ip.split('.');
     if (parts.length !== 4) return null;
-    
+
     return parts.reduce((acc, part, index) => {
       const num = parseInt(part, 10);
       if (isNaN(num) || num < 0 || num > 255) return NaN;
       return acc + (num << (8 * (3 - index)));
     }, 0);
   }
-  
+
   private static isIPv6(ip: string): boolean {
     return ip.includes(':');
   }
-  
+
   /**
    * SECURITY CRITICAL: Constant-time CIDR matching to prevent timing attacks
    * Always executes the same amount of work regardless of input to prevent
@@ -164,7 +164,7 @@ export class IPValidator {
     // SECURITY: Initialize result tracking - use bitwise operations for constant time
     let matchResult = 0;
     let validationSteps = 0;
-    
+
     // Step 1: Localhost check (always performed)
     validationSteps++;
     const isLocalhostCidr = cidr === 'localhost';
@@ -172,7 +172,7 @@ export class IPValidator {
     if (isLocalhostCidr && isLocalhostIP) {
       matchResult = 1;
     }
-    
+
     // Step 2: Exact match check (always performed)
     validationSteps++;
     if (!cidr.includes('/')) {
@@ -183,19 +183,19 @@ export class IPValidator {
       this.performTimingNormalization(validationSteps);
       return matchResult === 1;
     }
-    
+
     // Step 3: CIDR parsing (always performed)
     validationSteps++;
     const cidrParts = cidr.split('/');
     const network = cidrParts[0] || '';
     const prefixLength = cidrParts[1] || '';
     const prefix = parseInt(prefixLength, 10);
-    
+
     // Step 4: IPv6 handling (always check, but only process if needed)
     validationSteps++;
     const isIPv6IP = this.isIPv6(ip);
     const isIPv6CIDR = this.isIPv6(cidr);
-    
+
     if (isIPv6IP || isIPv6CIDR) {
       // SECURITY: IPv6 exact match comparison with constant time
       const ipv6Network = network;
@@ -206,38 +206,38 @@ export class IPValidator {
       this.performTimingNormalization(validationSteps + 2); // Additional steps for IPv6
       return matchResult === 1;
     }
-    
+
     // Step 5: IPv4 CIDR validation (always performed)
     validationSteps++;
     let prefixValid = 0;
     if (!isNaN(prefix) && prefix >= 0 && prefix <= 32) {
       prefixValid = 1;
     }
-    
+
     // Step 6: IP number conversion (always attempted)
     validationSteps++;
     const ipNum = this.ipToNumber(ip);
     const networkNum = this.ipToNumber(network);
-    
+
     // Step 7: Final CIDR calculation (always performed)
     validationSteps++;
-    if (prefixValid === 1 && ipNum !== null && networkNum !== null && 
+    if (prefixValid === 1 && ipNum !== null && networkNum !== null &&
         !isNaN(ipNum) && !isNaN(networkNum)) {
       const mask = (0xFFFFFFFF << (32 - prefix)) >>> 0;
       const ipMasked = (ipNum & mask) >>> 0;
       const networkMasked = (networkNum & mask) >>> 0;
-      
+
       if (ipMasked === networkMasked) {
         matchResult = 1;
       }
     }
-    
+
     // SECURITY: Normalize timing across all code paths
     this.performTimingNormalization(validationSteps);
-    
+
     return matchResult === 1;
   }
-  
+
   /**
    * SECURITY CRITICAL: Timing-safe IP allowlist validation
    * Prevents timing attacks by ensuring consistent execution time
@@ -245,92 +245,92 @@ export class IPValidator {
    */
   public static async isAllowed(ip: string): Promise<IPValidationResult> {
     const validationStartTime = Date.now();
-    
+
     if (!ip || ip === 'unknown') {
       // SECURITY: Ensure consistent timing even for invalid IPs
       await this.performAsyncTimingNormalization(50); // Base timing normalization
-      
+
       this.logSecurityEventSecurely('ip_validation_unknown', {
         validation_time_ms: Date.now() - validationStartTime
       });
-      
+
       return {
         isAllowed: false,
         reason: 'Unknown or missing IP address',
         ipType: 'Unknown'
       };
     }
-    
+
     // SECURITY: Always determine IP type for consistent processing
     const ipType = this.isIPv6(ip) ? 'IPv6' : 'IPv4';
-    
+
     // SECURITY: Track validation steps for timing consistency
     let validationSteps = 0;
     let matchFound = false;
     let matchedRange: string | undefined;
     let matchSource: 'static' | 'cloudflare_dynamic' | undefined;
     let serviceMetrics: any = {};
-    
+
     // Get current security config (dynamic for tests)
     const securityConfig = getSecurityConfig();
-    
+
     // SECURITY: Always check ALL static ranges - no early returns
     validationSteps++;
     for (const allowedIp of securityConfig.allowedIPs) {
       const rangeStartTime = Date.now();
       const isMatch = this.isInCIDR(ip, allowedIp);
       const rangeEndTime = Date.now();
-      
+
       // SECURITY: Record first match but continue checking all ranges
       if (isMatch && !matchFound) {
         matchFound = true;
         matchedRange = allowedIp;
         matchSource = 'static';
       }
-      
+
       // SECURITY: Log timing for each range check (but don't leak match info)
       this.logSecurityEventSecurely('ip_range_check', {
         range_validation_time_ms: rangeEndTime - rangeStartTime,
         range_index: securityConfig.allowedIPs.indexOf(allowedIp)
       });
     }
-    
+
     // SECURITY: Always attempt Cloudflare validation regardless of static match
     validationSteps++;
     let cloudflareValidationTime = 0;
     let cloudflareMatch = false;
-    
+
     try {
       const cloudflareStartTime = Date.now();
       const isCloudflareIP = await cloudflareIPService.isCloudflareIP(ip);
       cloudflareValidationTime = Date.now() - cloudflareStartTime;
-      
+
       if (isCloudflareIP && !matchFound) {
         matchFound = true;
         matchedRange = 'cloudflare_dynamic';
         matchSource = 'cloudflare_dynamic';
         cloudflareMatch = true;
       }
-      
+
       // SECURITY: Always collect service metrics for consistent timing
       serviceMetrics = cloudflareIPService.getMetrics();
-      
+
     } catch (error) {
       // SECURITY: Ensure consistent timing even on error
       cloudflareValidationTime = Date.now() - (validationStartTime + 100); // Estimated time
-      
+
       this.logSecurityEventSecurely('cloudflare_validation_error', {
         error_type: error instanceof Error ? error.constructor.name : 'unknown',
         validation_time_ms: cloudflareValidationTime
       });
     }
-    
+
     // SECURITY: Normalize total validation time to prevent timing analysis
     const totalValidationTime = Date.now() - validationStartTime;
     await this.performAsyncTimingNormalization(Math.max(200 - totalValidationTime, 0));
-    
+
     const finalValidationTime = Date.now() - validationStartTime;
-    
+
     // SECURITY: Build result object with consistent structure
     const result: IPValidationResult = {
       isAllowed: matchFound,
@@ -346,17 +346,17 @@ export class IPValidator {
         service_metrics: serviceMetrics
       }
     };
-    
+
     // SECURITY: Log final result securely without leaking timing patterns
     this.logSecurityEventSecurely(matchFound ? 'ip_validation_success' : 'ip_validation_failure', {
       normalized_validation_time_ms: finalValidationTime,
       validation_steps: validationSteps,
       ip_type: ipType
     });
-    
+
     return result;
   }
-  
+
   /**
    * SECURITY: Optimized timing normalization utility for constant-time operations
    * Performs lightweight CPU work to normalize execution time without excessive overhead
@@ -365,18 +365,18 @@ export class IPValidator {
     // SECURITY: Optimized work units for better performance in tests
     const workUnits = Math.max(steps * 50, 250);
     let dummy = 0;
-    
+
     for (let i = 0; i < workUnits; i++) {
       // SECURITY: Lightweight computation that prevents optimization
       dummy = (dummy + i * 17) % 10000;
     }
-    
+
     // SECURITY: Prevent compiler optimization by using result
     if (dummy === -1) {
       securityLogger.debug('Timing normalization completed', { dummy });
     }
   }
-  
+
   /**
    * SECURITY: Optimized async timing normalization for network operations
    * Ensures consistent timing across different execution paths with minimal overhead
@@ -384,15 +384,15 @@ export class IPValidator {
   private static async performAsyncTimingNormalization(minDelayMs: number): Promise<void> {
     // SECURITY: Cap maximum normalization delay to prevent test timeouts
     const cappedDelay = Math.min(Math.max(minDelayMs, 0), 50);
-    
+
     if (cappedDelay > 0) {
       await new Promise(resolve => setTimeout(resolve, cappedDelay));
     }
-    
+
     // SECURITY: Lightweight CPU work to mask timing variations
     this.performTimingNormalization(5);
   }
-  
+
   /**
    * SECURITY: Secure logging that prevents timing-based information disclosure
    * Logs security events without revealing sensitive timing patterns
@@ -400,7 +400,7 @@ export class IPValidator {
   private static logSecurityEventSecurely(eventType: string, metadata: Record<string, any>): void {
     // SECURITY: Sanitize timing information to prevent leakage
     const sanitizedMetadata = { ...metadata };
-    
+
     // Round timing values to prevent sub-millisecond timing analysis
     Object.keys(sanitizedMetadata).forEach(key => {
       if (key.includes('time_ms') && typeof sanitizedMetadata[key] === 'number') {
@@ -408,11 +408,11 @@ export class IPValidator {
         sanitizedMetadata[key] = Math.round(sanitizedMetadata[key] / 5) * 5;
       }
     });
-    
+
     // Log with normalized timing information
     securityLogger.debug(`Timing-safe security event: ${eventType}`, sanitizedMetadata);
   }
-  
+
   /**
    * Legacy synchronous method for backward compatibility
    * @deprecated Use isAllowed() instead for dynamic Cloudflare validation
@@ -427,13 +427,13 @@ export class IPValidator {
         ipType: 'Unknown'
       };
     }
-    
+
     // Determine IP type
     const ipType = this.isIPv6(ip) ? 'IPv6' : 'IPv4';
-    
+
     // Get current security config (dynamic for tests)
     const securityConfig = getSecurityConfig();
-    
+
     // Check against allowed IPs/ranges
     for (const allowedIp of securityConfig.allowedIPs) {
       if (this.isInCIDR(ip, allowedIp)) {
@@ -445,14 +445,14 @@ export class IPValidator {
         };
       }
     }
-    
+
     return {
       isAllowed: false,
       reason: 'IP not in allowed ranges',
       ipType
     };
   }
-  
+
   public static extractClientIP(request: NextRequest): string {
     // Check multiple headers in order of preference
     const headers = [
@@ -464,7 +464,7 @@ export class IPValidator {
       'forwarded-for',        // Alternative
       'forwarded'             // RFC 7239
     ];
-    
+
     for (const header of headers) {
       const value = request.headers.get(header);
       if (value) {
@@ -475,7 +475,7 @@ export class IPValidator {
         }
       }
     }
-    
+
     // Fallback to request IP if available (NextRequest doesn't have .ip property)
     return 'unknown';
   }
@@ -483,7 +483,7 @@ export class IPValidator {
 
 /**
  * Request signature validation using HMAC-SHA256
- * NOTE: Deprecated for CRON endpoints - use MiddlewareSecurity single auth method  
+ * NOTE: Deprecated for CRON endpoints - use MiddlewareSecurity single auth method
  * Kept for compatibility with non-CRON endpoints only
  */
 export class SignatureValidator {
@@ -496,12 +496,12 @@ export class SignatureValidator {
         .join('');
       return mockSignature;
     }
-    
+
     const signingKey = `${secret}.${timestamp}`;
     const encoder = new TextEncoder();
     const keyData = encoder.encode(signingKey);
     const messageData = encoder.encode(payload);
-    
+
     const cryptoKey = await crypto.subtle.importKey(
       'raw',
       keyData,
@@ -509,13 +509,13 @@ export class SignatureValidator {
       false,
       ['sign']
     );
-    
+
     const signature = await crypto.subtle.sign('HMAC', cryptoKey, messageData);
     return Array.from(new Uint8Array(signature))
       .map(b => b.toString(16).padStart(2, '0'))
       .join('');
   }
-  
+
   /**
    * SECURITY CRITICAL: Constant-time string comparison to prevent timing attacks
    * This implementation ensures that comparison time is independent of input content
@@ -524,58 +524,58 @@ export class SignatureValidator {
   private static timingSafeEqual(a: string, b: string): boolean {
     // SECURITY: Always compare full length to prevent early termination timing attacks
     const maxLength = Math.max(a.length, b.length);
-    
+
     // Pad shorter string with null bytes to ensure constant comparison time
     const paddedA = a.padEnd(maxLength, '\0');
     const paddedB = b.padEnd(maxLength, '\0');
-    
+
     const encoder = new TextEncoder();
     const aBytes = encoder.encode(paddedA);
     const bBytes = encoder.encode(paddedB);
-    
+
     let result = 0;
-    
+
     // SECURITY: Always iterate full length regardless of differences found
     for (let i = 0; i < maxLength; i++) {
       result |= aBytes[i] ^ bBytes[i];
     }
-    
+
     // SECURITY: Also compare original lengths in constant time
     const lengthDiff = a.length ^ b.length;
-    
+
     // Return true only if both content and length match exactly
     return (result | lengthDiff) === 0;
   }
-  
+
   public static async validateSignature(request: NextRequest): Promise<SignatureValidationResult> {
     try {
       const securityConfig = getSecurityConfig();
       const signature = request.headers.get(securityConfig.signature.headerName);
       const timestampHeader = request.headers.get(securityConfig.signature.timestampHeader);
       const secret = process.env.CRON_SIGNATURE_SECRET;
-      
+
       if (!signature) {
         return { valid: false, reason: 'Missing signature header' };
       }
-      
+
       if (!timestampHeader) {
         return { valid: false, reason: 'Missing timestamp header' };
       }
-      
+
       if (!secret) {
         securityLogger.error('CRON_SIGNATURE_SECRET not configured');
         return { valid: false, reason: 'Signature validation not configured' };
       }
-      
+
       const timestamp = parseInt(timestampHeader, 10);
       if (isNaN(timestamp)) {
         return { valid: false, reason: 'Invalid timestamp format' };
       }
-      
+
       // Check timestamp freshness (prevent replay attacks)
       const now = Math.floor(Date.now() / 1000);
       const timeDiff = Math.abs(now - timestamp);
-      
+
       if (timeDiff > securityConfig.signature.timestampTolerance) {
         securityLogger.warn('Request timestamp outside tolerance window', {
           timeDiff,
@@ -583,7 +583,7 @@ export class SignatureValidator {
         });
         return { valid: false, reason: 'Request timestamp outside tolerance window' };
       }
-      
+
       // Create payload for signature verification
       const url = new URL(request.url);
       const payload = JSON.stringify({
@@ -593,16 +593,16 @@ export class SignatureValidator {
         // Include query parameters in signature
         query: Object.fromEntries(url.searchParams.entries())
       });
-      
+
       // Calculate expected signature
       const expectedSignature = await this.createSignature(payload, secret, timestampHeader);
-      const providedSignature = signature.startsWith('sha256=') 
-        ? signature.slice(7) 
+      const providedSignature = signature.startsWith('sha256=')
+        ? signature.slice(7)
         : signature;
-      
+
       // Timing-safe comparison
       const isValid = this.timingSafeEqual(expectedSignature, providedSignature);
-      
+
       if (!isValid) {
         securityLogger.warn('Invalid request signature', {
           path: url.pathname,
@@ -611,20 +611,20 @@ export class SignatureValidator {
           expectedSigLength: expectedSignature.length
         });
       }
-      
-      return { 
-        valid: isValid, 
+
+      return {
+        valid: isValid,
         timestamp,
         algorithm: securityConfig.signature.algorithm,
         reason: isValid ? undefined : 'Signature verification failed'
       };
-      
+
     } catch (error) {
       securityLogger.error('Signature validation error', { error });
       return { valid: false, reason: 'Signature validation error' };
     }
   }
-  
+
   /**
    * Generate signature for testing purposes
    */
@@ -637,7 +637,7 @@ export class SignatureValidator {
     if (!secret) {
       throw new Error('CRON_SIGNATURE_SECRET not configured');
     }
-    
+
     const timestamp = Math.floor(Date.now() / 1000).toString();
     const payload = JSON.stringify({
       method,
@@ -645,9 +645,9 @@ export class SignatureValidator {
       timestamp: parseInt(timestamp),
       query
     });
-    
+
     const signature = await this.createSignature(payload, secret, timestamp);
-    
+
     const securityConfig = getSecurityConfig();
     return {
       signature: `sha256=${signature}`,
@@ -667,42 +667,42 @@ export class SignatureValidator {
  */
 export class APIKeyValidator {
   private static readonly API_KEY_PATTERN = /^tldr_[a-zA-Z0-9]{32}$/;
-  
+
   public static async validateAPIKey(request: NextRequest): Promise<APIKeyValidationResult> {
     try {
       const authHeader = request.headers.get('authorization');
       const apiKeyHeader = request.headers.get('x-api-key');
-      
+
       let apiKey: string | null = null;
-      
+
       // Check Authorization header (Bearer token)
       if (authHeader && authHeader.startsWith('Bearer ')) {
         apiKey = authHeader.slice(7);
       }
-      
+
       // Check X-API-Key header
       if (!apiKey && apiKeyHeader) {
         apiKey = apiKeyHeader;
       }
-      
+
       if (!apiKey) {
         return { valid: false, reason: 'Missing API key' };
       }
-      
+
       // Validate API key format
       if (!this.API_KEY_PATTERN.test(apiKey)) {
         return { valid: false, reason: 'Invalid API key format' };
       }
-      
+
       // Check against configured API keys
       const validKeys = process.env.CRON_API_KEYS?.split(',').filter(Boolean) || [];
-      
-      
+
+
       for (const validKey of validKeys) {
         const encoder = new TextEncoder();
         const apiKeyBytes = encoder.encode(apiKey);
         const validKeyBytes = encoder.encode(validKey.trim());
-        
+
         if (apiKeyBytes.length === validKeyBytes.length) {
           let isEqual = true;
           for (let i = 0; i < apiKeyBytes.length; i++) {
@@ -711,11 +711,11 @@ export class APIKeyValidator {
               break;
             }
           }
-          
+
           if (isEqual) {
             // Extract key ID for tracking
             let keyId: string;
-            
+
             if (process.env.NODE_ENV === 'test' || process.env.JEST_WORKER_ID) {
               // Test environment fallback
               keyId = Array.from(apiKey)
@@ -731,14 +731,14 @@ export class APIKeyValidator {
                 .join('')
                 .substring(0, 8);
             }
-            
+
             return { valid: true, keyId };
           }
         }
       }
-      
+
       return { valid: false, reason: 'Invalid API key' };
-      
+
     } catch (error) {
       securityLogger.error('API key validation error', { error });
       return { valid: false, reason: 'API key validation error' };
@@ -760,7 +760,7 @@ export class SecurityAuditor {
       const clientIP = IPValidator.extractClientIP(request);
       const userAgent = request.headers.get('user-agent') || 'unknown';
       const url = new URL(request.url);
-      
+
       const securityEvent: SecurityAuditEvent = {
         timestamp: new Date().toISOString(),
         eventType,
@@ -779,7 +779,7 @@ export class SecurityAuditor {
         result: eventType === 'ACCESS_GRANTED' ? 'ALLOWED' : 'DENIED',
         metadata: details
       };
-      
+
       // Record event in monitoring system
       securityMonitoring.recordSecurityEvent(eventType, {
         clientIP,
@@ -787,18 +787,18 @@ export class SecurityAuditor {
         path: url.pathname,
         ...details
       });
-      
+
       // Log security event
       if (eventType === 'ACCESS_GRANTED') {
         securityLogger.info(`Security event: ${eventType}`, securityEvent);
       } else {
         securityLogger.warn(`Security event: ${eventType}`, securityEvent);
       }
-      
+
       // Enhanced alerting for critical events
       if (eventType === 'SUSPICIOUS_ACTIVITY') {
         securityLogger.error('SECURITY ALERT: Suspicious activity detected', securityEvent);
-        
+
         // Check if system is under attack
         if (securityMonitoring.isUnderAttack()) {
           securityLogger.error('CRITICAL SECURITY ALERT: System appears to be under attack', {
@@ -807,7 +807,7 @@ export class SecurityAuditor {
           });
         }
       }
-      
+
       // Alert on multiple failed IP validations
       if (eventType === 'UNAUTHORIZED_IP' || eventType === 'IP_VALIDATION_FAILURE') {
         const threatSummary = securityMonitoring.getThreatSummary();
@@ -819,12 +819,12 @@ export class SecurityAuditor {
           });
         }
       }
-      
+
     } catch (error) {
       securityLogger.error('Failed to log security event', { error, eventType });
     }
   }
-  
+
   /**
    * Detect suspicious patterns in requests
    */
@@ -832,15 +832,15 @@ export class SecurityAuditor {
     const reasons: string[] = [];
     const userAgent = request.headers.get('user-agent') || '';
     const url = new URL(request.url);
-    
+
     // Railway native cron whitelist - bypass suspicious activity detection
     if (url.pathname.startsWith('/api/cron/')) {
       // Check if this is a Railway native cron job
       const clientIP = IPValidator.extractClientIP(request);
-      
+
       // Use a simpler approach - check if IP starts with known Railway network prefixes
       const railwayNetworkPrefixes = ['10.', '172.', '192.168.'];
-      
+
       for (const prefix of railwayNetworkPrefixes) {
         if (clientIP.startsWith(prefix)) {
           // This is likely from Railway's infrastructure, allow it to bypass suspicious activity detection
@@ -853,7 +853,7 @@ export class SecurityAuditor {
           };
         }
       }
-      
+
       // For cron endpoints, be more lenient with user agents since Railway native cron
       // might use different user agents than typical browser requests
       const legitCronUserAgents = [
@@ -862,7 +862,7 @@ export class SecurityAuditor {
         /github-actions/i,
         /cron/i
       ];
-      
+
       for (const pattern of legitCronUserAgents) {
         if (pattern.test(userAgent)) {
           return {
@@ -875,7 +875,7 @@ export class SecurityAuditor {
         }
       }
     }
-    
+
     // Check for suspicious user agents (excluding curl for cron endpoints)
     const suspiciousUAPatterns = [
       /wget/i,
@@ -888,19 +888,19 @@ export class SecurityAuditor {
       /sqlmap/i,
       /nikto/i
     ];
-    
+
     // For non-cron endpoints, still consider curl suspicious
     if (!url.pathname.startsWith('/api/cron/')) {
       suspiciousUAPatterns.push(/curl/i);
     }
-    
+
     for (const pattern of suspiciousUAPatterns) {
       if (pattern.test(userAgent)) {
         reasons.push(`Suspicious user agent: ${userAgent}`);
         break;
       }
     }
-    
+
     // Check for suspicious query parameters
     const suspiciousParams = ['admin', 'config', 'debug', 'test', 'backup', 'dump'];
     for (const param of suspiciousParams) {
@@ -908,13 +908,13 @@ export class SecurityAuditor {
         reasons.push(`Suspicious query parameter: ${param}`);
       }
     }
-    
+
     // Check for SQL injection patterns in query string
     const sqlInjectionPatterns = [
       /('|%27|\\';|%3B|\|%7C)/i,
       /(union|select|insert|delete|update|drop|create|alter|exec|execute)/i
     ];
-    
+
     const queryString = url.search;
     for (const pattern of sqlInjectionPatterns) {
       if (pattern.test(queryString)) {
@@ -922,14 +922,14 @@ export class SecurityAuditor {
         break;
       }
     }
-    
+
     const riskScore = Math.min(reasons.length * 25, 100); // Each reason adds 25 points, max 100
-    
+
     let recommendedAction: 'ALLOW' | 'CHALLENGE' | 'BLOCK' | 'MONITOR' = 'ALLOW';
     if (riskScore >= 75) recommendedAction = 'BLOCK';
     else if (riskScore >= 50) recommendedAction = 'CHALLENGE';
     else if (riskScore >= 25) recommendedAction = 'MONITOR';
-    
+
     return {
       suspicious: reasons.length > 0,
       reasons,
@@ -952,35 +952,36 @@ export class MiddlewareSecurity {
   private static timingSafeEqual(a: string, b: string): boolean {
     // SECURITY: Always compare full length to prevent early termination timing attacks
     const maxLength = Math.max(a.length, b.length);
-    
+
     // Pad shorter string with null bytes to ensure constant comparison time
     const paddedA = a.padEnd(maxLength, '\0');
     const paddedB = b.padEnd(maxLength, '\0');
-    
+
     const encoder = new TextEncoder();
     const aBytes = encoder.encode(paddedA);
     const bBytes = encoder.encode(paddedB);
-    
+
     let result = 0;
-    
+
     // SECURITY: Always iterate full length regardless of differences found
     for (let i = 0; i < maxLength; i++) {
       result |= aBytes[i] ^ bBytes[i];
     }
-    
+
     // SECURITY: Also compare original lengths in constant time
     const lengthDiff = a.length ^ b.length;
-    
+
     // Return true only if both content and length match exactly
     return (result | lengthDiff) === 0;
   }
+
   public static async validateRequest(
     request: NextRequest,
     endpointType: EndpointType
   ): Promise<SecurityValidationResult> {
     const clientIP = IPValidator.extractClientIP(request);
     const url = new URL(request.url);
-    
+
     try {
       // Step 1: Detect suspicious activity first
       const suspiciousCheck = SecurityAuditor.detectSuspiciousActivity(request);
@@ -988,14 +989,14 @@ export class MiddlewareSecurity {
         await SecurityAuditor.logSecurityEvent('SUSPICIOUS_ACTIVITY', request, {
           reasons: suspiciousCheck.reasons
         });
-        
+
         return {
           allowed: false,
           reason: 'Suspicious activity detected',
           statusCode: 403
         };
       }
-      
+
       // Step 2: IP allowlisting (for cron endpoints) - always enforced for security
       if (endpointType === 'CRON') {
         // IP allowlisting is always enforced regardless of authentication method
@@ -1007,14 +1008,14 @@ export class MiddlewareSecurity {
             ipValidation,
             cloudflare_metrics: cloudflareIPService.getMetrics()
           });
-          
+
           return {
             allowed: false,
             reason: 'IP not allowed',
             statusCode: 403
           };
         }
-        
+
         // Log successful IP validation for monitoring
         securityLogger.info('IP validation successful for CRON endpoint', {
           clientIP,
@@ -1023,7 +1024,7 @@ export class MiddlewareSecurity {
           matchedRange: ipValidation.matchedRange
         });
       }
-      
+
       // Step 3: Rate limiting
       const securityConfig = getSecurityConfig();
       const rateLimitConfig = securityConfig.rateLimits[endpointType];
@@ -1033,7 +1034,7 @@ export class MiddlewareSecurity {
         rateLimitConfig.limit,
         rateLimitConfig.windowMs
       );
-      
+
       if (!rateLimitResult.allowed) {
         await SecurityAuditor.logSecurityEvent('RATE_LIMIT_EXCEEDED', request, {
           clientIP,
@@ -1042,7 +1043,7 @@ export class MiddlewareSecurity {
           windowMs: rateLimitConfig.windowMs,
           remaining: rateLimitResult.remaining
         });
-        
+
         return {
           allowed: false,
           reason: 'Rate limit exceeded',
@@ -1055,12 +1056,12 @@ export class MiddlewareSecurity {
           }
         };
       }
-      
+
       // Step 4: MANDATORY Authentication for CRON endpoints (SINGLE METHOD ONLY)
       if (endpointType === 'CRON') {
         // SECURITY CRITICAL: Enforce single authentication method to prevent bypass
         // Only CRON_SECRET is supported - no fallbacks, no alternatives
-        
+
         // Validate required security configuration exists
         const cronSecret = process.env.CRON_SECRET;
         if (!cronSecret || cronSecret.length < 32) {
@@ -1068,45 +1069,45 @@ export class MiddlewareSecurity {
             error: 'CRON_SECRET not properly configured or too short',
             required_min_length: 32
           });
-          
+
           return {
             allowed: false,
             reason: 'Authentication not properly configured',
             statusCode: 500
           };
         }
-        
+
         // Extract and validate authorization header
         const authHeader = request.headers.get('authorization');
         if (!authHeader) {
           await SecurityAuditor.logSecurityEvent('MISSING_AUTH_HEADER', request, {
             reason: 'Missing Authorization header'
           });
-          
+
           return {
             allowed: false,
             reason: 'Missing Authorization header',
             statusCode: 401
           };
         }
-        
+
         // Validate Bearer token format
         if (!authHeader.startsWith('Bearer ')) {
           await SecurityAuditor.logSecurityEvent('INVALID_AUTH_FORMAT', request, {
             reason: 'Invalid Authorization header format'
           });
-          
+
           return {
             allowed: false,
             reason: 'Invalid Authorization header format',
             statusCode: 401
           };
         }
-        
+
         // Extract token and perform timing-safe comparison
         const providedToken = authHeader.slice(7); // Remove 'Bearer '
         const expectedToken = cronSecret;
-        
+
         // SECURITY CRITICAL: Always use timing-safe comparison to prevent timing attacks
         if (!this.timingSafeEqual(providedToken, expectedToken)) {
           await SecurityAuditor.logSecurityEvent('INVALID_CREDENTIALS', request, {
@@ -1114,14 +1115,14 @@ export class MiddlewareSecurity {
             token_length: providedToken.length,
             expected_length: expectedToken.length
           });
-          
+
           return {
             allowed: false,
             reason: 'Unauthorized',
             statusCode: 401
           };
         }
-        
+
         // Validate token meets security requirements
         if (providedToken.length < 32) {
           await SecurityAuditor.logSecurityEvent('WEAK_CREDENTIALS', request, {
@@ -1129,32 +1130,32 @@ export class MiddlewareSecurity {
             token_length: providedToken.length,
             required_min_length: 32
           });
-          
+
           return {
             allowed: false,
             reason: 'Invalid credentials',
             statusCode: 401
           };
         }
-        
+
         // Additional security headers validation for CRON requests
         const contentType = request.headers.get('content-type');
         const userAgent = request.headers.get('user-agent');
-        
+
         // Validate required security headers are present
         if (contentType && !['application/json', 'text/plain'].some(valid => contentType.includes(valid))) {
           await SecurityAuditor.logSecurityEvent('INVALID_CONTENT_TYPE', request, {
             reason: 'Invalid Content-Type for CRON request',
             content_type: contentType
           });
-          
+
           return {
             allowed: false,
             reason: 'Invalid request format',
             statusCode: 400
           };
         }
-        
+
         // Log successful authentication with enhanced details
         await SecurityAuditor.logSecurityEvent('ACCESS_GRANTED', request, {
           auth_method: 'cron_secret_only',
@@ -1164,7 +1165,7 @@ export class MiddlewareSecurity {
           user_agent: userAgent || 'unknown'
         });
       }
-      
+
       // Step 5: Final security validation and response preparation
       const responseHeaders = {
         ...securityConfig.securityHeaders,
@@ -1180,7 +1181,7 @@ export class MiddlewareSecurity {
           'X-Frame-Options': 'DENY'
         } : {})
       };
-      
+
       // Log successful validation for non-CRON endpoints
       if (endpointType !== 'CRON') {
         await SecurityAuditor.logSecurityEvent('ACCESS_GRANTED', request, {
@@ -1189,7 +1190,7 @@ export class MiddlewareSecurity {
           security_level: 'standard'
         });
       }
-      
+
       // SECURITY: Final validation that all required security checks completed
       if (endpointType === 'CRON' && (!clientIP || clientIP === 'unknown')) {
         securityLogger.error('SECURITY VIOLATION: CRON request with unknown IP passed validation');
@@ -1199,15 +1200,15 @@ export class MiddlewareSecurity {
           statusCode: 500
         };
       }
-      
+
       return {
         allowed: true,
         responseHeaders
       };
-      
+
     } catch (error) {
       securityLogger.error('Security validation error', { error, clientIP, path: url.pathname });
-      
+
       // Fail secure - deny access on validation errors
       return {
         allowed: false,
