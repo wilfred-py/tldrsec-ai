@@ -15,7 +15,7 @@ import { sleep } from '../utils';
  * Default SEC EDGAR API configuration
  */
 const DEFAULT_CONFIG: SECEdgarConfig = {
-  userAgent: 'TLDRSEC-AI-App contact@example.com', // Should be updated with real contact info
+  userAgent: 'TLDRSEC wilfredchen1@gmail.com', // SEC compliant User-Agent format
   maxRequestsPerSecond: 10, // SEC fair access policy limit
   baseUrl: 'https://www.sec.gov',
   maxRetries: 3,

@@ -9,6 +9,6 @@ export const SEC_CONFIG = {
   PRIMARY_DOC_URL: (accessionNumber: string, cik: string, primaryDocument: string) => 
     `https://www.sec.gov/Archives/edgar/data/${cik}/${accessionNumber.replace(/-/g, '')}/${primaryDocument}`,
   HEADERS: {
-    'User-Agent': 'tldrsec.app contact@tldrsec.app'
+    'User-Agent': 'TLDRSEC wilfredchen1@gmail.com'
   }
 };
