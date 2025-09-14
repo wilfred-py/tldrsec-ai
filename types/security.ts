@@ -12,7 +12,13 @@ export type SecurityEventType =
   | 'IP_VALIDATION_FAILURE'
   | 'INVALID_API_KEY'
   | 'ACCESS_GRANTED'
-  | 'SUSPICIOUS_ACTIVITY';
+  | 'SUSPICIOUS_ACTIVITY'
+  | 'CONFIGURATION_ERROR'
+  | 'MISSING_AUTH_HEADER'
+  | 'INVALID_AUTH_FORMAT'
+  | 'INVALID_CREDENTIALS'
+  | 'WEAK_CREDENTIALS'
+  | 'INVALID_CONTENT_TYPE';
 
 // Endpoint types for different security profiles
 export type EndpointType = 'CRON' | 'HEALTH' | 'PUBLIC' | 'ADMIN' | 'API';
@@ -31,10 +37,10 @@ export interface RateLimitConfig {
 export interface SecurityConfig {
   // IP Allowlisting configuration
   allowedIPs: string[];
-  
+
   // Rate limiting configuration by endpoint type
   rateLimits: Record<EndpointType, RateLimitConfig>;
-  
+
   // Request signature validation
   signature: {
     algorithm: string;
@@ -42,10 +48,10 @@ export interface SecurityConfig {
     headerName: string;
     timestampHeader: string;
   };
-  
+
   // Security headers configuration
   securityHeaders: Record<string, string>;
-  
+
   // Additional security options
   enableIPValidation: boolean;
   enableSignatureValidation: boolean;
