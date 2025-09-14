@@ -279,10 +279,10 @@ export async function fetchSecCompanyRSS(cik: string): Promise<CompanyRSSFeed> {
     });
     
     // Railway-enhanced SEC fetch with detailed diagnostics
-    const isRailway = !!process.env.RAILWAY_PUBLIC_DOMAIN;
-    const userAgent = isRailway 
-      ? 'tldrSEC-AI Railway Monitor (contact@tldrsec.com)'
-      : 'tldrSEC-AI RSS Monitor (contact@tldrsec.com)';
+    const isRailway = !!process.env.RAILWAY_ENVIRONMENT;
+    const userAgent = isRailway
+      ? 'TLDRSEC wilfredchen1@gmail.com'
+      : 'TLDRSEC wilfredchen1@gmail.com';
     
     rssLogger.info(`[SEC-FETCH] Starting RSS fetch`, {
       cik: formattedCik,
