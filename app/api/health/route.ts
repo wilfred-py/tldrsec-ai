@@ -194,7 +194,7 @@ async function performPR173HealthChecks() {
     // 5. Environment Configuration
     checks.environment = {
       status: 'healthy',
-      deployment_platform: process.env.RAILWAY_ENVIRONMENT ? 'RAILWAY' : 'VERCEL',
+      deployment_platform: 'VERCEL',
       edge_runtime: typeof EdgeRuntime !== 'undefined',
       cron_secret_configured: !!process.env.CRON_SECRET,
       node_env: process.env.NODE_ENV

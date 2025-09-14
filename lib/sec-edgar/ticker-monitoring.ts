@@ -1,6 +1,6 @@
 import { getPrismaClient } from '../db/prisma';
 import { fetchSecCompanyRSS, generateSecRssUrl, type RSSFilingEntry } from './rss-parser';
-import { fetchCompanyFilingsUnified, isRailwayEnvironment } from './environment-aware-fetcher';
+import { fetchCompanyFilingsUnified, isDevelopmentEnvironment } from './environment-aware-fetcher';
 import { logger } from '../logging';
 import { upsertTickerMonitoringWithLock, updateTickerMonitoringWithLock, ConcurrencyOptions } from '../db/concurrency';
 
@@ -181,7 +181,7 @@ export async function checkTickerForNewFilings(ticker: ActiveTicker): Promise<RS
       symbol: ticker.symbol,
       lastChecked: ticker.lastChecked,
       lastAccessionSeen: ticker.lastAccessionSeen,
-      environment: isRailwayEnvironment() ? 'Railway' : 'Local'
+      environment: isDevelopmentEnvironment() ? 'Development' : 'Production'
     });
 
     // Use environment-aware fetcher (RSS for local, REST API for Railway)
@@ -274,7 +274,7 @@ export async function checkTickerForNewFilings(ticker: ActiveTicker): Promise<RS
       monitoringLogger.info(`Found ${newEntries.length} new filings for ${ticker.symbol}`, {
         cik: ticker.cik,
         fetchMethod: filingResponse.source,
-        environment: isRailwayEnvironment() ? 'Railway' : 'Local',
+        environment: isDevelopmentEnvironment() ? 'Development' : 'Production',
         companyName: filingResponse.companyName,
         newFilings: newEntries.map(e => ({
           accession: e.accessionNumber,

@@ -39,8 +39,8 @@ interface ProcessingStats {
  * Runs every 30 minutes during market hours (Mon-Fri 6am-10pm EST)
  */
 export async function GET(request: NextRequest) {
-  // Initialize monitoring - detect platform
-  const platform = process.env.RAILWAY_ENVIRONMENT ? 'RAILWAY_CRON' : 'VERCEL_CRON';
+  // Initialize monitoring for Vercel platform
+  const platform = 'VERCEL_CRON';
   const monitor = new CronJobMonitor('sec-filing-monitor', platform);
   
   try {

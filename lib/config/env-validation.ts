@@ -30,7 +30,7 @@ export interface AppConfig {
     clerkPublishableKey?: string;
   };
   platform: {
-    name: 'RAILWAY' | 'VERCEL' | 'DEVELOPMENT';
+    name: 'VERCEL' | 'DEVELOPMENT';
     environment: 'production' | 'development' | 'test';
     isProduction: boolean;
     isDevelopment: boolean;
@@ -80,11 +80,9 @@ export function validateEnvironment(): AppConfig {
   }
 
   // Determine platform
-  const platform: AppConfig['platform']['name'] = process.env.RAILWAY_ENVIRONMENT 
-    ? 'RAILWAY' 
-    : process.env.VERCEL_ENV 
-      ? 'VERCEL' 
-      : 'DEVELOPMENT';
+  const platform: AppConfig['platform']['name'] = process.env.VERCEL_ENV 
+    ? 'VERCEL' 
+    : 'DEVELOPMENT';
 
   const environment = (process.env.NODE_ENV || 'development') as 'production' | 'development' | 'test';
 
@@ -262,9 +260,6 @@ export function validateRuntimeEnvironment(): {
     }
 
     // Platform-specific checks
-    if (config.platform.name === 'RAILWAY' && !process.env.RAILWAY_ENVIRONMENT) {
-      warnings.push('Platform detected as Railway but RAILWAY_ENVIRONMENT not set');
-    }
     if (config.platform.name === 'VERCEL' && !process.env.VERCEL_ENV) {
       warnings.push('Platform detected as Vercel but VERCEL_ENV not set');
     }

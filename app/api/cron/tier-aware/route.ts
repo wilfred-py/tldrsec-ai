@@ -125,8 +125,8 @@ export async function GET(request: NextRequest) {
   // DEBUG: Start logging immediately
   cronLogger.debug('Checkpoint 0: GET function entry');
   
-  // Initialize monitoring with platform detection using factory pattern
-  const platform = process.env.RAILWAY_ENVIRONMENT ? 'RAILWAY_CRON' : 'VERCEL_CRON';
+  // Initialize monitoring for Vercel platform
+  const platform = 'VERCEL_CRON';
   cronLogger.debug('Checkpoint 0.1: Platform determined', { platform });
   let monitor: CronJobMonitor;
   

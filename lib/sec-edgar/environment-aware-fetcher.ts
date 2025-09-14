@@ -1,13 +1,12 @@
 /**
  * Environment-Aware SEC Filing Fetcher
- * Automatically routes to RSS (local) or REST API (Railway) based on environment
+ * Automatically routes to RSS (local) or REST API (production) based on environment
  * Provides unified interface for seamless integration with existing code
  */
 
 import { logger } from '../logging';
-import { fetchSecCompanyRSS, type CompanyRSSFeed } from './rss-parser';
-import { fetchCompanyFilingsByTicker } from './railway-safe-fetcher';
-import type { RSSFilingEntry } from './rss-parser';
+import { fetchSecCompanyRSS, type CompanyRSSFeed, type RSSFilingEntry } from './rss-parser';
+import { findCompanyByTicker, getCompanyFilings } from '../../services/companyService';
 
 const envLogger = logger.child('environment-aware-fetcher');
 
@@ -22,30 +21,18 @@ export interface UnifiedFilingResponse {
 }
 
 /**
- * Detect if we're running in Railway environment
+ * Detect if we're running in development environment
  */
-export function isRailwayEnvironment(): boolean {
-  return !!(
-    process.env.RAILWAY_ENVIRONMENT || 
-    process.env.RAILWAY_PUBLIC_DOMAIN ||
-    process.env.RAILWAY_PROJECT_ID
-  );
+export function isDevelopmentEnvironment(): boolean {
+  return process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test';
 }
 
 /**
  * Detect if we should use RSS feeds 
- * CRITICAL FIX: RSS monitoring does NOT work in Railway - SEC gives errors
- * Railway must use REST API, local can use RSS
+ * RSS for local development, REST API for production
  */
 export function shouldUseRSSFeeds(): boolean {
-  const isLocal = process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test';
-  const isRailway = isRailwayEnvironment();
-  
-  // CRITICAL: RSS monitoring does NOT work in Railway (SEC website gives errors)
-  // Use REST API for Railway, RSS for local development
-  if (isRailway) {
-    return false; // Use REST API in Railway since RSS monitoring fails
-  }
+  const isDev = isDevelopmentEnvironment();
   
   // Allow manual override via environment variable
   if (process.env.FORCE_SEC_REST_API === 'true') {
@@ -56,8 +43,8 @@ export function shouldUseRSSFeeds(): boolean {
     return true;
   }
   
-  // Default: use RSS for local development, REST API gets used for Railway above
-  return isLocal; // RSS for local, REST API for Railway
+  // Default: use RSS for development, REST API for production
+  return isDev;
 }
 
 /**
@@ -69,14 +56,14 @@ export async function fetchCompanyFilingsUnified(
   limit: number = 10
 ): Promise<UnifiedFilingResponse> {
   const useRSS = shouldUseRSSFeeds();
-  const environment = isRailwayEnvironment() ? 'Railway' : 'Local';
+  const environment = isDevelopmentEnvironment() ? 'Development' : 'Production';
   
   envLogger.info('Fetching company filings with environment-aware routing', {
     input: cikOrTicker,
     limit,
     useRSS,
     environment,
-    isRailway: isRailwayEnvironment()
+    isDev: isDevelopmentEnvironment()
   });
 
   try {
@@ -138,25 +125,16 @@ async function fetchViaRSS(cik: string, limit: number): Promise<UnifiedFilingRes
 }
 
 /**
- * Fetch using SEC EDGAR REST API (for Railway and production)
+ * Fetch using SEC EDGAR REST API (for production)
  */
 async function fetchViaRestAPI(tickerOrCik: string, limit: number): Promise<UnifiedFilingResponse> {
   envLogger.debug('Fetching via SEC EDGAR REST API', { tickerOrCik, limit });
   
   try {
-    // Use the Railway-safe fetcher with ticker resolution
-    const result = await fetchCompanyFilingsByTicker(tickerOrCik, limit);
+    // Use existing company service to fetch filings
+    const company = await findCompanyByTicker(tickerOrCik);
     
-    if (result.success) {
-      return {
-        success: true,
-        cik: result.cik || 'unknown',
-        companyName: result.companyName,
-        entries: result.filings,
-        lastUpdated: new Date(),
-        source: 'rest-api'
-      };
-    } else {
+    if (!company) {
       return {
         success: false,
         cik: 'unknown',
@@ -164,9 +142,31 @@ async function fetchViaRestAPI(tickerOrCik: string, limit: number): Promise<Unif
         entries: [],
         lastUpdated: new Date(),
         source: 'rest-api',
-        error: result.error
+        error: `Company not found for ticker/CIK: ${tickerOrCik}`
       };
     }
+    
+    const filingsResult = await getCompanyFilings(company);
+    
+    // Convert SecFiling[] to RSSFilingEntry[] format
+    const limitedFilings = limit > 0 ? filingsResult.recentFilings.slice(0, limit) : filingsResult.recentFilings;
+    const entries: RSSFilingEntry[] = limitedFilings.map(filing => ({
+      accessionNumber: filing.accessionNumber,
+      filingType: filing.form,
+      filingDate: new Date(filing.filingDate),
+      filingUrl: filing.filingUrl,
+      rssEntryDate: new Date(filing.filingDate),
+      title: `${filing.form} - ${company.name}`
+    }));
+    
+    return {
+      success: true,
+      cik: company.cik,
+      companyName: company.name,
+      entries: entries,
+      lastUpdated: new Date(),
+      source: 'rest-api'
+    };
   } catch (error) {
     envLogger.error('REST API fetch failed', {
       tickerOrCik,
@@ -199,7 +199,7 @@ export async function fetchMultipleCompanyFilingsUnified(
     inputCount: inputs.length,
     limit,
     useRSS,
-    environment: isRailwayEnvironment() ? 'Railway' : 'Local'
+    environment: isDevelopmentEnvironment() ? 'Development' : 'Production'
   });
 
   // Process with appropriate concurrency based on source
@@ -250,7 +250,7 @@ export async function testEnvironmentFilingFetch(): Promise<{
   error?: string;
 }> {
   const useRSS = shouldUseRSSFeeds();
-  const environment = isRailwayEnvironment() ? 'Railway' : 'Local';
+  const environment = isDevelopmentEnvironment() ? 'Development' : 'Production';
   
   envLogger.info('Testing environment filing fetch capability', {
     environment,
