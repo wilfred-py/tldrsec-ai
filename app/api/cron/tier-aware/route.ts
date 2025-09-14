@@ -103,24 +103,8 @@ const DAILY_COST_LIMITS = {
 // Security constants - reserved for future cost validation
 // const MAX_COST_PER_OPERATION = 10.0; // Maximum cost allowed per operation
 
-/**
- * Timing-safe string comparison to prevent timing attacks
- */
-function timingSafeEqual(a: string, b: string): boolean {
-  if (a.length !== b.length) {
-    return false;
-  }
-  
-  const encoder = new TextEncoder();
-  const aBytes = encoder.encode(a);
-  const bBytes = encoder.encode(b);
-  
-  let result = 0;
-  for (let i = 0; i < aBytes.length; i++) {
-    result |= aBytes[i] ^ bBytes[i];
-  }
-  return result === 0;
-}
+// NOTE: Timing-safe string comparison is now handled by MiddlewareSecurity.timingSafeEqual()
+// This provides defense-in-depth security validation at the middleware level
 
 // Cost validation is now handled by the dedicated cost-validation module
 

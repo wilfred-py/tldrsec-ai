@@ -12,7 +12,13 @@ export type SecurityEventType =
   | 'IP_VALIDATION_FAILURE'
   | 'INVALID_API_KEY'
   | 'ACCESS_GRANTED'
-  | 'SUSPICIOUS_ACTIVITY';
+  | 'SUSPICIOUS_ACTIVITY'
+  | 'CONFIGURATION_ERROR'
+  | 'MISSING_AUTH_HEADER'
+  | 'INVALID_AUTH_FORMAT'
+  | 'INVALID_CREDENTIALS'
+  | 'WEAK_CREDENTIALS'
+  | 'INVALID_CONTENT_TYPE';
 
 // Endpoint types for different security profiles
 export type EndpointType = 'CRON' | 'HEALTH' | 'PUBLIC' | 'ADMIN' | 'API';

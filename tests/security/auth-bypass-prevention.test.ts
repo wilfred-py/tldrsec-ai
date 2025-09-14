@@ -8,6 +8,67 @@
 import { NextRequest } from 'next/server';
 import { GET } from '../../app/api/cron/tier-aware/route';
 
+// Mock dependencies similar to cron-security.test.ts
+jest.mock('../../lib/monitoring/cron-monitor', () => ({
+  CronJobMonitor: {
+    create: jest.fn().mockResolvedValue({
+      complete: jest.fn().mockResolvedValue({ executionId: 'test', duration: 100 }),
+      recordMetric: jest.fn().mockResolvedValue(undefined),
+      updateMetrics: jest.fn().mockResolvedValue(undefined)
+    })
+  }
+}));
+
+jest.mock('../../lib/db/prisma', () => ({
+  getPrismaClient: jest.fn(() => ({
+    user: {
+      findMany: jest.fn().mockResolvedValue([]),
+      findUnique: jest.fn().mockResolvedValue(null),
+      updateMany: jest.fn().mockResolvedValue({ count: 0 })
+    }
+  }))
+}));
+
+jest.mock('../../lib/security/rate-limiter', () => ({
+  rateLimiter: {
+    checkLimit: jest.fn().mockResolvedValue({ 
+      allowed: true, 
+      remaining: 100, 
+      resetTime: Date.now() + 60000 
+    })
+  }
+}));
+
+jest.mock('../../lib/security/cloudflare-ip-service', () => ({
+  cloudflareIPService: {
+    isCloudflareIP: jest.fn().mockResolvedValue(false),
+    getMetrics: jest.fn().mockReturnValue({ total_requests: 0, cache_hits: 0 })
+  }
+}));
+
+jest.mock('../../lib/security/security-monitoring', () => ({
+  securityMonitoring: {
+    recordSecurityEvent: jest.fn(),
+    isUnderAttack: jest.fn().mockReturnValue(false),
+    getThreatSummary: jest.fn().mockReturnValue({ ip_validation_failures: 0, blocked_ips: [] })
+  }
+}));
+
+jest.mock('../../lib/cron/market-hours', () => ({
+  getMarketHoursContext: jest.fn().mockReturnValue({
+    isMarketHours: false,
+    isMarketDay: true,
+    isHoliday: false,
+    currentTime: new Date()
+  }),
+  getUserProcessingStatuses: jest.fn().mockReturnValue([]),
+  getEligibleUsers: jest.fn().mockReturnValue([])
+}));
+
+jest.mock('../../lib/sec-edgar/ticker-monitoring', () => ({
+  getActiveTickersForMonitoring: jest.fn().mockResolvedValue([])
+}));
+
 describe('SECURITY: Authentication Bypass Prevention', () => {
   const originalEnv = process.env;
 
@@ -30,7 +91,7 @@ describe('SECURITY: Authentication Bypass Prevention', () => {
     it('should NEVER bypass authentication in development environment', async () => {
       // Set development environment
       process.env.NODE_ENV = 'development';
-      process.env.CRON_SECRET = 'test-secret-key';
+      process.env.CRON_SECRET = 'test-secret-key-with-proper-length-32chars-min-security-requirement';
 
       // Mock request from localhost without auth header
       const request = new NextRequest('http://localhost:3000/api/cron/tier-aware', {
@@ -50,12 +111,12 @@ describe('SECURITY: Authentication Bypass Prevention', () => {
 
       // CRITICAL: Must return 401 unauthorized - NO BYPASSES ALLOWED
       expect(response.status).toBe(401);
-      expect(responseData.error).toBe('Unauthorized');
+      expect(responseData.error).toBe('Missing Authorization header');
     });
 
     it('should NEVER bypass authentication for localhost requests', async () => {
       process.env.NODE_ENV = 'development';
-      process.env.CRON_SECRET = 'test-secret-key';
+      process.env.CRON_SECRET = 'test-secret-key-with-proper-length-32chars-min-security-requirement';
 
       const localhostIPs = ['127.0.0.1', '::1', 'localhost'];
 
@@ -72,13 +133,13 @@ describe('SECURITY: Authentication Bypass Prevention', () => {
 
         // CRITICAL: Must return 401 - no localhost bypasses
         expect(response.status).toBe(401);
-        expect(responseData.error).toBe('Unauthorized');
+        expect(responseData.error).toBe('Missing Authorization header');
       }
     });
 
     it('should NEVER bypass authentication in test environment', async () => {
       process.env.NODE_ENV = 'test';
-      process.env.CRON_SECRET = 'test-secret-key';
+      process.env.CRON_SECRET = 'test-secret-key-with-proper-length-32chars-min-security-requirement';
 
       const request = new NextRequest('http://localhost:3000/api/cron/tier-aware', {
         headers: {
@@ -90,14 +151,14 @@ describe('SECURITY: Authentication Bypass Prevention', () => {
       const responseData = await response.json();
 
       expect(response.status).toBe(401);
-      expect(responseData.error).toBe('Unauthorized');
+      expect(responseData.error).toBe('Missing Authorization header');
     });
 
     it('should NEVER bypass authentication for any environment variable combination', async () => {
       const environments = ['development', 'test', 'production', 'staging'];
       const ips = ['127.0.0.1', '::1', 'localhost', '192.168.1.1', '10.0.0.1'];
 
-      process.env.CRON_SECRET = 'test-secret-key';
+      process.env.CRON_SECRET = 'test-secret-key-with-proper-length-32chars-min-security-requirement';
 
       for (const env of environments) {
         process.env.NODE_ENV = env;
@@ -115,7 +176,7 @@ describe('SECURITY: Authentication Bypass Prevention', () => {
 
           // SECURITY: Every combination must require authentication
           expect(response.status).toBe(401);
-          expect(responseData.error).toBe('Unauthorized');
+          expect(responseData.error).toBe('Missing Authorization header');
         }
       }
     });
@@ -123,12 +184,12 @@ describe('SECURITY: Authentication Bypass Prevention', () => {
 
   describe('Mandatory Authentication Requirements', () => {
     it('should require valid Bearer token for all requests', async () => {
-      process.env.CRON_SECRET = 'valid-secret-key';
+      process.env.CRON_SECRET = 'valid-secret-key-with-proper-length-32chars-min-security-requirement';
       process.env.NODE_ENV = 'production';
 
       const request = new NextRequest('http://localhost:3000/api/cron/tier-aware', {
         headers: {
-          'authorization': 'Bearer valid-secret-key',
+          'authorization': 'Bearer valid-secret-key-with-proper-length-32chars-min-security-requirement',
           'x-forwarded-for': '127.0.0.1'
         }
       });
@@ -142,12 +203,12 @@ describe('SECURITY: Authentication Bypass Prevention', () => {
     });
 
     it('should reject requests with invalid Bearer token', async () => {
-      process.env.CRON_SECRET = 'valid-secret-key';
+      process.env.CRON_SECRET = 'valid-secret-key-with-proper-length-32chars-min-security-requirement';
       
       const request = new NextRequest('http://localhost:3000/api/cron/tier-aware', {
         headers: {
           'authorization': 'Bearer invalid-secret-key',
-          'x-forwarded-for': '1.2.3.4'
+          'x-forwarded-for': '127.0.0.1'
         }
       });
 
@@ -159,11 +220,11 @@ describe('SECURITY: Authentication Bypass Prevention', () => {
     });
 
     it('should reject requests without authorization header', async () => {
-      process.env.CRON_SECRET = 'valid-secret-key';
+      process.env.CRON_SECRET = 'valid-secret-key-with-proper-length-32chars-min-security-requirement';
       
       const request = new NextRequest('http://localhost:3000/api/cron/tier-aware', {
         headers: {
-          'x-forwarded-for': '1.2.3.4'
+          'x-forwarded-for': '127.0.0.1'
         }
       });
 
@@ -171,7 +232,7 @@ describe('SECURITY: Authentication Bypass Prevention', () => {
       const responseData = await response.json();
 
       expect(response.status).toBe(401);
-      expect(responseData.error).toBe('Unauthorized');
+      expect(responseData.error).toBe('Missing Authorization header');
     });
 
     it('should return 500 if CRON_SECRET is not configured', async () => {
@@ -181,7 +242,7 @@ describe('SECURITY: Authentication Bypass Prevention', () => {
       const request = new NextRequest('http://localhost:3000/api/cron/tier-aware', {
         headers: {
           'authorization': 'Bearer any-token',
-          'x-forwarded-for': '1.2.3.4'
+          'x-forwarded-for': '127.0.0.1'
         }
       });
 
@@ -189,7 +250,7 @@ describe('SECURITY: Authentication Bypass Prevention', () => {
       const responseData = await response.json();
 
       expect(response.status).toBe(500);
-      expect(responseData.error).toBe('Server configuration error');
+      expect(responseData.error).toBe('Authentication not properly configured');
     });
   });
 
@@ -206,7 +267,7 @@ describe('SECURITY: Authentication Bypass Prevention', () => {
 
       const request = new NextRequest('http://localhost:3000/api/cron/tier-aware', {
         headers: {
-          'x-forwarded-for': '1.2.3.4'
+          'x-forwarded-for': '127.0.0.1'
         }
       });
 
@@ -235,7 +296,7 @@ describe('SECURITY: Authentication Bypass Prevention', () => {
         const request = new NextRequest('http://localhost:3000/api/cron/tier-aware', {
           headers: {
             'authorization': `Bearer ${token}`,
-            'x-forwarded-for': '1.2.3.4'
+            'x-forwarded-for': '127.0.0.1'
           }
         });
 

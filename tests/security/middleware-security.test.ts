@@ -8,7 +8,7 @@ import { describe, it, expect, beforeEach, afterEach, jest } from '@jest/globals
 // Set environment variables before module imports
 process.env.NODE_ENV = 'test';
 process.env.CRON_ALLOWED_IPS = '203.0.113.1,198.51.100.0/24';
-process.env.CRON_SECRET = 'test-secret-key';
+process.env.CRON_SECRET = 'test-secret-key-with-proper-length-32chars-min-security-requirement';
 process.env.CRON_SIGNATURE_SECRET = 'test-signature-secret';
 process.env.CRON_API_KEYS = 'tldr_test123456789012345678901234,tldr_test987654321098765432109876';
 process.env.DATABASE_URL = 'postgresql://test:test@localhost:5432/testdb';
@@ -107,7 +107,7 @@ describe('Middleware Security System', () => {
   afterEach(() => {
     // Restore environment variables for subsequent tests
     process.env.CRON_ALLOWED_IPS = '203.0.113.1,198.51.100.0/24';
-    process.env.CRON_SECRET = 'test-secret-key';
+    process.env.CRON_SECRET = 'test-secret-key-with-proper-length-32chars-min-security-requirement';
     process.env.CRON_SIGNATURE_SECRET = 'test-signature-secret';
     process.env.CRON_API_KEYS = 'tldr_test123456789012345678901234,tldr_test987654321098765432109876';
   });

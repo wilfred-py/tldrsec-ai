@@ -59,6 +59,33 @@ jest.mock('../../lib/security/rate-limiter', () => ({
   }
 }));
 
+// Mock cloudflare IP service
+jest.mock('../../lib/security/cloudflare-ip-service', () => ({
+  cloudflareIPService: {
+    isCloudflareIP: jest.fn().mockResolvedValue(false),
+    getMetrics: jest.fn().mockReturnValue({
+      total_requests: 0,
+      cache_hits: 0,
+      cache_misses: 0,
+      api_requests: 0,
+      avg_response_time: 0
+    })
+  }
+}));
+
+// Mock security monitoring
+jest.mock('../../lib/security/security-monitoring', () => ({
+  securityMonitoring: {
+    recordSecurityEvent: jest.fn(),
+    isUnderAttack: jest.fn().mockReturnValue(false),
+    getThreatSummary: jest.fn().mockReturnValue({
+      ip_validation_failures: 0,
+      blocked_ips: [],
+      suspicious_activity_count: 0
+    })
+  }
+}));
+
 jest.mock('../../services/filing/summaryGenerationService', () => ({
   generateAISummaryWithRetry: jest.fn().mockResolvedValue({
     summary: 'Test summary',
@@ -92,8 +119,8 @@ describe('Cron Endpoint Security Tests', () => {
   beforeEach(() => {
     jest.resetAllMocks();
     process.env = { ...originalEnv };
-    process.env.CRON_SECRET = 'test-secret-key';
-    process.env.CRON_SIGNATURE_SECRET = 'test-signature-secret';
+    process.env.CRON_SECRET = 'test-secret-key-with-proper-length-32chars-min-security-requirement';
+    process.env.CRON_SIGNATURE_SECRET = 'test-signature-secret-with-proper-length-32chars-min-requirement';
     process.env.DATABASE_URL = 'postgresql://test:test@localhost:5432/testdb';
     process.env.NODE_ENV = 'test';
     // Ensure JEST_WORKER_ID is set for test environment detection
@@ -179,7 +206,7 @@ describe('Cron Endpoint Security Tests', () => {
       const request = new NextRequest('http://localhost:3000/api/cron/tier-aware', {
         method: 'GET',
         headers: {
-          'authorization': 'Bearer test-secret-key',
+          'authorization': 'Bearer test-secret-key-with-proper-length-32chars-min-security-requirement',
           'x-forwarded-for': '127.0.0.1'
         }
       });
@@ -222,8 +249,8 @@ describe('Cron Endpoint Security Tests', () => {
 
   describe('Timing Attack Prevention', () => {
     test('SECURITY: Must use timing-safe comparison for authorization', async () => {
-      const validToken = 'Bearer test-secret-key';
-      const invalidToken = 'Bearer test-secret-keyX'; // One character different
+      const validToken = 'Bearer test-secret-key-with-proper-length-32chars-min-security-requirement';
+      const invalidToken = 'Bearer test-secret-key-with-proper-length-32chars-min-security-requirementX'; // One character different
       
       // Both requests should take similar time and return same error
       const request1 = new NextRequest('http://localhost:3000/api/cron/tier-aware', {
@@ -272,7 +299,7 @@ describe('Cron Endpoint Security Tests', () => {
       const request = new NextRequest('http://localhost:3000/api/cron/tier-aware', {
         method: 'GET',
         headers: {
-          'authorization': 'Bearer test-secret-key',
+          'authorization': 'Bearer test-secret-key-with-proper-length-32chars-min-security-requirement',
           'x-forwarded-for': '127.0.0.1'
         }
       });
@@ -292,7 +319,7 @@ describe('Cron Endpoint Security Tests', () => {
       const request = new NextRequest('http://localhost:3000/api/cron/tier-aware', {
         method: 'GET',
         headers: {
-          'authorization': 'Bearer test-secret-key',
+          'authorization': 'Bearer test-secret-key-with-proper-length-32chars-min-security-requirement',
           'x-forwarded-for': '127.0.0.1' // Not in allowlist
         }
       });
@@ -310,7 +337,7 @@ describe('Cron Endpoint Security Tests', () => {
       const request = new NextRequest('http://localhost:3000/api/cron/tier-aware', {
         method: 'GET',
         headers: {
-          'authorization': 'Bearer test-secret-key',
+          'authorization': 'Bearer test-secret-key-with-proper-length-32chars-min-security-requirement',
           'x-forwarded-for': '127.0.0.1' // In allowlist
         }
       });
@@ -333,7 +360,7 @@ describe('Cron Endpoint Security Tests', () => {
         const request = new NextRequest('http://localhost:3000/api/cron/tier-aware', {
           method: 'GET',
           headers: {
-            'authorization': 'Bearer test-secret-key',
+            'authorization': 'Bearer test-secret-key-with-proper-length-32chars-min-security-requirement',
             [test.header]: test.value
           }
         });
