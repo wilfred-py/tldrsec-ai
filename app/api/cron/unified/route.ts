@@ -5,10 +5,10 @@ import { getMarketHoursContext } from '../../../../lib/cron/market-hours';
 const cronLogger = logger.child('unified-cron');
 
 /**
- * Unified cron endpoint for Railway's single cron limitation
+ * Unified cron endpoint for centralized scheduling management  
  * Always routes to tier-aware SEC filing monitoring since filings can be published 24/7
  * Market context affects processing frequency, not whether to process
- * Runs every 5 minutes continuously
+ * Can be called by various cron services (Cloudflare Workers, Vercel Cron, etc.)
  */
 export async function GET(request: NextRequest) {
   const startTime = Date.now();

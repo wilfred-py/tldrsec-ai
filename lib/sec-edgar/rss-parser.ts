@@ -278,11 +278,8 @@ export async function fetchSecCompanyRSS(cik: string): Promise<CompanyRSSFeed> {
       validationMetadata: validation.metadata 
     });
     
-    // Railway-enhanced SEC fetch with detailed diagnostics
-    const isRailway = !!process.env.RAILWAY_ENVIRONMENT;
-    const userAgent = isRailway
-      ? 'TLDRSEC wilfredchen1@gmail.com'
-      : 'TLDRSEC wilfredchen1@gmail.com';
+    // SEC-compliant user agent for all requests
+    const userAgent = 'TLDRSEC wilfredchen1@gmail.com';
     
     rssLogger.info(`[SEC-FETCH] Starting RSS fetch`, {
       cik: formattedCik,
@@ -330,7 +327,6 @@ export async function fetchSecCompanyRSS(cik: string): Promise<CompanyRSSFeed> {
     return await parseSecCompanyRSS(xmlContent, formattedCik);
 
   } catch (error) {
-    const isRailway = !!process.env.RAILWAY_PUBLIC_DOMAIN;
     const errorDetails = {
       error: error instanceof Error ? error.message : String(error),
       stack: error instanceof Error ? error.stack : undefined,
@@ -338,8 +334,6 @@ export async function fetchSecCompanyRSS(cik: string): Promise<CompanyRSSFeed> {
       originalCik: cik,
       formattedCik,
       environment: process.env.NODE_ENV,
-      isRailway,
-      railwayDomain: process.env.RAILWAY_PUBLIC_DOMAIN,
       errorType: error instanceof TypeError ? 'NetworkError' : 
                  error instanceof Error && error.name === 'AbortError' ? 'TimeoutError' :
                  error instanceof SyntaxError ? 'ParseError' : 'UnknownError',
@@ -348,22 +342,19 @@ export async function fetchSecCompanyRSS(cik: string): Promise<CompanyRSSFeed> {
     
     rssLogger.error(`[SEC-FETCH] Failed to fetch RSS feed for CIK ${formattedCik}`, errorDetails);
     
-    // Railway-specific debugging
-    if (isRailway) {
-      rssLogger.error(`[RAILWAY-DEBUG] SEC connectivity issue detected`, {
-        possibleCauses: [
-          'Railway IP range blocked by SEC.gov',
-          'DNS resolution failure for sec.gov',
-          'Firewall/egress restrictions',
-          'SEC rate limiting Railway IPs',
-          'SSL/TLS certificate issues'
-        ],
-        troubleshooting: {
-          testEndpoint: '/api/debug/sec-connectivity?cik=' + formattedCik,
-          railwayDomain: process.env.RAILWAY_PUBLIC_DOMAIN
-        }
-      });
-    }
+    // General SEC connectivity debugging
+    rssLogger.error(`[SEC-DEBUG] SEC connectivity issue detected`, {
+      possibleCauses: [
+        'IP range blocked by SEC.gov',
+        'DNS resolution failure for sec.gov',
+        'Network/firewall restrictions',
+        'SEC rate limiting',
+        'SSL/TLS certificate issues'
+      ],
+      troubleshooting: {
+        testEndpoint: '/api/debug/sec-connectivity?cik=' + formattedCik
+      }
+    });
     
     throw error;
   }

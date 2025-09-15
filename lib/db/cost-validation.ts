@@ -47,7 +47,7 @@ const EnvironmentUtils = {
   isProduction: () => process.env.NODE_ENV === 'production',
   isTest: () => process.env.NODE_ENV === 'test' || process.env.JEST_WORKER_ID !== undefined,
   isDevelopment: () => process.env.NODE_ENV === 'development',
-  isRailway: () => !!process.env.RAILWAY_ENVIRONMENT
+  isCloudflare: () => !!process.env.CF_RAY
 };
 
 /**

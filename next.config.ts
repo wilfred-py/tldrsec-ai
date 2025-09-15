@@ -15,7 +15,7 @@ const nextConfig: NextConfig = {
   // Environment-specific configuration
   env: {
     // Platform detection for monitoring
-    DEPLOYMENT_PLATFORM: process.env.RAILWAY_ENVIRONMENT ? 'RAILWAY' : 'VERCEL',
+    DEPLOYMENT_PLATFORM: 'VERCEL',
   },
   
   // Headers for security and performance

@@ -9,7 +9,7 @@ const middlewareLogger = logger.child('security-middleware');
  * Production-grade security middleware with defense-in-depth protection
  * 
  * Security Controls Implemented:
- * 1. IP allowlisting for cron endpoints (Railway/Vercel + custom IPs)
+ * 1. IP allowlisting for cron endpoints (Cloudflare Workers/Vercel + custom IPs)
  * 2. HMAC-SHA256 request signature validation with timestamp verification
  * 3. API key authentication as fallback security layer
  * 4. Rate limiting with circuit breaker pattern and emergency fallback
@@ -164,7 +164,7 @@ export default clerkMiddleware(
       '/api/health/liveness',
       '/api/health/readiness',
       '/api/health/optimized',
-      '/api/health/railway-cron',
+      '/api/health/cloudflare-worker',
       '/api/debug/sec-connectivity',
       
       // Marketing pages

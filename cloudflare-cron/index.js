@@ -2,7 +2,7 @@
 
 export default {
   async scheduled(event, env, ctx) {
-    // Point directly to tier-aware endpoint (bypassing unified router since Railway has single cron limitation)
+    // Point directly to tier-aware endpoint for Cloudflare Worker cron execution
     const url = `${env.PUBLIC_URL}/api/cron/tier-aware`;
     try {
       const response = await fetch(url, {
