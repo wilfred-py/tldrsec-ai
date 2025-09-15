@@ -5,14 +5,6 @@
 
 import { NextResponse } from 'next/server';
 import { stripe } from '../../../../lib/stripe';
-import { 
-  getUserSubscription 
-} from '../../../../services/filings/enhanced/subscriptionService';
-import {
-  getAuthenticatedUserId,
-  verifyUserExists,
-  SubscriptionAuthError
-} from '../../../../lib/auth/subscription-auth';
 
 /**
  * POST /api/billing/portal
@@ -20,6 +12,15 @@ import {
  */
 export async function POST() {
   try {
+    // Dynamic imports to avoid build-time database dependency
+    const { 
+      getUserSubscription 
+    } = await import('../../../../services/filings/enhanced/subscriptionService');
+    const {
+      getAuthenticatedUserId,
+      verifyUserExists
+    } = await import('../../../../lib/auth/subscription-auth');
+
     const userId = await getAuthenticatedUserId();
     await verifyUserExists(userId);
 
@@ -58,6 +59,9 @@ export async function POST() {
     });
 
   } catch (error) {
+    // Dynamic import for error handling
+    const { SubscriptionAuthError } = await import('../../../../lib/auth/subscription-auth');
+    
     if (error instanceof SubscriptionAuthError) {
       return NextResponse.json(
         { error: error.message },
@@ -75,8 +79,9 @@ export async function POST() {
 
 // Helper function to get the raw subscription record with Stripe data
 async function getUserSubscriptionRecord(userId: string) {
-  const { PrismaClient } = await import('@prisma/client');
-  const prisma = new PrismaClient();
+  // Dynamic import to avoid build-time database dependency
+  const { getPrismaClient } = await import('../../../../lib/db/prisma');
+  const prisma = getPrismaClient();
   
   try {
     return await prisma.userSubscription.findUnique({

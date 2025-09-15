@@ -67,12 +67,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ### Security Testing
 - `npm run test:security` - Run security test suite
 
-### Railway Deployment Commands
-- `railway status` - Check Railway service status
-- `railway logs` - View Railway deployment logs  
-- `railway variables` - List environment variables
-- `railway domain` - View Railway domain configuration
-- `node scripts/railway-cron.cjs` - Test cron script locally (requires env vars)
+### Cloudflare Workers Deployment Commands
+- `npx wrangler deploy` - Deploy Cloudflare Worker
+- `npx wrangler tail` - View Cloudflare Worker logs in real-time
+- `npx wrangler dev` - Test worker locally
+- `npx wrangler whoami` - Check current authentication status
 
 ### Vercel Deployment Commands  
 - `vercel` - Deploy to Vercel
@@ -103,22 +102,22 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **Vercel** (Primary): Hosts the web application for users
   - Domain: `https://tldrsec.app`
   - Serves user dashboard, authentication, API endpoints
-  - Handles SEC filing summarization pipeline via `/api/cron/unified`
+  - Handles SEC filing summarization pipeline via `/api/cron/tier-aware`
   - Connected to Neon PostgreSQL database
   - Available 24/7 for user interactions
 
-- **Railway** (Cron Only): Executes scheduled SEC filing monitoring
-  - Runs `node scripts/railway-cron.cjs` every 15 minutes
-  - Calls Vercel endpoint: `https://tldrsec.app/api/cron/unified`
-  - Exits after completion (allows Railway to restart for next cron)
-  - No web server or user-facing components
-  - Configured via Railway dashboard cron schedule: `*/15 * * * *`
+- **Cloudflare Workers** (Cron Only): Executes scheduled SEC filing monitoring
+  - Runs on Cloudflare's global edge network every 10 minutes
+  - Calls Vercel endpoint: `https://tldrsec.app/api/cron/tier-aware`
+  - Lightweight serverless execution model
+  - Zero cold start times and global distribution
+  - Configured via `wrangler.toml` cron schedule: `*/10 * * * *`
 
 #### Why This Architecture?
 - **Separation of Concerns**: Web serving vs scheduled tasks
-- **Cost Optimization**: Railway resources only used for cron execution
-- **Reliability**: Vercel provides excellent uptime for users
-- **Scalability**: Each service optimized for its specific role
+- **Cost Optimization**: Cloudflare Workers minimal cost for cron execution
+- **Global Distribution**: Cloudflare's edge network provides worldwide reliability
+- **Performance**: Zero cold starts and millisecond execution times
 
 ### Key Directory Structure
 
@@ -252,25 +251,36 @@ Required environment variables for E2E testing:
 - [ ] Environment variables are properly configured
 - [ ] No sensitive data in commit
 
-### Railway Cron-Only Service Configuration
+### Cloudflare Workers Cron Configuration
 
-**Railway Service Purpose:** Executes scheduled SEC filing monitoring by calling Vercel endpoint.
+**Cloudflare Worker Purpose:** Executes scheduled SEC filing monitoring by calling Vercel endpoint.
 
-**CRITICAL: Railway environment variables required:**
+**CRITICAL: Cloudflare Worker environment variables required:**
 
 ```bash
 CRON_SECRET=your_secure_cron_secret_here
 PUBLIC_URL=https://tldrsec.app  # Target Vercel endpoint
-# Database and API keys are handled by Vercel deployment
 ```
 
-**Railway service configuration (railway.toml):**
-- ✅ Start command: `node scripts/railway-cron.cjs`
-- ✅ Cron schedule: `*/15 * * * *` (Every 15 minutes)
-- ✅ Target endpoint: `https://tldrsec.app/api/cron/unified`
-- ✅ Service exits after completion to allow next scheduled run
+**Cloudflare Worker configuration (wrangler.toml):**
+- ✅ Worker script: `cloudflare-cron/index.js`
+- ✅ Cron schedule: `*/10 * * * *` (Every 10 minutes)
+- ✅ Target endpoint: `https://tldrsec.app/api/cron/tier-aware`
+- ✅ Zero cold starts and global edge execution
+- ✅ **Build-time database independence**: Worker builds without DATABASE_URL requirement
 
-**⚠️ WARNING: Test E2E pipeline against Vercel before Railway deployment**
+**⚠️ WARNING: Test E2E pipeline against Vercel before Cloudflare Worker deployment**
+
+#### Build Configuration Notes
+
+The codebase is configured to handle missing `DATABASE_URL` during Cloudflare Worker builds:
+
+1. **Prisma Client**: Gracefully skips initialization during build time when `DATABASE_URL` is unavailable
+2. **API Routes**: Use dynamic imports to defer database-dependent modules until runtime
+3. **Next.js Config**: Configured for standalone builds outside Vercel environment
+4. **Build Process**: Successfully builds even when database is unreachable
+
+This ensures Cloudflare Workers can be deployed independently without database connectivity during the build phase.
 
 ### Production Deployment Safety
 

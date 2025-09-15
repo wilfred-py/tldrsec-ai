@@ -14,6 +14,13 @@ const nextConfig = {
     strictNextHead: true,
     optimizePackageImports: ['@clerk/nextjs', 'lucide-react'],
   },
+  // Generate static pages where possible to avoid database dependencies during build
+  generateBuildId: async () => {
+    // Use a simple build ID to avoid external dependencies
+    return 'build-' + Date.now();
+  },
+  // Configure output to handle both static and dynamic routes appropriately
+  output: process.env.VERCEL ? undefined : 'standalone',
   serverExternalPackages: [],
   webpack: (config, { isServer, webpack }) => {
     if (!isServer) {
@@ -54,11 +61,13 @@ const nextConfig = {
       };
     }
 
-    // Suppress webpack warnings related to client reference manifests
+    // Suppress webpack warnings related to client reference manifests and build-time database errors
     config.ignoreWarnings = [
       ...(config.ignoreWarnings || []),
       /client-reference-manifest\.js/,
       /__NEXT_CLIENT_REFERENCE_MANIFEST__/,
+      /DATABASE_URL environment variable is not set/,
+      /Database not available during build time/,
     ];
 
     return config;

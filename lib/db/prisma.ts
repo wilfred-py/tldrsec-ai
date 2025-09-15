@@ -24,10 +24,13 @@ declare global {
  */
 
 // Use a singleton pattern to prevent connection pool exhaustion
-let prisma: PrismaClient
+let prisma: PrismaClient | undefined
 
-// Only initialize if DATABASE_URL is available to prevent build-time errors
-if (process.env.DATABASE_URL) {
+// Detect if we're in a build environment
+const isBuildTime = process.env.NODE_ENV === 'production' && !process.env.VERCEL && !process.env.DATABASE_URL
+
+// Only initialize if DATABASE_URL is available and not during build time
+if (process.env.DATABASE_URL && !isBuildTime) {
   if (process.env.NODE_ENV === 'production') {
     prisma = new PrismaClient({
       log: ['error', 'warn'],
@@ -53,15 +56,21 @@ if (process.env.DATABASE_URL) {
   }
 }
 
-// Export the singleton instance
+// Export the singleton instance - may be undefined during build time
 export { prisma }
 
 /**
  * Get the Prisma client instance with lazy loading pattern
  * This prevents build-time errors when the client hasn't been generated yet
  * @returns PrismaClient instance
+ * @throws Error if DATABASE_URL is not available and not in build mode
  */
 export function getPrismaClient(): PrismaClient {
+  // During build time, throw a more descriptive error
+  if (isBuildTime) {
+    throw new Error('Database not available during build time. This is expected for static generation.');
+  }
+  
   if (!prisma) {
     // Check if DATABASE_URL is available
     if (!process.env.DATABASE_URL) {
