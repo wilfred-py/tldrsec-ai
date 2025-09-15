@@ -6,8 +6,8 @@ import { getPrismaClient } from '@/lib/db/prisma';
 import { CircuitBreakerRegistry } from '@/lib/resilience/circuit-breaker';
 import { GlobalErrorHandler } from '@/lib/resilience/error-handling';
 
-// Enable Edge Runtime for this route specifically
-export const runtime = 'edge';
+// Note: Edge Runtime disabled due to ioredis compatibility in rate limiter
+// export const runtime = 'edge';
 
 // Component logger
 const componentLogger = logger.child('health-api');
