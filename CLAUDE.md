@@ -267,8 +267,20 @@ PUBLIC_URL=https://tldrsec.app  # Target Vercel endpoint
 - ✅ Cron schedule: `*/10 * * * *` (Every 10 minutes)
 - ✅ Target endpoint: `https://tldrsec.app/api/cron/tier-aware`
 - ✅ Zero cold starts and global edge execution
+- ✅ **Build-time database independence**: Worker builds without DATABASE_URL requirement
 
 **⚠️ WARNING: Test E2E pipeline against Vercel before Cloudflare Worker deployment**
+
+#### Build Configuration Notes
+
+The codebase is configured to handle missing `DATABASE_URL` during Cloudflare Worker builds:
+
+1. **Prisma Client**: Gracefully skips initialization during build time when `DATABASE_URL` is unavailable
+2. **API Routes**: Use dynamic imports to defer database-dependent modules until runtime
+3. **Next.js Config**: Configured for standalone builds outside Vercel environment
+4. **Build Process**: Successfully builds even when database is unreachable
+
+This ensures Cloudflare Workers can be deployed independently without database connectivity during the build phase.
 
 ### Production Deployment Safety
 
