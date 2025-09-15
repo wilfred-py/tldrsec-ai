@@ -26,26 +26,14 @@ const securityLogger = logger.child('middleware-security');
  */
 function getSecurityConfig(): SecurityConfig {
   return {
-    // IP Allowlisting - Railway/Vercel platform IPs and custom configured IPs
+    // IP Allowlisting - Vercel platform IPs and Cloudflare Workers (dynamic validation)
     allowedIPs: [
-      // Railway platform IPs (commonly used ranges)
-      '172.16.0.0/12',   // Private Railway network
-      '10.0.0.0/8',      // Private network range
-      '192.168.0.0/16',  // Private network range
-
-      // Railway uses Google Cloud Platform - add GCP cron service ranges
-      '35.235.0.0/16',   // Google Cloud US regions
-      '34.102.0.0/16',   // Google Cloud US-West
-      '35.247.0.0/16',   // Google Cloud US-Central
-      '34.68.0.0/16',    // Google Cloud additional ranges
-      '35.184.0.0/16',   // Google Cloud regional ranges
-
       // Vercel platform IPs (commonly used ranges)
       '76.76.19.0/24',   // Vercel cron service
       '76.76.21.0/24',   // Vercel infrastructure
 
-      // Cloudflare IP ranges (also dynamically fetched via cloudflareIPService)
-      // Static ranges for synchronous validation fallback
+      // Cloudflare IP ranges (static fallback - dynamic validation preferred)
+      // These are fallback ranges, live validation via cloudflareIPService is primary
       '173.245.48.0/20',   // Cloudflare
       '103.21.244.0/22',   // Cloudflare
       '103.22.200.0/22',   // Cloudflare
@@ -833,34 +821,34 @@ export class SecurityAuditor {
     const userAgent = request.headers.get('user-agent') || '';
     const url = new URL(request.url);
 
-    // Railway native cron whitelist - bypass suspicious activity detection
+    // Cloudflare Worker and legitimate cron service whitelist - bypass suspicious activity detection
     if (url.pathname.startsWith('/api/cron/')) {
-      // Check if this is a Railway native cron job
-      const clientIP = IPValidator.extractClientIP(request);
-
-      // Use a simpler approach - check if IP starts with known Railway network prefixes
-      const railwayNetworkPrefixes = ['10.', '172.', '192.168.'];
-
-      for (const prefix of railwayNetworkPrefixes) {
-        if (clientIP.startsWith(prefix)) {
-          // This is likely from Railway's infrastructure, allow it to bypass suspicious activity detection
-          return {
-            suspicious: false,
-            reasons: [],
-            riskScore: 0,
-            detectionRules: ['railway-cron-whitelist'],
-            recommendedAction: 'ALLOW'
-          };
-        }
+      // Check if this is a Cloudflare Worker request
+      const cfRay = request.headers.get('cf-ray');
+      const cfWorker = request.headers.get('cf-worker');
+      const cfConnectingIp = request.headers.get('cf-connecting-ip');
+      const xCloudflareWorker = request.headers.get('x-cloudflare-worker');
+      const xCronSource = request.headers.get('x-cron-source');
+      
+      if (cfRay || cfWorker || cfConnectingIp || xCloudflareWorker || xCronSource) {
+        // This is from Cloudflare infrastructure, allow it to bypass suspicious activity detection
+        return {
+          suspicious: false,
+          reasons: [],
+          riskScore: 0,
+          detectionRules: ['cloudflare-worker-whitelist'],
+          recommendedAction: 'ALLOW'
+        };
       }
 
-      // For cron endpoints, be more lenient with user agents since Railway native cron
+      // For cron endpoints, be more lenient with user agents since various cron services
       // might use different user agents than typical browser requests
       const legitCronUserAgents = [
-        /railway/i,
+        /cloudflare/i,
         /vercel/i,
         /github-actions/i,
-        /cron/i
+        /cron/i,
+        /tldrsec/i
       ];
 
       for (const pattern of legitCronUserAgents) {

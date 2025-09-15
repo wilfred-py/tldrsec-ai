@@ -10,7 +10,9 @@ export default {
         headers: {
           'Authorization': `Bearer ${env.CRON_SECRET}`,
           'Content-Type': 'application/json',
-          'User-Agent': 'TLDRSEC wilfredchen1@gmail.com'
+          'User-Agent': 'TLDRSEC-Cloudflare-Worker wilfredchen1@gmail.com',
+          'X-Cloudflare-Worker': 'tldrsec-cron',
+          'X-Cron-Source': 'cloudflare-worker'
         }
       });
       if (!response.ok) throw new Error(`Failed: ${response.status} ${response.statusText}`);
