@@ -2,12 +2,23 @@ import { logger } from '../logging';
 // Web Crypto API for Edge Runtime compatibility
 
 // Optional Redis dependency - will use in-memory fallback if not available
-let Redis: any;
-try {
-  Redis = require('ioredis').Redis;
-} catch (error) {
-  Redis = null;
-  logger.child('rate-limiter').info('Redis not available, using in-memory rate limiting');
+// Only import in Node.js runtime, not Edge Runtime
+let Redis: any = null;
+
+// Check if we're in Edge Runtime or Node.js runtime
+const isEdgeRuntime = typeof EdgeRuntime !== 'undefined' || 
+                      typeof globalThis.EdgeRuntime !== 'undefined' ||
+                      process.env.RUNTIME === 'edge';
+
+if (!isEdgeRuntime) {
+  try {
+    Redis = require('ioredis').Redis;
+  } catch (error) {
+    Redis = null;
+    logger.child('rate-limiter').info('Redis not available, using in-memory rate limiting');
+  }
+} else {
+  logger.child('rate-limiter').info('Edge Runtime detected, using in-memory rate limiting only');
 }
 
 const rateLimitLogger = logger.child('rate-limiter');
@@ -37,8 +48,8 @@ class RateLimiter {
   };
 
   constructor() {
-    // Initialize Redis if available, otherwise use in-memory cache
-    if (Redis && process.env.REDIS_URL) {
+    // Initialize Redis if available and not in Edge Runtime, otherwise use in-memory cache
+    if (Redis && process.env.REDIS_URL && !isEdgeRuntime) {
       try {
         this.redis = new Redis(process.env.REDIS_URL);
         rateLimitLogger.info('Rate limiter initialized with Redis');
