@@ -1,0 +1,264 @@
+# Runtime Compatibility Monitoring Configuration
+# DevOps configuration for monitoring Edge Runtime, database validation, and circuit breakers
+
+alerting:
+  # Critical alerts for runtime compatibility issues
+  critical:
+    - name: edge_runtime_crypto_failure
+      description: "Web Crypto API operations failing in Edge Runtime"
+      condition: "pr173_infrastructure.web_crypto.status != 'healthy'"
+      severity: critical
+      cooldown_minutes: 5
+      notification_channels: ["ops-alerts", "email"]
+      
+    - name: database_schema_validation_failure
+      description: "Database schema validation failing"
+      condition: "pr173_infrastructure.database_schema.status == 'unhealthy'"
+      severity: critical
+      cooldown_minutes: 5
+      notification_channels: ["ops-alerts", "email"]
+      
+    - name: circuit_breaker_open
+      description: "One or more circuit breakers are open"
+      condition: "resilience_systems.circuit_breakers.open > 0"
+      severity: critical
+      cooldown_minutes: 10
+      notification_channels: ["ops-alerts"]
+
+  # Warning alerts for performance and degradation
+  warning:
+    - name: health_check_performance_degraded
+      description: "Health check response time degraded"
+      condition: "response_time > 1000"
+      severity: warning
+      cooldown_minutes: 15
+      notification_channels: ["ops-warnings"]
+      
+    - name: rate_limiter_emergency_mode
+      description: "Rate limiter using emergency fallback"
+      condition: "rate_limiter.circuit_breaker.is_open == true"
+      severity: warning
+      cooldown_minutes: 20
+      notification_channels: ["ops-warnings"]
+      
+    - name: database_cold_start_detected
+      description: "Database cold start event detected"
+      condition: "pr173_infrastructure.concurrency_system.status == 'degraded'"
+      severity: warning
+      cooldown_minutes: 30
+      notification_channels: ["ops-warnings"]
+
+metrics:
+  # Runtime compatibility metrics
+  runtime:
+    - name: edge_runtime_detection_duration
+      type: histogram
+      buckets: [10, 50, 100, 250, 500, 1000]
+      unit: milliseconds
+      description: "Time taken to detect Edge Runtime"
+      
+    - name: web_crypto_operation_success_rate
+      type: gauge
+      unit: percentage
+      description: "Success rate of Web Crypto API operations"
+      
+    - name: runtime_type_distribution
+      type: counter
+      labels: ["runtime_type"]
+      description: "Distribution of runtime types (edge/node)"
+
+  # Database validation metrics
+  database:
+    - name: connection_validation_duration
+      type: histogram
+      buckets: [50, 100, 200, 500, 1000, 2000]
+      unit: milliseconds
+      description: "Time taken for database connection validation"
+      
+    - name: schema_validation_success_rate
+      type: gauge
+      unit: percentage
+      description: "Success rate of database schema validation"
+      
+    - name: optimistic_locking_status
+      type: gauge
+      unit: boolean
+      description: "Status of optimistic locking system"
+
+  # Circuit breaker metrics
+  circuit_breaker:
+    - name: state_changes
+      type: counter
+      labels: ["from_state", "to_state", "breaker_name"]
+      description: "Circuit breaker state transitions"
+      
+    - name: request_success_rate
+      type: gauge
+      labels: ["breaker_name"]
+      unit: percentage
+      description: "Success rate per circuit breaker"
+      
+    - name: emergency_cache_size
+      type: gauge
+      unit: count
+      description: "Size of emergency rate limiting cache"
+
+  # Performance metrics
+  performance:
+    - name: health_endpoint_response_time
+      type: histogram
+      buckets: [100, 250, 500, 1000, 2000, 5000]
+      unit: milliseconds
+      description: "Health endpoint response time"
+      
+    - name: build_time_impact
+      type: histogram
+      buckets: [30, 60, 120, 300, 600]
+      unit: seconds
+      description: "Build time with large type definitions"
+
+dashboards:
+  # Runtime Compatibility Dashboard
+  - name: runtime_compatibility
+    title: "Runtime Compatibility Status"
+    panels:
+      - title: "Edge Runtime Detection"
+        type: stat
+        target: "runtime.edge_runtime_detection_duration"
+        unit: "ms"
+        thresholds:
+          - value: 100
+            color: green
+          - value: 250
+            color: yellow
+          - value: 500
+            color: red
+            
+      - title: "Web Crypto API Success Rate"
+        type: stat
+        target: "runtime.web_crypto_operation_success_rate"
+        unit: "percent"
+        thresholds:
+          - value: 99
+            color: green
+          - value: 95
+            color: yellow
+          - value: 90
+            color: red
+            
+      - title: "Runtime Type Distribution"
+        type: pie
+        target: "runtime.runtime_type_distribution"
+        
+      - title: "Health Check Response Time"
+        type: graph
+        target: "performance.health_endpoint_response_time"
+        time_range: "24h"
+
+  # Database Validation Dashboard
+  - name: database_validation
+    title: "Database Validation & Connection Health"
+    panels:
+      - title: "Connection Validation Time"
+        type: graph
+        target: "database.connection_validation_duration"
+        time_range: "6h"
+        
+      - title: "Schema Validation Success"
+        type: stat
+        target: "database.schema_validation_success_rate"
+        unit: "percent"
+        
+      - title: "Optimistic Locking Status"
+        type: stat
+        target: "database.optimistic_locking_status"
+        
+      - title: "Database Health Trend"
+        type: graph
+        target: "database_health_status"
+        time_range: "24h"
+
+  # Circuit Breaker Dashboard
+  - name: circuit_breakers
+    title: "Circuit Breaker & Rate Limiting"
+    panels:
+      - title: "Circuit Breaker States"
+        type: stat_panel
+        targets:
+          - "circuit_breaker.total"
+          - "circuit_breaker.open"
+          - "circuit_breaker.closed"
+          
+      - title: "State Change Timeline"
+        type: graph
+        target: "circuit_breaker.state_changes"
+        time_range: "12h"
+        
+      - title: "Success Rate by Breaker"
+        type: bar
+        target: "circuit_breaker.request_success_rate"
+        
+      - title: "Emergency Cache Usage"
+        type: graph
+        target: "circuit_breaker.emergency_cache_size"
+        time_range: "6h"
+
+# Service Level Objectives (SLOs)
+slos:
+  - name: health_endpoint_availability
+    description: "Health endpoint availability"
+    target: 99.9
+    window: "30d"
+    error_budget: 0.1
+    
+  - name: edge_runtime_compatibility
+    description: "Edge Runtime compatibility success rate"
+    target: 99.5
+    window: "7d"
+    error_budget: 0.5
+    
+  - name: database_validation_success
+    description: "Database validation success rate"
+    target: 99.0
+    window: "24h"
+    error_budget: 1.0
+    
+  - name: health_check_performance
+    description: "Health check response time P95"
+    target: 500
+    unit: "ms"
+    window: "1h"
+
+# Runbook links and escalation
+runbooks:
+  edge_runtime_failure:
+    url: "https://docs.tldrsec.app/runbooks/edge-runtime-failure"
+    escalation: ["devops-lead", "backend-team"]
+    
+  database_validation_failure:
+    url: "https://docs.tldrsec.app/runbooks/database-validation"
+    escalation: ["database-admin", "backend-team"]
+    
+  circuit_breaker_open:
+    url: "https://docs.tldrsec.app/runbooks/circuit-breaker-recovery"
+    escalation: ["devops-team"]
+
+# Environment-specific configurations
+environments:
+  production:
+    alert_cooldowns:
+      critical: 5  # minutes
+      warning: 15  # minutes
+    metric_retention: "30d"
+    
+  staging:
+    alert_cooldowns:
+      critical: 10  # minutes
+      warning: 30  # minutes
+    metric_retention: "7d"
+    
+  development:
+    alert_cooldowns:
+      critical: 30  # minutes
+      warning: 60  # minutes
+    metric_retention: "1d"

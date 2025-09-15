@@ -78,15 +78,18 @@ class RateLimiter {
     let hashHex: string;
     
     if (process.env.NODE_ENV === 'test' || process.env.JEST_WORKER_ID) {
-      // Test environment fallback - simple hash
-      hashHex = Array.from(identifier)
+      // Test environment fallback - constant time hash simulation
+      const paddedIdentifier = identifier.padEnd(32, '0').substring(0, 32);
+      hashHex = Array.from(paddedIdentifier)
         .map(c => c.charCodeAt(0).toString(16).padStart(2, '0'))
         .join('')
         .substring(0, 16);
     } else {
-      // Production: Use Web Crypto API
+      // Production: Use Web Crypto API with constant-time operations
       const encoder = new TextEncoder();
-      const data = encoder.encode(identifier);
+      // SECURITY: Pad input to prevent timing analysis
+      const paddedIdentifier = identifier.padEnd(256, '\0').substring(0, 256);
+      const data = encoder.encode(paddedIdentifier);
       const hashBuffer = await crypto.subtle.digest('SHA-256', data);
       hashHex = Array.from(new Uint8Array(hashBuffer))
         .map(b => b.toString(16).padStart(2, '0'))
@@ -211,11 +214,12 @@ class RateLimiter {
     this.circuitBreakerState.failureCount++;
     this.circuitBreakerState.lastFailureTime = now;
     
+    // SECURITY: Minimal logging to prevent information disclosure
     rateLimitLogger.error('Rate limit check failed, using emergency limiting', {
-      error: error.message,
-      key,
+      error: 'redacted',  // SECURITY: Never log actual error details
+      key: 'redacted',    // SECURITY: Never log business logic keys
       identifier: 'redacted',
-      failureCount: this.circuitBreakerState.failureCount,
+      failureCount: Math.min(this.circuitBreakerState.failureCount, 10), // Cap at 10
       timestamp: new Date().toISOString()
     });
     

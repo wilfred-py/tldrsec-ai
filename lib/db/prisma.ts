@@ -65,7 +65,8 @@ export function getPrismaClient(): PrismaClient {
   if (!prisma) {
     // Check if DATABASE_URL is available
     if (!process.env.DATABASE_URL) {
-      throw new Error('DATABASE_URL environment variable is not set');
+      // SECURITY: Generic error message to prevent configuration enumeration
+      throw new Error('Database configuration is invalid');
     }
     
     try {
@@ -100,8 +101,14 @@ export function getPrismaClient(): PrismaClient {
         prisma = global.prisma
       }
     } catch (error) {
-      console.error(`Failed to initialize Prisma client: ${error instanceof Error ? error.message : String(error)}`);
-      throw error;
+      // SECURITY: Sanitize error messages to prevent credential leakage
+      const sanitizedMessage = error instanceof Error ? 
+        error.message.replace(/postgresql:\/\/[^\s]+/g, 'postgresql://[REDACTED]') : 
+        'Database initialization failed';
+      console.error(`Failed to initialize Prisma client: ${sanitizedMessage}`);
+      
+      // SECURITY: Throw sanitized error to prevent stack trace leakage
+      throw new Error('Database connection failed. Check configuration.');
     }
   }
   return prisma;
