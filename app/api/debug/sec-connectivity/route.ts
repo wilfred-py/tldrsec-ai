@@ -83,21 +83,20 @@ export async function GET(request: NextRequest) {
     });
   }
   
-  // Test 4: Check Railway environment
-  const railwayInfo = {
-    isRailway: !!process.env.RAILWAY_ENVIRONMENT,
-    region: process.env.RAILWAY_REGION || 'unknown',
+  // Test 4: Check deployment environment
+  const deploymentInfo = {
+    platform: 'VERCEL',
     nodeEnv: process.env.NODE_ENV,
-    publicDomain: process.env.RAILWAY_PUBLIC_DOMAIN
+    vercelUrl: process.env.VERCEL_URL
   };
   
   const summary = {
     timestamp: new Date().toISOString(),
-    railwayEnvironment: railwayInfo,
+    deploymentEnvironment: deploymentInfo,
     testResults: tests,
     overallStatus: tests.every(t => t.status === 'PASS') ? 'HEALTHY' : 'BLOCKED',
     diagnosis: tests.some(t => t.httpStatus === 403) ? 
-      'SEC.gov is blocking Railway IP addresses - this is the root cause of filing fetch failures' :
+      'SEC.gov is blocking IP addresses - this is the root cause of filing fetch failures' :
       'Further investigation needed'
   };
   

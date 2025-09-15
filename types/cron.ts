@@ -12,7 +12,7 @@ export enum CronJobStatus {
 }
 
 // Trigger source types for cron job executions
-export type CronTriggerSource = 'VERCEL_CRON' | 'RAILWAY_CRON' | 'MANUAL' | 'EXTERNAL';
+export type CronTriggerSource = 'VERCEL_CRON' | 'MANUAL' | 'EXTERNAL';
 
 // Enhanced cron execution metrics interface
 export interface CronExecutionMetrics {

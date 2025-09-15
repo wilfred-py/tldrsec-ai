@@ -45,7 +45,6 @@
     "test:cron-endpoint": "npx tsx scripts/test-cron-endpoint.ts",
     "test:cron-comprehensive": "jest __tests__/cron/comprehensive-cron-integration.test.ts --config=jest.config.mjs --verbose",
     "test:cloudflare-worker": "jest __tests__/cloudflare/worker-execution.test.ts --config=jest.config.mjs --verbose",
-    "test:railway-sec": "npx tsx scripts/test-railway-sec-integration.ts",
     "test:samples": "node scripts/parsers/sample-content-reader.js",
     "test:extract-xbrl": "node scripts/parsers/extract-xbrl.js",
     "test:watch": "jest --watch --config=jest.config.mjs",
@@ -65,12 +64,7 @@
     "validate:quick-check": "npx tsx scripts/quick-deployment-check.ts",
     "validate:deployment-status": "npx tsx scripts/check-deployment-status.ts",
     "monitor:pipeline": "npx tsx scripts/production-pipeline-monitor.ts",
-    "monitor:pipeline:fast": "npx tsx scripts/production-pipeline-monitor.ts 15",
-    "test:railway:production": "npx tsx scripts/test-railway-production.ts",
-    "test:railway:local": "npx tsx scripts/test-railway-production.ts --local",
-    "test:railway:health": "curl -s https://${RAILWAY_PUBLIC_DOMAIN}/api/health/railway-cron | jq .",
-    "test:railway:full": "npm run test:railway:production",
-    "diagnose:railway": "npm run test:railway:health && npm run test:railway:production"
+    "monitor:pipeline:fast": "npx tsx scripts/production-pipeline-monitor.ts 15"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.51.0",

@@ -56,9 +56,7 @@ export async function GET(request: NextRequest) {
     });
 
     // Call the appropriate endpoint
-    const baseUrl = process.env.RAILWAY_PUBLIC_DOMAIN 
-      ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}`
-      : process.env.VERCEL_URL 
+    const baseUrl = process.env.VERCEL_URL 
       ? `https://${process.env.VERCEL_URL}` 
       : `http://localhost:${process.env.PORT || 3000}`;
     

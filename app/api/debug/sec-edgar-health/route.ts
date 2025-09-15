@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { logger } from '../../../../lib/logging';
-import { testEnvironmentFilingFetch, isRailwayEnvironment } from '../../../../lib/sec-edgar/environment-aware-fetcher';
+import { testEnvironmentFilingFetch, isDevelopmentEnvironment } from '../../../../lib/sec-edgar/environment-aware-fetcher';
 import { resolveTicker } from '../../../../lib/sec-edgar/cik-resolver';
 
 const healthLogger = logger.child('sec-edgar-health');
@@ -17,10 +17,8 @@ export async function GET() {
 
     // Basic environment detection
     const environment = {
-      isRailway: isRailwayEnvironment(),
-      nodeEnv: process.env.NODE_ENV,
-      hasRailwayDomain: !!process.env.RAILWAY_PUBLIC_DOMAIN,
-      hasRailwayEnv: !!process.env.RAILWAY_ENVIRONMENT
+      isDevelopment: isDevelopmentEnvironment(),
+      nodeEnv: process.env.NODE_ENV
     };
 
     // Test ticker-to-CIK resolution
@@ -52,7 +50,7 @@ export async function GET() {
     healthLogger.info('SEC EDGAR health check completed', {
       success: result.success,
       duration,
-      environment: result.environment.isRailway ? 'Railway' : 'Local',
+      environment: result.environment.isDevelopment ? 'Development' : 'Production',
       method: filingTest.method
     });
 
