@@ -26,28 +26,31 @@ declare global {
 // Use a singleton pattern to prevent connection pool exhaustion
 let prisma: PrismaClient
 
-if (process.env.NODE_ENV === 'production') {
-  prisma = new PrismaClient({
-    log: ['error', 'warn'],
-    // Optimize for high-concurrency cron jobs with better connection management
-    datasources: {
-      db: {
-        url: process.env.DATABASE_URL
-      }
-    }
-  })
-} else {
-  if (!global.prisma) {
-    global.prisma = new PrismaClient({
+// Only initialize if DATABASE_URL is available to prevent build-time errors
+if (process.env.DATABASE_URL) {
+  if (process.env.NODE_ENV === 'production') {
+    prisma = new PrismaClient({
       log: ['error', 'warn'],
+      // Optimize for high-concurrency cron jobs with better connection management
       datasources: {
         db: {
           url: process.env.DATABASE_URL
         }
       }
     })
+  } else {
+    if (!global.prisma) {
+      global.prisma = new PrismaClient({
+        log: ['error', 'warn'],
+        datasources: {
+          db: {
+            url: process.env.DATABASE_URL
+          }
+        }
+      })
+    }
+    prisma = global.prisma
   }
-  prisma = global.prisma
 }
 
 // Export the singleton instance
@@ -60,6 +63,11 @@ export { prisma }
  */
 export function getPrismaClient(): PrismaClient {
   if (!prisma) {
+    // Check if DATABASE_URL is available
+    if (!process.env.DATABASE_URL) {
+      throw new Error('DATABASE_URL environment variable is not set');
+    }
+    
     try {
       if (process.env.NODE_ENV === 'production') {
         prisma = new PrismaClient({
@@ -69,7 +77,7 @@ export function getPrismaClient(): PrismaClient {
               url: process.env.DATABASE_URL
             }
           },
-          // Enable connection pooling optimizations for Railway/production
+          // Enable connection pooling optimizations for production
           __internal: {
             engine: {
               config: {
