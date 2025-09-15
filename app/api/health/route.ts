@@ -5,9 +5,15 @@ import { logger } from '@/lib/logging';
 import { getPrismaClient } from '@/lib/db/prisma';
 import { CircuitBreakerRegistry } from '@/lib/resilience/circuit-breaker';
 import { GlobalErrorHandler } from '@/lib/resilience/error-handling';
+import { rateLimiter } from '@/lib/security/rate-limiter';
+import { headers } from 'next/headers';
 
 // Note: Edge Runtime disabled due to ioredis compatibility in rate limiter
 // export const runtime = 'edge';
+
+// SECURITY: Check if we're in Edge Runtime
+const isEdgeRuntime = typeof (globalThis as any).EdgeRuntime !== 'undefined' || 
+                      process.env.RUNTIME === 'edge';
 
 // Component logger
 const componentLogger = logger.child('health-api');
@@ -20,6 +26,39 @@ const prisma = getPrismaClient();
  */
 export const GET = appRouterAsyncHandler(async () => {
   const startTime = Date.now();
+  
+  // SECURITY: Rate limit health endpoint to prevent reconnaissance abuse
+  const headersList = await headers();
+  const clientIP = headersList.get('x-forwarded-for') || 
+                   headersList.get('x-real-ip') || 
+                   'unknown';
+  
+  const rateLimitResult = await rateLimiter.checkLimit(
+    'health-api',
+    clientIP,
+    30, // 30 requests per minute max
+    60000 // 1 minute window
+  );
+  
+  if (!rateLimitResult.allowed) {
+    componentLogger.warn('Health API rate limit exceeded', { 
+      clientIP: 'redacted',
+      remaining: rateLimitResult.remaining 
+    });
+    
+    return NextResponse.json(
+      { error: 'Rate limit exceeded', status: 'rate_limited' },
+      { 
+        status: 429,
+        headers: {
+          'X-RateLimit-Limit': '30',
+          'X-RateLimit-Remaining': '0',
+          'X-RateLimit-Reset': rateLimitResult.resetTime.toString(),
+          'Retry-After': '60'
+        }
+      }
+    );
+  }
   
   // Get base health status
   const healthStatus = await monitoring.checkHealth();
@@ -70,7 +109,17 @@ export const GET = appRouterAsyncHandler(async () => {
   return NextResponse.json(enhancedHealthStatus, { 
     status: statusCode,
     headers: {
-      'Cache-Control': 'no-store, max-age=0'
+      // SECURITY: Comprehensive security headers
+      'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
+      'X-Content-Type-Options': 'nosniff',
+      'X-Frame-Options': 'DENY',
+      'X-XSS-Protection': '1; mode=block',
+      'Referrer-Policy': 'no-referrer',
+      'Content-Security-Policy': "default-src 'none'; frame-ancestors 'none'",
+      // Rate limiting headers
+      'X-RateLimit-Limit': '30',
+      'X-RateLimit-Remaining': rateLimitResult.remaining.toString(),
+      'X-RateLimit-Reset': rateLimitResult.resetTime.toString()
     }
   });
 });
@@ -191,13 +240,15 @@ async function performPR173HealthChecks() {
       if (overallStatus === 'healthy') overallStatus = 'degraded';
     }
 
-    // 5. Environment Configuration
+    // 5. Environment Configuration (sanitized for security)
     checks.environment = {
       status: 'healthy',
-      deployment_platform: 'VERCEL',
-      edge_runtime: typeof EdgeRuntime !== 'undefined',
-      cron_secret_configured: !!process.env.CRON_SECRET,
-      node_env: process.env.NODE_ENV
+      // SECURITY: Remove platform fingerprinting
+      runtime_type: isEdgeRuntime ? 'edge' : 'node',
+      // SECURITY: Only indicate if required secrets are present, not their names
+      secrets_configured: !!process.env.CRON_SECRET && !!process.env.DATABASE_URL,
+      // SECURITY: Only show production vs non-production
+      is_production: process.env.NODE_ENV === 'production'
     };
 
   } catch (error) {
