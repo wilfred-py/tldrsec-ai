@@ -24,9 +24,19 @@ import { monitoring } from '../monitoring';
 
 /**
  * Detect if we're in a build environment where environment variables may not be available
+ * Improved logic for reliable build-time detection across different platforms
  */
 function isBuildTime(): boolean {
-  return process.env.NODE_ENV === 'production' && !process.env.VERCEL && !process.env.RESEND_API_KEY;
+  // Check for explicit build indicators
+  const buildIndicators = [
+    process.env.NODE_ENV === 'production' && !process.env.VERCEL, // Non-Vercel production builds
+    process.env.CF_PAGES === '1' && !process.env.RESEND_API_KEY, // Cloudflare Pages build
+    process.env.GITHUB_ACTIONS === 'true', // GitHub Actions build
+    process.env.CI === 'true' && !process.env.RESEND_API_KEY, // General CI environment
+    process.env.BUILD_PHASE === 'true' // Explicit build phase flag
+  ];
+  
+  return buildIndicators.some(indicator => indicator);
 }
 
 // Define a safe version of recordEmailSent that handles missing function

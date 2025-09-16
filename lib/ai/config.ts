@@ -5,9 +5,19 @@
 
 /**
  * Detect if we're in a build environment where environment variables may not be available
+ * Improved logic for reliable build-time detection across different platforms
  */
 function isBuildTime(): boolean {
-  return process.env.NODE_ENV === 'production' && !process.env.VERCEL && !process.env.ANTHROPIC_API_KEY;
+  // Check for explicit build indicators
+  const buildIndicators = [
+    process.env.NODE_ENV === 'production' && !process.env.VERCEL, // Non-Vercel production builds
+    process.env.CF_PAGES === '1' && !process.env.ANTHROPIC_API_KEY, // Cloudflare Pages build
+    process.env.GITHUB_ACTIONS === 'true', // GitHub Actions build
+    process.env.CI === 'true' && !process.env.ANTHROPIC_API_KEY, // General CI environment
+    process.env.BUILD_PHASE === 'true' // Explicit build phase flag
+  ];
+  
+  return buildIndicators.some(indicator => indicator);
 }
 
 /**
@@ -90,6 +100,22 @@ export function getClaudeModel(): string {
  */
 export function getFallbackModel(): string {
   return getEnv('ANTHROPIC_FALLBACK_MODEL', getClaudeModel());
+}
+
+// Runtime validation for production environment
+function validateRuntimeConfig(): void {
+  if (typeof window === 'undefined' && // Server-side only
+      process.env.NODE_ENV === 'production' && 
+      process.env.VERCEL && // Vercel production
+      !isBuildTime() &&
+      !process.env.ANTHROPIC_API_KEY) {
+    console.warn('ANTHROPIC_API_KEY not found in production environment. AI features may not work.');
+  }
+}
+
+// Validate configuration at module load (server-side only)
+if (typeof window === 'undefined') {
+  validateRuntimeConfig();
 }
 
 export const ClaudeConfig = {
