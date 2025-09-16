@@ -8,6 +8,9 @@ crons = ["*/10 * * * *"]
 
 [vars]
 PUBLIC_URL = "https://tldrsec.app"
+
+# Note: CRON_SECRET should be added as a Secret via Cloudflare dashboard
+# This ensures secure handling of the authentication token
 # wrangler.toml (wrangler v3.88.0^)
 [observability.logs]
 enabled = true

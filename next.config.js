@@ -61,13 +61,18 @@ const nextConfig = {
       };
     }
 
-    // Suppress webpack warnings related to client reference manifests and build-time database errors
+    // Suppress webpack warnings related to client reference manifests and build-time environment variable errors
     config.ignoreWarnings = [
       ...(config.ignoreWarnings || []),
       /client-reference-manifest\.js/,
       /__NEXT_CLIENT_REFERENCE_MANIFEST__/,
       /DATABASE_URL environment variable is not set/,
       /Database not available during build time/,
+      /Environment variable ANTHROPIC_API_KEY is not set/,
+      /Missing API key\. Pass it to the constructor new Resend/,
+      /RESEND_API_KEY/,
+      /ANTHROPIC_API_KEY/,
+      /build-time-placeholder/,
     ];
 
     return config;

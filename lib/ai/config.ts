@@ -4,12 +4,27 @@
  */
 
 /**
- * Get environment variable with fallback
+ * Detect if we're in a build environment where environment variables may not be available
+ */
+function isBuildTime(): boolean {
+  return process.env.NODE_ENV === 'production' && !process.env.VERCEL && !process.env.ANTHROPIC_API_KEY;
+}
+
+/**
+ * Get environment variable with fallback and build-time safety
  */
 function getEnv(key: string, defaultValue?: string): string {
   // Use test value when in test environment
   if (process.env.NODE_ENV === 'test' && key === 'ANTHROPIC_API_KEY') {
     return 'test-api-key-for-testing-only';
+  }
+  
+  // During build time, provide safe defaults to prevent build failures
+  if (isBuildTime()) {
+    if (key === 'ANTHROPIC_API_KEY') {
+      return 'build-time-placeholder-key';
+    }
+    return defaultValue || 'build-time-placeholder';
   }
   
   const value = process.env[key];
@@ -78,8 +93,8 @@ export function getFallbackModel(): string {
 }
 
 export const ClaudeConfig = {
-  // API key should be set in the .env file
-  apiKey: process.env.ANTHROPIC_API_KEY || '',
+  // API key should be set in the .env file, with build-time safety
+  apiKey: isBuildTime() ? 'build-time-placeholder-key' : (process.env.ANTHROPIC_API_KEY || ''),
   
   // Model selection - use centralized function
   model: getClaudeModel(),
