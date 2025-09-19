@@ -12,8 +12,7 @@ import {
   getUnprocessedFilingsForTicker,
   markFilingAsProcessedByAccession
 } from '../../../../lib/sec-edgar/ticker-monitoring';
-// Web Crypto API for Edge Runtime compatibility
-import { MiddlewareSecurity } from '../../../../lib/security/middleware-security';
+// Security validation is handled by middleware.ts
 import { updateUserBudgetWithLock, isConcurrencyError } from '../../../../lib/db/concurrency';
 import { FilingTransactionManager } from '../../../../lib/db/transaction-manager';
 import { createAsyncAuditLog } from '../../../../lib/db/async-audit';
@@ -148,20 +147,8 @@ export async function GET(request: NextRequest) {
     // DEBUG: Add comprehensive logging to isolate error location
     cronLogger.debug('Checkpoint 1: Route function started');
 
-    // Comprehensive security validation using middleware security system
-    const securityResult = await MiddlewareSecurity.validateRequest(request, 'CRON');
-    
-    if (!securityResult.allowed) {
-      cronLogger.warn('Security validation failed for cron request', { 
-        reason: securityResult.reason,
-        statusCode: securityResult.statusCode 
-      });
-      await monitor.complete(CronJobStatus.FAILED, `Security validation failed: ${securityResult.reason}`);
-      return NextResponse.json({ error: securityResult.reason }, { status: securityResult.statusCode });
-    }
-    
-    // Security audit logging for all successful authentications
-    cronLogger.info('Cron request security validation successful', {
+    // Security validation is handled by middleware - request has been pre-validated
+    cronLogger.info('Processing tier-aware cron request (pre-validated by middleware)', {
       environment: process.env.NODE_ENV,
       timestamp: new Date().toISOString()
     });
