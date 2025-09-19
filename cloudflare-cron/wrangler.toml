@@ -8,6 +8,9 @@ crons = ["*/10 * * * *"]
 
 [vars]
 PUBLIC_URL = "https://tldrsec.app"
+
+# Note: CRON_SECRET and VERCEL_AUTOMATION_BYPASS_SECRET should be added as Secrets via Cloudflare dashboard
+# This ensures secure handling of the authentication and bypass tokens
 # wrangler.toml (wrangler v3.88.0^)
 [observability.logs]
 enabled = true

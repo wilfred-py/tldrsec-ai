@@ -22,6 +22,23 @@ import { logger } from '../logging';
 // Import monitoring module
 import { monitoring } from '../monitoring';
 
+/**
+ * Detect if we're in a build environment where environment variables may not be available
+ * Improved logic for reliable build-time detection across different platforms
+ */
+function isBuildTime(): boolean {
+  // Check for explicit build indicators
+  const buildIndicators = [
+    process.env.NODE_ENV === 'production' && !process.env.VERCEL, // Non-Vercel production builds
+    process.env.CF_PAGES === '1' && !process.env.RESEND_API_KEY, // Cloudflare Pages build
+    process.env.GITHUB_ACTIONS === 'true', // GitHub Actions build
+    process.env.CI === 'true' && !process.env.RESEND_API_KEY, // General CI environment
+    process.env.BUILD_PHASE === 'true' // Explicit build phase flag
+  ];
+  
+  return buildIndicators.some(indicator => indicator);
+}
+
 // Define a safe version of recordEmailSent that handles missing function
 const safeRecordEmailSent = (emailType: string, recipient: string, success: boolean, tags: Record<string, string> = {}): void => {
   try {
@@ -98,26 +115,32 @@ export class ResendClient {
    * @param key Optional API key (will use environment variable if not provided)
    */
   constructor(key?: string) {
-    // Get API key from environment if not provided
-    key = key || process.env.RESEND_API_KEY;
-    
-    // If no API key is provided, create a dummy client
-    if (!key) {
-      // In development or test, create a dummy client that logs but doesn't send
-      if (process.env.NODE_ENV !== 'production') {
-        this.isDummyClient = true;
-        logger.warn('No Resend API key provided. Using dummy client that will not send emails.');
-        // Initialize with empty string for dummy client
-        this.resend = new Resend('');
-      } else {
-        // In production, still create the client but log a warning
-        logger.error('No Resend API key provided in production. Set RESEND_API_KEY in your environment variables.');
-        // We'll initialize with an empty string which will cause API calls to fail gracefully
-        this.resend = new Resend('');
-      }
+    // During build time, create a dummy client with placeholder API key
+    if (isBuildTime()) {
+      this.isDummyClient = true;
+      this.resend = new Resend('build-time-placeholder-key');
     } else {
-      // Initialize with valid API key
-      this.resend = new Resend(key);
+      // Get API key from environment if not provided
+      key = key || process.env.RESEND_API_KEY;
+      
+      // If no API key is provided, create a dummy client
+      if (!key) {
+        // In development or test, create a dummy client that logs but doesn't send
+        if (process.env.NODE_ENV !== 'production') {
+          this.isDummyClient = true;
+          logger.warn('No Resend API key provided. Using dummy client that will not send emails.');
+          // Initialize with empty string for dummy client
+          this.resend = new Resend('');
+        } else {
+          // In production, still create the client but log a warning
+          logger.error('No Resend API key provided in production. Set RESEND_API_KEY in your environment variables.');
+          // We'll initialize with an empty string which will cause API calls to fail gracefully
+          this.resend = new Resend('');
+        }
+      } else {
+        // Initialize with valid API key
+        this.resend = new Resend(key);
+      }
     }
     
     // Initialize rate limiter
