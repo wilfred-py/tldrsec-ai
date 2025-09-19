@@ -48,6 +48,20 @@ const securityMiddleware = async (request: NextRequest): Promise<NextResponse | 
 
   // Apply comprehensive security validation for public endpoints
   if (requiresSecurityValidation) {
+    // Check for Vercel deployment protection bypass headers (for Cloudflare Workers)
+    const vercelBypass = request.headers.get('x-vercel-protection-bypass');
+    const vercelSetCookie = request.headers.get('x-vercel-set-bypass-cookie');
+    const cloudflareWorker = request.headers.get('x-cloudflare-worker');
+    
+    if (vercelBypass && vercelSetCookie && cloudflareWorker && pathname.startsWith('/api/cron/')) {
+      middlewareLogger.info('Bypassing middleware security validation for Vercel-protected Cloudflare Worker request', {
+        path: pathname,
+        cloudflareWorker,
+        hasVercelBypass: !!vercelBypass
+      });
+      return undefined; // Continue without security validation - Vercel already handled protection
+    }
+    
     // Development environment bypass for localhost testing
     const isDevelopment = process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test';
     const clientIP = request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || '127.0.0.1';
