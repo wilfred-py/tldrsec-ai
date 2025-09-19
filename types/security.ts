@@ -18,7 +18,8 @@ export type SecurityEventType =
   | 'INVALID_AUTH_FORMAT'
   | 'INVALID_CREDENTIALS'
   | 'WEAK_CREDENTIALS'
-  | 'INVALID_CONTENT_TYPE';
+  | 'INVALID_CONTENT_TYPE'
+  | 'CLOUDFLARE_WORKER_AUTHENTICATED';
 
 // Endpoint types for different security profiles
 export type EndpointType = 'CRON' | 'HEALTH' | 'PUBLIC' | 'ADMIN' | 'API';

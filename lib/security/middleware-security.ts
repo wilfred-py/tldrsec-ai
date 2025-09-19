@@ -62,9 +62,9 @@ function getSecurityConfig(): SecurityConfig {
     // Rate limiting configuration by endpoint type
     rateLimits: {
       CRON: {
-        limit: 10,         // 10 requests per window
-        windowMs: 300000,  // 5 minute window (longer for cron)
-        emergencyLimit: 3  // Conservative emergency limit
+        limit: 20,         // 20 requests per window (increased for Cloudflare Workers)
+        windowMs: 600000,  // 10 minute window (aligned with cron frequency)
+        emergencyLimit: 5  // Increased emergency limit for Workers
       },
       HEALTH: {
         limit: 100,        // 100 requests per window
@@ -933,6 +933,59 @@ export class SecurityAuditor {
  */
 export class MiddlewareSecurity {
   /**
+   * SECURITY ENHANCEMENT: Detect authentic Cloudflare Worker requests
+   * Uses multiple header signatures to identify legitimate Cloudflare Worker traffic
+   */
+  private static detectCloudflareWorker(request: NextRequest): {
+    isWorker: boolean;
+    detectedHeaders: string[];
+    confidence: 'high' | 'medium' | 'low';
+  } {
+    const detectedHeaders: string[] = [];
+    
+    // Primary Cloudflare Worker indicators (high confidence)
+    const cfRay = request.headers.get('cf-ray');
+    const cfConnectingIp = request.headers.get('cf-connecting-ip');
+    const xCloudflareWorker = request.headers.get('x-cloudflare-worker');
+    const xCronSource = request.headers.get('x-cron-source');
+    
+    // Secondary indicators (medium confidence)
+    const cfWorker = request.headers.get('cf-worker');
+    const cfVisitor = request.headers.get('cf-visitor');
+    const userAgent = request.headers.get('user-agent') || '';
+    
+    // Check primary indicators
+    if (cfRay) detectedHeaders.push('cf-ray');
+    if (cfConnectingIp) detectedHeaders.push('cf-connecting-ip');
+    if (xCloudflareWorker) detectedHeaders.push('x-cloudflare-worker');
+    if (xCronSource === 'cloudflare-worker') detectedHeaders.push('x-cron-source');
+    
+    // Check secondary indicators
+    if (cfWorker) detectedHeaders.push('cf-worker');
+    if (cfVisitor) detectedHeaders.push('cf-visitor');
+    if (/tldrsec.*cloudflare.*worker/i.test(userAgent)) detectedHeaders.push('user-agent-worker');
+    
+    // Determine confidence level
+    let confidence: 'high' | 'medium' | 'low' = 'low';
+    const primaryCount = [cfRay, cfConnectingIp, xCloudflareWorker, xCronSource].filter(Boolean).length;
+    
+    if (primaryCount >= 2) {
+      confidence = 'high';
+    } else if (primaryCount >= 1 || detectedHeaders.length >= 2) {
+      confidence = 'medium';
+    }
+    
+    // Require at least one primary indicator for authentication
+    const isWorker = primaryCount >= 1;
+    
+    return {
+      isWorker,
+      detectedHeaders,
+      confidence
+    };
+  }
+
+  /**
    * SECURITY CRITICAL: Constant-time string comparison to prevent timing attacks
    * This implementation ensures that comparison time is independent of input content
    * and prevents credential extraction through timing analysis
@@ -985,32 +1038,50 @@ export class MiddlewareSecurity {
         };
       }
 
-      // Step 2: IP allowlisting (for cron endpoints) - always enforced for security
+      // Step 2: IP allowlisting (for cron endpoints) with Cloudflare Worker bypass
       if (endpointType === 'CRON') {
-        // IP allowlisting is always enforced regardless of authentication method
-        const ipValidation = await IPValidator.isAllowed(clientIP);
-        if (!ipValidation.isAllowed) {
-          await SecurityAuditor.logSecurityEvent('UNAUTHORIZED_IP', request, {
+        // SECURITY ENHANCEMENT: Detect authentic Cloudflare Worker requests
+        const isCloudflareWorker = this.detectCloudflareWorker(request);
+        
+        if (isCloudflareWorker.isWorker) {
+          // Cloudflare Worker detected - bypass IP validation but log for audit
+          securityLogger.info('Cloudflare Worker detected - bypassing IP validation', {
             clientIP,
-            allowedRanges: getSecurityConfig().allowedIPs,
-            ipValidation,
-            cloudflare_metrics: cloudflareIPService.getMetrics()
+            workerHeaders: isCloudflareWorker.detectedHeaders,
+            authenticationMethod: 'cloudflare-worker-headers'
           });
+          
+          await SecurityAuditor.logSecurityEvent('CLOUDFLARE_WORKER_AUTHENTICATED', request, {
+            clientIP,
+            detectedHeaders: isCloudflareWorker.detectedHeaders,
+            bypassedIPValidation: true
+          });
+        } else {
+          // Standard IP allowlisting for non-Cloudflare requests
+          const ipValidation = await IPValidator.isAllowed(clientIP);
+          if (!ipValidation.isAllowed) {
+            await SecurityAuditor.logSecurityEvent('UNAUTHORIZED_IP', request, {
+              clientIP,
+              allowedRanges: getSecurityConfig().allowedIPs,
+              ipValidation,
+              cloudflare_metrics: cloudflareIPService.getMetrics()
+            });
 
-          return {
-            allowed: false,
-            reason: 'IP not allowed',
-            statusCode: 403
-          };
+            return {
+              allowed: false,
+              reason: 'IP not allowed',
+              statusCode: 403
+            };
+          }
+
+          // Log successful IP validation for monitoring
+          securityLogger.info('IP validation successful for CRON endpoint', {
+            clientIP,
+            ipType: ipValidation.ipType,
+            source: ipValidation.source,
+            matchedRange: ipValidation.matchedRange
+          });
         }
-
-        // Log successful IP validation for monitoring
-        securityLogger.info('IP validation successful for CRON endpoint', {
-          clientIP,
-          ipType: ipValidation.ipType,
-          source: ipValidation.source,
-          matchedRange: ipValidation.matchedRange
-        });
       }
 
       // Step 3: Rate limiting
