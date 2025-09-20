@@ -62,12 +62,24 @@ const nextConfig = {
     }
 
     // Suppress webpack warnings related to client reference manifests and build-time environment variable errors
+    // More specific patterns to avoid hiding legitimate issues
     config.ignoreWarnings = [
       ...(config.ignoreWarnings || []),
+      // Client reference manifest warnings (Next.js 15 compatibility)
       /client-reference-manifest\.js/,
       /__NEXT_CLIENT_REFERENCE_MANIFEST__/,
-      /DATABASE_URL environment variable is not set/,
+      // Build-time database warnings (expected during Cloudflare Workers build)
+      /DATABASE_URL environment variable is not set.*build.*time/,
       /Database not available during build time/,
+      // Build-time API key warnings (expected when using placeholder keys)
+      /Environment variable ANTHROPIC_API_KEY is not set.*build.*time/,
+      /Missing API key\. Pass it to the constructor new Resend.*build.*time/,
+      // Specific build-time placeholder warnings
+      /build-time-placeholder-key/,
+      // More specific environment variable warnings
+      /RESEND_API_KEY.*build.*phase/,
+      /ANTHROPIC_API_KEY.*build.*phase/,
+      // Legacy patterns for compatibility
       /Environment variable ANTHROPIC_API_KEY is not set/,
       /Missing API key\. Pass it to the constructor new Resend/,
       /RESEND_API_KEY/,

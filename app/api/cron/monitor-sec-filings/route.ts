@@ -1,10 +1,25 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { timingSafeEqual } from 'crypto';
+import { createErrorResponse } from '../../../../lib/error-handling/standardized-responses';
 
 // Dynamic imports will be used within functions to avoid build-time dependencies
 
 // Rate limiting config
 const BATCH_SIZE = 5; // Process max 5 filings per run
 const MAX_CONCURRENT_RSS_CHECKS = 3; // Check max 3 tickers simultaneously
+
+// Secure authentication function to prevent timing attacks
+function verifyAuthHeader(authHeader: string | null, secret: string | undefined): boolean {
+  if (!authHeader || !secret) return false;
+  
+  const expected = `Bearer ${secret}`;
+  if (authHeader.length !== expected.length) return false;
+  
+  return timingSafeEqual(
+    Buffer.from(authHeader, 'utf8'),
+    Buffer.from(expected, 'utf8')
+  );
+}
 // const PROCESSING_TIMEOUT_MS = 4 * 60 * 1000; // 4 minutes (Railway/Vercel timeout) - Reserved for future use
 
 interface ProcessingStats {
@@ -22,24 +37,43 @@ interface ProcessingStats {
  * Runs every 30 minutes during market hours (Mon-Fri 6am-10pm EST)
  */
 export async function GET(request: NextRequest) {
-  // Dynamic imports for build-time safety
-  const { CronJobMonitor } = await import('../../../../lib/monitoring/cron-monitor');
-  const { logger } = await import('../../../../lib/logging');
+  let monitor: InstanceType<typeof CronJobMonitor>;
+  let cronLogger: ReturnType<typeof import('../../../../lib/logging').logger.child>;
   
-  // Initialize monitoring for Vercel platform
-  const platform = 'VERCEL_CRON';
-  const monitor = new CronJobMonitor('sec-filing-monitor', platform);
-  const cronLogger = logger.child('cron-sec-monitoring');
+  try {
+    // Dynamic imports for build-time safety with error handling
+    const [
+      { CronJobMonitor },
+      { logger }
+    ] = await Promise.all([
+      import('../../../../lib/monitoring/cron-monitor'),
+      import('../../../../lib/logging')
+    ]);
+    
+    // Initialize monitoring for Vercel platform
+    const platform = 'VERCEL_CRON';
+    monitor = new CronJobMonitor('sec-filing-monitor', platform);
+    cronLogger = logger.child('cron-sec-monitoring');
+  } catch (importError) {
+    console.error('Failed to load required modules:', importError);
+    return NextResponse.json({ 
+      error: 'Service initialization failed',
+      details: importError instanceof Error ? importError.message : 'Unknown import error'
+    }, { status: 503 });
+  }
   
   try {
     cronLogger.info('Starting SEC filing monitoring cron job');
 
-    // Verify this is a legitimate cron request
+    // Verify this is a legitimate cron request using timing-safe comparison
     const authHeader = request.headers.get('authorization');
-    if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
-      cronLogger.warn('Unauthorized cron request');
+    if (!verifyAuthHeader(authHeader, process.env.CRON_SECRET)) {
+      cronLogger.warn('Unauthorized cron request', { 
+        authHeaderPresent: !!authHeader,
+        secretConfigured: !!process.env.CRON_SECRET 
+      });
       await monitor.complete('FAILED', 'Unauthorized access attempt');
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      return createErrorResponse('UNAUTHORIZED', 401);
     }
 
     // Phase 1: Check for new filings via RSS
@@ -73,12 +107,10 @@ export async function GET(request: NextRequest) {
       duration: errorResult.duration
     });
 
-    return NextResponse.json({
-      success: false,
-      error: error instanceof Error ? error.message : 'Unknown error',
+    return createErrorResponse('SERVICE_INITIALIZING', 503, {
       executionId: errorResult.executionId,
       duration: errorResult.duration
-    }, { status: 500 });
+    });
   }
 }
 
@@ -224,14 +256,24 @@ async function processSingleFiling(filing: {
     companyName: string;
   };
 }, stats: ProcessingStats, cronLogger: ReturnType<typeof import('../../../../lib/logging').logger.child>): Promise<void> {
-  // Dynamic imports for build-time safety
-  const { enhancedFetch } = await import('../../../../lib/network/enhanced-fetch');
-  const { parseFormContentEnhanced } = await import('../../../../lib/parsers/enhanced-form-parser');
-  const { getPrismaClient } = await import('../../../../lib/db/prisma');
-  const { sendFilingSummaryEmail } = await import('../../../../lib/email/summary-service');
-  const { getClaudeModel } = await import('@/lib/ai');
-  const { generateAISummaryWithRetry } = await import('../../../../services/filing/summaryGenerationService');
-  const { markFilingAsProcessed } = await import('../../../../lib/sec-edgar/ticker-monitoring');
+  // Batch dynamic imports for build-time safety and performance
+  const [
+    { enhancedFetch },
+    { parseFormContentEnhanced },
+    { getPrismaClient },
+    { sendFilingSummaryEmail },
+    { getClaudeModel },
+    { generateAISummaryWithRetry },
+    { markFilingAsProcessed }
+  ] = await Promise.all([
+    import('../../../../lib/network/enhanced-fetch'),
+    import('../../../../lib/parsers/enhanced-form-parser'),
+    import('../../../../lib/db/prisma'),
+    import('../../../../lib/email/summary-service'),
+    import('../../../../lib/ai'),
+    import('../../../../services/filing/summaryGenerationService'),
+    import('../../../../lib/sec-edgar/ticker-monitoring')
+  ]);
   
   const prisma = getPrismaClient();
   cronLogger.debug(`Processing filing ${filing.accessionNumber}`, {
@@ -249,9 +291,8 @@ async function processSingleFiling(filing: {
     operationName: 'sec-filing-cron-fetch'
   });
 
-  // Step 2: Parse filing content  
-  const filingTypes = await import('../../../../types/sec/filing');
-  const parsedContent = await parseFormContentEnhanced(content, filing.filingType as filingTypes.FilingType, filing.filingUrl);
+  // Step 2: Parse filing content
+  const parsedContent = await parseFormContentEnhanced(content, filing.filingType as string, filing.filingUrl);
 
   // Step 3: Generate AI summary
   const summaryResult = await generateAISummaryWithRetry(
@@ -273,7 +314,7 @@ async function processSingleFiling(filing: {
   };
 
   // Step 4: Find or create ticker in database
-  const dbTicker = await findOrCreateTicker(filing.ticker);
+  const dbTicker = await findOrCreateTicker(filing.ticker, prisma);
 
   // Step 5: Store summary in database
   const savedSummary = await prisma.summary.create({
@@ -350,7 +391,7 @@ async function processSingleFiling(filing: {
 /**
  * Find or create ticker in database for a test user
  */
-async function findOrCreateTicker(tickerInfo: { symbol: string; companyName: string }): Promise<{ id: string }> {
+async function findOrCreateTicker(tickerInfo: { symbol: string; companyName: string }, prisma: ReturnType<typeof import('../../../../lib/db/prisma').getPrismaClient>): Promise<{ id: string }> {
   // Find or create a system user for cron jobs
   let systemUser = await prisma.user.findFirst({
     where: { email: 'system@tldrsec.com' }
