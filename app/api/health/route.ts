@@ -12,7 +12,7 @@ import { headers } from 'next/headers';
 // export const runtime = 'edge';
 
 // SECURITY: Check if we're in Edge Runtime
-const isEdgeRuntime = typeof (globalThis as any).EdgeRuntime !== 'undefined' || 
+const isEdgeRuntime = typeof (globalThis as unknown as { EdgeRuntime?: unknown }).EdgeRuntime !== 'undefined' || 
                       process.env.RUNTIME === 'edge';
 
 // Component logger

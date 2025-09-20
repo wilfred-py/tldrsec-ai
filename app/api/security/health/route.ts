@@ -11,7 +11,7 @@ import { logger } from '@/lib/logging';
 
 const healthLogger = logger.child('api-security-health');
 
-export async function GET(request: NextRequest) {
+export async function GET(_request: NextRequest) {
   const startTime = Date.now();
 
   try {
@@ -86,7 +86,7 @@ export async function GET(request: NextRequest) {
 /**
  * Lightweight health check for monitoring systems
  */
-export async function HEAD(request: NextRequest) {
+export async function HEAD(_request: NextRequest) {
   try {
     const metrics = await securityMonitoring.getHealthMetrics();
     

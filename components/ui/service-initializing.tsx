@@ -99,7 +99,7 @@ export function ServiceError({
               id="service-error-description"
               className="text-red-700 text-sm mb-4"
             >
-              We're experiencing a temporary issue. Please try again in {retryAfter} seconds.
+              We&apos;re experiencing a temporary issue. Please try again in {retryAfter} seconds.
               If the problem persists, our team has been notified.
             </p>
             {onRetry && (

@@ -55,7 +55,7 @@ export async function GET() {
     try {
       await import('../../../../lib/logging');
       validation.dynamicImportsAvailable = true;
-    } catch (error) {
+    } catch (_error) {
       validation.dynamicImportsAvailable = false;
     }
 
