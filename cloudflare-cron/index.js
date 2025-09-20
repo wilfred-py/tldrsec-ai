@@ -28,6 +28,8 @@ export default {
         'X-Cron-Source': 'cloudflare-worker'
       };
       
+      console.log('Bypass secret value: ' + (env.VERCEL_AUTOMATION_BYPASS_SECRET ? '[REDACTED]' : 'UNDEFINED'));
+
       // Add Vercel deployment protection bypass via HTTP headers if configured
       if (env.VERCEL_AUTOMATION_BYPASS_SECRET) {
         headers['x-vercel-protection-bypass'] = env.VERCEL_AUTOMATION_BYPASS_SECRET;
