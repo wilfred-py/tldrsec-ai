@@ -79,6 +79,12 @@ const nextConfig = {
       // More specific environment variable warnings
       /RESEND_API_KEY.*build.*phase/,
       /ANTHROPIC_API_KEY.*build.*phase/,
+      // Legacy patterns for compatibility
+      /Environment variable ANTHROPIC_API_KEY is not set/,
+      /Missing API key\. Pass it to the constructor new Resend/,
+      /RESEND_API_KEY/,
+      /ANTHROPIC_API_KEY/,
+      /build-time-placeholder/,
     ];
 
     return config;
