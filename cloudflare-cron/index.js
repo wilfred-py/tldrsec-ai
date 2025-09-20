@@ -37,10 +37,30 @@ export default {
         console.log('No bypass secret available, continuing without bypass');
       }
       
-      const response = await fetch(url, {
-        method: 'GET',
-        headers
-      });
+      let response;
+      let attempts = 0;
+      const maxAttempts = 2; // Initial attempt + 1 retry
+      
+      while (attempts < maxAttempts) {
+        attempts++;
+        console.log(`Attempt ${attempts} to call endpoint`);
+        
+        response = await fetch(url, {
+          method: 'GET',
+          headers
+        });
+        
+        if (response.status !== 401) {
+          break;
+        }
+        
+        console.warn(`Received 401 on attempt ${attempts}, retrying...`);
+        await new Promise(resolve => setTimeout(resolve, 1000)); // 1 second delay before retry
+      }
+      
+      if (!response) {
+        throw new Error('Failed after maximum retry attempts');
+      }
       
       const responseText = await response.text();
       console.log(`Response status: ${response.status}`);
