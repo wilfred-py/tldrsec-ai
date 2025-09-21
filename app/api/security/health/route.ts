@@ -4,14 +4,14 @@
  * Provides real-time security monitoring data for dashboards and external systems
  */
 
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { securityMonitoring } from '@/lib/security/security-monitoring';
 import { cloudflareIPService } from '@/lib/security/cloudflare-ip-service';
 import { logger } from '@/lib/logging';
 
 const healthLogger = logger.child('api-security-health');
 
-export async function GET(request: NextRequest) {
+export async function GET() {
   const startTime = Date.now();
 
   try {
@@ -86,7 +86,7 @@ export async function GET(request: NextRequest) {
 /**
  * Lightweight health check for monitoring systems
  */
-export async function HEAD(request: NextRequest) {
+export async function HEAD() {
   try {
     const metrics = await securityMonitoring.getHealthMetrics();
     

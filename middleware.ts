@@ -62,19 +62,9 @@ const securityMiddleware = async (request: NextRequest): Promise<NextResponse | 
       return undefined; // Continue without security validation - Vercel already handled protection
     }
     
-    // Development environment bypass for localhost testing
-    const isDevelopment = process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test';
-    const clientIP = request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || '127.0.0.1';
-    const isLocalhost = clientIP === '127.0.0.1' || clientIP === '::1' || clientIP === 'localhost';
-    
-    if (isDevelopment && isLocalhost && pathname.startsWith('/api/cron/')) {
-      middlewareLogger.debug('Bypassing security validation for localhost cron endpoint in development', {
-        path: pathname,
-        clientIP,
-        environment: process.env.NODE_ENV
-      });
-      return undefined; // Continue without security validation
-    }
+    // SECURITY CRITICAL: Remove ALL development bypasses for cron endpoints
+    // Authentication is ALWAYS required for cron endpoints regardless of environment
+    // This prevents accidental deployment with security bypasses enabled
     
     try {
       const securityResult = await MiddlewareSecurity.validateRequest(request, endpointType);

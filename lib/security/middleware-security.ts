@@ -1084,11 +1084,11 @@ export class MiddlewareSecurity {
         }
       }
 
-      // Step 3: Rate limiting
+      // Step 3: Rate limiting (ALWAYS applied regardless of authentication method)
       const securityConfig = getSecurityConfig();
       const rateLimitConfig = securityConfig.rateLimits[endpointType];
       const rateLimitResult = await rateLimiter.checkLimit(
-        `middleware-${endpointType.toLowerCase()}`,
+        `${endpointType.toLowerCase()}-endpoint`,
         clientIP,
         rateLimitConfig.limit,
         rateLimitConfig.windowMs
