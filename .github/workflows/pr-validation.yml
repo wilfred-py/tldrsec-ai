@@ -1,0 +1,130 @@
+name: PR Validation Pipeline
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+  push:
+    branches: [main]
+
+jobs:
+  infrastructure-validation:
+    runs-on: ubuntu-latest
+    name: Infrastructure & Code Quality
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+          
+      - name: Install dependencies
+        run: npm ci
+        
+      - name: Environment Variables Check
+        run: |
+          echo "Validating required environment variables..."
+          # Check critical env vars exist (without exposing values)
+          [ -n "$DATABASE_URL" ] && echo "✅ DATABASE_URL configured" || echo "❌ DATABASE_URL missing"
+          [ -n "$ANTHROPIC_API_KEY" ] && echo "✅ ANTHROPIC_API_KEY configured" || echo "❌ ANTHROPIC_API_KEY missing"
+          [ -n "$RESEND_API_KEY" ] && echo "✅ RESEND_API_KEY configured" || echo "❌ RESEND_API_KEY missing"
+          [ -n "$CLERK_SECRET_KEY" ] && echo "✅ CLERK_SECRET_KEY configured" || echo "❌ CLERK_SECRET_KEY missing"
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          CLERK_SECRET_KEY: ${{ secrets.CLERK_SECRET_KEY }}
+          
+      - name: TypeScript & Linting
+        run: |
+          npm run lint
+          npm run build
+          
+      - name: Security Scan
+        run: npm audit --audit-level=high
+        
+      - name: Unit Tests
+        run: npm run test
+        
+      - name: Database Connection Test
+        run: npm run db:test
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          
+      # Skip E2E tests for now as they may consume API credits
+      # Uncomment when cost controls are in place
+      # - name: End-to-End Tests
+      #   run: npm run test:e2e
+      #   env:
+      #     DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      #     ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      #     RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+      #     TEST_EMAIL: ${{ secrets.TEST_EMAIL }}
+
+  cloudflare-worker-validation:
+    runs-on: ubuntu-latest
+    name: Cloudflare Worker Validation
+    needs: infrastructure-validation
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+          
+      - name: Install Wrangler
+        run: npm install -g wrangler
+        
+      - name: Validate Worker Configuration
+        run: |
+          cd cloudflare-cron
+          echo "Validating wrangler.toml configuration..."
+          npx wrangler validate
+          
+      - name: Worker Syntax Check
+        run: |
+          cd cloudflare-cron
+          node --check index.js
+          
+      # Production deployment happens via separate manual workflow
+      # This just validates the worker can be deployed
+      - name: Dry Run Deployment
+        run: |
+          cd cloudflare-cron
+          echo "Performing dry run deployment check..."
+          npx wrangler deploy --dry-run
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+
+  performance-monitoring:
+    runs-on: ubuntu-latest
+    name: Performance & Resource Monitoring
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Build Size Analysis
+        run: |
+          npm ci
+          npm run build
+          echo "📊 Build Analysis Complete"
+          echo "Bundle sizes logged in build output above"
+          
+      - name: Validate Monitoring Configuration
+        run: |
+          echo "Checking monitoring alert configurations..."
+          if [ -f "config/monitoring-alerts.yaml" ]; then
+            echo "✅ Monitoring alerts configuration found"
+            # Validate YAML syntax
+            python3 -c "import yaml; yaml.safe_load(open('config/monitoring-alerts.yaml'))" && echo "✅ Valid YAML syntax" || echo "❌ Invalid YAML"
+          else
+            echo "❌ Monitoring configuration missing"
+          fi

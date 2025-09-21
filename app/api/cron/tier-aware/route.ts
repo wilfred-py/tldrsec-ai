@@ -120,12 +120,12 @@ const DAILY_COST_LIMITS = {
  * 
  * Runs every 5 minutes continuously since SEC filings can be published 24/7
  */
-export async function GET(_request: NextRequest) {
+export async function GET(request: NextRequest) {
   // DEBUG: Start logging immediately
   cronLogger.debug('Checkpoint 0: GET function entry');
   
-  // Initialize monitoring for Vercel platform
-  const platform = 'VERCEL_CRON';
+  // Detect platform based on environment variables
+  const platform: 'RAILWAY_CRON' | 'VERCEL_CRON' | 'MANUAL_TRIGGER' = process.env.RAILWAY_ENVIRONMENT ? 'MANUAL_TRIGGER' : 'VERCEL_CRON';
   cronLogger.debug('Checkpoint 0.1: Platform determined', { platform });
   let monitor: CronJobMonitor;
   
@@ -139,6 +139,97 @@ export async function GET(_request: NextRequest) {
       success: false,
       error: 'Failed to initialize monitoring'
     }, { status: 500 });
+  }
+  // SECURITY: Check if middleware already validated auth (production requests have special header)
+  // Note: Since request parameter was removed, middleware validation is not available
+  const middlewareValidated = false;
+  
+  if (middlewareValidated) {
+    // Middleware already validated auth, skip route-level validation
+    cronLogger.debug('Auth validation already handled by middleware.ts');
+  } else {
+    // Direct route call or middleware bypassed - validate auth here
+    const authHeader = request.headers.get('authorization');
+    const cronSecret = process.env.CRON_SECRET;
+    
+    if (!cronSecret || cronSecret.length < 32) {
+      cronLogger.error('CRON_SECRET not properly configured');
+      await monitor.complete(CronJobStatus.FAILED, 'Server configuration error');
+      return NextResponse.json({
+        success: false,
+        error: 'Server configuration error'
+      }, { status: 500 });
+    }
+
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      cronLogger.warn('Missing or invalid authorization header');
+      await monitor.complete(CronJobStatus.FAILED, 'Unauthorized access attempt');
+      return NextResponse.json({
+        success: false,
+        error: 'Unauthorized'
+      }, { status: 401 });
+    }
+
+    const token = authHeader.slice(7); // Remove 'Bearer '
+    
+    // Use timing-safe comparison to prevent timing attacks
+    const encoder = new TextEncoder();
+    const tokenBytes = encoder.encode(token);
+    const secretBytes = encoder.encode(cronSecret);
+    
+    // Compare lengths first
+    let isValid = tokenBytes.length === secretBytes.length;
+    
+    // Always compare full length to prevent timing attacks
+    const maxLength = Math.max(tokenBytes.length, secretBytes.length);
+    for (let i = 0; i < maxLength; i++) {
+      const tokenByte = i < tokenBytes.length ? tokenBytes[i] : 0;
+      const secretByte = i < secretBytes.length ? secretBytes[i] : 0;
+      if (tokenByte !== secretByte) {
+        isValid = false;
+      }
+    }
+    
+    if (!isValid) {
+      cronLogger.warn('Invalid authorization token');
+      await monitor.complete(CronJobStatus.FAILED, 'Unauthorized access attempt');
+      return NextResponse.json({
+        success: false,
+        error: 'Unauthorized'
+      }, { status: 401 });
+    }
+
+    // IP allowlist validation
+    const allowedIPs = process.env.CRON_ALLOWED_IPS;
+    const clientIP = request.headers.get('x-forwarded-for') || 
+                    request.headers.get('x-real-ip') || 
+                    'unknown';
+    
+    if (allowedIPs) {
+      const allowedIPList = allowedIPs.split(',').map(ip => ip.trim());
+      
+      if (!allowedIPList.includes(clientIP)) {
+        cronLogger.warn('IP not in allowlist', { clientIP, allowedIPs: allowedIPList });
+        await monitor.complete(CronJobStatus.FAILED, 'IP not allowed');
+        return NextResponse.json({
+          success: false,
+          error: 'Forbidden'
+        }, { status: 403 });
+      }
+    }
+
+    // Rate limiting for direct calls (tests) - in production, middleware handles this
+    const { rateLimiter } = await import('../../../../lib/security/rate-limiter');
+    const rateLimitResult = await rateLimiter.checkLimit('cron-endpoint', clientIP);
+    
+    if (!rateLimitResult.allowed) {
+      cronLogger.warn('Rate limit exceeded', { clientIP });
+      await monitor.complete(CronJobStatus.FAILED, 'Rate limit exceeded');
+      return NextResponse.json({
+        success: false,
+        error: 'Rate limit exceeded'
+      }, { status: 429 });
+    }
   }
   
   try {
@@ -434,7 +525,12 @@ async function processTierBatch(
             }).catch(err => cronLogger.error('Failed to create async audit log', { err }));
           });
           
-          return { success: false, error: `Cost validation failed: ${costValidation.error}` };
+          return { 
+            success: false, 
+            userId: userStatus.userId,
+            error: `Cost validation failed: ${costValidation.error}`,
+            errorType: 'COST_VALIDATION_FAILED'
+          };
         }
         
         const validatedCost = costValidation.sanitizedCost;
@@ -751,13 +847,13 @@ async function processUserTierFilings(user: User, tier: string) {
             const filingForProcessing = {
               id: filing.id, // Use database ID for transaction
               accessionNumber: filing.accessionNumber,
-              formType: filing.formType || filing.filingType || 'Unknown',
+              formType: filing.filingType || 'Unknown',
               filingDate: filing.filingDate || new Date(),
               filingUrl: filing.filingUrl, 
               tickerData: {
                 symbol: tickerValidation.symbol,
                 cik: tickerValidation.cik,
-                companyName: tickerValidation.companyName || originalTicker?.companyName || 'Unknown Company'
+                companyName: originalTicker?.companyName || 'Unknown Company'
               }
             };
 
@@ -936,8 +1032,8 @@ async function processSecFilingWithinTransaction(
           data: {
             tickerId: tickerRecord.id,
             filingType: filingForProcessing.formType,
-            filingDate: filingForProcessing.filingDate, // ✅ ADD THIS LINE
-            filingUrl: filingForProcessing.filingUrl,   // ✅ ADD THIS LINE
+            filingDate: filingForProcessing.filingDate,
+            filingUrl: filingForProcessing.filingUrl || '',
             summaryText: summaryResult.summary,
             summaryJSON: {
               ticker: filingForProcessing.tickerData.symbol,

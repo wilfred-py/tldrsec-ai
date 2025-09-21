@@ -28,15 +28,11 @@ export default {
         'X-Cron-Source': 'cloudflare-worker'
       };
       
-      console.log('Bypass secret value: ' + (env.VERCEL_AUTOMATION_BYPASS_SECRET ? '[REDACTED]' : 'UNDEFINED'));
-
       // Add Vercel deployment protection bypass via HTTP headers if configured
       if (env.VERCEL_AUTOMATION_BYPASS_SECRET) {
         headers['x-vercel-protection-bypass'] = env.VERCEL_AUTOMATION_BYPASS_SECRET;
         headers['x-vercel-set-bypass-cookie'] = 'true';
-        console.log('Added Vercel deployment protection bypass via HTTP headers');
-      } else {
-        console.log('No bypass secret available, continuing without bypass');
+        console.log('Request configured with deployment protection bypass');
       }
       
       let response;

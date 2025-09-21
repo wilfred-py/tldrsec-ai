@@ -1,0 +1,173 @@
+# Infrastructure Monitoring Configuration
+# Critical infrastructure monitoring rules for immediate deployment
+
+groups:
+  - name: cloudflare_worker_critical
+    interval: 30s
+    rules:
+      # Cloudflare Worker Health
+      - alert: CloudflareWorkerExecutionFailures
+        expr: cloudflare_worker_execution_errors_total > 3
+        for: 2m
+        labels:
+          severity: critical
+          service: cloudflare_worker
+          environment: production
+        annotations:
+          summary: "Cloudflare Worker cron executions failing"
+          description: "{{ $value }} worker execution failures in 2 minutes"
+          action: "Check Cloudflare Worker logs and Vercel endpoint connectivity"
+          
+      - alert: CloudflareWorkerAuthenticationFailures  
+        expr: cloudflare_worker_401_responses_total > 2
+        for: 1m
+        labels:
+          severity: critical
+          service: authentication
+        annotations:
+          summary: "Worker authentication failures detected"
+          description: "CRON_SECRET or VERCEL_AUTOMATION_BYPASS_SECRET may be misconfigured"
+          action: "Verify Cloudflare Worker secrets and Vercel protection settings"
+
+      # Vercel Endpoint Monitoring
+      - alert: VercelEndpointDown
+        expr: up{job="vercel_cron_endpoint"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          service: vercel
+        annotations:
+          summary: "Vercel cron endpoint unreachable"
+          description: "https://tldrsec.app/api/cron/tier-aware is not responding"
+          action: "Check Vercel deployment status and DNS resolution"
+
+      - alert: VercelEndpointHighLatency
+        expr: http_request_duration_seconds{endpoint="/api/cron/tier-aware"} > 30
+        for: 3m
+        labels:
+          severity: warning
+          service: vercel
+        annotations:
+          summary: "High latency on Vercel cron endpoint"
+          description: "Cron endpoint response time: {{ $value }}s (target: <30s)"
+
+  - name: database_critical
+    interval: 30s  
+    rules:
+      # Database Connection Pool
+      - alert: DatabaseConnectionPoolExhaustion
+        expr: database_connections_active / database_connections_max > 0.9
+        for: 2m
+        labels:
+          severity: critical
+          service: database
+        annotations:
+          summary: "Database connection pool nearly exhausted"
+          description: "{{ $value | humanizePercentage }} of database connections in use"
+          action: "Scale database connections or investigate connection leaks"
+
+      - alert: DatabaseQueryTimeout
+        expr: database_query_timeout_total > 5
+        for: 5m
+        labels:
+          severity: warning
+          service: database
+        annotations:
+          summary: "Database query timeouts detected"
+          description: "{{ $value }} queries timed out in last 5 minutes"
+
+  - name: api_rate_limiting
+    interval: 30s
+    rules:
+      # Claude API Rate Limiting
+      - alert: ClaudeAPIRateLimitExceeded
+        expr: increase(claude_api_rate_limit_errors_total[5m]) > 10
+        for: 1m
+        labels:
+          severity: critical
+          service: claude_api
+        annotations:
+          summary: "Claude API rate limit exceeded"
+          description: "{{ $value }} rate limit errors in 5 minutes"
+          action: "Implement circuit breaker or reduce API call frequency"
+
+      - alert: ClaudeAPIQuotaAlert
+        expr: claude_api_tokens_used_daily / claude_api_tokens_quota_daily > 0.8
+        for: 1m
+        labels:
+          severity: warning
+          service: claude_api
+        annotations:
+          summary: "Claude API approaching daily quota"
+          description: "{{ $value | humanizePercentage }} of daily token quota used"
+
+  - name: email_delivery_critical
+    interval: 60s
+    rules:
+      # Email Delivery Monitoring
+      - alert: EmailDeliveryFailures
+        expr: increase(email_delivery_failures_total[10m]) > 5
+        for: 2m
+        labels:
+          severity: critical
+          service: email
+        annotations:
+          summary: "Email delivery failures detected"
+          description: "{{ $value }} email delivery failures in 10 minutes"
+          action: "Check Resend API status and authentication"
+
+      - alert: EmailDeliveryLatency
+        expr: email_delivery_duration_seconds > 10
+        for: 5m
+        labels:
+          severity: warning
+          service: email
+        annotations:
+          summary: "High email delivery latency"
+          description: "Email delivery taking {{ $value }}s (target: <5s)"
+
+  - name: business_logic_critical
+    interval: 60s
+    rules:
+      # SEC Filing Processing
+      - alert: SECFilingProcessingStalled
+        expr: increase(sec_filing_processed_total[30m]) == 0
+        for: 30m
+        labels:
+          severity: warning
+          service: sec_processing
+        annotations:
+          summary: "No SEC filings processed in 30 minutes"
+          description: "SEC filing processing pipeline may be stalled"
+          action: "Check RSS feed connectivity and cron job execution"
+
+      - alert: SECFilingParsingErrors
+        expr: increase(sec_filing_parsing_errors_total[15m]) > 10
+        for: 5m
+        labels:
+          severity: warning
+          service: sec_processing
+        annotations:
+          summary: "High SEC filing parsing error rate"
+          description: "{{ $value }} parsing errors in 15 minutes"
+
+# Recording rules for dashboards
+  - name: infrastructure_sla_recording
+    interval: 60s
+    rules:
+      - record: infrastructure:availability:1h
+        expr: |
+          (
+            sum(rate(http_requests_total{status!~"5.."}[1h])) /
+            sum(rate(http_requests_total[1h]))
+          )
+
+      - record: infrastructure:response_time_p95:1h  
+        expr: histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[1h]))
+
+      - record: infrastructure:error_rate:5m
+        expr: |
+          (
+            sum(rate(http_requests_total{status=~"5.."}[5m])) /
+            sum(rate(http_requests_total[5m]))
+          )

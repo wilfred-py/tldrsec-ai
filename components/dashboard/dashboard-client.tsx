@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { DashboardHeader } from "@/components/dashboard";
 import { CompanySearch } from "@/components/dashboard/company-search";
-import { SettingsIcon, Trash2Icon, PlusIcon, ArrowUpDown } from "lucide-react";
+import { SettingsIcon, Trash2Icon, PlusIcon, ArrowUpDown, Loader2 } from "lucide-react";
 
 import {
   Table,
@@ -373,7 +373,8 @@ export function DashboardClient() {
         </div>
         
         {isLoadingCompanies ? (
-          <div className="flex min-h-[200px] flex-col items-center justify-center rounded-md border border-dashed p-4 sm:p-8 text-center">
+          <div className="flex min-h-[200px] flex-col items-center justify-center rounded-md border border-dashed p-4 sm:p-8 text-center space-y-3">
+            <Loader2 className="h-6 w-6 text-muted-foreground animate-spin" />
             <p className="text-sm text-muted-foreground">Loading tracked companies...</p>
           </div>
         ) : showEmptyState ? (

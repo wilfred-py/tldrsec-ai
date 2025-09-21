@@ -2,6 +2,7 @@
 
 import { Loader2, AlertCircle } from "lucide-react";
 import { Card, CardContent } from "./card";
+import { Button } from "./button";
 
 interface ServiceInitializingProps {
   message?: string;
@@ -100,16 +101,17 @@ export function ServiceError({
               className="text-red-700 text-sm mb-4"
             >
               We&apos;re experiencing a temporary issue. Please try again in {retryAfter} seconds.
-              If the problem persists, our team has been notified.
+              If the problem persists, our team has been automatically notified and is working on a resolution.
             </p>
             {onRetry && (
-              <button
+              <Button
                 onClick={onRetry}
-                className="px-4 py-2 bg-red-600 text-white text-sm rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 transition-colors"
+                variant="destructive"
+                size="sm"
                 aria-describedby="service-error-description"
               >
                 Try Again
-              </button>
+              </Button>
             )}
           </div>
         </div>
