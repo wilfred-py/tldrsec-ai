@@ -120,7 +120,7 @@ const DAILY_COST_LIMITS = {
  * 
  * Runs every 5 minutes continuously since SEC filings can be published 24/7
  */
-export async function GET(_request: NextRequest) {
+export async function GET(request: NextRequest) {
   // DEBUG: Start logging immediately
   cronLogger.debug('Checkpoint 0: GET function entry');
   
