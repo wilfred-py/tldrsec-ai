@@ -213,8 +213,8 @@ describe('Comprehensive Cron Integration Tests', () => {
     jest.clearAllMocks();
     
     // Set up required environment variables (with proper lengths for security validation)
-    process.env.CRON_SECRET = 'mgL5bgG9vJQu448gHpjsVZcBCLBdupW0bD9YWw11TC9ix2mhC0zE4LxG64M5LqEuUCRJfAnd05i9LD0r'; // Use actual secret for consistency
-    process.env.CRON_SIGNATURE_SECRET = 'test-signature-secret-1234567890123456789012';
+    process.env.CRON_SECRET = process.env.TEST_CRON_SECRET || 'test-cron-secret-key-minimum-32-chars-long-for-security-validation';
+    process.env.CRON_SIGNATURE_SECRET = process.env.TEST_CRON_SIGNATURE_SECRET || 'test-signature-secret-1234567890123456789012';
     process.env.DATABASE_URL = 'postgresql://test:test@localhost:5432/testdb';
     process.env.NODE_ENV = 'test';
     
@@ -417,10 +417,10 @@ describe('Comprehensive Cron Integration Tests', () => {
       it('should detect Railway environment correctly', async () => {
         // Test Railway environment detection
         process.env.RAILWAY_ENVIRONMENT = 'production';
-        process.env.CRON_SECRET = 'mgL5bgG9vJQu448gHpjsVZcBCLBdupW0bD9YWw11TC9ix2mhC0zE4LxG64M5LqEuUCRJfAnd05i9LD0r';
+        process.env.CRON_SECRET = process.env.TEST_CRON_SECRET || 'test-cron-secret-key-minimum-32-chars-long-for-security-validation';
         
         const request = createMockRequest({
-          authorization: 'Bearer mgL5bgG9vJQu448gHpjsVZcBCLBdupW0bD9YWw11TC9ix2mhC0zE4LxG64M5LqEuUCRJfAnd05i9LD0r',
+          authorization: `Bearer ${process.env.CRON_SECRET}`,
           'x-forwarded-for': '10.0.0.1'
         });
 
@@ -443,10 +443,10 @@ describe('Comprehensive Cron Integration Tests', () => {
       it('should detect Vercel environment when Railway env is not set', async () => {
         // Test Vercel environment detection (default)
         delete process.env.RAILWAY_ENVIRONMENT;
-        process.env.CRON_SECRET = 'mgL5bgG9vJQu448gHpjsVZcBCLBdupW0bD9YWw11TC9ix2mhC0zE4LxG64M5LqEuUCRJfAnd05i9LD0r';
+        process.env.CRON_SECRET = process.env.TEST_CRON_SECRET || 'test-cron-secret-key-minimum-32-chars-long-for-security-validation';
         
         const request = createMockRequest({
-          authorization: 'Bearer mgL5bgG9vJQu448gHpjsVZcBCLBdupW0bD9YWw11TC9ix2mhC0zE4LxG64M5LqEuUCRJfAnd05i9LD0r'
+          authorization: `Bearer ${process.env.CRON_SECRET}`
         });
 
         const response = await tierAwareRoute(request);
@@ -480,7 +480,7 @@ describe('Comprehensive Cron Integration Tests', () => {
         process.env.ENTERPRISE_COST_LIMIT = '2.50';
         process.env.PROFESSIONAL_COST_LIMIT = '1.20';
         process.env.FREE_COST_LIMIT = '0.40';
-        process.env.CRON_SECRET = 'mgL5bgG9vJQu448gHpjsVZcBCLBdupW0bD9YWw11TC9ix2mhC0zE4LxG64M5LqEuUCRJfAnd05i9LD0r';
+        process.env.CRON_SECRET = process.env.TEST_CRON_SECRET || 'test-cron-secret-key-minimum-32-chars-long-for-security-validation';
 
         // Mock eligible users to test tier processing
         mockMarketHours.getEligibleUsers.mockReturnValue([
@@ -522,7 +522,7 @@ describe('Comprehensive Cron Integration Tests', () => {
         });
 
         const request = createMockRequest({
-          authorization: 'Bearer mgL5bgG9vJQu448gHpjsVZcBCLBdupW0bD9YWw11TC9ix2mhC0zE4LxG64M5LqEuUCRJfAnd05i9LD0r'
+          authorization: `Bearer ${process.env.CRON_SECRET}`
         });
 
         const response = await tierAwareRoute(request);
@@ -539,11 +539,12 @@ describe('Comprehensive Cron Integration Tests', () => {
 
     describe('Authentication Security', () => {
       it('should use timing-safe string comparison for secrets', async () => {
-        process.env.CRON_SECRET = 'mgL5bgG9vJQu448gHpjsVZcBCLBdupW0bD9YWw11TC9ix2mhC0zE4LxG64M5LqEuUCRJfAnd05i9LD0r';
+        process.env.CRON_SECRET = process.env.TEST_CRON_SECRET || 'test-cron-secret-key-minimum-32-chars-long-for-security-validation';
         
         // Test with similar but incorrect secret (timing attack protection)
+        const incorrectSecret = process.env.CRON_SECRET.slice(0, -1) + 'x'; // One character off
         const request = createMockRequest({
-          authorization: 'Bearer mgL5bgG9vJQu448gHpjsVZcBCLBdupW0bD9YWw11TC9ix2mhC0zE4LxG64M5LqEuUCRJfAnd05i9LD0x'  // One character off
+          authorization: `Bearer ${incorrectSecret}`
         });
 
         const response = await tierAwareRoute(request);
@@ -554,7 +555,7 @@ describe('Comprehensive Cron Integration Tests', () => {
 
       it('should NOT allow localhost bypass in any environment', async () => {
         process.env.NODE_ENV = 'development';
-        process.env.CRON_SECRET = 'mgL5bgG9vJQu448gHpjsVZcBCLBdupW0bD9YWw11TC9ix2mhC0zE4LxG64M5LqEuUCRJfAnd05i9LD0r';
+        process.env.CRON_SECRET = process.env.TEST_CRON_SECRET || 'test-cron-secret-key-minimum-32-chars-long-for-security-validation';
         
         const request = createMockRequest({
           // No authorization header - should fail
@@ -570,7 +571,7 @@ describe('Comprehensive Cron Integration Tests', () => {
 
       it('should enforce authentication in production even for localhost', async () => {
         process.env.NODE_ENV = 'production';
-        process.env.CRON_SECRET = 'mgL5bgG9vJQu448gHpjsVZcBCLBdupW0bD9YWw11TC9ix2mhC0zE4LxG64M5LqEuUCRJfAnd05i9LD0r';
+        process.env.CRON_SECRET = process.env.TEST_CRON_SECRET || 'test-cron-secret-key-minimum-32-chars-long-for-security-validation';
         
         const request = createMockRequest({
           // No authorization header
@@ -585,12 +586,12 @@ describe('Comprehensive Cron Integration Tests', () => {
 
     describe('IP Allowlist Configuration', () => {
       it('should respect IP allowlist when configured', async () => {
-        process.env.CRON_SECRET = 'mgL5bgG9vJQu448gHpjsVZcBCLBdupW0bD9YWw11TC9ix2mhC0zE4LxG64M5LqEuUCRJfAnd05i9LD0r';
+        process.env.CRON_SECRET = process.env.TEST_CRON_SECRET || 'test-cron-secret-key-minimum-32-chars-long-for-security-validation';
         process.env.CRON_ALLOWED_IPS = '10.0.0.1,192.168.1.100';
         
         // Test allowed IP
         const allowedRequest = createMockRequest({
-          authorization: 'Bearer mgL5bgG9vJQu448gHpjsVZcBCLBdupW0bD9YWw11TC9ix2mhC0zE4LxG64M5LqEuUCRJfAnd05i9LD0r',
+          authorization: `Bearer ${process.env.CRON_SECRET}`,
           'x-forwarded-for': '10.0.0.1'
         });
 
@@ -604,7 +605,7 @@ describe('Comprehensive Cron Integration Tests', () => {
 
         // Test disallowed IP
         const disallowedRequest = createMockRequest({
-          authorization: 'Bearer mgL5bgG9vJQu448gHpjsVZcBCLBdupW0bD9YWw11TC9ix2mhC0zE4LxG64M5LqEuUCRJfAnd05i9LD0r',
+          authorization: `Bearer ${process.env.CRON_SECRET}`,
           'x-forwarded-for': '192.168.1.101'
         });
 
@@ -613,11 +614,11 @@ describe('Comprehensive Cron Integration Tests', () => {
       });
 
       it('should allow all IPs when allowlist is empty', async () => {
-        process.env.CRON_SECRET = 'mgL5bgG9vJQu448gHpjsVZcBCLBdupW0bD9YWw11TC9ix2mhC0zE4LxG64M5LqEuUCRJfAnd05i9LD0r';
+        process.env.CRON_SECRET = process.env.TEST_CRON_SECRET || 'test-cron-secret-key-minimum-32-chars-long-for-security-validation';
         delete process.env.CRON_ALLOWED_IPS;
         
         const request = createMockRequest({
-          authorization: 'Bearer mgL5bgG9vJQu448gHpjsVZcBCLBdupW0bD9YWw11TC9ix2mhC0zE4LxG64M5LqEuUCRJfAnd05i9LD0r',
+          authorization: `Bearer ${process.env.CRON_SECRET}`,
           'x-forwarded-for': '192.168.1.101'
         });
 
@@ -629,7 +630,7 @@ describe('Comprehensive Cron Integration Tests', () => {
 
   describe('2. Cron Endpoint Integration Tests', () => {
     beforeEach(() => {
-      process.env.CRON_SECRET = 'mgL5bgG9vJQu448gHpjsVZcBCLBdupW0bD9YWw11TC9ix2mhC0zE4LxG64M5LqEuUCRJfAnd05i9LD0r';
+      process.env.CRON_SECRET = process.env.TEST_CRON_SECRET || 'test-cron-secret-key-minimum-32-chars-long-for-security-validation';
     });
 
     describe('Market Hours Context', () => {
@@ -658,7 +659,7 @@ describe('Comprehensive Cron Integration Tests', () => {
         ]);
 
         const request = createMockRequest({
-          authorization: 'Bearer mgL5bgG9vJQu448gHpjsVZcBCLBdupW0bD9YWw11TC9ix2mhC0zE4LxG64M5LqEuUCRJfAnd05i9LD0r'
+          authorization: `Bearer ${process.env.CRON_SECRET}`
         });
 
         const response = await tierAwareRoute(request);
@@ -696,7 +697,7 @@ describe('Comprehensive Cron Integration Tests', () => {
         mockMarketHours.getEligibleUsers.mockReturnValue([]);
 
         const request = createMockRequest({
-          authorization: 'Bearer mgL5bgG9vJQu448gHpjsVZcBCLBdupW0bD9YWw11TC9ix2mhC0zE4LxG64M5LqEuUCRJfAnd05i9LD0r'
+          authorization: `Bearer ${process.env.CRON_SECRET}`
         });
 
         const response = await tierAwareRoute(request);
@@ -721,7 +722,7 @@ describe('Comprehensive Cron Integration Tests', () => {
         });
 
         const request = createMockRequest({
-          authorization: 'Bearer mgL5bgG9vJQu448gHpjsVZcBCLBdupW0bD9YWw11TC9ix2mhC0zE4LxG64M5LqEuUCRJfAnd05i9LD0r'
+          authorization: `Bearer ${process.env.CRON_SECRET}`
         });
 
         const response = await tierAwareRoute(request);
@@ -763,7 +764,7 @@ describe('Comprehensive Cron Integration Tests', () => {
         mockTickerMonitoring.checkTickerForNewFilings.mockResolvedValue(mockNewFilings);
 
         const request = createMockRequest({
-          authorization: 'Bearer mgL5bgG9vJQu448gHpjsVZcBCLBdupW0bD9YWw11TC9ix2mhC0zE4LxG64M5LqEuUCRJfAnd05i9LD0r'
+          authorization: `Bearer ${process.env.CRON_SECRET}`
         });
 
         const response = await tierAwareRoute(request);
@@ -796,7 +797,7 @@ describe('Comprehensive Cron Integration Tests', () => {
         mockTickerMonitoring.checkTickerForNewFilings.mockRejectedValue(new Error('SEC server timeout'));
 
         const request = createMockRequest({
-          authorization: 'Bearer mgL5bgG9vJQu448gHpjsVZcBCLBdupW0bD9YWw11TC9ix2mhC0zE4LxG64M5LqEuUCRJfAnd05i9LD0r'
+          authorization: `Bearer ${process.env.CRON_SECRET}`
         });
 
         const response = await tierAwareRoute(request);
@@ -825,7 +826,7 @@ describe('Comprehensive Cron Integration Tests', () => {
         mockTickerMonitoring.checkTickerForNewFilings.mockResolvedValue([]);
 
         const request = createMockRequest({
-          authorization: 'Bearer mgL5bgG9vJQu448gHpjsVZcBCLBdupW0bD9YWw11TC9ix2mhC0zE4LxG64M5LqEuUCRJfAnd05i9LD0r'
+          authorization: `Bearer ${process.env.CRON_SECRET}`
         });
 
         const response = await tierAwareRoute(request);
@@ -907,7 +908,7 @@ describe('Comprehensive Cron Integration Tests', () => {
         });
 
         const request = createMockRequest({
-          authorization: 'Bearer mgL5bgG9vJQu448gHpjsVZcBCLBdupW0bD9YWw11TC9ix2mhC0zE4LxG64M5LqEuUCRJfAnd05i9LD0r'
+          authorization: `Bearer ${process.env.CRON_SECRET}`
         });
 
         const response = await tierAwareRoute(request);
@@ -924,7 +925,7 @@ describe('Comprehensive Cron Integration Tests', () => {
 
   describe('3. Database Consistency Tests', () => {
     beforeEach(() => {
-      process.env.CRON_SECRET = 'mgL5bgG9vJQu448gHpjsVZcBCLBdupW0bD9YWw11TC9ix2mhC0zE4LxG64M5LqEuUCRJfAnd05i9LD0r';
+      process.env.CRON_SECRET = process.env.TEST_CRON_SECRET || 'test-cron-secret-key-minimum-32-chars-long-for-security-validation';
     });
 
     describe('TickerMonitoring Record Validation', () => {
@@ -982,7 +983,7 @@ describe('Comprehensive Cron Integration Tests', () => {
         mockMarketHours.getEligibleUsers.mockReturnValue([]);
 
         const request = createMockRequest({
-          authorization: 'Bearer mgL5bgG9vJQu448gHpjsVZcBCLBdupW0bD9YWw11TC9ix2mhC0zE4LxG64M5LqEuUCRJfAnd05i9LD0r'
+          authorization: `Bearer ${process.env.CRON_SECRET}`
         });
 
         const response = await tierAwareRoute(request);
@@ -1022,7 +1023,7 @@ describe('Comprehensive Cron Integration Tests', () => {
         ]);
 
         const request = createMockRequest({
-          authorization: 'Bearer mgL5bgG9vJQu448gHpjsVZcBCLBdupW0bD9YWw11TC9ix2mhC0zE4LxG64M5LqEuUCRJfAnd05i9LD0r'
+          authorization: `Bearer ${process.env.CRON_SECRET}`
         });
 
         const response = await tierAwareRoute(request);
@@ -1067,7 +1068,7 @@ describe('Comprehensive Cron Integration Tests', () => {
           .mockResolvedValueOnce([]);                // Second check finds no new filings (already processed)
 
         const request = createMockRequest({
-          authorization: 'Bearer mgL5bgG9vJQu448gHpjsVZcBCLBdupW0bD9YWw11TC9ix2mhC0zE4LxG64M5LqEuUCRJfAnd05i9LD0r'
+          authorization: `Bearer ${process.env.CRON_SECRET}`
         });
 
         // First execution
@@ -1155,7 +1156,7 @@ describe('Comprehensive Cron Integration Tests', () => {
         );
 
         const request = createMockRequest({
-          authorization: 'Bearer mgL5bgG9vJQu448gHpjsVZcBCLBdupW0bD9YWw11TC9ix2mhC0zE4LxG64M5LqEuUCRJfAnd05i9LD0r'
+          authorization: `Bearer ${process.env.CRON_SECRET}`
         });
 
         const response = await tierAwareRoute(request);
@@ -1233,7 +1234,7 @@ describe('Comprehensive Cron Integration Tests', () => {
         });
         
         const request = createMockRequest({
-          authorization: 'Bearer mgL5bgG9vJQu448gHpjsVZcBCLBdupW0bD9YWw11TC9ix2mhC0zE4LxG64M5LqEuUCRJfAnd05i9LD0r'
+          authorization: `Bearer ${process.env.CRON_SECRET}`
         });
 
         const response = await tierAwareRoute(request);
@@ -1253,7 +1254,7 @@ describe('Comprehensive Cron Integration Tests', () => {
 
   describe('4. End-to-End Workflow Tests', () => {
     beforeEach(() => {
-      process.env.CRON_SECRET = 'mgL5bgG9vJQu448gHpjsVZcBCLBdupW0bD9YWw11TC9ix2mhC0zE4LxG64M5LqEuUCRJfAnd05i9LD0r';
+      process.env.CRON_SECRET = process.env.TEST_CRON_SECRET || 'test-cron-secret-key-minimum-32-chars-long-for-security-validation';
     });
 
     it('should complete full RSS → filing detection → summarization → email pipeline', async () => {
@@ -1356,7 +1357,7 @@ describe('Comprehensive Cron Integration Tests', () => {
       });
 
       const request = createMockRequest({
-        authorization: 'Bearer mgL5bgG9vJQu448gHpjsVZcBCLBdupW0bD9YWw11TC9ix2mhC0zE4LxG64M5LqEuUCRJfAnd05i9LD0r'
+        authorization: `Bearer ${process.env.CRON_SECRET}`
       });
 
       const response = await tierAwareRoute(request);
@@ -1464,7 +1465,7 @@ describe('Comprehensive Cron Integration Tests', () => {
       mockTickerMonitoring.markFilingAsProcessed.mockResolvedValue();
 
       const request = createMockRequest({
-        authorization: 'Bearer mgL5bgG9vJQu448gHpjsVZcBCLBdupW0bD9YWw11TC9ix2mhC0zE4LxG64M5LqEuUCRJfAnd05i9LD0r'
+        authorization: `Bearer ${process.env.CRON_SECRET}`
       });
 
       const response = await tierAwareRoute(request);
@@ -1482,7 +1483,7 @@ describe('Comprehensive Cron Integration Tests', () => {
 
   describe('5. Regression Prevention Tests', () => {
     beforeEach(() => {
-      process.env.CRON_SECRET = 'mgL5bgG9vJQu448gHpjsVZcBCLBdupW0bD9YWw11TC9ix2mhC0zE4LxG64M5LqEuUCRJfAnd05i9LD0r';
+      process.env.CRON_SECRET = process.env.TEST_CRON_SECRET || 'test-cron-secret-key-minimum-32-chars-long-for-security-validation';
     });
 
     describe('Authentication Regression Tests', () => {
@@ -1543,7 +1544,7 @@ describe('Comprehensive Cron Integration Tests', () => {
         });
 
         const request = createMockRequest({
-          authorization: 'Bearer mgL5bgG9vJQu448gHpjsVZcBCLBdupW0bD9YWw11TC9ix2mhC0zE4LxG64M5LqEuUCRJfAnd05i9LD0r',
+          authorization: `Bearer ${process.env.CRON_SECRET}`,
           'x-forwarded-for': '10.0.0.1'
         });
 
@@ -1560,7 +1561,7 @@ describe('Comprehensive Cron Integration Tests', () => {
         });
 
         const request = createMockRequest({
-          authorization: 'Bearer mgL5bgG9vJQu448gHpjsVZcBCLBdupW0bD9YWw11TC9ix2mhC0zE4LxG64M5LqEuUCRJfAnd05i9LD0r',
+          authorization: `Bearer ${process.env.CRON_SECRET}`,
           'x-forwarded-for': '10.0.0.1'
         });
 
@@ -1625,7 +1626,7 @@ describe('Comprehensive Cron Integration Tests', () => {
         mockConcurrency.updateUserBudgetWithLock.mockRejectedValue(concurrencyError);
 
         const request = createMockRequest({
-          authorization: 'Bearer mgL5bgG9vJQu448gHpjsVZcBCLBdupW0bD9YWw11TC9ix2mhC0zE4LxG64M5LqEuUCRJfAnd05i9LD0r'
+          authorization: `Bearer ${process.env.CRON_SECRET}`
         });
 
         const response = await tierAwareRoute(request);
@@ -1644,7 +1645,7 @@ describe('Comprehensive Cron Integration Tests', () => {
         );
 
         const request = createMockRequest({
-          authorization: 'Bearer mgL5bgG9vJQu448gHpjsVZcBCLBdupW0bD9YWw11TC9ix2mhC0zE4LxG64M5LqEuUCRJfAnd05i9LD0r'
+          authorization: `Bearer ${process.env.CRON_SECRET}`
         });
 
         const response = await tierAwareRoute(request);
@@ -1662,7 +1663,7 @@ describe('Comprehensive Cron Integration Tests', () => {
         );
 
         const request = createMockRequest({
-          authorization: 'Bearer mgL5bgG9vJQu448gHpjsVZcBCLBdupW0bD9YWw11TC9ix2mhC0zE4LxG64M5LqEuUCRJfAnd05i9LD0r'
+          authorization: `Bearer ${process.env.CRON_SECRET}`
         });
 
         const response = await tierAwareRoute(request);

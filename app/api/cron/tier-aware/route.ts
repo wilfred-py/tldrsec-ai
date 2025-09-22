@@ -142,7 +142,7 @@ export async function GET(request: NextRequest) {
   }
   // SECURITY: Check if middleware already validated auth (production requests have special header)
   // Note: Since request parameter was removed, middleware validation is not available
-  const middlewareValidated = false;
+  const middlewareValidated = request.headers.get('x-security-validated') === 'true';
   
   if (middlewareValidated) {
     // Middleware already validated auth, skip route-level validation

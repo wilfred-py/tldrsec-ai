@@ -142,15 +142,22 @@ const cronAuthMiddleware = async (request: NextRequest): Promise<NextResponse | 
       }
     }
 
-    // Authentication successful - continue to route handler
+    // Authentication successful - continue to route handler with validation header
     middlewareLogger.info('Cron authentication successful', {
       pathname,
       clientIP,
       timestamp: new Date().toISOString()
     });
     
-    // Return undefined to continue to the route handler
-    return undefined;
+    // Set header to indicate middleware validation succeeded and continue
+    const requestHeaders = new Headers(request.headers);
+    requestHeaders.set('x-security-validated', 'true');
+    
+    return NextResponse.next({
+      request: {
+        headers: requestHeaders
+      }
+    });
     
   } catch (error) {
     middlewareLogger.error('Cron authentication error', { error, pathname });
@@ -321,16 +328,8 @@ export default async function middleware(request: NextRequest) {
   // First: Handle cron authentication independently
   const cronResponse = await cronAuthMiddleware(request);
   if (cronResponse) {
-    // Cron middleware handled the request (auth failed) - return response
+    // Cron middleware handled the request (either auth failed or succeeded with headers)
     return cronResponse;
-  }
-  
-  // If request is for /api/cron/* and no response, cron auth succeeded - continue to route
-  if (request.nextUrl.pathname.startsWith('/api/cron/')) {
-    middlewareLogger.info('Cron authentication successful, continuing to route handler', {
-      pathname: request.nextUrl.pathname
-    });
-    return; // Continue to route handler, bypassing Clerk completely
   }
   
   // For all other requests: Use Clerk middleware with security middleware
