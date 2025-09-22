@@ -6,6 +6,175 @@ import { logger } from './lib/logging'
 const middlewareLogger = logger.child('security-middleware');
 
 /**
+ * Independent cron authentication middleware
+ * Handles /api/cron/* requests completely before Clerk middleware
+ */
+const cronAuthMiddleware = async (request: NextRequest): Promise<NextResponse | undefined> => {
+  const url = new URL(request.url);
+  const pathname = url.pathname;
+  
+  // Only handle cron endpoints
+  if (!pathname.startsWith('/api/cron/')) {
+    return undefined; // Pass to next middleware (Clerk)
+  }
+  
+  middlewareLogger.info('Processing cron request independently of Clerk', {
+    pathname,
+    timestamp: new Date().toISOString()
+  });
+  
+  try {
+    // Check both Authorization and X-Cron-Auth headers (X-Cron-Auth avoids Clerk conflicts)
+    const authHeader = request.headers.get('authorization') || request.headers.get('x-cron-auth');
+    const cronSecret = process.env.CRON_SECRET;
+    
+    if (!cronSecret || cronSecret.length < 32) {
+      middlewareLogger.error('CRON_SECRET not properly configured');
+      return new NextResponse(
+        JSON.stringify({
+          error: 'Server configuration error',
+          code: 500,
+          timestamp: new Date().toISOString(),
+          path: pathname
+        }),
+        {
+          status: 500,
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Content-Type-Options': 'nosniff',
+            'X-Frame-Options': 'DENY',
+            'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0'
+          }
+        }
+      );
+    }
+
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      middlewareLogger.warn('Missing or invalid authorization header for cron request');
+      return new NextResponse(
+        JSON.stringify({
+          error: 'Unauthorized',
+          code: 401,
+          timestamp: new Date().toISOString(),
+          path: pathname
+        }),
+        {
+          status: 401,
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Content-Type-Options': 'nosniff',
+            'X-Frame-Options': 'DENY',
+            'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0'
+          }
+        }
+      );
+    }
+
+    const token = authHeader.slice(7); // Remove 'Bearer '
+    
+    // Use timing-safe comparison to prevent timing attacks
+    const encoder = new TextEncoder();
+    const tokenBytes = encoder.encode(token);
+    const secretBytes = encoder.encode(cronSecret);
+    
+    // Compare lengths first
+    let isValid = tokenBytes.length === secretBytes.length;
+    
+    // Always compare full length to prevent timing attacks
+    const maxLength = Math.max(tokenBytes.length, secretBytes.length);
+    for (let i = 0; i < maxLength; i++) {
+      const tokenByte = i < tokenBytes.length ? tokenBytes[i] : 0;
+      const secretByte = i < secretBytes.length ? secretBytes[i] : 0;
+      if (tokenByte !== secretByte) {
+        isValid = false;
+      }
+    }
+    
+    if (!isValid) {
+      middlewareLogger.warn('Invalid authorization token for cron request');
+      return new NextResponse(
+        JSON.stringify({
+          error: 'Unauthorized',
+          code: 401,
+          timestamp: new Date().toISOString(),
+          path: pathname
+        }),
+        {
+          status: 401,
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Content-Type-Options': 'nosniff',
+            'X-Frame-Options': 'DENY',
+            'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0'
+          }
+        }
+      );
+    }
+
+    // Optional: IP allowlist validation for cron requests
+    const clientIP = request.headers.get('x-forwarded-for') || 
+                    request.headers.get('x-real-ip') || 
+                    'unknown';
+    
+    const allowedIPs = process.env.CRON_ALLOWED_IPS;
+    if (allowedIPs) {
+      const allowedIPList = allowedIPs.split(',').map(ip => ip.trim());
+      
+      if (!allowedIPList.includes(clientIP)) {
+        middlewareLogger.warn('IP not in allowlist for cron request', { clientIP, allowedIPs: allowedIPList });
+        return new NextResponse(
+          JSON.stringify({
+            error: 'Forbidden',
+            code: 403,
+            timestamp: new Date().toISOString(),
+            path: pathname
+          }),
+          {
+            status: 403,
+            headers: {
+              'Content-Type': 'application/json',
+              'X-Content-Type-Options': 'nosniff',
+              'X-Frame-Options': 'DENY',
+              'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0'
+            }
+          }
+        );
+      }
+    }
+
+    // Authentication successful - continue to route handler
+    middlewareLogger.info('Cron authentication successful', {
+      pathname,
+      clientIP,
+      timestamp: new Date().toISOString()
+    });
+    
+    // Return undefined to continue to the route handler
+    return undefined;
+    
+  } catch (error) {
+    middlewareLogger.error('Cron authentication error', { error, pathname });
+    
+    return new NextResponse(
+      JSON.stringify({
+        error: 'Authentication failed',
+        code: 500,
+        timestamp: new Date().toISOString()
+      }),
+      {
+        status: 500,
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Content-Type-Options': 'nosniff',
+          'X-Frame-Options': 'DENY',
+          'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0'
+        }
+      }
+    );
+  }
+};
+
+/**
  * Production-grade security middleware with defense-in-depth protection
  * 
  * Security Controls Implemented:
@@ -144,42 +313,59 @@ const securityMiddleware = async (request: NextRequest): Promise<NextResponse | 
   return undefined; // Continue to Clerk middleware
 };
 
-export default clerkMiddleware(
-  async (auth, request: NextRequest) => {
-    // First apply our security middleware
-    const securityResponse = await securityMiddleware(request);
-    if (securityResponse) {
-      return securityResponse;
-    }
-    
-    // Continue with default Clerk processing
-    return;
-  },
-  {
-    publicRoutes: [
-      // Cron endpoints (secured by our middleware security validation)
-      '/api/cron/tier-aware',
-      '/api/cron/unified',
-      '/api/cron/monitor-sec-filings', // Add other cron endpoints
-      
-      // Health endpoints (rate-limited by our middleware)
-      '/api/health',
-      '/api/health/database',
-      '/api/health/liveness',
-      '/api/health/readiness',
-      '/api/health/optimized',
-      '/api/health/cloudflare-worker',
-      '/api/debug/sec-connectivity',
-      
-      // Marketing pages
-      '/',
-      '/pricing',
-      '/about',
-      '/privacy',
-      '/terms'
-    ]
+/**
+ * Conditional middleware architecture
+ * Processes cron requests independently before Clerk middleware
+ */
+export default async function middleware(request: NextRequest) {
+  // First: Handle cron authentication independently
+  const cronResponse = await cronAuthMiddleware(request);
+  if (cronResponse) {
+    // Cron middleware handled the request (auth failed) - return response
+    return cronResponse;
   }
-)
+  
+  // If request is for /api/cron/* and no response, cron auth succeeded - continue to route
+  if (request.nextUrl.pathname.startsWith('/api/cron/')) {
+    middlewareLogger.info('Cron authentication successful, continuing to route handler', {
+      pathname: request.nextUrl.pathname
+    });
+    return; // Continue to route handler, bypassing Clerk completely
+  }
+  
+  // For all other requests: Use Clerk middleware with security middleware
+  return clerkMiddleware(
+    async (auth, request: NextRequest) => {
+      // Apply our security middleware for non-cron endpoints
+      const securityResponse = await securityMiddleware(request);
+      if (securityResponse) {
+        return securityResponse;
+      }
+      
+      // Continue with default Clerk processing
+      return;
+    },
+    {
+      publicRoutes: [
+        // Health endpoints (rate-limited by our middleware)
+        '/api/health',
+        '/api/health/database',
+        '/api/health/liveness',
+        '/api/health/readiness',
+        '/api/health/optimized',
+        '/api/health/cloudflare-worker',
+        '/api/debug/sec-connectivity',
+        
+        // Marketing pages
+        '/',
+        '/pricing',
+        '/about',
+        '/privacy',
+        '/terms'
+      ]
+    }
+  )(request);
+}
 
 export const config = {
   matcher: [

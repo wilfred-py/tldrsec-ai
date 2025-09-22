@@ -13,15 +13,32 @@ export default {
   async scheduled(event, env, ctx) {
     console.log('Starting TLDRSEC scheduled cron job execution');
     
+    // DEBUG: Check secret availability and structure
+    console.log('DEBUG: Checking environment secrets...');
+    console.log(`CRON_SECRET defined: ${!!env.CRON_SECRET}`);
+    console.log(`CRON_SECRET length: ${env.CRON_SECRET ? env.CRON_SECRET.length : 0}`);
+    console.log(`CRON_SECRET first 4 chars: ${env.CRON_SECRET ? env.CRON_SECRET.substring(0, 4) + '...' : 'UNDEFINED'}`);
+    console.log(`VERCEL_AUTOMATION_BYPASS_SECRET defined: ${!!env.VERCEL_AUTOMATION_BYPASS_SECRET}`);
+    
     // Build URL for Vercel endpoint
     const url = `${env.PUBLIC_URL}/api/cron/tier-aware`;
     
     try {
       console.log(`Calling tier-aware endpoint: ${url}`);
       
+      // Validate CRON_SECRET before proceeding
+      if (!env.CRON_SECRET) {
+        throw new Error('CRON_SECRET is not defined in Worker environment');
+      }
+      
+      if (env.CRON_SECRET.length < 32) {
+        throw new Error(`CRON_SECRET too short: ${env.CRON_SECRET.length} chars (minimum 32 required)`);
+      }
+      
       // Prepare headers with Vercel deployment protection bypass
+      // Use X-Cron-Auth instead of Authorization to avoid Clerk JWT validation
       const headers = {
-        'Authorization': `Bearer ${env.CRON_SECRET}`,
+        'X-Cron-Auth': `Bearer ${env.CRON_SECRET}`,
         'Content-Type': 'application/json',
         'User-Agent': 'TLDRSEC-Cloudflare-Worker wilfredchen1@gmail.com',
         'X-Cloudflare-Worker': 'tldrsec-cron',
@@ -33,6 +50,8 @@ export default {
         headers['x-vercel-protection-bypass'] = env.VERCEL_AUTOMATION_BYPASS_SECRET;
         headers['x-vercel-set-bypass-cookie'] = 'true';
         console.log('Request configured with deployment protection bypass');
+      } else {
+        console.log('No bypass secret available, continuing without bypass');
       }
       
       let response;
