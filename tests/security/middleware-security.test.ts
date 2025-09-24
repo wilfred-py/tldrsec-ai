@@ -10,7 +10,7 @@ process.env.NODE_ENV = 'test';
 process.env.CRON_ALLOWED_IPS = '203.0.113.1,198.51.100.0/24';
 process.env.CRON_SECRET = 'test-secret-key-with-proper-length-32chars-min-security-requirement';
 process.env.CRON_SIGNATURE_SECRET = 'test-signature-secret';
-process.env.CRON_API_KEYS = 'tldr_test123456789012345678901234,tldr_test987654321098765432109876';
+process.env.CRON_API_KEYS = 'tldr_12345678901234567890123456789012,tldr_98765432109876543210987654321098';
 process.env.DATABASE_URL = 'postgresql://test:test@localhost:5432/testdb';
 
 // Web Crypto API polyfill for Edge Runtime compatibility in tests
@@ -109,7 +109,7 @@ describe('Middleware Security System', () => {
     process.env.CRON_ALLOWED_IPS = '203.0.113.1,198.51.100.0/24';
     process.env.CRON_SECRET = 'test-secret-key-with-proper-length-32chars-min-security-requirement';
     process.env.CRON_SIGNATURE_SECRET = 'test-signature-secret';
-    process.env.CRON_API_KEYS = 'tldr_test123456789012345678901234,tldr_test987654321098765432109876';
+    process.env.CRON_API_KEYS = 'tldr_12345678901234567890123456789012,tldr_98765432109876543210987654321098';
   });
 
   describe('IP Validation', () => {
@@ -345,7 +345,7 @@ describe('Middleware Security System', () => {
     it('should validate correct API keys from Authorization header', async () => {
       const request = new NextRequest('https://test.com/api/cron/test', {
         headers: {
-          'Authorization': 'Bearer tldr_test123456789012345678901234'
+          'Authorization': 'Bearer tldr_12345678901234567890123456789012'
         }
       });
 
@@ -357,7 +357,7 @@ describe('Middleware Security System', () => {
     it('should validate correct API keys from X-API-Key header', async () => {
       const request = new NextRequest('https://test.com/api/cron/test', {
         headers: {
-          'X-API-Key': 'tldr_test987654321098765432109876'
+          'X-API-Key': 'tldr_98765432109876543210987654321098'
         }
       });
 
@@ -540,7 +540,7 @@ describe('Middleware Security System', () => {
           'x-forwarded-for': '127.0.0.1',
           'X-Signature-SHA256': 'sha256=invalid_signature',
           'X-Timestamp': Math.floor(Date.now() / 1000).toString(),
-          'X-API-Key': 'tldr_test1234567890123456789012345678',
+          'X-API-Key': 'tldr_12345678901234567890123456789012',
           'Authorization': `Bearer ${process.env.CRON_SECRET}`
         }
       });

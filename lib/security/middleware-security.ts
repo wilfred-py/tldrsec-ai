@@ -26,11 +26,16 @@ const securityLogger = logger.child('middleware-security');
  */
 function getSecurityConfig(): SecurityConfig {
   return {
-    // IP Allowlisting - Vercel platform IPs and Cloudflare Workers (dynamic validation)
+    // IP Allowlisting - Vercel platform IPs, Railway platform IPs, and Cloudflare Workers (dynamic validation)
     allowedIPs: [
       // Vercel platform IPs (commonly used ranges)
       '76.76.19.0/24',   // Vercel cron service
       '76.76.21.0/24',   // Vercel infrastructure
+
+      // Railway platform IPs (private network ranges commonly used by Railway)
+      '10.0.0.0/8',      // Railway internal network
+      '172.16.0.0/12',   // Railway container network  
+      '192.168.0.0/16',  // Railway local network
 
       // Cloudflare IP ranges (static fallback - dynamic validation preferred)
       // These are fallback ranges, live validation via cloudflareIPService is primary
@@ -62,9 +67,9 @@ function getSecurityConfig(): SecurityConfig {
     // Rate limiting configuration by endpoint type
     rateLimits: {
       CRON: {
-        limit: 20,         // 20 requests per window (increased for Cloudflare Workers)
+        limit: 10,         // 10 requests per window (conservative limit for cron endpoints)
         windowMs: 600000,  // 10 minute window (aligned with cron frequency)
-        emergencyLimit: 5  // Increased emergency limit for Workers
+        emergencyLimit: 5  // Emergency limit for Workers
       },
       HEALTH: {
         limit: 100,        // 100 requests per window

@@ -1232,6 +1232,14 @@ describe('Comprehensive Cron Integration Tests', () => {
           valid: false,
           error: 'Cost is negative'
         });
+
+        // Override FilingTransactionManager for this test to return the negative cost
+        const { FilingTransactionManager } = require('../../lib/db/transaction-manager');
+        (FilingTransactionManager.processFilingWithTransaction as jest.Mock).mockResolvedValueOnce({
+          success: true,
+          data: { cost: -0.01 }, // This will trigger cost validation failure
+          transactionId: 'test-transaction-id'
+        });
         
         const request = createMockRequest({
           authorization: `Bearer ${process.env.CRON_SECRET}`
@@ -1356,6 +1364,20 @@ describe('Comprehensive Cron Integration Tests', () => {
         messageId: 'email-123'
       });
 
+      // Override FilingTransactionManager to actually call the callback for this test
+      const { FilingTransactionManager } = require('../../lib/db/transaction-manager');
+      (FilingTransactionManager.processFilingWithTransaction as jest.Mock).mockImplementation(
+        async (filingId: string, userId: string, callback: Function) => {
+          // Call the actual callback to trigger summarization
+          const result = await callback(mockPrismaInstance as any);
+          return {
+            success: true,
+            data: result,
+            transactionId: 'test-transaction-id'
+          };
+        }
+      );
+
       const request = createMockRequest({
         authorization: `Bearer ${process.env.CRON_SECRET}`
       });
@@ -1434,6 +1456,19 @@ describe('Comprehensive Cron Integration Tests', () => {
         }
       ]);
 
+      // Mock getUnprocessedFilingsForTicker to return filings for processing in Phase 2
+      mockTickerMonitoring.getUnprocessedFilingsForTicker.mockResolvedValue([
+        {
+          id: 'filing-db-id-456',
+          accessionNumber: '0001628280-24-007006',
+          filingType: '10-Q',
+          filingDate: new Date('2024-01-15'),
+          filingUrl: 'https://www.sec.gov/filing123',
+          rssEntryDate: new Date('2024-01-15'),
+          title: 'Quarterly Report - Q4 2023'
+        }
+      ]);
+
       mockSummaryService.generateAISummaryWithRetry.mockResolvedValue({
         summary: 'Test summary',
         cost: 0.02,
@@ -1463,6 +1498,20 @@ describe('Comprehensive Cron Integration Tests', () => {
       });
 
       mockTickerMonitoring.markFilingAsProcessed.mockResolvedValue();
+
+      // Override FilingTransactionManager to actually call the callback for this test
+      const { FilingTransactionManager } = require('../../lib/db/transaction-manager');
+      (FilingTransactionManager.processFilingWithTransaction as jest.Mock).mockImplementation(
+        async (filingId: string, userId: string, callback: Function) => {
+          // Call the actual callback to trigger summarization
+          const result = await callback(mockPrismaInstance as any);
+          return {
+            success: true,
+            data: result,
+            transactionId: 'test-transaction-id'
+          };
+        }
+      );
 
       const request = createMockRequest({
         authorization: `Bearer ${process.env.CRON_SECRET}`
@@ -1601,6 +1650,19 @@ describe('Comprehensive Cron Integration Tests', () => {
             filingDate: new Date('2024-01-15'),
             filingUrl: 'https://www.sec.gov/filing123',
             rssEntryDate: new Date('2024-01-15')
+          }
+        ]);
+
+        // Mock getUnprocessedFilingsForTicker to return filings for processing in Phase 2
+        mockTickerMonitoring.getUnprocessedFilingsForTicker.mockResolvedValue([
+          {
+            id: 'filing-db-id-789',
+            accessionNumber: '0001628280-24-007006',
+            filingType: '10-Q',
+            filingDate: new Date('2024-01-15'),
+            filingUrl: 'https://www.sec.gov/filing123',
+            rssEntryDate: new Date('2024-01-15'),
+            title: 'Quarterly Report - Q4 2023'
           }
         ]);
 

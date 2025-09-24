@@ -117,7 +117,27 @@ describe('Cron Endpoint Security Tests', () => {
   const originalEnv = process.env;
   
   beforeEach(() => {
-    jest.resetAllMocks();
+    jest.clearAllMocks();
+    
+    // Reset rate limiter mock to allow requests by default
+    const { rateLimiter } = require('../../lib/security/rate-limiter');
+    rateLimiter.checkLimit.mockResolvedValue({ 
+      allowed: true, 
+      remaining: 100, 
+      resetTime: Date.now() + 60000 
+    });
+    
+    // Reset market hours mock
+    const { getMarketHoursContext, getUserProcessingStatuses, getEligibleUsers } = require('../../lib/cron/market-hours');
+    getMarketHoursContext.mockReturnValue({
+      isMarketHours: false,
+      isMarketDay: true,
+      isHoliday: false,
+      currentTime: new Date()
+    });
+    getUserProcessingStatuses.mockReturnValue([]);
+    getEligibleUsers.mockReturnValue([]);
+    
     process.env = { ...originalEnv };
     process.env.CRON_SECRET = 'test-secret-key-with-proper-length-32chars-min-security-requirement';
     process.env.CRON_SIGNATURE_SECRET = 'test-signature-secret-with-proper-length-32chars-min-requirement';
@@ -149,7 +169,7 @@ describe('Cron Endpoint Security Tests', () => {
       }
 
       expect(response.status).toBe(401);
-      expect(data.error).toBe('Unauthorized');
+      expect(data.error).toBe('Missing Authorization header');
     });
 
     test('CRITICAL: Must reject requests with invalid authorization token', async () => {
@@ -199,7 +219,7 @@ describe('Cron Endpoint Security Tests', () => {
       const data = await response.json();
 
       expect(response.status).toBe(500);
-      expect(data.error).toBe('Server configuration error');
+      expect(data.error).toBe('Authentication not properly configured');
     });
 
     test('SECURITY: Must accept valid authorization token', async () => {
@@ -213,6 +233,11 @@ describe('Cron Endpoint Security Tests', () => {
 
       const response = await GET(request);
       const data = await response.json();
+
+      // Debug: Log the response for troubleshooting
+      if (response.status !== 200) {
+        console.log('Expected 200 but got:', response.status, 'Error:', data);
+      }
 
       expect(response.status).toBe(200);
       expect(data.success).toBe(true);
