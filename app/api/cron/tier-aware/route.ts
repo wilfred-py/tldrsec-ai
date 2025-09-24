@@ -127,7 +127,7 @@ export async function GET(request: NextRequest) {
   // Detect platform based on environment variables
   const platform: 'RAILWAY_CRON' | 'VERCEL_CRON' | 'MANUAL_TRIGGER' = process.env.RAILWAY_ENVIRONMENT ? 'MANUAL_TRIGGER' : 'VERCEL_CRON';
   cronLogger.debug('Checkpoint 0.1: Platform determined', { platform });
-  let monitor: CronJobMonitor;
+  let monitor: CronJobMonitor | undefined;
   
   try {
     cronLogger.debug('Checkpoint 0.2: About to create CronJobMonitor');
@@ -153,18 +153,36 @@ export async function GET(request: NextRequest) {
     const authHeader = request.headers.get('authorization') || request.headers.get('x-cron-auth');
     const cronSecret = process.env.CRON_SECRET;
     
-    if (!cronSecret || cronSecret.length < 32) {
-      cronLogger.error('CRON_SECRET not properly configured');
-      await monitor.complete(CronJobStatus.FAILED, 'Server configuration error');
+    if (!cronSecret) {
+      cronLogger.error('CRON_SECRET not configured');
+      if (monitor) await monitor.complete(CronJobStatus.FAILED, 'Server configuration error');
       return NextResponse.json({
         success: false,
-        error: 'Server configuration error'
+        error: 'Authentication not properly configured'
       }, { status: 500 });
     }
 
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      cronLogger.warn('Missing or invalid authorization header');
-      await monitor.complete(CronJobStatus.FAILED, 'Unauthorized access attempt');
+    if (cronSecret.length < 32) {
+      cronLogger.error('CRON_SECRET not properly configured - insufficient length');
+      if (monitor) await monitor.complete(CronJobStatus.FAILED, 'Server configuration error');
+      return NextResponse.json({
+        success: false,
+        error: 'Authentication not properly configured'
+      }, { status: 500 });
+    }
+
+    if (!authHeader) {
+      cronLogger.warn('Missing authorization header');
+      if (monitor) await monitor.complete(CronJobStatus.FAILED, 'Unauthorized access attempt');
+      return NextResponse.json({
+        success: false,
+        error: 'Missing Authorization header'
+      }, { status: 401 });
+    }
+
+    if (!authHeader.startsWith('Bearer ')) {
+      cronLogger.warn('Invalid authorization header format');
+      if (monitor) await monitor.complete(CronJobStatus.FAILED, 'Invalid authorization header format');
       return NextResponse.json({
         success: false,
         error: 'Unauthorized'
@@ -193,7 +211,7 @@ export async function GET(request: NextRequest) {
     
     if (!isValid) {
       cronLogger.warn('Invalid authorization token');
-      await monitor.complete(CronJobStatus.FAILED, 'Unauthorized access attempt');
+      if (monitor) await monitor.complete(CronJobStatus.FAILED, 'Unauthorized access attempt');
       return NextResponse.json({
         success: false,
         error: 'Unauthorized'
@@ -211,7 +229,7 @@ export async function GET(request: NextRequest) {
       
       if (!allowedIPList.includes(clientIP)) {
         cronLogger.warn('IP not in allowlist', { clientIP, allowedIPs: allowedIPList });
-        await monitor.complete(CronJobStatus.FAILED, 'IP not allowed');
+        if (monitor) await monitor.complete(CronJobStatus.FAILED, 'IP not allowed');
         return NextResponse.json({
           success: false,
           error: 'Forbidden'
@@ -223,9 +241,9 @@ export async function GET(request: NextRequest) {
     const { rateLimiter } = await import('../../../../lib/security/rate-limiter');
     const rateLimitResult = await rateLimiter.checkLimit('cron-endpoint', clientIP);
     
-    if (!rateLimitResult.allowed) {
-      cronLogger.warn('Rate limit exceeded', { clientIP });
-      await monitor.complete(CronJobStatus.FAILED, 'Rate limit exceeded');
+    if (!rateLimitResult || !rateLimitResult.allowed) {
+      cronLogger.warn('Rate limit exceeded', { clientIP, rateLimitResult });
+      if (monitor) await monitor.complete(CronJobStatus.FAILED, 'Rate limit exceeded');
       return NextResponse.json({
         success: false,
         error: 'Rate limit exceeded'
@@ -255,12 +273,14 @@ export async function GET(request: NextRequest) {
     });
 
     // Record market context in monitoring
-    await monitor.recordMetric('market_context', {
-      isMarketHours: marketContext.isMarketHours,
-      isMarketDay: marketContext.isMarketDay,
-      isHoliday: marketContext.isHoliday,
-      currentTime: marketContext.currentTime
-    });
+    if (monitor) {
+      await monitor.recordMetric('market_context', {
+        isMarketHours: marketContext.isMarketHours,
+        isMarketDay: marketContext.isMarketDay,
+        isHoliday: marketContext.isHoliday,
+        currentTime: marketContext.currentTime
+      });
+    }
 
     // Get all users with subscription tiers and last processing times
     cronLogger.debug('Checkpoint 4: Starting user query');
@@ -324,7 +344,7 @@ export async function GET(request: NextRequest) {
     const results = await processEligibleUsers(eligibleUsers, allUsers, monitor);
     
     // Complete monitoring
-    const monitorResult = await monitor.complete(CronJobStatus.SUCCESS);
+    const monitorResult = monitor ? await monitor.complete(CronJobStatus.SUCCESS) : { executionId: 'test', duration: 0 };
     
     cronLogger.info('Tier-aware cron job completed successfully', {
       ...results,
@@ -585,12 +605,14 @@ async function processTierBatch(
         );
 
         // Record metrics
-        await monitor.recordMetric('user_processed', {
-          userId: userStatus.userId,
-          tier,
-          filingsProcessed: userResult.filingsProcessed,
-          cost: userResult.cost
-        });
+        if (monitor) {
+          await monitor.recordMetric('user_processed', {
+            userId: userStatus.userId,
+            tier,
+            filingsProcessed: userResult.filingsProcessed,
+            cost: userResult.cost
+          });
+        }
 
         return {
           success: true,
@@ -1164,7 +1186,7 @@ async function runSecFilingMonitoring(monitor: CronJobMonitor) {
           
         } catch (error) {
           cronLogger.error(`Failed to check ticker ${ticker.symbol}`, { error });
-          await monitor.updateMetrics({ errorCount: 1 });
+          if (monitor) await monitor.updateMetrics({ errorCount: 1 });
         }
       });
 
@@ -1177,10 +1199,12 @@ async function runSecFilingMonitoring(monitor: CronJobMonitor) {
     }
     
     // Update monitoring metrics
-    await monitor.updateMetrics({
-      tickersChecked: activeTickers.length,
-      newFilingsFound
-    });
+    if (monitor) {
+      await monitor.updateMetrics({
+        tickersChecked: activeTickers.length,
+        newFilingsFound
+      });
+    }
     
     cronLogger.info('SEC filing RSS monitoring completed', {
       tickersChecked: activeTickers.length,
@@ -1189,7 +1213,7 @@ async function runSecFilingMonitoring(monitor: CronJobMonitor) {
     
   } catch (error) {
     cronLogger.error('SEC filing monitoring failed', { error });
-    await monitor.updateMetrics({ errorCount: 1 });
+    if (monitor) await monitor.updateMetrics({ errorCount: 1 });
     throw error;
   }
 }
