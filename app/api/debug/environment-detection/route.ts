@@ -1,10 +1,10 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { shouldUseRSSFeeds, isDevelopmentEnvironment } from '../../../../lib/sec-edgar/environment-aware-fetcher';
 
 /**
  * Debug endpoint to test environment detection logic
  */
-export async function GET(request: NextRequest) {
+export async function GET() {
   const environmentInfo = {
     timestamp: new Date().toISOString(),
     nodeEnv: process.env.NODE_ENV,
