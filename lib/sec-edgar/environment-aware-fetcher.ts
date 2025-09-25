@@ -29,7 +29,10 @@ export function isDevelopmentEnvironment(): boolean {
 
 /**
  * Detect if we should use RSS feeds 
- * RSS for local development, REST API for production
+ * Based on SEC.gov blocking behavior for different hosting providers:
+ * - Local development: RSS works (fast and reliable)
+ * - Vercel: RSS works, REST API blocked (HTTP 403)
+ * - Railway: RSS blocked, REST API works
  */
 export function shouldUseRSSFeeds(): boolean {
   const isDev = isDevelopmentEnvironment();
@@ -43,7 +46,18 @@ export function shouldUseRSSFeeds(): boolean {
     return true;
   }
   
-  // Default: use RSS for development, REST API for production
+  // Platform-specific SEC.gov access patterns
+  if (process.env.VERCEL_URL || process.env.VERCEL) {
+    // Vercel: SEC Data API blocked (403), RSS feeds work
+    return true;
+  }
+  
+  if (process.env.RAILWAY_ENVIRONMENT) {
+    // Railway: RSS feeds blocked (403), REST API works
+    return false;
+  }
+  
+  // Default: RSS for development, REST API for other production environments
   return isDev;
 }
 
