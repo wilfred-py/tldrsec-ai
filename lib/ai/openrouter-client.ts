@@ -34,7 +34,7 @@ import Bottleneck from 'bottleneck';
 const OPENROUTER_CONFIG = {
   baseURL: 'https://openrouter.ai/api/v1',
   apiKey: process.env.TLDRSEC_AI_SUMMARIZER || process.env.OPENROUTER_API_KEY,
-  defaultModel: process.env.DEFAULT_AI_MODEL || 'x-ai/grok-4-fast-reasoning',
+  defaultModel: process.env.DEFAULT_AI_MODEL || 'x-ai/grok-4-fast:free',
   timeout: 120000, // 2 minutes
   maxRetries: 3
 };
@@ -54,8 +54,8 @@ interface ModelInfo {
 }
 
 const XAI_MODELS: Record<string, ModelInfo> = {
-  'x-ai/grok-4-fast-reasoning': {
-    id: 'x-ai/grok-4-fast-reasoning',
+  'x-ai/grok-4-fast:free': {
+    id: 'x-ai/grok-4-fast:free',
     name: 'Grok 4 Fast Reasoning',
     contextWindow: 2000000,
     costPerInputToken: 0.0000002, // $0.2/M tokens
@@ -105,9 +105,8 @@ class ModelSelectionAgent {
 
   constructor() {
     this.fallbackChain = [
-      'x-ai/grok-4-fast:free',      // Free tier first (limited time)
-      'x-ai/grok-4-fast-reasoning', // Primary paid model
-      'x-ai/grok-4',                // Standard fallback
+      'x-ai/grok-4-fast:free',      // Primary free model (2M context)
+      'x-ai/grok-4',                // Paid model fallback
       'x-ai/grok-3'                 // Last resort
     ];
     this.modelInfo = XAI_MODELS;
