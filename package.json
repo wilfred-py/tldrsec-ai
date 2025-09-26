@@ -67,7 +67,7 @@
     "monitor:pipeline:fast": "npx tsx scripts/production-pipeline-monitor.ts 15"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.51.0",
+    "@anthropic-ai/sdk": "^0.63.1",
     "@clerk/nextjs": "^6.19.3",
     "@hookform/resolvers": "^5.0.1",
     "@modelcontextprotocol/sdk": "^1.17.3",
