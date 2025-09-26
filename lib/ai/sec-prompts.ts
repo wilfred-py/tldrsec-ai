@@ -466,7 +466,7 @@ Your summary should be informative, accurate, and easy to understand for investo
 export function getPromptForFilingType(filingType: FilingType, context: { ticker?: string; companyName?: string }) {
   // Normalize the filing type before lookup
   const normalizedFilingType = filingType.replace(/\//g, '-').toUpperCase();
-  const formMetadata = getFormMetadata(normalizedFilingType);
+  getFormMetadata(normalizedFilingType);
   const ticker = context.ticker || '';
   const companyName = context.companyName || 'the company';
   

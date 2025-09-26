@@ -18,7 +18,15 @@ import { FilingTransactionManager } from '../../../../lib/db/transaction-manager
 import { createAsyncAuditLog } from '../../../../lib/db/async-audit';
 import { validateCostUpdate } from '../../../../lib/db/cost-validation';
 
-const prisma = getPrismaClient();
+// Initialize Prisma client lazily to avoid build-time database connections
+let prisma: ReturnType<typeof getPrismaClient>;
+function getPrisma() {
+  if (!prisma) {
+    prisma = getPrismaClient();
+  }
+  return prisma;
+}
+
 const cronLogger = logger.child('tier-aware-cron');
 
 // Type definitions
@@ -307,7 +315,7 @@ export async function GET(request: NextRequest) {
 
     // Get all users with subscription tiers and last processing times
     cronLogger.debug('Checkpoint 4: Starting user query');
-    const allUsers = await prisma.user.findMany({
+    const allUsers = await getPrisma().user.findMany({
       where: {
         tickers: {
           some: {} // Only users who follow at least one ticker
@@ -582,7 +590,7 @@ async function processTierBatch(
         // Get current user budget first with proper error handling
         let currentUser;
         try {
-          currentUser = await prisma.user.findUnique({
+          currentUser = await getPrisma().user.findUnique({
             where: { id: userStatus.userId },
             select: { 
               budgetUsed: true, 
@@ -1252,7 +1260,7 @@ async function runSecFilingMonitoring(monitor: CronJobMonitor) {
  */
 export async function resetMonthlyBudgets() {
   try {
-    const resetCount = await prisma.user.updateMany({
+    const resetCount = await getPrisma().user.updateMany({
       data: {
         budgetUsed: 0,
         budgetResetAt: new Date()

@@ -1,7 +1,7 @@
 // Web Crypto API for Edge Runtime compatibility
 import { NextRequest } from 'next/server';
 import { logger } from '../logging';
-import { rateLimiter } from './rate-limiter';
+// Dynamic import for rate limiter to handle Edge Runtime compatibility
 import { cloudflareIPService } from './cloudflare-ip-service';
 import { securityMonitoring } from './security-monitoring';
 import {
@@ -1092,6 +1092,9 @@ export class MiddlewareSecurity {
       // Step 3: Rate limiting (ALWAYS applied regardless of authentication method)
       const securityConfig = getSecurityConfig();
       const rateLimitConfig = securityConfig.rateLimits[endpointType];
+      
+      // Dynamic import for Edge Runtime compatibility
+      const { rateLimiter } = await import('./rate-limiter');
       const rateLimitResult = await rateLimiter.checkLimit(
         `${endpointType.toLowerCase()}-endpoint`,
         clientIP,

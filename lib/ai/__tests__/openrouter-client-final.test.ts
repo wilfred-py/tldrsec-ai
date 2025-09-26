@@ -15,7 +15,7 @@
  */
 
 import { jest } from '@jest/globals';
-import { OpenRouterClient, OpenRouterMessage, OpenRouterRequestOptions, OpenRouterResponse } from '../openrouter-client';
+import { OpenRouterClient, OpenRouterMessage } from '../openrouter-client';
 import { ApiError } from '../../error-handling';
 
 // Mock all dependencies at module level

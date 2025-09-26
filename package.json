@@ -64,7 +64,9 @@
     "validate:quick-check": "npx tsx scripts/quick-deployment-check.ts",
     "validate:deployment-status": "npx tsx scripts/check-deployment-status.ts",
     "monitor:pipeline": "npx tsx scripts/production-pipeline-monitor.ts",
-    "monitor:pipeline:fast": "npx tsx scripts/production-pipeline-monitor.ts 15"
+    "monitor:pipeline:fast": "npx tsx scripts/production-pipeline-monitor.ts 15",
+    "test:e2e:pipeline": "npx tsx scripts/e2e-last-3-days-pipeline.ts",
+    "test:e2e:pipeline:dry": "npx tsx scripts/e2e-last-3-days-pipeline.ts --dry-run"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.63.1",
