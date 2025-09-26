@@ -8,7 +8,7 @@ import { prisma } from '../../db/prisma';
 import { logger } from '../../logging';
 import { monitoring } from '../../monitoring';
 // import { SummarizationResult } from '../summarize'; // Currently unused
-import { EnhancedSummarizationResult } from './types';
+// import { EnhancedSummarizationResult } from './types'; // Currently unused
 
 // Component logger
 const componentLogger = logger.child('db-utils');
@@ -32,7 +32,7 @@ export async function updateSummaryWithPartialResult(
       summaryJSON,
       modelUsed,
       inputTokens,
-      outputTokens: _outputTokens,
+      // outputTokens not used - not in database schema
       cost,
       duration,
       isPartial = true
@@ -83,7 +83,7 @@ export async function updateSummaryWithResult(
       summaryJSON,
       modelUsed,
       inputTokens,
-      outputTokens: _outputTokens2,
+      // outputTokens not used - not in database schema
       cost,
       duration,
       isPartial = false,
