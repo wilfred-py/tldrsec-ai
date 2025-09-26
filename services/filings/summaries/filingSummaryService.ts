@@ -7,7 +7,7 @@ import { scrapeDocumentLinksFromFilingPage, fetchDocumentContent } from '../extr
 import { generateFallbackSummary, generateFallbackKeyPoints } from './fallbackSummaryGenerator';
 import { normalizeFormType } from '../utils/formTypeUtils';
 import { getSecApiHeaders } from '../utils/apiHeaders';
-import { getClaudeModel } from '../../../lib/ai/config';
+import { getDefaultModel } from '../../../lib/ai/config';
 
 /**
  * General content validation rules for all SEC forms
@@ -225,7 +225,7 @@ export async function getFilingSummary(
           preserveStructure: true
         },
         summarizationOptions: {
-          model: getClaudeModel(),
+          model: getDefaultModel(),
           maxRetries: 2,
           enableFallback: true
         }
@@ -417,7 +417,7 @@ export async function getFilingSummary(
       // Set summarization options
       const options: SummarizationOptions = {
         maxRetries: 2,
-        model: getClaudeModel(),
+        model: getDefaultModel(),
         metadata: {
           ticker: ticker,
           companyName: companyInfo.name || ticker,
