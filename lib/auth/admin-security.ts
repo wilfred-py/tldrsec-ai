@@ -324,7 +324,7 @@ async function getAdminSecurityWarnings(userId: string, securityCheck: AdminSecu
   return warnings;
 }
 
-async function logSecurityEvent(event: string, data: any) {
+async function logSecurityEvent(event: string, data: Record<string, unknown>) {
   try {
     // Only log audit events if we have a valid userId
     // Security events without authenticated users will be logged via the logger only
@@ -368,6 +368,6 @@ async function logSecurityEvent(event: string, data: any) {
   }
 }
 
-async function incrementFailedAttempts(userId: string) {
+async function incrementFailedAttempts(_userId: string) {
   // Implementation would track failed admin access attempts
 }

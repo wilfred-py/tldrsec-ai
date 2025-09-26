@@ -398,7 +398,6 @@ describe('Batch Processor', () => {
     expect(result).toHaveProperty('isPartial', true);
     expect(result.chunkResults).toHaveLength(2);
   });
-});
 
   it('should use provided options correctly', async () => {
     const customOptions = {
@@ -463,7 +462,7 @@ describe('Batch Processor', () => {
     let maxConcurrentExecutions = 0;
     
     // Mock implementation that tracks concurrency
-    mockedProcessSingleChunk.mockImplementation(async (chunk: string, filingType: SECFilingType, filingRecord: any, options: any): Promise<EnhancedSummarizationResult> => {
+    mockedProcessSingleChunk.mockImplementation(async (chunk: string, filingType: SECFilingType, filingRecord: Record<string, unknown>, options: Record<string, unknown>): Promise<EnhancedSummarizationResult> => {
       concurrentExecutions++;
       maxConcurrentExecutions = Math.max(maxConcurrentExecutions, concurrentExecutions);
       

@@ -35,7 +35,7 @@ export function logAuditEvent(
   eventType: AuditEventType,
   userId: string | null,
   resourceId?: string,
-  metadata: Record<string, any> = {}
+  metadata: Record<string, unknown> = {}
 ): void {
   // Prepare the audit log entry
   const auditLog = {
@@ -75,7 +75,7 @@ export function logSummaryAccess(
   userId: string | null,
   summaryId: string,
   wasSuccessful: boolean,
-  metadata: Record<string, any> = {}
+  metadata: Record<string, unknown> = {}
 ): void {
   const eventType = wasSuccessful 
     ? AuditEventType.SUMMARY_VIEW 

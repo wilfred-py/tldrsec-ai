@@ -34,7 +34,7 @@ export interface TickerGroup {
 
 export interface FilingResult {
   ticker: string;
-  filings: any[];
+  filings: Record<string, unknown>[];
   users: Array<{
     userId: string;
     userEmail: string;
