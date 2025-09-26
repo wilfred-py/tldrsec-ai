@@ -130,7 +130,7 @@ export class EnhancedClaudeClient extends EventEmitter {
    * @param messages Array of messages
    * @returns Estimated token count
    */
-  private estimateInputTokens(messages: ClaudeMessage[]): number {
+  private estimateInputTokens(messages: OpenRouterMessage[]): number {
     // Simple estimation based on character count (1 token ~= 4 characters)
     const totalChars = messages.reduce((sum, msg) => sum + msg.content.length, 0);
     return Math.ceil(totalChars / 4);
@@ -143,9 +143,9 @@ export class EnhancedClaudeClient extends EventEmitter {
    * @returns Claude response
    */
   async sendMessage(
-    messages: ClaudeMessage[],
+    messages: OpenRouterMessage[],
     options: EnhancedClaudeOptions = {}
-  ): Promise<ClaudeResponse> {
+  ): Promise<OpenRouterResponse> {
     const requestId = uuidv4();
     const startTime = Date.now();
     
@@ -210,7 +210,7 @@ export class EnhancedClaudeClient extends EventEmitter {
     }
     
     // Define the Claude operation
-    const claudeOperation = async (): Promise<ClaudeResponse> => {
+    const claudeOperation = async (): Promise<OpenRouterResponse> => {
       componentLogger.info(`Sending request ${requestId} to Claude API`);
       
       // Send the request to Claude
@@ -230,7 +230,7 @@ export class EnhancedClaudeClient extends EventEmitter {
     };
     
     try {
-      let response: ClaudeResponse;
+      let response: OpenRouterResponse;
       
       // Use adaptive retry if enabled
       if (mergedOptions.useRetry && mergedOptions.useAdaptiveRetry) {
@@ -548,7 +548,7 @@ export class EnhancedClaudeClient extends EventEmitter {
    * @param result Summarization result
    * @returns Claude response
    */
-  private convertSummarizationToClaudeResponse(result: SummarizationResult): ClaudeResponse {
+  private convertSummarizationToClaudeResponse(result: SummarizationResult): OpenRouterResponse {
     return {
       id: result.summaryId,
       content: typeof result.summaryText === 'string' ? result.summaryText : JSON.stringify(result.summaryText),
@@ -605,7 +605,7 @@ export class EnhancedClaudeClient extends EventEmitter {
    * Get the base Claude client
    * @returns Base Claude client
    */
-  getBaseClient(): ClaudeClient {
+  getBaseClient(): OpenRouterClient {
     return this.baseClient;
   }
 }

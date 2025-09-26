@@ -15,14 +15,14 @@ export class PromptTemplate {
   protected userPrompt: string;
   protected outputFormat: string;
   protected examplePrompt?: string;
-  protected options: Record<string, any>;
+  protected options: Record<string, unknown>;
   
   /**
    * Create a new prompt template
    * 
    * @param options - Options to customize the prompt
    */
-  constructor(options: Record<string, any> = {}) {
+  constructor(options: Record<string, unknown> = {}) {
     this.systemPrompt = '';
     this.userPrompt = '';
     this.outputFormat = '';

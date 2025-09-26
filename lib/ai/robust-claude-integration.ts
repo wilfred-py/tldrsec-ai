@@ -11,7 +11,7 @@
 
 import { v4 as uuidv4 } from 'uuid';
 import { ClaudeClient, ClaudeMessage, ClaudeRequestOptions, ClaudeResponse } from './claude-client';
-import { EnhancedClaudeClient, EnhancedClaudeOptions } from './enhanced-claude-client';
+import { EnhancedClaudeClient } from './enhanced-claude-client';
 import { logger } from '../logging';
 import { monitoring } from '../monitoring';
 import { ApiError, ErrorCode } from '../error-handling';
@@ -34,7 +34,7 @@ export interface RobustClaudeOptions extends ClaudeRequestOptions {
   useFallback?: boolean;
   
   // Context for the request (for logging and monitoring)
-  context?: Record<string, any>;
+  context?: Record<string, unknown>;
 }
 
 /**
@@ -48,7 +48,7 @@ export interface RobustClaudeOptions extends ClaudeRequestOptions {
 export async function withRobustErrorHandling<T>(
   operation: () => Promise<T>,
   options: RobustClaudeOptions = {},
-  context: Record<string, any> = {}
+  context: Record<string, unknown> = {}
 ): Promise<T> {
   const requestId = context.requestId || uuidv4();
   const startTime = Date.now();
@@ -114,7 +114,7 @@ export async function withRobustErrorHandling<T>(
     });
     
     return result;
-  } catch (error: any) {
+  } catch (error: unknown) {
     // Calculate duration
     const duration = Date.now() - startTime;
     
@@ -123,10 +123,10 @@ export async function withRobustErrorHandling<T>(
       ? error
       : new ApiError(
           ErrorCode.AI_ERROR,
-          error.message || 'Claude request failed',
+          (error as Error)?.message || 'Claude request failed',
           {
             ...enhancedContext,
-            originalError: error.toString()
+            originalError: String(error)
           },
           true,
           requestId
@@ -241,12 +241,12 @@ export async function processDocumentWithRobustHandling(
       },
       fallbackUsed: false
     };
-  } catch (error: any) {
+  } catch (error: unknown) {
     // Calculate duration
     const duration = Date.now() - startTime;
     
     // Log error
-    logger.error(`Failed to process document: ${error.message}`, {
+    logger.error(`Failed to process document: ${(error as Error)?.message || String(error)}`, {
       ...context,
       duration,
       error

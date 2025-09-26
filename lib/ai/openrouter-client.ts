@@ -14,7 +14,6 @@ import {
   createAiContentFilteredError,
   createAiUnavailableError,
   createAiModelError,
-  createAiParsingError,
   createTimeoutError
 } from '../error-handling';
 import { 
@@ -54,16 +53,6 @@ interface ModelInfo {
 }
 
 const XAI_MODELS: Record<string, ModelInfo> = {
-  'x-ai/grok-4-fast:free': {
-    id: 'x-ai/grok-4-fast:free',
-    name: 'Grok 4 Fast Reasoning',
-    contextWindow: 2000000,
-    costPerInputToken: 0.0000002, // $0.2/M tokens
-    costPerOutputToken: 0.0000005, // $0.5/M tokens
-    maxOutputTokens: 30000,
-    capabilities: ['reasoning', 'multimodal', 'tools'],
-    available: true
-  },
   'x-ai/grok-4-fast:free': {
     id: 'x-ai/grok-4-fast:free',
     name: 'Grok 4 Fast (Free)',
@@ -599,7 +588,7 @@ export class OpenRouterClient {
   /**
    * Extract content from OpenRouter response
    */
-  private extractContent(content: any): string {
+  private extractContent(content: unknown): string {
     if (typeof content === 'string') {
       return content;
     }

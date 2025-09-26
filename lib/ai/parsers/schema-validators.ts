@@ -222,7 +222,7 @@ const schemaMap: Record<SECFilingType | string, z.ZodTypeAny> = {
  * @returns Validation result with status and errors if any
  */
 export function validateAgainstSchema(
-  data: any, 
+  data: unknown, 
   filingType: SECFilingType = 'Generic',
   strict = false
 ): ValidationResult {
@@ -251,7 +251,7 @@ export function validateAgainstSchema(
     else {
       // Create a partial schema with only the fields that exist in the data
       // Type assertion to handle the fact that partial() is not on ZodTypeAny
-      const partialSchema = (schema as z.ZodObject<any, any, any>).partial();
+      const partialSchema = (schema as z.ZodObject<z.ZodRawShape>).partial();
       const result = partialSchema.safeParse(data);
       
       if (result.success) {
@@ -302,18 +302,24 @@ export function validateAgainstSchema(
  * @returns The extracted valid fields
  */
 export function extractValidFields(
-  data: any,
+  data: unknown,
   filingType: SECFilingType = 'Generic'
-): Record<string, any> {
+): Record<string, unknown> {
   try {
     const schema = schemaMap[filingType] || schemaGeneric;
-    const validFields: Record<string, any> = {};
+    const validFields: Record<string, unknown> = {};
+    
+    if (!data || typeof data !== 'object') {
+      return {};
+    }
+    
+    const dataObj = data as Record<string, unknown>;
     
     // Try to validate each field individually
-    Object.entries(data).forEach(([key, value]) => {
+    Object.entries(dataObj).forEach(([key, value]) => {
       try {
         // Get the schema for this particular field if it exists
-        const fieldSchema = (schema as any)._def.shape()[key];
+        const fieldSchema = (schema as z.ZodObject<z.ZodRawShape>)._def.shape()[key];
         
         if (fieldSchema) {
           const result = fieldSchema.safeParse(value);

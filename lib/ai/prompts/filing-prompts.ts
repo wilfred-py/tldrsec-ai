@@ -218,8 +218,7 @@ export function generateFilingPrompt(
     ticker,
     fiscalYear,
     fiscalQuarter,
-    promptConfig,
-    contextConfig
+    promptConfig
   } = request;
   
   // Get the template for this filing type

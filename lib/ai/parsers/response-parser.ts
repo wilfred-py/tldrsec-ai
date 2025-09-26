@@ -6,10 +6,8 @@
  */
 
 import { 
-  ExtractedJSON, 
   ExtractionOptions, 
-  ParserMetrics, 
-  ValidationResult 
+  ParserMetrics
 } from './types';
 import { extractJSON, repairJSON } from './json-extractors';
 import { validateAgainstSchema, extractValidFields } from './schema-validators';
@@ -24,12 +22,14 @@ import { secLogger as logger } from '../../../utils/logger';
  * @param filingType - Type of SEC filing
  * @returns Normalized data
  */
-function normalizeFields(data: any, filingType: SECFilingType): any {
+function normalizeFields(data: unknown, filingType: SECFilingType): unknown {
   if (!data || typeof data !== 'object') {
     return data;
   }
   
-  const normalized = { ...data };
+  const dataObj = data as Record<string, unknown>;
+  
+  const normalized = { ...dataObj };
   
   // Normalize common fields regardless of filing type
   if (normalized.filingDate && typeof normalized.filingDate === 'string') {
@@ -55,15 +55,18 @@ function normalizeFields(data: any, filingType: SECFilingType): any {
     case '6-K':
       // Financial statements
       if (Array.isArray(normalized.financials)) {
-        normalized.financials = normalized.financials.map((item: any) => ({
-          ...item,
-          value: typeof item.value === 'string' || typeof item.value === 'number' 
-            ? normalizeCurrency(item.value) 
-            : item.value,
-          growth: typeof item.growth === 'string' || typeof item.growth === 'number' 
-            ? normalizePercentage(item.growth) 
-            : item.growth
-        }));
+        normalized.financials = (normalized.financials as unknown[]).map((item: unknown) => {
+          const itemObj = item as Record<string, unknown>;
+          return {
+            ...itemObj,
+            value: typeof itemObj.value === 'string' || typeof itemObj.value === 'number' 
+              ? normalizeCurrency(itemObj.value) 
+              : itemObj.value,
+            growth: typeof itemObj.growth === 'string' || typeof itemObj.growth === 'number' 
+              ? normalizePercentage(itemObj.growth) 
+              : itemObj.growth
+          };
+        });
       }
       break;
       
@@ -76,8 +79,9 @@ function normalizeFields(data: any, filingType: SECFilingType): any {
     case '144' as SECFilingType:
       // Insider trading forms
       if (Array.isArray(normalized.transactions)) {
-        normalized.transactions = normalized.transactions.map((tx: any) => {
-          const result = { ...tx };
+        normalized.transactions = (normalized.transactions as unknown[]).map((tx: unknown) => {
+          const txObj = tx as Record<string, unknown>;
+          const result = { ...txObj };
           
           // Normalize transaction values
           if (result.price && (typeof result.price === 'string' || typeof result.price === 'number')) {
@@ -121,8 +125,9 @@ function normalizeFields(data: any, filingType: SECFilingType): any {
     case 'DEF 14A':
       // Executive compensation
       if (Array.isArray(normalized.executiveCompensation)) {
-        normalized.executiveCompensation = normalized.executiveCompensation.map((item: any) => {
-          const result = { ...item };
+        normalized.executiveCompensation = (normalized.executiveCompensation as unknown[]).map((item: unknown) => {
+          const itemObj = item as Record<string, unknown>;
+          const result = { ...itemObj };
           
           // Normalize compensation fields
           for (const field of ['salary', 'bonus', 'stockAwards', 'optionAwards', 'total']) {
@@ -161,7 +166,7 @@ export interface ParseOptions extends ExtractionOptions {
 /**
  * Result of parsing a Claude response
  */
-export interface ParseResult<T = any> {
+export interface ParseResult<T = unknown> {
   success: boolean;
   data?: T;
   raw?: string;
@@ -178,7 +183,7 @@ export interface ParseResult<T = any> {
  * @param options - Parsing options
  * @returns Parsed result with data and metadata
  */
-export function parseResponse<T = any>(
+export function parseResponse<T = unknown>(
   response: string,
   filingType: SECFilingType = 'Generic',
   options: ParseOptions = {}
@@ -232,7 +237,7 @@ export function parseResponse<T = any>(
           repaired = true;
           metrics.extractionSuccess = true;
           metrics.extractionMethod = extracted.extractionMethod;
-        } catch (repairError) {
+        } catch {
           // Continue to the next repair attempt
         }
       }
@@ -260,7 +265,7 @@ export function parseResponse<T = any>(
     metrics.validationSuccess = validationResult.valid;
     
     // If validation failed but partial data is allowed, try to extract valid fields
-    let data: any = validationResult.valid 
+    let data: unknown = validationResult.valid 
       ? validationResult.validatedData 
       : (options.allowPartial ? extractValidFields(extracted.parsed, filingType) : undefined);
     
@@ -335,15 +340,17 @@ export function parseResponse<T = any>(
  * @param filingType - Type of SEC filing
  * @returns Enhanced data with derived fields where possible
  */
-function postProcessFilingData(data: any, filingType: SECFilingType = 'Generic'): any {
+function postProcessFilingData(data: unknown, filingType: SECFilingType = 'Generic'): unknown {
   if (!data || typeof data !== 'object') {
     logger.debug(`${filingType} post-processing: Input data is not an object`);
     return data;
   }
   
-  logger.debug(`${filingType} post-processing: Starting with fields: ${Object.keys(data).join(', ')}`);
+  const dataObj = data as Record<string, unknown>;
   
-  const processed = { ...data };
+  logger.debug(`${filingType} post-processing: Starting with fields: ${Object.keys(dataObj).join(', ')}`);
+  
+  const processed = { ...dataObj };
   
   // Ensure we have a company field by checking all possible variations
   // This is critical for validation to pass
@@ -366,7 +373,7 @@ function postProcessFilingData(data: any, filingType: SECFilingType = 'Generic')
       }
     }
     
-// If we still don't have a company fiel                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              d, create a fallback
+    // If we still don't have a company field, create a fallback
     if (!processed.company) {
       // For insider forms, use a special format
       if (['3', '4', '144'].includes(filingType)) {
@@ -431,10 +438,10 @@ function postProcessFilingData(data: any, filingType: SECFilingType = 'Generic')
     // No longer truncating summaries to fixed length
     // We'll store the full summary in the database
     logger.debug(`${filingType} post-processing: Preserving full summary length of ${processed.summary.length} chars`);
-    
-    
-    // Form-specific post-processing to generate summary if missing
-    if (!processed.summary) {
+  }
+  
+  // Form-specific post-processing to generate summary if missing
+  if (!processed.summary) {
       logger.debug(`${filingType} post-processing: Summary field is missing, generating based on form type`);
       
       switch (filingType as string) {
@@ -489,6 +496,7 @@ function postProcessFilingData(data: any, filingType: SECFilingType = 'Generic')
         // Generic fallback
         processed.summary = `${processed.company || 'A company'} filed a ${filingType} SEC document.`;
         logger.debug(`Generated fallback summary for ${filingType}: ${processed.summary}`);
+        break;
     }
   }
   
@@ -565,13 +573,4 @@ function attemptSummaryRecovery(originalResponse: string, truncatedSummary: stri
     logger.error(`Summary recovery failed: ${error instanceof Error ? error.message : String(error)}`);
     return truncatedSummary; // Return original summary if recovery fails
   }
-}
-
-/**
- * Legacy function for backward compatibility
- * @deprecated Use postProcessFilingData instead
- */
-function postProcessForm4Data(data: any): any {
-  return postProcessFilingData(data, '4' as SECFilingType);
-}
 }

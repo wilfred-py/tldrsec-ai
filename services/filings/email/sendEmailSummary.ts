@@ -7,6 +7,7 @@ import { logger } from '../../../lib/logging';
 import { monitoring } from '@/lib/monitoring';
 import { RateLimitError } from '../enhanced/rateLimiter';
 import { checkIfFilingProcessed } from '../utils/filingProcessingStatus';
+import { trackEmailDelivery } from '../database/filingDatabase';
 
 const emailSummaryLogger = logger.child('email-summary');
 
@@ -308,6 +309,31 @@ export async function sendEmailSummary(
         email,
         summaryCount: summaries.length
       });
+      
+      // Track email delivery analytics for each summary that was sent
+      for (const summary of summaries) {
+        // Note: We need summary.id from the database, but FilingSummaryResult doesn't include it
+        // This is a limitation we'll address by finding the summary ID from the database
+        try {
+          if ((summary as any).id) {
+            await trackEmailDelivery((summary as any).id, email, 'summary_digest');
+          } else {
+            // Fallback: Log that we couldn't track this specific summary
+            emailSummaryLogger.debug('Could not track email delivery - summary ID missing', {
+              ticker: summary.ticker,
+              filingType: summary.filingType,
+              email
+            });
+          }
+        } catch (trackingError) {
+          emailSummaryLogger.warn('Failed to track email delivery analytics', {
+            error: trackingError,
+            ticker: summary.ticker,
+            email
+          });
+        }
+      }
+      
       return { 
         success: true, 
         message: `Email sent successfully to ${email} with ${summaries.length} summaries` 

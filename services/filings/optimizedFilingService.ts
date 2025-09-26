@@ -540,6 +540,11 @@ ${content}`;
         const [ticker, formType] = cacheKey.split('-');
         const dbResult = await this.findExistingDatabaseSummary(ticker, formType);
         if (dbResult) {
+          // Track cache access for analytics
+          if ((dbResult as any).id) {
+            await this.trackCacheAccessAnalytics((dbResult as any).id, 'database_cache_hit');
+          }
+          
           // Also populate higher-level caches
           if (this.config.enableInMemoryCache) {
             await this.cache.set(cacheKey, JSON.stringify(dbResult), this.config.cacheTimeoutSeconds);
@@ -946,6 +951,69 @@ ${content}`;
     });
     
     return results;
+  }
+
+  /**
+   * Track cache access for analytics
+   */
+  private async trackCacheAccessAnalytics(summaryId: string, accessType: string): Promise<void> {
+    try {
+      // Update the summary's cache usage count and last accessed time
+      await prisma.summary.update({
+        where: { id: summaryId },
+        data: {
+          cacheUsageCount: { increment: 1 },
+          lastCacheUsed: new Date()
+        }
+      });
+      
+      // Create a detailed cache access record
+      await prisma.summaryCacheAccess.create({
+        data: {
+          summaryId: summaryId,
+          accessType: accessType,
+          accessedAt: new Date()
+        }
+      });
+      
+      optimizedLogger.debug(`Cache access tracked: ${summaryId} (${accessType})`);
+    } catch (error) {
+      optimizedLogger.warn('Failed to track cache access', { error, summaryId, accessType });
+      // Don't throw - analytics failures shouldn't break main functionality
+    }
+  }
+  
+  /**
+   * Track email delivery for analytics
+   */
+  private async trackEmailDeliveryAnalytics(summaryId: string, userEmail: string, deliveryType: string = 'individual'): Promise<void> {
+    try {
+      // Create an email delivery record
+      await prisma.summaryEmailDelivery.create({
+        data: {
+          summaryId: summaryId,
+          userEmail: userEmail,
+          deliveryType: deliveryType,
+          deliveredAt: new Date(),
+          deliverySuccess: true
+        }
+      });
+      
+      // Update the summary to mark it as sent to user if not already
+      await prisma.summary.update({
+        where: { id: summaryId },
+        data: {
+          sentToUser: true,
+          emailDeliveryCount: { increment: 1 },
+          lastEmailDelivered: new Date()
+        }
+      });
+      
+      optimizedLogger.debug(`Email delivery tracked: ${summaryId} to ${userEmail}`);
+    } catch (error) {
+      optimizedLogger.warn('Failed to track email delivery', { error, summaryId, userEmail });
+      // Don't throw - analytics failures shouldn't break main functionality
+    }
   }
 
   /**

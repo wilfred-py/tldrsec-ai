@@ -3,17 +3,16 @@ import { jest } from '@jest/globals';
 // Integration test for the AI summarization pipeline that was just fixed
 // This tests the actual integration without heavy mocking
 
-// Mock only external services that would make network calls
-jest.mock('@anthropic-ai/sdk', () => {
-  const mockCreate = jest.fn();
-  return {
-    Anthropic: jest.fn().mockImplementation(() => ({
-      messages: {
-        create: mockCreate
-      }
-    }))
-  };
-});
+// Mock OpenRouter client instead of Anthropic
+const mockSendMessage = jest.fn();
+jest.mock('../../lib/ai/openrouter-client', () => ({
+  openRouterClient: {
+    sendMessage: mockSendMessage
+  },
+  OpenRouterClient: jest.fn().mockImplementation(() => ({
+    sendMessage: mockSendMessage
+  }))
+}));
 
 jest.mock('../../lib/network/enhanced-fetch', () => ({
   enhancedFetch: jest.fn()
@@ -42,57 +41,84 @@ jest.mock('../../lib/logging', () => ({
   }
 }));
 
+jest.mock('../../lib/monitoring', () => ({
+  monitoring: {
+    incrementCounter: jest.fn(),
+    recordValue: jest.fn(),
+    recordTiming: jest.fn(),
+    startTimer: jest.fn(),
+    stopTimer: jest.fn(),
+    recordMetric: jest.fn()
+  },
+  default: {
+    incrementCounter: jest.fn(),
+    recordValue: jest.fn(),
+    recordTiming: jest.fn(),
+    startTimer: jest.fn(),
+    stopTimer: jest.fn(),
+    recordMetric: jest.fn()
+  }
+}));
+
 import { generateAISummaryWithRetry } from '../../services/filing/summaryGenerationService';
 import { parseFormContentEnhanced } from '../../lib/parsers/enhanced-form-parser';
-
-const { Anthropic } = require('@anthropic-ai/sdk');
+import { openRouterClient } from '../../lib/ai/openrouter-client';
 
 describe('AI Summarization Pipeline Integration', () => {
-  let mockAnthropicCreate: jest.MockedFunction<any>;
-
   beforeEach(() => {
     jest.clearAllMocks();
     
-    // Set up the Anthropic mock
-    mockAnthropicCreate = Anthropic().messages.create;
-    
-    // Set environment variables
-    process.env.ANTHROPIC_API_KEY = 'test-api-key';
+    // Set environment variables for OpenRouter
+    process.env.TLDRSEC_AI_SUMMARIZER = 'test-api-key';
+    process.env.DEFAULT_AI_MODEL = 'x-ai/grok-4-fast:free';
   });
 
   afterEach(() => {
-    delete process.env.ANTHROPIC_API_KEY;
+    delete process.env.TLDRSEC_AI_SUMMARIZER;
+    delete process.env.DEFAULT_AI_MODEL;
   });
 
   describe('Core Functionality Tests', () => {
     it('should successfully parse filing content and generate AI summary', async () => {
-      // Mock successful AI response
-      const mockAIResponse = {
-        content: [{
-          text: JSON.stringify({
-            summary: 'Tesla Inc. reported strong quarterly financial performance with record deliveries.',
-            financialHighlights: [
-              { metric: 'Revenue', value: '$25.2B', yearOverYearChange: '+19%' },
-              { metric: 'Net Income', value: '$3.3B', yearOverYearChange: '+27%' }
-            ],
-            businessHighlights: [
-              { detail: 'Record vehicle deliveries of 484,507 units' },
-              { detail: 'Expansion of Supercharger network to 45,000 global stations' }
-            ],
-            riskFactors: [
-              { description: 'Supply chain constraints affecting production' },
-              { description: 'Increased competition in EV market' }
-            ],
-            keyTakeaway: 'Tesla continues to demonstrate strong execution with record performance across key metrics.'
-          })
-        }],
+      // Mock successful OpenRouter response
+      const mockOpenRouterResponse = {
+        id: 'test-response-id',
+        content: JSON.stringify({
+          summary: 'Tesla Inc. reported strong quarterly financial performance with record deliveries.',
+          financialHighlights: [
+            { metric: 'Revenue', value: '$25.2B', yearOverYearChange: '+19%', significance: 'Strong revenue growth' },
+            { metric: 'Net Income', value: '$3.3B', yearOverYearChange: '+27%', significance: 'Improved profitability' }
+          ],
+          businessHighlights: [
+            { category: 'Operations', detail: 'Record vehicle deliveries of 484,507 units', impact: 'Significant market expansion' },
+            { category: 'Infrastructure', detail: 'Expansion of Supercharger network to 45,000 global stations', impact: 'Enhanced customer experience' }
+          ],
+          riskFactors: [
+            { category: 'Operational', description: 'Supply chain constraints affecting production', severity: 'Medium' },
+            { category: 'Market', description: 'Increased competition in EV market', severity: 'Medium' }
+          ],
+          keyTakeaway: 'Tesla continues to demonstrate strong execution with record performance across key metrics.',
+          investorImpact: 'Positive outlook for continued growth'
+        }),
+        model: 'x-ai/grok-4-fast:free',
         usage: {
-          input_tokens: 2500,
-          output_tokens: 800
-        }
+          inputTokens: 2500,
+          outputTokens: 800
+        },
+        cost: {
+          inputCost: 0.0375,
+          outputCost: 0.060,
+          totalCost: 0.0975
+        },
+        inputTokens: 2500,
+        outputTokens: 800,
+        totalCost: 0.0975,
+        attempts: 1,
+        executionTimeMs: 3000,
+        fallbackUsed: false
       };
 
-      mockAnthropicCreate.mockResolvedValue(mockAIResponse);
+      mockSendMessage.mockResolvedValue(mockOpenRouterResponse);
 
       // Sample SEC filing content (realistic structure)
       const sampleFilingContent = `
@@ -165,29 +191,30 @@ describe('AI Summarization Pipeline Integration', () => {
       // Verify AI summary structure
       expect(summaryResult).toBeDefined();
       expect(summaryResult.summary).toBe('Tesla Inc. reported strong quarterly financial performance with record deliveries.');
-      expect(summaryResult.keyPoints).toHaveLength(7); // 2 financial + 2 business + 2 risk + 1 key takeaway
+      expect(summaryResult.keyPoints).toHaveLength(9); // 2 financial + 2 business + 2 risk + 1 key takeaway + 2 additional structured points
       expect(summaryResult.tokensUsed).toBe(3300);
       expect(summaryResult.inputTokens).toBe(2500);
       expect(summaryResult.outputTokens).toBe(800);
-      expect(summaryResult.cost).toBeCloseTo(0.0975); // (2500/1M * 15) + (800/1M * 75)
-      expect(summaryResult.model).toBe('claude-3-opus-20240229');
+      expect(summaryResult.cost).toBeCloseTo(0.0975, 4);
+      expect(summaryResult.model).toBe('x-ai/grok-4-fast:free');
       expect(summaryResult.error).toBeUndefined();
 
-      // Verify AI was called with proper prompt structure
-      expect(mockAnthropicCreate).toHaveBeenCalledWith({
-        model: 'claude-3-opus-20240229',
-        max_tokens: 4000,
-        temperature: 0.2,
-        system: 'You are a financial expert specializing in SEC filing analysis. Provide accurate, concise summaries in valid JSON format.',
-        messages: [
-          {
-            role: 'user',
-            content: expect.stringContaining('You are an expert financial analyst specializing in SEC filings')
-          }
-        ]
-      });
+      // Verify OpenRouter was called with proper prompt structure
+      expect(mockSendMessage).toHaveBeenCalledWith(
+        [{ role: 'user', content: expect.stringContaining('You are an expert financial analyst specializing in SEC filings') }],
+        expect.objectContaining({
+          model: 'x-ai/grok-4-fast:free',
+          maxTokens: 4000,
+          temperature: 0.1,
+          system: expect.stringContaining('You are a financial expert specializing in SEC filing analysis'),
+          requestType: 'standard',
+          timeout: 120000,
+          requiredCapabilities: ['reasoning'],
+          costLimit: 0.50
+        })
+      );
 
-      const promptContent = mockAnthropicCreate.mock.calls[0][0].messages[0].content;
+      const promptContent = mockSendMessage.mock.calls[0][0][0].content;
       expect(promptContent).toContain('Tesla Inc.');
       expect(promptContent).toContain('TSLA');
       expect(promptContent).toContain('10-Q');
@@ -195,10 +222,19 @@ describe('AI Summarization Pipeline Integration', () => {
     });
 
     it('should handle Date to ISO string conversion correctly', async () => {
-      // Mock AI response
-      mockAnthropicCreate.mockResolvedValue({
-        content: [{ text: '{"summary": "Test summary"}' }],
-        usage: { input_tokens: 100, output_tokens: 50 }
+      // Mock OpenRouter response
+      mockSendMessage.mockResolvedValue({
+        id: 'test-response-2',
+        content: '{"summary": "Test summary"}',
+        model: 'x-ai/grok-4-fast:free',
+        usage: { inputTokens: 100, outputTokens: 50 },
+        cost: { inputCost: 0.0015, outputCost: 0.0075, totalCost: 0.009 },
+        inputTokens: 100,
+        outputTokens: 50,
+        totalCost: 0.009,
+        attempts: 1,
+        executionTimeMs: 1500,
+        fallbackUsed: false
       });
 
       // Test with Date object (as would come from database)
@@ -220,7 +256,7 @@ describe('AI Summarization Pipeline Integration', () => {
       expect(result).toBeDefined();
       
       // Verify the prompt was generated with properly formatted date
-      const promptContent = mockAnthropicCreate.mock.calls[0][0].messages[0].content;
+      const promptContent = mockSendMessage.mock.calls[0][0][0].content;
       expect(promptContent).toContain('12/31/2023'); // Should be formatted for display
     });
 
@@ -228,12 +264,21 @@ describe('AI Summarization Pipeline Integration', () => {
       const startTime = Date.now();
       
       // Mock first two calls to fail, third to succeed
-      mockAnthropicCreate
+      mockSendMessage
         .mockRejectedValueOnce(new Error('Rate limit exceeded'))
         .mockRejectedValueOnce(new Error('Temporary service unavailable'))
         .mockResolvedValue({
-          content: [{ text: '{"summary": "Success after retries"}' }],
-          usage: { input_tokens: 200, output_tokens: 100 }
+          id: 'test-response-3',
+          content: '{"summary": "Success after retries"}',
+          model: 'x-ai/grok-4-fast:free',
+          usage: { inputTokens: 200, outputTokens: 100 },
+          cost: { inputCost: 0.003, outputCost: 0.015, totalCost: 0.018 },
+          inputTokens: 200,
+          outputTokens: 100,
+          totalCost: 0.018,
+          attempts: 3,
+          executionTimeMs: 4500,
+          fallbackUsed: false
         });
 
       const result = await generateAISummaryWithRetry(
@@ -254,12 +299,12 @@ describe('AI Summarization Pipeline Integration', () => {
       expect(duration).toBeGreaterThan(3000);
       
       // Should have been called 3 times
-      expect(mockAnthropicCreate).toHaveBeenCalledTimes(3);
+      expect(mockSendMessage).toHaveBeenCalledTimes(3);
     });
 
     it('should generate fallback summary when AI fails after all retries', async () => {
       // Mock all calls to fail
-      mockAnthropicCreate.mockRejectedValue(new Error('Persistent API failure'));
+      mockSendMessage.mockRejectedValue(new Error('Persistent API failure'));
 
       const result = await generateAISummaryWithRetry(
         'Test filing content',
@@ -275,21 +320,31 @@ describe('AI Summarization Pipeline Integration', () => {
         1 // maxRetries
       );
 
-      // Should return fallback summary
-      expect(result.summary).toContain('Fallback Test Company (FALL) filed a DEF 14A');
-      expect(result.keyPoints).toContain('AI-powered summary generation failed after multiple attempts. This is a fallback summary.');
-      expect(result.error).toBe('Persistent API failure');
-      expect(result.cost).toBeUndefined(); // Fallback summaries have no cost
+      // Should return error result for OpenRouter failure
+      expect(result.summary).toBe('');
+      expect(result.keyPoints).toEqual([]);
+      expect(result.error).toContain('Persistent API failure');
+      expect(result.processingStatus).toBe('FAILED');
+      expect(result.cost).toBeUndefined();
       expect(result.tokensUsed).toBeUndefined();
 
       // Should have attempted retries
-      expect(mockAnthropicCreate).toHaveBeenCalledTimes(2); // 1 initial + 1 retry
+      expect(mockSendMessage).toHaveBeenCalledTimes(2); // 1 initial + 1 retry
     });
 
     it('should handle JSON and string content sections correctly', async () => {
-      mockAnthropicCreate.mockResolvedValue({
-        content: [{ text: '{"summary": "Test summary"}' }],
-        usage: { input_tokens: 300, output_tokens: 150 }
+      mockSendMessage.mockResolvedValue({
+        id: 'test-response-4',
+        content: '{"summary": "Test summary"}',
+        model: 'x-ai/grok-4-fast:free',
+        usage: { inputTokens: 300, outputTokens: 150 },
+        cost: { inputCost: 0.0045, outputCost: 0.0225, totalCost: 0.027 },
+        inputTokens: 300,
+        outputTokens: 150,
+        totalCost: 0.027,
+        attempts: 1,
+        executionTimeMs: 2500,
+        fallbackUsed: false
       });
 
       // Test with object sections
@@ -319,16 +374,25 @@ describe('AI Summarization Pipeline Integration', () => {
       expect(result2).toBeDefined();
 
       // Both should work and generate summaries
-      expect(mockAnthropicCreate).toHaveBeenCalledTimes(2);
+      expect(mockSendMessage).toHaveBeenCalledTimes(2);
     });
   });
 
   describe('Error Handling Tests', () => {
     it('should handle malformed JSON response gracefully', async () => {
       // Mock malformed JSON response
-      mockAnthropicCreate.mockResolvedValue({
-        content: [{ text: 'Invalid JSON response from Claude {incomplete' }],
-        usage: { input_tokens: 100, output_tokens: 50 }
+      mockSendMessage.mockResolvedValue({
+        id: 'test-response-5',
+        content: 'Invalid JSON response from xAI {incomplete',
+        model: 'x-ai/grok-4-fast:free',
+        usage: { inputTokens: 100, outputTokens: 50 },
+        cost: { inputCost: 0.0015, outputCost: 0.0075, totalCost: 0.009 },
+        inputTokens: 100,
+        outputTokens: 50,
+        totalCost: 0.009,
+        attempts: 1,
+        executionTimeMs: 1500,
+        fallbackUsed: false
       });
 
       const result = await generateAISummaryWithRetry(
@@ -337,13 +401,14 @@ describe('AI Summarization Pipeline Integration', () => {
         { name: 'JSON Error Co', ticker: 'JSON' }
       );
 
-      // Should fall back to generated summary
-      expect(result.summary).toContain('JSON Error Co (JSON) filed a 8-K');
-      expect(result.error).toBe('Failed to parse AI summary response');
+      // Should return failed result with parsing error
+      expect(result.summary).toBe('');
+      expect(result.keyPoints).toEqual([]);
+      expect(result.error).toContain('Failed to parse AI response JSON');
     });
 
     it('should handle missing API key', async () => {
-      delete process.env.ANTHROPIC_API_KEY;
+      delete process.env.TLDRSEC_AI_SUMMARIZER;
 
       const result = await generateAISummaryWithRetry(
         'Test content',
@@ -351,16 +416,27 @@ describe('AI Summarization Pipeline Integration', () => {
         { name: 'No API Key Co', ticker: 'NOKEY' }
       );
 
-      // Should generate fallback without calling API
-      expect(result.summary).toContain('No API Key Co (NOKEY) filed a S-1');
-      expect(result.error).toBe('ANTHROPIC_API_KEY not set');
-      expect(mockAnthropicCreate).not.toHaveBeenCalled();
+      // Should return error result without calling API
+      expect(result.summary).toBe('');
+      expect(result.keyPoints).toEqual([]);
+      expect(result.error).toContain('OpenRouter API key not configured');
+      expect(result.processingStatus).toBe('FAILED');
+      expect(mockSendMessage).not.toHaveBeenCalled();
     });
 
     it('should handle content that is too long by truncating', async () => {
-      mockAnthropicCreate.mockResolvedValue({
-        content: [{ text: '{"summary": "Summary of truncated content"}' }],
-        usage: { input_tokens: 1500, output_tokens: 200 }
+      mockSendMessage.mockResolvedValue({
+        id: 'test-response-6',
+        content: '{"summary": "Summary of truncated content"}',
+        model: 'x-ai/grok-4-fast:free',
+        usage: { inputTokens: 1500, outputTokens: 200 },
+        cost: { inputCost: 0.0225, outputCost: 0.03, totalCost: 0.0525 },
+        inputTokens: 1500,
+        outputTokens: 200,
+        totalCost: 0.0525,
+        attempts: 1,
+        executionTimeMs: 3000,
+        fallbackUsed: false
       });
 
       // Create very long content (over 32k characters)
@@ -375,30 +451,43 @@ describe('AI Summarization Pipeline Integration', () => {
       expect(result.summary).toBe('Summary of truncated content');
 
       // Verify the content was truncated in the prompt
-      const promptContent = mockAnthropicCreate.mock.calls[0][0].messages[0].content;
-      const contentStart = promptContent.indexOf('Here is the filing content:') + 27;
+      const promptContent = mockSendMessage.mock.calls[0][0][0].content;
+      const contentStart = promptContent.indexOf('Here is the filing content') + 26;
       const actualContent = promptContent.substring(contentStart).trim();
       
-      // Content should be truncated to 32000 characters max
-      expect(actualContent.length).toBeLessThanOrEqual(32000);
+      // Content should be truncated to ~1.8M characters for xAI model context window
+      expect(actualContent.length).toBeLessThanOrEqual(1800000);
     });
   });
 
   describe('Cost Calculation Tests', () => {
     it('should calculate costs correctly for different token usage patterns', async () => {
       const testCases = [
-        { inputTokens: 1000, outputTokens: 500, expectedCost: 0.0525 },
-        { inputTokens: 5000, outputTokens: 2000, expectedCost: 0.225 },
-        { inputTokens: 100, outputTokens: 50, expectedCost: 0.00525 }
+        { inputTokens: 1000, outputTokens: 500, expectedCost: 0 }, // Free model
+        { inputTokens: 5000, outputTokens: 2000, expectedCost: 0 }, // Free model
+        { inputTokens: 100, outputTokens: 50, expectedCost: 0 } // Free model
       ];
 
       for (const testCase of testCases) {
-        mockAnthropicCreate.mockResolvedValue({
-          content: [{ text: '{"summary": "Test summary for cost calculation"}' }],
+        mockSendMessage.mockResolvedValue({
+          id: 'test-cost-response',
+          content: '{"summary": "Test summary for cost calculation"}',
+          model: 'x-ai/grok-4-fast:free',
           usage: {
-            input_tokens: testCase.inputTokens,
-            output_tokens: testCase.outputTokens
-          }
+            inputTokens: testCase.inputTokens,
+            outputTokens: testCase.outputTokens
+          },
+          cost: {
+            inputCost: testCase.expectedCost * 0.5,
+            outputCost: testCase.expectedCost * 0.5,
+            totalCost: testCase.expectedCost
+          },
+          inputTokens: testCase.inputTokens,
+          outputTokens: testCase.outputTokens,
+          totalCost: testCase.expectedCost,
+          attempts: 1,
+          executionTimeMs: 2000,
+          fallbackUsed: false
         });
 
         const result = await generateAISummaryWithRetry(

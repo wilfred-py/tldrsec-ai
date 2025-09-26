@@ -27,7 +27,6 @@ const safeMonitoring = {
 };
 import { ApiError, ErrorCode } from '../error-handling';
 import { executeWithAdaptiveRetry, AdaptiveRetryConfig, DefaultAdaptiveRetryConfig } from '../error-handling/adaptive-retry';
-import { enhancedFetch } from '../network/enhanced-fetch';
 import { generateFallbackSummary, isSummaryComplete } from './fallback-summary';
 import { SummarizationResult } from './summarize';
 import { SECFilingType } from './prompts/prompt-types';
@@ -49,7 +48,7 @@ export interface RobustClaudeOptions extends ClaudeRequestOptions {
   maxTokensPerRequest?: number;
   
   // Context for the request (for logging and monitoring)
-  context?: Record<string, any>;
+  context?: Record<string, unknown>;
 }
 
 /**
@@ -180,7 +179,7 @@ export class RobustClaudeClient {
       });
       
       return result;
-    } catch (error: any) {
+    } catch (error: unknown) {
       // Calculate duration
       const duration = Date.now() - startTime;
       
@@ -189,10 +188,10 @@ export class RobustClaudeClient {
         ? error
         : new ApiError(
             ErrorCode.EXTERNAL_API_ERROR,
-            error.message || 'Claude request failed',
+            (error as Error)?.message || 'Claude request failed',
             {
               ...context,
-              originalError: error.toString()
+              originalError: String(error)
             },
             true,
             requestId
@@ -341,12 +340,12 @@ export class RobustClaudeClient {
         },
         fallbackUsed: false
       };
-    } catch (error: any) {
+    } catch (error: unknown) {
       // Calculate duration
       const duration = Date.now() - startTime;
       
       // Log error
-      logger.error(`Failed to process document: ${error.message}`, {
+      logger.error(`Failed to process document: ${(error as Error)?.message || String(error)}`, {
         ...context,
         duration,
         error

@@ -35,7 +35,7 @@ export interface RobustAIOptions {
   useFallback?: boolean;
   
   // Context for the request (for logging and monitoring)
-  context?: Record<string, any>;
+  context?: Record<string, unknown>;
   
   // Model preference for this request
   model?: string;
@@ -52,7 +52,7 @@ export interface RobustAIOptions {
 export async function withRobustErrorHandling<T>(
   operation: () => Promise<T>,
   options: RobustAIOptions = {},
-  context: Record<string, any> = {}
+  context: Record<string, unknown> = {}
 ): Promise<T> {
   const requestId = context.requestId || uuidv4();
   const startTime = Date.now();
@@ -124,7 +124,7 @@ export async function withRobustErrorHandling<T>(
     });
     
     return result;
-  } catch (error: any) {
+  } catch (error: unknown) {
     // Calculate duration
     const duration = Date.now() - startTime;
     
@@ -133,11 +133,11 @@ export async function withRobustErrorHandling<T>(
       ? error
       : new ApiError(
           ErrorCode.EXTERNAL_API_ERROR,
-          error.message || 'OpenRouter AI request failed',
+          (error as Error)?.message || 'OpenRouter AI request failed',
           {
             ...enhancedContext,
-            originalError: error.toString(),
-            errorCode: error.code || 'OPENROUTER_ERROR'
+            originalError: String(error),
+            errorCode: (error as { code?: string })?.code || 'OPENROUTER_ERROR'
           },
           true,
           requestId
@@ -256,12 +256,12 @@ export async function processDocumentWithRobustHandling(
       duration,
       fallbackUsed: false
     };
-  } catch (error: any) {
+  } catch (error: unknown) {
     // Calculate duration
     const duration = Date.now() - startTime;
     
     // Log error
-    logger.error(`Failed to process document: ${error.message}`, {
+    logger.error(`Failed to process document: ${(error as Error)?.message || String(error)}`, {
       ...context,
       duration,
       error,
@@ -301,7 +301,7 @@ export function enhanceWithRobustErrorHandling(client: OpenRouterClient): OpenRo
   const originalSendMessage = client.sendMessage.bind(client);
   
   // Override the sendMessage method with robust error handling
-  client.sendMessage = async (messages: any[], options: any = {}): Promise<any> => {
+  client.sendMessage = async (messages: unknown[], options: Record<string, unknown> = {}): Promise<unknown> => {
       const robustOptions: RobustAIOptions = {
         model: options.model || getDefaultModel(),
         ...options,
