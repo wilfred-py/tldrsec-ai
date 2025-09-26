@@ -22,7 +22,7 @@ export interface CacheMetrics {
 }
 
 export class SecApiCache {
-  private cache: Map<string, CacheEntry<any>> = new Map();
+  private cache: Map<string, CacheEntry<unknown>> = new Map();
   private defaultTTL: number;
   private cleanupInterval: NodeJS.Timeout;
   private metrics: CacheMetrics = {
@@ -184,7 +184,7 @@ export class SecApiCache {
   /**
    * Generate cache key for SEC API calls
    */
-  static generateKey(operation: string, ticker: string, additionalParams?: Record<string, any>): string {
+  static generateKey(operation: string, ticker: string, additionalParams?: Record<string, unknown>): string {
     const params = additionalParams ? JSON.stringify(additionalParams) : '';
     return `sec_api:${operation}:${ticker.toUpperCase()}:${params}`;
   }

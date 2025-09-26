@@ -57,7 +57,7 @@ export async function fetchData<T>(
 
 export async function postData<T>(
   url: string, 
-  data: any, 
+  data: unknown, 
   options?: AxiosRequestConfig
 ): Promise<T> {
   try {

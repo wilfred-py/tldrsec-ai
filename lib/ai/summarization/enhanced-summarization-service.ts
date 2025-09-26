@@ -141,7 +141,7 @@ export class EnhancedSummarizationService extends EventEmitter {
       
       // Fetch filing record from database
       // Use type assertion to access the filing model
-      const filingRecord = await (prisma as any).filing.findUnique({
+      const filingRecord = await (prisma as unknown as { filing: { findUnique: (args: unknown) => Promise<unknown> } }).filing.findUnique({
         where: { id: filingId },
         include: { ticker: true }
       });

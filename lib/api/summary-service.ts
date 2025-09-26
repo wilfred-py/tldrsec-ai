@@ -1,4 +1,4 @@
-import { prisma } from '@/lib/db';
+// import { prisma } from '@/lib/db'; // Currently unused
 import { ApiResponse } from './types';
 
 // Type for Summary with Ticker information
@@ -9,7 +9,7 @@ export interface SummaryWithTicker {
   filingDate: Date;
   filingUrl: string;
   summaryText: string;
-  summaryJSON?: any;
+  summaryJSON?: Record<string, unknown>;
   createdAt: Date;
   sentToUser: boolean;
   ticker: {

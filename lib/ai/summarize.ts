@@ -268,8 +268,8 @@ function truncateDocumentContent(content: string, maxTokens: number): string {
   // Split document into sections/paragraphs
   const sections = content.split(/\n\n+/);
   
-  // Calculate approximate ratio to keep
-  const _keepRatio = maxTokens / currentTokens;
+  // Calculate approximate ratio to keep (for potential future use)
+  // const _keepRatio = maxTokens / currentTokens;
   
   // Prioritize important sections based on keywords
   const prioritizedSections = sections.map((section, index) => {
@@ -441,7 +441,7 @@ export interface SummarizationOptions {
   filingId?: string;
   summaryId?: string;
   requestId?: string;
-  openRouterOptions?: Record<string, any>;
+  openRouterOptions?: Record<string, unknown>;
   model?: string;
   metadata?: {
     ticker?: string;
@@ -626,7 +626,7 @@ export async function summarizeFiling(content: string, options: SummarizationOpt
     const maxTokenLimit = 180000; // Claude Sonnet 4's max token limit is 200k, but leave buffer for prompt
     
     let prompt: string;
-    const isChunked = false;
+    // const isChunked = false; // For potential future use
     
     // Handle minimal content case specially
     if (processedDoc.isMinimalContent) {
@@ -642,7 +642,7 @@ export async function summarizeFiling(content: string, options: SummarizationOpt
       // Use the existing truncation function since we've already done smart processing in processDocumentContent
       const truncatedContent = truncateDocumentContent(processedContent, maxTokenLimit);
       prompt = promptGenerator.getFullPrompt(truncatedContent);
-      const _isChunked = true;
+      // const _isChunked = true; // For potential future use
     } else {
       // Document is within token limits
       prompt = promptGenerator.getFullPrompt(processedContent);

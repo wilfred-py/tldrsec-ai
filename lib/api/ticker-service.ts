@@ -1,6 +1,6 @@
 import { Company, TickerSearchResult, ApiResponse, FilingPreferences } from './types';
 import { MOCK_COMPANIES, AVAILABLE_TICKERS } from './mock-data';
-import { prisma } from '@/lib/db/prisma';
+// import { prisma } from '@/lib/db/prisma'; // Currently unused
 
 // Environment check for API vs mock mode
 const API_ENABLED = process.env.NEXT_PUBLIC_API_ENABLED === 'true';
@@ -50,7 +50,7 @@ export async function getTrackedCompanies(): Promise<ApiResponse<Company[]>> {
         }
         
         // Convert API tickers to Company format
-        const userCompanies: Company[] = userData.tickers.map((ticker: any) => ({
+        const userCompanies: Company[] = userData.tickers.map((ticker: Record<string, unknown>) => ({
           id: ticker.id,
           symbol: ticker.symbol,
           companyName: ticker.companyName,
@@ -80,7 +80,7 @@ export async function getTrackedCompanies(): Promise<ApiResponse<Company[]>> {
             // Update companies with last filing dates
             if (filingsData.filings) {
               userCompanies.forEach(company => {
-                const filingInfo = filingsData.filings.find((f: any) => f.ticker === company.symbol);
+                const filingInfo = filingsData.filings.find((f: Record<string, unknown>) => f.ticker === company.symbol);
                 if (filingInfo) {
                   company.lastFilingDate = filingInfo.filingDate;
                   company.lastFiling = filingInfo.formType || "—";
