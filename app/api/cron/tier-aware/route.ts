@@ -83,29 +83,52 @@ interface TierStatus {
 }
 
 
-// Processing batch sizes per tier (from environment or defaults)
+// Processing batch sizes per tier (from environment or defaults) - Updated for xAI/OpenRouter pricing model
 const TIER_BATCH_SIZES = {
-  INSTITUTION: Number(process.env.INSTITUTION_BATCH_SIZE) || 10,
-  ENTERPRISE: Number(process.env.ENTERPRISE_BATCH_SIZE) || 8, 
-  PROFESSIONAL: Number(process.env.PROFESSIONAL_BATCH_SIZE) || 5,
-  FREE: Number(process.env.FREE_BATCH_SIZE) || 3
+  PRO: Number(process.env.PRO_BATCH_SIZE) || 20,      // 20 tickers, higher processing capacity
+  HOBBY: Number(process.env.HOBBY_BATCH_SIZE) || 3,   // 3 tickers, basic processing
+  FREE: Number(process.env.FREE_BATCH_SIZE) || 1      // 1 ticker for free users if any
 } as const;
 
-// Daily cost budgets (in USD) - from environment or defaults
+// Daily cost budgets (in USD) - Updated for new subscription tiers and xAI pricing
+// Based on $109/month HOBBY ($0.06/day) and $149/month PRO ($0.40/day) with 95% cost reduction from xAI
 const DAILY_COST_LIMITS = {
-  INSTITUTION: Number(process.env.INSTITUTION_COST_LIMIT) || 2.50,
-  ENTERPRISE: Number(process.env.ENTERPRISE_COST_LIMIT) || 1.25,
-  PROFESSIONAL: Number(process.env.PROFESSIONAL_COST_LIMIT) || 0.60,
-  FREE: Number(process.env.FREE_COST_LIMIT) || 0.20
+  PRO: Number(process.env.PRO_COST_LIMIT) || 0.40,     // $149/month = ~$0.40/day for 20 tickers
+  HOBBY: Number(process.env.HOBBY_COST_LIMIT) || 0.06, // $109/month = ~$0.06/day for 3 tickers
+  FREE: Number(process.env.FREE_COST_LIMIT) || 0.02    // Minimal cost for free tier if any
 } as const;
 
 // Security constants - reserved for future cost validation
 // const MAX_COST_PER_OPERATION = 10.0; // Maximum cost allowed per operation
 
 // NOTE: Timing-safe string comparison is now handled by MiddlewareSecurity.timingSafeEqual()
-// This provides defense-in-depth security validation at the middleware level
+// This provides defense-in-depth security validation at the middlew  are level
 
 // Cost validation is now handled by the dedicated cost-validation module
+
+/**
+ * Normalize subscription tiers for backward compatibility with legacy tiers
+ * Maps old tier names to new simplified tier structure
+ */
+function normalizeTier(tier: string): string {
+  const tierUpper = (tier || '').toUpperCase();
+  
+  // Map legacy tiers to new tiers for backward compatibility
+  switch (tierUpper) {
+    case 'INSTITUTION':
+    case 'ENTERPRISE':
+    case 'PROFESSIONAL':
+      return 'PRO';
+    case 'FREE':
+    case 'HOBBY':
+      return 'HOBBY';
+    case 'PRO':
+      return 'PRO';
+    default:
+      // Default unknown tiers to HOBBY for safety
+      return 'HOBBY';
+  }
+}
 
 
 /**
@@ -315,7 +338,7 @@ export async function GET(request: NextRequest) {
         .filter(u => u && u.id && u.subscriptionTier) // Filter out invalid users
         .map(u => ({
           id: u.id,
-          subscriptionTier: u.subscriptionTier as 'FREE' | 'PROFESSIONAL' | 'ENTERPRISE' | 'INSTITUTION', // Type assertion for Prisma enum compatibility
+          subscriptionTier: u.subscriptionTier as 'FREE' | 'HOBBY' | 'PRO', // Type assertion for updated subscription tiers
           lastProcessedAt: u.lastCronProcessed,
           budgetUsed: u.budgetUsed || 0
         })),
@@ -580,12 +603,17 @@ async function processTierBatch(
         }
         
         // Verify subscription tier hasn't changed (security: prevent tier escalation)
-        if (currentUser.subscriptionTier !== tier) {
-          throw new Error(`Subscription tier mismatch: expected ${tier}, got ${currentUser.subscriptionTier}`);
+        // Map legacy tiers to new tier structure for backward compatibility
+        const normalizedCurrentTier = normalizeTier(currentUser.subscriptionTier);
+        const normalizedExpectedTier = normalizeTier(tier);
+        
+        if (normalizedCurrentTier !== normalizedExpectedTier) {
+          throw new Error(`Subscription tier mismatch: expected ${normalizedExpectedTier}, got ${normalizedCurrentTier}`);
         }
         
         const currentBudgetUsed = currentUser.budgetUsed || 0;
-        const dailyLimit = DAILY_COST_LIMITS[tier as keyof typeof DAILY_COST_LIMITS];
+        const normalizedTier = normalizeTier(tier);
+        const dailyLimit = DAILY_COST_LIMITS[normalizedTier as keyof typeof DAILY_COST_LIMITS] || DAILY_COST_LIMITS.HOBBY;
         
         // Atomic budget update with race condition protection and async audit logging
         const updateResult = await updateUserBudgetWithLock(
