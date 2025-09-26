@@ -5,13 +5,13 @@
  * with specialized prompts for different filing types.
  */
 
-import { claudeClient, ClaudeRequestOptions } from './claude-client';
-import { modelConfig } from './config';
+import { openRouterClient } from './openrouter-client';
+import { modelConfig, getDefaultModel } from './config';
 import { parseResponse } from './parsers';
 import { SECFilingType } from './prompts/prompt-types';
 import { generateFilingPrompt } from './prompts/filing-prompts';
 import { estimateTokenCount, splitDocumentIntoChunks, getContextConfig } from './prompts/context-manager';
-import type { ContentBlock } from '@anthropic-ai/sdk/resources/messages';
+// Removed Anthropic SDK import - using OpenRouter client
 // import { extractFilingContent } from '../parsers/filing-extractor'; // Currently unused
 import { logger } from '../logging';
 import { monitoring } from '../monitoring';
@@ -328,43 +328,7 @@ function truncateDocumentContent(content: string, maxTokens: number): string {
   return keptSections.join('\n\n');
 }
 
-/**
- * Calculate the cost of an AI operation based on model and token usage
- * Updated with actual pricing for Claude models as of May 2025
- */
-function calculateCost(model: string, inputTokens: number, outputTokens: number): number {
-  // Claude pricing per million tokens (as of May 2025)
-  const pricing: Record<string, { input: number; output: number }> = {
-    'claude-sonnet-4-20250514': {
-      input: 3,      // $3 per million input tokens
-      output: 15     // $15 per million output tokens
-    },
-    'claude-3-opus-20240229': {
-      input: 15,     // $15 per million input tokens
-      output: 75     // $75 per million output tokens
-    },
-    'claude-3-sonnet-20240229': {
-      input: 3,      // $3 per million input tokens
-      output: 15     // $15 per million output tokens
-    },
-    'claude-3-haiku-20240307': {
-      input: 0.25,   // $0.25 per million input tokens
-      output: 1.25   // $1.25 per million output tokens
-    }
-  };
-  
-  // Default to Claude Sonnet 4 pricing if model not found
-  const modelPricing = pricing[model] || pricing['claude-sonnet-4-20250514'];
-  
-  // Calculate cost in dollars
-  const inputCost = (inputTokens / 1000000) * modelPricing.input;
-  const outputCost = (outputTokens / 1000000) * modelPricing.output;
-  const totalCost = inputCost + outputCost;
-  
-  componentLogger.debug(`Cost calculation for model '${model}', input tokens: ${inputTokens} ($${inputCost.toFixed(6)}), output tokens: ${outputTokens} ($${outputCost.toFixed(6)}), total: $${totalCost.toFixed(6)}`);
-  
-  return totalCost;
-}
+// Cost calculation removed - using OpenRouter's cost directly from response
 
 // Component logger
 const componentLogger = logger.child('claude-summarizer');
@@ -477,7 +441,7 @@ export interface SummarizationOptions {
   filingId?: string;
   summaryId?: string;
   requestId?: string;
-  claudeOptions?: ClaudeRequestOptions;
+  openRouterOptions?: Record<string, any>;
   model?: string;
   metadata?: {
     ticker?: string;
@@ -528,10 +492,10 @@ export async function summarizeFiling(content: string, options: SummarizationOpt
   };
   
   let filingRecordFromDB: SECFilingRecord | null = null;
-  const { filingId, summaryId, requestId, claudeOptions, metadata, model: optionsModel } = options; 
+  const { filingId, summaryId, requestId, openRouterOptions, metadata, model: optionsModel } = options; 
   const startTime = Date.now();
   
-  const aiClient = claudeClient;
+  const aiClient = openRouterClient;
   const operationId = requestId || `summarize-${summaryId || 'direct'}-${Date.now()}`;
   
   componentLogger.info(`Starting summarization${summaryId ? ` for summaryId=${summaryId}` : ''}${filingId ? `, filingId=${filingId}` : ''}, operationId=${operationId}`);
@@ -695,57 +659,33 @@ export async function summarizeFiling(content: string, options: SummarizationOpt
       });
     }
     
-    // Configure the Claude request
-    const model = optionsModel || modelConfig.defaultModel;
+    // Configure the OpenRouter request
+    const model = optionsModel || getDefaultModel();
     const requestOptions = {
-      // Use model config parameters directly
-      maxInputTokens: modelConfig.maxInputTokens,
-      maxOutputTokens: modelConfig.maxOutputTokens,
-      temperature: modelConfig.temperature,
-      topP: modelConfig.topP,
-      topK: modelConfig.topK,
-      ...claudeOptions
+      model,
+      maxTokens: modelConfig.maxOutputTokens || 4000,
+      temperature: modelConfig.temperature || 0.3,
+      ...openRouterOptions
     };
     
     componentLogger.debug(`Using model ${model} for ${summaryId ? `summaryId=${summaryId}` : 'direct summarization'}`);
     
     try {
-      // Call Claude API to generate the summary
-      const response = await aiClient.completeChat({
-        model,
-        messages: [
-          {
-            role: 'user',
-            content: prompt
-          }
-        ],
-        ...requestOptions
-      }, {
-        metadata: {
-          operationId,
-          ...(summaryId ? { summaryId } : {}),
-          ...(filingId ? { filingId } : {}),
-          filingType: filingRecordFromDB.formType
+      // Call OpenRouter API to generate the summary
+      const response = await aiClient.sendMessage([
+        {
+          role: 'user',
+          content: prompt
         }
-      });
+      ], requestOptions);
       
-      // Extract text content from the Claude API response
-      const summaryText = response.content
-        .filter((block: ContentBlock) => block.type === 'text')
-        .map((block: ContentBlock) => {
-          // Handle text blocks safely
-          if ('text' in block) {
-            return block.text;
-          }
-          return '';
-        })
-        .filter((text: string) => text.length > 0)
-        .join('\n');
+      // Extract text content from the OpenRouter API response
+      const summaryText = response.content;
       
-      // Access token usage with correct property names from the Anthropic API
-      const inputTokens = response.usage?.input_tokens || 0;
-      const outputTokens = response.usage?.output_tokens || 0;
-      const cost = calculateCost(model, inputTokens, outputTokens);
+      // Access token usage from OpenRouter response
+      const inputTokens = response.usage?.inputTokens || 0;
+      const outputTokens = response.usage?.outputTokens || 0;
+      const cost = response.cost?.totalCost || 0;
       
       componentLogger.info(`Received response for ${summaryId ? `summaryId=${summaryId}` : 'direct summarization'}, length=${summaryText.length}, inputTokens=${inputTokens}, outputTokens=${outputTokens}`);
       monitoring.recordTiming('ai.response_time', Date.now() - startTime);
@@ -784,7 +724,7 @@ export async function summarizeFiling(content: string, options: SummarizationOpt
               tokensUsed: inputTokens + outputTokens,
               model: response.model,
               cost,
-              attempts: response.executionMetadata?.attempts || 1
+              attempts: 1
             }
           });
         }
@@ -803,7 +743,7 @@ export async function summarizeFiling(content: string, options: SummarizationOpt
           tokensUsed: inputTokens + outputTokens,
           cost,
           processingTimeMs: Date.now() - startTime,
-          attempts: response.executionMetadata?.attempts || 1
+          attempts: 1
         };
       } else {
         monitoring.recordTiming('ai.parsing_duration', parsingDuration);
@@ -868,7 +808,7 @@ export async function summarizeFiling(content: string, options: SummarizationOpt
               tokensUsed: inputTokens + outputTokens,
               model: response.model,
               cost,
-              attempts: response.executionMetadata?.attempts || 1
+              attempts: 1
             }
           });
         }
@@ -889,7 +829,7 @@ export async function summarizeFiling(content: string, options: SummarizationOpt
           tokensUsed: inputTokens + outputTokens,
           cost,
           processingTimeMs: Date.now() - startTime,
-          attempts: response.executionMetadata?.attempts || 1
+          attempts: 1
         };
       }
     } catch (error) {

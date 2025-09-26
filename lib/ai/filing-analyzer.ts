@@ -3,7 +3,7 @@
  * with optimized prompting, caching, and error handling
  */
 
-import { claudeClient } from './claude-client';
+import { openRouterClient } from './openrouter-client';
 import { getPromptForFilingType } from './sec-prompts';
 import { FilingType } from '../sec-edgar/types';
 
@@ -84,28 +84,24 @@ class FilingAnalyzerService {
         truncatedContent
       );
       
-      // Call Claude API
-      console.log(`Calling Claude API for ${ticker} ${filingType} analysis...`);
-      const response = await claudeClient.completeChat({
-        messages: [
-          { role: 'user', content: prompt }
-        ],
+      // Call OpenRouter API
+      console.log(`Calling OpenRouter API for ${ticker} ${filingType} analysis...`);
+      const response = await openRouterClient.sendMessage([
+        { 
+          role: 'system', 
+          content: "You are an expert financial analyst specializing in SEC filings analysis. Provide concise, accurate analyses in valid JSON format." 
+        },
+        { role: 'user', content: prompt }
+      ], {
         model,
         temperature,
-        max_tokens: maxTokens,
-        system: "You are an expert financial analyst specializing in SEC filings analysis. Provide concise, accurate analyses in valid JSON format."
-      }, {
+        maxTokens,
         timeout,
         requestType: 'premium' // Use premium request type for higher priority
       });
       
       // Parse the response
-      let responseText = '';
-      if (response.content && response.content.length > 0) {
-        if ('text' in response.content[0]) {
-          responseText = response.content[0].text as string;
-        }
-      }
+      const responseText = response.content;
       
       let analysis;
       try {

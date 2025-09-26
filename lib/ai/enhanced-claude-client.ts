@@ -9,7 +9,7 @@
  * - Improved error recovery with retries and fallbacks
  */
 
-import { claudeClient, ClaudeMessage, ClaudeRequestOptions, ClaudeResponse, ClaudeClient } from './claude-client';
+import { openRouterClient, OpenRouterMessage, OpenRouterRequestOptions, OpenRouterResponse, OpenRouterClient } from './openrouter-client';
 import { StreamHandler } from './streaming/stream-handler';
 import { summaryCache, SummaryCacheKey } from './cache/summary-cache';
 import { batchProcessor, BatchJob } from './batch/batch-processor';
@@ -32,7 +32,7 @@ const componentLogger = logger.child('enhanced-claude');
 /**
  * Enhanced options for Claude requests
  */
-export interface EnhancedClaudeOptions extends ClaudeRequestOptions {
+export interface EnhancedClaudeOptions extends OpenRouterRequestOptions {
   useStreaming?: boolean;
   useCache?: boolean;
   processAllChunks?: boolean;
@@ -73,16 +73,16 @@ export enum EnhancedClaudeEvent {
  * Enhanced Claude client with advanced features
  */
 export class EnhancedClaudeClient extends EventEmitter {
-  private baseClient: ClaudeClient;
+  private baseClient: OpenRouterClient;
 
   /**
    * Create a new enhanced Claude client
    * @param baseClient Optional base Claude client to use
    */
-  constructor(baseClient?: typeof claudeClient) {
+  constructor(baseClient?: OpenRouterClient) {
     super();
-    this.baseClient = baseClient || claudeClient;
-    componentLogger.info('Enhanced Claude client initialized');
+    this.baseClient = baseClient || openRouterClient;
+    componentLogger.info('Enhanced OpenRouter client initialized');
   }
 
   /**
@@ -91,7 +91,7 @@ export class EnhancedClaudeClient extends EventEmitter {
    * @param options Options for the request
    * @returns Cache key
    */
-  private generateCacheKey(messages: ClaudeMessage[], options: EnhancedClaudeOptions): string {
+  private generateCacheKey(messages: OpenRouterMessage[], options: EnhancedClaudeOptions): string {
     // Create a simplified version of the request for the cache key
     const cacheKeyData = {
       messages: messages.map(m => ({
