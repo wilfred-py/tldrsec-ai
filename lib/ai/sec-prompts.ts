@@ -1,10 +1,11 @@
 import { FilingType } from '../sec-edgar/types';
-import { FormTypeMetadata, getFormMetadata } from '../sec-edgar/form-registry';
+import { getFormMetadata } from '../sec-edgar/form-registry';
 
 /**
  * Base prompt template for SEC filing summarization
+ * @deprecated - Reserved for future use
  */
-const BASE_PROMPT = `
+/* const BASE_PROMPT = `
 You are an expert financial analyst specializing in SEC filings. 
 Your task is to create a concise, informative summary of the following SEC filing.
 Focus on the most important information that would be relevant to investors and stakeholders.
@@ -22,7 +23,7 @@ FILING CONTENT:
 {{content}}
 
 Please provide a summary that is informative, accurate, and easy to understand for a business audience.
-`;
+`; */
 
 /**
  * 10-K Annual Report prompt template
@@ -182,8 +183,9 @@ Structure your analysis as a JSON object with the following format (without quot
 
 /**
  * Financial report prompt template (general for other financial reports)
+ * @deprecated - Reserved for future use
  */
-const FINANCIAL_REPORT_PROMPT = `
+/* const FINANCIAL_REPORT_PROMPT = `
 You are an expert financial analyst specializing in SEC filings.
 Your task is to create a concise, informative summary of the following financial report filing.
 Focus on the most important financial information and business developments.
@@ -206,7 +208,7 @@ Please structure your response as follows:
 5. A concluding sentence with the most important takeaway
 
 Your summary should be informative, accurate, and easy to understand for investors.
-`;
+`; */
 
 /**
  * 8-K Current Report prompt template
@@ -274,8 +276,9 @@ Structure your analysis as a JSON object with the following format (without quot
 
 /**
  * Event-based filing prompt template (general for other event filings)
+ * @deprecated - Reserved for future use
  */
-const EVENT_FILING_PROMPT = `
+/* const EVENT_FILING_PROMPT = `
 You are an expert financial analyst specializing in SEC filings.
 Your task is to create a concise, informative summary of the following event-based SEC filing.
 Focus on the specific event or announcement and its potential impact.
@@ -298,7 +301,7 @@ Please structure your response as follows:
 5. A concluding sentence with the most important takeaway
 
 Your summary should be informative, accurate, and easy to understand for investors.
-`;
+`; */
 
 /**
  * Form 4 (Insider Trading) prompt template
@@ -375,8 +378,9 @@ Structure your analysis as a JSON object with the following format (without quot
 
 /**
  * Ownership filing prompt template (general for other ownership filings)
+ * @deprecated - Reserved for future use
  */
-const OWNERSHIP_FILING_PROMPT = `
+/* const OWNERSHIP_FILING_PROMPT = `
 You are an expert financial analyst specializing in SEC filings.
 Your task is to create a concise, informative summary of the following ownership-related SEC filing.
 Focus on the ownership changes, transactions, or holdings disclosed.
@@ -399,7 +403,7 @@ Please structure your response as follows:
 5. A concluding sentence with the most important takeaway
 
 Your summary should be informative, accurate, and easy to understand for investors.
-`;
+`; */
 
 /**
  * Registration filing prompt template (S-1, F-1, etc.)

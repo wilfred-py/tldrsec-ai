@@ -151,7 +151,7 @@ describe('Batch Processor', () => {
     expect(processSingleChunk).toHaveBeenCalledTimes(chunks.length);
     
     // Each chunk should have been processed
-    chunks.forEach((chunk, index) => {
+    chunks.forEach((chunk, _index) => {
       expect(processSingleChunk).toHaveBeenCalledWith(
         chunk,
         filingType,

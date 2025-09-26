@@ -5,7 +5,8 @@
  */
 
 import { updateSummaryWithPartialResult, updateSummaryWithResult } from '../db-utils';
-import { EnhancedSummarizationResult, BaseSummarizationResult } from '../types';
+// Types imported but not used directly in current tests
+// import { EnhancedSummarizationResult, BaseSummarizationResult } from '../types';
 import { SummarizationResult } from '../../summarize';
 import { jest } from '@jest/globals';
 

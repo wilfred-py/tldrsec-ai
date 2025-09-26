@@ -3,7 +3,7 @@ import { logger } from '../logging';
 
 // Optional Redis dependency - will use in-memory fallback if not available
 // Only import in Node.js runtime, not Edge Runtime
-let Redis: any = null;
+let Redis: typeof import('ioredis').Redis | null = null;
 
 // Check if we're in Edge Runtime or Node.js runtime
 const isEdgeRuntime = typeof EdgeRuntime !== 'undefined' || 
@@ -12,8 +12,9 @@ const isEdgeRuntime = typeof EdgeRuntime !== 'undefined' ||
 
 if (!isEdgeRuntime) {
   try {
-    Redis = require('ioredis').Redis;
-  } catch (error) {
+    const ioredis = require('ioredis') as typeof import('ioredis');
+    Redis = ioredis.Redis;
+  } catch {
     Redis = null;
     logger.child('rate-limiter').info('Redis not available, using in-memory rate limiting');
   }
@@ -37,7 +38,7 @@ const RATE_LIMITER_CIRCUIT_BREAKER_TIMEOUT = 60000; // 1 minute
 const DEFAULT_EMERGENCY_LIMIT = 10; // Conservative limit when rate limiter fails
 
 class RateLimiter {
-  private redis: any | null = null;
+  private redis: InstanceType<typeof import('ioredis').Redis> | null = null;
   private inMemoryCache = new Map<string, { count: number; resetTime: number }>();
   private emergencyCache = new Map<string, { count: number; resetTime: number; failures: number }>();
   private circuitBreakerState = {
@@ -199,14 +200,14 @@ class RateLimiter {
    * CRITICAL: This implements fail-secure instead of fail-open
    */
   private handleRateLimiterFailure(
-    error: any,
+    error: Error,
     cacheKey: string,
     limit: number,
     windowMs: number,
     now: number,
     resetTime: number,
     key: string,
-    identifier: string
+    _identifier: string
   ): RateLimitResult {
     this.circuitBreakerState.failureCount++;
     this.circuitBreakerState.lastFailureTime = now;

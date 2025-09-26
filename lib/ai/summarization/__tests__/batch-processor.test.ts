@@ -366,9 +366,10 @@ describe('Batch Processor', () => {
     expect(result.outputTokens).toBe(0);
     expect(result.cost).toBe(0);
   });
-});
+
+  test('should handle errors in chunk processing', async () => {
     // Setup mock to throw an error for the second chunk
-    mockedProcessSingleChunk.mockImplementation((chunk: string, filingType: SECFilingType, filingRecord: any, options: any): Promise<EnhancedSummarizationResult> => {
+    mockedProcessSingleChunk.mockImplementation((chunk: string, filingType: SECFilingType, filingRecord: Record<string, unknown>, options: Record<string, unknown>): Promise<EnhancedSummarizationResult> => {
       if (chunk === mockChunks[1]) {
         return Promise.reject(new Error('Test error'));
       }
@@ -397,6 +398,7 @@ describe('Batch Processor', () => {
     expect(result).toHaveProperty('isPartial', true);
     expect(result.chunkResults).toHaveLength(2);
   });
+});
 
   it('should use provided options correctly', async () => {
     const customOptions = {

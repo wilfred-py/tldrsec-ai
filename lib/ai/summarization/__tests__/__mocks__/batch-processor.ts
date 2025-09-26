@@ -7,7 +7,7 @@ import { jest } from '@jest/globals';
 import type { EnhancedSummarizationResult } from '../../types';
 
 // Create a mock implementation of processAllChunks
-export const processAllChunks = jest.fn((...args: any[]): Promise<EnhancedSummarizationResult> => {
+export const processAllChunks = jest.fn((...args: unknown[]): Promise<EnhancedSummarizationResult> => {
   // Extract chunks from args if available
   const chunks = Array.isArray(args[0]) ? args[0] : [];
   

@@ -17,6 +17,7 @@ import { updateUserBudgetWithLock, isConcurrencyError } from '../../../../lib/db
 import { FilingTransactionManager } from '../../../../lib/db/transaction-manager';
 import { createAsyncAuditLog } from '../../../../lib/db/async-audit';
 import { validateCostUpdate } from '../../../../lib/db/cost-validation';
+import { optimizeCronProcessing } from '../../../../lib/cron/ticker-deduplication';
 
 // Initialize Prisma client lazily to avoid build-time database connections
 let prisma: ReturnType<typeof getPrismaClient>;
@@ -410,7 +411,7 @@ export async function GET(request: NextRequest) {
 }
 
 /**
- * Process eligible users by tier with priority handling
+ * Process eligible users by tier with ticker deduplication optimization
  */
 async function processEligibleUsers(
   eligibleUsers: EligibleUser[], 
@@ -429,49 +430,445 @@ async function processEligibleUsers(
       costValidationFailed: 0,
       tierMismatch: 0,
       unknownErrors: 0
+    },
+    cacheMetrics: {
+      hits: 0,
+      misses: 0,
+      hitRatio: 0,
+      apiCallsSaved: 0
     }
   };
 
-  // Group eligible users by tier
-  const usersByTier = eligibleUsers.reduce((acc, userStatus) => {
-    const tier = userStatus.tier;
-    if (!acc[tier]) acc[tier] = [];
-    acc[tier].push(userStatus);
-    return acc;
-  }, {} as Record<string, EligibleUser[]>);
+  // Get eligible users with full database records
+  const eligibleUserRecords = allUsers.filter(user => 
+    eligibleUsers.some(eligible => eligible.userId === user.id)
+  );
 
-  // Process each tier with appropriate batch sizes
-  for (const [tier, userStatuses] of Object.entries(usersByTier)) {
-    const typedUserStatuses = userStatuses as EligibleUser[];
-    if (typedUserStatuses.length === 0) continue;
+  if (eligibleUserRecords.length === 0) {
+    cronLogger.info('No eligible users found for processing');
+    return results;
+  }
 
-    const batchSize = TIER_BATCH_SIZES[tier as keyof typeof TIER_BATCH_SIZES] || 3;
-    const tierResults = await processTierBatch(tier, typedUserStatuses, batchSize, allUsers, monitor);
+  try {
+    // Apply ticker deduplication optimization
+    cronLogger.info(`Starting ticker deduplication optimization for ${eligibleUserRecords.length} eligible users`);
     
-    // Accumulate results
-    results.usersProcessed += tierResults.processed;
-    results.filingsProcessed += tierResults.filings;
-    results.totalCost += tierResults.cost;
-    results.tierBreakdown[tier] = tierResults.processed;
-    results.errors += tierResults.errors;
+    const deduplicationResult = await optimizeCronProcessing(eligibleUserRecords);
     
-    // Accumulate error breakdown
-    if (tierResults.errorBreakdown) {
-      results.errorBreakdown.concurrencyConflicts += tierResults.errorBreakdown.concurrencyConflicts || 0;
-      results.errorBreakdown.budgetExceeded += tierResults.errorBreakdown.budgetExceeded || 0;
-      results.errorBreakdown.costValidationFailed += tierResults.errorBreakdown.costValidationFailed || 0;
-      results.errorBreakdown.tierMismatch += tierResults.errorBreakdown.tierMismatch || 0;
-      results.errorBreakdown.unknownErrors += tierResults.errorBreakdown.unknownErrors || 0;
+    cronLogger.info('Ticker deduplication optimization completed', {
+      totalTickers: deduplicationResult.totalTickers,
+      uniqueTickers: deduplicationResult.uniqueTickers,
+      deduplicationRatio: Math.round(deduplicationResult.deduplicationRatio * 100) + '%',
+      apiCallsSaved: deduplicationResult.apiCallsSaved,
+      cacheHitRatio: Math.round(deduplicationResult.cacheMetrics.hitRatio * 100) + '%'
+    });
+
+    // Update cache metrics
+    results.cacheMetrics = {
+      hits: deduplicationResult.cacheMetrics.hits,
+      misses: deduplicationResult.cacheMetrics.misses,
+      hitRatio: deduplicationResult.cacheMetrics.hitRatio,
+      apiCallsSaved: deduplicationResult.apiCallsSaved
+    };
+
+    // Record deduplication metrics in monitoring
+    if (monitor) {
+      await monitor.recordMetric('ticker_deduplication', {
+        totalTickers: deduplicationResult.totalTickers,
+        uniqueTickers: deduplicationResult.uniqueTickers,
+        deduplicationRatio: deduplicationResult.deduplicationRatio,
+        apiCallsSaved: deduplicationResult.apiCallsSaved,
+        cacheHitRatio: deduplicationResult.cacheMetrics.hitRatio
+      });
     }
 
-    cronLogger.info(`Completed ${tier} tier processing`, tierResults);
+    // Now process users based on the optimized filing results
+    // Group users by tier for budget management and processing limits
+    const usersByTier = eligibleUsers.reduce((acc, userStatus) => {
+      const tier = userStatus.tier;
+      if (!acc[tier]) acc[tier] = [];
+      acc[tier].push(userStatus);
+      return acc;
+    }, {} as Record<string, EligibleUser[]>);
+
+    // Process each tier with their respective filing results
+    for (const [tier, userStatuses] of Object.entries(usersByTier)) {
+      const typedUserStatuses = userStatuses as EligibleUser[];
+      if (typedUserStatuses.length === 0) continue;
+
+      const batchSize = TIER_BATCH_SIZES[tier as keyof typeof TIER_BATCH_SIZES] || 3;
+      const tierResults = await processTierBatchWithDeduplication(
+        tier, 
+        typedUserStatuses, 
+        batchSize, 
+        allUsers, 
+        deduplicationResult.filingResults,
+        monitor
+      );
+      
+      // Accumulate results
+      results.usersProcessed += tierResults.processed;
+      results.filingsProcessed += tierResults.filings;
+      results.totalCost += tierResults.cost;
+      results.tierBreakdown[tier] = tierResults.processed;
+      results.errors += tierResults.errors;
+      
+      // Accumulate error breakdown
+      if (tierResults.errorBreakdown) {
+        results.errorBreakdown.concurrencyConflicts += tierResults.errorBreakdown.concurrencyConflicts || 0;
+        results.errorBreakdown.budgetExceeded += tierResults.errorBreakdown.budgetExceeded || 0;
+        results.errorBreakdown.costValidationFailed += tierResults.errorBreakdown.costValidationFailed || 0;
+        results.errorBreakdown.tierMismatch += tierResults.errorBreakdown.tierMismatch || 0;
+        results.errorBreakdown.unknownErrors += tierResults.errorBreakdown.unknownErrors || 0;
+      }
+
+      cronLogger.info(`Completed ${tier} tier processing with deduplication`, {
+        ...tierResults,
+        cacheOptimization: {
+          apiCallsSaved: deduplicationResult.apiCallsSaved,
+          cacheHitRatio: Math.round(deduplicationResult.cacheMetrics.hitRatio * 100) + '%'
+        }
+      });
+    }
+
+    return results;
+
+  } catch (deduplicationError) {
+    cronLogger.error('Ticker deduplication failed, falling back to individual processing', {
+      error: deduplicationError instanceof Error ? deduplicationError.message : 'Unknown error',
+      eligibleUsers: eligibleUserRecords.length
+    });
+
+    // Fallback to original processing method
+    const usersByTier = eligibleUsers.reduce((acc, userStatus) => {
+      const tier = userStatus.tier;
+      if (!acc[tier]) acc[tier] = [];
+      acc[tier].push(userStatus);
+      return acc;
+    }, {} as Record<string, EligibleUser[]>);
+
+    // Process each tier with appropriate batch sizes (original method)
+    for (const [tier, userStatuses] of Object.entries(usersByTier)) {
+      const typedUserStatuses = userStatuses as EligibleUser[];
+      if (typedUserStatuses.length === 0) continue;
+
+      const batchSize = TIER_BATCH_SIZES[tier as keyof typeof TIER_BATCH_SIZES] || 3;
+      const tierResults = await processTierBatch(tier, typedUserStatuses, batchSize, allUsers, monitor);
+      
+      // Accumulate results
+      results.usersProcessed += tierResults.processed;
+      results.filingsProcessed += tierResults.filings;
+      results.totalCost += tierResults.cost;
+      results.tierBreakdown[tier] = tierResults.processed;
+      results.errors += tierResults.errors;
+      
+      // Accumulate error breakdown
+      if (tierResults.errorBreakdown) {
+        results.errorBreakdown.concurrencyConflicts += tierResults.errorBreakdown.concurrencyConflicts || 0;
+        results.errorBreakdown.budgetExceeded += tierResults.errorBreakdown.budgetExceeded || 0;
+        results.errorBreakdown.costValidationFailed += tierResults.errorBreakdown.costValidationFailed || 0;
+        results.errorBreakdown.tierMismatch += tierResults.errorBreakdown.tierMismatch || 0;
+        results.errorBreakdown.unknownErrors += tierResults.errorBreakdown.unknownErrors || 0;
+      }
+
+      cronLogger.info(`Completed ${tier} tier processing (fallback method)`, tierResults);
+    }
+
+    return results;
+  }
+}
+
+/**
+ * Process a batch of users from a specific tier using deduplicated filing results
+ */
+async function processTierBatchWithDeduplication(
+  tier: string,
+  userStatuses: EligibleUser[],
+  batchSize: number,
+  allUsers: DatabaseUser[],
+  filingResults: Array<{
+    ticker: string;
+    filings: unknown[];
+    users: Array<{ userId: string; userEmail: string; tier: string }>;
+    cacheHit: boolean;
+    apiCallTime: number;
+    error?: string;
+  }>,
+  monitor: CronJobMonitor
+): Promise<TierStatus> {
+  const results = {
+    processed: 0,
+    filings: 0,
+    cost: 0,
+    errors: 0,
+    errorBreakdown: {
+      concurrencyConflicts: 0,
+      budgetExceeded: 0,
+      costValidationFailed: 0,
+      tierMismatch: 0,
+      unknownErrors: 0
+    }
+  };
+
+  // Limit batch size and implement concurrent processing
+  const batchUsers = (userStatuses || []).slice(0, batchSize);
+  
+  // Process users concurrently with controlled concurrency
+  const maxConcurrency = Math.min(3, batchUsers.length);
+  const processingPromises: Promise<ProcessUserResult>[] = [];
+  
+  for (let i = 0; i < batchUsers.length; i += maxConcurrency) {
+    const chunk = batchUsers.slice(i, i + maxConcurrency);
+    
+    const chunkPromises = (chunk || []).map(async (userStatus) => {
+      try {
+        // Validate userStatus object structure
+        if (!userStatus || !userStatus.userId) {
+          cronLogger.error('Invalid userStatus object', { userStatus });
+          return { success: false, error: 'Invalid userStatus object', userId: 'unknown' };
+        }
+
+        // Find full user data with null safety
+        const fullUser = (allUsers || []).find(u => u && u.id === userStatus.userId);
+        if (!fullUser) {
+          cronLogger.warn(`User ${userStatus.userId} not found in full user data`, {
+            userId: userStatus.userId,
+            availableUserIds: (allUsers || []).map(u => u?.id).filter(Boolean)
+          });
+          return { success: false, error: 'User not found', userId: userStatus.userId };
+        }
+
+        // Find relevant filing results for this user's tickers
+        const userFilingResults = filingResults.filter(result => 
+          result.users.some(u => u.userId === userStatus.userId)
+        );
+
+        // Process the user's filings using the deduplicated results
+        const userResult = await processUserWithDeduplicatedFilings(
+          fullUser, 
+          tier, 
+          userFilingResults
+        );
+        
+        // Comprehensive cost validation (security: prevent budget manipulation)
+        const costValidation = validateCostUpdate(userResult.cost, tier, {
+          userId: userStatus.userId,
+          tier,
+          operation: 'tier-aware-cron-processing-dedup',
+          operationType: userResult.cost === 0 ? 'cached_summary' : 'ai_generation',
+          isCached: userResult.cost === 0
+        });
+        
+        if (!costValidation.valid) {
+          cronLogger.error(`Cost validation failed for deduplication`, {
+            userId: userStatus.userId,
+            tier,
+            originalCost: userResult.cost,
+            error: costValidation.error
+          });
+          
+          // Queue audit log for failed cost validation asynchronously  
+          setImmediate(() => {
+            createAsyncAuditLog({
+              userId: userStatus.userId,
+              action: 'BUDGET_UPDATE_FAILED',
+              details: {
+                originalCost: userResult.cost,
+                tier,
+                error: costValidation.error,
+                timestamp: new Date().toISOString(),
+                processingType: 'deduplication'
+              },
+              success: false
+            }).catch(err => cronLogger.error('Failed to create async audit log', { err }));
+          });
+          
+          return { 
+            success: false, 
+            userId: userStatus.userId,
+            error: `Cost validation failed: ${costValidation.error}`,
+            errorType: 'COST_VALIDATION_FAILED'
+          };
+        }
+        
+        const validatedCost = costValidation.sanitizedCost;
+        
+        // Get current user budget first with proper error handling
+        let currentUser;
+        try {
+          currentUser = await getPrisma().user.findUnique({
+            where: { id: userStatus.userId },
+            select: { 
+              budgetUsed: true, 
+              subscriptionTier: true
+            }
+          });
+        } catch (dbError) {
+          cronLogger.error(`Database error fetching user ${userStatus.userId}`, {
+            error: dbError instanceof Error ? dbError.message : 'Unknown database error',
+            userId: userStatus.userId
+          });
+          throw new Error(`Database error: Unable to fetch user ${userStatus.userId}`);
+        }
+        
+        if (!currentUser) {
+          cronLogger.error(`User ${userStatus.userId} not found in database during budget check`);
+          throw new Error(`User ${userStatus.userId} not found`);
+        }
+        
+        // Verify subscription tier hasn't changed (security: prevent tier escalation)
+        const normalizedCurrentTier = normalizeTier(currentUser.subscriptionTier);
+        const normalizedExpectedTier = normalizeTier(tier);
+        
+        if (normalizedCurrentTier !== normalizedExpectedTier) {
+          throw new Error(`Subscription tier mismatch: expected ${normalizedExpectedTier}, got ${normalizedCurrentTier}`);
+        }
+        
+        const currentBudgetUsed = currentUser.budgetUsed || 0;
+        const normalizedTier = normalizeTier(tier);
+        const dailyLimit = DAILY_COST_LIMITS[normalizedTier as keyof typeof DAILY_COST_LIMITS] || DAILY_COST_LIMITS.HOBBY;
+        
+        // Atomic budget update with race condition protection and async audit logging
+        const updateResult = await updateUserBudgetWithLock(
+          userStatus.userId,
+          validatedCost,
+          currentBudgetUsed,
+          dailyLimit,
+          {
+            maxRetries: 5,
+            baseDelay: 50,
+            maxDelay: 1000,
+            isolationLevel: 'ReadCommitted',
+            tier,
+            originalCost: userResult.cost,
+            enableAuditLogging: true
+          }
+        );
+
+        // Record metrics
+        if (monitor) {
+          await monitor.recordMetric('user_processed_dedup', {
+            userId: userStatus.userId,
+            tier,
+            filingsProcessed: userResult.filingsProcessed,
+            cost: userResult.cost,
+            cacheOptimized: true
+          });
+        }
+
+        return {
+          success: true,
+          userId: userStatus.userId,
+          filingsProcessed: userResult?.filingsProcessed || 0,
+          cost: validatedCost,
+          budgetUpdate: updateResult ? {
+            previousBudget: updateResult.previousBudget || 0,
+            newBudget: updateResult.newBudget || 0,
+            costAdded: validatedCost
+          } : undefined
+        };
+
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        let errorType = 'UNKNOWN_ERROR';
+        
+        // Categorize concurrency errors
+        if (isConcurrencyError(error)) {
+          errorType = 'CONCURRENCY_CONFLICT';
+          cronLogger.warn(`Concurrency conflict processing user ${userStatus.userId} (dedup)`, {
+            error: errorMessage,
+            tier,
+            userStatus: userStatus.userId
+          });
+        } else if (errorMessage.includes('Budget limit exceeded')) {
+          errorType = 'BUDGET_EXCEEDED';
+          cronLogger.info(`User ${userStatus.userId} budget limit reached (dedup)`, {
+            tier,
+            error: errorMessage
+          });
+        } else if (errorMessage.includes('Cost validation failed')) {
+          errorType = 'COST_VALIDATION_FAILED';
+          cronLogger.error(`Cost validation failed for user ${userStatus.userId} (dedup)`, {
+            tier,
+            error: errorMessage
+          });
+        } else if (errorMessage.includes('Subscription tier mismatch')) {
+          errorType = 'TIER_MISMATCH';
+          cronLogger.warn(`Subscription tier changed during processing for user ${userStatus.userId} (dedup)`, {
+            tier,
+            error: errorMessage
+          });
+        } else {
+          cronLogger.error(`Unexpected error processing user ${userStatus.userId} (dedup)`, {
+            error: errorMessage,
+            tier,
+            errorType: typeof error
+          });
+        }
+        
+        return { 
+          success: false, 
+          userId: userStatus?.userId || 'unknown', 
+          error: errorMessage,
+          errorType 
+        };
+      }
+    });
+    
+    processingPromises.push(...chunkPromises);
+  }
+  
+  // Wait for all processing to complete
+  const processingResults = await Promise.allSettled(processingPromises);
+  
+  // Aggregate results with comprehensive null safety
+  for (const result of processingResults || []) {
+    try {
+      if (result && result.status === 'fulfilled' && result.value && result.value.success) {
+        results.processed++;
+        results.filings += result.value.filingsProcessed || 0;
+        results.cost += result.value.cost || 0;
+      } else {
+        results.errors++;
+        
+        // Track error breakdown with null safety
+        if (result && result.status === 'fulfilled' && result.value && result.value.errorType) {
+          switch (result.value.errorType) {
+            case 'CONCURRENCY_CONFLICT':
+              results.errorBreakdown.concurrencyConflicts++;
+              break;
+            case 'BUDGET_EXCEEDED':
+              results.errorBreakdown.budgetExceeded++;
+              break;
+            case 'COST_VALIDATION_FAILED':
+              results.errorBreakdown.costValidationFailed++;
+              break;
+            case 'TIER_MISMATCH':
+              results.errorBreakdown.tierMismatch++;
+              break;
+            default:
+              results.errorBreakdown.unknownErrors++;
+          }
+        } else {
+          results.errorBreakdown.unknownErrors++;
+        }
+      }
+    } catch (aggregationError) {
+      cronLogger.error('Error during result aggregation (dedup)', {
+        error: aggregationError instanceof Error ? aggregationError.message : 'Unknown aggregation error',
+        resultStatus: result?.status,
+        resultValue: result?.status === 'fulfilled' ? result.value : undefined
+      });
+      results.errors++;
+      results.errorBreakdown.unknownErrors++;
+    }
   }
 
   return results;
 }
 
 /**
- * Process a batch of users from a specific tier
+ * Process a batch of users from a specific tier (original method - fallback)
  */
 async function processTierBatch(
   tier: string,
@@ -1027,6 +1424,218 @@ async function processUserTierFilings(user: User, tier: string) {
       tickerCount: user.tickers.length
     });
   }
+  
+  return result;
+}
+
+/**
+ * Process user filings using deduplicated filing results (optimized)
+ */
+async function processUserWithDeduplicatedFilings(
+  user: DatabaseUser,
+  tier: string,
+  userFilingResults: Array<{
+    ticker: string;
+    filings: unknown[];
+    users: Array<{ userId: string; userEmail: string; tier: string }>;
+    cacheHit: boolean;
+    apiCallTime: number;
+    error?: string;
+  }>
+): Promise<{ filingsProcessed: number; cost: number }> {
+  const result = {
+    filingsProcessed: 0,
+    cost: 0
+  };
+
+  try {
+    cronLogger.info(`Processing user ${user.id} with ${userFilingResults.length} ticker results using deduplication`, {
+      userId: user.id,
+      tickerResults: userFilingResults.length,
+      tickers: userFilingResults.map(r => r.ticker)
+    });
+
+    // Process each ticker's filing results
+    for (const tickerResult of userFilingResults) {
+      try {
+        if (tickerResult.error) {
+          cronLogger.warn(`Skipping ticker ${tickerResult.ticker} due to error: ${tickerResult.error}`, {
+            userId: user.id,
+            ticker: tickerResult.ticker
+          });
+          continue;
+        }
+
+        if (!tickerResult.filings || tickerResult.filings.length === 0) {
+          cronLogger.debug(`No filings found for ticker ${tickerResult.ticker}`, {
+            userId: user.id,
+            ticker: tickerResult.ticker,
+            cacheHit: tickerResult.cacheHit
+          });
+          continue;
+        }
+
+        cronLogger.info(`Processing ${tickerResult.filings.length} filings for ${tickerResult.ticker}`, {
+          userId: user.id,
+          ticker: tickerResult.ticker,
+          cacheHit: tickerResult.cacheHit,
+          apiCallTime: tickerResult.apiCallTime
+        });
+
+        // Process each filing for this ticker
+        for (const filing of tickerResult.filings) {
+          try {
+            // Validate filing object structure
+            if (!filing || !filing.accessionNumber) {
+              cronLogger.warn('Invalid filing object encountered in deduplication', {
+                userId: user.id,
+                ticker: tickerResult.ticker,
+                filing: filing
+              });
+              continue;
+            }
+
+            // Create a unique filing ID for transaction tracking
+            const filingForProcessing = {
+              id: filing.id || `${filing.accessionNumber}-${tickerResult.ticker}`,
+              accessionNumber: filing.accessionNumber,
+              formType: filing.filingType || filing.formType || 'Unknown',
+              filingDate: filing.filingDate ? new Date(filing.filingDate) : new Date(),
+              filingUrl: filing.filingUrl || filing.url,
+              tickerData: {
+                symbol: tickerResult.ticker,
+                cik: filing.cik || 'unknown',
+                companyName: filing.companyName || user.tickers.find(t => t.symbol === tickerResult.ticker)?.companyName || 'Unknown Company'
+              }
+            };
+
+            // Process filing with full transaction boundaries (same as original method)
+            const transactionResult = await FilingTransactionManager.processFilingWithTransaction(
+              filingForProcessing.id,
+              user.id,
+              async (tx) => {
+                // Execute the actual filing processing within the transaction
+                const processingResult = await processSecFilingWithinTransaction(
+                  filingForProcessing,
+                  {
+                    id: user.id,
+                    email: user.email || undefined,
+                    tickers: user.tickers || [],
+                    subscriptionTier: user.subscriptionTier,
+                    lastCronProcessed: user.lastCronProcessed,
+                    processingBudget: user.processingBudget || 0,
+                    budgetUsed: user.budgetUsed || 0
+                  },
+                  tier,
+                  tx
+                );
+                
+                if (processingResult.success) {
+                  cronLogger.info(`Successfully processed filing ${filing.accessionNumber} for user ${user.id} (dedup)`, {
+                    ticker: tickerResult.ticker,
+                    cost: processingResult.cost
+                  });
+                  
+                  return {
+                    success: true,
+                    cost: processingResult.cost || 0
+                  };
+                } else {
+                  throw new Error(`Filing processing failed: ${processingResult.error || 'Unknown error'}`);
+                }
+              },
+              {
+                timeout: 60000, // 1 minute timeout for filing processing
+                description: `Process filing ${filing.accessionNumber} for user ${user.id} (dedup)`
+              }
+            );
+            
+            if (transactionResult.success && transactionResult.data) {
+              result.filingsProcessed++;
+              result.cost += transactionResult.data.cost;
+              
+              // Mark the filing as processed in the rssFilingCheck table
+              try {
+                await markFilingAsProcessedByAccession(
+                  filing.accessionNumber, 
+                  tickerResult.ticker, 
+                  user.id
+                );
+                cronLogger.debug(`Marked filing as processed (dedup): ${filing.accessionNumber} for ${tickerResult.ticker}`, {
+                  userId: user.id
+                });
+              } catch (markError) {
+                // Log error but don't fail the entire processing - the filing was successfully processed
+                cronLogger.warn(`Failed to mark filing as processed (dedup), but filing processing was successful`, {
+                  filingId: filing.accessionNumber,
+                  userId: user.id,
+                  ticker: tickerResult.ticker,
+                  error: markError instanceof Error ? markError.message : 'Unknown error'
+                });
+              }
+              
+              cronLogger.info(`Filing processed successfully with transaction (dedup)`, {
+                filingId: filing.accessionNumber,
+                userId: user.id,
+                transactionId: transactionResult.transactionId,
+                cost: transactionResult.data.cost
+              });
+            } else {
+              cronLogger.error(`Filing transaction failed (dedup)`, {
+                filingId: filing.accessionNumber,
+                userId: user.id,
+                error: transactionResult.error?.message,
+                transactionId: transactionResult.transactionId
+              });
+            }
+            
+            // Respect tier-based processing limits
+            const maxFilings = TIER_BATCH_SIZES[tier as keyof typeof TIER_BATCH_SIZES] || 3;
+            if (result.filingsProcessed >= maxFilings) {
+              cronLogger.info(`Reached tier limit for user ${user.id}: ${maxFilings} filings`, {
+                tier,
+                filingsProcessed: result.filingsProcessed
+              });
+              break;
+            }
+            
+          } catch (filingError) {
+            cronLogger.error(`Failed to process filing ${filing.accessionNumber} (dedup)`, {
+              error: filingError instanceof Error ? filingError.message : 'Unknown error',
+              userId: user.id,
+              ticker: tickerResult.ticker
+            });
+          }
+        }
+        
+        // Break if we've hit the tier limit
+        const maxFilings = TIER_BATCH_SIZES[tier as keyof typeof TIER_BATCH_SIZES] || 3;
+        if (result.filingsProcessed >= maxFilings) {
+          break;
+        }
+        
+      } catch (tickerError) {
+        cronLogger.error(`Failed to process ticker ${tickerResult.ticker} for user ${user.id} (dedup)`, {
+          error: tickerError instanceof Error ? tickerError.message : 'Unknown error',
+          userId: user.id,
+          ticker: tickerResult.ticker
+        });
+      }
+    }
+    
+  } catch (error) {
+    cronLogger.error(`Failed to process SEC filings for user ${user.id} (dedup)`, {
+      error: error instanceof Error ? error.message : 'Unknown error',
+      tier,
+      userFilingResults: userFilingResults.length
+    });
+  }
+  
+  cronLogger.info(`Completed processing for user ${user.id} (dedup)`, {
+    filingsProcessed: result.filingsProcessed,
+    cost: result.cost,
+    tier
+  });
   
   return result;
 }
