@@ -6,7 +6,6 @@
  * and database records for reliable coordination across multiple instances.
  */
 
-import { PrismaClient } from '@prisma/client';
 import { getPrismaClient } from './prisma';
 import { logger } from '../logging';
 import { monitoring } from '../monitoring';
@@ -317,7 +316,7 @@ export class DistributedLockManager {
         });
 
         return true;
-      } catch (error) {
+      } catch {
         // Lock already exists
         return false;
       }

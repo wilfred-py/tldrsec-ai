@@ -103,8 +103,6 @@ import { processSingleChunk } from '../chunk-processor';
 import { processAllChunks } from '../batch-processor';
 import { updateSummaryWithPartialResult, updateSummaryWithResult } from '../db-utils';
 import { summaryCache } from '../../cache/summary-cache';
-// Import the extractFilingContent function
-import { extractFilingContent } from '../../../parsers/filing-extractor';
 
 // Create properly typed mock functions
 type MockFunction<T extends (...args: unknown[]) => unknown> = jest.MockedFunction<T>;

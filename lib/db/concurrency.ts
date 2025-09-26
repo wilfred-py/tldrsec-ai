@@ -8,7 +8,6 @@ import { PrismaClientKnownRequestError } from '@prisma/client/runtime/library';
 import { getPrismaClient } from './prisma';
 import { logger } from '../logging';
 import { RetryOptions } from './retry-wrapper';
-import { createAsyncAuditLog } from './async-audit';
 import type { PrismaClient } from '@prisma/client';
 
 const prisma = getPrismaClient();
@@ -64,7 +63,7 @@ export function createOptimisticLockError(
 export function isConcurrencyError(error: unknown): boolean {
   // Check for optimistic lock errors first
   if (error && typeof error === 'object' && 'code' in error) {
-    const errorCode = (error as any).code;
+    const errorCode = (error as { code: string }).code;
     if (errorCode === 'OPTIMISTIC_LOCK_FAILED') {
       return true;
     }
@@ -72,13 +71,13 @@ export function isConcurrencyError(error: unknown): boolean {
   
   if (error instanceof PrismaClientKnownRequestError || 
       (error && typeof error === 'object' && 'code' in error && 
-       typeof (error as any).code === 'string')) {
+       typeof (error as { code: unknown }).code === 'string')) {
     // P2002: Unique constraint failed
     // P2034: Transaction failed due to write conflict
     // P2025: Record to update not found (can indicate race condition)
     // P2024: Timed out waiting for connection from pool
     // P5008: Queries timed out  
-    const errorCode = (error as any).code;
+    const errorCode = (error as { code: string }).code;
     return ['P2002', 'P2034', 'P2025', 'P2024', 'P5008'].includes(errorCode);
   }
 
