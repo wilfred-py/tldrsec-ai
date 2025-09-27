@@ -146,6 +146,35 @@ jest.mock('../../lib/db/async-audit', () => ({
   createAsyncAuditLog: jest.fn().mockResolvedValue(undefined)
 }));
 
+// Mock companyService to prevent real HTTP calls to SEC.gov
+jest.mock('../../services/companyService', () => ({
+  findCompanyByTicker: jest.fn().mockImplementation((ticker: string) => {
+    // Return mock company data for common test tickers
+    const mockCompanies: { [key: string]: any } = {
+      'AAPL': { ticker: 'AAPL', cik: '320193', companyName: 'Apple Inc.' },
+      'TSLA': { ticker: 'TSLA', cik: '1318605', companyName: 'Tesla, Inc.' },
+      'MSFT': { ticker: 'MSFT', cik: '789019', companyName: 'Microsoft Corporation' }
+    };
+    return Promise.resolve(mockCompanies[ticker.toUpperCase()] || null);
+  })
+}));
+
+// Mock company filings service to prevent real HTTP calls to SEC.gov
+jest.mock('../../services/company/filings', () => ({
+  getCompanyFilings: jest.fn().mockResolvedValue([
+    {
+      id: 'mock-filing-1',
+      accessionNumber: '0000320193-24-000001',
+      formType: '10-K',
+      filedAt: '2024-01-01',
+      reportDate: '2023-12-31',
+      companyName: 'Apple Inc.',
+      ticker: 'AAPL',
+      url: 'https://www.sec.gov/Archives/edgar/mock-filing-1.html'
+    }
+  ])
+}));
+
 // Simplify Prisma Client mock to avoid conflicts
 // Comment out the complex PrismaClient mock that might be causing issues
 // jest.mock('@prisma/client', () => ({
