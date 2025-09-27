@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
-import { prisma } from '@/lib/db/prisma';
+import { getPrismaClient } from '@/lib/db/prisma';
 import { sendEmail } from '@/lib/email';
 import { getEmailTemplate } from '@/lib/email/templates';
 import { EmailType } from '@/lib/email/types';
@@ -15,6 +15,8 @@ export const dynamic = 'force-dynamic';
  */
 export async function POST(req: NextRequest) {
   try {
+    const prisma = getPrismaClient();
+    
     // Verify authentication
     const authResult = await auth();
     if (!authResult || !authResult.userId) {

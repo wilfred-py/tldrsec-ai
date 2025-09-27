@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { prisma } from '@/lib/db/prisma';
+import { getPrismaClient } from '@/lib/db/prisma';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -32,6 +32,8 @@ interface CompanyData {
  */
 export async function GET() {
   try {
+    const prisma = getPrismaClient();
+    
     // Check if we have cached data in the database
     const cachedData = await prisma.secCompanyCache.findFirst({
       where: {

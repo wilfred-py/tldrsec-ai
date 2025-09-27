@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
-import { prisma } from '@/lib/db/prisma';
+import { getPrismaClient } from '@/lib/db/prisma';
 import { PrismaClient } from '@prisma/client';
 import { sendEmail } from '@/lib/email';
 // EmailSendResult imported but not used
@@ -13,6 +13,7 @@ export const dynamic = 'force-dynamic';
  * This is used for development and testing purposes
  */
 async function createTestDataForUser(userId: string, email: string) {
+  const prisma = getPrismaClient();
   try {
     console.log('Creating test data for user:', email);
     
@@ -81,6 +82,8 @@ async function createTestDataForUser(userId: string, email: string) {
  */
 export async function POST() {
   try {
+    const prisma = getPrismaClient();
+    
     // Verify authentication
     const authResult = await auth();
     if (!authResult || !authResult.userId) {

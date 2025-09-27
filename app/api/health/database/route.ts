@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { headers } from 'next/headers';
-import { prisma } from '@/lib/db/prisma';
+import { getPrismaClient } from '@/lib/db/prisma';
 import { dbRetry } from '@/lib/db/retry-wrapper';
 import { databaseMonitoring } from '@/lib/db/monitoring';
 
@@ -74,6 +74,7 @@ function checkRateLimit(ip: string): boolean {
  * Secured database health check endpoint with access controls
  */
 export async function GET() {
+  const prisma = getPrismaClient();
   const startTime = Date.now();
   
   // Get client IP address
