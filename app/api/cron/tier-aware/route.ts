@@ -5,6 +5,9 @@ import { logger } from '../../../../lib/logging';
 import { getMarketHoursContext, getUserProcessingStatuses, getEligibleUsers } from '../../../../lib/cron/market-hours';
 import { CronJobMonitor } from '../../../../lib/monitoring/cron-monitor';
 import { CronJobStatus } from '../../../../types/cron';
+
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
 import { 
   getActiveTickersForMonitoring, 
   checkTickerForNewFilings,
