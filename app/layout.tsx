@@ -1,7 +1,7 @@
 import './globals.css';
 import type { Metadata } from 'next';
 import { Geist, Geist_Mono } from 'next/font/google';
-import { ClerkProvider } from '@clerk/nextjs';
+import { ClerkProviderWrapper } from '@/components/auth/clerk-provider-wrapper';
 import { Toaster } from '@/components/ui/sonner';
 import { PostHogProvider } from '@/components/analytics/posthog-provider';
 import { PageViewTracker } from '@/components/analytics/page-view-tracker';
@@ -55,7 +55,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <ClerkProvider
+    <ClerkProviderWrapper
       afterSignUpUrl="/onboarding"
       afterSignInUrl="/dashboard"
       signUpUrl="/sign-up"
@@ -80,6 +80,6 @@ export default function RootLayout({
           </PostHogProvider>
         </body>
       </html>
-    </ClerkProvider>
+    </ClerkProviderWrapper>
   );
 }
