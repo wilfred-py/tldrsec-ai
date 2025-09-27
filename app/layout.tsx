@@ -52,6 +52,9 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  // Check if we're in build time
+  const isBuildTime = typeof window === 'undefined' && !process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY;
+  
   return (
     <ClerkProviderWrapper
       afterSignUpUrl="/onboarding"
@@ -64,14 +67,27 @@ export default function RootLayout({
           className={`${geistSans.variable} ${geistMono.variable} antialiased`}
         >
           <PostHogProvider>
-            <AuthProvider>
-              <MouseFollowEffect />
-              <JsonLd />
-              <main className="min-h-screen">
-                {children}
-              </main>
-              <Toaster />
-            </AuthProvider>
+            {isBuildTime ? (
+              // During build time, render children without AuthProvider
+              <>
+                <MouseFollowEffect />
+                <JsonLd />
+                <main className="min-h-screen">
+                  {children}
+                </main>
+                <Toaster />
+              </>
+            ) : (
+              // At runtime, use AuthProvider
+              <AuthProvider>
+                <MouseFollowEffect />
+                <JsonLd />
+                <main className="min-h-screen">
+                  {children}
+                </main>
+                <Toaster />
+              </AuthProvider>
+            )}
           </PostHogProvider>
         </body>
       </html>
