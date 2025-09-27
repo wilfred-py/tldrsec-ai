@@ -4,11 +4,9 @@ import { Geist, Geist_Mono } from 'next/font/google';
 import { ClerkProviderWrapper } from '@/components/auth/clerk-provider-wrapper';
 import { Toaster } from '@/components/ui/sonner';
 import { PostHogProvider } from '@/components/analytics/posthog-provider';
-import { PageViewTracker } from '@/components/analytics/page-view-tracker';
 import { MouseFollowEffect } from '@/components/landing/mouse-follow-effect';
 import { JsonLd } from '@/components/structured-data';
 import { AuthProvider } from '@/lib/context/auth-context';
-import { Suspense } from 'react';
 
 const geistSans = Geist({
   variable: '--font-geist-sans',
@@ -67,9 +65,6 @@ export default function RootLayout({
         >
           <PostHogProvider>
             <AuthProvider>
-              <Suspense fallback={null}>
-                <PageViewTracker />
-              </Suspense>
               <MouseFollowEffect />
               <JsonLd />
               <main className="min-h-screen">

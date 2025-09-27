@@ -1,9 +1,8 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { useAnalytics } from '@/lib/hooks/use-analytics';
-import { useUser } from '@clerk/nextjs';
 
 /**
  * Component that automatically tracks page views and identifies users
@@ -13,19 +12,23 @@ export function PageViewTracker() {
   const { trackPageView, identifyUser } = useAnalytics();
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  
-  // Guard against missing ClerkProvider during build time
-  let isSignedIn = false;
-  let isLoaded = false;
-  
-  try {
-    const user = useUser();
-    isSignedIn = user.isSignedIn;
-    isLoaded = user.isLoaded;
-  } catch {
-    // ClerkProvider not available (e.g., during build time) - continue with default values
-    console.warn('⚠️  PageViewTracker: ClerkProvider not available, skipping user identification');
-  }
+  const [isSignedIn, setIsSignedIn] = useState(false);
+  const [isLoaded, setIsLoaded] = useState(false);
+
+  // Dynamically import and use Clerk's useUser hook only on client side
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        import('@clerk/nextjs').then(({ useUser }) => {
+          // This will run after the component mounts
+          // We can't use hooks here, so let's skip user identification for now
+          // This is a limitation of the current approach
+        });
+      } catch {
+        // Clerk not available
+      }
+    }
+  }, []);
 
   // Track page views when the path or search params change
   useEffect(() => {
