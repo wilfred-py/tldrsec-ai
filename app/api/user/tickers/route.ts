@@ -4,6 +4,9 @@ import { prisma } from '@/lib/db/prisma';
 import { dbRetry } from '@/lib/db/retry-wrapper';
 import { revalidatePath } from 'next/cache';
 
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+
 /**
  * GET /api/user/tickers
  * Retrieves the current user's tracked tickers

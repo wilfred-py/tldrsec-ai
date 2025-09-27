@@ -3,6 +3,9 @@ import { WebhookEvent } from '@clerk/nextjs/server';
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/prisma';
 
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+
 // This endpoint handles Clerk webhook events
 // See https://clerk.com/docs/integration/webhooks for more information
 export async function POST(req: Request) {

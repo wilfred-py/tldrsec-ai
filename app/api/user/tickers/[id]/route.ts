@@ -2,6 +2,9 @@ import { NextResponse } from 'next/server';
 import { auth, currentUser } from '@clerk/nextjs/server';
 import { prisma } from '@/lib/db/prisma';
 
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+
 /**
  * DELETE /api/user/tickers/[id]
  * Remove a ticker from the user's tracked list

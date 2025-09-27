@@ -5,6 +5,9 @@ import { PrismaClient } from '@prisma/client';
 import { sendEmail } from '@/lib/email';
 // EmailSendResult imported but not used
 
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+
 /**
  * Helper function to create test data for a user
  * This is used for development and testing purposes

@@ -6,6 +6,9 @@ import { getEmailTemplate } from '@/lib/email/templates';
 import { EmailType } from '@/lib/email/types';
 import { logger } from '@/lib/logging';
 
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+
 /**
  * API endpoint to send a welcome email to the user
  * POST /api/email/welcome
