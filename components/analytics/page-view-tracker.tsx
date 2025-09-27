@@ -22,7 +22,7 @@ export function PageViewTracker() {
     const user = useUser();
     isSignedIn = user.isSignedIn;
     isLoaded = user.isLoaded;
-  } catch (error) {
+  } catch {
     // ClerkProvider not available (e.g., during build time) - continue with default values
     console.warn('⚠️  PageViewTracker: ClerkProvider not available, skipping user identification');
   }
