@@ -76,7 +76,7 @@ export function generateXmlSummary(xmlContent: string, maxElements = 10000): Xml
     // Temporarily suppress console errors/warnings during parsing
     const xmlErrors: string[] = [];
     console.error = (msg) => xmlErrors.push(String(msg));
-    console.warn = (msg) => {}; // Suppress warnings
+    console.warn = (_msg) => {}; // Suppress warnings
     
     // Try parsing with different approaches
     let doc;
@@ -323,7 +323,7 @@ export function logXmlDocument(
       hasEmbeddedHtml: false,
       size: {
         bytes: xmlContent.length,
-        category: 'unknown' as any,
+        category: 'unknown' as 'small' | 'medium' | 'large' | 'huge' | 'unknown',
       },
       truncated: false,
       error: error instanceof Error ? error.message : String(error)
@@ -382,9 +382,11 @@ export function visualizeContextReferences(contextRefs: Record<string, boolean>,
   return result;
 }
 
-export default {
+const xmlLoggingUtils = {
   generateXmlSummary,
   formatXmlSummary,
   logXmlDocument,
   visualizeContextReferences
 };
+
+export default xmlLoggingUtils;

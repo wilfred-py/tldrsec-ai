@@ -158,7 +158,7 @@ export function categorizeError(error: unknown): keyof typeof ERROR_CODES {
 /**
  * Wrap an async function with standardized error handling
  */
-export function withStandardizedErrors<T extends unknown[], R>(
+export function withStandardizedErrors<T extends unknown[]>(
   fn: (...args: T) => Promise<NextResponse>
 ) {
   return async (...args: T): Promise<NextResponse> => {

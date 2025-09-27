@@ -1,6 +1,6 @@
 import { DigestService } from '../digest-service';
 import { JobQueueService, processJobCallback } from '../../job-queue';
-import { ResendClient } from '../resend-client';
+// ResendClient imported but only used in mocks
 
 // We'll test the integration with JobQueueService but still mock underlying dependencies
 jest.mock('../resend-client');
@@ -69,11 +69,11 @@ jest.mock('../../job-queue', () => {
 
 describe('DigestService Integration', () => {
   let digestService: DigestService;
-  let mockPrismaClient: any;
+  let _mockPrismaClient: any;
   
   beforeEach(() => {
     jest.clearAllMocks();
-    mockPrismaClient = (new (require('@prisma/client').PrismaClient)());
+    _mockPrismaClient = (new (require('@prisma/client').PrismaClient)());
     digestService = new DigestService();
   });
   

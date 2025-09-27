@@ -6,7 +6,7 @@ import { v4 as uuidv4 } from 'uuid';
 import Bottleneck from 'bottleneck';
 import { 
   ApiError, 
-  ErrorCode, 
+  // ErrorCode, // Not used in this file
   createExternalApiError,
   createTimeoutError
 } from '../error-handling';
@@ -54,11 +54,11 @@ import { resendConfig } from './config';
 import type { 
   EmailMessage, 
   EmailSendResult, 
-  EmailSendSuccess,
-  EmailSendFailure,
+  // EmailSendSuccess, // Type export not used directly
+  // EmailSendFailure, // Type export not used directly
   EmailUsage,
   EmailRecipient,
-  EmailAttachment,
+  // EmailAttachment, // Type export not used directly
   EmailVerificationResult
 } from './types';
 
@@ -233,7 +233,7 @@ export class ResendClient {
               });
               
               // Type assertion to handle potential type mismatch with Resend API
-              const response = await this.resend.emails.send(emailOptions as any);
+              const response = await this.resend.emails.send(emailOptions as Record<string, unknown>);
               
               // Log the raw response for debugging
               logger.debug('Resend API response:', { response, requestId });
@@ -433,8 +433,8 @@ export class ResendClient {
    * @param message The email message
    * @returns Properly formatted email parameters
    */
-  private prepareEmailParams(message: EmailMessage): Record<string, any> {
-    const params: Record<string, any> = {
+  private prepareEmailParams(message: EmailMessage): Record<string, unknown> {
+    const params: Record<string, unknown> = {
       from: message.from || resendConfig.defaultFrom,
       to: this.formatRecipients(message.to),
       subject: message.subject

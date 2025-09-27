@@ -161,7 +161,7 @@ describe('OpenRouterClient', () => {
       const { logger } = require('../../logging');
       logger.warn.mockClear(); // Clear previous calls
       
-      const _clientWithoutKey = new OpenRouterClient();
+      new OpenRouterClient();
       
       expect(logger.warn).toHaveBeenCalledWith(
         'No OpenRouter API key provided. Set TLDRSEC_AI_SUMMARIZER or OPENROUTER_API_KEY in environment variables.'

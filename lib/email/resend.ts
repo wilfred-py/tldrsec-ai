@@ -1,4 +1,4 @@
-import { Resend, CreateEmailResponse, CreateEmailOptions } from 'resend';
+import { Resend, CreateEmailOptions } from 'resend';
 
 // Default values for rate limiting
 const DEFAULT_MAX_RETRIES = 3;
@@ -27,7 +27,7 @@ export interface EmailResponse {
 }
 
 // Error normalization
-function normalizeError(error: any): string {
+function normalizeError(error: unknown): string {
   if (error?.message) return error.message;
   if (typeof error === 'string') return error;
   return 'Unknown error sending email';
@@ -101,8 +101,8 @@ export class ResendClient {
           attachments: message.attachments,
         } as CreateEmailOptions);
         
-        return { id: (result as any).id, success: true };
-      } catch (error: any) {
+        return { id: (result as { id: string }).id, success: true };
+      } catch (error: unknown) {
         // Check if we should retry (rate limit or temporary error)
         const errorMessage = normalizeError(error);
         const isRateLimit = errorMessage.includes('rate limit') || 

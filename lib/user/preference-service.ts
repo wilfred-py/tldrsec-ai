@@ -1,7 +1,7 @@
 import { prisma } from '@/lib/db/prisma';
 import { DEFAULT_USER_PREFERENCES, NotificationPreferences, PreferenceUpdateResponse, TickerSubscription, UserPreferences, SubscriptionUpdateResponse } from './preference-types';
 import { logger } from '../logging';
-import { v4 as uuidv4 } from 'uuid';
+// import { v4 as uuidv4 } from 'uuid';
 
 /**
  * User Preference Service
@@ -82,7 +82,7 @@ export class PreferenceService {
       await prisma.user.update({
         where: { id: userId },
         data: {
-          preferences: updatedPrefs as any, // Prisma will handle JSON conversion
+          preferences: updatedPrefs as Record<string, unknown>, // Prisma will handle JSON conversion
         }
       });
       
@@ -412,7 +412,7 @@ export class PreferenceService {
    * @param user User with legacy preference fields
    * @returns Migrated preferences
    */
-  private static migrateLegacyPreferences(user: any): UserPreferences {
+  private static migrateLegacyPreferences(user: Record<string, unknown>): UserPreferences {
     // Start with default preferences
     const preferences = { ...DEFAULT_USER_PREFERENCES };
     

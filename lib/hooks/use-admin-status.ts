@@ -64,7 +64,7 @@ export function useAdminStatus() {
     return () => {
       isMounted = false;
     };
-  }, [user?.id]); // Re-fetch if user changes
+  }, [user]); // Re-fetch if user changes
 
   return {
     isAdmin,

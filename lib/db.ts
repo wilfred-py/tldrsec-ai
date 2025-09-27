@@ -74,7 +74,7 @@ export async function createSummary(data: {
   filingDate: Date;
   filingUrl: string;
   summaryText: string;
-  summaryJSON?: any;
+  summaryJSON?: Record<string, unknown>;
 }) {
   return prisma.summary.create({
     data,

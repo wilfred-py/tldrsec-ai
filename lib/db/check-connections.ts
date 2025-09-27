@@ -13,7 +13,7 @@ import { checkDatabaseConnection, optimizeConnections, getConnectionPoolStats, g
  */
 export async function runConnectionHealthCheck(): Promise<{
   connectionStatus: boolean;
-  poolStats: any;
+  poolStats: Record<string, unknown>;
   recommendation: string;
 }> {
   console.log('Starting database connection health check...');

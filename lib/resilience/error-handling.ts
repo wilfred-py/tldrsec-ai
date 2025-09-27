@@ -19,7 +19,7 @@ export interface ErrorContext {
   userId?: string;
   operation?: string;
   service?: string;
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
   timestamp?: Date;
   stack?: string;
   causedBy?: Error;
@@ -121,7 +121,7 @@ export abstract class BaseStructuredError extends Error {
    * Create child error with additional context
    */
   withContext(additionalContext: Partial<ErrorContext>): this {
-    const ErrorClass = this.constructor as new (...args: any[]) => this;
+    const ErrorClass = this.constructor as new (...args: unknown[]) => this;
     return new ErrorClass(
       this.message,
       this.category,

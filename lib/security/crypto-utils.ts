@@ -101,7 +101,7 @@ export class CryptoUtils {
     try {
       const expectedSignature = await this.generateHMACSignature(payload, secret, timestamp);
       return this.timingSafeEqual(expectedSignature, providedSignature);
-    } catch (error) {
+    } catch {
       return false;
     }
   }

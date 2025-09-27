@@ -21,7 +21,7 @@ interface JobQueueItem {
   jobType: JobType;
   status: JobStatus;
   priority: number;
-  payload: any;
+  payload: Record<string, unknown>;
   idempotencyKey: string | null;
   createdAt: Date;
   scheduledFor: Date;
@@ -33,7 +33,7 @@ interface JobQueueItem {
   maxAttempts: number;
   lastError: string | null;
   lastErrorStack: string | null;
-  result: any;
+  result: Record<string, unknown>;
   executionTime: number | null;
 }
 
@@ -67,7 +67,7 @@ export class NotificationProcessor implements NotificationProcessorInterface {
    * Process a notification directly
    * @param payload The notification payload to process
    */
-  async processNotification(payload: any): Promise<void> {
+  async processNotification(payload: Record<string, unknown>): Promise<void> {
     const job = {
       id: `direct-${Date.now()}`,
       payload
@@ -80,7 +80,7 @@ export class NotificationProcessor implements NotificationProcessorInterface {
    * Queue a notification for processing
    * @param payload The notification payload to queue
    */
-  async queueNotification(payload: any): Promise<void> {
+  async queueNotification(payload: Record<string, unknown>): Promise<void> {
     try {
       const job = await JobQueueService.addJob({
         jobType: 'SEND_FILING_NOTIFICATION',
@@ -250,7 +250,7 @@ export class NotificationProcessor implements NotificationProcessorInterface {
    * Process a notification job
    * @param job The job to process
    */
-  private async processNotificationJob(job: any): Promise<void> {
+  private async processNotificationJob(job: Record<string, unknown>): Promise<void> {
     try {
       const payload = job.payload;
       
@@ -316,6 +316,6 @@ export const notificationProcessor = new NotificationProcessor();
  * Process a notification directly
  * @param payload The notification payload to process
  */
-export async function processNotification(payload: any): Promise<void> {
+export async function processNotification(payload: Record<string, unknown>): Promise<void> {
   return notificationProcessor.processNotification(payload);
 }

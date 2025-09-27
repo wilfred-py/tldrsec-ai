@@ -18,7 +18,7 @@ import { logger } from '../logging';
 import { monitoring } from '../monitoring';
 
 // Use lazy loading for notification processor to break circular dependency
-let notificationProcessorInstance: any = null;
+let notificationProcessorInstance: Record<string, unknown> | null = null;
 
 const getNotificationProcessor = async () => {
   if (!notificationProcessorInstance) {
@@ -163,12 +163,12 @@ export async function stopNotificationIntegration(): Promise<void> {
 
 // Create and export the notification integration singleton
 class NotificationIntegration implements NotificationIntegrationInterface {
-  async sendNotification(payload: any): Promise<void> {
+  async sendNotification(payload: Record<string, unknown>): Promise<void> {
     const processor = await getNotificationProcessor();
     return processor.processNotification(payload);
   }
   
-  registerHandler(handler: (payload: any) => Promise<void>): void {
+  registerHandler(handler: (payload: Record<string, unknown>) => Promise<void>): void {
     // Implementation for registering custom handlers
     notificationEvents.on('custom_notification', handler);
   }

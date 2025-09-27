@@ -202,7 +202,7 @@ export class CloudflareIPService {
       this.metrics.cache_misses++;
 
       // Check if we should refresh (cache exists but near expiration)
-      const shouldRefresh = this.cache && this.shouldRefreshCache();
+      const _shouldRefresh = this.cache && this.shouldRefreshCache();
 
       // Attempt to fetch fresh data
       if (this.circuitBreaker.canExecute() && this.canMakeApiCall()) {
@@ -279,7 +279,7 @@ export class CloudflareIPService {
 
       // SECURITY: Track validation state without early returns
       let matchFound = false;
-      let matchedCidr: string | undefined;
+      let _matchedCidr: string | undefined;
       let rangesChecked = 0;
 
       // SECURITY: Always check ALL IPv4 ranges - no early returns
@@ -293,7 +293,7 @@ export class CloudflareIPService {
           // SECURITY: Record first match but continue checking ALL ranges
           if (isMatch && !matchFound) {
             matchFound = true;
-            matchedCidr = cidr;
+            _matchedCidr = cidr;
           }
 
           // SECURITY: Log individual range timing (anonymized)
@@ -313,7 +313,7 @@ export class CloudflareIPService {
           // SECURITY: Record first match but continue checking ALL ranges
           if (isMatch && !matchFound) {
             matchFound = true;
-            matchedCidr = cidr;
+            _matchedCidr = cidr;
           }
 
           // SECURITY: Log individual range timing (anonymized)
@@ -462,7 +462,7 @@ export class CloudflareIPService {
   /**
    * Validate API response structure and content
    */
-  private validateAPIResponse(data: any): CloudflareIPRanges | null {
+  private validateAPIResponse(data: unknown): CloudflareIPRanges | null {
     try {
       // Type check
       if (!data || typeof data !== 'object') {
@@ -774,7 +774,7 @@ export class CloudflareIPService {
    * SECURITY: Secure event logging that prevents timing disclosure
    * Logs events with normalized timing information to prevent analysis
    */
-  private logSecurityEvent(eventType: string, metadata: Record<string, any>): void {
+  private logSecurityEvent(eventType: string, metadata: Record<string, unknown>): void {
     // SECURITY: Sanitize timing information to prevent leakage
     const sanitizedMetadata = { ...metadata };
 

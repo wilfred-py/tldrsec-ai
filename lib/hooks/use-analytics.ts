@@ -5,7 +5,7 @@ import posthog from 'posthog-js';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { useUser } from '@clerk/nextjs';
 
-export type EventProperties = Record<string, any>;
+export type EventProperties = Record<string, unknown>;
 
 /**
  * Custom hook for tracking events and page views with PostHog

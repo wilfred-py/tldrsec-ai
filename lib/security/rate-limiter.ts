@@ -12,6 +12,7 @@ const isEdgeRuntime = typeof EdgeRuntime !== 'undefined' ||
 
 if (!isEdgeRuntime) {
   try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
     const ioredis = require('ioredis') as typeof import('ioredis');
     Redis = ioredis.Redis;
   } catch {

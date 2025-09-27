@@ -10,6 +10,7 @@
 import { getSecApiCache, SecApiCache, withSecApiCache } from '../cache/sec-api-cache';
 import { getLatestFilings } from '../../services/company/latestFilings';
 import { logger } from '../logging';
+import { SECFiling } from '../../services/filing/types';
 
 const dedupLogger = logger.child('ticker-deduplication');
 
@@ -111,7 +112,7 @@ export async function processDeduplicatedTickers(
     const startTime = Date.now();
     let cacheHit = false;
     let error: string | undefined;
-    let filings: any[] = [];
+    let filings: SECFiling[] = [];
 
     try {
       dedupLogger.info(`Processing ticker ${group.symbol} for ${group.totalUsers} users`, {
@@ -124,7 +125,7 @@ export async function processDeduplicatedTickers(
       const cacheKey = SecApiCache.generateKey('getLatestFilings', group.symbol, { limit });
       
       // Check if we have cached data
-      const cachedFilings = cache.get<any[]>(cacheKey);
+      const cachedFilings = cache.get<SECFiling[]>(cacheKey);
       if (cachedFilings !== null) {
         filings = cachedFilings;
         cacheHit = true;

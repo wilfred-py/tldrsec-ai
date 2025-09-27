@@ -11,7 +11,7 @@ import * as SECFilingEmailTemplate from '../../components/email/templates/SECFil
 const { default: SECFilingEmailTemplateComponent } = SECFilingEmailTemplate;
 
 // Helper function to generate plain text version of email
-function generatePlainTextEmail(filings: any[], errors: any[]) {
+function generatePlainTextEmail(filings: Record<string, unknown>[], errors: Record<string, unknown>[]) {
   let text = '';
   
   for (const filing of filings) {
@@ -76,7 +76,7 @@ export interface FilingTemplateData {
   summaryUrl: string;
   summaryId: string;
   summaryText?: string;
-  summaryData?: any;
+  summaryData?: Record<string, unknown>;
 }
 
 /**
@@ -85,7 +85,7 @@ export interface FilingTemplateData {
  */
 export function baseTemplate(content: string, data: BaseTemplateData): string {
   const year = data.currentYear || new Date().getFullYear();
-  const recipientName = data.recipientName || 'there';
+  const _recipientName = data.recipientName || 'there';
   
   return `
 <!DOCTYPE html>
@@ -291,7 +291,7 @@ export function immediateNotificationTemplate(
         specificContent += `
           <h3>Key Financials</h3>
           <ul>
-            ${json.financials.map((f: any) => 
+            ${json.financials.map((f: Record<string, unknown>) => 
               `<li><strong>${f.label}:</strong> ${f.value} ${f.growth ? `(${f.growth})` : ''}</li>`
             ).join('')}
           </ul>
@@ -710,7 +710,7 @@ Manage preferences: ${data.preferencesUrl}
  */
 export async function getEmailTemplate(
   templateType: EmailType,
-  data: any
+  data: Record<string, unknown>
 ): Promise<{ html: string; text: string }> {
   switch (templateType) {
     case EmailType.IMMEDIATE: {

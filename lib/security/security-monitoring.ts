@@ -23,7 +23,7 @@ export interface SecurityHealthMetrics {
     circuit_breaker_state: string;
     workers_requests_last_hour: number;
     geographic_distribution: Record<string, number>;
-    metrics: any;
+    metrics: unknown;
   };
   overall_status: 'healthy' | 'degraded' | 'unhealthy';
   threats_detected_last_hour: number;
@@ -305,7 +305,7 @@ export class SecurityMonitoring {
   /**
    * Record security events for monitoring
    */
-  public recordSecurityEvent(eventType: string, details: Record<string, any> = {}): void {
+  public recordSecurityEvent(eventType: string, details: Record<string, unknown> = {}): void {
     try {
       switch (eventType) {
         case 'IP_VALIDATION_FAILURE':
@@ -487,7 +487,7 @@ export class SecurityMonitoring {
     success: boolean, 
     responseTime: number, 
     region?: string,
-    details?: Record<string, any>
+    details?: Record<string, unknown>
   ): void {
     this.workersMetrics.total_requests++;
     
@@ -530,7 +530,7 @@ export class SecurityMonitoring {
   public triggerAlert(
     level: 'info' | 'warning' | 'critical',
     message: string,
-    details?: Record<string, any>
+    details?: Record<string, unknown>
   ): void {
     const alert = {
       timestamp: Date.now(),
@@ -583,7 +583,7 @@ export class SecurityMonitoring {
     }
     
     const sorted = [...this.performanceData.validation_times].sort((a, b) => a - b);
-    const length = sorted.length;
+    const _length = sorted.length;
     
     this.performanceData.percentiles = {
       p50: this.getPercentile(sorted, 50),
@@ -674,7 +674,7 @@ export class SecurityMonitoring {
   private detectWorkersAnomalies(
     responseTime: number, 
     region?: string, 
-    details?: Record<string, any>
+    _details?: Record<string, unknown>
   ): void {
     const anomalies: Array<{type: string, description: string, severity: 'low' | 'medium' | 'high', detected_at: string}> = [];
     
@@ -716,7 +716,7 @@ export class SecurityMonitoring {
   /**
    * Record Workers anomaly from security event
    */
-  private recordWorkersAnomaly(details: Record<string, any>): void {
+  private recordWorkersAnomaly(details: Record<string, unknown>): void {
     this.workersMetrics.anomalous_patterns.push({
       type: details.type || 'UNKNOWN',
       description: details.description || 'Unspecified Workers anomaly',
@@ -728,7 +728,7 @@ export class SecurityMonitoring {
   /**
    * Record performance degradation event
    */
-  private recordPerformanceEvent(details: Record<string, any>): void {
+  private recordPerformanceEvent(details: Record<string, unknown>): void {
     if (details.responseTime) {
       this.recordValidationTiming(details.responseTime, details.source);
     }
@@ -785,7 +785,7 @@ export class SecurityMonitoring {
    */
   private async deliverAlert(
     alert: {timestamp: number, level: string, message: string},
-    details?: Record<string, any>
+    details?: Record<string, unknown>
   ): Promise<void> {
     try {
       // TODO: Implement webhook delivery

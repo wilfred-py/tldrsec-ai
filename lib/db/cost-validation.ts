@@ -37,7 +37,7 @@ export interface CostValidationContext {
   operationType?: 'cached_summary' | 'ai_generation' | 'test_operation' | 'manual_retry';
   isCached?: boolean;
   isRetry?: boolean;
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
 }
 
 /**

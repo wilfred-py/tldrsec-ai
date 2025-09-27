@@ -25,7 +25,7 @@ export interface DigestSummaryItem {
   filingDate: Date;
   filingUrl: string;
   summaryText: string;
-  summaryJSON?: any;
+  summaryJSON?: Record<string, unknown>;
   createdAt: Date;
 }
 
@@ -56,7 +56,7 @@ declare module './types' {
       type: string;
       summaryCount: number;
       tickerCount: number;
-      [key: string]: any;
+      [key: string]: unknown;
     };
   }
 }
@@ -211,9 +211,9 @@ export class DigestService {
         id: string;
         email: string;
         name?: string;
-        preferences: any;
+        preferences: Record<string, unknown>;
       }) => {
-        const preferences = user.preferences as any || {};
+        const preferences = user.preferences as Record<string, unknown> || {};
         
         return {
           userId: user.id,
@@ -282,11 +282,11 @@ export class DigestService {
       
       // Format the data into ticker groups
       const tickerGroups: TickerDigestGroup[] = tickers
-        .filter((ticker: { summaries: any[] }) => ticker.summaries.length > 0)
+        .filter((ticker: { summaries: Record<string, unknown>[] }) => ticker.summaries.length > 0)
         .map((ticker: { 
           symbol: string; 
           companyName: string; 
-          summaries: any[] 
+          summaries: Record<string, unknown>[] 
         }) => ({
           symbol: ticker.symbol,
           companyName: ticker.companyName,
@@ -296,7 +296,7 @@ export class DigestService {
             filingDate: Date;
             filingUrl: string;
             summaryText: string;
-            summaryJSON: any;
+            summaryJSON: Record<string, unknown>;
             createdAt: Date;
           }) => ({
             id: summary.id,

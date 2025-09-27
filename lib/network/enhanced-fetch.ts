@@ -59,7 +59,7 @@ const defaultOptions: EnhancedFetchOptions = {
  * @param options Enhanced fetch options
  * @returns Response data based on responseType
  */
-export async function enhancedFetch<T = any>(
+export async function enhancedFetch<T = unknown>(
   url: string,
   options: EnhancedFetchOptions = {}
 ): Promise<T> {
@@ -121,7 +121,7 @@ export async function enhancedFetch<T = any>(
         // Check if response is ok
         if (!response.ok) {
           // Extract error details from response
-          let errorData: any;
+          let errorData: unknown;
           try {
             errorData = await response.json();
           } catch {
@@ -209,7 +209,7 @@ export async function enhancedFetch<T = any>(
         }
         
         // Parse response based on responseType
-        let data: any;
+        let data: unknown;
         switch (responseType) {
           case 'json':
             data = await response.json();
@@ -278,7 +278,7 @@ export async function enhancedFetch<T = any>(
     });
     
     return result;
-  } catch (error: any) {
+  } catch (error: unknown) {
     // Calculate duration
     const duration = Date.now() - startTime;
     
@@ -319,7 +319,7 @@ export async function enhancedFetch<T = any>(
 /**
  * Enhanced GET request
  */
-export function get<T = any>(url: string, options: EnhancedFetchOptions = {}): Promise<T> {
+export function get<T = unknown>(url: string, options: EnhancedFetchOptions = {}): Promise<T> {
   return enhancedFetch<T>(url, {
     ...options,
     method: 'GET'
@@ -329,7 +329,7 @@ export function get<T = any>(url: string, options: EnhancedFetchOptions = {}): P
 /**
  * Enhanced POST request
  */
-export function post<T = any>(url: string, data: any, options: EnhancedFetchOptions = {}): Promise<T> {
+export function post<T = unknown>(url: string, data: unknown, options: EnhancedFetchOptions = {}): Promise<T> {
   return enhancedFetch<T>(url, {
     ...options,
     method: 'POST',
@@ -340,7 +340,7 @@ export function post<T = any>(url: string, data: any, options: EnhancedFetchOpti
 /**
  * Enhanced PUT request
  */
-export function put<T = any>(url: string, data: any, options: EnhancedFetchOptions = {}): Promise<T> {
+export function put<T = unknown>(url: string, data: unknown, options: EnhancedFetchOptions = {}): Promise<T> {
   return enhancedFetch<T>(url, {
     ...options,
     method: 'PUT',
@@ -351,7 +351,7 @@ export function put<T = any>(url: string, data: any, options: EnhancedFetchOptio
 /**
  * Enhanced DELETE request
  */
-export function del<T = any>(url: string, options: EnhancedFetchOptions = {}): Promise<T> {
+export function del<T = unknown>(url: string, options: EnhancedFetchOptions = {}): Promise<T> {
   return enhancedFetch<T>(url, {
     ...options,
     method: 'DELETE'
@@ -373,7 +373,7 @@ export async function isUrlReachable(url: string, timeoutMs: number = 5000): Pro
       responseType: 'text'
     });
     return true;
-  } catch (error) {
+  } catch {
     return false;
   }
 }

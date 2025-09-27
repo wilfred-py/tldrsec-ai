@@ -5,8 +5,8 @@
  */
 
 import { v4 as uuidv4 } from 'uuid';
-import { ErrorCode, ErrorCategory } from './constants'; 
-import { ApiError, createRetryExhaustedError, createCircuitOpenError, createTimeoutError } from './index';
+import { ErrorCode } from './constants'; 
+import { ApiError } from './index';
 import { logger } from '../logging';
 
 /**
@@ -316,7 +316,7 @@ export async function executeWithRetry<T>(
         
         // Return the successful result
         return result;
-      } catch (error: any) {
+      } catch (error: unknown) {
         // Save the last error
         lastError = error;
         
@@ -480,7 +480,7 @@ export class TimeoutAbortController {
   /**
    * Abort the operation
    */
-  abort(reason?: any): void {
+  abort(reason?: unknown): void {
     this.clearTimeout();
     this.controller.abort(reason);
   }
@@ -492,10 +492,10 @@ export class TimeoutAbortController {
 export function createControlledPromise<T>(): {
   promise: Promise<T>;
   resolve: (value: T) => void;
-  reject: (reason: any) => void;
+  reject: (reason: unknown) => void;
 } {
   let resolve!: (value: T) => void;
-  let reject!: (reason: any) => void;
+  let reject!: (reason: unknown) => void;
   
   const promise = new Promise<T>((res, rej) => {
     resolve = res;

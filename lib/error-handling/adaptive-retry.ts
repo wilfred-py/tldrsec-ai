@@ -273,7 +273,7 @@ export function shouldRetryError(
 export async function executeWithAdaptiveRetry<T>(
   operation: () => Promise<T>,
   config: AdaptiveRetryConfig = DefaultAdaptiveRetryConfig,
-  context: Record<string, any> = {}
+  context: Record<string, unknown> = {}
 ): Promise<T> {
   let attempt = 0;
   const startTime = Date.now();
@@ -300,7 +300,7 @@ export async function executeWithAdaptiveRetry<T>(
       });
       
       return result;
-    } catch (error: any) {
+    } catch (error: unknown) {
       attempt++;
       const currentError = error instanceof Error ? error : new Error(String(error));
       

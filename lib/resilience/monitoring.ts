@@ -12,7 +12,7 @@
 
 import { logger } from '../logging';
 import { CircuitBreakerRegistry, CircuitState } from './circuit-breaker';
-import { GlobalErrorHandler, ErrorSeverity } from './error-handling';
+import { GlobalErrorHandler } from './error-handling';
 
 const monitoringLogger = logger.child('monitoring');
 
@@ -20,7 +20,7 @@ export interface HealthCheckResult {
   status: 'healthy' | 'degraded' | 'unhealthy';
   timestamp: Date;
   responseTime: number;
-  details?: Record<string, any>;
+  details?: Record<string, unknown>;
   error?: string;
 }
 
@@ -36,12 +36,12 @@ export interface ServiceHealth {
 export interface SystemMetrics {
   timestamp: Date;
   services: Record<string, ServiceHealth>;
-  circuitBreakers: Record<string, any>;
+  circuitBreakers: Record<string, unknown>;
   errors: {
     total: number;
     byCategory: Record<string, number>;
     bySeverity: Record<string, number>;
-    recent: any[];
+    recent: unknown[];
   };
   performance: {
     averageResponseTime: number;
@@ -127,7 +127,7 @@ export abstract class HealthCheck {
  * Database health check
  */
 export class DatabaseHealthCheck extends HealthCheck {
-  constructor(private prisma: any) {
+  constructor(private prisma: unknown) {
     super('database');
   }
 
@@ -361,7 +361,7 @@ export class SystemMonitor {
           uptime: healthCheck.getUptime(),
           dependencies: {}
         };
-      } catch (error) {
+      } catch {
         services[name] = {
           name,
           status: 'unhealthy',
@@ -550,7 +550,7 @@ export const DEFAULT_ALERT_CONDITIONS: AlertCondition[] = [
   {
     name: 'circuit-breaker-open',
     condition: (metrics) => Object.values(metrics.circuitBreakers)
-      .some((cb: any) => cb.state === CircuitState.OPEN),
+      .some((cb: unknown) => cb.state === CircuitState.OPEN),
     severity: 'warning',
     description: 'One or more circuit breakers are open',
     cooldownMinutes: 15

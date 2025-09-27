@@ -29,7 +29,7 @@ export async function checkDatabaseConnection(): Promise<boolean> {
  * 
  * @returns {Promise<object>} Connection pool statistics
  */
-export async function getConnectionPoolStats(): Promise<any> {
+export async function getConnectionPoolStats(): Promise<Record<string, unknown>> {
   try {
     // Query PostgreSQL's pg_stat_activity to get connection information
     const stats = await prisma.$queryRaw`
@@ -77,7 +77,7 @@ export async function optimizeConnections(): Promise<void> {
  * @param {string} url The database connection URL
  * @returns {object} Parsed connection parameters
  */
-export function parseConnectionUrl(url: string): any {
+export function parseConnectionUrl(url: string): Record<string, unknown> {
   try {
     // Basic URL parsing
     const parsedUrl = new URL(url);
