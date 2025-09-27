@@ -1,10 +1,10 @@
 "use client";
 
-import { useState } from "react";
-import { useSignIn } from "@clerk/nextjs";
-
 // Force dynamic rendering to prevent static generation during build
 export const dynamic = 'force-dynamic';
+
+import { useState } from "react";
+import { useSignIn } from "@clerk/nextjs";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import * as z from "zod";
