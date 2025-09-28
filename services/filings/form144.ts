@@ -41,7 +41,7 @@ export const parseForm144 = async (filingDetails: SecFilingDetails): Promise<For
 
 const extractXmlContent = (content: string): string | null => {
   try {
-    const xmlMatch = content.match(/<(?:ns:)?XML>[\\s\\S]*?<\\/(?:ns:)?XML>/i);
+    const xmlMatch = content.match(/<(?:ns:)?XML>[\s\S]*?<\/(?:ns:)?XML>/i);
     return xmlMatch ? xmlMatch[1].trim() : null;
   } catch (error) {
     secLogger.error(`Error extracting XML content: ${error}`);

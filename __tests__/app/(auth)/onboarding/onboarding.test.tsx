@@ -62,7 +62,7 @@ describe('Onboarding Flow', () => {
 
     await waitFor(() => {
       expect(screen.getByText('Welcome to tldrSEC')).toBeInTheDocument();
-      expect(screen.getByText('Let's set up your account to track SEC filings')).toBeInTheDocument();
+      expect(screen.getByText('Let\'s set up your account to track SEC filings')).toBeInTheDocument();
     });
 
     // Check for multi-step form UI elements
