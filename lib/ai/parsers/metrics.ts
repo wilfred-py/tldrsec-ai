@@ -50,9 +50,6 @@ class ParserMetricsCollector {
       return 0;
     }
     
-    const successfulExtractions = filtered.filter(m => m.extractionSuccess).length;
-    const successfulValidations = filtered.filter(m => m.validationSuccess).length;
-    
     // Success means both extraction and validation worked
     const overallSuccess = filtered.filter(m => m.extractionSuccess && m.validationSuccess).length;
     
@@ -189,7 +186,7 @@ class ParserMetricsCollector {
    * @param filingType - Optional filing type to filter by
    * @returns Summary object with key statistics
    */
-  getSummary(filingType?: SECFilingType): Record<string, any> {
+  getSummary(filingType?: SECFilingType): Record<string, unknown> {
     return {
       totalRequests: filingType 
         ? this.metrics.filter(m => m.documentType === filingType).length
@@ -210,8 +207,8 @@ class ParserMetricsCollector {
    * 
    * @returns Object with metrics for each filing type
    */
-  private getFilingTypeBreakdown(): Record<string, any> {
-    const result: Record<string, any> = {};
+  private getFilingTypeBreakdown(): Record<string, unknown> {
+    const result: Record<string, unknown> = {};
     
     // Get unique filing types in the metrics
     const filingTypes = new Set<string>();

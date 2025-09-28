@@ -109,7 +109,7 @@ export async function checkSummaryAccess(
  * @param summary The original summary
  * @returns A redacted version of the summary
  */
-export function createRedactedSummary(summary: any) {
+export function createRedactedSummary(summary: Record<string, unknown>) {
   return {
     id: summary.id,
     filingType: summary.filingType,

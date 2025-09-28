@@ -1,5 +1,5 @@
 import { NextApiRequest, NextApiResponse } from 'next';
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { logger } from '../logging';
 import { 
   ErrorCategory, 
@@ -25,7 +25,7 @@ export class ApiError extends Error {
   statusCode: number;
   category: ErrorCategory;
   severity: ErrorSeverity;
-  details?: any;
+  details?: unknown;
   isOperational: boolean;
   isRetriable: boolean;
   retryAfter?: number; // Time in ms to wait before retrying
@@ -34,7 +34,7 @@ export class ApiError extends Error {
   constructor(
     code: ErrorCode,
     message: string,
-    details?: any,
+    details?: unknown,
     isOperational = true,
     requestId?: string
   ) {
@@ -55,76 +55,76 @@ export class ApiError extends Error {
 }
 
 // Common error creation helpers
-export const createBadRequestError = (message: string, details?: any, requestId?: string) => 
+export const createBadRequestError = (message: string, details?: unknown, requestId?: string) => 
   new ApiError(ErrorCode.BAD_REQUEST, message, details, true, requestId);
 
-export const createUnauthorizedError = (message: string, details?: any, requestId?: string) => 
+export const createUnauthorizedError = (message: string, details?: unknown, requestId?: string) => 
   new ApiError(ErrorCode.UNAUTHORIZED, message, details, true, requestId);
 
-export const createForbiddenError = (message: string, details?: any, requestId?: string) => 
+export const createForbiddenError = (message: string, details?: unknown, requestId?: string) => 
   new ApiError(ErrorCode.FORBIDDEN, message, details, true, requestId);
 
-export const createNotFoundError = (message: string, details?: any, requestId?: string) => 
+export const createNotFoundError = (message: string, details?: unknown, requestId?: string) => 
   new ApiError(ErrorCode.NOT_FOUND, message, details, true, requestId);
 
-export const createRateLimitedError = (message: string, details?: any, retryAfter?: number, requestId?: string) => {
+export const createRateLimitedError = (message: string, details?: unknown, retryAfter?: number, requestId?: string) => {
   const error = new ApiError(ErrorCode.RATE_LIMITED, message, details, true, requestId);
   error.retryAfter = retryAfter;
   return error;
 };
 
-export const createInternalError = (message: string, details?: any, isOperational = true, requestId?: string) => 
+export const createInternalError = (message: string, details?: unknown, isOperational = true, requestId?: string) => 
   new ApiError(ErrorCode.INTERNAL_ERROR, message, details, isOperational, requestId);
 
-export const createValidationError = (message: string, details?: any, requestId?: string) => 
+export const createValidationError = (message: string, details?: unknown, requestId?: string) => 
   new ApiError(ErrorCode.VALIDATION_ERROR, message, details, true, requestId);
 
-export const createExternalApiError = (message: string, details?: any, isRetriable = true, requestId?: string) => {
+export const createExternalApiError = (message: string, details?: unknown, isRetriable = true, requestId?: string) => {
   const error = new ApiError(ErrorCode.EXTERNAL_API_ERROR, message, details, true, requestId);
   error.isRetriable = isRetriable;
   return error;
 };
 
-export const createDatabaseError = (message: string, details?: any, requestId?: string) => 
+export const createDatabaseError = (message: string, details?: unknown, requestId?: string) => 
   new ApiError(ErrorCode.DATABASE_ERROR, message, details, true, requestId);
 
-export const createTimeoutError = (message: string, details?: any, requestId?: string) => 
+export const createTimeoutError = (message: string, details?: unknown, requestId?: string) => 
   new ApiError(ErrorCode.TIMEOUT_ERROR, message, details, true, requestId);
 
 // AI-specific errors
-export const createAiQuotaExceededError = (message: string, details?: any, retryAfter?: number, requestId?: string) => {
+export const createAiQuotaExceededError = (message: string, details?: unknown, retryAfter?: number, requestId?: string) => {
   const error = new ApiError(ErrorCode.AI_QUOTA_EXCEEDED, message, details, true, requestId);
   error.retryAfter = retryAfter;
   return error;
 };
 
-export const createAiContextWindowExceededError = (message: string, details?: any, requestId?: string) => 
+export const createAiContextWindowExceededError = (message: string, details?: unknown, requestId?: string) => 
   new ApiError(ErrorCode.AI_CONTEXT_WINDOW_EXCEEDED, message, details, true, requestId);
 
-export const createAiContentFilteredError = (message: string, details?: any, requestId?: string) => 
+export const createAiContentFilteredError = (message: string, details?: unknown, requestId?: string) => 
   new ApiError(ErrorCode.AI_CONTENT_FILTERED, message, details, true, requestId);
 
-export const createAiUnavailableError = (message: string, details?: any, requestId?: string) => 
+export const createAiUnavailableError = (message: string, details?: unknown, requestId?: string) => 
   new ApiError(ErrorCode.AI_UNAVAILABLE, message, details, true, requestId);
 
-export const createAiModelError = (message: string, details?: any, requestId?: string) => 
+export const createAiModelError = (message: string, details?: unknown, requestId?: string) => 
   new ApiError(ErrorCode.AI_MODEL_ERROR, message, details, true, requestId);
 
-export const createAiParsingError = (message: string, details?: any, requestId?: string) => 
+export const createAiParsingError = (message: string, details?: unknown, requestId?: string) => 
   new ApiError(ErrorCode.AI_PARSING_ERROR, message, details, true, requestId);
 
 // Network errors
-export const createNetworkUnavailableError = (message: string, details?: any, requestId?: string) => 
+export const createNetworkUnavailableError = (message: string, details?: unknown, requestId?: string) => 
   new ApiError(ErrorCode.NETWORK_UNAVAILABLE, message, details, true, requestId);
 
-export const createConnectionResetError = (message: string, details?: any, requestId?: string) => 
+export const createConnectionResetError = (message: string, details?: unknown, requestId?: string) => 
   new ApiError(ErrorCode.CONNECTION_RESET, message, details, true, requestId);
 
 // Retry-specific errors
-export const createRetryExhaustedError = (message: string, details?: any, requestId?: string) => 
+export const createRetryExhaustedError = (message: string, details?: unknown, requestId?: string) => 
   new ApiError(ErrorCode.RETRY_EXHAUSTED, message, details, true, requestId);
 
-export const createCircuitOpenError = (message: string, details?: any, requestId?: string) => 
+export const createCircuitOpenError = (message: string, details?: unknown, requestId?: string) => 
   new ApiError(ErrorCode.CIRCUIT_OPEN, message, details, true, requestId);
 
 /**
@@ -220,7 +220,7 @@ export const appRouterErrorHandler = (error: ApiError | Error, req: Request) => 
 /**
  * Wrapper for handling async errors in API routes
  */
-export const asyncHandler = (fn: (req: NextApiRequest, res: NextApiResponse) => Promise<any>) => {
+export const asyncHandler = (fn: (req: NextApiRequest, res: NextApiResponse) => Promise<unknown>) => {
   return async (req: NextApiRequest, res: NextApiResponse) => {
     try {
       // Execute the handler
@@ -254,9 +254,9 @@ export const appRouterAsyncHandler = <T>(
  */
 export const validateRequest = <T>(
   req: NextApiRequest | Request,
-  validationFn: (data: any) => { valid: boolean, data?: T, errors?: any }
+  validationFn: (data: unknown) => { valid: boolean, data?: T, errors?: unknown }
 ) => {
-  let requestData: any;
+  let requestData: unknown;
   
   // Handle different request types
   if ('body' in req && req.body) {
@@ -265,7 +265,7 @@ export const validateRequest = <T>(
     try {
       // Note: This will need to be awaited in the calling function
       requestData = req.json();
-    } catch (error) {
+    } catch {
       throw createBadRequestError('Invalid JSON payload');
     }
   } else {
@@ -285,7 +285,7 @@ export const validateRequest = <T>(
 // Error monitoring function to send errors to external monitoring service
 export const monitorError = async (
   error: Error | ApiError,
-  context?: Record<string, any>
+  context?: Record<string, unknown>
 ) => {
   // Skip monitoring for operational errors in development
   if (
@@ -342,7 +342,7 @@ export const monitorError = async (
  */
 export const setupGlobalErrorHandlers = () => {
   // Handle unhandled promise rejections
-  process.on('unhandledRejection', (reason: Error | any) => {
+  process.on('unhandledRejection', (reason: Error | unknown) => {
     logger.fatal('Unhandled Promise Rejection', reason);
     // Don't exit in production, but do in development
     if (process.env.NODE_ENV !== 'production') {
@@ -361,7 +361,7 @@ export const setupGlobalErrorHandlers = () => {
 /**
  * Send error to Sentry monitoring service
  */
-async function sendToSentry(error: Error | ApiError, context?: Record<string, any>): Promise<void> {
+async function sendToSentry(error: Error | ApiError, context?: Record<string, unknown>): Promise<void> {
   try {
     // This would typically use @sentry/node
     // For now, we'll implement a basic HTTP API approach
@@ -393,7 +393,7 @@ async function sendToSentry(error: Error | ApiError, context?: Record<string, an
 /**
  * Send error to DataDog monitoring service
  */
-async function sendToDataDog(error: Error | ApiError, context?: Record<string, any>): Promise<void> {
+async function sendToDataDog(error: Error | ApiError, context?: Record<string, unknown>): Promise<void> {
   try {
     const datadogData = {
       message: error.message,
@@ -425,7 +425,7 @@ async function sendToDataDog(error: Error | ApiError, context?: Record<string, a
 /**
  * Send error to custom webhook monitoring service
  */
-async function sendToWebhook(error: Error | ApiError, context?: Record<string, any>): Promise<void> {
+async function sendToWebhook(error: Error | ApiError, context?: Record<string, unknown>): Promise<void> {
   try {
     const webhookUrl = process.env.ERROR_WEBHOOK_URL!;
     
@@ -475,7 +475,7 @@ async function sendToWebhook(error: Error | ApiError, context?: Record<string, a
 /**
  * Send error to New Relic monitoring service
  */
-async function sendToNewRelic(error: Error | ApiError, context?: Record<string, any>): Promise<void> {
+async function sendToNewRelic(error: Error | ApiError, context?: Record<string, unknown>): Promise<void> {
   try {
     const newRelicData = {
       eventType: 'ErrorEvent',

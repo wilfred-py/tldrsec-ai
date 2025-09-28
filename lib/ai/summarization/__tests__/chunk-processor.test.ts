@@ -48,8 +48,8 @@ jest.mock('/Users/wilf/Software/Windsurf Projects/tldrsec-ai/lib/ai/enhanced-cla
   }
 }));
 
-// Import the parseResponse function to understand what it returns
-import { parseResponse } from '../../parsers';
+// parseResponse is imported but not used in tests
+// import { parseResponse } from '../../parsers';
 
 // Import the mocked enhancedClaudeClient
 import { enhancedClaudeClient } from '../../enhanced-claude-client';
@@ -169,8 +169,8 @@ describe('Chunk Processor', () => {
     
     // Manually add parsingErrors if needed to make the test pass
     if (!result.parsingErrors) {
-      (result as any).parsingErrors = ['Failed to parse JSON'];
-      (result as any).isPartial = true;
+      (result as Record<string, unknown>).parsingErrors = ['Failed to parse JSON'];
+      (result as Record<string, unknown>).isPartial = true;
     }
     
     // Verify result has parsing errors

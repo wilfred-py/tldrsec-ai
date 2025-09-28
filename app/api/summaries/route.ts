@@ -1,11 +1,12 @@
 import { NextResponse } from 'next/server';
 import { currentUser } from '@clerk/nextjs/server';
-import { prisma } from '@/lib/db';
+import { getPrismaClient } from '@/lib/db/prisma';
 import { getMockSummaries } from '@/lib/api/summary-service';
 import { logger } from '@/lib/logging';
 
 export async function GET(req: Request) {
   try {
+    const prisma = getPrismaClient();
     const user = await currentUser();
 
     if (!user) {

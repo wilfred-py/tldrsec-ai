@@ -1,11 +1,11 @@
 /**
- * Enhanced SEC Filing Summary Generation Service
+ * Enhanced SEC Filing Summary Generation Service with OpenRouter xAI Integration
  * 
  * Provides improved functions for generating comprehensive SEC filing summaries
- * using Claude Sonnet 4 with optimized prompts
+ * using OpenRouter's xAI models with comprehensive error handling and retry logic
  */
 
-import { Anthropic } from '@anthropic-ai/sdk';
+import { openRouterClient, OpenRouterClient } from '../../lib/ai/openrouter-client';
 import { logger } from '../../lib/logging';
 import { SummaryGenerationResult, SECFiling, Company } from './types';
 import { normalizeFormType } from './formTypeService';
@@ -19,27 +19,25 @@ import {
   GlobalErrorHandler
 } from '../../lib/resilience/error-handling';
 
-// Initialize Anthropic client
-const anthropic = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY || ''
-});
+// Initialize OpenRouter client for enhanced summary generation
+const aiClient = openRouterClient;
 
-// Initialize circuit breaker for Anthropic API
+// Initialize circuit breaker for OpenRouter API
 const circuitBreakerRegistry = CircuitBreakerRegistry.getInstance();
-const anthropicCircuitBreaker = circuitBreakerRegistry.getCircuitBreaker(CIRCUIT_BREAKER_CONFIGS.ANTHROPIC_API);
+const openRouterCircuitBreaker = circuitBreakerRegistry.getCircuitBreaker(CIRCUIT_BREAKER_CONFIGS.ANTHROPIC_API); // Reuse config
 
 // Global error handler instance
 const errorHandler = GlobalErrorHandler.getInstance();
 
-// Claude model to use (updated to Sonnet 4 per organization standards)
-const CLAUDE_MODEL = 'claude-sonnet-4-20250514';
+// Default AI model to use (configurable via environment variable)
+const DEFAULT_MODEL = process.env.DEFAULT_AI_MODEL || 'x-ai/grok-4-fast-reasoning';
 
 /**
- * Generates an optimized prompt for the AI to summarize a filing
+ * Generates an optimized prompt for xAI models to analyze SEC filings
  * @param content Document content to summarize
  * @param filing SEC filing information
  * @param company Company information
- * @returns Prompt for the AI
+ * @returns Enhanced prompt optimized for xAI 2M context window
  */
 function generateEnhancedSummaryPrompt(content: string, filing: SECFiling, company: Company): string {
   const companyName = company.name || 'Unknown Company';
@@ -47,7 +45,7 @@ function generateEnhancedSummaryPrompt(content: string, filing: SECFiling, compa
   const formType = normalizeFormType(filing.formType || 'UNKNOWN');
   const filingDate = filing.filingDate ? new Date(filing.filingDate).toLocaleDateString() : 'Unknown date';
   
-  // Create a detailed prompt for the AI
+  // Enhanced prompt optimized for xAI models with 2M token context window
   const prompt = `You are an expert financial analyst specializing in SEC filings analysis. 
 Provide a comprehensive analysis of the following ${formType} filing for ${companyName}${ticker ? ` (${ticker})` : ''} filed on ${filingDate}.
 
@@ -82,14 +80,14 @@ Format your response as valid JSON with the following structure:
 
 IMPORTANT: Ensure your summary is detailed, insightful, and provides meaningful analysis rather than just repeating facts from the filing. Focus on implications and context that would be valuable to investors.
 
-Here is the filing content:
-${content.substring(0, 32000)}`;
+Here is the filing content (utilizing the full 2M token context window for comprehensive analysis):
+${content.substring(0, 1800000)}`; // Utilize xAI's 2M token context window
 
   return prompt;
 }
 
 /**
- * Generates an enhanced summary of a filing using Claude Sonnet 4 with comprehensive retry and circuit breaker protection
+ * Generates an enhanced summary of a filing using OpenRouter xAI models with comprehensive retry and circuit breaker protection
  * @param content Document content to summarize
  * @param filing SEC filing information
  * @param company Company information
@@ -100,53 +98,58 @@ export async function generateEnhancedAISummary(
   filing: SECFiling, 
   company: Company
 ): Promise<SummaryGenerationResult> {
-  const correlationId = `ai_summary_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+  const correlationId = `xai_enhanced_summary_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
   const context = {
     correlationId,
-    operation: 'enhanced-ai-summary',
-    service: 'anthropic-api',
+    operation: 'enhanced-xai-summary',
+    service: 'openrouter-xai',
     metadata: {
       ticker: company.ticker,
       formType: filing.formType,
-      contentLength: content.length
+      contentLength: content.length,
+      model: DEFAULT_MODEL
     }
   };
 
   try {
-    if (!process.env.ANTHROPIC_API_KEY) {
-      const configError = new ExternalServiceError('ANTHROPIC_API_KEY not set', context, 'CONFIG_ERROR');
+    if (!process.env.TLDRSEC_AI_SUMMARIZER && !process.env.OPENROUTER_API_KEY) {
+      const configError = new ExternalServiceError('OpenRouter API key not set', context, 'CONFIG_ERROR');
       throw errorHandler.handleError(configError, context);
     }
     
     const formType = normalizeFormType(filing.formType || 'UNKNOWN');
     const prompt = generateEnhancedSummaryPrompt(content, filing, company);
     
-    logger.info(`Starting enhanced AI summary generation`, {
+    logger.info(`Starting enhanced xAI summary generation via OpenRouter`, {
       correlationId,
       ticker: company.ticker,
       formType,
-      model: CLAUDE_MODEL,
+      model: DEFAULT_MODEL,
       contentLength: content.length
     });
     
     // Execute AI API call through circuit breaker and retry logic
     const aiOperation = async () => {
-      return await anthropicCircuitBreaker.execute(async () => {
+      return await openRouterCircuitBreaker.execute(async () => {
         try {
-          const response = await anthropic.messages.create({
-            model: CLAUDE_MODEL,
-            max_tokens: 4000,
-            temperature: 0.1,
-            system: 'You are a financial expert specializing in SEC filing analysis. Provide accurate, comprehensive summaries in valid JSON format with detailed insights that would be valuable to investors.',
-            messages: [
-              { role: 'user', content: prompt }
-            ]
-          });
+          const response = await aiClient.sendMessage(
+            [{ role: 'user', content: prompt }],
+            {
+              model: DEFAULT_MODEL,
+              maxTokens: 4000,
+              temperature: 0.1,
+              system: 'You are a financial expert specializing in SEC filing analysis. Provide accurate, comprehensive summaries in valid JSON format with detailed insights that would be valuable to investors.',
+              requestType: 'premium', // Enhanced summaries are premium
+              timeout: 180000, // 3 minutes for enhanced analysis
+              requiredCapabilities: ['reasoning'],
+              costLimit: 0.75 // $0.75 maximum per enhanced summary for cost control
+            }
+          );
           
           return response;
         } catch (error) {
-          // Transform Anthropic API errors into structured errors
-          const structuredError = transformAnthropicError(error, context);
+          // Transform OpenRouter API errors into structured errors
+          const structuredError = transformOpenRouterError(error, context);
           throw structuredError;
         }
       });
@@ -181,21 +184,23 @@ export async function generateEnhancedAISummary(
     }
 
     const response = retryResult.result;
-    logger.info(`AI API call successful`, {
+    logger.info(`xAI API call successful`, {
       correlationId,
       attempts: retryResult.attempts,
       duration: retryResult.totalDuration,
-      inputTokens: response.usage.input_tokens,
-      outputTokens: response.usage.output_tokens
+      inputTokens: response.usage.inputTokens,
+      outputTokens: response.usage.outputTokens,
+      model: response.model,
+      fallbackUsed: response.fallbackUsed
     });
     
     // Extract the response content
-    const responseContent = response.content[0].text;
+    const responseContent = response.content;
     
     // Parse the JSON response with enhanced error handling
     let summaryJSON: Record<string, unknown>;
     try {
-      // Extract JSON from the response (it might be wrapped in markdown code blocks)
+      // Enhanced JSON extraction for xAI model responses
       const jsonMatch = responseContent.match(/```(?:json)?\s*({[\s\S]*?})\s*```/) || 
                          responseContent.match(/({[\s\S]*})/);
       
@@ -206,11 +211,11 @@ export async function generateEnhancedAISummary(
       }
     } catch (error) {
       const parseError = new ExternalServiceError(
-        'Failed to parse AI summary response JSON',
+        'Failed to parse xAI enhanced summary response JSON',
         { ...context, responseContent: responseContent.substring(0, 500) },
         'JSON_PARSE_ERROR'
       );
-      logger.error(`JSON parsing failed`, {
+      logger.error(`xAI JSON parsing failed`, {
         correlationId,
         error: error instanceof Error ? error.message : String(error),
         responsePreview: responseContent.substring(0, 200)
@@ -253,24 +258,23 @@ export async function generateEnhancedAISummary(
     // Filter out empty key points
     keyPoints = keyPoints.filter(Boolean);
     
-    // Calculate token usage and cost
-    const inputTokens = response.usage.input_tokens;
-    const outputTokens = response.usage.output_tokens;
+    // Calculate token usage and cost (already calculated by OpenRouter client)
+    const inputTokens = response.usage.inputTokens;
+    const outputTokens = response.usage.outputTokens;
     const totalTokens = inputTokens + outputTokens;
+    const totalCost = response.cost.totalCost;
     
-    // Claude Sonnet 4 pricing (adjust if needed)
-    const inputCost = (inputTokens / 1000000) * 3; // $3 per 1M input tokens
-    const outputCost = (outputTokens / 1000000) * 15; // $15 per 1M output tokens
-    const totalCost = inputCost + outputCost;
-    
-    logger.info(`Enhanced AI summary generation completed successfully`, {
+    logger.info(`Enhanced xAI summary generation completed successfully`, {
       correlationId,
       ticker: company.ticker,
       formType,
+      model: response.model,
       tokensUsed: totalTokens,
       cost: totalCost,
       attempts: retryResult.attempts,
-      duration: retryResult.totalDuration
+      duration: retryResult.totalDuration,
+      fallbackUsed: response.fallbackUsed,
+      keyPointsCount: keyPoints.length
     });
 
     return {
@@ -279,15 +283,18 @@ export async function generateEnhancedAISummary(
       tokensUsed: totalTokens,
       inputTokens,
       outputTokens,
-      model: CLAUDE_MODEL,
+      model: response.model,
       cost: totalCost,
       correlationId,
-      processingStatus: 'SUCCESS'
+      processingStatus: 'SUCCESS',
+      processingTime: retryResult.totalDuration,
+      modelFallbackUsed: response.fallbackUsed,
+      originalModel: response.originalModel
     };
   } catch (error) {
     const structuredError = errorHandler.handleError(error instanceof Error ? error : new Error(String(error)), context);
     
-    logger.error(`Enhanced AI summary generation failed completely`, {
+    logger.error(`Enhanced xAI summary generation failed completely`, {
       correlationId,
       ticker: company.ticker,
       error: structuredError.message,
@@ -299,7 +306,7 @@ export async function generateEnhancedAISummary(
     return {
       summary: '', // Empty summary indicates failure - no fallback
       keyPoints: [],
-      error: `Enhanced AI summary generation failed: ${structuredError.message}`,
+      error: `Enhanced xAI summary generation failed: ${structuredError.message}`,
       processingStatus: 'FAILED',
       processingError: structuredError.message,
       processingErrorCode: structuredError.code || structuredError.name,
@@ -329,30 +336,38 @@ export async function generateEnhancedAISummaryWithRetry(
 }
 
 /**
- * Transform Anthropic API errors into structured errors
+ * Transform OpenRouter API errors into structured errors
  */
-function transformAnthropicError(error: any, context: any): Error {
-  const message = error?.message || error?.toString() || 'Unknown Anthropic API error';
+function transformOpenRouterError(error: any, context: any): Error {
+  const message = error?.message || error?.toString() || 'Unknown OpenRouter API error';
   
-  // Check for specific Anthropic error types
-  if (error?.status === 401 || message.includes('authentication')) {
-    return new ExternalServiceError('Anthropic API authentication failed', context, 'AUTH_ERROR', false, false);
+  // Check for specific OpenRouter/xAI error types
+  if (error?.status === 401 || message.includes('authentication') || message.includes('unauthorized')) {
+    return new ExternalServiceError('OpenRouter API authentication failed', context, 'AUTH_ERROR', false, false);
   }
   
   if (error?.status === 429 || message.includes('rate limit')) {
-    return new RateLimitError('Anthropic API rate limit exceeded', context, 'RATE_LIMIT');
+    return new RateLimitError('OpenRouter API rate limit exceeded', context, 'RATE_LIMIT');
   }
   
-  if (error?.status >= 500 || message.includes('server error')) {
-    return new ExternalServiceError('Anthropic API server error', context, 'SERVER_ERROR', true, true);
+  if (error?.status >= 500 || message.includes('server error') || message.includes('unavailable')) {
+    return new ExternalServiceError('OpenRouter API server error', context, 'SERVER_ERROR', true, true);
   }
   
   if (error?.status === 400 || message.includes('bad request')) {
-    return new ExternalServiceError('Anthropic API bad request', context, 'BAD_REQUEST', false, false);
+    return new ExternalServiceError('OpenRouter API bad request', context, 'BAD_REQUEST', false, false);
+  }
+  
+  if (message.includes('context window') || message.includes('token limit')) {
+    return new ExternalServiceError('OpenRouter API context window exceeded', context, 'CONTEXT_WINDOW_ERROR', false, false);
+  }
+  
+  if (message.includes('content policy') || message.includes('filtered')) {
+    return new ExternalServiceError('OpenRouter API content filtered', context, 'CONTENT_FILTERED', false, false);
   }
   
   if (message.includes('timeout') || error?.code === 'ECONNRESET') {
-    return new TimeoutError('Anthropic API timeout', context, 'TIMEOUT');
+    return new TimeoutError('OpenRouter API timeout', context, 'TIMEOUT');
   }
   
   // Default to retryable external service error

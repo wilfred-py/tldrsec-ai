@@ -31,7 +31,7 @@ export interface FilingNotificationPayload {
   description?: string;
   summaryId?: string;
   summaryText?: string;
-  summaryData?: any; // JSON data from the summary
+  summaryData?: Record<string, unknown>; // JSON data from the summary
   priorityLevel?: 'high' | 'medium' | 'low';
   url?: string;
 }
@@ -47,7 +47,7 @@ export interface UserNotificationPreferences {
 
 // Email sender interface for dependency injection
 export interface EmailSender {
-  sendEmail(message: any, options?: any): Promise<any>;
+  sendEmail(message: Record<string, unknown>, options?: Record<string, unknown>): Promise<unknown>;
 }
 
 // Notification service interface
@@ -60,14 +60,14 @@ export interface NotificationServiceInterface {
 
 // Notification processor interface
 export interface NotificationProcessorInterface {
-  processNotification(payload: any): Promise<void>;
-  queueNotification(payload: any): Promise<void>;
+  processNotification(payload: Record<string, unknown>): Promise<void>;
+  queueNotification(payload: Record<string, unknown>): Promise<void>;
 }
 
 // Notification integration interface
 export interface NotificationIntegrationInterface {
-  sendNotification(payload: any): Promise<void>;
-  registerHandler(handler: (payload: any) => Promise<void>): void;
+  sendNotification(payload: Record<string, unknown>): Promise<void>;
+  registerHandler(handler: (payload: Record<string, unknown>) => Promise<void>): void;
 }
 
 /**

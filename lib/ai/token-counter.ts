@@ -1,7 +1,8 @@
 /**
- * Token Estimation for Claude API
+ * Token Estimation for AI Models (OpenRouter/xAI)
  * 
- * Simple utility functions to roughly estimate token counts for Claude messages.
+ * Simple utility functions to roughly estimate token counts for AI models.
+ * Updated to support xAI models through OpenRouter with cost calculations.
  * For precise token counts, you'd need to use a proper tokenizer like tiktoken,
  * but these functions provide reasonable estimates for planning purposes.
  */
@@ -53,25 +54,43 @@ export function estimateMessagesTokenCount(messages: MessageForTokenCount[]): nu
 }
 
 /**
- * Calculate the approximate cost of a Claude API call
+ * Calculate the approximate cost of an AI API call (OpenRouter/xAI)
  * 
  * @param inputTokens Number of input tokens
  * @param outputTokens Number of output tokens
- * @param model Claude model name (defaults to sonnet)
+ * @param model AI model name (defaults to xAI grok-4-fast-reasoning)
  * @returns Cost in USD
  */
 export function calculateCost(
   inputTokens: number,
   outputTokens: number,
-  model: string = 'claude-sonnet-4-20250514'
+  model: string = process.env.DEFAULT_AI_MODEL || 'x-ai/grok-4-fast:free'
 ): { inputCost: number; outputCost: number; totalCost: number } {
-  // Claude price structure (as of July 2025)
+  // xAI price structure through OpenRouter (95% cheaper than Claude)
   const prices: Record<string, { input: number; output: number }> = {
+    // xAI models (primary)
+    'x-ai/grok-4-fast:free': {
+      input: 0.0000002,  // $0.20 per million tokens (95% cheaper than Claude)
+      output: 0.0000005  // $0.50 per million tokens
+    },
+    'x-ai/grok-4': {
+      input: 0.0000002,  // $0.20 per million tokens
+      output: 0.0000005  // $0.50 per million tokens
+    },
+    'x-ai/grok-3': {
+      input: 0.0000001,  // $0.10 per million tokens
+      output: 0.00000025 // $0.25 per million tokens
+    },
+    'x-ai/grok-4-fast:free': {
+      input: 0,          // Free tier (limited usage)
+      output: 0
+    },
+    // Legacy Claude models (deprecated but kept for backward compatibility)
     'claude-sonnet-4-20250514': {
       input: 0.000003,  // $3 per million tokens
       output: 0.000015  // $15 per million tokens
     },
-    'claude-3-opus-20240229': { // Legacy model pricing kept for backward compatibility
+    'claude-3-opus-20240229': {
       input: 0.000015,  // $15 per million tokens
       output: 0.000075  // $75 per million tokens
     },
@@ -82,16 +101,11 @@ export function calculateCost(
     'claude-3-haiku-20240307': {
       input: 0.00000025, // $0.25 per million tokens
       output: 0.00000125 // $1.25 per million tokens
-    },
-    // Add fallback for older models
-    'claude-2.1': {
-      input: 0.000008,  // $8 per million tokens
-      output: 0.000024  // $24 per million tokens
     }
   };
   
-  // Use Claude Sonnet 4 pricing as default fallback
-  const pricing = prices[model] || prices['claude-sonnet-4-20250514'];
+  // Use xAI grok-4-fast-reasoning pricing as default fallback
+  const pricing = prices[model] || prices['x-ai/grok-4-fast:free'];
   
   const inputCost = inputTokens * pricing.input;
   const outputCost = outputTokens * pricing.output;

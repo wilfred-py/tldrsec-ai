@@ -1,8 +1,11 @@
 import { NextResponse } from 'next/server';
 import { headers } from 'next/headers';
-import { prisma } from '@/lib/db/prisma';
+import { getPrismaClient } from '@/lib/db/prisma';
 import { dbRetry } from '@/lib/db/retry-wrapper';
 import { databaseMonitoring } from '@/lib/db/monitoring';
+
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
 
 // Rate limiting storage (in-memory for simplicity - in production use Redis)
 const requestCounts = new Map<string, { count: number; lastReset: number }>();
@@ -71,6 +74,7 @@ function checkRateLimit(ip: string): boolean {
  * Secured database health check endpoint with access controls
  */
 export async function GET() {
+  const prisma = getPrismaClient();
   const startTime = Date.now();
   
   // Get client IP address

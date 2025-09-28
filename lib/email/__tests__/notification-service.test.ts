@@ -2,7 +2,7 @@
  * Tests for notification service
  */
 
-import { NotificationService, NotificationEventType, FilingNotificationPayload, NotificationPreference } from '../notification-service';
+import { NotificationService, NotificationEventType, FilingNotificationPayload } from '../notification-service';
 import { JobQueueService } from '../../job-queue';
 
 // Mock ResendClient

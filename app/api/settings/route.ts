@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth, currentUser } from '@clerk/nextjs/server';
-import { prisma } from '@/lib/db';
+import { getPrismaClient } from '@/lib/db/prisma';
 import { logger } from '@/lib/logging';
 
 /**
@@ -9,6 +9,7 @@ import { logger } from '@/lib/logging';
  */
 export async function GET() {
   try {
+    const prisma = getPrismaClient();
     const { userId } = await auth();
     const user = await currentUser();
     
@@ -97,6 +98,7 @@ export async function GET() {
  */
 export async function PUT(request: NextRequest) {
   try {
+    const prisma = getPrismaClient();
     const { userId } = await auth();
     
     if (!userId) {

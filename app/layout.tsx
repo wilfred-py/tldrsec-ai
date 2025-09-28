@@ -1,14 +1,12 @@
 import './globals.css';
 import type { Metadata } from 'next';
 import { Geist, Geist_Mono } from 'next/font/google';
-import { ClerkProvider } from '@clerk/nextjs';
+import { ClerkProviderWrapper } from '@/components/auth/clerk-provider-wrapper';
 import { Toaster } from '@/components/ui/sonner';
 import { PostHogProvider } from '@/components/analytics/posthog-provider';
-import { PageViewTracker } from '@/components/analytics/page-view-tracker';
 import { MouseFollowEffect } from '@/components/landing/mouse-follow-effect';
 import { JsonLd } from '@/components/structured-data';
 import { AuthProvider } from '@/lib/context/auth-context';
-import { Suspense } from 'react';
 
 const geistSans = Geist({
   variable: '--font-geist-sans',
@@ -54,8 +52,11 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  // Check if we're in build time
+  const isBuildTime = typeof window === 'undefined' && !process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY;
+  
   return (
-    <ClerkProvider
+    <ClerkProviderWrapper
       afterSignUpUrl="/onboarding"
       afterSignInUrl="/dashboard"
       signUpUrl="/sign-up"
@@ -66,20 +67,30 @@ export default function RootLayout({
           className={`${geistSans.variable} ${geistMono.variable} antialiased`}
         >
           <PostHogProvider>
-            <AuthProvider>
-              <Suspense fallback={null}>
-                <PageViewTracker />
-              </Suspense>
-              <MouseFollowEffect />
-              <JsonLd />
-              <main className="min-h-screen">
-                {children}
-              </main>
-              <Toaster />
-            </AuthProvider>
+            {isBuildTime ? (
+              // During build time, render children without AuthProvider
+              <>
+                <MouseFollowEffect />
+                <JsonLd />
+                <main className="min-h-screen">
+                  {children}
+                </main>
+                <Toaster />
+              </>
+            ) : (
+              // At runtime, use AuthProvider
+              <AuthProvider>
+                <MouseFollowEffect />
+                <JsonLd />
+                <main className="min-h-screen">
+                  {children}
+                </main>
+                <Toaster />
+              </AuthProvider>
+            )}
           </PostHogProvider>
         </body>
       </html>
-    </ClerkProvider>
+    </ClerkProviderWrapper>
   );
 }

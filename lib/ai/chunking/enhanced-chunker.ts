@@ -197,7 +197,7 @@ export function combineChunkResults(
             combinedJSON[key] = [];
           }
           if (Array.isArray(combinedJSON[key])) {
-            (combinedJSON[key] as any[]).push(...value);
+            (combinedJSON[key] as unknown[]).push(...value);
           }
         } else if (typeof value === 'string') {
           // If it's a string, append with a separator
@@ -234,7 +234,7 @@ export function combineChunkResults(
   Object.keys(combinedJSON).forEach(key => {
     if (Array.isArray(combinedJSON[key])) {
       // Convert to Set and back to array to remove duplicates
-      combinedJSON[key] = [...new Set(combinedJSON[key] as any[])];
+      combinedJSON[key] = [...new Set(combinedJSON[key] as unknown[])];
     }
   });
   

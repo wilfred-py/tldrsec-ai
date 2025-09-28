@@ -271,6 +271,9 @@ export async function fetchSecCompanyRSS(cik: string): Promise<CompanyRSSFeed> {
   const formattedCik = validation.formattedCIK!;
   const rssUrl = generateSecRssUrl(cik);
   
+  // Detect Railway environment
+  const isRailway = process.env.RAILWAY_ENVIRONMENT !== undefined;
+  
   try {
     rssLogger.debug(`Fetching RSS feed for CIK ${formattedCik}`, { 
       rssUrl, 

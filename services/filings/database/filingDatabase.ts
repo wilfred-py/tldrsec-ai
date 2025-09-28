@@ -50,10 +50,15 @@ export async function findExistingSummary(ticker: string, formType: string, bypa
       return null;
     }
     
+    // Track cache access and update usage analytics
+    if (summaryRecord.id) {
+      await trackCacheAccess(summaryRecord.id, 'database_query');
+    }
+    
     // Parse the summary JSON
     const summaryJSON = summaryRecord.summaryJSON as any;
     
-    // Convert to FilingSummaryResult format
+    // Convert to FilingSummaryResult format with enhanced data
     const result: FilingSummaryResult = {
       ticker: ticker,
       companyName: tickerRecord.companyName || ticker,
@@ -65,15 +70,19 @@ export async function findExistingSummary(ticker: string, formType: string, bypa
       url: summaryRecord.filingUrl,
       model: summaryRecord.model || undefined,
       tokensUsed: summaryJSON?.tokensUsed,
-      inputTokens: summaryJSON?.inputTokens,
-      outputTokens: summaryJSON?.outputTokens,
-      cost: summaryJSON?.cost,
+      inputTokens: summaryRecord.inputTokens || summaryJSON?.inputTokens,
+      outputTokens: summaryRecord.outputTokens || summaryJSON?.outputTokens,
+      cost: summaryRecord.totalCost || summaryJSON?.cost,
       processingStatus: summaryRecord.processingStatus || undefined,
       processingTimeMs: summaryJSON?.processingTimeMs,
-      failureReason: summaryJSON?.failureReason
+      failureReason: summaryJSON?.failureReason,
+      // Cache analytics metadata
+      isCacheHit: true,
+      cacheUsageCount: summaryRecord.cacheUsageCount || 0,
+      qualityScore: summaryRecord.qualityScore
     };
     
-    console.log(`[DEBUG][FilingDatabase] Found existing summary for ${ticker} - ${formType}`);
+    console.log(`[DEBUG][FilingDatabase] Found existing summary for ${ticker} - ${formType} (cache usage: ${summaryRecord.cacheUsageCount || 0})`);
     return result;
   } catch (error) {
     console.error(`[ERROR][FilingDatabase] Error finding existing summary: ${error instanceof Error ? error.message : String(error)}`);
@@ -82,7 +91,7 @@ export async function findExistingSummary(ticker: string, formType: string, bypa
 }
 
 /**
- * Stores a filing summary in the database
+ * Stores a filing summary in the database with comprehensive analytics tracking
  * 
  * @param summary The filing summary to store
  * @returns Boolean indicating success or failure
@@ -109,8 +118,20 @@ export async function storeSummary(
       return false;
     }
     
-    // Create a new summary record
-    await prisma.summary.create({
+    // Calculate cost per token from metadata if available
+    const inputTokens = metadata.inputTokens || 0;
+    const outputTokens = metadata.outputTokens || 0;
+    const totalCost = metadata.cost || 0;
+    
+    const inputCostPerToken = inputTokens > 0 && totalCost > 0 
+      ? (totalCost * 0.6) / inputTokens // Assume 60% of cost is input tokens (approximate)
+      : null;
+    const outputCostPerToken = outputTokens > 0 && totalCost > 0 
+      ? (totalCost * 0.4) / outputTokens // Assume 40% of cost is output tokens (approximate)
+      : null;
+    
+    // Create a new summary record with enhanced analytics
+    const summaryRecord = await prisma.summary.create({
       data: {
         tickerId: tickerRecord.id,
         filingType: formType,
@@ -140,11 +161,31 @@ export async function storeSummary(
         sentToUser: false, // Will be marked as sent when included in an email
         model: metadata.model || 'unknown',
         processingStatus: metadata.failureReason ? 'FAILED' : 'COMPLETED',
+        
+        // Enhanced Cost and Token Tracking
+        inputTokens: inputTokens,
+        outputTokens: outputTokens,
+        inputCostPerToken: inputCostPerToken,
+        outputCostPerToken: outputCostPerToken,
+        totalCost: totalCost,
+        
+        // Cache and Reuse Analytics (new summary is not a cache hit)
+        isCacheHit: false,
+        cacheUsageCount: 0,
+        lastCacheUsed: null,
+        cacheVersion: metadata.cacheVersion || '1.0',
+        
+        // Performance and Quality Metrics
+        qualityScore: metadata.qualityScore || null,
+        confidenceLevel: metadata.confidenceLevel || null,
+        extractionSuccess: metadata.extractionSuccess || true,
+        parsingErrors: metadata.parsingErrors || 0,
+        
         ...(metadata.failureReason ? { processingError: metadata.failureReason } : {})
       }
     });
     
-    console.log(`[INFO][FilingDatabase] Successfully stored summary in database for ${ticker} - ${formType}`);
+    console.log(`[INFO][FilingDatabase] Successfully stored summary with analytics for ${ticker} - ${formType} (ID: ${summaryRecord.id})`);
     return true;
   } catch (dbError: unknown) {
     // Log the error but don't fail the operation if database storage fails
@@ -186,5 +227,79 @@ export async function getFilingLogs(limit: number = 100): Promise<any[]> {
   } catch (error) {
     console.error(`[ERROR][FilingDatabase] Error getting filing logs: ${error instanceof Error ? error.message : String(error)}`);
     return [];
+  }
+}
+
+/**
+ * Track cache access for analytics - records when a cached summary is accessed
+ * 
+ * @param summaryId The ID of the summary being accessed
+ * @param accessType The type of access (database_query, memory_cache, etc.)
+ * @returns Boolean indicating success
+ */
+export async function trackCacheAccess(summaryId: string, accessType: string): Promise<boolean> {
+  try {
+    // Update the summary's cache usage count and last accessed time
+    await prisma.summary.update({
+      where: { id: summaryId },
+      data: {
+        cacheUsageCount: { increment: 1 },
+        lastCacheUsed: new Date()
+      }
+    });
+    
+    // Create a detailed cache access record
+    await prisma.summaryCacheAccess.create({
+      data: {
+        summaryId: summaryId,
+        accessType: accessType,
+        accessedAt: new Date()
+      }
+    });
+    
+    console.log(`[DEBUG][FilingDatabase] Cache access tracked for summary ${summaryId} (type: ${accessType})`);
+    return true;
+  } catch (error) {
+    console.error(`[ERROR][FilingDatabase] Failed to track cache access: ${error instanceof Error ? error.message : String(error)}`);
+    return false;
+  }
+}
+
+/**
+ * Track email delivery for analytics - records when a summary is included in an email
+ * 
+ * @param summaryId The ID of the summary being delivered
+ * @param userEmail The email address of the recipient
+ * @param deliveryType The type of delivery (individual, digest, etc.)
+ * @returns Boolean indicating success
+ */
+export async function trackEmailDelivery(summaryId: string, userEmail: string, deliveryType: string = 'individual'): Promise<boolean> {
+  try {
+    // Create an email delivery record
+    await prisma.summaryEmailDelivery.create({
+      data: {
+        summaryId: summaryId,
+        userEmail: userEmail,
+        deliveryType: deliveryType,
+        deliveredAt: new Date(),
+        deliverySuccess: true
+      }
+    });
+    
+    // Update the summary to mark it as sent to user if not already
+    await prisma.summary.update({
+      where: { id: summaryId },
+      data: {
+        sentToUser: true,
+        emailDeliveryCount: { increment: 1 },
+        lastEmailDelivered: new Date()
+      }
+    });
+    
+    console.log(`[DEBUG][FilingDatabase] Email delivery tracked for summary ${summaryId} to ${userEmail}`);
+    return true;
+  } catch (error) {
+    console.error(`[ERROR][FilingDatabase] Failed to track email delivery: ${error instanceof Error ? error.message : String(error)}`);
+    return false;
   }
 }

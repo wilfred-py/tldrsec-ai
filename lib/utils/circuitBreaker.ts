@@ -203,7 +203,7 @@ export const circuitBreakerRegistry = new CircuitBreakerRegistry();
 /**
  * Utility function to create a circuit breaker protected function
  */
-export function withCircuitBreaker<T extends (...args: any[]) => Promise<any>>(
+export function withCircuitBreaker<T extends (...args: unknown[]) => Promise<unknown>>(
   name: string,
   fn: T,
   config?: Partial<CircuitBreakerConfig>

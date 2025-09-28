@@ -7,7 +7,7 @@
 import { PromptTemplate } from './prompt-template';
 
 export class FormForm4Prompt extends PromptTemplate {
-  constructor(options: Record<string, any> = {}) {
+  constructor(options: Record<string, unknown> = {}) {
     super(options);
     
     // Set the system prompt (guidance for the AI)

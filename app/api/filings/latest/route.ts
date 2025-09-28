@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/lib/db/prisma';
+import { getPrismaClient } from '@/lib/db/prisma';
 import { auth } from '@clerk/nextjs/server';
+
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
 
 /**
  * API endpoint to get the latest filing for each ticker
@@ -9,6 +12,8 @@ import { auth } from '@clerk/nextjs/server';
  */
 export async function POST(req: NextRequest) {
   try {
+    const prisma = getPrismaClient();
+    
     // Verify authentication
     const authResult = await auth();
     const userId = authResult.userId;

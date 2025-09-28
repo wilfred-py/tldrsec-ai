@@ -2,7 +2,7 @@
  * Tests for the Resend email client
  */
 import { ResendClient } from '../resend-client';
-import { EmailMessage, EmailSendSuccess, EmailSendFailure } from '../types';
+import { EmailMessage } from '../types';
 
 // Mock Resend constructor and methods
 jest.mock('resend', () => {
@@ -167,7 +167,7 @@ describe('ResendClient', () => {
       await client.sendEmail(message);
       try {
         await client.sendEmail(message);
-      } catch (error) {
+      } catch {
         // Ignore error
       }
       

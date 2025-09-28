@@ -86,7 +86,7 @@ export class SummaryCache {
         // Convert database entry to cache entry
         const cacheEntry: SummaryCacheEntry = {
           summaryId: existingSummary.id,
-          status: existingSummary.processingStatus as any,
+          status: existingSummary.processingStatus as 'PENDING' | 'PROCESSING' | 'COMPLETED' | 'FAILED' | 'COMPLETED_WITH_WARNINGS',
           result: {
             summaryId: existingSummary.id,
             summaryText: existingSummary.summaryText,

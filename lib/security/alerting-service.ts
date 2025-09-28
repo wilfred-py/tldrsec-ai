@@ -62,7 +62,7 @@ export interface Alert {
   title: string;
   message: string;
   source: string;
-  details?: Record<string, any>;
+  details?: Record<string, unknown>;
   fingerprint?: string; // For deduplication
   tags?: string[];
 }
@@ -199,8 +199,8 @@ export class AlertingService {
    * Send bulk security report
    */
   public async sendSecurityDigest(
-    threats: any[],
-    metrics: any,
+    threats: unknown[],
+    metrics: unknown,
     timeframe: string
   ): Promise<AlertDeliveryResult[]> {
     const digest: Alert = {
@@ -238,7 +238,7 @@ export class AlertingService {
     alerts_sent_last_hour: number;
     delivery_success_rate: number;
     average_delivery_time_ms: number;
-    channel_performance: Record<string, any>;
+    channel_performance: Record<string, unknown>;
     rate_limit_hits: number;
   } {
     const oneHourAgo = Date.now() - 60 * 60 * 1000;
@@ -253,7 +253,7 @@ export class AlertingService {
       : 0;
 
     // Channel performance breakdown
-    const channelPerformance: Record<string, any> = {};
+    const channelPerformance: Record<string, unknown> = {};
     const channels = [...new Set(recentDeliveries.map(d => d.channel))];
 
     channels.forEach(channel => {
@@ -596,7 +596,7 @@ export class AlertingService {
   /**
    * Generate digest message
    */
-  private generateDigestMessage(threats: any[], metrics: any): string {
+  private generateDigestMessage(threats: unknown[], metrics: unknown): string {
     return `Security monitoring digest:\n\n` +
            `• Threats detected: ${threats.length}\n` +
            `• System status: ${metrics.overall_status || 'unknown'}\n` +

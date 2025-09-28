@@ -6,7 +6,7 @@
 
 import { ResendClient } from './resend-client';
 import { EmailMessage, EmailSendResult } from './types';
-import { resendConfig } from './config';
+// resendConfig not used in this file
 
 // Create the default client with API key from environment
 const RESEND_API_KEY = process.env.RESEND_API_KEY;

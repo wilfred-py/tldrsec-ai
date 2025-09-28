@@ -31,7 +31,7 @@ const requiredFieldsByType: Record<string, string[]> = {
  * @returns Object with validation result and missing fields
  */
 export function validateRequiredFields(
-  data: Record<string, any>,
+  data: Record<string, unknown>,
   filingType: SECFilingType
 ): { valid: boolean; missingFields: string[] } {
   // Get required fields for this filing type or fall back to generic
@@ -65,7 +65,7 @@ export function ensureMinimumFields(
   responseText: string,
   filingType: SECFilingType,
   fallbackCompany: string = 'Unknown Company'
-): Record<string, any> {
+): Record<string, unknown> {
   logger.debug(`Ensuring minimum fields for ${filingType} filing`);
   
   // First try to extract any JSON-like structures from the response
@@ -89,7 +89,7 @@ export function ensureMinimumFields(
   }
   
   // Create minimum valid object based on filing type
-  let result: Record<string, any>;
+  let result: Record<string, unknown>;
   
   switch (filingType) {
     case '4':
@@ -201,8 +201,8 @@ export function ensureMinimumFields(
  * @param text - The response text to extract data from
  * @returns Partial data extracted from the text
  */
-function extractPartialData(text: string): Record<string, any> {
-  const result: Record<string, any> = {};
+function extractPartialData(text: string): Record<string, unknown> {
+  const result: Record<string, unknown> = {};
   
   try {
     // Try to find any JSON-like structures in the text

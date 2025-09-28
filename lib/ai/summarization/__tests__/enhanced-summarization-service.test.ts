@@ -103,23 +103,23 @@ import { processSingleChunk } from '../chunk-processor';
 import { processAllChunks } from '../batch-processor';
 import { updateSummaryWithPartialResult, updateSummaryWithResult } from '../db-utils';
 import { summaryCache } from '../../cache/summary-cache';
-// Import the extractFilingContent function
-import { extractFilingContent } from '../../../parsers/filing-extractor';
 
 // Create properly typed mock functions
-type MockFunction<T extends (...args: any) => any> = jest.MockedFunction<T>;
+type MockFunction<T extends (...args: unknown[]) => unknown> = jest.MockedFunction<T>;
 
 const mockedProcessSingleChunk = processSingleChunk as MockFunction<typeof processSingleChunk>;
 const mockedProcessAllChunks = processAllChunks as MockFunction<typeof processAllChunks>;
 const mockedUpdateSummaryWithPartialResult = updateSummaryWithPartialResult as MockFunction<typeof updateSummaryWithPartialResult>;
 const mockedUpdateSummaryWithResult = updateSummaryWithResult as MockFunction<typeof updateSummaryWithResult>;
-const mockedExtractFilingContent = extractFilingContent as MockFunction<typeof extractFilingContent>;
+// mockedExtractFilingContent is defined but not used in current tests
+// const mockedExtractFilingContent = extractFilingContent as MockFunction<typeof extractFilingContent>;
 
 // Cast the mock to the right type
-const mockedSummaryCache = {
-  get: summaryCache.get as MockFunction<typeof summaryCache.get>,
-  set: summaryCache.set as MockFunction<typeof summaryCache.set>
-};
+// mockedSummaryCache is defined but not used in current tests
+// const mockedSummaryCache = {
+//   get: summaryCache.get as MockFunction<typeof summaryCache.get>,
+//   set: summaryCache.set as MockFunction<typeof summaryCache.set>
+// };
 
 describe('EnhancedSummarizationService', () => {
   // Test data

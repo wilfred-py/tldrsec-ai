@@ -6,7 +6,7 @@
  * and provides isolation levels for different use cases.
  */
 
-import { PrismaClient, Prisma } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 import { getPrismaClient } from './prisma';
 import { logger } from '../logging';
 import { monitoring } from '../monitoring';
@@ -211,7 +211,7 @@ export class TransactionManager {
     
     // Prisma concurrency errors
     if (error.constructor.name === 'PrismaClientKnownRequestError') {
-      const prismaError = error as any;
+      const prismaError = error as { code: string };
       return ['P2002', 'P2034', 'P2025'].includes(prismaError.code);
     }
 
@@ -244,7 +244,7 @@ export class FilingTransactionManager {
   static async processFilingWithTransaction<T>(
     filingId: string,
     userId: string,
-    operation: (tx: Prisma.TransactionClient, filing: any) => Promise<T>,
+    operation: (tx: Prisma.TransactionClient, filing: Record<string, unknown>) => Promise<T>,
     options: TransactionOptions = {}
   ): Promise<TransactionResult<T>> {
     return TransactionManager.executeTransaction(
@@ -311,7 +311,7 @@ export class FilingTransactionManager {
   static async updateUserBudgetWithTransaction(
     userId: string,
     costToAdd: number,
-    operation: (tx: Prisma.TransactionClient, currentUser: any) => Promise<void>,
+    operation: (tx: Prisma.TransactionClient, currentUser: Record<string, unknown>) => Promise<void>,
     options: TransactionOptions = {}
   ): Promise<TransactionResult<{ previousBudget: number; newBudget: number }>> {
     return TransactionManager.executeTransaction(
@@ -400,7 +400,7 @@ export class FilingTransactionManager {
       transactionOptions?: TransactionOptions;
     } = {}
   ): Promise<Array<{ filing: { id: string; userId: string }; result?: T; error?: Error; success: boolean }>> {
-    const { maxConcurrency = 3, continueOnError = true, transactionOptions = {} } = options;
+    const { maxConcurrency = 3, continueOnError = true, transactionOptions: _transactionOptions = {} } = options;
     const results: Array<{ filing: { id: string; userId: string }; result?: T; error?: Error; success: boolean }> = [];
 
     transactionLogger.info('Starting batch processing with isolation', {
@@ -486,7 +486,7 @@ export const transactionUtils = {
   withFilingTransaction: <T>(
     filingId: string,
     userId: string,
-    operation: (tx: Prisma.TransactionClient, filing: any) => Promise<T>,
+    operation: (tx: Prisma.TransactionClient, filing: Record<string, unknown>) => Promise<T>,
     options?: TransactionOptions
   ) => {
     return () => FilingTransactionManager.processFilingWithTransaction(
@@ -503,7 +503,7 @@ export const transactionUtils = {
   withBudgetTransaction: (
     userId: string,
     costToAdd: number,
-    operation: (tx: Prisma.TransactionClient, currentUser: any) => Promise<void>,
+    operation: (tx: Prisma.TransactionClient, currentUser: Record<string, unknown>) => Promise<void>,
     options?: TransactionOptions
   ) => {
     return () => FilingTransactionManager.updateUserBudgetWithTransaction(

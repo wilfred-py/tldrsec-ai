@@ -1,6 +1,6 @@
 /**
- * Configuration for Anthropic Claude AI integration
- * This file contains settings for the Claude API client
+ * Configuration for OpenRouter AI integration
+ * This file contains settings for the OpenRouter API client with xAI model support
  */
 
 /**
@@ -25,13 +25,13 @@ function isBuildTime(): boolean {
  */
 function getEnv(key: string, defaultValue?: string): string {
   // Use test value when in test environment
-  if (process.env.NODE_ENV === 'test' && key === 'ANTHROPIC_API_KEY') {
+  if (process.env.NODE_ENV === 'test' && key === 'OPENROUTER_API_KEY') {
     return 'test-api-key-for-testing-only';
   }
   
   // During build time, provide safe defaults to prevent build failures
   if (isBuildTime()) {
-    if (key === 'ANTHROPIC_API_KEY') {
+    if (key === 'OPENROUTER_API_KEY') {
       return 'build-time-placeholder-key';
     }
     return defaultValue || 'build-time-placeholder';
@@ -51,55 +51,64 @@ function getEnv(key: string, defaultValue?: string): string {
  * Base API configuration
  */
 export const apiConfig = {
-  apiKey: getEnv('ANTHROPIC_API_KEY'),
-  baseUrl: getEnv('ANTHROPIC_API_URL', 'https://api.anthropic.com'),
-  maxRetries: parseInt(getEnv('ANTHROPIC_MAX_RETRIES', '3'), 10),
-  timeout: parseInt(getEnv('ANTHROPIC_TIMEOUT_MS', '120000'), 10),
-  rateLimitPerMinute: parseInt(getEnv('ANTHROPIC_RATE_LIMIT', '30'), 10)
+  apiKey: getEnv('OPENROUTER_API_KEY'),
+  baseUrl: getEnv('OPENROUTER_API_URL', 'https://openrouter.ai/api/v1'),
+  maxRetries: parseInt(getEnv('OPENROUTER_MAX_RETRIES', '3'), 10),
+  timeout: parseInt(getEnv('OPENROUTER_TIMEOUT_MS', '120000'), 10),
+  rateLimitPerMinute: parseInt(getEnv('OPENROUTER_RATE_LIMIT', '60'), 10),
+  headers: {
+    'HTTP-Referer': getEnv('OPENROUTER_HTTP_REFERER', ''),
+    'X-Title': getEnv('OPENROUTER_X_TITLE', 'tldrsec-ai'),
+  }
 };
 
 /**
  * Model configuration - centralized model selection
  */
 export const modelConfig = {
-  // Use ANTHROPIC_MODEL as the primary environment variable for consistency
-  defaultModel: getEnv('ANTHROPIC_MODEL', 'claude-sonnet-4-20250514'),
-  fallbackModel: getEnv('ANTHROPIC_FALLBACK_MODEL', getEnv('ANTHROPIC_MODEL', 'claude-sonnet-4-20250514')),
-  maxInputTokens: parseInt(getEnv('CLAUDE_MAX_INPUT_TOKENS', '100000'), 10),
-  maxOutputTokens: parseInt(getEnv('CLAUDE_MAX_OUTPUT_TOKENS', '4096'), 10),
-  temperature: parseFloat(getEnv('CLAUDE_TEMPERATURE', '0.2')),
-  topP: parseFloat(getEnv('CLAUDE_TOP_P', '0.9')),
-  topK: parseInt(getEnv('CLAUDE_TOP_K', '50'), 10)
+  // Use DEFAULT_AI_MODEL as the primary environment variable
+  defaultModel: getEnv('DEFAULT_AI_MODEL', 'x-ai/grok-4-fast-reasoning'),
+  fallbackModel: getEnv('OPENROUTER_FALLBACK_MODEL', getEnv('DEFAULT_AI_MODEL', 'x-ai/grok-2')),
+  maxInputTokens: parseInt(getEnv('OPENROUTER_MAX_INPUT_TOKENS', '1280000'), 10), // xAI 2M context
+  maxOutputTokens: parseInt(getEnv('OPENROUTER_MAX_OUTPUT_TOKENS', '8000'), 10),
+  temperature: parseFloat(getEnv('OPENROUTER_TEMPERATURE', '0.2')),
+  topP: parseFloat(getEnv('OPENROUTER_TOP_P', '0.9')),
+  topK: parseInt(getEnv('OPENROUTER_TOP_K', '50'), 10)
 };
 
 /**
- * Cost tracking configuration
+ * Cost tracking configuration - OpenRouter/xAI pricing
  */
 export const costConfig = {
-  // Cost per million tokens
-  claudeSonnet4InputCost: parseFloat(getEnv('CLAUDE_SONNET4_INPUT_COST', '3.0')),
-  claudeSonnet4OutputCost: parseFloat(getEnv('CLAUDE_SONNET4_OUTPUT_COST', '15.0')),
-  claude3OpusInputCost: parseFloat(getEnv('CLAUDE3_OPUS_INPUT_COST', '15.0')),
-  claude3OpusOutputCost: parseFloat(getEnv('CLAUDE3_OPUS_OUTPUT_COST', '75.0')),
-  claude3SonnetInputCost: parseFloat(getEnv('CLAUDE3_SONNET_INPUT_COST', '3.0')),
-  claude3SonnetOutputCost: parseFloat(getEnv('CLAUDE3_SONNET_OUTPUT_COST', '15.0')),
-  claude3HaikuInputCost: parseFloat(getEnv('CLAUDE3_HAIKU_INPUT_COST', '0.25')),
-  claude3HaikuOutputCost: parseFloat(getEnv('CLAUDE3_HAIKU_OUTPUT_COST', '1.25'))
+  // Cost per million tokens for xAI models via OpenRouter
+  xaiGrok4InputCost: parseFloat(getEnv('XAI_GROK4_INPUT_COST', '0.30')), // $0.30/M input
+  xaiGrok4OutputCost: parseFloat(getEnv('XAI_GROK4_OUTPUT_COST', '0.50')), // $0.50/M output
+  xaiGrok2InputCost: parseFloat(getEnv('XAI_GROK2_INPUT_COST', '0.15')), // $0.15/M input fallback
+  xaiGrok2OutputCost: parseFloat(getEnv('XAI_GROK2_OUTPUT_COST', '0.25')), // $0.25/M output fallback
+  openRouterSurcharge: parseFloat(getEnv('OPENROUTER_SURCHARGE', '0.10')), // 10% OpenRouter fee
+  maxCostPerRequest: parseFloat(getEnv('MAX_COST_PER_REQUEST', '0.75')) // Max $0.75 per enhanced summary
 };
 
 /**
- * Get the current Claude model from environment variable
+ * Get the default AI model from environment variable
  * This is the centralized function all code should use to get the model
  */
-export function getClaudeModel(): string {
-  return getEnv('ANTHROPIC_MODEL', 'claude-sonnet-4-20250514');
+export function getDefaultModel(): string {
+  return getEnv('DEFAULT_AI_MODEL', 'x-ai/grok-4-fast-reasoning');
 }
 
 /**
  * Get fallback model for error handling
  */
 export function getFallbackModel(): string {
-  return getEnv('ANTHROPIC_FALLBACK_MODEL', getClaudeModel());
+  return getEnv('OPENROUTER_FALLBACK_MODEL', getDefaultModel());
+}
+
+/**
+ * Alias for getDefaultModel to maintain backward compatibility
+ */
+export function getClaudeModel(): string {
+  return getDefaultModel();
 }
 
 // Runtime validation for production environment
@@ -108,81 +117,71 @@ function validateRuntimeConfig(): void {
       process.env.NODE_ENV === 'production' && 
       process.env.VERCEL && // Vercel production
       !isBuildTime() &&
-      !process.env.ANTHROPIC_API_KEY) {
-    console.warn('ANTHROPIC_API_KEY not found in production environment. AI features may not work.');
+      !process.env.OPENROUTER_API_KEY) {
+    console.warn('OPENROUTER_API_KEY not found in production environment. AI features may not work.');
   }
 }
 
-// Validate configuration at module load (server-side only)
 if (typeof window === 'undefined') {
   validateRuntimeConfig();
 }
 
-export const ClaudeConfig = {
+export const OpenRouterConfig = {
   // API key should be set in the .env file, with build-time safety
-  apiKey: isBuildTime() ? 'build-time-placeholder-key' : (process.env.ANTHROPIC_API_KEY || ''),
+  apiKey: isBuildTime() ? 'build-time-placeholder-key' : (process.env.OPENROUTER_API_KEY || ''),
   
   // Model selection - use centralized function
-  model: getClaudeModel(),
+  model: getDefaultModel(),
   
   // Request parameters
-  maxTokens: parseInt(process.env.ANTHROPIC_MAX_TOKENS || '4000', 10),
-  temperature: parseFloat(process.env.ANTHROPIC_TEMPERATURE || '0.3'),
+  maxTokens: parseInt(process.env.OPENROUTER_MAX_TOKENS || '8000', 10),
+  temperature: parseFloat(process.env.OPENROUTER_TEMPERATURE || '0.2'),
   
   // Rate limiting configuration
   rateLimit: {
-    maxRequests: 10,  // Maximum requests per minute
-    maxTokensPerMinute: 100000,  // Token rate limit (if applicable)
-    concurrentRequests: 5,  // Maximum concurrent requests
+    maxRequests: 60,  // Higher for OpenRouter
+    maxTokensPerMinute: 1000000,  // Token rate limit
+    concurrentRequests: 5,
   },
   
   // Retry configuration
   retry: {
     maxRetries: 3,
-    initialDelayMs: 1000,  // Start with 1 second delay
-    maxDelayMs: 10000,     // Maximum 10 second delay
-    backoffFactor: 2,      // Exponential backoff multiplier
+    initialDelayMs: 1000,
+    maxDelayMs: 10000,
+    backoffFactor: 2,
   },
   
   // Timeout configuration (in milliseconds)
-  timeout: 60000,  // 60 seconds
+  timeout: 180000,  // 3 minutes for enhanced analysis
   
-  // Available models
+  // Available models (xAI via OpenRouter)
   availableModels: [
-    'claude-sonnet-4-20250514',
-    'claude-3-opus-20240229', // Legacy model kept for backward compatibility
-    'claude-3-sonnet-20240229',
-    'claude-3-haiku-20240307',
-    'claude-2.1',
-    'claude-2.0',
-    'claude-instant-1.2',
+    'x-ai/grok-4-fast-reasoning',
+    'x-ai/grok-2',
+    'meta-llama/llama-3.1-405b-instruct:free',
+    'google/gemini-pro-1.5:free',
   ],
   
-  // Model capabilities and constraints
+  // Model capabilities and constraints (xAI focused)
   modelInfo: {
-    'claude-sonnet-4-20250514': {
-      contextWindow: 200000,
-      costPerInputToken: 0.000003,  // $3 per million input tokens
-      costPerOutputToken: 0.000015, // $15 per million output tokens
-      strengths: 'Latest Claude Sonnet model with improved capabilities',
+    'x-ai/grok-4-fast-reasoning': {
+      contextWindow: 2000000, // 2M tokens
+      costPerInputToken: 0.0000003,  // $0.30 per million
+      costPerOutputToken: 0.0000005, // $0.50 per million
+      strengths: 'Advanced reasoning with 2M context window, optimized for financial analysis',
     },
-    'claude-3-opus-20240229': { // Legacy model pricing kept for backward compatibility
-      contextWindow: 200000,
-      costPerInputToken: 0.000015,  // $15 per million input tokens
-      costPerOutputToken: 0.000075, // $75 per million output tokens
-      strengths: 'Most powerful Claude model, best for complex reasoning',
+    'x-ai/grok-2': {
+      contextWindow: 128000,
+      costPerInputToken: 0.00000015,
+      costPerOutputToken: 0.00000025,
+      strengths: 'Reliable fallback model for SEC filing analysis',
     },
-    'claude-3-sonnet-20240229': {
-      contextWindow: 180000,
-      costPerInputToken: 0.000003,  // $3 per million input tokens
-      costPerOutputToken: 0.000015, // $15 per million output tokens
-      strengths: 'Excellent balance of intelligence and speed',
-    },
-    'claude-3-haiku-20240307': {
-      contextWindow: 150000,
-      costPerInputToken: 0.00000025, // $0.25 per million input tokens
-      costPerOutputToken: 0.00000125, // $1.25 per million output tokens
-      strengths: 'Fastest Claude model, good for quick responses',
+    'meta-llama/llama-3.1-405b-instruct:free': {
+      contextWindow: 128000,
+      costPerInputToken: 0.000000, // Free tier
+      costPerOutputToken: 0.000000,
+      strengths: 'Free fallback for basic summarization',
     },
   }
-}; 
+};

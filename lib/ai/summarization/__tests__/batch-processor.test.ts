@@ -6,7 +6,6 @@
  * real modules to avoid constructor errors.
  */
 
-import { EventEmitter } from 'events';
 import { jest } from '@jest/globals';
 
 // Mock types
@@ -50,7 +49,7 @@ interface SummaryResult {
 type ChunkResult = SummaryResult;
 
 // Mock implementation of processSingleChunk
-const processSingleChunk = jest.fn().mockImplementation((chunk: string, filingType: SECFilingType, filingRecord: FilingRecord, options: SummaryOptions) => {
+const processSingleChunk = jest.fn().mockImplementation((chunk: string, _filingType: SECFilingType, _filingRecord: FilingRecord, _options: SummaryOptions) => {
   return Promise.resolve({
     summaryId: `chunk-${chunk}`,
     summaryText: `Summary for ${chunk}`,
@@ -366,9 +365,10 @@ describe('Batch Processor', () => {
     expect(result.outputTokens).toBe(0);
     expect(result.cost).toBe(0);
   });
-});
+
+  test('should handle errors in chunk processing', async () => {
     // Setup mock to throw an error for the second chunk
-    mockedProcessSingleChunk.mockImplementation((chunk: string, filingType: SECFilingType, filingRecord: any, options: any): Promise<EnhancedSummarizationResult> => {
+    mockedProcessSingleChunk.mockImplementation((chunk: string, filingType: SECFilingType, filingRecord: Record<string, unknown>, options: Record<string, unknown>): Promise<EnhancedSummarizationResult> => {
       if (chunk === mockChunks[1]) {
         return Promise.reject(new Error('Test error'));
       }
@@ -461,7 +461,7 @@ describe('Batch Processor', () => {
     let maxConcurrentExecutions = 0;
     
     // Mock implementation that tracks concurrency
-    mockedProcessSingleChunk.mockImplementation(async (chunk: string, filingType: SECFilingType, filingRecord: any, options: any): Promise<EnhancedSummarizationResult> => {
+    mockedProcessSingleChunk.mockImplementation(async (chunk: string, filingType: SECFilingType, filingRecord: Record<string, unknown>, options: Record<string, unknown>): Promise<EnhancedSummarizationResult> => {
       concurrentExecutions++;
       maxConcurrentExecutions = Math.max(maxConcurrentExecutions, concurrentExecutions);
       

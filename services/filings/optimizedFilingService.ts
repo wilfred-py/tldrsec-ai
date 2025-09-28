@@ -7,7 +7,8 @@
 
 import { FilingType } from '../../types/sec/filing';
 import { FilingSummaryResult } from '../filing/types';
-import { DirectClaudeClient } from '../../lib/ai/directClaudeClient';
+import { openRouterClient } from '../../lib/ai/openrouter-client';
+import { getDefaultModel } from '../../lib/ai/config';
 import { fetchEnhancedDocumentContent } from './extractors/enhancedDocumentScraper';
 import * as secService from '../secService';
 import { generateFallbackSummary, generateFallbackKeyPoints } from './summaries/fallbackSummaryGenerator';
@@ -174,9 +175,9 @@ export interface OptimizedFilingConfig {
   prioritizeSpeed?: boolean;
   
   // Claude configuration
-  claudeModel?: string;
-  claudeTemperature?: number;
-  claudeMaxTokens?: number;
+  aiModel?: string;
+  temperature?: number;
+  maxTokens?: number;
 }
 
 /**
@@ -184,7 +185,7 @@ export interface OptimizedFilingConfig {
  */
 export class OptimizedFilingService {
   private cache: CacheInterface;
-  private claudeClient: DirectClaudeClient;
+  private aiClient: typeof openRouterClient;
   private config: Required<OptimizedFilingConfig>;
   private cleanupInterval?: NodeJS.Timeout;
 
@@ -200,22 +201,16 @@ export class OptimizedFilingService {
       enableAsyncProcessing: config.enableAsyncProcessing ?? false,
       enableBatchProcessing: config.enableBatchProcessing ?? false,
       prioritizeSpeed: config.prioritizeSpeed ?? true,
-      claudeModel: config.claudeModel ?? 'claude-sonnet-4-20250514',
-      claudeTemperature: config.claudeTemperature ?? 0.3,
-      claudeMaxTokens: config.claudeMaxTokens ?? 4000
+      aiModel: config.aiModel ?? getDefaultModel(),
+      temperature: config.temperature ?? 0.3,
+      maxTokens: config.maxTokens ?? 4000
     };
 
     // Initialize cache (in production, this would be Redis)
     this.cache = new MemoryCache();
 
-    // Initialize Claude client
-    this.claudeClient = new DirectClaudeClient({
-      model: this.config.claudeModel,
-      temperature: this.config.claudeTemperature,
-      maxTokens: this.config.claudeMaxTokens,
-      enableChunking: this.config.enableChunking,
-      maxRetries: this.config.maxRetries
-    });
+    // Initialize OpenRouter AI client
+    this.aiClient = openRouterClient;
 
     // Cleanup memory cache periodically (for production Redis, this isn't needed)
     if (this.config.enableInMemoryCache && this.cache instanceof MemoryCache) {
@@ -435,21 +430,33 @@ export class OptimizedFilingService {
     // Generate summary with direct Claude
     try {
       const summarizeStart = Date.now();
-      const claudeResult = await this.claudeClient.summarizeFiling(
-        content,
-        formType as FilingType,
+      // Generate AI summary using OpenRouter
+      const prompt = `Please analyze this SEC ${formType} filing for ${companyInfo.name || ticker} (${ticker}) and provide a comprehensive summary in JSON format with the following structure:
+{
+  "summary": "Detailed 300-500 word analysis",
+  "keyPoints": ["Key point 1", "Key point 2", "Key point 3"],
+  "riskFactors": ["Risk factor 1", "Risk factor 2"],
+  "financialHighlights": ["Financial highlight 1", "Financial highlight 2"]
+}
+
+Filing content:
+${content}`;
+      
+      const aiResult = await this.aiClient.sendMessage(
+        [{ role: 'user', content: prompt }],
         {
-          ticker: ticker,
-          companyName: companyInfo.name || ticker
+          model: this.config.aiModel,
+          maxTokens: this.config.maxTokens,
+          temperature: this.config.temperature
         }
       );
       
       safeMonitoring.recordDuration('optimized_claude_summarization_ms', Date.now() - summarizeStart, {
         ticker,
         formType,
-        input_tokens: claudeResult.inputTokens.toString(),
-        output_tokens: claudeResult.outputTokens.toString(),
-        chunks_processed: claudeResult.chunksProcessed?.toString() || '1'
+        input_tokens: aiResult.usage.inputTokens.toString(),
+        output_tokens: aiResult.usage.outputTokens.toString(),
+        model: aiResult.model
       });
       
       // Create summary result
@@ -459,15 +466,15 @@ export class OptimizedFilingService {
         filingType: formType as FilingType,
         filingDate: filing.filingDate || new Date().toISOString(),
         accessionNumber: filing.accessionNumber || '',
-        summaryText: typeof claudeResult.summary === 'string' ? claudeResult.summary : JSON.stringify(claudeResult.summary),
-        keyPoints: this.extractKeyPoints(claudeResult.summary),
+        summaryText: aiResult.content,
+        keyPoints: this.extractKeyPoints(aiResult.content),
         url: htmlViewerUrl,
         filingUrl: filing.filingUrl,
-        tokensUsed: claudeResult.inputTokens + claudeResult.outputTokens,
-        inputTokens: claudeResult.inputTokens,
-        outputTokens: claudeResult.outputTokens,
-        model: claudeResult.model,
-        cost: claudeResult.cost,
+        tokensUsed: aiResult.usage.inputTokens + aiResult.usage.outputTokens,
+        inputTokens: aiResult.usage.inputTokens,
+        outputTokens: aiResult.usage.outputTokens,
+        model: aiResult.model,
+        cost: aiResult.cost.totalCost,
         processingStatus: 'COMPLETED',
         processingTimeMs: Date.now() - startTime
       };
@@ -533,6 +540,11 @@ export class OptimizedFilingService {
         const [ticker, formType] = cacheKey.split('-');
         const dbResult = await this.findExistingDatabaseSummary(ticker, formType);
         if (dbResult) {
+          // Track cache access for analytics
+          if ((dbResult as any).id) {
+            await this.trackCacheAccessAnalytics((dbResult as any).id, 'database_cache_hit');
+          }
+          
           // Also populate higher-level caches
           if (this.config.enableInMemoryCache) {
             await this.cache.set(cacheKey, JSON.stringify(dbResult), this.config.cacheTimeoutSeconds);
@@ -939,6 +951,69 @@ export class OptimizedFilingService {
     });
     
     return results;
+  }
+
+  /**
+   * Track cache access for analytics
+   */
+  private async trackCacheAccessAnalytics(summaryId: string, accessType: string): Promise<void> {
+    try {
+      // Update the summary's cache usage count and last accessed time
+      await prisma.summary.update({
+        where: { id: summaryId },
+        data: {
+          cacheUsageCount: { increment: 1 },
+          lastCacheUsed: new Date()
+        }
+      });
+      
+      // Create a detailed cache access record
+      await prisma.summaryCacheAccess.create({
+        data: {
+          summaryId: summaryId,
+          accessType: accessType,
+          accessedAt: new Date()
+        }
+      });
+      
+      optimizedLogger.debug(`Cache access tracked: ${summaryId} (${accessType})`);
+    } catch (error) {
+      optimizedLogger.warn('Failed to track cache access', { error, summaryId, accessType });
+      // Don't throw - analytics failures shouldn't break main functionality
+    }
+  }
+  
+  /**
+   * Track email delivery for analytics
+   */
+  private async trackEmailDeliveryAnalytics(summaryId: string, userEmail: string, deliveryType: string = 'individual'): Promise<void> {
+    try {
+      // Create an email delivery record
+      await prisma.summaryEmailDelivery.create({
+        data: {
+          summaryId: summaryId,
+          userEmail: userEmail,
+          deliveryType: deliveryType,
+          deliveredAt: new Date(),
+          deliverySuccess: true
+        }
+      });
+      
+      // Update the summary to mark it as sent to user if not already
+      await prisma.summary.update({
+        where: { id: summaryId },
+        data: {
+          sentToUser: true,
+          emailDeliveryCount: { increment: 1 },
+          lastEmailDelivered: new Date()
+        }
+      });
+      
+      optimizedLogger.debug(`Email delivery tracked: ${summaryId} to ${userEmail}`);
+    } catch (error) {
+      optimizedLogger.warn('Failed to track email delivery', { error, summaryId, userEmail });
+      // Don't throw - analytics failures shouldn't break main functionality
+    }
   }
 
   /**

@@ -37,6 +37,8 @@ model User {
   filingUsage         FilingUsage[]
   usagePeriods        UsagePeriod[]
   auditLogs           AuditLog[]
+  cacheAccesses       SummaryCacheAccess[]
+  emailDeliveries     SummaryEmailDelivery[]
 }
 
 enum SubscriptionTier {
@@ -88,8 +90,33 @@ model Summary {
   secFilingId           String?
   tokensUsed            Int?
   metadata              Json?      // Enhanced processing metadata (chunks, strategy, etc.)
+  
+  // Enhanced Cost and Token Tracking
+  inputTokens           Int?       // Tokens used for input
+  outputTokens          Int?       // Tokens generated in output  
+  inputCostPerToken     Float?     // Cost per input token at time of generation
+  outputCostPerToken    Float?     // Cost per output token at time of generation
+  totalCost             Float?     // Total cost for this summary generation
+  
+  // Cache and Reuse Analytics
+  isCacheHit            Boolean    @default(false)  // Was this served from cache?
+  cacheUsageCount       Int        @default(0)      // How many times this cached summary was reused
+  lastCacheUsed         DateTime?  // Last time this cache was accessed
+  cacheVersion          String?    // Cache version identifier
+  
+  // Performance Metrics
+  modelVersion          String?    // AI model version used
+  promptVersion         String?    // Prompt template version
+  
+  // Business Analytics
+  uniqueUsersServed     Int        @default(0)      // Number of unique users who received this summary
+  totalEmailsSent       Int        @default(0)      // Total emails sent with this summary
+  
+  // Relationships
   secFiling             SecFiling? @relation(fields: [secFilingId], references: [id])
   ticker                Ticker     @relation(fields: [tickerId], references: [id], onDelete: Cascade)
+  cacheAccesses         SummaryCacheAccess[]
+  emailDeliveries       SummaryEmailDelivery[]
 }
 
 model CikMapping {
@@ -652,6 +679,40 @@ model CronExecutionContext {
   
   @@index([executionId])
   @@index([isMarketHours, createdAt])
+}
+
+// Track each time a cached summary is accessed
+model SummaryCacheAccess {
+  id                    String     @id @default(uuid())
+  summaryId             String
+  userId                String
+  accessedAt            DateTime   @default(now())
+  accessType            String     // EMAIL, API, DASHBOARD
+  
+  summary               Summary    @relation(fields: [summaryId], references: [id], onDelete: Cascade)
+  user                  User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([summaryId, accessedAt])
+  @@index([userId, accessedAt])
+}
+
+// Track email deliveries per summary
+model SummaryEmailDelivery {
+  id                    String     @id @default(uuid())
+  summaryId             String
+  userId                String
+  emailAddress          String
+  sentAt                DateTime   @default(now())
+  deliveryStatus        String     @default("sent") // sent, delivered, bounced, opened, clicked
+  emailServiceId        String?    // ID from email service (e.g., Resend)
+  metadata              Json?      // Additional tracking data
+  
+  summary               Summary    @relation(fields: [summaryId], references: [id], onDelete: Cascade)
+  user                  User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([summaryId, sentAt])
+  @@index([userId, sentAt])
+  @@index([deliveryStatus, sentAt])
 }
 
 // Audit logging for financial and security operations

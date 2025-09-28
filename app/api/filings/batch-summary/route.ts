@@ -16,7 +16,7 @@ import { enhancedFilingService } from '../../../../services/enhancedFilingServic
 import { logger } from '../../../../lib/logging';
 import { FilingType } from '../../../../lib/sec-edgar/types';
 import { getFormMetadata } from '../../../../lib/sec-edgar/form-registry';
-import { prisma } from '../../../../lib/db';
+import { getPrismaClient } from '../../../../lib/db/prisma';
 
 // API route logger
 const apiLogger = logger.child('api-batch-summary');
@@ -101,6 +101,7 @@ export async function POST(request: NextRequest) {
     
     // Record request in analytics
     if (userId) {
+      const prisma = getPrismaClient();
       await prisma.userActivity.create({
         data: {
           userId,

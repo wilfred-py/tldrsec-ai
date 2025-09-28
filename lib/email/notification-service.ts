@@ -62,7 +62,7 @@ export class NotificationService implements NotificationServiceInterface {
   /**
    * Get singleton instance
    */
-  static getInstance(customEmailClient?: any): NotificationService {
+  static getInstance(customEmailClient?: Record<string, unknown>): NotificationService {
     if (!NotificationService.instance) {
       NotificationService.instance = new NotificationService(customEmailClient);
     }
@@ -342,7 +342,7 @@ export class NotificationService implements NotificationServiceInterface {
       
       // Filter users based on their ticker and form type preferences
       return users
-        .filter((user: any) => {
+        .filter((user: Record<string, unknown>) => {
           // If user has no preferences, use legacy fields or default to true
           if (!user.preferences) {
             // Legacy: If user has specific tickers, check if this ticker is included
@@ -364,7 +364,7 @@ export class NotificationService implements NotificationServiceInterface {
           }
           
           // Use new preference structure
-          const prefs = user.preferences as any;
+          const prefs = user.preferences as Record<string, unknown>;
           
           // Skip if user doesn't want this form type
           if (prefs.notifications?.filingTypes) {
@@ -399,13 +399,13 @@ export class NotificationService implements NotificationServiceInterface {
           // Check if user is watching this specific ticker
           return tickers.some((t: { symbol: string }) => t.symbol.toUpperCase() === upperTicker);
         })
-        .map((user: any) => {
+        .map((user: Record<string, unknown>) => {
           // Convert to UserNotificationPreferences
           return {
             userId: user.id,
             email: user.email,
             emailNotificationPreference: user.preferences 
-              ? (user.preferences as any).notifications?.emailFrequency || NotificationPreference.IMMEDIATE
+              ? (user.preferences as Record<string, unknown>).notifications?.emailFrequency || NotificationPreference.IMMEDIATE
               : (user.notificationPreference as NotificationPreference) || NotificationPreference.IMMEDIATE,
             watchedTickers: user.watchedTickers || [],
             watchedFormTypes: user.watchedFormTypes || []

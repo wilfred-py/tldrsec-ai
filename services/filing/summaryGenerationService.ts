@@ -1,141 +1,24 @@
-import { Anthropic } from '@anthropic-ai/sdk';
+/**
+ * SEC Filing Summary Generation Service with OpenRouter xAI Integration
+ * 
+ * Provides comprehensive AI-powered summarization of SEC filings using
+ * OpenRouter's xAI models with intelligent fallback and retry mechanisms
+ */
+
+import { openRouterClient, OpenRouterClient } from '../../lib/ai/openrouter-client';
 import { logger } from '../../lib/logging';
 import { SummaryGenerationResult, SECFiling, Company } from './types';
 import { normalizeFormType } from './formTypeService';
 
-// Circuit breaker state management
-interface CircuitBreakerState {
-  failures: number;
-  lastFailureTime: number;
-  state: 'CLOSED' | 'OPEN' | 'HALF_OPEN';
-}
-
-// Global circuit breaker for AI service
-const circuitBreaker: CircuitBreakerState = {
-  failures: 0,
-  lastFailureTime: 0,
-  state: 'CLOSED'
-};
-
-// Circuit breaker configuration
-const CIRCUIT_BREAKER_CONFIG = {
-  failureThreshold: 5, // Open circuit after 5 consecutive failures
-  timeoutMs: 30000, // 30 seconds timeout
-  recoveryTimeMs: 60000 // 1 minute before attempting recovery
-};
-
-// Error classification for intelligent retry
-enum ErrorType {
-  TRANSIENT = 'TRANSIENT', // Temporary errors that should be retried
-  PERMANENT = 'PERMANENT', // Permanent errors that should not be retried
-  RATE_LIMIT = 'RATE_LIMIT', // Rate limiting errors with special handling
-  AUTHENTICATION = 'AUTHENTICATION', // Auth errors - don't retry
-  UNKNOWN = 'UNKNOWN'
-}
-
-function classifyError(error: Error): ErrorType {
-  const message = error.message.toLowerCase();
-  
-  if (message.includes('rate limit') || message.includes('429')) {
-    return ErrorType.RATE_LIMIT;
-  }
-  if (message.includes('authentication') || message.includes('unauthorized') || message.includes('401')) {
-    return ErrorType.AUTHENTICATION;
-  }
-  if (message.includes('timeout') || message.includes('network') || message.includes('connection')) {
-    return ErrorType.TRANSIENT;
-  }
-  if (message.includes('invalid') || message.includes('malformed') || message.includes('400')) {
-    return ErrorType.PERMANENT;
-  }
-  
-  return ErrorType.UNKNOWN;
-}
-
-function shouldRetry(error: Error, attempt: number, maxRetries: number): boolean {
-  const errorType = classifyError(error);
-  
-  if (attempt >= maxRetries) return false;
-  if (errorType === ErrorType.PERMANENT) return false;
-  if (errorType === ErrorType.AUTHENTICATION) return false;
-  
-  return true;
-}
-
-function getBackoffDelay(attempt: number, errorType: ErrorType): number {
-  let baseDelay = Math.pow(2, attempt) * 1000; // Exponential backoff
-  
-  // Special handling for rate limits
-  if (errorType === ErrorType.RATE_LIMIT) {
-    baseDelay = Math.max(baseDelay, 30000); // Minimum 30 seconds for rate limits
-  }
-  
-  // Add jitter to prevent thundering herd
-  const jitter = Math.random() * 1000;
-  return Math.min(baseDelay + jitter, 300000); // Max 5 minutes
-}
-
-function updateCircuitBreaker(success: boolean): void {
-  const now = Date.now();
-  
-  if (success) {
-    circuitBreaker.failures = 0;
-    circuitBreaker.state = 'CLOSED';
-  } else {
-    circuitBreaker.failures++;
-    circuitBreaker.lastFailureTime = now;
-    
-    if (circuitBreaker.failures >= CIRCUIT_BREAKER_CONFIG.failureThreshold) {
-      circuitBreaker.state = 'OPEN';
-      logger.error('Circuit breaker OPENED - AI service calls will be blocked', {
-        failures: circuitBreaker.failures,
-        threshold: CIRCUIT_BREAKER_CONFIG.failureThreshold
-      });
-    }
-  }
-}
-
-function checkCircuitBreaker(): { allowed: boolean; reason?: string } {
-  const now = Date.now();
-  
-  if (circuitBreaker.state === 'CLOSED') {
-    return { allowed: true };
-  }
-  
-  if (circuitBreaker.state === 'OPEN') {
-    const timeSinceLastFailure = now - circuitBreaker.lastFailureTime;
-    
-    if (timeSinceLastFailure >= CIRCUIT_BREAKER_CONFIG.recoveryTimeMs) {
-      circuitBreaker.state = 'HALF_OPEN';
-      logger.info('Circuit breaker entering HALF_OPEN state - allowing test request');
-      return { allowed: true };
-    }
-    
-    return { 
-      allowed: false, 
-      reason: `Circuit breaker OPEN - ${Math.ceil((CIRCUIT_BREAKER_CONFIG.recoveryTimeMs - timeSinceLastFailure) / 1000)}s until retry` 
-    };
-  }
-  
-  if (circuitBreaker.state === 'HALF_OPEN') {
-    // Allow one request to test if service is healthy
-    return { allowed: true };
-  }
-  
-  return { allowed: false, reason: 'Circuit breaker in unknown state' };
-}
-
-// Initialize Anthropic client
-const anthropic = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY || ''
-});
+// Initialize OpenRouter client for summary generation
+const aiClient = openRouterClient;
 
 /**
- * Generates a prompt for the AI to summarize a filing
+ * Generates a comprehensive prompt for AI summarization of SEC filings
  * @param content Document content to summarize
  * @param filing SEC filing information
  * @param company Company information
- * @returns Prompt for the AI
+ * @returns Optimized prompt for xAI models
  */
 function generateSummaryPrompt(content: string, filing: SECFiling, company: Company): string {
   const companyName = company.name || 'Unknown Company';
@@ -143,338 +26,419 @@ function generateSummaryPrompt(content: string, filing: SECFiling, company: Comp
   const formType = normalizeFormType(filing.formType || 'UNKNOWN');
   const filingDate = filing.filingDate ? new Date(filing.filingDate).toLocaleDateString() : 'Unknown date';
   
-  // Create a prompt for the AI
-  const prompt = `You are an expert financial analyst specializing in SEC filings. 
-Summarize the following ${formType} filing for ${companyName}${ticker ? ` (${ticker})` : ''} filed on ${filingDate}.
+  // Enhanced prompt optimized for xAI models with 2M context window
+  const prompt = `You are an expert financial analyst specializing in SEC filings analysis. 
+Analyze and summarize the following ${formType} filing for ${companyName}${ticker ? ` (${ticker})` : ''} filed on ${filingDate}.
+
+Your analysis should be comprehensive yet concise, focusing on material information that would be valuable to investors and stakeholders.
 
 Focus on:
-1. Key financial metrics and changes
-2. Important business developments
-3. Risk factors or warnings
-4. Management's outlook and guidance
-5. Any unusual or noteworthy items
+1. Key financial metrics, changes, and performance indicators
+2. Important business developments, strategic initiatives, and operational changes
+3. Material risk factors, legal issues, or regulatory concerns
+4. Management's guidance, outlook, and strategic direction
+5. Any unusual, noteworthy, or material items that could impact the business
+6. Comparative analysis where applicable (year-over-year, quarter-over-quarter)
 
 Format your response as valid JSON with the following structure:
 {
-  "summary": "A concise 1-2 paragraph overview of the filing",
+  "summary": "A comprehensive 2-3 paragraph overview highlighting the most material aspects of the filing",
   "financialHighlights": [
-    {"metric": "Revenue", "value": "$X million", "yearOverYearChange": "+/-X%"},
-    {"metric": "Net Income", "value": "$X million", "yearOverYearChange": "+/-X%"}
+    {
+      "metric": "Revenue", 
+      "value": "$X million", 
+      "yearOverYearChange": "+/-X%",
+      "significance": "Brief explanation of what this means for the business"
+    },
+    {
+      "metric": "Net Income", 
+      "value": "$X million", 
+      "yearOverYearChange": "+/-X%",
+      "significance": "Brief explanation of what this means for the business"
+    }
   ],
   "businessHighlights": [
-    {"detail": "Key business development 1"},
-    {"detail": "Key business development 2"}
+    {
+      "category": "Strategic Initiative",
+      "detail": "Description of key business development",
+      "impact": "Expected impact on the business"
+    },
+    {
+      "category": "Operational Change",
+      "detail": "Description of operational development",
+      "impact": "Expected impact on the business"
+    }
   ],
   "riskFactors": [
-    {"description": "Risk factor 1"},
-    {"description": "Risk factor 2"}
+    {
+      "category": "Market Risk",
+      "description": "Description of the risk factor",
+      "severity": "High/Medium/Low",
+      "mitigation": "Company's approach to managing this risk if mentioned"
+    }
   ],
-  "keyTakeaway": "The most important insight from this filing"
+  "managementOutlook": {
+    "guidance": "Management's forward-looking statements or guidance",
+    "strategy": "Key strategic priorities or initiatives mentioned",
+    "concerns": "Any concerns or challenges highlighted by management"
+  },
+  "keyTakeaway": "The single most important insight or development from this filing that investors should know",
+  "investorImpact": "Overall assessment of how this filing might impact the company's investment thesis"
 }
 
-Here is the filing content:
-${content.substring(0, 32000)}`;
+IMPORTANT: Ensure all financial figures are accurate and sourced from the filing. If specific metrics are not available, indicate "Not disclosed" rather than estimating. Focus on material information only.
+
+Here is the filing content (utilizing the full 2M token context window for comprehensive analysis):
+${content.substring(0, 1800000)}`; // Utilize xAI's 2M token context window
 
   return prompt;
 }
 
 /**
- * Generates a summary of a filing using AI with enhanced retry mechanisms
+ * Generate AI summary using OpenRouter xAI models with comprehensive error handling
  * @param content Document content to summarize
- * @param filing SEC filing information
+ * @param filing SEC filing information  
  * @param company Company information
- * @returns Summary generation result
+ * @returns Summary generation result with enhanced metadata
  */
 export async function generateAISummary(
   content: string, 
   filing: SECFiling, 
   company: Company
 ): Promise<SummaryGenerationResult> {
-  const correlationId = `ai_summary_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+  const correlationId = `xai_summary_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+  const startTime = Date.now();
   
   try {
-    // Check circuit breaker before attempting API call
-    const circuitCheck = checkCircuitBreaker();
-    if (!circuitCheck.allowed) {
-      const error = new Error(`Circuit breaker preventing API call: ${circuitCheck.reason}`);
-      updateCircuitBreaker(false);
-      throw error;
-    }
-    
-    if (!process.env.ANTHROPIC_API_KEY) {
-      throw new Error('ANTHROPIC_API_KEY not set');
-    }
-    
     const formType = normalizeFormType(filing.formType || 'UNKNOWN');
     const prompt = generateSummaryPrompt(content, filing, company);
     
-    logger.info(`Generating AI summary for ${company.ticker || 'unknown'} ${formType} filing`, {
+    logger.info(`Starting xAI summary generation via OpenRouter`, {
       correlationId,
-      circuitBreakerState: circuitBreaker.state,
-      circuitBreakerFailures: circuitBreaker.failures,
-      contentLength: content.length
+      ticker: company.ticker,
+      formType,
+      contentLength: content.length,
+      model: process.env.DEFAULT_AI_MODEL || 'grok-4-fast-reasoning'
     });
-    
-    // Call the Anthropic API with timeout
-    const timeoutPromise = new Promise((_, reject) => {
-      setTimeout(() => reject(new Error('API call timeout')), CIRCUIT_BREAKER_CONFIG.timeoutMs);
-    });
-    
-    const apiPromise = anthropic.messages.create({
-      model: 'claude-3-opus-20240229',
-      max_tokens: 4000,
-      temperature: 0.2,
-      system: 'You are a financial expert specializing in SEC filing analysis. Provide accurate, concise summaries in valid JSON format.',
-      messages: [
-        { role: 'user', content: prompt }
-      ]
-    });
-    
-    const response = await Promise.race([apiPromise, timeoutPromise]) as Anthropic.Messages.Message;
-    
-    // Record success in circuit breaker
-    updateCircuitBreaker(true);
-    
-    // Extract the response content
-    const responseContent = response.content[0].text;
-    
-    // Parse the JSON response
+
+    // Call OpenRouter with xAI model selection and fallback
+    const response = await aiClient.sendMessage(
+      [{ role: 'user', content: prompt }],
+      {
+        model: process.env.DEFAULT_AI_MODEL,
+        maxTokens: 4000,
+        temperature: 0.1,
+        system: 'You are a financial expert specializing in SEC filing analysis. Provide accurate, comprehensive summaries in valid JSON format with detailed insights valuable to investors.',
+        requestType: 'standard',
+        timeout: 120000, // 2 minutes for comprehensive analysis
+        requiredCapabilities: ['reasoning'],
+        costLimit: 0.50 // $0.50 maximum per summary for cost control
+      }
+    );
+
+    // Extract and parse the JSON response
+    const responseContent = response.content;
     let summaryJSON: Record<string, unknown>;
+    
     try {
-      // Extract JSON from the response (it might be wrapped in markdown code blocks)
+      // Enhanced JSON extraction for xAI model responses
       const jsonMatch = responseContent.match(/```(?:json)?\s*({[\s\S]*?})\s*```/) || 
-                         responseContent.match(/({[\s\S]*})/);
+                        responseContent.match(/({[\s\S]*})/);
       
       if (jsonMatch && jsonMatch[1]) {
         summaryJSON = JSON.parse(jsonMatch[1]);
       } else {
         summaryJSON = JSON.parse(responseContent);
       }
-    } catch (error) {
-      logger.error(`Error parsing AI summary JSON`, {
+    } catch (parseError) {
+      logger.error(`JSON parsing failed for xAI response`, {
         correlationId,
-        error: error instanceof Error ? error.message : String(error),
+        error: parseError instanceof Error ? parseError.message : String(parseError),
         responsePreview: responseContent.substring(0, 200)
       });
-      throw new Error('Failed to parse AI summary response');
+      throw new Error(`Failed to parse AI response JSON: ${parseError instanceof Error ? parseError.message : String(parseError)}`);
     }
+
+    // Extract and structure the summary data
+    const summary = typeof summaryJSON.summary === 'string' ? summaryJSON.summary : '';
+    const keyTakeaway = typeof summaryJSON.keyTakeaway === 'string' ? summaryJSON.keyTakeaway : '';
+    const investorImpact = typeof summaryJSON.investorImpact === 'string' ? summaryJSON.investorImpact : '';
     
-    // Extract summary and key points
-    const summary = typeof summaryJSON.summary === 'string' ? summaryJSON.summary : 
-      `Summary for ${company.name || 'Unknown Company'}${company.ticker ? ` (${company.ticker})` : ''} ${formType} filing`;
-    
-    // Extract key points from the summary JSON
+    // Build comprehensive key points from structured response
     let keyPoints: string[] = [];
     
     // Add financial highlights
     if (Array.isArray(summaryJSON.financialHighlights)) {
-      const financialHighlights = summaryJSON.financialHighlights as Array<{metric: string, value: string, yearOverYearChange: string}>;
+      const financialHighlights = summaryJSON.financialHighlights as Array<{
+        metric: string; 
+        value: string; 
+        yearOverYearChange?: string;
+        significance?: string;
+      }>;
       keyPoints = keyPoints.concat(
-        financialHighlights.map(item => `${item.metric}: ${item.value} (${item.yearOverYearChange})`)
+        financialHighlights.map(item => 
+          `${item.metric}: ${item.value}${item.yearOverYearChange ? ` (${item.yearOverYearChange})` : ''}${item.significance ? ` - ${item.significance}` : ''}`
+        )
       );
     }
     
-    // Add business highlights
+    // Add business highlights  
     if (Array.isArray(summaryJSON.businessHighlights)) {
-      const businessHighlights = summaryJSON.businessHighlights as Array<{detail: string}>;
+      const businessHighlights = summaryJSON.businessHighlights as Array<{
+        category?: string;
+        detail: string;
+        impact?: string;
+      }>;
       keyPoints = keyPoints.concat(
-        businessHighlights.map(item => item.detail)
+        businessHighlights.map(item => 
+          `${item.category ? `${item.category}: ` : ''}${item.detail}${item.impact ? ` (Impact: ${item.impact})` : ''}`
+        )
       );
     }
     
     // Add risk factors
     if (Array.isArray(summaryJSON.riskFactors)) {
-      const riskFactors = summaryJSON.riskFactors as Array<{description: string}>;
+      const riskFactors = summaryJSON.riskFactors as Array<{
+        category?: string;
+        description: string;
+        severity?: string;
+      }>;
       keyPoints = keyPoints.concat(
-        riskFactors.map(item => item.description)
+        riskFactors.map(item => 
+          `Risk - ${item.category ? `${item.category}: ` : ''}${item.description}${item.severity ? ` (${item.severity} severity)` : ''}`
+        )
       );
     }
     
-    // Add key takeaway
-    if (typeof summaryJSON.keyTakeaway === 'string') {
-      keyPoints.push(summaryJSON.keyTakeaway);
+    // Add management outlook
+    if (typeof summaryJSON.managementOutlook === 'object' && summaryJSON.managementOutlook) {
+      const outlook = summaryJSON.managementOutlook as {
+        guidance?: string;
+        strategy?: string;
+        concerns?: string;
+      };
+      if (outlook.guidance) keyPoints.push(`Management Guidance: ${outlook.guidance}`);
+      if (outlook.strategy) keyPoints.push(`Strategic Priority: ${outlook.strategy}`);
+      if (outlook.concerns) keyPoints.push(`Management Concerns: ${outlook.concerns}`);
     }
+    
+    // Add key takeaway and investor impact
+    if (keyTakeaway) keyPoints.push(`Key Takeaway: ${keyTakeaway}`);
+    if (investorImpact) keyPoints.push(`Investor Impact: ${investorImpact}`);
     
     // Filter out empty key points
     keyPoints = keyPoints.filter(Boolean);
     
-    // Calculate token usage and cost
-    const inputTokens = response.usage.input_tokens;
-    const outputTokens = response.usage.output_tokens;
+    // Calculate processing metrics
+    const executionTime = Date.now() - startTime;
+    const inputTokens = response.usage.inputTokens;
+    const outputTokens = response.usage.outputTokens;
     const totalTokens = inputTokens + outputTokens;
+    const totalCost = response.cost.totalCost;
     
-    // Claude-3 Opus pricing: $15 per 1M input tokens, $75 per 1M output tokens
-    const inputCost = (inputTokens / 1000000) * 15;
-    const outputCost = (outputTokens / 1000000) * 75;
-    const totalCost = inputCost + outputCost;
-    
-    logger.info(`AI summary generation completed successfully`, {
+    logger.info(`xAI summary generation completed successfully`, {
       correlationId,
       ticker: company.ticker,
       formType,
+      model: response.model,
       tokensUsed: totalTokens,
-      cost: totalCost
+      cost: totalCost,
+      executionTime,
+      fallbackUsed: response.fallbackUsed,
+      keyPointsCount: keyPoints.length
     });
-    
+
     return {
       summary,
       keyPoints,
       tokensUsed: totalTokens,
       inputTokens,
       outputTokens,
-      model: 'claude-3-opus-20240229',
+      model: response.model,
       cost: totalCost,
       correlationId,
-      processingStatus: 'SUCCESS'
+      processingStatus: 'SUCCESS',
+      processingTime: executionTime,
+      modelFallbackUsed: response.fallbackUsed,
+      originalModel: response.originalModel
     };
+    
   } catch (error) {
-    // Record failure in circuit breaker
-    updateCircuitBreaker(false);
+    const executionTime = Date.now() - startTime;
     
-    const errorMessage = error instanceof Error ? error.message : String(error);
-    const errorType = classifyError(error instanceof Error ? error : new Error(errorMessage));
-    
-    logger.error(`AI summary generation failed`, {
+    logger.error(`xAI summary generation failed`, {
       correlationId,
       ticker: company.ticker,
-      error: errorMessage,
-      errorType,
-      circuitBreakerState: circuitBreaker.state
+      error: error instanceof Error ? error.message : String(error),
+      executionTime
     });
     
-    // Return error information instead of throwing - NO FALLBACK SUMMARIES
+    // Return structured error information instead of throwing
     return {
-      summary: '', // Empty summary indicates failure - no fallback
+      summary: '', // Empty summary indicates failure
       keyPoints: [],
-      error: `AI summary generation failed: ${errorMessage}`,
+      error: `xAI summary generation failed: ${error instanceof Error ? error.message : String(error)}`,
       processingStatus: 'FAILED',
-      processingError: errorMessage,
-      processingErrorCode: error instanceof Error && error.name ? error.name : 'UNKNOWN_ERROR',
+      processingError: error instanceof Error ? error.message : String(error),
+      processingErrorCode: error instanceof Error ? error.name : 'UNKNOWN_ERROR',
       correlationId,
-      errorType,
-      isRetryable: shouldRetry(error instanceof Error ? error : new Error(errorMessage), 0, 2)
+      processingTime: executionTime,
+      isRetryable: true // Most xAI/OpenRouter errors are retryable
     };
   }
 }
 
 /**
- * Attempts to generate an AI summary with intelligent retry mechanisms
+ * Generate AI summary with retry logic for improved reliability
  * @param content Document content to summarize
  * @param filing SEC filing information
- * @param company Company information
- * @param maxRetries Maximum number of retries
- * @returns Summary generation result
+ * @param company Company information  
+ * @param maxRetries Maximum number of retry attempts
+ * @returns Summary generation result with retry metadata
  */
 export async function generateAISummaryWithRetry(
-  content: string, 
+  content: string,
   filing: SECFiling, 
-  company: Company, 
-  maxRetries: number = 3
+  company: Company,
+  maxRetries: number = 2
 ): Promise<SummaryGenerationResult> {
-  const correlationId = `ai_summary_retry_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
   let lastError: Error | null = null;
-  let totalAttempts = 0;
-  const startTime = Date.now();
+  let attempt = 0;
   
-  for (let attempt = 0; attempt <= maxRetries; attempt++) {
-    totalAttempts++;
+  const correlationId = `xai_summary_retry_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+  
+  while (attempt <= maxRetries) {
+    attempt++;
+    
+    logger.info(`Attempting xAI summary generation (attempt ${attempt}/${maxRetries + 1})`, {
+      correlationId,
+      ticker: company.ticker,
+      formType: filing.formType
+    });
     
     try {
-      if (attempt > 0) {
-        logger.info(`Retry attempt ${attempt} for generating AI summary`, {
-          correlationId,
-          attempt,
-          ticker: company.ticker,
-          formType: filing.formType,
-          totalDuration: Date.now() - startTime
-        });
-      }
-      
       const result = await generateAISummary(content, filing, company);
       
-      // If successful, add retry metadata
-      if (result.processingStatus === 'SUCCESS') {
+      // Check if the result indicates success
+      if (result.processingStatus === 'SUCCESS' && result.summary && result.summary.length > 0) {
+        if (attempt > 1) {
+          logger.info(`xAI summary generation succeeded after ${attempt} attempts`, {
+            correlationId,
+            ticker: company.ticker,
+            totalAttempts: attempt
+          });
+        }
+        
+        // Add retry metadata to result
         return {
           ...result,
-          attempts: totalAttempts,
-          totalRetryDuration: Date.now() - startTime,
-          correlationId: result.correlationId || correlationId
-        };
-      } else if (result.error && !result.isRetryable) {
-        // If error is not retryable, stop immediately
-        logger.warn(`Non-retryable error encountered, stopping retries`, {
-          correlationId,
-          error: result.error,
-          errorType: result.errorType
-        });
-        return {
-          ...result,
-          attempts: totalAttempts,
-          totalRetryDuration: Date.now() - startTime
+          retryAttempts: attempt - 1,
+          retriesRequired: attempt > 1
         };
       }
       
-      // If we got a retryable error, continue to retry logic
-      lastError = new Error(result.error || 'Unknown error');
+      // If processing status indicates failure but we should retry
+      if (result.isRetryable && attempt <= maxRetries) {
+        lastError = new Error(result.processingError || 'AI processing failed');
+        logger.warn(`xAI summary generation failed (attempt ${attempt}), retrying...`, {
+          correlationId,
+          error: result.processingError,
+          attemptsRemaining: maxRetries - attempt + 1
+        });
+        
+        // Brief delay before retry
+        await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
+        continue;
+      }
+      
+      // Return the failed result if not retryable or max retries exceeded
+      return {
+        ...result,
+        retryAttempts: attempt - 1,
+        retriesRequired: attempt > 1
+      };
       
     } catch (error) {
       lastError = error instanceof Error ? error : new Error(String(error));
       
-      // Check if error should be retried
-      if (!shouldRetry(lastError, attempt, maxRetries)) {
-        logger.warn(`Error not retryable, stopping attempts`, {
+      if (attempt <= maxRetries) {
+        logger.warn(`xAI summary generation attempt ${attempt} failed, retrying...`, {
           correlationId,
           error: lastError.message,
-          errorType: classifyError(lastError),
-          attempt
+          attemptsRemaining: maxRetries - attempt + 1
         });
-        break;
+        
+        // Exponential backoff for retries
+        const delay = Math.min(1000 * Math.pow(2, attempt - 1), 10000);
+        await new Promise(resolve => setTimeout(resolve, delay));
       }
-    }
-    
-    // If this is not the last attempt, calculate backoff delay
-    if (attempt < maxRetries && lastError) {
-      const errorType = classifyError(lastError);
-      const backoffDelay = getBackoffDelay(attempt, errorType);
-      
-      logger.info(`Waiting before retry`, {
-        correlationId,
-        attempt: attempt + 1,
-        maxRetries,
-        backoffDelay,
-        errorType
-      });
-      
-      await new Promise(resolve => setTimeout(resolve, backoffDelay));
     }
   }
   
-  // All retries failed, return comprehensive error information
-  const totalDuration = Date.now() - startTime;
-  const errorMessage = lastError?.message || 'Unknown error';
-  const errorType = lastError ? classifyError(lastError) : ErrorType.UNKNOWN;
-  
-  logger.error(`All retry attempts exhausted for AI summary generation`, {
+  // All attempts failed
+  logger.error(`All xAI summary generation attempts failed after ${attempt} attempts`, {
     correlationId,
     ticker: company.ticker,
-    totalAttempts,
-    totalDuration,
-    finalError: errorMessage,
-    errorType
+    finalError: lastError?.message
   });
   
-  // Return comprehensive error information - NO FALLBACK SUMMARIES
   return {
-    summary: '', // Empty summary indicates failure - no fallback
+    summary: '',
     keyPoints: [],
-    error: `AI summary generation failed after ${totalAttempts} attempts: ${errorMessage}`,
+    error: `All retry attempts failed: ${lastError?.message || 'Unknown error'}`,
     processingStatus: 'FAILED',
-    processingError: errorMessage,
-    processingErrorCode: lastError?.name || 'UNKNOWN_ERROR',
-    attempts: totalAttempts,
-    totalRetryDuration: totalDuration,
+    processingError: lastError?.message || 'Unknown error',
+    processingErrorCode: lastError?.name || 'RETRY_EXHAUSTED',
     correlationId,
-    errorType,
-    isRetryable: false // No more retries possible
+    retryAttempts: maxRetries,
+    retriesRequired: true,
+    isRetryable: false // Don't retry further after exhausting all attempts
+  };
+}
+
+/**
+ * Validate summary generation result for quality assurance
+ * @param result Summary generation result to validate
+ * @returns Validation status and quality metrics
+ */
+export function validateSummaryResult(result: SummaryGenerationResult): {
+  isValid: boolean;
+  qualityScore: number;
+  issues: string[];
+} {
+  const issues: string[] = [];
+  let qualityScore = 100;
+  
+  // Check for basic completeness
+  if (!result.summary || result.summary.length < 100) {
+    issues.push('Summary too short or missing');
+    qualityScore -= 30;
+  }
+  
+  if (!result.keyPoints || result.keyPoints.length < 3) {
+    issues.push('Insufficient key points extracted');
+    qualityScore -= 20;
+  }
+  
+  // Check token usage (should be in 4K-150K range for valid summaries)
+  if (result.tokensUsed && (result.tokensUsed < 4000 || result.tokensUsed > 150000)) {
+    if (result.tokensUsed < 4000) {
+      issues.push(`Token usage too low (${result.tokensUsed}) - may indicate processing failure`);
+      qualityScore -= 40;
+    }
+  }
+  
+  // Check cost effectiveness (should be around $0.05 per summary based on business model)
+  if (result.cost && result.cost > 0.10) {
+    issues.push(`Cost higher than expected ($${result.cost.toFixed(3)}) - review model selection`);
+    qualityScore -= 10;
+  }
+  
+  const isValid = issues.length === 0 && qualityScore >= 70;
+  
+  return {
+    isValid,
+    qualityScore: Math.max(0, qualityScore),
+    issues
   };
 }

@@ -15,7 +15,7 @@ import { notificationProcessor } from '../notification-processor';
 import { notificationService } from '../notification-service';
 import { JobQueueService } from '../../job-queue';
 import { logger } from '../../logging';
-import { monitoring } from '../../monitoring';
+// monitoring imported but only used in mocks
 
 // Mock dependencies
 jest.mock('../../job-queue', () => {

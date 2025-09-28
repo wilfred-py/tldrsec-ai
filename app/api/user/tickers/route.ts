@@ -1,8 +1,11 @@
 import { NextResponse } from 'next/server';
 import { auth, currentUser } from '@clerk/nextjs/server';
-import { prisma } from '@/lib/db/prisma';
+import { getPrismaClient } from '@/lib/db/prisma';
 import { dbRetry } from '@/lib/db/retry-wrapper';
 import { revalidatePath } from 'next/cache';
+
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
 
 /**
  * GET /api/user/tickers
@@ -10,6 +13,8 @@ import { revalidatePath } from 'next/cache';
  */
 export async function GET() {
   try {
+    const prisma = getPrismaClient();
+    
     // Check authentication
     const { userId } = await auth();
     if (!userId) {
@@ -87,6 +92,8 @@ export async function GET() {
  */
 export async function POST(request: Request) {
   try {
+    const prisma = getPrismaClient();
+    
     // Parse request body
     const body = await request.json();
     const { symbol, companyName } = body;

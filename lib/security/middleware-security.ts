@@ -1,21 +1,19 @@
 // Web Crypto API for Edge Runtime compatibility
 import { NextRequest } from 'next/server';
 import { logger } from '../logging';
-import { rateLimiter } from './rate-limiter';
+// Dynamic import for rate limiter to handle Edge Runtime compatibility
 import { cloudflareIPService } from './cloudflare-ip-service';
 import { securityMonitoring } from './security-monitoring';
 import {
   SecurityConfig,
   SecurityEventType,
   EndpointType,
-  RateLimitConfig,
   IPValidationResult,
   SignatureValidationResult,
   APIKeyValidationResult,
   SecurityAuditEvent,
   SuspiciousActivityResult,
-  SecurityValidationResult,
-  SecurityMetrics
+  SecurityValidationResult
 } from '../../types/security';
 
 const securityLogger = logger.child('middleware-security');
@@ -262,7 +260,7 @@ export class IPValidator {
     let matchFound = false;
     let matchedRange: string | undefined;
     let matchSource: 'static' | 'cloudflare_dynamic' | undefined;
-    let serviceMetrics: any = {};
+    let serviceMetrics: Record<string, unknown> = {};
 
     // Get current security config (dynamic for tests)
     const securityConfig = getSecurityConfig();
@@ -291,7 +289,6 @@ export class IPValidator {
     // SECURITY: Always attempt Cloudflare validation regardless of static match
     validationSteps++;
     let cloudflareValidationTime = 0;
-    let cloudflareMatch = false;
 
     try {
       const cloudflareStartTime = Date.now();
@@ -302,7 +299,6 @@ export class IPValidator {
         matchFound = true;
         matchedRange = 'cloudflare_dynamic';
         matchSource = 'cloudflare_dynamic';
-        cloudflareMatch = true;
       }
 
       // SECURITY: Always collect service metrics for consistent timing
@@ -390,7 +386,7 @@ export class IPValidator {
    * SECURITY: Secure logging that prevents timing-based information disclosure
    * Logs security events without revealing sensitive timing patterns
    */
-  private static logSecurityEventSecurely(eventType: string, metadata: Record<string, any>): void {
+  private static logSecurityEventSecurely(eventType: string, metadata: Record<string, unknown>): void {
     // SECURITY: Sanitize timing information to prevent leakage
     const sanitizedMetadata = { ...metadata };
 
@@ -747,7 +743,7 @@ export class SecurityAuditor {
   public static async logSecurityEvent(
     eventType: SecurityEventType,
     request: NextRequest,
-    details: Record<string, any> = {}
+    details: Record<string, unknown> = {}
   ): Promise<void> {
     try {
       const clientIP = IPValidator.extractClientIP(request);
@@ -1092,6 +1088,9 @@ export class MiddlewareSecurity {
       // Step 3: Rate limiting (ALWAYS applied regardless of authentication method)
       const securityConfig = getSecurityConfig();
       const rateLimitConfig = securityConfig.rateLimits[endpointType];
+      
+      // Dynamic import for Edge Runtime compatibility
+      const { rateLimiter } = await import('./rate-limiter');
       const rateLimitResult = await rateLimiter.checkLimit(
         `${endpointType.toLowerCase()}-endpoint`,
         clientIP,

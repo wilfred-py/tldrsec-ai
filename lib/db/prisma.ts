@@ -8,7 +8,7 @@ import { PrismaClient } from '@prisma/client'
 
 // Define the global variable properly
 declare global {
-  var prisma: PrismaClient | undefined
+  let prisma: PrismaClient | undefined
 }
 
 /**
@@ -26,8 +26,14 @@ declare global {
 // Use a singleton pattern to prevent connection pool exhaustion
 let prisma: PrismaClient | undefined
 
-// Detect if we're in a build environment
-const isBuildTime = process.env.NODE_ENV === 'production' && !process.env.VERCEL && !process.env.DATABASE_URL
+// Detect if we're in a build environment or Next.js prerendering phase
+// During Next.js build, we should NOT attempt database connections
+const isBuildTime = (
+  // Standard build detection (no DATABASE_URL)
+  (process.env.NODE_ENV === 'production' && !process.env.VERCEL && !process.env.DATABASE_URL) ||
+  // Next.js static generation phase detection
+  process.env.NEXT_PHASE === 'phase-production-build'
+)
 
 // Only initialize if DATABASE_URL is available and not during build time
 if (process.env.DATABASE_URL && !isBuildTime) {
@@ -66,9 +72,16 @@ export { prisma }
  * @throws Error if DATABASE_URL is not available and not in build mode
  */
 export function getPrismaClient(): PrismaClient {
-  // During build time, throw a more descriptive error
+  // During build time, return a stub client to allow module imports during static generation
+  // The routes are marked with dynamic = 'force-dynamic' so they won't actually execute
   if (isBuildTime) {
-    throw new Error('Database not available during build time. This is expected for static generation.');
+    console.warn('⚠️  getPrismaClient() called during build time - returning stub client');
+    // Return a Proxy that will throw if any method is actually called
+    return new Proxy({} as PrismaClient, {
+      get: () => {
+        throw new Error('Database not available during build time. This stub client should not be used at runtime.');
+      }
+    });
   }
   
   if (!prisma) {

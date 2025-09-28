@@ -14,15 +14,15 @@ type SummaryOptions = { summaryId?: string };
 type SummaryResult = {
   summaryId: string;
   summaryText: string;
-  summaryJSON: any;
+  summaryJSON: Record<string, unknown>;
   modelUsed: string;
   duration: number;
   inputTokens: number;
   outputTokens: number;
   cost: number;
   isPartial: boolean;
-  parsingErrors: any[];
-  chunkResults?: any[];
+  parsingErrors: unknown[];
+  chunkResults?: unknown[];
 };
 
 // Mock implementation of processSingleChunk
@@ -98,7 +98,7 @@ describe('Batch Processor', () => {
     expect(processSingleChunk).toHaveBeenCalledTimes(chunks.length);
     
     // Each chunk should have been processed
-    chunks.forEach((chunk, index) => {
+    chunks.forEach((chunk, _index) => {
       expect(processSingleChunk).toHaveBeenCalledWith(
         chunk,
         filingType,

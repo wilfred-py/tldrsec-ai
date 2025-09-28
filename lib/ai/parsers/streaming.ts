@@ -8,7 +8,6 @@
 import { EventEmitter } from 'events';
 import { 
   ExtractedJSON, 
-  StreamingEventListener, 
   StreamingOptions, 
   StreamingParserState, 
   StreamingProgressEvent 
@@ -207,7 +206,7 @@ export class StreamingParser extends EventEmitter {
         
         this.emitEvent('complete', result);
         this.resetState();
-      } catch (repairError) {
+      } catch {
         // If repair failed, emit error
         this.emitEvent('error', error instanceof Error ? error : new Error(String(error)));
       }
@@ -226,7 +225,7 @@ export class StreamingParser extends EventEmitter {
     }
     
     // Look for complete key-value pairs 
-    const keyValuePairs: Record<string, any> = {};
+    const keyValuePairs: Record<string, unknown> = {};
     const keyValueRegex = /"([^"]+)":\s*(?:"([^"]*)"|\{([^}]*)\}|(\[[^\]]*\])|([^,}\]]+))/g;
     
     let match;
@@ -267,7 +266,7 @@ export class StreamingParser extends EventEmitter {
             keyValuePairs[key] = trimmed;
           }
         }
-      } catch (e) {
+      } catch {
         // Skip problematic values
         continue;
       }
@@ -285,8 +284,6 @@ export class StreamingParser extends EventEmitter {
    * Finish the streaming parser and force completion
    */
   finish(): void {
-    const combined = this.state.collectedChunks.join('');
-    
     // Check if we already have a complete result
     if (!this.state.jsonStarted) {
       // No JSON found, try standard extraction
@@ -307,7 +304,7 @@ export class StreamingParser extends EventEmitter {
       };
       
       this.emitEvent('complete', result);
-    } catch (error) {
+    } catch {
       // If we have a partial result but couldn't complete it
       if (this.state.partialResult && Object.keys(this.state.partialResult).length > 0) {
         const result: ExtractedJSON = {
@@ -333,7 +330,7 @@ export class StreamingParser extends EventEmitter {
    * @param type - Event type
    * @param data - Event data
    */
-  private emitEvent(type: 'chunk' | 'partial' | 'complete' | 'error', data: any): void {
+  private emitEvent(type: 'chunk' | 'partial' | 'complete' | 'error', data: unknown): void {
     const event: StreamingProgressEvent = {
       type,
       data,

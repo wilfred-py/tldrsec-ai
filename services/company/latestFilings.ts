@@ -2,14 +2,36 @@ import { findCompanyByTicker } from '../companyService';
 import { getCompanyFilings } from './filings';
 import { SecFiling, SecCompanyInfo } from '../../types/sec';
 import { logger } from '../../lib/logging';
+import { withSecApiCache, SecApiCache } from '../../lib/cache/sec-api-cache';
 
 /**
- * Gets the latest filings for a company
+ * Gets the latest filings for a company with caching optimization
  * @param ticker Company ticker symbol
  * @param limit Maximum number of filings to return
+ * @param bypassCache Whether to bypass cache for fresh data
  * @returns Array of latest filings
  */
-export async function getLatestFilings(ticker: string, limit: number = 5): Promise<SecFiling[]> {
+export async function getLatestFilings(ticker: string, limit: number = 5, bypassCache: boolean = false): Promise<SecFiling[]> {
+  const cacheKey = SecApiCache.generateKey('getLatestFilings', ticker, { limit });
+  
+  // Use cached version unless explicitly bypassing cache
+  if (!bypassCache) {
+    return withSecApiCache(
+      cacheKey,
+      () => getLatestFilingsInternal(ticker, limit),
+      10 // 10 minute TTL for SEC filings
+    );
+  } else {
+    // Bypass cache and get fresh data
+    console.log(`[DEBUG][secService] Bypassing cache for ${ticker} (fresh data requested)`);
+    return getLatestFilingsInternal(ticker, limit);
+  }
+}
+
+/**
+ * Internal function that performs the actual SEC API calls
+ */
+async function getLatestFilingsInternal(ticker: string, limit: number): Promise<SecFiling[]> {
   try {
     console.log(`[DEBUG][secService] Getting latest filings for ${ticker}, limit: ${limit}`);
     logger.debug(`Getting latest filings for ${ticker}, limit: ${limit}`);

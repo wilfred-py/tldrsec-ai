@@ -8,10 +8,7 @@
  * ts-node robust-claude-simulation.ts
  */
 
-import { robustClaudeClient } from '../robust-claude-client';
 import { ApiError, ErrorCode } from '../../error-handling';
-import { logger } from '../../logging';
-import { monitoring } from '../../monitoring';
 
 // Sample SEC filing content (abbreviated)
 const sampleFiling = `
@@ -57,7 +54,7 @@ class MockClaudeClient {
     this.maxErrors = maxErrors;
   }
   
-  async sendMessage(messages: any[], options: any = {}) {
+  async sendMessage(messages: Array<{role: string; content: string}>): Promise<unknown> {
     console.log(`\n[MockClaudeClient] Sending message with ${messages.length} messages`);
     console.log(`[MockClaudeClient] Using error scenario: ${this.errorScenario}`);
     
@@ -178,7 +175,7 @@ async function runSimulation(errorScenario: string, maxErrors: number = 3) {
   // Create a client with the mock
   const mockClient = new MockClaudeClient(errorScenario, maxErrors);
   // Use the mock client directly instead of trying to construct a new instance
-  const client = mockClient as any;
+  const client = mockClient as MockClaudeClient;
   
   // Setup logging
   console.log('Setting up simulation...');

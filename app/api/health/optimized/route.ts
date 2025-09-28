@@ -13,7 +13,7 @@ import { NextResponse } from 'next/server';
 import { optimizedFilingService } from '../../../../services/filings/optimizedFilingService';
 // DirectClaudeClient import removed - not used in active code paths
 import { logger } from '../../../../lib/logging';
-import { prisma } from '../../../../lib/db';
+import { getPrismaClient } from '../../../../lib/db/prisma';
 import { getClaudeModel } from '@/lib/ai';
 
 const healthLogger = logger.child('health-optimized');
@@ -112,6 +112,7 @@ interface HealthStatus {
 }
 
 export async function GET() {
+  const prisma = getPrismaClient();
   const startTime = Date.now();
   
   try {

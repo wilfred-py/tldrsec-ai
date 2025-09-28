@@ -10,7 +10,7 @@ import { SECFilingType } from '../prompts/prompt-types';
  */
 export interface ExtractedJSON {
   raw: string;           // The raw JSON string as extracted
-  parsed?: any;          // The parsed JSON object if successful
+  parsed?: unknown;      // The parsed JSON object if successful
   error?: Error;         // Any error that occurred during parsing
   extractionMethod: string; // Which method was used to extract the JSON
   success: boolean;      // Whether the extraction was successful
@@ -32,8 +32,8 @@ export interface ExtractionOptions {
 export interface ValidationResult {
   valid: boolean;
   errors?: string[];
-  validatedData?: any;
-  partialData?: any;
+  validatedData?: unknown;
+  partialData?: unknown;
 }
 
 /**
@@ -60,7 +60,7 @@ export interface StreamingParserState {
   escape: boolean;
   currentKey: string;
   collectedChunks: string[];
-  partialResult?: any;
+  partialResult?: unknown;
 }
 
 /**
@@ -68,7 +68,7 @@ export interface StreamingParserState {
  */
 export interface StreamingOptions extends ExtractionOptions {
   onChunk?: (chunk: string) => void;
-  onPartialJson?: (json: any) => void;
+  onPartialJson?: (json: unknown) => void;
   onComplete?: (result: ExtractedJSON) => void;
   onError?: (error: Error) => void;
   bufferSize?: number;
@@ -79,7 +79,7 @@ export interface StreamingOptions extends ExtractionOptions {
  */
 export interface StreamingProgressEvent {
   type: 'chunk' | 'partial' | 'complete' | 'error';
-  data: any;
+  data: unknown;
   timestamp: number;
   progress?: number; // 0-100 estimate
 }

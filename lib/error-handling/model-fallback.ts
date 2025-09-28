@@ -4,12 +4,12 @@
  * cost-based selection and adaptive retry strategies depending on the error type.
  */
 
-import { ErrorCode, ErrorCategory } from './constants';
-import { ApiError, createAiModelError } from './index';
+import { ErrorCode } from './constants';
+import { ApiError } from './index';
 import { executeWithRetry, RetryConfig, DefaultRetryConfig, CircuitBreakerConfig, DefaultCircuitBreakerConfig } from './retry';
 import { logger } from '../logging';
 import { monitoring } from '../monitoring';
-import { getClaudeModel, getFallbackModel } from '../ai/config';
+import { getClaudeModel } from '../ai/config';
 import { v4 as uuidv4 } from 'uuid';
 
 /**
@@ -606,7 +606,7 @@ export async function executeWithModelFallback<T>(
           attempts: totalAttempts + 1,
           executionTimeMs: Date.now() - startTime
         };
-      } catch (error: any) {
+      } catch (error: unknown) {
         // Increment attempt counter
         totalAttempts++;
         

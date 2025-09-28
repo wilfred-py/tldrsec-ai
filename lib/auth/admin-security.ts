@@ -19,9 +19,9 @@ async function createHashSHA256(input: string, length: number = 8): Promise<stri
 const adminSecurityLogger = logger.child('admin-security');
 
 // Admin security configuration
-const ADMIN_SESSION_TIMEOUT = 30 * 60 * 1000; // 30 minutes
-const MAX_ADMIN_FAILURES = 3;
-const ADMIN_LOCKOUT_DURATION = 15 * 60 * 1000; // 15 minutes
+// const ADMIN_SESSION_TIMEOUT = 30 * 60 * 1000; // 30 minutes (reserved for future use)
+// const MAX_ADMIN_FAILURES = 3; // (reserved for future use)
+// const ADMIN_LOCKOUT_DURATION = 15 * 60 * 1000; // 15 minutes (reserved for future use)
 const ADMIN_ACTIONS_REQUIRING_MFA = [
   'USER_DELETE',
   'BUDGET_RESET',
@@ -297,19 +297,19 @@ function getClientIP(request: Request): string {
 }
 
 // Stub implementations - would need to be fully implemented
-async function checkAdminLockout(userId: string) {
+async function checkAdminLockout(_userId: string) {
   return { isLocked: false, unlockTime: null };
 }
 
-async function validateAdminSession(userId: string) {
+async function validateAdminSession(_userId: string) {
   return { valid: true, reason: null, lastActivity: new Date() };
 }
 
-async function validateAdminMFA(userId: string, action?: string) {
+async function validateAdminMFA(_userId: string, _action?: string) {
   return { valid: true, status: 'not_required' };
 }
 
-async function updateAdminActivity(userId: string, ip: string, userAgent: string) {
+async function updateAdminActivity(_userId: string, _ip: string, _userAgent: string) {
   // Implementation would update admin session tracking
 }
 
@@ -324,7 +324,7 @@ async function getAdminSecurityWarnings(userId: string, securityCheck: AdminSecu
   return warnings;
 }
 
-async function logSecurityEvent(event: string, data: any) {
+async function logSecurityEvent(event: string, data: Record<string, unknown>) {
   try {
     // Only log audit events if we have a valid userId
     // Security events without authenticated users will be logged via the logger only
@@ -368,6 +368,6 @@ async function logSecurityEvent(event: string, data: any) {
   }
 }
 
-async function incrementFailedAttempts(userId: string) {
+async function incrementFailedAttempts(_userId: string) {
   // Implementation would track failed admin access attempts
 }
