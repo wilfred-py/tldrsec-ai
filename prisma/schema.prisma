@@ -710,9 +710,11 @@ model SummaryEmailDelivery {
   summary               Summary    @relation(fields: [summaryId], references: [id], onDelete: Cascade)
   user                  User       @relation(fields: [userId], references: [id], onDelete: Cascade)
   
+  @@unique([userId, summaryId], name: "unique_user_summary_email")
   @@index([summaryId, sentAt])
   @@index([userId, sentAt])
   @@index([deliveryStatus, sentAt])
+  @@index([userId, summaryId], name: "idx_email_deduplication_lookup")
 }
 
 // Audit logging for financial and security operations

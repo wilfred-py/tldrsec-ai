@@ -113,12 +113,20 @@ export async function generateAISummary(
     const formType = normalizeFormType(filing.formType || 'UNKNOWN');
     const prompt = generateSummaryPrompt(content, filing, company);
     
-    logger.info(`Starting xAI summary generation via OpenRouter`, {
+    // DEBUG: Check environment and client setup
+    const apiKey = process.env.TLDRSEC_AI_SUMMARIZER || process.env.OPENROUTER_API_KEY;
+    const model = process.env.DEFAULT_AI_MODEL || 'x-ai/grok-4-fast:free';
+    
+    logger.info(`[DEBUG] Starting xAI summary generation via OpenRouter`, {
       correlationId,
       ticker: company.ticker,
       formType,
       contentLength: content.length,
-      model: process.env.DEFAULT_AI_MODEL || 'grok-4-fast-reasoning'
+      model: model,
+      hasApiKey: !!apiKey,
+      apiKeyPrefix: apiKey ? apiKey.substring(0, 10) + '...' : 'MISSING',
+      promptLength: prompt.length,
+      aiClientExists: !!aiClient
     });
 
     // Call OpenRouter with xAI model selection and fallback
