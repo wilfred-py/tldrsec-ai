@@ -112,6 +112,12 @@ model Summary {
   uniqueUsersServed     Int        @default(0)      // Number of unique users who received this summary
   totalEmailsSent       Int        @default(0)      // Total emails sent with this summary
   
+  // Quality and Confidence Metrics
+  qualityScore          Float?     // Quality score of the generated summary (0-100)
+  confidenceLevel       Float?     // Confidence level of the AI generation (0-100)
+  extractionSuccess     Boolean    @default(true)   // Whether content extraction was successful
+  parsingErrors         Int        @default(0)      // Number of parsing errors encountered
+  
   // Relationships
   secFiling             SecFiling? @relation(fields: [secFilingId], references: [id])
   ticker                Ticker     @relation(fields: [tickerId], references: [id], onDelete: Cascade)
