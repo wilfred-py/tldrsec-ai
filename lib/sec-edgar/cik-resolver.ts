@@ -210,22 +210,57 @@ async function checkDatabase(ticker: string): Promise<{ cik: string; companyName
 }
 
 /**
- * Fallback SEC API lookup (placeholder implementation)
- * In production, this would use SEC's ticker.txt or company tickers endpoint
+ * Fallback SEC API lookup using official company_tickers_exchange.json
  */
 async function fallbackSecLookup(ticker: string): Promise<{ cik: string; companyName: string } | null> {
   try {
     cikLogger.info(`Attempting SEC fallback lookup for ticker ${ticker}`);
     
-    // PLACEHOLDER: In a real implementation, this would:
-    // 1. Download and parse SEC's ticker.txt file: https://www.sec.gov/files/company_tickers.json
-    // 2. Or use a third-party service for ticker-to-CIK mapping
-    // 3. Or maintain our own comprehensive ticker database
+    // Fetch from SEC's official company_tickers_exchange.json endpoint
+    const response = await fetch('https://www.sec.gov/files/company_tickers_exchange.json', {
+      headers: {
+        'User-Agent': 'tldrsec.app contact@tldrsec.app',
+        'Accept': 'application/json'
+      }
+    });
     
-    // For now, we'll return null to indicate no fallback is available
-    // This ensures the system gracefully handles missing CIK mappings
+    if (!response.ok) {
+      cikLogger.warn(`SEC API returned ${response.status} for ticker lookup`);
+      return null;
+    }
     
-    cikLogger.warn(`SEC fallback lookup not implemented for ticker ${ticker}`);
+    const data = await response.json();
+    
+    // Parse the structure: {"fields": ["cik", "name", "ticker", "exchange"], "data": [...]}
+    if (!data.fields || !data.data) {
+      cikLogger.warn('Unexpected SEC API response format');
+      return null;
+    }
+    
+    const fields = data.fields;
+    const cikIndex = fields.indexOf('cik');
+    const nameIndex = fields.indexOf('name');
+    const tickerIndex = fields.indexOf('ticker');
+    
+    // Search for the ticker in the data array
+    const normalizedTicker = ticker.toUpperCase().trim();
+    const company = data.data.find((row: any[]) => 
+      row[tickerIndex] === normalizedTicker
+    );
+    
+    if (company) {
+      const cik = String(company[cikIndex]).padStart(10, '0');
+      const companyName = company[nameIndex];
+      
+      cikLogger.info(`Found CIK ${cik} for ticker ${ticker} via SEC API`);
+      
+      return {
+        cik,
+        companyName
+      };
+    }
+    
+    cikLogger.warn(`Ticker ${ticker} not found in SEC company data`);
     return null;
     
   } catch (error) {
