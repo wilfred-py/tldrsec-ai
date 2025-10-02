@@ -151,7 +151,7 @@ export class CronAuthService {
   private static async validateRateLimit(clientIP: string): Promise<AuthValidationResult> {
     try {
       // Dynamic import to avoid build-time dependencies
-      const { rateLimiter } = await import('../../security/rate-limiter');
+      const { rateLimiter } = await import('../security/rate-limiter');
       const rateLimitResult = await rateLimiter.checkLimit('cron-endpoint', clientIP);
       
       if (!rateLimitResult || !rateLimitResult.allowed) {
