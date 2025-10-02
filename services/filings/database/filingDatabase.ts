@@ -237,7 +237,7 @@ export async function getFilingLogs(limit: number = 100): Promise<any[]> {
  * @param accessType The type of access (database_query, memory_cache, etc.)
  * @returns Boolean indicating success
  */
-export async function trackCacheAccess(summaryId: string, accessType: string): Promise<boolean> {
+export async function trackCacheAccess(summaryId: string, accessType: string, userId?: string): Promise<boolean> {
   try {
     // Update the summary's cache usage count and last accessed time
     await prisma.summary.update({
@@ -248,14 +248,17 @@ export async function trackCacheAccess(summaryId: string, accessType: string): P
       }
     });
     
-    // Create a detailed cache access record
-    await prisma.summaryCacheAccess.create({
-      data: {
-        summaryId: summaryId,
-        accessType: accessType,
-        accessedAt: new Date()
-      }
-    });
+    // Create a detailed cache access record only if we have a userId
+    if (userId) {
+      await prisma.summaryCacheAccess.create({
+        data: {
+          summaryId: summaryId,
+          userId: userId,
+          accessType: accessType,
+          accessedAt: new Date()
+        }
+      });
+    }
     
     console.log(`[DEBUG][FilingDatabase] Cache access tracked for summary ${summaryId} (type: ${accessType})`);
     return true;
