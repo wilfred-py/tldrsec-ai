@@ -4,7 +4,7 @@
  * Extracted from app/api/cron/tier-aware/route.ts
  */
 
-import { Prisma } from '@prisma/client';
+import { Prisma, Summary } from '@prisma/client';
 import { logger } from '../logging';
 // import { getPrismaClient } from '../db/prisma';
 import { FilingTransactionManager } from '../db/transaction-manager';
@@ -590,14 +590,12 @@ export class CronFilingProcessor {
 
       // 3. Generate AI summary (or use cached version)
       let summaryResult;
-      let isCacheHit = false;
       
       if (existingSummary && existingSummary.summaryText) {
         // Use cached summary
-        isCacheHit = true;
         summaryResult = {
           summary: existingSummary.summaryText,
-          keyPoints: (existingSummary.summaryJSON as any)?.keyPoints || [],
+          keyPoints: (existingSummary.summaryJSON as Record<string, unknown>)?.keyPoints || [],
           tokensUsed: 0, // No new tokens used for cache hit
           inputTokens: 0,
           outputTokens: 0,
@@ -659,7 +657,7 @@ export class CronFilingProcessor {
       const actualCost = summaryResult.cost || 0;
 
       // 3. Store the summary in database using transaction context
-      let summaryRecord: any = null;
+      let summaryRecord: Summary | null = null;
       try {
         const tickerRecord = await tx.ticker.findFirst({
           where: { symbol: filingForProcessing.tickerData.symbol }

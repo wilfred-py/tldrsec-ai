@@ -459,9 +459,9 @@ export class CronUserProcessingService {
           lockId: lockResult.id 
         });
         
-      } catch (lockError: any) {
+      } catch (lockError: unknown) {
         // Check if lock already exists
-        if (lockError.code === 'P2002') { // Unique constraint violation
+        if ((lockError as Record<string, unknown>).code === 'P2002') { // Unique constraint violation
           processingLogger.info(`User ${userStatus.userId} is already being processed by another cron run, skipping`);
           return { 
             success: false, 
