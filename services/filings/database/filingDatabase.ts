@@ -268,7 +268,7 @@ export async function trackCacheAccess(summaryId: string, accessType: string, us
     // SECURITY: Validate all input parameters
     validateCacheAccessParams({ summaryId, accessType, userId });
 
-    // SECURITY: If userId is provided, check consent (authorization handled at API level)
+    // SECURITY: If userId is provided, check authorization and consent
     let shouldTrackUserSpecificData = false;
     
     if (userId) {
