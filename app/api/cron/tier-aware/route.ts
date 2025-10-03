@@ -169,12 +169,12 @@ export async function GET(request: NextRequest) {
     cronLogger.debug(`[${executionId}] Checkpoint 6: Starting SEC filing monitoring`);
     const filingMonitoringResults = await Promise.race([
       CronSecFilingService.runSecFilingMonitoring(monitor),
-      new Promise((_, reject) => {
+      new Promise<never>((_, reject) => {
         timeoutController.signal.addEventListener('abort', () => {
           reject(new Error('SEC filing monitoring aborted due to timeout'));
         });
       })
-    ]) as any;
+    ]);
     cronLogger.debug(`[${executionId}] Checkpoint 7: SEC filing monitoring completed`);
 
     // Check timeout before user processing
@@ -238,12 +238,12 @@ export async function GET(request: NextRequest) {
           }
         }
       ),
-      new Promise((_, reject) => {
+      new Promise<never>((_, reject) => {
         timeoutController.signal.addEventListener('abort', () => {
           reject(new Error('User processing aborted due to timeout'));
         });
       })
-    ]) as any;
+    ]);
     cronLogger.debug(`[${executionId}] Checkpoint 9: User processing pipeline completed`);
 
     // STEP 5: Prepare Final Results
