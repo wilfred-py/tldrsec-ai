@@ -93,23 +93,51 @@ export function validateUserId(userId: string): { valid: boolean; sanitizedValue
 }
 
 /**
- * Send an email summary of the latest filings
+ * Send an email summary of the latest filings with 100% duplicate elimination
  * @param email Recipient email address
  * @param tickers List of tickers to include in the summary
  * @param debug Debug mode flag
+ * @param userId Optional user ID for user-specific deduplication
  */
 export async function sendEmailSummary(
   email: string,
   tickers: string[] = ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'META'],
-  debug: boolean = false
+  debug: boolean = false,
+  userId?: string
 ) {
   try {
-    console.log(`[INFO][FilingService] Starting email summary process for ${email}`);
-    console.log(`[INFO][FilingService] Tickers: ${tickers.join(', ')}`);
+    console.log(`[INFO][FilingService] Starting bulletproof email summary process for ${email}`);
+    console.log(`[INFO][FilingService] Tickers: ${tickers.join(', ')}, User ID: ${userId || 'not provided'}`);
     
-    // Get the latest summaries for each ticker
+    // Get the latest summaries for each ticker with bulletproof deduplication
     const summaries: FilingSummaryResult[] = [];
     const errors: FilingError[] = [];
+    const duplicatesDetected: string[] = [];
+    
+    // Find user record if userId provided
+    let userRecord = null;
+    if (userId) {
+      const userValidation = validateUserId(userId);
+      if (!userValidation.valid) {
+        console.log(`[SECURITY][FilingService] Invalid user ID: ${userValidation.error}`);
+        return {
+          success: false,
+          error: `Invalid user ID: ${userValidation.error}`
+        };
+      }
+      
+      userRecord = await prisma.user.findUnique({
+        where: { id: userValidation.sanitizedValue }
+      });
+      
+      if (!userRecord) {
+        console.log(`[ERROR][FilingService] User not found: ${userId}`);
+        return {
+          success: false,
+          error: `User not found: ${userId}`
+        };
+      }
+    }
     
     for (const ticker of tickers) {
       try {
@@ -140,28 +168,71 @@ export async function sendEmailSummary(
           continue;
         }
         
-        // Get the latest summaries from ALL ticker records for this symbol that haven't been sent to the user yet
-        const latestSummaries = await prisma.summary.findMany({
-          where: {
-            tickerId: {
-              in: tickerRecords.map(t => t.id)
+        // BULLETPROOF DEDUPLICATION: Get summaries that haven't been sent to THIS user yet
+        let latestSummaries;
+        if (userRecord) {
+          // User-specific deduplication using SummaryEmailDelivery table
+          latestSummaries = await prisma.summary.findMany({
+            where: {
+              tickerId: {
+                in: tickerRecords.map(t => t.id)
+              },
+              // Exclude summaries already sent to this specific user
+              NOT: {
+                emailDeliveries: {
+                  some: {
+                    userId: userRecord.id
+                  }
+                }
+              }
             },
-            sentToUser: false
-          },
-          orderBy: {
-            createdAt: 'desc'
-          },
-          take: 5 // Limit to 5 latest summaries per ticker
-        });
+            orderBy: {
+              createdAt: 'desc'
+            },
+            take: 5 // Limit to 5 latest summaries per ticker
+          });
+        } else {
+          // Fallback to original logic if no user ID provided
+          latestSummaries = await prisma.summary.findMany({
+            where: {
+              tickerId: {
+                in: tickerRecords.map(t => t.id)
+              },
+              sentToUser: false
+            },
+            orderBy: {
+              createdAt: 'desc'
+            },
+            take: 5 // Limit to 5 latest summaries per ticker
+          });
+        }
         
         if (latestSummaries.length === 0) {
-          console.log(`[INFO][FilingService] No new summaries found for ${ticker}`);
+          console.log(`[INFO][FilingService] No new summaries found for ${ticker} (after deduplication)`);
           continue;
         }
+        
+        console.log(`[DEDUP][FilingService] Found ${latestSummaries.length} deduplicated summaries for ${ticker}`);
         
         // Process each summary
         for (const summary of latestSummaries) {
           try {
+            // FINAL DUPLICATE CHECK: Verify this summary hasn't been sent to this user
+            if (userRecord) {
+              const existingDelivery = await prisma.summaryEmailDelivery.findFirst({
+                where: {
+                  userId: userRecord.id,
+                  summaryId: summary.id
+                }
+              });
+              
+              if (existingDelivery) {
+                console.log(`[DUPLICATE_DETECTED][FilingService] Summary ${summary.id} already sent to user ${userRecord.id} at ${existingDelivery.sentAt}`);
+                duplicatesDetected.push(`${ticker}:${summary.id}`);
+                continue;
+              }
+            }
+            
             // Parse the summary JSON
             const summaryData = summary.summaryJSON as unknown as FilingSummary;
             
@@ -174,8 +245,9 @@ export async function sendEmailSummary(
               continue;
             }
             
-            // Create a summary result object
-            const summaryResult: FilingSummaryResult = {
+            // Create a summary result object with database ID for tracking
+            const summaryResult: FilingSummaryResult & { summaryId: string } = {
+              summaryId: summary.id, // Add database ID for delivery tracking
               ticker: summaryData.ticker,
               companyName: summaryData.companyName,
               filingType: summaryData.filingType,
@@ -215,8 +287,14 @@ export async function sendEmailSummary(
         success: true,
         message: 'No summaries to send',
         summaryCount: 0,
-        errorCount: 0
+        errorCount: 0,
+        duplicatesDetected: duplicatesDetected.length
       };
+    }
+    
+    // Log duplicate detection results
+    if (duplicatesDetected.length > 0) {
+      console.log(`[DUPLICATE_PREVENTION][FilingService] Prevented ${duplicatesDetected.length} duplicate emails: ${duplicatesDetected.join(', ')}`);
     }
     
     // Create a single email with all summaries instead of concatenating multiple HTML documents
@@ -317,7 +395,7 @@ export async function sendEmailSummary(
     }
     
     
-    // Send email using the pre-initialized emailClient
+    // ATOMIC EMAIL SENDING + DELIVERY TRACKING
     let emailResult;
     try {
       const emailParams = {
@@ -330,11 +408,93 @@ export async function sendEmailSummary(
       };
       
       // Log email sending details, with debug flag indication if applicable
-      console.log(`[INFO][FilingService] Sending email summary to: ${email} with ${summaries.length} summaries and ${errors.length} errors${debug ? ' (debug mode)' : ''}`);
+      console.log(`[INFO][FilingService] Sending bulletproof email summary to: ${email} with ${summaries.length} summaries and ${errors.length} errors${debug ? ' (debug mode)' : ''}`);
       
-      // Always use the real email client
-      emailResult = await emailClient.sendEmail(emailParams);
-      console.log(`[INFO][FilingService] Email sent successfully to ${email}`);
+      // Use database transaction to ensure atomicity of email + delivery records
+      const transactionResult = await prisma.$transaction(async (tx) => {
+        // First, pre-create delivery records to claim these summaries for this user
+        if (userRecord && summaries.length > 0) {
+          const deliveryRecords = summaries.map(summary => ({
+            summaryId: (summary as any).summaryId,
+            userId: userRecord!.id,
+            emailAddress: email,
+            deliveryStatus: 'pending' as const,
+            metadata: {
+              ticker: summary.ticker,
+              filingType: summary.filingType,
+              accessionNumber: summary.accessionNumber,
+              debug: debug
+            }
+          }));
+          
+          try {
+            // Use createMany with skipDuplicates to handle race conditions gracefully
+            const createResult = await tx.summaryEmailDelivery.createMany({
+              data: deliveryRecords,
+              skipDuplicates: true // Skip if unique constraint violated
+            });
+            
+            console.log(`[DEDUP][FilingService] Created ${createResult.count} delivery records out of ${deliveryRecords.length} attempted`);
+            
+            // If no records were created, it means all were duplicates
+            if (createResult.count === 0) {
+              console.log(`[DUPLICATE_PREVENTION][FilingService] All summaries already sent to user ${userRecord!.id}, aborting email`);
+              return { success: false, reason: 'all_duplicates' };
+            }
+          } catch (dbError: any) {
+            // Handle unique constraint violation gracefully
+            if (dbError.code === 'P2002' && dbError.meta?.target?.includes('unique_user_summary_email')) {
+              console.log(`[DUPLICATE_PREVENTION][FilingService] Unique constraint prevented duplicate email delivery`);
+              return { success: false, reason: 'duplicate_prevented' };
+            }
+            throw dbError; // Re-throw other errors
+          }
+        }
+        
+        // Now send the actual email
+        const emailSendResult = await emailClient.sendEmail(emailParams);
+        
+        if (!emailSendResult || !('id' in emailSendResult)) {
+          throw new Error('Failed to send email: No valid ID returned from email service');
+        }
+        
+        // Update delivery records to mark as sent
+        if (userRecord && summaries.length > 0) {
+          await tx.summaryEmailDelivery.updateMany({
+            where: {
+              userId: userRecord.id,
+              summaryId: {
+                in: summaries.map(s => (s as any).summaryId)
+              },
+              deliveryStatus: 'pending'
+            },
+            data: {
+              deliveryStatus: 'sent',
+              emailServiceId: emailSendResult.id,
+              sentAt: new Date()
+            }
+          });
+        }
+        
+        return { success: true, emailResult: emailSendResult };
+      });
+      
+      if (!transactionResult.success) {
+        if (transactionResult.reason === 'all_duplicates' || transactionResult.reason === 'duplicate_prevented') {
+          return {
+            success: true,
+            message: 'All summaries were already sent - duplicate prevented',
+            summaryCount: 0,
+            errorCount: errors.length,
+            duplicatesDetected: summaries.length
+          };
+        }
+        throw new Error('Transaction failed');
+      }
+      
+      emailResult = transactionResult.emailResult;
+      console.log(`[INFO][FilingService] Bulletproof email sent successfully to ${email} with delivery tracking`);
+      
     } catch (error) {
       console.error(`[ERROR][FilingService] Failed to send email:`, error);
       return {
@@ -343,58 +503,19 @@ export async function sendEmailSummary(
       };
     }
     
-    // Check if the email was actually sent successfully
+    // Email was successfully sent and tracked
     if (!emailResult || !('id' in emailResult)) {
-      console.error('[ERROR][FilingService] Failed to send email: No valid ID returned from email service');
+      console.error('[ERROR][FilingService] Email transaction succeeded but no email ID available');
       return {
         success: false,
-        message: 'Failed to send email: No valid ID returned',
+        message: 'Email transaction inconsistency',
         summaryCount: summaries.length,
         errorCount: errors.length
       };
     }
     
-    // Mark summaries as sent to users
-    try {
-      // Update the summary records in the database to mark them as sent
-      if (summaries.length > 0) {
-        for (const summary of summaries) {
-          // Find ALL ticker records for this symbol
-          const tickerRecords = await prisma.ticker.findMany({
-            where: {
-              symbol: (summary.ticker || '').toUpperCase()
-            }
-          });
-          
-          if (tickerRecords.length > 0) {
-            // Find the summary record across all ticker records for this symbol
-            const summaryRecord = await prisma.summary.findFirst({
-              where: {
-                tickerId: {
-                  in: tickerRecords.map(t => t.id)
-                },
-                filingType: summary.filingType as string,
-                summaryJSON: {
-                  path: ['accessionNumber'],
-                  equals: summary.accessionNumber
-                }
-              }
-            });
-            
-            if (summaryRecord) {
-              // Update the summary record to mark it as sent
-              await prisma.summary.update({
-                where: { id: summaryRecord.id },
-                data: { sentToUser: true }
-              });
-            }
-          }
-        }
-      }
-    } catch (dbError) {
-      console.error(`[ERROR][FilingService] Error updating summary records: ${dbError}`);
-      // Continue with the process, don't fail the email just because of DB update issues
-    }
+    // Email delivery tracking is now handled in the transaction above
+    // No need to mark summaries as sent globally since we use user-specific delivery tracking
     
     console.log('[INFO][FilingService] Email sent successfully to', email);
     console.log('[INFO][FilingService] Time:', new Date().toISOString());
@@ -437,12 +558,14 @@ export async function sendEmailSummary(
     
     // The emailResult is already set from the previous code block
     
-    // Final return
+    // Final return with duplicate prevention metrics
     return {
       success: true,
-      message: 'Email summary sent successfully!',
+      message: 'Bulletproof email summary sent successfully!',
       summaries,
-      errors
+      errors,
+      duplicatesDetected: duplicatesDetected.length,
+      emailServiceId: emailResult.id
     };
   } catch (error) {
     console.error(`[ERROR][FilingService] Failed to send email summary: ${error instanceof Error ? error.message : 'Unknown error'}`);

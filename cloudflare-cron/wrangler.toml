@@ -4,7 +4,7 @@ compatibility_date = "2024-09-12"
 workers_dev = true
 
 [triggers]
-crons = ["*/10 * * * *"]
+crons = ["*/20 * * * *"]
 
 [vars]
 PUBLIC_URL = "https://tldrsec.app"
