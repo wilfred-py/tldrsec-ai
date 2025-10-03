@@ -31,6 +31,13 @@ model User {
   dailyBudgetResetAt     DateTime?        // Daily budget reset timestamp
   tierProcessingCount    Int              @default(0) // Total tier-based processings
   lastTierUpgrade        DateTime?        // Last subscription tier upgrade
+  
+  // Privacy and Consent Fields
+  analyticsOptOut        Boolean   @default(false)  // User opted out of analytics tracking
+  privacyPolicyVersion   String?   @default("1.0")  // Version of privacy policy accepted
+  privacyPolicyAcceptedAt DateTime?                 // When privacy policy was accepted
+  dataProcessingOptOut   Boolean   @default(false)  // User opted out of data processing
+  
   tickers             Ticker[]
   notificationsSent   NotificationSent[]
   userSubscription    UserSubscription?
@@ -39,6 +46,7 @@ model User {
   auditLogs           AuditLog[]
   cacheAccesses       SummaryCacheAccess[]
   emailDeliveries     SummaryEmailDelivery[]
+  privacyConsents     UserPrivacyConsent[]
 }
 
 enum SubscriptionTier {
@@ -743,4 +751,26 @@ model AuditLog {
   @@index([userId, createdAt])
   @@index([action, createdAt])
   @@index([createdAt])
+}
+
+// Privacy consent tracking for GDPR compliance
+model UserPrivacyConsent {
+  id                    String   @id @default(uuid())
+  userId                String
+  consentType           String   // ANALYTICS_TRACKING, EMAIL_MARKETING, DATA_PROCESSING, PERFORMANCE_MONITORING
+  consentGiven          Boolean  @default(false)
+  consentVersion        String   @default("1.0") // Version of privacy policy when consent was given
+  consentDate           DateTime @default(now())
+  consentMethod         String   // ONBOARDING, SETTINGS_UPDATE, EXPLICIT_PROMPT, MIGRATION_DEFAULT
+  revokedDate           DateTime?
+  ipAddress             String?
+  userAgent             String?
+  
+  // Relationships
+  user                  User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@unique([userId, consentType])
+  @@index([userId, consentType])
+  @@index([consentType, consentGiven])
+  @@index([consentDate])
 }

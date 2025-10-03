@@ -231,15 +231,85 @@ export async function getFilingLogs(limit: number = 100): Promise<any[]> {
 }
 
 /**
- * Track cache access for analytics - records when a cached summary is accessed
+ * Track cache access analytics - records when a summary is retrieved from cache
+ * Enhanced with security validation and privacy consent checking
  * 
  * @param summaryId The ID of the summary being accessed
- * @param accessType The type of access (database_query, memory_cache, etc.)
+ * @param accessType The type of access (EMAIL, API, DASHBOARD, SYSTEM, CRON)
+ * @param userId Optional user ID for user-specific tracking (requires consent)
  * @returns Boolean indicating success
  */
 export async function trackCacheAccess(summaryId: string, accessType: string, userId?: string): Promise<boolean> {
   try {
-    // Update the summary's cache usage count and last accessed time
+    // Import security and privacy modules dynamically to avoid circular dependencies
+    const { validateCacheAccessParams, sanitizeForLogging } = await import('@/lib/security/validation');
+    const { PrivacyConsentService } = await import('@/lib/privacy/consent-service');
+    
+    // Safe logging function that works in both server and client contexts
+    const safeLog = {
+      debug: (message: string, data?: any) => {
+        if (typeof window === 'undefined') {
+          // Server-side: use console for now to avoid server-only imports
+          console.log(`[DEBUG] ${message}`, data);
+        }
+      },
+      warn: (message: string, data?: any) => {
+        if (typeof window === 'undefined') {
+          console.warn(`[WARN] ${message}`, data);
+        }
+      },
+      error: (message: string, data?: any) => {
+        if (typeof window === 'undefined') {
+          console.error(`[ERROR] ${message}`, data);
+        }
+      }
+    };
+
+    // SECURITY: Validate all input parameters
+    validateCacheAccessParams({ summaryId, accessType, userId });
+
+    // SECURITY: If userId is provided, check consent (authorization handled at API level)
+    let shouldTrackUserSpecificData = false;
+    
+    if (userId) {
+      try {
+        // NOTE: Authorization (checkSummaryAccess) should be handled at the API level
+        // to avoid server-only imports in shared modules
+        
+        // Check if user has consented to analytics tracking
+        const consentResult = await PrivacyConsentService.checkAnalyticsConsent(userId);
+        
+        if (consentResult.hasConsent) {
+          shouldTrackUserSpecificData = true;
+          safeLog.debug('User analytics tracking enabled with consent', {
+            summaryId: sanitizeForLogging(summaryId),
+            userId: sanitizeForLogging(userId),
+            accessType
+          });
+        } else {
+          safeLog.debug('User analytics tracking skipped - no consent or opted out', {
+            summaryId: sanitizeForLogging(summaryId),
+            userId: sanitizeForLogging(userId),
+            accessType,
+            reason: consentResult.error || 'no_consent'
+          });
+        }
+      } catch (consentError) {
+        // If consent check fails, log the attempt but don't track user data
+        safeLog.warn('Cache access consent check failed', {
+          error: consentError instanceof Error ? consentError.message : 'Unknown error',
+          summaryId: sanitizeForLogging(summaryId),
+          userId: sanitizeForLogging(userId),
+          accessType
+        });
+        
+        // Still allow the cache tracking to succeed for system metrics,
+        // but don't create user-specific records
+        shouldTrackUserSpecificData = false;
+      }
+    }
+
+    // Always update the summary's cache usage count (system-level metrics)
     await prisma.summary.update({
       where: { id: summaryId },
       data: {
@@ -247,23 +317,60 @@ export async function trackCacheAccess(summaryId: string, accessType: string, us
         lastCacheUsed: new Date()
       }
     });
+
+    // Create detailed user-specific cache access record only with proper authorization and consent
+    if (userId && shouldTrackUserSpecificData) {
+      try {
+        await prisma.summaryCacheAccess.create({
+          data: {
+            summaryId,
+            userId,
+            accessType: accessType.toUpperCase(),
+            accessedAt: new Date()
+          }
+        });
+        
+        safeLog.debug('User-specific cache access recorded', {
+          summaryId: sanitizeForLogging(summaryId),
+          userId: sanitizeForLogging(userId),
+          accessType
+        });
+      } catch (userTrackingError) {
+        // Don't fail the entire operation if user tracking fails
+        safeLog.warn('User-specific cache tracking failed', {
+          error: userTrackingError instanceof Error ? userTrackingError.message : 'Unknown error',
+          summaryId: sanitizeForLogging(summaryId),
+          userId: sanitizeForLogging(userId),
+          accessType
+        });
+      }
+    }
+
+    safeLog.debug('Cache access tracked successfully', {
+      summaryId: sanitizeForLogging(summaryId),
+      accessType,
+      hasUserId: !!userId,
+      userTrackingEnabled: shouldTrackUserSpecificData
+    });
+
+    return true;
     
-    // Create a detailed cache access record only if we have a userId
-    if (userId) {
-      await prisma.summaryCacheAccess.create({
-        data: {
-          summaryId: summaryId,
-          userId: userId,
-          accessType: accessType,
-          accessedAt: new Date()
-        }
-      });
+  } catch (error) {
+    // Safe error logging
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    const logData = {
+      error: errorMessage,
+      summaryId: summaryId || 'undefined',
+      accessType: accessType || 'undefined',
+      hasUserId: !!userId
+    };
+    
+    if (typeof window === 'undefined') {
+      console.error('[ERROR] Cache access tracking failed', logData);
     }
     
-    console.log(`[DEBUG][FilingDatabase] Cache access tracked for summary ${summaryId} (type: ${accessType})`);
-    return true;
-  } catch (error) {
-    console.error(`[ERROR][FilingDatabase] Failed to track cache access: ${error instanceof Error ? error.message : String(error)}`);
+    // Return false to indicate tracking failure, but don't throw
+    // This allows the calling code to continue even if analytics fail
     return false;
   }
 }
