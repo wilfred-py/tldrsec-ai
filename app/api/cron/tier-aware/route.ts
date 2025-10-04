@@ -34,11 +34,26 @@ const cronLogger = logger.child('tier-aware-cron');
  */
 export async function GET(request: NextRequest) {
   const startTime = Date.now();
-  const executionId = request.headers.get('x-execution-id') || `api-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  // Generate secure execution ID
+  const generateSecureExecutionId = (): string => {
+    const timestamp = Date.now();
+    const randomBytes = Buffer.from(Array.from({ length: 16 }, () => Math.floor(Math.random() * 256)));
+    const randomHex = randomBytes.toString('hex').substring(0, 16);
+    return `api-${timestamp}-${randomHex}`;
+  };
   
-  // Timeout configuration based on Cloudflare Worker headers
-  const workerTimeoutMs = parseInt(request.headers.get('x-worker-timeout') || '480000'); // 8 minutes default
-  const effectiveTimeoutMs = parseInt(request.headers.get('x-effective-timeout') || '420000'); // 7 minutes default
+  const executionId = request.headers.get('x-execution-id') || generateSecureExecutionId();
+  
+  // Timeout configuration based on Cloudflare Worker headers with input validation
+  const parseTimeoutHeader = (header: string | null, defaultValue: number): number => {
+    if (!header) return defaultValue;
+    const parsed = parseInt(header);
+    if (isNaN(parsed) || parsed < 0) return defaultValue;
+    return Math.min(parsed, 600000); // Cap at 10 minutes maximum
+  };
+  
+  const workerTimeoutMs = parseTimeoutHeader(request.headers.get('x-worker-timeout'), 480000); // 8 minutes default
+  const effectiveTimeoutMs = parseTimeoutHeader(request.headers.get('x-effective-timeout'), 420000); // 7 minutes default
   const timeoutBuffer = 30000; // 30 seconds buffer for cleanup
   
   cronLogger.info(`[${executionId}] Starting tier-aware cron with timeout protection`, {
@@ -93,21 +108,40 @@ export async function GET(request: NextRequest) {
     const authResult = await CronAuthService.validateCronRequest(request);
     if (!authResult.isValid) {
       clearTimeout(timeoutId);
-      cronLogger.warn(`[${executionId}] Authentication failed`, { 
-        error: authResult.error,
-        clientIP: authResult.clientIP 
-      });
-      if (monitor) await monitor.complete(CronJobStatus.FAILED, authResult.error || 'Authentication failed');
       
-      return NextResponse.json({
-        success: false,
-        error: authResult.error || 'Authentication failed',
-        executionId,
-        duration: Date.now() - startTime
-      }, { 
-        status: authResult.error?.includes('Rate limit') ? 429 : 
-               authResult.error?.includes('IP not allowed') ? 403 : 401
-      });
+      // Distinguish between server configuration errors and authentication failures
+      const isConfigurationError = authResult.error?.includes('not properly configured');
+      
+      if (isConfigurationError) {
+        cronLogger.error(`[${executionId}] Server configuration error`, { 
+          error: authResult.error,
+          clientIP: authResult.clientIP 
+        });
+        if (monitor) await monitor.complete(CronJobStatus.FAILED, 'Server configuration error');
+        
+        return NextResponse.json({
+          success: false,
+          error: 'Server configuration error',
+          executionId,
+          duration: Date.now() - startTime
+        }, { status: 500 });
+      } else {
+        cronLogger.warn(`[${executionId}] Authentication failed`, { 
+          error: authResult.error,
+          clientIP: authResult.clientIP 
+        });
+        if (monitor) await monitor.complete(CronJobStatus.FAILED, authResult.error || 'Authentication failed');
+        
+        return NextResponse.json({
+          success: false,
+          error: authResult.error || 'Authentication failed',
+          executionId,
+          duration: Date.now() - startTime
+        }, { 
+          status: authResult.error?.includes('Rate limit') ? 429 : 
+                 authResult.error?.includes('IP not allowed') ? 403 : 401
+        });
+      }
     }
 
     cronLogger.info(`[${executionId}] Authentication validated successfully`, {
@@ -293,6 +327,20 @@ export async function GET(request: NextRequest) {
     
     const errorType = error instanceof Error && error.message.includes('timeout') ? 'TIMEOUT' : 'ERROR';
     
+    // Safe error message for external consumption (no stack traces or sensitive info)
+    const safeErrorMessage = (() => {
+      if (errorType === 'TIMEOUT') return 'Request timeout';
+      if (error instanceof Error) {
+        // Only include safe error messages
+        if (error.message.includes('Database')) return 'Database temporarily unavailable';
+        if (error.message.includes('Network')) return 'Network error';
+        if (error.message.includes('Authentication')) return 'Authentication failed';
+        return 'Internal processing error';
+      }
+      return 'Unknown error occurred';
+    })();
+    
+    // Log full error details internally (with stack trace) but don't expose to client
     cronLogger.error(`[${executionId}] Tier-aware cron job failed`, { 
       error,
       errorType,
@@ -303,7 +351,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({
       success: false,
-      error: error instanceof Error ? error.message : 'Unknown error',
+      error: safeErrorMessage,
       errorType,
       executionId,
       duration: Date.now() - startTime

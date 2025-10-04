@@ -12,7 +12,16 @@ export default {
 
   // Handle scheduled cron events with timeout protection
   async scheduled(event, env, ctx) {
-    const executionId = `cron-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    // Generate secure execution ID using crypto API
+    const generateSecureExecutionId = () => {
+      const timestamp = Date.now();
+      const randomArray = new Uint8Array(16);
+      crypto.getRandomValues(randomArray);
+      const randomHex = Array.from(randomArray, byte => byte.toString(16).padStart(2, '0')).join('').substring(0, 16);
+      return `cron-${timestamp}-${randomHex}`;
+    };
+    
+    const executionId = generateSecureExecutionId();
     const startTime = Date.now();
     
     console.log(`[${executionId}] Starting TLDRSEC scheduled cron job execution`);
@@ -75,6 +84,19 @@ export default {
       const duration = Date.now() - startTime;
       const errorType = classifyError(error);
       
+      // Safe error message for external logs (no sensitive details)
+      const safeErrorMessage = (() => {
+        switch (errorType) {
+          case 'TIMEOUT': return 'Execution timeout';
+          case 'SERVICE_UNAVAILABLE': return 'Target service unavailable';
+          case 'RATE_LIMITED': return 'Rate limit exceeded';
+          case 'AUTHENTICATION_ERROR': return 'Authentication failed';
+          case 'NETWORK_ERROR': return 'Network connectivity issue';
+          default: return 'Execution failed';
+        }
+      })();
+      
+      // Log full error details for debugging but use safe message externally
       console.error(`[${executionId}] Cron job failed after ${duration}ms`, {
         error: error.message,
         errorType,
@@ -85,7 +107,7 @@ export default {
       // Don't throw - let Cloudflare handle gracefully
       return {
         success: false,
-        error: error.message,
+        error: safeErrorMessage,
         errorType,
         executionId,
         duration
