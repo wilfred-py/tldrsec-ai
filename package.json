@@ -45,6 +45,8 @@
     "test:cron-endpoint": "npx tsx scripts/test-cron-endpoint.ts",
     "test:cron-comprehensive": "jest __tests__/cron/comprehensive-cron-integration.test.ts --config=jest.config.mjs --verbose",
     "test:cloudflare-worker": "jest __tests__/cloudflare/worker-execution.test.ts --config=jest.config.mjs --verbose",
+    "test:cloudflare-timeout": "npx tsx scripts/test-cloudflare-timeout-fix.ts",
+    "test:timeout-scenarios": "jest __tests__/timeout/timeout-scenarios.test.ts --config=jest.config.mjs --verbose",
     "test:samples": "node scripts/parsers/sample-content-reader.js",
     "test:extract-xbrl": "node scripts/parsers/extract-xbrl.js",
     "test:watch": "jest --watch --config=jest.config.mjs",
