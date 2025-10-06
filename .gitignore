@@ -100,3 +100,4 @@ test-tesla-filing-extraction.js
 # Tesla 10-K related files
 *tsla*10k*
 *tesla*10k*
+.env*.local

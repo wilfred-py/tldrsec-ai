@@ -5,6 +5,7 @@
 
 import { logger } from '../logging';
 import { SubscriptionTier } from '@prisma/client';
+import { CronBudgetService } from './budget-service';
 
 const cronLogger = logger.child('market-hours');
 
@@ -23,15 +24,28 @@ const MARKET_HOLIDAYS_2025: Set<string> = new Set([
   '2025-12-25', // Christmas Day
 ]);
 
-// Tier processing frequencies (in minutes)
+// Tier processing frequencies (in minutes) - configurable via environment variables
 export const TIER_FREQUENCIES = {
-  INSTITUTION: { market: 5, offMarket: 15 },
-  ENTERPRISE: { market: 15, offMarket: 30 },
-  PROFESSIONAL: { market: 30, offMarket: 120 },
-  FREE: { market: 120, offMarket: 240 }
+  INSTITUTION: { 
+    market: Number(process.env.INSTITUTION_MARKET_FREQUENCY) || 5, 
+    offMarket: Number(process.env.INSTITUTION_OFF_MARKET_FREQUENCY) || 15 
+  },
+  ENTERPRISE: { 
+    market: Number(process.env.ENTERPRISE_MARKET_FREQUENCY) || 15, 
+    offMarket: Number(process.env.ENTERPRISE_OFF_MARKET_FREQUENCY) || 30 
+  },
+  PROFESSIONAL: { 
+    market: Number(process.env.PROFESSIONAL_MARKET_FREQUENCY) || 30, 
+    offMarket: Number(process.env.PROFESSIONAL_OFF_MARKET_FREQUENCY) || 120 
+  },
+  FREE: { 
+    market: Number(process.env.FREE_MARKET_FREQUENCY) || 120, 
+    offMarket: Number(process.env.FREE_OFF_MARKET_FREQUENCY) || 240 
+  }
 } as const;
 
-// Monthly budget allocations per user (in USD)
+// DEPRECATED: Monthly budget allocations (replaced by CronBudgetService daily limits)
+// Keeping for backward compatibility but not used in processing logic
 export const TIER_BUDGETS = {
   INSTITUTION: 100.0,
   ENTERPRISE: 25.0,
@@ -39,12 +53,12 @@ export const TIER_BUDGETS = {
   FREE: 2.0
 } as const;
 
-// Processing priority order (higher number = higher priority)
+// Processing priority order (higher number = higher priority) - configurable via environment variables
 export const TIER_PRIORITIES = {
-  INSTITUTION: 4,
-  ENTERPRISE: 3,
-  PROFESSIONAL: 2,
-  FREE: 1
+  INSTITUTION: Number(process.env.INSTITUTION_PRIORITY) || 4,
+  ENTERPRISE: Number(process.env.ENTERPRISE_PRIORITY) || 3,
+  PROFESSIONAL: Number(process.env.PROFESSIONAL_PRIORITY) || 2,
+  FREE: Number(process.env.FREE_PRIORITY) || 1
 } as const;
 
 export interface MarketHoursContext {
@@ -219,9 +233,10 @@ export function getUserProcessingStatuses(
       marketContext
     );
 
-    const monthlyBudget = TIER_BUDGETS[user.subscriptionTier] || TIER_BUDGETS.FREE;
-    const budgetRemaining = monthlyBudget - user.budgetUsed;
-    const budgetUtilization = (user.budgetUsed / monthlyBudget) * 100;
+    // Use daily budget limits for consistency with CronBudgetService
+    const dailyBudget = CronBudgetService.getDailyCostLimit(user.subscriptionTier);
+    const budgetRemaining = CronBudgetService.calculateRemainingBudget(user.budgetUsed, user.subscriptionTier);
+    const budgetUtilization = CronBudgetService.getBudgetUtilization(user.budgetUsed, user.subscriptionTier);
 
     return {
       userId: user.id,
@@ -230,7 +245,7 @@ export function getUserProcessingStatuses(
       eligibility,
       priority: TIER_PRIORITIES[user.subscriptionTier] || TIER_PRIORITIES.FREE,
       budgetStatus: {
-        monthlyBudget,
+        monthlyBudget: dailyBudget, // Using daily budget for consistency
         budgetUsed: user.budgetUsed,
         budgetRemaining,
         budgetUtilization

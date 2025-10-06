@@ -722,7 +722,9 @@ export async function summarizeFiling(content: string, options: SummarizationOpt
               isPartialResult: false,
               processingTimeMs: Date.now() - startTime,
               tokensUsed: inputTokens + outputTokens,
-              model: response.model,
+              model: response.model || getDefaultModel(),
+              modelVersion: response.model || getDefaultModel(),
+              promptVersion: 'v1.0', // Track prompt version
               cost,
               attempts: 1
             }
@@ -736,13 +738,16 @@ export async function summarizeFiling(content: string, options: SummarizationOpt
           summaryJSON: parsedResult.data,
           keyPoints: parsedResult.data.keyPoints || [],
           duration: Date.now() - startTime,
-          modelUsed: response.model,
-          model: response.model,
+          modelUsed: response.model || getDefaultModel(),
+          model: response.model || getDefaultModel(),
+          modelVersion: response.model || getDefaultModel(),
+          promptVersion: 'v1.0',
           inputTokens,
           outputTokens,
           tokensUsed: inputTokens + outputTokens,
           cost,
           processingTimeMs: Date.now() - startTime,
+          processingCompletedAt: new Date(),
           attempts: 1
         };
       } else {
@@ -806,7 +811,9 @@ export async function summarizeFiling(content: string, options: SummarizationOpt
               processingTimeMs: Date.now() - startTime,
               processingError: 'Fixed JSON response: ' + parsedResult.errors?.join('; '),
               tokensUsed: inputTokens + outputTokens,
-              model: response.model,
+              model: response.model || getDefaultModel(),
+              modelVersion: response.model || getDefaultModel(),
+              promptVersion: 'v1.0',
               cost,
               attempts: 1
             }
@@ -822,13 +829,16 @@ export async function summarizeFiling(content: string, options: SummarizationOpt
           isPartial: true,
           parsingErrors: parsedResult.errors,
           duration: Date.now() - startTime,
-          modelUsed: response.model,
-          model: response.model,
+          modelUsed: response.model || getDefaultModel(),
+          model: response.model || getDefaultModel(),
+          modelVersion: response.model || getDefaultModel(),
+          promptVersion: 'v1.0',
           inputTokens,
           outputTokens,
           tokensUsed: inputTokens + outputTokens,
           cost,
           processingTimeMs: Date.now() - startTime,
+          processingCompletedAt: new Date(),
           attempts: 1
         };
       }

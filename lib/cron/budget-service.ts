@@ -70,9 +70,12 @@ export class CronBudgetService {
     context: ProcessingContext
   ): { valid: boolean; sanitizedCost: number; error?: string } {
     try {
-      const costValidation = validateCostUpdate(cost, tier, {
+      // Normalize tier first to ensure consistency with cost validation system
+      const normalizedTier = this.normalizeTier(tier);
+      
+      const costValidation = validateCostUpdate(cost, normalizedTier, {
         userId: context.userId,
-        tier,
+        tier: normalizedTier,
         operation: context.operation,
         operationType: context.operationType,
         isCached: context.isCached

@@ -199,6 +199,41 @@ export async function GET(request: NextRequest) {
       eligibleUsers: eligibleUsers.length
     });
 
+    // STEP 2.5: Backlog Processing Phase - Process ALL unprocessed filings first
+    cronLogger.debug(`[${executionId}] Checkpoint 5.5: Starting backlog processing for unprocessed filings`);
+    
+    // Check current unprocessed filing count for monitoring
+    let unprocessedCount = 0;
+    try {
+      const unprocessedFilings = await import('../../../../lib/sec-edgar/ticker-monitoring').then(m => m.getUnprocessedFilings(100));
+      unprocessedCount = unprocessedFilings.length;
+      
+      if (unprocessedCount > 0) {
+        cronLogger.warn(`[${executionId}] BACKLOG DETECTED: ${unprocessedCount} unprocessed filings found`, {
+          backlogSize: unprocessedCount,
+          targetFilings: 0
+        });
+        
+        // Record backlog metrics
+        if (monitor) {
+          await monitor.recordMetric('unprocessed_filings_backlog', {
+            count: unprocessedCount,
+            alertLevel: unprocessedCount > 10 ? 'HIGH' : unprocessedCount > 5 ? 'MEDIUM' : 'LOW'
+          });
+        }
+      } else {
+        cronLogger.info(`[${executionId}] No backlog detected - all filings processed`);
+      }
+    } catch (backlogCheckError) {
+      cronLogger.error(`[${executionId}] Failed to check backlog size`, {
+        error: backlogCheckError instanceof Error ? backlogCheckError.message : 'Unknown error'
+      });
+    }
+    
+    cronLogger.debug(`[${executionId}] Checkpoint 5.6: Backlog assessment completed`, {
+      unprocessedFilingsFound: unprocessedCount
+    });
+
     // STEP 3: Core SEC Filing Monitoring (always runs - filings can be published 24/7)
     cronLogger.debug(`[${executionId}] Checkpoint 6: Starting SEC filing monitoring`);
     const filingMonitoringResults = await Promise.race([
@@ -292,6 +327,50 @@ export async function GET(request: NextRequest) {
       filingMonitoring: filingMonitoringResults
     };
 
+    // ENHANCED CRITICAL MONITORING: Alert when filings are detected but not processed OR backlog exists
+    const totalFilingsAvailable = filingMonitoringResults.newFilingsFound + unprocessedCount;
+    
+    if (filingMonitoringResults.newFilingsFound > 0 && processingResults.filingsProcessed === 0) {
+      cronLogger.error(`[${executionId}] CRITICAL: Filings detected but not processed!`, {
+        newFilingsFound: filingMonitoringResults.newFilingsFound,
+        unprocessedBacklog: unprocessedCount,
+        totalFilingsAvailable,
+        filingsProcessed: processingResults.filingsProcessed,
+        usersProcessed: processingResults.usersProcessed,
+        eligibleUsers: eligibleUsers.length,
+        alert: 'FILING_PROCESSING_FAILURE'
+      });
+      
+      // Create alert in monitoring system
+      if (monitor) {
+        await monitor.createAlert('FILING_PROCESSING_FAILURE', {
+          severity: 'CRITICAL',
+          message: `${filingMonitoringResults.newFilingsFound} new filings + ${unprocessedCount} backlog filings detected but none processed`,
+          details: {
+            newFilingsFound: filingMonitoringResults.newFilingsFound,
+            unprocessedBacklog: unprocessedCount,
+            totalFilingsAvailable,
+            filingsProcessed: processingResults.filingsProcessed,
+            usersProcessed: processingResults.usersProcessed,
+            target: 'Process ALL filings to reach 0 unprocessed'
+          }
+        });
+      }
+    } else if (unprocessedCount > 0) {
+      cronLogger.warn(`[${executionId}] BACKLOG WARNING: ${unprocessedCount} unprocessed filings remain (Target: 0)`, {
+        unprocessedBacklog: unprocessedCount,
+        newFilingsFound: filingMonitoringResults.newFilingsFound,
+        filingsProcessed: processingResults.filingsProcessed,
+        target: 'All unprocessed filings should be processed each run'
+      });
+    } else if (filingMonitoringResults.newFilingsFound > processingResults.filingsProcessed) {
+      cronLogger.warn(`[${executionId}] WARNING: Not all detected filings were processed`, {
+        newFilingsFound: filingMonitoringResults.newFilingsFound,
+        filingsProcessed: processingResults.filingsProcessed,
+        processingRate: (processingResults.filingsProcessed / filingMonitoringResults.newFilingsFound * 100).toFixed(2) + '%'
+      });
+    }
+
     // Complete monitoring
     const monitorResult = monitor ? 
       await monitor.complete(CronJobStatus.SUCCESS) : 
@@ -303,7 +382,9 @@ export async function GET(request: NextRequest) {
       ...results,
       executionId: monitorResult.executionId,
       duration: monitorResult.duration,
-      duplicatePreventionActive: true
+      duplicatePreventionActive: true,
+      processingHealth: filingMonitoringResults.newFilingsFound === 0 ? 'No new filings' : 
+                       processingResults.filingsProcessed > 0 ? 'Healthy' : 'CRITICAL'
     });
 
     return NextResponse.json({
