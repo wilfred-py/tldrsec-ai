@@ -50,6 +50,9 @@ model User {
 }
 
 enum SubscriptionTier {
+  HOBBY
+  PRO
+  // Legacy tiers kept for migration compatibility
   FREE
   PROFESSIONAL
   ENTERPRISE

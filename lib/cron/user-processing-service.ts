@@ -82,7 +82,7 @@ export class CronUserProcessingService {
           .filter(u => u && u.id && u.subscriptionTier) // Filter out invalid users
           .map(u => ({
             id: u.id,
-            subscriptionTier: u.subscriptionTier as 'FREE' | 'HOBBY' | 'PRO', // Type assertion for updated subscription tiers
+            subscriptionTier: CronBudgetService.normalizeTier(u.subscriptionTier), // Normalize tier to HOBBY/PRO
             lastProcessedAt: u.lastCronProcessed,
             budgetUsed: u.budgetUsed || 0
           })),

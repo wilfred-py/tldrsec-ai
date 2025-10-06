@@ -26,14 +26,14 @@ export class CronBudgetService {
   static normalizeTier(tier: string): SubscriptionTier {
     const tierUpper = (tier || '').toUpperCase();
     
-    // Map legacy tiers to new tiers for backward compatibility
+    // Map legacy tiers to new two-tier system (PRO and HOBBY)
     switch (tierUpper) {
       case 'INSTITUTION':
       case 'ENTERPRISE':
       case 'PROFESSIONAL':
         return 'PRO';
       case 'FREE':
-        return 'FREE';
+        return 'HOBBY';  // Map FREE to HOBBY
       case 'HOBBY':
         return 'HOBBY';
       case 'PRO':

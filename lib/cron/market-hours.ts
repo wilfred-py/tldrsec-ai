@@ -25,22 +25,32 @@ const MARKET_HOLIDAYS_2025: Set<string> = new Set([
 ]);
 
 // Tier processing frequencies (in minutes) - configurable via environment variables
+// Simplified two-tier system: PRO and HOBBY
 export const TIER_FREQUENCIES = {
+  PRO: { 
+    market: Number(process.env.PRO_MARKET_FREQUENCY) || 5, 
+    offMarket: Number(process.env.PRO_OFF_MARKET_FREQUENCY) || 15 
+  },
+  HOBBY: { 
+    market: Number(process.env.HOBBY_MARKET_FREQUENCY) || 120, 
+    offMarket: Number(process.env.HOBBY_OFF_MARKET_FREQUENCY) || 240 
+  },
+  // Legacy tier mappings for backward compatibility
   INSTITUTION: { 
-    market: Number(process.env.INSTITUTION_MARKET_FREQUENCY) || 5, 
-    offMarket: Number(process.env.INSTITUTION_OFF_MARKET_FREQUENCY) || 15 
+    market: Number(process.env.PRO_MARKET_FREQUENCY) || 5, 
+    offMarket: Number(process.env.PRO_OFF_MARKET_FREQUENCY) || 15 
   },
   ENTERPRISE: { 
-    market: Number(process.env.ENTERPRISE_MARKET_FREQUENCY) || 15, 
-    offMarket: Number(process.env.ENTERPRISE_OFF_MARKET_FREQUENCY) || 30 
+    market: Number(process.env.PRO_MARKET_FREQUENCY) || 5, 
+    offMarket: Number(process.env.PRO_OFF_MARKET_FREQUENCY) || 15 
   },
   PROFESSIONAL: { 
-    market: Number(process.env.PROFESSIONAL_MARKET_FREQUENCY) || 30, 
-    offMarket: Number(process.env.PROFESSIONAL_OFF_MARKET_FREQUENCY) || 120 
+    market: Number(process.env.PRO_MARKET_FREQUENCY) || 5, 
+    offMarket: Number(process.env.PRO_OFF_MARKET_FREQUENCY) || 15 
   },
   FREE: { 
-    market: Number(process.env.FREE_MARKET_FREQUENCY) || 120, 
-    offMarket: Number(process.env.FREE_OFF_MARKET_FREQUENCY) || 240 
+    market: Number(process.env.HOBBY_MARKET_FREQUENCY) || 120, 
+    offMarket: Number(process.env.HOBBY_OFF_MARKET_FREQUENCY) || 240 
   }
 } as const;
 
@@ -54,11 +64,15 @@ export const TIER_BUDGETS = {
 } as const;
 
 // Processing priority order (higher number = higher priority) - configurable via environment variables
+// Simplified two-tier system: PRO and HOBBY
 export const TIER_PRIORITIES = {
-  INSTITUTION: Number(process.env.INSTITUTION_PRIORITY) || 4,
-  ENTERPRISE: Number(process.env.ENTERPRISE_PRIORITY) || 3,
-  PROFESSIONAL: Number(process.env.PROFESSIONAL_PRIORITY) || 2,
-  FREE: Number(process.env.FREE_PRIORITY) || 1
+  PRO: Number(process.env.PRO_PRIORITY) || 2,
+  HOBBY: Number(process.env.HOBBY_PRIORITY) || 1,
+  // Legacy tier mappings for backward compatibility
+  INSTITUTION: Number(process.env.PRO_PRIORITY) || 2,
+  ENTERPRISE: Number(process.env.PRO_PRIORITY) || 2,
+  PROFESSIONAL: Number(process.env.PRO_PRIORITY) || 2,
+  FREE: Number(process.env.HOBBY_PRIORITY) || 1
 } as const;
 
 export interface MarketHoursContext {
