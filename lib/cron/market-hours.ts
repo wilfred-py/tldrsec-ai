@@ -191,8 +191,8 @@ export function calculateProcessingEligibility(
   lastProcessedAt: Date | null,
   marketContext: MarketHoursContext
 ): ProcessingEligibility {
-  // Handle invalid tiers by falling back to FREE tier
-  const validTier = TIER_FREQUENCIES[tier] ? tier : 'FREE';
+  // Handle invalid tiers by falling back to HOBBY tier
+  const validTier = TIER_FREQUENCIES[tier] ? tier : 'HOBBY';
   const frequency = marketContext.isMarketHours 
     ? TIER_FREQUENCIES[validTier].market 
     : TIER_FREQUENCIES[validTier].offMarket;
@@ -257,7 +257,7 @@ export function getUserProcessingStatuses(
       tier: user.subscriptionTier,
       lastProcessedAt: user.lastProcessedAt,
       eligibility,
-      priority: TIER_PRIORITIES[user.subscriptionTier] || TIER_PRIORITIES.FREE,
+      priority: TIER_PRIORITIES[user.subscriptionTier] || TIER_PRIORITIES.HOBBY,
       budgetStatus: {
         monthlyBudget: dailyBudget, // Using daily budget for consistency
         budgetUsed: user.budgetUsed,
