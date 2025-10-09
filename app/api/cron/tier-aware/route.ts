@@ -313,6 +313,17 @@ export async function GET(request: NextRequest) {
                 // Process filing for each user who subscribes to this ticker
                 for (const user of usersForTicker) {
                   try {
+                    // ENHANCED: Validate processSingleFiling method accessibility before calling
+                    if (typeof CronFilingProcessor.processSingleFiling !== 'function') {
+                      throw new Error('CronFilingProcessor.processSingleFiling is not accessible or not a function');
+                    }
+
+                    cronLogger.debug(`[${executionId}] Calling CronFilingProcessor.processSingleFiling for filing ${filing.accessionNumber}`, {
+                      userId: user.id,
+                      ticker: filing.ticker.symbol,
+                      methodAccessible: typeof CronFilingProcessor.processSingleFiling === 'function'
+                    });
+
                     // Use the PROPER filing processor that does real E2E processing
                     const result = await CronFilingProcessor.processSingleFiling(
                       filing,
@@ -321,6 +332,11 @@ export async function GET(request: NextRequest) {
                       { symbol: filing.ticker.symbol, cik: filing.ticker.cik },
                       { companyName: filing.ticker.companyName }
                     );
+
+                    // ENHANCED: Validate result structure
+                    if (!result || typeof result !== 'object') {
+                      throw new Error(`Invalid result returned from processSingleFiling: ${typeof result}`);
+                    }
 
                     if (result.success) {
                       totalProcessedForFiling++;
@@ -335,10 +351,33 @@ export async function GET(request: NextRequest) {
                       });
                     }
                   } catch (userProcessingError) {
-                    cronLogger.error(`[${executionId}] Error processing filing ${filing.accessionNumber} for user ${user.email}`, {
-                      error: userProcessingError instanceof Error ? userProcessingError.message : 'Unknown error',
-                      ticker: filing.ticker.symbol
+                    const errorMessage = userProcessingError instanceof Error ? userProcessingError.message : 'Unknown error';
+                    
+                    // ENHANCED: Detect specific error types for better debugging
+                    const isAccessError = errorMessage.includes('private and only accessible') || 
+                                          errorMessage.includes('not accessible') ||
+                                          errorMessage.includes('not a function');
+                    
+                    const isTypeError = userProcessingError instanceof TypeError;
+                    
+                    cronLogger.error(`[${executionId}] CRITICAL: Error processing filing ${filing.accessionNumber} for user ${user.email}`, {
+                      error: errorMessage,
+                      errorType: userProcessingError?.constructor?.name || 'Unknown',
+                      isAccessError,
+                      isTypeError,
+                      ticker: filing.ticker.symbol,
+                      userId: user.id,
+                      methodType: typeof CronFilingProcessor.processSingleFiling,
+                      alertLevel: isAccessError ? 'CRITICAL_METHOD_ACCESS' : 'ERROR'
                     });
+                    
+                    // If this is a method access error, we need to track this specifically
+                    if (isAccessError || isTypeError) {
+                      cronLogger.error(`[${executionId}] SYSTEM ERROR: CronFilingProcessor.processSingleFiling method access issue detected`, {
+                        possibleCause: 'Method visibility or import issues',
+                        recommendation: 'Check if processSingleFiling is public static and properly exported'
+                      });
+                    }
                   }
                 }
 

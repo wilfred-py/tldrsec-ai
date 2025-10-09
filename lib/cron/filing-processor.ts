@@ -387,7 +387,7 @@ export class CronFilingProcessor {
   /**
    * Process a single filing with transaction boundaries
    */
-  private static async processSingleFiling(
+  public static async processSingleFiling(
     filing: unknown,
     user: DatabaseUser | User,
     tier: string,
