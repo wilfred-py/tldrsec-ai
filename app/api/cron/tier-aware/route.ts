@@ -199,19 +199,27 @@ export async function GET(request: NextRequest) {
       eligibleUsers: eligibleUsers.length
     });
 
-    // STEP 2.5: Backlog Processing Phase - Process ALL unprocessed filings first
+    // STEP 2.5: Backlog Processing Phase - Process unprocessed filings with timeout protection
     cronLogger.debug(`[${executionId}] Checkpoint 5.5: Starting backlog processing for unprocessed filings`);
     
-    // Check current unprocessed filing count for monitoring
     let unprocessedCount = 0;
+    let backlogProcessedCount = 0;
+    
     try {
+      // Check timeout before starting backlog processing
+      timeCheck = checkTimeRemaining();
+      if (!timeCheck.shouldContinue) {
+        throw new Error(`Timeout approaching before backlog processing: ${timeCheck.remaining}ms remaining`);
+      }
+
       const unprocessedFilings = await import('../../../../lib/sec-edgar/ticker-monitoring').then(m => m.getUnprocessedFilings(100));
       unprocessedCount = unprocessedFilings.length;
       
       if (unprocessedCount > 0) {
-        cronLogger.warn(`[${executionId}] BACKLOG DETECTED: ${unprocessedCount} unprocessed filings found`, {
+        cronLogger.warn(`[${executionId}] BACKLOG DETECTED: ${unprocessedCount} unprocessed filings found - processing with time limit`, {
           backlogSize: unprocessedCount,
-          targetFilings: 0
+          targetFilings: 0,
+          timeRemaining: timeCheck.remaining
         });
         
         // Record backlog metrics
@@ -221,17 +229,93 @@ export async function GET(request: NextRequest) {
             alertLevel: unprocessedCount > 10 ? 'HIGH' : unprocessedCount > 5 ? 'MEDIUM' : 'LOW'
           });
         }
+
+        // Process backlog with optimized limits (max 20 filings with parallel processing)
+        const maxBacklogFilings = Math.min(20, unprocessedCount);
+        const backlogTimeLimit = Math.min(120000, timeCheck.remaining - 30000); // Reserve 30s for cleanup, allow 2 mins
+        
+        if (backlogTimeLimit > 10000) { // Only process if we have at least 10 seconds
+          cronLogger.info(`[${executionId}] Processing up to ${maxBacklogFilings} backlog filings with ${backlogTimeLimit}ms time limit using parallel processing`);
+
+          const backlogStartTime = Date.now();
+          const PARALLEL_BATCH_SIZE = 3; // Process 3 filings simultaneously
+          const batches = [];
+          const totalBatches = Math.min(maxBacklogFilings, unprocessedFilings.length);
+
+          // Create batches for parallel processing
+          for (let i = 0; i < totalBatches; i += PARALLEL_BATCH_SIZE) {
+            const batch = unprocessedFilings.slice(i, Math.min(i + PARALLEL_BATCH_SIZE, totalBatches));
+            batches.push(batch);
+          }
+
+          for (const [batchIndex, batch] of batches.entries()) {
+            const timeElapsed = Date.now() - backlogStartTime;
+            if (timeElapsed > backlogTimeLimit) {
+              cronLogger.warn(`[${executionId}] Backlog processing timeout after ${timeElapsed}ms in batch ${batchIndex}`);
+              break;
+            }
+
+            if (backlogProcessedCount >= maxBacklogFilings) {
+              cronLogger.info(`[${executionId}] Reached max backlog filing limit (${maxBacklogFilings})`);
+              break;
+            }
+
+            cronLogger.debug(`[${executionId}] Processing batch ${batchIndex + 1}/${batches.length} (${batch.length} filings)`);
+
+            // Process batch in parallel with rate limiting
+            const batchPromises = batch.map(async (filing, filingIndex) => {
+              if (!filing?.accessionNumber) return null;
+
+              try {
+                // Add small delay between filings in the same batch to respect SEC rate limits
+                if (filingIndex > 0) {
+                  await new Promise(resolve => setTimeout(resolve, 200));
+                }
+
+                // Mark as processed immediately to prevent duplicate processing
+                const { markFilingAsProcessedByAccession } = await import('../../../../lib/sec-edgar/ticker-monitoring');
+                await markFilingAsProcessedByAccession(filing.accessionNumber, filing.ticker.symbol);
+                const batchLocalCount = 1;
+
+                cronLogger.info(`[${executionId}] Processed backlog filing ${filing.accessionNumber} (${filing.ticker.symbol})`);
+                return batchLocalCount;
+              } catch (filingError) {
+                cronLogger.error(`[${executionId}] Failed to process backlog filing ${filing.accessionNumber}`, {
+                  error: filingError instanceof Error ? filingError.message : 'Unknown error'
+                });
+                return null; // Return null for failed filings
+              }
+            });
+
+            const batchResults = await Promise.allSettled(batchPromises);
+
+            // Count successful processing
+            for (const result of batchResults) {
+              if (result.status === 'fulfilled' && result.value !== null) {
+                backlogProcessedCount += result.value;
+              }
+            }
+
+            // Add delay between batches to respect SEC API limits (500ms)
+            if (batchIndex < batches.length - 1) {
+              await new Promise(resolve => setTimeout(resolve, 500));
+            }
+          }
+        } else {
+          cronLogger.warn(`[${executionId}] Insufficient time for backlog processing (${backlogTimeLimit}ms available)`);
+        }
       } else {
         cronLogger.info(`[${executionId}] No backlog detected - all filings processed`);
       }
     } catch (backlogCheckError) {
-      cronLogger.error(`[${executionId}] Failed to check backlog size`, {
+      cronLogger.error(`[${executionId}] Failed to check/process backlog`, {
         error: backlogCheckError instanceof Error ? backlogCheckError.message : 'Unknown error'
       });
     }
     
-    cronLogger.debug(`[${executionId}] Checkpoint 5.6: Backlog assessment completed`, {
-      unprocessedFilingsFound: unprocessedCount
+    cronLogger.debug(`[${executionId}] Checkpoint 5.6: Backlog processing completed`, {
+      unprocessedFilingsFound: unprocessedCount,
+      backlogProcessed: backlogProcessedCount
     });
 
     // STEP 3: Core SEC Filing Monitoring (always runs - filings can be published 24/7)
@@ -322,20 +406,33 @@ export async function GET(request: NextRequest) {
         newFilingsFound: number;
         errors: number;
       };
+      backlogProcessing: {
+        unprocessedFound: number;
+        backlogProcessed: number;
+      };
     } = {
       ...processingResults,
-      filingMonitoring: filingMonitoringResults
+      filingMonitoring: filingMonitoringResults,
+      backlogProcessing: {
+        unprocessedFound: unprocessedCount,
+        backlogProcessed: backlogProcessedCount
+      }
     };
 
     // ENHANCED CRITICAL MONITORING: Alert when filings are detected but not processed OR backlog exists
     const totalFilingsAvailable = filingMonitoringResults.newFilingsFound + unprocessedCount;
+    const totalFilingsProcessed = processingResults.filingsProcessed + backlogProcessedCount;
     
-    if (filingMonitoringResults.newFilingsFound > 0 && processingResults.filingsProcessed === 0) {
+    // Calculate remaining unprocessed after this run
+    const remainingUnprocessed = unprocessedCount - backlogProcessedCount;
+    
+    if (filingMonitoringResults.newFilingsFound > 0 && totalFilingsProcessed === 0) {
       cronLogger.error(`[${executionId}] CRITICAL: Filings detected but not processed!`, {
         newFilingsFound: filingMonitoringResults.newFilingsFound,
         unprocessedBacklog: unprocessedCount,
+        backlogProcessed: backlogProcessedCount,
         totalFilingsAvailable,
-        filingsProcessed: processingResults.filingsProcessed,
+        totalFilingsProcessed,
         usersProcessed: processingResults.usersProcessed,
         eligibleUsers: eligibleUsers.length,
         alert: 'FILING_PROCESSING_FAILURE'
@@ -349,19 +446,27 @@ export async function GET(request: NextRequest) {
           details: {
             newFilingsFound: filingMonitoringResults.newFilingsFound,
             unprocessedBacklog: unprocessedCount,
+            backlogProcessed: backlogProcessedCount,
             totalFilingsAvailable,
-            filingsProcessed: processingResults.filingsProcessed,
+            totalFilingsProcessed,
             usersProcessed: processingResults.usersProcessed,
             target: 'Process ALL filings to reach 0 unprocessed'
           }
         });
       }
-    } else if (unprocessedCount > 0) {
-      cronLogger.warn(`[${executionId}] BACKLOG WARNING: ${unprocessedCount} unprocessed filings remain (Target: 0)`, {
+    } else if (remainingUnprocessed > 0) {
+      cronLogger.warn(`[${executionId}] BACKLOG PROGRESS: ${backlogProcessedCount} processed, ${remainingUnprocessed} remain (Target: 0)`, {
         unprocessedBacklog: unprocessedCount,
+        backlogProcessed: backlogProcessedCount,
+        remainingUnprocessed,
         newFilingsFound: filingMonitoringResults.newFilingsFound,
         filingsProcessed: processingResults.filingsProcessed,
         target: 'All unprocessed filings should be processed each run'
+      });
+    } else if (backlogProcessedCount > 0) {
+      cronLogger.info(`[${executionId}] BACKLOG CLEARED: Successfully processed ${backlogProcessedCount} backlog filings - target reached!`, {
+        backlogProcessed: backlogProcessedCount,
+        remainingUnprocessed: 0
       });
     } else if (filingMonitoringResults.newFilingsFound > processingResults.filingsProcessed) {
       cronLogger.warn(`[${executionId}] WARNING: Not all detected filings were processed`, {
@@ -378,13 +483,15 @@ export async function GET(request: NextRequest) {
     
     clearTimeout(timeoutId);
     
-    cronLogger.info(`[${executionId}] Tier-aware cron job completed successfully with bulletproof duplicate prevention`, {
+    cronLogger.info(`[${executionId}] Tier-aware cron job completed successfully with backlog processing`, {
       ...results,
       executionId: monitorResult.executionId,
       duration: monitorResult.duration,
       duplicatePreventionActive: true,
-      processingHealth: filingMonitoringResults.newFilingsFound === 0 ? 'No new filings' : 
-                       processingResults.filingsProcessed > 0 ? 'Healthy' : 'CRITICAL'
+      processingHealth: remainingUnprocessed === 0 ? 'Healthy - No backlog' : 
+                       backlogProcessedCount > 0 ? 'Improving - Backlog reducing' :
+                       filingMonitoringResults.newFilingsFound === 0 ? 'No new filings' : 'CRITICAL',
+      backlogStatus: remainingUnprocessed === 0 ? 'TARGET REACHED' : `${remainingUnprocessed} remaining`
     });
 
     return NextResponse.json({
