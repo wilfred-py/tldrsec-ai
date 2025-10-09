@@ -68,10 +68,17 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - `npm run test:security` - Run security test suite
 
 ### Cloudflare Workers Deployment Commands
-- `npx wrangler deploy` - Deploy Cloudflare Worker
-- `npx wrangler tail` - View Cloudflare Worker logs in real-time
-- `npx wrangler dev` - Test worker locally
-- `npx wrangler whoami` - Check current authentication status
+- `npm run cloudflare:deploy` - Deploy Cloudflare Worker to production
+- `npm run cloudflare:deploy:dry-run` - Validate deployment configuration without deploying
+- `npm run cloudflare:deploy:tail` - Deploy and start log monitoring
+- `npm run cloudflare:logs` - View Cloudflare Worker logs in real-time
+- `npm run cloudflare:status` - Check deployment status and list recent deployments
+
+**Manual Commands (run from cloudflare-cron/ directory):**
+- `cd cloudflare-cron && npx wrangler deploy` - Deploy worker
+- `cd cloudflare-cron && npx wrangler tail --format=pretty` - View logs
+- `cd cloudflare-cron && npx wrangler deployments list` - List deployments
+- `cd cloudflare-cron && npx wrangler secret put CRON_SECRET` - Set secrets
 
 ### Vercel Deployment Commands  
 - `vercel` - Deploy to Vercel

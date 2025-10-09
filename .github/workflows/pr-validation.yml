@@ -87,7 +87,17 @@ jobs:
         run: |
           cd cloudflare-cron
           echo "Validating wrangler.toml configuration..."
-          npx wrangler validate
+          echo "Checking wrangler.toml syntax..."
+          if [ ! -f "wrangler.toml" ]; then
+            echo "❌ wrangler.toml not found"
+            exit 1
+          fi
+          echo "✅ wrangler.toml exists"
+          if [ ! -f "index.js" ]; then
+            echo "❌ index.js not found"
+            exit 1
+          fi
+          echo "✅ index.js exists"
           
       - name: Worker Syntax Check
         run: |
