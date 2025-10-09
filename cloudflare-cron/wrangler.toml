@@ -4,7 +4,7 @@ compatibility_date = "2024-09-12"
 workers_dev = true
 
 [triggers]
-crons = ["*/10 * * * *"]
+crons = ["*/5 * * * *"]
 
 [vars]
 PUBLIC_URL = "https://tldrsec.app"
@@ -14,6 +14,3 @@ PUBLIC_URL = "https://tldrsec.app"
 # wrangler.toml (wrangler v3.88.0^)
 [observability.logs]
 enabled = true
-
-
-

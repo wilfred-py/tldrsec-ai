@@ -157,16 +157,14 @@ export interface AuthHeaders {
 // Updated for xAI/OpenRouter pricing model
 export const TIER_BATCH_SIZES = {
   PRO: Number(process.env.PRO_BATCH_SIZE) || 20,      // 20 tickers, higher processing capacity
-  HOBBY: Number(process.env.HOBBY_BATCH_SIZE) || 3,   // 3 tickers, basic processing
-  FREE: Number(process.env.FREE_BATCH_SIZE) || 1      // 1 ticker for free users if any
+  HOBBY: Number(process.env.HOBBY_BATCH_SIZE) || 3    // 3 tickers, basic processing
 } as const;
 
 // Daily cost budgets (in USD) - Updated for new subscription tiers and xAI pricing
 // Based on $109/month HOBBY ($0.06/day) and $149/month PRO ($0.40/day) with 95% cost reduction from xAI
 export const DAILY_COST_LIMITS = {
   PRO: Number(process.env.PRO_COST_LIMIT) || 0.40,     // $149/month = ~$0.40/day for 20 tickers
-  HOBBY: Number(process.env.HOBBY_COST_LIMIT) || 0.06, // $109/month = ~$0.06/day for 3 tickers
-  FREE: Number(process.env.FREE_COST_LIMIT) || 0.02    // Minimal cost for free tier if any
+  HOBBY: Number(process.env.HOBBY_COST_LIMIT) || 0.06  // $109/month = ~$0.06/day for 3 tickers
 } as const;
 
 // Security constants
@@ -190,7 +188,7 @@ export type ErrorType = typeof ERROR_TYPES[keyof typeof ERROR_TYPES];
 
 // ===== UTILITY TYPES =====
 
-export type SubscriptionTier = 'FREE' | 'HOBBY' | 'PRO';
+export type SubscriptionTier = 'HOBBY' | 'PRO';
 
 export interface MarketContext {
   isMarketHours: boolean;
@@ -220,7 +218,7 @@ export interface TransactionResult<T = unknown> {
 // ===== TYPE GUARDS =====
 
 export function isValidSubscriptionTier(tier: string): tier is SubscriptionTier {
-  return ['FREE', 'HOBBY', 'PRO'].includes(tier.toUpperCase());
+  return ['HOBBY', 'PRO'].includes(tier.toUpperCase());
 }
 
 export function isProcessUserResult(obj: unknown): obj is ProcessUserResult {

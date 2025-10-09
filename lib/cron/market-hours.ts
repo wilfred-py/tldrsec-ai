@@ -5,6 +5,7 @@
 
 import { logger } from '../logging';
 import { SubscriptionTier } from '@prisma/client';
+import { CronBudgetService } from './budget-service';
 
 const cronLogger = logger.child('market-hours');
 
@@ -23,15 +24,38 @@ const MARKET_HOLIDAYS_2025: Set<string> = new Set([
   '2025-12-25', // Christmas Day
 ]);
 
-// Tier processing frequencies (in minutes)
+// Tier processing frequencies (in minutes) - configurable via environment variables
+// Simplified two-tier system: PRO and HOBBY
 export const TIER_FREQUENCIES = {
-  INSTITUTION: { market: 5, offMarket: 15 },
-  ENTERPRISE: { market: 15, offMarket: 30 },
-  PROFESSIONAL: { market: 30, offMarket: 120 },
-  FREE: { market: 120, offMarket: 240 }
+  PRO: { 
+    market: Number(process.env.PRO_MARKET_FREQUENCY) || 5, 
+    offMarket: Number(process.env.PRO_OFF_MARKET_FREQUENCY) || 15 
+  },
+  HOBBY: { 
+    market: Number(process.env.HOBBY_MARKET_FREQUENCY) || 120, 
+    offMarket: Number(process.env.HOBBY_OFF_MARKET_FREQUENCY) || 240 
+  },
+  // Legacy tier mappings for backward compatibility
+  INSTITUTION: { 
+    market: Number(process.env.PRO_MARKET_FREQUENCY) || 5, 
+    offMarket: Number(process.env.PRO_OFF_MARKET_FREQUENCY) || 15 
+  },
+  ENTERPRISE: { 
+    market: Number(process.env.PRO_MARKET_FREQUENCY) || 5, 
+    offMarket: Number(process.env.PRO_OFF_MARKET_FREQUENCY) || 15 
+  },
+  PROFESSIONAL: { 
+    market: Number(process.env.PRO_MARKET_FREQUENCY) || 5, 
+    offMarket: Number(process.env.PRO_OFF_MARKET_FREQUENCY) || 15 
+  },
+  FREE: { 
+    market: Number(process.env.HOBBY_MARKET_FREQUENCY) || 120, 
+    offMarket: Number(process.env.HOBBY_OFF_MARKET_FREQUENCY) || 240 
+  }
 } as const;
 
-// Monthly budget allocations per user (in USD)
+// DEPRECATED: Monthly budget allocations (replaced by CronBudgetService daily limits)
+// Keeping for backward compatibility but not used in processing logic
 export const TIER_BUDGETS = {
   INSTITUTION: 100.0,
   ENTERPRISE: 25.0,
@@ -39,12 +63,16 @@ export const TIER_BUDGETS = {
   FREE: 2.0
 } as const;
 
-// Processing priority order (higher number = higher priority)
+// Processing priority order (higher number = higher priority) - configurable via environment variables
+// Simplified two-tier system: PRO and HOBBY
 export const TIER_PRIORITIES = {
-  INSTITUTION: 4,
-  ENTERPRISE: 3,
-  PROFESSIONAL: 2,
-  FREE: 1
+  PRO: Number(process.env.PRO_PRIORITY) || 2,
+  HOBBY: Number(process.env.HOBBY_PRIORITY) || 1,
+  // Legacy tier mappings for backward compatibility
+  INSTITUTION: Number(process.env.PRO_PRIORITY) || 2,
+  ENTERPRISE: Number(process.env.PRO_PRIORITY) || 2,
+  PROFESSIONAL: Number(process.env.PRO_PRIORITY) || 2,
+  FREE: Number(process.env.HOBBY_PRIORITY) || 1
 } as const;
 
 export interface MarketHoursContext {
@@ -163,8 +191,8 @@ export function calculateProcessingEligibility(
   lastProcessedAt: Date | null,
   marketContext: MarketHoursContext
 ): ProcessingEligibility {
-  // Handle invalid tiers by falling back to FREE tier
-  const validTier = TIER_FREQUENCIES[tier] ? tier : 'FREE';
+  // Handle invalid tiers by falling back to HOBBY tier
+  const validTier = TIER_FREQUENCIES[tier] ? tier : 'HOBBY';
   const frequency = marketContext.isMarketHours 
     ? TIER_FREQUENCIES[validTier].market 
     : TIER_FREQUENCIES[validTier].offMarket;
@@ -219,18 +247,19 @@ export function getUserProcessingStatuses(
       marketContext
     );
 
-    const monthlyBudget = TIER_BUDGETS[user.subscriptionTier] || TIER_BUDGETS.FREE;
-    const budgetRemaining = monthlyBudget - user.budgetUsed;
-    const budgetUtilization = (user.budgetUsed / monthlyBudget) * 100;
+    // Use daily budget limits for consistency with CronBudgetService
+    const dailyBudget = CronBudgetService.getDailyCostLimit(user.subscriptionTier);
+    const budgetRemaining = CronBudgetService.calculateRemainingBudget(user.budgetUsed, user.subscriptionTier);
+    const budgetUtilization = CronBudgetService.getBudgetUtilization(user.budgetUsed, user.subscriptionTier);
 
     return {
       userId: user.id,
       tier: user.subscriptionTier,
       lastProcessedAt: user.lastProcessedAt,
       eligibility,
-      priority: TIER_PRIORITIES[user.subscriptionTier] || TIER_PRIORITIES.FREE,
+      priority: TIER_PRIORITIES[user.subscriptionTier] || TIER_PRIORITIES.HOBBY,
       budgetStatus: {
-        monthlyBudget,
+        monthlyBudget: dailyBudget, // Using daily budget for consistency
         budgetUsed: user.budgetUsed,
         budgetRemaining,
         budgetUtilization

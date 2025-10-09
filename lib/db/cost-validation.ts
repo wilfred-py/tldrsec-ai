@@ -10,11 +10,16 @@ import { logger } from '../logging';
 const costValidationLogger = logger.child('cost-validation');
 
 // Cost validation constants - centralized configuration
+// Updated to match CronBudgetService normalized tiers for consistency
 export const DAILY_COST_LIMITS = {
-  INSTITUTION: Number(process.env.INSTITUTION_COST_LIMIT) || 2.50,
-  ENTERPRISE: Number(process.env.ENTERPRISE_COST_LIMIT) || 1.25,
-  PROFESSIONAL: Number(process.env.PROFESSIONAL_COST_LIMIT) || 0.60,
-  FREE: Number(process.env.FREE_COST_LIMIT) || 0.20
+  // Normalized two-tier system
+  PRO: Number(process.env.PRO_COST_LIMIT) || 0.40,
+  HOBBY: Number(process.env.HOBBY_COST_LIMIT) || 0.06,
+  // Legacy tier support for backward compatibility (all map to PRO or HOBBY)
+  INSTITUTION: Number(process.env.PRO_COST_LIMIT) || 0.40,
+  ENTERPRISE: Number(process.env.PRO_COST_LIMIT) || 0.40,
+  PROFESSIONAL: Number(process.env.PRO_COST_LIMIT) || 0.40,
+  FREE: Number(process.env.HOBBY_COST_LIMIT) || 0.06
 } as const;
 
 export const MAX_COST_PER_OPERATION = 10.0; // Maximum cost allowed per operation

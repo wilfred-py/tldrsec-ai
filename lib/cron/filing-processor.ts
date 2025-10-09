@@ -23,6 +23,22 @@ const processorLogger = logger.child('cron-filing-processor');
 
 export class CronFilingProcessor {
   /**
+   * Retry configuration for failed filing processing
+   */
+  private static readonly RETRY_CONFIG = {
+    maxRetries: 3,
+    baseDelayMs: 1000,
+    maxDelayMs: 10000,
+    retryableErrors: [
+      'timeout',
+      'network',
+      'api_error',
+      'rate_limit',
+      'temporary_failure'
+    ]
+  };
+
+  /**
    * Process SEC filings for a specific user with tier-aware optimization
    */
   static async processUserTierFilings(
@@ -95,18 +111,32 @@ export class CronFilingProcessor {
             continue;
           }
 
-          // Get unprocessed filings for this ticker
-          const newFilings = await CronSecFilingService.getUnprocessedFilingsForUser(
+          // Get ALL unprocessed filings for this ticker (including historical backlog)
+          const unprocessedFilings = await CronSecFilingService.getUnprocessedFilingsForUser(
             tickerValidation.symbol,
             user.id
           );
 
-          processorLogger.info(`Found ${newFilings.length} unprocessed filings for ${tickerValidation.symbol}`, {
-            userId: user.id
+          processorLogger.info(`Found ${unprocessedFilings.length} unprocessed filings for ${tickerValidation.symbol} (including backlog)`, {
+            userId: user.id,
+            ticker: tickerValidation.symbol,
+            filingsFound: unprocessedFilings.map(f => ({
+              accession: f.accessionNumber,
+              type: f.filingType,
+              date: f.filingDate
+            }))
           });
 
-          // Process each filing
-          for (const filing of newFilings || []) {
+          // CRITICAL: Prioritize processing ALL unprocessed filings to reach 0 target
+          if (unprocessedFilings.length > 0) {
+            processorLogger.info(`Processing backlog of ${unprocessedFilings.length} unprocessed filings for ${tickerValidation.symbol}`, {
+              userId: user.id,
+              ticker: tickerValidation.symbol
+            });
+          }
+
+          // Process each filing from the complete unprocessed backlog
+          for (const filing of unprocessedFilings || []) {
             try {
               if (!filing || !filing.id || !filing.accessionNumber) {
                 processorLogger.warn('Invalid filing object encountered', {
@@ -129,12 +159,47 @@ export class CronFilingProcessor {
                 result.filingsProcessed++;
                 result.cost += filingResult.cost;
 
-                // Mark filing as processed
+                // Mark filing as processed - CRITICAL for reducing backlog to 0
                 await CronSecFilingService.markFilingAsProcessed(
                   filing.accessionNumber,
                   tickerValidation.symbol,
                   user.id
                 );
+                
+                processorLogger.info(`Successfully processed and marked filing ${filing.accessionNumber}`, {
+                  userId: user.id,
+                  ticker: tickerValidation.symbol,
+                  filingType: filing.filingType,
+                  cost: filingResult.cost
+                });
+              } else {
+                // Log failure but continue processing other filings
+                processorLogger.error(`Failed to process filing ${filing.accessionNumber}`, {
+                  userId: user.id,
+                  ticker: tickerValidation.symbol,
+                  error: filingResult.error,
+                  filingType: filing.filingType
+                });
+                
+                // Implement retry logic for failed filings
+                const isRetryable = this.isRetryableError(filingResult.error);
+                if (isRetryable) {
+                  processorLogger.info(`Filing ${filing.accessionNumber} failed with retryable error, will be retried in next cron run`, {
+                    userId: user.id,
+                    ticker: tickerValidation.symbol,
+                    error: filingResult.error,
+                    filingType: filing.filingType
+                  });
+                  // Filing remains marked as unprocessed, will be picked up in next run
+                } else {
+                  processorLogger.error(`Filing ${filing.accessionNumber} failed with non-retryable error`, {
+                    userId: user.id,
+                    ticker: tickerValidation.symbol,
+                    error: filingResult.error,
+                    filingType: filing.filingType
+                  });
+                  // Could mark as permanently failed or implement different handling
+                }
               }
 
               // Respect tier-based processing limits
@@ -800,5 +865,77 @@ export class CronFilingProcessor {
         error: error instanceof Error ? error.message : 'Unknown error'
       };
     }
+  }
+
+  /**
+   * Determine if an error is retryable based on error message patterns
+   */
+  private static isRetryableError(errorMessage?: string): boolean {
+    if (!errorMessage) return false;
+    
+    const lowerError = errorMessage.toLowerCase();
+    
+    return this.RETRY_CONFIG.retryableErrors.some(pattern => 
+      lowerError.includes(pattern) ||
+      lowerError.includes('timeout') ||
+      lowerError.includes('connection') ||
+      lowerError.includes('502') ||
+      lowerError.includes('503') ||
+      lowerError.includes('504') ||
+      lowerError.includes('rate limit') ||
+      lowerError.includes('too many requests') ||
+      lowerError.includes('temporarily unavailable')
+    );
+  }
+
+  /**
+   * Execute a function with exponential backoff retry logic
+   */
+  private static async executeWithRetry<T>(
+    operation: () => Promise<T>,
+    operationName: string,
+    maxRetries: number = this.RETRY_CONFIG.maxRetries
+  ): Promise<T> {
+    let lastError: Error;
+    
+    for (let attempt = 1; attempt <= maxRetries + 1; attempt++) {
+      try {
+        return await operation();
+      } catch (error) {
+        lastError = error instanceof Error ? error : new Error(String(error));
+        
+        if (attempt > maxRetries) {
+          processorLogger.error(`All retry attempts exhausted for ${operationName}`, {
+            attempts: attempt - 1,
+            finalError: lastError.message
+          });
+          throw lastError;
+        }
+        
+        if (!this.isRetryableError(lastError.message)) {
+          processorLogger.warn(`Non-retryable error in ${operationName}, not retrying`, {
+            error: lastError.message,
+            attempt
+          });
+          throw lastError;
+        }
+        
+        const delay = Math.min(
+          this.RETRY_CONFIG.baseDelayMs * Math.pow(2, attempt - 1),
+          this.RETRY_CONFIG.maxDelayMs
+        );
+        
+        processorLogger.warn(`${operationName} failed (attempt ${attempt}), retrying in ${delay}ms`, {
+          error: lastError.message,
+          attempt,
+          maxRetries,
+          delay
+        });
+        
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
+    }
+    
+    throw lastError!;
   }
 }

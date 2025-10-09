@@ -204,6 +204,76 @@ export class CronJobMonitor {
     }
   }
 
+  /**
+   * Create an alert for critical events during cron execution
+   * This method records important alerts that need attention
+   */
+  async createAlert(alertType: string, alertData: {
+    severity: string;
+    message: string;
+    details?: any;
+  }): Promise<void> {
+    try {
+      this.ensureInitialized();
+      
+      // Skip in test mode
+      const isTestEnvironment = process.env.NODE_ENV === 'test' || process.env.JEST_WORKER_ID;
+      if (isTestEnvironment) {
+        cronLogger.info(`Alert created (test mode): ${alertType}`, alertData);
+        return;
+      }
+      
+      // Log the alert with appropriate severity
+      const logMethod = alertData.severity === 'CRITICAL' ? 'error' : 
+                       alertData.severity === 'WARNING' ? 'warn' : 'info';
+      
+      cronLogger[logMethod](`ALERT [${alertData.severity}]: ${alertType}`, {
+        executionId: this.executionId,
+        alertType,
+        message: alertData.message,
+        details: alertData.details,
+        timestamp: new Date().toISOString()
+      });
+      
+      // Update error count if it's a critical alert
+      if (alertData.severity === 'CRITICAL') {
+        await this.updateMetrics({ errorCount: this.metrics.errorCount + 1 });
+      } else if (alertData.severity === 'WARNING') {
+        await this.updateMetrics({ warningCount: this.metrics.warningCount + 1 });
+      }
+      
+      // Store alert in database if CronJobAlert table exists
+      // For now, we'll just log it as the table might not exist yet
+      try {
+        // Check if CronJobAlert model exists in Prisma
+        if (prisma.cronJobAlert) {
+          await prisma.cronJobAlert.create({
+            data: {
+              executionId: this.executionId,
+              alertType,
+              severity: alertData.severity,
+              message: alertData.message,
+              details: alertData.details || {},
+              createdAt: new Date()
+            }
+          });
+        }
+      } catch (dbError) {
+        // If the table doesn't exist, just log it
+        cronLogger.debug('CronJobAlert table not available, alert logged only', { dbError });
+      }
+      
+    } catch (error) {
+      cronLogger.error('Failed to create alert', { 
+        error, 
+        alertType, 
+        alertData,
+        executionId: this.executionId 
+      });
+      // Don't throw to avoid disrupting the cron flow
+    }
+  }
+
   async complete(status: CronJobStatus, errorMessage?: string): Promise<CronExecutionResult> {
     const completedAt = new Date();
     const durationMs = completedAt.getTime() - this.startTime.getTime();
