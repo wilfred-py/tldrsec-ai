@@ -170,7 +170,7 @@ export const DAILY_COST_LIMITS = {
 // Security constants
 export const MAX_CONCURRENT_RSS_CHECKS = 3;
 export const MAX_CONCURRENT_USER_PROCESSING = 3;
-export const FILING_PROCESSING_TIMEOUT = 60000; // 1 minute
+export const FILING_PROCESSING_TIMEOUT = 180000; // 3 minutes - increased for AI summarization + content fetching
 
 // Platform detection types
 export type CronPlatform = 'RAILWAY_CRON' | 'VERCEL_CRON' | 'MANUAL_TRIGGER';

@@ -595,26 +595,50 @@ export class CronFilingProcessor {
 
       // Dynamic imports to avoid build-time dependencies
       const { generateAISummaryWithRetry } = await import('../../services/filing/summaryGenerationService');
-      const { sendEmailSummary } = await import('../../services/filing/sendEmailSummary');
+      const { sendEmailSummary } = await import('../../services/filings/email/sendEmailSummary');
       const { getFilingContent } = await import('../../services/filings/filingRetrieval');
 
-      // 1. Fetch the actual filing content
-      let filingContent = '';
-      try {
-        processorLogger.info(`Fetching content for filing ${filingForProcessing.accessionNumber}`, {
-          cik: filingForProcessing.tickerData.cik,
-          ticker: filingForProcessing.tickerData.symbol
-        });
+      // Validate critical imports succeeded
+      if (typeof generateAISummaryWithRetry !== 'function') {
+        throw new Error('Failed to import generateAISummaryWithRetry - AI summarization will not work');
+      }
+      if (typeof sendEmailSummary !== 'function') {
+        throw new Error('Failed to import sendEmailSummary - email notifications will not work');
+      }
+      if (typeof getFilingContent !== 'function') {
+        throw new Error('Failed to import getFilingContent - filing retrieval will not work');
+      }
 
+      processorLogger.info(`Successfully imported all dependencies for filing ${filingForProcessing.accessionNumber}`, {
+        userId: user.id,
+        ticker: filingForProcessing.tickerData.symbol
+      });
+
+      // STEP 1: Fetch the actual filing content
+      processorLogger.info(`🔄 STEP 1: Starting content fetch for filing ${filingForProcessing.accessionNumber}`, {
+        userId: user.id,
+        ticker: filingForProcessing.tickerData.symbol,
+        cik: filingForProcessing.tickerData.cik,
+        formType: filingForProcessing.formType
+      });
+
+      let filingContent = '';
+      const contentFetchStartTime = Date.now();
+      
+      try {
         filingContent = await getFilingContent(
           filingForProcessing.accessionNumber,
           '1', // Use document sequence 1 as primary document
           filingForProcessing.tickerData.cik
         );
 
-        processorLogger.info(`Successfully fetched content for filing ${filingForProcessing.accessionNumber}`, {
+        const contentFetchDuration = Date.now() - contentFetchStartTime;
+        processorLogger.info(`✅ STEP 1 COMPLETE: Content fetch successful for filing ${filingForProcessing.accessionNumber}`, {
+          userId: user.id,
+          ticker: filingForProcessing.tickerData.symbol,
           contentLength: filingContent.length,
-          ticker: filingForProcessing.tickerData.symbol
+          fetchDurationMs: contentFetchDuration,
+          nextStep: 'Cache check and AI summarization'
         });
       } catch (contentError) {
         processorLogger.error(`Failed to fetch content for filing ${filingForProcessing.accessionNumber}`, {
@@ -625,8 +649,17 @@ export class CronFilingProcessor {
         throw new Error(`Failed to fetch filing content: ${contentError instanceof Error ? contentError.message : 'Unknown error'}`);
       }
 
-      // 2. Check for existing summary (cache hit detection)
+      // STEP 2: Check for existing summary (cache hit detection)
+      processorLogger.info(`🔄 STEP 2: Checking for cached summary for filing ${filingForProcessing.accessionNumber}`, {
+        userId: user.id,
+        ticker: filingForProcessing.tickerData.symbol,
+        formType: filingForProcessing.formType,
+        filingDate: filingForProcessing.filingDate
+      });
+
       let existingSummary = null;
+      const cacheCheckStartTime = Date.now();
+      
       try {
         existingSummary = await tx.summary.findFirst({
           where: {
@@ -639,22 +672,43 @@ export class CronFilingProcessor {
           orderBy: { createdAt: 'desc' }
         });
 
+        const cacheCheckDuration = Date.now() - cacheCheckStartTime;
+
         if (existingSummary && existingSummary.summaryText) {
-          processorLogger.info(`Cache hit found for filing ${filingForProcessing.accessionNumber}`, {
+          processorLogger.info(`✅ STEP 2 COMPLETE: Cache hit found for filing ${filingForProcessing.accessionNumber}`, {
             userId: user.id,
             ticker: filingForProcessing.tickerData.symbol,
             existingSummaryId: existingSummary.id,
-            cacheUsageCount: existingSummary.cacheUsageCount
+            cacheUsageCount: existingSummary.cacheUsageCount,
+            cacheCheckDurationMs: cacheCheckDuration,
+            nextStep: 'Use cached summary'
+          });
+        } else {
+          processorLogger.info(`✅ STEP 2 COMPLETE: No cache found for filing ${filingForProcessing.accessionNumber}`, {
+            userId: user.id,
+            ticker: filingForProcessing.tickerData.symbol,
+            cacheCheckDurationMs: cacheCheckDuration,
+            nextStep: 'Generate new AI summary'
           });
         }
       } catch (cacheCheckError) {
-        processorLogger.warn(`Cache check failed for filing ${filingForProcessing.accessionNumber}`, {
-          error: cacheCheckError instanceof Error ? cacheCheckError.message : String(cacheCheckError)
+        processorLogger.warn(`⚠️ STEP 2 WARNING: Cache check failed for filing ${filingForProcessing.accessionNumber}`, {
+          error: cacheCheckError instanceof Error ? cacheCheckError.message : String(cacheCheckError),
+          userId: user.id,
+          nextStep: 'Proceeding with AI generation'
         });
       }
 
-      // 3. Generate AI summary (or use cached version)
+      // STEP 3: Generate AI summary (or use cached version)
+      processorLogger.info(`🔄 STEP 3: Starting summary generation for filing ${filingForProcessing.accessionNumber}`, {
+        userId: user.id,
+        ticker: filingForProcessing.tickerData.symbol,
+        willUseCache: !!(existingSummary && existingSummary.summaryText),
+        contentLength: filingContent.length
+      });
+
       let summaryResult;
+      const summaryStartTime = Date.now();
       
       if (existingSummary && existingSummary.summaryText) {
         // Use cached summary
@@ -688,14 +742,25 @@ export class CronFilingProcessor {
           }
         });
 
-        processorLogger.info(`Using cached summary for filing ${filingForProcessing.accessionNumber}`, {
+        const summaryDuration = Date.now() - summaryStartTime;
+        processorLogger.info(`✅ STEP 3 COMPLETE: Using cached summary for filing ${filingForProcessing.accessionNumber}`, {
           userId: user.id,
           ticker: filingForProcessing.tickerData.symbol,
           cachedSummaryId: existingSummary.id,
-          newCacheUsageCount: existingSummary.cacheUsageCount + 1
+          newCacheUsageCount: existingSummary.cacheUsageCount + 1,
+          summaryDurationMs: summaryDuration,
+          nextStep: 'Store summary and send email'
         });
       } else {
-        // Generate new AI summary
+        // Generate new AI summary with OpenRouter
+        processorLogger.info(`🤖 STEP 3: Calling OpenRouter AI for new summary generation`, {
+          userId: user.id,
+          ticker: filingForProcessing.tickerData.symbol,
+          contentLength: filingContent.length,
+          formType: filingForProcessing.formType,
+          openRouterModel: process.env.DEFAULT_AI_MODEL || 'grok-4-fast'
+        });
+
         summaryResult = await generateAISummaryWithRetry(
           filingContent,
           {
@@ -710,19 +775,51 @@ export class CronFilingProcessor {
           2 // max retries
         );
 
-        processorLogger.info(`Generated new AI summary for filing ${filingForProcessing.accessionNumber}`, {
+        const summaryDuration = Date.now() - summaryStartTime;
+        const actualCost = summaryResult.cost || 0;
+
+        // CRITICAL: Validate AI generation was successful and cost incurred
+        if (!summaryResult.summary || summaryResult.summary.trim().length === 0) {
+          throw new Error('AI generation failed: Empty summary returned from OpenRouter');
+        }
+
+        if (actualCost === 0 && !existingSummary) {
+          processorLogger.warn(`🚨 COST VALIDATION WARNING: OpenRouter returned $0 cost for new summary generation`, {
+            userId: user.id,
+            ticker: filingForProcessing.tickerData.symbol,
+            tokensUsed: summaryResult.tokensUsed || 0,
+            possibleIssue: 'OpenRouter API may not have been called or free credits used'
+          });
+        }
+
+        processorLogger.info(`✅ STEP 3 COMPLETE: AI summary generated successfully for filing ${filingForProcessing.accessionNumber}`, {
           userId: user.id,
           ticker: filingForProcessing.tickerData.symbol,
           tokensUsed: summaryResult.tokensUsed || 0,
-          cost: summaryResult.cost || 0,
-          processingStatus: summaryResult.processingStatus
+          inputTokens: summaryResult.inputTokens || 0,
+          outputTokens: summaryResult.outputTokens || 0,
+          cost: actualCost,
+          processingStatus: summaryResult.processingStatus,
+          summaryLength: summaryResult.summary.length,
+          summaryDurationMs: summaryDuration,
+          openRouterApiCalled: actualCost > 0,
+          nextStep: 'Store summary in database'
         });
       }
 
       const actualCost = summaryResult.cost || 0;
 
-      // 3. Store the summary in database using transaction context
+      // STEP 4: Store the summary in database using transaction context
+      processorLogger.info(`🔄 STEP 4: Storing summary in database for filing ${filingForProcessing.accessionNumber}`, {
+        userId: user.id,
+        ticker: filingForProcessing.tickerData.symbol,
+        summaryLength: summaryResult.summary.length,
+        cost: actualCost
+      });
+
       let summaryRecord: Summary | null = null;
+      const dbStoreStartTime = Date.now();
+      
       try {
         const tickerRecord = await tx.ticker.findFirst({
           where: { symbol: filingForProcessing.tickerData.symbol }
@@ -767,12 +864,15 @@ export class CronFilingProcessor {
             }
           });
 
-          processorLogger.info(`Enhanced summary stored for filing ${filingForProcessing.accessionNumber}`, {
+          const dbStoreDuration = Date.now() - dbStoreStartTime;
+          processorLogger.info(`✅ STEP 4 COMPLETE: Summary stored successfully in database for filing ${filingForProcessing.accessionNumber}`, {
             userId: user.id,
             ticker: filingForProcessing.tickerData.symbol,
             cost: actualCost,
             summaryId: summaryRecord.id,
-            tokensUsed: summaryResult.tokensUsed || 0
+            tokensUsed: summaryResult.tokensUsed || 0,
+            dbStoreDurationMs: dbStoreDuration,
+            nextStep: 'Send email notification'
           });
         }
       } catch (dbError) {
@@ -784,8 +884,17 @@ export class CronFilingProcessor {
         // The transaction will be rolled back if this function throws
       }
 
-      // 4. Send email notification if user has email with bulletproof deduplication
+      // STEP 5: Send email notification if user has email with bulletproof deduplication
       if (user.email && summaryRecord) {
+        processorLogger.info(`🔄 STEP 5: Sending email notification for filing ${filingForProcessing.accessionNumber}`, {
+          userId: user.id,
+          email: user.email,
+          ticker: filingForProcessing.tickerData.symbol,
+          summaryId: summaryRecord.id
+        });
+
+        const emailStartTime = Date.now();
+        
         try {
           const emailResult = await sendEmailSummary(
             user.email,
@@ -806,16 +915,20 @@ export class CronFilingProcessor {
               }
             });
 
-            processorLogger.info(`Bulletproof email sent successfully for filing ${filingForProcessing.accessionNumber}`, {
+            const emailDuration = Date.now() - emailStartTime;
+            processorLogger.info(`✅ STEP 5 COMPLETE: Email sent successfully for filing ${filingForProcessing.accessionNumber}`, {
               userId: user.id,
               email: user.email,
               ticker: filingForProcessing.tickerData.symbol,
               summaryId: summaryRecord.id,
               duplicatesDetected: emailResult.duplicatesDetected || 0,
-              emailServiceId: emailResult.emailServiceId
+              emailServiceId: emailResult.emailServiceId,
+              emailDurationMs: emailDuration,
+              finalStep: 'E2E process complete'
             });
           } else {
-            processorLogger.warn(`Email sending failed for filing ${filingForProcessing.accessionNumber}`, {
+            const _emailDuration = Date.now() - emailStartTime;
+            processorLogger.warn(`❌ STEP 5 FAILED: Email sending failed for filing ${filingForProcessing.accessionNumber}`, {
               userId: user.id,
               email: user.email,
               error: emailResult.error,
@@ -840,11 +953,26 @@ export class CronFilingProcessor {
         }
       }
       
-      processorLogger.info(`Successfully processed filing ${filingForProcessing.accessionNumber} for user ${user.id} within transaction`, {
+      // FINAL SUMMARY: E2E Processing Complete
+      const totalProcessingTime = Date.now() - contentFetchStartTime;
+      processorLogger.info(`🎉 E2E PROCESSING COMPLETE: Successfully processed filing ${filingForProcessing.accessionNumber} for user ${user.id}`, {
+        userId: user.id,
         tier,
+        ticker: filingForProcessing.tickerData.symbol,
         filingType: filingForProcessing.formType,
+        totalProcessingTimeMs: totalProcessingTime,
         actualCost,
-        summaryGenerated: !!summaryResult.summary
+        summaryGenerated: !!summaryResult.summary,
+        summaryLength: summaryResult.summary?.length || 0,
+        openRouterApiCalled: actualCost > 0,
+        emailSent: !!(user.email && summaryRecord),
+        summaryId: summaryRecord?.id,
+        processingSummary: {
+          contentFetched: !!filingContent,
+          aiSummaryGenerated: !!summaryResult.summary,
+          databaseStored: !!summaryRecord,
+          emailSent: !!(user.email && summaryRecord)
+        }
       });
       
       return {
