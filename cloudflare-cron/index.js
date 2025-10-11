@@ -26,9 +26,9 @@ export default {
     
     console.log(`[${executionId}] Starting TLDRSEC scheduled cron job execution`);
     
-    // Configuration
-    const WORKER_TIMEOUT_MS = 8 * 60 * 1000; // 8 minutes (stay under 10min Cloudflare limit)
-    const REQUEST_TIMEOUT_MS = 7 * 60 * 1000; // 7 minutes for individual request
+    // Configuration - Extended for AI processing workloads
+    const WORKER_TIMEOUT_MS = 10 * 60 * 1000; // 10 minutes (maximum Cloudflare limit)
+    const REQUEST_TIMEOUT_MS = 9 * 60 * 1000; // 9 minutes for individual request
     const MAX_ATTEMPTS = 3;
     const INITIAL_BACKOFF_MS = 2000; // 2 seconds
     
@@ -45,16 +45,19 @@ export default {
       const url = `${env.PUBLIC_URL}/api/cron/tier-aware`;
       console.log(`[${executionId}] Target endpoint: ${url}`);
       
-      // Prepare headers with enhanced tracking
+      // Prepare headers with enhanced tracking and timeout coordination
       const headers = {
         'X-Cron-Auth': `Bearer ${env.CRON_SECRET}`,
         'Content-Type': 'application/json',
-        'User-Agent': 'TLDRSEC-Cloudflare-Worker/2.0 wilfredchen1@gmail.com',
+        'User-Agent': 'TLDRSEC-Cloudflare-Worker/2.1 wilfredchen1@gmail.com',
         'X-Cloudflare-Worker': 'tldrsec-cron',
         'X-Cron-Source': 'cloudflare-worker',
         'X-Execution-Id': executionId,
         'X-Worker-Timeout': WORKER_TIMEOUT_MS.toString(),
-        'X-Request-Start-Time': startTime.toString()
+        'X-Effective-Timeout': REQUEST_TIMEOUT_MS.toString(),
+        'X-Request-Start-Time': startTime.toString(),
+        'X-Cron-Frequency': '10-minutes',
+        'X-Processing-Mode': 'ai-enhanced'
       };
       
       // Add Vercel deployment protection bypass if configured
@@ -87,6 +90,7 @@ export default {
       // Safe error message for external logs (no sensitive details)
       const safeErrorMessage = (() => {
         switch (errorType) {
+          case 'VERCEL_TIMEOUT_524': return 'AI processing timeout (524) - Extended processing time exceeded limits';
           case 'TIMEOUT': return 'Execution timeout';
           case 'SERVICE_UNAVAILABLE': return 'Target service unavailable';
           case 'RATE_LIMITED': return 'Rate limit exceeded';
@@ -230,9 +234,10 @@ async function executeRequestWithTimeout({ executionId, url, headers, timeoutMs 
     
     console.log(`[${executionId}] Received response: ${response.status} ${response.statusText}`);
     
-    // Handle different response types
+    // Handle different response types with enhanced 524 error details
     if (response.status === 524) {
-      throw new Error('Vercel endpoint timeout (524)');
+      const timeElapsed = Date.now() - parseInt(headers['X-Request-Start-Time']);
+      throw new Error(`Vercel endpoint timeout (524) after ${timeElapsed}ms - AI processing may be taking longer than expected`);
     }
     
     if (response.status === 503) {
@@ -269,7 +274,7 @@ function classifyError(error) {
   const message = error.message.toLowerCase();
   
   if (message.includes('timeout') || message.includes('524')) {
-    return 'TIMEOUT';
+    return message.includes('524') ? 'VERCEL_TIMEOUT_524' : 'TIMEOUT';
   }
   if (message.includes('503') || message.includes('unavailable')) {
     return 'SERVICE_UNAVAILABLE';

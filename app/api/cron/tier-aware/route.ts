@@ -8,7 +8,7 @@
  * 4. Respect monthly cost budget limits
  * 5. Adjust processing frequency based on market hours context
  * 
- * Runs every 5 minutes continuously since SEC filings can be published 24/7
+ * Runs every 10 minutes continuously since SEC filings can be published 24/7
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -52,8 +52,8 @@ export async function GET(request: NextRequest) {
     return Math.min(parsed, 600000); // Cap at 10 minutes maximum
   };
   
-  const workerTimeoutMs = parseTimeoutHeader(request.headers.get('x-worker-timeout'), 480000); // 8 minutes default
-  const effectiveTimeoutMs = parseTimeoutHeader(request.headers.get('x-effective-timeout'), 420000); // 7 minutes default
+  const workerTimeoutMs = parseTimeoutHeader(request.headers.get('x-worker-timeout'), 600000); // 10 minutes default
+  const effectiveTimeoutMs = parseTimeoutHeader(request.headers.get('x-effective-timeout'), 540000); // 9 minutes default
   const timeoutBuffer = 30000; // 30 seconds buffer for cleanup
   
   cronLogger.info(`[${executionId}] Starting tier-aware cron with timeout protection`, {
@@ -199,11 +199,12 @@ export async function GET(request: NextRequest) {
       eligibleUsers: eligibleUsers.length
     });
 
-    // STEP 2.5: Backlog Processing Phase - Process unprocessed filings with timeout protection
+    // STEP 2.5: Backlog Processing Phase - Process unprocessed filings with timeout protection and circuit breaker
     cronLogger.debug(`[${executionId}] Checkpoint 5.5: Starting backlog processing for unprocessed filings`);
     
     let unprocessedCount = 0;
     let backlogProcessedCount = 0;
+    let skipBacklogDueToTimeConstraints = false;
     
     try {
       // Check timeout before starting backlog processing
@@ -212,10 +213,21 @@ export async function GET(request: NextRequest) {
         throw new Error(`Timeout approaching before backlog processing: ${timeCheck.remaining}ms remaining`);
       }
 
+      // CIRCUIT BREAKER: Skip backlog if we have very limited time (less than 3 minutes)
+      const minimumTimeForBacklog = 180000; // 3 minutes
+      if (timeCheck.remaining < minimumTimeForBacklog) {
+        skipBacklogDueToTimeConstraints = true;
+        cronLogger.warn(`[${executionId}] CIRCUIT BREAKER ACTIVE: Skipping backlog processing due to insufficient time`, {
+          timeRemaining: timeCheck.remaining,
+          minimumRequired: minimumTimeForBacklog,
+          reason: 'Prioritizing new filing monitoring over backlog to prevent 524 timeouts'
+        });
+      }
+
       const unprocessedFilings = await import('../../../../lib/sec-edgar/ticker-monitoring').then(m => m.getUnprocessedFilings(100));
       unprocessedCount = unprocessedFilings.length;
       
-      if (unprocessedCount > 0) {
+      if (unprocessedCount > 0 && !skipBacklogDueToTimeConstraints) {
         cronLogger.warn(`[${executionId}] BACKLOG DETECTED: ${unprocessedCount} unprocessed filings found - processing with time limit`, {
           backlogSize: unprocessedCount,
           targetFilings: 0,
@@ -417,6 +429,13 @@ export async function GET(request: NextRequest) {
         } else {
           cronLogger.warn(`[${executionId}] Insufficient time for backlog processing (${backlogTimeLimit}ms available)`);
         }
+      } else if (skipBacklogDueToTimeConstraints) {
+        cronLogger.warn(`[${executionId}] CIRCUIT BREAKER: Backlog exists (${unprocessedCount} filings) but skipped due to time constraints`, {
+          unprocessedFilings: unprocessedCount,
+          timeRemaining: timeCheck.remaining,
+          circuitBreakerActive: true,
+          willRetryNextRun: true
+        });
       } else {
         cronLogger.info(`[${executionId}] No backlog detected - all filings processed`);
       }
