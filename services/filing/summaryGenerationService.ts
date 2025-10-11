@@ -138,7 +138,7 @@ export async function generateAISummary(
         temperature: 0.1,
         system: 'You are a financial expert specializing in SEC filing analysis. Provide accurate, comprehensive summaries in valid JSON format with detailed insights valuable to investors.',
         requestType: 'standard',
-        timeout: 120000, // 2 minutes for comprehensive analysis
+        timeout: 90000, // 1.5 minutes for comprehensive analysis (optimized to prevent 524 timeouts)
         requiredCapabilities: ['reasoning'],
         costLimit: 0.50 // $0.50 maximum per summary for cost control
       }
@@ -308,7 +308,7 @@ export async function generateAISummaryWithRetry(
   content: string,
   filing: SECFiling, 
   company: Company,
-  maxRetries: number = 2
+  maxRetries: number = 1 // Reduced from 2 to 1 to prevent timeout cascading
 ): Promise<SummaryGenerationResult> {
   let lastError: Error | null = null;
   let attempt = 0;
