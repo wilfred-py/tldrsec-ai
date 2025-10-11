@@ -13,6 +13,12 @@
   "functions": {
     "app/api/cron/monitor-sec-filings/route.ts": {
       "maxDuration": 300
+    },
+    "app/api/cron/tier-aware/route.ts": {
+      "maxDuration": 540
+    },
+    "app/api/cron/tier-aware-optimized/route.ts": {
+      "maxDuration": 900
     }
   }
 }

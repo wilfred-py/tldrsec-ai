@@ -34,8 +34,8 @@ const OPENROUTER_CONFIG = {
   baseURL: 'https://openrouter.ai/api/v1',
   apiKey: process.env.TLDRSEC_AI_SUMMARIZER || process.env.OPENROUTER_API_KEY,
   defaultModel: process.env.DEFAULT_AI_MODEL || 'x-ai/grok-4-fast:free',
-  timeout: 120000, // 2 minutes
-  maxRetries: 3
+  timeout: 90000, // 1.5 minutes (reduced from 2 minutes)
+  maxRetries: 2 // Reduced from 3 to prevent cascading timeouts
 };
 
 /**
