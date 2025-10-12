@@ -15,10 +15,10 @@
       "maxDuration": 300
     },
     "app/api/cron/tier-aware/route.ts": {
-      "maxDuration": 540
+      "maxDuration": 300
     },
     "app/api/cron/tier-aware-optimized/route.ts": {
-      "maxDuration": 900
+      "maxDuration": 300
     }
   }
 }

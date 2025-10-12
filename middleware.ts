@@ -365,6 +365,11 @@ export default async function middleware(request: NextRequest) {
         '/api/health/cloudflare-worker',
         '/api/debug/sec-connectivity',
         
+        // Cron endpoints (we handle auth ourselves)
+        '/api/cron/tier-aware',
+        '/api/cron/tier-aware-optimized',
+        '/api/cron/unified',
+        
         // Marketing pages
         '/',
         '/pricing',
