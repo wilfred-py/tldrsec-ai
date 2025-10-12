@@ -71,16 +71,16 @@ export async function GET(request: NextRequest) {
     return Math.min(parsed, 600000); // Cap at 10 minutes maximum
   };
   
-  const workerTimeoutMs = parseTimeoutHeader(request.headers.get('x-worker-timeout'), 600000);
-  const effectiveTimeoutMs = parseTimeoutHeader(request.headers.get('x-effective-timeout'), 540000); // 9 minutes
+  const workerTimeoutMs = parseTimeoutHeader(request.headers.get('x-worker-timeout'), 300000); // 5 minutes for Vercel free plan
+  const effectiveTimeoutMs = parseTimeoutHeader(request.headers.get('x-effective-timeout'), 270000); // 4.5 minutes
   
-  // Initialize circuit breaker with smart timeout management
+  // Initialize circuit breaker with smart timeout management (optimized for 5-minute Vercel limit)
   const circuitBreaker = createCircuitBreaker(workerTimeoutMs, {
     effectiveTimeoutMs,
-    minFilingProcessingTime: 90000, // 1.5 minutes per filing
+    minFilingProcessingTime: 60000, // 1 minute per filing (reduced for 5-min limit)
     safetyBuffer: 30000,            // 30 seconds buffer
-    maxConcurrentProcessing: 2,     // Limit concurrent AI operations
-    maxBacklogFilings: 15           // Reduced from 20 to 15 for better timeout control
+    maxConcurrentProcessing: 3,     // Increase concurrency to finish faster
+    maxBacklogFilings: 8            // Reduce backlog processing to ensure completion
   });
   
   cronLogger.info(`[${executionId}] Starting optimized tier-aware cron with 524 timeout prevention`, {
@@ -630,11 +630,11 @@ export async function HEAD(request: NextRequest) {
       'filing-prioritization', 
       'performance-monitoring',
       'enhanced-parallel-processing',
-      '900s-timeout-configuration'
+      '300s-timeout-configuration'
     ],
     timeoutConfiguration: {
-      vercelTimeout: '900s (15 minutes)',
-      circuitBreakerTimeout: '540s (9 minutes)',
+      vercelTimeout: '300s (5 minutes - free plan)',
+      circuitBreakerTimeout: '270s (4.5 minutes)',
       effectiveSafetyBuffer: '30s'
     }
   };
