@@ -48,6 +48,20 @@ export async function GET(request: NextRequest) {
   };
   
   const executionId = request.headers.get('x-execution-id') || generateSecureExecutionId();
+  const isDebugMode = request.headers.get('x-debug-mode') === 'true';
+  
+  // Debug logging for auth troubleshooting
+  if (isDebugMode) {
+    cronLogger.info(`[${executionId}] DEBUG: Request received`, {
+      headers: Object.fromEntries(request.headers.entries()),
+      url: request.url,
+      method: request.method,
+      authHeader: request.headers.get('authorization') ? 'present' : 'missing',
+      xCronAuth: request.headers.get('x-cron-auth') ? 'present' : 'missing',
+      cronSecretConfigured: !!process.env.CRON_SECRET,
+      cronSecretLength: process.env.CRON_SECRET?.length || 0
+    });
+  }
   
   // Enhanced timeout configuration with circuit breaker
   const parseTimeoutHeader = (header: string | null, defaultValue: number): number => {
@@ -596,28 +610,52 @@ export async function GET(request: NextRequest) {
 }
 
 /**
- * Health check endpoint for circuit breaker and performance monitoring
+ * Health check endpoint for circuit breaker and performance monitoring (no auth required)
  */
-export async function HEAD(_request: NextRequest) {
+export async function HEAD(request: NextRequest) {
+  const isDebugMode = request.headers.get('x-debug-mode') === 'true';
+  
   const healthCheck = {
+    status: 'healthy',
+    endpoint: '/api/cron/tier-aware-optimized',
     timestamp: new Date().toISOString(),
+    environment: process.env.NODE_ENV,
     circuitBreakerReady: true,
     performanceMonitoringReady: true,
     filingPrioritizerReady: true,
+    authConfigured: !!process.env.CRON_SECRET,
+    authSecretLength: process.env.CRON_SECRET?.length || 0,
     optimizationsEnabled: [
       'intelligent-circuit-breaker',
       'filing-prioritization', 
       'performance-monitoring',
-      'enhanced-parallel-processing'
-    ]
+      'enhanced-parallel-processing',
+      '900s-timeout-configuration'
+    ],
+    timeoutConfiguration: {
+      vercelTimeout: '900s (15 minutes)',
+      circuitBreakerTimeout: '540s (9 minutes)',
+      effectiveSafetyBuffer: '30s'
+    }
   };
+  
+  // Add debug information if requested
+  if (isDebugMode) {
+    healthCheck['debug'] = {
+      headers: Object.fromEntries(request.headers.entries()),
+      url: request.url,
+      method: request.method
+    };
+  }
 
   return new NextResponse(JSON.stringify(healthCheck), {
     status: 200,
     headers: {
       'Content-Type': 'application/json',
       'X-Optimizations-Enabled': 'true',
-      'X-Circuit-Breaker-Ready': 'true'
+      'X-Circuit-Breaker-Ready': 'true',
+      'X-Endpoint-Status': 'healthy',
+      'X-Auth-Configured': process.env.CRON_SECRET ? 'true' : 'false'
     }
   });
 }

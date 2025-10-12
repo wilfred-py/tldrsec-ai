@@ -18,8 +18,18 @@ const cronAuthMiddleware = async (request: NextRequest): Promise<NextResponse | 
     return undefined; // Pass to next middleware (Clerk)
   }
   
+  // Allow HEAD requests for health checks without authentication
+  if (request.method === 'HEAD') {
+    middlewareLogger.info('Allowing unauthenticated HEAD request for health check', {
+      pathname,
+      timestamp: new Date().toISOString()
+    });
+    return undefined; // Pass through to the handler
+  }
+  
   middlewareLogger.info('Processing cron request independently of Clerk', {
     pathname,
+    method: request.method,
     timestamp: new Date().toISOString()
   });
   

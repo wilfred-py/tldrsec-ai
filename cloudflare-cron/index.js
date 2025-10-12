@@ -41,15 +41,22 @@ export default {
       
       console.log(`[${executionId}] Environment validation passed`);
       
-      // Build URL for Vercel endpoint
-      const url = `${env.PUBLIC_URL}/api/cron/tier-aware`;
-      console.log(`[${executionId}] Target endpoint: ${url}`);
+      // Build URLs for Vercel endpoints (optimized with fallback)
+      const optimizedUrl = `${env.PUBLIC_URL}/api/cron/tier-aware-optimized`;
+      const fallbackUrl = `${env.PUBLIC_URL}/api/cron/tier-aware`;
+      const useOptimized = env.USE_OPTIMIZED_ENDPOINT !== 'false'; // Default to true
+      
+      const url = useOptimized ? optimizedUrl : fallbackUrl;
+      console.log(`[${executionId}] Target endpoint: ${url} (${useOptimized ? 'optimized with 524 prevention' : 'standard'})`);
+      console.log(`[${executionId}] PUBLIC_URL: ${env.PUBLIC_URL}`);
+      console.log(`[${executionId}] CRON_SECRET configured: ${env.CRON_SECRET ? 'Yes (' + env.CRON_SECRET.length + ' chars)' : 'No'}`);
       
       // Prepare headers with enhanced tracking and timeout coordination
       const headers = {
-        'X-Cron-Auth': `Bearer ${env.CRON_SECRET}`,
+        'Authorization': `Bearer ${env.CRON_SECRET}`, // Primary auth header
+        'X-Cron-Auth': `Bearer ${env.CRON_SECRET}`, // Backup auth header to avoid Clerk conflicts
         'Content-Type': 'application/json',
-        'User-Agent': 'TLDRSEC-Cloudflare-Worker/2.1 wilfredchen1@gmail.com',
+        'User-Agent': 'TLDRSEC-Cloudflare-Worker/2.2 wilfredchen1@gmail.com',
         'X-Cloudflare-Worker': 'tldrsec-cron',
         'X-Cron-Source': 'cloudflare-worker',
         'X-Execution-Id': executionId,
@@ -57,7 +64,8 @@ export default {
         'X-Effective-Timeout': REQUEST_TIMEOUT_MS.toString(),
         'X-Request-Start-Time': startTime.toString(),
         'X-Cron-Frequency': '10-minutes',
-        'X-Processing-Mode': 'ai-enhanced'
+        'X-Processing-Mode': 'ai-enhanced',
+        'X-Debug-Mode': 'true' // Enable debug logging
       };
       
       // Add Vercel deployment protection bypass if configured
@@ -68,15 +76,44 @@ export default {
       }
       
       // Execute with timeout protection and retry logic
-      const result = await executeWithTimeoutAndRetry({
-        executionId,
-        url,
-        headers,
-        workerTimeoutMs: WORKER_TIMEOUT_MS,
-        requestTimeoutMs: REQUEST_TIMEOUT_MS,
-        maxAttempts: MAX_ATTEMPTS,
-        initialBackoffMs: INITIAL_BACKOFF_MS
-      });
+      let result;
+      try {
+        result = await executeWithTimeoutAndRetry({
+          executionId,
+          url,
+          headers,
+          workerTimeoutMs: WORKER_TIMEOUT_MS,
+          requestTimeoutMs: REQUEST_TIMEOUT_MS,
+          maxAttempts: MAX_ATTEMPTS,
+          initialBackoffMs: INITIAL_BACKOFF_MS
+        });
+      } catch (primaryError) {
+        const errorType = classifyError(primaryError);
+        
+        // If optimized endpoint fails with 404 or auth error, fallback to original
+        if (useOptimized && (errorType === 'ENDPOINT_NOT_FOUND' || errorType === 'AUTHENTICATION_ERROR')) {
+          console.log(`[${executionId}] Optimized endpoint failed (${errorType}), attempting fallback to original endpoint`);
+          
+          try {
+            result = await executeWithTimeoutAndRetry({
+              executionId,
+              url: fallbackUrl,
+              headers,
+              workerTimeoutMs: WORKER_TIMEOUT_MS,
+              requestTimeoutMs: REQUEST_TIMEOUT_MS,
+              maxAttempts: 1, // Single attempt for fallback
+              initialBackoffMs: INITIAL_BACKOFF_MS
+            });
+            
+            console.log(`[${executionId}] Fallback to original endpoint successful`);
+          } catch (fallbackError) {
+            console.error(`[${executionId}] Both endpoints failed`);
+            throw primaryError; // Throw original error
+          }
+        } else {
+          throw primaryError;
+        }
+      }
       
       const duration = Date.now() - startTime;
       console.log(`[${executionId}] Cron job completed successfully in ${duration}ms`);
@@ -90,11 +127,12 @@ export default {
       // Safe error message for external logs (no sensitive details)
       const safeErrorMessage = (() => {
         switch (errorType) {
+          case 'ENDPOINT_NOT_FOUND': return 'Endpoint not found (404) - Check deployment status';
+          case 'AUTHENTICATION_ERROR': return 'Authentication failed - Verify CRON_SECRET';
           case 'VERCEL_TIMEOUT_524': return 'AI processing timeout (524) - Extended processing time exceeded limits';
           case 'TIMEOUT': return 'Execution timeout';
           case 'SERVICE_UNAVAILABLE': return 'Target service unavailable';
           case 'RATE_LIMITED': return 'Rate limit exceeded';
-          case 'AUTHENTICATION_ERROR': return 'Authentication failed';
           case 'NETWORK_ERROR': return 'Network connectivity issue';
           default: return 'Execution failed';
         }
@@ -233,8 +271,19 @@ async function executeRequestWithTimeout({ executionId, url, headers, timeoutMs 
     });
     
     console.log(`[${executionId}] Received response: ${response.status} ${response.statusText}`);
+    console.log(`[${executionId}] Response headers:`, Object.fromEntries(response.headers.entries()));
     
-    // Handle different response types with enhanced 524 error details
+    // Handle different response types with enhanced error details
+    if (response.status === 404) {
+      throw new Error(`Endpoint not found (404) - URL: ${url} - The endpoint may not be deployed or accessible`);
+    }
+    
+    if (response.status === 401) {
+      const responseText = await response.text();
+      console.error(`[${executionId}] Authentication failed (401):`, responseText);
+      throw new Error(`Authentication failed (401) - The CRON_SECRET may not match or headers are incorrect`);
+    }
+    
     if (response.status === 524) {
       const timeElapsed = Date.now() - parseInt(headers['X-Request-Start-Time']);
       throw new Error(`Vercel endpoint timeout (524) after ${timeElapsed}ms - AI processing may be taking longer than expected`);
@@ -249,9 +298,16 @@ async function executeRequestWithTimeout({ executionId, url, headers, timeoutMs 
     }
     
     const responseText = await response.text();
-    console.log(`[${executionId}] Response body preview: ${responseText.substring(0, 200)}...`);
+    console.log(`[${executionId}] Response status: ${response.status}`);
+    console.log(`[${executionId}] Response body preview: ${responseText.substring(0, 500)}...`);
     
     if (!response.ok) {
+      console.error(`[${executionId}] Request failed:`, {
+        status: response.status,
+        statusText: response.statusText,
+        url: url,
+        responsePreview: responseText.substring(0, 500)
+      });
       throw new Error(`HTTP ${response.status}: ${response.statusText} - ${responseText.substring(0, 500)}`);
     }
     
@@ -273,6 +329,12 @@ async function executeRequestWithTimeout({ executionId, url, headers, timeoutMs 
 function classifyError(error) {
   const message = error.message.toLowerCase();
   
+  if (message.includes('404') || message.includes('not found')) {
+    return 'ENDPOINT_NOT_FOUND';
+  }
+  if (message.includes('401') || message.includes('unauthorized') || message.includes('authentication')) {
+    return 'AUTHENTICATION_ERROR';
+  }
   if (message.includes('timeout') || message.includes('524')) {
     return message.includes('524') ? 'VERCEL_TIMEOUT_524' : 'TIMEOUT';
   }
@@ -281,9 +343,6 @@ function classifyError(error) {
   }
   if (message.includes('429') || message.includes('rate limit')) {
     return 'RATE_LIMITED';
-  }
-  if (message.includes('401') || message.includes('unauthorized')) {
-    return 'AUTHENTICATION_ERROR';
   }
   if (message.includes('network') || message.includes('fetch')) {
     return 'NETWORK_ERROR';
