@@ -458,6 +458,63 @@ export class PerformanceMetricsCollector {
       });
     }
   }
+
+  /**
+   * Record batch processing performance metrics
+   */
+  recordBatchProcessingMetrics(batchResult: {
+    totalFilings: number;
+    processedFilings: number;
+    successfulUsers: number;
+    skippedFilings: number;
+    errors: string[];
+    processingTime: number;
+  }): void {
+    // Calculate batch efficiency metrics
+    const batchEfficiency = batchResult.totalFilings > 0 
+      ? (batchResult.processedFilings / batchResult.totalFilings) * 100 
+      : 0;
+    
+    const userSuccessRate = batchResult.processedFilings > 0 
+      ? (batchResult.successfulUsers / batchResult.processedFilings) * 100 
+      : 0;
+
+    // Update processing time metrics
+    this.recordProcessingTime(batchResult.processingTime, batchResult.errors.length === 0);
+
+    // Update backlog metrics
+    this.recordBacklogSize(batchResult.skippedFilings);
+
+    // Create alerts for batch processing issues
+    if (batchEfficiency < 50 && batchResult.totalFilings > 0) {
+      this.createAlert('HIGH', 'Low batch processing efficiency', {
+        batchEfficiency: batchEfficiency.toFixed(1) + '%',
+        totalFilings: batchResult.totalFilings,
+        processedFilings: batchResult.processedFilings,
+        skippedFilings: batchResult.skippedFilings,
+        errorCount: batchResult.errors.length
+      }, 'batch_efficiency_low', 'Consider optimizing circuit breaker thresholds or processing capacity');
+    }
+
+    if (userSuccessRate < 70 && batchResult.processedFilings > 0) {
+      this.createAlert('MEDIUM', 'Low user processing success rate', {
+        userSuccessRate: userSuccessRate.toFixed(1) + '%',
+        successfulUsers: batchResult.successfulUsers,
+        processedFilings: batchResult.processedFilings,
+        errors: batchResult.errors.slice(0, 3) // First 3 errors for debugging
+      }, 'user_success_rate_low', 'Investigate user processing failures and AI timeout issues');
+    }
+
+    logger.info('Batch processing metrics recorded', {
+      batchEfficiency: batchEfficiency.toFixed(1) + '%',
+      userSuccessRate: userSuccessRate.toFixed(1) + '%',
+      processingTime: batchResult.processingTime,
+      totalFilings: batchResult.totalFilings,
+      processedFilings: batchResult.processedFilings,
+      successfulUsers: batchResult.successfulUsers,
+      errors: batchResult.errors.length
+    });
+  }
 }
 
 // Export singleton instance
