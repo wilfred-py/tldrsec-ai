@@ -27,6 +27,7 @@ import type { CronResults } from '../../../../lib/cron/types';
 import { IntelligentCircuitBreaker, createCircuitBreaker } from '../../../../lib/services/circuitBreaker';
 import { filingPrioritizer } from '../../../../lib/services/filingPrioritizer';
 import { performanceMetrics } from '../../../../lib/monitoring/performanceMetrics';
+import { BatchFilingProcessor } from '../../../../lib/cron/batch-filing-processor';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -225,136 +226,54 @@ export async function GET(request: NextRequest) {
             estimatedTime: optimalProcessingOrder.totalEstimatedTime
           });
 
-          // Process recommended backlog filings in optimized batches
+          // OPTIMIZED: Process recommended backlog filings using batch processor (eliminates N+1 queries)
           if (optimalProcessingOrder.recommended.length > 0) {
-            const optimalBatchSize = circuitBreaker.calculateOptimalBatchSize(
-              optimalProcessingOrder.recommended.length,
-              'BACKLOG'
-            );
+            cronLogger.info(`[${executionId}] Starting optimized batch processing for ${optimalProcessingOrder.recommended.length} backlog filings`);
             
-            const batches = filingPrioritizer.createProcessingBatches(
-              optimalProcessingOrder.recommended,
-              optimalBatchSize,
-              2 // max concurrent priorities
+            // Convert to batch filing format
+            const batchFilings = optimalProcessingOrder.recommended.map(prioritizedFiling => ({
+              filing: prioritizedFiling.filing,
+              priority: 'BACKLOG' as const,
+              estimatedProcessingTime: prioritizedFiling.estimatedProcessingTime
+            }));
+
+            // Use batch processor with controlled concurrency (optimized for 5-minute timeout)
+            const batchResult = await BatchFilingProcessor.processBatchFilings(
+              batchFilings,
+              circuitBreaker,
+              3 // max concurrency for 5-minute constraint
             );
 
-            for (const [batchIndex, batch] of batches.entries()) {
-              const batchTimeCheck = circuitBreaker.calculateTimeConstraints();
-              if (!batchTimeCheck.shouldContinue) {
-                cronLogger.warn(`[${executionId}] Circuit breaker stopped backlog processing at batch ${batchIndex}`);
-                break;
-              }
+            backlogProcessedCount = batchResult.successfulUsers;
+            
+            cronLogger.info(`[${executionId}] Batch backlog processing completed`, {
+              totalFilings: batchResult.totalFilings,
+              processedFilings: batchResult.processedFilings,
+              successfulUsers: batchResult.successfulUsers,
+              skippedFilings: batchResult.skippedFilings,
+              errors: batchResult.errors.length,
+              processingTime: batchResult.processingTime,
+              efficiency: batchResult.totalFilings > 0 ? 
+                ((batchResult.processedFilings / batchResult.totalFilings) * 100).toFixed(1) + '%' : 'N/A'
+            });
 
-              cronLogger.info(`[${executionId}] Processing backlog batch ${batchIndex + 1}/${batches.length} (${batch.length} filings)`);
-              
-              const batchStartTime = Date.now();
-              const batchPromises = batch.map(async (prioritizedFiling) => {
-                const filing = prioritizedFiling.filing;
-                
-                return circuitBreaker.wrapProcessing(async () => {
-                  // Process filing using existing logic but with enhanced monitoring
-                  const { getPrismaClient } = await import('../../../../lib/db/prisma');
-                  const prisma = getPrismaClient();
-                  
-                  const usersForTicker = await prisma.user.findMany({
-                    where: {
-                      tickers: {
-                        some: {
-                          symbol: filing.ticker.symbol
-                        }
-                      }
-                    },
-                    select: {
-                      id: true,
-                      email: true,
-                      subscriptionTier: true,
-                      processingBudget: true,
-                      budgetUsed: true,
-                      tickers: {
-                        where: {
-                          symbol: filing.ticker.symbol
-                        },
-                        select: {
-                          symbol: true,
-                          companyName: true
-                        }
-                      }
-                    }
-                  });
-
-                  if (usersForTicker.length === 0) {
-                    return null;
-                  }
-
-                  let successfulProcessingCount = 0;
-                  
-                  for (const user of usersForTicker) {
-                    try {
-                      const processingStartTime = Date.now();
-                      
-                      const result = await CronFilingProcessor.processSingleFiling(
-                        filing,
-                        user,
-                        user.subscriptionTier,
-                        { symbol: filing.ticker.symbol, cik: filing.ticker.cik },
-                        { companyName: filing.ticker.companyName }
-                      );
-
-                      const processingTime = Date.now() - processingStartTime;
-                      performanceMetrics.recordProcessingTime(processingTime, result.success);
-
-                      if (result.success) {
-                        successfulProcessingCount++;
-                        
-                        // Record AI metrics if available
-                        if (result.cost && result.cost > 0) {
-                          performanceMetrics.recordAIMetrics(
-                            processingTime,
-                            true,
-                            result.tokensUsed || 0,
-                            result.cost
-                          );
-                        }
-                      }
-                    } catch (userError) {
-                      const processingTime = Date.now() - processingStartTime;
-                      performanceMetrics.recordProcessingTime(processingTime, false);
-                      
-                      cronLogger.error(`[${executionId}] User processing failed in optimized backlog`, {
-                        error: userError instanceof Error ? userError.message : 'Unknown error',
-                        userId: user.id,
-                        ticker: filing.ticker.symbol
-                      });
-                    }
-                  }
-
-                  if (successfulProcessingCount > 0) {
-                    const { markFilingAsProcessedByAccession } = await import('../../../../lib/sec-edgar/ticker-monitoring');
-                    await markFilingAsProcessedByAccession(filing.accessionNumber, filing.ticker.symbol);
-                    return successfulProcessingCount;
-                  }
-                  
-                  return null;
-                }, 'BACKLOG', prioritizedFiling.estimatedProcessingTime);
-              });
-
-              const batchResults = await Promise.allSettled(batchPromises);
-              
-              // Count successful processing and record metrics
-              for (const result of batchResults) {
-                if (result.status === 'fulfilled' && !result.value.skipped && result.value.result !== null) {
-                  backlogProcessedCount += result.value.result;
-                } else if (result.status === 'fulfilled' && result.value.skipped) {
-                  circuitBreaker.recordProcessingComplete('BACKLOG', 0, false);
-                }
-              }
-
-              const batchTime = Date.now() - batchStartTime;
-              cronLogger.info(`[${executionId}] Backlog batch ${batchIndex + 1} completed in ${batchTime}ms`);
-
-              // Delay between batches to respect API limits
-              if (batchIndex < batches.length - 1) {
-                await new Promise(resolve => setTimeout(resolve, 500));
+            // Mark processed filings
+            const processedFilings = optimalProcessingOrder.recommended
+              .slice(0, batchResult.processedFilings);
+            
+            if (processedFilings.length > 0) {
+              try {
+                const { markFilingAsProcessedByAccession } = await import('../../../../lib/sec-edgar/ticker-monitoring');
+                await Promise.allSettled(
+                  processedFilings.map(pf => 
+                    markFilingAsProcessedByAccession(pf.filing.accessionNumber, pf.filing.ticker.symbol)
+                  )
+                );
+              } catch (markingError) {
+                cronLogger.error(`[${executionId}] Failed to mark some filings as processed`, { 
+                  error: markingError instanceof Error ? markingError.message : 'Unknown error',
+                  filingCount: processedFilings.length
+                });
               }
             }
           }
@@ -511,14 +430,20 @@ export async function GET(request: NextRequest) {
       ? (totalFilingsProcessed / totalFilingsAvailable * 100).toFixed(1)
       : 'N/A';
 
-    cronLogger.info(`[${executionId}] Optimized processing completed with enhanced analytics`, {
+    cronLogger.info(`[${executionId}] Parallel AI optimized processing completed with enhanced analytics`, {
       totalFilingsAvailable,
       totalFilingsProcessed,
       processingEfficiency: processingEfficiency + '%',
       circuitBreakerActivations: results.circuitBreakerStatus.activations,
       healthScore: results.performanceMetrics.healthScore,
       timeoutsPrevented: results.circuitBreakerStatus.activations,
-      recommendationsCount: results.performanceMetrics.recommendations.length
+      recommendationsCount: results.performanceMetrics.recommendations.length,
+      optimizationsEnabled: [
+        'N+1 query elimination',
+        'Parallel AI processing',
+        'Circuit breaker protection',
+        'Performance monitoring'
+      ]
     });
 
     // Critical alert for processing failures with circuit breaker context
@@ -543,7 +468,7 @@ export async function GET(request: NextRequest) {
     
     clearTimeout(timeoutId);
     
-    cronLogger.info(`[${executionId}] Enhanced tier-aware cron completed with 524 timeout prevention`, {
+    cronLogger.info(`[${executionId}] Enhanced tier-aware cron completed with parallel AI processing and 524 timeout prevention`, {
       ...results,
       executionId: monitorResult.executionId,
       duration: monitorResult.duration,
@@ -551,7 +476,8 @@ export async function GET(request: NextRequest) {
         'Intelligent circuit breaker',
         'Filing prioritization',
         'Performance monitoring',
-        'Enhanced parallel processing'
+        'Parallel AI processing pipeline',
+        'N+1 query elimination'
       ]
     });
 
