@@ -1,7 +1,7 @@
 import { prisma } from '../db/prisma';
 import { v4 as uuidv4 } from 'uuid';
 
-// Job types
+// Job types (Enhanced for Phase 2 async processing)
 export type JobType = 
   | 'CHECK_FILINGS' 
   | 'PROCESS_FILING' 
@@ -12,7 +12,12 @@ export type JobType =
   | 'CHECK_FORM4_FILINGS'
   | 'SUMMARIZE_FILING'
   | 'SEND_FILING_NOTIFICATION'
-  | 'COMPILE_DAILY_DIGEST';
+  | 'COMPILE_DAILY_DIGEST'
+  // Phase 2: Async processing job types
+  | 'ASYNC_SUMMARIZE_FILING'
+  | 'ASYNC_EMAIL_DIGEST'
+  | 'ASYNC_FILING_CLEANUP'
+  | 'ASYNC_WEBHOOK_NOTIFICATION';
 
 // Job status
 export type JobStatus = 
