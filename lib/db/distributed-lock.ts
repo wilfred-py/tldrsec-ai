@@ -388,6 +388,13 @@ export class DistributedLockManager {
    * RACE CONDITION FIX: Deterministic hashing ensures same lock key always maps to same advisory lock
    */
   private hashLockKey(lockName: string): bigint {
+    return DistributedLockManager.hashLockKey(lockName);
+  }
+  
+  /**
+   * Static version for external access
+   */
+  static hashLockKey(lockName: string): bigint {
     // Use a simple but effective hash for lock names
     let hash = 0;
     for (let i = 0; i < lockName.length; i++) {
@@ -764,3 +771,105 @@ export const releaseLock = (lockId: string) =>
 
 export const withLock = <T>(lockName: string, operation: () => Promise<T>, options?: LockOptions) => 
   distributedLockManager.withLock(lockName, operation, options);
+
+// Specialized lock utilities for specific use cases
+export class lockUtils {
+  /**
+   * Execute operation with filing-specific lock
+   */
+  static async withFilingLock<T>(
+    lockKey: string,
+    operation: () => Promise<T>,
+    options: {
+      ttlMs?: number;
+      timeoutMs?: number;
+      metadata?: Record<string, unknown>;
+    } = {}
+  ): Promise<T> {
+    const lockOptions: LockOptions = {
+      ttl: options.ttlMs || 600000, // 10 minutes default
+      acquireTimeout: options.timeoutMs || 10000, // 10 seconds default
+      autoRenewal: true,
+      renewalInterval: 60
+    };
+    
+    return distributedLockManager.withLock(
+      `filing_${lockKey}`,
+      operation,
+      lockOptions
+    );
+  }
+  
+  /**
+   * Execute operation with cache-specific lock
+   */
+  static async withCacheLock<T>(
+    cacheKey: string,
+    operation: () => Promise<T>,
+    options: {
+      ttlMs?: number;
+      timeoutMs?: number;
+    } = {}
+  ): Promise<T> {
+    const lockOptions: LockOptions = {
+      ttl: options.ttlMs || 30000, // 30 seconds default for cache operations
+      acquireTimeout: options.timeoutMs || 5000, // 5 seconds default
+      autoRenewal: false // Cache operations should be quick
+    };
+    
+    return distributedLockManager.withLock(
+      `cache_${cacheKey}`,
+      operation,
+      lockOptions
+    );
+  }
+  
+  /**
+   * Execute operation with user-specific lock
+   */
+  static async withUserLock<T>(
+    userId: string,
+    operation: () => Promise<T>,
+    options: {
+      ttlMs?: number;
+      timeoutMs?: number;
+    } = {}
+  ): Promise<T> {
+    const lockOptions: LockOptions = {
+      ttl: options.ttlMs || 300000, // 5 minutes default
+      acquireTimeout: options.timeoutMs || 10000, // 10 seconds default
+      autoRenewal: true
+    };
+    
+    return distributedLockManager.withLock(
+      `user_${userId}`,
+      operation,
+      lockOptions
+    );
+  }
+  
+  /**
+   * Execute operation with cron-specific lock
+   */
+  static async withCronLock<T>(
+    cronName: string,
+    operation: () => Promise<T>,
+    options: {
+      ttlMs?: number;
+      timeoutMs?: number;
+    } = {}
+  ): Promise<T> {
+    const lockOptions: LockOptions = {
+      ttl: options.ttlMs || 900000, // 15 minutes default for cron operations
+      acquireTimeout: options.timeoutMs || 30000, // 30 seconds default
+      autoRenewal: true,
+      renewalInterval: 50 // Renew at 50% to prevent overlapping cron runs
+    };
+    
+    return distributedLockManager.withLock(
+      `cron_${cronName}`,
+      operation,
+      lockOptions
+    );
+  }
+}

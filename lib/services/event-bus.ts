@@ -42,7 +42,7 @@ class EventSecurity {
    */
   static encryptData(data: Record<string, unknown>): { encrypted: string; iv: string; tag: string } {
     const iv = crypto.randomBytes(SECURITY_CONFIG.ivLength);
-    const cipher = crypto.createCipher(SECURITY_CONFIG.algorithm, this.encryptionKey);
+    const cipher = crypto.createCipherGCM(SECURITY_CONFIG.algorithm, this.encryptionKey, iv);
     cipher.setAAD(Buffer.from('event-bus-data'));
     
     const serialized = JSON.stringify(data);
@@ -63,10 +63,10 @@ class EventSecurity {
    */
   static decryptData(encryptedData: { encrypted: string; iv: string; tag: string }): Record<string, unknown> {
     try {
-      const _iv = Buffer.from(encryptedData.iv, 'hex');
+      const iv = Buffer.from(encryptedData.iv, 'hex');
       const tag = Buffer.from(encryptedData.tag, 'hex');
       
-      const decipher = crypto.createDecipher(SECURITY_CONFIG.algorithm, this.encryptionKey);
+      const decipher = crypto.createDecipherGCM(SECURITY_CONFIG.algorithm, this.encryptionKey, iv);
       decipher.setAAD(Buffer.from('event-bus-data'));
       decipher.setAuthTag(tag);
       

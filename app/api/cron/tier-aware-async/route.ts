@@ -15,7 +15,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { logger } from '../../../../lib/logging/index';
 import { getMarketHoursContext } from '../../../../lib/cron/market-hours';
 import { CronJobMonitor } from '../../../../lib/monitoring/cron-monitor';
-import { CronJobStatus } from '../../../../types/cron';
+// import { CronJobStatus } from '../../../../types/cron'; // TODO: Add back when needed
 import { generateSecureExecutionId } from '../../../../lib/security/secure-random';
 
 // Import our enhanced async services
@@ -281,7 +281,7 @@ async function processAsynchronously(
       filingUrl: string;
     }> = [];
 
-    const userTickers = (user as any).tickers || (user as any).tickerMonitoring || [];
+    const userTickers = (user as Record<string, unknown>).tickers || (user as Record<string, unknown>).tickerMonitoring || [];
     
     for (const ticker of userTickers) {
       try {
@@ -315,7 +315,7 @@ async function processAsynchronously(
     if (userFilings.length > 0) {
       allFilingsToQueue.push({
         userId: user.id,
-        userTier: (user as any).subscriptionTier || 'free',
+        userTier: (user as Record<string, unknown>).subscriptionTier as string || 'free',
         filings: userFilings
       });
     }
@@ -452,7 +452,7 @@ async function processSynchronously(
         }
 
         // Extract user tier from the user object
-        const userTier = (user as any).subscriptionTier || 'free';
+        const userTier = (user as Record<string, unknown>).subscriptionTier as string || 'free';
         
         cronLogger.info(`Processing user ${index + 1}/${eligibleUsers.length} synchronously`, {
           executionId,
@@ -466,10 +466,10 @@ async function processSynchronously(
           id: user.id,
           email: user.email,
           subscriptionTier: userTier,
-          tickers: (user as any).tickers || (user as any).tickerMonitoring || [],
-          processingBudget: (user as any).processingBudget || 0,
-          budgetUsed: (user as any).budgetUsed || 0,
-          lastCronProcessed: (user as any).lastCronProcessed || null
+          tickers: (user as Record<string, unknown>).tickers || (user as Record<string, unknown>).tickerMonitoring || [],
+          processingBudget: (user as Record<string, unknown>).processingBudget as number || 0,
+          budgetUsed: (user as Record<string, unknown>).budgetUsed as number || 0,
+          lastCronProcessed: (user as Record<string, unknown>).lastCronProcessed as Date | null || null
         };
 
         // Validate tickers exist
