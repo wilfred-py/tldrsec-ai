@@ -3,6 +3,13 @@ const { TextEncoder, TextDecoder } = require('util');
 global.TextEncoder = TextEncoder;
 global.TextDecoder = TextDecoder;
 
+// Add setImmediate polyfill for Node.js environment
+if (typeof global.setImmediate === 'undefined') {
+  global.setImmediate = (callback, ...args) => {
+    return setTimeout(callback, 0, ...args);
+  };
+}
+
 // Mock BroadcastChannel for MSW
 global.BroadcastChannel = class BroadcastChannel {
   constructor() {
@@ -49,5 +56,20 @@ console.error = (...args) => {
   if (args[0]?.includes?.('inside a strict mode tree')) {
     return;
   }
+  if (args[0]?.includes?.('preflight has invalid HTTP status code')) {
+    return;
+  }
   originalConsoleError(...args);
+};
+
+// Suppress warnings during tests
+const originalConsoleWarn = console.warn;
+console.warn = (...args) => {
+  if (args[0]?.includes?.('SEC API request attempt')) {
+    return;
+  }
+  if (args[0]?.includes?.('punycode module is deprecated')) {
+    return;
+  }
+  originalConsoleWarn(...args);
 }; 

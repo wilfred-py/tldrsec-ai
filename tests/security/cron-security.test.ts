@@ -185,7 +185,7 @@ describe('Cron Endpoint Security Tests', () => {
       const data = await response.json();
 
       expect(response.status).toBe(401);
-      expect(data.error).toBe('Unauthorized');
+      expect(data.error).toBe('Invalid authorization token');
     });
 
     test('CRITICAL: Must reject requests with malformed authorization header', async () => {
@@ -201,7 +201,7 @@ describe('Cron Endpoint Security Tests', () => {
       const data = await response.json();
 
       expect(response.status).toBe(401);
-      expect(data.error).toBe('Unauthorized');
+      expect(data.error).toBe('Invalid authorization header format');
     });
 
     test('CRITICAL: Must reject requests when CRON_SECRET is missing', async () => {
@@ -219,7 +219,7 @@ describe('Cron Endpoint Security Tests', () => {
       const data = await response.json();
 
       expect(response.status).toBe(500);
-      expect(data.error).toBe('Authentication not properly configured');
+      expect(data.error).toBe('Server configuration error');
     });
 
     test('SECURITY: Must accept valid authorization token', async () => {
@@ -353,7 +353,7 @@ describe('Cron Endpoint Security Tests', () => {
       const data = await response.json();
 
       expect(response.status).toBe(403);
-      expect(data.error).toBe('Forbidden');
+      expect(data.error).toBe('IP not allowed');
     });
 
     test('SECURITY: Must allow IPs in allowlist', async () => {

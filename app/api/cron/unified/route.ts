@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { logger } from '../../../../lib/logging';
 import { getMarketHoursContext } from '../../../../lib/cron/market-hours';
+import { CronAuthService } from '../../../../lib/cron/auth-service';
 
 const cronLogger = logger.child('unified-cron');
 
@@ -16,11 +17,21 @@ export async function GET(request: NextRequest) {
   try {
     cronLogger.info('Starting unified cron job router');
 
-    // Verify authorization
-    const authHeader = request.headers.get('authorization');
-    if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
-      cronLogger.warn('Unauthorized cron request');
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    // Secure authentication using CronAuthService
+    const authResult = await CronAuthService.validateCronRequest(request);
+    if (!authResult.isValid) {
+      cronLogger.warn('Unauthorized cron request', { 
+        error: authResult.error,
+        clientIP: authResult.clientIP 
+      });
+      
+      const isConfigurationError = authResult.error?.includes('not properly configured');
+      return NextResponse.json(
+        { 
+          error: isConfigurationError ? 'Server configuration error' : authResult.error || 'Authentication failed'
+        }, 
+        { status: isConfigurationError ? 500 : 401 }
+      );
     }
 
     // Get market context for intelligent routing

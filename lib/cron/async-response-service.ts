@@ -41,6 +41,19 @@ export interface AsyncErrorResponse {
 }
 
 /**
+ * Security headers for cron endpoint responses
+ */
+const SECURITY_HEADERS = {
+  'X-Content-Type-Options': 'nosniff',
+  'X-Frame-Options': 'DENY',
+  'X-XSS-Protection': '1; mode=block',
+  'Referrer-Policy': 'no-referrer',
+  'Content-Security-Policy': "default-src 'none'; frame-ancestors 'none'",
+  'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
+  'Pragma': 'no-cache'
+} as const;
+
+/**
  * Service for handling async processing responses
  */
 export class AsyncResponseService {
@@ -181,13 +194,14 @@ export class AsyncResponseService {
       }
     };
     
-    // Add response headers for async processing
+    // Add response headers for async processing with security headers
     const headers = new Headers({
       'Content-Type': 'application/json',
       'X-Processing-Mode': 'async',
       'X-Execution-ID': result.executionId,
       'X-Estimated-Completion': result.data.estimatedCompletionTime.toISOString(),
-      'X-Filings-Queued': result.data.filingsQueued.toString()
+      'X-Filings-Queued': result.data.filingsQueued.toString(),
+      ...SECURITY_HEADERS
     });
     
     return new NextResponse(JSON.stringify(responseBody), {
@@ -224,7 +238,8 @@ export class AsyncResponseService {
       'X-Processing-Mode': 'async',
       'X-Execution-ID': error.executionId,
       'X-Error-Code': error.code,
-      'X-Retryable': error.metadata.retryable.toString()
+      'X-Retryable': error.metadata.retryable.toString(),
+      ...SECURITY_HEADERS
     });
     
     return new NextResponse(JSON.stringify(responseBody), {

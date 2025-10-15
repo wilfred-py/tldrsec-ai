@@ -82,11 +82,14 @@ export function isConcurrencyError(error: unknown): boolean {
   }
 
   // Check for deadlock errors in error message
-  const errorMessage = (error as Error)?.message?.toLowerCase() || '';
-  if (errorMessage.includes('deadlock') || 
-      errorMessage.includes('serialization failure') ||
-      errorMessage.includes('could not serialize access')) {
-    return true;
+  if (error instanceof Error) {
+    const errorMessage = error.message.toLowerCase();
+    if (errorMessage.includes('deadlock') || 
+        errorMessage.includes('serialization failure') ||
+        errorMessage.includes('could not serialize access') ||
+        errorMessage.includes('lock wait timeout')) {
+      return true;
+    }
   }
   
   return false;

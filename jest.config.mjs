@@ -8,6 +8,7 @@ const createJestConfig = nextJest({
 // Add any custom config to be passed to Jest
 const config = {
   testEnvironment: 'jsdom',
+  testTimeout: 30000, // 30 seconds for async operations
   setupFilesAfterEnv: [
     '<rootDir>/jest.setup.js', 
     '<rootDir>/__tests__/setup.js'

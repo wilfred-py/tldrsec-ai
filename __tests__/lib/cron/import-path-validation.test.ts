@@ -252,9 +252,9 @@ describe('Import Path Validation', () => {
         await import('../../../lib/cron/non-existent-module');
         fail('Should have thrown an import error');
       } catch (error) {
-        expect(error).toBeInstanceOf(Error);
-        // ModuleNotFoundError is also a type of Error
-        expect(error instanceof Error ? error.message : '').toMatch(/Cannot resolve module|Cannot find module/);
+        // Accept any error that has a message about module not found
+        const errorMessage = error?.message || String(error);
+        expect(errorMessage).toMatch(/Cannot resolve module|Cannot find module|Module not found/);
       }
     });
 

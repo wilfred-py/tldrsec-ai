@@ -297,10 +297,12 @@ describe('Error Handling and Recovery Tests', () => {
 
     it('should validate environment-specific behavior', () => {
       const originalEnv = process.env.NODE_ENV;
+      const originalJestWorkerId = process.env.JEST_WORKER_ID;
       
       try {
         // Test production environment
         process.env.NODE_ENV = 'production';
+        delete process.env.JEST_WORKER_ID; // Temporarily clear Jest worker ID to test production behavior
         let config = getCostValidationConfig();
         expect(config.environment.isProduction).toBe(true);
         
@@ -322,6 +324,9 @@ describe('Error Handling and Recovery Tests', () => {
         
       } finally {
         process.env.NODE_ENV = originalEnv;
+        if (originalJestWorkerId) {
+          process.env.JEST_WORKER_ID = originalJestWorkerId;
+        }
       }
     });
   });
