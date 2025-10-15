@@ -30,6 +30,7 @@ import { v4 as uuidv4 } from 'uuid';
 // PrismaClient import - using service layer instead
 // import { PrismaClient } from '@prisma/client';
 import { summarizeFiling, SummarizationError } from '../../../../lib/ai/summarize';
+import { AsyncFilingProcessor } from '../../../../lib/job-queue/async-filing-processor';
 // claudeClient import removed - not used in active code paths
 // SummarizationResult import removed - not used in active code paths
 
@@ -194,6 +195,61 @@ export const GET = appRouterAsyncHandler(async (request: Request) => {
             monitoring.incrementCounter('jobs.completed', 1, {
               jobType: job.jobType
             });
+            
+            return { jobId: job.id, success: true, result };
+          } else if (job.jobType === 'ASYNC_SUMMARIZE_FILING') {
+            // Phase 2: Process async filing summarization
+            const payload = job.payload as { filingId?: string; userId?: string; [key: string]: unknown }; // Type assertion for async job payload
+            
+            if (!payload.filingId || !payload.userId) {
+              throw new Error('Missing filingId or userId in async job payload');
+            }
+            
+            componentLogger.info(`Processing async filing summarization ${job.id}`, {
+              filingId: payload.filingId,
+              ticker: payload.ticker,
+              userId: payload.userId
+            });
+            
+            // Call the async filing processor
+            const result = await AsyncFilingProcessor.processAsyncFilingSummarization(
+              job.id,
+              payload
+            );
+            
+            if (!result.success) {
+              throw new Error(result.error || 'Async filing processing failed');
+            }
+            
+            // Log success
+            componentLogger.info(`Successfully processed async filing job ${job.id}`, {
+              summaryId: result.summaryId,
+              cost: result.cost,
+              processingTime: result.processingTime,
+              duration: Date.now() - jobStartTime
+            });
+            
+            // Mark job as completed
+            await JobQueueService.updateJobStatus(job.id, 'COMPLETED', {
+              completedAt: new Date(),
+              executionTime: Date.now() - jobStartTime,
+              result: {
+                summaryId: result.summaryId,
+                cost: result.cost,
+                tokensUsed: result.tokensUsed,
+                model: result.model,
+                processingTime: result.processingTime,
+                fallbackUsed: result.fallbackUsed
+              }
+            });
+            
+            // Track successful async job
+            monitoring.incrementCounter('jobs.completed', 1, {
+              jobType: job.jobType,
+              priority: payload.priority || 'unknown'
+            });
+            
+            monitoring.recordTiming('async_filing.job_duration', Date.now() - jobStartTime);
             
             return { jobId: job.id, success: true, result };
           } else {
