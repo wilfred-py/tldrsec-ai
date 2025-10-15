@@ -10,6 +10,7 @@ import { logger } from '../../../../lib/logging';
 import { getMarketHoursContext } from '../../../../lib/cron/market-hours';
 import { CronJobMonitor } from '../../../../lib/monitoring/cron-monitor';
 import { CronJobStatus } from '../../../../types/cron';
+import { generateSecureExecutionId } from '../../../../lib/security/secure-random';
 
 // Import Phase 3 microservices
 // Note: Services will be imported dynamically when needed to avoid unused import warnings
@@ -32,14 +33,10 @@ const microservicesLogger = logger.child('microservices-cron');
  */
 export async function GET(request: NextRequest) {
   const startTime = Date.now();
-  const generateSecureExecutionId = (): string => {
-    const timestamp = Date.now();
-    const randomBytes = Buffer.from(Array.from({ length: 16 }, () => Math.floor(Math.random() * 256)));
-    const randomHex = randomBytes.toString('hex').substring(0, 16);
-    return `microservices-${timestamp}-${randomHex}`;
-  };
+  // Use secure random generation for execution IDs
+  const secureExecutionId = generateSecureExecutionId('microservices');
   
-  const executionId = request.headers.get('x-execution-id') || generateSecureExecutionId();
+  const executionId = request.headers.get('x-execution-id') || secureExecutionId;
   
   // Ultra-fast timeout for microservices architecture (guaranteed <30s response)
   const timeoutMs = 25000; // 25 seconds maximum

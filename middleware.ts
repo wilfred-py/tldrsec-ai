@@ -368,6 +368,9 @@ export default async function middleware(request: NextRequest) {
         // Cron endpoints (we handle auth ourselves)
         '/api/cron/tier-aware',
         '/api/cron/tier-aware-optimized',
+        '/api/cron/tier-aware-async',
+        '/api/cron/microservices',
+        '/api/cron/process-jobs',
         '/api/cron/unified',
         
         // Marketing pages

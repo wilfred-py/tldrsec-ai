@@ -16,6 +16,7 @@ import { logger } from '../../../../lib/logging';
 import { getMarketHoursContext } from '../../../../lib/cron/market-hours';
 import { CronJobMonitor } from '../../../../lib/monitoring/cron-monitor';
 import { CronJobStatus } from '../../../../types/cron';
+import { generateSecureExecutionId } from '../../../../lib/security/secure-random';
 
 // Import our enhanced async services
 import { CronAuthService } from '../../../../lib/cron/auth-service';
@@ -36,14 +37,10 @@ const cronLogger = logger.child('tier-aware-async-cron');
  */
 export async function GET(request: NextRequest) {
   const startTime = Date.now();
-  const generateSecureExecutionId = (): string => {
-    const timestamp = Date.now();
-    const randomBytes = Buffer.from(Array.from({ length: 16 }, () => Math.floor(Math.random() * 256)));
-    const randomHex = randomBytes.toString('hex').substring(0, 16);
-    return `async-${timestamp}-${randomHex}`;
-  };
+  // Use secure random generation for execution IDs
+  const secureExecutionId = generateSecureExecutionId('async');
   
-  const executionId = request.headers.get('x-execution-id') || generateSecureExecutionId();
+  const executionId = request.headers.get('x-execution-id') || secureExecutionId;
   
   // Enhanced timeout configuration for async processing
   const parseTimeoutHeader = (header: string | null, defaultValue: number): number => {
@@ -63,16 +60,16 @@ export async function GET(request: NextRequest) {
   });
 
   // Initialize monitoring
-  const monitor = new CronJobMonitor('tier-aware-async', executionId);
+  const monitor = await CronJobMonitor.create('tier-aware-async', 'VERCEL_CRON');
   
   try {
     // Step 1: Authentication (Fast - should complete in <1s)
-    const authResult = await CronAuthService.validateCronAuth(request);
-    if (!authResult.valid) {
+    const authResult = await CronAuthService.validateCronRequest(request);
+    if (!authResult.isValid) {
       cronLogger.error('Authentication failed', {
         executionId,
-        reason: authResult.reason,
-        headers: authResult.headers
+        error: authResult.error,
+        clientIP: authResult.clientIP
       });
       
       return NextResponse.json(
@@ -80,7 +77,7 @@ export async function GET(request: NextRequest) {
           success: false, 
           executionId,
           error: 'Authentication failed',
-          reason: authResult.reason 
+          reason: authResult.error || 'Invalid credentials'
         },
         { status: 401 }
       );
@@ -88,14 +85,19 @@ export async function GET(request: NextRequest) {
 
     // Step 2: Market hours context (Fast - <500ms)
     const marketContext = await getMarketHoursContext();
-    monitor.recordCheckpoint('market_context_ready');
+    monitor.recordMetric('market_context_ready', { timestamp: Date.now() });
 
     // Step 3: Get eligible users for processing (Optimized - <2s)
-    const eligibleUsers = await CronUserProcessingService.getEligibleUsersForProcessing({
-      batchSize: 50,
+    const userResults = await CronUserProcessingService.getEligibleUsersForProcessing(
       marketContext,
-      executionId
-    });
+      {
+        maxUsersPerCycle: 50,
+        respectBudgetLimits: true,
+        budgetThreshold: 90
+      }
+    );
+
+    const eligibleUsers = userResults.eligibleUsers;
 
     if (eligibleUsers.length === 0) {
       cronLogger.info('No eligible users found for processing', { executionId });
@@ -110,11 +112,14 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    monitor.recordCheckpoint('users_identified', { count: eligibleUsers.length });
+    monitor.recordMetric('users_identified', { count: eligibleUsers.length, timestamp: Date.now() });
 
     // Step 4: Determine processing mode based on load and remaining time
-    const totalFilings = eligibleUsers.reduce((sum, user) => 
-      sum + (user.tickerMonitoring?.length || 0), 0);
+    const totalFilings = eligibleUsers.reduce((sum, user) => {
+      // Get the user data from allUsers to access tickers
+      const userData = userResults.allUsers.find(u => u.id === user.userId);
+      return sum + (userData?.tickers?.length || 0);
+    }, 0);
     
     const shouldUseAsync = AsyncResponseService.shouldUseAsyncProcessing(
       totalFilings,
@@ -133,9 +138,23 @@ export async function GET(request: NextRequest) {
       // Import and use existing synchronous processor
       const { CronFilingProcessor: _CronFilingProcessor } = await import('../../../../lib/cron/filing-processor');
       
+      // Convert eligible users to the format expected by processSynchronously
+      const usersForSync = eligibleUsers.map(user => {
+        const userData = userResults.allUsers.find(u => u.id === user.userId);
+        return {
+          id: user.userId,
+          email: userData?.email || '',
+          subscriptionTier: user.tier,
+          tickers: userData?.tickers || [],
+          processingBudget: userData?.processingBudget || 0,
+          budgetUsed: userData?.budgetUsed || 0,
+          lastCronProcessed: userData?.lastCronProcessed
+        };
+      }).filter(user => user.email); // Only process users with email addresses
+
       // Process synchronously with reduced timeout
       const syncResults = await processSynchronously(
-        eligibleUsers,
+        usersForSync,
         remainingTime * 0.8, // Use 80% of remaining time
         executionId
       );
@@ -157,23 +176,38 @@ export async function GET(request: NextRequest) {
       remainingTime
     });
 
+    // Convert eligible users to format expected by processAsynchronously  
+    const usersForAsync = eligibleUsers.map(user => {
+      const userData = userResults.allUsers.find(u => u.id === user.userId);
+      return {
+        id: user.userId,
+        email: userData?.email || '',
+        subscriptionTier: user.tier,
+        tickers: userData?.tickers || [],
+        processingBudget: userData?.processingBudget || 0,
+        budgetUsed: userData?.budgetUsed || 0,
+        lastCronProcessed: userData?.lastCronProcessed
+      };
+    }).filter(user => user.email); // Only process users with email addresses
+
     const asyncResults = await processAsynchronously(
-      eligibleUsers,
+      usersForAsync,
       executionId,
       marketContext
     );
 
-    monitor.recordCheckpoint('async_jobs_queued');
+    monitor.recordMetric('async_jobs_queued', { jobsQueued: asyncResults.data.filingsQueued, timestamp: Date.now() });
     
     // Step 6: Return immediate response
     const response = AsyncResponseService.createImmediateResponse(asyncResults);
     
     const totalTime = Date.now() - startTime;
-    monitor.recordMetrics({
+    monitor.recordMetric('execution_completed', {
       duration: totalTime,
-      status: CronJobStatus.SUCCESS,
+      status: 'SUCCESS',
       usersProcessed: eligibleUsers.length,
-      mode: 'async'
+      mode: 'async',
+      timestamp: Date.now()
     });
 
     cronLogger.info('Async cron job completed', {
@@ -189,10 +223,11 @@ export async function GET(request: NextRequest) {
     const totalTime = Date.now() - startTime;
     const errorMessage = error instanceof Error ? error.message : String(error);
     
-    monitor.recordMetrics({
+    monitor.recordMetric('execution_failed', {
       duration: totalTime,
-      status: CronJobStatus.FAILED,
-      error: errorMessage
+      status: 'FAILED',
+      error: errorMessage,
+      timestamp: Date.now()
     });
 
     cronLogger.error('Async cron job failed', {
@@ -246,20 +281,25 @@ async function processAsynchronously(
       filingUrl: string;
     }> = [];
 
-    for (const ticker of user.tickerMonitoring) {
+    const userTickers = (user as any).tickers || (user as any).tickerMonitoring || [];
+    
+    for (const ticker of userTickers) {
       try {
-        // Get latest filings for this ticker
-        const latestFilings = await CronSecFilingService.getLatestFilingsForTicker(
+        // Get unprocessed filings for this user and ticker
+        const unprocessedFilings = await CronSecFilingService.getUnprocessedFilingsForUser(
           ticker.symbol,
-          1 // Get one latest filing per ticker for async processing
+          user.id
         );
 
+        // Take only the latest few filings for async processing to avoid overwhelming the queue
+        const latestFilings = unprocessedFilings.slice(0, 2); // Limit to 2 latest per ticker
+        
         for (const filing of latestFilings) {
           userFilings.push({
             filingId: filing.accessionNumber,
             ticker: ticker.symbol,
-            formType: filing.form,
-            filingUrl: filing.primaryDocUrl || filing.filingUrl
+            formType: filing.filingType || 'Unknown',
+            filingUrl: filing.filingUrl || ''
           });
         }
       } catch (error) {
@@ -275,7 +315,7 @@ async function processAsynchronously(
     if (userFilings.length > 0) {
       allFilingsToQueue.push({
         userId: user.id,
-        userTier: user.subscriptionTier || 'free',
+        userTier: (user as any).subscriptionTier || 'free',
         filings: userFilings
       });
     }
@@ -328,26 +368,189 @@ async function processAsynchronously(
 
 /**
  * Fallback synchronous processing for small loads
+ * Implements real filing processing using the existing CronFilingProcessor
  */
 async function processSynchronously(
   eligibleUsers: Array<{ id: string; email: string; [key: string]: unknown }>,
   timeoutMs: number,
   executionId: string
-) {
-  // This would use the existing CronFilingProcessor
-  // Implementation simplified for demo - would need full integration
-  
+): Promise<{
+  usersProcessed: number;
+  filingsProcessed: number;
+  cost: number;
+  errors: number;
+  emailsSent: number;
+  totalCostUSD: number;
+  processingTime: number;
+}> {
+  const startTime = Date.now();
   const results = {
-    usersProcessed: eligibleUsers.length,
+    usersProcessed: 0,
     filingsProcessed: 0,
     cost: 0,
-    errors: 0
+    errors: 0,
+    emailsSent: 0,
+    totalCostUSD: 0,
+    processingTime: 0
   };
 
-  cronLogger.info('Processed users synchronously (fallback)', {
+  cronLogger.info('Starting synchronous processing (fallback mode)', {
     executionId,
-    ...results
+    userCount: eligibleUsers.length,
+    timeoutMs,
+    mode: 'synchronous_fallback'
   });
 
-  return results;
+  try {
+    // Import CronFilingProcessor dynamically to avoid build issues
+    const { CronFilingProcessor } = await import('../../../../lib/cron/filing-processor');
+    
+    // Validate the import
+    if (!CronFilingProcessor || typeof CronFilingProcessor.processUserTierFilings !== 'function') {
+      throw new Error('CronFilingProcessor not properly imported or processUserTierFilings method not available');
+    }
+
+    // Process each eligible user with timeout protection
+    const remainingTime = timeoutMs;
+    const timePerUser = remainingTime / Math.max(eligibleUsers.length, 1);
+    
+    cronLogger.info('Processing users with time allocation', {
+      executionId,
+      totalUsers: eligibleUsers.length,
+      remainingTime,
+      timePerUser: Math.floor(timePerUser)
+    });
+
+    for (let index = 0; index < eligibleUsers.length; index++) {
+      const user = eligibleUsers[index];
+      const userStartTime = Date.now();
+      const elapsedTotal = userStartTime - startTime;
+      
+      // Check if we're approaching timeout
+      if (elapsedTotal >= timeoutMs * 0.9) { // Use 90% of timeout as safety margin
+        cronLogger.warn('Approaching timeout, stopping synchronous processing', {
+          executionId,
+          elapsedTime: elapsedTotal,
+          timeoutMs,
+          usersProcessed: index,
+          totalUsers: eligibleUsers.length
+        });
+        break;
+      }
+
+      try {
+        // Validate user object structure
+        if (!user.id || !user.email) {
+          cronLogger.warn('Invalid user object in synchronous processing', {
+            executionId,
+            userId: user.id || 'missing',
+            hasEmail: !!user.email,
+            userIndex: index
+          });
+          results.errors++;
+          continue;
+        }
+
+        // Extract user tier from the user object
+        const userTier = (user as any).subscriptionTier || 'free';
+        
+        cronLogger.info(`Processing user ${index + 1}/${eligibleUsers.length} synchronously`, {
+          executionId,
+          userId: user.id,
+          tier: userTier,
+          email: user.email
+        });
+
+        // Convert user object to the format expected by CronFilingProcessor
+        const userForProcessing = {
+          id: user.id,
+          email: user.email,
+          subscriptionTier: userTier,
+          tickers: (user as any).tickers || (user as any).tickerMonitoring || [],
+          processingBudget: (user as any).processingBudget || 0,
+          budgetUsed: (user as any).budgetUsed || 0,
+          lastCronProcessed: (user as any).lastCronProcessed || null
+        };
+
+        // Validate tickers exist
+        if (!userForProcessing.tickers || userForProcessing.tickers.length === 0) {
+          cronLogger.warn('User has no tickers to process', {
+            executionId,
+            userId: user.id,
+            userIndex: index
+          });
+          results.usersProcessed++;
+          continue;
+        }
+
+        // Process user's filings using the existing processor
+        const userResult = await CronFilingProcessor.processUserTierFilings(
+          userForProcessing,
+          userTier
+        );
+
+        // Accumulate results
+        results.filingsProcessed += userResult.filingsProcessed;
+        results.cost += userResult.cost;
+        results.totalCostUSD += userResult.cost;
+        results.usersProcessed++;
+
+        // Count emails sent (assuming 1 email per processed filing)
+        results.emailsSent += userResult.filingsProcessed;
+
+        const userProcessingTime = Date.now() - userStartTime;
+        cronLogger.info(`User processed successfully in synchronous mode`, {
+          executionId,
+          userId: user.id,
+          tier: userTier,
+          filingsProcessed: userResult.filingsProcessed,
+          cost: userResult.cost,
+          processingTime: userProcessingTime,
+          userIndex: index + 1,
+          totalUsers: eligibleUsers.length
+        });
+
+      } catch (userError) {
+        results.errors++;
+        const errorMessage = userError instanceof Error ? userError.message : String(userError);
+        
+        cronLogger.error('Failed to process user in synchronous mode', {
+          executionId,
+          userId: user.id,
+          error: errorMessage,
+          userIndex: index + 1,
+          totalUsers: eligibleUsers.length
+        });
+
+        // Continue processing other users even if one fails
+        continue;
+      }
+    }
+
+    results.processingTime = Date.now() - startTime;
+
+    cronLogger.info('Synchronous processing completed', {
+      executionId,
+      ...results,
+      avgTimePerUser: results.usersProcessed > 0 ? Math.floor(results.processingTime / results.usersProcessed) : 0,
+      successRate: results.usersProcessed > 0 ? ((results.usersProcessed - results.errors) / results.usersProcessed * 100).toFixed(1) + '%' : '0%'
+    });
+
+    return results;
+
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    results.processingTime = Date.now() - startTime;
+    results.errors = eligibleUsers.length; // Mark all as failed
+    
+    cronLogger.error('Synchronous processing failed completely', {
+      executionId,
+      error: errorMessage,
+      totalUsers: eligibleUsers.length,
+      processingTime: results.processingTime
+    });
+
+    // Return partial results even on failure
+    return results;
+  }
 }

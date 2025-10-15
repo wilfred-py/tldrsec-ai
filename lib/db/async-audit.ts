@@ -8,6 +8,7 @@
 
 import { getPrismaClient } from './prisma';
 import { logger } from '../logging';
+import { generateSecureAuditId } from '../security/secure-random';
 
 const prisma = getPrismaClient();
 const auditLogger = logger.child('async-audit');
@@ -55,10 +56,7 @@ let cleanupTimer: NodeJS.Timeout | null = null;
  * Generate a unique ID with better entropy
  */
 function generateAuditId(): string {
-  const timestamp = Date.now().toString(36);
-  const randomPart = Math.random().toString(36).substring(2, 15);
-  const randomPart2 = Math.random().toString(36).substring(2, 15);
-  return `audit_${timestamp}_${randomPart}${randomPart2}`;
+  return generateSecureAuditId();
 }
 
 /**

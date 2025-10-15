@@ -8,6 +8,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { ErrorCode } from './constants'; 
 import { ApiError } from './index';
 import { logger } from '../logging';
+import { generateSecureJitter } from '../security/secure-random';
 
 /**
  * Configuration for retry operations
@@ -79,7 +80,7 @@ export function calculateBackoffDelay(
   const cappedDelay = Math.min(exponentialDelay, config.maxDelayMs);
   
   // Add jitter: random value between 0 and jitterFactor * delay
-  const jitter = cappedDelay * config.jitterFactor * Math.random();
+  const jitter = generateSecureJitter(cappedDelay, config.jitterFactor) - cappedDelay;
   
   // Return delay with jitter
   return Math.floor(cappedDelay + jitter);

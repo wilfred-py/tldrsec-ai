@@ -15,6 +15,7 @@ import { getFormMetadata } from '../../../../lib/sec-edgar/form-registry';
 import { optimizedFilingService } from '../../../../services/filings/optimizedFilingService';
 import { logger } from '../../../../lib/logging';
 import { monitoring } from '../../../../lib/monitoring';
+import { generateSecureBatchId } from '../../../../lib/security/secure-random';
 
 // API route logger
 const apiLogger = logger.child('api-optimized-batch');
@@ -70,7 +71,7 @@ interface BatchResponse {
 
 export async function POST(request: NextRequest) {
   const startTime = Date.now();
-  const requestId = `batch-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  const requestId = generateSecureBatchId('batch');
   
   try {
     // Check Content-Length header for payload size limit

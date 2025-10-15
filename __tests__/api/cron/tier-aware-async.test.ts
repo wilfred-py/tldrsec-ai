@@ -26,15 +26,18 @@ jest.mock('../../../lib/cron/market-hours', () => ({
 }));
 
 jest.mock('../../../lib/monitoring/cron-monitor', () => ({
-  CronJobMonitor: jest.fn().mockImplementation(() => ({
-    recordCheckpoint: jest.fn(),
-    recordMetrics: jest.fn()
-  }))
+  CronJobMonitor: {
+    create: jest.fn().mockResolvedValue({
+      recordMetric: jest.fn(),
+      recordCheckpoint: jest.fn(),
+      recordMetrics: jest.fn()
+    })
+  }
 }));
 
 jest.mock('../../../lib/cron/auth-service', () => ({
   CronAuthService: {
-    validateCronAuth: jest.fn()
+    validateCronRequest: jest.fn()
   }
 }));
 
@@ -69,9 +72,9 @@ describe('Tier-Aware Async API', () => {
   describe('Authentication', () => {
     it('should reject requests without valid authentication', async () => {
       const { CronAuthService } = require('../../../lib/cron/auth-service');
-      CronAuthService.validateCronAuth.mockResolvedValue({
-        valid: false,
-        reason: 'Missing authorization header'
+      CronAuthService.validateCronRequest.mockResolvedValue({
+        isValid: false,
+        error: 'Missing authorization header'
       });
 
       const request = mockRequest();
@@ -87,11 +90,14 @@ describe('Tier-Aware Async API', () => {
       const { CronAuthService } = require('../../../lib/cron/auth-service');
       const { CronUserProcessingService } = require('../../../lib/cron/user-processing-service');
       
-      CronAuthService.validateCronAuth.mockResolvedValue({
-        valid: true
+      CronAuthService.validateCronRequest.mockResolvedValue({
+        isValid: true
       });
 
-      CronUserProcessingService.getEligibleUsersForProcessing.mockResolvedValue([]);
+      CronUserProcessingService.getEligibleUsersForProcessing.mockResolvedValue({
+        allUsers: [],
+        eligibleUsers: []
+      });
 
       const request = mockRequest({
         'authorization': 'Bearer valid-token'
@@ -112,22 +118,30 @@ describe('Tier-Aware Async API', () => {
       const { CronUserProcessingService } = require('../../../lib/cron/user-processing-service');
       const { AsyncResponseService } = require('../../../lib/cron/async-response-service');
 
-      CronAuthService.validateCronAuth.mockResolvedValue({ valid: true });
+      CronAuthService.validateCronRequest.mockResolvedValue({ isValid: true });
       
-      const mockUsers = [
+      const mockEligibleUsers = [
+        { userId: 'user1', tier: 'free' },
+        { userId: 'user2', tier: 'hobby' }
+      ];
+
+      const mockAllUsers = [
         { 
           id: 'user1', 
           email: 'user1@example.com',
-          tickerMonitoring: [{ symbol: 'TSLA' }, { symbol: 'AAPL' }]
+          tickers: [{ symbol: 'TSLA' }, { symbol: 'AAPL' }]
         },
         { 
           id: 'user2', 
           email: 'user2@example.com',
-          tickerMonitoring: [{ symbol: 'MSFT' }]
+          tickers: [{ symbol: 'MSFT' }]
         }
       ];
 
-      CronUserProcessingService.getEligibleUsersForProcessing.mockResolvedValue(mockUsers);
+      CronUserProcessingService.getEligibleUsersForProcessing.mockResolvedValue({
+        allUsers: mockAllUsers,
+        eligibleUsers: mockEligibleUsers
+      });
       AsyncResponseService.shouldUseAsyncProcessing.mockReturnValue(true);
       AsyncResponseService.createImmediateResponse.mockReturnValue({
         status: 200,
@@ -156,17 +170,24 @@ describe('Tier-Aware Async API', () => {
       const { CronUserProcessingService } = require('../../../lib/cron/user-processing-service');
       const { AsyncResponseService } = require('../../../lib/cron/async-response-service');
 
-      CronAuthService.validateCronAuth.mockResolvedValue({ valid: true });
+      CronAuthService.validateCronRequest.mockResolvedValue({ isValid: true });
       
-      const mockUsers = [
+      const mockEligibleUsers = [
+        { userId: 'user1', tier: 'free' }
+      ];
+
+      const mockAllUsers = [
         { 
           id: 'user1', 
           email: 'user1@example.com',
-          tickerMonitoring: [{ symbol: 'TSLA' }]
+          tickers: [{ symbol: 'TSLA' }]
         }
       ];
 
-      CronUserProcessingService.getEligibleUsersForProcessing.mockResolvedValue(mockUsers);
+      CronUserProcessingService.getEligibleUsersForProcessing.mockResolvedValue({
+        allUsers: mockAllUsers,
+        eligibleUsers: mockEligibleUsers
+      });
       AsyncResponseService.shouldUseAsyncProcessing.mockReturnValue(false);
 
       const request = mockRequest({
@@ -186,7 +207,7 @@ describe('Tier-Aware Async API', () => {
       const { CronUserProcessingService } = require('../../../lib/cron/user-processing-service');
       const { AsyncResponseService } = require('../../../lib/cron/async-response-service');
 
-      CronAuthService.validateCronAuth.mockResolvedValue({ valid: true });
+      CronAuthService.validateCronRequest.mockResolvedValue({ isValid: true });
       CronUserProcessingService.getEligibleUsersForProcessing.mockRejectedValue(
         new Error('Database connection failed')
       );
@@ -221,8 +242,11 @@ describe('Tier-Aware Async API', () => {
       const { CronAuthService } = require('../../../lib/cron/auth-service');
       const { CronUserProcessingService } = require('../../../lib/cron/user-processing-service');
 
-      CronAuthService.validateCronAuth.mockResolvedValue({ valid: true });
-      CronUserProcessingService.getEligibleUsersForProcessing.mockResolvedValue([]);
+      CronAuthService.validateCronRequest.mockResolvedValue({ isValid: true });
+      CronUserProcessingService.getEligibleUsersForProcessing.mockResolvedValue({
+        allUsers: [],
+        eligibleUsers: []
+      });
 
       const request = mockRequest({
         'authorization': 'Bearer valid-token',
@@ -238,8 +262,11 @@ describe('Tier-Aware Async API', () => {
       const { CronAuthService } = require('../../../lib/cron/auth-service');
       const { CronUserProcessingService } = require('../../../lib/cron/user-processing-service');
 
-      CronAuthService.validateCronAuth.mockResolvedValue({ valid: true });
-      CronUserProcessingService.getEligibleUsersForProcessing.mockResolvedValue([]);
+      CronAuthService.validateCronRequest.mockResolvedValue({ isValid: true });
+      CronUserProcessingService.getEligibleUsersForProcessing.mockResolvedValue({
+        allUsers: [],
+        eligibleUsers: []
+      });
 
       const request = mockRequest({
         'authorization': 'Bearer valid-token',

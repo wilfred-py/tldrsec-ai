@@ -7,6 +7,7 @@
 
 import { ParserErrorCategory, ParserError } from './parser-error-handler';
 import { Logger } from '@/lib/logging';
+import { generateSecureOperationId } from '../security/secure-random';
 
 // Create a logger for parser monitoring
 const logger = new Logger({}, 'parser-monitor');
@@ -117,7 +118,7 @@ export function startParseOperation(
   parserType: string,
   sourceType: string
 ): string {
-  const id = `${parserType}-${Date.now()}-${Math.random().toString(36).substring(2, 10)}`;
+  const id = generateSecureOperationId(parserType);
   const startTime = Date.now();
   
   // Create and add the record

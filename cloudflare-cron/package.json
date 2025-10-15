@@ -1,0 +1,40 @@
+{
+  "name": "tldrsec-cloudflare-worker",
+  "version": "1.0.0",
+  "description": "Cloudflare Worker for TLDRSEC SEC filing monitoring cron jobs",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "deploy": "wrangler deploy",
+    "deploy:dry-run": "wrangler deploy --dry-run",
+    "dev": "wrangler dev",
+    "tail": "wrangler tail --format=pretty",
+    "status": "wrangler deployments list",
+    "logs": "wrangler tail --format=pretty",
+    "validate": "node --check index.js && wrangler deploy --dry-run",
+    "secret:put": "wrangler secret put",
+    "secret:list": "wrangler secret list"
+  },
+  "keywords": [
+    "cloudflare",
+    "worker",
+    "cron",
+    "sec",
+    "filing",
+    "monitoring",
+    "tldrsec"
+  ],
+  "author": "TLDRSEC",
+  "license": "MIT",
+  "devDependencies": {
+    "wrangler": "^4.43.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/your-org/tldrsec-ai.git",
+    "directory": "cloudflare-cron"
+  }
+}

@@ -6,6 +6,7 @@
  */
 
 import { logger } from '../logging';
+import { generateSecureOperationId } from '../security/secure-random';
 
 export enum CircuitState {
   CLOSED = 'CLOSED',     // Normal operation
@@ -329,7 +330,7 @@ export class AIProcessingCircuitBreaker {
   }
 
   private generateRequestId(): string {
-    return `cb_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    return generateSecureOperationId('cb');
   }
 }
 

@@ -13,6 +13,11 @@
  * 5. Regression Prevention Tests - authentication, middleware security, concurrency
  */
 
+// Set up test environment variables BEFORE any imports
+process.env.CRON_SECRET = 'test-cron-secret-for-comprehensive-testing-min-32-chars';
+process.env.NODE_ENV = 'test';
+process.env.DATABASE_URL = 'postgresql://test:test@localhost:5432/test';
+
 import { NextRequest, NextResponse } from 'next/server';
 import { CronJobMonitor } from '../../lib/monitoring/cron-monitor';
 import * as tickerMonitoring from '../../lib/sec-edgar/ticker-monitoring';
@@ -146,6 +151,83 @@ jest.mock('../../lib/db/async-audit', () => ({
   createAsyncAuditLog: jest.fn().mockResolvedValue(undefined)
 }));
 
+// Mock the cron service classes that the route depends on
+jest.mock('../../lib/cron/auth-service', () => ({
+  CronAuthService: {
+    validateCronRequest: jest.fn().mockResolvedValue({ 
+      isValid: true, 
+      clientIP: '127.0.0.1' 
+    }),
+    detectPlatform: jest.fn().mockReturnValue('test')
+  }
+}));
+
+jest.mock('../../lib/cron/user-processing-service', () => ({
+  CronUserProcessingService: {
+    getEligibleUsersForProcessing: jest.fn().mockResolvedValue({
+      allUsers: [],
+      eligibleUsers: []
+    }),
+    processEligibleUsers: jest.fn().mockResolvedValue({
+      usersProcessed: 0,
+      filingsProcessed: 0,
+      emailsSent: 0,
+      totalCostUSD: 0,
+      errorBreakdown: {
+        budgetExceeded: 0,
+        costValidationFailed: 0,
+        concurrencyConflicts: 0
+      }
+    })
+  }
+}));
+
+jest.mock('../../lib/cron/sec-filing-service', () => ({
+  CronSecFilingService: {
+    runSecFilingMonitoring: jest.fn().mockResolvedValue({
+      tickersChecked: 0,
+      newFilingsFound: 0,
+      errorCount: 0
+    })
+  }
+}));
+
+jest.mock('../../lib/cron/filing-processor', () => ({
+  CronFilingProcessor: {
+    processSingleFiling: jest.fn().mockResolvedValue({
+      success: true,
+      cost: 0.5
+    }),
+    processUserWithDeduplicatedFilings: jest.fn().mockResolvedValue({
+      success: true,
+      cost: 0.5
+    }),
+    processUserTierFilings: jest.fn().mockResolvedValue({
+      success: true,
+      cost: 0.5
+    })
+  }
+}));
+
+jest.mock('../../lib/security/secure-random', () => ({
+  generateSecureExecutionId: jest.fn().mockReturnValue('test-execution-id-123')
+}));
+
+jest.mock('../../lib/sec-edgar/ticker-monitoring', () => ({
+  getUnprocessedFilings: jest.fn().mockResolvedValue([]),
+  markFilingAsProcessedByAccession: jest.fn().mockResolvedValue(true),
+  getActiveTickersForMonitoring: jest.fn().mockResolvedValue([]),
+  checkTickerForNewFilings: jest.fn().mockResolvedValue([]),
+  validateUserTickers: jest.fn().mockResolvedValue([]),
+  markFilingAsProcessed: jest.fn().mockResolvedValue(undefined),
+  getTickerMonitoringRecord: jest.fn().mockResolvedValue(null),
+  updateTickerLastChecked: jest.fn().mockResolvedValue(undefined),
+  getUnprocessedFilingsForTicker: jest.fn().mockResolvedValue([]),
+  createTickerMonitoringRecord: jest.fn().mockResolvedValue(undefined),
+  getNewFilingsForUser: jest.fn().mockResolvedValue([]),
+  updateFilingProcessingStatus: jest.fn().mockResolvedValue(undefined)
+}));
+
 // Mock companyService to prevent real HTTP calls to SEC.gov
 jest.mock('../../services/companyService', () => ({
   findCompanyByTicker: jest.fn().mockImplementation((ticker: string) => {
@@ -197,6 +279,10 @@ jest.mock('../../services/company/filings', () => ({
 // Import after mocks are set up
 import { getPrismaClient } from '../../lib/db/prisma';
 import { GET as tierAwareRoute } from '../../app/api/cron/tier-aware/route';
+import { CronAuthService } from '../../lib/cron/auth-service';
+import { CronUserProcessingService } from '../../lib/cron/user-processing-service';
+import { CronSecFilingService } from '../../lib/cron/sec-filing-service';
+import { CronFilingProcessor } from '../../lib/cron/filing-processor';
 
 // Get reference to the mocked Prisma instance
 const mockPrismaInstance = (getPrismaClient as jest.Mock)();
@@ -222,6 +308,12 @@ const mockConcurrency = {
   updateUserBudgetWithLock: updateUserBudgetWithLock as jest.MockedFunction<typeof updateUserBudgetWithLock>
 };
 const mockRateLimiter = rateLimiter as jest.Mocked<typeof rateLimiter>;
+
+// Mock service references
+const mockCronAuthService = CronAuthService as jest.Mocked<typeof CronAuthService>;
+const mockCronUserProcessingService = CronUserProcessingService as jest.Mocked<typeof CronUserProcessingService>;
+const mockCronSecFilingService = CronSecFilingService as jest.Mocked<typeof CronSecFilingService>;
+const mockCronFilingProcessor = CronFilingProcessor as jest.Mocked<typeof CronFilingProcessor>;
 
 
 // Mock CronJobMonitor
@@ -1820,6 +1912,48 @@ describe('Comprehensive Cron Integration Tests', () => {
       details: '{}',
       success: true,
       createdAt: new Date()
+    });
+    
+    // Setup service mocks
+    mockCronAuthService.validateCronRequest.mockResolvedValue({ 
+      isValid: true, 
+      clientIP: '127.0.0.1' 
+    });
+    mockCronAuthService.detectPlatform.mockReturnValue('test');
+    
+    mockCronUserProcessingService.getEligibleUsersForProcessing.mockResolvedValue({
+      allUsers: [],
+      eligibleUsers: []
+    });
+    mockCronUserProcessingService.processEligibleUsers.mockResolvedValue({
+      usersProcessed: 0,
+      filingsProcessed: 0,
+      emailsSent: 0,
+      totalCostUSD: 0,
+      errorBreakdown: {
+        budgetExceeded: 0,
+        costValidationFailed: 0,
+        concurrencyConflicts: 0
+      }
+    });
+    
+    mockCronSecFilingService.runSecFilingMonitoring.mockResolvedValue({
+      tickersChecked: 0,
+      newFilingsFound: 0,
+      errorCount: 0
+    });
+    
+    mockCronFilingProcessor.processSingleFiling.mockResolvedValue({
+      success: true,
+      cost: 0.5
+    });
+    mockCronFilingProcessor.processUserWithDeduplicatedFilings.mockResolvedValue({
+      success: true,
+      cost: 0.5
+    });
+    mockCronFilingProcessor.processUserTierFilings.mockResolvedValue({
+      success: true,
+      cost: 0.5
     });
   }
 });

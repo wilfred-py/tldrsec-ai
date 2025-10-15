@@ -1,0 +1,140 @@
+name: Deploy Cloudflare Worker
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Deployment environment'
+        required: true
+        default: 'production'
+        type: choice
+        options:
+          - production
+          - staging
+      tail_logs:
+        description: 'Start log tailing after deployment'
+        required: false
+        default: false
+        type: boolean
+  push:
+    branches: [main]
+    paths:
+      - 'cloudflare-cron/**'
+      - '.github/workflows/cloudflare-worker-deploy.yml'
+
+jobs:
+  deploy-cloudflare-worker:
+    runs-on: ubuntu-latest
+    name: Deploy Worker to Cloudflare Edge
+    environment: ${{ github.event.inputs.environment || 'production' }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: 'cloudflare-cron/package.json'
+          
+      - name: Install Worker Dependencies
+        run: |
+          cd cloudflare-cron
+          npm ci
+          
+      - name: Validate Environment
+        run: |
+          echo "🔍 Validating deployment environment..."
+          echo "Target Environment: ${{ github.event.inputs.environment || 'production' }}"
+          echo "Repository: ${{ github.repository }}"
+          echo "Branch: ${{ github.ref_name }}"
+          echo "Commit: ${{ github.sha }}"
+          
+      - name: Pre-deployment Validation
+        run: |
+          cd cloudflare-cron
+          echo "🔍 Running pre-deployment checks..."
+          
+          # Syntax validation
+          echo "Checking JavaScript syntax..."
+          node --check index.js
+          echo "✅ JavaScript syntax valid"
+          
+          # Configuration validation
+          echo "Validating wrangler.toml..."
+          if ! grep -q "main.*=.*index.js" wrangler.toml; then
+            echo "❌ wrangler.toml missing valid main entry"
+            exit 1
+          fi
+          
+          if ! grep -q "name.*=.*cloudflare-cron" wrangler.toml; then
+            echo "❌ wrangler.toml missing valid name entry"
+            exit 1
+          fi
+          
+          echo "✅ Configuration valid"
+          
+          # Dry run validation
+          echo "Performing dry run deployment..."
+          npx wrangler deploy --dry-run
+          echo "✅ Dry run successful"
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          
+      - name: Deploy to Cloudflare
+        run: |
+          cd cloudflare-cron
+          echo "🚀 Deploying to Cloudflare Workers..."
+          
+          npx wrangler deploy
+          
+          echo "✅ Deployment completed successfully!"
+          
+          # Get deployment info
+          echo "📊 Deployment Information:"
+          npx wrangler deployments list --latest 1 || true
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          
+      - name: Verify Deployment
+        run: |
+          cd cloudflare-cron
+          echo "🔍 Verifying deployment status..."
+          
+          # Check deployment status
+          npx wrangler deployments list --latest 1
+          
+          echo "✅ Deployment verification completed"
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          
+      - name: Start Log Monitoring (Optional)
+        if: ${{ github.event.inputs.tail_logs == 'true' }}
+        run: |
+          cd cloudflare-cron
+          echo "📋 Starting log monitoring for 30 seconds..."
+          timeout 30s npx wrangler tail --format=pretty || true
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          
+      - name: Post-deployment Summary
+        run: |
+          echo "🎉 Cloudflare Worker Deployment Summary"
+          echo "======================================="
+          echo "✅ Worker deployed successfully to Cloudflare Edge"
+          echo "🌍 Available globally across Cloudflare's network"
+          echo "⏰ Cron schedule: Every 10 minutes (*/10 * * * *)"
+          echo "🎯 Target endpoint: https://tldrsec.app/api/cron/tier-aware-async"
+          echo ""
+          echo "📋 Next Steps:"
+          echo "1. Verify worker secrets are configured:"
+          echo "   - CRON_SECRET (required)"
+          echo "   - VERCEL_AUTOMATION_BYPASS_SECRET (optional)"
+          echo "2. Monitor worker logs for any issues"
+          echo "3. Test the end-to-end cron pipeline"
+          echo ""
+          echo "📊 Monitoring Commands:"
+          echo "  cd cloudflare-cron && npx wrangler tail --format=pretty"
+          echo "  cd cloudflare-cron && npx wrangler deployments list"

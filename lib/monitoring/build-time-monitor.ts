@@ -3,6 +3,8 @@
  * Ensures proper handling of build vs runtime environments
  */
 
+import { generateSecureHexString } from '../security/secure-random';
+
 export interface BuildTimeContext {
   isBuildTime: boolean;
   environment: string;
@@ -135,7 +137,7 @@ export class BuildTimeMonitor {
    */
   generateSecurePlaceholder(type: 'api' | 'db' | 'secret'): string {
     const timestamp = Date.now();
-    const entropy = Math.random().toString(36).substr(2, 9);
+    const entropy = generateSecureHexString(6).substring(0, 9);
     return `build_${type}_${timestamp}_${entropy}`;
   }
 

@@ -214,7 +214,45 @@ export function getSecApiCache(): SecApiCache {
 }
 
 /**
- * Wrapper function for caching SEC API calls
+ * Atomic cache operation wrapper
+ * RACE CONDITION FIX: Prevents concurrent operations on same key
+ */
+export async function withAtomicCacheOperation<T>(
+  cache: SecApiCache,
+  key: string,
+  operation: () => Promise<T>
+): Promise<T> {
+  const operationKey = `atomic_${key}`;
+  
+  // Check if operation is already in progress
+  if ((cache as any).operationLocks.has(operationKey)) {
+    console.log(`[SecApiCache] Waiting for ongoing operation on ${key}`);
+    await (cache as any).operationLocks.get(operationKey);
+    
+    // Try to get from cache after waiting
+    const cachedResult = cache.get<T>(key);
+    if (cachedResult !== null) {
+      return cachedResult;
+    }
+  }
+  
+  // Create operation promise
+  const operationPromise = (async () => {
+    try {
+      return await operation();
+    } finally {
+      (cache as any).operationLocks.delete(operationKey);
+    }
+  })();
+  
+  (cache as any).operationLocks.set(operationKey, operationPromise.then(() => {}));
+  
+  return operationPromise;
+}
+
+/**
+ * Wrapper function for caching SEC API calls with race condition prevention
+ * RACE CONDITION FIX: Atomic operations and duplicate request prevention
  */
 export async function withSecApiCache<T>(
   key: string,
@@ -223,16 +261,69 @@ export async function withSecApiCache<T>(
 ): Promise<T> {
   const cache = getSecApiCache();
   
-  // Try to get from cache first
-  const cached = cache.get<T>(key);
-  if (cached !== null) {
-    return cached;
-  }
+  return withAtomicCacheOperation(cache, key, async () => {
+    // Try to get from cache first (double-check inside atomic operation)
+    const cached = cache.get<T>(key);
+    if (cached !== null) {
+      return cached;
+    }
 
-  // Make API call and cache result
-  console.log(`[SecApiCache] Cache MISS for ${key}, making API call`);
-  const result = await apiCall();
-  cache.set(key, result, ttlMinutes);
+    // Make API call and cache result
+    console.log(`[SecApiCache] Cache MISS for ${key}, making API call`);
+    const result = await apiCall();
+    cache.set(key, result, ttlMinutes);
+    
+    return result;
+  });
+}
+
+/**
+ * Bulk cache operations with coordination
+ * RACE CONDITION FIX: Batch operations for efficiency
+ */
+export async function withBulkSecApiCache<T>(
+  requests: Array<{ key: string; apiCall: () => Promise<T>; ttlMinutes?: number }>
+): Promise<T[]> {
+  const cache = getSecApiCache();
+  const results: T[] = [];
+  const pendingRequests: Array<{ index: number; key: string; apiCall: () => Promise<T>; ttlMinutes?: number }> = [];
   
-  return result;
+  // First pass: check cache for all requests
+  for (let i = 0; i < requests.length; i++) {
+    const { key, apiCall, ttlMinutes } = requests[i];
+    const cached = cache.get<T>(key);
+    
+    if (cached !== null) {
+      results[i] = cached;
+    } else {
+      pendingRequests.push({ index: i, key, apiCall, ttlMinutes });
+    }
+  }
+  
+  // Second pass: process cache misses
+  const pendingPromises = pendingRequests.map(async ({ index, key, apiCall, ttlMinutes }) => {
+    return withAtomicCacheOperation(cache, key, async () => {
+      // Double-check cache (may have been populated by another request)
+      const cached = cache.get<T>(key);
+      if (cached !== null) {
+        return { index, result: cached };
+      }
+      
+      // Make API call
+      const result = await apiCall();
+      cache.set(key, result, ttlMinutes);
+      
+      return { index, result };
+    });
+  });
+  
+  // Wait for all pending requests
+  const pendingResults = await Promise.all(pendingPromises);
+  
+  // Merge results
+  for (const { index, result } of pendingResults) {
+    results[index] = result;
+  }
+  
+  return results;
 }

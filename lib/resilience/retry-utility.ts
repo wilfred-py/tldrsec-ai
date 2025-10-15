@@ -10,6 +10,7 @@
  */
 
 import { logger } from '../logging';
+import { generateSecureOperationId, generateSecureJitter } from '../security/secure-random';
 
 const retryLogger = logger.child('retry-utility');
 
@@ -190,7 +191,7 @@ export class ErrorClassifier {
  * Generate correlation ID for tracking retry attempts
  */
 function generateCorrelationId(): string {
-  return `retry_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+  return generateSecureOperationId('retry');
 }
 
 /**
@@ -208,7 +209,7 @@ function calculateDelayWithJitter(
   if (jitter) {
     // Add ±25% jitter
     const jitterAmount = delay * 0.25;
-    delay += (Math.random() - 0.5) * 2 * jitterAmount;
+    delay = generateSecureJitter(delay, jitterAmount / delay);
   }
   
   return Math.min(Math.max(delay, 0), maxDelay);

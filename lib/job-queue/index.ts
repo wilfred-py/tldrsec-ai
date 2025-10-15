@@ -1,5 +1,7 @@
 import { prisma } from '../db/prisma';
 import { v4 as uuidv4 } from 'uuid';
+import { ValidationSchemas } from '../validation/schemas';
+import { sanitizeJSON, detectMaliciousPatterns } from '../validation/sanitizers';
 
 // Job types (Enhanced for Phase 2 async processing)
 export type JobType = 
@@ -68,6 +70,8 @@ export async function processJobCallback(job: any, digestService?: any) {
 export class JobQueueService {
   /**
    * Add a new job to the queue
+   * 
+   * SECURITY: Validates and sanitizes all input parameters
    */
   static async addJob({
     jobType,
@@ -85,11 +89,54 @@ export class JobQueueService {
     maxAttempts?: number;
   }) {
     try {
-      // If idempotency key is provided, check for existing job
+      // Validate job type
+      const validJobTypes: JobType[] = [
+        'CHECK_FILINGS', 'PROCESS_FILING', 'ARCHIVE_FILINGS',
+        'CHECK_10K_FILINGS', 'CHECK_10Q_FILINGS', 'CHECK_8K_FILINGS', 'CHECK_FORM4_FILINGS',
+        'SUMMARIZE_FILING', 'SEND_FILING_NOTIFICATION', 'COMPILE_DAILY_DIGEST',
+        'ASYNC_SUMMARIZE_FILING', 'ASYNC_EMAIL_DIGEST', 'ASYNC_FILING_CLEANUP', 'ASYNC_WEBHOOK_NOTIFICATION'
+      ];
+      
+      if (!validJobTypes.includes(jobType)) {
+        throw new Error(`Invalid job type: ${jobType}`);
+      }
+      
+      // Validate and sanitize payload
+      const sanitizedPayload = sanitizeJSON(payload) as JobPayload;
+      
+      // Check for malicious patterns in payload
+      const payloadString = JSON.stringify(sanitizedPayload);
+      const detection = detectMaliciousPatterns(payloadString);
+      if (detection.detected) {
+        throw new Error(`Job payload contains potentially malicious patterns: ${detection.threats.join(', ')}`);
+      }
+      
+      // Validate priority
+      const validatedPriority = ValidationSchemas.positiveInteger.max(10).parse(priority);
+      
+      // Validate maxAttempts
+      const validatedMaxAttempts = ValidationSchemas.positiveInteger.max(10).parse(maxAttempts);
+      
+      // Validate idempotencyKey if provided
+      let validatedIdempotencyKey: string | undefined = undefined;
       if (idempotencyKey) {
+        validatedIdempotencyKey = ValidationSchemas.secureString.max(255).parse(idempotencyKey);
+      }
+      
+      // Validate scheduledFor date
+      if (scheduledFor && (scheduledFor.getTime() < Date.now() - 24 * 60 * 60 * 1000)) {
+        throw new Error('Cannot schedule jobs more than 24 hours in the past');
+      }
+      
+      if (scheduledFor && (scheduledFor.getTime() > Date.now() + 30 * 24 * 60 * 60 * 1000)) {
+        throw new Error('Cannot schedule jobs more than 30 days in the future');
+      }
+
+      // If idempotency key is provided, check for existing job
+      if (validatedIdempotencyKey) {
         const existingJob = await prisma.jobQueue.findFirst({
           where: {
-            idempotencyKey,
+            idempotencyKey: validatedIdempotencyKey,
             status: {
               in: ['PENDING', 'PROCESSING', 'RETRYING']
             }
@@ -100,17 +147,20 @@ export class JobQueueService {
           return existingJob;
         }
       }
+      
+      // Generate secure job ID
+      const jobId = uuidv4();
 
       // Create a new job
       return await prisma.jobQueue.create({
         data: {
-          id: uuidv4(),
+          id: jobId,
           jobType,
-          payload,
-          priority,
+          payload: sanitizedPayload,
+          priority: validatedPriority,
           scheduledFor,
-          idempotencyKey,
-          maxRetries: maxAttempts,
+          idempotencyKey: validatedIdempotencyKey,
+          maxRetries: validatedMaxAttempts,
           status: 'PENDING',
           createdAt: new Date()
           // updatedAt is handled by Prisma's @updatedAt decorator
@@ -124,11 +174,16 @@ export class JobQueueService {
 
   /**
    * Get a specific job by ID
+   * 
+   * SECURITY: Validates job ID format
    */
   static async getJobById(id: string) {
     try {
+      // Validate job ID format
+      const validatedId = ValidationSchemas.uuid.parse(id);
+      
       return await prisma.jobQueue.findUnique({
-        where: { id }
+        where: { id: validatedId }
       });
     } catch (error) {
       console.error(`Error fetching job ${id}:`, error);
@@ -138,9 +193,28 @@ export class JobQueueService {
 
   /**
    * Get jobs to process
+   * 
+   * SECURITY: Validates parameters and limits result size
    */
   static async getJobsToProcess(limit: number = 10, jobType?: JobType) {
     try {
+      // Validate limit parameter
+      const validatedLimit = ValidationSchemas.positiveInteger.max(100).parse(limit);
+      
+      // Validate job type if provided
+      if (jobType) {
+        const validJobTypes: JobType[] = [
+          'CHECK_FILINGS', 'PROCESS_FILING', 'ARCHIVE_FILINGS',
+          'CHECK_10K_FILINGS', 'CHECK_10Q_FILINGS', 'CHECK_8K_FILINGS', 'CHECK_FORM4_FILINGS',
+          'SUMMARIZE_FILING', 'SEND_FILING_NOTIFICATION', 'COMPILE_DAILY_DIGEST',
+          'ASYNC_SUMMARIZE_FILING', 'ASYNC_EMAIL_DIGEST', 'ASYNC_FILING_CLEANUP', 'ASYNC_WEBHOOK_NOTIFICATION'
+        ];
+        
+        if (!validJobTypes.includes(jobType)) {
+          throw new Error(`Invalid job type: ${jobType}`);
+        }
+      }
+      
       const now = new Date();
       
       return await prisma.jobQueue.findMany({
@@ -161,7 +235,7 @@ export class JobQueueService {
           { scheduledFor: 'asc' },
           { createdAt: 'asc' }
         ],
-        take: limit
+        take: validatedLimit
       });
     } catch (error) {
       console.error('Error getting jobs to process:', error);
