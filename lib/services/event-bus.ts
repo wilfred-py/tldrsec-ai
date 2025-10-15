@@ -105,7 +105,9 @@ class EventSecurity {
       if (typeof value === 'string') {
         // Remove potentially dangerous characters
         sanitized[key] = value
-          .replace(/<[^>]*>/g, '') // Remove HTML tags
+          .replace(/<script[^>]*>.*?<\/script>/gi, '') // Remove script tags and their content
+          .replace(/<style[^>]*>.*?<\/style>/gi, '') // Remove style tags and their content
+          .replace(/<[^>]*>/g, '') // Remove remaining HTML tags
           .replace(/javascript:/gi, '') // Remove javascript: protocols
           .replace(/data:/gi, '') // Remove data: protocols
           .substring(0, 10000); // Limit length
@@ -223,9 +225,9 @@ export class EventBus {
   async publish(event: Event): Promise<void> {
     const startTime = Date.now();
     
-    // SECURITY: Validate event integrity and sanitize data
-    if (!EventSecurity.validateEventIntegrity(event)) {
-      eventLogger.error('Event failed security validation', {
+    // SECURITY: Basic event structure validation
+    if (!event.id || !event.type || !event.source) {
+      eventLogger.error('Event failed basic structure validation', {
         eventId: event.id,
         type: event.type,
         source: event.source
@@ -233,11 +235,21 @@ export class EventBus {
       throw new Error('Event failed security validation');
     }
     
-    // Sanitize event data to prevent injection attacks
+    // Sanitize event data to prevent injection attacks BEFORE detailed validation
     const sanitizedEvent = {
       ...event,
       data: EventSecurity.sanitizeEventData(event.data)
     };
+    
+    // SECURITY: Validate sanitized event integrity
+    if (!EventSecurity.validateEventIntegrity(sanitizedEvent)) {
+      eventLogger.error('Event failed security validation after sanitization', {
+        eventId: sanitizedEvent.id,
+        type: sanitizedEvent.type,
+        source: sanitizedEvent.source
+      });
+      throw new Error('Event failed security validation');
+    }
     
     // Add to history (using sanitized event)
     this.addToHistory(sanitizedEvent);
