@@ -9,6 +9,8 @@ const nextConfig = {
     // your project has type errors.
     ignoreBuildErrors: true,
   },
+  // SWC minification is enabled by default in Next.js 15
+  // swcMinify: true, // Not needed - enabled by default
   experimental: {
     // Remove strictNextHead as it's not recognized in Next.js 15.5.5
     optimizePackageImports: ['@clerk/nextjs', 'lucide-react'],
@@ -24,16 +26,13 @@ const nextConfig = {
   output: process.env.VERCEL ? undefined : 'standalone',
   serverExternalPackages: [],
   webpack: (config, { isServer, webpack, dev }) => {
-    // Enable safe minification using SWC instead of problematic TerserPlugin
+    // Enable safe minification - SWC is configured at Next.js level
     if (!dev) {
       config.optimization = {
         ...config.optimization,
         minimize: true,
         minimizer: [],
       };
-      
-      // Use SWC minification which is more compatible with Next.js 15
-      config.swcMinify = true;
     }
 
     if (!isServer) {

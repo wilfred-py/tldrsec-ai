@@ -25,19 +25,11 @@
     },
     "app/api/cron/tier-aware-async/route.ts": {
       "maxDuration": 300,
-      "memory": 1536,
-      "environment": {
-        "ASYNC_PROCESSING_ENABLED": "true",
-        "JOB_QUEUE_BATCH_SIZE": "10"
-      }
+      "memory": 1536
     },
     "app/api/cron/microservices/route.ts": {
       "maxDuration": 30,
-      "memory": 512,
-      "environment": {
-        "MICROSERVICES_MODE": "true",
-        "FAST_RESPONSE_TIMEOUT": "25000"
-      }
+      "memory": 512
     },
     "app/api/cron/process-jobs/route.ts": {
       "maxDuration": 300,
@@ -181,7 +173,7 @@
       "destination": "/api/health/readiness"
     }
   ],
-  "regions": ["iad1", "sfo1"],
+  "regions": ["iad1"],
   "env": {
     "NODE_ENV": "production",
     "VERCEL_ENV": "production"
