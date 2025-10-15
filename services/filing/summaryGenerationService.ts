@@ -138,9 +138,10 @@ export async function generateAISummary(
         temperature: 0.1,
         system: 'You are a financial expert specializing in SEC filing analysis. Provide accurate, comprehensive summaries in valid JSON format with detailed insights valuable to investors.',
         requestType: 'standard',
-        timeout: 90000, // 1.5 minutes for comprehensive analysis (optimized to prevent 524 timeouts)
+        timeout: 45000, // Reduced to 45s for aggressive timeout optimization (Phase 1)
         requiredCapabilities: ['reasoning'],
-        costLimit: 0.50 // $0.50 maximum per summary for cost control
+        costLimit: 0.50, // $0.50 maximum per summary for cost control
+        remainingExecutionTime: 240000 // Estimate 4 minutes remaining for dynamic timeout calculation
       }
     );
 

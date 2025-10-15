@@ -52,10 +52,10 @@ export type TransactionOperation<T> = (tx: Prisma.TransactionClient, context: Tr
 export class TransactionManager {
   private static readonly DEFAULT_OPTIONS: Required<Omit<TransactionOptions, 'description' | 'metadata'>> = {
     isolationLevel: 'ReadCommitted',
-    timeout: 30000, // 30 seconds
-    maxWait: 10000, // 10 seconds
+    timeout: 30000, // 30 seconds (optimized for fast processing)
+    maxWait: 5000, // 5 seconds (reduced for faster failure detection)
     retryOnConflict: true,
-    maxRetries: 3
+    maxRetries: 2 // Reduced from 3 to minimize timeout accumulation
   };
 
   /**
