@@ -5,8 +5,8 @@
  * from main application context to achieve <0.5% timeout error rate
  */
 
-import { logger } from '../logging';
-import { monitoring } from '../monitoring';
+import { logger } from '../logging/index';
+import { monitoring } from '../monitoring/index';
 import { openRouterClient } from '../ai/openrouter-client';
 import { getPrismaClient } from '../db/prisma';
 import { v4 as uuidv4 } from 'uuid';

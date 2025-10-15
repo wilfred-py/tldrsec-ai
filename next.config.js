@@ -22,7 +22,18 @@ const nextConfig = {
   // Configure output to handle both static and dynamic routes appropriately
   output: process.env.VERCEL ? undefined : 'standalone',
   serverExternalPackages: [],
-  webpack: (config, { isServer, webpack }) => {
+  webpack: (config, { isServer, webpack, dev }) => {
+    // TEMPORARY FIX: Disable minification due to webpack minify plugin error
+    // Issue: _webpack.WebpackError is not a constructor in minify-webpack-plugin
+    // This allows production builds to complete successfully
+    // TODO: Re-enable minification after identifying problematic code patterns
+    if (!dev) {
+      config.optimization = {
+        ...config.optimization,
+        minimize: false
+      };
+    }
+
     if (!isServer) {
       // Don't resolve server-side modules on the client
       config.resolve.fallback = {

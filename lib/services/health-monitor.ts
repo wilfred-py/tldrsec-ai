@@ -5,8 +5,8 @@
  * Ensures <0.5% timeout rate through proactive service management
  */
 
-import { logger } from '../logging';
-import { monitoring } from '../monitoring';
+import { logger } from '../logging/index';
+import { monitoring } from '../monitoring/index';
 import { eventBus, EVENT_TYPES } from './event-bus';
 import { AIProcessingService } from './ai-processing-service';
 import { FilingRetrievalService as _FilingRetrievalService } from './filing-retrieval-service';

@@ -13,8 +13,8 @@
  * - Improved concurrency control for event processing
  */
 
-import { logger } from '../logging';
-import { monitoring } from '../monitoring';
+import { logger } from '../logging/index';
+import { monitoring } from '../monitoring/index';
 import { v4 as uuidv4 } from 'uuid';
 import crypto from 'crypto';
 

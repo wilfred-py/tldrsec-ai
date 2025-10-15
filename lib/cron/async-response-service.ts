@@ -6,8 +6,8 @@
  */
 
 import { NextResponse } from 'next/server';
-import { logger } from '../logging';
-import { monitoring } from '../monitoring';
+import { logger } from '../logging/index';
+import { monitoring } from '../monitoring/index';
 import { AsyncFilingProcessor, AsyncFilingJob } from '../job-queue/async-filing-processor';
 import { v4 as uuidv4 } from 'uuid';
 

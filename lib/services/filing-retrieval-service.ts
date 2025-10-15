@@ -12,8 +12,8 @@
  * - Improved error handling and retry logic
  */
 
-import { logger } from '../logging';
-import { monitoring } from '../monitoring';
+import { logger } from '../logging/index';
+import { monitoring } from '../monitoring/index';
 import { SecApiCache as _SecApiCache } from '../cache/sec-api-cache';
 import { v4 as _uuidv4 } from 'uuid';
 import { DistributedLockManager, lockUtils } from '../db/distributed-lock';

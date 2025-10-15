@@ -5,8 +5,8 @@
  * to achieve <1% timeout error rate through event-driven architecture
  */
 
-import { logger } from '../logging';
-import { monitoring } from '../monitoring';
+import { logger } from '../logging/index';
+import { monitoring } from '../monitoring/index';
 import { JobQueueService, JobType, JobStatus } from './index';
 import { generateAISummaryWithRetry } from '../../services/filing/summaryGenerationService';
 import { EmailGenerationService } from '../email/generation-service';
