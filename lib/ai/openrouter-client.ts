@@ -33,10 +33,10 @@ import Bottleneck from 'bottleneck';
 const OPENROUTER_CONFIG = {
   baseURL: 'https://openrouter.ai/api/v1',
   apiKey: process.env.TLDRSEC_AI_SUMMARIZER || process.env.OPENROUTER_API_KEY,
-  defaultModel: process.env.DEFAULT_AI_MODEL || 'x-ai/grok-4-fast:free',
-  timeout: 45000, // 45 seconds (reduced from 90s for faster fallback)
+  defaultModel: process.env.DEFAULT_AI_MODEL || 'x-ai/grok-3',
+  timeout: 30000, // 30 seconds (optimized for faster response)
   maxRetries: 0, // Eliminated retries - use model fallback instead
-  fallbackTimeout: 20000, // 20 seconds for fallback models
+  fallbackTimeout: 15000, // 15 seconds for fallback models
   circuitBreakerThreshold: 3 // Open circuit after 3 failures (reduced from 5)
 };
 
@@ -63,26 +63,6 @@ interface CircuitBreakerState {
 }
 
 const XAI_MODELS: Record<string, ModelInfo> = {
-  'x-ai/grok-4-fast:free': {
-    id: 'x-ai/grok-4-fast:free',
-    name: 'Grok 4 Fast (Free)',
-    contextWindow: 2000000,
-    costPerInputToken: 0, // Free during limited time
-    costPerOutputToken: 0, // Free during limited time
-    maxOutputTokens: 30000,
-    priority: 1, // Highest priority (primary model)
-    timeout: 45000 // 45 seconds
-  },
-  'x-ai/grok-4': {
-    id: 'x-ai/grok-4',
-    name: 'Grok 4',
-    contextWindow: 256000,
-    costPerInputToken: 0.000003, // $3/M tokens
-    costPerOutputToken: 0.000015, // $15/M tokens (scales up for >128k tokens)
-    maxOutputTokens: 30000,
-    priority: 2, // Second priority (fallback)
-    timeout: 35000 // 35 seconds (faster for fallback)
-  },
   'x-ai/grok-3': {
     id: 'x-ai/grok-3',
     name: 'Grok 3',
@@ -90,8 +70,28 @@ const XAI_MODELS: Record<string, ModelInfo> = {
     costPerInputToken: 0.000002, // $2/M tokens
     costPerOutputToken: 0.00001, // $10/M tokens
     maxOutputTokens: 30000,
-    priority: 3, // Lowest priority (last resort)
-    timeout: 25000 // 25 seconds (fastest for last resort)
+    priority: 1, // Highest priority (known working model)
+    timeout: 20000 // 20 seconds for reliable response
+  },
+  'anthropic/claude-3-haiku': {
+    id: 'anthropic/claude-3-haiku',
+    name: 'Claude 3 Haiku',
+    contextWindow: 200000,
+    costPerInputToken: 0.00000025, // $0.25/M tokens
+    costPerOutputToken: 0.00000125, // $1.25/M tokens
+    maxOutputTokens: 4096,
+    priority: 2, // Reliable fallback
+    timeout: 15000 // 15 seconds
+  },
+  'openai/gpt-3.5-turbo': {
+    id: 'openai/gpt-3.5-turbo',
+    name: 'GPT-3.5 Turbo',
+    contextWindow: 16385,
+    costPerInputToken: 0.0000005, // $0.50/M tokens
+    costPerOutputToken: 0.0000015, // $1.50/M tokens
+    maxOutputTokens: 4096,
+    priority: 3, // Last resort fallback
+    timeout: 10000 // 10 seconds for fastest response
   }
 };
 
@@ -104,9 +104,9 @@ class ModelSelectionAgent {
 
   constructor() {
     this.fallbackChain = [
-      'x-ai/grok-4-fast:free',      // Primary free model (2M context)
-      'x-ai/grok-4',                // Paid model fallback
-      'x-ai/grok-3'                 // Last resort
+      'x-ai/grok-3',                // Known working model (primary)
+      'anthropic/claude-3-haiku',   // Reliable fallback
+      'openai/gpt-3.5-turbo'        // Last resort
     ];
     this.modelInfo = XAI_MODELS;
   }

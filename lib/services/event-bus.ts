@@ -8,8 +8,117 @@
 import { logger } from '../logging';
 import { monitoring } from '../monitoring';
 import { v4 as uuidv4 } from 'uuid';
+import crypto from 'crypto';
 
 const eventLogger = logger.child('event-bus');
+
+/**
+ * Security Configuration for Event Bus
+ */
+const SECURITY_CONFIG = {
+  encryptionKey: process.env.EVENT_BUS_ENCRYPTION_KEY || crypto.randomBytes(32).toString('hex'),
+  algorithm: 'aes-256-gcm',
+  keyLength: 32,
+  ivLength: 16,
+  tagLength: 16
+};
+
+/**
+ * Security utilities for event data
+ */
+class EventSecurity {
+  private static encryptionKey = Buffer.from(SECURITY_CONFIG.encryptionKey.slice(0, 64), 'hex');
+  
+  /**
+   * Encrypt sensitive event data
+   */
+  static encryptData(data: Record<string, unknown>): { encrypted: string; iv: string; tag: string } {
+    const iv = crypto.randomBytes(SECURITY_CONFIG.ivLength);
+    const cipher = crypto.createCipher(SECURITY_CONFIG.algorithm, this.encryptionKey);
+    cipher.setAAD(Buffer.from('event-bus-data'));
+    
+    const serialized = JSON.stringify(data);
+    let encrypted = cipher.update(serialized, 'utf8', 'hex');
+    encrypted += cipher.final('hex');
+    
+    const tag = cipher.getAuthTag();
+    
+    return {
+      encrypted,
+      iv: iv.toString('hex'),
+      tag: tag.toString('hex')
+    };
+  }
+  
+  /**
+   * Decrypt event data
+   */
+  static decryptData(encryptedData: { encrypted: string; iv: string; tag: string }): Record<string, unknown> {
+    try {
+      const _iv = Buffer.from(encryptedData.iv, 'hex');
+      const tag = Buffer.from(encryptedData.tag, 'hex');
+      
+      const decipher = crypto.createDecipher(SECURITY_CONFIG.algorithm, this.encryptionKey);
+      decipher.setAAD(Buffer.from('event-bus-data'));
+      decipher.setAuthTag(tag);
+      
+      let decrypted = decipher.update(encryptedData.encrypted, 'hex', 'utf8');
+      decrypted += decipher.final('utf8');
+      
+      return JSON.parse(decrypted);
+    } catch (error) {
+      eventLogger.error('Failed to decrypt event data', { error });
+      throw new Error('Event data decryption failed');
+    }
+  }
+  
+  /**
+   * Validate event integrity and source
+   */
+  static validateEventIntegrity(event: Event): boolean {
+    if (!event.id || !event.type || !event.source) {
+      return false;
+    }
+    
+    // Check for suspicious patterns
+    const suspiciousPatterns = [
+      /script/i,
+      /javascript/i,
+      /eval/i,
+      /function/i,
+      /<[^>]*>/,  // HTML tags
+      /\$\(/,     // jQuery
+      /document\./
+    ];
+    
+    const eventString = JSON.stringify(event);
+    return !suspiciousPatterns.some(pattern => pattern.test(eventString));
+  }
+  
+  /**
+   * Sanitize event data
+   */
+  static sanitizeEventData(data: Record<string, unknown>): Record<string, unknown> {
+    const sanitized: Record<string, unknown> = {};
+    
+    for (const [key, value] of Object.entries(data)) {
+      if (typeof value === 'string') {
+        // Remove potentially dangerous characters
+        sanitized[key] = value
+          .replace(/<[^>]*>/g, '') // Remove HTML tags
+          .replace(/javascript:/gi, '') // Remove javascript: protocols
+          .replace(/data:/gi, '') // Remove data: protocols
+          .substring(0, 10000); // Limit length
+      } else if (typeof value === 'object' && value !== null) {
+        sanitized[key] = this.sanitizeEventData(value as Record<string, unknown>);
+      } else {
+        sanitized[key] = value;
+      }
+    }
+    
+    return sanitized;
+  }
+}
 
 export interface Event {
   id: string;
@@ -114,31 +223,47 @@ export class EventBus {
   async publish(event: Event): Promise<void> {
     const startTime = Date.now();
     
-    // Add to history
-    this.addToHistory(event);
+    // SECURITY: Validate event integrity and sanitize data
+    if (!EventSecurity.validateEventIntegrity(event)) {
+      eventLogger.error('Event failed security validation', {
+        eventId: event.id,
+        type: event.type,
+        source: event.source
+      });
+      throw new Error('Event failed security validation');
+    }
+    
+    // Sanitize event data to prevent injection attacks
+    const sanitizedEvent = {
+      ...event,
+      data: EventSecurity.sanitizeEventData(event.data)
+    };
+    
+    // Add to history (using sanitized event)
+    this.addToHistory(sanitizedEvent);
     
     eventLogger.info('Publishing event', {
-      eventId: event.id,
-      type: event.type,
-      source: event.source,
-      correlationId: event.metadata.correlationId,
-      priority: event.metadata.priority
+      eventId: sanitizedEvent.id,
+      type: sanitizedEvent.type,
+      source: sanitizedEvent.source,
+      correlationId: sanitizedEvent.metadata.correlationId,
+      priority: sanitizedEvent.metadata.priority
     });
     
     try {
       // Get subscribers for this event type
-      const subscribers = this.getSubscribers(event.type);
+      const subscribers = this.getSubscribers(sanitizedEvent.type);
       
       if (subscribers.length === 0) {
         eventLogger.warn('No subscribers for event type', {
-          eventType: event.type,
-          eventId: event.id
+          eventType: sanitizedEvent.type,
+          eventId: sanitizedEvent.id
         });
         return;
       }
       
-      // Deliver to subscribers
-      await this.deliverToSubscribers(event, subscribers);
+      // Deliver to subscribers (using sanitized event)
+      await this.deliverToSubscribers(sanitizedEvent, subscribers);
       
       // Record success metrics
       const processingTime = Date.now() - startTime;

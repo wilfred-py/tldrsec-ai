@@ -41,13 +41,14 @@ export default {
       
       console.log(`[${executionId}] Environment validation passed`);
       
-      // Build URLs for Vercel endpoints (optimized with fallback)
+      // Build URLs for Vercel endpoints (async processing with fallback)
+      const asyncUrl = `${env.PUBLIC_URL}/api/cron/tier-aware-async`;
       const optimizedUrl = `${env.PUBLIC_URL}/api/cron/tier-aware-optimized`;
       const fallbackUrl = `${env.PUBLIC_URL}/api/cron/tier-aware`;
-      const useOptimized = env.USE_OPTIMIZED_ENDPOINT !== 'false'; // Default to true
+      const useAsync = env.USE_ASYNC_PROCESSING !== 'false'; // Default to true for new microservices
       
-      const url = useOptimized ? optimizedUrl : fallbackUrl;
-      console.log(`[${executionId}] Target endpoint: ${url} (${useOptimized ? 'optimized with 524 prevention' : 'standard'})`);
+      const url = useAsync ? asyncUrl : optimizedUrl;
+      console.log(`[${executionId}] Target endpoint: ${url} (${useAsync ? 'async microservices architecture' : 'optimized with 524 prevention'})`);
       console.log(`[${executionId}] PUBLIC_URL: ${env.PUBLIC_URL}`);
       console.log(`[${executionId}] CRON_SECRET configured: ${env.CRON_SECRET ? 'Yes (' + env.CRON_SECRET.length + ' chars)' : 'No'}`);
       
@@ -90,14 +91,14 @@ export default {
       } catch (primaryError) {
         const errorType = classifyError(primaryError);
         
-        // If optimized endpoint fails with 404 or auth error, fallback to original
-        if (useOptimized && (errorType === 'ENDPOINT_NOT_FOUND' || errorType === 'AUTHENTICATION_ERROR')) {
-          console.log(`[${executionId}] Optimized endpoint failed (${errorType}), attempting fallback to original endpoint`);
+        // Multi-tier fallback: async -> optimized -> original
+        if (useAsync && (errorType === 'ENDPOINT_NOT_FOUND' || errorType === 'AUTHENTICATION_ERROR')) {
+          console.log(`[${executionId}] Async endpoint failed (${errorType}), attempting fallback to optimized endpoint`);
           
           try {
             result = await executeWithTimeoutAndRetry({
               executionId,
-              url: fallbackUrl,
+              url: optimizedUrl,
               headers,
               workerTimeoutMs: WORKER_TIMEOUT_MS,
               requestTimeoutMs: REQUEST_TIMEOUT_MS,
@@ -105,10 +106,26 @@ export default {
               initialBackoffMs: INITIAL_BACKOFF_MS
             });
             
-            console.log(`[${executionId}] Fallback to original endpoint successful`);
-          } catch (fallbackError) {
-            console.error(`[${executionId}] Both endpoints failed`);
-            throw primaryError; // Throw original error
+            console.log(`[${executionId}] Fallback to optimized endpoint successful`);
+          } catch (optimizedError) {
+            console.log(`[${executionId}] Optimized endpoint also failed, attempting final fallback to original endpoint`);
+            
+            try {
+              result = await executeWithTimeoutAndRetry({
+                executionId,
+                url: fallbackUrl,
+                headers,
+                workerTimeoutMs: WORKER_TIMEOUT_MS,
+                requestTimeoutMs: REQUEST_TIMEOUT_MS,
+                maxAttempts: 1, // Single attempt for final fallback
+                initialBackoffMs: INITIAL_BACKOFF_MS
+              });
+              
+              console.log(`[${executionId}] Final fallback to original endpoint successful`);
+            } catch (finalError) {
+              console.error(`[${executionId}] All endpoints failed`);
+              throw primaryError; // Throw original error
+            }
           }
         } else {
           throw primaryError;

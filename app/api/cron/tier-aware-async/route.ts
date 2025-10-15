@@ -134,7 +134,7 @@ export async function GET(request: NextRequest) {
       const { CronFilingProcessor: _CronFilingProcessor } = await import('../../../../lib/cron/filing-processor');
       
       // Process synchronously with reduced timeout
-      const syncResults = await this.processSynchronously(
+      const syncResults = await processSynchronously(
         eligibleUsers,
         remainingTime * 0.8, // Use 80% of remaining time
         executionId
@@ -157,7 +157,7 @@ export async function GET(request: NextRequest) {
       remainingTime
     });
 
-    const asyncResults = await this.processAsynchronously(
+    const asyncResults = await processAsynchronously(
       eligibleUsers,
       executionId,
       marketContext
@@ -221,9 +221,9 @@ export async function GET(request: NextRequest) {
 /**
  * Process users asynchronously by queueing jobs
  */
-async function _processAsynchronously(
-  _eligibleUsers: Array<{ id: string; email: string; [key: string]: unknown }>,
-  _executionId: string,
+async function processAsynchronously(
+  eligibleUsers: Array<{ id: string; email: string; [key: string]: unknown }>,
+  executionId: string,
   _marketContext: Record<string, unknown>
 ) {
   const allFilingsToQueue: Array<{
@@ -329,10 +329,10 @@ async function _processAsynchronously(
 /**
  * Fallback synchronous processing for small loads
  */
-async function _processSynchronously(
-  _eligibleUsers: Array<{ id: string; email: string; [key: string]: unknown }>,
-  _timeoutMs: number,
-  _executionId: string
+async function processSynchronously(
+  eligibleUsers: Array<{ id: string; email: string; [key: string]: unknown }>,
+  timeoutMs: number,
+  executionId: string
 ) {
   // This would use the existing CronFilingProcessor
   // Implementation simplified for demo - would need full integration
