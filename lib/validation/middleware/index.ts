@@ -17,14 +17,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import rateLimit from 'express-rate-limit';
-import helmet from 'helmet';
+// import helmet from 'helmet'; // TODO: Add security headers
 import DOMPurify from 'dompurify';
 import { JSDOM } from 'jsdom';
 import xss from 'xss';
 
 // Create DOMPurify instance for server-side use
 const window = new JSDOM('').window;
-const purify = DOMPurify(window as any);
+const purify = DOMPurify(window as unknown as Window);
 
 /**
  * Security Configuration
@@ -237,7 +237,7 @@ export function createSecurityValidator<T>(schema: z.ZodSchema<T>) {
             const formData = await request.formData();
             rawData = Object.fromEntries(formData.entries());
           }
-        } catch (error) {
+        } catch {
           errors.push('Invalid request body format');
           throw new Error('Invalid request body');
         }
@@ -371,7 +371,7 @@ export function validateIPAddress(request: NextRequest): { isValid: boolean; ip:
  * Request Timeout Middleware
  */
 export function createTimeoutMiddleware(timeoutMs: number = SECURITY_CONFIG.maxRequestTimeout) {
-  return (request: NextRequest): Promise<void> => {
+  return (_request: NextRequest): Promise<void> => {
     return new Promise((resolve, reject) => {
       const timeout = setTimeout(() => {
         reject(new Error(`Request timeout after ${timeoutMs}ms`));

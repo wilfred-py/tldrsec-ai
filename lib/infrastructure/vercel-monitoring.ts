@@ -302,7 +302,7 @@ export class VercelMonitoring {
   private checkAlertRules(endpoint: string, metrics: MonitoringMetrics): void {
     // Find the appropriate monitoring config
     let config = null;
-    for (const [key, cfg] of Object.entries(MONITORING_CONFIGS)) {
+    for (const [_key, cfg] of Object.entries(MONITORING_CONFIGS)) {
       if (cfg.endpoints.some(ep => endpoint.startsWith(ep))) {
         config = cfg;
         break;

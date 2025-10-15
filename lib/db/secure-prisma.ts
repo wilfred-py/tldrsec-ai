@@ -16,7 +16,7 @@
 import { PrismaClient, Prisma } from '@prisma/client';
 import { SecurePrismaClient, SecureQueryBuilder } from '../validation/database/secure-queries';
 import { ValidationSchemas } from '../validation/schemas';
-import { sanitizeQueryParam, detectMaliciousPatterns } from '../validation/sanitizers';
+import { sanitizeString as _sanitizeString } from '../validation/sanitizers';
 import { logger } from '../logging';
 import { monitoring } from '../monitoring';
 
@@ -90,8 +90,8 @@ class QueryPerformanceMonitor {
     });
   }
   
-  static getStats(): Record<string, any> {
-    const stats: Record<string, any> = {};
+  static getStats(): Record<string, unknown> {
+    const stats: Record<string, unknown> = {};
     
     for (const [key, data] of this.queryStats.entries()) {
       stats[key] = {
@@ -254,7 +254,7 @@ class DatabaseSecurityManager {
   static getConnectionStatus(): {
     isConnected: boolean;
     connectionAttempts: number;
-    stats: Record<string, any>;
+    stats: Record<string, unknown>;
   } {
     return {
       isConnected: this.isConnected,
@@ -461,8 +461,8 @@ export class SecureDatabase {
    * Get database health and performance statistics
    */
   getHealthStats(): {
-    connection: any;
-    performance: any;
+    connection: Record<string, unknown>;
+    performance: Record<string, unknown>;
     security: {
       queryLoggingEnabled: boolean;
       performanceMonitoringEnabled: boolean;

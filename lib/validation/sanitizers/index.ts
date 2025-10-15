@@ -19,7 +19,7 @@ import xss from 'xss';
 
 // Create DOMPurify instance for server-side use
 const window = new JSDOM('').window;
-const purify = DOMPurify(window as any);
+const purify = DOMPurify(window as unknown as Window);
 
 /**
  * Malicious Pattern Detection
@@ -300,7 +300,7 @@ export function sanitizeURL(input: string): string {
     return '';
   }
   
-  let sanitized = sanitizeBasicString(input);
+  const sanitized = sanitizeBasicString(input);
   
   try {
     const url = new URL(sanitized);
@@ -316,7 +316,7 @@ export function sanitizeURL(input: string): string {
     url.search = sanitizeBasicString(url.search);
     
     return url.toString();
-  } catch (error) {
+  } catch {
     throw new Error('Invalid URL format');
   }
 }
@@ -490,7 +490,7 @@ export function sanitizeAPIKey(input: string): string {
     throw new Error('API key must be a string');
   }
   
-  let sanitized = input.trim();
+  const sanitized = input.trim();
   
   // API keys should only contain safe characters
   if (!/^[a-zA-Z0-9_.-]+$/.test(sanitized)) {

@@ -16,7 +16,7 @@ import { logger } from '../logging/index';
 import { monitoring } from '../monitoring/index';
 import { SecApiCache as _SecApiCache } from '../cache/sec-api-cache';
 import { v4 as _uuidv4 } from 'uuid';
-import { DistributedLockManager, lockUtils } from '../db/distributed-lock';
+import { lockUtils } from '../db/distributed-lock';
 
 const filingServiceLogger = logger.child('filing-retrieval-service');
 

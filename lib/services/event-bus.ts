@@ -768,7 +768,7 @@ export class EventBus {
     });
   }
   
-  private async isDeliveryCompleted(eventId: string, serviceName: string): Promise<boolean> {
+  private async isDeliveryCompleted(_eventId: string, _serviceName: string): Promise<boolean> {
     // Check if delivery to specific service is already completed
     return false; // Placeholder
   }
@@ -789,7 +789,7 @@ export class EventBus {
     eventLogger.debug('Delivery skipped', { eventId, serviceName });
   }
   
-  private async checkAllDeliveriesCompleted(eventId: string): Promise<boolean> {
+  private async checkAllDeliveriesCompleted(_eventId: string): Promise<boolean> {
     // Check if all required deliveries for event are completed
     return true; // Placeholder
   }

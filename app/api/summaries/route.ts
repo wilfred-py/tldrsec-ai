@@ -1,6 +1,5 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import { currentUser } from '@clerk/nextjs/server';
-import { getPrismaClient } from '@/lib/db/prisma';
 import { getMockSummaries } from '@/lib/api/summary-service';
 import { logger } from '@/lib/logging';
 import { 
@@ -55,7 +54,7 @@ export async function GET(req: NextRequest) {
     const secureDb = await getSecureDatabase();
 
     // Get summaries using secure database operations
-    const summaryFilters: any = {
+    const summaryFilters: Record<string, unknown> = {
       userId: user.id,
       limit,
       offset: 0
@@ -84,7 +83,7 @@ export async function GET(req: NextRequest) {
         select: { symbol: true }
       });
 
-      const userTickerSymbols = userTickers.map((t: any) => t.symbol);
+      const userTickerSymbols = userTickers.map((t: { symbol: string }) => t.symbol);
 
       // Filter summaries to only show those for tickers the user is tracking
       mockSummaries = mockSummaries.filter(summary => 

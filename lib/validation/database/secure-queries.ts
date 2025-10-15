@@ -15,7 +15,7 @@
 import { PrismaClient, Prisma } from '@prisma/client';
 import { sanitizeQueryParam, detectMaliciousPatterns } from '../sanitizers';
 import { ValidationSchemas } from '../schemas';
-import { z } from 'zod';
+// import { z } from 'zod'; // TODO: Use for schema validation
 
 /**
  * Secure Prisma Client Wrapper
@@ -95,7 +95,7 @@ export class SecurePrismaClient {
       }
     }
     
-    return (this.prisma[model] as any).findMany(args);
+    return (this.prisma[model] as Record<string, unknown>).findMany(args);
   }
   
   /**
@@ -111,7 +111,7 @@ export class SecurePrismaClient {
       this.validateQueryParams(args.where as Record<string, unknown>);
     }
     
-    return (this.prisma[model] as any).findUnique(args);
+    return (this.prisma[model] as Record<string, unknown>).findUnique(args);
   }
   
   /**
@@ -133,7 +133,7 @@ export class SecurePrismaClient {
       }
     }
     
-    return (this.prisma[model] as any).findFirst(args);
+    return (this.prisma[model] as Record<string, unknown>).findFirst(args);
   }
   
   /**
@@ -149,7 +149,7 @@ export class SecurePrismaClient {
       this.validateCreateData(args.data as Record<string, unknown>);
     }
     
-    return (this.prisma[model] as any).create(args);
+    return (this.prisma[model] as Record<string, unknown>).create(args);
   }
   
   /**
@@ -169,7 +169,7 @@ export class SecurePrismaClient {
       this.validateUpdateData(args.data as Record<string, unknown>);
     }
     
-    return (this.prisma[model] as any).update(args);
+    return (this.prisma[model] as Record<string, unknown>).update(args);
   }
   
   /**
@@ -189,7 +189,7 @@ export class SecurePrismaClient {
       this.validateUpdateData(args.data as Record<string, unknown>);
     }
     
-    return (this.prisma[model] as any).updateMany(args);
+    return (this.prisma[model] as Record<string, unknown>).updateMany(args);
   }
   
   /**
@@ -205,7 +205,7 @@ export class SecurePrismaClient {
       this.validateQueryParams(args.where as Record<string, unknown>);
     }
     
-    return (this.prisma[model] as any).delete(args);
+    return (this.prisma[model] as Record<string, unknown>).delete(args);
   }
   
   /**
@@ -221,7 +221,7 @@ export class SecurePrismaClient {
       this.validateQueryParams(args.where as Record<string, unknown>);
     }
     
-    return (this.prisma[model] as any).deleteMany(args);
+    return (this.prisma[model] as Record<string, unknown>).deleteMany(args);
   }
   
   /**
@@ -237,7 +237,7 @@ export class SecurePrismaClient {
       this.validateQueryParams(args.where as Record<string, unknown>);
     }
     
-    return (this.prisma[model] as any).count(args);
+    return (this.prisma[model] as Record<string, unknown>).count(args);
   }
   
   /**
@@ -257,7 +257,7 @@ export class SecurePrismaClient {
       this.validateOrderBy(args.orderBy);
     }
     
-    return (this.prisma[model] as any).aggregate(args);
+    return (this.prisma[model] as Record<string, unknown>).aggregate(args);
   }
   
   /**
@@ -549,10 +549,10 @@ export class SecureQueryBuilder {
     if (query.dateFrom || query.dateTo) {
       where.filedAt = {};
       if (query.dateFrom) {
-        (where.filedAt as any).gte = query.dateFrom;
+        (where.filedAt as Record<string, unknown>).gte = query.dateFrom;
       }
       if (query.dateTo) {
-        (where.filedAt as any).lte = query.dateTo;
+        (where.filedAt as Record<string, unknown>).lte = query.dateTo;
       }
     }
     

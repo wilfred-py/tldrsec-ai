@@ -25,6 +25,7 @@ export class SecApiCache {
   private cache: Map<string, CacheEntry<unknown>> = new Map();
   private defaultTTL: number;
   private cleanupInterval: NodeJS.Timeout;
+  private operationLocks: Map<string, Promise<void>> = new Map();
   private metrics: CacheMetrics = {
     totalRequests: 0,
     cacheHits: 0,
@@ -190,6 +191,13 @@ export class SecApiCache {
   }
 
   /**
+   * Get operation locks for atomic operations
+   */
+  getOperationLocks(): Map<string, Promise<void>> {
+    return this.operationLocks;
+  }
+
+  /**
    * Destroy cache and cleanup resources
    */
   destroy(): void {
@@ -225,9 +233,10 @@ export async function withAtomicCacheOperation<T>(
   const operationKey = `atomic_${key}`;
   
   // Check if operation is already in progress
-  if ((cache as any).operationLocks.has(operationKey)) {
+  const operationLocks = cache.getOperationLocks();
+  if (operationLocks.has(operationKey)) {
     console.log(`[SecApiCache] Waiting for ongoing operation on ${key}`);
-    await (cache as any).operationLocks.get(operationKey);
+    await operationLocks.get(operationKey);
     
     // Try to get from cache after waiting
     const cachedResult = cache.get<T>(key);
@@ -241,11 +250,11 @@ export async function withAtomicCacheOperation<T>(
     try {
       return await operation();
     } finally {
-      (cache as any).operationLocks.delete(operationKey);
+      operationLocks.delete(operationKey);
     }
   })();
   
-  (cache as any).operationLocks.set(operationKey, operationPromise.then(() => {}));
+  operationLocks.set(operationKey, operationPromise.then(() => {}));
   
   return operationPromise;
 }
