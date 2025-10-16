@@ -138,27 +138,46 @@ model TickerChange {
 }
 
 model JobQueue {
-  id             String    @id @default(uuid())
+  id             String        @id @default(uuid())
   jobType        String
   status         String
-  priority       Int       @default(5)
+  priority       Int           @default(5)
   payload        Json
   idempotencyKey String?
-  createdAt      DateTime  @default(now())
+  createdAt      DateTime      @default(now())
   scheduledFor   DateTime
   startedAt      DateTime?
   completedAt    DateTime?
   failedAt       DateTime?
-  retryCount     Int       @default(0)
-  maxRetries     Int       @default(3)
+  retryCount     Int           @default(0)
+  maxRetries     Int           @default(3)
   lastError      String?
   executionTime  Int?
   result         Json?
+  costUSD        Decimal?      @db.Decimal(10, 4)
+  tokenUsage     Json?
+  timeoutFlagged Boolean       @default(false)
+  progress       JobProgress[]
 
   @@index([status, scheduledFor])
   @@index([jobType, status])
   @@index([idempotencyKey])
   @@index([createdAt])
+  @@index([timeoutFlagged, createdAt])
+}
+
+model JobProgress {
+  id        String   @id @default(uuid())
+  jobId     String
+  phase     String
+  progress  Int
+  details   Json?
+  startedAt DateTime
+  updatedAt DateTime @updatedAt
+  job       JobQueue @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@index([jobId, updatedAt])
+  @@index([phase, updatedAt])
 }
 
 model JobLock {
