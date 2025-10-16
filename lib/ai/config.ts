@@ -54,7 +54,7 @@ export const apiConfig = {
   apiKey: getEnv('OPENROUTER_API_KEY'),
   baseUrl: getEnv('OPENROUTER_API_URL', 'https://openrouter.ai/api/v1'),
   maxRetries: parseInt(getEnv('OPENROUTER_MAX_RETRIES', '3'), 10),
-  timeout: parseInt(getEnv('OPENROUTER_TIMEOUT_MS', '120000'), 10),
+  timeout: parseInt(getEnv('OPENROUTER_TIMEOUT_MS', '600000'), 10),
   rateLimitPerMinute: parseInt(getEnv('OPENROUTER_RATE_LIMIT', '60'), 10),
   headers: {
     'HTTP-Referer': getEnv('OPENROUTER_HTTP_REFERER', ''),

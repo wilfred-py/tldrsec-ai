@@ -33,10 +33,10 @@ import Bottleneck from 'bottleneck';
 const OPENROUTER_CONFIG = {
   baseURL: 'https://openrouter.ai/api/v1',
   apiKey: process.env.TLDRSEC_AI_SUMMARIZER || process.env.OPENROUTER_API_KEY,
-  defaultModel: process.env.DEFAULT_AI_MODEL || 'x-ai/grok-3',
-  timeout: 30000, // 30 seconds (optimized for faster response)
+  defaultModel: process.env.DEFAULT_AI_MODEL || 'x-ai/grok-code-fast-1',
+  timeout: parseInt(process.env.OPENROUTER_TIMEOUT_MS || '600000', 10), // 10 minutes from environment (was 30 seconds)
   maxRetries: 0, // Eliminated retries - use model fallback instead
-  fallbackTimeout: 15000, // 15 seconds for fallback models
+  fallbackTimeout: parseInt(process.env.OPENROUTER_TIMEOUT_MS || '600000', 10), // Use same timeout for fallback models
   circuitBreakerThreshold: 3 // Open circuit after 3 failures (reduced from 5)
 };
 
@@ -63,6 +63,26 @@ interface CircuitBreakerState {
 }
 
 const XAI_MODELS: Record<string, ModelInfo> = {
+  'x-ai/grok-4-fast-reasoning': {
+    id: 'x-ai/grok-4-fast-reasoning',
+    name: 'Grok 4 Fast Reasoning',
+    contextWindow: 2000000,
+    costPerInputToken: 0.0000003, // $0.30/M tokens
+    costPerOutputToken: 0.0000005, // $0.50/M tokens  
+    maxOutputTokens: 30000,
+    priority: 1, // Highest priority (primary model)
+    timeout: parseInt(process.env.OPENROUTER_TIMEOUT_MS || '600000', 10)
+  },
+  'x-ai/grok-code-fast-1': {
+    id: 'x-ai/grok-code-fast-1',
+    name: 'Grok Code Fast 1',
+    contextWindow: 128000,
+    costPerInputToken: 0.00000015, // $0.15/M tokens
+    costPerOutputToken: 0.00000025, // $0.25/M tokens
+    maxOutputTokens: 8000,
+    priority: 2, // Primary fallback model
+    timeout: parseInt(process.env.OPENROUTER_TIMEOUT_MS || '600000', 10)
+  },
   'x-ai/grok-3': {
     id: 'x-ai/grok-3',
     name: 'Grok 3',
@@ -70,8 +90,8 @@ const XAI_MODELS: Record<string, ModelInfo> = {
     costPerInputToken: 0.000002, // $2/M tokens
     costPerOutputToken: 0.00001, // $10/M tokens
     maxOutputTokens: 30000,
-    priority: 1, // Highest priority (known working model)
-    timeout: 20000 // 20 seconds for reliable response
+    priority: 3, // Secondary fallback (legacy)
+    timeout: parseInt(process.env.OPENROUTER_TIMEOUT_MS || '600000', 10) // 10 minutes (was 20 seconds)
   },
   'anthropic/claude-3-haiku': {
     id: 'anthropic/claude-3-haiku',
@@ -81,7 +101,7 @@ const XAI_MODELS: Record<string, ModelInfo> = {
     costPerOutputToken: 0.00000125, // $1.25/M tokens
     maxOutputTokens: 4096,
     priority: 2, // Reliable fallback
-    timeout: 15000 // 15 seconds
+    timeout: parseInt(process.env.OPENROUTER_TIMEOUT_MS || '600000', 10) // 10 minutes (was 15 seconds)
   },
   'openai/gpt-3.5-turbo': {
     id: 'openai/gpt-3.5-turbo',
@@ -91,7 +111,7 @@ const XAI_MODELS: Record<string, ModelInfo> = {
     costPerOutputToken: 0.0000015, // $1.50/M tokens
     maxOutputTokens: 4096,
     priority: 3, // Last resort fallback
-    timeout: 10000 // 10 seconds for fastest response
+    timeout: parseInt(process.env.OPENROUTER_TIMEOUT_MS || '600000', 10) // 10 minutes (was 10 seconds)
   }
 };
 
@@ -104,9 +124,8 @@ class ModelSelectionAgent {
 
   constructor() {
     this.fallbackChain = [
-      'x-ai/grok-3',                // Known working model (primary)
-      'anthropic/claude-3-haiku',   // Reliable fallback
-      'openai/gpt-3.5-turbo'        // Last resort
+      process.env.DEFAULT_AI_MODEL || 'x-ai/grok-4-fast-reasoning',           // Primary model from env
+      process.env.OPENROUTER_FALLBACK_MODEL || 'x-ai/grok-code-fast-1'       // Fallback model from env  
     ];
     this.modelInfo = XAI_MODELS;
   }
@@ -790,8 +809,8 @@ export class OpenRouterClient {
   private calculateDynamicTimeout(remainingTime?: number): number | undefined {
     if (!remainingTime) return undefined;
 
-    // Use 60% of remaining time for AI processing, minimum 20s, maximum 45s
-    const dynamicTimeout = Math.max(20000, Math.min(remainingTime * 0.6, 45000));
+    // Use 80% of remaining time for AI processing, minimum 60s, maximum 10 minutes (600s)
+    const dynamicTimeout = Math.max(60000, Math.min(remainingTime * 0.8, 600000));
     
     logger.debug('Calculated dynamic timeout', {
       remainingTime,
@@ -827,7 +846,10 @@ export class OpenRouterClient {
     }
 
     // Try fallback models that are available
-    const fallbackChain = ['x-ai/grok-4-fast:free', 'x-ai/grok-4', 'x-ai/grok-3'];
+    const fallbackChain = [
+      process.env.DEFAULT_AI_MODEL || 'x-ai/grok-4-fast-reasoning',
+      process.env.OPENROUTER_FALLBACK_MODEL || 'x-ai/grok-code-fast-1'
+    ];
     
     for (const modelId of fallbackChain) {
       if (this.circuitBreakerManager.isModelAvailable(modelId)) {
