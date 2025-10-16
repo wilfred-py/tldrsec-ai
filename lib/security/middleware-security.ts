@@ -1089,14 +1089,26 @@ export class MiddlewareSecurity {
       const securityConfig = getSecurityConfig();
       const rateLimitConfig = securityConfig.rateLimits[endpointType];
       
-      // Dynamic import for Edge Runtime compatibility
-      const { rateLimiter } = await import('./rate-limiter');
-      const rateLimitResult = await rateLimiter.checkLimit(
-        `${endpointType.toLowerCase()}-endpoint`,
-        clientIP,
-        rateLimitConfig.limit,
-        rateLimitConfig.windowMs
-      );
+      // Dynamic import for Edge Runtime compatibility - ensures IORedis isolation
+      let rateLimitResult;
+      try {
+        const { rateLimiter } = await import('./rate-limiter');
+        rateLimitResult = await rateLimiter.checkLimit(
+          `${endpointType.toLowerCase()}-endpoint`,
+          clientIP,
+          rateLimitConfig.limit,
+          rateLimitConfig.windowMs
+        );
+      } catch (error) {
+        // Fallback rate limiting if dynamic import fails in Edge Runtime
+        securityLogger.warn('Rate limiter import failed, using emergency fallback', { error });
+        rateLimitResult = {
+          allowed: true, // Fail open for rate limiting, but log the issue
+          remaining: rateLimitConfig.emergencyLimit || 5,
+          resetTime: Date.now() + rateLimitConfig.windowMs,
+          errorOccurred: true
+        };
+      }
 
       if (!rateLimitResult.allowed) {
         await SecurityAuditor.logSecurityEvent('RATE_LIMIT_EXCEEDED', request, {

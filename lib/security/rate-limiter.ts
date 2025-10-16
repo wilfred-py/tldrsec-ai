@@ -12,43 +12,66 @@ const isEdgeRuntime = (
   (typeof globalThis !== 'undefined' && typeof globalThis.setImmediate === 'undefined')
 );
 
-// Redis type for Node.js environments only
-type RedisInstance = {
+// Edge Runtime compatible Redis interface - NO IORedis types imported
+interface EdgeCompatibleRedisInterface {
   pipeline: () => {
     incr: (key: string) => void;
     expire: (key: string, seconds: number) => void;
     exec: () => Promise<Array<[Error | null, unknown]> | null>;
   };
-};
+}
 
-// Edge Runtime compatible rate limiter - no Redis dependency in Edge Runtime
-let redis: RedisInstance | null = null;
+// Edge Runtime compatible rate limiter - no Redis dependency
+let redisConnection: EdgeCompatibleRedisInterface | null = null;
 
-// Lazy Redis initialization for Node.js environments only
-function initializeRedis(): Promise<RedisInstance | null> {
+// Lazy Redis initialization for Node.js environments only - completely isolated from Edge Runtime
+async function initializeRedis(): Promise<EdgeCompatibleRedisInterface | null> {
+  // EDGE RUNTIME: Always return null, no Redis imports
   if (isEdgeRuntime) {
     logger.child('rate-limiter').info('Edge Runtime detected, using in-memory rate limiting only');
-    return Promise.resolve(null);
+    return null;
   }
   
-  if (redis !== null) {
-    return Promise.resolve(redis);
+  // Return cached connection if available
+  if (redisConnection !== null) {
+    return redisConnection;
   }
   
-  if (typeof process !== 'undefined' && process.env?.REDIS_URL && typeof process.nextTick === 'function') {
-    return import('ioredis').then((ioredis) => {
-      redis = new ioredis.Redis(process.env.REDIS_URL!) as RedisInstance;
+  // NODE.JS RUNTIME: Only attempt Redis initialization if all Node.js APIs are available
+  if (typeof process !== 'undefined' && 
+      process.env?.REDIS_URL && 
+      typeof process.nextTick === 'function' &&
+      typeof global !== 'undefined') {
+    
+    try {
+      // Dynamic import with complete isolation from Edge Runtime
+      const { Redis } = await import('ioredis');
+      const redisInstance = new Redis(process.env.REDIS_URL!);
+      
+      // Type-safe wrapper that matches our interface
+      redisConnection = {
+        pipeline: () => {
+          const pipeline = redisInstance.pipeline();
+          return {
+            incr: (key: string) => pipeline.incr(key),
+            expire: (key: string, seconds: number) => pipeline.expire(key, seconds),
+            exec: () => pipeline.exec()
+          };
+        }
+      };
+      
       logger.child('rate-limiter').info('Redis initialized successfully');
-      return redis;
-    }).catch((error) => {
+      return redisConnection;
+      
+    } catch (error) {
       logger.child('rate-limiter').warn('Redis not available, using in-memory rate limiting', { error });
-      redis = null;
+      redisConnection = null;
       return null;
-    });
+    }
   }
   
   logger.child('rate-limiter').info('Redis not configured, using in-memory rate limiting');
-  return Promise.resolve(null);
+  return null;
 }
 
 const rateLimitLogger = logger.child('rate-limiter');
@@ -67,7 +90,7 @@ const RATE_LIMITER_CIRCUIT_BREAKER_TIMEOUT = 60000; // 1 minute
 const DEFAULT_EMERGENCY_LIMIT = 10; // Conservative limit when rate limiter fails
 
 class RateLimiter {
-  private redisInstance: RedisInstance | null = null;
+  private redisInstance: EdgeCompatibleRedisInterface | null = null;
   private redisInitialized = false;
   private inMemoryCache = new Map<string, { count: number; resetTime: number }>();
   private emergencyCache = new Map<string, { count: number; resetTime: number; failures: number }>();
@@ -83,7 +106,7 @@ class RateLimiter {
     rateLimitLogger.info(`Rate limiter initialized with in-memory cache (${reason})`);
   }
   
-  private async getRedis(): Promise<RedisInstance | null> {
+  private async getRedis(): Promise<EdgeCompatibleRedisInterface | null> {
     if (this.redisInitialized) {
       return this.redisInstance;
     }
@@ -170,7 +193,7 @@ class RateLimiter {
     windowMs: number,
     now: number,
     resetTime: number,
-    redisClient: RedisInstance
+    redisClient: EdgeCompatibleRedisInterface
   ): Promise<RateLimitResult> {
     const pipeline = redisClient.pipeline();
     pipeline.incr(cacheKey);
