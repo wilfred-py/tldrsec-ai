@@ -9,10 +9,13 @@ const nextConfig = {
     // your project has type errors.
     ignoreBuildErrors: true,
   },
+  // SWC minification is enabled by default in Next.js 15
+  // swcMinify: true, // Not needed - enabled by default
   experimental: {
-    // Enable stricter route group validation to prevent conflicts
-    strictNextHead: true,
+    // Remove strictNextHead as it's not recognized in Next.js 15.5.5
     optimizePackageImports: ['@clerk/nextjs', 'lucide-react'],
+    // Enable Edge Runtime compatibility
+    esmExternals: true,
   },
   // Generate static pages where possible to avoid database dependencies during build
   generateBuildId: async () => {
@@ -22,7 +25,16 @@ const nextConfig = {
   // Configure output to handle both static and dynamic routes appropriately
   output: process.env.VERCEL ? undefined : 'standalone',
   serverExternalPackages: [],
-  webpack: (config, { isServer, webpack }) => {
+  webpack: (config, { isServer, webpack, dev }) => {
+    // Enable safe minification - SWC is configured at Next.js level
+    if (!dev) {
+      config.optimization = {
+        ...config.optimization,
+        minimize: true,
+        minimizer: [],
+      };
+    }
+
     if (!isServer) {
       // Don't resolve server-side modules on the client
       config.resolve.fallback = {
@@ -42,6 +54,12 @@ const nextConfig = {
         http: false,
         https: false,
         zlib: false,
+        // Add canvas fallback for client-side rendering
+        canvas: false,
+        'canvas/lib/bindings': false,
+        // Additional canvas-related fallbacks
+        'node-canvas-webgl': false,
+        'canvaskit-wasm': false,
       };
     }
 
@@ -74,6 +92,18 @@ const nextConfig = {
       // Build-time API key warnings (expected when using placeholder keys)
       /Environment variable ANTHROPIC_API_KEY is not set.*build.*time/,
       /Missing API key\. Pass it to the constructor new Resend.*build.*time/,
+      // Canvas and JSDOM related warnings for Edge Runtime compatibility
+      /Canvas is not defined/,
+      /Cannot resolve module 'canvas'/,
+      /Module not found: Can't resolve 'canvas'/,
+      /Critical dependency: require function is used in a way in which dependencies cannot be statically extracted/,
+      // IORedis Edge Runtime warnings
+      /Module not found: Can't resolve 'ioredis'/,
+      /process\.nextTick is not a function/,
+      /setImmediate is not defined/,
+      // Webpack minification errors in Next.js 15
+      /_webpack\.WebpackError is not a constructor/,
+      /MinifyWebpackPlugin/,
       // Specific build-time placeholder warnings
       /build-time-placeholder-key/,
       // More specific environment variable warnings

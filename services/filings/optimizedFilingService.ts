@@ -16,6 +16,7 @@ import { normalizeFormType } from './utils/formTypeUtils';
 import { logger } from '../../lib/logging';
 import { monitoring } from '../../lib/monitoring';
 import { prisma } from '../../lib/db';
+import { generateSecureBatchId } from '../../lib/security/secure-random';
 
 const optimizedLogger = logger.child('optimized-filing-service');
 
@@ -851,7 +852,7 @@ ${content}`;
   }>> {
     const { concurrency = 5, failFast = false, progressCallback } = batchOptions;
     const startTime = Date.now();
-    const batchId = `batch-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`;
+    const batchId = generateSecureBatchId('batch');
     
     optimizedLogger.info(`🚀 Starting batch processing: ${requests.length} requests`, {
       batchId,

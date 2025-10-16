@@ -6,6 +6,7 @@
  */
 
 import { logger } from '../logging';
+import { generateSecureAlertId } from '../security/secure-random';
 
 export interface InfrastructureMetrics {
   timestamp: Date;
@@ -235,7 +236,7 @@ export class InfrastructureMonitor {
    * Create and log an alert
    */
   private createAlert(threshold: AlertThreshold, currentValue: number): void {
-    const alertId = `alert_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    const alertId = generateSecureAlertId();
     
     const alert: Alert = {
       id: alertId,
@@ -367,12 +368,12 @@ export class InfrastructureMonitor {
   }
 
   private getCpuUsage(): number {
-    // Simplified CPU usage simulation
+    // Simplified CPU usage simulation (non-security sensitive)
     return Math.round(Math.random() * 100);
   }
 
   private async getDatabaseConnectionUsage(): Promise<number> {
-    // In real implementation, this would query Prisma/database metrics
+    // In real implementation, this would query Prisma/database metrics (non-security sensitive)
     return Math.round(Math.random() * 100);
   }
 

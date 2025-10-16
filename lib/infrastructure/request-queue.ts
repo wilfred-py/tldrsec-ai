@@ -7,6 +7,7 @@
 
 import { logger } from '../logging';
 import Bottleneck from 'bottleneck';
+import { generateSecureRequestId } from '../security/secure-random';
 
 export interface QueuedRequest {
   id: string;
@@ -269,7 +270,7 @@ export class InfrastructureRequestQueue {
 
   // Private methods
   private generateRequestId(): string {
-    return `req_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    return generateSecureRequestId('req');
   }
 
   private clearTimeout(requestId: string): void {

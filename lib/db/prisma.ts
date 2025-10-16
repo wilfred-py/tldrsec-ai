@@ -92,11 +92,16 @@ export function getPrismaClient(): PrismaClient {
     
     try {
       if (process.env.NODE_ENV === 'production') {
+        // Optimize DATABASE_URL for aggressive connection pooling (Phase 1)
+        const optimizedUrl = process.env.DATABASE_URL?.includes('connection_limit') 
+          ? process.env.DATABASE_URL 
+          : `${process.env.DATABASE_URL}${process.env.DATABASE_URL?.includes('?') ? '&' : '?'}connection_limit=20&pool_timeout=30&connect_timeout=60`;
+        
         prisma = new PrismaClient({
           log: ['error', 'warn'],
           datasources: {
             db: {
-              url: process.env.DATABASE_URL
+              url: optimizedUrl
             }
           },
           // Enable connection pooling optimizations for production

@@ -80,8 +80,16 @@ jobs:
           node-version: '18'
           cache: 'npm'
           
-      - name: Install Wrangler
-        run: npm install -g wrangler
+      - name: Install Worker Dependencies
+        run: |
+          cd cloudflare-cron
+          npm ci || npm install
+          
+      - name: Verify Wrangler Installation
+        run: |
+          cd cloudflare-cron
+          npx wrangler --version
+          echo "✅ Wrangler is available"
         
       - name: Validate Worker Configuration
         run: |
@@ -98,6 +106,18 @@ jobs:
             exit 1
           fi
           echo "✅ index.js exists"
+          if [ ! -f "package.json" ]; then
+            echo "❌ package.json not found"
+            exit 1
+          fi
+          echo "✅ package.json exists"
+          
+          # Validate wrangler.toml has required fields
+          if ! grep -q "main.*=.*index.js" wrangler.toml; then
+            echo "❌ wrangler.toml missing 'main' entry"
+            exit 1
+          fi
+          echo "✅ wrangler.toml has valid main entry"
           
       - name: Worker Syntax Check
         run: |
@@ -110,6 +130,12 @@ jobs:
         run: |
           cd cloudflare-cron
           echo "Performing dry run deployment check..."
+          echo "Cloudflare API Token configured: ${{ secrets.CLOUDFLARE_API_TOKEN != '' }}"
+          if [ -z "$CLOUDFLARE_API_TOKEN" ]; then
+            echo "⚠️ CLOUDFLARE_API_TOKEN not configured, skipping deployment validation"
+            echo "This step will be skipped in CI/CD until the token is added to GitHub Secrets"
+            exit 0
+          fi
           npx wrangler deploy --dry-run
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}

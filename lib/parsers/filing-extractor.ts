@@ -11,6 +11,7 @@ import * as cheerio from 'cheerio';
 import { FilingType } from '../sec-edgar/types';
 import { SECErrorCode, SECEdgarError } from '../sec-edgar/types';
 import axios from 'axios';
+import { generateSecureOperationId } from '../security/secure-random';
 import { FilingExtractorFactory } from './filing-extractor-factory';
 import {
   cleanHtmlContent as cleanHtml,
@@ -166,7 +167,7 @@ async function fetchContent(url: string): Promise<string> {
  */
 export async function extractFilingContent(filingUrl: string, filingType: FilingType): Promise<string> {
   const startTime = Date.now();
-  const operationId = `extract-${Date.now()}-${Math.random().toString(36).substring(2, 10)}`;
+  const operationId = generateSecureOperationId('extract');
   
   // Log start of extraction
   componentLogger.info(`Extracting content from ${filingType} filing`, {

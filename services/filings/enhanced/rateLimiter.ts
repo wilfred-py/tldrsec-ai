@@ -1,5 +1,6 @@
 import { logger } from '../../../lib/logging';
 import { monitoring } from '@/lib/monitoring';
+import { generateSecureHexString } from '../../../lib/security/secure-random';
 
 const rateLimitLogger = logger.child('rate-limiter');
 
@@ -371,7 +372,7 @@ export class SmartRateLimiter {
       // Queue the request if rate limited
       return new Promise<T>(async (resolve, reject) => {
         const queuedRequest: QueuedRequest = {
-          id: Math.random().toString(36).slice(2, 11),
+          id: generateSecureHexString(8),
           tokens,
           priority,
           queuedAt: new Date(),
@@ -435,7 +436,7 @@ export class SmartRateLimiter {
         // Queue for retry
         return new Promise<T>(async (resolve, reject) => {
           const queuedRequest: QueuedRequest = {
-            id: Math.random().toString(36).slice(2, 11),
+            id: generateSecureHexString(8),
             tokens,
             priority,
             queuedAt: new Date(),

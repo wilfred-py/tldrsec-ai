@@ -89,7 +89,7 @@ describe('Budget Manipulation Security Tests', () => {
         const result = validateCostUpdate(0.0001, 'FREE', 'user123');
         
         expect(result.valid).toBe(false);
-        expect(result.error).toBe('Cost too small');
+        expect(result.error).toBe('Cost too small - potential bypass attempt');
         expect(result.sanitizedCost).toBe(0);
       } finally {
         process.env.NODE_ENV = originalEnv;

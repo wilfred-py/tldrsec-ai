@@ -11,6 +11,7 @@
  */
 
 import { logger } from '../logging';
+import { generateSecureOperationId } from '../security/secure-random';
 
 const errorLogger = logger.child('error-handling');
 
@@ -249,7 +250,7 @@ export class ConfigurationError extends BaseStructuredError {
  * Generate correlation ID for error tracking
  */
 function generateCorrelationId(): string {
-  return `err_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+  return generateSecureOperationId('err');
 }
 
 /**

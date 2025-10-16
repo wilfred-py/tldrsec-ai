@@ -4,6 +4,7 @@
  */
 
 import { NextResponse } from 'next/server';
+import { generateSecureRequestId } from '../security/secure-random';
 
 export interface StandardErrorResponse {
   success: false;
@@ -121,7 +122,7 @@ export function createSuccessResponse(
  * Generate a unique request ID for tracking
  */
 function generateRequestId(): string {
-  return `req_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  return generateSecureRequestId('req');
 }
 
 /**

@@ -33,9 +33,11 @@ import Bottleneck from 'bottleneck';
 const OPENROUTER_CONFIG = {
   baseURL: 'https://openrouter.ai/api/v1',
   apiKey: process.env.TLDRSEC_AI_SUMMARIZER || process.env.OPENROUTER_API_KEY,
-  defaultModel: process.env.DEFAULT_AI_MODEL || 'x-ai/grok-4-fast:free',
-  timeout: 90000, // 1.5 minutes (reduced from 2 minutes)
-  maxRetries: 2 // Reduced from 3 to prevent cascading timeouts
+  defaultModel: process.env.DEFAULT_AI_MODEL || 'x-ai/grok-3',
+  timeout: 30000, // 30 seconds (optimized for faster response)
+  maxRetries: 0, // Eliminated retries - use model fallback instead
+  fallbackTimeout: 15000, // 15 seconds for fallback models
+  circuitBreakerThreshold: 3 // Open circuit after 3 failures (reduced from 5)
 };
 
 /**
@@ -48,31 +50,19 @@ interface ModelInfo {
   costPerInputToken: number;  // USD per token
   costPerOutputToken: number; // USD per token
   maxOutputTokens: number;
-  capabilities: string[];
-  available: boolean;
+  priority: number; // For fallback ordering (lower = higher priority)
+  timeout: number; // Model-specific timeout
+  circuitBreakerState?: CircuitBreakerState;
+}
+
+interface CircuitBreakerState {
+  failures: number;
+  lastFailureTime: number;
+  isOpen: boolean;
+  resetTimeout: number;
 }
 
 const XAI_MODELS: Record<string, ModelInfo> = {
-  'x-ai/grok-4-fast:free': {
-    id: 'x-ai/grok-4-fast:free',
-    name: 'Grok 4 Fast (Free)',
-    contextWindow: 2000000,
-    costPerInputToken: 0, // Free during limited time
-    costPerOutputToken: 0, // Free during limited time
-    maxOutputTokens: 30000,
-    capabilities: ['reasoning', 'multimodal', 'tools'],
-    available: true
-  },
-  'x-ai/grok-4': {
-    id: 'x-ai/grok-4',
-    name: 'Grok 4',
-    contextWindow: 256000,
-    costPerInputToken: 0.000003, // $3/M tokens
-    costPerOutputToken: 0.000015, // $15/M tokens (scales up for >128k tokens)
-    maxOutputTokens: 30000,
-    capabilities: ['reasoning', 'multimodal', 'tools'],
-    available: true
-  },
   'x-ai/grok-3': {
     id: 'x-ai/grok-3',
     name: 'Grok 3',
@@ -80,8 +70,28 @@ const XAI_MODELS: Record<string, ModelInfo> = {
     costPerInputToken: 0.000002, // $2/M tokens
     costPerOutputToken: 0.00001, // $10/M tokens
     maxOutputTokens: 30000,
-    capabilities: ['reasoning', 'multimodal'],
-    available: true
+    priority: 1, // Highest priority (known working model)
+    timeout: 20000 // 20 seconds for reliable response
+  },
+  'anthropic/claude-3-haiku': {
+    id: 'anthropic/claude-3-haiku',
+    name: 'Claude 3 Haiku',
+    contextWindow: 200000,
+    costPerInputToken: 0.00000025, // $0.25/M tokens
+    costPerOutputToken: 0.00000125, // $1.25/M tokens
+    maxOutputTokens: 4096,
+    priority: 2, // Reliable fallback
+    timeout: 15000 // 15 seconds
+  },
+  'openai/gpt-3.5-turbo': {
+    id: 'openai/gpt-3.5-turbo',
+    name: 'GPT-3.5 Turbo',
+    contextWindow: 16385,
+    costPerInputToken: 0.0000005, // $0.50/M tokens
+    costPerOutputToken: 0.0000015, // $1.50/M tokens
+    maxOutputTokens: 4096,
+    priority: 3, // Last resort fallback
+    timeout: 10000 // 10 seconds for fastest response
   }
 };
 
@@ -94,9 +104,9 @@ class ModelSelectionAgent {
 
   constructor() {
     this.fallbackChain = [
-      'x-ai/grok-4-fast:free',      // Primary free model (2M context)
-      'x-ai/grok-4',                // Paid model fallback
-      'x-ai/grok-3'                 // Last resort
+      'x-ai/grok-3',                // Known working model (primary)
+      'anthropic/claude-3-haiku',   // Reliable fallback
+      'openai/gpt-3.5-turbo'        // Last resort
     ];
     this.modelInfo = XAI_MODELS;
   }
@@ -152,23 +162,18 @@ class ModelSelectionAgent {
     modelId: string, 
     maxCost?: number, 
     requiredContextWindow?: number, 
-    requiredCapabilities?: string[]
+    _requiredCapabilities?: string[]
   ): boolean {
     const model = this.modelInfo[modelId];
-    if (!model || !model.available) return false;
+    if (!model) return false;
 
     // Check context window requirement
     if (requiredContextWindow && model.contextWindow < requiredContextWindow) {
       return false;
     }
 
-    // Check capability requirements
-    if (requiredCapabilities && requiredCapabilities.length > 0) {
-      const hasAllCapabilities = requiredCapabilities.every(cap => 
-        model.capabilities.includes(cap)
-      );
-      if (!hasAllCapabilities) return false;
-    }
+    // Note: Capability checking removed since capabilities property was removed from ModelInfo
+    // All xAI models have basic reasoning capabilities by default
 
     // Check cost constraint (estimate for 10k tokens)
     if (maxCost) {
@@ -218,6 +223,7 @@ export type OpenRouterRequestOptions = {
   retryConfig?: Partial<RetryConfig>;
   costLimit?: number;
   requiredCapabilities?: string[];
+  remainingExecutionTime?: number; // Time remaining in execution context for dynamic timeout calculation
 };
 
 export type OpenRouterResponse = {
@@ -252,9 +258,82 @@ export type OpenRouterResponse = {
 /**
  * OpenRouter AI Client with xAI Intelligence
  */
+/**
+ * Model-specific Circuit Breaker Manager
+ */
+class ModelCircuitBreakerManager {
+  private circuitBreakers: Map<string, CircuitBreakerState> = new Map();
+  private readonly failureThreshold = OPENROUTER_CONFIG.circuitBreakerThreshold;
+  private readonly resetTimeoutMs = 60000; // 1 minute
+
+  isModelAvailable(modelId: string): boolean {
+    const breaker = this.circuitBreakers.get(modelId);
+    if (!breaker) return true;
+
+    if (breaker.isOpen) {
+      const now = Date.now();
+      if (now - breaker.lastFailureTime > this.resetTimeoutMs) {
+        // Reset circuit breaker
+        breaker.isOpen = false;
+        breaker.failures = 0;
+        logger.info(`Circuit breaker reset for model ${modelId}`);
+        return true;
+      }
+      return false;
+    }
+    return true;
+  }
+
+  recordFailure(modelId: string, error: Error): void {
+    let breaker = this.circuitBreakers.get(modelId);
+    if (!breaker) {
+      breaker = {
+        failures: 0,
+        lastFailureTime: 0,
+        isOpen: false,
+        resetTimeout: this.resetTimeoutMs
+      };
+      this.circuitBreakers.set(modelId, breaker);
+    }
+
+    breaker.failures++;
+    breaker.lastFailureTime = Date.now();
+
+    if (breaker.failures >= this.failureThreshold) {
+      breaker.isOpen = true;
+      logger.warn(`Circuit breaker opened for model ${modelId}`, {
+        failures: breaker.failures,
+        error: error.message
+      });
+    }
+  }
+
+  recordSuccess(modelId: string): void {
+    const breaker = this.circuitBreakers.get(modelId);
+    if (breaker) {
+      breaker.failures = Math.max(0, breaker.failures - 1);
+      if (breaker.failures === 0) {
+        breaker.isOpen = false;
+      }
+    }
+  }
+
+  getStats(): Record<string, { failures: number; isOpen: boolean }> {
+    const stats: Record<string, { failures: number; isOpen: boolean }> = {};
+    this.circuitBreakers.forEach((breaker, modelId) => {
+      stats[modelId] = {
+        failures: breaker.failures,
+        isOpen: breaker.isOpen
+      };
+    });
+    return stats;
+  }
+}
+
 export class OpenRouterClient {
   private limiter: Bottleneck;
   private modelAgent: ModelSelectionAgent;
+  private circuitBreakerManager: ModelCircuitBreakerManager;
   private totalTokensUsed: { input: number; output: number };
   private totalCost: number;
   private serviceName = 'openrouter-xai';
@@ -272,6 +351,9 @@ export class OpenRouterClient {
 
     // Initialize model selection agent
     this.modelAgent = new ModelSelectionAgent();
+
+    // Initialize circuit breaker manager
+    this.circuitBreakerManager = new ModelCircuitBreakerManager();
 
     // Initialize tracking
     this.totalTokensUsed = { input: 0, output: 0 };
@@ -291,10 +373,12 @@ export class OpenRouterClient {
     const temperature = options.temperature ?? 0.1;
     const requestType = options.requestType || 'standard';
     const abortController = new TimeoutAbortController();
-    const timeout = options.timeout || OPENROUTER_CONFIG.timeout;
+    // Calculate dynamic timeout based on remaining execution time
+    const dynamicTimeout = this.calculateDynamicTimeout(options.remainingExecutionTime);
+    const timeout = options.timeout || dynamicTimeout || OPENROUTER_CONFIG.timeout;
 
-    // Select optimal model
-    const selectedModel = this.modelAgent.selectModel({
+    // Select optimal model with circuit breaker check
+    const selectedModel = this.selectAvailableModel({
       preferredModel: originalModel,
       maxCost: options.costLimit,
       requiredCapabilities: options.requiredCapabilities
@@ -446,6 +530,9 @@ export class OpenRouterClient {
           )
         );
 
+        // Record success in circuit breaker
+        this.circuitBreakerManager.recordSuccess(currentModel);
+
         // Success - calculate costs and return
         const modelInfo = this.modelAgent.getModelInfo(currentModel);
         if (!modelInfo) {
@@ -489,8 +576,11 @@ export class OpenRouterClient {
         };
 
       } catch (error) {
+        // Record failure in circuit breaker
+        this.circuitBreakerManager.recordFailure(currentModel, error instanceof Error ? error : new Error(String(error)));
+
         logger.warn(`Model ${currentModel} failed on attempt ${attempts}`, {
-          error: error.message,
+          error: error instanceof Error ? error.message : String(error),
           requestId,
           currentModel,
           attempts
@@ -613,16 +703,17 @@ export class OpenRouterClient {
     }
     
     // Check for abort errors
-    if (error.name === 'AbortError' || error.message?.includes('aborted')) {
+    const errorObj = error as { name?: string; message?: string };
+    if (errorObj?.name === 'AbortError' || errorObj?.message?.includes('aborted')) {
       return createTimeoutError(
         'Request was aborted or timed out',
-        { originalError: error.message },
+        { originalError: errorObj?.message },
         requestId
       );
     }
     
     // Parse OpenRouter API error responses
-    const message = error?.message || String(error);
+    const message = errorObj?.message || String(error);
     
     if (message.includes('rate limit') || message.includes('429')) {
       return createAiQuotaExceededError(
@@ -691,6 +782,87 @@ export class OpenRouterClient {
     this.totalTokensUsed = { input: 0, output: 0 };
     this.totalCost = 0;
     logger.info('OpenRouter client usage statistics reset');
+  }
+
+  /**
+   * Calculate dynamic timeout based on remaining execution time
+   */
+  private calculateDynamicTimeout(remainingTime?: number): number | undefined {
+    if (!remainingTime) return undefined;
+
+    // Use 60% of remaining time for AI processing, minimum 20s, maximum 45s
+    const dynamicTimeout = Math.max(20000, Math.min(remainingTime * 0.6, 45000));
+    
+    logger.debug('Calculated dynamic timeout', {
+      remainingTime,
+      dynamicTimeout,
+      percentageUsed: (dynamicTimeout / remainingTime) * 100
+    });
+
+    return dynamicTimeout;
+  }
+
+  /**
+   * Select available model checking circuit breaker status
+   */
+  private selectAvailableModel(options: {
+    preferredModel?: string;
+    maxCost?: number;
+    requiredCapabilities?: string[];
+  }): string {
+    const { preferredModel = OPENROUTER_CONFIG.defaultModel } = options;
+
+    // Check if preferred model is available via circuit breaker
+    if (this.circuitBreakerManager.isModelAvailable(preferredModel)) {
+      const selectedModel = this.modelAgent.selectModel({
+        preferredModel,
+        maxCost: options.maxCost,
+        requiredCapabilities: options.requiredCapabilities
+      });
+      
+      // If selected model is same as preferred and circuit breaker allows it
+      if (selectedModel === preferredModel) {
+        return selectedModel;
+      }
+    }
+
+    // Try fallback models that are available
+    const fallbackChain = ['x-ai/grok-4-fast:free', 'x-ai/grok-4', 'x-ai/grok-3'];
+    
+    for (const modelId of fallbackChain) {
+      if (this.circuitBreakerManager.isModelAvailable(modelId)) {
+        const selectedModel = this.modelAgent.selectModel({
+          preferredModel: modelId,
+          maxCost: options.maxCost,
+          requiredCapabilities: options.requiredCapabilities
+        });
+        
+        if (selectedModel === modelId) {
+          logger.info(`Model fallback due to circuit breaker`, {
+            originalModel: preferredModel,
+            selectedModel: modelId,
+            reason: 'circuit_breaker_open'
+          });
+          return selectedModel;
+        }
+      }
+    }
+
+    // Last resort: use default model even if circuit breaker is open
+    logger.warn(`All models circuit breaker open, using default model`, {
+      preferredModel,
+      defaultModel: OPENROUTER_CONFIG.defaultModel,
+      circuitBreakerStats: this.circuitBreakerManager.getStats()
+    });
+    
+    return OPENROUTER_CONFIG.defaultModel;
+  }
+
+  /**
+   * Get circuit breaker statistics
+   */
+  getCircuitBreakerStats(): Record<string, { failures: number; isOpen: boolean }> {
+    return this.circuitBreakerManager.getStats();
   }
 
   /**

@@ -6,6 +6,7 @@
 import { ApiError, ErrorCode } from './index';
 import { logger } from '../logging';
 import { monitoring } from '../monitoring';
+import { generateSecureJitter } from '../security/secure-random';
 
 /**
  * Safe wrapper for monitoring duration metrics to handle missing function
@@ -162,14 +163,14 @@ export function calculateAdaptiveBackoff(
   if (rateLimitInfo.isRateLimited) {
     const baseDelay = config.initialDelayMs * Math.pow(config.backoffFactor, attempt + 1);
     const cappedDelay = Math.min(baseDelay, config.maxDelayMs);
-    const jitter = cappedDelay * config.jitterFactor * Math.random();
+    const jitter = generateSecureJitter(cappedDelay, config.jitterFactor) - cappedDelay;
     return Math.floor(cappedDelay + jitter);
   }
   
   // For other errors, use standard exponential backoff
   const exponentialDelay = config.initialDelayMs * Math.pow(config.backoffFactor, attempt);
   const cappedDelay = Math.min(exponentialDelay, config.maxDelayMs);
-  const jitter = cappedDelay * config.jitterFactor * Math.random();
+  const jitter = generateSecureJitter(cappedDelay, config.jitterFactor) - cappedDelay;
   return Math.floor(cappedDelay + jitter);
 }
 

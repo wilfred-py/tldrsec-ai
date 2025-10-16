@@ -10,6 +10,7 @@ import { logger } from '../../lib/logging';
 import { SummaryGenerationResult, SECFiling, Company } from './types';
 import { normalizeFormType } from './formTypeService';
 import { RetryWrapper, ErrorType } from '../../lib/resilience/retry-utility';
+import { generateSecureCorrelationId } from '../../lib/security/secure-random';
 import { CircuitBreakerRegistry, CIRCUIT_BREAKER_CONFIGS } from '../../lib/resilience/circuit-breaker';
 import { 
   ExternalServiceError, 
@@ -98,7 +99,7 @@ export async function generateEnhancedAISummary(
   filing: SECFiling, 
   company: Company
 ): Promise<SummaryGenerationResult> {
-  const correlationId = `xai_enhanced_summary_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+  const correlationId = generateSecureCorrelationId('xai_enhanced_summary');
   const context = {
     correlationId,
     operation: 'enhanced-xai-summary',

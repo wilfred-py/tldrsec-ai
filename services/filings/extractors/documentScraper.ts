@@ -1,13 +1,100 @@
 import axios from 'axios';
-import { JSDOM } from 'jsdom';
 import { logger } from '../../../lib/logging';
 import { SecFiling } from '../../../types/sec';
 import { getSecApiHeaders } from '../../filings/utils';
+
+// Edge Runtime compatible JSDOM import with canvas fallback
+let JSDOM: typeof import('jsdom').JSDOM | null = null;
+
+// Initialize JSDOM asynchronously
+async function initializeJSDOM(): Promise<typeof import('jsdom').JSDOM | null> {
+  if (JSDOM !== null) return JSDOM;
+  
+  try {
+    // Only import JSDOM in environments where it's supported
+    if (typeof window === 'undefined' && typeof process !== 'undefined') {
+      const jsdomModule = await import('jsdom');
+      JSDOM = jsdomModule.JSDOM;
+      logger.debug('JSDOM initialized successfully');
+      return JSDOM;
+    }
+  } catch (error) {
+    logger.warn('JSDOM not available, will use fallback HTML parsing', { error: error instanceof Error ? error.message : String(error) });
+    JSDOM = null;
+  }
+  
+  return null;
+}
 
 /**
  * Base URL for SEC EDGAR
  */
 const SEC_EDGAR_BASE_URL = 'https://www.sec.gov';
+
+/**
+ * Fallback HTML parsing using regex when JSDOM is not available
+ * This provides basic document link extraction for Edge Runtime compatibility
+ */
+function parseHtmlWithRegex(html: string, filing: SecFiling): string | null {
+  try {
+    logger.debug('Using regex-based HTML parsing fallback');
+    
+    // Priority document types to look for
+    const priorityTypes = ['10-K', '10-Q', '8-K', 'EX-13', 'EX-99', 'DEF 14A', '424B2', '144'];
+    
+    // Extract all href attributes from anchor tags
+    const linkPattern = /<a[^>]+href="([^"]+)"[^>]*>([^<]*)<\/a>/gi;
+    const links: Array<{ href: string; text: string }> = [];
+    
+    let match;
+    while ((match = linkPattern.exec(html)) !== null) {
+      const href = match[1];
+      const text = match[2].trim();
+      
+      // Filter for document-like links
+      if (href && (href.includes('.htm') || href.includes('.xml') || href.includes('.txt') || href.includes('.pdf'))) {
+        links.push({ href, text });
+      }
+    }
+    
+    // Look for priority document types first
+    for (const priorityType of priorityTypes) {
+      const priorityLink = links.find(link => 
+        link.text.includes(priorityType) || link.href.includes(priorityType.toLowerCase())
+      );
+      if (priorityLink) {
+        logger.debug(`Found priority document via regex: ${priorityType} -> ${priorityLink.href}`);
+        return ensureAbsoluteUrl(priorityLink.href);
+      }
+    }
+    
+    // If no priority document found, return the first document link
+    if (links.length > 0) {
+      const firstLink = links[0];
+      logger.debug(`Using first document link via regex: ${firstLink.href}`);
+      return ensureAbsoluteUrl(firstLink.href);
+    }
+    
+    // Last resort: try to construct URL from filing information
+    if (filing.accessionNumber && filing.filingUrl) {
+      const cikMatch = filing.filingUrl.match(/\/data\/([0-9]+)\//); 
+      if (cikMatch && cikMatch[1]) {
+        const cik = cikMatch[1];
+        const formattedAccession = filing.accessionNumber.replace(/-/g, '');
+        const constructedUrl = `https://www.sec.gov/Archives/edgar/data/${cik}/${formattedAccession}/${filing.accessionNumber}-index.html`;
+        logger.debug(`Constructed document URL via regex fallback: ${constructedUrl}`);
+        return constructedUrl;
+      }
+    }
+    
+    logger.warn('No document links found using regex fallback');
+    return null;
+    
+  } catch (error) {
+    logger.error('Error in regex HTML parsing fallback', { error: error instanceof Error ? error.message : String(error) });
+    return null;
+  }
+}
 
 /**
  * Converts a relative URL to an absolute URL
@@ -53,9 +140,46 @@ export async function scrapeDocumentLinksFromFilingPage(
     const response = await axios.get(absoluteUrl, { headers });
     const html = response.data as string;
     
-    // Parse the HTML
-    const dom = new JSDOM(html);
-    const document = dom.window.document;
+    // Parse the HTML with fallback for environments without JSDOM
+    let document: Document;
+    
+    const jsdomClass = await initializeJSDOM();
+    if (jsdomClass) {
+      const dom = new jsdomClass(html, {
+        // Enhanced configuration for Edge Runtime compatibility
+        virtualConsole: new jsdomClass.VirtualConsole(),
+        // Disable canvas and other problematic features for Edge Runtime compatibility
+        pretendToBeVisual: false,
+        resources: 'usable',
+        runScripts: 'outside-only',
+        // Handle missing canvas and other Node.js dependencies gracefully
+        beforeParse: (window) => {
+          // Provide comprehensive fallbacks for missing browser APIs
+          if (!window.HTMLCanvasElement) {
+            window.HTMLCanvasElement = class MockCanvas {
+              getContext() { return null; }
+              toDataURL() { return ''; }
+              width = 0;
+              height = 0;
+            } as any;
+          }
+          
+          // Additional fallbacks for Edge Runtime compatibility
+          if (!window.requestAnimationFrame) {
+            window.requestAnimationFrame = (callback) => setTimeout(callback, 16);
+          }
+          
+          if (!window.cancelAnimationFrame) {
+            window.cancelAnimationFrame = (id) => clearTimeout(id);
+          }
+        }
+      });
+      document = dom.window.document;
+    } else {
+      // Fallback: Use basic regex-based HTML parsing
+      logger.info('Using fallback HTML parsing instead of JSDOM');
+      return parseHtmlWithRegex(html, filing);
+    }
     
     // Log the HTML structure for debugging
     logger.debug(`HTML structure: ${html.length} characters, ${document.querySelectorAll('table').length} tables`);
@@ -207,6 +331,18 @@ export async function scrapeDocumentLinksFromFilingPage(
     logger.error(
       `Error scraping document links: ${errorMessage}, Status: ${statusCode}, URL: ${filing.filingUrl}`
     );
+    
+    // Try regex fallback if JSDOM parsing failed
+    if (JSDOM === null) {
+      logger.info('Attempting regex fallback due to JSDOM unavailability');
+      try {
+        const response = await axios.get(ensureAbsoluteUrl(filing.filingUrl), { headers: getSecApiHeaders() });
+        return parseHtmlWithRegex(response.data, filing);
+      } catch (fallbackError) {
+        logger.error('Regex fallback also failed', { error: fallbackError instanceof Error ? fallbackError.message : String(fallbackError) });
+      }
+    }
+    
     return null;
   }
 }

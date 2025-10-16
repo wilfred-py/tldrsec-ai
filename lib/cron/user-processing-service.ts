@@ -182,6 +182,15 @@ export class CronUserProcessingService {
         });
       }
 
+      // Group eligible users by tier to build tier breakdown
+      const tierUserCounts = eligibleUsers.reduce((acc, user) => {
+        acc[user.tier] = (acc[user.tier] || 0) + 1;
+        return acc;
+      }, {} as Record<string, number>);
+
+      // Populate tier breakdown with user counts
+      results.tierBreakdown = tierUserCounts;
+
       // Process users by tier using optimized filing results
       const tierResults = await this.processUsersByTier(
         eligibleUsers,
@@ -191,7 +200,6 @@ export class CronUserProcessingService {
         filingProcessor
       );
 
-      // Accumulate tier results
       for (const tierResult of tierResults) {
         results.usersProcessed += tierResult.processed;
         results.filingsProcessed += tierResult.filings;
@@ -215,6 +223,15 @@ export class CronUserProcessingService {
         error: deduplicationError instanceof Error ? deduplicationError.message : 'Unknown error',
         eligibleUsers: eligibleUserRecords.length
       });
+
+      // Group eligible users by tier to build tier breakdown (fallback case)
+      const tierUserCounts = eligibleUsers.reduce((acc, user) => {
+        acc[user.tier] = (acc[user.tier] || 0) + 1;
+        return acc;
+      }, {} as Record<string, number>);
+
+      // Populate tier breakdown with user counts
+      results.tierBreakdown = tierUserCounts;
 
       // Fallback to original processing method without deduplication
       const tierResults = await this.processUsersByTier(

@@ -8,6 +8,7 @@ import { Prisma, Summary } from '@prisma/client';
 import { logger } from '../logging';
 // import { getPrismaClient } from '../db/prisma';
 import { FilingTransactionManager } from '../db/transaction-manager';
+import { generateSecureCorrelationId } from '../security/secure-random';
 import { CronSecFilingService } from './sec-filing-service';
 import { CronBudgetService } from './budget-service';
 import type {
@@ -720,7 +721,7 @@ export class CronFilingProcessor {
           outputTokens: 0,
           cost: 0, // No new cost for cache hit
           processingStatus: 'CACHE_HIT',
-          correlationId: `cache_hit_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`
+          correlationId: generateSecureCorrelationId('cache_hit')
         };
 
         // Update cache analytics for existing summary

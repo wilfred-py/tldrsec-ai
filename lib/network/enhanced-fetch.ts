@@ -5,6 +5,7 @@
 
 import { logger } from '../logging';
 import { monitoring } from '../monitoring';
+import { generateSecureRequestId } from '../security/secure-random';
 
 // Create a safe wrapper for monitoring functions
 const safeMonitoring = {
@@ -84,7 +85,7 @@ export async function enhancedFetch<T = unknown>(
   } = mergedOptions;
   
   // Generate a unique request ID for tracking
-  const requestId = `req_${Date.now()}_${Math.random().toString(36).substring(2, 10)}`;
+  const requestId = generateSecureRequestId('req');
   
   // Create context for logging and monitoring
   const context = {

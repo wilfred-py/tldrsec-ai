@@ -16,6 +16,7 @@ import { getFormMetadata } from '../../../../lib/sec-edgar/form-registry';
 import { optimizedFilingService } from '../../../../services/filings/optimizedFilingService';
 import { logger } from '../../../../lib/logging';
 import { monitoring } from '../../../../lib/monitoring';
+import { generateSecureRequestId } from '../../../../lib/security/secure-random';
 
 // API route logger
 const apiLogger = logger.child('api-optimized-summary');
@@ -35,7 +36,7 @@ const safeMonitoring = {
 
 export async function GET(request: NextRequest) {
   const startTime = Date.now();
-  const requestId = `opt-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  const requestId = generateSecureRequestId('opt');
   
   try {
     // Get query parameters

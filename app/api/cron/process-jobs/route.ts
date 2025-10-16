@@ -1,13 +1,19 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { JobQueueService, JobType } from '../../../../lib/job-queue';
 // JobResultData imported but used in interface declaration extension
 import { LockService } from '../../../../lib/job-queue/lock-service';
 // DeadLetterQueueService import removed - not used in active code paths
 import { logger } from '../../../../lib/logging';
 import { 
-  appRouterAsyncHandler, 
-  createInternalError
+  appRouterAsyncHandler
 } from '../../../../lib/error-handling/index';
+import { 
+  applySecurityMiddleware,
+  createErrorResponse,
+  createSuccessResponse,
+  logSecurityEvent
+} from '../../../../lib/validation/middleware';
+import { CronSchemas } from '../../../../lib/validation/schemas/api-schemas';
 // ApiError, ErrorCode imports removed - not used in active code paths
 // ErrorCategory, ErrorSeverity imports removed - not used in active code paths
 // Retry and circuit breaker imports removed - not used in active code paths
@@ -30,6 +36,7 @@ import { v4 as uuidv4 } from 'uuid';
 // PrismaClient import - using service layer instead
 // import { PrismaClient } from '@prisma/client';
 import { summarizeFiling, SummarizationError } from '../../../../lib/ai/summarize';
+import { AsyncFilingProcessor } from '../../../../lib/job-queue/async-filing-processor';
 // claudeClient import removed - not used in active code paths
 // SummarizationResult import removed - not used in active code paths
 
@@ -91,14 +98,48 @@ const processJob = async (jobId: string) => {
 /**
  * GET handler for job processing cron job
  * This endpoint is called by Vercel Cron to process queued jobs
+ * 
+ * SECURITY: Protected with cron authentication and input validation
  */
-export const GET = appRouterAsyncHandler(async (request: Request) => {
+export const GET = appRouterAsyncHandler(async (request: NextRequest) => {
   const startTime = Date.now();
   
-  // Extract parameters
-  const { searchParams } = new URL(request.url);
-  const limit = parseInt(searchParams.get('limit') || '5', 10);
-  const jobTypes = searchParams.get('types')?.split(',') || undefined;
+  try {
+    // Apply comprehensive security validation
+    const securityResult = await applySecurityMiddleware(
+      request,
+      CronSchemas.processJobsQuery,
+      {
+        requireCronAuth: true,
+        logSecurityEvents: true,
+        timeoutMs: 300000 // 5 minutes for job processing
+      }
+    );
+    
+    // Check if security validation failed
+    if (securityResult.response) {
+      return securityResult.response;
+    }
+    
+    // Extract validated parameters
+    const { limit, types } = securityResult.data;
+    const jobTypes = types ? types.split(',').filter(Boolean) : undefined;
+    
+    // Additional validation for job types
+    if (jobTypes) {
+      const validJobTypes: JobType[] = [
+        'CHECK_FILINGS', 'PROCESS_FILING', 'ARCHIVE_FILINGS',
+        'CHECK_10K_FILINGS', 'CHECK_10Q_FILINGS', 'CHECK_8K_FILINGS', 'CHECK_FORM4_FILINGS',
+        'SUMMARIZE_FILING', 'SEND_FILING_NOTIFICATION', 'COMPILE_DAILY_DIGEST',
+        'ASYNC_SUMMARIZE_FILING', 'ASYNC_EMAIL_DIGEST', 'ASYNC_FILING_CLEANUP', 'ASYNC_WEBHOOK_NOTIFICATION'
+      ];
+      
+      for (const type of jobTypes) {
+        if (!validJobTypes.includes(type as JobType)) {
+          return createErrorResponse(`Invalid job type: ${type}`, 400);
+        }
+      }
+    }
   
   // Create a lock name for this processor
   const lockName = 'process-jobs-queue';
@@ -196,6 +237,61 @@ export const GET = appRouterAsyncHandler(async (request: Request) => {
             });
             
             return { jobId: job.id, success: true, result };
+          } else if (job.jobType === 'ASYNC_SUMMARIZE_FILING') {
+            // Phase 2: Process async filing summarization
+            const payload = job.payload as { filingId?: string; userId?: string; [key: string]: unknown }; // Type assertion for async job payload
+            
+            if (!payload.filingId || !payload.userId) {
+              throw new Error('Missing filingId or userId in async job payload');
+            }
+            
+            componentLogger.info(`Processing async filing summarization ${job.id}`, {
+              filingId: payload.filingId,
+              ticker: payload.ticker,
+              userId: payload.userId
+            });
+            
+            // Call the async filing processor
+            const result = await AsyncFilingProcessor.processAsyncFilingSummarization(
+              job.id,
+              payload
+            );
+            
+            if (!result.success) {
+              throw new Error(result.error || 'Async filing processing failed');
+            }
+            
+            // Log success
+            componentLogger.info(`Successfully processed async filing job ${job.id}`, {
+              summaryId: result.summaryId,
+              cost: result.cost,
+              processingTime: result.processingTime,
+              duration: Date.now() - jobStartTime
+            });
+            
+            // Mark job as completed
+            await JobQueueService.updateJobStatus(job.id, 'COMPLETED', {
+              completedAt: new Date(),
+              executionTime: Date.now() - jobStartTime,
+              result: {
+                summaryId: result.summaryId,
+                cost: result.cost,
+                tokensUsed: result.tokensUsed,
+                model: result.model,
+                processingTime: result.processingTime,
+                fallbackUsed: result.fallbackUsed
+              }
+            });
+            
+            // Track successful async job
+            monitoring.incrementCounter('jobs.completed', 1, {
+              jobType: job.jobType,
+              priority: payload.priority || 'unknown'
+            });
+            
+            monitoring.recordTiming('async_filing.job_duration', Date.now() - jobStartTime);
+            
+            return { jobId: job.id, success: true, result };
           } else {
             // Unsupported job type
             componentLogger.warn(`Unsupported job type: ${job.jobType}`, { jobId: job.id });
@@ -260,25 +356,48 @@ export const GET = appRouterAsyncHandler(async (request: Request) => {
       duration
     });
     
-    // Return success response
-    return NextResponse.json({
+    // Return success response with security headers
+    return createSuccessResponse({
       success: true,
       message: `Job processing completed`,
       processed: jobs.length,
       succeeded,
       failed,
-      duration
+      duration,
+      processId
     });
   } catch (error) {
     // Track processing failure
     monitoring.incrementCounter('jobs.processor_error', 1);
     
+    // Log security event for processing failures
+    logSecurityEvent({
+      type: 'invalid_request',
+      ip: request.headers.get('x-forwarded-for') || 'unknown',
+      userAgent: request.headers.get('user-agent') || 'unknown',
+      url: request.url,
+      method: request.method,
+      timestamp: new Date().toISOString(),
+      details: { 
+        error: error instanceof Error ? error.message : String(error),
+        processId 
+      }
+    });
+    
     if (error instanceof Error) {
-      throw createInternalError(`Failed to process jobs: ${error.message}`, { error });
+      return createErrorResponse(`Failed to process jobs: ${error.message}`, 500);
     }
-    throw error;
+    return createErrorResponse('Unknown error occurred during job processing', 500);
   } finally {
     // Release the lock
     await LockService.releaseLock(lockName, processId);
+  }
+  
+  } catch (outerError) {
+    // Handle security middleware errors
+    return createErrorResponse(
+      `Security validation failed: ${outerError instanceof Error ? outerError.message : 'Unknown error'}`,
+      400
+    );
   }
 }); 
