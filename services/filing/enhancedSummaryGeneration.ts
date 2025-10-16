@@ -141,7 +141,7 @@ export async function generateEnhancedAISummary(
               temperature: 0.1,
               system: 'You are a financial expert specializing in SEC filing analysis. Provide accurate, comprehensive summaries in valid JSON format with detailed insights that would be valuable to investors.',
               requestType: 'premium', // Enhanced summaries are premium
-              timeout: 180000, // 3 minutes for enhanced analysis
+              timeout: 600000, // 10 minutes for enhanced analysis (increased for complex filings)
               requiredCapabilities: ['reasoning'],
               costLimit: 0.75 // $0.75 maximum per enhanced summary for cost control
             }
