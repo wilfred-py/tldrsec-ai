@@ -31,7 +31,7 @@ export const DefaultRetryConfig: RetryConfig = {
   maxDelayMs: 30000,
   backoffFactor: 2,
   jitterFactor: 0.3,
-  timeoutMs: 60000,
+  timeoutMs: 600000, // 10 minutes (increased for complex filings)
   onRetry: (error, attempt, delay) => {
     logger.warn(`Retry attempt ${attempt} after ${delay}ms due to error: ${error.message}`);
   }

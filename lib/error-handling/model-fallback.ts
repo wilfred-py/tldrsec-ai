@@ -195,7 +195,7 @@ export const PremiumClaudeFallback: FallbackConfig = {
     ModelCapability.REASONING,
   ],
   maxCostMultiplier: 2, // Only modest cost reduction allowed
-  timeoutMs: 120000, // 2 minute timeout
+  timeoutMs: 600000, // 10 minute timeout (increased for complex filings)
 };
 
 /**
