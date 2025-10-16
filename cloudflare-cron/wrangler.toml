@@ -1,16 +1,32 @@
+# Cloudflare Worker Configuration for TLDRSEC SEC Filing Monitoring
+# This worker executes every 10 minutes to trigger SEC filing processing
+
 name = "cloudflare-cron"
 main = "index.js"
 compatibility_date = "2024-10-15"
 workers_dev = true
 
+# Cron schedule: Every 10 minutes
 [triggers]
 crons = ["*/10 * * * *"]
 
+# Environment variables (non-sensitive)
 [vars]
 PUBLIC_URL = "https://tldrsec.app"
+USE_ASYNC_PROCESSING = "true"
 
-# Note: CRON_SECRET and VERCEL_AUTOMATION_BYPASS_SECRET should be added as Secrets via Cloudflare dashboard
-# This ensures secure handling of the authentication and bypass tokens
-# wrangler.toml (wrangler v3.88.0^)
+# NOTE: Sensitive secrets must be added via Cloudflare Dashboard or wrangler CLI:
+# - CRON_SECRET (required for API authentication)
+# - VERCEL_AUTOMATION_BYPASS_SECRET (optional for deployment protection)
+# - OPENROUTER_API_KEY (if using OpenRouter for AI processing)
+# - DEFAULT_AI_MODEL (model configuration)
+#
+# Add secrets with: npx wrangler secret put CRON_SECRET
+
+# Enhanced logging for production monitoring
 [observability.logs]
 enabled = true
+
+# Build configuration for robust deployment
+# Note: upload exclusions are handled automatically by wrangler
+# for common patterns like node_modules, .git, etc.
