@@ -159,28 +159,6 @@ export async function GET(request: NextRequest) {
         executionId
       );
       
-<<<<<<< HEAD
-      // Update metrics and complete the cron job for sync processing
-      await monitor.updateMetrics({
-        filingsProcessed: syncResults.filingsProcessed,
-        usersNotified: syncResults.usersProcessed,
-        emailsSent: syncResults.emailsSent,
-        errorCount: syncResults.errors
-      });
-      
-      // Mark the cron job as completed
-      const totalTime = Date.now() - startTime;
-      const completionResult = await monitor.complete(syncResults.errors > 0 ? 'FAILED' : 'SUCCESS');
-      
-      cronLogger.info('Synchronous cron job completed', {
-        executionId,
-        totalTime,
-        syncResults,
-        completionResult
-      });
-      
-=======
->>>>>>> origin/main
       return NextResponse.json({
         success: true,
         executionId,
@@ -220,27 +198,10 @@ export async function GET(request: NextRequest) {
 
     monitor.recordMetric('async_jobs_queued', { jobsQueued: asyncResults.data.filingsQueued, timestamp: Date.now() });
     
-<<<<<<< HEAD
-    // Step 6: Update final metrics and mark job as completed
-    await monitor.updateMetrics({
-      filingsProcessed: asyncResults.data.filingsQueued, // Jobs queued = work done
-      usersNotified: eligibleUsers.length,
-      emailsSent: asyncResults.data.filingsQueued // Email notifications will be queued
-    });
-    
-    // Mark the cron job as completed successfully  
-    const totalTime = Date.now() - startTime;
-    const completionResult = await monitor.complete('SUCCESS');
-    
-    // Step 7: Return immediate response
-    const response = AsyncResponseService.createImmediateResponse(asyncResults);
-    
-=======
     // Step 6: Return immediate response
     const response = AsyncResponseService.createImmediateResponse(asyncResults);
     
     const totalTime = Date.now() - startTime;
->>>>>>> origin/main
     monitor.recordMetric('execution_completed', {
       duration: totalTime,
       status: 'SUCCESS',
@@ -249,20 +210,11 @@ export async function GET(request: NextRequest) {
       timestamp: Date.now()
     });
 
-<<<<<<< HEAD
-    cronLogger.info('Async cron job completed successfully', {
-      executionId,
-      totalTime,
-      usersProcessed: eligibleUsers.length,
-      jobsQueued: asyncResults.data.filingsQueued,
-      completionResult
-=======
     cronLogger.info('Async cron job completed', {
       executionId,
       totalTime,
       usersProcessed: eligibleUsers.length,
       jobsQueued: asyncResults.data.filingsQueued
->>>>>>> origin/main
     });
 
     return response;
@@ -271,16 +223,6 @@ export async function GET(request: NextRequest) {
     const totalTime = Date.now() - startTime;
     const errorMessage = error instanceof Error ? error.message : String(error);
     
-<<<<<<< HEAD
-    // Mark the cron job as failed
-    try {
-      await monitor.complete('FAILED', errorMessage);
-    } catch (completeError) {
-      cronLogger.error('Failed to mark cron job as failed', { completeError });
-    }
-    
-=======
->>>>>>> origin/main
     monitor.recordMetric('execution_failed', {
       duration: totalTime,
       status: 'FAILED',

@@ -12,8 +12,6 @@ import { generateAISummaryWithRetry } from '../../services/filing/summaryGenerat
 import { EmailGenerationService } from '../email/generation-service';
 import { FilingTransactionManager } from '../db/transaction-manager';
 import { getPrismaClient } from '../db/prisma';
-import { ProgressCheckpointService } from './progress-checkpoint';
-import { CostMonitorService } from '../monitoring/cost-monitor';
 import { v4 as uuidv4 } from 'uuid';
 
 const asyncLogger = logger.child('async-filing-processor');
@@ -122,176 +120,6 @@ export class AsyncFilingProcessor {
       correlationId
     });
     
-<<<<<<< HEAD
-    // Initialize progress tracker for 60-second checkpoints
-    const progressTracker = ProgressCheckpointService.createProgressTracker(jobId, 'FILING_FETCH');
-    await progressTracker(5, { 
-      currentStep: 'Starting filing processing',
-      timeElapsed: Date.now() - startTime
-    });
-    
-    try {
-      // Use direct transaction processing instead of FilingTransactionManager
-      // since we need to create SecFiling records on-demand
-      const result = await prisma.$transaction(async (tx) => {
-        // Step 1: Find or create ticker record
-        // Since Ticker is user-specific, we need to find the user's ticker or create one
-        const ticker = await tx.ticker.upsert({
-          where: { 
-            userId_symbol: {
-              userId: payload.userId,
-              symbol: payload.ticker
-            }
-          },
-          update: {},
-          create: {
-            symbol: payload.ticker,
-            companyName: `Company for ${payload.ticker}`, // Default name
-            userId: payload.userId
-          }
-        });
-
-        // Step 2: Check if filing already exists in SecFiling table
-        let secFiling = await tx.secFiling.findFirst({
-          where: {
-            accessionNumber: payload.filingId, // filingId is the accession number
-            tickerId: ticker.id
-          }
-        });
-
-        // Step 3: Create SecFiling record if it doesn't exist
-        if (!secFiling) {
-          asyncLogger.info('Creating SecFiling record for async processing', {
-            jobId,
-            filingId: payload.filingId,
-            ticker: payload.ticker
-          });
-
-          secFiling = await tx.secFiling.create({
-            data: {
-              tickerId: ticker.id,
-              formType: payload.formType,
-              filingDate: new Date(), // Use current date if not provided
-              secUrl: payload.filingUrl,
-              accessionNumber: payload.filingId,
-              companyName: `Company for ${payload.ticker}`,
-              cik: '' // Will be updated when available
-            }
-          });
-        }
-
-        // Step 4: Check if summary was already processed by another job
-        const existingSummary = await tx.summary.findFirst({
-          where: {
-            secFilingId: secFiling.id,
-            userId: payload.userId
-          }
-        });
-        
-        if (existingSummary) {
-          asyncLogger.info('Filing already processed, skipping', {
-            jobId,
-            existingSummaryId: existingSummary.id,
-            secFilingId: secFiling.id
-          });
-          
-          return {
-            summaryId: existingSummary.id,
-            success: true,
-            skipped: true
-          };
-        }
-        
-        // Step 5: Fetch and parse filing content
-        await progressTracker(25, { 
-          currentStep: 'Fetching filing content from SEC',
-          timeElapsed: Date.now() - startTime
-        });
-        
-        const filingContent = await this.fetchFilingContent(payload.filingUrl);
-        
-        await progressTracker(40, { 
-          currentStep: 'Content fetched, starting AI processing',
-          itemsProcessed: 1,
-          totalItems: 3,
-          timeElapsed: Date.now() - startTime
-        });
-        
-        // Step 6: Generate AI summary with retry logic
-        const aiStartTime = new Date();
-        const summaryResult = await generateAISummaryWithRetry(
-          filingContent,
-          {
-            formType: payload.formType,
-            filingDate: new Date().toISOString(),
-            filingUrl: payload.filingUrl
-          },
-          {
-            ticker: payload.ticker,
-            name: `Company for ${payload.ticker}`
-          },
-          2 // Max retries for async processing
-        );
-        const aiEndTime = new Date();
-        
-        if (summaryResult.processingStatus !== 'SUCCESS') {
-          throw new Error(`AI summarization failed: ${summaryResult.processingError}`);
-        }
-
-        // Track API cost for this operation
-        if (summaryResult.tokensUsed && summaryResult.cost && summaryResult.model) {
-          await CostMonitorService.trackApiCall({
-            jobId,
-            model: summaryResult.model,
-            inputTokens: Math.floor(summaryResult.tokensUsed * 0.8), // Estimate 80% input
-            outputTokens: Math.floor(summaryResult.tokensUsed * 0.2), // Estimate 20% output
-            requestTime: aiStartTime,
-            responseTime: aiEndTime,
-            success: true
-          });
-        }
-
-        await progressTracker(75, { 
-          currentStep: 'AI processing complete, creating summary record',
-          itemsProcessed: 2,
-          totalItems: 3,
-          timeElapsed: Date.now() - startTime
-        });
-        
-        // Step 7: Create summary record linked to SecFiling
-        const summary = await tx.summary.create({
-          data: {
-            id: uuidv4(),
-            secFilingId: secFiling.id, // Link to SecFiling instead of filingId
-            userId: payload.userId,
-            ticker: payload.ticker,
-            formType: payload.formType,
-            summary: summaryResult.summary,
-            keyPoints: summaryResult.keyPoints,
-            processingStatus: 'COMPLETED',
-            tokensUsed: summaryResult.tokensUsed || 0,
-            cost: summaryResult.cost || 0,
-            model: summaryResult.model || 'unknown',
-            processingTime: summaryResult.processingTime || 0,
-            correlationId
-          }
-        });
-        
-        return {
-          summaryId: summary.id,
-          success: true,
-          cost: summaryResult.cost,
-          tokensUsed: summaryResult.tokensUsed,
-          model: summaryResult.model,
-          processingTime: summaryResult.processingTime,
-          fallbackUsed: summaryResult.modelFallbackUsed
-        };
-      }, {
-        timeout: 600000 // 10 minutes for async processing (increased for complex filings)
-      });
-      
-      const processingTime = Date.now() - startTime;
-=======
     try {
       // Use transaction-safe processing
       const result = await FilingTransactionManager.processFilingWithTransaction(
@@ -383,50 +211,16 @@ export class AsyncFilingProcessor {
       
       const processingTime = Date.now() - startTime;
       const summaryResult = result.data as AsyncSummaryResult;
->>>>>>> origin/main
       
       // Record success metrics
       monitoring.incrementCounter('async_filing.completed', 1, {
         priority: payload.priority,
         formType: payload.formType,
-<<<<<<< HEAD
-        fallbackUsed: result.fallbackUsed ? 'true' : 'false'
-=======
         fallbackUsed: summaryResult.fallbackUsed ? 'true' : 'false'
->>>>>>> origin/main
       });
       
       monitoring.recordTiming('async_filing.processing_time', processingTime);
       
-<<<<<<< HEAD
-      // Update progress to email sending phase
-      const emailProgressTracker = ProgressCheckpointService.createProgressTracker(jobId, 'EMAIL_SENDING');
-      await emailProgressTracker(90, { 
-        currentStep: 'Triggering email notification',
-        itemsProcessed: 3,
-        totalItems: 3,
-        timeElapsed: Date.now() - startTime
-      });
-
-      // Trigger email notification if configured
-      if (!result.skipped) {
-        await this.triggerEmailNotification(payload.userId, result.summaryId);
-      }
-
-      // Final progress checkpoint
-      await emailProgressTracker(100, { 
-        currentStep: 'Processing complete',
-        itemsProcessed: 3,
-        totalItems: 3,
-        timeElapsed: Date.now() - startTime
-      });
-      
-      asyncLogger.info('Async filing summarization completed', {
-        jobId,
-        summaryId: result.summaryId,
-        processingTime,
-        cost: result.cost,
-=======
       // Trigger email notification if configured
       if (!summaryResult.skipped) {
         await this.triggerEmailNotification(payload.userId, summaryResult.summaryId);
@@ -437,16 +231,11 @@ export class AsyncFilingProcessor {
         summaryId: summaryResult.summaryId,
         processingTime,
         cost: summaryResult.cost,
->>>>>>> origin/main
         correlationId
       });
       
       return {
-<<<<<<< HEAD
-        ...result,
-=======
         ...summaryResult,
->>>>>>> origin/main
         processingTime
       };
       
