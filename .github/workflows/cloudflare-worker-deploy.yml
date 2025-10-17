@@ -45,7 +45,7 @@ jobs:
           echo "Node.js version: $(node --version)"
           echo "NPM version: $(npm --version)"
           echo "Installing worker dependencies..."
-          npm ci --only=production --ignore-scripts
+          npm ci
           echo "Verifying wrangler installation..."
           npx wrangler --version
           
@@ -83,7 +83,7 @@ jobs:
           
           # Dry run validation with better error handling
           echo "Performing dry run deployment..."
-          if npx wrangler deploy --dry-run --compatibility-date=2024-12-01; then
+          if npx wrangler deploy --dry-run; then
             echo "✅ Dry run successful"
           else
             echo "❌ Dry run failed"
@@ -98,13 +98,13 @@ jobs:
           cd cloudflare-cron
           echo "🚀 Deploying to Cloudflare Workers..."
           
-          # Deploy with explicit compatibility date and improved error handling
-          if npx wrangler deploy --compatibility-date=2024-12-01; then
+          # Deploy with improved error handling
+          if npx wrangler deploy; then
             echo "✅ Deployment completed successfully!"
           else
             echo "❌ Primary deployment failed"
             echo "🔄 Attempting fallback deployment..."
-            if npx wrangler deploy --no-bundle --compatibility-date=2024-12-01; then
+            if npx wrangler deploy --no-bundle; then
               echo "✅ Fallback deployment successful!"
             else
               echo "❌ All deployment attempts failed"

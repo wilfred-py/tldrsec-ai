@@ -122,6 +122,7 @@ export class AsyncFilingProcessor {
       correlationId
     });
     
+<<<<<<< HEAD
     // Initialize progress tracker for 60-second checkpoints
     const progressTracker = ProgressCheckpointService.createProgressTracker(jobId, 'FILING_FETCH');
     await progressTracker(5, { 
@@ -290,16 +291,114 @@ export class AsyncFilingProcessor {
       });
       
       const processingTime = Date.now() - startTime;
+=======
+    try {
+      // Use transaction-safe processing
+      const result = await FilingTransactionManager.processFilingWithTransaction(
+        payload.filingId,
+        payload.userId,
+        async (tx, filing) => {
+          // Check if filing was already processed by another job
+          const existingSummary = await tx.summary.findFirst({
+            where: {
+              filingId: payload.filingId,
+              userId: payload.userId
+            }
+          });
+          
+          if (existingSummary) {
+            asyncLogger.info('Filing already processed, skipping', {
+              jobId,
+              existingSummaryId: existingSummary.id
+            });
+            
+            return {
+              summaryId: existingSummary.id,
+              success: true,
+              skipped: true
+            };
+          }
+          
+          // Fetch and parse filing content
+          const filingContent = await this.fetchFilingContent(payload.filingUrl);
+          
+          // Generate AI summary with retry logic
+          const summaryResult = await generateAISummaryWithRetry(
+            filingContent,
+            {
+              formType: payload.formType,
+              filingDate: new Date().toISOString(),
+              filingUrl: payload.filingUrl
+            },
+            {
+              ticker: payload.ticker,
+              name: `Company for ${payload.ticker}`
+            },
+            2 // Max retries for async processing
+          );
+          
+          if (summaryResult.processingStatus !== 'SUCCESS') {
+            throw new Error(`AI summarization failed: ${summaryResult.processingError}`);
+          }
+          
+          // Create summary record
+          const summary = await tx.summary.create({
+            data: {
+              id: uuidv4(),
+              filingId: payload.filingId,
+              userId: payload.userId,
+              ticker: payload.ticker,
+              formType: payload.formType,
+              summary: summaryResult.summary,
+              keyPoints: summaryResult.keyPoints,
+              processingStatus: 'COMPLETED',
+              tokensUsed: summaryResult.tokensUsed || 0,
+              cost: summaryResult.cost || 0,
+              model: summaryResult.model || 'unknown',
+              processingTime: summaryResult.processingTime || 0,
+              correlationId
+            }
+          });
+          
+          return {
+            summaryId: summary.id,
+            success: true,
+            cost: summaryResult.cost,
+            tokensUsed: summaryResult.tokensUsed,
+            model: summaryResult.model,
+            processingTime: summaryResult.processingTime,
+            fallbackUsed: summaryResult.modelFallbackUsed
+          };
+        },
+        {
+          timeout: 60000, // 1 minute for async processing
+          description: `Async filing summarization for ${payload.ticker}`,
+          metadata: { jobId, correlationId }
+        }
+      );
+      
+      if (!result.success) {
+        throw new Error(`Transaction failed: ${result.error?.message}`);
+      }
+      
+      const processingTime = Date.now() - startTime;
+      const summaryResult = result.data as AsyncSummaryResult;
+>>>>>>> origin/main
       
       // Record success metrics
       monitoring.incrementCounter('async_filing.completed', 1, {
         priority: payload.priority,
         formType: payload.formType,
+<<<<<<< HEAD
         fallbackUsed: result.fallbackUsed ? 'true' : 'false'
+=======
+        fallbackUsed: summaryResult.fallbackUsed ? 'true' : 'false'
+>>>>>>> origin/main
       });
       
       monitoring.recordTiming('async_filing.processing_time', processingTime);
       
+<<<<<<< HEAD
       // Update progress to email sending phase
       const emailProgressTracker = ProgressCheckpointService.createProgressTracker(jobId, 'EMAIL_SENDING');
       await emailProgressTracker(90, { 
@@ -327,11 +426,27 @@ export class AsyncFilingProcessor {
         summaryId: result.summaryId,
         processingTime,
         cost: result.cost,
+=======
+      // Trigger email notification if configured
+      if (!summaryResult.skipped) {
+        await this.triggerEmailNotification(payload.userId, summaryResult.summaryId);
+      }
+      
+      asyncLogger.info('Async filing summarization completed', {
+        jobId,
+        summaryId: summaryResult.summaryId,
+        processingTime,
+        cost: summaryResult.cost,
+>>>>>>> origin/main
         correlationId
       });
       
       return {
+<<<<<<< HEAD
         ...result,
+=======
+        ...summaryResult,
+>>>>>>> origin/main
         processingTime
       };
       

@@ -12,71 +12,91 @@
   ],
   "functions": {
     "app/api/cron/monitor-sec-filings/route.ts": {
-      "maxDuration": 10,
+      "maxDuration": 300,
       "memory": 1024
     },
     "app/api/cron/tier-aware/route.ts": {
-      "maxDuration": 10,
+      "maxDuration": 300,
       "memory": 1024
     },
     "app/api/cron/tier-aware-optimized/route.ts": {
-      "maxDuration": 10,
+      "maxDuration": 300,
       "memory": 1024
     },
     "app/api/cron/tier-aware-async/route.ts": {
-      "maxDuration": 10,
-      "memory": 1024
+      "maxDuration": 300,
+      "memory": 1536
     },
     "app/api/cron/microservices/route.ts": {
-      "maxDuration": 10,
+      "maxDuration": 30,
       "memory": 512
     },
     "app/api/cron/process-jobs/route.ts": {
-      "maxDuration": 10,
+      "maxDuration": 300,
       "memory": 1024
     },
     "app/api/cron/unified/route.ts": {
-      "maxDuration": 10,
+      "maxDuration": 300,
       "memory": 1024
     },
     "app/api/jobs/worker/route.ts": {
-      "maxDuration": 10,
+      "maxDuration": 300,
       "memory": 1024
     },
     "app/api/jobs/process/route.ts": {
-      "maxDuration": 10,
+      "maxDuration": 300,
       "memory": 1024
     },
     "app/api/jobs/status/route.ts": {
-      "maxDuration": 10,
+      "maxDuration": 60,
       "memory": 512
     },
     "app/api/filings/async-summary/route.ts": {
-      "maxDuration": 10,
+      "maxDuration": 300,
       "memory": 1024
     },
+    "app/api/filings/batch-summary/route.ts": {
+      "maxDuration": 300,
+      "memory": 2048
+    },
+    "app/api/filings/optimized-batch/route.ts": {
+      "maxDuration": 300,
+      "memory": 2048
+    },
+    "app/api/filings/stream-summary/route.ts": {
+      "maxDuration": 300,
+      "memory": 1536
+    },
+    "app/api/filings/enhanced-summary/route.ts": {
+      "maxDuration": 300,
+      "memory": 2048
+    },
+    "app/api/filings/optimized-summary/route.ts": {
+      "maxDuration": 300,
+      "memory": 1536
+    },
     "app/api/test/ai-summary/route.ts": {
-      "maxDuration": 10,
+      "maxDuration": 120,
       "memory": 1024
     },
     "app/api/test/filing-summary/route.ts": {
-      "maxDuration": 10,
+      "maxDuration": 120,
       "memory": 1024
     },
     "app/api/test/tsla-email-summary/route.ts": {
-      "maxDuration": 10,
+      "maxDuration": 120,
       "memory": 1024
     },
     "app/api/email/filings-summary/route.ts": {
-      "maxDuration": 10,
+      "maxDuration": 60,
       "memory": 512
     },
     "app/api/email/summary/route.ts": {
-      "maxDuration": 10,
+      "maxDuration": 60,
       "memory": 512
     },
     "app/api/email/welcome/route.ts": {
-      "maxDuration": 10,
+      "maxDuration": 30,
       "memory": 256
     }
   },

@@ -17,7 +17,6 @@ import { getMarketHoursContext } from '../../../../lib/cron/market-hours';
 import { CronJobMonitor } from '../../../../lib/monitoring/cron-monitor';
 import { CronJobStatus } from '../../../../types/cron';
 import { generateSecureExecutionId } from '../../../../lib/security/secure-random';
-// import { createSecureCronResponse } from '../../../../lib/security/headers';
 
 // Import our new service layer
 import { CronAuthService } from '../../../../lib/cron/auth-service';

@@ -87,9 +87,9 @@ jobs:
           echo "Node.js version: $(node --version)"
           echo "NPM version: $(npm --version)"
           echo "Installing worker dependencies..."
-          npm ci --only=production --ignore-scripts || {
+          npm ci || {
             echo "npm ci failed, trying npm install as fallback..."
-            npm install --only=production --ignore-scripts
+            npm install
           }
           echo "Dependencies installed successfully"
           echo "Verifying wrangler installation..."
@@ -145,16 +145,24 @@ jobs:
           echo "Testing wrangler configuration parsing..."
           npx wrangler whoami --help > /dev/null && echo "✅ Wrangler CLI functional"
           
-          # Validate configuration without deployment
-          echo "Validating wrangler.toml syntax..."
-          if npx wrangler deploy --dry-run 2>&1 | grep -q "Total Upload:" || 
-             npx wrangler deploy --dry-run 2>&1 | grep -q "dry-run: exiting"; then
-            echo "✅ Worker configuration validation successful"
-          else
-            echo "❌ Worker configuration validation failed"
-            # Still try basic syntax validation
+          # Check if Cloudflare API token is available
+          echo "Cloudflare API Token configured: ${{ secrets.CLOUDFLARE_API_TOKEN != '' }}"
+          if [ -z "$CLOUDFLARE_API_TOKEN" ]; then
+            echo "⚠️ CLOUDFLARE_API_TOKEN not configured, performing local validation only"
             echo "Attempting basic syntax validation..."
             node --check index.js && echo "✅ JavaScript syntax valid"
+          else
+            # Validate configuration with deployment dry-run
+            echo "Validating wrangler.toml syntax with deployment dry-run..."
+            if npx wrangler deploy --dry-run 2>&1 | grep -q "Total Upload:" || 
+               npx wrangler deploy --dry-run 2>&1 | grep -q "dry-run: exiting"; then
+              echo "✅ Worker configuration validation successful"
+            else
+              echo "❌ Worker configuration validation failed"
+              # Still try basic syntax validation
+              echo "Attempting basic syntax validation..."
+              node --check index.js && echo "✅ JavaScript syntax valid"
+            fi
           fi
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}

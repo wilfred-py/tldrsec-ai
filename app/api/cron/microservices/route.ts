@@ -67,16 +67,28 @@ export async function GET(request: NextRequest) {
     }
     
     // Step 3: Ultra-fast authentication (Phase 1 optimized)
+<<<<<<< HEAD
     const authResult = await CronAuthService.validateCronRequest(request);
     if (!authResult.isValid) {
+=======
+    const authResult = await CronAuthService.validateCronAuth(request);
+    if (!authResult.valid) {
+>>>>>>> origin/main
       return NextResponse.json(
         { 
           success: false, 
           executionId,
+<<<<<<< HEAD
           error: authResult.error || 'Authentication failed',
           mode: 'microservices'
         },
         { status: authResult.error?.includes('not properly configured') ? 500 : 401 }
+=======
+          error: 'Authentication failed',
+          mode: 'microservices'
+        },
+        { status: 401 }
+>>>>>>> origin/main
       );
     }
     

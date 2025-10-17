@@ -12,6 +12,7 @@ const isEdgeRuntime = (
   (typeof globalThis !== 'undefined' && typeof globalThis.setImmediate === 'undefined')
 );
 
+<<<<<<< HEAD
 // Edge Runtime compatible Redis interface - NO IORedis types imported
 interface EdgeCompatibleRedisInterface {
   pipeline: () => {
@@ -72,6 +73,45 @@ async function initializeRedis(): Promise<EdgeCompatibleRedisInterface | null> {
   
   logger.child('rate-limiter').info('Redis not configured, using in-memory rate limiting');
   return null;
+=======
+// Redis type for Node.js environments only
+type RedisInstance = {
+  pipeline: () => {
+    incr: (key: string) => void;
+    expire: (key: string, seconds: number) => void;
+    exec: () => Promise<Array<[Error | null, any]> | null>;
+  };
+};
+
+// Edge Runtime compatible rate limiter - no Redis dependency in Edge Runtime
+let redis: RedisInstance | null = null;
+
+// Lazy Redis initialization for Node.js environments only
+function initializeRedis(): Promise<RedisInstance | null> {
+  if (isEdgeRuntime) {
+    logger.child('rate-limiter').info('Edge Runtime detected, using in-memory rate limiting only');
+    return Promise.resolve(null);
+  }
+  
+  if (redis !== null) {
+    return Promise.resolve(redis);
+  }
+  
+  if (typeof process !== 'undefined' && process.env?.REDIS_URL && typeof process.nextTick === 'function') {
+    return import('ioredis').then((ioredis) => {
+      redis = new ioredis.Redis(process.env.REDIS_URL!) as RedisInstance;
+      logger.child('rate-limiter').info('Redis initialized successfully');
+      return redis;
+    }).catch((error) => {
+      logger.child('rate-limiter').warn('Redis not available, using in-memory rate limiting', { error });
+      redis = null;
+      return null;
+    });
+  }
+  
+  logger.child('rate-limiter').info('Redis not configured, using in-memory rate limiting');
+  return Promise.resolve(null);
+>>>>>>> origin/main
 }
 
 const rateLimitLogger = logger.child('rate-limiter');
@@ -90,7 +130,11 @@ const RATE_LIMITER_CIRCUIT_BREAKER_TIMEOUT = 60000; // 1 minute
 const DEFAULT_EMERGENCY_LIMIT = 10; // Conservative limit when rate limiter fails
 
 class RateLimiter {
+<<<<<<< HEAD
   private redisInstance: EdgeCompatibleRedisInterface | null = null;
+=======
+  private redisInstance: RedisInstance | null = null;
+>>>>>>> origin/main
   private redisInitialized = false;
   private inMemoryCache = new Map<string, { count: number; resetTime: number }>();
   private emergencyCache = new Map<string, { count: number; resetTime: number; failures: number }>();
@@ -106,7 +150,11 @@ class RateLimiter {
     rateLimitLogger.info(`Rate limiter initialized with in-memory cache (${reason})`);
   }
   
+<<<<<<< HEAD
   private async getRedis(): Promise<EdgeCompatibleRedisInterface | null> {
+=======
+  private async getRedis(): Promise<RedisInstance | null> {
+>>>>>>> origin/main
     if (this.redisInitialized) {
       return this.redisInstance;
     }
@@ -193,7 +241,11 @@ class RateLimiter {
     windowMs: number,
     now: number,
     resetTime: number,
+<<<<<<< HEAD
     redisClient: EdgeCompatibleRedisInterface
+=======
+    redisClient: RedisInstance
+>>>>>>> origin/main
   ): Promise<RateLimitResult> {
     const pipeline = redisClient.pipeline();
     pipeline.incr(cacheKey);
