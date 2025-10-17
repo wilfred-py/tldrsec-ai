@@ -1,2 +1,44 @@
+# Cloudflare Worker specific gitignore
+
+# Vercel
 .vercel
-.wrangler/tmp/
+
+# Cloudflare Wrangler
+.wrangler/
+dist/
+
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build outputs and artifacts
+*.tsbuildinfo
+
+# Environment files
+.env*
+!.env.example
+
+# Runtime and cache
+.cache/
+*.log
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+Icon?
+ehthumbs.db
+Thumbs.db
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Temporary files
+tmp/
+temp/

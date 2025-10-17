@@ -86,12 +86,14 @@ jobs:
           cd cloudflare-cron
           echo "Node.js version: $(node --version)"
           echo "NPM version: $(npm --version)"
-          echo "Installing dependencies..."
-          npm ci || {
+          echo "Installing worker dependencies..."
+          npm ci --only=production --ignore-scripts || {
             echo "npm ci failed, trying npm install as fallback..."
-            npm install
+            npm install --only=production --ignore-scripts
           }
           echo "Dependencies installed successfully"
+          echo "Verifying wrangler installation..."
+          npx wrangler --version || echo "⚠️ Wrangler not available"
           
       - name: Verify Wrangler Installation
         run: |

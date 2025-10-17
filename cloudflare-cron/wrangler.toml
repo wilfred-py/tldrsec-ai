@@ -3,8 +3,13 @@
 
 name = "cloudflare-cron"
 main = "index.js"
-compatibility_date = "2024-10-15"
+compatibility_date = "2024-12-01"
 workers_dev = true
+
+# Explicit build configuration for Cloudflare's new build system
+[build]
+command = ""
+watch_dir = ""
 
 # Cron schedule: Every 10 minutes
 [triggers]
