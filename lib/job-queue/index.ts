@@ -104,30 +104,6 @@ export class JobQueueService {
       // Validate and sanitize payload
       const sanitizedPayload = sanitizeJSON(payload) as JobPayload;
       
-<<<<<<< HEAD
-      // Check for malicious patterns in payload (skip for SEC filing job types)
-      const exemptJobTypes = [
-        'ASYNC_SUMMARIZE_FILING',
-        'SUMMARIZE_FILING', 
-        'SEND_FILING_NOTIFICATION',
-        'CHECK_FILINGS',
-        'PROCESS_FILING'
-      ];
-      
-      if (!exemptJobTypes.includes(jobType)) {
-        const payloadString = JSON.stringify(sanitizedPayload);
-        const detection = detectMaliciousPatterns(payloadString);
-        if (detection.detected) {
-          throw new Error(`Job payload contains potentially malicious patterns: ${detection.threats.join(', ')}`);
-        }
-      }
-      
-      // Validate priority
-      const validatedPriority = ValidationSchemas.safeInteger(1, 10).parse(priority);
-      
-      // Validate maxAttempts
-      const validatedMaxAttempts = ValidationSchemas.safeInteger(1, 10).parse(maxAttempts);
-=======
       // Check for malicious patterns in payload
       const payloadString = JSON.stringify(sanitizedPayload);
       const detection = detectMaliciousPatterns(payloadString);
@@ -140,17 +116,11 @@ export class JobQueueService {
       
       // Validate maxAttempts
       const validatedMaxAttempts = ValidationSchemas.positiveInteger.max(10).parse(maxAttempts);
->>>>>>> origin/main
       
       // Validate idempotencyKey if provided
       let validatedIdempotencyKey: string | undefined = undefined;
       if (idempotencyKey) {
-<<<<<<< HEAD
-        // For idempotency keys, we use the id schema which allows longer strings and has less strict validation
-        validatedIdempotencyKey = ValidationSchemas.id.parse(idempotencyKey);
-=======
         validatedIdempotencyKey = ValidationSchemas.secureString.max(255).parse(idempotencyKey);
->>>>>>> origin/main
       }
       
       // Validate scheduledFor date
@@ -229,11 +199,7 @@ export class JobQueueService {
   static async getJobsToProcess(limit: number = 10, jobType?: JobType) {
     try {
       // Validate limit parameter
-<<<<<<< HEAD
-      const validatedLimit = ValidationSchemas.safeInteger(1, 100).parse(limit);
-=======
       const validatedLimit = ValidationSchemas.positiveInteger.max(100).parse(limit);
->>>>>>> origin/main
       
       // Validate job type if provided
       if (jobType) {
