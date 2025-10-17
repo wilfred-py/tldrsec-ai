@@ -63,7 +63,7 @@ export const DefaultAdaptiveRetryConfig: AdaptiveRetryConfig = {
   maxDelayMs: 60000,
   backoffFactor: 2,
   jitterFactor: 0.2,
-  timeoutMs: 300000, // 5 minutes
+  timeoutMs: 600000, // 10 minutes (increased for complex filings)
   onRetry: (error, attempt, delay, remainingAttempts) => {
     logger.warn(`Retry attempt ${attempt} (${remainingAttempts} remaining) after ${delay}ms due to error: ${error.message}`);
     monitoring.incrementCounter('ai.retries', 1, { attempt: String(attempt) });

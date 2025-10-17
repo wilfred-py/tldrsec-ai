@@ -34,9 +34,9 @@ const OPENROUTER_CONFIG = {
   baseURL: 'https://openrouter.ai/api/v1',
   apiKey: process.env.TLDRSEC_AI_SUMMARIZER || process.env.OPENROUTER_API_KEY,
   defaultModel: process.env.DEFAULT_AI_MODEL || 'x-ai/grok-3',
-  timeout: 30000, // 30 seconds (optimized for faster response)
+  timeout: parseInt(process.env.OPENROUTER_TIMEOUT_MS || '270000', 10), // 4.5 minutes - just under Vercel free plan limit
   maxRetries: 0, // Eliminated retries - use model fallback instead
-  fallbackTimeout: 15000, // 15 seconds for fallback models
+  fallbackTimeout: parseInt(process.env.OPENROUTER_FALLBACK_TIMEOUT_MS || '120000', 10), // 2 minutes for fallback models
   circuitBreakerThreshold: 3 // Open circuit after 3 failures (reduced from 5)
 };
 

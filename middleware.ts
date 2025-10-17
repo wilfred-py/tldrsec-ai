@@ -36,7 +36,7 @@ const cronAuthMiddleware = async (request: NextRequest): Promise<NextResponse | 
   try {
     // Check both Authorization and X-Cron-Auth headers (X-Cron-Auth avoids Clerk conflicts)
     const authHeader = request.headers.get('authorization') || request.headers.get('x-cron-auth');
-    const cronSecret = process.env.CRON_SECRET;
+    const cronSecret = process.env.CRON_SECRET?.trim();
     
     if (!cronSecret || cronSecret.length < 32) {
       middlewareLogger.error('CRON_SECRET not properly configured');

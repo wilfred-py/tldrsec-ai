@@ -10,59 +10,35 @@ datasource db {
 }
 
 model User {
-  id                  String    @id @default(uuid())
-  email               String    @unique
-  name                String?
-  authProvider        String
-  authProviderId      String
-  createdAt           DateTime  @default(now())
-  preferences         Json?
-  onboardingCompleted Boolean   @default(false)
-  tutorialCompletedAt DateTime?
-  tutorialProgress    Int       @default(0)
-  tutorialSteps       Json?
-  subscriptionTier       SubscriptionTier @default(FREE)
-  lastProcessedAt        DateTime?        // Last time this user was processed by cron
-  lastCronProcessed      DateTime?        // Last time processed by tier-aware cron
-  processingBudget       Int              @default(0) // Monthly token budget
-  budgetUsed             Int              @default(0) // Current month usage
-  budgetResetAt          DateTime?        // Budget reset date
-  dailyProcessingBudget  Int              @default(0) // Daily processing minutes used
-  dailyBudgetResetAt     DateTime?        // Daily budget reset timestamp
-  tierProcessingCount    Int              @default(0) // Total tier-based processings
-  lastTierUpgrade        DateTime?        // Last subscription tier upgrade
-  
-  // Privacy and Consent Fields
-  analyticsOptOut        Boolean   @default(false)  // User opted out of analytics tracking
-  privacyPolicyVersion   String?   @default("1.0")  // Version of privacy policy accepted
-  privacyPolicyAcceptedAt DateTime?                 // When privacy policy was accepted
-  dataProcessingOptOut   Boolean   @default(false)  // User opted out of data processing
-  
-  tickers             Ticker[]
-  notificationsSent   NotificationSent[]
-  userSubscription    UserSubscription?
-  filingUsage         FilingUsage[]
-  usagePeriods        UsagePeriod[]
-  auditLogs           AuditLog[]
-  cacheAccesses       SummaryCacheAccess[]
-  emailDeliveries     SummaryEmailDelivery[]
-  privacyConsents     UserPrivacyConsent[]
-}
-
-enum SubscriptionTier {
-  HOBBY
-  PRO
-  // Legacy tiers kept for migration compatibility
-  FREE
-  PROFESSIONAL
-  ENTERPRISE
-  INSTITUTION
-}
-
-enum PlanType {
-  BASIC
-  PROFESSIONAL
-  PREMIUM
+  id                    String                 @id @default(uuid())
+  email                 String                 @unique
+  name                  String?
+  authProvider          String
+  authProviderId        String
+  createdAt             DateTime               @default(now())
+  preferences           Json?
+  onboardingCompleted   Boolean                @default(false)
+  tutorialCompletedAt   DateTime?
+  tutorialProgress      Int                    @default(0)
+  tutorialSteps         Json?
+  subscriptionTier      SubscriptionTier       @default(FREE)
+  lastProcessedAt       DateTime?
+  lastCronProcessed     DateTime?
+  processingBudget      Int                    @default(0)
+  budgetUsed            Int                    @default(0)
+  budgetResetAt         DateTime?
+  dailyProcessingBudget Int                    @default(0)
+  dailyBudgetResetAt    DateTime?
+  tierProcessingCount   Int                    @default(0)
+  lastTierUpgrade       DateTime?
+  auditLogs             AuditLog[]
+  filingUsage           FilingUsage[]
+  notificationsSent     NotificationSent[]
+  cacheAccesses         SummaryCacheAccess[]
+  emailDeliveries       SummaryEmailDelivery[]
+  tickers               Ticker[]
+  usagePeriods          UsagePeriod[]
+  userSubscription      UserSubscription?
 }
 
 model Ticker {
@@ -79,19 +55,19 @@ model Ticker {
 }
 
 model Summary {
-  id                    String     @id @default(uuid())
+  id                    String                 @id @default(uuid())
   tickerId              String
   filingType            String
   filingDate            DateTime
   filingUrl             String
   summaryText           String
   summaryJSON           Json?
-  createdAt             DateTime   @default(now())
-  sentToUser            Boolean    @default(false)
+  createdAt             DateTime               @default(now())
+  sentToUser            Boolean                @default(false)
   url                   String?
-  attempts              Int?       @default(0)
+  attempts              Int?                   @default(0)
   cost                  Float?
-  isPartialResult       Boolean?   @default(false)
+  isPartialResult       Boolean?               @default(false)
   model                 String?
   processingCompletedAt DateTime?
   processingError       String?
@@ -100,38 +76,26 @@ model Summary {
   processingTimeMs      Int?
   secFilingId           String?
   tokensUsed            Int?
-  metadata              Json?      // Enhanced processing metadata (chunks, strategy, etc.)
-  
-  // Enhanced Cost and Token Tracking
-  inputTokens           Int?       // Tokens used for input
-  outputTokens          Int?       // Tokens generated in output  
-  inputCostPerToken     Float?     // Cost per input token at time of generation
-  outputCostPerToken    Float?     // Cost per output token at time of generation
-  totalCost             Float?     // Total cost for this summary generation
-  
-  // Cache and Reuse Analytics
-  isCacheHit            Boolean    @default(false)  // Was this served from cache?
-  cacheUsageCount       Int        @default(0)      // How many times this cached summary was reused
-  lastCacheUsed         DateTime?  // Last time this cache was accessed
-  cacheVersion          String?    // Cache version identifier
-  
-  // Performance Metrics
-  modelVersion          String?    // AI model version used
-  promptVersion         String?    // Prompt template version
-  
-  // Business Analytics
-  uniqueUsersServed     Int        @default(0)      // Number of unique users who received this summary
-  totalEmailsSent       Int        @default(0)      // Total emails sent with this summary
-  
-  // Quality and Confidence Metrics
-  qualityScore          Float?     // Quality score of the generated summary (0-100)
-  confidenceLevel       Float?     // Confidence level of the AI generation (0-100)
-  extractionSuccess     Boolean    @default(true)   // Whether content extraction was successful
-  parsingErrors         Int        @default(0)      // Number of parsing errors encountered
-  
-  // Relationships
-  secFiling             SecFiling? @relation(fields: [secFilingId], references: [id])
-  ticker                Ticker     @relation(fields: [tickerId], references: [id], onDelete: Cascade)
+  metadata              Json?
+  cacheUsageCount       Int                    @default(0)
+  cacheVersion          String?
+  inputCostPerToken     Float?
+  inputTokens           Int?
+  isCacheHit            Boolean                @default(false)
+  lastCacheUsed         DateTime?
+  modelVersion          String?
+  outputCostPerToken    Float?
+  outputTokens          Int?
+  promptVersion         String?
+  totalCost             Float?
+  totalEmailsSent       Int                    @default(0)
+  uniqueUsersServed     Int                    @default(0)
+  confidenceLevel       Float?
+  extractionSuccess     Boolean                @default(true)
+  parsingErrors         Int                    @default(0)
+  qualityScore          Float?
+  secFiling             SecFiling?             @relation(fields: [secFilingId], references: [id])
+  ticker                Ticker                 @relation(fields: [tickerId], references: [id], onDelete: Cascade)
   cacheAccesses         SummaryCacheAccess[]
   emailDeliveries       SummaryEmailDelivery[]
 }
@@ -174,27 +138,46 @@ model TickerChange {
 }
 
 model JobQueue {
-  id             String    @id @default(uuid())
+  id             String        @id @default(uuid())
   jobType        String
   status         String
-  priority       Int       @default(5)
+  priority       Int           @default(5)
   payload        Json
   idempotencyKey String?
-  createdAt      DateTime  @default(now())
+  createdAt      DateTime      @default(now())
   scheduledFor   DateTime
   startedAt      DateTime?
   completedAt    DateTime?
   failedAt       DateTime?
-  retryCount     Int       @default(0)
-  maxRetries     Int       @default(3)
+  retryCount     Int           @default(0)
+  maxRetries     Int           @default(3)
   lastError      String?
   executionTime  Int?
   result         Json?
+  costUSD        Decimal?      @db.Decimal(10, 4)
+  tokenUsage     Json?
+  timeoutFlagged Boolean       @default(false)
+  progress       JobProgress[]
 
   @@index([status, scheduledFor])
   @@index([jobType, status])
   @@index([idempotencyKey])
   @@index([createdAt])
+  @@index([timeoutFlagged, createdAt])
+}
+
+model JobProgress {
+  id        String   @id @default(uuid())
+  jobId     String
+  phase     String
+  progress  Int
+  details   Json?
+  startedAt DateTime
+  updatedAt DateTime @updatedAt
+  job       JobQueue @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@index([jobId, updatedAt])
+  @@index([phase, updatedAt])
 }
 
 model JobLock {
@@ -210,7 +193,7 @@ model JobLock {
 }
 
 model SecFiling {
-  id              String           @id @default(uuid())
+  id              String            @id @default(uuid())
   tickerId        String
   formType        String
   filingDate      DateTime
@@ -218,11 +201,11 @@ model SecFiling {
   accessionNumber String
   companyName     String?
   cik             String
-  createdAt       DateTime         @default(now())
-  updatedAt       DateTime         @updatedAt
-  ticker          Ticker           @relation(fields: [tickerId], references: [id], onDelete: Cascade)
-  summaries       Summary[]
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
   fetchAttempts   SecFetchAttempt[]
+  ticker          Ticker            @relation(fields: [tickerId], references: [id], onDelete: Cascade)
+  summaries       Summary[]
 
   @@index([tickerId, formType])
   @@index([accessionNumber])
@@ -236,28 +219,28 @@ model SecCompanyCache {
 }
 
 model SecFetchAttempt {
-  id           String   @id @default(uuid())
+  id           String    @id @default(uuid())
   filingId     String
   attemptedAt  DateTime
-  status       String
   errorMessage String?
+  status       String
   filing       SecFiling @relation(fields: [filingId], references: [id], onDelete: Cascade)
 
   @@index([filingId])
 }
 
 model NotificationSent {
-  id              String   @id @default(uuid())
-  userId          String
-  filingId        String?
-  summaryId       String?
-  notificationType String   // NEW_FILING, FILING_UPDATE, SUMMARY_READY, DAILY_DIGEST
-  emailId         String?  // ID from email service (e.g., Resend)
-  emailAddress    String
-  sentAt          DateTime @default(now())
-  deliveryStatus  String   @default("sent") // sent, delivered, bounced, complained
-  metadata        Json?    // Additional tracking data
-  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id               String   @id @default(uuid())
+  userId           String
+  filingId         String?
+  summaryId        String?
+  notificationType String
+  emailId          String?
+  emailAddress     String
+  sentAt           DateTime @default(now())
+  deliveryStatus   String   @default("sent")
+  metadata         Json?
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, sentAt])
   @@index([notificationType, sentAt])
@@ -265,77 +248,74 @@ model NotificationSent {
 }
 
 model TickerMonitoring {
-  id                String   @id @default(uuid())
-  cik               String   @unique
+  id                String           @id @default(uuid())
+  cik               String           @unique
   symbol            String
   companyName       String
-  isActive          Boolean  @default(true)
+  isActive          Boolean          @default(true)
   rssUrl            String
   lastChecked       DateTime?
   lastAccessionSeen String?
-  subscriberCount   Int      @default(0)
-  version           Int      @default(0)  // Optimistic locking version
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
-  
+  subscriberCount   Int              @default(0)
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+  version           Int              @default(0)
   filingChecks      RssFilingCheck[]
 
   @@index([isActive, lastChecked])
   @@index([cik])
-  @@index([cik, version])  // Optimistic locking index
+  @@index([cik, version])
 }
 
 model RssFilingCheck {
-  id               String   @id @default(uuid())
+  id                 String           @id @default(uuid())
   tickerMonitoringId String
-  accessionNumber  String
-  filingType       String
-  filingDate       DateTime
-  filingUrl        String
-  rssEntryDate     DateTime
-  processed        Boolean  @default(false)
-  createdAt        DateTime @default(now())
-  
-  tickerMonitoring TickerMonitoring @relation(fields: [tickerMonitoringId], references: [id], onDelete: Cascade)
+  accessionNumber    String           @unique
+  filingType         String
+  filingDate         DateTime
+  filingUrl          String
+  rssEntryDate       DateTime
+  processed          Boolean          @default(false)
+  createdAt          DateTime         @default(now())
+  tickerMonitoring   TickerMonitoring @relation(fields: [tickerMonitoringId], references: [id], onDelete: Cascade)
 
-  @@unique([accessionNumber])
   @@index([processed, createdAt])
   @@index([tickerMonitoringId, processed])
 }
 
 model UserSubscription {
-  id                    String   @id @default(uuid())
-  userId                String   @unique
-  planType              PlanType @default(BASIC)
-  isActive              Boolean  @default(true)
-  currentPeriodStart    DateTime @default(now())
-  currentPeriodEnd      DateTime
-  cancelAtPeriodEnd     Boolean  @default(false)
-  stripeCustomerId      String?  @unique
-  stripeSubscriptionId  String?  @unique
-  stripePriceId         String?
-  createdAt             DateTime @default(now())
-  updatedAt             DateTime @updatedAt
-  user                  User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id                   String   @id @default(uuid())
+  userId               String   @unique
+  planType             PlanType @default(BASIC)
+  isActive             Boolean  @default(true)
+  currentPeriodStart   DateTime @default(now())
+  currentPeriodEnd     DateTime
+  cancelAtPeriodEnd    Boolean  @default(false)
+  stripeCustomerId     String?  @unique
+  stripeSubscriptionId String?  @unique
+  stripePriceId        String?
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+  user                 User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([planType, isActive])
 }
 
 model FilingUsage {
-  id                   String   @id @default(uuid())
-  userId               String
-  filingType           String
-  ticker               String
-  accessionNumber      String?
-  optimizationLevel    String
-  originalTokens       Int?
-  optimizedTokens      Int?
-  reductionPercentage  Float?
-  cost                 Float?
-  processingTimeMs     Int?
-  subscriptionTier     String
-  createdAt            DateTime @default(now())
-  user                 User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id                  String   @id @default(uuid())
+  userId              String
+  filingType          String
+  ticker              String
+  accessionNumber     String?
+  optimizationLevel   String
+  originalTokens      Int?
+  optimizedTokens     Int?
+  reductionPercentage Float?
+  cost                Float?
+  processingTimeMs    Int?
+  subscriptionTier    String
+  createdAt           DateTime @default(now())
+  user                User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, createdAt])
   @@index([subscriptionTier, createdAt])
@@ -343,95 +323,74 @@ model FilingUsage {
 }
 
 model UsagePeriod {
-  id           String   @id @default(uuid())
-  userId       String
-  periodStart  DateTime
-  periodEnd    DateTime
-  planType     PlanType
-  filingLimit  Int
-  filingsUsed  Int      @default(0)
-  resetAt      DateTime
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id          String   @id @default(uuid())
+  userId      String
+  periodStart DateTime
+  periodEnd   DateTime
+  planType    PlanType
+  filingLimit Int
+  filingsUsed Int      @default(0)
+  resetAt     DateTime
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, periodStart])
   @@index([userId, periodEnd])
 }
 
-// Cron Job Monitoring Models
 model CronJobExecution {
-  id                  String                @id @default(uuid())
-  jobName             String                // "monitor-sec-filings"
-  executionId         String                @unique // UUID for this specific run
-  status              CronJobStatus         // STARTED, SUCCESS, FAILED, TIMEOUT
-  startedAt           DateTime
-  completedAt         DateTime?
-  durationMs          Int?
-  
-  // Environment & Configuration
-  environment         String                // "production", "staging" 
-  cronExpression      String?               // "0 */30 6-22 * * 1-5"
-  batchSize           Int?                  // 5
-  maxConcurrent       Int?                  // 3
-  timeoutMs           Int?                  // 240000
-  
-  // High-level Results  
-  tickersChecked      Int                   @default(0)
-  newFilingsFound     Int                   @default(0)
-  filingsProcessed    Int                   @default(0)
-  emailsSent          Int                   @default(0)
-  errorsCount         Int                   @default(0)
-  
-  // Resource Usage
-  memoryUsageMb       Float?
-  cpuUsagePercent     Float?
-  
-  // Error Information
-  errorMessage        String?
-  errorStack          String?
-  
-  // Relationships
-  metrics             CronJobMetrics[]
-  alerts              CronJobAlert[]
-  performance         CronJobPerformance[]
-  
-  createdAt           DateTime              @default(now())
-  
+  id               String               @id @default(uuid())
+  jobName          String
+  executionId      String               @unique
+  status           CronJobStatus
+  startedAt        DateTime
+  completedAt      DateTime?
+  durationMs       Int?
+  environment      String
+  cronExpression   String?
+  batchSize        Int?
+  maxConcurrent    Int?
+  timeoutMs        Int?
+  tickersChecked   Int                  @default(0)
+  newFilingsFound  Int                  @default(0)
+  filingsProcessed Int                  @default(0)
+  emailsSent       Int                  @default(0)
+  errorsCount      Int                  @default(0)
+  memoryUsageMb    Float?
+  cpuUsagePercent  Float?
+  errorMessage     String?
+  errorStack       String?
+  createdAt        DateTime             @default(now())
+  alerts           CronJobAlert[]
+  metrics          CronJobMetrics[]
+  performance      CronJobPerformance[]
+
   @@index([jobName, startedAt])
-  @@index([status, startedAt]) 
+  @@index([status, startedAt])
   @@index([startedAt])
   @@index([executionId])
 }
 
 model CronJobMetrics {
-  id                    String              @id @default(uuid())
+  id                    String           @id @default(uuid())
   executionId           String
-  execution             CronJobExecution    @relation(fields: [executionId], references: [id], onDelete: Cascade)
-  
-  // Filing Activity Metrics
-  filingsByType         Json?               // {"10-K": 2, "10-Q": 1, "8-K": 3}
-  companiesProcessed    Json?               // ["TSLA", "AAPL", "MSFT"]
-  filingDates           Json?               // Array of filing dates processed
+  filingsByType         Json?
+  companiesProcessed    Json?
+  filingDates           Json?
   avgProcessingTimeMs   Float?
-  
-  // User Impact Metrics
-  usersAffected         Int                 @default(0)
-  uniqueEmailRecipients Int                 @default(0)
-  emailDeliveryRate     Float?              // Percentage successful
+  usersAffected         Int              @default(0)
+  uniqueEmailRecipients Int              @default(0)
+  emailDeliveryRate     Float?
   emailBounceRate       Float?
-  
-  // Cost Analysis
-  aiCostTotal           Float               @default(0)
-  aiTokensUsed          Int                 @default(0)
-  aiTokensInput         Int                 @default(0)
-  aiTokensOutput        Int                 @default(0)
-  emailCostTotal        Float               @default(0)
-  operationalCostTotal  Float               @default(0)
+  aiCostTotal           Float            @default(0)
+  aiTokensUsed          Int              @default(0)
+  aiTokensInput         Int              @default(0)
+  aiTokensOutput        Int              @default(0)
+  emailCostTotal        Float            @default(0)
+  operationalCostTotal  Float            @default(0)
   costPerFiling         Float?
   costPerUser           Float?
-  
-  // Performance Metrics
   avgMemoryUsageMb      Float?
   peakMemoryUsageMb     Float?
   dbQueryCount          Int?
@@ -440,45 +399,34 @@ model CronJobMetrics {
   avgApiResponseTimeMs  Float?
   secApiCallCount       Int?
   avgSecApiResponseMs   Float?
-  
-  // Throughput Metrics
   filingsPerMinute      Float?
   emailsPerMinute       Float?
-  
-  createdAt             DateTime            @default(now())
-  
+  createdAt             DateTime         @default(now())
+  execution             CronJobExecution @relation(fields: [executionId], references: [id], onDelete: Cascade)
+
   @@index([executionId])
 }
 
 model CronJobAlert {
-  id                String              @id @default(uuid())
-  executionId       String?
-  execution         CronJobExecution?   @relation(fields: [executionId], references: [id], onDelete: Cascade)
-  
-  alertType         CronAlertType       // EXECUTION_FAILED, HIGH_ERROR_RATE, COST_THRESHOLD, PERFORMANCE_DEGRADED
-  severity          AlertSeverity       // LOW, MEDIUM, HIGH, CRITICAL
-  title             String
-  description       String
-  
-  // Alert Configuration
-  threshold         Json?               // Threshold values that triggered alert
-  actualValue       Json?               // Actual values that triggered the alert
-  
-  // Alert Lifecycle
-  triggeredAt       DateTime            @default(now())
-  acknowledgedAt    DateTime?
-  acknowledgedBy    String?             // User ID or system
-  resolvedAt        DateTime?
-  resolvedBy        String?
-  
-  // Notification
-  notificationsSent Json?               // Channels where alert was sent
-  notificationStatus String?            // "sent", "failed", "pending"
-  
-  // Metadata
-  jobName           String?
-  environment       String?
-  
+  id                 String            @id @default(uuid())
+  executionId        String?
+  alertType          CronAlertType
+  severity           AlertSeverity
+  title              String
+  description        String
+  threshold          Json?
+  actualValue        Json?
+  triggeredAt        DateTime          @default(now())
+  acknowledgedAt     DateTime?
+  acknowledgedBy     String?
+  resolvedAt         DateTime?
+  resolvedBy         String?
+  notificationsSent  Json?
+  notificationStatus String?
+  jobName            String?
+  environment        String?
+  execution          CronJobExecution? @relation(fields: [executionId], references: [id], onDelete: Cascade)
+
   @@index([alertType, triggeredAt])
   @@index([severity, triggeredAt])
   @@index([jobName, triggeredAt])
@@ -486,77 +434,198 @@ model CronJobAlert {
 }
 
 model CronJobPerformance {
-  id                  String              @id @default(uuid())
+  id                  String           @id @default(uuid())
   executionId         String
-  execution           CronJobExecution    @relation(fields: [executionId], references: [id], onDelete: Cascade)
-  
-  // Time-series data points
   timestamp           DateTime
-  phase               String              // "rss_check", "filing_processing", "email_sending", "cleanup"
-  
-  // Performance Metrics
+  phase               String
   memoryUsageMb       Float
   cpuUsagePercent     Float?
   activeConnections   Int?
   queueDepth          Int?
-  
-  // Operation-specific metrics  
-  operationType       String?             // "filing_fetch", "ai_summary", "email_send", "db_query"
+  operationType       String?
   operationDurationMs Int?
   operationSuccess    Boolean?
   operationError      String?
-  
-  // Throughput at this point
   itemsProcessed      Int?
   itemsRemaining      Int?
-  
+  execution           CronJobExecution @relation(fields: [executionId], references: [id], onDelete: Cascade)
+
   @@index([executionId, timestamp])
   @@index([phase, timestamp])
   @@index([operationType, timestamp])
 }
 
-// Aggregated views for faster dashboard queries
 model CronJobDailySummary {
   id                    String   @id @default(uuid())
   date                  DateTime @unique @db.Date
-  jobName               String   
-  
-  // Execution Statistics
+  jobName               String
   totalExecutions       Int      @default(0)
   successfulExecutions  Int      @default(0)
   failedExecutions      Int      @default(0)
   avgDurationMs         Float?
   totalDurationMs       Int      @default(0)
-  
-  // Processing Statistics  
   totalFilingsProcessed Int      @default(0)
   totalEmailsSent       Int      @default(0)
   totalUsersAffected    Int      @default(0)
-  
-  // Cost Statistics
   totalAiCost           Float    @default(0)
   totalEmailCost        Float    @default(0)
   totalOperationalCost  Float    @default(0)
-  
-  // Performance Statistics
   avgMemoryUsageMb      Float?
   peakMemoryUsageMb     Float?
   totalApiCalls         Int      @default(0)
-  
-  // Alert Statistics
   totalAlerts           Int      @default(0)
   criticalAlerts        Int      @default(0)
-  
   createdAt             DateTime @default(now())
   updatedAt             DateTime @updatedAt
-  
+
   @@index([date, jobName])
   @@index([jobName, date])
 }
 
+model TierProcessingMetrics {
+  id                String           @id @default(uuid())
+  date              DateTime         @default(now()) @db.Date
+  tier              SubscriptionTier
+  usersProcessed    Int              @default(0)
+  usersEligible     Int              @default(0)
+  usersSkipped      Int              @default(0)
+  avgProcessingTime Float?
+  filingsProcessed  Int              @default(0)
+  budgetUsed        Float            @default(0)
+  budgetLimit       Float            @default(0)
+  costPerUser       Float?
+  marketHoursRuns   Int              @default(0)
+  offHoursRuns      Int              @default(0)
+  priorityProcessed Int              @default(0)
+  errorCount        Int              @default(0)
+  timeoutCount      Int              @default(0)
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+
+  @@unique([date, tier])
+  @@index([date, tier])
+  @@index([tier, createdAt])
+}
+
+model TierProcessingExecution {
+  id               String           @id @default(uuid())
+  executionId      String
+  tier             SubscriptionTier
+  isMarketHours    Boolean
+  startedAt        DateTime         @default(now())
+  completedAt      DateTime?
+  status           ExecutionStatus  @default(RUNNING)
+  usersEligible    Int              @default(0)
+  usersProcessed   Int              @default(0)
+  usersSkipped     Int              @default(0)
+  userErrors       Int              @default(0)
+  filingsFound     Int              @default(0)
+  filingsProcessed Int              @default(0)
+  filingsErrors    Int              @default(0)
+  processingTimeMs Int?
+  budgetUsed       Float            @default(0)
+  avgTimePerUser   Float?
+  batchSize        Int              @default(0)
+  priority         Int              @default(0)
+  frequency        Int              @default(0)
+  errorMessage     String?
+  errorStack       String?
+
+  @@index([executionId])
+  @@index([tier, startedAt])
+  @@index([isMarketHours, tier])
+}
+
+model CronExecutionContext {
+  id                   String   @id @default(uuid())
+  executionId          String   @unique
+  isMarketHours        Boolean
+  marketTimeZone       String   @default("America/New_York")
+  totalUsersEligible   Int      @default(0)
+  tierBreakdown        Json?
+  globalBudgetLimit    Decimal  @default(0)
+  globalBudgetUsed     Decimal  @default(0)
+  budgetAlerts         Json?
+  usersProcessedByTier Json?
+  avgProcessingByTier  Json?
+  budgetUtilization    Float?
+  avgLatency           Int      @default(0)
+  errorCount           Int      @default(0)
+  successRate          Float?
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  @@index([executionId])
+  @@index([isMarketHours, createdAt])
+}
+
+model SummaryCacheAccess {
+  id         String   @id @default(uuid())
+  summaryId  String
+  userId     String
+  accessedAt DateTime @default(now())
+  accessType String
+  summary    Summary  @relation(fields: [summaryId], references: [id], onDelete: Cascade)
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([summaryId, accessedAt])
+  @@index([userId, accessedAt])
+}
+
+model SummaryEmailDelivery {
+  id             String   @id @default(uuid())
+  summaryId      String
+  userId         String
+  emailAddress   String
+  sentAt         DateTime @default(now())
+  deliveryStatus String   @default("sent")
+  emailServiceId String?
+  metadata       Json?
+  summary        Summary  @relation(fields: [summaryId], references: [id], onDelete: Cascade)
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, summaryId], name: "unique_user_summary_email")
+  @@index([summaryId, sentAt])
+  @@index([userId, sentAt])
+  @@index([deliveryStatus, sentAt])
+  @@index([userId, summaryId], map: "idx_email_deduplication_lookup")
+}
+
+model AuditLog {
+  id           String   @id @default(uuid())
+  userId       String
+  action       String
+  details      Json
+  ipAddress    String?
+  userAgent    String?
+  success      Boolean  @default(true)
+  errorMessage String?
+  createdAt    DateTime @default(now())
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@index([action, createdAt])
+  @@index([createdAt])
+}
+
+enum SubscriptionTier {
+  FREE
+  PROFESSIONAL
+  ENTERPRISE
+  INSTITUTION
+  HOBBY
+  PRO
+}
+
+enum PlanType {
+  BASIC
+  PROFESSIONAL
+  PREMIUM
+}
+
 enum CronJobStatus {
   STARTED
-  SUCCESS  
+  SUCCESS
   FAILED
   TIMEOUT
   CANCELLED
@@ -577,84 +646,9 @@ enum CronAlertType {
 
 enum AlertSeverity {
   LOW
-  MEDIUM  
+  MEDIUM
   HIGH
   CRITICAL
-}
-
-// Tier-aware processing models
-model TierProcessingMetrics {
-  id                    String              @id @default(uuid())
-  date                  DateTime            @default(now()) @db.Date
-  tier                  SubscriptionTier    // FREE, PROFESSIONAL, ENTERPRISE, INSTITUTION
-  
-  // Processing Statistics
-  usersProcessed        Int                 @default(0)
-  usersEligible         Int                 @default(0)
-  usersSkipped          Int                 @default(0)
-  avgProcessingTime     Float?              // milliseconds
-  filingsProcessed      Int                 @default(0)
-  
-  // Cost and Budget Tracking
-  budgetUsed            Float               @default(0)   // Processing minutes used
-  budgetLimit           Float               @default(0)   // Daily budget limit
-  costPerUser           Float?              // Average cost per user
-  
-  // Performance Metrics
-  marketHoursRuns       Int                 @default(0)
-  offHoursRuns          Int                 @default(0)
-  priorityProcessed     Int                 @default(0)   // Users processed at high priority
-  
-  // Error Tracking
-  errorCount            Int                 @default(0)
-  timeoutCount          Int                 @default(0)
-  
-  createdAt             DateTime            @default(now())
-  updatedAt             DateTime            @updatedAt
-  
-  @@unique([date, tier])
-  @@index([date, tier])
-  @@index([tier, createdAt])
-}
-
-model TierProcessingExecution {
-  id                    String              @id @default(uuid())
-  executionId           String              // Links to main cron execution
-  tier                  SubscriptionTier
-  
-  // Execution Context
-  isMarketHours         Boolean
-  startedAt             DateTime            @default(now())
-  completedAt           DateTime?
-  status                ExecutionStatus     @default(RUNNING)
-  
-  // User Processing
-  usersEligible         Int                 @default(0)
-  usersProcessed        Int                 @default(0)
-  usersSkipped          Int                 @default(0)
-  userErrors            Int                 @default(0)
-  
-  // Filing Processing
-  filingsFound          Int                 @default(0)
-  filingsProcessed      Int                 @default(0)
-  filingsErrors         Int                 @default(0)
-  
-  // Resource Usage
-  processingTimeMs      Int?                // Total processing time
-  budgetUsed            Float               @default(0)
-  avgTimePerUser        Float?              // Average time per user
-  
-  // Performance Metrics
-  batchSize             Int                 @default(0)
-  priority              Int                 @default(0)
-  frequency             Int                 @default(0)  // Minutes between runs
-  
-  errorMessage          String?
-  errorStack            String?
-  
-  @@index([executionId])
-  @@index([tier, startedAt])
-  @@index([isMarketHours, tier])
 }
 
 enum ExecutionStatus {
@@ -662,118 +656,4 @@ enum ExecutionStatus {
   COMPLETED
   FAILED
   SKIPPED
-}
-
-model CronExecutionContext {
-  id                    String              @id @default(uuid())
-  executionId           String              @unique // Links to CronJobExecution
-  
-  // Market Context
-  isMarketHours         Boolean
-  marketTimeZone        String              @default("America/New_York")
-  
-  // Processing Context
-  totalUsersEligible    Int                 @default(0)
-  tierBreakdown         Json?               // {"FREE": 100, "PROFESSIONAL": 50, ...}
-  
-  // Budget Context
-  globalBudgetLimit     Decimal             @default(0)
-  globalBudgetUsed      Decimal             @default(0)
-  budgetAlerts          Json?               // Active budget alerts
-  
-  // Processing Results
-  usersProcessedByTier  Json?               // {"FREE": 10, "PROFESSIONAL": 25, ...}
-  avgProcessingByTier   Json?               // Processing times per tier
-  
-  // Performance Metrics
-  budgetUtilization     Float?              // percentage of budget used
-  avgLatency            Int                 @default(0) // milliseconds
-  errorCount            Int                 @default(0)
-  successRate           Float?              // percentage
-  
-  createdAt             DateTime            @default(now())
-  updatedAt             DateTime            @updatedAt
-  
-  @@index([executionId])
-  @@index([isMarketHours, createdAt])
-}
-
-// Track each time a cached summary is accessed
-model SummaryCacheAccess {
-  id                    String     @id @default(uuid())
-  summaryId             String
-  userId                String
-  accessedAt            DateTime   @default(now())
-  accessType            String     // EMAIL, API, DASHBOARD
-  
-  summary               Summary    @relation(fields: [summaryId], references: [id], onDelete: Cascade)
-  user                  User       @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
-  @@index([summaryId, accessedAt])
-  @@index([userId, accessedAt])
-}
-
-// Track email deliveries per summary
-model SummaryEmailDelivery {
-  id                    String     @id @default(uuid())
-  summaryId             String
-  userId                String
-  emailAddress          String
-  sentAt                DateTime   @default(now())
-  deliveryStatus        String     @default("sent") // sent, delivered, bounced, opened, clicked
-  emailServiceId        String?    // ID from email service (e.g., Resend)
-  metadata              Json?      // Additional tracking data
-  
-  summary               Summary    @relation(fields: [summaryId], references: [id], onDelete: Cascade)
-  user                  User       @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
-  @@unique([userId, summaryId], name: "unique_user_summary_email")
-  @@index([summaryId, sentAt])
-  @@index([userId, sentAt])
-  @@index([deliveryStatus, sentAt])
-  @@index([userId, summaryId], name: "idx_email_deduplication_lookup")
-}
-
-// Audit logging for financial and security operations
-model AuditLog {
-  id                    String              @id @default(uuid())
-  userId                String
-  action                String              // BUDGET_UPDATE, TIER_CHANGE, COST_CALCULATION, etc.
-  details               Json                // Structured details of the operation
-  ipAddress             String?
-  userAgent             String?
-  success               Boolean             @default(true)
-  errorMessage          String?
-  
-  // Timestamps
-  createdAt             DateTime            @default(now())
-  
-  // Relationships
-  user                  User                @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
-  @@index([userId, createdAt])
-  @@index([action, createdAt])
-  @@index([createdAt])
-}
-
-// Privacy consent tracking for GDPR compliance
-model UserPrivacyConsent {
-  id                    String   @id @default(uuid())
-  userId                String
-  consentType           String   // ANALYTICS_TRACKING, EMAIL_MARKETING, DATA_PROCESSING, PERFORMANCE_MONITORING
-  consentGiven          Boolean  @default(false)
-  consentVersion        String   @default("1.0") // Version of privacy policy when consent was given
-  consentDate           DateTime @default(now())
-  consentMethod         String   // ONBOARDING, SETTINGS_UPDATE, EXPLICIT_PROMPT, MIGRATION_DEFAULT
-  revokedDate           DateTime?
-  ipAddress             String?
-  userAgent             String?
-  
-  // Relationships
-  user                  User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
-  @@unique([userId, consentType])
-  @@index([userId, consentType])
-  @@index([consentType, consentGiven])
-  @@index([consentDate])
 }

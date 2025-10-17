@@ -7,11 +7,12 @@ import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogClose } from '@/components/ui/dialog';
 import { XIcon, SearchIcon } from 'lucide-react';
 import { LogsHeader, LogsTabs } from "@/components/logs-header";
-// import filingService from '@/services/filingService';
+import { getFilingLogs } from '@/lib/api/filing-service';
 import { FilingLog } from '@/types/filing';
 
 export default function LogsPage() {
   const [logs, setLogs] = useState<FilingLog[]>([]);
+  const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedFilingType, setSelectedFilingType] = useState('all-types');
   const [selectedStatus, setSelectedStatus] = useState('all-statuses');
@@ -24,13 +25,14 @@ export default function LogsPage() {
 
   const fetchLogs = async () => {
     try {
-      // TODO: Replace with API route call
-      // const response = await filingService.getFilingLogs();
-      // setLogs(response.data || []);
-      setLogs([]);
+      setLoading(true);
+      const response = await getFilingLogs();
+      setLogs(response.data || []);
     } catch (error) {
       console.error('Error fetching logs:', error);
       setLogs([]);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -112,7 +114,18 @@ export default function LogsPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredLogs.length > 0 ? (
+                {loading ? (
+                  // Loading skeletons
+                  Array.from({ length: 5 }).map((_, index) => (
+                    <TableRow key={index}>
+                      <TableCell><div className="h-4 bg-muted animate-pulse rounded" /></TableCell>
+                      <TableCell><div className="h-4 bg-muted animate-pulse rounded" /></TableCell>
+                      <TableCell><div className="h-4 bg-muted animate-pulse rounded" /></TableCell>
+                      <TableCell><div className="h-4 bg-muted animate-pulse rounded" /></TableCell>
+                      <TableCell><div className="h-4 bg-muted animate-pulse rounded" /></TableCell>
+                    </TableRow>
+                  ))
+                ) : filteredLogs.length > 0 ? (
                   filteredLogs.map((filing) => (
                     <TableRow 
                       key={filing.id} 
@@ -129,7 +142,7 @@ export default function LogsPage() {
                 ) : (
                   <TableRow>
                     <TableCell colSpan={5} className="h-24 text-center">
-                      No logs found.
+                      No filings found.
                     </TableCell>
                   </TableRow>
                 )}

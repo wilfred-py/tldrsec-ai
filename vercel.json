@@ -39,6 +39,22 @@
       "maxDuration": 300,
       "memory": 1024
     },
+    "app/api/jobs/worker/route.ts": {
+      "maxDuration": 300,
+      "memory": 1024
+    },
+    "app/api/jobs/process/route.ts": {
+      "maxDuration": 300,
+      "memory": 1024
+    },
+    "app/api/jobs/status/route.ts": {
+      "maxDuration": 60,
+      "memory": 512
+    },
+    "app/api/filings/async-summary/route.ts": {
+      "maxDuration": 300,
+      "memory": 1024
+    },
     "app/api/filings/batch-summary/route.ts": {
       "maxDuration": 300,
       "memory": 2048

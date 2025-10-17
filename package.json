@@ -51,6 +51,8 @@
     "cloudflare:deploy:tail": "./scripts/deploy-cloudflare-worker.sh --tail",
     "cloudflare:logs": "cd cloudflare-cron && npx wrangler tail --format=pretty",
     "cloudflare:status": "cd cloudflare-cron && npx wrangler deployments list",
+    "cloudflare:verify": "cd cloudflare-cron && ./verify-deployment.sh",
+    "cloudflare:fix-deploy": "cd cloudflare-cron && npx wrangler deploy",
     "test:timeout-scenarios": "jest __tests__/timeout/timeout-scenarios.test.ts --config=jest.config.mjs --verbose",
     "test:samples": "node scripts/parsers/sample-content-reader.js",
     "test:extract-xbrl": "node scripts/parsers/extract-xbrl.js",

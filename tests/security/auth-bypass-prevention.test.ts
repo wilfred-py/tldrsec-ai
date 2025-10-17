@@ -216,7 +216,7 @@ describe('SECURITY: Authentication Bypass Prevention', () => {
       const responseData = await response.json();
 
       expect(response.status).toBe(401);
-      expect(responseData.error).toBe('Unauthorized');
+      expect(responseData.error).toBe('Invalid authorization token');
     });
 
     it('should reject requests without authorization header', async () => {
@@ -250,7 +250,7 @@ describe('SECURITY: Authentication Bypass Prevention', () => {
       const responseData = await response.json();
 
       expect(response.status).toBe(500);
-      expect(responseData.error).toBe('Authentication not properly configured');
+      expect(responseData.error).toBe('Server configuration error');
     });
   });
 

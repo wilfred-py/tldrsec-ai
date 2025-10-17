@@ -68,10 +68,19 @@ export function calculateCost(
 ): { inputCost: number; outputCost: number; totalCost: number } {
   // xAI price structure through OpenRouter (95% cheaper than Claude)
   const prices: Record<string, { input: number; output: number }> = {
-    // xAI models (primary)
-    'x-ai/grok-4-fast:free': {
-      input: 0.0000002,  // $0.20 per million tokens (95% cheaper than Claude)
+    // xAI models (primary) - environment configured models
+    'x-ai/grok-4-fast-reasoning': {
+      input: 0.0000003,  // $0.30 per million tokens
       output: 0.0000005  // $0.50 per million tokens
+    },
+    'x-ai/grok-code-fast-1': {
+      input: 0.00000015, // $0.15 per million tokens
+      output: 0.00000025 // $0.25 per million tokens
+    },
+    // xAI models (additional)
+    'x-ai/grok-4-fast:free': {
+      input: 0,          // Free tier (limited usage)
+      output: 0
     },
     'x-ai/grok-4': {
       input: 0.0000002,  // $0.20 per million tokens
@@ -80,10 +89,6 @@ export function calculateCost(
     'x-ai/grok-3': {
       input: 0.0000001,  // $0.10 per million tokens
       output: 0.00000025 // $0.25 per million tokens
-    },
-    'x-ai/grok-4-fast:free': {
-      input: 0,          // Free tier (limited usage)
-      output: 0
     },
     // Legacy Claude models (deprecated but kept for backward compatibility)
     'claude-sonnet-4-20250514': {

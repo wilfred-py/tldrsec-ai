@@ -15,6 +15,37 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
 import { SummaryErrorState } from './summary-error-state';
+import DOMPurify from 'dompurify';
+
+/**
+ * Sanitize content to prevent DOM clobbering and XSS attacks
+ * Defense against CVE-1105770 (PrismJS DOM Clobbering)
+ */
+function sanitizeDisplayContent(content: string): string {
+  if (typeof window === 'undefined') {
+    // Server-side: basic sanitization only
+    return content
+      .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '[SCRIPT_REMOVED]')
+      .replace(/<[^>]*>/g, '') // Remove all HTML tags
+      .substring(0, 50000); // Limit content size
+  }
+
+  // Client-side: full DOMPurify sanitization  
+  const sanitized = DOMPurify.sanitize(content, {
+    ALLOWED_TAGS: [], // Remove all HTML tags
+    ALLOWED_ATTR: [], // Remove all attributes
+    KEEP_CONTENT: true, // Keep text content
+    FORBID_TAGS: ['script', 'object', 'embed', 'link', 'style', 'iframe'],
+    FORBID_ATTR: ['onerror', 'onload', 'onclick', 'onmouseover', 'onfocus', 'onblur']
+  });
+
+  // Additional security: limit content size and remove potential DOM clobbering patterns
+  return sanitized
+    .replace(/javascript:/gi, 'javascript-removed:')
+    .replace(/data:text\/html/gi, 'data-text-html-removed')
+    .replace(/vbscript:/gi, 'vbscript-removed:')
+    .substring(0, 50000); // Limit to 50KB to prevent DoS
+}
 
 // Extend the Summary type to include redacted properties
 interface RedactedSummary {
@@ -243,7 +274,7 @@ export function SummaryContent({ summary }: SummaryContentProps) {
             filingDate={summary.filingDate}
           />
         ) : (
-          <div className="whitespace-pre-wrap">{summary.summaryText}</div>
+          <div className="whitespace-pre-wrap">{sanitizeDisplayContent(summary.summaryText || '')}</div>
         )}
       </TabsContent>
 
@@ -329,7 +360,7 @@ export function SummaryContent({ summary }: SummaryContentProps) {
                 }}
                 ref={customSyntaxHighlighterRef}
               >
-                {summary.summaryText}
+                {sanitizeDisplayContent(summary.summaryText || '')}
               </SyntaxHighlighter>
             </div>
           </CardContent>
@@ -461,7 +492,7 @@ function FormattedSummary({ summaryData, filingType, summaryText, ticker, filing
       </CardHeader>
       <CardContent>
         <div className="prose dark:prose-invert max-w-none">
-          <div className="whitespace-pre-wrap">{summaryText}</div>
+          <div className="whitespace-pre-wrap">{sanitizeDisplayContent(summaryText || '')}</div>
         </div>
       </CardContent>
     </Card>

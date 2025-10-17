@@ -24,14 +24,31 @@ const nextConfig = {
   },
   // Configure output to handle both static and dynamic routes appropriately
   output: process.env.VERCEL ? undefined : 'standalone',
-  serverExternalPackages: [],
-  webpack: (config, { isServer, webpack, dev }) => {
+  serverExternalPackages: ['ioredis'],
+  webpack: (config, { isServer, webpack, dev, nextRuntime }) => {
     // Enable safe minification - SWC is configured at Next.js level
     if (!dev) {
       config.optimization = {
         ...config.optimization,
         minimize: true,
         minimizer: [],
+      };
+    }
+
+    // Edge Runtime specific configuration
+    if (nextRuntime === 'edge') {
+      // Completely exclude IORedis and Node.js specific modules from Edge Runtime
+      config.externals = config.externals || [];
+      config.externals.push('ioredis');
+      config.externals.push('@ioredis/commands');
+      config.externals.push('redis-errors');
+      
+      // Add webpack alias to replace IORedis imports with Edge Runtime compatible stubs
+      config.resolve.alias = {
+        ...config.resolve.alias,
+        'ioredis': false,
+        '@ioredis/commands': false,
+        'redis-errors': false,
       };
     }
 
@@ -60,6 +77,10 @@ const nextConfig = {
         // Additional canvas-related fallbacks
         'node-canvas-webgl': false,
         'canvaskit-wasm': false,
+        // Exclude IORedis from client-side builds
+        'ioredis': false,
+        '@ioredis/commands': false,
+        'redis-errors': false,
       };
     }
 
@@ -97,10 +118,16 @@ const nextConfig = {
       /Cannot resolve module 'canvas'/,
       /Module not found: Can't resolve 'canvas'/,
       /Critical dependency: require function is used in a way in which dependencies cannot be statically extracted/,
-      // IORedis Edge Runtime warnings
+      // IORedis Edge Runtime warnings - now externalized
       /Module not found: Can't resolve 'ioredis'/,
+      /Module not found: Can't resolve '@ioredis\/commands'/,
+      /Module not found: Can't resolve 'redis-errors'/,
       /process\.nextTick is not a function/,
       /setImmediate is not defined/,
+      /A Node\.js API is used \(process\.nextTick/,
+      /A Node\.js API is used \(setImmediate/,
+      /A Node\.js API is used \(process\.version/,
+      /which is not supported in the Edge Runtime/,
       // Webpack minification errors in Next.js 15
       /_webpack\.WebpackError is not a constructor/,
       /MinifyWebpackPlugin/,

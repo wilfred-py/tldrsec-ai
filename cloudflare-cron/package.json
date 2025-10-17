@@ -13,7 +13,9 @@
     "logs": "wrangler tail --format=pretty",
     "validate": "node --check index.js && wrangler deploy --dry-run",
     "secret:put": "wrangler secret put",
-    "secret:list": "wrangler secret list"
+    "secret:list": "wrangler secret list",
+    "build": "echo 'No build step required for Cloudflare Worker'",
+    "lint": "node --check index.js"
   },
   "keywords": [
     "cloudflare",
@@ -34,7 +36,8 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/your-org/tldrsec-ai.git",
+    "url": "https://github.com/tldrsec/tldrsec-ai.git",
     "directory": "cloudflare-cron"
-  }
+  },
+  "private": true
 }
