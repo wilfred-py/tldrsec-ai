@@ -95,6 +95,10 @@ const processJob = async (jobId: string) => {
 };
 */
 
+// Disable static generation for this API route
+export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
+
 /**
  * GET handler for job processing cron job
  * This endpoint is called by Vercel Cron to process queued jobs
