@@ -180,7 +180,6 @@
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",
-    "@tailwindcss/postcss": "^4",
     "@testing-library/dom": "^10.4.0",
     "@testing-library/jest-dom": "^6.6.3",
     "@testing-library/react": "^16.3.0",
@@ -205,7 +204,9 @@
     "pdf-parse": "^1.1.1",
     "pdf2json": "^3.1.5",
     "pdfkit": "^0.17.1",
-    "tailwindcss": "^4",
+    "tailwindcss": "^3.4.17",
+    "autoprefixer": "^10.4.20",
+    "postcss": "^8.4.49",
     "ts-jest": "^29.3.4",
     "ts-node": "^10.9.2",
     "tsx": "^4.20.3",
