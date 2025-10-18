@@ -39,6 +39,8 @@
     "db:push": "prisma db push",
     "db:studio": "prisma studio",
     "db:test": "npx tsx lib/test-db.ts",
+    "check-stuck-jobs": "npx tsx scripts/check-stuck-jobs.ts",
+    "clean-stuck-jobs": "npx tsx scripts/clean-stuck-jobs.ts",
     "seed:cik-mappings": "npx tsx scripts/seed-cik-mappings.ts",
     "sync:sec-mappings": "npx tsx scripts/sync-sec-cik-mappings.ts",
     "test:cron-performance": "npx tsx scripts/test-cron-performance.ts",
