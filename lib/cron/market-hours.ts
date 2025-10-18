@@ -185,6 +185,7 @@ export function getMarketHoursContext(now = new Date()): MarketHoursContext {
 
 /**
  * Calculate processing eligibility for a user based on their tier and last processing time
+ * Note: Always uses market hours frequency (24/7 processing) since SEC filings are published anytime
  */
 export function calculateProcessingEligibility(
   tier: SubscriptionTier,
@@ -193,9 +194,8 @@ export function calculateProcessingEligibility(
 ): ProcessingEligibility {
   // Handle invalid tiers by falling back to HOBBY tier
   const validTier = TIER_FREQUENCIES[tier] ? tier : 'HOBBY';
-  const frequency = marketContext.isMarketHours 
-    ? TIER_FREQUENCIES[validTier].market 
-    : TIER_FREQUENCIES[validTier].offMarket;
+  // Always use market hours frequency (more frequent) since SEC filings are published 24/7
+  const frequency = TIER_FREQUENCIES[validTier].market;
 
   // If never processed, user is eligible
   if (!lastProcessedAt) {
