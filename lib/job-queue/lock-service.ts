@@ -1,4 +1,3 @@
-import { prisma } from '@/lib/db/prisma';
 import { v4 as uuidv4 } from 'uuid';
 
 /**
@@ -18,6 +17,10 @@ export class LockService {
     ttlMinutes: number = 15
   ) {
     try {
+      // Dynamic import to avoid build-time dependencies
+      const { getPrismaClient } = await import('../db/prisma');
+      const prisma = getPrismaClient();
+      
       // First, clean up any expired locks
       await this.cleanupExpiredLocks();
       
@@ -74,6 +77,10 @@ export class LockService {
    */
   static async releaseLock(lockName: string, acquiredBy?: string) {
     try {
+      // Dynamic import to avoid build-time dependencies
+      const { getPrismaClient } = await import('../db/prisma');
+      const prisma = getPrismaClient();
+      
       const whereClause: any = {
         lockName,
         released: false
@@ -117,6 +124,10 @@ export class LockService {
     extendMinutes: number = 15
   ) {
     try {
+      // Dynamic import to avoid build-time dependencies
+      const { getPrismaClient } = await import('../db/prisma');
+      const prisma = getPrismaClient();
+      
       const lock = await prisma.jobLock.findFirst({
         where: {
           lockName,
@@ -163,6 +174,10 @@ export class LockService {
    */
   static async cleanupExpiredLocks() {
     try {
+      // Dynamic import to avoid build-time dependencies
+      const { getPrismaClient } = await import('../db/prisma');
+      const prisma = getPrismaClient();
+      
       const result = await prisma.jobLock.updateMany({
         where: {
           released: false,
@@ -192,6 +207,10 @@ export class LockService {
    */
   static async checkLock(lockName: string) {
     try {
+      // Dynamic import to avoid build-time dependencies
+      const { getPrismaClient } = await import('../db/prisma');
+      const prisma = getPrismaClient();
+      
       const lock = await prisma.jobLock.findFirst({
         where: {
           lockName,
@@ -212,6 +231,10 @@ export class LockService {
    */
   static async listActiveLocks() {
     try {
+      // Dynamic import to avoid build-time dependencies
+      const { getPrismaClient } = await import('../db/prisma');
+      const prisma = getPrismaClient();
+      
       const locks = await prisma.jobLock.findMany({
         where: {
           released: false,
