@@ -104,6 +104,14 @@ const processJob = async (jobId: string) => {
 export const GET = appRouterAsyncHandler(async (request: NextRequest) => {
   const startTime = Date.now();
   
+  // Build-time safety check
+  if (!request?.headers) {
+    return NextResponse.json({ 
+      error: 'Invalid request context', 
+      buildTime: true 
+    }, { status: 400 });
+  }
+  
   try {
     // Apply comprehensive security validation
     const securityResult = await applySecurityMiddleware(
