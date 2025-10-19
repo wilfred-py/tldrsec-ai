@@ -67,6 +67,7 @@
     "test:security": "jest tests/security/ --config=jest.config.mjs",
     "test:e2e": "npx tsx scripts/test-e2e-email.ts",
     "test:e2e:multi-ticker": "npx tsx scripts/test-e2e-multi-ticker.ts",
+    "test:async-email-queue": "npx tsx scripts/test-async-email-queue.ts",
     "test:production:validation": "npx tsx scripts/production-validation-test.ts",
     "test:production:pipeline": "npx tsx scripts/production-pipeline-test.ts",
     "test:production:pipeline:live": "npx tsx scripts/production-pipeline-test.ts --live",
