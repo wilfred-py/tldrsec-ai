@@ -94,6 +94,12 @@ model Summary {
   extractionSuccess     Boolean                @default(true)
   parsingErrors         Int                    @default(0)
   qualityScore          Float?
+  // Cache invalidation fields for testing OpenRouter integration
+  forceRefreshFlag      Boolean                @default(false)
+  lastInvalidatedAt     DateTime?
+  invalidationCount     Int                    @default(0)
+  invalidationReason    String?
+  invalidatedBy         String?
   secFiling             SecFiling?             @relation(fields: [secFilingId], references: [id])
   ticker                Ticker                 @relation(fields: [tickerId], references: [id], onDelete: Cascade)
   cacheAccesses         SummaryCacheAccess[]
@@ -656,4 +662,25 @@ enum ExecutionStatus {
   COMPLETED
   FAILED
   SKIPPED
+}
+
+model CacheInvalidation {
+  id                String   @id @default(uuid())
+  correlationId     String   @unique
+  requesterId       String
+  environment       String
+  reason            String
+  criteria          Json     // Store invalidation criteria
+  summariesAffected String[] // Array of summary IDs
+  invalidatedCount  Int
+  strategy          String   // 'soft', 'timestamp', 'hard'
+  executionTimeMs   Int
+  success           Boolean
+  errorMessage      String?
+  createdAt         DateTime @default(now())
+  
+  @@index([environment, createdAt])
+  @@index([requesterId, createdAt])
+  @@index([correlationId])
+  @@index([strategy, createdAt])
 }

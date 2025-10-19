@@ -668,14 +668,42 @@ export class CronFilingProcessor {
               symbol: filingForProcessing.tickerData.symbol
             },
             filingType: filingForProcessing.formType,
-            filingDate: filingForProcessing.filingDate
+            filingDate: filingForProcessing.filingDate,
+            // Skip summaries marked for force refresh (cache invalidation)
+            forceRefreshFlag: { not: true }
           },
           orderBy: { createdAt: 'desc' }
         });
 
         const cacheCheckDuration = Date.now() - cacheCheckStartTime;
 
-        if (existingSummary && existingSummary.summaryText) {
+        // Check if there's an invalidated summary we're bypassing
+        const invalidatedSummary = await tx.summary.findFirst({
+          where: {
+            ticker: {
+              symbol: filingForProcessing.tickerData.symbol
+            },
+            filingType: filingForProcessing.formType,
+            filingDate: filingForProcessing.filingDate,
+            forceRefreshFlag: true
+          },
+          orderBy: { createdAt: 'desc' }
+        });
+
+        if (invalidatedSummary) {
+          processorLogger.info(`🔄 CACHE INVALIDATION DETECTED: Forcing OpenRouter call for filing ${filingForProcessing.accessionNumber}`, {
+            userId: user.id,
+            ticker: filingForProcessing.tickerData.symbol,
+            invalidatedSummaryId: invalidatedSummary.id,
+            invalidationReason: invalidatedSummary.invalidationReason,
+            invalidatedBy: invalidatedSummary.invalidatedBy,
+            lastInvalidatedAt: invalidatedSummary.lastInvalidatedAt,
+            cacheCheckDurationMs: cacheCheckDuration,
+            nextStep: 'Generate new AI summary (cache invalidated)'
+          });
+          // Treat as cache miss to force OpenRouter call
+          existingSummary = null;
+        } else if (existingSummary && existingSummary.summaryText) {
           processorLogger.info(`✅ STEP 2 COMPLETE: Cache hit found for filing ${filingForProcessing.accessionNumber}`, {
             userId: user.id,
             ticker: filingForProcessing.tickerData.symbol,
@@ -907,6 +935,43 @@ export class CronFilingProcessor {
             dbStoreDurationMs: dbStoreDuration,
             nextStep: 'Send email notification'
           });
+
+          // STEP 4.5: Clear force refresh flag if this was a cache invalidation refresh
+          try {
+            const clearedFlags = await tx.summary.updateMany({
+              where: {
+                ticker: {
+                  symbol: filingForProcessing.tickerData.symbol
+                },
+                filingType: filingForProcessing.formType,
+                filingDate: filingForProcessing.filingDate,
+                forceRefreshFlag: true
+              },
+              data: {
+                forceRefreshFlag: false,
+                invalidationReason: null,
+                invalidatedBy: null
+              }
+            });
+
+            if (clearedFlags.count > 0) {
+              processorLogger.info(`🔄 CACHE INVALIDATION COMPLETE: Cleared force refresh flags after successful regeneration`, {
+                userId: user.id,
+                ticker: filingForProcessing.tickerData.symbol,
+                filingType: filingForProcessing.formType,
+                clearedFlagsCount: clearedFlags.count,
+                newSummaryId: summaryRecord.id,
+                message: 'OpenRouter API call successful - cache invalidation workflow complete'
+              });
+            }
+          } catch (flagClearError) {
+            processorLogger.warn(`Failed to clear force refresh flags after successful generation`, {
+              error: flagClearError instanceof Error ? flagClearError.message : String(flagClearError),
+              userId: user.id,
+              ticker: filingForProcessing.tickerData.symbol
+            });
+            // Don't fail the main process for flag clearing issues
+          }
         }
       } catch (dbError) {
         processorLogger.error(`Failed to store summary for filing ${filingForProcessing.accessionNumber}`, { 
