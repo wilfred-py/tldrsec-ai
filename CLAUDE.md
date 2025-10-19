@@ -9,6 +9,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - Write a plan to .claude/tasks/TASK_NAME.md.
 - The plan should be a detailed implementation plan and the reasoning behind them, as well as tasks broken down into subtasks.
 - Review the plan with me.
+- Always list unresolved questions you have at the end of the plan. 
+- For any unresolved questions, allow me to answer them before you continue.
+- Use concise language to create the final plan for approval by me. 
 
 ### While implementing
 - You should update the plan as you work. 
@@ -67,6 +70,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - `npm run test:build` - Test build pipeline
 - `npm run test:build:performance` - Build performance tests
 - `npm run test:build:integration` - Build integration tests
+
+### Async Email Queue Testing
+- `npm run test:async-email-queue` - **NEW** Test async email queue system with rate limiting compliance
 
 ### Security Testing
 - `npm run test:security` - Run security test suite
