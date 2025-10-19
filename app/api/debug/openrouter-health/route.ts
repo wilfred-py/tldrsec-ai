@@ -18,7 +18,7 @@ const healthLogger = logger.child('openrouter-health');
 /**
  * Test OpenRouter configuration and connectivity
  */
-export async function GET(request: NextRequest) {
+export async function GET(_request: NextRequest) {
   const startTime = Date.now();
   
   healthLogger.info('🏥 OpenRouter Health Check Started');
@@ -54,7 +54,7 @@ export async function GET(request: NextRequest) {
     healthLogger.info('⚙️  Configuration Validation', configCheck);
 
     // Phase 3: OpenRouter Client Test
-    let clientTest = {
+    const clientTest = {
       clientInitialized: false,
       circuitBreakerStats: {},
       availableModels: {},
@@ -76,18 +76,19 @@ export async function GET(request: NextRequest) {
     }
 
     // Phase 4: Simple API Test (if valid configuration)
-    let apiTest = {
+    const apiTest = {
       attempted: false,
       successful: false,
-      error: null as any,
-      response: null as any,
+      error: null as unknown,
+      response: null as unknown,
       duration: 0
     };
 
     if (hasValidApiKey && isValidApiKeyFormat) {
+      let testStartTime = 0;
       try {
         apiTest.attempted = true;
-        const testStartTime = Date.now();
+        testStartTime = Date.now();
 
         healthLogger.info('🚀 Testing OpenRouter API with simple request');
 
@@ -116,7 +117,7 @@ export async function GET(request: NextRequest) {
         });
 
       } catch (apiError) {
-        apiTest.duration = Date.now() - (apiTest as any).testStartTime || 0;
+        apiTest.duration = Date.now() - testStartTime;
         apiTest.error = {
           message: apiError instanceof Error ? apiError.message : String(apiError),
           name: apiError instanceof Error ? apiError.name : 'Unknown'
