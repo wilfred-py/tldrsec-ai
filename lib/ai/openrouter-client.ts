@@ -6,7 +6,7 @@
  */
 
 import { logger } from '../logging';
-import monitoring from '../monitoring';
+import { monitoring } from '../monitoring';
 import { getDefaultModel, getFallbackModel } from './config';
 import { 
   ApiError, 

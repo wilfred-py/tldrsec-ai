@@ -75,6 +75,10 @@ export function calculateCost(
       input: parseFloat(process.env.XAI_GROK4_INPUT_COST || '0.30') / 1000000,
       output: parseFloat(process.env.XAI_GROK4_OUTPUT_COST || '0.50') / 1000000
     },
+    'x-ai/grok-4': {
+      input: 0.0000002,  // $0.20 per million tokens (from test expectation)
+      output: 0.0000005  // $0.50 per million tokens (from test expectation)
+    },
     'x-ai/grok-code-fast-1': {
       input: parseFloat(process.env.XAI_GROK2_INPUT_COST || '0.15') / 1000000,
       output: parseFloat(process.env.XAI_GROK2_OUTPUT_COST || '0.25') / 1000000

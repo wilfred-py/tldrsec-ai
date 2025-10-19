@@ -22,11 +22,23 @@ import { logger } from '../../lib/logging';
 
 // Mock the monitoring module that's causing issues
 jest.mock('../../lib/monitoring', () => ({
+  monitoring: {
+    startTimer: jest.fn(),
+    stopTimer: jest.fn(),
+    recordTiming: jest.fn(),
+    incrementCounter: jest.fn(),
+    recordValue: jest.fn(),
+    recordEmailSent: jest.fn(),
+    recordAiApiCall: jest.fn()
+  },
   default: {
     startTimer: jest.fn(),
     stopTimer: jest.fn(),
     recordTiming: jest.fn(),
-    incrementCounter: jest.fn()
+    incrementCounter: jest.fn(),
+    recordValue: jest.fn(),
+    recordEmailSent: jest.fn(),
+    recordAiApiCall: jest.fn()
   }
 }));
 

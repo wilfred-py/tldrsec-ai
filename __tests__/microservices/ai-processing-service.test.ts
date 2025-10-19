@@ -20,7 +20,24 @@ jest.mock('../../lib/monitoring', () => ({
   monitoring: {
     incrementCounter: jest.fn(),
     recordTiming: jest.fn(),
-    recordGauge: jest.fn()
+    recordValue: jest.fn(),
+    recordMetric: jest.fn(),
+    recordGauge: jest.fn(), // Add recordGauge method that the service uses
+    startTimer: jest.fn(),
+    stopTimer: jest.fn(),
+    recordEmailSent: jest.fn(),
+    recordAiApiCall: jest.fn()
+  },
+  default: {
+    incrementCounter: jest.fn(),
+    recordTiming: jest.fn(),
+    recordValue: jest.fn(),
+    recordMetric: jest.fn(),
+    recordGauge: jest.fn(), // Add recordGauge method that the service uses
+    startTimer: jest.fn(),
+    stopTimer: jest.fn(),
+    recordEmailSent: jest.fn(),
+    recordAiApiCall: jest.fn()
   }
 }));
 
@@ -30,12 +47,23 @@ jest.mock('../../lib/ai/openrouter-client', () => ({
   }
 }));
 
+jest.mock('../../lib/db/prisma', () => ({
+  getPrismaClient: jest.fn(() => ({
+    $queryRaw: jest.fn(),
+    summary: {
+      create: jest.fn(),
+      findUnique: jest.fn(),
+      update: jest.fn()
+    }
+  }))
+}));
+
 describe('AIProcessingService', () => {
   describe('processAISummarization', () => {
     it('should process valid AI summarization requests', async () => {
       const mockRequest = {
         requestId: 'test-123',
-        filingContent: 'Test filing content with sufficient length for processing validation',
+        filingContent: 'Test filing content with sufficient length for processing validation. This content needs to be at least 100 characters long to pass the validation requirements of the AI processing service. Additional content to reach minimum length requirement.',
         metadata: {
           ticker: 'TSLA',
           formType: '10-K',
@@ -103,7 +131,7 @@ describe('AIProcessingService', () => {
     it('should handle AI processing errors gracefully', async () => {
       const mockRequest = {
         requestId: 'test-error',
-        filingContent: 'Test filing content with sufficient length for processing validation',
+        filingContent: 'Test filing content with sufficient length for processing validation. This content needs to be at least 100 characters long to pass the validation requirements of the AI processing service. Additional content to reach minimum length requirement.',
         metadata: {
           ticker: 'TSLA',
           formType: '10-K',
