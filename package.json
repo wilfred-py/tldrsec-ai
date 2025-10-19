@@ -79,6 +79,8 @@
     "test:e2e:pipeline": "npx tsx scripts/e2e-last-3-days-pipeline.ts",
     "test:e2e:pipeline:dry": "npx tsx scripts/e2e-last-3-days-pipeline.ts --dry-run",
     "test:e2e:enhanced": "npx tsx scripts/enhanced-e2e-pipeline-test.ts",
+    "test:pipeline:real": "npx tsx scripts/test-real-pipeline-execution.ts",
+    "test:pipeline:analyze": "npx tsx scripts/analyze-database-state.ts",
     "validate:enhanced-pipeline": "npx tsx scripts/quick-pipeline-validation.ts",
     "validate:enhancements": "npx tsx scripts/validate-enhancements-offline.ts",
     "validate:enhancements:quick": "./scripts/validate-enhancements.sh",
