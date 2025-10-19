@@ -63,38 +63,50 @@ interface CircuitBreakerState {
   resetTimeout: number;
 }
 
-const XAI_MODELS: Record<string, ModelInfo> = {
-  'x-ai/grok-4-fast-reasoning': {
-    id: 'x-ai/grok-4-fast-reasoning',
-    name: 'Grok 4 Fast Reasoning',
-    contextWindow: 2000000, // 2M tokens
-    costPerInputToken: 0.0000003, // $0.30/M tokens
-    costPerOutputToken: 0.0000005, // $0.50/M tokens
-    maxOutputTokens: 8000,
-    priority: 1, // Highest priority (primary model)
-    timeout: 20000 // 20 seconds for reliable response
-  },
-  'anthropic/claude-3-haiku': {
-    id: 'anthropic/claude-3-haiku',
-    name: 'Claude 3 Haiku',
-    contextWindow: 200000,
-    costPerInputToken: 0.00000025, // $0.25/M tokens
-    costPerOutputToken: 0.00000125, // $1.25/M tokens
-    maxOutputTokens: 4096,
-    priority: 2, // Reliable fallback
-    timeout: 15000 // 15 seconds
-  },
-  'openai/gpt-3.5-turbo': {
-    id: 'openai/gpt-3.5-turbo',
-    name: 'GPT-3.5 Turbo',
-    contextWindow: 16385,
-    costPerInputToken: 0.0000005, // $0.50/M tokens
-    costPerOutputToken: 0.0000015, // $1.50/M tokens
-    maxOutputTokens: 4096,
-    priority: 3, // Last resort fallback
-    timeout: 10000 // 10 seconds for fastest response
+/**
+ * Create model info dynamically based on environment configuration
+ * Only includes models that are configured in environment variables
+ */
+function createDynamicModelInfo(): Record<string, ModelInfo> {
+  const models: Record<string, ModelInfo> = {};
+  
+  const defaultModel = getDefaultModel();
+  const fallbackModel = getFallbackModel();
+  
+  // Add default model if it's an xAI model
+  if (defaultModel.startsWith('x-ai/')) {
+    models[defaultModel] = {
+      id: defaultModel,
+      name: defaultModel.includes('grok-4') ? 'Grok 4 Fast Reasoning' : 'Grok Model',
+      contextWindow: defaultModel.includes('grok-4') ? 2000000 : 128000,
+      costPerInputToken: defaultModel.includes('grok-4') ? 0.0000003 : 0.00000015,
+      costPerOutputToken: defaultModel.includes('grok-4') ? 0.0000005 : 0.00000025,
+      maxOutputTokens: 8000,
+      priority: 1,
+      timeout: 20000
+    };
   }
-};
+  
+  // Add fallback model if different from default
+  if (fallbackModel !== defaultModel) {
+    if (fallbackModel.startsWith('x-ai/')) {
+      models[fallbackModel] = {
+        id: fallbackModel,
+        name: fallbackModel.includes('grok-4') ? 'Grok 4 Fast Reasoning' : 'Grok Model',
+        contextWindow: fallbackModel.includes('grok-4') ? 2000000 : 128000,
+        costPerInputToken: fallbackModel.includes('grok-4') ? 0.0000003 : 0.00000015,
+        costPerOutputToken: fallbackModel.includes('grok-4') ? 0.0000005 : 0.00000025,
+        maxOutputTokens: 8000,
+        priority: 2,
+        timeout: 15000
+      };
+    }
+  }
+  
+  return models;
+}
+
+const XAI_MODELS: Record<string, ModelInfo> = createDynamicModelInfo();
 
 /**
  * Model Selection Strategy
@@ -104,12 +116,15 @@ class ModelSelectionAgent {
   private modelInfo: Record<string, ModelInfo>;
 
   constructor() {
-    this.fallbackChain = [
-      getDefaultModel(),            // Primary model from env
-      getFallbackModel(),           // Fallback model from env
-      'anthropic/claude-3-haiku',   // Reliable fallback
-      'openai/gpt-3.5-turbo'        // Last resort
-    ];
+    // Use only environment-configured models
+    const defaultModel = getDefaultModel();
+    const fallbackModel = getFallbackModel();
+    
+    // Create fallback chain with only environment variables
+    this.fallbackChain = defaultModel === fallbackModel 
+      ? [defaultModel]
+      : [defaultModel, fallbackModel];
+    
     this.modelInfo = XAI_MODELS;
   }
 
@@ -929,8 +944,12 @@ export class OpenRouterClient {
       }
     }
 
-    // Try fallback models that are available
-    const fallbackChain = [getDefaultModel(), getFallbackModel(), 'anthropic/claude-3-haiku'];
+    // Try fallback models that are available (environment-configured only)
+    const defaultModel = getDefaultModel();
+    const fallbackModel = getFallbackModel();
+    const fallbackChain = defaultModel === fallbackModel 
+      ? [defaultModel]
+      : [defaultModel, fallbackModel];
     
     for (const modelId of fallbackChain) {
       if (this.circuitBreakerManager.isModelAvailable(modelId)) {
