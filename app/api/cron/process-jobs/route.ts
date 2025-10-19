@@ -95,6 +95,10 @@ const processJob = async (jobId: string) => {
 };
 */
 
+// Disable static generation for this API route
+export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
+
 /**
  * GET handler for job processing cron job
  * This endpoint is called by Vercel Cron to process queued jobs
@@ -103,6 +107,14 @@ const processJob = async (jobId: string) => {
  */
 export const GET = appRouterAsyncHandler(async (request: NextRequest) => {
   const startTime = Date.now();
+  
+  // Build-time safety check
+  if (!request?.headers) {
+    return NextResponse.json({ 
+      error: 'Invalid request context', 
+      buildTime: true 
+    }, { status: 400 });
+  }
   
   try {
     // Apply comprehensive security validation

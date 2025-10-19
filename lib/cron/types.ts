@@ -160,11 +160,12 @@ export const TIER_BATCH_SIZES = {
   HOBBY: Number(process.env.HOBBY_BATCH_SIZE) || 3    // 3 tickers, basic processing
 } as const;
 
-// Daily cost budgets (in USD) - Updated for new subscription tiers and xAI pricing
-// Based on $109/month HOBBY ($0.06/day) and $149/month PRO ($0.40/day) with 95% cost reduction from xAI
+// Daily cost budgets (in USD) - Updated for realistic AI processing capacity
+// Increased from restrictive limits to enable actual service delivery
+// PRO: $10/day (allows 100-1000 operations), HOBBY: $2/day (allows 20-200 operations)
 export const DAILY_COST_LIMITS = {
-  PRO: Number(process.env.PRO_COST_LIMIT) || 0.40,     // $149/month = ~$0.40/day for 20 tickers
-  HOBBY: Number(process.env.HOBBY_COST_LIMIT) || 0.06  // $109/month = ~$0.06/day for 3 tickers
+  PRO: Number(process.env.PRO_COST_LIMIT) || 10.00,    // $10/day per user - realistic for 20 tickers with AI processing
+  HOBBY: Number(process.env.HOBBY_COST_LIMIT) || 2.00  // $2/day per user - realistic for 3 tickers with AI processing
 } as const;
 
 // Security constants

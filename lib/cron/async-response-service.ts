@@ -41,7 +41,6 @@ export interface AsyncErrorResponse {
 }
 
 /**
-<<<<<<< HEAD
  * Security headers for cron endpoint responses
  */
 const SECURITY_HEADERS = {
@@ -55,8 +54,6 @@ const SECURITY_HEADERS = {
 } as const;
 
 /**
-=======
->>>>>>> origin/main
  * Service for handling async processing responses
  */
 export class AsyncResponseService {
@@ -197,22 +194,14 @@ export class AsyncResponseService {
       }
     };
     
-<<<<<<< HEAD
     // Add response headers for async processing with security headers
-=======
-    // Add response headers for async processing
->>>>>>> origin/main
     const headers = new Headers({
       'Content-Type': 'application/json',
       'X-Processing-Mode': 'async',
       'X-Execution-ID': result.executionId,
       'X-Estimated-Completion': result.data.estimatedCompletionTime.toISOString(),
-<<<<<<< HEAD
       'X-Filings-Queued': result.data.filingsQueued.toString(),
       ...SECURITY_HEADERS
-=======
-      'X-Filings-Queued': result.data.filingsQueued.toString()
->>>>>>> origin/main
     });
     
     return new NextResponse(JSON.stringify(responseBody), {
@@ -249,12 +238,8 @@ export class AsyncResponseService {
       'X-Processing-Mode': 'async',
       'X-Execution-ID': error.executionId,
       'X-Error-Code': error.code,
-<<<<<<< HEAD
       'X-Retryable': error.metadata.retryable.toString(),
       ...SECURITY_HEADERS
-=======
-      'X-Retryable': error.metadata.retryable.toString()
->>>>>>> origin/main
     });
     
     return new NextResponse(JSON.stringify(responseBody), {

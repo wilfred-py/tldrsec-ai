@@ -125,6 +125,11 @@ export const ATTACK_PATTERNS = {
  * Request Size Validator
  */
 export function validateRequestSize(request: NextRequest): void {
+  // Build-time safety check
+  if (!request?.headers) {
+    return;
+  }
+
   const contentLength = request.headers.get('content-length');
   
   if (contentLength && parseInt(contentLength) > SECURITY_CONFIG.maxRequestSize) {
@@ -317,6 +322,11 @@ export function createRateLimiter(config: typeof SECURITY_CONFIG.defaultRateLimi
  * Cron Security Middleware
  */
 export function validateCronSecurity(request: NextRequest): boolean {
+  // Build-time safety check
+  if (!request?.headers) {
+    return false;
+  }
+
   const cronSecret = request.headers.get('x-cron-secret');
   const expectedSecret = process.env.CRON_SECRET;
   
@@ -347,6 +357,11 @@ export function validateCronSecurity(request: NextRequest): boolean {
  * IP Address Validator
  */
 export function validateIPAddress(request: NextRequest): { isValid: boolean; ip: string | null } {
+  // Build-time safety check
+  if (!request?.headers) {
+    return { isValid: false, ip: null };
+  }
+
   // Get IP from various headers (in order of preference)
   const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
              request.headers.get('x-real-ip') ||
@@ -458,6 +473,11 @@ export async function applySecurityMiddleware<T>(
   } = {}
 ): Promise<{ data: T; response?: NextResponse }> {
   try {
+    // Build-time safety check
+    if (!request?.headers) {
+      throw new Error('Invalid request context during build time');
+    }
+
     // Apply timeout
     if (options.timeoutMs) {
       await createTimeoutMiddleware(options.timeoutMs)(request);

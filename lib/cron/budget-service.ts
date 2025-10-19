@@ -313,4 +313,163 @@ export class CronBudgetService {
       dailyLimit: this.getDailyCostLimit(tier)
     });
   }
+
+  /**
+   * Check if user's daily budget needs to be reset
+   * @param user User object with budget tracking fields
+   * @returns true if budget should be reset
+   */
+  static shouldResetDailyBudget(user: {
+    dailyBudgetResetAt?: Date | null;
+    budgetUsed?: number | null;
+  }): boolean {
+    // If no reset date set, budget needs reset
+    if (!user.dailyBudgetResetAt) {
+      return true;
+    }
+
+    // If reset date is in the past, budget needs reset
+    const now = new Date();
+    return user.dailyBudgetResetAt <= now;
+  }
+
+  /**
+   * Calculate next daily budget reset time (midnight UTC)
+   * @returns Date for next midnight UTC
+   */
+  static getNextDailyResetTime(): Date {
+    const now = new Date();
+    const nextMidnight = new Date(now);
+    nextMidnight.setUTCHours(24, 0, 0, 0); // Next midnight UTC
+    return nextMidnight;
+  }
+
+  /**
+   * Reset user's daily budget to zero and set next reset time
+   * @param userId User ID to reset
+   * @returns Budget reset result
+   */
+  static async resetUserDailyBudget(userId: string): Promise<{
+    success: boolean;
+    previousBudget: number;
+    nextResetAt: Date;
+    error?: string;
+  }> {
+    try {
+      // Dynamic import to avoid build-time dependencies
+      const { getPrismaClient } = await import('../db/prisma');
+      const prisma = getPrismaClient();
+      
+      const nextResetAt = this.getNextDailyResetTime();
+      
+      // Update user's budget with atomic operation
+      const updatedUser = await prisma.user.update({
+        where: { id: userId },
+        data: {
+          budgetUsed: 0,
+          dailyBudgetResetAt: nextResetAt,
+        },
+        select: {
+          id: true,
+          budgetUsed: true,
+          dailyBudgetResetAt: true,
+          subscriptionTier: true
+        }
+      });
+
+      budgetLogger.info('Daily budget reset completed', {
+        userId,
+        nextResetAt: nextResetAt.toISOString(),
+        tier: updatedUser.subscriptionTier
+      });
+
+      return {
+        success: true,
+        previousBudget: updatedUser.budgetUsed || 0,
+        nextResetAt
+      };
+
+    } catch (error) {
+      budgetLogger.error('Failed to reset daily budget', {
+        userId,
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+
+      return {
+        success: false,
+        previousBudget: 0,
+        nextResetAt: this.getNextDailyResetTime(),
+        error: error instanceof Error ? error.message : 'Unknown error'
+      };
+    }
+  }
+
+  /**
+   * Check and reset daily budgets for all users who need it
+   * @returns Array of reset results
+   */
+  static async resetAllEligibleDailyBudgets(): Promise<Array<{
+    userId: string;
+    success: boolean;
+    previousBudget: number;
+    nextResetAt: Date;
+    error?: string;
+  }>> {
+    try {
+      // Dynamic import to avoid build-time dependencies
+      const { getPrismaClient } = await import('../db/prisma');
+      const prisma = getPrismaClient();
+      
+      const now = new Date();
+      
+      // Find users whose budget needs to be reset
+      const usersNeedingReset = await prisma.user.findMany({
+        where: {
+          OR: [
+            { dailyBudgetResetAt: null }, // Never been set
+            { dailyBudgetResetAt: { lte: now } } // Reset time has passed
+          ]
+        },
+        select: {
+          id: true,
+          budgetUsed: true,
+          dailyBudgetResetAt: true,
+          subscriptionTier: true
+        }
+      });
+
+      budgetLogger.info('Found users needing daily budget reset', {
+        count: usersNeedingReset.length,
+        users: usersNeedingReset.map(u => ({
+          id: u.id,
+          tier: u.subscriptionTier,
+          currentBudget: u.budgetUsed,
+          lastReset: u.dailyBudgetResetAt?.toISOString()
+        }))
+      });
+
+      // Reset budgets for all eligible users
+      const results = await Promise.all(
+        usersNeedingReset.map(user => this.resetUserDailyBudget(user.id))
+      );
+
+      const successCount = results.filter(r => r.success).length;
+      const errorCount = results.filter(r => !r.success).length;
+
+      budgetLogger.info('Daily budget reset batch completed', {
+        totalUsers: usersNeedingReset.length,
+        successful: successCount,
+        errors: errorCount
+      });
+
+      return results;
+
+    } catch (error) {
+      budgetLogger.error('Failed to reset daily budgets', {
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+
+      return [];
+    }
+  }
 }

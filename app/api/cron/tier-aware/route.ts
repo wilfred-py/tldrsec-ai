@@ -17,6 +17,7 @@ import { getMarketHoursContext } from '../../../../lib/cron/market-hours';
 import { CronJobMonitor } from '../../../../lib/monitoring/cron-monitor';
 import { CronJobStatus } from '../../../../types/cron';
 import { generateSecureExecutionId } from '../../../../lib/security/secure-random';
+import { LockService } from '../../../../lib/job-queue/lock-service';
 
 // Import our new service layer
 import { CronAuthService } from '../../../../lib/cron/auth-service';
@@ -89,6 +90,11 @@ export async function GET(request: NextRequest) {
     }, { status: 500 });
   }
 
+  // Distributed lock variables for cleanup in catch/finally
+  let lock = null;
+  let lockName = '';
+  let lockId = '';
+
   try {
     cronLogger.info(`[${executionId}] Starting tier-aware SEC filing cron job with bulletproof duplicate email prevention`);
     cronLogger.debug(`[${executionId}] Checkpoint 1: Route function started with enhanced security features`);
@@ -151,6 +157,91 @@ export async function GET(request: NextRequest) {
     let timeCheck = checkTimeRemaining();
     if (!timeCheck.shouldContinue) {
       throw new Error(`Timeout approaching after authentication: ${timeCheck.remaining}ms remaining`);
+    }
+
+    // STEP 1.5: Acquire Distributed Lock to Prevent Concurrent Executions
+    lockName = 'tier-aware-cron-execution';
+    lockId = `${platform}-${executionId}`;
+    
+    try {
+      cronLogger.debug(`[${executionId}] Attempting to acquire distributed lock`, {
+        lockName,
+        lockId,
+        platform
+      });
+      
+      lock = await LockService.acquireLock(lockName, lockId, 15); // 15-minute TTL
+      
+      if (!lock) {
+        // Another cron execution is already in progress
+        cronLogger.warn(`[${executionId}] Concurrent execution detected - another cron is running`, {
+          lockName,
+          lockId,
+          platform
+        });
+        
+        // Check who holds the lock for debugging
+        const existingLock = await LockService.checkLock(lockName);
+        if (existingLock) {
+          cronLogger.info(`[${executionId}] Lock currently held by: ${existingLock.acquiredBy}`, {
+            acquiredAt: existingLock.acquiredAt,
+            expiresAt: existingLock.expiresAt
+          });
+        }
+        
+        clearTimeout(timeoutId);
+        if (monitor) await monitor.complete(CronJobStatus.SUCCESS, 'Skipped due to concurrent execution');
+        
+        return NextResponse.json({
+          success: true,
+          message: 'Concurrent execution detected - skipped to prevent conflicts',
+          executionId,
+          duration: Date.now() - startTime,
+          lockInfo: {
+            lockName,
+            currentHolder: existingLock?.acquiredBy || 'Unknown',
+            acquiredAt: existingLock?.acquiredAt?.toISOString(),
+            expiresAt: existingLock?.expiresAt?.toISOString()
+          }
+        }, { status: 429 });
+      }
+      
+      cronLogger.info(`[${executionId}] Distributed lock acquired successfully`, {
+        lockName,
+        lockId,
+        expiresAt: lock.expiresAt?.toISOString(),
+        platform
+      });
+      
+    } catch (lockError) {
+      cronLogger.error(`[${executionId}] Failed to acquire distributed lock`, {
+        error: lockError instanceof Error ? lockError.message : 'Unknown error',
+        lockName,
+        lockId
+      });
+      
+      // Continue without lock to avoid blocking service
+      cronLogger.warn(`[${executionId}] Continuing without lock - increased risk of concurrent execution`);
+    }
+
+    // STEP 1.6: Reset Daily Budgets for Eligible Users
+    cronLogger.debug(`[${executionId}] Checking for users needing daily budget reset`);
+    try {
+      const { CronBudgetService } = await import('../../../../lib/cron/budget-service');
+      const budgetResetResults = await CronBudgetService.resetAllEligibleDailyBudgets();
+      
+      if (budgetResetResults.length > 0) {
+        const successCount = budgetResetResults.filter(r => r.success).length;
+        cronLogger.info(`[${executionId}] Daily budget reset completed`, {
+          totalUsers: budgetResetResults.length,
+          successful: successCount,
+          errors: budgetResetResults.length - successCount
+        });
+      }
+    } catch (budgetError) {
+      cronLogger.warn(`[${executionId}] Budget reset failed but continuing processing`, {
+        error: budgetError instanceof Error ? budgetError.message : 'Unknown error'
+      });
     }
 
     // STEP 2: Get Market Context and User Eligibility
@@ -529,6 +620,18 @@ export async function GET(request: NextRequest) {
         await monitor.complete(CronJobStatus.SUCCESS, 'Partial completion due to timeout') : 
         { executionId: 'test', duration: timeCheck.elapsed };
 
+      // Release lock before returning
+      if (lock) {
+        try {
+          await LockService.releaseLock(lockName, lockId);
+          cronLogger.info(`[${executionId}] Lock released during timeout handling`);
+        } catch (lockError) {
+          cronLogger.error(`[${executionId}] Failed to release lock during timeout`, {
+            error: lockError instanceof Error ? lockError.message : 'Unknown error'
+          });
+        }
+      }
+
       clearTimeout(timeoutId);
       return NextResponse.json({
         success: true,
@@ -697,6 +800,24 @@ export async function GET(request: NextRequest) {
       await monitor.complete(CronJobStatus.SUCCESS) : 
       { executionId: 'test', duration: 0 };
     
+    // Release distributed lock
+    if (lock) {
+      try {
+        const released = await LockService.releaseLock(lockName, lockId);
+        cronLogger.info(`[${executionId}] Distributed lock released`, {
+          lockName,
+          lockId,
+          released
+        });
+      } catch (lockReleaseError) {
+        cronLogger.error(`[${executionId}] Failed to release distributed lock`, {
+          error: lockReleaseError instanceof Error ? lockReleaseError.message : 'Unknown error',
+          lockName,
+          lockId
+        });
+      }
+    }
+    
     clearTimeout(timeoutId);
     
     cronLogger.info(`[${executionId}] Tier-aware cron job completed successfully with backlog processing`, {
@@ -704,6 +825,7 @@ export async function GET(request: NextRequest) {
       executionId: monitorResult.executionId,
       duration: monitorResult.duration,
       duplicatePreventionActive: true,
+      distributedLockUsed: lock !== null,
       processingHealth: remainingUnprocessed === 0 ? 'Healthy - No backlog' : 
                        backlogProcessedCount > 0 ? 'Improving - Backlog reducing' :
                        filingMonitoringResults.newFilingsFound === 0 ? 'No new filings' : 'CRITICAL',
@@ -722,6 +844,22 @@ export async function GET(request: NextRequest) {
     });
 
   } catch (error) {
+    // Release distributed lock in case of error
+    if (lock && lockName && lockId) {
+      try {
+        await LockService.releaseLock(lockName, lockId);
+        cronLogger.info(`[${executionId}] Distributed lock released after error`, {
+          lockName,
+          lockId
+        });
+      } catch (lockReleaseError) {
+        cronLogger.error(`[${executionId}] Failed to release lock after error`, {
+          lockError: lockReleaseError instanceof Error ? lockReleaseError.message : 'Unknown error',
+          originalError: error instanceof Error ? error.message : 'Unknown error'
+        });
+      }
+    }
+    
     clearTimeout(timeoutId);
     
     // Only call monitor.complete if monitor was successfully initialized

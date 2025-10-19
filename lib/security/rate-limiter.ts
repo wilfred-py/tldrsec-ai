@@ -17,7 +17,7 @@ type RedisInstance = {
   pipeline: () => {
     incr: (key: string) => void;
     expire: (key: string, seconds: number) => void;
-    exec: () => Promise<Array<[Error | null, any]> | null>;
+    exec: () => Promise<Array<[Error | null, unknown]> | null>;
   };
 };
 
