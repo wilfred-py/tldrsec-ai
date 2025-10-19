@@ -411,22 +411,60 @@ export class JobWorker {
     const startTime = Date.now();
     
     try {
-      // Placeholder for email digest processing
-      workerLogger.info('Processing async email digest', {
+      workerLogger.info('Processing async email digest job', {
         jobId: job.id,
         payload: job.payload
       });
 
-      return {
-        success: true,
-        result: { digestProcessed: true },
-        executionTime: Date.now() - startTime
-      };
+      // Import async email queue processor
+      const { AsyncEmailQueue } = await import('../email/async-email-queue');
+      const emailQueue = AsyncEmailQueue.getInstance();
+      
+      // Process the email job
+      const result = await emailQueue.processEmailJob(job.payload);
+      
+      if (result.success) {
+        workerLogger.info('Email sent successfully via async queue', {
+          jobId: job.id,
+          emailId: result.emailId,
+          executionTime: Date.now() - startTime
+        });
+        
+        return {
+          success: true,
+          result: {
+            emailId: result.emailId,
+            emailSent: true
+          },
+          executionTime: Date.now() - startTime
+        };
+      } else {
+        workerLogger.warn('Email sending failed via async queue', {
+          jobId: job.id,
+          error: result.error,
+          retryable: result.retryable,
+          executionTime: Date.now() - startTime
+        });
+        
+        return {
+          success: false,
+          error: result.error || 'Email sending failed',
+          executionTime: Date.now() - startTime,
+          retryable: result.retryable !== false // Default to retryable unless explicitly set to false
+        };
+      }
 
     } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      workerLogger.error('Async email digest job processing failed', {
+        jobId: job.id,
+        error: errorMessage,
+        executionTime: Date.now() - startTime
+      });
+      
       return {
         success: false,
-        error: error.message,
+        error: errorMessage,
         executionTime: Date.now() - startTime,
         retryable: true
       };
