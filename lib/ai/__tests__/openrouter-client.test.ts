@@ -241,7 +241,7 @@ describe('OpenRouterClient', () => {
       });
 
       it('should return null for last model in chain', () => {
-        const nextModel = (client as any).modelAgent.getNextModel('x-ai/grok-3');
+        const nextModel = (client as any).modelAgent.getNextModel('openai/gpt-3.5-turbo');
         expect(nextModel).toBeNull();
       });
 
@@ -654,9 +654,9 @@ describe('OpenRouterClient', () => {
       it('should return all available xAI models', () => {
         const models = client.getAvailableModels();
         
-        expect(models).toHaveProperty('x-ai/grok-4-fast:free');
-        expect(models).toHaveProperty('x-ai/grok-4');
-        expect(models).toHaveProperty('x-ai/grok-3');
+        expect(models).toHaveProperty('x-ai/grok-4-fast-reasoning');
+        expect(models).toHaveProperty('anthropic/claude-3-haiku');
+        expect(models).toHaveProperty('openai/gpt-3.5-turbo');
         
         // Check model structure
         const grokModel = models['x-ai/grok-4-fast:free'];

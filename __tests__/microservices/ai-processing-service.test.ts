@@ -60,7 +60,7 @@ describe('AIProcessingService', () => {
           keyPoints: ['Point 1', 'Point 2'],
           analysis: { test: 'data' }
         }),
-        model: 'x-ai/grok-3',
+        model: process.env.DEFAULT_AI_MODEL || 'x-ai/grok-4-fast-reasoning',
         usage: { inputTokens: 100, outputTokens: 50 },
         cost: 0.05,
         processingTime: 1000
@@ -71,7 +71,7 @@ describe('AIProcessingService', () => {
       expect(result.success).toBe(true);
       expect(result.requestId).toBe('test-123');
       expect(result.summary?.content).toBe('Test summary');
-      expect(result.performance.model).toBe('x-ai/grok-3');
+      expect(result.performance.model).toBe(process.env.DEFAULT_AI_MODEL || 'x-ai/grok-4-fast-reasoning');
     });
 
     it('should handle validation failures', async () => {

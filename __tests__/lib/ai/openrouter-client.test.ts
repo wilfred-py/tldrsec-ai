@@ -172,10 +172,10 @@ describe('OpenRouter Client', () => {
       const result = await client.sendMessage([
         { role: 'user', content: 'test' }
       ], {
-        model: 'x-ai/grok-3'
+        model: 'x-ai/grok-4-fast-reasoning'
       });
 
-      expect(result.model).toBe('x-ai/grok-3');
+      expect(result.model).toBe('x-ai/grok-4-fast-reasoning');
     });
   });
 });

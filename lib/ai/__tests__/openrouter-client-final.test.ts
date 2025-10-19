@@ -125,9 +125,9 @@ describe('OpenRouterClient Comprehensive Tests', () => {
 
     it('should return available xAI models', () => {
       const models = client.getAvailableModels();
-      expect(models).toHaveProperty('x-ai/grok-4-fast:free');
-      expect(models).toHaveProperty('x-ai/grok-4');
-      expect(models).toHaveProperty('x-ai/grok-3');
+      expect(models).toHaveProperty('x-ai/grok-4-fast-reasoning');
+      expect(models).toHaveProperty('anthropic/claude-3-haiku');
+      expect(models).toHaveProperty('openai/gpt-3.5-turbo');
       
       const freeModel = models['x-ai/grok-4-fast:free'];
       expect(freeModel).toMatchObject({
@@ -182,9 +182,10 @@ describe('OpenRouterClient Comprehensive Tests', () => {
 
     it('should get next model in fallback chain', () => {
       const agent = (client as any).modelAgent;
-      expect(agent.getNextModel('x-ai/grok-4-fast:free')).toBe('x-ai/grok-4');
-      expect(agent.getNextModel('x-ai/grok-4')).toBe('x-ai/grok-3');
-      expect(agent.getNextModel('x-ai/grok-3')).toBeNull();
+      expect(agent.getNextModel('x-ai/grok-4-fast-reasoning')).toBe('x-ai/grok-code-fast-1');
+      expect(agent.getNextModel('x-ai/grok-code-fast-1')).toBe('anthropic/claude-3-haiku');
+      expect(agent.getNextModel('anthropic/claude-3-haiku')).toBe('openai/gpt-3.5-turbo');
+      expect(agent.getNextModel('openai/gpt-3.5-turbo')).toBeNull();
       expect(agent.getNextModel('unknown-model')).toBeNull();
     });
 
