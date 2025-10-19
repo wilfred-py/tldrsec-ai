@@ -754,27 +754,59 @@ export class CronFilingProcessor {
         });
       } else {
         // Generate new AI summary with OpenRouter
-        processorLogger.info(`🤖 STEP 3: Calling OpenRouter AI for new summary generation`, {
+        processorLogger.info(`🤖 STEP 3: INITIATING OPENROUTER AI CALL - This should generate OpenRouter logs`, {
           userId: user.id,
           ticker: filingForProcessing.tickerData.symbol,
           contentLength: filingContent.length,
           formType: filingForProcessing.formType,
-          openRouterModel: process.env.DEFAULT_AI_MODEL || 'grok-4-fast'
+          accessionNumber: filingForProcessing.accessionNumber,
+          expectedModel: process.env.DEFAULT_AI_MODEL || 'fallback-model',
+          apiConfiguration: {
+            OPENROUTER_API_KEY_SET: !!process.env.OPENROUTER_API_KEY,
+            TLDRSEC_AI_SUMMARIZER_SET: !!process.env.TLDRSEC_AI_SUMMARIZER,
+            DEFAULT_AI_MODEL_SET: !!process.env.DEFAULT_AI_MODEL,
+            ANTHROPIC_API_KEY_SET: !!process.env.ANTHROPIC_API_KEY
+          },
+          expectation: 'OpenRouter client should log: 🚀 OPENROUTER API CALL INITIATED'
         });
 
-        summaryResult = await generateAISummaryWithRetry(
-          filingContent,
-          {
-            accessionNumber: filingForProcessing.accessionNumber,
-            formType: filingForProcessing.formType,
-            filingDate: filingForProcessing.filingDate.toISOString()
-          },
-          {
-            name: filingForProcessing.tickerData.companyName,
-            ticker: filingForProcessing.tickerData.symbol
-          },
-          2 // max retries
-        );
+        try {
+          summaryResult = await generateAISummaryWithRetry(
+            filingContent,
+            {
+              accessionNumber: filingForProcessing.accessionNumber,
+              formType: filingForProcessing.formType,
+              filingDate: filingForProcessing.filingDate.toISOString()
+            },
+            {
+              name: filingForProcessing.tickerData.companyName,
+              ticker: filingForProcessing.tickerData.symbol
+            },
+            2 // max retries
+          );
+
+          processorLogger.info(`✅ OPENROUTER AI CALL COMPLETED`, {
+            userId: user.id,
+            ticker: filingForProcessing.tickerData.symbol,
+            summaryGenerated: !!summaryResult.summary,
+            model: summaryResult.model || 'unknown',
+            inputTokens: summaryResult.inputTokens || 0,
+            outputTokens: summaryResult.outputTokens || 0,
+            cost: summaryResult.cost || 0,
+            processingStatus: summaryResult.processingStatus
+          });
+
+        } catch (aiError) {
+          processorLogger.error(`❌ OPENROUTER AI CALL FAILED`, {
+            userId: user.id,
+            ticker: filingForProcessing.tickerData.symbol,
+            error: aiError instanceof Error ? aiError.message : String(aiError),
+            errorName: aiError instanceof Error ? aiError.name : 'Unknown',
+            stack: aiError instanceof Error ? aiError.stack : undefined,
+            recommendation: 'Check OpenRouter API key, model availability, and network connectivity'
+          });
+          throw aiError; // Re-throw to maintain error handling flow
+        }
 
         const summaryDuration = Date.now() - summaryStartTime;
         const actualCost = summaryResult.cost || 0;

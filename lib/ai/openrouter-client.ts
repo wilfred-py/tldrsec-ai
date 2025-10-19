@@ -341,8 +341,32 @@ export class OpenRouterClient {
   private serviceName = 'openrouter-xai';
 
   constructor(apiKey?: string) {
-    if (!OPENROUTER_CONFIG.apiKey && !apiKey) {
-      logger.warn('No OpenRouter API key provided. Set TLDRSEC_AI_SUMMARIZER or OPENROUTER_API_KEY in environment variables.');
+    // ENHANCED DEBUG: Log OpenRouter client initialization
+    const configuredApiKey = OPENROUTER_CONFIG.apiKey || apiKey;
+    const hasApiKey = !!configuredApiKey;
+    const apiKeySource = process.env.TLDRSEC_AI_SUMMARIZER ? 'TLDRSEC_AI_SUMMARIZER' : 
+                        process.env.OPENROUTER_API_KEY ? 'OPENROUTER_API_KEY' : 
+                        apiKey ? 'constructor_param' : 'none';
+    
+    logger.info('🔧 OpenRouter Client Initialization', {
+      hasApiKey,
+      apiKeySource,
+      apiKeyFormat: hasApiKey ? `${configuredApiKey.substring(0, 8)}...` : 'none',
+      defaultModel: OPENROUTER_CONFIG.defaultModel,
+      availableEnvVars: {
+        TLDRSEC_AI_SUMMARIZER: !!process.env.TLDRSEC_AI_SUMMARIZER,
+        OPENROUTER_API_KEY: !!process.env.OPENROUTER_API_KEY,
+        DEFAULT_AI_MODEL: !!process.env.DEFAULT_AI_MODEL,
+        ANTHROPIC_API_KEY: !!process.env.ANTHROPIC_API_KEY
+      }
+    });
+
+    if (!configuredApiKey) {
+      logger.error('❌ CRITICAL: No OpenRouter API key configured!', {
+        message: 'OpenRouter API calls will fail',
+        requiredEnvVars: ['TLDRSEC_AI_SUMMARIZER', 'OPENROUTER_API_KEY'],
+        recommendation: 'Set either TLDRSEC_AI_SUMMARIZER or OPENROUTER_API_KEY environment variable'
+      });
     }
 
     // Initialize rate limiter (OpenRouter has generous limits)
@@ -360,6 +384,12 @@ export class OpenRouterClient {
     // Initialize tracking
     this.totalTokensUsed = { input: 0, output: 0 };
     this.totalCost = 0;
+
+    logger.info('✅ OpenRouter Client initialized successfully', {
+      hasValidConfiguration: hasApiKey,
+      defaultModel: OPENROUTER_CONFIG.defaultModel,
+      serviceName: this.serviceName
+    });
   }
 
   /**
@@ -396,11 +426,24 @@ export class OpenRouterClient {
       });
     }
 
-    logger.info(`Starting OpenRouter request`, {
-      model: selectedModel,
-      originalModel,
+    // ENHANCED DEBUG: Log comprehensive request details
+    logger.info(`🚀 OPENROUTER API CALL INITIATED`, {
       requestId,
-      requestType
+      selectedModel,
+      originalModel,
+      requestType,
+      hasApiKey: !!OPENROUTER_CONFIG.apiKey,
+      apiKeyFormat: OPENROUTER_CONFIG.apiKey ? `${OPENROUTER_CONFIG.apiKey.substring(0, 8)}...` : 'none',
+      messageCount: messages.length,
+      maxTokens,
+      temperature,
+      timeout,
+      circuitBreakerStats: this.circuitBreakerManager.getStats(),
+      configuredOptions: {
+        costLimit: options.costLimit,
+        requiredCapabilities: options.requiredCapabilities,
+        remainingExecutionTime: options.remainingExecutionTime
+      }
     });
 
     const startTime = Date.now();
@@ -458,15 +501,34 @@ export class OpenRouterClient {
       this.totalTokensUsed.output += result.usage.outputTokens;
       this.totalCost += result.cost.totalCost;
 
-      logger.info(`OpenRouter request completed successfully`, {
-        model: result.model,
-        originalModel,
+      // ENHANCED DEBUG: Log successful response with comprehensive details
+      logger.info(`✅ OPENROUTER API CALL SUCCESSFUL`, {
         requestId,
-        inputTokens: result.usage.inputTokens,
-        outputTokens: result.usage.outputTokens,
+        actualModel: result.model,
+        originalModel,
+        selectedModel,
         fallbackUsed: result.model !== selectedModel,
-        duration: executionTimeMs,
-        cost: result.cost.totalCost
+        executionTimeMs,
+        usage: {
+          inputTokens: result.usage.inputTokens,
+          outputTokens: result.usage.outputTokens,
+          totalTokens: result.usage.inputTokens + result.usage.outputTokens
+        },
+        cost: {
+          inputCost: result.cost.inputCost,
+          outputCost: result.cost.outputCost,
+          totalCost: result.cost.totalCost
+        },
+        responseMetrics: {
+          contentLength: result.content?.length || 0,
+          responseId: result.id,
+          attempts: result.attempts || 1
+        },
+        clientStats: {
+          totalInputTokens: this.totalTokensUsed.input + result.usage.inputTokens,
+          totalOutputTokens: this.totalTokensUsed.output + result.usage.outputTokens,
+          totalCostUSD: this.totalCost + result.cost.totalCost
+        }
       });
 
       return result;
@@ -481,12 +543,27 @@ export class OpenRouterClient {
       
       abortController.clearTimeout();
       
-      logger.error(`Error in OpenRouter request:`, {
-        error: error.message,
-        model: selectedModel,
-        originalModel,
+      // ENHANCED DEBUG: Log comprehensive error details
+      logger.error(`❌ OPENROUTER API CALL FAILED`, {
         requestId,
-        stack: error.stack
+        selectedModel,
+        originalModel,
+        requestType,
+        errorDetails: {
+          message: error instanceof Error ? error.message : String(error),
+          name: error instanceof Error ? error.name : 'Unknown',
+          stack: error instanceof Error ? error.stack : undefined
+        },
+        requestConfig: {
+          hasApiKey: !!OPENROUTER_CONFIG.apiKey,
+          baseURL: OPENROUTER_CONFIG.baseURL,
+          timeout,
+          maxTokens,
+          temperature
+        },
+        executionTimeMs,
+        circuitBreakerStats: this.circuitBreakerManager.getStats(),
+        recommendation: 'Check API key validity, network connectivity, and model availability'
       });
       
       throw this.normalizeError(error, requestId);
@@ -642,11 +719,22 @@ export class OpenRouterClient {
       stream: false
     };
 
-    logger.debug(`Making OpenRouter API request`, {
+    // ENHANCED DEBUG: Log actual HTTP request details
+    logger.info(`🌐 HTTP REQUEST TO OPENROUTER`, {
+      url: `${OPENROUTER_CONFIG.baseURL}/chat/completions`,
+      method: 'POST',
       model,
       messageCount: formattedMessages.length,
       maxTokens,
-      temperature
+      temperature,
+      hasSystemMessage: !!system,
+      requestBodySize: JSON.stringify(requestBody).length,
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey.substring(0, 8)}...`,
+        'HTTP-Referer': 'https://tldrsec.app',
+        'X-Title': 'TLDRSEC.AI'
+      }
     });
 
     const response = await fetch(`${OPENROUTER_CONFIG.baseURL}/chat/completions`, {
@@ -674,6 +762,19 @@ export class OpenRouterClient {
     }
 
     const result = await response.json();
+    
+    // ENHANCED DEBUG: Log successful HTTP response
+    logger.info(`📥 HTTP RESPONSE FROM OPENROUTER`, {
+      status: response.status,
+      statusText: response.statusText,
+      model,
+      responseSize: JSON.stringify(result).length,
+      hasChoices: !!result.choices && result.choices.length > 0,
+      usage: result.usage || null,
+      id: result.id || 'unknown',
+      contentPreview: result.choices?.[0]?.message?.content?.substring(0, 100) + '...' || 'no content'
+    });
+    
     return result;
   }
 
