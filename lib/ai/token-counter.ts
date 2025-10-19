@@ -7,6 +7,8 @@
  * but these functions provide reasonable estimates for planning purposes.
  */
 
+import { getDefaultModel, getFallbackModel } from './config';
+
 /**
  * Rough estimate of tokens in a string for Claude models
  * Based on the guideline that 1 token is approximately 4 characters for English text
@@ -64,31 +66,27 @@ export function estimateMessagesTokenCount(messages: MessageForTokenCount[]): nu
 export function calculateCost(
   inputTokens: number,
   outputTokens: number,
-  model: string = process.env.DEFAULT_AI_MODEL || 'x-ai/grok-4-fast:free'
+  model: string = getDefaultModel()
 ): { inputCost: number; outputCost: number; totalCost: number } {
-  // xAI price structure through OpenRouter (95% cheaper than Claude)
+  // xAI price structure through OpenRouter using environment variables
   const prices: Record<string, { input: number; output: number }> = {
     // xAI models (primary) - environment configured models
     'x-ai/grok-4-fast-reasoning': {
-      input: 0.0000003,  // $0.30 per million tokens
-      output: 0.0000005  // $0.50 per million tokens
+      input: parseFloat(process.env.XAI_GROK4_INPUT_COST || '0.30') / 1000000,
+      output: parseFloat(process.env.XAI_GROK4_OUTPUT_COST || '0.50') / 1000000
+    },
+    'x-ai/grok-4': {
+      input: 0.0000002,  // $0.20 per million tokens (from test expectation)
+      output: 0.0000005  // $0.50 per million tokens (from test expectation)
     },
     'x-ai/grok-code-fast-1': {
-      input: 0.00000015, // $0.15 per million tokens
-      output: 0.00000025 // $0.25 per million tokens
+      input: parseFloat(process.env.XAI_GROK2_INPUT_COST || '0.15') / 1000000,
+      output: parseFloat(process.env.XAI_GROK2_OUTPUT_COST || '0.25') / 1000000
     },
     // xAI models (additional)
     'x-ai/grok-4-fast:free': {
       input: 0,          // Free tier (limited usage)
       output: 0
-    },
-    'x-ai/grok-4': {
-      input: 0.0000002,  // $0.20 per million tokens
-      output: 0.0000005  // $0.50 per million tokens
-    },
-    'x-ai/grok-3': {
-      input: 0.0000001,  // $0.10 per million tokens
-      output: 0.00000025 // $0.25 per million tokens
     },
     // Legacy Claude models (deprecated but kept for backward compatibility)
     'claude-sonnet-4-20250514': {
@@ -109,8 +107,8 @@ export function calculateCost(
     }
   };
   
-  // Use xAI grok-4-fast-reasoning pricing as default fallback
-  const pricing = prices[model] || prices['x-ai/grok-4-fast:free'];
+  // Use default model pricing as fallback, then fallback model, then free tier
+  const pricing = prices[model] || prices[getDefaultModel()] || prices[getFallbackModel()] || prices['x-ai/grok-4-fast:free'];
   
   const inputCost = inputTokens * pricing.input;
   const outputCost = outputTokens * pricing.output;

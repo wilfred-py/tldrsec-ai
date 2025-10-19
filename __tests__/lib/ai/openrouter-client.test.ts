@@ -6,18 +6,18 @@
 import { jest } from '@jest/globals';
 
 // Mock monitoring
-const mockMonitoring = {
-  startTimer: jest.fn(() => 'mock-timer'),
-  stopTimer: jest.fn(),
-  recordTiming: jest.fn(),
-  incrementCounter: jest.fn(),
-  recordMetric: jest.fn()
-};
-
 jest.mock('../../../lib/monitoring', () => ({
-  __esModule: true,
-  default: mockMonitoring,
-  monitoring: mockMonitoring
+  monitoring: {
+    startTimer: jest.fn(() => 'mock-timer'),
+    stopTimer: jest.fn(),
+    recordTiming: jest.fn(),
+    incrementCounter: jest.fn(),
+    recordMetric: jest.fn(),
+    recordValue: jest.fn(),
+    recordGauge: jest.fn(),
+    recordEmailSent: jest.fn(),
+    recordAiApiCall: jest.fn()
+  }
 }));
 
 jest.mock('../../../lib/logging', () => ({
@@ -172,10 +172,10 @@ describe('OpenRouter Client', () => {
       const result = await client.sendMessage([
         { role: 'user', content: 'test' }
       ], {
-        model: 'x-ai/grok-3'
+        model: 'x-ai/grok-4-fast-reasoning'
       });
 
-      expect(result.model).toBe('x-ai/grok-3');
+      expect(result.model).toBe('x-ai/grok-4-fast-reasoning');
     });
   });
 });

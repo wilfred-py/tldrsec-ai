@@ -22,11 +22,23 @@ import { logger } from '../../lib/logging';
 
 // Mock the monitoring module that's causing issues
 jest.mock('../../lib/monitoring', () => ({
+  monitoring: {
+    startTimer: jest.fn(),
+    stopTimer: jest.fn(),
+    recordTiming: jest.fn(),
+    incrementCounter: jest.fn(),
+    recordValue: jest.fn(),
+    recordEmailSent: jest.fn(),
+    recordAiApiCall: jest.fn()
+  },
   default: {
     startTimer: jest.fn(),
     stopTimer: jest.fn(),
     recordTiming: jest.fn(),
-    incrementCounter: jest.fn()
+    incrementCounter: jest.fn(),
+    recordValue: jest.fn(),
+    recordEmailSent: jest.fn(),
+    recordAiApiCall: jest.fn()
   }
 }));
 
@@ -416,11 +428,11 @@ describe('OpenRouter xAI Pipeline Integration Tests', () => {
       expect(paidCost.outputCost).toBeCloseTo(0.0015, 4); // 3K * $0.0000005
       expect(paidCost.totalCost).toBeCloseTo(0.0035, 4);
 
-      // Test grok-3 model (cheaper)
-      const cheaperCost = calculateCost(10000, 3000, 'x-ai/grok-3');
-      expect(cheaperCost.inputCost).toBeCloseTo(0.001, 4); // 10K * $0.0000001
+      // Test fallback model (cheaper)
+      const cheaperCost = calculateCost(10000, 3000, 'x-ai/grok-code-fast-1');
+      expect(cheaperCost.inputCost).toBeCloseTo(0.0015, 4); // 10K * $0.00000015
       expect(cheaperCost.outputCost).toBeCloseTo(0.00075, 4); // 3K * $0.00000025
-      expect(cheaperCost.totalCost).toBeCloseTo(0.00175, 4);
+      expect(cheaperCost.totalCost).toBeCloseTo(0.00225, 4);
     });
 
     it('should track total usage across multiple requests', () => {
@@ -742,19 +754,19 @@ describe('OpenRouter xAI Pipeline Integration Tests', () => {
     });
 
     it('should use correct default model from environment', async () => {
-      process.env.DEFAULT_AI_MODEL = 'x-ai/grok-3';
+      process.env.DEFAULT_AI_MODEL = 'x-ai/grok-4-fast-reasoning';
 
       jest.spyOn(openRouterClient, 'sendMessage').mockResolvedValueOnce({
         ...mockOpenRouterResponse,
-        model: 'x-ai/grok-3'
+        model: 'x-ai/grok-4-fast-reasoning'
       });
 
       const result = await generateAISummary(MOCK_FILING_CONTENT, TEST_FILING, TEST_COMPANY);
 
-      expect(result.model).toBe('x-ai/grok-3');
+      expect(result.model).toBe('x-ai/grok-4-fast-reasoning');
 
       // Restore default
-      process.env.DEFAULT_AI_MODEL = 'x-ai/grok-4-fast:free';
+      process.env.DEFAULT_AI_MODEL = 'x-ai/grok-4-fast-reasoning';
     });
   });
 

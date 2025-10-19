@@ -6,7 +6,8 @@
  */
 
 import { logger } from '../logging';
-import monitoring from '../monitoring';
+import { monitoring } from '../monitoring';
+import { getDefaultModel, getFallbackModel } from './config';
 import { 
   ApiError, 
   createAiQuotaExceededError,
@@ -33,7 +34,7 @@ import Bottleneck from 'bottleneck';
 const OPENROUTER_CONFIG = {
   baseURL: 'https://openrouter.ai/api/v1',
   apiKey: process.env.TLDRSEC_AI_SUMMARIZER || process.env.OPENROUTER_API_KEY,
-  defaultModel: process.env.DEFAULT_AI_MODEL || 'x-ai/grok-3',
+  defaultModel: getDefaultModel(),
   timeout: parseInt(process.env.OPENROUTER_TIMEOUT_MS || '270000', 10), // 4.5 minutes - just under Vercel free plan limit
   maxRetries: 0, // Eliminated retries - use model fallback instead
   fallbackTimeout: parseInt(process.env.OPENROUTER_FALLBACK_TIMEOUT_MS || '120000', 10), // 2 minutes for fallback models
@@ -63,14 +64,14 @@ interface CircuitBreakerState {
 }
 
 const XAI_MODELS: Record<string, ModelInfo> = {
-  'x-ai/grok-3': {
-    id: 'x-ai/grok-3',
-    name: 'Grok 3',
-    contextWindow: 256000,
-    costPerInputToken: 0.000002, // $2/M tokens
-    costPerOutputToken: 0.00001, // $10/M tokens
-    maxOutputTokens: 30000,
-    priority: 1, // Highest priority (known working model)
+  'x-ai/grok-4-fast-reasoning': {
+    id: 'x-ai/grok-4-fast-reasoning',
+    name: 'Grok 4 Fast Reasoning',
+    contextWindow: 2000000, // 2M tokens
+    costPerInputToken: 0.0000003, // $0.30/M tokens
+    costPerOutputToken: 0.0000005, // $0.50/M tokens
+    maxOutputTokens: 8000,
+    priority: 1, // Highest priority (primary model)
     timeout: 20000 // 20 seconds for reliable response
   },
   'anthropic/claude-3-haiku': {
@@ -104,7 +105,8 @@ class ModelSelectionAgent {
 
   constructor() {
     this.fallbackChain = [
-      'x-ai/grok-3',                // Known working model (primary)
+      getDefaultModel(),            // Primary model from env
+      getFallbackModel(),           // Fallback model from env
       'anthropic/claude-3-haiku',   // Reliable fallback
       'openai/gpt-3.5-turbo'        // Last resort
     ];
@@ -827,7 +829,7 @@ export class OpenRouterClient {
     }
 
     // Try fallback models that are available
-    const fallbackChain = ['x-ai/grok-4-fast:free', 'x-ai/grok-4', 'x-ai/grok-3'];
+    const fallbackChain = [getDefaultModel(), getFallbackModel(), 'anthropic/claude-3-haiku'];
     
     for (const modelId of fallbackChain) {
       if (this.circuitBreakerManager.isModelAvailable(modelId)) {

@@ -20,7 +20,24 @@ jest.mock('../../lib/monitoring', () => ({
   monitoring: {
     incrementCounter: jest.fn(),
     recordTiming: jest.fn(),
-    recordGauge: jest.fn()
+    recordValue: jest.fn(),
+    recordMetric: jest.fn(),
+    recordGauge: jest.fn(), // Add recordGauge method that the service uses
+    startTimer: jest.fn(),
+    stopTimer: jest.fn(),
+    recordEmailSent: jest.fn(),
+    recordAiApiCall: jest.fn()
+  },
+  default: {
+    incrementCounter: jest.fn(),
+    recordTiming: jest.fn(),
+    recordValue: jest.fn(),
+    recordMetric: jest.fn(),
+    recordGauge: jest.fn(), // Add recordGauge method that the service uses
+    startTimer: jest.fn(),
+    stopTimer: jest.fn(),
+    recordEmailSent: jest.fn(),
+    recordAiApiCall: jest.fn()
   }
 }));
 
@@ -30,12 +47,23 @@ jest.mock('../../lib/ai/openrouter-client', () => ({
   }
 }));
 
+jest.mock('../../lib/db/prisma', () => ({
+  getPrismaClient: jest.fn(() => ({
+    $queryRaw: jest.fn(),
+    summary: {
+      create: jest.fn(),
+      findUnique: jest.fn(),
+      update: jest.fn()
+    }
+  }))
+}));
+
 describe('AIProcessingService', () => {
   describe('processAISummarization', () => {
     it('should process valid AI summarization requests', async () => {
       const mockRequest = {
         requestId: 'test-123',
-        filingContent: 'Test filing content with sufficient length for processing validation',
+        filingContent: 'Test filing content with sufficient length for processing validation. This content needs to be at least 100 characters long to pass the validation requirements of the AI processing service. Additional content to reach minimum length requirement.',
         metadata: {
           ticker: 'TSLA',
           formType: '10-K',
@@ -60,7 +88,7 @@ describe('AIProcessingService', () => {
           keyPoints: ['Point 1', 'Point 2'],
           analysis: { test: 'data' }
         }),
-        model: 'x-ai/grok-3',
+        model: process.env.DEFAULT_AI_MODEL || 'x-ai/grok-4-fast-reasoning',
         usage: { inputTokens: 100, outputTokens: 50 },
         cost: 0.05,
         processingTime: 1000
@@ -71,7 +99,7 @@ describe('AIProcessingService', () => {
       expect(result.success).toBe(true);
       expect(result.requestId).toBe('test-123');
       expect(result.summary?.content).toBe('Test summary');
-      expect(result.performance.model).toBe('x-ai/grok-3');
+      expect(result.performance.model).toBe(process.env.DEFAULT_AI_MODEL || 'x-ai/grok-4-fast-reasoning');
     });
 
     it('should handle validation failures', async () => {
@@ -103,7 +131,7 @@ describe('AIProcessingService', () => {
     it('should handle AI processing errors gracefully', async () => {
       const mockRequest = {
         requestId: 'test-error',
-        filingContent: 'Test filing content with sufficient length for processing validation',
+        filingContent: 'Test filing content with sufficient length for processing validation. This content needs to be at least 100 characters long to pass the validation requirements of the AI processing service. Additional content to reach minimum length requirement.',
         metadata: {
           ticker: 'TSLA',
           formType: '10-K',

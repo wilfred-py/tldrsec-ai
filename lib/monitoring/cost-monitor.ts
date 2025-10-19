@@ -8,6 +8,7 @@
 import { logger } from '../logging/index';
 import { monitoring } from '../monitoring/index';
 import { getPrismaClient } from '../db/prisma';
+import { getDefaultModel, getFallbackModel } from '../ai/config';
 import { v4 as uuidv4 } from 'uuid';
 
 const costLogger = logger.child('cost-monitor');
@@ -78,15 +79,15 @@ export class CostMonitorService {
   private static readonly HIGH_COST_THRESHOLD = 1.00; // $1.00
   private static readonly ALERT_EMAIL = process.env.ADMIN_EMAIL || 'wilfred.chen.python@gmail.com';
   
-  // xAI model pricing via OpenRouter (per million tokens)
+  // xAI model pricing via OpenRouter (per million tokens) - using environment variables
   private static readonly MODEL_PRICING = {
     'x-ai/grok-4-fast-reasoning': {
-      inputCost: 0.30,   // $0.30 per million input tokens
-      outputCost: 0.50   // $0.50 per million output tokens
+      inputCost: parseFloat(process.env.XAI_GROK4_INPUT_COST || '0.30'),
+      outputCost: parseFloat(process.env.XAI_GROK4_OUTPUT_COST || '0.50')
     },
-    'x-ai/grok-2': {
-      inputCost: 0.15,   // $0.15 per million input tokens
-      outputCost: 0.25   // $0.25 per million output tokens
+    'x-ai/grok-code-fast-1': {
+      inputCost: parseFloat(process.env.XAI_GROK2_INPUT_COST || '0.15'),
+      outputCost: parseFloat(process.env.XAI_GROK2_OUTPUT_COST || '0.25')
     },
     'meta-llama/llama-3.1-405b-instruct:free': {
       inputCost: 0.0,    // Free
@@ -112,7 +113,7 @@ export class CostMonitorService {
       const durationMs = params.responseTime.getTime() - params.requestTime.getTime();
       
       // Calculate costs based on model pricing
-      const pricing = this.MODEL_PRICING[params.model] || this.MODEL_PRICING['x-ai/grok-2'];
+      const pricing = this.MODEL_PRICING[params.model] || this.MODEL_PRICING[getDefaultModel()] || this.MODEL_PRICING[getFallbackModel()];
       const inputCostUSD = (params.inputTokens / 1000000) * pricing.inputCost;
       const outputCostUSD = (params.outputTokens / 1000000) * pricing.outputCost;
       const totalCostUSD = inputCostUSD + outputCostUSD;
@@ -342,8 +343,8 @@ export class CostMonitorService {
     }
 
     // Model selection recommendations
-    if (apiCall.model === 'x-ai/grok-4-fast-reasoning' && apiCall.totalCostUSD > 2.0) {
-      recommendations.push('Consider using x-ai/grok-2 for less complex filings to reduce costs');
+    if (apiCall.model === getDefaultModel() && apiCall.totalCostUSD > 2.0) {
+      recommendations.push(`Consider using ${getFallbackModel()} for less complex filings to reduce costs`);
       recommendations.push('Implement filing complexity analysis to choose appropriate model');
     }
 

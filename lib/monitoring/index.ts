@@ -85,6 +85,13 @@ class Monitoring {
   }
 
   /**
+   * Record a gauge value (current state rather than accumulated)
+   */
+  recordGauge(name: string, value: number, tags?: Record<string, string>, description?: string): void {
+    this.recordMetric(name, value, tags, 'gauge', description);
+  }
+
+  /**
    * Record a numeric value for a specific metric
    * 
    * @param metric - The name of the metric to record

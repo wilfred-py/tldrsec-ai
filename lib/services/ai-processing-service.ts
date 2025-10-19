@@ -445,20 +445,21 @@ ${content.substring(0, 50000)}`; // Limit content to prevent token overflow
     fallbackAttempted: boolean;
   } {
     const errorMessage = error instanceof Error ? error.message : String(error);
+    const lowerMessage = errorMessage.toLowerCase();
     
-    if (errorMessage.includes('timeout')) {
+    if (lowerMessage.includes('timeout')) {
       return { code: 'TIMEOUT_ERROR', retryable: true, fallbackAttempted: true };
     }
     
-    if (errorMessage.includes('rate limit')) {
+    if (lowerMessage.includes('rate limit')) {
       return { code: 'RATE_LIMIT_ERROR', retryable: true, fallbackAttempted: false };
     }
     
-    if (errorMessage.includes('cost limit')) {
+    if (lowerMessage.includes('cost limit')) {
       return { code: 'COST_LIMIT_ERROR', retryable: false, fallbackAttempted: false };
     }
     
-    if (errorMessage.includes('validation')) {
+    if (lowerMessage.includes('validation')) {
       return { code: 'VALIDATION_ERROR', retryable: false, fallbackAttempted: false };
     }
     
