@@ -63,38 +63,50 @@ interface CircuitBreakerState {
   resetTimeout: number;
 }
 
-const XAI_MODELS: Record<string, ModelInfo> = {
-  'x-ai/grok-4-fast-reasoning': {
-    id: 'x-ai/grok-4-fast-reasoning',
-    name: 'Grok 4 Fast Reasoning',
-    contextWindow: 2000000, // 2M tokens
-    costPerInputToken: 0.0000003, // $0.30/M tokens
-    costPerOutputToken: 0.0000005, // $0.50/M tokens
-    maxOutputTokens: 8000,
-    priority: 1, // Highest priority (primary model)
-    timeout: 20000 // 20 seconds for reliable response
-  },
-  'anthropic/claude-3-haiku': {
-    id: 'anthropic/claude-3-haiku',
-    name: 'Claude 3 Haiku',
-    contextWindow: 200000,
-    costPerInputToken: 0.00000025, // $0.25/M tokens
-    costPerOutputToken: 0.00000125, // $1.25/M tokens
-    maxOutputTokens: 4096,
-    priority: 2, // Reliable fallback
-    timeout: 15000 // 15 seconds
-  },
-  'openai/gpt-3.5-turbo': {
-    id: 'openai/gpt-3.5-turbo',
-    name: 'GPT-3.5 Turbo',
-    contextWindow: 16385,
-    costPerInputToken: 0.0000005, // $0.50/M tokens
-    costPerOutputToken: 0.0000015, // $1.50/M tokens
-    maxOutputTokens: 4096,
-    priority: 3, // Last resort fallback
-    timeout: 10000 // 10 seconds for fastest response
+/**
+ * Create model info dynamically based on environment configuration
+ * Only includes models that are configured in environment variables
+ */
+function createDynamicModelInfo(): Record<string, ModelInfo> {
+  const models: Record<string, ModelInfo> = {};
+  
+  const defaultModel = getDefaultModel();
+  const fallbackModel = getFallbackModel();
+  
+  // Add default model if it's an xAI model
+  if (defaultModel.startsWith('x-ai/')) {
+    models[defaultModel] = {
+      id: defaultModel,
+      name: defaultModel.includes('grok-4') ? 'Grok 4 Fast Reasoning' : 'Grok Model',
+      contextWindow: defaultModel.includes('grok-4') ? 2000000 : 128000,
+      costPerInputToken: defaultModel.includes('grok-4') ? 0.0000003 : 0.00000015,
+      costPerOutputToken: defaultModel.includes('grok-4') ? 0.0000005 : 0.00000025,
+      maxOutputTokens: 8000,
+      priority: 1,
+      timeout: 20000
+    };
   }
-};
+  
+  // Add fallback model if different from default
+  if (fallbackModel !== defaultModel) {
+    if (fallbackModel.startsWith('x-ai/')) {
+      models[fallbackModel] = {
+        id: fallbackModel,
+        name: fallbackModel.includes('grok-4') ? 'Grok 4 Fast Reasoning' : 'Grok Model',
+        contextWindow: fallbackModel.includes('grok-4') ? 2000000 : 128000,
+        costPerInputToken: fallbackModel.includes('grok-4') ? 0.0000003 : 0.00000015,
+        costPerOutputToken: fallbackModel.includes('grok-4') ? 0.0000005 : 0.00000025,
+        maxOutputTokens: 8000,
+        priority: 2,
+        timeout: 15000
+      };
+    }
+  }
+  
+  return models;
+}
+
+const XAI_MODELS: Record<string, ModelInfo> = createDynamicModelInfo();
 
 /**
  * Model Selection Strategy
@@ -104,12 +116,15 @@ class ModelSelectionAgent {
   private modelInfo: Record<string, ModelInfo>;
 
   constructor() {
-    this.fallbackChain = [
-      getDefaultModel(),            // Primary model from env
-      getFallbackModel(),           // Fallback model from env
-      'anthropic/claude-3-haiku',   // Reliable fallback
-      'openai/gpt-3.5-turbo'        // Last resort
-    ];
+    // Use only environment-configured models
+    const defaultModel = getDefaultModel();
+    const fallbackModel = getFallbackModel();
+    
+    // Create fallback chain with only environment variables
+    this.fallbackChain = defaultModel === fallbackModel 
+      ? [defaultModel]
+      : [defaultModel, fallbackModel];
+    
     this.modelInfo = XAI_MODELS;
   }
 
@@ -341,8 +356,32 @@ export class OpenRouterClient {
   private serviceName = 'openrouter-xai';
 
   constructor(apiKey?: string) {
-    if (!OPENROUTER_CONFIG.apiKey && !apiKey) {
-      logger.warn('No OpenRouter API key provided. Set TLDRSEC_AI_SUMMARIZER or OPENROUTER_API_KEY in environment variables.');
+    // ENHANCED DEBUG: Log OpenRouter client initialization
+    const configuredApiKey = OPENROUTER_CONFIG.apiKey || apiKey;
+    const hasApiKey = !!configuredApiKey;
+    const apiKeySource = process.env.TLDRSEC_AI_SUMMARIZER ? 'TLDRSEC_AI_SUMMARIZER' : 
+                        process.env.OPENROUTER_API_KEY ? 'OPENROUTER_API_KEY' : 
+                        apiKey ? 'constructor_param' : 'none';
+    
+    logger.info('🔧 OpenRouter Client Initialization', {
+      hasApiKey,
+      apiKeySource,
+      apiKeyFormat: hasApiKey ? `${configuredApiKey.substring(0, 8)}...` : 'none',
+      defaultModel: OPENROUTER_CONFIG.defaultModel,
+      availableEnvVars: {
+        TLDRSEC_AI_SUMMARIZER: !!process.env.TLDRSEC_AI_SUMMARIZER,
+        OPENROUTER_API_KEY: !!process.env.OPENROUTER_API_KEY,
+        DEFAULT_AI_MODEL: !!process.env.DEFAULT_AI_MODEL,
+        ANTHROPIC_API_KEY: !!process.env.ANTHROPIC_API_KEY
+      }
+    });
+
+    if (!configuredApiKey) {
+      logger.error('❌ CRITICAL: No OpenRouter API key configured!', {
+        message: 'OpenRouter API calls will fail',
+        requiredEnvVars: ['TLDRSEC_AI_SUMMARIZER', 'OPENROUTER_API_KEY'],
+        recommendation: 'Set either TLDRSEC_AI_SUMMARIZER or OPENROUTER_API_KEY environment variable'
+      });
     }
 
     // Initialize rate limiter (OpenRouter has generous limits)
@@ -360,6 +399,12 @@ export class OpenRouterClient {
     // Initialize tracking
     this.totalTokensUsed = { input: 0, output: 0 };
     this.totalCost = 0;
+
+    logger.info('✅ OpenRouter Client initialized successfully', {
+      hasValidConfiguration: hasApiKey,
+      defaultModel: OPENROUTER_CONFIG.defaultModel,
+      serviceName: this.serviceName
+    });
   }
 
   /**
@@ -396,11 +441,24 @@ export class OpenRouterClient {
       });
     }
 
-    logger.info(`Starting OpenRouter request`, {
-      model: selectedModel,
-      originalModel,
+    // ENHANCED DEBUG: Log comprehensive request details
+    logger.info(`🚀 OPENROUTER API CALL INITIATED`, {
       requestId,
-      requestType
+      selectedModel,
+      originalModel,
+      requestType,
+      hasApiKey: !!OPENROUTER_CONFIG.apiKey,
+      apiKeyFormat: OPENROUTER_CONFIG.apiKey ? `${OPENROUTER_CONFIG.apiKey.substring(0, 8)}...` : 'none',
+      messageCount: messages.length,
+      maxTokens,
+      temperature,
+      timeout,
+      circuitBreakerStats: this.circuitBreakerManager.getStats(),
+      configuredOptions: {
+        costLimit: options.costLimit,
+        requiredCapabilities: options.requiredCapabilities,
+        remainingExecutionTime: options.remainingExecutionTime
+      }
     });
 
     const startTime = Date.now();
@@ -458,15 +516,34 @@ export class OpenRouterClient {
       this.totalTokensUsed.output += result.usage.outputTokens;
       this.totalCost += result.cost.totalCost;
 
-      logger.info(`OpenRouter request completed successfully`, {
-        model: result.model,
-        originalModel,
+      // ENHANCED DEBUG: Log successful response with comprehensive details
+      logger.info(`✅ OPENROUTER API CALL SUCCESSFUL`, {
         requestId,
-        inputTokens: result.usage.inputTokens,
-        outputTokens: result.usage.outputTokens,
+        actualModel: result.model,
+        originalModel,
+        selectedModel,
         fallbackUsed: result.model !== selectedModel,
-        duration: executionTimeMs,
-        cost: result.cost.totalCost
+        executionTimeMs,
+        usage: {
+          inputTokens: result.usage.inputTokens,
+          outputTokens: result.usage.outputTokens,
+          totalTokens: result.usage.inputTokens + result.usage.outputTokens
+        },
+        cost: {
+          inputCost: result.cost.inputCost,
+          outputCost: result.cost.outputCost,
+          totalCost: result.cost.totalCost
+        },
+        responseMetrics: {
+          contentLength: result.content?.length || 0,
+          responseId: result.id,
+          attempts: result.attempts || 1
+        },
+        clientStats: {
+          totalInputTokens: this.totalTokensUsed.input + result.usage.inputTokens,
+          totalOutputTokens: this.totalTokensUsed.output + result.usage.outputTokens,
+          totalCostUSD: this.totalCost + result.cost.totalCost
+        }
       });
 
       return result;
@@ -481,12 +558,27 @@ export class OpenRouterClient {
       
       abortController.clearTimeout();
       
-      logger.error(`Error in OpenRouter request:`, {
-        error: error.message,
-        model: selectedModel,
-        originalModel,
+      // ENHANCED DEBUG: Log comprehensive error details
+      logger.error(`❌ OPENROUTER API CALL FAILED`, {
         requestId,
-        stack: error.stack
+        selectedModel,
+        originalModel,
+        requestType,
+        errorDetails: {
+          message: error instanceof Error ? error.message : String(error),
+          name: error instanceof Error ? error.name : 'Unknown',
+          stack: error instanceof Error ? error.stack : undefined
+        },
+        requestConfig: {
+          hasApiKey: !!OPENROUTER_CONFIG.apiKey,
+          baseURL: OPENROUTER_CONFIG.baseURL,
+          timeout,
+          maxTokens,
+          temperature
+        },
+        executionTimeMs,
+        circuitBreakerStats: this.circuitBreakerManager.getStats(),
+        recommendation: 'Check API key validity, network connectivity, and model availability'
       });
       
       throw this.normalizeError(error, requestId);
@@ -642,11 +734,22 @@ export class OpenRouterClient {
       stream: false
     };
 
-    logger.debug(`Making OpenRouter API request`, {
+    // ENHANCED DEBUG: Log actual HTTP request details
+    logger.info(`🌐 HTTP REQUEST TO OPENROUTER`, {
+      url: `${OPENROUTER_CONFIG.baseURL}/chat/completions`,
+      method: 'POST',
       model,
       messageCount: formattedMessages.length,
       maxTokens,
-      temperature
+      temperature,
+      hasSystemMessage: !!system,
+      requestBodySize: JSON.stringify(requestBody).length,
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey.substring(0, 8)}...`,
+        'HTTP-Referer': 'https://tldrsec.app',
+        'X-Title': 'TLDRSEC.AI'
+      }
     });
 
     const response = await fetch(`${OPENROUTER_CONFIG.baseURL}/chat/completions`, {
@@ -674,6 +777,19 @@ export class OpenRouterClient {
     }
 
     const result = await response.json();
+    
+    // ENHANCED DEBUG: Log successful HTTP response
+    logger.info(`📥 HTTP RESPONSE FROM OPENROUTER`, {
+      status: response.status,
+      statusText: response.statusText,
+      model,
+      responseSize: JSON.stringify(result).length,
+      hasChoices: !!result.choices && result.choices.length > 0,
+      usage: result.usage || null,
+      id: result.id || 'unknown',
+      contentPreview: result.choices?.[0]?.message?.content?.substring(0, 100) + '...' || 'no content'
+    });
+    
     return result;
   }
 
@@ -828,8 +944,12 @@ export class OpenRouterClient {
       }
     }
 
-    // Try fallback models that are available
-    const fallbackChain = [getDefaultModel(), getFallbackModel(), 'anthropic/claude-3-haiku'];
+    // Try fallback models that are available (environment-configured only)
+    const defaultModel = getDefaultModel();
+    const fallbackModel = getFallbackModel();
+    const fallbackChain = defaultModel === fallbackModel 
+      ? [defaultModel]
+      : [defaultModel, fallbackModel];
     
     for (const modelId of fallbackChain) {
       if (this.circuitBreakerManager.isModelAvailable(modelId)) {

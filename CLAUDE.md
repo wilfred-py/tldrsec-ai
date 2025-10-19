@@ -55,6 +55,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - `npm run test:enhanced:integration` - Integration tests for enhanced features
 - `npm run test:enhanced:functionality` - Functional tests for enhanced summaries
 
+### Real Pipeline Testing
+- `npm run test:pipeline:real` - **Execute real production pipeline** with live API calls, actual database users, SEC filings, and email delivery (10-minute test)
+- `npm run test:pipeline:analyze` - Analyze current database state including users, tickers, summaries, budgets, and unprocessed filings
+
 ### Parser-Specific Testing
 - `npm run test:pdf` - Test PDF parser functionality
 - `npm run test:xbrl` - Test XBRL parser functionality

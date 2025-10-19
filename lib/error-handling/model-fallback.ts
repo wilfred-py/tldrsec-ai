@@ -9,7 +9,7 @@ import { ApiError } from './index';
 import { executeWithRetry, RetryConfig, DefaultRetryConfig, CircuitBreakerConfig, DefaultCircuitBreakerConfig } from './retry';
 import { logger } from '../logging';
 import { monitoring } from '../monitoring';
-import { getClaudeModel } from '../ai/config';
+import { getDefaultModel, getFallbackModel } from '../ai/config';
 import { v4 as uuidv4 } from 'uuid';
 
 /**
@@ -84,23 +84,7 @@ export const ClaudeModels: Record<string, ModelInfo> = {
     ],
     priority: 2,
   },
-  'claude-3-haiku-20240307': {
-    id: 'claude-3-haiku-20240307',
-    name: 'Claude 3 Haiku',
-    provider: 'anthropic',
-    costPerInputToken: 0.00000025, // $0.25 per million tokens
-    costPerOutputToken: 0.00000125, // $1.25 per million tokens
-    maxContextTokens: 200000,
-    capabilities: [
-      ModelCapability.TEXT_COMPLETION,
-      ModelCapability.SUMMARIZATION,
-      ModelCapability.CLASSIFICATION,
-      ModelCapability.EXTRACTION,
-      ModelCapability.MULTILINGUAL,
-      ModelCapability.LONG_CONTEXT,
-    ],
-    priority: 3,
-  },
+  // Removed hardcoded Claude 3 Haiku - use environment configuration instead
   'claude-2.1': {
     id: 'claude-2.1',
     name: 'Claude 2.1',
@@ -150,11 +134,9 @@ export interface FallbackConfig {
  * Default fallback chain for Anthropic Claude models
  */
 export const DefaultClaudeFallback: FallbackConfig = {
-  initialModel: 'claude-3-sonnet-20240229',
+  initialModel: getDefaultModel(),
   fallbackModels: [
-    'claude-3-haiku-20240307',
-    'claude-2.1',
-    'claude-instant-1.2',
+    getFallbackModel(),
   ],
   requiredCapabilities: [
     ModelCapability.SUMMARIZATION,
@@ -168,10 +150,9 @@ export const DefaultClaudeFallback: FallbackConfig = {
  * Cost-optimized fallback chain for batch processing
  */
 export const BatchClaudeFallback: FallbackConfig = {
-  initialModel: 'claude-3-haiku-20240307',
+  initialModel: getFallbackModel(),
   fallbackModels: [
-    'claude-3-sonnet-20240229',
-    'claude-2.1',
+    getDefaultModel(),
   ],
   requiredCapabilities: [
     ModelCapability.SUMMARIZATION,
@@ -184,10 +165,9 @@ export const BatchClaudeFallback: FallbackConfig = {
  * Premium fallback chain for high-quality results
  */
 export const PremiumClaudeFallback: FallbackConfig = {
-  initialModel: getClaudeModel(),
+  initialModel: getDefaultModel(),
   fallbackModels: [
-    'claude-3-sonnet-20240229',
-    'claude-3-haiku-20240307',
+    getFallbackModel(),
   ],
   requiredCapabilities: [
     ModelCapability.SUMMARIZATION,
