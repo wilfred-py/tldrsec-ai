@@ -11,6 +11,7 @@ import { optimizeCronProcessing } from './ticker-deduplication';
 import { isConcurrencyError } from '../db/concurrency';
 import { CronJobMonitor } from '../monitoring/cron-monitor';
 import { CronBudgetService } from './budget-service';
+import { lockUtils } from '../db/distributed-lock';
 import type {
   DatabaseUser,
   EligibleUser,
@@ -448,10 +449,6 @@ export class CronUserProcessingService {
     monitor: CronJobMonitor,
     filingProcessor: (user: DatabaseUser, tier: string, ...args: unknown[]) => Promise<{ filingsProcessed: number; cost: number }>
   ): Promise<ProcessUserResult> {
-    let lockAcquired = false;
-    const lockName = `user_processing_${userStatus.userId}`;
-    const lockExpirationMs = 10 * 60 * 1000; // 10 minutes
-    
     try {
       // Validate userStatus object structure
       if (!userStatus || !userStatus.userId) {
@@ -459,37 +456,44 @@ export class CronUserProcessingService {
         return { success: false, error: 'Invalid userStatus object', userId: 'unknown' };
       }
 
-      // ACQUIRE USER-LEVEL PROCESSING LOCK
-      try {
-        processingLogger.debug(`Attempting to acquire processing lock for user ${userStatus.userId}`);
-        
-        const lockResult = await getPrisma().jobLock.create({
-          data: {
-            lockName: lockName,
-            acquiredBy: `cron-${process.pid}`,
-            expiresAt: new Date(Date.now() + lockExpirationMs)
-          }
-        });
-        
-        lockAcquired = true;
-        processingLogger.debug(`Successfully acquired processing lock for user ${userStatus.userId}`, { 
-          lockId: lockResult.id 
-        });
-        
-      } catch (lockError: unknown) {
-        // Check if lock already exists
-        if ((lockError as Record<string, unknown>).code === 'P2002') { // Unique constraint violation
-          processingLogger.info(`User ${userStatus.userId} is already being processed by another cron run, skipping`);
-          return { 
-            success: false, 
-            error: 'User already being processed', 
-            userId: userStatus.userId,
-            errorType: ERROR_TYPES.CONCURRENCY_CONFLICT
-          };
+      // Use distributed lock manager for proper user-level locking
+      return await lockUtils.withUserLock(
+        userStatus.userId,
+        async () => {
+          processingLogger.debug(`Successfully acquired processing lock for user ${userStatus.userId}`);
+          return await this.executeUserProcessing(userStatus, allUsers, tier, monitor, filingProcessor);
+        },
+        {
+          ttlMs: 10 * 60 * 1000, // 10 minutes
+          timeoutMs: 5000 // 5 seconds to acquire lock
         }
-        throw lockError;
+      );
+      
+    } catch (lockError: unknown) {
+      if (lockError instanceof Error && lockError.message.includes('Failed to acquire lock')) {
+        processingLogger.info(`User ${userStatus.userId} is already being processed by another cron run, skipping`);
+        return { 
+          success: false, 
+          error: 'User already being processed', 
+          userId: userStatus.userId,
+          errorType: ERROR_TYPES.CONCURRENCY_CONFLICT
+        };
       }
+      throw lockError;
+    }
+  }
 
+  /**
+   * Execute the actual user processing within the lock
+   */
+  private static async executeUserProcessing(
+    userStatus: EligibleUser,
+    allUsers: DatabaseUser[],
+    tier: string,
+    monitor: CronJobMonitor,
+    filingProcessor: (user: DatabaseUser, tier: string, ...args: unknown[]) => Promise<{ filingsProcessed: number; cost: number }>
+  ): Promise<ProcessUserResult> {
+    try {
       // Find full user data with null safety
       const fullUser = (allUsers || []).find(u => u && u.id === userStatus.userId);
       if (!fullUser) {
@@ -544,20 +548,6 @@ export class CronUserProcessingService {
 
     } catch (error) {
       return this.handleUserProcessingError(error, userStatus, tier);
-    } finally {
-      // ALWAYS RELEASE THE LOCK
-      if (lockAcquired) {
-        try {
-          await getPrisma().jobLock.delete({
-            where: { lockName: lockName }
-          });
-          processingLogger.debug(`Released processing lock for user ${userStatus.userId}`);
-        } catch (lockReleaseError) {
-          processingLogger.error(`Failed to release processing lock for user ${userStatus.userId}`, {
-            error: lockReleaseError instanceof Error ? lockReleaseError.message : 'Unknown error'
-          });
-        }
-      }
     }
   }
 
