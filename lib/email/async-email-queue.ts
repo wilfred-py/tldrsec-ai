@@ -342,20 +342,37 @@ export class AsyncEmailQueue {
       // Process jobs sequentially to respect rate limits
       for (const job of jobs) {
         try {
-          // Mark job as processing
-          await JobQueueService.updateJobStatus(job.id, 'PROCESSING', {
-            startedAt: new Date()
-          });
+          // Mark job as processing (be resilient to database conflicts)
+          try {
+            await JobQueueService.updateJobStatus(job.id, 'PROCESSING', {
+              startedAt: new Date()
+            });
+          } catch (statusError) {
+            emailQueueLogger.warn('Failed to update job status to PROCESSING, continuing with email processing', {
+              jobId: job.id,
+              error: statusError instanceof Error ? statusError.message : 'Unknown error'
+            });
+          }
           
           // Process the email job
           const result = await this.processEmailJob(job.payload as EmailJobPayload);
           
           if (result.success) {
-            // Mark job as completed
-            await JobQueueService.updateJobStatus(job.id, 'COMPLETED', {
-              completedAt: new Date(),
-              result: { emailId: result.emailId }
-            });
+            try {
+              // Mark job as completed
+              await JobQueueService.updateJobStatus(job.id, 'COMPLETED', {
+                completedAt: new Date(),
+                result: { emailId: result.emailId }
+              });
+            } catch (statusError) {
+              // Log the database error but don't fail the entire process
+              emailQueueLogger.warn('Failed to update job status to COMPLETED, but email was sent successfully', {
+                jobId: job.id,
+                emailId: result.emailId,
+                error: statusError instanceof Error ? statusError.message : 'Unknown error'
+              });
+            }
+            // Always count as processed if email was successfully sent
             processed++;
           } else {
             // Mark job as failed (JobQueue will handle retry logic)

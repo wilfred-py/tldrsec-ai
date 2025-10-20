@@ -220,7 +220,7 @@ describe('PII Masking Functions', () => {
       const masked = maskEmailContentForLogging(longContent, maxLength);
 
       expect(masked.length).toBe(maxLength);
-      expect(masked).toEndWith('...');
+      expect(masked.endsWith('...')).toBe(true);
       expect(masked.substring(0, maxLength - 3)).toBe('x'.repeat(maxLength - 3));
     });
 

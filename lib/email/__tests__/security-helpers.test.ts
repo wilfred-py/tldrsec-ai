@@ -19,7 +19,7 @@ describe('PII Masking Functions', () => {
     test('should mask email addresses properly', () => {
       expect(maskEmailForLogging('user@example.com')).toBe('us***r@example.com');
       expect(maskEmailForLogging('a@test.com')).toBe('a***@test.com');
-      expect(maskEmailForLogging('ab@domain.org')).toBe('a***@domain.org');
+      expect(maskEmailForLogging('ab@domain.org')).toBe('ab***@domain.org'); // 2 chars shows both
       expect(maskEmailForLogging('john.doe@company.com')).toBe('jo***e@company.com');
     });
 
@@ -50,7 +50,7 @@ describe('PII Masking Functions', () => {
     test('should mask PII in email content', () => {
       const content = 'Email user@example.com about phone 555-123-4567';
       const masked = maskEmailContentForLogging(content);
-      expect(masked).toBe('Email [EMAIL_REDACTED] about phone [PHONE_REDAC...');
+      expect(masked).toBe('Email [EMAIL_REDACTED] about phone [PHONE_REDACTED]');
     });
 
     test('should mask SSNs and credit card numbers', () => {

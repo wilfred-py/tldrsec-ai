@@ -235,9 +235,13 @@ describe('Job Queue Async Email Integration', () => {
       expect(failedCall[2]).toEqual(
         expect.objectContaining({
           error: 'Invalid email address',
-          retryable: undefined // Non-retryable errors don't set retryable flag
+          failedAt: expect.any(Date)
+          // Non-retryable errors don't include retryable property
         })
       );
+      
+      // Verify retryable property is NOT present for non-retryable errors
+      expect(failedCall[2]).not.toHaveProperty('retryable');
     });
   });
 
