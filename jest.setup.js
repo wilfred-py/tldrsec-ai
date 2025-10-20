@@ -81,6 +81,7 @@ jest.mock('@/lib/monitoring', () => ({
   monitoring: {
     incrementCounter: jest.fn(),
     recordValue: jest.fn(),
+    recordTiming: jest.fn(),
     startTimer: jest.fn().mockReturnValue('timer-id'),
     stopTimer: jest.fn(),
     registerHealthCheck: jest.fn(),
