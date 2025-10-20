@@ -48,7 +48,7 @@ jobs:
           fi
           if [ -z "$CLERK_SECRET_KEY" ]; then
             echo "⚠️ CLERK_SECRET_KEY not configured, using test key"
-            export CLERK_SECRET_KEY="sk_test_clerk_key"
+            export CLERK_SECRET_KEY="sk_test_abcdefghijklmnopqrstuvwxyz123456789"
           else
             echo "✅ CLERK_SECRET_KEY configured"
           fi
@@ -67,8 +67,8 @@ jobs:
           DATABASE_URL: ${{ secrets.DATABASE_URL || 'postgresql://test:test@localhost:5432/test_db' }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY || 'sk-test-anthropic-key' }}
           RESEND_API_KEY: ${{ secrets.RESEND_API_KEY || 're_test_resend_key' }}
-          CLERK_SECRET_KEY: ${{ secrets.CLERK_SECRET_KEY || 'sk_test_clerk_key' }}
-          NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY || 'pk_test_clerk_key' }}
+          CLERK_SECRET_KEY: ${{ secrets.CLERK_SECRET_KEY || 'sk_test_abcdefghijklmnopqrstuvwxyz123456789' }}
+          NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY || 'pk_test_abcdefghijklmnopqrstuvwxyz123456789_clerk_publishable' }}
           
       - name: Security Scan
         run: npm audit --audit-level=high
@@ -79,8 +79,8 @@ jobs:
           DATABASE_URL: ${{ secrets.DATABASE_URL || 'postgresql://test:test@localhost:5432/test_db' }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY || 'sk-test-anthropic-key' }}
           RESEND_API_KEY: ${{ secrets.RESEND_API_KEY || 're_test_resend_key' }}
-          CLERK_SECRET_KEY: ${{ secrets.CLERK_SECRET_KEY || 'sk_test_clerk_key' }}
-          NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY || 'pk_test_clerk_key' }}
+          CLERK_SECRET_KEY: ${{ secrets.CLERK_SECRET_KEY || 'sk_test_abcdefghijklmnopqrstuvwxyz123456789' }}
+          NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY || 'pk_test_abcdefghijklmnopqrstuvwxyz123456789_clerk_publishable' }}
         
       - name: Database Connection Test
         run: npm run db:test || echo "⚠️ Database connection test skipped - no live database available"
@@ -222,8 +222,8 @@ jobs:
           echo "Bundle sizes logged in build output above"
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL || 'postgresql://test:test@localhost:5432/test_db' }}
-          CLERK_SECRET_KEY: ${{ secrets.CLERK_SECRET_KEY || 'sk_test_clerk_key' }}
-          NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY || 'pk_test_clerk_key' }}
+          CLERK_SECRET_KEY: ${{ secrets.CLERK_SECRET_KEY || 'sk_test_abcdefghijklmnopqrstuvwxyz123456789' }}
+          NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY || 'pk_test_abcdefghijklmnopqrstuvwxyz123456789_clerk_publishable' }}
           
       - name: Validate Monitoring Configuration
         run: |
