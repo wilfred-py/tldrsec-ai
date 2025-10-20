@@ -599,6 +599,7 @@ export class CronFilingProcessor {
       const { queueEmail } = await import('../email/async-email-queue');
       const { generateHtmlEmail, generatePlainTextEmail } = await import('../../services/filings/email/emailGenerator');
       const { getFilingContent } = await import('../../services/filings/filingRetrieval');
+      const { FilingContentValidator } = await import('../validation/filing-content-validator');
 
       // Validate critical imports succeeded
       if (typeof generateAISummaryWithRetry !== 'function') {
@@ -609,6 +610,9 @@ export class CronFilingProcessor {
       }
       if (typeof getFilingContent !== 'function') {
         throw new Error('Failed to import getFilingContent - filing retrieval will not work');
+      }
+      if (typeof FilingContentValidator !== 'function') {
+        throw new Error('Failed to import FilingContentValidator - content validation will not work');
       }
 
       processorLogger.info(`Successfully imported all dependencies for filing ${filingForProcessing.accessionNumber}`, {
@@ -640,7 +644,7 @@ export class CronFilingProcessor {
           ticker: filingForProcessing.tickerData.symbol,
           contentLength: filingContent.length,
           fetchDurationMs: contentFetchDuration,
-          nextStep: 'Cache check and AI summarization'
+          nextStep: 'Content validation'
         });
       } catch (contentError) {
         processorLogger.error(`Failed to fetch content for filing ${filingForProcessing.accessionNumber}`, {
@@ -649,6 +653,67 @@ export class CronFilingProcessor {
           cik: filingForProcessing.tickerData.cik
         });
         throw new Error(`Failed to fetch filing content: ${contentError instanceof Error ? contentError.message : 'Unknown error'}`);
+      }
+
+      // STEP 1.5: Validate content to prevent NoSuchKey errors and invalid content from reaching AI
+      processorLogger.info(`🔄 STEP 1.5: Validating content for filing ${filingForProcessing.accessionNumber}`, {
+        userId: user.id,
+        ticker: filingForProcessing.tickerData.symbol,
+        contentLength: filingContent.length,
+        formType: filingForProcessing.formType
+      });
+
+      const validationStartTime = Date.now();
+      
+      try {
+        const documentUrl = filingForProcessing.filingUrl || `filing-${filingForProcessing.accessionNumber}`;
+        const validationResult = await FilingContentValidator.validate(
+          filingContent,
+          filingForProcessing.accessionNumber,
+          documentUrl
+        );
+
+        const validationDuration = Date.now() - validationStartTime;
+
+        if (!validationResult.isValid) {
+          // Content is invalid - log details and fail the filing
+          processorLogger.error(`❌ STEP 1.5 FAILED: Content validation failed for filing ${filingForProcessing.accessionNumber}`, {
+            userId: user.id,
+            ticker: filingForProcessing.tickerData.symbol,
+            validationError: validationResult.error?.name,
+            validationCode: validationResult.error?.code,
+            failureReason: validationResult.failureReason,
+            validationTimeMs: validationDuration,
+            contentLength: filingContent.length,
+            detectedFormat: validationResult.validationMetrics.detectedFormat,
+            hasNoSuchKey: validationResult.validationMetrics.hasNoSuchKey,
+            retryable: validationResult.error?.retryable,
+            costSaved: '$0.152' // Approximate cost saved by preventing AI processing
+          });
+
+          // Throw the validation error to fail the filing processing
+          throw validationResult.error || new Error(validationResult.failureReason || 'Content validation failed');
+        }
+
+        processorLogger.info(`✅ STEP 1.5 COMPLETE: Content validation passed for filing ${filingForProcessing.accessionNumber}`, {
+          userId: user.id,
+          ticker: filingForProcessing.tickerData.symbol,
+          validationTimeMs: validationDuration,
+          contentLength: filingContent.length,
+          detectedFormat: validationResult.validationMetrics.detectedFormat,
+          extractedYear: validationResult.validationMetrics.extractedYear,
+          nextStep: 'Cache check and AI summarization'
+        });
+
+      } catch (validationError) {
+        processorLogger.error(`Content validation error for filing ${filingForProcessing.accessionNumber}`, {
+          error: validationError instanceof Error ? validationError.message : 'Unknown validation error',
+          ticker: filingForProcessing.tickerData.symbol,
+          cik: filingForProcessing.tickerData.cik,
+          userId: user.id,
+          validationTimeMs: Date.now() - validationStartTime
+        });
+        throw new Error(`Content validation failed: ${validationError instanceof Error ? validationError.message : 'Unknown validation error'}`);
       }
 
       // STEP 2: Check for existing summary (cache hit detection)
@@ -1118,12 +1183,29 @@ export class CronFilingProcessor {
 
   /**
    * Determine if an error is retryable based on error message patterns
+   * Updated to handle validation errors appropriately
    */
   private static isRetryableError(errorMessage?: string): boolean {
     if (!errorMessage) return false;
     
     const lowerError = errorMessage.toLowerCase();
     
+    // Check for non-retryable validation errors first
+    const nonRetryableValidationPatterns = [
+      'nosuchkey', // NoSuchKey errors are permanent
+      'content validation failed', // Generic validation failures
+      'content too short', // Invalid content length
+      'invalid date', // Date validation failures
+      'malformed content' // Content structure issues
+    ];
+    
+    for (const pattern of nonRetryableValidationPatterns) {
+      if (lowerError.includes(pattern)) {
+        return false; // These errors won't resolve with retry
+      }
+    }
+    
+    // Check for retryable patterns (including retryable validation errors)
     return this.RETRY_CONFIG.retryableErrors.some(pattern => 
       lowerError.includes(pattern) ||
       lowerError.includes('timeout') ||
@@ -1133,7 +1215,8 @@ export class CronFilingProcessor {
       lowerError.includes('504') ||
       lowerError.includes('rate limit') ||
       lowerError.includes('too many requests') ||
-      lowerError.includes('temporarily unavailable')
+      lowerError.includes('temporarily unavailable') ||
+      lowerError.includes('sec api error') // Retryable validation errors
     );
   }
 
