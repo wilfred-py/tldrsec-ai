@@ -12,8 +12,9 @@ import { monitoring } from '../monitoring';
 import { EmailMessage } from './types';
 import { emailClient } from './index';
 import { v4 as uuidv4 } from 'uuid';
+import { SecureEmailLogger, EmailQueueLock } from './security-helpers';
 
-const emailQueueLogger = logger.child('async-email-queue');
+const emailQueueLogger = new SecureEmailLogger(logger.child('async-email-queue'));
 
 /**
  * Email job payload for async processing
@@ -40,10 +41,16 @@ export interface EmailJobResult {
  * 
  * Provides methods to queue emails for async processing and
  * process queued email jobs with proper rate limiting.
+ * Includes GDPR-compliant logging and race condition protection.
  */
 export class AsyncEmailQueue {
   private static instance: AsyncEmailQueue;
   private processing = false;
+  private processId: string;
+  
+  constructor() {
+    this.processId = `queue-${uuidv4().substring(0, 8)}-${process.pid || 'unknown'}`;
+  }
   
   /**
    * Get singleton instance
@@ -277,35 +284,57 @@ export class AsyncEmailQueue {
   }
   
   /**
-   * Process queued email jobs
+   * Process queued email jobs with atomic locking
    * 
    * This method should be called by the job worker to process
-   * ASYNC_EMAIL_DIGEST jobs from the queue.
+   * ASYNC_EMAIL_DIGEST jobs from the queue. Uses distributed locking
+   * to prevent race conditions in concurrent environments.
    * 
    * @param batchSize Number of jobs to process in one batch
    * @returns Promise resolving to number of jobs processed
    */
   async processQueuedEmails(batchSize: number = 5): Promise<number> {
+    const lockKey = 'email-queue-processing';
+    
+    // Try to acquire distributed lock to prevent race conditions
+    if (!EmailQueueLock.acquireLock(lockKey, this.processId)) {
+      emailQueueLogger.debug('Email queue processing lock already held by another process', {
+        processId: this.processId,
+        lockStatus: EmailQueueLock.getLockStatus()
+      });
+      return 0;
+    }
+    
+    // Additional local check for this instance
     if (this.processing) {
-      emailQueueLogger.debug('Email queue processing already in progress, skipping');
+      EmailQueueLock.releaseLock(lockKey, this.processId);
+      emailQueueLogger.debug('Email queue processing already in progress on this instance', {
+        processId: this.processId
+      });
       return 0;
     }
     
     this.processing = true;
     
     try {
-      emailQueueLogger.info('Starting email queue processing', { batchSize });
+      emailQueueLogger.info('Starting email queue processing', { 
+        batchSize,
+        processId: this.processId
+      });
       
       // Get email jobs from the queue
       const jobs = await JobQueueService.getJobsToProcess(batchSize, 'ASYNC_EMAIL_DIGEST');
       
       if (jobs.length === 0) {
-        emailQueueLogger.debug('No email jobs to process');
+        emailQueueLogger.debug('No email jobs to process', {
+          processId: this.processId
+        });
         return 0;
       }
       
       emailQueueLogger.info(`Processing ${jobs.length} email jobs`, {
-        jobIds: jobs.map(j => j.id)
+        jobIds: jobs.map(j => j.id),
+        processId: this.processId
       });
       
       let processed = 0;
@@ -341,7 +370,8 @@ export class AsyncEmailQueue {
           const errorMessage = error instanceof Error ? error.message : 'Unknown error';
           emailQueueLogger.error('Failed to process email job', {
             jobId: job.id,
-            error: errorMessage
+            error: errorMessage,
+            processId: this.processId
           });
           
           // Mark job as failed
@@ -355,7 +385,8 @@ export class AsyncEmailQueue {
       emailQueueLogger.info('Email queue processing completed', {
         totalJobs: jobs.length,
         processedSuccessfully: processed,
-        failed: jobs.length - processed
+        failed: jobs.length - processed,
+        processId: this.processId
       });
       
       monitoring.recordValue('email_queue.batch_processed', processed);
@@ -364,11 +395,18 @@ export class AsyncEmailQueue {
       return processed;
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      emailQueueLogger.error('Email queue processing failed', { error: errorMessage });
+      emailQueueLogger.error('Email queue processing failed', { 
+        error: errorMessage,
+        processId: this.processId
+      });
       monitoring.incrementCounter('email_queue.processing_error', 1);
       throw error;
     } finally {
       this.processing = false;
+      EmailQueueLock.releaseLock(lockKey, this.processId);
+      emailQueueLogger.debug('Released email queue processing lock', {
+        processId: this.processId
+      });
     }
   }
 }

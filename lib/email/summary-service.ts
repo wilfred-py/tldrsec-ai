@@ -6,6 +6,10 @@ import { getEmailTemplate } from './templates';
 import { EmailType, EmailMessage } from './types';
 import { sendEmail } from './index';
 import { logger } from '../logging';
+import { SecureEmailLogger } from './security-helpers';
+
+// Create secure logger to prevent PII exposure
+const secureLogger = new SecureEmailLogger(logger.child('summary-service'));
 
 /**
  * Get summaries for 10-K and 10-Q filings for a user's tickers
@@ -185,14 +189,15 @@ export async function sendLatestSummariesEmail(): Promise<{ success: boolean; er
       }
       
       // Log success
-      logger.info(`Sent summaries email to ${primaryEmail}`, {
+      secureLogger.info('Sent summaries email', {
+        to: primaryEmail,
         userId: dbUser.id,
         emailId: result.id
       });
       
       return { success: true };
     } catch (emailError) {
-      logger.error('Failed to send summaries email', {
+      secureLogger.error('Failed to send summaries email', {
         error: emailError instanceof Error ? emailError.message : 'Unknown error',
         userId: dbUser.id
       });
@@ -263,21 +268,23 @@ export async function sendFilingSummaryEmail(
     const result = await sendEmail(message);
     
     if (!result.success) {
-      logger.warn(`Filing notification email failed: ${result.error?.message}`, {
+      secureLogger.warn('Filing notification email failed', {
+        error: result.error?.message,
         recipientEmail,
         ticker: filingData.ticker
       });
       return { success: false, error: result.error?.message || 'Failed to send email' };
     }
     
-    logger.info(`Sent filing notification email to ${recipientEmail}`, {
+    secureLogger.info('Sent filing notification email', {
+      to: recipientEmail,
       ticker: filingData.ticker,
       emailId: result.id
     });
     
     return { success: true };
   } catch (error) {
-    logger.error('Error sending filing summary email', {
+    secureLogger.error('Error sending filing summary email', {
       error: error instanceof Error ? error.message : 'Unknown error',
       recipientEmail,
       ticker: filingData.ticker
