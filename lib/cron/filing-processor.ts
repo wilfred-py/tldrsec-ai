@@ -596,15 +596,16 @@ export class CronFilingProcessor {
 
       // Dynamic imports to avoid build-time dependencies
       const { generateAISummaryWithRetry } = await import('../../services/filing/summaryGenerationService');
-      const { sendEmailSummary } = await import('../../services/filings/email/sendEmailSummary');
+      const { queueEmail } = await import('../email/async-email-queue');
+      const { generateHtmlEmail, generatePlainTextEmail } = await import('../../services/filings/email/emailGenerator');
       const { getFilingContent } = await import('../../services/filings/filingRetrieval');
 
       // Validate critical imports succeeded
       if (typeof generateAISummaryWithRetry !== 'function') {
         throw new Error('Failed to import generateAISummaryWithRetry - AI summarization will not work');
       }
-      if (typeof sendEmailSummary !== 'function') {
-        throw new Error('Failed to import sendEmailSummary - email notifications will not work');
+      if (typeof queueEmail !== 'function') {
+        throw new Error('Failed to import queueEmail - async email notifications will not work');
       }
       if (typeof getFilingContent !== 'function') {
         throw new Error('Failed to import getFilingContent - filing retrieval will not work');
@@ -982,65 +983,87 @@ export class CronFilingProcessor {
         // The transaction will be rolled back if this function throws
       }
 
-      // STEP 5: Send email notification if user has email with bulletproof deduplication
+      // STEP 5: Queue email notification for async processing (rate limit compliant)
       if (user.email && summaryRecord) {
-        processorLogger.info(`🔄 STEP 5: Sending email notification for filing ${filingForProcessing.accessionNumber}`, {
+        processorLogger.info(`🔄 STEP 5: Queuing async email notification for filing ${filingForProcessing.accessionNumber}`, {
           userId: user.id,
           email: user.email,
           ticker: filingForProcessing.tickerData.symbol,
           summaryId: summaryRecord.id
         });
 
-        const emailStartTime = Date.now();
+        const emailQueueStartTime = Date.now();
         
         try {
-          const emailResult = await sendEmailSummary(
-            user.email,
-            [filingForProcessing.tickerData.symbol],
-            false, // not debug mode
-            user.id // Pass user ID for bulletproof deduplication
-          );
+          // Create filing summary data for email
+          const filingSummaryResult = {
+            ticker: filingForProcessing.tickerData.symbol,
+            companyName: filingForProcessing.tickerData.companyName,
+            filingType: filingForProcessing.formType,
+            filingDate: filingForProcessing.filingDate.toISOString(),
+            url: filingForProcessing.filingUrl || '',
+            accessionNumber: filingForProcessing.accessionNumber,
+            summaryText: summaryResult.summary,
+            keyPoints: summaryResult.keyPoints || []
+          };
           
-          if (emailResult.success) {
-            // Email delivery tracking is now handled atomically in sendEmailSummary function
-            // Update summary analytics - increment email counters
-            await tx.summary.update({
-              where: { id: summaryRecord.id },
-              data: {
-                sentToUser: true,
-                totalEmailsSent: { increment: 1 },
-                uniqueUsersServed: { increment: 1 } // First email to this user for this summary
-              }
-            });
-
-            const emailDuration = Date.now() - emailStartTime;
-            processorLogger.info(`✅ STEP 5 COMPLETE: Email sent successfully for filing ${filingForProcessing.accessionNumber}`, {
+          // Generate email content
+          const emailHtml = generateHtmlEmail([filingSummaryResult], []);
+          const plainText = generatePlainTextEmail([filingSummaryResult], []);
+          
+          // Queue email for async processing
+          const jobId = await queueEmail({
+            to: user.email,
+            subject: `SEC Filing Summary - ${new Date().toLocaleDateString()}`,
+            html: emailHtml,
+            text: plainText,
+            tags: [
+              'type_summaries',
+              'content_filings',
+              `ticker_${filingForProcessing.tickerData.symbol}`,
+              `form_${filingForProcessing.formType}`
+            ],
+            replyTo: 'no-reply@tldrsec.app'
+          }, {
+            priority: 7, // High priority for filing notifications
+            metadata: {
               userId: user.id,
-              email: user.email,
-              ticker: filingForProcessing.tickerData.symbol,
               summaryId: summaryRecord.id,
-              duplicatesDetected: emailResult.duplicatesDetected || 0,
-              emailServiceId: emailResult.emailServiceId,
-              emailDurationMs: emailDuration,
-              finalStep: 'E2E process complete'
-            });
-          } else {
-            const _emailDuration = Date.now() - emailStartTime;
-            processorLogger.warn(`❌ STEP 5 FAILED: Email sending failed for filing ${filingForProcessing.accessionNumber}`, {
-              userId: user.id,
-              email: user.email,
-              error: emailResult.error,
-              summaryId: summaryRecord.id
-            });
-          }
-        } catch (emailError) {
-          processorLogger.error(`Email service error for filing ${filingForProcessing.accessionNumber}`, {
-            error: emailError,
+              ticker: filingForProcessing.tickerData.symbol,
+              filingType: filingForProcessing.formType,
+              accessionNumber: filingForProcessing.accessionNumber
+            },
+            idempotencyKey: `filing-email-${user.id}-${summaryRecord.id}`
+          });
+          
+          // Mark summary as queued for email (will be updated when email actually sends)
+          await tx.summary.update({
+            where: { id: summaryRecord.id },
+            data: {
+              sentToUser: false, // Will be set to true when email actually sends
+              totalEmailsSent: { increment: 0 }, // Will be incremented when email sends
+              uniqueUsersServed: { increment: 0 } // Will be incremented when email sends
+            }
+          });
+
+          const emailQueueDuration = Date.now() - emailQueueStartTime;
+          processorLogger.info(`✅ STEP 5 COMPLETE: Email queued successfully for filing ${filingForProcessing.accessionNumber}`, {
+            userId: user.id,
+            email: user.email,
+            ticker: filingForProcessing.tickerData.symbol,
+            summaryId: summaryRecord.id,
+            jobId,
+            emailQueueDurationMs: emailQueueDuration,
+            finalStep: 'E2E process complete - email will be sent asynchronously'
+          });
+        } catch (emailQueueError) {
+          processorLogger.error(`Email queue error for filing ${filingForProcessing.accessionNumber}`, {
+            error: emailQueueError instanceof Error ? emailQueueError.message : 'Unknown error',
             userId: user.id,
             email: user.email,
             summaryId: summaryRecord?.id
           });
-          // Don't fail the whole process for email errors
+          // Don't fail the whole process for email queue errors
         }
       } else {
         if (!user.email) {

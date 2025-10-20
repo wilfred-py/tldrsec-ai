@@ -11,6 +11,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { EmailType } from './types';
 import { logger } from '../logging';
 import { monitoring } from '../monitoring';
+import { SecureEmailLogger } from './security-helpers';
 import { JobQueueService, JobType } from '../job-queue';
 import { 
   getEmailTemplate, 
@@ -33,6 +34,9 @@ import {
 
 // Import from email-core to avoid circular dependency
 import { emailClient, sendEmail } from './email-core';
+
+// Create secure logger to prevent PII exposure
+const secureLogger = new SecureEmailLogger(logger.child('notification-service'));
 
 /**
  * Email Notification Service
@@ -91,7 +95,7 @@ export class NotificationService implements NotificationServiceInterface {
       this.handleSummaryReadyEvent.bind(this)
     );
     
-    logger.info('Notification service initialized with event listeners');
+    secureLogger.info('Notification service initialized with event listeners');
   }
   
   /**
@@ -100,9 +104,10 @@ export class NotificationService implements NotificationServiceInterface {
    */
   public async handleNewFilingEvent(payload: FilingNotificationPayload): Promise<void> {
     try {
-      logger.info(`Processing new filing notification for ${payload.ticker} - ${payload.formType}`, { 
+      secureLogger.info('Processing new filing notification', { 
         filingId: payload.filingId,
-        ticker: payload.ticker
+        ticker: payload.ticker,
+        formType: payload.formType
       });
       
       // Add to job queue for processing
@@ -118,7 +123,7 @@ export class NotificationService implements NotificationServiceInterface {
       
       monitoring.incrementCounter('notification.event.new_filing', 1);
     } catch (error) {
-      logger.error('Error handling new filing event', { 
+      secureLogger.error('Error handling new filing event', { 
         error: error instanceof Error ? error.message : String(error),
         filingId: payload.filingId 
       });
@@ -132,9 +137,10 @@ export class NotificationService implements NotificationServiceInterface {
    */
   public async handleFilingUpdateEvent(payload: FilingNotificationPayload): Promise<void> {
     try {
-      logger.info(`Processing filing update notification for ${payload.ticker} - ${payload.formType}`, { 
+      secureLogger.info('Processing filing update notification', { 
         filingId: payload.filingId,
-        ticker: payload.ticker
+        ticker: payload.ticker,
+        formType: payload.formType
       });
       
       // Add to job queue for processing
@@ -150,7 +156,7 @@ export class NotificationService implements NotificationServiceInterface {
       
       monitoring.incrementCounter('notification.event.filing_update', 1);
     } catch (error) {
-      logger.error('Error handling filing update event', { 
+      secureLogger.error('Error handling filing update event', { 
         error: error instanceof Error ? error.message : String(error),
         filingId: payload.filingId 
       });
@@ -164,10 +170,11 @@ export class NotificationService implements NotificationServiceInterface {
    */
   public async handleSummaryReadyEvent(payload: FilingNotificationPayload): Promise<void> {
     try {
-      logger.info(`Processing summary ready notification for ${payload.ticker} - ${payload.formType}`, { 
+      secureLogger.info('Processing summary ready notification', { 
         filingId: payload.filingId,
         summaryId: payload.summaryId,
-        ticker: payload.ticker
+        ticker: payload.ticker,
+        formType: payload.formType
       });
       
       // Add to job queue for processing
@@ -183,7 +190,7 @@ export class NotificationService implements NotificationServiceInterface {
       
       monitoring.incrementCounter('notification.event.summary_ready', 1);
     } catch (error) {
-      logger.error('Error handling summary ready event', {
+      secureLogger.error('Error handling summary ready event', {
         error: error instanceof Error ? error.message : String(error),
         filingId: payload.filingId,
         summaryId: payload.summaryId
@@ -237,7 +244,7 @@ export class NotificationService implements NotificationServiceInterface {
       const recipients = await this.getImmediateNotificationRecipients(payload);
       
       if (recipients.length === 0) {
-        logger.info('No recipients for immediate notification', { 
+        secureLogger.info('No recipients for immediate notification', { 
           filingId: payload.filingId, 
           ticker: payload.ticker 
         });
@@ -245,7 +252,7 @@ export class NotificationService implements NotificationServiceInterface {
         return;
       }
       
-      logger.info(`Sending immediate notifications to ${recipients.length} recipients`, {
+      secureLogger.info('Sending immediate notifications', {
         filingId: payload.filingId,
         ticker: payload.ticker,
         recipientCount: recipients.length
@@ -269,14 +276,14 @@ export class NotificationService implements NotificationServiceInterface {
       monitoring.incrementCounter('notification.immediate.sent', successful);
       monitoring.incrementCounter('notification.immediate.failed', failed);
       
-      logger.info(`Sent ${successful} immediate notifications (${failed} failed)`, {
+      secureLogger.info('Immediate notifications completed', {
         filingId: payload.filingId,
         ticker: payload.ticker,
         successful,
         failed
       });
     } catch (error) {
-      logger.error('Error sending immediate notifications', { 
+      secureLogger.error('Error sending immediate notifications', { 
         error: error instanceof Error ? error.message : String(error),
         filingId: payload.filingId, 
         ticker: payload.ticker
@@ -412,7 +419,7 @@ export class NotificationService implements NotificationServiceInterface {
           };
         });
     } catch (error) {
-      logger.error('Error getting notification recipients', {
+      secureLogger.error('Error getting notification recipients', {
         error: error instanceof Error ? error.message : String(error),
         filingId: payload.filingId,
         ticker: payload.ticker
@@ -431,7 +438,11 @@ export class NotificationService implements NotificationServiceInterface {
     payload: FilingNotificationPayload
   ): Promise<void> {
     try {
-      logger.info(`Sending immediate notification to ${recipient.email} for ${payload.ticker} - ${payload.formType}`);
+      secureLogger.info('Sending immediate notification', {
+        to: recipient.email,
+        ticker: payload.ticker,
+        formType: payload.formType
+      });
       
       // Generate notification content
       const { html, text } = await this.generateNotificationContent(payload);
@@ -462,7 +473,8 @@ export class NotificationService implements NotificationServiceInterface {
       }
       
       // Log success
-      logger.info(`Sent immediate notification to ${recipient.email}`, {
+      secureLogger.info('Sent immediate notification', {
+        to: recipient.email,
         userId: recipient.userId,
         filingId: payload.filingId,
         emailId: result.id
@@ -488,8 +500,9 @@ export class NotificationService implements NotificationServiceInterface {
         }
       });
     } catch (error) {
-      logger.error(`Failed to send notification to ${recipient.email}`, {
+      secureLogger.error('Failed to send notification', {
         error: error instanceof Error ? error.message : String(error),
+        to: recipient.email,
         userId: recipient.userId,
         filingId: payload.filingId
       });
@@ -520,7 +533,7 @@ export class NotificationService implements NotificationServiceInterface {
   ): Promise<{ html: string, text: string }> {
     try {
       // Log that we're using the template system
-      logger.debug('Generating email content using template system', {
+      secureLogger.debug('Generating email content using template system', {
         ticker: payload.ticker,
         formType: payload.formType,
         hasDetails: !!payload.summaryId
@@ -555,7 +568,7 @@ export class NotificationService implements NotificationServiceInterface {
         filing: filingData
       });
     } catch (error) {
-      logger.error('Error generating notification content using templates', {
+      secureLogger.error('Error generating notification content using templates', {
         error: error instanceof Error ? error.message : String(error),
         filingId: payload.filingId
       });

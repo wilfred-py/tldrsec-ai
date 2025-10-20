@@ -9,6 +9,7 @@
 import { JobQueueService, JobType, JobStatus, JobResultData } from '../job-queue';
 import { logger } from '../logging';
 import { monitoring } from '../monitoring';
+import { SecureEmailLogger } from './security-helpers';
 import { 
   NotificationEventType,
   FilingNotificationPayload,
@@ -55,6 +56,9 @@ const DEFAULT_CONFIG: NotificationProcessorConfig = {
   enabled: true        // Enabled by default
 };
 
+// Create secure logger to prevent PII exposure
+const secureLogger = new SecureEmailLogger(logger.child('notification-processor'));
+
 /**
  * Class for processing notification jobs from the queue
  */
@@ -89,7 +93,7 @@ export class NotificationProcessor implements NotificationProcessorInterface {
         idempotencyKey: `notification-${payload?.filingId || Date.now()}`
       });
       
-      logger.info(`Queued notification job ${job.id}`, {
+      secureLogger.info('Queued notification job', {
         jobId: job.id,
         notificationType: payload?.notificationType,
         filingId: payload?.filing?.filingId
@@ -97,7 +101,7 @@ export class NotificationProcessor implements NotificationProcessorInterface {
       
       return Promise.resolve();
     } catch (error) {
-      logger.error('Error queueing notification', {
+      secureLogger.error('Error queueing notification', {
         error: error instanceof Error ? error.message : String(error),
         notificationType: payload?.notificationType,
         filingId: payload?.filing?.filingId
@@ -115,16 +119,16 @@ export class NotificationProcessor implements NotificationProcessorInterface {
    */
   start(): void {
     if (this.isRunning) {
-      logger.warn('Notification processor already running');
+      secureLogger.warn('Notification processor already running');
       return;
     }
     
     if (!this.config.enabled) {
-      logger.info('Notification processor is disabled');
+      secureLogger.info('Notification processor is disabled');
       return;
     }
     
-    logger.info('Starting notification processor', {
+    secureLogger.info('Starting notification processor', {
       pollInterval: this.config.pollInterval,
       batchSize: this.config.batchSize
     });
@@ -138,11 +142,11 @@ export class NotificationProcessor implements NotificationProcessorInterface {
    */
   stop(): void {
     if (!this.isRunning) {
-      logger.warn('Notification processor not running');
+      secureLogger.warn('Notification processor not running');
       return;
     }
     
-    logger.info('Stopping notification processor');
+    secureLogger.info('Stopping notification processor');
     
     if (this.pollTimerId) {
       clearTimeout(this.pollTimerId);
@@ -160,7 +164,7 @@ export class NotificationProcessor implements NotificationProcessorInterface {
     
     this.pollTimerId = setTimeout(
       () => this.poll().catch(err => {
-        logger.error('Error polling for notification jobs', err);
+        secureLogger.error('Error polling for notification jobs', { error: err instanceof Error ? err.message : String(err) });
       }).finally(() => {
         this.schedulePoll();
       }), 
@@ -185,7 +189,7 @@ export class NotificationProcessor implements NotificationProcessorInterface {
         return; // No jobs to process
       }
       
-      logger.info(`Processing ${jobs.length} notification jobs`);
+      secureLogger.info('Processing notification jobs', { jobCount: jobs.length });
       monitoring.incrementCounter('notification.jobs.processed', jobs.length);
       
       // Process each job
@@ -204,7 +208,7 @@ export class NotificationProcessor implements NotificationProcessorInterface {
             completedAt: new Date()
           } as JobResultData);
         } catch (error) {
-          logger.error(`Error processing notification job ${job.id}`, {
+          secureLogger.error('Error processing notification job', {
             error: error instanceof Error ? error.message : String(error),
             jobId: job.id
           });
@@ -225,7 +229,7 @@ export class NotificationProcessor implements NotificationProcessorInterface {
               failedAt: new Date()
             } as JobResultData);
             
-            logger.info(`Scheduled retry for job ${job.id} at ${retryAt}`);
+            secureLogger.info('Scheduled job retry', { jobId: job.id, retryAt });
           } else {
             // Max attempts reached, mark as failed
             await JobQueueService.updateJobStatus(job.id, 'FAILED', {
@@ -234,12 +238,12 @@ export class NotificationProcessor implements NotificationProcessorInterface {
               stack: error instanceof Error && error.stack ? error.stack : undefined
             } as JobResultData);
             
-            logger.warn(`Job ${job.id} failed after ${(job as unknown as JobQueueItem).attempts} attempts`);
+            secureLogger.warn('Job failed after max attempts', { jobId: job.id, attempts: (job as unknown as JobQueueItem).attempts });
           }
         }
       }
     } catch (error) {
-      logger.error('Error polling for notification jobs', {
+      secureLogger.error('Error polling for notification jobs', {
         error: error instanceof Error ? error.message : String(error)
       });
       monitoring.incrementCounter('notification.processor.errors', 1);
@@ -266,7 +270,9 @@ export class NotificationProcessor implements NotificationProcessorInterface {
       
       const filingPayload = filing as FilingNotificationPayload;
       
-      logger.info(`Processing ${notificationType} notification for ${filingPayload.ticker}`, {
+      secureLogger.info('Processing notification', {
+        notificationType,
+        ticker: filingPayload.ticker,
         jobId: job.id,
         filingId: filingPayload.filingId
       });
@@ -285,14 +291,17 @@ export class NotificationProcessor implements NotificationProcessorInterface {
           break;
           
         default:
-          logger.warn(`Unknown notification type: ${notificationType}`, {
+          secureLogger.warn('Unknown notification type', {
+            notificationType,
             jobId: job.id,
             filingId: filingPayload.filingId
           });
           break;
       }
       
-      logger.info(`Completed ${notificationType} notification for ${filingPayload.ticker}`, {
+      secureLogger.info('Completed notification processing', {
+        notificationType,
+        ticker: filingPayload.ticker,
         jobId: job.id,
         filingId: filingPayload.filingId
       });
@@ -300,7 +309,7 @@ export class NotificationProcessor implements NotificationProcessorInterface {
       monitoring.incrementCounter('notification.jobs.processed', 1);
       monitoring.stopTimer('notification.process');
     } catch (error) {
-      logger.error(`Error processing notification job ${job.id}`, {
+      secureLogger.error('Error processing notification job', {
         error: error instanceof Error ? error.message : String(error),
         jobId: job.id
       });

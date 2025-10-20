@@ -21,6 +21,7 @@ import {
 import { logger } from '../logging';
 // Import monitoring module
 import { monitoring } from '../monitoring';
+import { SecureEmailLogger } from './security-helpers';
 
 /**
  * Detect if we're in a build environment where environment variables may not be available
@@ -109,6 +110,8 @@ export class ResendClient {
   private totalFailed: number = 0;
   /** Last time metrics were reset */
   private lastResetTime: Date;
+  /** Secure logger to prevent PII exposure */
+  private secureLogger: SecureEmailLogger;
   
   /**
    * Create a new Resend API client
@@ -153,6 +156,9 @@ export class ResendClient {
     this.totalSent = 0;
     this.totalFailed = 0;
     this.lastResetTime = new Date();
+    
+    // Initialize secure logger
+    this.secureLogger = new SecureEmailLogger(logger.child('resend-client'));
   }
   
   /**
@@ -180,7 +186,8 @@ export class ResendClient {
     try {
       // If this is a dummy client, just log and return a fake success
       if (this.isDummyClient) {
-        logger.info(`[DUMMY] Would send email to ${emailParams.to}`, {
+        this.secureLogger.info('[DUMMY] Would send email', {
+          to: emailParams.to,
           subject: message.subject,
           requestId
         });
@@ -313,8 +320,8 @@ export class ResendClient {
       
       // Normalize and log error
       const normalizedError = this.normalizeError(error, requestId);
-      logger.error(`Failed to send email: ${normalizedError.message}`, {
-        error: normalizedError,
+      this.secureLogger.error('Failed to send email', {
+        error: normalizedError.message,
         subject: message.subject,
         to: emailParams.to,
         requestId
@@ -395,7 +402,7 @@ export class ResendClient {
     
     // If in dummy mode, return basic validation result
     if (this.isDummyClient) {
-      logger.info(`[DUMMY] Email verification for ${email}: valid`);
+      this.secureLogger.info('[DUMMY] Email verification completed', { email, isValid: true });
       return {
         email,
         isValid: true,
@@ -419,7 +426,7 @@ export class ResendClient {
         reason: undefined
       };
     } catch (error) {
-      logger.error('Email verification failed', { email, error });
+      this.secureLogger.error('Email verification failed', { email, error });
       return {
         email,
         isValid: false,

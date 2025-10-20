@@ -6,6 +6,10 @@ import { getEmailTemplate } from './templates';
 import { EmailType, EmailMessage } from './types';
 import { sendEmail } from './index';
 import { logger } from '../logging';
+import { SecureEmailLogger } from './security-helpers';
+
+// Create secure logger to prevent PII exposure
+const secureLogger = new SecureEmailLogger(logger.child('welcome-service'));
 
 /**
  * Send welcome email to a user who completed onboarding
@@ -95,14 +99,15 @@ export async function sendWelcomeEmail(): Promise<{ success: boolean; error?: st
         });
       } else {
         // Log success
-        logger.info(`Sent welcome email to ${primaryEmail}`, {
+        secureLogger.info('Sent welcome email', {
+          to: primaryEmail,
           userId: dbUser.id,
           emailId: result.id
         });
       }
     } catch (emailError) {
       // Log the error but continue - user has been marked as onboarded
-      logger.error('Failed to send welcome email but continuing', {
+      secureLogger.error('Failed to send welcome email but continuing', {
         error: emailError instanceof Error ? emailError.message : 'Unknown error',
         userId: dbUser.id
       });

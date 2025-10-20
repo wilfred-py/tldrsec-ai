@@ -8,6 +8,7 @@
 
 import { logger } from '../logging';
 import { monitoring } from '../monitoring';
+import { SecureEmailLogger } from './security-helpers';
 import { ResendClient, sendEmail } from './index';
 import { EmailMessage, EmailType } from './types';
 import { JobQueueService, JobType } from '../job-queue';
@@ -67,9 +68,11 @@ declare module './types' {
 export class DigestService {
   private static instance: DigestService;
   private emailClient: ResendClient;
+  private secureLogger: SecureEmailLogger;
   
   constructor(emailClient?: ResendClient) {
     this.emailClient = emailClient || new ResendClient();
+    this.secureLogger = new SecureEmailLogger(logger.child('digest-service'));
   }
   
   /**
@@ -367,7 +370,8 @@ export class DigestService {
         throw new Error(`Failed to send digest email: ${result.error?.message}`);
       }
       
-      logger.info(`Digest email sent to ${digestData.email}`, {
+      this.secureLogger.info('Digest email sent', {
+        to: digestData.email,
         userId: digestData.userId,
         summaryCount: this.countSummaries(digestData),
         emailId: result.id
@@ -397,7 +401,7 @@ export class DigestService {
         });
       }
     } catch (error) {
-      logger.error(`Error sending digest email to ${digestData.email}`, error);
+      this.secureLogger.error('Error sending digest email', { to: digestData.email, error });
       monitoring.incrementCounter('digest.email.error', 1);
       throw error;
     }
@@ -479,7 +483,7 @@ export class DigestService {
       // Use template system to generate email
       return getEmailTemplate(EmailType.DIGEST, templateData);
     } catch (error) {
-      logger.error('Error using template system for digest email, falling back to default', error);
+      this.secureLogger.error('Error using template system for digest email, falling back to default', { error });
       
       // If template generation fails, fall back to the original implementation
       return this.formatDigestEmailFallback(digestData);

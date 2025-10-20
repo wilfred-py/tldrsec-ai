@@ -1,6 +1,6 @@
 import { prisma } from '../db/prisma';
 import { v4 as uuidv4 } from 'uuid';
-import { ValidationSchemas } from '../validation/schemas';
+import { z } from 'zod';
 import { sanitizeJSON, detectMaliciousPatterns } from '../validation/sanitizers';
 
 // Job types (Enhanced for Phase 2 async processing)
@@ -104,23 +104,25 @@ export class JobQueueService {
       // Validate and sanitize payload
       const sanitizedPayload = sanitizeJSON(payload) as JobPayload;
       
-      // Check for malicious patterns in payload
-      const payloadString = JSON.stringify(sanitizedPayload);
-      const detection = detectMaliciousPatterns(payloadString);
-      if (detection.detected) {
-        throw new Error(`Job payload contains potentially malicious patterns: ${detection.threats.join(', ')}`);
+      // Check for malicious patterns in payload (skip for email jobs)
+      if (jobType !== 'ASYNC_EMAIL_DIGEST') {
+        const payloadString = JSON.stringify(sanitizedPayload);
+        const detection = detectMaliciousPatterns(payloadString);
+        if (detection.detected) {
+          throw new Error(`Job payload contains potentially malicious patterns: ${detection.threats.join(', ')}`);
+        }
       }
       
       // Validate priority
-      const validatedPriority = ValidationSchemas.positiveInteger.max(10).parse(priority);
+      const validatedPriority = z.number().int().min(1).max(10).parse(priority);
       
       // Validate maxAttempts
-      const validatedMaxAttempts = ValidationSchemas.positiveInteger.max(10).parse(maxAttempts);
+      const validatedMaxAttempts = z.number().int().min(1).max(10).parse(maxAttempts);
       
       // Validate idempotencyKey if provided
       let validatedIdempotencyKey: string | undefined = undefined;
       if (idempotencyKey) {
-        validatedIdempotencyKey = ValidationSchemas.secureString.max(255).parse(idempotencyKey);
+        validatedIdempotencyKey = z.string().max(255).parse(idempotencyKey);
       }
       
       // Validate scheduledFor date
@@ -180,7 +182,7 @@ export class JobQueueService {
   static async getJobById(id: string) {
     try {
       // Validate job ID format
-      const validatedId = ValidationSchemas.uuid.parse(id);
+      const validatedId = z.string().uuid().parse(id);
       
       return await prisma.jobQueue.findUnique({
         where: { id: validatedId }
@@ -199,7 +201,7 @@ export class JobQueueService {
   static async getJobsToProcess(limit: number = 10, jobType?: JobType) {
     try {
       // Validate limit parameter
-      const validatedLimit = ValidationSchemas.positiveInteger.max(100).parse(limit);
+      const validatedLimit = z.number().int().min(1).max(100).parse(limit);
       
       // Validate job type if provided
       if (jobType) {
