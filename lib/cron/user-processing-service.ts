@@ -464,21 +464,49 @@ export class CronUserProcessingService {
           return await this.executeUserProcessing(userStatus, allUsers, tier, monitor, filingProcessor);
         },
         {
-          ttlMs: 10 * 60 * 1000, // 10 minutes
-          timeoutMs: 5000 // 5 seconds to acquire lock
+          ttlMs: 30 * 60 * 1000, // 30 minutes - increased for longer processing
+          timeoutMs: 30000 // 30 seconds to acquire lock - increased for better reliability
         }
       );
       
     } catch (lockError: unknown) {
       if (lockError instanceof Error && lockError.message.includes('Failed to acquire lock')) {
-        processingLogger.info(`User ${userStatus.userId} is already being processed by another cron run, skipping`);
+        processingLogger.warn(`User ${userStatus.userId} lock acquisition failed after all attempts`, {
+          userId: userStatus.userId,
+          tier,
+          errorMessage: lockError.message,
+          lockType: 'user_processing',
+          retryRecommendation: 'Will retry on next cron cycle',
+          alertLevel: 'LOCK_CONTENTION'
+        });
+        
+        // Record lock contention metrics for monitoring
+        if (monitor) {
+          await monitor.recordMetric('lock_contention', {
+            lockType: 'user_processing',
+            userId: userStatus.userId,
+            tier,
+            errorMessage: lockError.message
+          });
+        }
+        
         return { 
           success: false, 
-          error: 'User already being processed', 
+          error: 'User already being processed or lock timeout', 
           userId: userStatus.userId,
           errorType: ERROR_TYPES.CONCURRENCY_CONFLICT
         };
       }
+      
+      // For non-lock errors, log with full context
+      processingLogger.error(`Unexpected error during user processing setup`, {
+        userId: userStatus.userId,
+        tier,
+        error: lockError instanceof Error ? lockError.message : 'Unknown error',
+        errorType: lockError instanceof Error ? lockError.constructor.name : 'Unknown',
+        alertLevel: 'CRITICAL'
+      });
+      
       throw lockError;
     }
   }

@@ -98,6 +98,7 @@
     "infrastructure:validate:pre-deploy": "npm run infrastructure:validate && npm run test:e2e",
     "infrastructure:monitor": "node scripts/infrastructure/monitor-deployment.js",
     "test:live:enhanced": "npx tsx scripts/test-live-filing-enhanced.ts",
+    "validate:filing-processor": "npx tsx scripts/validate-filing-processor.ts",
     "test:enhanced:with-filings": "npx tsx scripts/test-live-with-filing-creation.ts"
   },
   "dependencies": {

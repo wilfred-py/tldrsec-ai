@@ -279,7 +279,7 @@ async function storeCikMapping(ticker: string, data: { cik: string; companyName:
   try {
     await prisma.cikMapping.upsert({
       where: {
-        ticker: ticker.toUpperCase()
+        cik: data.cik
       },
       create: {
         ticker: ticker.toUpperCase(),
