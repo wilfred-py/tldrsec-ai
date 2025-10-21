@@ -684,3 +684,61 @@ model CacheInvalidation {
   @@index([correlationId])
   @@index([strategy, createdAt])
 }
+
+model PipelineHealthHistory {
+  id                String   @id @default(uuid())
+  timestamp         DateTime @default(now())
+  pipelineStatus    String   // "healthy", "degraded", "critical"
+  processingLatency Int      // in milliseconds
+  successRate       Float    // percentage
+  errorCount        Int
+  activeJobs        Int
+  queueDepth        Int
+  memoryUsage       Float    // MB
+  cpuUsage          Float?   // percentage
+  metadata          Json?    // Additional metrics
+  createdAt         DateTime @default(now())
+
+  @@index([timestamp])
+  @@index([pipelineStatus])
+}
+
+model ErrorAlert {
+  id            String   @id @default(uuid())
+  alertType     String   // "critical", "warning", "info"
+  source        String   // "pipeline", "api", "database", "external"
+  message       String
+  errorCode     String?
+  stackTrace    String?
+  context       Json?    // Additional context
+  resolved      Boolean  @default(false)
+  resolvedAt    DateTime?
+  notifiedAt    DateTime?
+  escalatedAt   DateTime?
+  acknowledgedAt DateTime?
+  acknowledgedBy String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([alertType])
+  @@index([source])
+  @@index([resolved])
+  @@index([createdAt])
+}
+
+model MonitoringThreshold {
+  id                   String   @id @default(uuid())
+  metricName           String
+  thresholdType        String   // "warning", "critical"
+  operator             String   // "gt", "lt", "eq", "gte", "lte"
+  value                Float
+  enabled              Boolean  @default(true)
+  alertFrequencyMins   Int      @default(15)
+  escalationDelayMins  Int      @default(60)
+  description          String?
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  @@unique([metricName, thresholdType])
+  @@index([metricName, enabled])
+}

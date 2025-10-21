@@ -12,6 +12,8 @@ import { auth } from '@clerk/nextjs/server';
 import { securityMonitoring } from '../../../../../lib/security/security-monitoring';
 import { cloudflareIPService } from '../../../../../lib/security/cloudflare-ip-service';
 import { logger } from '../../../../../lib/logging';
+import { authorizeMonitoringAccess } from '../../../../../lib/security/secure-auth';
+import { logSecureAudit } from '../../../../../lib/security/audit-protection';
 
 const healthLogger = logger.child('security-health-api');
 
@@ -19,27 +21,54 @@ const healthLogger = logger.child('security-health-api');
  * GET /api/admin/security/health
  * 
  * Returns comprehensive security health metrics
+ * SECURITY FIX: Enhanced authorization with proper RBAC
  */
 export async function GET(request: NextRequest) {
   try {
-    // Verify admin access
-    const { userId } = await auth();
-    if (!userId) {
+    // SECURITY FIX: Use secure authorization service
+    const authResult = await authorizeMonitoringAccess(request, 'security');
+    
+    if (!authResult.authorized) {
       healthLogger.warn('Unauthorized access attempt to security health endpoint', {
-        ip: request.headers.get('x-forwarded-for') || 'unknown',
-        user_agent: request.headers.get('user-agent')
+        reason: authResult.reason,
+        hasContext: !!authResult.securityContext
       });
       
+      // SECURITY FIX: Log the security incident
+      if (authResult.securityContext) {
+        await logSecureAudit(
+          'UNAUTHORIZED_SECURITY_ACCESS',
+          authResult.securityContext.userId || 'anonymous',
+          authResult.securityContext.ipAddress || 'unknown',
+          'security_health_endpoint',
+          authResult.securityContext.userAgent
+        );
+      }
+      
       return NextResponse.json(
-        { error: 'Unauthorized' },
+        { error: authResult.reason || 'Unauthorized' },
         { status: 401 }
       );
     }
     
-    // TODO: Add admin role check when roles are implemented
-    // For now, any authenticated user can access this endpoint
+    const { securityContext } = authResult;
+    if (!securityContext) {
+      return NextResponse.json({ error: 'Invalid security context' }, { status: 500 });
+    }
     
-    healthLogger.info('Security health metrics requested', { userId });
+    healthLogger.info('Security health metrics requested', { 
+      userId: securityContext.userId,
+      isAdmin: securityContext.isAdmin 
+    });
+    
+    // SECURITY FIX: Log authorized access for audit trail
+    await logSecureAudit(
+      'SECURITY_HEALTH_ACCESS',
+      securityContext.userId,
+      securityContext.ipAddress || 'unknown',
+      'security_health_endpoint',
+      securityContext.userAgent
+    );
     
     // Get comprehensive health metrics
     const healthMetrics = await securityMonitoring.getHealthMetrics();
@@ -98,9 +127,9 @@ export async function GET(request: NextRequest) {
       }
     };
     
-    // Log access for audit trail
+    // SECURITY FIX: Enhanced audit logging with secure data
     healthLogger.info('Security health metrics provided', {
-      userId,
+      userId: securityContext.userId,
       overall_status: healthMetrics.overall_status,
       cloudflare_status: healthMetrics.cloudflare_ip_service.status,
       threats_detected: healthMetrics.threats_detected_last_hour,
@@ -108,6 +137,20 @@ export async function GET(request: NextRequest) {
       forced_refresh: refreshCloudflare,
       include_ranges: includeRanges
     });
+    
+    // Log successful access
+    await logSecureAudit(
+      'SECURITY_HEALTH_PROVIDED',
+      securityContext.userId,
+      securityContext.ipAddress || 'unknown',
+      'security_health_endpoint',
+      securityContext.userAgent,
+      {
+        forced_refresh: refreshCloudflare,
+        include_ranges: includeRanges,
+        under_attack: securityMonitoring.isUnderAttack()
+      }
+    );
     
     return NextResponse.json(response, {
       status: 200,

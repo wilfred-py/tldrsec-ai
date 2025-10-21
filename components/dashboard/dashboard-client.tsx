@@ -39,6 +39,8 @@ import { Company } from "@/lib/api/types";
 import { getTrackedCompanies, addTrackedCompany, deleteTrackedCompany, updateCompanyPreferences } from "@/lib/api/ticker-service";
 import { useAsync } from "@/lib/hooks/use-async";
 import { TutorialGuide } from "@/components/onboarding/tutorial-guide";
+import { SystemHealthBanner } from "@/components/dashboard/system-health-banner";
+import { ProcessingStatus } from "@/components/dashboard/processing-status";
 
 // Column helper for the table
 const columnHelper = createColumnHelper<Company>();
@@ -310,6 +312,10 @@ export function DashboardClient() {
         heading="Dashboard"
         description="Welcome to tldrSEC."
       />
+      
+      {/* System Health & Status */}
+      <SystemHealthBanner />
+      <ProcessingStatus />
       
       {/* Tracked Tickers - Removed border */}
       <Card className="p-6">

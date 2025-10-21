@@ -13,6 +13,11 @@ const config = {
     '<rootDir>/jest.setup.js', 
     '<rootDir>/__tests__/setup.js'
   ],
+  // Override timeout for real pipeline tests
+  testMatch: [
+    '<rootDir>/**/__tests__/**/*.(test|spec).(js|jsx|ts|tsx)',
+    '<rootDir>/**/?(*.)(test|spec).(js|jsx|ts|tsx)'
+  ],
   testPathIgnorePatterns: ['<rootDir>/.next/', '<rootDir>/node_modules/'],
   moduleNameMapper: {
     '^@/components/(.*)$': '<rootDir>/components/$1',

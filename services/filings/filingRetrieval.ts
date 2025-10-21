@@ -224,6 +224,18 @@ export async function getFilingContent(accessionNumber: string, documentIdentifi
       throw new Error(`No content found for filing ${accessionNumber}`);
     }
     
+    // Basic content validation to catch obvious issues early
+    if (content.length < 100) {
+      logger.warn(`Content too short for filing ${accessionNumber}: ${content.length} bytes`);
+      throw new Error(`Content too short for filing ${accessionNumber}: ${content.length} bytes`);
+    }
+    
+    // Quick NoSuchKey detection for early failure
+    if (content.includes('NoSuchKey') || content.includes('<Code>NoSuchKey</Code>')) {
+      logger.warn(`NoSuchKey detected in content for filing ${accessionNumber}`);
+      throw new Error(`NoSuchKey error detected for filing ${accessionNumber}`);
+    }
+    
     logger.debug(`Successfully retrieved content for filing ${accessionNumber} (${content.length} bytes)`);
     return content;
   } catch (error: unknown) {

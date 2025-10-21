@@ -7,6 +7,8 @@
 
 import { logger } from '../logging';
 import { generateSecureAlertId } from '../security/secure-random';
+import { prisma } from '../db';
+import * as os from 'os';
 
 export interface InfrastructureMetrics {
   timestamp: Date;
@@ -368,13 +370,55 @@ export class InfrastructureMonitor {
   }
 
   private getCpuUsage(): number {
-    // Simplified CPU usage simulation (non-security sensitive)
-    return Math.round(Math.random() * 100);
+    if (typeof process !== 'undefined' && process.cpuUsage) {
+      const usage = process.cpuUsage();
+      // Calculate CPU usage as percentage of available CPU time
+      const totalCpuTime = usage.user + usage.system;
+      // Convert microseconds to percentage (simplified calculation)
+      const cpuPercent = Math.min(100, (totalCpuTime / 1000000) * 100);
+      return Math.round(cpuPercent);
+    }
+    
+    // Fallback: use OS load average if available
+    if (typeof process !== 'undefined' && process.platform !== 'win32') {
+      const loadAvg = os.loadavg();
+      const cpuCount = os.cpus().length;
+      // Use 1-minute load average as CPU usage approximation
+      const cpuPercent = Math.min(100, (loadAvg[0] / cpuCount) * 100);
+      return Math.round(cpuPercent);
+    }
+    
+    return 0; // Unable to determine CPU usage
   }
 
   private async getDatabaseConnectionUsage(): Promise<number> {
-    // In real implementation, this would query Prisma/database metrics (non-security sensitive)
-    return Math.round(Math.random() * 100);
+    try {
+      // Try to get connection pool metrics from Prisma
+      if (prisma && (prisma as { _engine?: unknown })._engine) {
+        // Prisma doesn't expose connection pool metrics directly
+        // Use a simple query with timing to estimate database load
+        const startTime = Date.now();
+        await prisma.$queryRaw`SELECT 1`;
+        const queryTime = Date.now() - startTime;
+        
+        // Estimate connection usage based on query response time
+        // Fast queries (< 10ms) suggest low usage, slow queries suggest high usage
+        const estimatedUsage = Math.min(100, Math.max(0, (queryTime - 5) * 10));
+        return Math.round(estimatedUsage);
+      }
+      
+      // Fallback: check if we can perform a simple database operation
+      const startTime = Date.now();
+      await prisma.$connect();
+      const connectionTime = Date.now() - startTime;
+      
+      // Estimate usage based on connection time
+      const estimatedUsage = Math.min(100, Math.max(0, (connectionTime - 10) * 5));
+      return Math.round(estimatedUsage);
+    } catch (error) {
+      logger.warn('Failed to measure database connection usage', { error });
+      return 100; // Assume high usage if we can't connect
+    }
   }
 
   private extractMetricValue(metrics: InfrastructureMetrics, metricPath: string): number | null {

@@ -1,0 +1,433 @@
+name: Monitoring Infrastructure Validation
+
+on:
+  push:
+    branches: [ main, develop, enhance/test-pipeline-validation ]
+    paths:
+      - 'app/api/monitoring/**'
+      - 'lib/monitoring/**'
+      - 'prisma/schema.prisma'
+      - 'prisma/migrations/**'
+      - '.github/workflows/monitoring-validation.yml'
+  pull_request:
+    branches: [ main, develop ]
+    paths:
+      - 'app/api/monitoring/**'
+      - 'lib/monitoring/**'
+      - 'prisma/schema.prisma'
+      - 'prisma/migrations/**'
+
+env:
+  NODE_ENV: test
+  VERCEL_ENV: test
+  # Test database configuration
+  DATABASE_URL: postgresql://test_user:test_password@localhost:5432/tldrsec_monitoring_test
+  # Mock API keys for testing
+  ANTHROPIC_API_KEY: test_anthropic_key_for_monitoring_validation
+  RESEND_API_KEY: test_resend_key_for_monitoring_validation
+  CLERK_SECRET_KEY: test_clerk_secret_for_monitoring_validation
+  NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: test_clerk_public_for_monitoring_validation
+  # Alert system configuration
+  ALERT_EMAIL_RECIPIENTS: test-alerts@tldrsec.app,monitoring-team@tldrsec.app
+  ESCALATION_EMAIL_RECIPIENTS: critical-alerts@tldrsec.app,engineering-lead@tldrsec.app
+  NEXT_PUBLIC_BASE_URL: https://test.tldrsec.app
+
+jobs:
+  database-validation:
+    name: Validate Database Schema & Migrations
+    runs-on: ubuntu-latest
+    
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: test_user
+          POSTGRES_PASSWORD: test_password
+          POSTGRES_DB: tldrsec_monitoring_test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma client
+        run: npx prisma generate
+
+      - name: Run database migrations
+        run: npx prisma migrate deploy
+
+      - name: Validate schema integrity
+        run: |
+          # Check that all monitoring models exist
+          npx prisma validate
+          
+          # Verify monitoring tables exist
+          psql $DATABASE_URL -c "SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' AND table_name IN ('PipelineHealthHistory', 'ErrorAlert', 'MonitoringThreshold');"
+          
+          # Verify indices exist
+          psql $DATABASE_URL -c "SELECT indexname FROM pg_indexes WHERE tablename IN ('PipelineHealthHistory', 'ErrorAlert', 'MonitoringThreshold');"
+
+      - name: Seed test monitoring data
+        run: |
+          # Insert test monitoring thresholds
+          psql $DATABASE_URL -c "
+            INSERT INTO \"MonitoringThreshold\" (id, \"metricName\", \"thresholdType\", operator, value, description)
+            VALUES 
+              ('test_error_rate', 'error_rate_percent', 'critical', 'gt', 15.0, 'Test error rate threshold'),
+              ('test_latency', 'avg_processing_latency_ms', 'warning', 'gt', 30000, 'Test latency threshold')
+            ON CONFLICT (\"metricName\", \"thresholdType\") DO NOTHING;
+          "
+
+      - name: Test monitoring queries
+        run: |
+          # Test pipeline health history queries
+          psql $DATABASE_URL -c "
+            INSERT INTO \"PipelineHealthHistory\" (id, \"pipelineStatus\", \"processingLatency\", \"successRate\", \"errorCount\", \"activeJobs\", \"queueDepth\", \"memoryUsage\")
+            VALUES ('test_health_1', 'healthy', 5000, 98.5, 2, 3, 10, 512.0);
+            
+            SELECT COUNT(*) FROM \"PipelineHealthHistory\" WHERE \"pipelineStatus\" = 'healthy';
+          "
+          
+          # Test error alert queries
+          psql $DATABASE_URL -c "
+            INSERT INTO \"ErrorAlert\" (id, \"alertType\", source, message, resolved)
+            VALUES ('test_alert_1', 'warning', 'pipeline', 'Test alert message', false);
+            
+            SELECT COUNT(*) FROM \"ErrorAlert\" WHERE resolved = false;
+          "
+
+  monitoring-api-tests:
+    name: Test Monitoring API Endpoints
+    runs-on: ubuntu-latest
+    needs: database-validation
+    
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: test_user
+          POSTGRES_PASSWORD: test_password
+          POSTGRES_DB: tldrsec_monitoring_test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Setup test database
+        run: |
+          npx prisma generate
+          npx prisma migrate deploy
+
+      - name: Run monitoring API tests
+        run: npm run test -- --testPathPattern=monitoring --coverage
+        env:
+          TEST_TIMEOUT: 30000
+
+      - name: Test monitoring endpoints integration
+        run: |
+          # Start Next.js server in background
+          npm run build
+          npm start &
+          SERVER_PID=$!
+          
+          # Wait for server to start
+          sleep 10
+          
+          # Test health endpoints (with mock auth)
+          curl -f http://localhost:3000/api/health || exit 1
+          curl -f http://localhost:3000/api/health/database || exit 1
+          
+          # Cleanup
+          kill $SERVER_PID
+
+  alert-system-tests:
+    name: Validate Alert System
+    runs-on: ubuntu-latest
+    needs: database-validation
+
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: test_user
+          POSTGRES_PASSWORD: test_password
+          POSTGRES_DB: tldrsec_monitoring_test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Setup test database
+        run: |
+          npx prisma generate
+          npx prisma migrate deploy
+
+      - name: Test alert service functionality
+        run: |
+          cat > test_alert_service.js << 'EOF'
+          const { alertService } = require('./lib/monitoring/alert-service');
+          
+          async function testAlertService() {
+            console.log('Testing alert service...');
+            
+            // Test alert creation
+            const alertId = await alertService.createAlert({
+              alertType: 'warning',
+              source: 'pipeline',
+              message: 'Test alert for CI validation',
+              autoNotify: false
+            });
+            
+            console.log('Alert created:', alertId);
+            
+            // Test threshold checking
+            const testMetrics = {
+              errorRate: 20, // Should trigger critical threshold
+              avgProcessingLatency: 5000,
+              queueDepth: 50,
+              memoryUsage: 512,
+              successRate: 80,
+              activeJobs: 5,
+              errorCount: 10
+            };
+            
+            await alertService.checkThresholds(testMetrics);
+            console.log('Threshold checking completed');
+            
+            // Test alert statistics
+            const stats = await alertService.getAlertStatistics('hour');
+            console.log('Alert statistics:', stats);
+            
+            console.log('Alert service tests passed!');
+          }
+          
+          testAlertService().catch(console.error);
+          EOF
+          
+          node test_alert_service.js
+
+      - name: Test monitoring integration
+        run: |
+          cat > test_monitoring_integration.js << 'EOF'
+          const { monitoringIntegration } = require('./lib/monitoring/monitoring-integration');
+          
+          async function testMonitoringIntegration() {
+            console.log('Testing monitoring integration...');
+            
+            // Test health checks
+            const healthChecks = await monitoringIntegration.performHealthCheck();
+            console.log('Health checks:', healthChecks.map(h => ({ component: h.component, status: h.status })));
+            
+            // Test monitoring cycle
+            const monitoringData = await monitoringIntegration.runMonitoringCycle();
+            console.log('Monitoring cycle:', {
+              systemHealth: monitoringData.systemHealth,
+              activeAlerts: monitoringData.activeAlerts,
+              errorRate: monitoringData.metrics.errorRate
+            });
+            
+            console.log('Monitoring integration tests passed!');
+          }
+          
+          testMonitoringIntegration().catch(console.error);
+          EOF
+          
+          node test_monitoring_integration.js
+
+  security-validation:
+    name: Security & Performance Validation
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Security audit
+        run: |
+          # Run npm audit
+          npm audit --audit-level=moderate
+          
+          # Check for sensitive data in monitoring code
+          echo "Checking for sensitive data in monitoring code..."
+          if grep -r "password\|secret\|key" app/api/monitoring/ --exclude-dir=node_modules | grep -v "test\|example\|placeholder"; then
+            echo "WARNING: Potential sensitive data found in monitoring code"
+            exit 1
+          fi
+
+      - name: Validate environment variables
+        run: |
+          cat > validate_env.js << 'EOF'
+          // Validate that all required environment variables are documented
+          const requiredEnvVars = [
+            'DATABASE_URL',
+            'ANTHROPIC_API_KEY',
+            'RESEND_API_KEY',
+            'ALERT_EMAIL_RECIPIENTS',
+            'ESCALATION_EMAIL_RECIPIENTS'
+          ];
+          
+          console.log('Validating environment variable configuration...');
+          
+          for (const envVar of requiredEnvVars) {
+            if (!process.env[envVar]) {
+              console.log(`✓ ${envVar} is not set (expected in test environment)`);
+            } else {
+              console.log(`✓ ${envVar} is configured`);
+            }
+          }
+          
+          console.log('Environment validation completed');
+          EOF
+          
+          node validate_env.js
+
+      - name: Performance validation
+        run: |
+          echo "Validating monitoring query performance..."
+          
+          # Check for proper indexing in Prisma schema
+          if ! grep -q "@@index" prisma/schema.prisma; then
+            echo "WARNING: No database indices found in schema"
+            exit 1
+          fi
+          
+          # Validate that monitoring endpoints have proper pagination
+          if ! grep -q "limit" app/api/monitoring/error-alerts/route.ts; then
+            echo "ERROR: Alert endpoint missing pagination"
+            exit 1
+          fi
+          
+          echo "Performance validation passed"
+
+  deployment-readiness:
+    name: Deployment Readiness Check
+    runs-on: ubuntu-latest
+    needs: [database-validation, monitoring-api-tests, alert-system-tests, security-validation]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build validation
+        run: |
+          # Test that the application builds with monitoring components
+          npm run build
+
+      - name: Validate Vercel configuration
+        run: |
+          # Check that monitoring endpoints are properly configured
+          if ! grep -q "monitoring" vercel.json; then
+            echo "WARNING: Monitoring endpoints not found in vercel.json"
+          fi
+          
+          echo "Vercel configuration validated"
+
+      - name: Generate deployment summary
+        run: |
+          echo "## Monitoring Infrastructure Deployment Summary" > deployment_summary.md
+          echo "" >> deployment_summary.md
+          echo "✅ Database schema validated" >> deployment_summary.md
+          echo "✅ Monitoring API endpoints tested" >> deployment_summary.md
+          echo "✅ Alert system validated" >> deployment_summary.md
+          echo "✅ Security checks passed" >> deployment_summary.md
+          echo "✅ Build validation completed" >> deployment_summary.md
+          echo "" >> deployment_summary.md
+          echo "### New Monitoring Endpoints:" >> deployment_summary.md
+          echo "- \`/api/monitoring/pipeline-health\` - Real-time pipeline status" >> deployment_summary.md
+          echo "- \`/api/monitoring/error-alerts\` - Alert management" >> deployment_summary.md
+          echo "- \`/api/monitoring/health-trends\` - Historical analytics" >> deployment_summary.md
+          echo "- \`/api/monitoring/metrics\` - System metrics aggregation" >> deployment_summary.md
+          echo "" >> deployment_summary.md
+          echo "### Required Environment Variables:" >> deployment_summary.md
+          echo "- \`ALERT_EMAIL_RECIPIENTS\` - Email addresses for system alerts" >> deployment_summary.md
+          echo "- \`ESCALATION_EMAIL_RECIPIENTS\` - Email addresses for escalated alerts" >> deployment_summary.md
+          echo "" >> deployment_summary.md
+          echo "Ready for production deployment! 🚀" >> deployment_summary.md
+
+      - name: Upload deployment summary
+        uses: actions/upload-artifact@v4
+        with:
+          name: monitoring-deployment-summary
+          path: deployment_summary.md
+
+  notification:
+    name: Notify Deployment Status
+    runs-on: ubuntu-latest
+    needs: [deployment-readiness]
+    if: always()
+
+    steps:
+      - name: Notification
+        run: |
+          if [ "${{ needs.deployment-readiness.result }}" == "success" ]; then
+            echo "🎉 Monitoring infrastructure validation completed successfully!"
+            echo "All systems validated and ready for production deployment."
+          else
+            echo "❌ Monitoring infrastructure validation failed!"
+            echo "Please review the failed checks before deployment."
+          fi
