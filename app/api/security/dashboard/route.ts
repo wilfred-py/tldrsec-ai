@@ -228,15 +228,21 @@ export async function GET(request: NextRequest) {
  * Calculate overall security level based on various metrics
  */
 function calculateSecurityLevel(
-  pipelineReport: PromiseSettledResult<any>,
-  auditIntegrity: PromiseSettledResult<any>
+  pipelineReport: PromiseSettledResult<{
+    overallHealthScore: number;
+    activeAlerts: Array<{ severity: string; type: string; lastDetected: Date }>;
+  }>,
+  auditIntegrity: PromiseSettledResult<{
+    isValid: boolean;
+    tamperedEntries: unknown[];
+  }>
 ): 'HIGH' | 'MEDIUM' | 'LOW' | 'CRITICAL' {
   let score = 100;
 
   // Deduct for pipeline issues
   if (pipelineReport.status === 'fulfilled') {
-    const criticalAlerts = pipelineReport.value.activeAlerts?.filter((a: any) => a.severity === 'critical').length || 0;
-    const securityAlerts = pipelineReport.value.activeAlerts?.filter((a: any) => a.type === 'security').length || 0;
+    const criticalAlerts = pipelineReport.value.activeAlerts?.filter((a) => a.severity === 'critical').length || 0;
+    const securityAlerts = pipelineReport.value.activeAlerts?.filter((a) => a.type === 'security').length || 0;
     
     score -= criticalAlerts * 20;
     score -= securityAlerts * 15;

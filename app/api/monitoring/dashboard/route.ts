@@ -14,6 +14,8 @@ import { alertService } from '@/lib/monitoring/alert-service';
 import { configValidator } from '@/lib/monitoring/config-validation';
 import { prisma } from '@/lib/db';
 import { logger } from '@/lib/logging';
+import * as os from 'os';
+import * as fs from 'fs/promises';
 
 interface DashboardMetrics {
   timestamp: Date;
@@ -74,10 +76,10 @@ export async function GET(request: NextRequest) {
     
     // Get current system health
     const systemHealth = await monitoring.checkHealth();
-    const infrastructureHealth = infrastructureMonitor.getHealthSummary();
+    const _infrastructureHealth = infrastructureMonitor.getHealthSummary();
     const databaseMetrics = databaseMonitor.getCurrentMetrics();
     const memoryHealth = memoryManager.getHealthStatus();
-    const alertStats = await alertService.getAlertStatistics(timeRange as any);
+    const alertStats = await alertService.getAlertStatistics(timeRange as '1h' | '6h' | '24h' | '7d' | '30d');
     
     // Get performance metrics
     const performanceMetrics = await getPerformanceMetrics();
@@ -87,7 +89,7 @@ export async function GET(request: NextRequest) {
     const dashboardData: DashboardMetrics = {
       timestamp: new Date(),
       system: {
-        health: systemHealth.status as any,
+        health: systemHealth.status as 'healthy' | 'warning' | 'critical',
         uptime: systemHealth.uptime,
         version: systemHealth.version
       },
@@ -218,12 +220,11 @@ export async function POST(request: NextRequest) {
 
 async function getPerformanceMetrics() {
   const memoryUsage = process.memoryUsage();
-  const totalMemory = require('os').totalmem();
+  const totalMemory = os.totalmem();
   
   // Get real system metrics
   let cpuUsage = 0;
   try {
-    const os = require('os');
     const loadAvg = os.loadavg();
     const cpuCount = os.cpus().length;
     cpuUsage = Math.min(100, (loadAvg[0] / cpuCount) * 100);
@@ -233,25 +234,23 @@ async function getPerformanceMetrics() {
   
   let diskIO = 0;
   try {
-    const fs = require('fs').promises;
     const startTime = process.hrtime.bigint();
     await fs.access('/tmp');
     const endTime = process.hrtime.bigint();
     const accessTime = Number(endTime - startTime) / 1000000; // Convert to milliseconds
     diskIO = Math.min(100, Math.max(0, (accessTime - 1) * 20));
-  } catch (error) {
+  } catch {
     diskIO = 25; // Default moderate I/O
   }
   
   let networkIO = 0;
   try {
-    const os = require('os');
     const networkInterfaces = os.networkInterfaces();
     const activeInterfaces = Object.values(networkInterfaces)
       .flat()
-      .filter((iface: any) => iface && !iface.internal && iface.family === 'IPv4');
+      .filter((iface): iface is os.NetworkInterfaceInfo => iface && !iface.internal && iface.family === 'IPv4');
     networkIO = Math.min(100, activeInterfaces.length * 15);
-  } catch (error) {
+  } catch {
     networkIO = 10; // Default low network usage
   }
   

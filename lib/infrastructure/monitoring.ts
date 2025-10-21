@@ -8,6 +8,7 @@
 import { logger } from '../logging';
 import { generateSecureAlertId } from '../security/secure-random';
 import { prisma } from '../db';
+import * as os from 'os';
 
 export interface InfrastructureMetrics {
   timestamp: Date;
@@ -380,7 +381,6 @@ export class InfrastructureMonitor {
     
     // Fallback: use OS load average if available
     if (typeof process !== 'undefined' && process.platform !== 'win32') {
-      const os = require('os');
       const loadAvg = os.loadavg();
       const cpuCount = os.cpus().length;
       // Use 1-minute load average as CPU usage approximation
@@ -394,7 +394,7 @@ export class InfrastructureMonitor {
   private async getDatabaseConnectionUsage(): Promise<number> {
     try {
       // Try to get connection pool metrics from Prisma
-      if (prisma && (prisma as any)._engine) {
+      if (prisma && (prisma as { _engine?: unknown })._engine) {
         // Prisma doesn't expose connection pool metrics directly
         // Use a simple query with timing to estimate database load
         const startTime = Date.now();

@@ -16,7 +16,7 @@ interface PipelineMetrics {
   queueDepth: number;
   memoryUsage: number;
   cpuUsage?: number;
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
 }
 
 interface HealthResponse {

@@ -226,7 +226,7 @@ function getTimeRange(timeRange: string, granularity: string) {
   return { startTime, endTime: now, intervalMinutes };
 }
 
-async function fetchHistoricalData(startTime: Date, endTime: Date, metrics: string[]) {
+async function fetchHistoricalData(startTime: Date, endTime: Date, _metrics: string[]) {
   return await prisma.pipelineHealthHistory.findMany({
     where: {
       timestamp: {
@@ -250,7 +250,15 @@ async function fetchHistoricalData(startTime: Date, endTime: Date, metrics: stri
 }
 
 function aggregateDataByInterval(
-  data: any[], 
+  data: Array<{
+    timestamp: Date;
+    processingLatency: number;
+    successRate: number;
+    errorCount: number;
+    queueDepth: number;
+    memoryUsage: number;
+    cpuUsage: number | null;
+  }>, 
   intervalMinutes: number, 
   startTime: Date, 
   endTime: Date
@@ -437,7 +445,12 @@ async function performAnomalyDetection(data: TrendDataPoint[], metrics: string[]
 }
 
 async function generateForecasts(data: TrendDataPoint[], metrics: string[]) {
-  const forecasts: Record<string, any> = {};
+  const forecasts: Record<string, {
+    next1h: number;
+    next6h: number;
+    next24h: number;
+    confidence: number;
+  }> = {};
   
   for (const metric of metrics) {
     const values = data.map(d => d.metrics[metric]).filter(v => v !== undefined && v !== null);
@@ -482,22 +495,22 @@ function calculateOptimalInterval(start: Date, end: Date): number {
   return 1440; // 1 day
 }
 
-function analyzeSeasonality(data: TrendDataPoint[], metrics: string[]) {
+function analyzeSeasonality(_data: TrendDataPoint[], _metrics: string[]) {
   // Placeholder for seasonal analysis
   return {};
 }
 
-function detectChangePoints(data: TrendDataPoint[], metrics: string[]) {
+function detectChangePoints(_data: TrendDataPoint[], _metrics: string[]) {
   // Placeholder for change point detection
   return [];
 }
 
-function calculateAnomalyScore(data: TrendDataPoint[], metrics: string[]): number {
+function calculateAnomalyScore(_data: TrendDataPoint[], _metrics: string[]): number {
   // Placeholder for anomaly scoring
   return 0;
 }
 
-function identifyAnomalyPatterns(data: TrendDataPoint[], metrics: string[]) {
+function identifyAnomalyPatterns(_data: TrendDataPoint[], _metrics: string[]) {
   // Placeholder for pattern identification
   return [];
 }

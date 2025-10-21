@@ -7,7 +7,6 @@
 
 import { logger } from '../logging';
 import { getPrismaClient } from '../db/prisma';
-import { createSecureAuditLog } from './secure-auth';
 
 const auditLogger = logger.child('audit-protection');
 const prisma = getPrismaClient();
@@ -372,7 +371,7 @@ export class AuditProtectionService {
 
       return report;
 
-    } catch (error) {
+    } catch {
       return {
         isValid: false,
         totalEntries: 0,
@@ -422,7 +421,7 @@ export class AuditProtectionService {
       const hashBuffer = await crypto.subtle.digest('SHA-256', data);
       const hashArray = Array.from(new Uint8Array(hashBuffer));
       return hashArray.map(b => b.toString(16).padStart(2, '0')).join('').slice(0, 16);
-    } catch (error) {
+    } catch {
       return 'hash_error';
     }
   }

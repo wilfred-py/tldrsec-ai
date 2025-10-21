@@ -151,7 +151,7 @@ async function performPR173HealthChecks() {
         version_column_exists: versionColumnExists,
         responseTime: Date.now() - schemaStart
       };
-    } catch (error) {
+    } catch {
       checks.database_schema = {
         status: 'unhealthy',
         optimistic_locking_enabled: false,

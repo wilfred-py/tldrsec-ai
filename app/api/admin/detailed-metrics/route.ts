@@ -19,7 +19,7 @@ async function isAdminUser(): Promise<boolean> {
   }
 }
 
-export async function GET(request: NextRequest) {
+export async function GET(_request: NextRequest) {
   // Check admin permissions
   const isAdmin = await isAdminUser();
   if (!isAdmin) {

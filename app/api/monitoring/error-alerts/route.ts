@@ -13,7 +13,7 @@ interface CreateAlertRequest {
   message: string;
   errorCode?: string;
   stackTrace?: string;
-  context?: Record<string, any>;
+  context?: Record<string, unknown>;
 }
 
 interface AlertUpdateRequest {
@@ -48,10 +48,10 @@ export async function GET(request: NextRequest) {
     const alertType = url.searchParams.get('alertType');
     const source = url.searchParams.get('source');
     const resolved = url.searchParams.get('resolved');
-    const severity = url.searchParams.get('severity');
+    const _severity = url.searchParams.get('severity');
 
     // Build filter conditions
-    const where: any = {};
+    const where: Record<string, unknown> = {};
     if (alertType) where.alertType = alertType;
     if (source) where.source = source;
     if (resolved !== null) where.resolved = resolved === 'true';
@@ -210,7 +210,7 @@ export async function PATCH(request: NextRequest) {
       select: { email: true, name: true }
     });
 
-    const updateData: any = {};
+    const updateData: Record<string, unknown> = {};
     
     if (body.resolved !== undefined) {
       updateData.resolved = body.resolved;
@@ -340,7 +340,7 @@ async function getAlertStatistics() {
   };
 }
 
-async function triggerImmediateNotification(alert: any) {
+async function triggerImmediateNotification(alert: { id: string; source: string; message: string; createdAt: Date }) {
   try {
     // This would integrate with the existing email system
     // For now, we'll just log it - actual implementation would use the email service
