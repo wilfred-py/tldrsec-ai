@@ -32,6 +32,7 @@
     "test:enhanced:performance": "node --loader ts-node/esm scripts/test-enhanced-summarization.ts --performance",
     "test:enhanced:integration": "node scripts/test-enhanced-integration.js",
     "test:enhanced:functionality": "node scripts/test-enhanced-functionality.js",
+    "test:security": "NODE_ENV=test jest __tests__/security/security-fixes.test.ts --verbose",
     "create-pdf": "node scripts/pdf/create-sample-pdf.js",
     "scripts:verify": "node scripts/parsers/verify-organization.js",
     "db:generate": "prisma generate",

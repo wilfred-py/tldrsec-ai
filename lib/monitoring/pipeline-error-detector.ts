@@ -367,10 +367,13 @@ class PipelineErrorDetector {
         userExperience: userExperienceMetrics
       };
 
-      // Store historical metrics (keep last 100 entries)
+      // SECURITY FIX: Implement memory exhaustion protection with stricter limits
       this.historicalMetrics.push(metrics);
-      if (this.historicalMetrics.length > 100) {
-        this.historicalMetrics.shift();
+      // Reduced from 100 to 50 to prevent memory exhaustion attacks
+      const MAX_HISTORICAL_METRICS = 50;
+      if (this.historicalMetrics.length > MAX_HISTORICAL_METRICS) {
+        // Remove oldest entries to maintain memory bounds
+        this.historicalMetrics.splice(0, this.historicalMetrics.length - MAX_HISTORICAL_METRICS);
       }
 
       return metrics;
@@ -616,18 +619,28 @@ class PipelineErrorDetector {
         }
       });
 
+      // SECURITY FIX: Remove sensitive information disclosure
+      const failedAuthCount = recentAuditLogs.filter(log => 
+        log.action.includes('AUTH') || log.action.includes('LOGIN')
+      ).length;
+      
+      const suspiciousIPCount = new Set(recentAuditLogs.map(log => log.ipAddress).filter(Boolean)).size;
+      
+      const unauthorizedAccessCount = recentAuditLogs.filter(log => 
+        log.action.includes('UNAUTHORIZED')
+      ).length;
+      
+      const injectionAttemptCount = recentAuditLogs.filter(log => 
+        log.details?.includes('injection') || log.details?.includes('DROP TABLE')
+      ).length;
+
       return {
-        failedAuthAttempts: recentAuditLogs.filter(log => 
-          log.action.includes('AUTH') || log.action.includes('LOGIN')
-        ).length,
-        suspiciousIPs: [...new Set(recentAuditLogs.map(log => log.ipAddress).filter(Boolean))],
-        unauthorizedAccess: recentAuditLogs.filter(log => 
-          log.action.includes('UNAUTHORIZED')
-        ).length,
+        failedAuthAttempts: failedAuthCount,
+        // SECURITY FIX: Return count only, not actual IPs to prevent reconnaissance
+        suspiciousIPCount: suspiciousIPCount,
+        unauthorizedAccess: unauthorizedAccessCount,
         dataLeakageAttempts: 0, // Would be detected from access patterns
-        injectionAttempts: recentAuditLogs.filter(log => 
-          log.details?.includes('injection') || log.details?.includes('DROP TABLE')
-        ).length
+        injectionAttempts: injectionAttemptCount
       };
     } catch (error) {
       errorLogger.error('Failed to collect security metrics', { error });

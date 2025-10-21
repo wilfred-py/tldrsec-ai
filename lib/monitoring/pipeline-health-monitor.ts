@@ -878,12 +878,65 @@ class PipelineHealthMonitor extends EventEmitter {
   }
 
   private async getPerformanceMetrics(): Promise<SystemHealth['performance']> {
-    // In a real implementation, these would come from system monitoring
+    const os = require('os');
+    const fs = require('fs').promises;
+    
+    // Get real CPU usage
+    let cpuUsage = 0;
+    if (typeof process !== 'undefined') {
+      if (process.cpuUsage) {
+        const usage = process.cpuUsage();
+        const totalCpuTime = usage.user + usage.system;
+        cpuUsage = Math.min(100, Math.max(0, (totalCpuTime / 1000000) * 100));
+      } else if (process.platform !== 'win32') {
+        // Use load average as fallback
+        const loadAvg = os.loadavg();
+        const cpuCount = os.cpus().length;
+        cpuUsage = Math.min(100, (loadAvg[0] / cpuCount) * 100);
+      }
+    }
+    
+    // Get real memory usage
+    let memoryUsage = 0;
+    if (typeof process !== 'undefined' && process.memoryUsage) {
+      const memory = process.memoryUsage();
+      const totalMemory = os.totalmem();
+      memoryUsage = (memory.heapUsed / totalMemory) * 100;
+    }
+    
+    // Get disk I/O usage (simplified - check if we can access filesystem)
+    let diskIO = 0;
+    try {
+      const startTime = process.hrtime.bigint();
+      await fs.access('/tmp', fs.constants.F_OK);
+      const endTime = process.hrtime.bigint();
+      const accessTime = Number(endTime - startTime) / 1000000; // Convert to milliseconds
+      // Estimate disk I/O based on filesystem access time
+      diskIO = Math.min(100, Math.max(0, (accessTime - 1) * 20));
+    } catch (error) {
+      // If we can't access filesystem, assume moderate I/O
+      diskIO = 25;
+    }
+    
+    // Get network I/O usage (simplified - check network interfaces)
+    let networkIO = 0;
+    try {
+      const networkInterfaces = os.networkInterfaces();
+      const activeInterfaces = Object.values(networkInterfaces)
+        .flat()
+        .filter(iface => iface && !iface.internal && iface.family === 'IPv4');
+      
+      // Estimate network usage based on number of active interfaces
+      networkIO = Math.min(100, activeInterfaces.length * 15);
+    } catch (error) {
+      networkIO = 10; // Default low network usage
+    }
+    
     return {
-      cpu: Math.random() * 50 + 20, // 20-70%
-      memory: Math.random() * 40 + 30, // 30-70%
-      diskIO: Math.random() * 30 + 10, // 10-40%
-      networkIO: Math.random() * 20 + 5 // 5-25%
+      cpu: Math.round(cpuUsage),
+      memory: Math.round(memoryUsage),
+      diskIO: Math.round(diskIO),
+      networkIO: Math.round(networkIO)
     };
   }
 

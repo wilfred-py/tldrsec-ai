@@ -132,27 +132,31 @@ async function performPR173HealthChecks() {
   let overallStatus = 'healthy';
   
   try {
-    // 1. Database Schema Validation (optimistic locking)
+    // 1. Database Schema Validation (optimistic locking) - SQL INJECTION FIX
     try {
       const schemaStart = Date.now();
-      await prisma.$executeRaw`
+      // SECURITY FIX: Use parameterized query instead of raw SQL to prevent injection
+      const result = await prisma.$queryRaw<Array<{ count: number }>>`
         SELECT COUNT(*) as count
         FROM information_schema.columns 
-        WHERE table_name = 'TickerMonitoring' 
-        AND column_name = 'version'
+        WHERE table_name = ${`TickerMonitoring`}
+        AND column_name = ${`version`}
       `;
+      
+      const versionColumnExists = result[0]?.count > 0;
       
       checks.database_schema = {
         status: 'healthy',
-        optimistic_locking_enabled: true,
-        version_column_exists: true,
+        optimistic_locking_enabled: versionColumnExists,
+        version_column_exists: versionColumnExists,
         responseTime: Date.now() - schemaStart
       };
     } catch (error) {
       checks.database_schema = {
         status: 'unhealthy',
         optimistic_locking_enabled: false,
-        error: error instanceof Error ? error.message : 'Schema validation failed'
+        // SECURITY FIX: Sanitize error messages to prevent information disclosure
+        error: 'Schema validation failed'
       };
       overallStatus = 'unhealthy';
     }
@@ -210,17 +214,25 @@ async function performPR173HealthChecks() {
     try {
       const securityStart = Date.now();
       
-      // Test timing-safe comparison
+      // SECURITY FIX: Enhanced timing-safe comparison to prevent timing attacks
       function timingSafeEqual(a: string, b: string): boolean {
-        if (a.length !== b.length) return false;
+        // Always perform comparison on equal-length strings to prevent length-based timing attacks
+        const maxLength = Math.max(a.length, b.length);
+        const aNormalized = a.padEnd(maxLength, '\0');
+        const bNormalized = b.padEnd(maxLength, '\0');
+        
         const encoder = new TextEncoder();
-        const aBytes = encoder.encode(a);
-        const bBytes = encoder.encode(b);
+        const aBytes = encoder.encode(aNormalized);
+        const bBytes = encoder.encode(bNormalized);
+        
         let result = 0;
-        for (let i = 0; i < aBytes.length; i++) {
+        // Ensure constant-time comparison regardless of input
+        for (let i = 0; i < maxLength; i++) {
           result |= aBytes[i] ^ bBytes[i];
         }
-        return result === 0;
+        
+        // Return length equality AND content equality
+        return (a.length === b.length) && (result === 0);
       }
       
       const timingSafeWorks = !timingSafeEqual('test1', 'test2');
