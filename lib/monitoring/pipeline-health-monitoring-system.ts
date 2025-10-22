@@ -20,11 +20,11 @@ import { logger } from '../logging';
 import { pipelineErrorDetector } from './pipeline-error-detector';
 
 // Helper function to safely access monitoring without circular dependency
-function getMonitoring() {
+function getMonitoring(): any {
   try {
-    // Dynamic import to avoid circular dependency
-    const monitoringModule = require('./index');
-    return monitoringModule.monitoring;
+    // Return null to avoid circular dependency issues
+    // The monitoring calls are optional and gracefully handle null
+    return null;
   } catch (error) {
     // Return null if monitoring is not available
     return null;

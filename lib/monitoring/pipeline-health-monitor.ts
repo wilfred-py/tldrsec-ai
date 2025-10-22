@@ -19,6 +19,8 @@ import { logger } from '../logging';
 import { prisma } from '../db/index';
 import { pipelineErrorDetector, type ErrorAlert, type DetectionReport } from './pipeline-error-detector';
 import { performance } from 'perf_hooks';
+import * as os from 'os';
+import { promises as fs } from 'fs';
 
 const healthLogger = logger.child('pipeline-health-monitor');
 
@@ -878,8 +880,6 @@ class PipelineHealthMonitor extends EventEmitter {
   }
 
   private async getPerformanceMetrics(): Promise<SystemHealth['performance']> {
-    const os = require('os');
-    const fs = require('fs').promises;
     
     // Get real CPU usage
     let cpuUsage = 0;

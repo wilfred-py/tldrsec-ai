@@ -160,24 +160,31 @@ export async function GET(request: NextRequest) {
     }
 
     // STEP 1.5: Acquire Distributed Lock to Prevent Concurrent Executions
-    lockName = 'tier-aware-cron-execution';
+    const environment = process.env.NODE_ENV || 'development';
+    lockName = `tier-aware-cron-execution-${environment}`;
     lockId = `${platform}-${executionId}`;
     
     try {
+      // Proactive cleanup of expired locks before acquisition
+      await LockService.cleanupExpiredLocks();
+      
       cronLogger.debug(`[${executionId}] Attempting to acquire distributed lock`, {
         lockName,
         lockId,
-        platform
+        platform,
+        environment
       });
       
-      lock = await LockService.acquireLock(lockName, lockId, 30); // 30-minute TTL - increased for reliability
+      lock = await LockService.acquireLock(lockName, lockId, 12); // 12-minute TTL - optimized for 10-minute cron frequency
       
       if (!lock) {
         // Another cron execution is already in progress
         cronLogger.warn(`[${executionId}] Concurrent execution detected - another cron is running`, {
           lockName,
           lockId,
-          platform
+          platform,
+          environment,
+          ttlMinutes: 12
         });
         
         // Check who holds the lock for debugging
@@ -209,8 +216,10 @@ export async function GET(request: NextRequest) {
       cronLogger.info(`[${executionId}] Distributed lock acquired successfully`, {
         lockName,
         lockId,
-        expiresAt: lock.expiresAt?.toISOString(),
-        platform
+        platform,
+        environment,
+        ttlMinutes: 12,
+        expiresAt: new Date(Date.now() + 12 * 60 * 1000).toISOString()
       });
       
     } catch (lockError) {

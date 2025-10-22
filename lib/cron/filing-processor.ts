@@ -263,10 +263,11 @@ export class CronFilingProcessor {
     user: DatabaseUser,
     tier: string,
     userFilingResults: UserFilingResult[]
-  ): Promise<{ filingsProcessed: number; cost: number }> {
+  ): Promise<{ filingsProcessed: number; cost: number; filingsSkipped?: number }> {
     const result = {
       filingsProcessed: 0,
-      cost: 0
+      cost: 0,
+      filingsSkipped: 0
     };
 
     try {
@@ -312,6 +313,26 @@ export class CronFilingProcessor {
                   ticker: tickerResult.ticker,
                   filing: filing
                 });
+                continue;
+              }
+
+              // Pre-filter: Check if filing is already processed before transaction
+              const { checkIfFilingProcessed } = await import('../../services/filings/utils/filingProcessingStatus');
+              const isAlreadyProcessed = await checkIfFilingProcessed(
+                tickerResult.ticker,
+                filing.filingType,
+                filing.accessionNumber
+              );
+
+              if (isAlreadyProcessed) {
+                processorLogger.debug('Skipping already processed filing', {
+                  userId: user.id,
+                  ticker: tickerResult.ticker,
+                  accessionNumber: filing.accessionNumber,
+                  filingType: filing.filingType,
+                  optimization: 'pre-filter'
+                });
+                result.filingsSkipped = (result.filingsSkipped || 0) + 1;
                 continue;
               }
 
@@ -378,8 +399,10 @@ export class CronFilingProcessor {
 
     processorLogger.info(`Completed deduplication processing for user ${user.id}`, {
       filingsProcessed: result.filingsProcessed,
+      filingsSkipped: result.filingsSkipped,
       cost: result.cost,
-      tier
+      tier,
+      optimization: result.filingsSkipped > 0 ? `Saved ${result.filingsSkipped} unnecessary transactions` : 'No optimization applied'
     });
 
     return result;

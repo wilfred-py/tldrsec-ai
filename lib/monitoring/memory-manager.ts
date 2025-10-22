@@ -7,6 +7,7 @@
 
 import { logger } from '../logging';
 import { EventEmitter } from 'events';
+import * as os from 'os';
 
 interface MemoryMetrics {
   timestamp: Date;
@@ -367,7 +368,7 @@ export class MemoryManager extends EventEmitter {
    */
   private collectMemoryMetrics(): void {
     const memoryUsage = process.memoryUsage();
-    const totalMemory = require('os').totalmem();
+    const totalMemory = os.totalmem();
     
     const metrics: MemoryMetrics = {
       timestamp: new Date(),

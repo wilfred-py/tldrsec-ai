@@ -249,22 +249,60 @@ export class FilingTransactionManager {
   ): Promise<TransactionResult<T>> {
     return TransactionManager.executeTransaction(
       async (tx, context) => {
-        // Step 1: Acquire lock on the filing to prevent concurrent processing
-        const filing = await tx.rssFilingCheck.findUnique({
-          where: { id: filingId },
-          include: {
-            tickerMonitoring: {
-              select: {
-                symbol: true,
-                companyName: true,
-                cik: true
+        // Step 1: Determine lookup strategy based on filingId format
+        const isSyntheticId = this.isSyntheticFilingId(filingId);
+        let filing;
+        
+        if (isSyntheticId) {
+          // Extract accession number from synthetic ID (format: accessionNumber-TICKER)
+          const accessionNumber = this.extractAccessionNumber(filingId);
+          
+          transactionLogger.debug('Looking up filing by accession number (synthetic ID detected)', {
+            transactionId: context.id,
+            originalFilingId: filingId,
+            extractedAccessionNumber: accessionNumber,
+            userId
+          });
+          
+          // Look up by accessionNumber instead of id
+          filing = await tx.rssFilingCheck.findUnique({
+            where: { accessionNumber },
+            include: {
+              tickerMonitoring: {
+                select: {
+                  symbol: true,
+                  companyName: true,
+                  cik: true
+                }
               }
             }
-          }
-        });
+          });
+        } else {
+          // Standard UUID lookup
+          transactionLogger.debug('Looking up filing by UUID (standard ID)', {
+            transactionId: context.id,
+            filingId,
+            userId
+          });
+          
+          filing = await tx.rssFilingCheck.findUnique({
+            where: { id: filingId },
+            include: {
+              tickerMonitoring: {
+                select: {
+                  symbol: true,
+                  companyName: true,
+                  cik: true
+                }
+              }
+            }
+          });
+        }
 
         if (!filing) {
-          throw new Error(`Filing ${filingId} not found`);
+          const lookupMethod = isSyntheticId ? 'accession number' : 'ID';
+          const lookupValue = isSyntheticId ? this.extractAccessionNumber(filingId) : filingId;
+          throw new Error(`Filing not found by ${lookupMethod}: ${lookupValue}`);
         }
 
         if (filing.processed) {
@@ -463,6 +501,52 @@ export class FilingTransactionManager {
     });
 
     return results;
+  }
+
+  /**
+   * Check if a filing ID is synthetic (contains ticker suffix)
+   * Synthetic IDs follow the pattern: accessionNumber-TICKER
+   * Example: "0001104659-25-101278-TSLA"
+   */
+  public static isSyntheticFilingId(filingId: string): boolean {
+    // UUID pattern: 8-4-4-4-12 characters with hyphens
+    const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    
+    // If it matches UUID pattern, it's a real database ID
+    if (uuidPattern.test(filingId)) {
+      return false;
+    }
+    
+    // Check if it looks like accessionNumber-TICKER pattern
+    // Accession numbers are typically in format: XXXXXXXXXX-XX-XXXXXX
+    // So synthetic ID would be: XXXXXXXXXX-XX-XXXXXX-TICKER
+    const syntheticPattern = /^\d{10}-\d{2}-\d{6}-[A-Z]+$/;
+    
+    return syntheticPattern.test(filingId);
+  }
+
+  /**
+   * Extract accession number from synthetic filing ID
+   * Input: "0001104659-25-101278-TSLA"
+   * Output: "0001104659-25-101278"
+   */
+  public static extractAccessionNumber(syntheticId: string): string {
+    // Find the last dash and remove everything after it (the ticker part)
+    const lastDashIndex = syntheticId.lastIndexOf('-');
+    if (lastDashIndex === -1) {
+      // If no dash found, return as-is (shouldn't happen for synthetic IDs)
+      return syntheticId;
+    }
+    
+    const accessionNumber = syntheticId.substring(0, lastDashIndex);
+    
+    transactionLogger.debug('Extracted accession number from synthetic ID', {
+      syntheticId,
+      extractedAccessionNumber: accessionNumber,
+      ticker: syntheticId.substring(lastDashIndex + 1)
+    });
+    
+    return accessionNumber;
   }
 }
 
