@@ -93,9 +93,26 @@ const ValidationRules = {
           return { valid: true, allowZero: true };
         }
         
-        // In production, require context for zero-cost operations
-        if (EnvironmentUtils.isProduction() && !context) {
-          return { valid: false, error: 'Zero cost requires operation context in production' };
+        // In production, require valid operation context for zero-cost operations
+        if (EnvironmentUtils.isProduction()) {
+          // Check for specific context properties instead of just existence
+          const hasValidContext = context && (
+            context.operationType || 
+            context.isCached !== undefined || 
+            context.userId
+          );
+          
+          if (!hasValidContext) {
+            return { valid: false, error: 'Zero cost requires operation context in production' };
+          }
+          
+          // If context exists but doesn't explicitly allow zero cost, require justification
+          if (!context.operationType && !context.isCached) {
+            return { valid: false, error: 'Zero cost operation requires valid operationType or isCached flag' };
+          }
+          
+          // Allow zero cost with sufficient context in production
+          return { valid: true, allowZero: true };
         }
         
         // Allow in development/test without strict context requirements
@@ -186,17 +203,26 @@ export function validateCostUpdate(
       environment: process.env.NODE_ENV,
       isProduction: EnvironmentUtils.isProduction(),
       isTest: EnvironmentUtils.isTest(),
+      contextProvided: !!context,
+      operationType: context?.operationType,
+      isCached: context?.isCached,
       error: minValidation.error 
     });
     return { valid: false, sanitizedCost: 0, error: minValidation.error };
   }
 
-  // Log zero cost allowance in non-production
+  // Log zero cost allowance with detailed context
   if (minValidation.allowZero) {
-    costValidationLogger.debug('Zero cost allowed in non-production environment', { 
+    costValidationLogger.info('Zero cost operation allowed', { 
       cost, tier, userId, operation,
       environment: process.env.NODE_ENV,
-      isTest: EnvironmentUtils.isTest() 
+      isProduction: EnvironmentUtils.isProduction(),
+      isTest: EnvironmentUtils.isTest(),
+      operationType: context?.operationType,
+      isCached: context?.isCached,
+      allowanceReason: context?.operationType === 'cached_summary' ? 'cached_summary' : 
+                      context?.operationType === 'test_operation' ? 'test_operation' :
+                      context?.isCached === true ? 'explicitly_cached' : 'environment_override'
     });
   }
 

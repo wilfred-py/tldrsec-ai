@@ -21,7 +21,8 @@ import type {
   UserFilingResult,
   // User,
   MarketContext,
-  EligibilityOptions
+  EligibilityOptions,
+  ProcessingContext
 } from './types';
 import { TIER_BATCH_SIZES, MAX_CONCURRENT_USER_PROCESSING, ERROR_TYPES } from './types';
 
@@ -217,6 +218,9 @@ export class CronUserProcessingService {
         }
       }
 
+      // Log comprehensive resilience metrics
+      this.logProcessingResilience(results, 'optimized');
+
       return results;
 
     } catch (deduplicationError) {
@@ -258,6 +262,9 @@ export class CronUserProcessingService {
           results.errorBreakdown.unknownErrors += tierResult.errorBreakdown.unknownErrors || 0;
         }
       }
+
+      // Log comprehensive resilience metrics
+      this.logProcessingResilience(results, 'fallback');
 
       return results;
     }
@@ -519,7 +526,7 @@ export class CronUserProcessingService {
     allUsers: DatabaseUser[],
     tier: string,
     monitor: CronJobMonitor,
-    filingProcessor: (user: DatabaseUser, tier: string, ...args: unknown[]) => Promise<{ filingsProcessed: number; cost: number }>
+    filingProcessor: (user: DatabaseUser, tier: string, ...args: unknown[]) => Promise<{ filingsProcessed: number; cost: number; processingContext?: ProcessingContext }>
   ): Promise<ProcessUserResult> {
     try {
       // Find full user data with null safety
@@ -545,8 +552,30 @@ export class CronUserProcessingService {
       // Process user's filings
       const userResult = await filingProcessor(fullUser, tier);
 
-      // Validate and update budget
-      const budgetResult = await this.validateAndUpdateUserBudget(userStatus.userId, userResult.cost, tier);
+      // Extract context from filing processing result if available
+      const filingProcessingContext = userResult.processingContext || {
+        userId: userStatus.userId,
+        tier,
+        operation: 'tier-aware-cron-processing',
+        operationType: userResult.cost === 0 ? 'cached_summary' : 'ai_generation',
+        isCached: userResult.cost === 0
+      };
+
+      processingLogger.debug('Context extracted from filing processing', {
+        userId: userStatus.userId,
+        tier,
+        cost: userResult.cost,
+        contextFromProcessor: !!userResult.processingContext,
+        finalContext: filingProcessingContext
+      });
+
+      // Validate and update budget with proper context
+      const budgetResult = await this.validateAndUpdateUserBudget(
+        userStatus.userId, 
+        userResult.cost, 
+        tier, 
+        filingProcessingContext
+      );
       if (!budgetResult.success) {
         return {
           success: false,
@@ -585,17 +614,28 @@ export class CronUserProcessingService {
   private static async validateAndUpdateUserBudget(
     userId: string,
     cost: number,
-    tier: string
+    tier: string,
+    context?: ProcessingContext
   ): Promise<{ success: boolean; error?: string; errorType?: string; budgetUpdate?: unknown }> {
     try {
-      // Comprehensive cost validation
-      const costValidation = CronBudgetService.validateProcessingCost(cost, tier, {
+      // Comprehensive cost validation with proper context
+      const validationContext = context || {
         userId,
         tier,
         operation: 'tier-aware-cron-processing',
         operationType: cost === 0 ? 'cached_summary' : 'ai_generation',
         isCached: cost === 0
+      };
+
+      processingLogger.debug('Budget validation context', {
+        userId,
+        tier,
+        cost,
+        contextProvided: !!context,
+        validationContext
       });
+
+      const costValidation = CronBudgetService.validateProcessingCost(cost, tier, validationContext);
 
       if (!costValidation.valid) {
         return {
@@ -730,8 +770,28 @@ export class CronUserProcessingService {
           results.processed++;
           results.filings += result.value.filingsProcessed || 0;
           results.cost += result.value.cost || 0;
+          
+          // Log successful user processing with filing details
+          processingLogger.info(`✅ User processing successful`, {
+            userId: result.value.userId,
+            filingsProcessed: result.value.filingsProcessed || 0,
+            cost: result.value.cost || 0,
+            processingStatus: 'Success'
+          });
         } else {
           results.errors++;
+          
+          // Enhanced error logging with more context
+          const errorDetail = result && result.status === 'fulfilled' && result.value ? result.value : null;
+          processingLogger.warn(`⚠️ User processing failed`, {
+            userId: errorDetail?.userId || 'unknown',
+            errorType: errorDetail?.errorType || 'unknown',
+            error: errorDetail?.error || 'Unknown error',
+            filingsProcessed: errorDetail?.filingsProcessed || 0,
+            cost: errorDetail?.cost || 0,
+            processingStatus: 'Failed',
+            resultStatus: result?.status || 'unknown'
+          });
 
           // Track error breakdown with null safety
           if (result && result.status === 'fulfilled' && result.value && result.value.errorType) {
@@ -764,6 +824,68 @@ export class CronUserProcessingService {
         results.errors++;
         results.errorBreakdown!.unknownErrors++;
       }
+    }
+  }
+
+  /**
+   * Log comprehensive processing resilience metrics
+   */
+  private static logProcessingResilience(results: CronResults, mode: string): void {
+    const totalUsersAttempted = results.usersProcessed + results.errors;
+    const userSuccessRate = totalUsersAttempted > 0 
+      ? Math.round((results.usersProcessed / totalUsersAttempted) * 100)
+      : 0;
+    
+    const totalErrors = Object.values(results.errorBreakdown).reduce((sum, count) => sum + count, 0);
+    const hasPartialSuccesses = results.usersProcessed > 0 && totalErrors > 0;
+    
+    processingLogger.info(`🛡️ Processing Resilience Summary (${mode} mode)`, {
+      mode,
+      summary: {
+        usersAttempted: totalUsersAttempted,
+        usersSuccessful: results.usersProcessed,
+        userSuccessRate: `${userSuccessRate}%`,
+        filingsProcessed: results.filingsProcessed,
+        totalCost: results.totalCost,
+        totalErrors: results.errors
+      },
+      resilience: {
+        hasPartialSuccesses,
+        continuedOnErrors: results.errors > 0 && results.usersProcessed > 0,
+        errorDistribution: results.errorBreakdown,
+        resilienceScore: userSuccessRate
+      },
+      cacheOptimization: {
+        hits: results.cacheMetrics.hits,
+        misses: results.cacheMetrics.misses,
+        hitRatio: `${Math.round(results.cacheMetrics.hitRatio * 100)}%`,
+        apiCallsSaved: results.cacheMetrics.apiCallsSaved
+      },
+      tierBreakdown: results.tierBreakdown
+    });
+
+    // Log specific resilience insights
+    if (hasPartialSuccesses) {
+      processingLogger.info('✅ System demonstrated resilience: continued processing despite individual failures', {
+        successfulUsers: results.usersProcessed,
+        failedUsers: results.errors,
+        filingsStillProcessed: results.filingsProcessed
+      });
+    }
+
+    if (results.errors === 0 && results.usersProcessed > 0) {
+      processingLogger.info('🎯 Perfect processing cycle: all users processed successfully', {
+        usersProcessed: results.usersProcessed,
+        filingsProcessed: results.filingsProcessed
+      });
+    }
+
+    if (results.usersProcessed === 0 && results.errors > 0) {
+      processingLogger.warn('⚠️ Complete processing failure: no users processed successfully', {
+        totalErrors: results.errors,
+        errorBreakdown: results.errorBreakdown,
+        recommendation: 'Check system health and error patterns'
+      });
     }
   }
 }

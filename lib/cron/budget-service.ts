@@ -73,6 +73,20 @@ export class CronBudgetService {
       // Normalize tier first to ensure consistency with cost validation system
       const normalizedTier = this.normalizeTier(tier);
       
+      // Log context flow for debugging
+      budgetLogger.debug('Processing cost validation with context', {
+        userId: context.userId,
+        tier,
+        normalizedTier,
+        cost,
+        context: {
+          operation: context.operation,
+          operationType: context.operationType,
+          isCached: context.isCached
+        },
+        contextFlow: 'budget-service -> cost-validation'
+      });
+      
       const costValidation = validateCostUpdate(cost, normalizedTier, {
         userId: context.userId,
         tier: normalizedTier,
@@ -85,7 +99,13 @@ export class CronBudgetService {
         budgetLogger.error(`Cost validation failed`, {
           userId: context.userId,
           tier,
+          normalizedTier,
           originalCost: cost,
+          contextProvided: {
+            operation: context.operation,
+            operationType: context.operationType,
+            isCached: context.isCached
+          },
           error: costValidation.error
         });
 
