@@ -12,14 +12,14 @@ export abstract class FilingRetrievalError extends Error {
   public readonly isRetryable: boolean;
   public readonly errorCode: string;
   public readonly httpStatus?: number;
-  public readonly context: Record<string, any>;
+  public readonly context: Record<string, unknown>;
 
   constructor(
     message: string,
     isRetryable: boolean,
     errorCode: string,
     httpStatus?: number,
-    context: Record<string, any> = {}
+    context: Record<string, unknown> = {}
   ) {
     super(message);
     this.name = this.constructor.name;
@@ -55,7 +55,7 @@ export abstract class FilingRetrievalError extends Error {
  * These indicate issues with the filing request itself
  */
 export class PermanentFilingError extends FilingRetrievalError {
-  constructor(message: string, errorCode: string, httpStatus?: number, context: Record<string, any> = {}) {
+  constructor(message: string, errorCode: string, httpStatus?: number, context: Record<string, unknown> = {}) {
     super(message, false, errorCode, httpStatus, context);
   }
 }
@@ -71,7 +71,7 @@ export class TransientFilingError extends FilingRetrievalError {
     message: string, 
     errorCode: string, 
     httpStatus?: number, 
-    context: Record<string, any> = {},
+    context: Record<string, unknown> = {},
     retryAfter?: number
   ) {
     super(message, true, errorCode, httpStatus, context);
@@ -151,9 +151,9 @@ export const DEFAULT_RETRY_CONFIG: RetryConfig = {
  * Classify an error based on HTTP status code and error characteristics
  */
 export function classifyFilingError(
-  error: any,
+  error: unknown,
   accessionNumber: string,
-  context: Record<string, any> = {}
+  context: Record<string, unknown> = {}
 ): FilingRetrievalError {
   const errorContext = {
     accessionNumber,
