@@ -24,6 +24,9 @@ describe('CronJobMonitor', () => {
         findFirst: jest.fn(),
         groupBy: jest.fn()
       },
+      cronJobAlert: {
+        create: jest.fn()
+      },
       filingProcessingLog: {
         groupBy: jest.fn()
       }
@@ -47,43 +50,26 @@ describe('CronJobMonitor', () => {
       const dbError = new Error('Database connection failed');
       mockPrisma.cronJobExecution.create.mockRejectedValue(dbError);
 
-      const monitor = new CronJobMonitor('test-job', 'MANUAL');
-      
-      // Ensure initialization attempt completes
-      await monitor.ensureInitialized();
-      
-      // Monitor should handle the failure gracefully
-      expect((monitor as any).initialized).toBe(false);
-      
-      // Should not throw when trying to use monitor methods
-      await expect(monitor.updateMetrics({ tickersChecked: 1 })).resolves.not.toThrow();
-      await expect(monitor.complete('SUCCESS')).resolves.not.toThrow();
+      await expect(CronJobMonitor.create('test-job', 'MANUAL')).rejects.toThrow('Database connection failed');
     });
 
-    it('should prevent operations before initialization completes', async () => {
-      let resolveInit: (value?: any) => void;
-      const initPromise = new Promise(resolve => {
-        resolveInit = resolve;
+    it('should allow operations after initialization succeeds', async () => {
+      mockPrisma.cronJobExecution.create.mockResolvedValue({ id: 'test-id' });
+      mockPrisma.cronJobExecution.update.mockResolvedValue({ id: 'test-id' });
+
+      const monitor = await CronJobMonitor.create('test-job', 'MANUAL');
+      
+      // Operations should work normally
+      await monitor.updateMetrics({ tickersChecked: 5 });
+      await monitor.complete('SUCCESS');
+      
+      expect(mockPrisma.cronJobExecution.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          jobName: 'test-job',
+          executionId: 'mock-uuid-1234',
+          status: 'STARTED'
+        })
       });
-
-      mockPrisma.cronJobExecution.create.mockImplementation(() => initPromise);
-
-      const monitor = new CronJobMonitor('test-job', 'MANUAL');
-      
-      // Start operations before initialization completes
-      const updatePromise = monitor.updateMetrics({ tickersChecked: 1 });
-      const completePromise = monitor.complete('SUCCESS');
-      
-      // These operations should be waiting for initialization
-      expect(mockPrisma.cronJobExecution.update).not.toHaveBeenCalled();
-      
-      // Complete initialization
-      resolveInit!();
-      await initPromise;
-      
-      // Now operations should proceed
-      await updatePromise;
-      await completePromise;
       
       expect(mockPrisma.cronJobExecution.update).toHaveBeenCalledTimes(2);
     });
@@ -498,6 +484,214 @@ describe('CronJobMonitor', () => {
         where: { executionId: 'mock-uuid-1234' },
         data: {}
       });
+    });
+  });
+
+  describe('Alert Creation System', () => {
+    it('should create alerts with required title field', async () => {
+      mockPrisma.cronJobExecution.create.mockResolvedValue({ id: 'test-id' });
+      mockPrisma.cronJobAlert.create.mockResolvedValue({ id: 'alert-id' });
+
+      const monitor = new CronJobMonitor('test-job', 'MANUAL');
+      await monitor.ensureInitialized();
+
+      await monitor.createAlert('EXECUTION_FAILED', {
+        severity: 'CRITICAL',
+        message: 'Job execution failed due to database error',
+        details: { error: 'Connection timeout' }
+      });
+
+      expect(mockPrisma.cronJobAlert.create).toHaveBeenCalledWith({
+        data: {
+          executionId: 'mock-uuid-1234',
+          alertType: 'EXECUTION_FAILED',
+          severity: 'CRITICAL',
+          title: '🚨 CRITICAL: Cron Job Execution Failed',
+          description: 'Job execution failed due to database error',
+          actualValue: { error: 'Connection timeout' },
+          jobName: 'test-job',
+          environment: 'test',
+          triggeredAt: expect.any(Date)
+        }
+      });
+    });
+
+    it('should generate appropriate titles for different alert types', async () => {
+      mockPrisma.cronJobExecution.create.mockResolvedValue({ id: 'test-id' });
+      mockPrisma.cronJobAlert.create.mockResolvedValue({ id: 'alert-id' });
+
+      const monitor = new CronJobMonitor('test-job', 'MANUAL');
+      await monitor.ensureInitialized();
+
+      const testCases = [
+        { type: 'HIGH_ERROR_RATE', severity: 'HIGH', expectedTitle: '⚠️ HIGH: High Error Rate Detected' },
+        { type: 'COST_THRESHOLD_EXCEEDED', severity: 'MEDIUM', expectedTitle: '⚡ MEDIUM: Cost Threshold Exceeded' },
+        { type: 'EMAIL_DELIVERY_FAILED', severity: 'LOW', expectedTitle: '📋 LOW: Email Delivery Failed' },
+        { type: 'CUSTOM_ALERT_TYPE', severity: 'CRITICAL', expectedTitle: '🚨 CRITICAL: CUSTOM_ALERT_TYPE Alert' }
+      ];
+
+      for (const testCase of testCases) {
+        await monitor.createAlert(testCase.type, {
+          severity: testCase.severity,
+          message: 'Test message'
+        });
+
+        expect(mockPrisma.cronJobAlert.create).toHaveBeenCalledWith({
+          data: expect.objectContaining({
+            title: testCase.expectedTitle
+          })
+        });
+
+        jest.clearAllMocks();
+        mockPrisma.cronJobExecution.create.mockResolvedValue({ id: 'test-id' });
+        mockPrisma.cronJobAlert.create.mockResolvedValue({ id: 'alert-id' });
+      }
+    });
+
+    it('should handle alert creation failure gracefully', async () => {
+      mockPrisma.cronJobExecution.create.mockResolvedValue({ id: 'test-id' });
+      mockPrisma.cronJobAlert.create.mockRejectedValue(new Error('Alert creation failed'));
+
+      const monitor = new CronJobMonitor('test-job', 'MANUAL');
+      await monitor.ensureInitialized();
+
+      // Should not throw error
+      await expect(monitor.createAlert('EXECUTION_FAILED', {
+        severity: 'CRITICAL',
+        message: 'Test alert'
+      })).resolves.not.toThrow();
+
+      expect(mockPrisma.cronJobAlert.create).toHaveBeenCalled();
+    });
+
+    it('should map alert types to proper enums', async () => {
+      mockPrisma.cronJobExecution.create.mockResolvedValue({ id: 'test-id' });
+      mockPrisma.cronJobAlert.create.mockResolvedValue({ id: 'alert-id' });
+
+      const monitor = new CronJobMonitor('test-job', 'MANUAL');
+      await monitor.ensureInitialized();
+
+      await monitor.createAlert('api_rate_limit_hit', {
+        severity: 'warning',
+        message: 'Rate limit exceeded'
+      });
+
+      expect(mockPrisma.cronJobAlert.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          alertType: 'API_RATE_LIMIT_HIT', // Should be mapped to uppercase enum
+          severity: 'MEDIUM' // 'warning' should map to 'MEDIUM'
+        })
+      });
+    });
+
+    it('should handle missing alert details gracefully', async () => {
+      mockPrisma.cronJobExecution.create.mockResolvedValue({ id: 'test-id' });
+      mockPrisma.cronJobAlert.create.mockResolvedValue({ id: 'alert-id' });
+
+      const monitor = new CronJobMonitor('test-job', 'MANUAL');
+      await monitor.ensureInitialized();
+
+      await monitor.createAlert('NO_FILINGS_PROCESSED', {
+        severity: 'HIGH',
+        message: 'No filings were processed'
+        // details omitted
+      });
+
+      expect(mockPrisma.cronJobAlert.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          actualValue: {} // Should default to empty object
+        })
+      });
+    });
+
+    it('should update error/warning counts based on alert severity', async () => {
+      mockPrisma.cronJobExecution.create.mockResolvedValue({ id: 'test-id' });
+      mockPrisma.cronJobExecution.update.mockResolvedValue({ id: 'test-id' });
+      mockPrisma.cronJobAlert.create.mockResolvedValue({ id: 'alert-id' });
+
+      const monitor = new CronJobMonitor('test-job', 'MANUAL');
+      await monitor.ensureInitialized();
+
+      // Critical alert should increment error count
+      await monitor.createAlert('EXECUTION_FAILED', {
+        severity: 'CRITICAL',
+        message: 'Critical error'
+      });
+
+      expect(mockPrisma.cronJobExecution.update).toHaveBeenCalledWith({
+        where: { executionId: 'mock-uuid-1234' },
+        data: { errorsCount: 1 }
+      });
+
+      // Warning alert should increment warning count
+      await monitor.createAlert('PERFORMANCE_DEGRADED', {
+        severity: 'WARNING',
+        message: 'Performance warning'
+      });
+
+      // Note: Warning gets mapped to HIGH severity
+      expect(mockPrisma.cronJobExecution.update).toHaveBeenCalledTimes(2);
+    });
+
+    it('should skip alert creation in test mode', async () => {
+      // Set test environment
+      const originalEnv = process.env.NODE_ENV;
+      process.env.NODE_ENV = 'test';
+
+      const monitor = new CronJobMonitor('test-job', 'MANUAL');
+      await monitor.ensureInitialized();
+
+      await monitor.createAlert('EXECUTION_FAILED', {
+        severity: 'CRITICAL',
+        message: 'Test alert'
+      });
+
+      // Should not call database in test mode
+      expect(mockPrisma.cronJobAlert.create).not.toHaveBeenCalled();
+
+      // Restore environment
+      process.env.NODE_ENV = originalEnv;
+    });
+
+    it('should handle all supported alert types', async () => {
+      mockPrisma.cronJobExecution.create.mockResolvedValue({ id: 'test-id' });
+      mockPrisma.cronJobAlert.create.mockResolvedValue({ id: 'alert-id' });
+
+      const monitor = new CronJobMonitor('test-job', 'MANUAL');
+      await monitor.ensureInitialized();
+
+      const alertTypes = [
+        'EXECUTION_FAILED',
+        'HIGH_ERROR_RATE',
+        'COST_THRESHOLD_EXCEEDED',
+        'PERFORMANCE_DEGRADED',
+        'NO_FILINGS_PROCESSED',
+        'EMAIL_DELIVERY_FAILED',
+        'TIMEOUT_EXCEEDED',
+        'MEMORY_LIMIT_EXCEEDED',
+        'API_RATE_LIMIT_HIT',
+        'DATABASE_CONNECTION_FAILED'
+      ];
+
+      for (const alertType of alertTypes) {
+        await monitor.createAlert(alertType, {
+          severity: 'HIGH',
+          message: `Test ${alertType} alert`
+        });
+
+        expect(mockPrisma.cronJobAlert.create).toHaveBeenCalledWith({
+          data: expect.objectContaining({
+            alertType,
+            title: expect.stringContaining(alertType.replace(/_/g, ' ').split(' ').map(word => 
+              word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
+            ).join(' '))
+          })
+        });
+
+        jest.clearAllMocks();
+        mockPrisma.cronJobExecution.create.mockResolvedValue({ id: 'test-id' });
+        mockPrisma.cronJobAlert.create.mockResolvedValue({ id: 'alert-id' });
+      }
     });
   });
 

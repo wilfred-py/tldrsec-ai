@@ -9,6 +9,7 @@ import {
   CronExecutionResult,
   MonitoringConfig
 } from '../../types/cron';
+import { CronAlertType, AlertSeverity } from '@prisma/client';
 
 const prisma = getPrismaClient();
 const cronLogger = logger.child('cron-monitor');
@@ -205,6 +206,76 @@ export class CronJobMonitor {
   }
 
   /**
+   * Map string alert type to Prisma enum
+   */
+  private mapToAlertType(alertType: string): CronAlertType {
+    const typeMap: Record<string, CronAlertType> = {
+      'EXECUTION_FAILED': CronAlertType.EXECUTION_FAILED,
+      'HIGH_ERROR_RATE': CronAlertType.HIGH_ERROR_RATE,
+      'COST_THRESHOLD_EXCEEDED': CronAlertType.COST_THRESHOLD_EXCEEDED,
+      'PERFORMANCE_DEGRADED': CronAlertType.PERFORMANCE_DEGRADED,
+      'NO_FILINGS_PROCESSED': CronAlertType.NO_FILINGS_PROCESSED,
+      'EMAIL_DELIVERY_FAILED': CronAlertType.EMAIL_DELIVERY_FAILED,
+      'TIMEOUT_EXCEEDED': CronAlertType.TIMEOUT_EXCEEDED,
+      'MEMORY_LIMIT_EXCEEDED': CronAlertType.MEMORY_LIMIT_EXCEEDED,
+      'API_RATE_LIMIT_HIT': CronAlertType.API_RATE_LIMIT_HIT,
+      'DATABASE_CONNECTION_FAILED': CronAlertType.DATABASE_CONNECTION_FAILED
+    };
+    
+    return typeMap[alertType.toUpperCase()] || CronAlertType.EXECUTION_FAILED;
+  }
+
+  /**
+   * Map string severity to Prisma enum
+   */
+  private mapToSeverity(severity: string): AlertSeverity {
+    const severityMap: Record<string, AlertSeverity> = {
+      'LOW': AlertSeverity.LOW,
+      'MEDIUM': AlertSeverity.MEDIUM,
+      'HIGH': AlertSeverity.HIGH,
+      'CRITICAL': AlertSeverity.CRITICAL
+    };
+    
+    return severityMap[severity.toUpperCase()] || AlertSeverity.MEDIUM;
+  }
+
+  /**
+   * Generate a meaningful title for the alert based on type and severity
+   */
+  private generateAlertTitle(alertType: string, severity: string): string {
+    const severityPrefix = severity === 'CRITICAL' ? '🚨 CRITICAL' : 
+                          severity === 'HIGH' ? '⚠️ HIGH' :
+                          severity === 'MEDIUM' ? '⚡ MEDIUM' : 
+                          '📋 LOW';
+    
+    // Generate title based on alert type
+    switch (alertType.toUpperCase()) {
+      case 'EXECUTION_FAILED':
+        return `${severityPrefix}: Cron Job Execution Failed`;
+      case 'HIGH_ERROR_RATE':
+        return `${severityPrefix}: High Error Rate Detected`;
+      case 'COST_THRESHOLD_EXCEEDED':
+        return `${severityPrefix}: Cost Threshold Exceeded`;
+      case 'PERFORMANCE_DEGRADED':
+        return `${severityPrefix}: Performance Degradation`;
+      case 'NO_FILINGS_PROCESSED':
+        return `${severityPrefix}: No Filings Processed`;
+      case 'EMAIL_DELIVERY_FAILED':
+        return `${severityPrefix}: Email Delivery Failed`;
+      case 'TIMEOUT_EXCEEDED':
+        return `${severityPrefix}: Execution Timeout`;
+      case 'MEMORY_LIMIT_EXCEEDED':
+        return `${severityPrefix}: Memory Limit Exceeded`;
+      case 'API_RATE_LIMIT_HIT':
+        return `${severityPrefix}: API Rate Limit Hit`;
+      case 'DATABASE_CONNECTION_FAILED':
+        return `${severityPrefix}: Database Connection Failed`;
+      default:
+        return `${severityPrefix}: ${alertType} Alert`;
+    }
+  }
+
+  /**
    * Create an alert for critical events during cron execution
    * This method records important alerts that need attention
    */
@@ -243,24 +314,34 @@ export class CronJobMonitor {
       }
       
       // Store alert in database if CronJobAlert table exists
-      // For now, we'll just log it as the table might not exist yet
       try {
         // Check if CronJobAlert model exists in Prisma
         if (prisma.cronJobAlert) {
+          // Generate meaningful title for the alert
+          const alertTitle = this.generateAlertTitle(alertType, alertData.severity);
+          
           await prisma.cronJobAlert.create({
             data: {
               executionId: this.executionId,
-              alertType,
-              severity: alertData.severity,
-              message: alertData.message,
-              details: alertData.details || {},
-              createdAt: new Date()
+              alertType: this.mapToAlertType(alertType),
+              severity: this.mapToSeverity(alertData.severity),
+              title: alertTitle, // Required field - now provided
+              description: alertData.message, // Schema expects 'description', not 'message'
+              actualValue: alertData.details || {}, // Store details in actualValue field
+              jobName: this.jobName, // Add job name for context
+              environment: process.env.NODE_ENV || 'development',
+              triggeredAt: new Date()
             }
           });
         }
       } catch (dbError) {
-        // If the table doesn't exist, just log it
-        cronLogger.debug('CronJobAlert table not available, alert logged only', { dbError });
+        // Log specific error but don't fail the cron execution
+        cronLogger.error('Failed to create CronJobAlert in database', { 
+          dbError, 
+          alertType, 
+          severity: alertData.severity,
+          executionId: this.executionId 
+        });
       }
       
     } catch (error) {
