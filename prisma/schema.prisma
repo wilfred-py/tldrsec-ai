@@ -290,19 +290,20 @@ model RssFilingCheck {
 }
 
 model UserSubscription {
-  id                   String   @id @default(uuid())
-  userId               String   @unique
-  planType             PlanType @default(BASIC)
-  isActive             Boolean  @default(true)
-  currentPeriodStart   DateTime @default(now())
+  id                   String        @id @default(uuid())
+  userId               String        @unique
+  planType             PlanType      @default(BASIC)
+  billingPeriod        BillingPeriod @default(MONTHLY)
+  isActive             Boolean       @default(true)
+  currentPeriodStart   DateTime      @default(now())
   currentPeriodEnd     DateTime
-  cancelAtPeriodEnd    Boolean  @default(false)
-  stripeCustomerId     String?  @unique
-  stripeSubscriptionId String?  @unique
+  cancelAtPeriodEnd    Boolean       @default(false)
+  stripeCustomerId     String?       @unique
+  stripeSubscriptionId String?       @unique
   stripePriceId        String?
-  createdAt            DateTime @default(now())
-  updatedAt            DateTime @updatedAt
-  user                 User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt            DateTime      @default(now())
+  updatedAt            DateTime      @updatedAt
+  user                 User          @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([planType, isActive])
 }
@@ -627,6 +628,11 @@ enum PlanType {
   BASIC
   PROFESSIONAL
   PREMIUM
+}
+
+enum BillingPeriod {
+  MONTHLY
+  YEARLY
 }
 
 enum CronJobStatus {
