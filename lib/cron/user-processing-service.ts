@@ -552,13 +552,15 @@ export class CronUserProcessingService {
       // Process user's filings
       const userResult = await filingProcessor(fullUser, tier);
 
-      // Extract context from filing processing result if available
+      // Extract context from filing processing result - should now be properly set during processing
       const filingProcessingContext = userResult.processingContext || {
+        // Fallback context if filing processor didn't provide one (shouldn't happen with new implementation)
         userId: userStatus.userId,
         tier,
         operation: 'tier-aware-cron-processing',
-        operationType: userResult.cost === 0 ? 'cached_summary' : 'ai_generation',
-        isCached: userResult.cost === 0
+        operationType: 'failed_operation', // Conservative default if no context provided
+        isCached: false,
+        errorOccurred: true // If no context, something went wrong
       };
 
       processingLogger.debug('Context extracted from filing processing', {
