@@ -1,7 +1,7 @@
 import { prisma } from '@/lib/db/prisma';
 import { summarizeFiling } from '@/lib/ai/summarize';
 import { parseSECFilingFromUrl } from '@/lib/parsers/sec-filing-parser';
-import { claudeClient } from '@/lib/ai/claude-client';
+import { ClaudeApiClient } from '@/lib/ai/claude-api-client';
 import { logger } from '@/lib/logging';
 
 // Mock the API calls and database operations for testing

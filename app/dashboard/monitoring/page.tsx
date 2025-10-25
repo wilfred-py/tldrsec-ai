@@ -12,10 +12,11 @@ export const metadata: Metadata = {
 };
 
 interface MonitoringPageProps {
-  searchParams: { [key: string]: string | string[] | undefined };
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }
 
 export default async function MonitoringPage({ searchParams }: MonitoringPageProps) {
+  const resolvedSearchParams = await searchParams;
   const user = await currentUser();
   
   if (!user) {
@@ -36,8 +37,8 @@ export default async function MonitoringPage({ searchParams }: MonitoringPagePro
     });
 
     // Redirect back to dashboard with error message in URL params
-    const redirectUrl = searchParams.from && typeof searchParams.from === 'string' 
-      ? decodeURIComponent(searchParams.from)
+    const redirectUrl = resolvedSearchParams.from && typeof resolvedSearchParams.from === 'string' 
+      ? decodeURIComponent(resolvedSearchParams.from)
       : '/dashboard';
     
     redirect(`${redirectUrl}?error=access_denied&resource=monitoring`);

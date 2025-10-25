@@ -932,7 +932,7 @@ export async function GET(request: NextRequest) {
  * Reset monthly budgets (called from separate cron or admin endpoint)
  * Extracted utility function - kept in route file for backward compatibility
  */
-export async function resetMonthlyBudgets() {
+async function _resetMonthlyBudgets() {
   try {
     const { getPrismaClient } = await import('../../../../lib/db/prisma');
     const prisma = getPrismaClient();

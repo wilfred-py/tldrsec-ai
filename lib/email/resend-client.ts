@@ -585,3 +585,6 @@ export class ResendClient {
 }
 
 export default ResendClient;
+
+// Create and export a singleton instance for convenience
+export const resendClient = new ResendClient();
