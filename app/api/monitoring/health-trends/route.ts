@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
+import { getPrismaClient } from '@/lib/prisma';
 import { getAuth } from '@clerk/nextjs/server';
 
 /**
@@ -58,7 +58,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Check admin access
-    const user = await prisma.user.findUnique({
+    const user = await getPrismaClient().user.findUnique({
       where: { authProviderId: userId },
       select: { subscriptionTier: true }
     });
@@ -227,7 +227,7 @@ function getTimeRange(timeRange: string, granularity: string) {
 }
 
 async function fetchHistoricalData(startTime: Date, endTime: Date, _metrics: string[]) {
-  return await prisma.pipelineHealthHistory.findMany({
+  return await getPrismaClient().pipelineHealthHistory.findMany({
     where: {
       timestamp: {
         gte: startTime,

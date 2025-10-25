@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
+import { getPrismaClient } from '@/lib/prisma';
 import { getAuth } from '@clerk/nextjs/server';
 
 /**
@@ -33,7 +33,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Check admin access
-    const user = await prisma.user.findUnique({
+    const user = await getPrismaClient().user.findUnique({
       where: { authProviderId: userId },
       select: { subscriptionTier: true }
     });
@@ -57,10 +57,10 @@ export async function GET(request: NextRequest) {
     if (resolved !== null) where.resolved = resolved === 'true';
 
     // Get total count for pagination
-    const totalCount = await prisma.errorAlert.count({ where });
+    const totalCount = await getPrismaClient().errorAlert.count({ where });
 
     // Get alerts with pagination
-    const alerts = await prisma.errorAlert.findMany({
+    const alerts = await getPrismaClient().errorAlert.findMany({
       where,
       orderBy: [
         { resolved: 'asc' }, // Unresolved first
@@ -133,7 +133,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Check for duplicate alerts (prevent spam)
-    const recentSimilarAlert = await prisma.errorAlert.findFirst({
+    const recentSimilarAlert = await getPrismaClient().errorAlert.findFirst({
       where: {
         source: body.source,
         message: body.message,
@@ -153,7 +153,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Create the alert
-    const alert = await prisma.errorAlert.create({
+    const alert = await getPrismaClient().errorAlert.create({
       data: {
         alertType: body.alertType,
         source: body.source,
@@ -205,7 +205,7 @@ export async function PATCH(request: NextRequest) {
     const body: AlertUpdateRequest = await request.json();
 
     // Get user info for acknowledgment
-    const user = await prisma.user.findUnique({
+    const user = await getPrismaClient().user.findUnique({
       where: { authProviderId: userId },
       select: { email: true, name: true }
     });
@@ -224,7 +224,7 @@ export async function PATCH(request: NextRequest) {
       updateData.acknowledgedBy = body.acknowledgedBy || user?.email || userId;
     }
 
-    const updatedAlert = await prisma.errorAlert.update({
+    const updatedAlert = await getPrismaClient().errorAlert.update({
       where: { id: alertId },
       data: updateData
     });
@@ -255,7 +255,7 @@ export async function DELETE(request: NextRequest) {
     }
 
     // Check admin access
-    const user = await prisma.user.findUnique({
+    const user = await getPrismaClient().user.findUnique({
       where: { authProviderId: userId },
       select: { subscriptionTier: true }
     });
@@ -271,7 +271,7 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: 'Alert ID required' }, { status: 400 });
     }
 
-    await prisma.errorAlert.delete({
+    await getPrismaClient().errorAlert.delete({
       where: { id: alertId }
     });
 
@@ -297,28 +297,28 @@ async function getAlertStatistics() {
     sourceBreakdown,
     typeBreakdown
   ] = await Promise.all([
-    prisma.errorAlert.count({
+    getPrismaClient().errorAlert.count({
       where: { resolved: false }
     }),
-    prisma.errorAlert.count({
+    getPrismaClient().errorAlert.count({
       where: { 
         createdAt: { gte: twentyFourHoursAgo }
       }
     }),
-    prisma.errorAlert.count({
+    getPrismaClient().errorAlert.count({
       where: { 
         alertType: 'critical',
         resolved: false
       }
     }),
-    prisma.errorAlert.groupBy({
+    getPrismaClient().errorAlert.groupBy({
       by: ['source'],
       where: { 
         createdAt: { gte: twentyFourHoursAgo }
       },
       _count: { id: true }
     }),
-    prisma.errorAlert.groupBy({
+    getPrismaClient().errorAlert.groupBy({
       by: ['alertType'],
       where: { 
         createdAt: { gte: twentyFourHoursAgo }
@@ -352,7 +352,7 @@ async function triggerImmediateNotification(alert: { id: string; source: string;
     });
 
     // Update notification timestamp
-    await prisma.errorAlert.update({
+    await getPrismaClient().errorAlert.update({
       where: { id: alert.id },
       data: { notifiedAt: new Date() }
     });

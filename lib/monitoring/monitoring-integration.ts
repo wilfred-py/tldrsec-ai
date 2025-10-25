@@ -1,4 +1,4 @@
-import { prisma } from '@/lib/prisma';
+import { getPrismaClient } from '@/lib/prisma';
 import { alertService, SystemMetrics } from './alert-service';
 
 /**
@@ -190,7 +190,7 @@ class MonitoringIntegration {
     const oneHourAgo = new Date(now.getTime() - 60 * 60 * 1000);
 
     // Get recent summaries for error rate calculation
-    const recentSummaries = await prisma.summary.findMany({
+    const recentSummaries = await getPrismaClient().summary.findMany({
       where: {
         createdAt: { gte: oneHourAgo }
       },
@@ -217,16 +217,16 @@ class MonitoringIntegration {
 
     // Get queue metrics
     const [queueDepth, activeJobs] = await Promise.all([
-      prisma.jobQueue.count({
+      getPrismaClient().jobQueue.count({
         where: { status: { in: ['pending', 'running'] } }
       }),
-      prisma.jobQueue.count({
+      getPrismaClient().jobQueue.count({
         where: { status: 'running' }
       })
     ]);
 
     // Get latest system resource usage
-    const latestExecution = await prisma.cronJobExecution.findFirst({
+    const latestExecution = await getPrismaClient().cronJobExecution.findFirst({
       where: { startedAt: { gte: oneHourAgo } },
       orderBy: { startedAt: 'desc' },
       select: { memoryUsageMb: true }
@@ -252,7 +252,7 @@ class MonitoringIntegration {
       pipelineStatus = 'degraded';
     }
 
-    await prisma.pipelineHealthHistory.create({
+    await getPrismaClient().pipelineHealthHistory.create({
       data: {
         pipelineStatus,
         processingLatency: metrics.avgProcessingLatency,
@@ -275,11 +275,11 @@ class MonitoringIntegration {
     const oneHourAgo = new Date(now.getTime() - 60 * 60 * 1000);
 
     const [currentPeriod, previousPeriod] = await Promise.all([
-      prisma.pipelineHealthHistory.findMany({
+      getPrismaClient().pipelineHealthHistory.findMany({
         where: { timestamp: { gte: oneHourAgo } },
         select: { processingLatency: true, errorCount: true, queueDepth: true }
       }),
-      prisma.pipelineHealthHistory.findMany({
+      getPrismaClient().pipelineHealthHistory.findMany({
         where: { 
           timestamp: { gte: twoHoursAgo, lt: oneHourAgo } 
         },
@@ -318,7 +318,7 @@ class MonitoringIntegration {
   }
 
   private async getActiveAlertsCount(): Promise<number> {
-    return await prisma.errorAlert.count({
+    return await getPrismaClient().errorAlert.count({
       where: { resolved: false }
     });
   }
@@ -350,7 +350,7 @@ class MonitoringIntegration {
   private async checkDatabaseHealth(): Promise<HealthCheckResult> {
     const startTime = Date.now();
     try {
-      await prisma.$queryRaw`SELECT 1`;
+      await getPrismaClient().$queryRaw`SELECT 1`;
       const responseTime = Date.now() - startTime;
       
       return {
@@ -421,8 +421,8 @@ class MonitoringIntegration {
     const startTime = Date.now();
     try {
       const [totalJobs, stuckJobs] = await Promise.all([
-        prisma.jobQueue.count(),
-        prisma.jobQueue.count({
+        getPrismaClient().jobQueue.count(),
+        getPrismaClient().jobQueue.count({
           where: {
             status: 'running',
             startedAt: {
@@ -452,7 +452,7 @@ class MonitoringIntegration {
   }
 
   private async getHistoricalData(startTime: Date, endTime: Date) {
-    return await prisma.pipelineHealthHistory.findMany({
+    return await getPrismaClient().pipelineHealthHistory.findMany({
       where: {
         timestamp: { gte: startTime, lte: endTime }
       },
