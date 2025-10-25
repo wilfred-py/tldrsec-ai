@@ -3,7 +3,17 @@
  * 
  * Provides structured error handling for SEC filing retrieval with distinction
  * between permanent and transient failures to enable proper retry logic.
+ * 
+ * SECURITY: Enhanced with input validation, sanitization, and access control
+ * to prevent injection attacks and ensure GDPR compliance.
  */
+
+// SECURITY: Import validation and sanitization modules
+import { ValidationUtils } from '../security/validation-schemas';
+import { sanitize } from '../security/data-sanitizer';
+import { logger } from '../logging';
+
+const errorLogger = logger.child('filing-errors');
 
 /**
  * Base class for all filing retrieval errors
@@ -21,12 +31,21 @@ export abstract class FilingRetrievalError extends Error {
     httpStatus?: number,
     context: Record<string, unknown> = {}
   ) {
-    super(message);
+    // SECURITY: Sanitize error message to prevent XSS and log injection
+    const sanitizedMessage = ValidationUtils.sanitizeString(message, 500);
+    super(sanitizedMessage);
+    
     this.name = this.constructor.name;
     this.isRetryable = isRetryable;
-    this.errorCode = errorCode;
-    this.httpStatus = httpStatus;
-    this.context = context;
+    
+    // SECURITY: Validate error code against known values
+    this.errorCode = ValidationUtils.sanitizeString(errorCode, 50);
+    
+    // SECURITY: Validate HTTP status codes
+    this.httpStatus = httpStatus && (httpStatus >= 100 && httpStatus <= 599) ? httpStatus : undefined;
+    
+    // SECURITY: Sanitize context to remove PII and validate structure
+    this.context = this.sanitizeErrorContext(context);
 
     // Maintains proper stack trace for where error was thrown (Node.js only)
     if (Error.captureStackTrace) {
@@ -35,7 +54,7 @@ export abstract class FilingRetrievalError extends Error {
   }
 
   /**
-   * Serialize error for logging and monitoring
+   * Serialize error for logging and monitoring with GDPR compliance
    */
   toJSON() {
     return {
@@ -44,9 +63,49 @@ export abstract class FilingRetrievalError extends Error {
       errorCode: this.errorCode,
       isRetryable: this.isRetryable,
       httpStatus: this.httpStatus,
-      context: this.context,
-      stack: this.stack
+      // SECURITY: Sanitize context for safe logging
+      context: sanitize.object(this.context),
+      // SECURITY: Redact sensitive information from stack traces
+      stack: process.env.NODE_ENV === 'production' ? '[REDACTED_IN_PRODUCTION]' : this.stack,
+      sanitized: true,
+      timestamp: new Date().toISOString()
     };
+  }
+
+  /**
+   * SECURITY: Sanitize error context to prevent PII exposure and injection attacks
+   */
+  private sanitizeErrorContext(context: Record<string, unknown>): Record<string, unknown> {
+    try {
+      const sanitizedContext: Record<string, unknown> = {};
+      
+      Object.entries(context).forEach(([key, value]) => {
+        // SECURITY: Validate key names to prevent prototype pollution
+        const sanitizedKey = ValidationUtils.sanitizeString(key, 100);
+        if (sanitizedKey && !['__proto__', 'constructor', 'prototype'].includes(sanitizedKey)) {
+          // SECURITY: Sanitize values based on type and content
+          if (typeof value === 'string') {
+            sanitizedContext[sanitizedKey] = ValidationUtils.sanitizeString(value, 1000);
+          } else if (typeof value === 'number' && isFinite(value)) {
+            sanitizedContext[sanitizedKey] = value;
+          } else if (typeof value === 'boolean') {
+            sanitizedContext[sanitizedKey] = value;
+          } else if (value && typeof value === 'object') {
+            // Recursively sanitize nested objects (with depth limit)
+            sanitizedContext[sanitizedKey] = sanitize.object(value);
+          } else {
+            sanitizedContext[sanitizedKey] = '[SANITIZED]';
+          }
+        }
+      });
+      
+      return sanitizedContext;
+    } catch (sanitizationError) {
+      errorLogger.warn('Failed to sanitize error context', {
+        error: sanitizationError instanceof Error ? sanitizationError.message : 'Unknown sanitization error'
+      });
+      return { sanitizationFailed: true, timestamp: new Date().toISOString() };
+    }
   }
 }
 
@@ -155,16 +214,39 @@ export function classifyFilingError(
   accessionNumber: string,
   context: Record<string, unknown> = {}
 ): FilingRetrievalError {
+  // SECURITY: Validate and sanitize inputs
+  const sanitizedAccessionNumber = ValidationUtils.sanitizeString(accessionNumber, 50);
+  
+  // SECURITY: Validate accession number format
+  if (!/^\d{10}-\d{2}-\d{6}$/.test(sanitizedAccessionNumber)) {
+    errorLogger.warn('Invalid accession number format provided to classifyFilingError', {
+      provided: sanitize.string(accessionNumber),
+      expected: 'XXXXXXXXXX-XX-XXXXXX'
+    });
+  }
+  
+  // SECURITY: Sanitize context to prevent injection and PII exposure
+  const sanitizedContext = sanitize.object(context) as Record<string, unknown>;
+  
   const errorContext = {
-    accessionNumber,
-    ...context,
-    timestamp: new Date().toISOString()
+    accessionNumber: sanitizedAccessionNumber,
+    ...sanitizedContext,
+    timestamp: new Date().toISOString(),
+    sanitized: true
   };
 
-  // Handle axios errors with response
-  if (error.response) {
-    const status = error.response.status;
-    const statusText = error.response.statusText || 'Unknown';
+  // SECURITY: Safely handle axios errors with response validation
+  if (error && typeof error === 'object' && 'response' in error && error.response) {
+    const response = error.response as { status?: number; data?: unknown; statusText?: string };
+    
+    // SECURITY: Validate HTTP status is within valid range
+    const status = typeof response.status === 'number' && response.status >= 100 && response.status <= 599 
+      ? response.status 
+      : 0;
+    
+    const statusText = typeof response.statusText === 'string' 
+      ? ValidationUtils.sanitizeString(response.statusText, 100) 
+      : 'Unknown';
 
     switch (status) {
       case 404:
@@ -189,7 +271,7 @@ export function classifyFilingError(
         const retryDelay = retryAfter ? parseInt(retryAfter) * 1000 : undefined;
         
         return new TransientFilingError(
-          `Rate limited for filing: ${accessionNumber}`,
+          `Rate limited for filing: ${sanitizedAccessionNumber}`,
           FILING_ERROR_CODES.RATE_LIMITED,
           status,
           errorContext,

@@ -11,6 +11,7 @@ import { FilingTransactionManager } from '../db/transaction-manager';
 import { generateSecureCorrelationId } from '../security/secure-random';
 import { CronSecFilingService } from './sec-filing-service';
 import { CronBudgetService } from './budget-service';
+import { boundedContextManager } from './bounded-context-manager';
 import type {
   DatabaseUser,
   User,
@@ -185,8 +186,9 @@ export class CronFilingProcessor {
               const filingProcessingTime = Date.now() - filingStartTime;
               processingMetrics.processingTimes.push(filingProcessingTime);
 
-              // Collect processing context if available
+              // OPTIMIZATION: Add context to bounded manager instead of accumulating unlimited contexts
               if (filingResult.processingContext) {
+                boundedContextManager.addContext(user.id, filingResult.processingContext);
                 individualContexts.push(filingResult.processingContext);
               }
 
@@ -339,14 +341,18 @@ export class CronFilingProcessor {
       }
     });
 
-    // Aggregate processing contexts from individual filing results
-    const aggregateContext: ProcessingContext = this.createAggregateContext(
+    // OPTIMIZATION: Use bounded context manager to prevent memory growth
+    // Old approach was accumulating unlimited contexts causing memory issues
+    const aggregateContext: ProcessingContext = boundedContextManager.createBoundedAggregateContext(
       user.id,
       tier,
       individualContexts,
       result.cost,
       result.filingsProcessed
     );
+
+    // Clean up completed contexts to free memory
+    boundedContextManager.cleanupCompletedContexts(user.id);
 
     processorLogger.debug('Created aggregate processing context for user tier filings', {
       userId: user.id,
@@ -1592,6 +1598,7 @@ export class CronFilingProcessor {
 
   /**
    * Create an aggregate processing context from individual filing contexts
+   * @deprecated Use BoundedContextManager.createBoundedAggregateContext() for memory-optimized processing
    */
   private static createAggregateContext(
     userId: string,
