@@ -3,7 +3,7 @@
   "crons": [
     {
       "path": "/api/cron/tier-aware",
-      "schedule": "*/10 * * * *"
+      "schedule": "0 9 * * 1,2,3,4,5"
     }
   ],
   "functions": {
