@@ -239,6 +239,9 @@
     }
   ],
   "regions": ["iad1"],
+  "installCommand": "npm install",
+  "buildCommand": "npm run build",
+  "framework": "nextjs",
   "env": {
     "NODE_ENV": "production",
     "VERCEL_ENV": "production"
