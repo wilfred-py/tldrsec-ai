@@ -62,7 +62,7 @@ CREATE TABLE "MonitoringThreshold" (
     "escalationDelayMins" INTEGER NOT NULL DEFAULT 60,
     "description" TEXT,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
 
     CONSTRAINT "MonitoringThreshold_pkey" PRIMARY KEY ("id")
 );
