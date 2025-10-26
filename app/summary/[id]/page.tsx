@@ -20,12 +20,13 @@ import {
 } from "@/components/ui/breadcrumb";
 
 interface SummaryPageProps {
-  params: {
+  params: Promise<{
     id: string;
-  };
+  }>;
 }
 
 export default async function SummaryPage({ params }: SummaryPageProps) {
+  const resolvedParams = await params;
   const user = await currentUser();
 
   if (!user) {
@@ -34,12 +35,12 @@ export default async function SummaryPage({ params }: SummaryPageProps) {
 
   try {
     // Check if user has access to this summary
-    await checkSummaryAccess(params.id);
+    await checkSummaryAccess(resolvedParams.id);
   
     // Fetch summary with ticker information
     const summary = await prisma.summary.findUnique({
       where: { 
-        id: params.id 
+        id: resolvedParams.id 
       },
       include: {
         ticker: true

@@ -113,8 +113,14 @@ export interface ProcessingContext {
   tier: string;
   userId: string;
   operation: string;
-  operationType: string;
+  operationType: 'cached_summary' | 'ai_generation' | 'failed_operation';
   isCached: boolean;
+  // Enhanced tracking fields for proper context detection
+  cacheHit?: boolean;       // Explicit cache hit detection
+  aiGenerated?: boolean;    // Explicit AI usage tracking
+  errorOccurred?: boolean;  // Explicit error tracking
+  processingStartTime?: number;
+  processingEndTime?: number;
 }
 
 // ===== BUDGET & COST INTERFACES =====

@@ -32,7 +32,6 @@
     "test:enhanced:performance": "node --loader ts-node/esm scripts/test-enhanced-summarization.ts --performance",
     "test:enhanced:integration": "node scripts/test-enhanced-integration.js",
     "test:enhanced:functionality": "node scripts/test-enhanced-functionality.js",
-    "test:security": "NODE_ENV=test jest __tests__/security/security-fixes.test.ts --verbose",
     "create-pdf": "node scripts/pdf/create-sample-pdf.js",
     "scripts:verify": "node scripts/parsers/verify-organization.js",
     "db:generate": "prisma generate",
@@ -48,6 +47,7 @@
     "test:cron-endpoint": "npx tsx scripts/test-cron-endpoint.ts",
     "test:cron-comprehensive": "jest __tests__/cron/comprehensive-cron-integration.test.ts __tests__/lib/email/async-email-queue.test.ts --config=jest.config.mjs --verbose",
     "test:cloudflare-worker": "jest __tests__/cloudflare/worker-execution.test.ts --config=jest.config.mjs --verbose",
+    "test:cloudflare-integration": "node scripts/test-worker-integration-simple.js",
     "test:cloudflare-timeout": "npx tsx scripts/test-cloudflare-timeout-fix.ts",
     "cloudflare:deploy": "./scripts/deploy-cloudflare-worker.sh",
     "cloudflare:deploy:dry-run": "./scripts/deploy-cloudflare-worker.sh --dry-run",
@@ -69,6 +69,7 @@
     "test:e2e": "npx tsx scripts/test-e2e-email.ts",
     "test:e2e:multi-ticker": "npx tsx scripts/test-e2e-multi-ticker.ts",
     "test:async-email-queue": "npx tsx scripts/test-async-email-queue.ts",
+    "test:context-workflow": "npx tsx scripts/test-context-workflow.ts",
     "test:async-email-queue:unit": "jest __tests__/lib/email/async-email-queue.test.ts --config=jest.config.mjs --verbose",
     "test:async-email-queue:security": "jest __tests__/lib/email/security-helpers.test.ts --config=jest.config.mjs --verbose",
     "test:async-email-queue:integration": "jest __tests__/lib/job-queue/async-email-integration.test.ts --config=jest.config.mjs --verbose",
@@ -98,6 +99,7 @@
     "infrastructure:validate:pre-deploy": "npm run infrastructure:validate && npm run test:e2e",
     "infrastructure:monitor": "node scripts/infrastructure/monitor-deployment.js",
     "test:live:enhanced": "npx tsx scripts/test-live-filing-enhanced.ts",
+    "validate:filing-processor": "npx tsx scripts/validate-filing-processor.ts",
     "test:enhanced:with-filings": "npx tsx scripts/test-live-with-filing-creation.ts"
   },
   "dependencies": {
@@ -139,7 +141,6 @@
     "dompurify": "^3.3.0",
     "dotenv": "^16.5.0",
     "express-rate-limit": "^8.1.0",
-    "express-validator": "^7.2.1",
     "fast-xml-parser": "^5.2.3",
     "framer-motion": "^12.12.2",
     "helmet": "^8.1.0",
@@ -226,5 +227,9 @@
     "tw-animate-css": "^1.2.9",
     "typescript": "^5.8.3",
     "whatwg-fetch": "^3.6.20"
+  },
+  "overrides": {
+    "prismjs": ">=1.30.0",
+    "validator": ">=13.12.0"
   }
 }

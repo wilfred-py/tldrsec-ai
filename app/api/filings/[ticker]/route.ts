@@ -33,9 +33,9 @@ const tickerResolver = new TickerResolver({
  */
 export async function GET(
   request: NextRequest,
-  context: { params: { ticker: string } }
+  context: { params: Promise<{ ticker: string }> }
 ) {
-  const { params } = context;
+  const params = await context.params;
   try {
     // Get ticker from route params
     const ticker = params.ticker.toUpperCase();

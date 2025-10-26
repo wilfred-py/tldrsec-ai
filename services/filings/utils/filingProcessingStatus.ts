@@ -20,7 +20,24 @@ export async function checkIfFilingProcessed(
   try {
     console.log(`[DEBUG][FilingProcessingStatus] Checking processing status for ${ticker} - ${formType} - ${accessionNumber}`);
     
-    // Find the ticker record first
+    // CRITICAL FIX: Check RssFilingCheck.processed field first
+    // This prevents the race condition where Summary check fails but transaction check succeeds
+    const rssFilingCheck = await prisma.rssFilingCheck.findFirst({
+      where: {
+        accessionNumber: accessionNumber,
+        tickerMonitoring: {
+          symbol: ticker.toUpperCase()
+        },
+        filingType: formType
+      }
+    });
+
+    if (rssFilingCheck && rssFilingCheck.processed) {
+      console.log(`[DEBUG][FilingProcessingStatus] ✅ Filing already processed for ${ticker} - ${formType} - ${accessionNumber} (RssFilingCheck marked as processed)`);
+      return true;
+    }
+    
+    // Find the ticker record for Summary check
     const tickerRecord = await prisma.ticker.findFirst({
       where: {
         symbol: ticker.toUpperCase()

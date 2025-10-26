@@ -5,4 +5,4 @@
  * and ensure consistent client initialization across the application.
  */
 
-export { prisma } from './prisma';
+export { prisma, getPrismaClient } from './prisma';

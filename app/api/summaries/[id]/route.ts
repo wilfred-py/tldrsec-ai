@@ -11,10 +11,11 @@ interface Params {
 
 export async function GET(
   req: Request,
-  { params }: { params: Params }
+  { params }: { params: Promise<Params> }
 ) {
+  const resolvedParams = await params;
   try {
-    const id = params.id;
+    const id = resolvedParams.id;
     const user = await currentUser();
 
     if (!user) {
@@ -72,7 +73,7 @@ export async function GET(
       );
     }
   } catch (error) {
-    logger.error('Error in summary API', { error, params });
+    logger.error('Error in summary API', { error, params: resolvedParams });
     return NextResponse.json(
       { error: 'Failed to fetch summary' },
       { status: 500 }

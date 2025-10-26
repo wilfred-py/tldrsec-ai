@@ -384,4 +384,13 @@ class Monitoring {
 
 // Create and export a singleton instance
 export const monitoring = new Monitoring();
+
+// Export all monitoring services
+export * from './pipeline-health-monitoring-system';
+export * from './parameter-validation-monitor';
+export * from './sec-api-monitor';
+export * from './user-processing-monitor';
+export * from './pipeline-error-detector';
+export * from './pipeline-health-monitor';
+
 export default monitoring;

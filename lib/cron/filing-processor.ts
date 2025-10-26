@@ -11,12 +11,14 @@ import { FilingTransactionManager } from '../db/transaction-manager';
 import { generateSecureCorrelationId } from '../security/secure-random';
 import { CronSecFilingService } from './sec-filing-service';
 import { CronBudgetService } from './budget-service';
+import { boundedContextManager } from './bounded-context-manager';
 import type {
   DatabaseUser,
   User,
   FilingForProcessing,
   UserFilingResult,
-  TransactionOptions
+  TransactionOptions,
+  ProcessingContext
 } from './types';
 import { FILING_PROCESSING_TIMEOUT } from './types';
 
@@ -45,10 +47,31 @@ export class CronFilingProcessor {
   static async processUserTierFilings(
     user: DatabaseUser | User,
     tier: string
-  ): Promise<{ filingsProcessed: number; cost: number }> {
+  ): Promise<{ filingsProcessed: number; cost: number; processingContext?: ProcessingContext }> {
     const result = {
       filingsProcessed: 0,
       cost: 0
+    };
+
+    // Collection of individual processing contexts for aggregation
+    const individualContexts: ProcessingContext[] = [];
+
+    // Enhanced metrics tracking for filing processing
+    const processingMetrics = {
+      totalAttempted: 0,
+      successful: 0,
+      permanentFailures: 0,
+      transientFailures: 0,
+      errorBreakdown: {
+        filingNotFound: 0,
+        invalidAccessionNumber: 0,
+        contentValidationFailed: 0,
+        aiGenerationFailed: 0,
+        networkTimeouts: 0,
+        rateLimited: 0,
+        unknownErrors: 0
+      },
+      processingTimes: [] as number[]
     };
 
     try {
@@ -138,6 +161,9 @@ export class CronFilingProcessor {
 
           // Process each filing from the complete unprocessed backlog
           for (const filing of unprocessedFilings || []) {
+            const filingStartTime = Date.now();
+            processingMetrics.totalAttempted++;
+            
             try {
               if (!filing || !filing.id || !filing.accessionNumber) {
                 processorLogger.warn('Invalid filing object encountered', {
@@ -145,6 +171,7 @@ export class CronFilingProcessor {
                   ticker: tickerValidation.symbol,
                   filing: filing
                 });
+                processingMetrics.errorBreakdown.unknownErrors++;
                 continue;
               }
 
@@ -156,9 +183,19 @@ export class CronFilingProcessor {
                 originalTicker
               );
 
+              const filingProcessingTime = Date.now() - filingStartTime;
+              processingMetrics.processingTimes.push(filingProcessingTime);
+
+              // OPTIMIZATION: Add context to bounded manager instead of accumulating unlimited contexts
+              if (filingResult.processingContext) {
+                boundedContextManager.addContext(user.id, filingResult.processingContext);
+                individualContexts.push(filingResult.processingContext);
+              }
+
               if (filingResult.success) {
                 result.filingsProcessed++;
                 result.cost += filingResult.cost;
+                processingMetrics.successful++;
 
                 // Mark filing as processed - CRITICAL for reducing backlog to 0
                 await CronSecFilingService.markFilingAsProcessed(
@@ -171,35 +208,53 @@ export class CronFilingProcessor {
                   userId: user.id,
                   ticker: tickerValidation.symbol,
                   filingType: filing.filingType,
-                  cost: filingResult.cost
+                  cost: filingResult.cost,
+                  processingTimeMs: filingProcessingTime
                 });
               } else {
-                // Log failure but continue processing other filings
-                processorLogger.error(`Failed to process filing ${filing.accessionNumber}`, {
-                  userId: user.id,
-                  ticker: tickerValidation.symbol,
-                  error: filingResult.error,
-                  filingType: filing.filingType
-                });
+                // Classify the error for detailed metrics
+                this.categorizeFilingError(filingResult.error, processingMetrics);
                 
                 // Implement retry logic for failed filings
                 const isRetryable = this.isRetryableError(filingResult.error);
                 if (isRetryable) {
-                  processorLogger.info(`Filing ${filing.accessionNumber} failed with retryable error, will be retried in next cron run`, {
+                  processingMetrics.transientFailures++;
+                  processorLogger.warn(`Filing ${filing.accessionNumber} failed with retryable error, will be retried in next cron run`, {
                     userId: user.id,
                     ticker: tickerValidation.symbol,
                     error: filingResult.error,
-                    filingType: filing.filingType
+                    errorCode: filingResult.errorCode,
+                    isRetryable: filingResult.isRetryable,
+                    filingType: filing.filingType,
+                    processingTimeMs: filingProcessingTime,
+                    nextRetry: 'Next cron execution'
                   });
                   // Filing remains marked as unprocessed, will be picked up in next run
                 } else {
-                  processorLogger.error(`Filing ${filing.accessionNumber} failed with non-retryable error`, {
+                  processingMetrics.permanentFailures++;
+                  processorLogger.error(`Filing ${filing.accessionNumber} failed with non-retryable error - skipping permanently`, {
                     userId: user.id,
                     ticker: tickerValidation.symbol,
                     error: filingResult.error,
-                    filingType: filing.filingType
+                    errorCode: filingResult.errorCode,
+                    isRetryable: filingResult.isRetryable,
+                    filingType: filing.filingType,
+                    processingTimeMs: filingProcessingTime,
+                    action: 'Marked as permanently failed'
                   });
-                  // Could mark as permanently failed or implement different handling
+                  
+                  // Mark as permanently failed to avoid infinite retries
+                  try {
+                    await CronSecFilingService.markFilingAsProcessed(
+                      filing.accessionNumber,
+                      tickerValidation.symbol,
+                      user.id
+                    );
+                  } catch (markError) {
+                    processorLogger.error(`Failed to mark filing ${filing.accessionNumber} as permanently failed`, {
+                      error: markError instanceof Error ? markError.message : 'Unknown error'
+                    });
+                  }
                 }
               }
 
@@ -214,11 +269,20 @@ export class CronFilingProcessor {
               }
 
             } catch (filingError) {
-              processorLogger.error(`Failed to process filing ${filing.accessionNumber}`, {
+              const filingProcessingTime = Date.now() - filingStartTime;
+              processingMetrics.processingTimes.push(filingProcessingTime);
+              processingMetrics.errorBreakdown.unknownErrors++;
+              processingMetrics.permanentFailures++;
+              
+              processorLogger.error(`Failed to process filing ${filing.accessionNumber} - unexpected error`, {
                 error: filingError instanceof Error ? filingError.message : 'Unknown error',
+                errorType: filingError instanceof Error ? filingError.constructor.name : 'Unknown',
                 userId: user.id,
                 ticker: tickerValidation.symbol,
-                cik: tickerValidation.cik
+                cik: tickerValidation.cik,
+                filingType: filing.filingType,
+                processingTimeMs: filingProcessingTime,
+                action: 'Continue processing other filings'
               });
             }
           }
@@ -247,13 +311,62 @@ export class CronFilingProcessor {
       });
     }
 
-    processorLogger.info(`Completed processing for user ${user.id}`, {
-      filingsProcessed: result.filingsProcessed,
-      cost: result.cost,
-      tier
+    // Calculate final metrics
+    const avgProcessingTime = processingMetrics.processingTimes.length > 0 
+      ? Math.round(processingMetrics.processingTimes.reduce((a, b) => a + b, 0) / processingMetrics.processingTimes.length)
+      : 0;
+    
+    const successRate = processingMetrics.totalAttempted > 0 
+      ? Math.round((processingMetrics.successful / processingMetrics.totalAttempted) * 100)
+      : 0;
+
+    processorLogger.info(`📊 User processing metrics for ${user.id}`, {
+      userId: user.id,
+      tier,
+      summary: {
+        filingsProcessed: result.filingsProcessed,
+        totalCost: result.cost,
+        totalAttempted: processingMetrics.totalAttempted,
+        successful: processingMetrics.successful,
+        successRate: `${successRate}%`,
+        permanentFailures: processingMetrics.permanentFailures,
+        transientFailures: processingMetrics.transientFailures,
+        avgProcessingTimeMs: avgProcessingTime
+      },
+      errorBreakdown: processingMetrics.errorBreakdown,
+      resilience: {
+        continuedOnFailures: processingMetrics.totalAttempted > processingMetrics.successful,
+        totalFailures: processingMetrics.permanentFailures + processingMetrics.transientFailures,
+        retriableFailures: processingMetrics.transientFailures
+      }
     });
 
-    return result;
+    // OPTIMIZATION: Use bounded context manager to prevent memory growth
+    // Old approach was accumulating unlimited contexts causing memory issues
+    const aggregateContext: ProcessingContext = boundedContextManager.createBoundedAggregateContext(
+      user.id,
+      tier,
+      individualContexts,
+      result.cost,
+      result.filingsProcessed
+    );
+
+    // Clean up completed contexts to free memory
+    boundedContextManager.cleanupCompletedContexts(user.id);
+
+    processorLogger.debug('Created aggregate processing context for user tier filings', {
+      userId: user.id,
+      tier,
+      totalCost: result.cost,
+      filingsProcessed: result.filingsProcessed,
+      individualContextsCount: individualContexts.length,
+      aggregateContext
+    });
+
+    return {
+      ...result,
+      processingContext: aggregateContext
+    };
   }
 
   /**
@@ -263,10 +376,11 @@ export class CronFilingProcessor {
     user: DatabaseUser,
     tier: string,
     userFilingResults: UserFilingResult[]
-  ): Promise<{ filingsProcessed: number; cost: number }> {
+  ): Promise<{ filingsProcessed: number; cost: number; filingsSkipped?: number }> {
     const result = {
       filingsProcessed: 0,
-      cost: 0
+      cost: 0,
+      filingsSkipped: 0
     };
 
     try {
@@ -312,6 +426,26 @@ export class CronFilingProcessor {
                   ticker: tickerResult.ticker,
                   filing: filing
                 });
+                continue;
+              }
+
+              // Pre-filter: Check if filing is already processed before transaction
+              const { checkIfFilingProcessed } = await import('../../services/filings/utils/filingProcessingStatus');
+              const isAlreadyProcessed = await checkIfFilingProcessed(
+                tickerResult.ticker,
+                filing.filingType,
+                filing.accessionNumber
+              );
+
+              if (isAlreadyProcessed) {
+                processorLogger.debug('Skipping already processed filing', {
+                  userId: user.id,
+                  ticker: tickerResult.ticker,
+                  accessionNumber: filing.accessionNumber,
+                  filingType: filing.filingType,
+                  optimization: 'pre-filter'
+                });
+                result.filingsSkipped = (result.filingsSkipped || 0) + 1;
                 continue;
               }
 
@@ -376,13 +510,28 @@ export class CronFilingProcessor {
       });
     }
 
+    // Create processing context based on the operations performed
+    const processingContext: ProcessingContext = {
+      userId: user.id,
+      tier,
+      operation: 'tier-aware-cron-processing-dedup',
+      operationType: result.cost === 0 ? 'cached_summary' : 'ai_generation',
+      isCached: result.cost === 0
+    };
+
     processorLogger.info(`Completed deduplication processing for user ${user.id}`, {
       filingsProcessed: result.filingsProcessed,
+      filingsSkipped: result.filingsSkipped,
       cost: result.cost,
-      tier
+      tier,
+      optimization: result.filingsSkipped > 0 ? `Saved ${result.filingsSkipped} unnecessary transactions` : 'No optimization applied',
+      context: processingContext
     });
 
-    return result;
+    return {
+      ...result,
+      processingContext
+    };
   }
 
   /**
@@ -394,7 +543,7 @@ export class CronFilingProcessor {
     tier: string,
     tickerValidation: { symbol: string; cik: string },
     originalTicker: { companyName?: string }
-  ): Promise<{ success: boolean; cost: number; error?: string }> {
+  ): Promise<{ success: boolean; cost: number; error?: string; processingContext?: ProcessingContext }> {
     try {
       // Create filing object for processing
       const filingRecord = filing as { id: string; accessionNumber: string; filingType?: string; filingDate?: Date; filingUrl?: string };
@@ -439,7 +588,8 @@ export class CronFilingProcessor {
 
         return {
           success: true,
-          cost: transactionResult.data.cost || 0
+          cost: transactionResult.data.cost || 0,
+          processingContext: transactionResult.data.processingContext
         };
       } else {
         processorLogger.error(`Filing transaction failed`, {
@@ -452,7 +602,8 @@ export class CronFilingProcessor {
         return {
           success: false,
           cost: 0,
-          error: transactionResult.error?.message || 'Transaction failed'
+          error: transactionResult.error?.message || 'Transaction failed',
+          processingContext: transactionResult.data?.processingContext
         };
       }
 
@@ -467,6 +618,7 @@ export class CronFilingProcessor {
         success: false,
         cost: 0,
         error: error instanceof Error ? error.message : 'Unknown error'
+        // Note: No context available for outer catch errors
       };
     }
   }
@@ -585,7 +737,29 @@ export class CronFilingProcessor {
     user: User,
     tier: string,
     tx: Prisma.TransactionClient
-  ): Promise<{ success: boolean; cost?: number; error?: string }> {
+  ): Promise<{ 
+    success: boolean; 
+    cost?: number; 
+    error?: string;
+    filingData?: FilingForProcessing;
+    errorCode?: string;
+    isRetryable?: boolean;
+    processingTime?: number;
+    metadata?: Record<string, unknown>;
+    processingContext?: ProcessingContext;
+  }> {
+    const processingStartTime = Date.now();
+    
+    // Initialize processing context - will be updated as processing progresses
+    let processingContext: ProcessingContext = {
+      userId: user.id,
+      tier,
+      operation: 'tier-aware-cron-processing',
+      operationType: 'ai_generation', // Default, will be updated based on actual processing
+      isCached: false,              // Default, will be updated if cache is used
+      processingStartTime
+    };
+    
     try {
       processorLogger.info(`Processing filing ${filingForProcessing.accessionNumber} for user ${user.id} within transaction`, {
         tier,
@@ -598,7 +772,7 @@ export class CronFilingProcessor {
       const { generateAISummaryWithRetry } = await import('../../services/filing/summaryGenerationService');
       const { queueEmail } = await import('../email/async-email-queue');
       const { generateHtmlEmail, generatePlainTextEmail } = await import('../../services/filings/email/emailGenerator');
-      const { getFilingContent } = await import('../../services/filings/filingRetrieval');
+      const { getFilingContentWithRetry } = await import('../../services/filings/filingRetrieval');
       const { FilingContentValidator } = await import('../validation/filing-content-validator');
 
       // Validate critical imports succeeded
@@ -608,8 +782,8 @@ export class CronFilingProcessor {
       if (typeof queueEmail !== 'function') {
         throw new Error('Failed to import queueEmail - async email notifications will not work');
       }
-      if (typeof getFilingContent !== 'function') {
-        throw new Error('Failed to import getFilingContent - filing retrieval will not work');
+      if (typeof getFilingContentWithRetry !== 'function') {
+        throw new Error('Failed to import getFilingContentWithRetry - filing retrieval will not work');
       }
       if (typeof FilingContentValidator !== 'function') {
         throw new Error('Failed to import FilingContentValidator - content validation will not work');
@@ -631,28 +805,57 @@ export class CronFilingProcessor {
       let filingContent = '';
       const contentFetchStartTime = Date.now();
       
-      try {
-        filingContent = await getFilingContent(
-          filingForProcessing.accessionNumber,
-          '1', // Use document sequence 1 as primary document
-          filingForProcessing.tickerData.cik
-        );
+      // STEP 1: Use resilient filing retrieval with comprehensive error handling
+      const retrievalResult: FilingRetrievalResult = await getFilingContentWithRetry(
+        filingForProcessing.accessionNumber,
+        '1', // Use document sequence 1 as primary document
+        filingForProcessing.tickerData.cik
+      );
 
-        const contentFetchDuration = Date.now() - contentFetchStartTime;
+      const contentFetchDuration = Date.now() - contentFetchStartTime;
+
+      if (retrievalResult.success && retrievalResult.content) {
+        filingContent = retrievalResult.content;
+        
         processorLogger.info(`✅ STEP 1 COMPLETE: Content fetch successful for filing ${filingForProcessing.accessionNumber}`, {
           userId: user.id,
           ticker: filingForProcessing.tickerData.symbol,
           contentLength: filingContent.length,
           fetchDurationMs: contentFetchDuration,
+          attemptCount: retrievalResult.metadata.attemptCount,
+          finalUrl: retrievalResult.metadata.finalUrl,
           nextStep: 'Content validation'
         });
-      } catch (contentError) {
-        processorLogger.error(`Failed to fetch content for filing ${filingForProcessing.accessionNumber}`, {
-          error: contentError instanceof Error ? contentError.message : 'Unknown error',
+      } else {
+        // Handle filing retrieval failure gracefully - don't throw, return error result
+        const error = retrievalResult.error!;
+        
+        processorLogger.warn(`⚠️ STEP 1 FAILED: Filing retrieval failed for ${filingForProcessing.accessionNumber}`, {
+          userId: user.id,
           ticker: filingForProcessing.tickerData.symbol,
-          cik: filingForProcessing.tickerData.cik
+          cik: filingForProcessing.tickerData.cik,
+          errorCode: error.errorCode,
+          isRetryable: error.isRetryable,
+          httpStatus: error.httpStatus,
+          attemptCount: retrievalResult.metadata.attemptCount,
+          totalDuration: retrievalResult.metadata.totalDuration,
+          errorMessage: error.message
         });
-        throw new Error(`Failed to fetch filing content: ${contentError instanceof Error ? contentError.message : 'Unknown error'}`);
+
+        // Return a graceful failure result instead of throwing
+        return {
+          success: false,
+          filingData: filingForProcessing,
+          error: `Filing retrieval failed: ${error.errorCode} - ${error.message}`,
+          errorCode: error.errorCode,
+          isRetryable: error.isRetryable,
+          processingTime: Date.now() - processingStartTime,
+          metadata: {
+            step: 'filing_retrieval',
+            attemptCount: retrievalResult.metadata.attemptCount,
+            errorType: error.isRetryable ? 'transient' : 'permanent'
+          }
+        };
       }
 
       // STEP 1.5: Validate content to prevent NoSuchKey errors and invalid content from reaching AI
@@ -776,14 +979,24 @@ export class CronFilingProcessor {
             existingSummaryId: existingSummary.id,
             cacheUsageCount: existingSummary.cacheUsageCount,
             cacheCheckDurationMs: cacheCheckDuration,
-            nextStep: 'Use cached summary'
+            nextStep: 'Use cached summary',
+            contextFlags: {
+              operationType: 'cached_summary',
+              isCached: true,
+              expectedCost: 0
+            }
           });
         } else {
           processorLogger.info(`✅ STEP 2 COMPLETE: No cache found for filing ${filingForProcessing.accessionNumber}`, {
             userId: user.id,
             ticker: filingForProcessing.tickerData.symbol,
             cacheCheckDurationMs: cacheCheckDuration,
-            nextStep: 'Generate new AI summary'
+            nextStep: 'Generate new AI summary',
+            contextFlags: {
+              operationType: 'ai_generation',
+              isCached: false,
+              expectedCost: '>0'
+            }
           });
         }
       } catch (cacheCheckError) {
@@ -806,6 +1019,15 @@ export class CronFilingProcessor {
       const summaryStartTime = Date.now();
       
       if (existingSummary && existingSummary.summaryText) {
+        // CACHE HIT: Update processing context to reflect cache usage
+        processingContext = {
+          ...processingContext,
+          operationType: 'cached_summary',
+          isCached: true,
+          cacheHit: true,
+          aiGenerated: false
+        };
+        
         // Use cached summary
         summaryResult = {
           summary: existingSummary.summaryText,
@@ -844,9 +1066,24 @@ export class CronFilingProcessor {
           cachedSummaryId: existingSummary.id,
           newCacheUsageCount: existingSummary.cacheUsageCount + 1,
           summaryDurationMs: summaryDuration,
-          nextStep: 'Store summary and send email'
+          nextStep: 'Store summary and send email',
+          contextAssignment: {
+            operationType: 'cached_summary',
+            isCached: true,
+            actualCost: 0,
+            expectedValidation: 'Should pass zero-cost validation with cached context'
+          }
         });
       } else {
+        // CACHE MISS: Update processing context to reflect AI generation
+        processingContext = {
+          ...processingContext,
+          operationType: 'ai_generation',
+          isCached: false,
+          cacheHit: false,
+          aiGenerated: true
+        };
+        
         // Generate new AI summary with OpenRouter
         processorLogger.info(`🤖 STEP 3: INITIATING OPENROUTER AI CALL - This should generate OpenRouter logs`, {
           userId: user.id,
@@ -921,6 +1158,7 @@ export class CronFilingProcessor {
 
         processorLogger.info(`✅ STEP 3 COMPLETE: AI summary generated successfully for filing ${filingForProcessing.accessionNumber}`, {
           userId: user.id,
+          tier,
           ticker: filingForProcessing.tickerData.symbol,
           tokensUsed: summaryResult.tokensUsed || 0,
           inputTokens: summaryResult.inputTokens || 0,
@@ -930,7 +1168,13 @@ export class CronFilingProcessor {
           summaryLength: summaryResult.summary.length,
           summaryDurationMs: summaryDuration,
           openRouterApiCalled: actualCost > 0,
-          nextStep: 'Store summary in database'
+          nextStep: 'Store summary in database',
+          contextAssignment: {
+            operationType: 'ai_generation',
+            isCached: false,
+            actualCost,
+            expectedValidation: actualCost > 0 ? 'Should pass cost validation for AI generation' : 'WARNING: Zero cost for AI generation may fail validation'
+          }
         });
       }
 
@@ -1161,12 +1405,26 @@ export class CronFilingProcessor {
         }
       });
       
+      // Finalize processing context with end time
+      processingContext.processingEndTime = Date.now();
+      
       return {
         success: true,
-        cost: actualCost
+        cost: actualCost,
+        processingTime: Date.now() - processingStartTime,
+        processingContext
       };
       
     } catch (error) {
+      // ERROR: Update processing context to reflect failure
+      processingContext = {
+        ...processingContext,
+        operationType: 'failed_operation',
+        isCached: false,
+        errorOccurred: true,
+        processingEndTime: Date.now()
+      };
+      
       processorLogger.error(`Failed to process filing ${filingForProcessing.accessionNumber} within transaction`, { 
         error,
         userId: user.id,
@@ -1176,27 +1434,62 @@ export class CronFilingProcessor {
       return {
         success: false,
         cost: 0,
-        error: error instanceof Error ? error.message : 'Unknown error'
+        error: error instanceof Error ? error.message : 'Unknown error',
+        processingTime: Date.now() - processingStartTime,
+        processingContext
       };
     }
   }
 
   /**
-   * Determine if an error is retryable based on error message patterns
-   * Updated to handle validation errors appropriately
+   * Determine if an error is retryable based on error message patterns and error codes
+   * Enhanced to handle the new filing error classification system
    */
   private static isRetryableError(errorMessage?: string): boolean {
     if (!errorMessage) return false;
     
     const lowerError = errorMessage.toLowerCase();
     
-    // Check for non-retryable validation errors first
+    // Check for specific error codes from the filing error classification system
+    const permanentErrorCodes = [
+      'filing_not_found',
+      'invalid_accession_number',
+      'access_denied',
+      'malformed_content',
+      'content_too_short',
+      'no_such_key'
+    ];
+    
+    const transientErrorCodes = [
+      'rate_limited',
+      'server_error',
+      'network_timeout',
+      'connection_error',
+      'service_unavailable'
+    ];
+    
+    // Check if the error message contains any error codes
+    for (const code of permanentErrorCodes) {
+      if (lowerError.includes(code)) {
+        return false; // Permanent errors should not be retried
+      }
+    }
+    
+    for (const code of transientErrorCodes) {
+      if (lowerError.includes(code)) {
+        return true; // Transient errors should be retried
+      }
+    }
+    
+    // Check for non-retryable validation errors (legacy patterns)
     const nonRetryableValidationPatterns = [
       'nosuchkey', // NoSuchKey errors are permanent
       'content validation failed', // Generic validation failures
       'content too short', // Invalid content length
       'invalid date', // Date validation failures
-      'malformed content' // Content structure issues
+      'malformed content', // Content structure issues
+      'filing not found', // 404 errors
+      'access denied' // 403 errors
     ];
     
     for (const pattern of nonRetryableValidationPatterns) {
@@ -1269,5 +1562,97 @@ export class CronFilingProcessor {
     }
     
     throw lastError!;
+  }
+
+  /**
+   * Categorize filing errors for detailed metrics tracking
+   */
+  private static categorizeFilingError(
+    errorMessage: string | undefined, 
+    metrics: { errorBreakdown: Record<string, number> }
+  ): void {
+    if (!errorMessage) {
+      metrics.errorBreakdown.unknownErrors++;
+      return;
+    }
+
+    const lowerError = errorMessage.toLowerCase();
+
+    // Classify errors based on the new error codes and legacy patterns
+    if (lowerError.includes('filing_not_found') || lowerError.includes('filing not found') || lowerError.includes('404')) {
+      metrics.errorBreakdown.filingNotFound++;
+    } else if (lowerError.includes('invalid_accession_number') || lowerError.includes('invalid accession') || lowerError.includes('malformed accession')) {
+      metrics.errorBreakdown.invalidAccessionNumber++;
+    } else if (lowerError.includes('content validation failed') || lowerError.includes('content too short') || lowerError.includes('malformed_content')) {
+      metrics.errorBreakdown.contentValidationFailed++;
+    } else if (lowerError.includes('ai generation failed') || lowerError.includes('openrouter') || lowerError.includes('anthropic')) {
+      metrics.errorBreakdown.aiGenerationFailed++;
+    } else if (lowerError.includes('network_timeout') || lowerError.includes('timeout') || lowerError.includes('connection')) {
+      metrics.errorBreakdown.networkTimeouts++;
+    } else if (lowerError.includes('rate_limited') || lowerError.includes('rate limit') || lowerError.includes('429')) {
+      metrics.errorBreakdown.rateLimited++;
+    } else {
+      metrics.errorBreakdown.unknownErrors++;
+    }
+  }
+
+  /**
+   * Create an aggregate processing context from individual filing contexts
+   * @deprecated Use BoundedContextManager.createBoundedAggregateContext() for memory-optimized processing
+   */
+  private static createAggregateContext(
+    userId: string,
+    tier: string,
+    individualContexts: ProcessingContext[],
+    _totalCost: number,
+    _filingsProcessed: number
+  ): ProcessingContext {
+    if (individualContexts.length === 0) {
+      // No individual contexts available, create a fallback context
+      return {
+        userId,
+        tier,
+        operation: 'tier-aware-cron-processing',
+        operationType: 'failed_operation',
+        isCached: false,
+        errorOccurred: true
+      };
+    }
+
+    // Analyze individual contexts to determine aggregate characteristics
+    const cacheHits = individualContexts.filter(ctx => ctx.cacheHit).length;
+    const aiGenerations = individualContexts.filter(ctx => ctx.aiGenerated).length;
+    const errors = individualContexts.filter(ctx => ctx.errorOccurred).length;
+
+    // Determine primary operation type based on majority
+    let operationType: 'cached_summary' | 'ai_generation' | 'failed_operation';
+    if (errors > 0 && errors >= individualContexts.length / 2) {
+      operationType = 'failed_operation';
+    } else if (cacheHits > aiGenerations) {
+      operationType = 'cached_summary';
+    } else {
+      operationType = 'ai_generation';
+    }
+
+    // Aggregate timing information
+    const validStartTimes = individualContexts
+      .map(ctx => ctx.processingStartTime)
+      .filter(t => t !== undefined) as number[];
+    const validEndTimes = individualContexts
+      .map(ctx => ctx.processingEndTime)
+      .filter(t => t !== undefined) as number[];
+
+    return {
+      userId,
+      tier,
+      operation: 'tier-aware-cron-processing',
+      operationType,
+      isCached: cacheHits > 0,
+      cacheHit: cacheHits > 0,
+      aiGenerated: aiGenerations > 0,
+      errorOccurred: errors > 0,
+      processingStartTime: validStartTimes.length > 0 ? Math.min(...validStartTimes) : undefined,
+      processingEndTime: validEndTimes.length > 0 ? Math.max(...validEndTimes) : undefined
+    };
   }
 }

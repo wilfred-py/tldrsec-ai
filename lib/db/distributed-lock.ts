@@ -16,6 +16,7 @@
 import { getPrismaClient } from './prisma';
 import { logger } from '../logging';
 import { monitoring } from '../monitoring';
+import { recordLockOperation } from '../monitoring/pipeline-health-monitoring-system';
 import { v4 as uuidv4 } from 'uuid';
 
 const prisma = getPrismaClient();
@@ -126,15 +127,20 @@ export class DistributedLockManager {
             this.setupAutoRenewal(lockContext, config.ttl, config.renewalInterval);
           }
 
+          const acquisitionTime = Date.now() - startTime;
+
           lockLogger.info('Lock acquired successfully', {
             lockName,
             lockId,
             attempts,
-            duration: Date.now() - startTime
+            duration: acquisitionTime
           });
 
           monitoring.incrementCounter('lock.acquired', 1);
-          monitoring.recordValue('lock.acquisition_time', Date.now() - startTime);
+          monitoring.recordValue('lock.acquisition_time', acquisitionTime);
+
+          // Record lock operation in health monitoring system
+          recordLockOperation(lockName, true, acquisitionTime, false);
 
           return {
             acquired: true,
@@ -170,14 +176,19 @@ export class DistributedLockManager {
       }
     }
 
+    const totalTime = Date.now() - startTime;
+
     lockLogger.warn('Failed to acquire lock after all attempts', {
       lockName,
       attempts,
-      duration: Date.now() - startTime,
+      duration: totalTime,
       timeout: config.acquireTimeout
     });
 
     monitoring.incrementCounter('lock.acquisition_failed', 1);
+
+    // Record failed lock operation in health monitoring system (timeout)
+    recordLockOperation(lockName, false, totalTime, true);
 
     return {
       acquired: false,
@@ -836,8 +847,8 @@ export class lockUtils {
     } = {}
   ): Promise<T> {
     const lockOptions: LockOptions = {
-      ttl: options.ttlMs || 300000, // 5 minutes default
-      acquireTimeout: options.timeoutMs || 10000, // 10 seconds default
+      ttl: options.ttlMs || 1800000, // 30 minutes default - increased for longer processing
+      acquireTimeout: options.timeoutMs || 30000, // 30 seconds default - increased for reliability
       autoRenewal: true
     };
     
@@ -860,8 +871,8 @@ export class lockUtils {
     } = {}
   ): Promise<T> {
     const lockOptions: LockOptions = {
-      ttl: options.ttlMs || 900000, // 15 minutes default for cron operations
-      acquireTimeout: options.timeoutMs || 30000, // 30 seconds default
+      ttl: options.ttlMs || 2700000, // 45 minutes default for cron operations - increased for reliability
+      acquireTimeout: options.timeoutMs || 45000, // 45 seconds default - increased for complex operations
       autoRenewal: true,
       renewalInterval: 50 // Renew at 50% to prevent overlapping cron runs
     };

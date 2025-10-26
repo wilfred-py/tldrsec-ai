@@ -7,8 +7,11 @@
 import { logger } from '../logging';
 import { fetchSecCompanyRSS, type CompanyRSSFeed, type RSSFilingEntry } from './rss-parser';
 import { findCompanyByTicker, getCompanyFilings } from '../../services/companyService';
+import { getPrismaClient } from '../db/prisma';
+import { resolveTicker } from './cik-resolver';
 
 const envLogger = logger.child('environment-aware-fetcher');
+const prisma = getPrismaClient();
 
 export interface UnifiedFilingResponse {
   success: boolean;
@@ -25,6 +28,52 @@ export interface UnifiedFilingResponse {
  */
 export function isDevelopmentEnvironment(): boolean {
   return process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test';
+}
+
+/**
+ * Detect if input is a CIK (numeric, 1-10 digits) or ticker symbol
+ */
+function isInputCIK(input: string): boolean {
+  return /^\d{1,10}$/.test(input.trim());
+}
+
+/**
+ * Convert CIK to ticker using existing CIK resolver service
+ */
+async function convertCIKToTicker(cik: string): Promise<string | null> {
+  try {
+    envLogger.debug('Converting CIK to ticker', { cik });
+    
+    // Search CikMapping database for ticker by CIK
+    const mapping = await prisma.cikMapping.findFirst({
+      where: { 
+        cik: cik.padStart(10, '0'), 
+        isActive: true 
+      },
+      select: { 
+        ticker: true,
+        companyName: true 
+      }
+    });
+    
+    if (mapping?.ticker) {
+      envLogger.debug('CIK to ticker conversion successful', { 
+        cik, 
+        ticker: mapping.ticker,
+        companyName: mapping.companyName 
+      });
+      return mapping.ticker;
+    }
+    
+    envLogger.debug('CIK not found in mapping database', { cik });
+    return null;
+  } catch (error) {
+    envLogger.warn('CIK to ticker conversion failed', { 
+      cik, 
+      error: error instanceof Error ? error.message : 'Unknown error' 
+    });
+    return null;
+  }
 }
 
 /**
@@ -144,9 +193,59 @@ async function fetchViaRSS(cik: string, limit: number): Promise<UnifiedFilingRes
 async function fetchViaRestAPI(tickerOrCik: string, limit: number): Promise<UnifiedFilingResponse> {
   envLogger.debug('Fetching via SEC EDGAR REST API', { tickerOrCik, limit });
   
+  let ticker: string;
+  
   try {
-    // Use existing company service to fetch filings
-    const company = await findCompanyByTicker(tickerOrCik);
+    // Check if input is CIK or ticker and convert if necessary
+    if (isInputCIK(tickerOrCik)) {
+      envLogger.debug('Input detected as CIK, converting to ticker', { cik: tickerOrCik });
+      
+      const convertedTicker = await convertCIKToTicker(tickerOrCik);
+      if (!convertedTicker) {
+        // Try fallback using CIK resolver service
+        envLogger.debug('Primary CIK lookup failed, trying CIK resolver service');
+        
+        const resolverResult = await resolveTicker(tickerOrCik);
+        if (resolverResult.success && resolverResult.ticker) {
+          ticker = resolverResult.ticker;
+          envLogger.debug('CIK resolver fallback succeeded', { 
+            cik: tickerOrCik, 
+            ticker: resolverResult.ticker 
+          });
+        } else {
+          return {
+            success: false,
+            cik: tickerOrCik,
+            companyName: 'Unknown',
+            entries: [],
+            lastUpdated: new Date(),
+            source: 'rest-api',
+            error: `CIK ${tickerOrCik} not found in CIK mapping database or resolver service`
+          };
+        }
+      } else {
+        ticker = convertedTicker;
+        envLogger.debug('Successfully converted CIK to ticker', { 
+          cik: tickerOrCik, 
+          ticker: convertedTicker 
+        });
+      }
+    } else {
+      // Input is already a ticker symbol
+      ticker = tickerOrCik;
+      envLogger.debug('Input detected as ticker symbol', { ticker });
+    }
+    
+    // Log parameter processing details for debugging
+    envLogger.debug('Parameter processing completed', {
+      originalInput: tickerOrCik,
+      inputType: isInputCIK(tickerOrCik) ? 'CIK' : 'ticker',
+      finalTicker: ticker,
+      conversionRequired: isInputCIK(tickerOrCik)
+    });
+    
+    // Now use ticker (not CIK) with findCompanyByTicker
+    const company = await findCompanyByTicker(ticker);
     
     if (!company) {
       return {
@@ -156,7 +255,7 @@ async function fetchViaRestAPI(tickerOrCik: string, limit: number): Promise<Unif
         entries: [],
         lastUpdated: new Date(),
         source: 'rest-api',
-        error: `Company not found for ticker/CIK: ${tickerOrCik}`
+        error: `Company not found for ticker: ${ticker} (original input: ${tickerOrCik})`
       };
     }
     
@@ -183,7 +282,8 @@ async function fetchViaRestAPI(tickerOrCik: string, limit: number): Promise<Unif
     };
   } catch (error) {
     envLogger.error('REST API fetch failed', {
-      tickerOrCik,
+      originalInput: tickerOrCik,
+      convertedTicker: ticker || 'conversion failed',
       error: error instanceof Error ? error.message : 'Unknown error'
     });
 

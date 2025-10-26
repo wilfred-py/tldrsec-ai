@@ -10,6 +10,19 @@ import { FilingType } from '../../types/sec/filing';
 import axios from 'axios';
 import { SECEdgarClient } from '../../lib/sec-edgar/client';
 import { getSecApiHeaders } from './companyInfo';
+import {
+  FilingRetrievalResult,
+  FilingRetrievalError,
+  PermanentFilingError,
+  TransientFilingError,
+  classifyFilingError,
+  shouldRetryError,
+  calculateRetryDelay,
+  sleep,
+  DEFAULT_RETRY_CONFIG,
+  RetryConfig,
+  FILING_ERROR_CODES
+} from '../../lib/errors/filing-errors';
 
 /**
  * Filing information interface
@@ -112,11 +125,12 @@ export async function getFilings(cik: string, formType: FilingType, limit: numbe
 }
 
 /**
- * Get filing content by accession number and document sequence/filename
+ * Get filing content by accession number and document sequence/filename (LEGACY)
  * @param accessionNumber SEC accession number
  * @param documentIdentifier Document sequence number or filename (e.g., "1" or "filename.htm")
  * @param cik Optional Company CIK - will be extracted from the document if not provided
  * @returns Filing content as string
+ * @deprecated Use getFilingContentWithRetry for better error handling and resilience
  */
 export async function getFilingContent(accessionNumber: string, documentIdentifier: string, cik?: string): Promise<string> {
   try {
@@ -243,4 +257,254 @@ export async function getFilingContent(accessionNumber: string, documentIdentifi
     logger.error(`Error getting filing content for ${accessionNumber}:`, { error: errorMessage });
     throw new Error(`Failed to get filing content for ${accessionNumber}: ${errorMessage}`);
   }
+}
+
+/**
+ * Get filing content with comprehensive error handling and retry logic
+ * @param accessionNumber SEC accession number
+ * @param documentIdentifier Document sequence number or filename (e.g., "1" or "filename.htm")
+ * @param cik Optional Company CIK - will be extracted from the document if not provided
+ * @param retryConfig Optional retry configuration
+ * @returns Filing retrieval result with success/error information
+ */
+export async function getFilingContentWithRetry(
+  accessionNumber: string,
+  documentIdentifier: string,
+  cik?: string,
+  retryConfig: RetryConfig = DEFAULT_RETRY_CONFIG
+): Promise<FilingRetrievalResult> {
+  const startTime = Date.now();
+  let lastError: FilingRetrievalError;
+  let attemptCount = 0;
+  
+  const metadata = {
+    accessionNumber,
+    documentIdentifier,
+    cik,
+    attemptCount: 0,
+    totalDuration: 0,
+    finalUrl: undefined as string | undefined
+  };
+
+  while (attemptCount < retryConfig.maxAttempts) {
+    attemptCount++;
+    metadata.attemptCount = attemptCount;
+    
+    try {
+      logger.debug(`Filing retrieval attempt ${attemptCount}/${retryConfig.maxAttempts} for ${accessionNumber}`, {
+        documentIdentifier,
+        cik,
+        attemptCount
+      });
+
+      const content = await attemptFilingRetrieval(accessionNumber, documentIdentifier, cik, metadata);
+      
+      metadata.totalDuration = Date.now() - startTime;
+      
+      logger.info(`✅ Filing retrieval successful for ${accessionNumber}`, {
+        attemptCount,
+        totalDuration: metadata.totalDuration,
+        contentLength: content.length,
+        finalUrl: metadata.finalUrl
+      });
+
+      return {
+        success: true,
+        content,
+        metadata
+      };
+
+    } catch (error: unknown) {
+      const classifiedError = classifyFilingError(error, accessionNumber, {
+        documentIdentifier,
+        cik,
+        attemptCount,
+        finalUrl: metadata.finalUrl
+      });
+      
+      lastError = classifiedError;
+      
+      logger.warn(`❌ Filing retrieval attempt ${attemptCount} failed for ${accessionNumber}`, {
+        errorCode: classifiedError.errorCode,
+        isRetryable: classifiedError.isRetryable,
+        httpStatus: classifiedError.httpStatus,
+        message: classifiedError.message,
+        attemptCount,
+        maxAttempts: retryConfig.maxAttempts
+      });
+
+      // Check if we should retry this error
+      if (!shouldRetryError(classifiedError, attemptCount, retryConfig)) {
+        logger.error(`🚫 Not retrying filing ${accessionNumber} - permanent error or max attempts reached`, {
+          errorCode: classifiedError.errorCode,
+          isRetryable: classifiedError.isRetryable,
+          attemptCount,
+          maxAttempts: retryConfig.maxAttempts,
+          finalError: classifiedError.toJSON()
+        });
+        break;
+      }
+
+      // Calculate retry delay
+      const retryDelay = classifiedError.retryAfter || calculateRetryDelay(attemptCount, retryConfig);
+      
+      logger.info(`⏳ Retrying filing ${accessionNumber} in ${retryDelay}ms`, {
+        attemptCount,
+        nextAttempt: attemptCount + 1,
+        retryDelay,
+        errorCode: classifiedError.errorCode
+      });
+
+      // Wait before next attempt
+      await sleep(retryDelay);
+    }
+  }
+
+  // All attempts failed
+  metadata.totalDuration = Date.now() - startTime;
+  
+  logger.error(`💥 All filing retrieval attempts failed for ${accessionNumber}`, {
+    attemptCount,
+    totalDuration: metadata.totalDuration,
+    finalError: lastError.toJSON()
+  });
+
+  return {
+    success: false,
+    error: lastError,
+    metadata
+  };
+}
+
+/**
+ * Internal function to attempt filing retrieval
+ * Separated for clarity and testing
+ */
+async function attemptFilingRetrieval(
+  accessionNumber: string,
+  documentIdentifier: string,
+  cik?: string,
+  metadata?: { finalUrl?: string }
+): Promise<string> {
+  // Create SEC client
+  const secClient = new SECEdgarClient(SEC_CONFIG);
+  
+  // Format the accession number without dashes for the URL
+  const formattedAccessionNumber = accessionNumber.replace(/-/g, '');
+  
+  // First, get filing details to determine CIK and document filename if needed
+  let documentUrl: string;
+  let targetCik = cik;
+  
+  // If we have a numeric document identifier (sequence), we need to get the document filename
+  if (/^\d+$/.test(documentIdentifier)) {
+    // This is a document sequence number - we need to get the filing details to find the actual filename
+    logger.debug(`Document identifier ${documentIdentifier} appears to be a sequence number, fetching filing details`);
+    
+    // Try to get the filing index page to find the actual document
+    const indexUrl = `https://www.sec.gov/Archives/edgar/data/${formattedAccessionNumber.substring(0, 10)}/${formattedAccessionNumber}/${accessionNumber}-index.html`;
+    
+    try {
+      const indexContent = await secClient.getFilingDocument(indexUrl, { handleNotFound: true });
+      if (indexContent) {
+        // Parse the index to find the document with the specified sequence
+        const docMatch = indexContent.match(new RegExp(`<a href="([^"]+)"[^>]*>${documentIdentifier}</a>`, 'i'));
+        if (docMatch) {
+          const documentFilename = docMatch[1];
+          targetCik = targetCik || formattedAccessionNumber.substring(0, 10);
+          documentUrl = `https://www.sec.gov/Archives/edgar/data/${targetCik?.replace(/^0+/, '')}/${formattedAccessionNumber}/${documentFilename}`;
+        } else {
+          // Fallback to common document naming patterns
+          const commonExtensions = ['htm', 'html', 'txt', 'xml'];
+          let found = false;
+          
+          for (const ext of commonExtensions) {
+            const testFilename = `${accessionNumber}.${ext}`;
+            targetCik = targetCik || formattedAccessionNumber.substring(0, 10);
+            const testUrl = `https://www.sec.gov/Archives/edgar/data/${targetCik?.replace(/^0+/, '')}/${formattedAccessionNumber}/${testFilename}`;
+            
+            try {
+              const testContent = await secClient.getFilingDocument(testUrl, { handleNotFound: true });
+              if (testContent && testContent.length > 100) {  // Basic content validation
+                documentUrl = testUrl;
+                found = true;
+                logger.debug(`Found document using common naming pattern: ${testFilename}`);
+                break;
+              }
+            } catch {
+              // Continue trying other extensions
+            }
+          }
+          
+          if (!found) {
+            throw new Error(`Could not find document with sequence ${documentIdentifier} for filing ${accessionNumber}`);
+          }
+        }
+      } else {
+        throw new Error(`Could not fetch filing index for ${accessionNumber}`);
+      }
+    } catch (indexError) {
+      logger.warn(`Failed to fetch filing index, trying fallback approaches: ${indexError}`);
+      
+      // Fallback: try common document naming patterns
+      const commonExtensions = ['htm', 'html', 'txt'];
+      let found = false;
+      
+      for (const ext of commonExtensions) {
+        const testFilename = `${accessionNumber}.${ext}`;
+        targetCik = targetCik || formattedAccessionNumber.substring(0, 10);
+        const testUrl = `https://www.sec.gov/Archives/edgar/data/${targetCik?.replace(/^0+/, '')}/${formattedAccessionNumber}/${testFilename}`;
+        
+        try {
+          const testContent = await secClient.getFilingDocument(testUrl, { handleNotFound: true });
+          if (testContent && testContent.length > 100) {  // Basic content validation
+            documentUrl = testUrl;
+            found = true;
+            logger.debug(`Found document using fallback naming pattern: ${testFilename}`);
+            break;
+          }
+        } catch {
+          // Continue trying other extensions
+        }
+      }
+      
+      if (!found) {
+        throw new Error(`Could not find valid document for filing ${accessionNumber} after trying multiple approaches`);
+      }
+    }
+  } else {
+    // This is already a filename, construct the URL directly
+    targetCik = targetCik || formattedAccessionNumber.substring(0, 10);
+    documentUrl = `https://www.sec.gov/Archives/edgar/data/${targetCik?.replace(/^0+/, '')}/${formattedAccessionNumber}/${documentIdentifier}`;
+  }
+  
+  logger.debug(`Fetching filing content from ${documentUrl}`);
+  
+  // Store final URL for debugging
+  if (metadata) {
+    metadata.finalUrl = documentUrl;
+  }
+  
+  // Get the document content
+  const content = await secClient.getFilingDocument(documentUrl!, { handleNotFound: true });
+  
+  if (!content) {
+    logger.warn(`No content found for filing ${accessionNumber}`);
+    throw new Error(`No content found for filing ${accessionNumber}`);
+  }
+  
+  // Basic content validation to catch obvious issues early
+  if (content.length < 100) {
+    logger.warn(`Content too short for filing ${accessionNumber}: ${content.length} bytes`);
+    throw new Error(`Content too short for filing ${accessionNumber}: ${content.length} bytes`);
+  }
+  
+  // Quick NoSuchKey detection for early failure
+  if (content.includes('NoSuchKey') || content.includes('<Code>NoSuchKey</Code>')) {
+    logger.warn(`NoSuchKey detected in content for filing ${accessionNumber}`);
+    throw new Error(`NoSuchKey error detected for filing ${accessionNumber}`);
+  }
+  
+  logger.debug(`Successfully retrieved content for filing ${accessionNumber} (${content.length} bytes)`);
+  return content;
 }

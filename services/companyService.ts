@@ -65,12 +65,27 @@ export async function findCompanyByTicker(ticker: string): Promise<SecCompanyInf
     console.log(`[DEBUG][companyService] Received company details response`);
     const filingSearchResponse = companyResponse.data as FilingSearchResponse;
 
-    // Map to our company info format
+    // Map to our company info format with proper null/undefined checks
+    const tickers = filingSearchResponse.tickers || [];
+    const exchanges = filingSearchResponse.exchanges || [];
+    
+    // Provide fallback values when arrays are missing or empty
+    const primaryTicker = tickers.length > 0 ? tickers[0] : ticker.toUpperCase();
+    const primaryExchange = exchanges.length > 0 ? exchanges[0] : 'UNKNOWN';
+    
+    // Log when fallback values are used for debugging
+    if (tickers.length === 0) {
+      console.log(`[DEBUG][companyService] No tickers found in SEC response for ${ticker}, using fallback: ${primaryTicker}`);
+    }
+    if (exchanges.length === 0) {
+      console.log(`[DEBUG][companyService] No exchanges found in SEC response for ${ticker}, using fallback: ${primaryExchange}`);
+    }
+    
     const companyInfo: SecCompanyInfo = {
       cik,
       name: filingSearchResponse.name,
-      ticker: filingSearchResponse.tickers[0],
-      exchange: filingSearchResponse.exchanges[0],
+      ticker: primaryTicker,
+      exchange: primaryExchange,
       filingSearchResponse
     };
 
@@ -98,15 +113,29 @@ export async function getCompanyFilings(company: SecCompanyInfo): Promise<{ rece
     if (company.filingSearchResponse) {
       const recentFilings = company.filingSearchResponse.filings.recent;
       
-      // Map to our filing format
-      const filings: SecFiling[] = recentFilings.accessionNumber.map((accessionNumber, index) => ({
+      // Add null checks for filing arrays
+      const accessionNumbers = recentFilings.accessionNumber || [];
+      const filingDates = recentFilings.filingDate || [];
+      const forms = recentFilings.form || [];
+      const reportDates = recentFilings.reportDate || [];
+      const primaryDocuments = recentFilings.primaryDocument || [];
+      const primaryDocUrls = recentFilings.primaryDocUrl || [];
+      const filingUrls = recentFilings.filingUrl || [];
+      
+      // Log if arrays are missing for debugging
+      if (accessionNumbers.length === 0) {
+        console.log(`[DEBUG][companyService] No accessionNumber array found for ${company.name} (CIK: ${company.cik})`);
+      }
+      
+      // Map to our filing format with safe array access
+      const filings: SecFiling[] = accessionNumbers.map((accessionNumber, index) => ({
         accessionNumber,
-        filingDate: recentFilings.filingDate[index],
-        form: recentFilings.form[index],
-        reportDate: recentFilings.reportDate[index],
-        primaryDocument: recentFilings.primaryDocument[index],
-        primaryDocUrl: recentFilings.primaryDocUrl[index],
-        filingUrl: recentFilings.filingUrl[index]
+        filingDate: filingDates[index] || '',
+        form: forms[index] || '',
+        reportDate: reportDates[index] || '',
+        primaryDocument: primaryDocuments[index] || '',
+        primaryDocUrl: primaryDocUrls[index] || '',
+        filingUrl: filingUrls[index] || ''
       }));
 
       return { recentFilings: filings };
@@ -123,15 +152,29 @@ export async function getCompanyFilings(company: SecCompanyInfo): Promise<{ rece
     const filingSearchResponse = filingsResponse.data as FilingSearchResponse;
     const recentFilings = filingSearchResponse.filings.recent;
 
-    // Map to our filing format
-    const filings: SecFiling[] = recentFilings.accessionNumber.map((accessionNumber, index) => ({
+    // Add null checks for filing arrays (similar to cached path)
+    const accessionNumbers = recentFilings.accessionNumber || [];
+    const filingDates = recentFilings.filingDate || [];
+    const forms = recentFilings.form || [];
+    const reportDates = recentFilings.reportDate || [];
+    const primaryDocuments = recentFilings.primaryDocument || [];
+    const primaryDocUrls = recentFilings.primaryDocUrl || [];
+    const filingUrls = recentFilings.filingUrl || [];
+    
+    // Log if arrays are missing for debugging
+    if (accessionNumbers.length === 0) {
+      console.log(`[DEBUG][companyService] No accessionNumber array found for ${company.name} (CIK: ${company.cik}) in fresh API response`);
+    }
+
+    // Map to our filing format with safe array access
+    const filings: SecFiling[] = accessionNumbers.map((accessionNumber, index) => ({
       accessionNumber,
-      filingDate: recentFilings.filingDate[index],
-      form: recentFilings.form[index],
-      reportDate: recentFilings.reportDate[index],
-      primaryDocument: recentFilings.primaryDocument[index],
-      primaryDocUrl: recentFilings.primaryDocUrl[index],
-      filingUrl: recentFilings.filingUrl[index]
+      filingDate: filingDates[index] || '',
+      form: forms[index] || '',
+      reportDate: reportDates[index] || '',
+      primaryDocument: primaryDocuments[index] || '',
+      primaryDocUrl: primaryDocUrls[index] || '',
+      filingUrl: filingUrls[index] || ''
     }));
 
     return { recentFilings: filings };

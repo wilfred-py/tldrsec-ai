@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
+import { getPrismaClient } from '@/lib/prisma';
 import { getAuth } from '@clerk/nextjs/server';
 
 /**
@@ -50,7 +50,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Check if user has admin access
-    const user = await prisma.user.findUnique({
+    const user = await getPrismaClient().user.findUnique({
       where: { authProviderId: userId },
       select: { subscriptionTier: true }
     });
@@ -132,19 +132,19 @@ async function calculatePipelineMetrics(): Promise<PipelineMetrics> {
   const oneHourAgo = new Date(now.getTime() - 60 * 60 * 1000);
 
   // Get job queue metrics
-  const queueStats = await prisma.jobQueue.aggregate({
+  const queueStats = await getPrismaClient().jobQueue.aggregate({
     _count: { id: true },
     where: {
       status: { in: ['pending', 'running'] }
     }
   });
 
-  const activeJobs = await prisma.jobQueue.count({
+  const activeJobs = await getPrismaClient().jobQueue.count({
     where: { status: 'running' }
   });
 
   // Get recent cron execution metrics
-  const recentExecution = await prisma.cronJobExecution.findFirst({
+  const recentExecution = await getPrismaClient().cronJobExecution.findFirst({
     where: {
       startedAt: { gte: oneHourAgo }
     },
@@ -153,7 +153,7 @@ async function calculatePipelineMetrics(): Promise<PipelineMetrics> {
   });
 
   // Calculate error rate from recent summaries
-  const recentSummaries = await prisma.summary.findMany({
+  const recentSummaries = await getPrismaClient().summary.findMany({
     where: {
       createdAt: { gte: oneHourAgo }
     },
@@ -208,11 +208,11 @@ async function calculateHealthTrends() {
   const oneHourAgo = new Date(now.getTime() - 60 * 60 * 1000);
 
   const [currentPeriod, previousPeriod] = await Promise.all([
-    prisma.pipelineHealthHistory.findMany({
+    getPrismaClient().pipelineHealthHistory.findMany({
       where: { timestamp: { gte: oneHourAgo } },
       select: { processingLatency: true, errorCount: true, queueDepth: true }
     }),
-    prisma.pipelineHealthHistory.findMany({
+    getPrismaClient().pipelineHealthHistory.findMany({
       where: { 
         timestamp: { gte: twoHoursAgo, lt: oneHourAgo } 
       },
@@ -250,7 +250,7 @@ function getTrend(current: number, previous: number): '↑' | '↓' | '→' {
 }
 
 async function checkThresholdAlerts(metrics: PipelineMetrics) {
-  const thresholds = await prisma.monitoringThreshold.findMany({
+  const thresholds = await getPrismaClient().monitoringThreshold.findMany({
     where: { enabled: true }
   });
 
@@ -302,7 +302,7 @@ function checkThreshold(value: number, operator: string, threshold: number): boo
 }
 
 async function recordHealthSnapshot(metrics: PipelineMetrics) {
-  await prisma.pipelineHealthHistory.create({
+  await getPrismaClient().pipelineHealthHistory.create({
     data: {
       pipelineStatus: metrics.pipelineStatus,
       processingLatency: metrics.processingLatency,

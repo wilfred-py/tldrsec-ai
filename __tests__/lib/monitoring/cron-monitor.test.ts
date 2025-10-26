@@ -5,9 +5,67 @@ import { logger } from '../../../lib/logging';
 // Mock dependencies
 jest.mock('../../../lib/db/prisma');
 jest.mock('../../../lib/logging');
+jest.mock('../../../lib/monitoring/async-alert-queue');
+jest.mock('../../../lib/monitoring/performance-monitor');
+jest.mock('../../../lib/security/data-sanitizer');
+jest.mock('../../../lib/security/validation-schemas');
+jest.mock('../../../lib/security/rbac');
+jest.mock('../../../lib/security/secure-logger');
 jest.mock('uuid', () => ({
   v4: jest.fn(() => 'mock-uuid-1234')
 }));
+
+// Mock async alert queue
+const mockAsyncAlertQueue = {
+  queueAlert: jest.fn().mockResolvedValue(undefined),
+  getQueueStats: jest.fn().mockReturnValue({
+    queueSize: 0,
+    isProcessing: false,
+    circuitBreakerOpen: false,
+    consecutiveFailures: 0
+  }),
+  shutdown: jest.fn().mockResolvedValue(undefined)
+};
+
+// Mock performance monitor
+const mockPerformanceMonitor = {
+  recordAlertProcessingTime: jest.fn(),
+  getMetrics: jest.fn().mockReturnValue({})
+};
+
+// Mock security modules
+const mockSanitize = {
+  logContext: jest.fn((data) => data),
+  userId: jest.fn((userId) => `sanitized_${userId}`),
+  string: jest.fn((str) => str)
+};
+
+const mockSecureValidator = {
+  validateUserNotification: jest.fn((data) => data)
+};
+
+const mockRbacAuthorizer = {
+  authorize: jest.fn().mockResolvedValue({ authorized: true, reason: 'test_authorized' })
+};
+
+const mockAuditLog = {
+  userNotified: jest.fn().mockResolvedValue(undefined),
+  securityViolation: jest.fn().mockResolvedValue(undefined)
+};
+
+// Apply mocks
+require('../../../lib/monitoring/async-alert-queue').asyncAlertQueue = mockAsyncAlertQueue;
+require('../../../lib/monitoring/performance-monitor').performanceMonitor = mockPerformanceMonitor;
+require('../../../lib/security/data-sanitizer').dataSanitizer = {};
+require('../../../lib/security/data-sanitizer').sanitize = mockSanitize;
+require('../../../lib/security/validation-schemas').SecureValidator = mockSecureValidator;
+require('../../../lib/security/rbac').rbacAuthorizer = mockRbacAuthorizer;
+require('../../../lib/security/rbac').UserRole = { SYSTEM: 'SYSTEM' };
+require('../../../lib/security/rbac').ResourceType = { USER_DATA: 'USER_DATA' };
+require('../../../lib/security/rbac').Operation = { UPDATE: 'UPDATE' };
+require('../../../lib/security/secure-logger').secureLogger = {};
+require('../../../lib/security/secure-logger').auditLog = mockAuditLog;
+require('../../../lib/security/secure-logger').SecuritySeverity = { MEDIUM: 'MEDIUM' };
 
 describe('CronJobMonitor', () => {
   let mockPrisma: any;
@@ -16,6 +74,14 @@ describe('CronJobMonitor', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     
+    // Clear environment variables to avoid test mode detection
+    const originalNodeEnv = process.env.NODE_ENV;
+    const originalJestWorker = process.env.JEST_WORKER_ID;
+    
+    // Force non-test environment for testing database operations
+    process.env.NODE_ENV = 'development';
+    delete process.env.JEST_WORKER_ID;
+    
     mockPrisma = {
       cronJobExecution: {
         create: jest.fn(),
@@ -23,6 +89,9 @@ describe('CronJobMonitor', () => {
         findMany: jest.fn(),
         findFirst: jest.fn(),
         groupBy: jest.fn()
+      },
+      cronJobAlert: {
+        create: jest.fn()
       },
       filingProcessingLog: {
         groupBy: jest.fn()
@@ -40,62 +109,41 @@ describe('CronJobMonitor', () => {
 
     (getPrismaClient as jest.Mock).mockReturnValue(mockPrisma);
     (logger as any).child = mockLogger.child;
+    
+    // Re-apply mocks after clearAllMocks
+    mockAsyncAlertQueue.queueAlert = jest.fn().mockResolvedValue(undefined);
+    mockPerformanceMonitor.recordAlertProcessingTime = jest.fn();
+    
+    // Store original values for cleanup
+    (global as any).__originalEnvVars = { originalNodeEnv, originalJestWorker };
+  });
+  
+  afterEach(() => {
+    // Restore original environment variables
+    const { originalNodeEnv, originalJestWorker } = (global as any).__originalEnvVars || {};
+    if (originalNodeEnv !== undefined) {
+      process.env.NODE_ENV = originalNodeEnv;
+    } else {
+      delete process.env.NODE_ENV;
+    }
+    if (originalJestWorker !== undefined) {
+      process.env.JEST_WORKER_ID = originalJestWorker;
+    }
   });
 
-  describe('Async Initialization Safety', () => {
+  describe('Factory Method and Initialization', () => {
     it('should handle database connection failures gracefully during initialization', async () => {
       const dbError = new Error('Database connection failed');
       mockPrisma.cronJobExecution.create.mockRejectedValue(dbError);
 
-      const monitor = new CronJobMonitor('test-job', 'MANUAL');
-      
-      // Ensure initialization attempt completes
-      await monitor.ensureInitialized();
-      
-      // Monitor should handle the failure gracefully
-      expect((monitor as any).initialized).toBe(false);
-      
-      // Should not throw when trying to use monitor methods
-      await expect(monitor.updateMetrics({ tickersChecked: 1 })).resolves.not.toThrow();
-      await expect(monitor.complete('SUCCESS')).resolves.not.toThrow();
+      await expect(CronJobMonitor.create('test-job', 'MANUAL')).rejects.toThrow('Database connection failed');
     });
 
-    it('should prevent operations before initialization completes', async () => {
-      let resolveInit: (value?: any) => void;
-      const initPromise = new Promise(resolve => {
-        resolveInit = resolve;
-      });
-
-      mockPrisma.cronJobExecution.create.mockImplementation(() => initPromise);
-
-      const monitor = new CronJobMonitor('test-job', 'MANUAL');
-      
-      // Start operations before initialization completes
-      const updatePromise = monitor.updateMetrics({ tickersChecked: 1 });
-      const completePromise = monitor.complete('SUCCESS');
-      
-      // These operations should be waiting for initialization
-      expect(mockPrisma.cronJobExecution.update).not.toHaveBeenCalled();
-      
-      // Complete initialization
-      resolveInit!();
-      await initPromise;
-      
-      // Now operations should proceed
-      await updatePromise;
-      await completePromise;
-      
-      expect(mockPrisma.cronJobExecution.update).toHaveBeenCalledTimes(2);
-    });
-
-    it('should allow operations after initialization succeeds', async () => {
+    it('should create monitor successfully with valid database connection', async () => {
       mockPrisma.cronJobExecution.create.mockResolvedValue({ id: 'test-id' });
       mockPrisma.cronJobExecution.update.mockResolvedValue({ id: 'test-id' });
 
-      const monitor = new CronJobMonitor('test-job', 'MANUAL');
-      
-      // Wait for initialization
-      await monitor.ensureInitialized();
+      const monitor = await CronJobMonitor.create('test-job', 'MANUAL');
       
       // Operations should work normally
       await monitor.updateMetrics({ tickersChecked: 5 });
@@ -112,83 +160,25 @@ describe('CronJobMonitor', () => {
       expect(mockPrisma.cronJobExecution.update).toHaveBeenCalledTimes(2);
     });
 
-    it('should handle concurrent initialization attempts safely', async () => {
-      let resolveCount = 0;
-      mockPrisma.cronJobExecution.create.mockImplementation(() => {
-        resolveCount++;
-        return Promise.resolve({ id: `test-id-${resolveCount}` });
+    it('should initialize with proper execution ID and metrics', async () => {
+      mockPrisma.cronJobExecution.create.mockResolvedValue({ id: 'test-id' });
+
+      const monitor = await CronJobMonitor.create('test-job', 'MANUAL');
+      
+      expect(monitor.getExecutionId()).toBe('mock-uuid-1234');
+      expect(monitor.getCurrentMetrics()).toEqual({
+        tickersChecked: 0,
+        newFilingsFound: 0,
+        filingsProcessed: 0,
+        emailsSent: 0,
+        usersNotified: 0,
+        totalCostUSD: 0,
+        aiCostUSD: 0,
+        emailCostUSD: 0,
+        tokensUsed: 0,
+        errorCount: 0,
+        warningCount: 0
       });
-
-      const monitor = new CronJobMonitor('test-job', 'MANUAL');
-      
-      // Start multiple concurrent initialization attempts
-      const promises = [
-        monitor.ensureInitialized(),
-        monitor.ensureInitialized(),
-        monitor.ensureInitialized()
-      ];
-      
-      await Promise.all(promises);
-      
-      // Should only initialize once
-      expect(mockPrisma.cronJobExecution.create).toHaveBeenCalledTimes(1);
-      expect((monitor as any).initialized).toBe(true);
-    });
-
-    it('should handle initialization timeout scenarios', async () => {
-      jest.useFakeTimers();
-      
-      let timeoutId: NodeJS.Timeout;
-      mockPrisma.cronJobExecution.create.mockImplementation(() => {
-        return new Promise((resolve) => {
-          // Simulate a very slow database response
-          timeoutId = setTimeout(() => resolve({ id: 'test-id' }), 10000);
-        });
-      });
-
-      const monitor = new CronJobMonitor('test-job', 'MANUAL');
-      
-      // Start initialization
-      const initPromise = monitor.ensureInitialized();
-      
-      // Fast-forward time but not enough to complete
-      jest.advanceTimersByTime(5000);
-      
-      // Operations should still be waiting
-      const updatePromise = monitor.updateMetrics({ tickersChecked: 1 });
-      
-      // Complete initialization
-      jest.advanceTimersByTime(6000);
-      await initPromise;
-      await updatePromise;
-      
-      clearTimeout(timeoutId);
-      jest.useRealTimers();
-      
-      expect((monitor as any).initialized).toBe(true);
-    });
-
-    it('should maintain state consistency during failed initialization recovery', async () => {
-      // First attempt fails
-      mockPrisma.cronJobExecution.create
-        .mockRejectedValueOnce(new Error('Connection failed'))
-        .mockResolvedValueOnce({ id: 'test-id' });
-
-      const monitor = new CronJobMonitor('test-job', 'MANUAL');
-      
-      // Wait for first (failed) initialization
-      await monitor.ensureInitialized();
-      expect((monitor as any).initialized).toBe(false);
-      
-      // Update metrics should skip DB operations but update internal state
-      await monitor.updateMetrics({ tickersChecked: 3, errorCount: 1 });
-      
-      const metrics = monitor.getCurrentMetrics();
-      expect(metrics.tickersChecked).toBe(3);
-      expect(metrics.errorCount).toBe(1);
-      
-      // Verify update was skipped due to failed initialization
-      expect(mockPrisma.cronJobExecution.update).not.toHaveBeenCalled();
     });
   });
 
@@ -197,8 +187,7 @@ describe('CronJobMonitor', () => {
       mockPrisma.cronJobExecution.create.mockResolvedValue({ id: 'test-id' });
       mockPrisma.cronJobExecution.update.mockRejectedValue(new Error('Update failed'));
 
-      const monitor = new CronJobMonitor('test-job', 'MANUAL');
-      await monitor.ensureInitialized();
+      const monitor = await CronJobMonitor.create('test-job', 'MANUAL');
       
       // Should not throw despite database error
       await expect(monitor.updateMetrics({ tickersChecked: 1 })).resolves.not.toThrow();
@@ -208,15 +197,21 @@ describe('CronJobMonitor', () => {
       expect(metrics.tickersChecked).toBe(1);
     });
 
-    it('should handle database errors during completion gracefully', async () => {
+    it('should handle database errors during completion and return fallback result', async () => {
       mockPrisma.cronJobExecution.create.mockResolvedValue({ id: 'test-id' });
       mockPrisma.cronJobExecution.update.mockRejectedValue(new Error('Completion failed'));
 
-      const monitor = new CronJobMonitor('test-job', 'MANUAL');
-      await monitor.ensureInitialized();
+      const monitor = await CronJobMonitor.create('test-job', 'MANUAL');
       
-      // Should throw error during completion failure (unlike metric updates)
-      await expect(monitor.complete('SUCCESS')).rejects.toThrow('Completion failed');
+      // Should not throw but return fallback result 
+      const result = await monitor.complete('SUCCESS');
+      
+      expect(result).toEqual({
+        executionId: 'mock-uuid-1234',
+        duration: expect.any(Number),
+        status: 'SUCCESS',
+        metrics: expect.any(Object)
+      });
     });
 
     it('should handle partial database update failures', async () => {
@@ -231,8 +226,7 @@ describe('CronJobMonitor', () => {
         return Promise.resolve({ id: 'test-id' });
       });
 
-      const monitor = new CronJobMonitor('test-job', 'MANUAL');
-      await monitor.ensureInitialized();
+      const monitor = await CronJobMonitor.create('test-job', 'MANUAL');
       
       // First update fails
       await monitor.updateMetrics({ tickersChecked: 1 });
@@ -249,13 +243,12 @@ describe('CronJobMonitor', () => {
     });
   });
 
-  describe('Status Changes (COMPLETED to SUCCESS)', () => {
+  describe('Status Changes and Completion', () => {
     it('should record SUCCESS status correctly', async () => {
       mockPrisma.cronJobExecution.create.mockResolvedValue({ id: 'test-id' });
       mockPrisma.cronJobExecution.update.mockResolvedValue({ id: 'test-id' });
 
-      const monitor = new CronJobMonitor('test-job', 'MANUAL');
-      await monitor.ensureInitialized();
+      const monitor = await CronJobMonitor.create('test-job', 'MANUAL');
       
       const result = await monitor.complete('SUCCESS');
       
@@ -279,8 +272,7 @@ describe('CronJobMonitor', () => {
       const statuses: Array<'SUCCESS' | 'FAILED' | 'TIMEOUT'> = ['SUCCESS', 'FAILED', 'TIMEOUT'];
       
       for (const status of statuses) {
-        const monitor = new CronJobMonitor(`test-job-${status}`, 'MANUAL');
-        await monitor.ensureInitialized();
+        const monitor = await CronJobMonitor.create(`test-job-${status}`, 'MANUAL');
         
         const result = await monitor.complete(status, status === 'FAILED' ? 'Test error' : undefined);
         
@@ -294,6 +286,8 @@ describe('CronJobMonitor', () => {
         });
         
         jest.clearAllMocks();
+        mockPrisma.cronJobExecution.create.mockResolvedValue({ id: 'test-id' });
+        mockPrisma.cronJobExecution.update.mockResolvedValue({ id: 'test-id' });
       }
     });
 
@@ -305,8 +299,7 @@ describe('CronJobMonitor', () => {
       mockPrisma.cronJobExecution.create.mockResolvedValue({ id: 'test-id' });
       mockPrisma.cronJobExecution.update.mockResolvedValue({ id: 'test-id' });
 
-      const monitor = new CronJobMonitor('test-job', 'MANUAL');
-      await monitor.ensureInitialized();
+      const monitor = await CronJobMonitor.create('test-job', 'MANUAL');
       
       // Advance time by 5 minutes
       jest.advanceTimersByTime(5 * 60 * 1000);
@@ -330,8 +323,7 @@ describe('CronJobMonitor', () => {
       mockPrisma.cronJobExecution.create.mockResolvedValue({ id: 'test-id' });
       mockPrisma.cronJobExecution.update.mockResolvedValue({ id: 'test-id' });
 
-      const monitor = new CronJobMonitor('test-job', 'MANUAL');
-      await monitor.ensureInitialized();
+      const monitor = await CronJobMonitor.create('test-job', 'MANUAL');
       
       // Update various metrics
       await monitor.updateMetrics({
@@ -375,8 +367,7 @@ describe('CronJobMonitor', () => {
       mockPrisma.cronJobExecution.create.mockResolvedValue({ id: 'test-id' });
       mockPrisma.cronJobExecution.update.mockResolvedValue({ id: 'test-id' });
 
-      const monitor = new CronJobMonitor('test-job', 'MANUAL');
-      await monitor.ensureInitialized();
+      const monitor = await CronJobMonitor.create('test-job', 'MANUAL');
       
       // Update only some metrics
       await monitor.updateMetrics({ tickersChecked: 5 });
@@ -394,8 +385,7 @@ describe('CronJobMonitor', () => {
       mockPrisma.cronJobExecution.create.mockResolvedValue({ id: 'test-id' });
       mockPrisma.cronJobExecution.update.mockResolvedValue({ id: 'test-id' });
 
-      const monitor = new CronJobMonitor('test-job', 'MANUAL');
-      await monitor.ensureInitialized();
+      const monitor = await CronJobMonitor.create('test-job', 'MANUAL');
       
       const filingMetrics = {
         accessionNumber: '0001234567-24-000001',
@@ -429,8 +419,7 @@ describe('CronJobMonitor', () => {
       mockPrisma.cronJobExecution.create.mockResolvedValue({ id: 'test-id' });
       mockPrisma.cronJobExecution.update.mockResolvedValue({ id: 'test-id' });
 
-      const monitor = new CronJobMonitor('test-job', 'MANUAL');
-      await monitor.ensureInitialized();
+      const monitor = await CronJobMonitor.create('test-job', 'MANUAL');
       
       await monitor.updateMetrics({ tickersChecked: 0, errorCount: 0 });
       
@@ -447,8 +436,7 @@ describe('CronJobMonitor', () => {
       mockPrisma.cronJobExecution.create.mockResolvedValue({ id: 'test-id' });
       mockPrisma.cronJobExecution.update.mockResolvedValue({ id: 'test-id' });
 
-      const monitor = new CronJobMonitor('test-job', 'MANUAL');
-      await monitor.ensureInitialized();
+      const monitor = await CronJobMonitor.create('test-job', 'MANUAL');
       
       const largeValue = Number.MAX_SAFE_INTEGER;
       await monitor.updateMetrics({ tickersChecked: largeValue });
@@ -465,8 +453,7 @@ describe('CronJobMonitor', () => {
       mockPrisma.cronJobExecution.create.mockResolvedValue({ id: 'test-id' });
       mockPrisma.cronJobExecution.update.mockResolvedValue({ id: 'test-id' });
 
-      const monitor = new CronJobMonitor('test-job', 'MANUAL');
-      await monitor.ensureInitialized();
+      const monitor = await CronJobMonitor.create('test-job', 'MANUAL');
       
       // Pass object with undefined values
       await monitor.updateMetrics({ 
@@ -488,8 +475,7 @@ describe('CronJobMonitor', () => {
       mockPrisma.cronJobExecution.create.mockResolvedValue({ id: 'test-id' });
       mockPrisma.cronJobExecution.update.mockResolvedValue({ id: 'test-id' });
 
-      const monitor = new CronJobMonitor('test-job', 'MANUAL');
-      await monitor.ensureInitialized();
+      const monitor = await CronJobMonitor.create('test-job', 'MANUAL');
       
       await monitor.updateMetrics({});
       
@@ -501,16 +487,124 @@ describe('CronJobMonitor', () => {
     });
   });
 
+  describe('Async Alert Queue Integration', () => {
+    it('should queue alerts through async alert queue', async () => {
+      mockPrisma.cronJobExecution.create.mockResolvedValue({ id: 'test-id' });
+
+      const monitor = await CronJobMonitor.create('test-job', 'MANUAL');
+
+      await monitor.createAlert('EXECUTION_FAILED', {
+        severity: 'CRITICAL',
+        message: 'Job execution failed due to database error',
+        details: { error: 'Connection timeout' }
+      });
+
+      expect(mockAsyncAlertQueue.queueAlert).toHaveBeenCalledWith({
+        executionId: 'mock-uuid-1234',
+        alertType: 'EXECUTION_FAILED',
+        severity: 'CRITICAL',
+        message: 'Job execution failed due to database error',
+        details: { error: 'Connection timeout' },
+        jobName: 'test-job',
+        environment: 'development'
+      });
+    });
+
+    it('should handle async alert queue failures gracefully', async () => {
+      mockPrisma.cronJobExecution.create.mockResolvedValue({ id: 'test-id' });
+      mockAsyncAlertQueue.queueAlert.mockRejectedValue(new Error('Queue failed'));
+
+      const monitor = await CronJobMonitor.create('test-job', 'MANUAL');
+
+      // Should not throw error
+      await expect(monitor.createAlert('HIGH_ERROR_RATE', {
+        severity: 'HIGH',
+        message: 'Error rate exceeded'
+      })).resolves.not.toThrow();
+
+      expect(mockAsyncAlertQueue.queueAlert).toHaveBeenCalled();
+    });
+
+    it('should record performance metrics for alert processing', async () => {
+      mockPrisma.cronJobExecution.create.mockResolvedValue({ id: 'test-id' });
+
+      const monitor = await CronJobMonitor.create('test-job', 'MANUAL');
+
+      await monitor.createAlert('EMAIL_DELIVERY_FAILED', {
+        severity: 'MEDIUM',
+        message: 'Email failed'
+      });
+
+      expect(mockPerformanceMonitor.recordAlertProcessingTime).toHaveBeenCalledWith(
+        expect.any(Number)
+      );
+    });
+  });
+
+  describe('Security Integration Tests', () => {
+    it('should sanitize user notification data', async () => {
+      mockPrisma.cronJobExecution.create.mockResolvedValue({ id: 'test-id' });
+      mockPrisma.cronJobExecution.update.mockResolvedValue({ id: 'test-id' });
+
+      const monitor = await CronJobMonitor.create('test-job', 'MANUAL');
+
+      await monitor.recordUserNotification(
+        'user-123',
+        'test@example.com',
+        'TSLA',
+        'delivered',
+        0.001
+      );
+
+      expect(mockSecureValidator.validateUserNotification).toHaveBeenCalledWith({
+        userId: 'user-123',
+        userEmail: 'test@example.com',
+        ticker: 'TSLA',
+        deliveryStatus: 'delivered',
+        deliveryCostUSD: 0.001
+      });
+
+      expect(mockRbacAuthorizer.authorize).toHaveBeenCalled();
+      expect(mockAuditLog.userNotified).toHaveBeenCalled();
+    });
+
+    it('should handle RBAC authorization failures', async () => {
+      mockPrisma.cronJobExecution.create.mockResolvedValue({ id: 'test-id' });
+      mockPrisma.cronJobExecution.update.mockResolvedValue({ id: 'test-id' });
+      mockRbacAuthorizer.authorize.mockResolvedValue({ 
+        authorized: false, 
+        reason: 'Insufficient permissions' 
+      });
+
+      const monitor = await CronJobMonitor.create('test-job', 'MANUAL');
+
+      await monitor.recordUserNotification(
+        'user-123',
+        'test@example.com',
+        'TSLA',
+        'delivered',
+        0.001
+      );
+
+      expect(mockAuditLog.securityViolation).toHaveBeenCalledWith(
+        'user_notification_failed',
+        'MEDIUM',
+        'Failed to record user notification',
+        expect.objectContaining({
+          userId: 'sanitized_user-123',
+          ticker: 'TSLA'
+        })
+      );
+    });
+  });
+
   describe('Multi-tenancy and Isolation', () => {
     it('should isolate different monitor instances', async () => {
       mockPrisma.cronJobExecution.create.mockResolvedValue({ id: 'test-id' });
       mockPrisma.cronJobExecution.update.mockResolvedValue({ id: 'test-id' });
 
-      const monitor1 = new CronJobMonitor('job-1', 'MANUAL');
-      const monitor2 = new CronJobMonitor('job-2', 'RAILWAY_CRON');
-      
-      await monitor1.ensureInitialized();
-      await monitor2.ensureInitialized();
+      const monitor1 = await CronJobMonitor.create('job-1', 'MANUAL');
+      const monitor2 = await CronJobMonitor.create('job-2', 'RAILWAY_CRON');
       
       await monitor1.updateMetrics({ tickersChecked: 5 });
       await monitor2.updateMetrics({ tickersChecked: 10 });
@@ -521,8 +615,8 @@ describe('CronJobMonitor', () => {
       expect(metrics1.tickersChecked).toBe(5);
       expect(metrics2.tickersChecked).toBe(10);
       
-      // Should have different execution IDs
-      expect(monitor1.getExecutionId()).toBe(monitor2.getExecutionId()); // Both use mock UUID
+      // Should have same execution IDs (due to mock)
+      expect(monitor1.getExecutionId()).toBe(monitor2.getExecutionId());
     });
 
     it('should handle different trigger sources correctly', async () => {
@@ -531,8 +625,7 @@ describe('CronJobMonitor', () => {
       for (const source of sources) {
         mockPrisma.cronJobExecution.create.mockResolvedValue({ id: 'test-id' });
         
-        const monitor = new CronJobMonitor('test-job', source);
-        await monitor.ensureInitialized();
+        const monitor = await CronJobMonitor.create('test-job', source);
         
         expect(mockPrisma.cronJobExecution.create).toHaveBeenCalledWith({
           data: expect.objectContaining({

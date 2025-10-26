@@ -14,7 +14,7 @@ export class LockService {
   static async acquireLock(
     lockName: string, 
     acquiredBy: string = uuidv4(), 
-    ttlMinutes: number = 15
+    ttlMinutes: number = 30
   ) {
     try {
       // Dynamic import to avoid build-time dependencies
@@ -61,10 +61,19 @@ export class LockService {
         }
       });
 
-      console.log(`Lock ${lockName} acquired by ${acquiredBy}, expires at ${expiresAt}`);
+      console.log(`Lock ${lockName} acquired by ${acquiredBy}, expires at ${expiresAt}`, {
+        ttlMinutes,
+        lockId: lock.id,
+        timestamp: new Date().toISOString()
+      });
       return lock;
     } catch (error) {
-      console.error(`Failed to acquire lock ${lockName}:`, error);
+      console.error(`Failed to acquire lock ${lockName}:`, error, {
+        ttlMinutes,
+        acquiredBy,
+        errorType: error instanceof Error ? error.constructor.name : 'Unknown',
+        timestamp: new Date().toISOString()
+      });
       throw new Error(`Failed to acquire lock: ${(error as Error).message}`);
     }
   }
@@ -247,6 +256,92 @@ export class LockService {
     } catch (error) {
       console.error('Failed to list active locks:', error);
       throw new Error(`Failed to list active locks: ${(error as Error).message}`);
+    }
+  }
+
+  /**
+   * Get lock health metrics for monitoring
+   */
+  static async getLockHealthMetrics() {
+    try {
+      // Dynamic import to avoid build-time dependencies
+      const { getPrismaClient } = await import('../db/prisma');
+      const prisma = getPrismaClient();
+      
+      const now = new Date();
+      const oneHourAgo = new Date(now.getTime() - 60 * 60 * 1000);
+      
+      // Get active locks
+      const activeLocks = await prisma.jobLock.count({
+        where: {
+          released: false,
+          expiresAt: { gt: now }
+        }
+      });
+      
+      // Get locks created in last hour
+      const recentLocks = await prisma.jobLock.count({
+        where: {
+          acquiredAt: { gte: oneHourAgo }
+        }
+      });
+      
+      // Get expired but not released locks (potential issues)
+      const staleLocksCount = await prisma.jobLock.count({
+        where: {
+          released: false,
+          expiresAt: { lt: now }
+        }
+      });
+      
+      // Get lock contention data
+      const locksByName = await prisma.jobLock.groupBy({
+        by: ['lockName'],
+        where: {
+          acquiredAt: { gte: oneHourAgo }
+        },
+        _count: {
+          lockName: true
+        },
+        orderBy: {
+          _count: {
+            lockName: 'desc'
+          }
+        },
+        take: 10
+      });
+      
+      console.log('Lock health metrics collected', {
+        activeLocks,
+        recentLocks,
+        staleLocksCount,
+        topContentedLocks: locksByName.length,
+        timestamp: now.toISOString()
+      });
+      
+      return {
+        activeLocks,
+        recentLocks,
+        staleLocksCount,
+        topContentedLocks: locksByName.map(group => ({
+          lockName: group.lockName,
+          count: group._count.lockName
+        })),
+        healthStatus: staleLocksCount > 5 ? 'CRITICAL' : 
+                     staleLocksCount > 2 ? 'WARNING' : 'HEALTHY',
+        timestamp: now.toISOString()
+      };
+    } catch (error) {
+      console.error('Failed to get lock health metrics:', error);
+      return {
+        activeLocks: 0,
+        recentLocks: 0,
+        staleLocksCount: 0,
+        topContentedLocks: [],
+        healthStatus: 'ERROR',
+        error: error instanceof Error ? error.message : 'Unknown error',
+        timestamp: new Date().toISOString()
+      };
     }
   }
 } 

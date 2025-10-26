@@ -4,15 +4,16 @@ import { prisma } from '@/lib/db/prisma';
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { ticker: string } }
+  { params }: { params: Promise<{ ticker: string }> }
 ) {
+  const resolvedParams = await params;
   try {
     const user = await currentUser();
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const ticker = params.ticker.toUpperCase();
+    const ticker = resolvedParams.ticker.toUpperCase();
     
     // Check if user tracks this ticker
     const trackedTicker = await prisma.ticker.findFirst({
@@ -117,7 +118,7 @@ export async function GET(
     console.error('Filing status check failed:', error);
     
     return NextResponse.json({
-      ticker: params.ticker.toUpperCase(),
+      ticker: resolvedParams.ticker.toUpperCase(),
       lastCheck: new Date(),
       status: 'error',
       message: 'Unable to check filing status',

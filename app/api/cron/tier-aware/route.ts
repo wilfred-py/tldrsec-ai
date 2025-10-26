@@ -160,24 +160,31 @@ export async function GET(request: NextRequest) {
     }
 
     // STEP 1.5: Acquire Distributed Lock to Prevent Concurrent Executions
-    lockName = 'tier-aware-cron-execution';
+    const environment = process.env.NODE_ENV || 'development';
+    lockName = `tier-aware-cron-execution-${environment}`;
     lockId = `${platform}-${executionId}`;
     
     try {
+      // Proactive cleanup of expired locks before acquisition
+      await LockService.cleanupExpiredLocks();
+      
       cronLogger.debug(`[${executionId}] Attempting to acquire distributed lock`, {
         lockName,
         lockId,
-        platform
+        platform,
+        environment
       });
       
-      lock = await LockService.acquireLock(lockName, lockId, 15); // 15-minute TTL
+      lock = await LockService.acquireLock(lockName, lockId, 12); // 12-minute TTL - optimized for 10-minute cron frequency
       
       if (!lock) {
         // Another cron execution is already in progress
         cronLogger.warn(`[${executionId}] Concurrent execution detected - another cron is running`, {
           lockName,
           lockId,
-          platform
+          platform,
+          environment,
+          ttlMinutes: 12
         });
         
         // Check who holds the lock for debugging
@@ -209,19 +216,39 @@ export async function GET(request: NextRequest) {
       cronLogger.info(`[${executionId}] Distributed lock acquired successfully`, {
         lockName,
         lockId,
-        expiresAt: lock.expiresAt?.toISOString(),
-        platform
+        platform,
+        environment,
+        ttlMinutes: 12,
+        expiresAt: new Date(Date.now() + 12 * 60 * 1000).toISOString()
       });
       
     } catch (lockError) {
-      cronLogger.error(`[${executionId}] Failed to acquire distributed lock`, {
+      cronLogger.error(`[${executionId}] Failed to acquire distributed lock after all attempts`, {
         error: lockError instanceof Error ? lockError.message : 'Unknown error',
         lockName,
-        lockId
+        lockId,
+        platform,
+        ttlMinutes: 30,
+        errorType: lockError instanceof Error ? lockError.constructor.name : 'Unknown',
+        alertLevel: 'LOCK_CONTENTION_HIGH',
+        recommendation: 'Check for long-running cron jobs or database connectivity issues'
       });
       
+      // Record lock failure metrics
+      if (monitor) {
+        await monitor.recordMetric('cron_lock_failure', {
+          lockName,
+          lockId,
+          platform,
+          errorMessage: lockError instanceof Error ? lockError.message : 'Unknown error'
+        });
+      }
+      
       // Continue without lock to avoid blocking service
-      cronLogger.warn(`[${executionId}] Continuing without lock - increased risk of concurrent execution`);
+      cronLogger.warn(`[${executionId}] Continuing without lock - increased risk of concurrent execution`, {
+        riskLevel: 'HIGH',
+        mitigation: 'Relying on individual user locks for protection'
+      });
     }
 
     // STEP 1.6: Reset Daily Budgets for Eligible Users
@@ -905,7 +932,7 @@ export async function GET(request: NextRequest) {
  * Reset monthly budgets (called from separate cron or admin endpoint)
  * Extracted utility function - kept in route file for backward compatibility
  */
-export async function resetMonthlyBudgets() {
+async function _resetMonthlyBudgets() {
   try {
     const { getPrismaClient } = await import('../../../../lib/db/prisma');
     const prisma = getPrismaClient();

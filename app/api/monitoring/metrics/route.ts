@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
+import { getPrismaClient } from '@/lib/prisma';
 import { getAuth } from '@clerk/nextjs/server';
 
 /**
@@ -104,7 +104,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Check admin access
-    const user = await prisma.user.findUnique({
+    const user = await getPrismaClient().user.findUnique({
       where: { authProviderId: userId },
       select: { subscriptionTier: true }
     });
@@ -261,7 +261,7 @@ async function aggregateMetrics(
 
 async function getPerformanceMetrics(startTime: Date, endTime: Date): Promise<PerformanceMetrics> {
   // Get processing time statistics from summaries
-  const summaryStats = await prisma.summary.aggregate({
+  const summaryStats = await getPrismaClient().summary.aggregate({
     where: {
       createdAt: { gte: startTime, lte: endTime },
       processingTimeMs: { not: null }
@@ -271,7 +271,7 @@ async function getPerformanceMetrics(startTime: Date, endTime: Date): Promise<Pe
   });
 
   // Get processing times for percentile calculations
-  const processingTimes = await prisma.summary.findMany({
+  const processingTimes = await getPrismaClient().summary.findMany({
     where: {
       createdAt: { gte: startTime, lte: endTime },
       processingTimeMs: { not: null }
@@ -285,7 +285,7 @@ async function getPerformanceMetrics(startTime: Date, endTime: Date): Promise<Pe
   const p99 = calculatePercentile(times, 99);
 
   // Get error rate
-  const errorCount = await prisma.summary.count({
+  const errorCount = await getPrismaClient().summary.count({
     where: {
       createdAt: { gte: startTime, lte: endTime },
       processingError: { not: null }
@@ -296,19 +296,19 @@ async function getPerformanceMetrics(startTime: Date, endTime: Date): Promise<Pe
   const errorRate = totalSummaries > 0 ? (errorCount / totalSummaries) * 100 : 0;
 
   // Get queue metrics
-  const queueStats = await prisma.jobQueue.aggregate({
+  const queueStats = await getPrismaClient().jobQueue.aggregate({
     where: {
       createdAt: { gte: startTime, lte: endTime }
     },
     _count: { id: true }
   });
 
-  const activeJobs = await prisma.jobQueue.count({
+  const activeJobs = await getPrismaClient().jobQueue.count({
     where: { status: 'running' }
   });
 
   // Get latest performance data
-  const latestPerformance = await prisma.cronJobExecution.findFirst({
+  const latestPerformance = await getPrismaClient().cronJobExecution.findFirst({
     where: { startedAt: { gte: startTime } },
     orderBy: { startedAt: 'desc' },
     select: { memoryUsageMb: true, cpuUsagePercent: true }
@@ -336,23 +336,23 @@ async function getBusinessMetrics(startTime: Date, endTime: Date): Promise<Busin
     emailsSent,
     subscriptionBreakdown
   ] = await Promise.all([
-    prisma.user.count(),
-    prisma.user.count({
+    getPrismaClient().user.count(),
+    getPrismaClient().user.count({
       where: {
         lastProcessedAt: { gte: startTime }
       }
     }),
-    prisma.summary.count({
+    getPrismaClient().summary.count({
       where: {
         createdAt: { gte: startTime, lte: endTime }
       }
     }),
-    prisma.summaryEmailDelivery.count({
+    getPrismaClient().summaryEmailDelivery.count({
       where: {
         sentAt: { gte: startTime, lte: endTime }
       }
     }),
-    prisma.user.groupBy({
+    getPrismaClient().user.groupBy({
       by: ['subscriptionTier'],
       _count: { id: true }
     })
@@ -381,7 +381,7 @@ async function getBusinessMetrics(startTime: Date, endTime: Date): Promise<Busin
 }
 
 async function getOperationalMetrics(startTime: Date, endTime: Date): Promise<OperationalMetrics> {
-  const cronExecutions = await prisma.cronJobExecution.findMany({
+  const cronExecutions = await getPrismaClient().cronJobExecution.findMany({
     where: {
       startedAt: { gte: startTime, lte: endTime }
     },
@@ -397,7 +397,7 @@ async function getOperationalMetrics(startTime: Date, endTime: Date): Promise<Op
     : 100;
 
   // Get API call metrics from audit logs
-  const apiCalls = await prisma.auditLog.count({
+  const apiCalls = await getPrismaClient().auditLog.count({
     where: {
       createdAt: { gte: startTime, lte: endTime },
       action: { contains: 'api' }
@@ -417,7 +417,7 @@ async function getOperationalMetrics(startTime: Date, endTime: Date): Promise<Op
 }
 
 async function getQualityMetrics(startTime: Date, endTime: Date): Promise<QualityMetrics> {
-  const summaries = await prisma.summary.findMany({
+  const summaries = await getPrismaClient().summary.findMany({
     where: {
       createdAt: { gte: startTime, lte: endTime }
     },
@@ -457,7 +457,7 @@ async function getQualityMetrics(startTime: Date, endTime: Date): Promise<Qualit
 }
 
 async function getCostMetrics(startTime: Date, endTime: Date): Promise<CostMetrics> {
-  const costData = await prisma.cronJobExecution.findMany({
+  const costData = await getPrismaClient().cronJobExecution.findMany({
     where: {
       startedAt: { gte: startTime, lte: endTime }
     },
@@ -474,11 +474,11 @@ async function getCostMetrics(startTime: Date, endTime: Date): Promise<CostMetri
 
   const totalOperationalCost = totalAiCost + totalEmailCost;
 
-  const activeUsers = await prisma.user.count({
+  const activeUsers = await getPrismaClient().user.count({
     where: { lastProcessedAt: { gte: startTime } }
   });
 
-  const summariesGenerated = await prisma.summary.count({
+  const summariesGenerated = await getPrismaClient().summary.count({
     where: { createdAt: { gte: startTime, lte: endTime } }
   });
 
@@ -495,9 +495,9 @@ async function getCostMetrics(startTime: Date, endTime: Date): Promise<CostMetri
 
 async function getAlertSummary() {
   const [activeAlerts, criticalAlerts, warningAlerts] = await Promise.all([
-    prisma.errorAlert.count({ where: { resolved: false } }),
-    prisma.errorAlert.count({ where: { resolved: false, alertType: 'critical' } }),
-    prisma.errorAlert.count({ where: { resolved: false, alertType: 'warning' } })
+    getPrismaClient().errorAlert.count({ where: { resolved: false } }),
+    getPrismaClient().errorAlert.count({ where: { resolved: false, alertType: 'critical' } }),
+    getPrismaClient().errorAlert.count({ where: { resolved: false, alertType: 'warning' } })
   ]);
 
   return {
