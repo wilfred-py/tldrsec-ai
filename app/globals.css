@@ -154,3 +154,69 @@
     box-shadow: 0 0 0 0 rgba(99, 102, 241, 0);
   }
 }
+
+/* Dashboard Ticker Row Animations */
+@keyframes fadeInSlideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeOutSlideUp {
+  from {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+}
+
+@keyframes highlightPulse {
+  0%, 100% {
+    background-color: transparent;
+  }
+  50% {
+    background-color: rgba(59, 130, 246, 0.1);
+  }
+}
+
+.fade-in-row {
+  animation: fadeInSlideDown 200ms ease-out;
+}
+
+.fade-out-row {
+  animation: fadeOutSlideUp 150ms ease-in forwards;
+}
+
+.highlight-pulse {
+  animation: highlightPulse 1s ease-in-out;
+}
+
+.dark .highlight-pulse {
+  animation: highlightPulse 1s ease-in-out;
+}
+
+@keyframes highlightPulse {
+  0%, 100% {
+    background-color: transparent;
+  }
+  50% {
+    background-color: rgba(59, 130, 246, 0.2);
+  }
+}
+
+.dark @keyframes highlightPulse {
+  0%, 100% {
+    background-color: transparent;
+  }
+  50% {
+    background-color: rgba(59, 130, 246, 0.3);
+  }
+}

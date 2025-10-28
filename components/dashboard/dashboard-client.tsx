@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { DashboardHeader } from "@/components/dashboard";
 import { CompanySearch } from "@/components/dashboard/company-search";
-import { SettingsIcon, Trash2Icon, PlusIcon, ArrowUpDown, Loader2 } from "lucide-react";
+import { SettingsIcon, Trash2Icon, ArrowUpDown, Loader2 } from "lucide-react";
 
 import {
   Table,
@@ -15,14 +15,13 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { 
-  Dialog, 
-  DialogContent, 
+import {
+  Dialog,
+  DialogContent,
   DialogHeader,
   DialogTitle,
   DialogDescription,
   DialogFooter,
-  DialogTrigger,
 } from "@/components/ui/dialog";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
@@ -51,8 +50,8 @@ export function DashboardClient() {
   const [sorting, setSorting] = useState<SortingState>([]);
   const [currentCompany, setCurrentCompany] = useState<Company | null>(null);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
-  const [isAddTickerOpen, setIsAddTickerOpen] = useState(false);
   const [isPreferencesOpen, setIsPreferencesOpen] = useState(false);
+  const [deletingCompanyId, setDeletingCompanyId] = useState<string | null>(null);
 
   const [showTutorial, setShowTutorial] = useState(false);
   const [tutorialProgress, setTutorialProgress] = useState(0);
@@ -84,111 +83,153 @@ export function DashboardClient() {
   // Load tracked companies on component mount
   useEffect(() => {
     loadCompanies();
-    
+
     // Check if user is new and should see tutorial
     const hasSeenTutorial = localStorage.getItem('hasSeenTutorial');
     if (!hasSeenTutorial) {
       setShowTutorial(true);
       localStorage.setItem('hasSeenTutorial', 'true');
     }
-    
+
     // Load tutorial progress if available
     const savedProgress = localStorage.getItem('tutorialProgress');
     if (savedProgress) {
       setTutorialProgress(parseInt(savedProgress, 10));
     }
   }, [loadCompanies]);
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // CMD/CTRL + K to focus search
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault();
+        const searchInput = document.querySelector('input[placeholder*="Search"]') as HTMLInputElement;
+        if (searchInput) {
+          searchInput.focus();
+        }
+      }
+
+      // ESC to clear search
+      if (e.key === 'Escape') {
+        const searchInput = document.querySelector('input[placeholder*="Search"]') as HTMLInputElement;
+        if (searchInput && document.activeElement === searchInput) {
+          searchInput.value = '';
+          searchInput.dispatchEvent(new Event('change', { bubbles: true }));
+          searchInput.blur();
+        }
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, []);
   
 
 
 
   
-  // Handle adding a ticker
+  // Handle adding a ticker - Enhanced with optimistic update only
   const handleAddTicker = async (symbol: string, name: string) => {
-    setIsAddTickerOpen(false);
-    
-    // Create a new company object for optimistic update
+    // Check if ticker already exists
+    const exists = companies.some(company => company.symbol.toUpperCase() === symbol.toUpperCase());
+    if (exists) {
+      toast.error(`${symbol} is already tracked`);
+      // Highlight existing row briefly (handled by CSS animation)
+      const existingRow = document.querySelector(`[data-ticker="${symbol}"]`);
+      if (existingRow) {
+        existingRow.classList.add('highlight-pulse');
+        setTimeout(() => existingRow.classList.remove('highlight-pulse'), 1000);
+      }
+      return;
+    }
+
+    // Create a new company object for optimistic update with loading state
+    const tempId = `temp-${Date.now()}`;
     const newCompany: Company = {
-      id: `temp-${Date.now()}`, // Temporary ID that will be replaced after API refresh
+      id: tempId,
       symbol,
-      name, // name property is the company name in the Company interface
+      name,
       lastFiling: "—",
-      lastFilingDate: undefined, // Using undefined instead of null to match Company type
+      lastFilingDate: undefined,
       preferences: { tenK: true, tenQ: true, eightK: true, form4: false, other: false }
     };
-    
-    // Optimistically add the company to the list to reduce perceived latency
-    setCompanies(prevCompanies => {
-      // Check if this ticker already exists to prevent duplicates
-      const exists = prevCompanies.some(company => company.symbol === symbol);
-      if (exists) {
-        // If it exists, don't add it again
-        return prevCompanies;
-      }
-      // Add the new company to the list
-      return [...prevCompanies, newCompany];
-    });
-    
+
+    // Optimistically add the company to the list - immediate UI update
+    setCompanies(prevCompanies => [...prevCompanies, newCompany]);
+
     try {
       // Add the ticker to the database
       const result = await executeAddTicker(() => addTrackedCompany(symbol, name));
-      
+
       if (result && result.success && result.data) {
+        // Update the optimistic entry with real data from API (no full reload needed)
+        setCompanies(prevCompanies =>
+          prevCompanies.map(c =>
+            c.id === tempId ? { ...result.data } : c
+          )
+        );
+
         toast.success(`Added ${symbol} to your tracked companies`);
-        
-        // Explicitly reload the companies list from the API to ensure we have the latest data
-        // This will replace our optimistic update with the real data
-        try {
-          // Call executeGetCompanies with a function that calls getTrackedCompanies
-          const response = await executeGetCompanies(() => getTrackedCompanies());
-          if (response && 'data' in response && Array.isArray(response.data)) {
-            setCompanies(response.data);
-          }
-        } catch (refreshError) {
-          console.error("Error refreshing companies list:", refreshError);
-          // Even if refresh fails, we still added the ticker successfully
-          // and our optimistic update remains in place
-        }
-        
+
         // Show next step in tutorial if active
         if (showTutorial && tutorialProgress === 0) {
           setTutorialProgress(1);
         }
       } else {
-        // Handle API error response - remove the optimistic update
-        setCompanies(prevCompanies => prevCompanies.filter(company => company.id !== newCompany.id));
-        
+        // Handle API error response - remove the optimistic update (rollback)
+        setCompanies(prevCompanies => prevCompanies.filter(company => company.id !== tempId));
+
         // Get error message from result if available
         let errorMessage = `Failed to add ${symbol}`;
         if (!result.success && result.data === null) {
-          errorMessage = `Failed to add ${symbol}: The ticker may already be tracked or not exist`;
+          errorMessage = `${symbol} may already be tracked or does not exist`;
         }
         toast.error(errorMessage);
       }
     } catch (error) {
-      // Remove the optimistic update on error
-      setCompanies(prevCompanies => prevCompanies.filter(company => company.id !== newCompany.id));
-      
+      // Remove the optimistic update on error (rollback)
+      setCompanies(prevCompanies => prevCompanies.filter(company => company.id !== tempId));
+
       console.error("Error adding ticker:", error);
       toast.error(`Failed to add ${symbol}`);
     }
   };
   
-  // Handle deleting a ticker
+  // Handle deleting a ticker - Enhanced with optimistic removal and rollback
   const handleDeleteTicker = async () => {
     if (!currentCompany) return;
-    
+
+    const companyToDelete = currentCompany;
+    setDeletingCompanyId(companyToDelete.id); // Set deleting state for fade-out animation
+
+    // Close dialog immediately for better UX
+    setIsDeleteDialogOpen(false);
+
+    // Wait for fade-out animation to complete (150ms)
+    await new Promise(resolve => setTimeout(resolve, 150));
+
+    // Optimistically remove from local state
+    setCompanies(prev => prev.filter(c => c.id !== companyToDelete.id));
+
     try {
-      await executeDeleteTicker(() => deleteTrackedCompany(currentCompany.id));
-      toast.success(`Removed ${currentCompany.symbol} from tracked companies`);
-      
-      // Remove from local state
-      setCompanies(prev => prev.filter(c => c.id !== currentCompany.id));
-      setIsDeleteDialogOpen(false);
+      await executeDeleteTicker(() => deleteTrackedCompany(companyToDelete.id));
+      toast.success(`Removed ${companyToDelete.symbol} from tracked companies`);
       setCurrentCompany(null);
+      setDeletingCompanyId(null);
     } catch (error) {
+      // Rollback: Re-add the company on error
+      setCompanies(prev => {
+        // Find insertion position to maintain sort order
+        const sortedCompanies = [...prev, companyToDelete].sort((a, b) =>
+          a.symbol.localeCompare(b.symbol)
+        );
+        return sortedCompanies;
+      });
+
       console.error("Error deleting ticker:", error);
-      toast.error(`Failed to remove ${currentCompany.symbol}`);
+      toast.error(`Failed to remove ${companyToDelete.symbol}. Please try again.`);
+      setDeletingCompanyId(null);
     }
   };
   
@@ -319,61 +360,21 @@ export function DashboardClient() {
       
       {/* Tracked Tickers - Removed border */}
       <Card className="p-6">
-        <div className="mb-6 text-center">
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <div className="mx-auto sm:mx-0">
-              <h2 className="text-lg font-semibold">Tracked Tickers</h2>
-              <p className="text-sm text-muted-foreground">Manage your tracked companies.</p>
+        <div className="mb-6">
+          <div className="flex flex-col gap-4">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+              <div>
+                <h2 className="text-lg font-semibold">Tracked Tickers</h2>
+                <p className="text-sm text-muted-foreground">Manage your tracked companies.</p>
+              </div>
             </div>
-            
-            <div className="flex gap-2">
-              {/* Email Latest Filings Button - HIDDEN */}
-              {/* <Button
-                onClick={handleRequestEmailSummary}
-                disabled={isEmailRequestLoading}
-                className="gap-1"
-              >
-                <EnvelopeIcon className="h-4 w-4 mr-2" />
-                <span className="hidden sm:inline">Email Latest Filings</span>
-                <span className="inline sm:hidden">Email</span>
-              </Button> */}
-              
-              <Dialog open={isAddTickerOpen} onOpenChange={setIsAddTickerOpen}>
-                <DialogTrigger asChild>
-                  <Button
-                    onClick={() => setIsAddTickerOpen(true)}
-                    className="gap-1"
-                    data-tutorial="add-ticker"
-                  >
-                    <PlusIcon className="h-4 w-4 mr-2" />
-                    <span className="hidden sm:inline">Add Ticker</span>
-                    <span className="inline sm:hidden">Add</span>
-                  </Button>
-                </DialogTrigger>
-                <DialogContent className="max-w-[95vw] sm:max-w-md">
-                  <DialogHeader>
-                    <DialogTitle>Add New Ticker</DialogTitle>
-                    <DialogDescription>
-                      Search for a company to track its SEC filings.
-                    </DialogDescription>
-                  </DialogHeader>
-                  
-                  <div className="my-4">
-                    <CompanySearch 
-                      onSelect={handleAddTicker}
-                      onCancel={() => setIsAddTickerOpen(false)}
-                    />
-                  </div>
-                  
-                  <DialogFooter className="flex-col sm:flex-row gap-2 sm:gap-0">
-                    <Button variant="outline" onClick={() => {
-                      setIsAddTickerOpen(false);
-                    }}>
-                      Cancel
-                    </Button>
-                  </DialogFooter>
-                </DialogContent>
-              </Dialog>
+
+            {/* Inline Search Bar - No Modal */}
+            <div className="w-full" data-tutorial="add-ticker">
+              <CompanySearch
+                onSelect={handleAddTicker}
+                onCancel={() => {}}
+              />
             </div>
           </div>
         </div>
@@ -387,36 +388,8 @@ export function DashboardClient() {
           <div className="flex min-h-[200px] flex-col items-center justify-center rounded-md border border-dashed p-4 sm:p-8 text-center space-y-4">
             <h3 className="text-base font-medium">No companies tracked yet</h3>
             <p className="text-sm text-muted-foreground">
-              Start tracking companies to receive SEC filing summaries.
+              Use the search bar above to add your first company and start tracking SEC filings.
             </p>
-            <Dialog open={isAddTickerOpen} onOpenChange={setIsAddTickerOpen}>
-              <DialogTrigger asChild>
-                <Button className="mt-6">Add Your First Company</Button>
-              </DialogTrigger>
-              <DialogContent className="max-w-[95vw] sm:max-w-md">
-                <DialogHeader>
-                  <DialogTitle>Add New Ticker</DialogTitle>
-                  <DialogDescription>
-                    Search for a company to track its SEC filings.
-                  </DialogDescription>
-                </DialogHeader>
-                
-                <div className="my-4">
-                  <CompanySearch 
-                    onSelect={handleAddTicker}
-                    onCancel={() => setIsAddTickerOpen(false)}
-                  />
-                </div>
-                
-                <DialogFooter className="flex-col sm:flex-row gap-2 sm:gap-0">
-                  <Button variant="outline" onClick={() => {
-                    setIsAddTickerOpen(false);
-                  }}>
-                    Cancel
-                  </Button>
-                </DialogFooter>
-              </DialogContent>
-            </Dialog>
           </div>
         ) : (
           <>
@@ -441,15 +414,24 @@ export function DashboardClient() {
                 </TableHeader>
                 <TableBody>
                   {table.getRowModel().rows.length ? (
-                    table.getRowModel().rows.map(row => (
-                      <TableRow key={row.id} data-state={row.getIsSelected() && "selected"}>
-                        {row.getVisibleCells().map(cell => (
-                          <TableCell key={cell.id}>
-                            {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                          </TableCell>
-                        ))}
-                      </TableRow>
-                    ))
+                    table.getRowModel().rows.map(row => {
+                      const company = row.original;
+                      const isDeleting = deletingCompanyId === company.id;
+                      return (
+                        <TableRow
+                          key={row.id}
+                          data-state={row.getIsSelected() && "selected"}
+                          data-ticker={company.symbol}
+                          className={isDeleting ? "fade-out-row" : "fade-in-row"}
+                        >
+                          {row.getVisibleCells().map(cell => (
+                            <TableCell key={cell.id}>
+                              {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                            </TableCell>
+                          ))}
+                        </TableRow>
+                      );
+                    })
                   ) : (
                     <TableRow>
                       <TableCell colSpan={columns.length} className="h-24 text-center">
@@ -463,40 +445,47 @@ export function DashboardClient() {
             
             {/* Mobile Card View */}
             <div className="sm:hidden space-y-4">
-              {companies.map(company => (
-                <div key={company.symbol} className="border rounded-md p-4">
-                  <div className="flex justify-between items-start mb-2">
-                    <div>
-                      <h3 className="font-medium">{company.symbol}</h3>
-                      <p className="text-sm text-muted-foreground">{company.name}</p>
-                    </div>
-                    <div className="flex gap-1">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => {
-                          setCurrentCompany(company);
-                          setIsPreferencesOpen(true);
-                        }}
-                        className="h-8 w-8"
-                      >
-                        <SettingsIcon className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => {
-                          setCurrentCompany(company);
-                          setIsDeleteDialogOpen(true);
-                        }}
-                        className="h-8 w-8"
-                      >
-                        <Trash2Icon className="h-4 w-4" />
-                      </Button>
+              {companies.map(company => {
+                const isDeleting = deletingCompanyId === company.id;
+                return (
+                  <div
+                    key={company.symbol}
+                    data-ticker={company.symbol}
+                    className={`border rounded-md p-4 ${isDeleting ? "fade-out-row" : "fade-in-row"}`}
+                  >
+                    <div className="flex justify-between items-start mb-2">
+                      <div>
+                        <h3 className="font-medium">{company.symbol}</h3>
+                        <p className="text-sm text-muted-foreground">{company.name}</p>
+                      </div>
+                      <div className="flex gap-1">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => {
+                            setCurrentCompany(company);
+                            setIsPreferencesOpen(true);
+                          }}
+                          className="h-8 w-8"
+                        >
+                          <SettingsIcon className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => {
+                            setCurrentCompany(company);
+                            setIsDeleteDialogOpen(true);
+                          }}
+                          className="h-8 w-8"
+                        >
+                          <Trash2Icon className="h-4 w-4" />
+                        </Button>
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </>
         )}

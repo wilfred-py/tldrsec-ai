@@ -9,7 +9,6 @@ import { updateTutorialProgress } from '@/components/onboarding/actions';
 import { sendLatestSummariesEmail } from '@/lib/email/summary-service';
 import { useRouter } from 'next/navigation';
 import {
-  List,
   ActivityIcon,
   Settings,
   Trash2,
@@ -48,10 +47,10 @@ export function TutorialGuide({
   // Define the tutorial steps
   const tutorialSteps = useMemo(() => [
     {
-      title: "Add",
-      description: "Click the 'Add Ticker' button to start tracking a company's SEC filings.",
+      title: "Add Companies",
+      description: "Use the search bar to find and add companies to track their SEC filings. Type a ticker or company name to get started.",
       selector: '[data-tutorial="add-ticker"]',
-      icon: <List className="h-5 w-5" />,
+      icon: <Search className="h-5 w-5" />,
       position: 'bottom'
     },
     {
