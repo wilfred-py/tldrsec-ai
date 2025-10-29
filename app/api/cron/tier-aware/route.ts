@@ -18,6 +18,8 @@ import { CronJobMonitor } from '../../../../lib/monitoring/cron-monitor';
 import { CronJobStatus } from '../../../../types/cron';
 import { generateSecureExecutionId } from '../../../../lib/security/secure-random';
 import { LockService } from '../../../../lib/job-queue/lock-service';
+import { withVercelRateLimit } from '../../../../lib/infrastructure/rate-limiting/vercel-endpoint-enhancer';
+import { rateLimitMonitor, RateLimitEventType } from '../../../../lib/infrastructure/rate-limiting/rate-limit-monitor';
 
 // Import our new service layer
 import { CronAuthService } from '../../../../lib/cron/auth-service';
@@ -32,7 +34,7 @@ export const dynamic = 'force-dynamic';
 const cronLogger = logger.child('tier-aware-cron');
 
 /**
- * Main cron endpoint handler - now serves as a clean orchestrator
+ * Main cron endpoint handler with enhanced rate limiting protection
  */
 export async function GET(request: NextRequest) {
   const startTime = Date.now();
@@ -40,6 +42,50 @@ export async function GET(request: NextRequest) {
   const secureExecutionId = generateSecureExecutionId('api');
   
   const executionId = request.headers.get('x-execution-id') || secureExecutionId;
+  
+  // Apply enhanced rate limiting protection
+  try {
+    const rateLimitResponse = await withVercelRateLimit(request);
+    if (rateLimitResponse) {
+      // Record rate limiting event
+      rateLimitMonitor.recordEvent(
+        'vercel-endpoint',
+        'tier-aware-cron',
+        RateLimitEventType.RATE_LIMIT_HIT,
+        {
+          executionId,
+          clientIP: request.headers.get('x-forwarded-for'),
+          userAgent: request.headers.get('user-agent'),
+          endpoint: '/api/cron/tier-aware'
+        },
+        { requestsBlocked: 1 }
+      );
+      
+      cronLogger.warn(`Rate limit applied to request ${executionId}`, {
+        status: rateLimitResponse.status,
+        clientIP: request.headers.get('x-forwarded-for')
+      });
+      
+      return rateLimitResponse;
+    }
+  } catch (rateLimitError) {
+    // Record rate limiting error
+    rateLimitMonitor.recordEvent(
+      'vercel-endpoint',
+      'tier-aware-cron',
+      RateLimitEventType.PERFORMANCE_DEGRADATION,
+      {
+        executionId,
+        error: rateLimitError.message,
+        endpoint: '/api/cron/tier-aware'
+      }
+    );
+    
+    // Continue without rate limiting on error (fail open for critical cron requests)
+    cronLogger.warn(`Rate limiting error for request ${executionId}, continuing without rate limit`, {
+      error: rateLimitError.message
+    });
+  }
   
   // Timeout configuration based on Cloudflare Worker headers with input validation
   const parseTimeoutHeader = (header: string | null, defaultValue: number): number => {

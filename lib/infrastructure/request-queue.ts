@@ -243,7 +243,7 @@ export class InfrastructureRequestQueue {
       activeRequests: this.activeRequests.size,
       queuedJobs: this.bottleneck.queued(),
       runningJobs: this.bottleneck.running(),
-      pendingJobs: this.bottleneck.pending(),
+      pendingJobs: this.bottleneck.queued() + this.bottleneck.running(), // pending = queued + running
       done: this.bottleneck.done,
       failed: this.bottleneck.failed
     };
