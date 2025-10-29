@@ -263,6 +263,8 @@ export class ExternalApiRateLimiter {
   private requestQueues = new Map<string, QueuedRequest<unknown>[]>();
   private processing = new Map<string, boolean>();
   private readonly logger = logger.child('external-api-limiter');
+  private queueIntervals = new Map<string, NodeJS.Timeout>();
+  private isDestroyed = false;
 
   constructor() {
     // Initialize rate limiters for each service
@@ -568,19 +570,30 @@ export class ExternalApiRateLimiter {
    */
   private startQueueProcessors(): void {
     for (const serviceKey of Object.keys(EXTERNAL_SERVICES)) {
-      setInterval(() => {
+      const interval = setInterval(() => {
+        if (this.isDestroyed) return;
+        
+        // Use atomic check-and-set to prevent race conditions
         if (!this.processing.get(serviceKey)) {
           const queue = this.requestQueues.get(serviceKey) || [];
           if (queue.length > 0) {
+            // Set processing flag atomically
+            this.processing.set(serviceKey, true);
+            
             this.processQueue(serviceKey).catch(error => {
               this.logger.error('Queue processor error', {
                 serviceKey,
                 error: error.message
               });
+            }).finally(() => {
+              // Always reset processing flag
+              this.processing.set(serviceKey, false);
             });
           }
         }
       }, 5000); // Check every 5 seconds
+      
+      this.queueIntervals.set(serviceKey, interval);
     }
   }
 
@@ -612,6 +625,37 @@ export class ExternalApiRateLimiter {
         availableTokens: this.tokenBuckets.get(serviceKey)?.getAvailableTokens()
       }))
     };
+  }
+
+  /**
+   * Cleanup method to prevent memory leaks
+   */
+  public destroy(): void {
+    if (this.isDestroyed) return;
+    
+    this.isDestroyed = true;
+    
+    // Clear all queue processing intervals
+    this.queueIntervals.forEach(intervalId => {
+      clearInterval(intervalId);
+    });
+    this.queueIntervals.clear();
+    
+    // Clear all request queues and their timeouts
+    this.requestQueues.forEach((queue, _serviceKey) => {
+      queue.forEach(request => {
+        clearTimeout(request.timeout);
+        request.reject(new Error('Service shutting down'));
+      });
+    });
+    this.requestQueues.clear();
+    
+    // Clear all maps
+    this.tokenBuckets.clear();
+    this.circuitBreakers.clear();
+    this.processing.clear();
+    
+    this.logger.info('ExternalApiRateLimiter destroyed and cleaned up');
   }
 }
 

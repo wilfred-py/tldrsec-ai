@@ -16,6 +16,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { rateLimiter } from '../../security/rate-limiter';
 import { logger } from '../../logging';
 import { monitoring } from '../../monitoring';
+import { RateLimitInputValidator } from './input-validator';
 
 // Request priority levels
 export enum RequestPriority {
@@ -70,22 +71,27 @@ interface RequestClassificationRule {
 const CLASSIFICATION_RULES: RequestClassificationRule[] = [
   {
     condition: (req) => {
-      const cronSecret = req.headers.get('x-cron-auth') || req.headers.get('authorization');
+      const hmacSignature = req.headers.get('x-hmac-signature');
+      const hmacTimestamp = req.headers.get('x-hmac-timestamp');
       const cronSource = req.headers.get('x-cron-source');
       const userAgent = req.headers.get('user-agent');
       
-      return !!(cronSecret && (cronSource === 'cloudflare-worker' || userAgent?.includes('TLDRSEC-Cloudflare-Worker')));
+      // Check for HMAC authentication headers (secure method)
+      return !!(hmacSignature && hmacTimestamp && 
+               (cronSource === 'cloudflare-worker' || userAgent?.includes('TLDRSEC-Cloudflare-Worker-HMAC')));
     },
     priority: RequestPriority.CRITICAL,
-    description: 'Authenticated Cloudflare Worker cron request'
+    description: 'HMAC-authenticated Cloudflare Worker cron request'
   },
   {
     condition: (req) => {
       const path = new URL(req.url).pathname;
-      return path.startsWith('/api/cron/') && req.headers.get('x-cron-secret');
+      const hmacSignature = req.headers.get('x-hmac-signature');
+      const hmacTimestamp = req.headers.get('x-hmac-timestamp');
+      return path.startsWith('/api/cron/') && hmacSignature && hmacTimestamp;
     },
     priority: RequestPriority.CRITICAL,
-    description: 'Authenticated cron endpoint'
+    description: 'HMAC-authenticated cron endpoint'
   },
   {
     condition: (req) => {
@@ -131,6 +137,8 @@ class VercelEndpointRateLimiter {
   private requestQueue = new Map<RequestPriority, QueuedRequest[]>();
   private processing = false;
   private readonly logger = logger.child('vercel-endpoint-limiter');
+  private queueProcessorInterval: NodeJS.Timeout | null = null;
+  private isDestroyed = false;
   private metrics = {
     requestsProcessed: 0,
     queuedRequests: 0,
@@ -210,8 +218,8 @@ class VercelEndpointRateLimiter {
     } catch (error) {
       this.logger.error('Rate limiting error', {
         requestId,
-        error: error.message,
-        stack: error.stack
+        error: error.message
+        // Stack trace removed for security - available in service logs
       });
 
       // Fail open on rate limiter errors for critical requests
@@ -230,12 +238,42 @@ class VercelEndpointRateLimiter {
    * Classify request based on headers and path
    */
   private classifyRequest(request: NextRequest): RequestPriority {
+    // First validate the request input
+    const urlResult = RateLimitInputValidator.parseUrl(request.url);
+    if (!urlResult.isValid) {
+      this.logger.warn('Invalid URL in request classification', {
+        error: urlResult.error
+      });
+      return RequestPriority.SUSPICIOUS;
+    }
+
+    // Validate and sanitize headers used in classification
+    const hmacSignature = RateLimitInputValidator.validateHmacSignature(
+      request.headers.get('x-hmac-signature')
+    );
+    const hmacTimestamp = RateLimitInputValidator.validateHmacTimestamp(
+      request.headers.get('x-hmac-timestamp')
+    );
+    const userAgent = RateLimitInputValidator.validateUserAgent(
+      request.headers.get('user-agent')
+    );
+
+    // If critical security headers are invalid, treat as suspicious
+    if (!hmacSignature.isValid || !hmacTimestamp.isValid || !userAgent.isValid) {
+      this.logger.warn('Invalid security headers in request', {
+        hmacSignatureValid: hmacSignature.isValid,
+        hmacTimestampValid: hmacTimestamp.isValid,
+        userAgentValid: userAgent.isValid
+      });
+      return RequestPriority.SUSPICIOUS;
+    }
+
     for (const rule of CLASSIFICATION_RULES) {
       if (rule.condition(request)) {
         this.logger.debug('Request classified', {
           priority: rule.priority,
           description: rule.description,
-          path: new URL(request.url).pathname
+          path: urlResult.url!.pathname
         });
         return rule.priority;
       }
@@ -435,25 +473,43 @@ class VercelEndpointRateLimiter {
    * Get client identifier for rate limiting
    */
   private getClientIdentifier(request: NextRequest): string {
-    // For cron requests, use execution ID if available
-    const executionId = request.headers.get('x-execution-id');
-    if (executionId) {
-      return `cron:${executionId}`;
+    // Validate and sanitize execution ID
+    const executionIdResult = RateLimitInputValidator.validateExecutionId(
+      request.headers.get('x-execution-id')
+    );
+    if (executionIdResult.isValid && executionIdResult.sanitizedValue) {
+      return `cron:${executionIdResult.sanitizedValue}`;
     }
 
-    // For user requests, try to get user ID
-    const userId = request.headers.get('x-user-id');
-    if (userId) {
-      return `user:${userId}`;
+    // Validate and sanitize user ID
+    const userIdResult = RateLimitInputValidator.validateUserId(
+      request.headers.get('x-user-id')
+    );
+    if (userIdResult.isValid && userIdResult.sanitizedValue) {
+      return `user:${userIdResult.sanitizedValue}`;
     }
 
-    // Fall back to IP address
-    const ip = request.headers.get('x-forwarded-for') || 
-               request.headers.get('x-real-ip') || 
-               request.headers.get('cf-connecting-ip') || 
-               'unknown';
+    // Validate and sanitize IP address
+    const ipCandidates = [
+      request.headers.get('x-forwarded-for'),
+      request.headers.get('x-real-ip'),
+      request.headers.get('cf-connecting-ip')
+    ];
+
+    for (const ipCandidate of ipCandidates) {
+      const ipResult = RateLimitInputValidator.validateIpAddress(ipCandidate);
+      if (ipResult.isValid && ipResult.sanitizedValue && ipResult.sanitizedValue !== 'unknown') {
+        return `ip:${ipResult.sanitizedValue}`;
+      }
+    }
+
+    // If no valid identifier found, use a generic unknown identifier
+    this.logger.warn('No valid client identifier found', {
+      executionIdValid: executionIdResult.isValid,
+      userIdValid: userIdResult.isValid
+    });
     
-    return `ip:${ip}`;
+    return 'ip:unknown';
   }
 
   /**
@@ -478,10 +534,9 @@ class VercelEndpointRateLimiter {
     return NextResponse.json(
       {
         error: 'Rate limit exceeded',
-        priority,
         retryAfter,
         requestId,
-        message: `Too many requests for ${priority} priority. Try again in ${retryAfter} seconds.`
+        message: `Too many requests. Try again in ${retryAfter} seconds.`
       },
       {
         status: 429,
@@ -533,7 +588,9 @@ class VercelEndpointRateLimiter {
    * Start queue processor interval
    */
   private startQueueProcessor(): void {
-    setInterval(() => {
+    this.queueProcessorInterval = setInterval(() => {
+      if (this.isDestroyed) return;
+      
       if (!this.processing && this.hasQueuedRequests()) {
         this.processQueue().catch(error => {
           this.logger.error('Queue processor error', { error: error.message });
@@ -553,6 +610,40 @@ class VercelEndpointRateLimiter {
         length: queue.length
       }))
     };
+  }
+
+  /**
+   * Cleanup method to prevent memory leaks
+   */
+  public destroy(): void {
+    if (this.isDestroyed) return;
+    
+    this.isDestroyed = true;
+    
+    // Clear queue processor interval
+    if (this.queueProcessorInterval) {
+      clearInterval(this.queueProcessorInterval);
+      this.queueProcessorInterval = null;
+    }
+    
+    // Clear all request queues and their timeouts
+    this.requestQueue.forEach((queue, _priority) => {
+      queue.forEach(request => {
+        clearTimeout(request.timeout);
+        request.reject(new Error('Service shutting down'));
+      });
+    });
+    this.requestQueue.clear();
+    
+    // Reset metrics
+    this.metrics = {
+      requestsProcessed: 0,
+      queuedRequests: 0,
+      rejectedRequests: 0,
+      averageWaitTime: 0
+    };
+    
+    this.logger.info('VercelEndpointRateLimiter destroyed and cleaned up');
   }
 }
 

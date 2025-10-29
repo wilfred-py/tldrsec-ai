@@ -153,6 +153,8 @@ export class RateLimitMonitor {
   private metrics: RateLimitMetrics[] = [];
   private alertCounts = new Map<string, { count: number; windowStart: number }>();
   private readonly logger = logger.child('rate-limit-monitor');
+  private intervalIds: NodeJS.Timeout[] = [];
+  private isDestroyed = false;
 
   constructor() {
     this.logger.info('RateLimitMonitor initialized');
@@ -161,7 +163,12 @@ export class RateLimitMonitor {
     this.startPeriodicMonitoring();
     
     // Clean up old metrics every hour
-    setInterval(() => this.cleanupOldMetrics(), 3600000);
+    const cleanupInterval = setInterval(() => {
+      if (!this.isDestroyed) {
+        this.cleanupOldMetrics();
+      }
+    }, 3600000);
+    this.intervalIds.push(cleanupInterval);
   }
 
   /**
@@ -421,14 +428,20 @@ export class RateLimitMonitor {
    */
   private startPeriodicMonitoring(): void {
     // Monitor every 30 seconds
-    setInterval(() => {
-      this.collectSystemMetrics();
+    const metricsInterval = setInterval(() => {
+      if (!this.isDestroyed) {
+        this.collectSystemMetrics();
+      }
     }, 30000);
+    this.intervalIds.push(metricsInterval);
 
     // Perform health checks every 5 minutes
-    setInterval(() => {
-      this.performHealthChecks();
+    const healthInterval = setInterval(() => {
+      if (!this.isDestroyed) {
+        this.performHealthChecks();
+      }
     }, 300000);
+    this.intervalIds.push(healthInterval);
   }
 
   /**
@@ -629,6 +642,27 @@ export class RateLimitMonitor {
    */
   private getNestedProperty(obj: Record<string, unknown>, path: string): unknown {
     return path.split('.').reduce((current, key) => current?.[key], obj);
+  }
+
+  /**
+   * Cleanup method to prevent memory leaks
+   */
+  public destroy(): void {
+    if (this.isDestroyed) return;
+    
+    this.isDestroyed = true;
+    
+    // Clear all intervals
+    this.intervalIds.forEach(intervalId => {
+      clearInterval(intervalId);
+    });
+    this.intervalIds = [];
+    
+    // Clear metrics
+    this.metrics = [];
+    this.alertCounts.clear();
+    
+    this.logger.info('RateLimitMonitor destroyed and cleaned up');
   }
 }
 

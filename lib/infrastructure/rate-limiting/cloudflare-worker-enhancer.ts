@@ -92,12 +92,18 @@ export class CloudflareWorkerRateLimiter {
     timestamp: number 
   }>>();
   private readonly logger = logger.child('cloudflare-rate-limiter');
+  private cleanupInterval: NodeJS.Timeout | null = null;
+  private isDestroyed = false;
 
   constructor() {
     this.logger.info('CloudflareWorkerRateLimiter initialized with enhanced patterns');
     
     // Cleanup old entries every 5 minutes
-    setInterval(() => this.cleanup(), 300000);
+    this.cleanupInterval = setInterval(() => {
+      if (!this.isDestroyed) {
+        this.cleanup();
+      }
+    }, 300000);
   }
 
   /**
@@ -358,7 +364,14 @@ export class CloudflareWorkerRateLimiter {
     // Extract retry-after header if available
     let retryAfter = 0;
     if (error?.headers?.['retry-after']) {
-      retryAfter = parseInt(error.headers['retry-after']) * 1000;
+      const retryAfterValue = error.headers['retry-after'];
+      // Validate retry-after header is a positive integer
+      if (typeof retryAfterValue === 'string' && /^[0-9]{1,6}$/.test(retryAfterValue)) {
+        const parsed = parseInt(retryAfterValue, 10);
+        if (parsed > 0 && parsed <= 86400) { // Max 24 hours
+          retryAfter = parsed * 1000;
+        }
+      }
     }
 
     // Calculate exponential backoff
@@ -531,6 +544,28 @@ export class CloudflareWorkerRateLimiter {
         queueLength: queue.length
       }))
     };
+  }
+
+  /**
+   * Cleanup method to prevent memory leaks
+   */
+  public destroy(): void {
+    if (this.isDestroyed) return;
+    
+    this.isDestroyed = true;
+    
+    // Clear cleanup interval
+    if (this.cleanupInterval) {
+      clearInterval(this.cleanupInterval);
+      this.cleanupInterval = null;
+    }
+    
+    // Clear all maps
+    this.circuitBreakers.clear();
+    this.rateLimitMetrics.clear();
+    this.requestQueue.clear();
+    
+    this.logger.info('CloudflareWorkerRateLimiter destroyed and cleaned up');
   }
 }
 

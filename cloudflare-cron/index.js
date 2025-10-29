@@ -130,12 +130,41 @@ export default {
       console.log(`[${executionId}] PUBLIC_URL: ${env.PUBLIC_URL}`);
       console.log(`[${executionId}] CRON_SECRET configured: ${env.CRON_SECRET ? 'Yes (' + env.CRON_SECRET.length + ' chars)' : 'No'}`);
       
-      // Prepare headers with enhanced tracking and timeout coordination
+      // Generate HMAC signature for secure authentication
+      const urlObj = new URL(url);
+      const method = 'GET';
+      const path = urlObj.pathname;
+      const timestamp = Date.now();
+      
+      // Create HMAC payload: timestamp:method:path
+      const payload = `${timestamp}:${method.toUpperCase()}:${path}`;
+      
+      // Generate HMAC-SHA256 signature
+      const encoder = new TextEncoder();
+      const key = await crypto.subtle.importKey(
+        'raw',
+        encoder.encode(env.CRON_SECRET),
+        { name: 'HMAC', hash: 'SHA-256' },
+        false,
+        ['sign']
+      );
+      const signature = await crypto.subtle.sign('HMAC', key, encoder.encode(payload));
+      const signatureHex = Array.from(new Uint8Array(signature))
+        .map(byte => byte.toString(16).padStart(2, '0'))
+        .join('');
+
+      console.log(`[${executionId}] Generated HMAC signature for secure authentication`, {
+        method,
+        path,
+        timestamp,
+        payloadLength: payload.length,
+        signatureLength: signatureHex.length
+      });
+
+      // Prepare headers with HMAC authentication
       const headers = {
-        'Authorization': `Bearer ${env.CRON_SECRET}`, // Primary auth header
-        'X-Cron-Auth': `Bearer ${env.CRON_SECRET}`, // Backup auth header to avoid Clerk conflicts
         'Content-Type': 'application/json',
-        'User-Agent': 'TLDRSEC-Cloudflare-Worker/2.2 wilfredchen1@gmail.com',
+        'User-Agent': 'TLDRSEC-Cloudflare-Worker-HMAC/2.4.0',
         'X-Cloudflare-Worker': 'tldrsec-cron',
         'X-Cron-Source': 'cloudflare-worker',
         'X-Execution-Id': executionId,
@@ -144,7 +173,10 @@ export default {
         'X-Request-Start-Time': startTime.toString(),
         'X-Cron-Frequency': '10-minutes',
         'X-Processing-Mode': 'ai-enhanced',
-        'X-Debug-Mode': 'true' // Enable debug logging
+        'X-Debug-Mode': 'true',
+        // HMAC Authentication Headers (secure)
+        'X-Hmac-Signature': signatureHex,
+        'X-Hmac-Timestamp': timestamp.toString()
       };
       
       // Add Vercel deployment protection bypass if configured

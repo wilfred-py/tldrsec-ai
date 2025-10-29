@@ -1,17 +1,18 @@
 /**
  * Authentication and security service for cron endpoints
- * Extracted from app/api/cron/tier-aware/route.ts
+ * Enhanced with HMAC-based cryptographic authentication
  */
 
 import { NextRequest } from 'next/server';
 import { logger } from '../logging';
+import { validateCronRequestHmac } from '../security/hmac-auth';
 import type { AuthValidationResult, AuthHeaders } from './types';
 
 const authLogger = logger.child('cron-auth');
 
 export class CronAuthService {
   /**
-   * Validate cron request authentication with comprehensive security checks
+   * Validate cron request authentication with HMAC cryptographic verification
    */
   static async validateCronRequest(request: NextRequest): Promise<AuthValidationResult> {
     try {
@@ -23,24 +24,39 @@ export class CronAuthService {
         return { isValid: true };
       }
 
-      // Direct route call or middleware bypassed - validate auth here
-      const authHeaders: AuthHeaders = {
-        authorization: request.headers.get('authorization') || undefined,
-        'x-cron-auth': request.headers.get('x-cron-auth') || undefined,
-        'x-forwarded-for': request.headers.get('x-forwarded-for') || undefined,
-        'x-real-ip': request.headers.get('x-real-ip') || undefined,
-        'x-security-validated': request.headers.get('x-security-validated') || undefined,
-      };
+      const clientIP = request.headers.get('x-forwarded-for') || 
+                      request.headers.get('x-real-ip') || 
+                      'unknown';
 
-      const clientIP = authHeaders['x-forwarded-for'] || authHeaders['x-real-ip'] || 'unknown';
+      // Step 1: HMAC Signature Validation (replaces header-based auth)
+      authLogger.debug('Validating HMAC signature for cron request', {
+        method: request.method,
+        path: new URL(request.url).pathname,
+        clientIP
+      });
 
-      // Step 1: CRON_SECRET validation
-      const secretValidation = this.validateCronSecret(authHeaders);
-      if (!secretValidation.isValid) {
-        return { ...secretValidation, clientIP };
+      const hmacValidation = validateCronRequestHmac(request);
+      if (!hmacValidation.isValid) {
+        authLogger.warn('HMAC signature validation failed', {
+          error: hmacValidation.error,
+          clientIP,
+          timestamp: hmacValidation.timestamp,
+          skew: hmacValidation.skew
+        });
+        return { 
+          isValid: false, 
+          error: hmacValidation.error || 'HMAC authentication failed',
+          clientIP 
+        };
       }
 
-      // Step 2: IP allowlist validation
+      authLogger.info('HMAC signature validated successfully', {
+        clientIP,
+        timestamp: hmacValidation.timestamp,
+        skew: hmacValidation.skew
+      });
+
+      // Step 2: IP allowlist validation (optional additional security)
       const ipValidation = this.validateIPAllowlist(clientIP);
       if (!ipValidation.isValid) {
         return { ...ipValidation, clientIP };
@@ -52,10 +68,20 @@ export class CronAuthService {
         return { ...rateLimitValidation, clientIP };
       }
 
-      return { isValid: true, clientIP };
+      return { 
+        isValid: true, 
+        clientIP,
+        hmacValidated: true,
+        timestamp: hmacValidation.timestamp,
+        skew: hmacValidation.skew
+      };
 
     } catch (error) {
-      authLogger.error('Authentication validation failed', { error });
+      authLogger.error('Authentication validation failed', { 
+        error: error instanceof Error ? error.message : 'Unknown error',
+        url: request.url,
+        method: request.method
+      });
       return {
         isValid: false,
         error: 'Authentication validation error',
