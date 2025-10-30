@@ -42,27 +42,28 @@ enabled = true
 # Enhanced KV storage for advanced rate limiting, circuit breaker state persistence, and monitoring
 # IMPORTANT: Replace placeholder IDs with actual KV namespace IDs from Cloudflare Dashboard
 # Create KV namespaces with: 
-#   npx wrangler kv:namespace create "RATE_LIMIT_KV"
-#   npx wrangler kv:namespace create "CIRCUIT_BREAKER_KV" 
-#   npx wrangler kv:namespace create "METRICS_KV"
-#   npx wrangler kv:namespace create "RATE_LIMIT_KV" --preview
-#   npx wrangler kv:namespace create "CIRCUIT_BREAKER_KV" --preview
-#   npx wrangler kv:namespace create "METRICS_KV" --preview
+#   npx wrangler kv namespace create "RATE_LIMIT_KV"
+#   npx wrangler kv namespace create "CIRCUIT_BREAKER_KV" 
+#   npx wrangler kv namespace create "METRICS_KV"
+#   npx wrangler kv namespace create "RATE_LIMIT_KV" --preview
+#   npx wrangler kv namespace create "CIRCUIT_BREAKER_KV" --preview
+#   npx wrangler kv namespace create "METRICS_KV" --preview
 
-[[kv_namespaces]]
-binding = "RATE_LIMIT_KV"
-preview_id = "REPLACE_WITH_ACTUAL_PREVIEW_ID" # Replace with actual preview namespace ID
-id = "REPLACE_WITH_ACTUAL_PRODUCTION_ID"     # Replace with actual production namespace ID
+# Commented out until KV namespaces are properly configured
+# [[kv_namespaces]]
+# binding = "RATE_LIMIT_KV"
+# preview_id = "" # Replace with actual preview namespace ID
+# id = ""     # Replace with actual production namespace ID
 
-[[kv_namespaces]]
-binding = "CIRCUIT_BREAKER_KV"
-preview_id = "REPLACE_WITH_ACTUAL_PREVIEW_ID" # Replace with actual preview namespace ID
-id = "REPLACE_WITH_ACTUAL_PRODUCTION_ID"     # Replace with actual production namespace ID
+# [[kv_namespaces]]
+# binding = "CIRCUIT_BREAKER_KV"
+# preview_id = "" # Replace with actual preview namespace ID
+# id = ""     # Replace with actual production namespace ID
 
-[[kv_namespaces]]
-binding = "METRICS_KV"
-preview_id = "REPLACE_WITH_ACTUAL_PREVIEW_ID" # Replace with actual preview namespace ID
-id = "REPLACE_WITH_ACTUAL_PRODUCTION_ID"     # Replace with actual production namespace ID
+# [[kv_namespaces]]
+# binding = "METRICS_KV"
+# preview_id = "" # Replace with actual preview namespace ID
+# id = ""     # Replace with actual production namespace ID
 
 # Build configuration for robust deployment
 # Note: upload exclusions are handled automatically by wrangler
