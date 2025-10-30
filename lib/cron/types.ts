@@ -147,6 +147,9 @@ export interface AuthValidationResult {
   isValid: boolean;
   error?: string;
   clientIP?: string;
+  hmacValidated?: boolean;
+  timestamp?: number;
+  skew?: number;
 }
 
 export interface AuthHeaders {

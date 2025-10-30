@@ -1,5 +1,6 @@
 // index.js - Cloudflare Worker for Cron Trigger
-// Enhanced with timeout handling, retry logic, and comprehensive error management
+// Enhanced with advanced rate limiting, circuit breaker patterns, and comprehensive monitoring
+// Features: Request tracking, adaptive backoff, circuit breaker state persistence, burst protection
 
 export default {
   // Handle HTTP requests (required by Cloudflare Workers)
@@ -10,8 +11,20 @@ export default {
     });
   },
 
-  // Handle scheduled cron events with timeout protection
+  // Handle scheduled cron events with advanced rate limiting mitigation
   async scheduled(event, env, ctx) {
+    // Initialize rate limiting and monitoring services with environment validation
+    const rateLimiter = new AdvancedRateLimiter(
+      env.RATE_LIMIT_KV || null, 
+      env.CIRCUIT_BREAKER_KV || null, 
+      env.METRICS_KV || null
+    );
+    const circuitBreaker = new CircuitBreaker(
+      env.CIRCUIT_BREAKER_KV || null, 
+      rateLimiter
+    );
+    const monitor = new WorkerMonitor(env.METRICS_KV || null);
+    
     // Generate secure execution ID using crypto API
     const generateSecureExecutionId = () => {
       const timestamp = Date.now();
@@ -24,22 +37,87 @@ export default {
     const executionId = generateSecureExecutionId();
     const startTime = Date.now();
     
-    console.log(`[${executionId}] Starting TLDRSEC scheduled cron job execution`);
+    // Log KV storage availability
+    console.log(`[${executionId}] KV Storage availability:`, {
+      rateLimitKV: !!env.RATE_LIMIT_KV,
+      circuitBreakerKV: !!env.CIRCUIT_BREAKER_KV,
+      metricsKV: !!env.METRICS_KV
+    });
     
-    // Configuration - Extended for AI processing workloads
+    console.log(`[${executionId}] Starting TLDRSEC scheduled cron job execution with enhanced rate limiting`);
+    
+    // Enhanced rate limiting configuration with global subrequest awareness
     const WORKER_TIMEOUT_MS = 10 * 60 * 1000; // 10 minutes (maximum Cloudflare limit)
     const REQUEST_TIMEOUT_MS = 9 * 60 * 1000; // 9 minutes for individual request
-    const MAX_ATTEMPTS = 3;
-    const INITIAL_BACKOFF_MS = 2000; // 2 seconds
+    const MAX_ATTEMPTS = 5; // Intelligent retry attempts
+    const INITIAL_BACKOFF_MS = 500; // Fast initial recovery
+    const MAX_BACKOFF_MS = 180000; // 3 minutes maximum backoff for severe rate limiting
+    const JITTER_PERCENTAGE = 30; // Enhanced jitter to prevent thundering herd
+    const RATE_LIMIT_WINDOW_MS = 60000; // 1-minute rate limiting window
+    const MAX_REQUESTS_PER_WINDOW = 30; // Conservative request limit (reduced from 50)
+    const CIRCUIT_BREAKER_THRESHOLD = 3; // Circuit opens after 3 consecutive failures (reduced for faster protection)
+    const GLOBAL_SUBREQUEST_LIMIT = 1800; // Global limit per minute (10% buffer under 2000 limit)
+    const BURST_PROTECTION_WINDOW_MS = 10000; // 10-second burst window
+    const MAX_BURST_REQUESTS = 5; // Maximum requests in burst window
     
     try {
-      // Environment validation
+      // Environment validation with KV storage checks
       const envValidation = validateEnvironment(env);
       if (!envValidation.isValid) {
         throw new Error(`Environment validation failed: ${envValidation.errors.join(', ')}`);
       }
       
       console.log(`[${executionId}] Environment validation passed`);
+      
+      // Initialize monitoring and rate limiting
+      await monitor.recordExecution(executionId, 'started', { startTime });
+      
+      // Check circuit breaker state before proceeding
+      const circuitState = await circuitBreaker.getState();
+      console.log(`[${executionId}] Circuit breaker state: ${circuitState.state} (failures: ${circuitState.failureCount}, last failure: ${circuitState.lastFailureTime})`);
+      
+      if (circuitState.state === 'OPEN') {
+        const timeUntilReset = circuitState.nextRetryTime - Date.now();
+        if (timeUntilReset > 0) {
+          console.log(`[${executionId}] Circuit breaker is OPEN, waiting ${timeUntilReset}ms before retry`);
+          await monitor.recordExecution(executionId, 'circuit_breaker_blocked', { timeUntilReset });
+          return {
+            success: false,
+            reason: 'circuit_breaker_open',
+            nextRetryTime: circuitState.nextRetryTime,
+            executionId
+          };
+        } else {
+          // Try to move to HALF_OPEN state
+          await circuitBreaker.halfOpen();
+          console.log(`[${executionId}] Circuit breaker moved to HALF_OPEN state for testing`);
+        }
+      }
+      
+      // Enhanced rate limiting with global subrequest tracking
+      const rateLimitCheck = await rateLimiter.checkRateLimit(executionId, {
+        windowMs: RATE_LIMIT_WINDOW_MS,
+        maxRequests: MAX_REQUESTS_PER_WINDOW,
+        burstLimit: MAX_BURST_REQUESTS,
+        globalLimit: GLOBAL_SUBREQUEST_LIMIT,
+        burstWindowMs: BURST_PROTECTION_WINDOW_MS
+      });
+      
+      if (!rateLimitCheck.allowed) {
+        console.log(`[${executionId}] Rate limit exceeded: ${rateLimitCheck.reason}, reset in ${rateLimitCheck.resetTimeMs}ms`);
+        console.log(`[${executionId}] Rate limit details:`, {
+          globalUsage: rateLimitCheck.globalUsage,
+          burstUsage: rateLimitCheck.burstUsage,
+          remaining: rateLimitCheck.remaining
+        });
+        await monitor.recordExecution(executionId, 'rate_limited', rateLimitCheck);
+        return {
+          success: false,
+          reason: 'rate_limited',
+          resetTime: Date.now() + rateLimitCheck.resetTimeMs,
+          executionId
+        };
+      }
       
       // Build URLs for Vercel endpoints (async processing with fallback)
       const asyncUrl = `${env.PUBLIC_URL}/api/cron/tier-aware-async`;
@@ -52,12 +130,41 @@ export default {
       console.log(`[${executionId}] PUBLIC_URL: ${env.PUBLIC_URL}`);
       console.log(`[${executionId}] CRON_SECRET configured: ${env.CRON_SECRET ? 'Yes (' + env.CRON_SECRET.length + ' chars)' : 'No'}`);
       
-      // Prepare headers with enhanced tracking and timeout coordination
+      // Generate HMAC signature for secure authentication
+      const urlObj = new URL(url);
+      const method = 'GET';
+      const path = urlObj.pathname;
+      const timestamp = Date.now();
+      
+      // Create HMAC payload: timestamp:method:path
+      const payload = `${timestamp}:${method.toUpperCase()}:${path}`;
+      
+      // Generate HMAC-SHA256 signature
+      const encoder = new TextEncoder();
+      const key = await crypto.subtle.importKey(
+        'raw',
+        encoder.encode(env.CRON_SECRET),
+        { name: 'HMAC', hash: 'SHA-256' },
+        false,
+        ['sign']
+      );
+      const signature = await crypto.subtle.sign('HMAC', key, encoder.encode(payload));
+      const signatureHex = Array.from(new Uint8Array(signature))
+        .map(byte => byte.toString(16).padStart(2, '0'))
+        .join('');
+
+      console.log(`[${executionId}] Generated HMAC signature for secure authentication`, {
+        method,
+        path,
+        timestamp,
+        payloadLength: payload.length,
+        signatureLength: signatureHex.length
+      });
+
+      // Prepare headers with HMAC authentication
       const headers = {
-        'Authorization': `Bearer ${env.CRON_SECRET}`, // Primary auth header
-        'X-Cron-Auth': `Bearer ${env.CRON_SECRET}`, // Backup auth header to avoid Clerk conflicts
         'Content-Type': 'application/json',
-        'User-Agent': 'TLDRSEC-Cloudflare-Worker/2.2 wilfredchen1@gmail.com',
+        'User-Agent': 'TLDRSEC-Cloudflare-Worker-HMAC/2.4.0',
         'X-Cloudflare-Worker': 'tldrsec-cron',
         'X-Cron-Source': 'cloudflare-worker',
         'X-Execution-Id': executionId,
@@ -66,7 +173,10 @@ export default {
         'X-Request-Start-Time': startTime.toString(),
         'X-Cron-Frequency': '10-minutes',
         'X-Processing-Mode': 'ai-enhanced',
-        'X-Debug-Mode': 'true' // Enable debug logging
+        'X-Debug-Mode': 'true',
+        // HMAC Authentication Headers (secure)
+        'X-Hmac-Signature': signatureHex,
+        'X-Hmac-Timestamp': timestamp.toString()
       };
       
       // Add Vercel deployment protection bypass if configured
@@ -76,34 +186,60 @@ export default {
         console.log(`[${executionId}] Configured with deployment protection bypass`);
       }
       
-      // Execute with timeout protection and retry logic
+      // Execute with advanced rate limiting and circuit breaker protection
       let result;
       try {
-        result = await executeWithTimeoutAndRetry({
+        result = await executeWithAdvancedRateLimiting({
           executionId,
           url,
           headers,
           workerTimeoutMs: WORKER_TIMEOUT_MS,
           requestTimeoutMs: REQUEST_TIMEOUT_MS,
           maxAttempts: MAX_ATTEMPTS,
-          initialBackoffMs: INITIAL_BACKOFF_MS
+          initialBackoffMs: INITIAL_BACKOFF_MS,
+          maxBackoffMs: MAX_BACKOFF_MS,
+          jitterPercentage: JITTER_PERCENTAGE,
+          rateLimiter,
+          circuitBreaker,
+          monitor,
+          rateLimitConfig: {
+            windowMs: RATE_LIMIT_WINDOW_MS,
+            maxRequests: MAX_REQUESTS_PER_WINDOW,
+            burstLimit: MAX_BURST_REQUESTS,
+            globalLimit: GLOBAL_SUBREQUEST_LIMIT,
+            burstWindowMs: BURST_PROTECTION_WINDOW_MS,
+            breakerThreshold: CIRCUIT_BREAKER_THRESHOLD
+          }
         });
       } catch (primaryError) {
         const errorType = classifyError(primaryError);
         
-        // Multi-tier fallback: async -> optimized -> original
-        if (useAsync && (errorType === 'ENDPOINT_NOT_FOUND' || errorType === 'AUTHENTICATION_ERROR')) {
-          console.log(`[${executionId}] Async endpoint failed (${errorType}), attempting fallback to optimized endpoint`);
+        // Multi-tier fallback with enhanced rate limiting: async -> optimized -> original
+        if (useAsync && (errorType === 'ENDPOINT_NOT_FOUND' || errorType === 'AUTHENTICATION_ERROR' || errorType === 'RATE_LIMITED')) {
+          console.log(`[${executionId}] Async endpoint failed (${errorType}), attempting fallback to optimized endpoint with rate limiting`);
           
           try {
-            result = await executeWithTimeoutAndRetry({
+            result = await executeWithAdvancedRateLimiting({
               executionId,
               url: optimizedUrl,
               headers,
               workerTimeoutMs: WORKER_TIMEOUT_MS,
               requestTimeoutMs: REQUEST_TIMEOUT_MS,
-              maxAttempts: 1, // Single attempt for fallback
-              initialBackoffMs: INITIAL_BACKOFF_MS
+              maxAttempts: 2, // Limited attempts for fallback endpoints
+              initialBackoffMs: INITIAL_BACKOFF_MS,
+              maxBackoffMs: MAX_BACKOFF_MS,
+              jitterPercentage: JITTER_PERCENTAGE,
+              rateLimiter,
+              circuitBreaker,
+              monitor,
+              rateLimitConfig: {
+                windowMs: RATE_LIMIT_WINDOW_MS,
+                maxRequests: MAX_REQUESTS_PER_WINDOW,
+                burstLimit: MAX_BURST_REQUESTS,
+                globalLimit: GLOBAL_SUBREQUEST_LIMIT,
+                burstWindowMs: BURST_PROTECTION_WINDOW_MS,
+                breakerThreshold: CIRCUIT_BREAKER_THRESHOLD
+              }
             });
             
             console.log(`[${executionId}] Fallback to optimized endpoint successful`);
@@ -111,14 +247,27 @@ export default {
             console.log(`[${executionId}] Optimized endpoint also failed, attempting final fallback to original endpoint`);
             
             try {
-              result = await executeWithTimeoutAndRetry({
+              result = await executeWithAdvancedRateLimiting({
                 executionId,
                 url: fallbackUrl,
                 headers,
                 workerTimeoutMs: WORKER_TIMEOUT_MS,
                 requestTimeoutMs: REQUEST_TIMEOUT_MS,
-                maxAttempts: 1, // Single attempt for final fallback
-                initialBackoffMs: INITIAL_BACKOFF_MS
+                maxAttempts: 2, // Limited attempts for final fallback
+                initialBackoffMs: INITIAL_BACKOFF_MS,
+                maxBackoffMs: MAX_BACKOFF_MS,
+                jitterPercentage: JITTER_PERCENTAGE,
+                rateLimiter,
+                circuitBreaker,
+                monitor,
+                rateLimitConfig: {
+                  windowMs: RATE_LIMIT_WINDOW_MS,
+                  maxRequests: MAX_REQUESTS_PER_WINDOW,
+                  burstLimit: MAX_BURST_REQUESTS,
+                  globalLimit: GLOBAL_SUBREQUEST_LIMIT,
+                  burstWindowMs: BURST_PROTECTION_WINDOW_MS,
+                  breakerThreshold: CIRCUIT_BREAKER_THRESHOLD
+                }
               });
               
               console.log(`[${executionId}] Final fallback to original endpoint successful`);
@@ -134,6 +283,11 @@ export default {
       
       const duration = Date.now() - startTime;
       console.log(`[${executionId}] Cron job completed successfully in ${duration}ms`);
+      
+      // Record successful execution and update circuit breaker
+      await monitor.recordExecution(executionId, 'completed', { duration, success: true });
+      await circuitBreaker.recordSuccess();
+      await rateLimiter.recordSuccess(executionId);
       
       return result;
       
@@ -162,6 +316,15 @@ export default {
         duration,
         stack: error.stack
       });
+      
+      // Record failure and update circuit breaker state
+      try {
+        await monitor.recordExecution(executionId, 'failed', { duration, error: error.message, errorType });
+        await circuitBreaker.recordFailure(error);
+        await rateLimiter.recordFailure(executionId, errorType);
+      } catch (recordingError) {
+        console.error(`[${executionId}] Failed to record failure metrics:`, recordingError);
+      }
       
       // Don't throw - let Cloudflare handle gracefully
       return {
@@ -200,24 +363,61 @@ function validateEnvironment(env) {
 }
 
 /**
- * Execute request with comprehensive timeout and retry logic
+ * Execute request with advanced rate limiting, circuit breaker protection, and intelligent retry logic
  */
-async function executeWithTimeoutAndRetry({
+async function executeWithAdvancedRateLimiting({
   executionId,
   url,
   headers,
   workerTimeoutMs,
   requestTimeoutMs,
   maxAttempts,
-  initialBackoffMs
+  initialBackoffMs,
+  maxBackoffMs,
+  jitterPercentage,
+  rateLimiter,
+  circuitBreaker,
+  monitor,
+  rateLimitConfig
 }) {
   let lastError;
+  let consecutiveRateLimitErrors = 0;
+  const rateLimitBackoffMultiplier = 2; // Extra backoff for rate limiting
   
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     const attemptStartTime = Date.now();
     const remainingWorkerTime = workerTimeoutMs - (attemptStartTime - parseInt(headers['X-Request-Start-Time']));
     
-    console.log(`[${executionId}] Attempt ${attempt}/${maxAttempts}, remaining worker time: ${remainingWorkerTime}ms`);
+    console.log(`[${executionId}] Enhanced attempt ${attempt}/${maxAttempts}:`, {
+      remainingWorkerTime: `${remainingWorkerTime}ms`,
+      circuitState: circuitState.state,
+      failureCount: circuitState.failureCount,
+      lastFailureTime: circuitState.lastFailureTime ? new Date(circuitState.lastFailureTime).toISOString() : null,
+      consecutiveRateLimitErrors,
+      globalRateLimitProtection: true
+    });
+    
+    // Check circuit breaker state before each attempt
+    const circuitState = await circuitBreaker.getState();
+    if (circuitState.state === 'OPEN') {
+      console.log(`[${executionId}] Circuit breaker is OPEN on attempt ${attempt}, aborting`);
+      throw new Error('Circuit breaker is OPEN - too many consecutive failures');
+    }
+    
+    // Check rate limiting before each attempt  
+    const rateLimitCheck = await rateLimiter.checkRateLimit(executionId);
+    if (!rateLimitCheck.allowed) {
+      console.log(`[${executionId}] Rate limited on attempt ${attempt}: ${rateLimitCheck.reason}`);
+      
+      // Wait for rate limit reset if time allows
+      if (rateLimitCheck.resetTimeMs < remainingWorkerTime) {
+        console.log(`[${executionId}] Waiting ${rateLimitCheck.resetTimeMs}ms for rate limit reset`);
+        await new Promise(resolve => setTimeout(resolve, rateLimitCheck.resetTimeMs));
+        continue; // Retry without counting as an attempt
+      } else {
+        throw new Error(`Rate limited and insufficient time to wait for reset: ${rateLimitCheck.resetTimeMs}ms needed, ${remainingWorkerTime}ms available`);
+      }
+    }
     
     // Check if we have enough time for this attempt
     if (remainingWorkerTime < 30000) { // Need at least 30 seconds
@@ -228,19 +428,41 @@ async function executeWithTimeoutAndRetry({
       // Use the smaller of request timeout or remaining worker time
       const effectiveTimeout = Math.min(requestTimeoutMs, remainingWorkerTime - 10000); // 10s buffer
       
+      // Record request attempt
+      await rateLimiter.recordRequest(executionId, url);
+      await monitor.recordAttempt(executionId, attempt, { url, attemptStartTime });
+      
       const result = await executeRequestWithTimeout({
         executionId,
         url,
         headers: {
           ...headers,
           'X-Attempt-Number': attempt.toString(),
-          'X-Effective-Timeout': effectiveTimeout.toString()
+          'X-Effective-Timeout': effectiveTimeout.toString(),
+          'X-Rate-Limit-Retry': consecutiveRateLimitErrors.toString(),
+          'X-Advanced-Retry': 'true',
+          'X-Circuit-State': circuitState.state
         },
         timeoutMs: effectiveTimeout
       });
       
       const attemptDuration = Date.now() - attemptStartTime;
-      console.log(`[${executionId}] Attempt ${attempt} succeeded in ${attemptDuration}ms`);
+      console.log(`[${executionId}] Enhanced attempt ${attempt} succeeded in ${attemptDuration}ms:`, {
+        duration: attemptDuration,
+        url: url.replace(env.PUBLIC_URL, '[PUBLIC_URL]'),
+        circuitStateAfter: 'SUCCESS_RECORDED',
+        rateLimitCountersReset: true,
+        performanceMetrics: {
+          requestDuration: attemptDuration,
+          totalExecutionTime: Date.now() - parseInt(headers['X-Request-Start-Time']),
+          timeoutMargin: effectiveTimeout - attemptDuration
+        }
+      });
+      
+      // Reset failure counters on success
+      consecutiveRateLimitErrors = 0;
+      await circuitBreaker.recordSuccess();
+      await monitor.recordAttempt(executionId, attempt, { url, attemptStartTime, duration: attemptDuration, success: true });
       
       return result;
       
@@ -248,25 +470,219 @@ async function executeWithTimeoutAndRetry({
       const attemptDuration = Date.now() - attemptStartTime;
       lastError = error;
       
-      console.warn(`[${executionId}] Attempt ${attempt} failed after ${attemptDuration}ms:`, error.message);
+      const errorType = classifyError(error);
+      const isRateLimitError = errorType === 'RATE_LIMITED';
+      if (isRateLimitError) {
+        consecutiveRateLimitErrors++;
+      }
+      
+      // Record failure in circuit breaker and monitoring
+      await circuitBreaker.recordFailure(error);
+      await monitor.recordAttempt(executionId, attempt, { 
+        url, 
+        attemptStartTime, 
+        duration: attemptDuration, 
+        success: false, 
+        error: error.message,
+        errorType 
+      });
+      
+      console.warn(`[${executionId}] Enhanced attempt ${attempt} failed after ${attemptDuration}ms:`, {
+        error: error.message,
+        errorType,
+        isRateLimitError,
+        consecutiveRateLimitErrors,
+        circuitState: circuitState.state,
+        circuitFailureCount: circuitState.failureCount,
+        rateLimitHeaders: error.headers ? {
+          retryAfter: error.retryAfter,
+          rateLimitRemaining: error.rateLimitRemaining,
+          rateLimitLimit: error.rateLimitLimit,
+          rateLimitType: error.rateLimitType
+        } : null,
+        performanceMetrics: {
+          attemptDuration,
+          effectiveTimeout,
+          timeoutUtilization: (attemptDuration / effectiveTimeout * 100).toFixed(2) + '%'
+        },
+        nextActions: {
+          willRetry: attempt < maxAttempts && !isNonRetryableError(error),
+          backoffCalculation: 'adaptive_with_jitter'
+        }
+      });
       
       // Don't retry on certain error types
       if (isNonRetryableError(error) || attempt === maxAttempts) {
         throw error;
       }
       
-      // Calculate backoff delay
-      const backoffDelay = Math.min(
-        initialBackoffMs * Math.pow(2, attempt - 1), // Exponential backoff
-        30000 // Max 30 seconds
-      );
+      // Calculate advanced backoff delay with adaptive strategies
+      let backoffDelay = await calculateAdvancedBackoffDelay({
+        attempt,
+        initialBackoffMs,
+        maxBackoffMs,
+        jitterPercentage,
+        isRateLimitError,
+        consecutiveRateLimitErrors,
+        rateLimitBackoffMultiplier,
+        error,
+        rateLimiter,
+        circuitState,
+        executionId
+      });
       
-      console.log(`[${executionId}] Waiting ${backoffDelay}ms before retry...`);
+      console.log(`[${executionId}] Enhanced adaptive backoff calculated:`, {
+        backoffDelay: `${backoffDelay}ms`,
+        consecutiveRateLimitErrors,
+        circuitState: circuitState.state,
+        errorType,
+        adaptiveFactors: {
+          baseExponentialBackoff: true,
+          rateLimitMultiplier: isRateLimitError,
+          circuitBreakerAdjustment: circuitState.state !== 'CLOSED',
+          retryAfterRespected: error.retryAfterMs > 0,
+          jitterApplied: true
+        },
+        nextAttemptETA: new Date(Date.now() + backoffDelay).toISOString()
+      });
       await new Promise(resolve => setTimeout(resolve, backoffDelay));
     }
   }
   
   throw lastError;
+}
+
+/**
+ * Calculate advanced backoff delay with adaptive strategies and circuit breaker awareness
+ */
+async function calculateAdvancedBackoffDelay({
+  attempt,
+  initialBackoffMs,
+  maxBackoffMs,
+  jitterPercentage,
+  isRateLimitError,
+  consecutiveRateLimitErrors,
+  rateLimitBackoffMultiplier,
+  error,
+  rateLimiter,
+  circuitState,
+  executionId
+}) {
+  // Extract retry-after header if available
+  let retryAfter = 0;
+  if (error.headers && error.headers['retry-after']) {
+    retryAfter = parseInt(error.headers['retry-after']) * 1000;
+  }
+  
+  // Get enhanced adaptive backoff recommendations from rate limiter
+  const adaptiveRecommendation = await rateLimiter.getBackoffRecommendation(executionId, isRateLimitError, {
+    consecutiveErrors: consecutiveRateLimitErrors,
+    errorType: error.rateLimitType,
+    circuitState: circuitState.state
+  });
+  
+  // Base exponential backoff with enhanced adaptive adjustments
+  let baseDelay = Math.min(
+    initialBackoffMs * Math.pow(2, attempt - 1),
+    maxBackoffMs
+  );
+  
+  // Enhanced rate limiting multiplier with different strategies per error type
+  if (isRateLimitError && consecutiveRateLimitErrors > 1) {
+    const errorTypeMultiplier = getErrorTypeMultiplier(error.rateLimitType);
+    baseDelay *= Math.pow(rateLimitBackoffMultiplier * errorTypeMultiplier, Math.min(consecutiveRateLimitErrors - 1, 5));
+  }
+  
+  // Apply circuit breaker state adjustments with more nuanced timing
+  if (circuitState.state === 'HALF_OPEN') {
+    // Be more conservative in half-open state
+    baseDelay *= 2.0; // Increased from 1.5
+  } else if (circuitState.failureCount > 0) {
+    // Gradual backoff based on failure count
+    baseDelay *= (1 + circuitState.failureCount * 0.2);
+  }
+  
+  // Use adaptive recommendation with priority based on confidence
+  if (adaptiveRecommendation && adaptiveRecommendation.recommendedDelayMs > 0) {
+    if (adaptiveRecommendation.confidence > 0.7) {
+      baseDelay = adaptiveRecommendation.recommendedDelayMs;
+    } else {
+      baseDelay = Math.max(baseDelay, adaptiveRecommendation.recommendedDelayMs);
+    }
+  }
+  
+  // Enhanced retry-after handling with error-specific parsing
+  let retryAfterDelay = 0;
+  if (error.retryAfterMs && error.retryAfterMs > 0) {
+    retryAfterDelay = error.retryAfterMs;
+  } else if (error.retryAfterSeconds && error.retryAfterSeconds > 0) {
+    retryAfterDelay = error.retryAfterSeconds * 1000;
+  }
+  
+  // Use retry-after with safety margin for different rate limit types
+  if (retryAfterDelay > 0) {
+    const safetyMarginMs = getSafetyMarginForRateLimitType(error.rateLimitType);
+    baseDelay = Math.max(baseDelay, retryAfterDelay + safetyMarginMs);
+  }
+  
+  // Enhanced jitter with adaptive sizing based on error patterns
+  const adaptiveJitterMultiplier = getAdaptiveJitterMultiplier(isRateLimitError, consecutiveRateLimitErrors, error.rateLimitType);
+  const effectiveJitter = jitterPercentage * adaptiveJitterMultiplier;
+  const jitter = baseDelay * (effectiveJitter / 100) * (Math.random() - 0.5) * 2;
+  const finalDelay = Math.max(1000, baseDelay + jitter); // Minimum 1s (increased from 500ms)
+  
+  return Math.min(finalDelay, maxBackoffMs);
+}
+
+/**
+ * Get error type specific multiplier for backoff calculation
+ */
+function getErrorTypeMultiplier(rateLimitType) {
+  switch (rateLimitType) {
+    case 'cloudflare': return 1.5; // Cloudflare is strict
+    case 'vercel': return 1.3; // Vercel has reasonable limits
+    case 'aws_api_gateway': return 2.0; // AWS can be very strict
+    default: return 1.2; // Conservative default
+  }
+}
+
+/**
+ * Get safety margin for different rate limit types
+ */
+function getSafetyMarginForRateLimitType(rateLimitType) {
+  switch (rateLimitType) {
+    case 'cloudflare': return 5000; // 5 second margin
+    case 'vercel': return 2000; // 2 second margin
+    case 'aws_api_gateway': return 10000; // 10 second margin
+    default: return 3000; // 3 second default margin
+  }
+}
+
+/**
+ * Calculate adaptive jitter multiplier based on error patterns
+ */
+function getAdaptiveJitterMultiplier(isRateLimitError, consecutiveErrors, rateLimitType) {
+  let multiplier = 1.0;
+  
+  if (isRateLimitError) {
+    multiplier *= 1.8; // Increase jitter for rate limit errors
+    
+    // Increase jitter with consecutive errors
+    multiplier *= (1 + consecutiveErrors * 0.3);
+    
+    // Adjust based on rate limit type
+    switch (rateLimitType) {
+      case 'cloudflare':
+      case 'aws_api_gateway':
+        multiplier *= 1.4; // More jitter for strict systems
+        break;
+      case 'vercel':
+        multiplier *= 1.2; // Moderate jitter
+        break;
+    }
+  }
+  
+  return Math.min(multiplier, 3.0); // Cap at 3x jitter
 }
 
 /**
@@ -311,7 +727,50 @@ async function executeRequestWithTimeout({ executionId, url, headers, timeoutMs 
     }
     
     if (response.status === 429) {
-      throw new Error('Rate limited (429)');
+      // Enhanced 429 error with comprehensive rate limit header parsing
+      const retryAfter = response.headers.get('retry-after');
+      const rateLimitReset = response.headers.get('x-ratelimit-reset');
+      const rateLimitRemaining = response.headers.get('x-ratelimit-remaining');
+      const rateLimitLimit = response.headers.get('x-ratelimit-limit');
+      const cloudflareRayId = response.headers.get('cf-ray');
+      const retryAfterMs = response.headers.get('retry-after-ms');
+      
+      // Parse retry-after (can be seconds or HTTP date)
+      let retryAfterSeconds = 0;
+      if (retryAfter) {
+        if (/^\d+$/.test(retryAfter)) {
+          retryAfterSeconds = parseInt(retryAfter);
+        } else {
+          // HTTP date format
+          const retryDate = new Date(retryAfter);
+          retryAfterSeconds = Math.max(0, (retryDate.getTime() - Date.now()) / 1000);
+        }
+      }
+      
+      const error = new Error('Rate limited (429)');
+      error.headers = Object.fromEntries(response.headers.entries());
+      error.retryAfter = retryAfter;
+      error.retryAfterSeconds = retryAfterSeconds;
+      error.retryAfterMs = retryAfterMs ? parseInt(retryAfterMs) : retryAfterSeconds * 1000;
+      error.rateLimitReset = rateLimitReset;
+      error.rateLimitRemaining = rateLimitRemaining;
+      error.rateLimitLimit = rateLimitLimit;
+      error.cloudflareRayId = cloudflareRayId;
+      error.rateLimitType = detectRateLimitType(response.headers);
+      
+      console.warn(`[${executionId}] Enhanced rate limit details:`, {
+        retryAfter,
+        retryAfterSeconds,
+        retryAfterMs: error.retryAfterMs,
+        rateLimitReset, 
+        rateLimitRemaining,
+        rateLimitLimit,
+        rateLimitType: error.rateLimitType,
+        cloudflareRayId,
+        allHeaders: Object.fromEntries(response.headers.entries())
+      });
+      
+      throw error;
     }
     
     const responseText = await response.text();
@@ -338,6 +797,35 @@ async function executeRequestWithTimeout({ executionId, url, headers, timeoutMs 
   } finally {
     clearTimeout(timeoutId);
   }
+}
+
+/**
+ * Detect the type of rate limiting from response headers
+ */
+function detectRateLimitType(headers) {
+  const headersObj = Object.fromEntries(headers.entries());
+  
+  // Cloudflare rate limiting
+  if (headersObj['cf-ray']) {
+    return 'cloudflare';
+  }
+  
+  // Vercel rate limiting
+  if (headersObj['x-vercel-id'] || headersObj['server']?.includes('Vercel')) {
+    return 'vercel';
+  }
+  
+  // Generic rate limiting
+  if (headersObj['x-ratelimit-limit']) {
+    return 'standard';
+  }
+  
+  // API Gateway or custom
+  if (headersObj['x-amzn-requestid']) {
+    return 'aws_api_gateway';
+  }
+  
+  return 'unknown';
 }
 
 /**
@@ -378,4 +866,894 @@ function isNonRetryableError(error) {
   return [
     'AUTHENTICATION_ERROR'
   ].includes(errorType);
+}
+
+/**
+ * Advanced Rate Limiter using Cloudflare KV storage for persistent tracking
+ * Features: Request tracking, adaptive backoff, burst protection, circuit breaker integration
+ */
+class AdvancedRateLimiter {
+  constructor(rateLimitKV, circuitBreakerKV, metricsKV) {
+    this.rateLimitKV = rateLimitKV;
+    this.circuitBreakerKV = circuitBreakerKV;
+    this.metricsKV = metricsKV;
+    this.memoryCache = new Map(); // Fallback for KV failures
+    this.lastCleanup = 0;
+  }
+
+  /**
+   * Check if request is allowed based on enhanced rate limiting rules with global tracking
+   */
+  async checkRateLimit(executionId, options = {}) {
+    const {
+      windowMs = 60000,        // 1 minute window
+      maxRequests = 30,        // Conservative limit (reduced)
+      burstLimit = 5,          // Burst protection (reduced)
+      globalLimit = 1800,      // Global subrequest limit per minute
+      burstWindowMs = 10000,   // 10-second burst window
+      keyPrefix = 'rate_limit'
+    } = options;
+
+    const now = Date.now();
+    const windowStart = Math.floor(now / windowMs) * windowMs;
+    const burstWindowStart = Math.floor(now / burstWindowMs) * burstWindowMs;
+    
+    const localKey = `${keyPrefix}:local:${windowStart}`;
+    const globalKey = `${keyPrefix}:global:${windowStart}`;
+    const burstKey = `${keyPrefix}:burst:${burstWindowStart}`;
+
+    try {
+      // Check KV storage first
+      if (this.rateLimitKV) {
+        return await this.checkRateLimitKV({
+          localKey, 
+          globalKey, 
+          burstKey, 
+          maxRequests, 
+          burstLimit, 
+          globalLimit,
+          windowMs, 
+          burstWindowMs,
+          now
+        });
+      } else {
+        // Fallback to memory cache
+        return this.checkRateLimitMemory({
+          localKey, 
+          globalKey, 
+          burstKey, 
+          maxRequests, 
+          burstLimit, 
+          globalLimit,
+          windowMs, 
+          burstWindowMs,
+          now
+        });
+      }
+    } catch (error) {
+      console.error('Rate limit check failed, allowing request (fail-open)', error);
+      // Fail-open for availability - allow request but log the failure
+      return {
+        allowed: true,
+        reason: 'rate_limiter_failed',
+        resetTimeMs: windowMs,
+        remaining: maxRequests - 1,
+        errorOccurred: true
+      };
+    }
+  }
+
+  /**
+   * Enhanced KV-based rate limiting with global subrequest tracking
+   */
+  async checkRateLimitKV({ localKey, globalKey, burstKey, maxRequests, burstLimit, globalLimit, windowMs, burstWindowMs, now }) {
+    // Get current counts for local, global, and burst tracking
+    const [localCount, globalCount, burstCount] = await Promise.all([
+      this.rateLimitKV.get(localKey, { type: 'json' }),
+      this.rateLimitKV.get(globalKey, { type: 'json' }),
+      this.rateLimitKV.get(burstKey, { type: 'json' })
+    ]);
+
+    const localRequestCount = localCount?.count || 0;
+    const globalRequestCount = globalCount?.count || 0;
+    const burstRequestCount = burstCount?.count || 0;
+    
+    const currentBurstWindow = Math.floor(now / burstWindowMs) * burstWindowMs;
+    const burstWindowStart = burstCount?.windowStart || currentBurstWindow;
+
+    // Check burst protection first (highest priority)
+    if (burstWindowStart === currentBurstWindow && burstRequestCount >= burstLimit) {
+      return {
+        allowed: false,
+        reason: 'burst_limit_exceeded',
+        resetTimeMs: burstWindowMs - (now % burstWindowMs),
+        remaining: 0,
+        burstUsage: burstRequestCount,
+        burstProtection: true
+      };
+    }
+
+    // Check global subrequest limit (Cloudflare limit protection)
+    if (globalRequestCount >= globalLimit) {
+      return {
+        allowed: false,
+        reason: 'global_subrequest_limit_exceeded',
+        resetTimeMs: windowMs - (now % windowMs),
+        remaining: 0,
+        globalUsage: globalRequestCount,
+        globalLimit: globalLimit
+      };
+    }
+
+    // Check local rate limit
+    if (localRequestCount >= maxRequests) {
+      return {
+        allowed: false,
+        reason: 'local_rate_limit_exceeded', 
+        resetTimeMs: windowMs - (now % windowMs),
+        remaining: 0,
+        localUsage: localRequestCount
+      };
+    }
+
+    // All checks passed - increment all counters atomically
+    const ttlSeconds = Math.ceil(windowMs / 1000);
+    const burstTtlSeconds = Math.ceil(burstWindowMs / 1000);
+    const windowStart = Math.floor(now / windowMs) * windowMs;
+
+    await Promise.all([
+      // Increment local counter
+      this.rateLimitKV.put(localKey, JSON.stringify({ 
+        count: localRequestCount + 1, 
+        windowStart: windowStart,
+        lastUpdate: now
+      }), { expirationTtl: ttlSeconds }),
+      
+      // Increment global counter (shared across all worker instances)
+      this.rateLimitKV.put(globalKey, JSON.stringify({ 
+        count: globalRequestCount + 1, 
+        windowStart: windowStart,
+        lastUpdate: now,
+        instances: (globalCount?.instances || new Set()).add(crypto.randomUUID().substring(0, 8))
+      }), { expirationTtl: ttlSeconds }),
+      
+      // Increment burst counter
+      this.rateLimitKV.put(burstKey, JSON.stringify({ 
+        count: burstWindowStart === currentBurstWindow ? burstRequestCount + 1 : 1,
+        windowStart: currentBurstWindow,
+        lastUpdate: now
+      }), { expirationTtl: burstTtlSeconds })
+    ]);
+
+    return {
+      allowed: true,
+      remaining: maxRequests - (localRequestCount + 1),
+      globalRemaining: globalLimit - (globalRequestCount + 1),
+      burstRemaining: burstLimit - (burstRequestCount + 1),
+      resetTimeMs: windowMs - (now % windowMs),
+      localUsage: localRequestCount + 1,
+      globalUsage: globalRequestCount + 1,
+      burstUsage: burstRequestCount + 1
+    };
+  }
+
+  /**
+   * Enhanced memory-based rate limiting fallback with global tracking simulation
+   */
+  checkRateLimitMemory({ localKey, globalKey, burstKey, maxRequests, burstLimit, globalLimit, windowMs, burstWindowMs, now }) {
+    this.cleanupExpiredEntries(now);
+
+    const localEntry = this.memoryCache.get(localKey) || { count: 0, resetTime: now + windowMs };
+    const globalEntry = this.memoryCache.get(globalKey) || { count: 0, resetTime: now + windowMs };
+    const burstEntry = this.memoryCache.get(burstKey) || { count: 0, resetTime: now + burstWindowMs };
+
+    // Check burst limit
+    if (burstEntry.resetTime > now && burstEntry.count >= burstLimit) {
+      return {
+        allowed: false,
+        reason: 'burst_limit_exceeded_memory',
+        resetTimeMs: burstEntry.resetTime - now,
+        remaining: 0,
+        burstUsage: burstEntry.count,
+        burstProtection: true,
+        usingMemoryFallback: true
+      };
+    }
+
+    // Check global limit (simulated in memory)
+    if (globalEntry.resetTime > now && globalEntry.count >= globalLimit) {
+      return {
+        allowed: false,
+        reason: 'global_subrequest_limit_exceeded_memory',
+        resetTimeMs: globalEntry.resetTime - now,
+        remaining: 0,
+        globalUsage: globalEntry.count,
+        globalLimit: globalLimit,
+        usingMemoryFallback: true
+      };
+    }
+
+    // Check local rate limit
+    if (localEntry.resetTime > now && localEntry.count >= maxRequests) {
+      return {
+        allowed: false,
+        reason: 'local_rate_limit_exceeded_memory',
+        resetTimeMs: localEntry.resetTime - now,
+        remaining: 0,
+        localUsage: localEntry.count,
+        usingMemoryFallback: true
+      };
+    }
+
+    // Update all counters
+    if (localEntry.resetTime <= now) {
+      localEntry.count = 1;
+      localEntry.resetTime = now + windowMs;
+    } else {
+      localEntry.count++;
+    }
+
+    if (globalEntry.resetTime <= now) {
+      globalEntry.count = 1;
+      globalEntry.resetTime = now + windowMs;
+    } else {
+      globalEntry.count++;
+    }
+
+    if (burstEntry.resetTime <= now) {
+      burstEntry.count = 1;
+      burstEntry.resetTime = now + burstWindowMs;
+    } else {
+      burstEntry.count++;
+    }
+
+    this.memoryCache.set(localKey, localEntry);
+    this.memoryCache.set(globalKey, globalEntry);
+    this.memoryCache.set(burstKey, burstEntry);
+
+    return {
+      allowed: true,
+      remaining: maxRequests - localEntry.count,
+      globalRemaining: globalLimit - globalEntry.count,
+      burstRemaining: burstLimit - burstEntry.count,
+      resetTimeMs: localEntry.resetTime - now,
+      localUsage: localEntry.count,
+      globalUsage: globalEntry.count,
+      burstUsage: burstEntry.count,
+      usingMemoryFallback: true
+    };
+  }
+
+  /**
+   * Record successful request for adaptive algorithms
+   */
+  async recordRequest(executionId, url) {
+    try {
+      if (this.metricsKV) {
+        const requestData = {
+          executionId,
+          url,
+          timestamp: Date.now(),
+          success: null // Will be updated later
+        };
+        await this.metricsKV.put(`request:${executionId}`, JSON.stringify(requestData), { expirationTtl: 3600 });
+      }
+    } catch (error) {
+      console.warn('Failed to record request metrics:', error);
+    }
+  }
+
+  /**
+   * Record successful completion
+   */
+  async recordSuccess(executionId) {
+    try {
+      if (this.metricsKV) {
+        const key = `request:${executionId}`;
+        const existing = await this.metricsKV.get(key, { type: 'json' });
+        if (existing) {
+          existing.success = true;
+          existing.completedAt = Date.now();
+          await this.metricsKV.put(key, JSON.stringify(existing), { expirationTtl: 3600 });
+        }
+      }
+    } catch (error) {
+      console.warn('Failed to record success metrics:', error);
+    }
+  }
+
+  /**
+   * Record failure with error type
+   */
+  async recordFailure(executionId, errorType) {
+    try {
+      if (this.metricsKV) {
+        const key = `request:${executionId}`;
+        const existing = await this.metricsKV.get(key, { type: 'json' });
+        if (existing) {
+          existing.success = false;
+          existing.errorType = errorType;
+          existing.failedAt = Date.now();
+          await this.metricsKV.put(key, JSON.stringify(existing), { expirationTtl: 3600 });
+        }
+      }
+    } catch (error) {
+      console.warn('Failed to record failure metrics:', error);
+    }
+  }
+
+  /**
+   * Get enhanced adaptive backoff recommendation based on recent patterns and error analysis
+   */
+  async getBackoffRecommendation(executionId, isRateLimitError, options = {}) {
+    try {
+      const { consecutiveErrors = 0, errorType = 'unknown', circuitState = 'CLOSED' } = options;
+      
+      if (!this.metricsKV) {
+        return this.getBasicBackoffRecommendation(isRateLimitError, consecutiveErrors, errorType);
+      }
+
+      // Get recent error patterns from KV storage
+      const recentErrorsKey = 'recent_errors';
+      const recentErrors = await this.metricsKV.get(recentErrorsKey, { type: 'json' }) || [];
+      
+      // Analyze error patterns
+      const errorAnalysis = this.analyzeErrorPatterns(recentErrors, errorType);
+      
+      // Calculate recommendation based on multiple factors
+      let recommendedDelayMs = 0;
+      let confidence = 0.5; // Default confidence
+      
+      if (isRateLimitError) {
+        // Base delay for rate limit errors
+        recommendedDelayMs = 15000; // 15 seconds base
+        
+        // Adjust based on error type
+        switch (errorType) {
+          case 'cloudflare':
+            recommendedDelayMs = 45000; // 45 seconds for Cloudflare
+            confidence = 0.9;
+            break;
+          case 'vercel':
+            recommendedDelayMs = 30000; // 30 seconds for Vercel
+            confidence = 0.8;
+            break;
+          case 'aws_api_gateway':
+            recommendedDelayMs = 60000; // 60 seconds for AWS
+            confidence = 0.9;
+            break;
+          default:
+            recommendedDelayMs = 25000; // 25 seconds default
+            confidence = 0.6;
+        }
+        
+        // Increase delay based on consecutive errors
+        if (consecutiveErrors > 1) {
+          recommendedDelayMs *= Math.pow(1.5, Math.min(consecutiveErrors - 1, 4));
+          confidence = Math.min(confidence + 0.1, 0.95);
+        }
+        
+        // Adjust based on recent error patterns
+        if (errorAnalysis.frequency > 0.3) { // High error frequency
+          recommendedDelayMs *= 2.0;
+          confidence = Math.min(confidence + 0.2, 0.95);
+        }
+        
+        // Circuit breaker state adjustment
+        if (circuitState === 'HALF_OPEN') {
+          recommendedDelayMs *= 1.5;
+          confidence = Math.min(confidence + 0.1, 0.95);
+        }
+      }
+      
+      // Store current error for pattern analysis
+      if (isRateLimitError) {
+        await this.recordErrorPattern(executionId, errorType, consecutiveErrors);
+      }
+
+      return { 
+        recommendedDelayMs: Math.min(recommendedDelayMs, 180000), // Cap at 3 minutes
+        confidence,
+        errorAnalysis,
+        reasoning: `${errorType} rate limit with ${consecutiveErrors} consecutive errors`
+      };
+    } catch (error) {
+      console.warn('Failed to get adaptive backoff recommendation:', error);
+      return this.getBasicBackoffRecommendation(isRateLimitError, consecutiveErrors || 0, errorType || 'unknown');
+    }
+  }
+  
+  /**
+   * Basic backoff recommendation when KV storage is unavailable
+   */
+  getBasicBackoffRecommendation(isRateLimitError, consecutiveErrors, errorType) {
+    if (!isRateLimitError) {
+      return { recommendedDelayMs: 0, confidence: 0.5 };
+    }
+    
+    let baseDelay = 20000; // 20 seconds base
+    
+    // Adjust based on error type
+    switch (errorType) {
+      case 'cloudflare':
+        baseDelay = 40000;
+        break;
+      case 'aws_api_gateway':
+        baseDelay = 50000;
+        break;
+      case 'vercel':
+        baseDelay = 25000;
+        break;
+    }
+    
+    // Apply consecutive error multiplier
+    const delayMs = baseDelay * Math.pow(1.4, Math.min(consecutiveErrors, 4));
+    
+    return { 
+      recommendedDelayMs: Math.min(delayMs, 120000), // Cap at 2 minutes
+      confidence: 0.6,
+      fallbackMode: true
+    };
+  }
+  
+  /**
+   * Analyze recent error patterns for adaptive recommendations
+   */
+  analyzeErrorPatterns(recentErrors, currentErrorType) {
+    const now = Date.now();
+    const oneHourAgo = now - 3600000; // 1 hour
+    
+    // Filter recent errors within the last hour
+    const recentRelevantErrors = recentErrors.filter(error => 
+      error.timestamp > oneHourAgo && error.errorType === currentErrorType
+    );
+    
+    const totalRecentRequests = recentErrors.filter(error => error.timestamp > oneHourAgo).length;
+    
+    return {
+      frequency: totalRecentRequests > 0 ? recentRelevantErrors.length / totalRecentRequests : 0,
+      count: recentRelevantErrors.length,
+      avgInterval: this.calculateAverageInterval(recentRelevantErrors),
+      trend: this.calculateErrorTrend(recentRelevantErrors)
+    };
+  }
+  
+  /**
+   * Calculate average interval between errors
+   */
+  calculateAverageInterval(errors) {
+    if (errors.length < 2) return 0;
+    
+    const intervals = [];
+    for (let i = 1; i < errors.length; i++) {
+      intervals.push(errors[i].timestamp - errors[i-1].timestamp);
+    }
+    
+    return intervals.reduce((sum, interval) => sum + interval, 0) / intervals.length;
+  }
+  
+  /**
+   * Calculate error trend (increasing, decreasing, stable)
+   */
+  calculateErrorTrend(errors) {
+    if (errors.length < 3) return 'insufficient_data';
+    
+    const now = Date.now();
+    const thirtyMinutesAgo = now - 1800000;
+    const sixtyMinutesAgo = now - 3600000;
+    
+    const recentErrors = errors.filter(e => e.timestamp > thirtyMinutesAgo).length;
+    const olderErrors = errors.filter(e => e.timestamp > sixtyMinutesAgo && e.timestamp <= thirtyMinutesAgo).length;
+    
+    if (recentErrors > olderErrors * 1.5) return 'increasing';
+    if (recentErrors < olderErrors * 0.5) return 'decreasing';
+    return 'stable';
+  }
+  
+  /**
+   * Record error pattern for future analysis
+   */
+  async recordErrorPattern(executionId, errorType, consecutiveErrors) {
+    try {
+      if (!this.metricsKV) return;
+      
+      const recentErrorsKey = 'recent_errors';
+      const existing = await this.metricsKV.get(recentErrorsKey, { type: 'json' }) || [];
+      
+      // Add new error
+      existing.push({
+        executionId,
+        errorType,
+        consecutiveErrors,
+        timestamp: Date.now()
+      });
+      
+      // Keep only last 100 errors
+      const trimmed = existing.slice(-100);
+      
+      // Store with 24 hour TTL
+      await this.metricsKV.put(recentErrorsKey, JSON.stringify(trimmed), { expirationTtl: 86400 });
+    } catch (error) {
+      console.warn('Failed to record error pattern:', error);
+    }
+  }
+
+  /**
+   * Cleanup expired memory cache entries
+   */
+  cleanupExpiredEntries(now) {
+    if (now - this.lastCleanup > 60000) { // Cleanup every minute
+      for (const [key, entry] of this.memoryCache.entries()) {
+        if (entry.resetTime <= now) {
+          this.memoryCache.delete(key);
+        }
+      }
+      this.lastCleanup = now;
+    }
+  }
+}
+
+/**
+ * Circuit Breaker with KV state persistence for Cloudflare Workers
+ * Features: State persistence, failure tracking, automatic recovery
+ */
+class CircuitBreaker {
+  constructor(kvStorage, rateLimiter) {
+    this.kvStorage = kvStorage;
+    this.rateLimiter = rateLimiter;
+    this.memoryState = {
+      state: 'CLOSED',
+      failureCount: 0,
+      lastFailureTime: null,
+      nextRetryTime: null
+    };
+    this.stateLoaded = false;
+  }
+
+  /**
+   * Get current circuit breaker state (load from KV if needed)
+   */
+  async getState() {
+    if (!this.stateLoaded) {
+      await this.loadStateFromKV();
+    }
+    return { ...this.memoryState };
+  }
+
+  /**
+   * Load state from KV storage
+   */
+  async loadStateFromKV() {
+    try {
+      if (this.kvStorage) {
+        const stored = await this.kvStorage.get('circuit_breaker_state', { type: 'json' });
+        if (stored) {
+          this.memoryState = { ...stored };
+        }
+      }
+    } catch (error) {
+      console.warn('Failed to load circuit breaker state from KV:', error);
+    }
+    this.stateLoaded = true;
+  }
+
+  /**
+   * Save state to KV storage
+   */
+  async saveStateToKV() {
+    try {
+      if (this.kvStorage) {
+        await this.kvStorage.put('circuit_breaker_state', JSON.stringify(this.memoryState), {
+          expirationTtl: 3600 // 1 hour TTL
+        });
+      }
+    } catch (error) {
+      console.warn('Failed to save circuit breaker state to KV:', error);
+    }
+  }
+
+  /**
+   * Record successful operation
+   */
+  async recordSuccess() {
+    const state = await this.getState();
+    
+    if (state.state === 'HALF_OPEN' || state.failureCount > 0) {
+      this.memoryState.state = 'CLOSED';
+      this.memoryState.failureCount = 0;
+      this.memoryState.lastFailureTime = null;
+      this.memoryState.nextRetryTime = null;
+      await this.saveStateToKV();
+      
+      console.log('Circuit breaker: Success recorded, state reset to CLOSED');
+    }
+  }
+
+  /**
+   * Record failed operation
+   */
+  async recordFailure(error) {
+    await this.getState(); // Ensure state is loaded
+    
+    this.memoryState.failureCount++;
+    this.memoryState.lastFailureTime = Date.now();
+    
+    const threshold = 3; // Open circuit after 3 failures (reduced for faster protection)
+    const recoveryTimeMs = 180000; // 3 minutes recovery time (reduced from 5 minutes)
+    
+    if (this.memoryState.failureCount >= threshold) {
+      this.memoryState.state = 'OPEN';
+      this.memoryState.nextRetryTime = Date.now() + recoveryTimeMs;
+      
+      console.log(`[CIRCUIT_BREAKER] State changed to OPEN:`, {
+        triggerFailureCount: this.memoryState.failureCount,
+        threshold,
+        nextRetryTime: new Date(this.memoryState.nextRetryTime).toISOString(),
+        lastFailureTime: new Date(this.memoryState.lastFailureTime).toISOString(),
+        recoveryTimeMs,
+        errorType: error?.message?.includes('429') ? 'rate_limit' : 'other'
+      });
+    }
+    
+    await this.saveStateToKV();
+  }
+
+  /**
+   * Attempt to move to half-open state
+   */
+  async halfOpen() {
+    this.memoryState.state = 'HALF_OPEN';
+    await this.saveStateToKV();
+    console.log('Circuit breaker: Moved to HALF_OPEN state for testing');
+  }
+
+  /**
+   * Reset circuit breaker to closed state
+   */
+  async reset() {
+    this.memoryState.state = 'CLOSED';
+    this.memoryState.failureCount = 0;
+    this.memoryState.lastFailureTime = null;
+    this.memoryState.nextRetryTime = null;
+    await this.saveStateToKV();
+    console.log('Circuit breaker: Manually reset to CLOSED state');
+  }
+}
+
+/**
+ * Worker Monitor for metrics collection and performance tracking
+ * Features: Execution tracking, performance metrics, error analysis
+ */
+class WorkerMonitor {
+  constructor(metricsKV) {
+    this.metricsKV = metricsKV;
+    this.memoryMetrics = {
+      executions: [],
+      attempts: [],
+      performanceData: []
+    };
+  }
+
+  /**
+   * Record execution start/completion/failure with enhanced debugging information
+   */
+  async recordExecution(executionId, status, metadata = {}) {
+    const record = {
+      executionId,
+      status, // 'started', 'completed', 'failed', 'circuit_breaker_blocked', 'rate_limited'
+      timestamp: Date.now(),
+      debugInfo: {
+        workerVersion: '2.3.0-enhanced',
+        kvStorageAvailable: !!this.metricsKV,
+        rateLimitingStrategy: 'adaptive-global-aware',
+        circuitBreakerEnabled: true
+      },
+      ...metadata
+    };
+
+    try {
+      if (this.metricsKV) {
+        await this.metricsKV.put(`execution:${executionId}:${status}`, JSON.stringify(record), {
+          expirationTtl: 86400 // 24 hours
+        });
+        
+        // Also maintain aggregated statistics
+        await this.updateAggregatedStats(status, metadata);
+      }
+      
+      // Also store in memory for immediate access
+      this.memoryMetrics.executions.push(record);
+      this.trimMemoryMetrics();
+      
+      // Enhanced logging for debugging
+      if (status === 'failed' || status === 'rate_limited' || status === 'circuit_breaker_blocked') {
+        console.warn(`[${executionId}] Execution recorded as ${status}:`, {
+          timestamp: new Date(record.timestamp).toISOString(),
+          metadata: metadata,
+          debugInfo: record.debugInfo
+        });
+      } else {
+        console.log(`[${executionId}] Execution recorded as ${status}`);
+      }
+    } catch (error) {
+      console.warn(`[${executionId}] Failed to record execution metrics:`, {
+        error: error.message,
+        status,
+        metadataKeys: Object.keys(metadata)
+      });
+    }
+  }
+  
+  /**
+   * Update aggregated statistics for monitoring dashboard
+   */
+  async updateAggregatedStats(status, metadata) {
+    try {
+      const statsKey = 'aggregated_stats';
+      const existing = await this.metricsKV.get(statsKey, { type: 'json' }) || {
+        totalExecutions: 0,
+        successful: 0,
+        failed: 0,
+        rateLimited: 0,
+        circuitBreakerBlocked: 0,
+        lastUpdated: Date.now()
+      };
+      
+      existing.totalExecutions++;
+      
+      switch (status) {
+        case 'completed':
+          existing.successful++;
+          break;
+        case 'failed':
+          existing.failed++;
+          break;
+        case 'rate_limited':
+          existing.rateLimited++;
+          break;
+        case 'circuit_breaker_blocked':
+          existing.circuitBreakerBlocked++;
+          break;
+      }
+      
+      existing.lastUpdated = Date.now();
+      existing.successRate = (existing.successful / existing.totalExecutions * 100).toFixed(2);
+      
+      await this.metricsKV.put(statsKey, JSON.stringify(existing), { expirationTtl: 86400 });
+    } catch (error) {
+      console.warn('Failed to update aggregated stats:', error);
+    }
+  }
+
+  /**
+   * Record individual attempt within an execution
+   */
+  async recordAttempt(executionId, attemptNumber, metadata = {}) {
+    const record = {
+      executionId,
+      attemptNumber,
+      timestamp: Date.now(),
+      ...metadata
+    };
+
+    try {
+      if (this.metricsKV) {
+        await this.metricsKV.put(`attempt:${executionId}:${attemptNumber}`, JSON.stringify(record), {
+          expirationTtl: 86400
+        });
+      }
+      
+      this.memoryMetrics.attempts.push(record);
+      this.trimMemoryMetrics();
+    } catch (error) {
+      console.warn('Failed to record attempt metrics:', error);
+    }
+  }
+
+  /**
+   * Record performance data
+   */
+  async recordPerformance(executionId, performanceMetrics) {
+    const record = {
+      executionId,
+      timestamp: Date.now(),
+      ...performanceMetrics
+    };
+
+    try {
+      if (this.metricsKV) {
+        await this.metricsKV.put(`performance:${executionId}`, JSON.stringify(record), {
+          expirationTtl: 86400
+        });
+      }
+      
+      this.memoryMetrics.performanceData.push(record);
+      this.trimMemoryMetrics();
+    } catch (error) {
+      console.warn('Failed to record performance metrics:', error);
+    }
+  }
+
+  /**
+   * Get enhanced execution summary with debugging insights
+   */
+  getRecentExecutionSummary() {
+    const recent = this.memoryMetrics.executions.slice(-50); // Last 50 executions (increased)
+    const now = Date.now();
+    const oneHourAgo = now - 3600000;
+    
+    const recentHour = recent.filter(e => e.timestamp > oneHourAgo);
+    
+    const summary = {
+      total: recent.length,
+      totalLastHour: recentHour.length,
+      completed: recent.filter(e => e.status === 'completed').length,
+      failed: recent.filter(e => e.status === 'failed').length,
+      rateLimited: recent.filter(e => e.status === 'rate_limited').length,
+      circuitBreakerBlocked: recent.filter(e => e.status === 'circuit_breaker_blocked').length,
+      debugInfo: {
+        oldestExecution: recent.length > 0 ? new Date(recent[0].timestamp).toISOString() : null,
+        newestExecution: recent.length > 0 ? new Date(recent[recent.length - 1].timestamp).toISOString() : null,
+        memoryUtilization: {
+          executions: this.memoryMetrics.executions.length,
+          attempts: this.memoryMetrics.attempts.length,
+          performanceData: this.memoryMetrics.performanceData.length
+        }
+      }
+    };
+    
+    summary.successRate = summary.total > 0 ? (summary.completed / summary.total * 100).toFixed(2) : 0;
+    summary.hourlySuccessRate = recentHour.length > 0 ? 
+      (recentHour.filter(e => e.status === 'completed').length / recentHour.length * 100).toFixed(2) : 0;
+    
+    // Add trend analysis
+    summary.trends = this.calculateExecutionTrends(recent);
+    
+    return summary;
+  }
+  
+  /**
+   * Calculate execution trends for monitoring
+   */
+  calculateExecutionTrends(executions) {
+    if (executions.length < 10) {
+      return { trend: 'insufficient_data', confidence: 'low' };
+    }
+    
+    const midpoint = Math.floor(executions.length / 2);
+    const firstHalf = executions.slice(0, midpoint);
+    const secondHalf = executions.slice(midpoint);
+    
+    const firstHalfSuccess = firstHalf.filter(e => e.status === 'completed').length / firstHalf.length;
+    const secondHalfSuccess = secondHalf.filter(e => e.status === 'completed').length / secondHalf.length;
+    
+    const difference = secondHalfSuccess - firstHalfSuccess;
+    
+    if (Math.abs(difference) < 0.1) {
+      return { trend: 'stable', confidence: 'medium', successRateDelta: difference };
+    } else if (difference > 0.1) {
+      return { trend: 'improving', confidence: 'high', successRateDelta: difference };
+    } else {
+      return { trend: 'degrading', confidence: 'high', successRateDelta: difference };
+    }
+  }
+
+  /**
+   * Trim memory metrics to prevent unbounded growth
+   */
+  trimMemoryMetrics() {
+    const maxEntries = 100;
+    
+    if (this.memoryMetrics.executions.length > maxEntries) {
+      this.memoryMetrics.executions = this.memoryMetrics.executions.slice(-maxEntries);
+    }
+    
+    if (this.memoryMetrics.attempts.length > maxEntries) {
+      this.memoryMetrics.attempts = this.memoryMetrics.attempts.slice(-maxEntries);
+    }
+    
+    if (this.memoryMetrics.performanceData.length > maxEntries) {
+      this.memoryMetrics.performanceData = this.memoryMetrics.performanceData.slice(-maxEntries);
+    }
+  }
 }
