@@ -1,4 +1,4 @@
-import { createServerSupabaseClient } from '@/lib/supabase/client';
+import { createServerSupabaseClient } from '@/lib/supabase/server-client';
 import { ResendClient } from '@/lib/email/resend';
 
 export class NewsletterService {
