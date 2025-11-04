@@ -331,6 +331,79 @@ const securityMiddleware = async (request: NextRequest): Promise<NextResponse | 
 };
 
 /**
+ * A/B testing middleware for landing page variants
+ */
+const abTestingMiddleware = async (request: NextRequest): Promise<NextResponse | undefined> => {
+  const url = new URL(request.url);
+  const pathname = url.pathname;
+  
+  // Only apply A/B testing to homepage
+  if (pathname !== '/') {
+    return undefined;
+  }
+  
+  try {
+    const response = NextResponse.next();
+    
+    // Check if user has existing variant preference
+    let variant = request.cookies.get('landing_variant')?.value;
+    
+    if (!variant) {
+      // 50/50 split between original and newsletter page
+      variant = Math.random() < 0.5 ? 'original' : 'newsletter';
+      response.cookies.set('landing_variant', variant, { 
+        maxAge: 30 * 24 * 60 * 60, // 30 days
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax'
+      });
+    }
+    
+    // Track page view for analytics (fire and forget)
+    trackPageView(request, variant).catch(error => {
+      middlewareLogger.warn('Failed to track page view for A/B test', { error, variant });
+    });
+    
+    // Redirect newsletter variant to newsletter page
+    if (variant === 'newsletter') {
+      return NextResponse.redirect(new URL('/newsletter', request.url));
+    }
+    
+    return response;
+  } catch (error) {
+    middlewareLogger.error('A/B testing middleware error', { error, pathname });
+    // Fail gracefully - continue to original page
+    return undefined;
+  }
+};
+
+async function trackPageView(req: NextRequest, variant: string) {
+  // Queue analytics tracking (don't block request)
+  // This is a fire-and-forget operation for performance
+  try {
+    // Extract UTM parameters and basic info for analytics
+    const url = new URL(req.url);
+    const utmSource = url.searchParams.get('utm_source');
+    const utmMedium = url.searchParams.get('utm_medium');
+    const utmCampaign = url.searchParams.get('utm_campaign');
+    
+    // In a real implementation, you might queue this to a background job
+    // For now, we'll just log it
+    middlewareLogger.info('A/B test page view tracked', {
+      variant,
+      utmSource,
+      utmMedium,
+      utmCampaign,
+      userAgent: req.headers.get('user-agent')?.substring(0, 100),
+      referrer: req.headers.get('referer')?.substring(0, 100)
+    });
+  } catch (error) {
+    // Silently fail - don't affect user experience
+    middlewareLogger.warn('Page view tracking failed', { error });
+  }
+}
+
+/**
  * Conditional middleware architecture
  * Processes cron requests independently before Clerk middleware
  */
@@ -340,6 +413,12 @@ export default async function middleware(request: NextRequest) {
   if (cronResponse) {
     // Cron middleware handled the request (either auth failed or succeeded with headers)
     return cronResponse;
+  }
+  
+  // Second: Handle A/B testing for homepage
+  const abTestResponse = await abTestingMiddleware(request);
+  if (abTestResponse) {
+    return abTestResponse;
   }
   
   // For all other requests: Use Clerk middleware with security middleware
@@ -375,6 +454,7 @@ export default async function middleware(request: NextRequest) {
         
         // Marketing pages
         '/',
+        '/newsletter',
         '/pricing',
         '/about',
         '/privacy',
