@@ -1,10 +1,7 @@
 import type { Metadata, ResolvingMetadata } from 'next';
-import { HeroSection } from '@/components/landing/hero-section';
-import { FeaturesSection } from '@/components/landing/features-section';
-import { HowItWorks } from '@/components/landing/how-it-works';
-import { ComprehensiveInsights } from '@/components/landing/comprehensive-insights';
-import { PricingSection } from '@/components/landing/pricing-section';
-import { CTASection } from '@/components/landing/cta-section';
+import { WaitlistHero } from '@/components/waitlist/waitlist-hero';
+import { ProblemSolution } from '@/components/waitlist/problem-solution';
+import { WaitlistCTA } from '@/components/waitlist/waitlist-cta';
 
 export async function generateMetadata(
   _: unknown,
@@ -13,35 +10,31 @@ export async function generateMetadata(
   const previousMetadata = await parent;
   
   return {
-    title: 'SEC Filing Email Summaries - Stay Informed in Real-Time',
-    description: 'Subscribe to company tickers and receive concise email summaries of SEC filings in real-time. Stay informed without the information overload.',
+    title: 'Stop Drowning in SEC Filing Noise - Early Access Waitlist',
+    description: 'Get the filing details that matter delivered straight to your inbox. Join 500+ investors already on the waitlist for beta access.',
     keywords: [
-      'SEC filing summarizer',
-      'SEC filing email alerts',
-      'SEC filing subscription',
-      'financial document analysis',
       'SEC filing summaries',
-      'SEC filing email service',
       'investment research',
-      'SEC insights',
-      '10-K summary',
-      '10-Q summary',
-      'earnings report summary'
+      'filing alerts',
+      'financial document analysis',
+      'investor tools',
+      'early access',
+      'beta waitlist'
     ],
     openGraph: {
-      title: 'SEC Filing Email Summaries - Stay Informed in Real-Time',
-      description: 'Subscribe to company tickers and receive concise email summaries of SEC filings in real-time. Stay informed without the information overload.',
+      title: 'Stop Drowning in SEC Filing Noise - Early Access Waitlist',
+      description: 'Join 500+ investors already on the waitlist for beta access to concise SEC filing summaries.',
       images: previousMetadata.openGraph?.images || [],
       type: 'website',
     },
     twitter: {
       card: 'summary_large_image',
-      title: 'SEC Filing Email Summaries - Stay Informed in Real-Time',
-      description: 'Subscribe to company tickers and receive concise email summaries of SEC filings in real-time. Stay informed without the information overload.',
+      title: 'Stop Drowning in SEC Filing Noise - Early Access Waitlist',
+      description: 'Join 500+ investors already on the waitlist for beta access to concise SEC filing summaries.',
       images: previousMetadata.twitter?.images || [],
     },
     alternates: {
-      canonical: 'https://tldrsec.ai',
+      canonical: 'https://tldrsec.app',
     },
   };
 }
@@ -49,24 +42,9 @@ export async function generateMetadata(
 export default function Home() {
   return (
     <main>
-      <section id="hero">
-        <HeroSection />
-      </section>
-      <section id="features">
-        <FeaturesSection />
-      </section>
-      <section id="insights">
-        <ComprehensiveInsights />
-      </section>
-      <section id="how-it-works">
-        <HowItWorks />
-      </section>
-      <section id="pricing">
-        <PricingSection />
-      </section>
-      <section id="cta">
-        <CTASection />
-      </section>
+      <WaitlistHero />
+      <ProblemSolution />
+      <WaitlistCTA />
     </main>
   );
-} 
+}
