@@ -101,3 +101,4 @@ test-tesla-filing-extraction.js
 *tsla*10k*
 *tesla*10k*
 .env*.local
+.playwright-mcp/
