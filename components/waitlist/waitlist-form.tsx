@@ -47,6 +47,7 @@ export function WaitlistForm() {
         throw new Error('Subscription failed');
       }
 
+      const result = await response.json();
       setStatus('success');
       
       // Track successful waitlist signup
@@ -59,13 +60,18 @@ export function WaitlistForm() {
     }
   };
 
+  const [successMessage, setSuccessMessage] = useState('');
+
   if (status === 'success') {
     return (
       <div className="text-center p-6">
         <div className="text-green-600 text-2xl mb-2">✓</div>
         <h3 className="text-lg font-semibold mb-2">You&apos;re on the list!</h3>
         <p className="text-gray-600">
-          We&apos;ll notify you as soon as beta access is available. Check your email for confirmation.
+          {successMessage.includes('already') 
+            ? 'You were already subscribed. You&apos;ll continue to receive updates when beta access is available.'
+            : 'We&apos;ll notify you as soon as beta access is available. Check your email for confirmation.'
+          }
         </p>
       </div>
     );
