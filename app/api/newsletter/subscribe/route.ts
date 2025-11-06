@@ -38,7 +38,7 @@ export async function POST(request: NextRequest) {
       try {
         const resend = new ResendClient();
         await resend.sendEmail({
-          from: 'SEC Filing Summaries <summaries@tldrsec.app>',
+          from: 'notifications@tldrsec.app',
           to: email,
           subject: 'Welcome to SEC Filing Summaries!',
           html: getWelcomeEmailTemplate(email)
