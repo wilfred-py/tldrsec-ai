@@ -1,7 +1,7 @@
 import { OpenRouterClient } from '@/lib/ai/openrouter-client';
 import { createDefaultRateLimitManager, AIRateLimitManager, RateLimitExceededError } from '@/lib/ai/rate-limiter';
 import { costTracker } from '@/lib/ai/cost-tracker';
-import { rateLimitConfig, getUserTier } from '@/lib/ai/rate-limit-config';
+import { rateLimitConfig } from '@/lib/ai/rate-limit-config';
 import { logger } from '@/lib/logging';
 
 export interface PersonalizedContent {

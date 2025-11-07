@@ -19,7 +19,7 @@
  */
 
 import { z } from 'zod';
-import { ValidationUtils, SecureValidator } from './validation-schemas';
+import { ValidationUtils } from './validation-schemas';
 import { rateLimiter } from './rate-limiter';
 import { logger } from '../logging';
 
@@ -715,9 +715,9 @@ export class NewsletterSecurityValidator {
    */
   static async validateSubscription(data: unknown, clientIP: string): Promise<{
     isValid: boolean;
-    data?: any;
+    data?: Record<string, unknown>;
     errors?: string[];
-    rateLimitInfo?: any;
+    rateLimitInfo?: { resetTime?: number };
   }> {
     try {
       // First validate the basic structure with sync validation
