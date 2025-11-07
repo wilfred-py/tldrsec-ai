@@ -1,50 +1,90 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { LLMRecommendationEngine, PersonalizedContent, UserContext } from '@/lib/newsletter/recommendation-engine';
+import { PersonalizedContent, UserContext } from '@/lib/newsletter/recommendation-engine';
 import { trackPageAnalytics } from '@/lib/analytics/page-tracking';
+import { useAIPersonalizationRecovery } from '@/hooks/use-error-recovery';
+import NewsletterErrorBoundary from '@/components/error/newsletter-error-boundary';
+import { newsletterErrorTracker } from '@/lib/monitoring/newsletter-error-tracker';
 
 interface PersonalizedHeroProps {
   fallbackContent?: PersonalizedContent;
 }
 
-export function PersonalizedHero({ fallbackContent }: PersonalizedHeroProps) {
-  const [content, setContent] = useState<PersonalizedContent>(
-    fallbackContent || {
-      headline: "SEC Filings Made Simple",
-      valueProposition: "Get weekly AI summaries without the overwhelm",
-      socialProof: "Join 2,847+ smart investors",
-      ctaText: "Get Weekly Insights",
-      riskMitigation: "Free forever • No spam"
-    }
-  );
+// Internal component without error boundary
+function PersonalizedHeroInternal({ fallbackContent }: PersonalizedHeroProps) {
+  const defaultContent: PersonalizedContent = useMemo(() => fallbackContent || {
+    headline: "SEC Filings Made Simple",
+    valueProposition: "Get weekly AI summaries without the overwhelm",
+    socialProof: "Join 2,847+ smart investors",
+    ctaText: "Get Weekly Insights",
+    riskMitigation: "Free forever • No spam"
+  }, [fallbackContent]);
+
+  const [content, setContent] = useState<PersonalizedContent>(defaultContent);
   const [email, setEmail] = useState('');
   const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
   const [isPersonalizing, setIsPersonalizing] = useState(false);
+  
+  // Use AI personalization recovery hook
+  const aiRecovery = useAIPersonalizationRecovery();
 
   useEffect(() => {
     // Personalize content on component mount
     personalizeContent();
-  }, []);
+  }, [personalizeContent]);
 
-  const personalizeContent = async () => {
+  const personalizeContent = useCallback(async () => {
+    // Skip personalization if circuit breaker is open
+    if (aiRecovery.state.isCircuitBreakerOpen) {
+      console.log('AI personalization circuit breaker is open, skipping personalization');
+      return;
+    }
+
+    // Gather user context with error handling
+    const userContext: UserContext = {
+      referrer: typeof document !== 'undefined' ? document.referrer : undefined,
+      utm_source: typeof window !== 'undefined' 
+        ? new URLSearchParams(window.location.search).get('utm_source') || undefined 
+        : undefined,
+      utm_medium: typeof window !== 'undefined' 
+        ? new URLSearchParams(window.location.search).get('utm_medium') || undefined 
+        : undefined,
+      utm_campaign: typeof window !== 'undefined' 
+        ? new URLSearchParams(window.location.search).get('utm_campaign') || undefined 
+        : undefined,
+      userAgent: typeof window !== 'undefined' ? window.navigator.userAgent : undefined,
+    };
+
     try {
       setIsPersonalizing(true);
-      
-      // Gather user context
-      const userContext: UserContext = {
-        referrer: document.referrer,
-        utm_source: new URLSearchParams(window.location.search).get('utm_source') || undefined,
-        utm_medium: new URLSearchParams(window.location.search).get('utm_medium') || undefined,
-        utm_campaign: new URLSearchParams(window.location.search).get('utm_campaign') || undefined,
-        userAgent: window.navigator.userAgent,
-        // Add more context as needed
-      };
 
-      const engine = new LLMRecommendationEngine();
-      const personalizedContent = await engine.generatePersonalizedContent(userContext);
+      // Use the AI recovery hook to handle personalization with fallback
+      const personalizedContent = await aiRecovery.executeAIOperation(
+        async () => {
+          const response = await fetch('/api/newsletter/personalize', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(userContext),
+          });
+          
+          if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+          }
+          
+          const data = await response.json();
+          if (!data.success) {
+            throw new Error(data.error || 'Personalization failed');
+          }
+          
+          return data.content;
+        },
+        defaultContent // Fallback to default content if AI fails
+      );
       
       setContent(personalizedContent);
       
@@ -53,16 +93,29 @@ export function PersonalizedHero({ fallbackContent }: PersonalizedHeroProps) {
         utm_source: userContext.utm_source,
         utm_medium: userContext.utm_medium,
         utm_campaign: userContext.utm_campaign,
+        retry_count: aiRecovery.state.retryCount,
       });
     } catch (error) {
-      console.error('Personalization failed:', error);
+      console.error('Personalization failed after all recovery attempts:', error);
       
-      // Track personalization failure but don't show error to user
-      await trackPageAnalytics('newsletter', 'personalization_failed');
+      // Track personalization failure with detailed monitoring
+      const errorInstance = error instanceof Error ? error : new Error(String(error));
+      await newsletterErrorTracker.trackAIPersonalizationFailure(errorInstance, {
+        retryCount: aiRecovery.state.retryCount,
+        circuitBreakerOpen: aiRecovery.state.isCircuitBreakerOpen,
+        userContext: userContext,
+      });
+      
+      // Also track in analytics
+      await trackPageAnalytics('newsletter', 'personalization_failed', {
+        error_name: errorInstance.name,
+        retry_count: aiRecovery.state.retryCount,
+        circuit_breaker_open: aiRecovery.state.isCircuitBreakerOpen,
+      });
     } finally {
       setIsPersonalizing(false);
     }
-  };
+  }, [aiRecovery, defaultContent]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -229,5 +282,22 @@ export function PersonalizedHero({ fallbackContent }: PersonalizedHeroProps) {
         </div>
       </div>
     </section>
+  );
+}
+
+// Main export with error boundary wrapper
+export function PersonalizedHero(props: PersonalizedHeroProps) {
+  const handleError = useCallback((error: Error, errorInfo: React.ErrorInfo) => {
+    console.error('PersonalizedHero component error:', { error, errorInfo });
+  }, []);
+
+  return (
+    <NewsletterErrorBoundary 
+      enableRetry={true}
+      maxRetries={2}
+      onError={handleError}
+    >
+      <PersonalizedHeroInternal {...props} />
+    </NewsletterErrorBoundary>
   );
 }

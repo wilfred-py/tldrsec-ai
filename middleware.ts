@@ -2,6 +2,7 @@ import { clerkMiddleware } from '@clerk/nextjs/server'
 import { NextRequest, NextResponse } from 'next/server'
 import { MiddlewareSecurity, SecurityAuditor } from './lib/security/middleware-security'
 import { logger } from './lib/logging'
+import { redirectMonitor } from './lib/monitoring/redirect-protection-monitor'
 
 const middlewareLogger = logger.child('security-middleware');
 
@@ -331,7 +332,634 @@ const securityMiddleware = async (request: NextRequest): Promise<NextResponse | 
 };
 
 /**
- * A/B testing middleware for landing page variants
+ * Secure cookie management utility for A/B testing
+ * Implements defense-in-depth security controls:
+ * 1. Environment-specific secure settings
+ * 2. Domain validation and sanitization
+ * 3. HMAC-based cookie integrity validation
+ * 4. Proper expiration and cleanup mechanisms
+ */
+class SecureCookieManager {
+  private static readonly COOKIE_SECRET = process.env.COOKIE_SECRET || 'default-fallback-secret-do-not-use-in-production';
+  private static readonly COOKIE_NAME = 'ab_variant';
+  private static readonly INTEGRITY_SUFFIX = '_sig';
+  
+  /**
+   * Environment-specific cookie configuration
+   */
+  private static getCookieConfig(url: URL) {
+    const isProduction = process.env.NODE_ENV === 'production';
+    const isDevelopment = process.env.NODE_ENV === 'development';
+    
+    // Validate and sanitize domain
+    const hostname = url.hostname;
+    let domain: string | undefined;
+    
+    if (isProduction) {
+      // Only set domain for production with validated domains
+      const allowedDomains = ['tldrsec.app', 'www.tldrsec.app'];
+      if (allowedDomains.includes(hostname)) {
+        domain = hostname;
+      } else {
+        middlewareLogger.warn('Invalid domain for production cookie', { hostname });
+        // Fail secure - don't set domain for unknown hosts
+      }
+    }
+    
+    return {
+      maxAge: 30 * 24 * 60 * 60, // 30 days
+      httpOnly: true,
+      secure: isProduction, // Only secure in production
+      sameSite: isProduction ? 'strict' as const : 'lax' as const, // Strict for production
+      domain,
+      path: '/', // Explicitly set path for security
+    };
+  }
+  
+  /**
+   * Generate HMAC signature for cookie integrity validation
+   */
+  private static async generateSignature(value: string, timestamp: number): Promise<string> {
+    const encoder = new TextEncoder();
+    const data = `${value}:${timestamp}`;
+    
+    try {
+      const key = await crypto.subtle.importKey(
+        'raw',
+        encoder.encode(this.COOKIE_SECRET),
+        { name: 'HMAC', hash: 'SHA-256' },
+        false,
+        ['sign']
+      );
+      
+      const signature = await crypto.subtle.sign('HMAC', key, encoder.encode(data));
+      return Array.from(new Uint8Array(signature))
+        .map(b => b.toString(16).padStart(2, '0'))
+        .join('');
+    } catch (error) {
+      middlewareLogger.error('Failed to generate cookie signature', { error });
+      throw new Error('Cookie signature generation failed');
+    }
+  }
+  
+  /**
+   * Verify cookie integrity using HMAC signature
+   */
+  private static async verifySignature(value: string, timestamp: number, signature: string): Promise<boolean> {
+    try {
+      const expectedSignature = await this.generateSignature(value, timestamp);
+      
+      // Timing-safe comparison
+      const sigBytes = new TextEncoder().encode(signature);
+      const expectedBytes = new TextEncoder().encode(expectedSignature);
+      
+      if (sigBytes.length !== expectedBytes.length) {
+        return false;
+      }
+      
+      let isValid = true;
+      for (let i = 0; i < sigBytes.length; i++) {
+        if (sigBytes[i] !== expectedBytes[i]) {
+          isValid = false;
+        }
+      }
+      
+      return isValid;
+    } catch (error) {
+      middlewareLogger.error('Failed to verify cookie signature', { error });
+      return false;
+    }
+  }
+  
+  /**
+   * Set secure cookie with integrity validation
+   */
+  static async setSecureCookie(response: NextResponse, value: string, url: URL): Promise<void> {
+    try {
+      const timestamp = Date.now();
+      const signature = await this.generateSignature(value, timestamp);
+      const cookieValue = `${value}:${timestamp}`;
+      const config = this.getCookieConfig(url);
+      
+      // Set main cookie
+      response.cookies.set(this.COOKIE_NAME, cookieValue, config);
+      
+      // Set integrity signature cookie (httpOnly=false for client validation if needed)
+      response.cookies.set(this.COOKIE_NAME + this.INTEGRITY_SUFFIX, signature, {
+        ...config,
+        httpOnly: false, // Allow client-side access for integrity validation
+      });
+      
+      middlewareLogger.info('Secure A/B test cookie set', { 
+        variant: value, 
+        domain: config.domain,
+        secure: config.secure,
+        sameSite: config.sameSite
+      });
+    } catch (error) {
+      middlewareLogger.error('Failed to set secure cookie', { error, value });
+      throw error;
+    }
+  }
+  
+  /**
+   * Get and validate secure cookie
+   */
+  static async getValidatedCookie(request: NextRequest): Promise<string | null> {
+    try {
+      const cookieValue = request.cookies.get(this.COOKIE_NAME)?.value;
+      const signature = request.cookies.get(this.COOKIE_NAME + this.INTEGRITY_SUFFIX)?.value;
+      
+      if (!cookieValue || !signature) {
+        return null;
+      }
+      
+      // Parse cookie value
+      const parts = cookieValue.split(':');
+      if (parts.length !== 2) {
+        middlewareLogger.warn('Invalid cookie format detected', { cookieValue });
+        return null;
+      }
+      
+      const [value, timestampStr] = parts;
+      const timestamp = parseInt(timestampStr, 10);
+      
+      if (isNaN(timestamp)) {
+        middlewareLogger.warn('Invalid timestamp in cookie', { timestampStr });
+        return null;
+      }
+      
+      // Check expiration (30 days)
+      const maxAge = 30 * 24 * 60 * 60 * 1000; // 30 days in milliseconds
+      if (Date.now() - timestamp > maxAge) {
+        middlewareLogger.info('Expired cookie detected', { timestamp, age: Date.now() - timestamp });
+        return null;
+      }
+      
+      // Verify integrity
+      const isValid = await this.verifySignature(value, timestamp, signature);
+      if (!isValid) {
+        middlewareLogger.warn('Cookie integrity validation failed', { value, signature });
+        return null;
+      }
+      
+      // Validate variant value
+      if (!['original', 'newsletter'].includes(value)) {
+        middlewareLogger.warn('Invalid variant value in cookie', { value });
+        return null;
+      }
+      
+      return value;
+    } catch (error) {
+      middlewareLogger.error('Failed to validate cookie', { error });
+      return null;
+    }
+  }
+  
+  /**
+   * Clear cookies securely
+   */
+  static clearSecureCookies(response: NextResponse, url: URL): void {
+    const config = this.getCookieConfig(url);
+    
+    // Clear main cookie
+    response.cookies.set(this.COOKIE_NAME, '', {
+      ...config,
+      maxAge: 0, // Immediate expiration
+    });
+    
+    // Clear signature cookie
+    response.cookies.set(this.COOKIE_NAME + this.INTEGRITY_SUFFIX, '', {
+      ...config,
+      maxAge: 0,
+      httpOnly: false,
+    });
+    
+    middlewareLogger.info('A/B test cookies cleared', { domain: config.domain });
+  }
+}
+
+/**
+ * Redirect Loop Protection System
+ * Implements comprehensive protection against infinite redirects in A/B testing
+ */
+class RedirectLoopProtection {
+  private static readonly MAX_REDIRECTS = 3;
+  private static readonly REDIRECT_TIMEOUT_MS = 10000; // 10 seconds
+  private static readonly BYPASS_PARAM = 'ab_test';
+  private static readonly BYPASS_COOKIE = 'ab_bypass';
+  private static readonly LOOP_HEADER = 'x-redirect-count';
+  private static readonly TIMESTAMP_HEADER = 'x-redirect-timestamp';
+  
+  /**
+   * Check for redirect loops and patterns
+   */
+  static checkForLoop(request: NextRequest): { isLoop: boolean; count: number; reason?: string } {
+    const startTime = Date.now();
+    
+    try {
+      // Get redirect count from headers (passed through redirects)
+      const redirectCountHeader = request.headers.get(this.LOOP_HEADER);
+      const redirectTimestampHeader = request.headers.get(this.TIMESTAMP_HEADER);
+      
+      const redirectCount = redirectCountHeader ? parseInt(redirectCountHeader, 10) : 0;
+      const redirectTimestamp = redirectTimestampHeader ? parseInt(redirectTimestampHeader, 10) : 0;
+      
+      middlewareLogger.info('Checking redirect loop', {
+        path: request.nextUrl.pathname,
+        redirectCount,
+        redirectTimestamp,
+        currentTime: Date.now()
+      });
+      
+      let result: { isLoop: boolean; count: number; reason?: string };
+      
+      // Check maximum redirects
+      if (redirectCount >= this.MAX_REDIRECTS) {
+        middlewareLogger.warn('Maximum redirects exceeded', {
+          count: redirectCount,
+          maxAllowed: this.MAX_REDIRECTS,
+          path: request.nextUrl.pathname
+        });
+        
+        result = {
+          isLoop: true,
+          count: redirectCount,
+          reason: `Maximum redirects (${this.MAX_REDIRECTS}) exceeded`
+        };
+        
+        // Record loop detection in monitoring
+        redirectMonitor.recordLoop(
+          request.nextUrl.pathname,
+          redirectCount,
+          result.reason,
+          {
+            userAgent: request.headers.get('user-agent'),
+            ipAddress: request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip'),
+            executionTimeMs: Date.now() - startTime
+          }
+        );
+        
+        return result;
+      }
+      
+      // Check for rapid successive redirects (potential infinite loop)
+      if (redirectTimestamp && Date.now() - redirectTimestamp < 1000) {
+        middlewareLogger.warn('Rapid redirect detected', {
+          timeDiff: Date.now() - redirectTimestamp,
+          path: request.nextUrl.pathname
+        });
+        
+        result = {
+          isLoop: true,
+          count: redirectCount,
+          reason: 'Rapid successive redirects detected'
+        };
+        
+        // Record loop detection in monitoring
+        redirectMonitor.recordLoop(
+          request.nextUrl.pathname,
+          redirectCount,
+          result.reason,
+          {
+            timeDiff: Date.now() - redirectTimestamp,
+            userAgent: request.headers.get('user-agent'),
+            ipAddress: request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip'),
+            executionTimeMs: Date.now() - startTime
+          }
+        );
+        
+        return result;
+      }
+      
+      // Check for timeout (redirect chain taking too long)
+      if (redirectTimestamp && Date.now() - redirectTimestamp > this.REDIRECT_TIMEOUT_MS) {
+        middlewareLogger.warn('Redirect timeout exceeded', {
+          timeDiff: Date.now() - redirectTimestamp,
+          timeout: this.REDIRECT_TIMEOUT_MS,
+          path: request.nextUrl.pathname
+        });
+        
+        result = {
+          isLoop: true,
+          count: redirectCount,
+          reason: 'Redirect timeout exceeded'
+        };
+        
+        // Record loop detection in monitoring
+        redirectMonitor.recordLoop(
+          request.nextUrl.pathname,
+          redirectCount,
+          result.reason,
+          {
+            timeDiff: Date.now() - redirectTimestamp,
+            timeout: this.REDIRECT_TIMEOUT_MS,
+            userAgent: request.headers.get('user-agent'),
+            ipAddress: request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip'),
+            executionTimeMs: Date.now() - startTime
+          }
+        );
+        
+        return result;
+      }
+      
+      // Record successful check performance
+      redirectMonitor.recordPerformance(
+        request.nextUrl.pathname,
+        Date.now() - startTime,
+        {
+          redirectCount,
+          userAgent: request.headers.get('user-agent'),
+          ipAddress: request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip')
+        }
+      );
+      
+      return { isLoop: false, count: redirectCount };
+    } catch (error) {
+      middlewareLogger.error('Error checking redirect loop', { error, path: request.nextUrl.pathname });
+      
+      // Record error in monitoring
+      redirectMonitor.recordLoop(
+        request.nextUrl.pathname,
+        0,
+        'Error in loop detection',
+        {
+          error: error instanceof Error ? error.message : String(error),
+          userAgent: request.headers.get('user-agent'),
+          ipAddress: request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip'),
+          executionTimeMs: Date.now() - startTime
+        }
+      );
+      
+      // Fail safe - assume loop to prevent infinite redirects
+      return {
+        isLoop: true,
+        count: 0,
+        reason: 'Error in loop detection'
+      };
+    }
+  }
+  
+  /**
+   * Check if A/B testing should be bypassed
+   */
+  static shouldBypass(request: NextRequest): boolean {
+    try {
+      const url = new URL(request.url);
+      
+      // URL parameter bypass
+      const bypassParam = url.searchParams.get(this.BYPASS_PARAM);
+      if (bypassParam === 'false' || bypassParam === 'off') {
+        middlewareLogger.info('A/B testing bypassed via URL parameter', {
+          path: url.pathname,
+          bypassParam
+        });
+        
+        // Record bypass usage
+        redirectMonitor.recordBypass(
+          url.pathname,
+          'URL parameter bypass',
+          {
+            bypassParam,
+            userAgent: request.headers.get('user-agent'),
+            ipAddress: request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip')
+          }
+        );
+        
+        return true;
+      }
+      
+      // Cookie-based bypass
+      const bypassCookie = request.cookies.get(this.BYPASS_COOKIE)?.value;
+      if (bypassCookie === 'true') {
+        middlewareLogger.info('A/B testing bypassed via cookie', {
+          path: url.pathname
+        });
+        
+        // Record bypass usage
+        redirectMonitor.recordBypass(
+          url.pathname,
+          'Cookie bypass',
+          {
+            userAgent: request.headers.get('user-agent'),
+            ipAddress: request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip')
+          }
+        );
+        
+        return true;
+      }
+      
+      // Environment-based circuit breaker
+      const circuitBreakerOpen = process.env.AB_TEST_CIRCUIT_BREAKER === 'true';
+      if (circuitBreakerOpen) {
+        middlewareLogger.warn('A/B testing disabled via circuit breaker', {
+          path: url.pathname
+        });
+        
+        // Record bypass usage
+        redirectMonitor.recordBypass(
+          url.pathname,
+          'Circuit breaker bypass',
+          {
+            userAgent: request.headers.get('user-agent'),
+            ipAddress: request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip')
+          }
+        );
+        
+        return true;
+      }
+      
+      // Emergency override for specific paths
+      const emergencyOverride = process.env.AB_TEST_EMERGENCY_DISABLE;
+      if (emergencyOverride === 'true' || emergencyOverride === url.pathname) {
+        middlewareLogger.warn('A/B testing disabled via emergency override', {
+          path: url.pathname,
+          emergencyOverride
+        });
+        
+        // Record bypass usage
+        redirectMonitor.recordBypass(
+          url.pathname,
+          'Emergency override bypass',
+          {
+            emergencyOverride,
+            userAgent: request.headers.get('user-agent'),
+            ipAddress: request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip')
+          }
+        );
+        
+        return true;
+      }
+      
+      return false;
+    } catch (error) {
+      middlewareLogger.error('Error checking bypass conditions', { error });
+      
+      // Record error bypass
+      redirectMonitor.recordBypass(
+        request.nextUrl.pathname,
+        'Error bypass',
+        {
+          error: error instanceof Error ? error.message : String(error),
+          userAgent: request.headers.get('user-agent'),
+          ipAddress: request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip')
+        }
+      );
+      
+      // Fail safe - bypass on error
+      return true;
+    }
+  }
+  
+  /**
+   * Validate that a redirect target exists and is accessible
+   */
+  static async validateRedirectTarget(targetPath: string, request: NextRequest): Promise<boolean> {
+    try {
+      // Define valid targets based on actual route existence
+      const validTargets = ['/newsletter', '/dashboard', '/', '/pricing'];
+      
+      // Define explicitly invalid targets (if any)
+      const invalidTargets: string[] = [];
+      
+      const isValid = validTargets.includes(targetPath) && !invalidTargets.includes(targetPath);
+      
+      middlewareLogger.info('Validating redirect target', {
+        targetPath,
+        isValid,
+        validTargets,
+        invalidTargets,
+        reason: !isValid ? (invalidTargets.includes(targetPath) ? 'Target explicitly invalid' : 'Target not in valid list') : 'Valid'
+      });
+      
+      // Record invalid target detection
+      if (!isValid) {
+        redirectMonitor.recordInvalidTarget(
+          request.nextUrl.pathname,
+          targetPath,
+          {
+            validTargets,
+            invalidTargets,
+            reason: invalidTargets.includes(targetPath) ? 'Target explicitly invalid' : 'Target not in valid list',
+            userAgent: request.headers.get('user-agent'),
+            ipAddress: request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip')
+          }
+        );
+      }
+      
+      return isValid;
+    } catch (error) {
+      middlewareLogger.error('Error validating redirect target', { error, targetPath });
+      
+      // Record invalid target due to error
+      redirectMonitor.recordInvalidTarget(
+        request.nextUrl.pathname,
+        targetPath,
+        {
+          error: error instanceof Error ? error.message : String(error),
+          userAgent: request.headers.get('user-agent'),
+          ipAddress: request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip')
+        }
+      );
+      
+      return false;
+    }
+  }
+  
+  /**
+   * Create a protected redirect with loop tracking
+   */
+  static createProtectedRedirect(targetUrl: string, request: NextRequest): NextResponse {
+    try {
+      const currentCount = parseInt(request.headers.get(this.LOOP_HEADER) || '0', 10);
+      const newCount = currentCount + 1;
+      const timestamp = Date.now();
+      
+      middlewareLogger.info('Creating protected redirect', {
+        from: request.nextUrl.pathname,
+        to: targetUrl,
+        redirectCount: newCount,
+        timestamp
+      });
+      
+      const redirectResponse = NextResponse.redirect(new URL(targetUrl, request.url));
+      
+      // Add tracking headers for the redirected request
+      redirectResponse.headers.set(this.LOOP_HEADER, newCount.toString());
+      redirectResponse.headers.set(this.TIMESTAMP_HEADER, timestamp.toString());
+      
+      // Add cache control to prevent redirect caching
+      redirectResponse.headers.set('Cache-Control', 'no-cache, no-store, must-revalidate');
+      redirectResponse.headers.set('Pragma', 'no-cache');
+      redirectResponse.headers.set('Expires', '0');
+      
+      return redirectResponse;
+    } catch (error) {
+      middlewareLogger.error('Error creating protected redirect', { error, targetUrl });
+      // Fallback - return next response
+      return NextResponse.next();
+    }
+  }
+  
+  /**
+   * Set bypass cookie for emergency situations
+   */
+  static setBypassCookie(response: NextResponse, duration: number = 3600): void {
+    try {
+      response.cookies.set(this.BYPASS_COOKIE, 'true', {
+        maxAge: duration, // Default 1 hour
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'strict',
+        path: '/'
+      });
+      
+      middlewareLogger.info('Set A/B testing bypass cookie', { duration });
+    } catch (error) {
+      middlewareLogger.error('Failed to set bypass cookie', { error });
+    }
+  }
+  
+  /**
+   * Create fallback response when redirects fail
+   */
+  static createFallbackResponse(request: NextRequest, reason: string): NextResponse {
+    try {
+      middlewareLogger.warn('Creating fallback response', {
+        path: request.nextUrl.pathname,
+        reason
+      });
+      
+      const response = NextResponse.next();
+      
+      // Set bypass cookie to prevent future redirect attempts
+      this.setBypassCookie(response, 1800); // 30 minutes
+      
+      // Add diagnostic headers
+      response.headers.set('X-AB-Test-Status', 'bypassed');
+      response.headers.set('X-AB-Test-Reason', reason);
+      
+      return response;
+    } catch (error) {
+      middlewareLogger.error('Error creating fallback response', { error, reason });
+      return NextResponse.next();
+    }
+  }
+}
+
+/**
+ * A/B testing middleware for landing page variants with enhanced security and redirect loop protection
+ * 
+ * Security Features:
+ * 1. Environment-specific secure cookie settings
+ * 2. Domain validation and sanitization
+ * 3. HMAC-based cookie integrity validation
+ * 4. Proper cookie expiration and cleanup
+ * 5. Input validation and sanitization
+ * 6. Secure error handling
+ * 7. Comprehensive redirect loop protection
+ * 8. Emergency bypass mechanisms
+ * 9. Redirect target validation
  */
 const abTestingMiddleware = async (request: NextRequest): Promise<NextResponse | undefined> => {
   const url = new URL(request.url);
@@ -343,20 +971,46 @@ const abTestingMiddleware = async (request: NextRequest): Promise<NextResponse |
   }
   
   try {
+    // Check for bypass conditions first
+    if (RedirectLoopProtection.shouldBypass(request)) {
+      middlewareLogger.info('A/B testing bypassed', { path: pathname });
+      const response = NextResponse.next();
+      response.headers.set('X-AB-Test-Status', 'bypassed');
+      return response;
+    }
+    
+    // Check for redirect loops before processing
+    const loopCheck = RedirectLoopProtection.checkForLoop(request);
+    if (loopCheck.isLoop) {
+      middlewareLogger.warn('Redirect loop detected, falling back', {
+        path: pathname,
+        reason: loopCheck.reason,
+        count: loopCheck.count
+      });
+      
+      // Clear problematic cookies and create fallback response
+      const fallbackResponse = RedirectLoopProtection.createFallbackResponse(
+        request,
+        loopCheck.reason || 'Redirect loop detected'
+      );
+      SecureCookieManager.clearSecureCookies(fallbackResponse, url);
+      
+      return fallbackResponse;
+    }
+    
     const response = NextResponse.next();
     
-    // Check if user has existing variant preference
-    let variant = request.cookies.get('landing_variant')?.value;
+    // Check if user has existing validated variant preference
+    let variant = await SecureCookieManager.getValidatedCookie(request);
     
     if (!variant) {
-      // 50/50 split between original and newsletter page
-      variant = Math.random() < 0.5 ? 'original' : 'newsletter';
-      response.cookies.set('landing_variant', variant, { 
-        maxAge: 30 * 24 * 60 * 60, // 30 days
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'lax'
-      });
+      // Generate new variant with cryptographically secure randomness
+      const randomBytes = new Uint8Array(1);
+      crypto.getRandomValues(randomBytes);
+      variant = (randomBytes[0] / 255) < 0.5 ? 'original' : 'newsletter';
+      
+      // Set secure cookie with integrity validation
+      await SecureCookieManager.setSecureCookie(response, variant, url);
     }
     
     // Track page view for analytics (fire and forget)
@@ -364,16 +1018,58 @@ const abTestingMiddleware = async (request: NextRequest): Promise<NextResponse |
       middlewareLogger.warn('Failed to track page view for A/B test', { error, variant });
     });
     
-    // Redirect newsletter variant to newsletter page
+    // Handle newsletter variant with protection
     if (variant === 'newsletter') {
-      return NextResponse.redirect(new URL('/newsletter', request.url));
+      const targetPath = '/newsletter';
+      
+      // Validate redirect target exists
+      const isTargetValid = await RedirectLoopProtection.validateRedirectTarget(targetPath, request);
+      
+      if (!isTargetValid) {
+        middlewareLogger.warn('Invalid redirect target, falling back to original', {
+          targetPath,
+          originalPath: pathname
+        });
+        
+        // Clear the newsletter variant and force original variant
+        await SecureCookieManager.setSecureCookie(response, 'original', url);
+        
+        // Add diagnostic headers
+        response.headers.set('X-AB-Test-Status', 'fallback-invalid-target');
+        response.headers.set('X-AB-Test-Original-Variant', 'newsletter');
+        
+        return response;
+      }
+      
+      // Create protected redirect with loop tracking
+      return RedirectLoopProtection.createProtectedRedirect(targetPath, request);
     }
+    
+    // Add success headers for monitoring
+    response.headers.set('X-AB-Test-Status', 'success');
+    response.headers.set('X-AB-Test-Variant', variant);
     
     return response;
   } catch (error) {
     middlewareLogger.error('A/B testing middleware error', { error, pathname });
-    // Fail gracefully - continue to original page
-    return undefined;
+    
+    // Enhanced error recovery with redirect protection
+    try {
+      const fallbackResponse = RedirectLoopProtection.createFallbackResponse(
+        request,
+        'Middleware error recovery'
+      );
+      SecureCookieManager.clearSecureCookies(fallbackResponse, url);
+      
+      return fallbackResponse;
+    } catch (clearError) {
+      middlewareLogger.error('Failed to clear cookies during error recovery', { clearError });
+      
+      // Final fallback - continue without cookie management
+      const finalResponse = NextResponse.next();
+      finalResponse.headers.set('X-AB-Test-Status', 'error-recovery-failed');
+      return finalResponse;
+    }
   }
 };
 

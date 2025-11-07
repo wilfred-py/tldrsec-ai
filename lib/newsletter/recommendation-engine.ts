@@ -1,4 +1,8 @@
 import { OpenRouterClient } from '@/lib/ai/openrouter-client';
+import { createDefaultRateLimitManager, AIRateLimitManager, RateLimitExceededError } from '@/lib/ai/rate-limiter';
+import { costTracker } from '@/lib/ai/cost-tracker';
+import { rateLimitConfig, getUserTier } from '@/lib/ai/rate-limit-config';
+import { logger } from '@/lib/logging';
 
 export interface PersonalizedContent {
   headline: string;
@@ -18,6 +22,9 @@ export interface UserContext {
   clickedTopics?: string[];
   userAgent?: string;
   country?: string;
+  // Rate limiting context
+  userId?: string;
+  subscriptionTier?: string;
 }
 
 export interface EmailOptimization {
@@ -34,34 +41,171 @@ export interface UserEngagement {
 
 export class LLMRecommendationEngine {
   private openrouter: OpenRouterClient;
+  private rateLimitManager: AIRateLimitManager;
+  private readonly requestTimeout: number = 15000; // 15 seconds timeout
+  private readonly maxContentLength: number = 1000; // Limit content length for faster processing
 
   constructor() {
     // Use the fallback model for cost-efficient personalization
     this.openrouter = new OpenRouterClient({
       defaultModel: process.env.OPENROUTER_FALLBACK_MODEL || 'x-ai/grok-beta' // Uses Grok for cost efficiency
     });
+    
+    // Initialize rate limiting
+    this.rateLimitManager = createDefaultRateLimitManager();
+  }
+
+  private createTimeoutPromise<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
+    return new Promise((resolve, reject) => {
+      const timeoutId = setTimeout(() => {
+        const error = new Error(`Request timeout after ${timeoutMs}ms`);
+        error.name = 'TimeoutError';
+        reject(error);
+      }, timeoutMs);
+
+      promise
+        .then((result) => {
+          clearTimeout(timeoutId);
+          resolve(result);
+        })
+        .catch((error) => {
+          clearTimeout(timeoutId);
+          reject(error);
+        });
+    });
   }
 
   async generatePersonalizedContent(userContext: UserContext): Promise<PersonalizedContent> {
+    const operation = 'newsletter_personalization';
+    const model = process.env.OPENROUTER_FALLBACK_MODEL || 'x-ai/grok-beta';
+    const startTime = Date.now();
+    
     try {
+      // Check rate limiting and budget before processing
+      await this.checkRateLimitsAndBudget(userContext, operation);
+
       const prompt = this.buildPersonalizationPrompt(userContext);
       
-      const response = await this.openrouter.complete({
+      // Estimate token usage and cost
+      const inputTokens = this.estimateTokens(prompt);
+      const outputTokens = 300; // maxTokens setting
+      const estimatedCost = costTracker.estimateCost(model, inputTokens, outputTokens);
+      
+      // Final budget check with accurate cost estimate
+      const budgetStatus = await costTracker.checkBudget(
+        userContext.userId,
+        estimatedCost,
+        operation
+      );
+      
+      if (!budgetStatus.isWithinBudget) {
+        logger.warn('Budget exceeded for personalization request', {
+          userId: userContext.userId,
+          operation,
+          estimatedCost,
+          budgetStatus
+        });
+        
+        // Use fallback content instead of making AI call
+        return this.getFallbackContent(userContext);
+      }
+
+      // Add timeout to the AI request
+      const aiRequest = this.openrouter.complete({
         messages: [
           {
             role: 'user',
             content: prompt
           }
         ],
-        maxTokens: 500,
+        maxTokens: outputTokens,
         temperature: 0.7 // Higher creativity for marketing content
       });
 
-      return this.parseRecommendations(response.content);
+      const response = await this.createTimeoutPromise(aiRequest, this.requestTimeout);
+      
+      // Validate response before processing
+      if (!response || !response.content) {
+        throw new Error('Empty or invalid response from AI service');
+      }
+
+      // Track actual usage and cost
+      const actualCost = response.cost?.totalCost || estimatedCost;
+      const actualInputTokens = response.usage?.inputTokens || inputTokens;
+      const actualOutputTokens = response.usage?.outputTokens || outputTokens;
+      
+      await this.recordUsageAndCost({
+        userId: userContext.userId,
+        operation,
+        model,
+        inputTokens: actualInputTokens,
+        outputTokens: actualOutputTokens,
+        estimatedCost,
+        actualCost,
+        processingTimeMs: Date.now() - startTime
+      });
+
+      const parsedContent = this.parseRecommendations(response.content);
+      
+      // Validate parsed content structure
+      this.validatePersonalizedContent(parsedContent);
+      
+      return parsedContent;
     } catch (error) {
-      console.error('LLM personalization error:', error);
+      // Check if it's a rate limit error
+      if (error instanceof RateLimitExceededError) {
+        logger.warn('Rate limit exceeded for personalization', {
+          userId: userContext.userId,
+          operation,
+          violations: error.violations,
+          retryAfter: error.retryAfter
+        });
+        
+        // Use fallback content when rate limited
+        return this.getFallbackContent(userContext);
+      }
+      
+      // Enhance error information
+      const enhancedError = this.enhanceError(error, 'generatePersonalizedContent');
+      console.error('LLM personalization error:', enhancedError);
+      
+      // Return fallback content on any error
       return this.getFallbackContent(userContext);
     }
+  }
+
+  private validatePersonalizedContent(content: PersonalizedContent): void {
+    const requiredFields = ['headline', 'valueProposition', 'socialProof', 'ctaText', 'riskMitigation'];
+    const missingFields = requiredFields.filter(field => !content[field as keyof PersonalizedContent]);
+    
+    if (missingFields.length > 0) {
+      throw new Error(`Invalid personalized content: missing fields ${missingFields.join(', ')}`);
+    }
+
+    // Validate content length limits
+    if (content.headline.length > 80) {
+      throw new Error('Headline exceeds maximum length');
+    }
+    
+    if (content.valueProposition.length > 120) {
+      throw new Error('Value proposition exceeds maximum length');
+    }
+  }
+
+  private enhanceError(error: unknown, operation: string): Error {
+    if (error instanceof Error) {
+      // Add context to existing error
+      const enhancedError = new Error(`${operation} failed: ${error.message}`);
+      enhancedError.name = error.name === 'Error' ? 'AIPersonalizationError' : error.name;
+      enhancedError.stack = error.stack;
+      return enhancedError;
+    }
+    
+    // Handle non-Error objects
+    const errorMessage = typeof error === 'string' ? error : 'Unknown error occurred';
+    const enhancedError = new Error(`${operation} failed: ${errorMessage}`);
+    enhancedError.name = 'AIPersonalizationError';
+    return enhancedError;
   }
 
   private buildPersonalizationPrompt(context: UserContext): string {
@@ -108,14 +252,138 @@ Respond in JSON format only:
     try {
       // Clean up the response to extract JSON
       const jsonMatch = content.match(/\{[\s\S]*\}/);
-      if (jsonMatch) {
-        return JSON.parse(jsonMatch[0]);
+      if (!jsonMatch) {
+        throw new Error('No JSON found in AI response');
       }
-      throw new Error('No JSON found in response');
+
+      // Parse JSON with additional validation
+      const parsed = JSON.parse(jsonMatch[0]);
+      
+      // Ensure all required fields are present and are strings
+      const requiredFields = ['headline', 'valueProposition', 'socialProof', 'ctaText', 'riskMitigation'];
+      for (const field of requiredFields) {
+        if (typeof parsed[field] !== 'string' || parsed[field].trim().length === 0) {
+          throw new Error(`Invalid or missing field: ${field}`);
+        }
+      }
+
+      // Sanitize the content
+      const sanitized: PersonalizedContent = {
+        headline: this.sanitizeContent(parsed.headline, 80),
+        valueProposition: this.sanitizeContent(parsed.valueProposition, 120),
+        socialProof: this.sanitizeContent(parsed.socialProof, 100),
+        ctaText: this.sanitizeContent(parsed.ctaText, 30),
+        riskMitigation: this.sanitizeContent(parsed.riskMitigation, 80),
+      };
+
+      return sanitized;
     } catch (error) {
-      console.warn('Failed to parse LLM recommendations, using fallback:', error);
-      return this.getFallbackContent();
+      const enhancedError = this.enhanceError(error, 'parseRecommendations');
+      console.warn('Failed to parse LLM recommendations:', enhancedError);
+      throw enhancedError; // Re-throw to be handled by calling function
     }
+  }
+
+  /**
+   * Check rate limits and budget before making AI calls
+   */
+  private async checkRateLimitsAndBudget(
+    userContext: UserContext, 
+    operation: string
+  ): Promise<void> {
+    if (!rateLimitConfig.isRateLimitingEnabled()) {
+      return; // Rate limiting disabled
+    }
+
+    // Estimate token usage for rate limiting check
+    const estimatedTokens = 1000; // Conservative estimate for recommendation requests
+    const estimatedCost = 0.01; // Conservative cost estimate
+
+    const rateLimitResult = await this.rateLimitManager.checkAllLimits(
+      userContext.userId,
+      operation,
+      estimatedTokens,
+      estimatedCost
+    );
+
+    if (!rateLimitResult.allowed) {
+      throw new RateLimitExceededError(rateLimitResult.violations);
+    }
+  }
+
+  /**
+   * Estimate token count for text (simple approximation)
+   */
+  private estimateTokens(text: string): number {
+    // Rough approximation: 1 token per 4 characters
+    return Math.ceil(text.length / 4);
+  }
+
+  /**
+   * Record usage and cost after AI operation
+   */
+  private async recordUsageAndCost(data: {
+    userId?: string;
+    operation: string;
+    model: string;
+    inputTokens: number;
+    outputTokens: number;
+    estimatedCost: number;
+    actualCost: number;
+    processingTimeMs: number;
+  }): Promise<void> {
+    try {
+      // Record usage for rate limiting
+      await this.rateLimitManager.recordUsage(
+        data.userId,
+        data.operation,
+        data.inputTokens + data.outputTokens,
+        data.actualCost
+      );
+
+      // Track cost for budget management
+      await costTracker.trackCost({
+        userId: data.userId,
+        operation: data.operation,
+        model: data.model,
+        inputTokens: data.inputTokens,
+        outputTokens: data.outputTokens,
+        estimatedCost: data.estimatedCost,
+        actualCost: data.actualCost,
+        timestamp: new Date(),
+        metadata: {
+          processingTimeMs: data.processingTimeMs,
+          source: 'newsletter_recommendation_engine'
+        }
+      });
+
+    } catch (error) {
+      logger.error('Failed to record usage and cost', {
+        error: error instanceof Error ? error.message : String(error),
+        data
+      });
+    }
+  }
+
+  private sanitizeContent(content: string, maxLength: number): string {
+    if (typeof content !== 'string') {
+      throw new Error('Content must be a string');
+    }
+    
+    // Remove any potential HTML/script tags and trim whitespace
+    const sanitized = content
+      .replace(/<[^>]*>/g, '') // Remove HTML tags
+      .replace(/[<>]/g, '') // Remove remaining angle brackets
+      .trim();
+    
+    if (sanitized.length === 0) {
+      throw new Error('Content is empty after sanitization');
+    }
+    
+    // Truncate if too long
+    return sanitized.length > maxLength 
+      ? sanitized.substring(0, maxLength - 3) + '...' 
+      : sanitized;
   }
 
   private getFallbackContent(context?: UserContext): PersonalizedContent {
@@ -164,9 +432,19 @@ Respond in JSON format only:
 
   async optimizeEmailContent(
     baseContent: string,
-    userEngagement: UserEngagement
+    userEngagement: UserEngagement,
+    userContext?: UserContext
   ): Promise<EmailOptimization> {
+    const operation = 'email_optimization';
+    const model = process.env.OPENROUTER_FALLBACK_MODEL || 'x-ai/grok-beta';
+    const startTime = Date.now();
+    
     try {
+      // Check rate limiting first
+      if (userContext) {
+        await this.checkRateLimitsAndBudget(userContext, operation);
+      }
+
       const optimizationPrompt = `
 Based on the email engagement data below, suggest improvements to this newsletter content:
 
@@ -202,6 +480,28 @@ Respond in JSON format:
 }
       `;
 
+      // Estimate and check budget
+      const inputTokens = this.estimateTokens(optimizationPrompt);
+      const outputTokens = 400;
+      const estimatedCost = costTracker.estimateCost(model, inputTokens, outputTokens);
+      
+      if (userContext?.userId) {
+        const budgetStatus = await costTracker.checkBudget(
+          userContext.userId,
+          estimatedCost,
+          operation
+        );
+        
+        if (!budgetStatus.isWithinBudget) {
+          logger.warn('Budget exceeded for email optimization', {
+            userId: userContext.userId,
+            estimatedCost,
+            budgetStatus
+          });
+          return this.getFallbackOptimizations(userEngagement);
+        }
+      }
+
       const response = await this.openrouter.complete({
         messages: [
           {
@@ -209,12 +509,39 @@ Respond in JSON format:
             content: optimizationPrompt
           }
         ],
-        maxTokens: 400,
+        maxTokens: outputTokens,
         temperature: 0.3 // Lower temperature for more focused recommendations
       });
 
+      // Record usage if we have user context
+      if (userContext?.userId) {
+        const actualCost = response.cost?.totalCost || estimatedCost;
+        const actualInputTokens = response.usage?.inputTokens || inputTokens;
+        const actualOutputTokens = response.usage?.outputTokens || outputTokens;
+        
+        await this.recordUsageAndCost({
+          userId: userContext.userId,
+          operation,
+          model,
+          inputTokens: actualInputTokens,
+          outputTokens: actualOutputTokens,
+          estimatedCost,
+          actualCost,
+          processingTimeMs: Date.now() - startTime
+        });
+      }
+
       return this.parseOptimizations(response.content);
     } catch (error) {
+      if (error instanceof RateLimitExceededError) {
+        logger.warn('Rate limit exceeded for email optimization', {
+          userId: userContext?.userId,
+          operation,
+          violations: error.violations
+        });
+        return this.getFallbackOptimizations(userEngagement);
+      }
+      
       console.error('Email optimization error:', error);
       return this.getFallbackOptimizations(userEngagement);
     }
@@ -263,9 +590,19 @@ Respond in JSON format:
       topCompanies: string[];
       topFormTypes: string[];
       weekDate: string;
-    }
+    },
+    userContext?: UserContext
   ): Promise<string[]> {
+    const operation = 'subject_line_generation';
+    const model = process.env.OPENROUTER_FALLBACK_MODEL || 'x-ai/grok-beta';
+    const startTime = Date.now();
+    
     try {
+      // Check rate limiting first
+      if (userContext) {
+        await this.checkRateLimitsAndBudget(userContext, operation);
+      }
+
       const prompt = `
 Generate 5 email subject line variants for a SEC filing newsletter. 
 
@@ -287,23 +624,104 @@ Return as JSON array:
 ["variant1", "variant2", "variant3", "variant4", "variant5"]
       `;
 
+      // Estimate and check budget
+      const inputTokens = this.estimateTokens(prompt);
+      const outputTokens = 300;
+      const estimatedCost = costTracker.estimateCost(model, inputTokens, outputTokens);
+      
+      if (userContext?.userId) {
+        const budgetStatus = await costTracker.checkBudget(
+          userContext.userId,
+          estimatedCost,
+          operation
+        );
+        
+        if (!budgetStatus.isWithinBudget) {
+          logger.warn('Budget exceeded for subject line generation', {
+            userId: userContext.userId,
+            estimatedCost,
+            budgetStatus
+          });
+          return this.getFallbackSubjectLines(baseSubject, context);
+        }
+      }
+
       const response = await this.openrouter.complete({
         messages: [{ role: 'user', content: prompt }],
-        maxTokens: 300,
+        maxTokens: outputTokens,
         temperature: 0.8
       });
 
+      // Record usage if we have user context
+      if (userContext?.userId) {
+        const actualCost = response.cost?.totalCost || estimatedCost;
+        const actualInputTokens = response.usage?.inputTokens || inputTokens;
+        const actualOutputTokens = response.usage?.outputTokens || outputTokens;
+        
+        await this.recordUsageAndCost({
+          userId: userContext.userId,
+          operation,
+          model,
+          inputTokens: actualInputTokens,
+          outputTokens: actualOutputTokens,
+          estimatedCost,
+          actualCost,
+          processingTimeMs: Date.now() - startTime
+        });
+      }
+
       const variants = JSON.parse(response.content);
-      return Array.isArray(variants) ? variants : [baseSubject];
+      return Array.isArray(variants) ? variants : this.getFallbackSubjectLines(baseSubject, context);
     } catch (error) {
+      if (error instanceof RateLimitExceededError) {
+        logger.warn('Rate limit exceeded for subject line generation', {
+          userId: userContext?.userId,
+          operation,
+          violations: error.violations
+        });
+        return this.getFallbackSubjectLines(baseSubject, context);
+      }
+      
       console.error('Subject line generation error:', error);
-      return [
-        baseSubject,
-        `${context.topCompanies[0]} files ${context.topFormTypes[0]} + 4 more`,
-        `This week: ${context.topCompanies.slice(0, 2).join(', ')} updates`,
-        `${context.topCompanies.length} companies filed this week`,
-        `SEC Alert: ${context.topCompanies[0]} + major updates`
-      ];
+      return this.getFallbackSubjectLines(baseSubject, context);
     }
+  }
+
+  /**
+   * Generate fallback subject lines when AI is unavailable
+   */
+  private getFallbackSubjectLines(
+    baseSubject: string,
+    context: {
+      topCompanies: string[];
+      topFormTypes: string[];
+      weekDate: string;
+    }
+  ): string[] {
+    return [
+      baseSubject,
+      `${context.topCompanies[0]} files ${context.topFormTypes[0]} + 4 more`,
+      `This week: ${context.topCompanies.slice(0, 2).join(', ')} updates`,
+      `${context.topCompanies.length} companies filed this week`,
+      `SEC Alert: ${context.topCompanies[0]} + major updates`
+    ];
+  }
+
+  /**
+   * Get rate limiting status for a user
+   */
+  async getRateLimitStatus(userId: string): Promise<{
+    requests: { current: number; limit: number; resetTime: number };
+    tokens: { current: number; limit: number; resetTime: number };
+    cost: { current: number; limit: number; resetTime: number };
+  }> {
+    return await this.rateLimitManager.getRateLimitStatus(userId);
+  }
+
+  /**
+   * Cleanup resources
+   */
+  async shutdown(): Promise<void> {
+    await this.rateLimitManager.shutdown();
   }
 }

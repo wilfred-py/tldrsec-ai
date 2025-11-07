@@ -70,6 +70,8 @@
     "test:e2e:multi-ticker": "npx tsx scripts/test-e2e-multi-ticker.ts",
     "test:async-email-queue": "npx tsx scripts/test-async-email-queue.ts",
     "test:context-workflow": "npx tsx scripts/test-context-workflow.ts",
+    "test:ai-rate-limiting": "NODE_ENV=test jest tests/rate-limiting.test.ts --detectOpenHandles --forceExit",
+    "test:ai-rate-limiting:watch": "NODE_ENV=test jest tests/rate-limiting.test.ts --detectOpenHandles --forceExit --watch",
     "test:rate-limiting:components": "jest __tests__/rate-limiting/circuit-breaker-comprehensive.test.ts __tests__/rate-limiting/request-queue-comprehensive.test.ts __tests__/rate-limiting/rate-limit-algorithms.test.ts --config=jest.config.mjs --verbose",
     "test:rate-limiting:integration": "jest __tests__/rate-limiting/integration-cross-service.test.ts --config=jest.config.mjs --verbose --runInBand",
     "test:rate-limiting:e2e": "jest __tests__/rate-limiting/e2e-pipeline-validation.test.ts --config=jest.config.mjs --verbose --runInBand --detectOpenHandles",

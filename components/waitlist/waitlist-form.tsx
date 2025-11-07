@@ -20,6 +20,7 @@ export function WaitlistForm() {
     
     if (!email || !email.includes('@')) {
       setErrorMessage('Please enter a valid email address');
+      setStatus('error');
       return;
     }
 

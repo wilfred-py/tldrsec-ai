@@ -742,3 +742,77 @@ model MonitoringThreshold {
   @@unique([metricName, thresholdType])
   @@index([metricName, enabled])
 }
+
+model AiCostTracking {
+  id            String   @id @default(uuid())
+  userId        String?
+  operation     String
+  model         String
+  tokensUsed    Int
+  inputTokens   Int      @default(0)
+  outputTokens  Int      @default(0)
+  estimatedCost Float
+  actualCost    Float?
+  timestamp     DateTime @default(now())
+  metadata      Json?
+
+  @@index([userId, timestamp])
+  @@index([operation, timestamp])
+  @@index([model, timestamp])
+  @@index([timestamp])
+}
+
+model UserRateLimit {
+  id          String        @id @default(uuid())
+  userId      String
+  limitType   RateLimitType
+  currentCount Int          @default(0)
+  resetTime   DateTime
+  lastUpdated DateTime      @default(now())
+
+  @@unique([userId, limitType])
+  @@index([userId])
+  @@index([resetTime])
+}
+
+model GlobalRateLimit {
+  id          String        @id @default(uuid())
+  limitType   RateLimitType
+  currentCount Int          @default(0)
+  resetTime   DateTime
+  lastUpdated DateTime      @default(now())
+
+  @@unique([limitType])
+  @@index([resetTime])
+}
+
+model RateLimitViolation {
+  id                String          @id @default(uuid())
+  userId            String?
+  limitType         RateLimitType
+  violationType     ViolationType
+  attemptedOperation String
+  currentUsage      Int
+  limit             Int
+  timestamp         DateTime        @default(now())
+  metadata          Json?
+
+  @@index([userId, timestamp])
+  @@index([limitType, timestamp])
+  @@index([violationType, timestamp])
+}
+
+enum RateLimitType {
+  REQUESTS_PER_HOUR
+  REQUESTS_PER_DAY
+  TOKENS_PER_HOUR
+  TOKENS_PER_DAY
+  COST_PER_HOUR
+  COST_PER_DAY
+}
+
+enum ViolationType {
+  SOFT_LIMIT
+  HARD_LIMIT
+  BUDGET_EXCEEDED
+}
