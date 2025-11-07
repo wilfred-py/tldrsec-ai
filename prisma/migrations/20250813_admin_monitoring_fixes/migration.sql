@@ -32,17 +32,8 @@ CREATE INDEX IF NOT EXISTS "CronJobExecution_startedAt_idx" ON "CronJobExecution
 CREATE INDEX IF NOT EXISTS "CronJobExecution_completedAt_idx" ON "CronJobExecution"("completedAt");
 
 -- Verify data integrity after migration
--- This will help identify any remaining inconsistencies
-INSERT INTO "CronJobHealthMetric" ("id", "jobName", "metricName", "metricValue", "metricUnit", "recordedAt")
-SELECT 
-    gen_random_uuid(),
-    'migration-verification',
-    'status-migration-count',
-    COUNT(*)::DECIMAL,
-    'records',
-    NOW()
-FROM "CronJobExecution"
-WHERE status IN ('STARTED', 'SUCCESS', 'FAILED');
+-- The verification will be handled by application code rather than SQL
+-- to avoid UUID generation compatibility issues across PostgreSQL versions
 
 COMMIT;
 

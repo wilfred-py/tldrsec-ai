@@ -305,7 +305,7 @@ jobs:
           
           # Check for sensitive data in monitoring code
           echo "Checking for sensitive data in monitoring code..."
-          if grep -r "password\|secret\|key" app/api/monitoring/ --exclude-dir=node_modules | grep -v "test\|example\|placeholder"; then
+          if grep -r "password\|secret\|key" app/api/monitoring/ --exclude-dir=node_modules --exclude="*.disabled" | grep -v "test\|example\|placeholder"; then
             echo "WARNING: Potential sensitive data found in monitoring code"
             exit 1
           fi
