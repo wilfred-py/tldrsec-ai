@@ -64,12 +64,13 @@ export async function POST(request: NextRequest) {
     }
     
     // Extract and provide defaults for required fields
+    const bodyRecord = body as Record<string, unknown>;
     const requestData = {
-      email: (body as any).email,
-      source: (body as any).source || 'newsletter_page',
-      utm_source: (body as any).utm_source,
-      utm_medium: (body as any).utm_medium,
-      utm_campaign: (body as any).utm_campaign
+      email: typeof bodyRecord.email === 'string' ? bodyRecord.email : '',
+      source: typeof bodyRecord.source === 'string' ? bodyRecord.source : 'newsletter_page',
+      utm_source: typeof bodyRecord.utm_source === 'string' ? bodyRecord.utm_source : undefined,
+      utm_medium: typeof bodyRecord.utm_medium === 'string' ? bodyRecord.utm_medium : undefined,
+      utm_campaign: typeof bodyRecord.utm_campaign === 'string' ? bodyRecord.utm_campaign : undefined
     };
     
     // Comprehensive security validation
@@ -289,9 +290,8 @@ export async function POST(request: NextRequest) {
   }
 }
 
-function getWelcomeEmailTemplate(email: string): string {
-  // Sanitize email for template usage
-  const sanitizedEmail = email.replace(/[<>"'&]/g, '');
+function getWelcomeEmailTemplate(_email: string): string {
+  // Email is not used in template, parameter kept for future use
   return `
     <!DOCTYPE html>
     <html>
