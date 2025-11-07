@@ -288,7 +288,7 @@ const PRODUCTION_CONFIG: RateLimitConfiguration = {
  */
 export class RateLimitConfigManager {
   private config: RateLimitConfiguration;
-  private envOverrides: Map<string, any> = new Map();
+  private envOverrides: Map<string, unknown> = new Map();
 
   constructor(environment?: Environment) {
     this.config = this.selectEnvironmentConfig(environment);
@@ -385,7 +385,7 @@ export class RateLimitConfigManager {
   /**
    * Parse environment variable value to appropriate type
    */
-  private parseEnvValue(value: string): any {
+  private parseEnvValue(value: string): unknown {
     // Boolean values
     if (value.toLowerCase() === 'true') return true;
     if (value.toLowerCase() === 'false') return false;
@@ -401,15 +401,15 @@ export class RateLimitConfigManager {
   /**
    * Set nested configuration value using dot notation path
    */
-  private setConfigValue(path: string, value: any): void {
+  private setConfigValue(path: string, value: unknown): void {
     const parts = path.split('.');
-    let current: any = this.config;
+    let current: Record<string, unknown> = this.config as Record<string, unknown>;
     
     for (let i = 0; i < parts.length - 1; i++) {
       if (!(parts[i] in current)) {
         current[parts[i]] = {};
       }
-      current = current[parts[i]];
+      current = current[parts[i]] as Record<string, unknown>;
     }
     
     current[parts[parts.length - 1]] = value;

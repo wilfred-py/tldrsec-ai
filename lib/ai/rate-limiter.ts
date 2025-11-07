@@ -8,7 +8,6 @@
 import Redis from 'ioredis';
 import { logger } from '../logging';
 import { monitoring } from '../monitoring';
-import { createApiError } from '../error-handling';
 
 /**
  * Rate limiting configuration types
@@ -366,7 +365,7 @@ export class AIRateLimitManager {
     // Generate keys for different scopes
     const userKey = userId ? `${RateLimitScope.USER}:${userId}` : null;
     const globalKey = `${RateLimitScope.GLOBAL}:all`;
-    const endpointKey = `${RateLimitScope.ENDPOINT}:${operation}`;
+    const _endpointKey = `${RateLimitScope.ENDPOINT}:${operation}`;
 
     try {
       // Check per-user limits

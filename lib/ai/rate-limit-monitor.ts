@@ -81,7 +81,7 @@ export class RateLimitMonitor {
     attemptedOperation: string;
     currentUsage: number;
     limit: number;
-    metadata?: Record<string, any>;
+    metadata?: Record<string, unknown>;
   }): Promise<void> {
     try {
       await prisma.rateLimitViolation.create({

@@ -23,7 +23,7 @@ export interface CostTrackingEntry {
   estimatedCost: number;
   actualCost?: number;
   timestamp: Date;
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
 }
 
 export interface BudgetConfig {
@@ -177,9 +177,9 @@ export class AICostTracker {
     operation: string
   ): Promise<BudgetStatus> {
     try {
-      const now = new Date();
-      const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-      const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+      const _now = new Date();
+      const _startOfDay = new Date(_now.getFullYear(), _now.getMonth(), _now.getDate());
+      const _startOfMonth = new Date(_now.getFullYear(), _now.getMonth(), 1);
 
       // Get current costs
       const [globalDailyCost, globalMonthlyCost, userDailyCost, userMonthlyCost] = await Promise.all([
@@ -414,7 +414,7 @@ export class AICostTracker {
     endDate?: Date
   ): Promise<CostSummary> {
     try {
-      const whereClause: any = {};
+      const whereClause: Record<string, unknown> = {};
       
       if (userId) {
         whereClause.userId = userId;
@@ -553,7 +553,7 @@ export class AICostTracker {
    */
   async resetBudgetUsage(userId?: string): Promise<void> {
     try {
-      const whereClause: any = {};
+      const whereClause: Record<string, unknown> = {};
       if (userId) {
         whereClause.userId = userId;
       }
