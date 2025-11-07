@@ -52,12 +52,21 @@ jobs:
           else
             echo "✅ CLERK_SECRET_KEY configured"
           fi
+          if [ -z "$OPENROUTER_API_KEY" ] && [ -z "$TLDRSEC_AI_SUMMARIZER" ]; then
+            echo "⚠️ OpenRouter API key not configured, using test key"
+            export OPENROUTER_API_KEY="sk-or-test-key"
+            export TLDRSEC_AI_SUMMARIZER="sk-test-summarizer-key"
+          else
+            echo "✅ OpenRouter API key configured"
+          fi
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
           CLERK_SECRET_KEY: ${{ secrets.CLERK_SECRET_KEY }}
-          NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY }}
+          NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ vars.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          TLDRSEC_AI_SUMMARIZER: ${{ secrets.TLDRSEC_AI_SUMMARIZER }}
           
       - name: TypeScript & Linting
         run: |
@@ -68,7 +77,9 @@ jobs:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY || 'sk-test-anthropic-key' }}
           RESEND_API_KEY: ${{ secrets.RESEND_API_KEY || 're_test_resend_key' }}
           CLERK_SECRET_KEY: ${{ secrets.CLERK_SECRET_KEY || 'sk_test_abcdefghijklmnopqrstuvwxyz123456789' }}
-          NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY || 'pk_test_abcdefghijklmnopqrstuvwxyz123456789_clerk_publishable' }}
+          NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ vars.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY || 'pk_test_abcdefghijklmnopqrstuvwxyz123456789_clerk_publishable' }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY || 'sk-or-test-key' }}
+          TLDRSEC_AI_SUMMARIZER: ${{ secrets.TLDRSEC_AI_SUMMARIZER || 'sk-test-summarizer-key' }}
           
       - name: Security Scan
         run: npm audit --audit-level=high
@@ -80,7 +91,9 @@ jobs:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY || 'sk-test-anthropic-key' }}
           RESEND_API_KEY: ${{ secrets.RESEND_API_KEY || 're_test_resend_key' }}
           CLERK_SECRET_KEY: ${{ secrets.CLERK_SECRET_KEY || 'sk_test_abcdefghijklmnopqrstuvwxyz123456789' }}
-          NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY || 'pk_test_abcdefghijklmnopqrstuvwxyz123456789_clerk_publishable' }}
+          NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ vars.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY || 'pk_test_abcdefghijklmnopqrstuvwxyz123456789_clerk_publishable' }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY || 'sk-or-test-key' }}
+          TLDRSEC_AI_SUMMARIZER: ${{ secrets.TLDRSEC_AI_SUMMARIZER || 'sk-test-summarizer-key' }}
         
       - name: Database Connection Test
         run: npm run db:test || echo "⚠️ Database connection test skipped - no live database available"
@@ -223,7 +236,9 @@ jobs:
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL || 'postgresql://test:test@localhost:5432/test_db' }}
           CLERK_SECRET_KEY: ${{ secrets.CLERK_SECRET_KEY || 'sk_test_abcdefghijklmnopqrstuvwxyz123456789' }}
-          NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY || 'pk_test_abcdefghijklmnopqrstuvwxyz123456789_clerk_publishable' }}
+          NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ vars.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY || 'pk_test_abcdefghijklmnopqrstuvwxyz123456789_clerk_publishable' }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY || 'sk-or-test-key' }}
+          TLDRSEC_AI_SUMMARIZER: ${{ secrets.TLDRSEC_AI_SUMMARIZER || 'sk-test-summarizer-key' }}
           
       - name: Validate Monitoring Configuration
         run: |
