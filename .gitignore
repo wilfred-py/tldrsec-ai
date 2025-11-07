@@ -61,6 +61,9 @@ tasks/
 # clerk configuration (can include secrets)
 /.clerk/
 
+# claude settings that may contain secrets
+.claude/settings.local.json
+
 # TaskMaster and Cursor files
 .taskmasterconfig
 .roo/
