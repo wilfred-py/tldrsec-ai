@@ -11,19 +11,12 @@ export default {
     });
   },
 
-  // Handle scheduled cron events with advanced rate limiting mitigation
+  // Handle scheduled cron events with basic rate limiting
   async scheduled(event, env, ctx) {
-    // Initialize rate limiting and monitoring services with environment validation
-    const rateLimiter = new AdvancedRateLimiter(
-      env.RATE_LIMIT_KV || null, 
-      env.CIRCUIT_BREAKER_KV || null, 
-      env.METRICS_KV || null
-    );
-    const circuitBreaker = new CircuitBreaker(
-      env.CIRCUIT_BREAKER_KV || null, 
-      rateLimiter
-    );
-    const monitor = new WorkerMonitor(env.METRICS_KV || null);
+    // Initialize monitoring services (KV storage is optional)
+    const rateLimiter = new AdvancedRateLimiter(null, null, null); // Use memory fallback
+    const circuitBreaker = new CircuitBreaker(null, rateLimiter);
+    const monitor = new WorkerMonitor(null); // Use memory fallback
     
     // Generate secure execution ID using crypto API
     const generateSecureExecutionId = () => {
@@ -37,12 +30,8 @@ export default {
     const executionId = generateSecureExecutionId();
     const startTime = Date.now();
     
-    // Log KV storage availability
-    console.log(`[${executionId}] KV Storage availability:`, {
-      rateLimitKV: !!env.RATE_LIMIT_KV,
-      circuitBreakerKV: !!env.CIRCUIT_BREAKER_KV,
-      metricsKV: !!env.METRICS_KV
-    });
+    // Log initialization (KV storage not used in this build)
+    console.log(`[${executionId}] Worker initialized with memory-only storage`);
     
     console.log(`[${executionId}] Starting TLDRSEC scheduled cron job execution with enhanced rate limiting`);
     

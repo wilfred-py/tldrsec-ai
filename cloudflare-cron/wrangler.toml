@@ -3,13 +3,7 @@
 
 name = "cloudflare-cron"
 main = "index.js"
-compatibility_date = "2024-12-01"
-workers_dev = true
-
-# Explicit build configuration for Cloudflare's new build system
-[build]
-command = ""
-watch_dir = ""
+compatibility_date = "2024-10-01"
 
 # Cron schedule: Every 10 minutes
 [triggers]
@@ -19,8 +13,8 @@ crons = ["*/10 * * * *"]
 [vars]
 PUBLIC_URL = "https://tldrsec.app"
 USE_ASYNC_PROCESSING = "true"
-DEBUG_MODE = "true"  # Set to "false" in production for reduced logging
-WORKER_VERSION = "2.3.0-enhanced"
+DEBUG_MODE = "true"
+WORKER_VERSION = "2.4.0-stable"
 RATE_LIMIT_STRATEGY = "adaptive-global-aware"
 
 # IMPORTANT: Sensitive secrets must be added via Cloudflare Dashboard or wrangler CLI:
@@ -40,7 +34,9 @@ RATE_LIMIT_STRATEGY = "adaptive-global-aware"
 enabled = true
 
 # Enhanced KV storage for advanced rate limiting, circuit breaker state persistence, and monitoring
-# IMPORTANT: Replace placeholder IDs with actual KV namespace IDs from Cloudflare Dashboard
+# NOTE: KV namespaces are optional and worker functions without them (fallback to memory cache)
+# To enable KV storage, create namespaces and uncomment the sections below:
+# 
 # Create KV namespaces with: 
 #   npx wrangler kv namespace create "RATE_LIMIT_KV"
 #   npx wrangler kv namespace create "CIRCUIT_BREAKER_KV" 
@@ -48,22 +44,9 @@ enabled = true
 #   npx wrangler kv namespace create "RATE_LIMIT_KV" --preview
 #   npx wrangler kv namespace create "CIRCUIT_BREAKER_KV" --preview
 #   npx wrangler kv namespace create "METRICS_KV" --preview
-
-# Commented out until KV namespaces are properly configured
-# [[kv_namespaces]]
-# binding = "RATE_LIMIT_KV"
-# preview_id = "" # Replace with actual preview namespace ID
-# id = ""     # Replace with actual production namespace ID
-
-# [[kv_namespaces]]
-# binding = "CIRCUIT_BREAKER_KV"
-# preview_id = "" # Replace with actual preview namespace ID
-# id = ""     # Replace with actual production namespace ID
-
-# [[kv_namespaces]]
-# binding = "METRICS_KV"
-# preview_id = "" # Replace with actual preview namespace ID
-# id = ""     # Replace with actual production namespace ID
+#
+# KV namespaces are commented out to prevent build failures
+# Worker gracefully falls back to memory cache when KV is not available
 
 # Build configuration for robust deployment
 # Note: upload exclusions are handled automatically by wrangler
