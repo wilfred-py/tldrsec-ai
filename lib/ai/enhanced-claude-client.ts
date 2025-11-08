@@ -479,8 +479,15 @@ export class EnhancedClaudeClient extends EventEmitter {
       // Log batch completion
       componentLogger.info(`Batch ${batchId} completed: ${batchResults.results.length} successful, ${batchResults.errors.length} failed`);
       
-      // Track batch metrics
-      setInterval(() => {
+      // Track batch metrics with proper cleanup
+      const { resourceCleanupSystem } = await import('../resources/automatic-cleanup-system');
+      const batchContextId = resourceCleanupSystem.createContext('batch', {
+        batchId,
+        resultsCount: batchResults.results.length,
+        errorsCount: batchResults.errors.length
+      });
+      
+      const { id: intervalId } = resourceCleanupSystem.createInterval(() => {
         try {
           monitoring.recordBatchProcessing(
             'document_processing',
@@ -491,7 +498,13 @@ export class EnhancedClaudeClient extends EventEmitter {
         } catch (monitoringError) {
           componentLogger.warn(`Failed to record batch metrics: ${monitoringError instanceof Error ? monitoringError.message : String(monitoringError)}`);
         }
-      }, 1000);
+      }, 1000, batchContextId);
+      
+      // Clean up after 30 seconds to prevent long-running intervals
+      resourceCleanupSystem.createTimeout(() => {
+        resourceCleanupSystem.clearInterval(intervalId);
+        resourceCleanupSystem.cleanupContext(batchContextId);
+      }, 30000, batchContextId);
       
       // Emit batch complete event
       this.emit(EnhancedClaudeEvent.BATCH_COMPLETE, { 
