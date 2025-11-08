@@ -301,9 +301,7 @@ describe('Redirect Loop Protection', () => {
 
   describe('Bypass Cookie Management', () => {
     it('should set bypass cookie with correct attributes', () => {
-      const response = new NextResponse();
-      
-      // Mock cookie setting
+      // Test cookie attributes without needing NextResponse constructor
       const cookieAttributes = {
         maxAge: 3600,
         httpOnly: true,

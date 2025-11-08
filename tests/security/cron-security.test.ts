@@ -7,9 +7,9 @@ import { NextRequest } from 'next/server';
 import { GET } from '../../app/api/cron/tier-aware/route';
 import { HmacAuthService } from '../../lib/security/hmac-auth';
 
-// Mock dependencies
-jest.mock('../../lib/db/prisma', () => ({
-  getPrismaClient: jest.fn(() => ({
+// Mock dependencies with more comprehensive database model coverage
+jest.mock('../../lib/db/prisma', () => {
+  const mockPrismaClient = {
     user: {
       findMany: jest.fn().mockResolvedValue([]),
       findUnique: jest.fn().mockResolvedValue(null),
@@ -17,9 +17,37 @@ jest.mock('../../lib/db/prisma', () => ({
     },
     auditLog: {
       create: jest.fn().mockResolvedValue({})
+    },
+    jobLock: {
+      findFirst: jest.fn().mockResolvedValue(null), // No existing lock
+      upsert: jest.fn().mockResolvedValue({
+        id: 'test-lock-id',
+        lockName: 'test-lock',
+        acquiredBy: 'test',
+        acquiredAt: new Date(),
+        expiresAt: new Date(Date.now() + 30 * 60 * 1000),
+        released: false
+      }),
+      updateMany: jest.fn().mockResolvedValue({ count: 0 }), // No expired locks to cleanup
+      update: jest.fn().mockResolvedValue({})
+    },
+    summary: {
+      count: jest.fn().mockResolvedValue(0)
+    },
+    ticker: {
+      findMany: jest.fn().mockResolvedValue([])
+    },
+    secFiling: {
+      findMany: jest.fn().mockResolvedValue([])
     }
-  }))
-}));
+  };
+  
+  // Export both the client and a way to access it for resetting
+  return {
+    getPrismaClient: jest.fn(() => mockPrismaClient),
+    __mockPrismaClient: mockPrismaClient
+  };
+});
 
 jest.mock('../../lib/monitoring/cron-monitor', () => ({
   CronJobMonitor: {
@@ -127,8 +155,37 @@ describe('Cron Endpoint Security Tests', () => {
     };
   };
   
-  beforeEach(() => {
+  beforeEach(async () => {
     jest.clearAllMocks();
+    
+    // Get the mock Prisma client
+    const { __mockPrismaClient } = await import('../../lib/db/prisma');
+    
+    if (__mockPrismaClient) {
+      // Reset all Prisma client mocks
+      Object.values(__mockPrismaClient).forEach(model => {
+        if (model && typeof model === 'object') {
+          Object.values(model).forEach(method => {
+            if (jest.isMockFunction(method)) {
+              method.mockClear();
+            }
+          });
+        }
+      });
+      
+      // Reset specific mock implementations to defaults
+      __mockPrismaClient.jobLock.findFirst.mockResolvedValue(null);
+      __mockPrismaClient.jobLock.updateMany.mockResolvedValue({ count: 0 });
+      __mockPrismaClient.jobLock.upsert.mockResolvedValue({
+        id: 'test-lock-id',
+        lockName: 'test-lock',
+        acquiredBy: 'test',
+        acquiredAt: new Date(),
+        expiresAt: new Date(Date.now() + 30 * 60 * 1000),
+        released: false
+      });
+      __mockPrismaClient.summary.count.mockResolvedValue(0);
+    }
     
     // Reset rate limiter mock to allow requests by default
     const { rateLimiter } = require('../../lib/security/rate-limiter');
