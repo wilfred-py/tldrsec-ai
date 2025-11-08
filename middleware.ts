@@ -340,7 +340,7 @@ const securityMiddleware = async (request: NextRequest): Promise<NextResponse | 
  * 4. Proper expiration and cleanup mechanisms
  */
 class SecureCookieManager {
-  private static readonly COOKIE_SECRET = process.env.COOKIE_SECRET || 'default-fallback-secret-do-not-use-in-production';
+  private static readonly COOKIE_SECRET = process.env.COOKIE_SECRET;
   private static readonly COOKIE_NAME = 'ab_variant';
   private static readonly INTEGRITY_SUFFIX = '_sig';
   
@@ -380,6 +380,12 @@ class SecureCookieManager {
    * Generate HMAC signature for cookie integrity validation
    */
   private static async generateSignature(value: string, timestamp: number): Promise<string> {
+    // Fail securely if COOKIE_SECRET is not properly configured
+    if (!this.COOKIE_SECRET || this.COOKIE_SECRET.length < 32) {
+      middlewareLogger.error('COOKIE_SECRET not properly configured');
+      throw new Error('Cookie signature generation failed - server configuration error');
+    }
+    
     const encoder = new TextEncoder();
     const data = `${value}:${timestamp}`;
     
@@ -406,6 +412,12 @@ class SecureCookieManager {
    * Verify cookie integrity using HMAC signature
    */
   private static async verifySignature(value: string, timestamp: number, signature: string): Promise<boolean> {
+    // Fail securely if COOKIE_SECRET is not properly configured
+    if (!this.COOKIE_SECRET || this.COOKIE_SECRET.length < 32) {
+      middlewareLogger.error('COOKIE_SECRET not properly configured during verification');
+      return false;
+    }
+    
     try {
       const expectedSignature = await this.generateSignature(value, timestamp);
       

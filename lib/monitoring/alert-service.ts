@@ -800,5 +800,6 @@ class AlertService {
   }
 }
 
-// Export singleton instance
+// Export both class and singleton instance
+export { AlertService };
 export const alertService = new AlertService();
