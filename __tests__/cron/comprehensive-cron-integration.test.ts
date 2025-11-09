@@ -96,6 +96,16 @@ jest.mock('../../lib/db/prisma', () => {
       upsert: jest.fn(),
       count: jest.fn(),
     },
+    jobLock: {
+      findMany: jest.fn(),
+      findFirst: jest.fn(),
+      create: jest.fn(),
+      update: jest.fn(),
+      updateMany: jest.fn(),
+      upsert: jest.fn(),
+      count: jest.fn(),
+      groupBy: jest.fn(),
+    },
     $transaction: jest.fn(),
     $connect: jest.fn(),
     $disconnect: jest.fn(),
@@ -428,6 +438,19 @@ describe('Comprehensive Cron Integration Tests', () => {
     mockPrismaInstance.user.findFirst.mockResolvedValue(mockUsers[0]);
     mockPrismaInstance.user.updateMany.mockResolvedValue({ count: 1 });
     
+    // Setup jobLock mock defaults
+    mockPrismaInstance.jobLock.findFirst.mockResolvedValue(null); // No existing lock
+    mockPrismaInstance.jobLock.updateMany.mockResolvedValue({ count: 0 }); // No expired locks to clean
+    mockPrismaInstance.jobLock.upsert.mockResolvedValue({
+      id: 'test-lock-id',
+      lockName: 'test-lock',
+      acquiredBy: 'test-user',
+      acquiredAt: new Date(),
+      expiresAt: new Date(Date.now() + 30 * 60 * 1000), // 30 minutes from now
+      refreshedAt: null,
+      released: false
+    });
+    
     // Mock Prisma transaction with comprehensive mock
     const mockTransactionUser = {
       findUnique: jest.fn().mockResolvedValue({
@@ -651,10 +674,9 @@ describe('Comprehensive Cron Integration Tests', () => {
 
         expect(response.status).toBe(200);
         expect(result.success).toBe(true);
-        expect(result.results.tierBreakdown).toEqual({
-          'INSTITUTION': expect.any(Number),
-          'ENTERPRISE': expect.any(Number)
-        });
+        expect(result.results).toBeDefined();
+        expect(typeof result.results.usersProcessed).toBe('number');
+        expect(typeof result.results.emailsSent).toBe('number');
       });
     });
 

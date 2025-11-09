@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { currentUser } from '@clerk/nextjs/server';
 import { prisma } from '@/lib/db';
 import { getMockSummaries } from '@/lib/api/summary-service';
@@ -69,7 +69,7 @@ describe('Summaries API Route', () => {
     // Reset mocks
     (currentUser as jest.Mock).mockReset();
     (getMockSummaries as jest.Mock).mockReset();
-    (prisma.ticker.findMany as jest.Mock).mockReset();
+    (prisma?.ticker.findMany as jest.Mock).mockReset();
   });
 
   it('should return 401 if user is not authenticated', async () => {
@@ -77,9 +77,9 @@ describe('Summaries API Route', () => {
     (currentUser as jest.Mock).mockResolvedValue(null);
 
     // Execute
-    const request = new Request('https://example.com/api/summaries');
+    const request = new NextRequest('https://example.com/api/summaries');
     const response = await GET(request);
-    const responseBody = await response.json();
+    const responseBody = await response.json() as any;
 
     // Assert
     expect(response.status).toBe(401);
@@ -90,12 +90,12 @@ describe('Summaries API Route', () => {
     // Setup: User is authenticated and has access to some tickers
     (currentUser as jest.Mock).mockResolvedValue(mockUser);
     (getMockSummaries as jest.Mock).mockReturnValue(mockSummaries);
-    (prisma.ticker.findMany as jest.Mock).mockResolvedValue(mockTickers);
+    (prisma?.ticker.findMany as jest.Mock).mockResolvedValue(mockTickers);
 
     // Execute
-    const request = new Request('https://example.com/api/summaries');
+    const request = new NextRequest('https://example.com/api/summaries');
     const response = await GET(request);
-    const responseBody = await response.json();
+    const responseBody = await response.json() as any;
 
     // Assert
     expect(response.status).toBe(200);
@@ -107,7 +107,7 @@ describe('Summaries API Route', () => {
     expect(responseBody.summaries.find((s: any) => s.ticker.symbol === 'GOOG')).toBeUndefined();
     
     // Verify tickers were fetched
-    expect(prisma.ticker.findMany).toHaveBeenCalledWith({
+    expect(prisma?.ticker.findMany).toHaveBeenCalledWith({
       where: { userId: mockUser.id },
       select: { symbol: true }
     });
@@ -117,12 +117,12 @@ describe('Summaries API Route', () => {
     // Setup: User is authenticated and requesting specific ticker
     (currentUser as jest.Mock).mockResolvedValue(mockUser);
     (getMockSummaries as jest.Mock).mockReturnValue(mockSummaries);
-    (prisma.ticker.findMany as jest.Mock).mockResolvedValue(mockTickers);
+    (prisma?.ticker.findMany as jest.Mock).mockResolvedValue(mockTickers);
 
     // Execute: Request with ticker filter
     const request = new Request('https://example.com/api/summaries?ticker=aapl');
     const response = await GET(request);
-    const responseBody = await response.json();
+    const responseBody = await response.json() as any;
 
     // Assert
     expect(response.status).toBe(200);
@@ -135,12 +135,12 @@ describe('Summaries API Route', () => {
     // Setup: User is authenticated and requesting specific filing type
     (currentUser as jest.Mock).mockResolvedValue(mockUser);
     (getMockSummaries as jest.Mock).mockReturnValue(mockSummaries);
-    (prisma.ticker.findMany as jest.Mock).mockResolvedValue(mockTickers);
+    (prisma?.ticker.findMany as jest.Mock).mockResolvedValue(mockTickers);
 
     // Execute: Request with filing type filter
     const request = new Request('https://example.com/api/summaries?filingType=10-k');
     const response = await GET(request);
-    const responseBody = await response.json();
+    const responseBody = await response.json() as any;
 
     // Assert
     expect(response.status).toBe(200);
@@ -153,12 +153,12 @@ describe('Summaries API Route', () => {
     // Setup: User is authenticated and requesting limited results
     (currentUser as jest.Mock).mockResolvedValue(mockUser);
     (getMockSummaries as jest.Mock).mockReturnValue(mockSummaries);
-    (prisma.ticker.findMany as jest.Mock).mockResolvedValue(mockTickers);
+    (prisma?.ticker.findMany as jest.Mock).mockResolvedValue(mockTickers);
 
     // Execute: Request with limit
     const request = new Request('https://example.com/api/summaries?limit=1');
     const response = await GET(request);
-    const responseBody = await response.json();
+    const responseBody = await response.json() as any;
 
     // Assert
     expect(response.status).toBe(200);
@@ -170,12 +170,12 @@ describe('Summaries API Route', () => {
     // Setup: User is authenticated
     (currentUser as jest.Mock).mockResolvedValue(mockUser);
     (getMockSummaries as jest.Mock).mockReturnValue(mockSummaries);
-    (prisma.ticker.findMany as jest.Mock).mockResolvedValue(mockTickers);
+    (prisma?.ticker.findMany as jest.Mock).mockResolvedValue(mockTickers);
 
     // Execute
-    const request = new Request('https://example.com/api/summaries');
+    const request = new NextRequest('https://example.com/api/summaries');
     const response = await GET(request);
-    const responseBody = await response.json();
+    const responseBody = await response.json() as any;
 
     // Assert
     expect(response.status).toBe(200);
@@ -190,9 +190,9 @@ describe('Summaries API Route', () => {
     (currentUser as jest.Mock).mockRejectedValue(new Error('Server error'));
 
     // Execute
-    const request = new Request('https://example.com/api/summaries');
+    const request = new NextRequest('https://example.com/api/summaries');
     const response = await GET(request);
-    const responseBody = await response.json();
+    const responseBody = await response.json() as any;
 
     // Assert
     expect(response.status).toBe(500);

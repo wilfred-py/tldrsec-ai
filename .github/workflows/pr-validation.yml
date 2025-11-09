@@ -52,12 +52,21 @@ jobs:
           else
             echo "✅ CLERK_SECRET_KEY configured"
           fi
+          if [ -z "$OPENROUTER_API_KEY" ] && [ -z "$TLDRSEC_AI_SUMMARIZER" ]; then
+            echo "⚠️ OpenRouter API key not configured, using test key"
+            export OPENROUTER_API_KEY="sk-or-test-key"
+            export TLDRSEC_AI_SUMMARIZER="sk-test-summarizer-key"
+          else
+            echo "✅ OpenRouter API key configured"
+          fi
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
           CLERK_SECRET_KEY: ${{ secrets.CLERK_SECRET_KEY }}
-          NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY }}
+          NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ vars.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          TLDRSEC_AI_SUMMARIZER: ${{ secrets.TLDRSEC_AI_SUMMARIZER }}
           
       - name: TypeScript & Linting
         run: |
@@ -65,10 +74,16 @@ jobs:
           npm run build
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL || 'postgresql://test:test@localhost:5432/test_db' }}
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY || 'sk-test-anthropic-key' }}
-          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY || 're_test_resend_key' }}
-          CLERK_SECRET_KEY: ${{ secrets.CLERK_SECRET_KEY || 'sk_test_abcdefghijklmnopqrstuvwxyz123456789' }}
-          NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY || 'pk_test_abcdefghijklmnopqrstuvwxyz123456789_clerk_publishable' }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY || 'test-key' }}
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY || 'test-key' }}
+          CLERK_SECRET_KEY: ${{ secrets.CLERK_SECRET_KEY || 'test-key' }}
+          NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ vars.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY || 'test-key' }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY || 'test-key' }}
+          TLDRSEC_AI_SUMMARIZER: ${{ secrets.TLDRSEC_AI_SUMMARIZER || 'test-key' }}
+          NEXT_PUBLIC_SUPABASE_URL: ${{ vars.NEXT_PUBLIC_SUPABASE_URL || 'test-url' }}
+          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ vars.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || 'test-key' }}
+          SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY || 'test-key' }}
+          CI: true
           
       - name: Security Scan
         run: npm audit --audit-level=high
@@ -76,11 +91,16 @@ jobs:
       - name: Unit Tests
         run: npm run test
         env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL || 'postgresql://test:test@localhost:5432/test_db' }}
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY || 'sk-test-anthropic-key' }}
-          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY || 're_test_resend_key' }}
-          CLERK_SECRET_KEY: ${{ secrets.CLERK_SECRET_KEY || 'sk_test_abcdefghijklmnopqrstuvwxyz123456789' }}
-          NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY || 'pk_test_abcdefghijklmnopqrstuvwxyz123456789_clerk_publishable' }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          CLERK_SECRET_KEY: ${{ secrets.CLERK_SECRET_KEY }}
+          NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ vars.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          TLDRSEC_AI_SUMMARIZER: ${{ secrets.TLDRSEC_AI_SUMMARIZER }}
+          NEXT_PUBLIC_SUPABASE_URL: ${{ vars.NEXT_PUBLIC_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ vars.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY }}
+          SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
         
       - name: Database Connection Test
         run: npm run db:test || echo "⚠️ Database connection test skipped - no live database available"
@@ -168,33 +188,39 @@ jobs:
           
       # Production deployment happens via separate manual workflow
       # This validates the worker configuration and syntax
-      - name: Worker Configuration Validation
+      - name: Worker Build Validation
         run: |
           cd cloudflare-cron
-          echo "Validating worker configuration and dependencies..."
+          echo "Running comprehensive worker build validation..."
           
-          # Test wrangler can parse the configuration
-          echo "Testing wrangler configuration parsing..."
-          npx wrangler whoami --help > /dev/null && echo "✅ Wrangler CLI functional"
+          # Make validation script executable
+          chmod +x build-validation.sh
           
-          # Check if Cloudflare API token is available
-          echo "Cloudflare API Token configured: ${{ secrets.CLOUDFLARE_API_TOKEN != '' }}"
+          # Run validation script with fallback handling
           if [ -z "$CLOUDFLARE_API_TOKEN" ]; then
             echo "⚠️ CLOUDFLARE_API_TOKEN not configured, performing local validation only"
-            echo "Attempting basic syntax validation..."
-            node --check index.js && echo "✅ JavaScript syntax valid"
-          else
-            # Validate configuration with deployment dry-run
-            echo "Validating wrangler.toml syntax with deployment dry-run..."
-            if npx wrangler deploy --dry-run 2>&1 | grep -q "Total Upload:" || 
-               npx wrangler deploy --dry-run 2>&1 | grep -q "dry-run: exiting"; then
-              echo "✅ Worker configuration validation successful"
-            else
-              echo "❌ Worker configuration validation failed"
-              # Still try basic syntax validation
-              echo "Attempting basic syntax validation..."
-              node --check index.js && echo "✅ JavaScript syntax valid"
+            
+            # Run local validation without API calls
+            echo "📝 Validating JavaScript syntax..."
+            node --check index.js
+            echo "✅ JavaScript syntax valid"
+            
+            echo "⚙️ Validating wrangler configuration..."
+            if ! grep -q "name.*=.*cloudflare-cron" wrangler.toml; then
+              echo "❌ wrangler.toml missing valid name entry"
+              exit 1
             fi
+            
+            if ! grep -q "main.*=.*index.js" wrangler.toml; then
+              echo "❌ wrangler.toml missing valid main entry"
+              exit 1
+            fi
+            echo "✅ Configuration valid"
+            
+            echo "✅ Local validation completed successfully"
+          else
+            echo "✅ Running full validation with API token"
+            ./build-validation.sh
           fi
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -223,7 +249,9 @@ jobs:
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL || 'postgresql://test:test@localhost:5432/test_db' }}
           CLERK_SECRET_KEY: ${{ secrets.CLERK_SECRET_KEY || 'sk_test_abcdefghijklmnopqrstuvwxyz123456789' }}
-          NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY || 'pk_test_abcdefghijklmnopqrstuvwxyz123456789_clerk_publishable' }}
+          NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ vars.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY || 'sk-or-test-key' }}
+          TLDRSEC_AI_SUMMARIZER: ${{ secrets.TLDRSEC_AI_SUMMARIZER || 'sk-test-summarizer-key' }}
           
       - name: Validate Monitoring Configuration
         run: |

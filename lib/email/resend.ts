@@ -49,8 +49,8 @@ export class ResendClient {
     // Use environment variable if apiKey not provided
     this.client = new Resend(apiKey || process.env.RESEND_API_KEY);
     
-    // Set default from address
-    this.defaultFrom = defaultFrom || process.env.EMAIL_FROM || 'notifications@tldrsec.com';
+    // Set default from address - using verified domain tldrsec.app
+    this.defaultFrom = defaultFrom || process.env.EMAIL_FROM || 'notifications@tldrsec.app';
     
     // Extract domain from default from address
     this.verifiedDomain = this.defaultFrom.split('@')[1];

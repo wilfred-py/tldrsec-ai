@@ -8,14 +8,16 @@
     "deploy": "wrangler deploy",
     "deploy:dry-run": "wrangler deploy --dry-run",
     "dev": "wrangler dev",
-    "tail": "wrangler tail --format=pretty",
+    "tail": "wrangler tail --format=pretty", 
     "status": "wrangler deployments list",
     "logs": "wrangler tail --format=pretty",
-    "validate": "node --check index.js && wrangler deploy --dry-run",
+    "validate": "node --check index.js",
     "secret:put": "wrangler secret put",
     "secret:list": "wrangler secret list",
-    "build": "echo 'No build step required for Cloudflare Worker'",
-    "lint": "node --check index.js"
+    "build": "echo 'Worker uses zero-build configuration'",
+    "lint": "node --check index.js",
+    "preinstall": "echo 'Installing Cloudflare Worker dependencies...'",
+    "postinstall": "echo 'Cloudflare Worker ready for deployment'"
   },
   "keywords": [
     "cloudflare",

@@ -7,6 +7,7 @@
 
 import { NextRequest } from 'next/server';
 import { GET } from '../../app/api/cron/tier-aware/route';
+import { HmacAuthService } from '../../lib/security/hmac-auth';
 
 // Mock dependencies similar to cron-security.test.ts
 jest.mock('../../lib/monitoring/cron-monitor', () => ({
@@ -111,7 +112,7 @@ describe('SECURITY: Authentication Bypass Prevention', () => {
 
       // CRITICAL: Must return 401 unauthorized - NO BYPASSES ALLOWED
       expect(response.status).toBe(401);
-      expect(responseData.error).toBe('Missing Authorization header');
+      expect(responseData.error).toBe('Missing x-hmac-signature header');
     });
 
     it('should NEVER bypass authentication for localhost requests', async () => {
@@ -133,7 +134,7 @@ describe('SECURITY: Authentication Bypass Prevention', () => {
 
         // CRITICAL: Must return 401 - no localhost bypasses
         expect(response.status).toBe(401);
-        expect(responseData.error).toBe('Missing Authorization header');
+        expect(responseData.error).toBe('Missing x-hmac-signature header');
       }
     });
 
@@ -151,7 +152,7 @@ describe('SECURITY: Authentication Bypass Prevention', () => {
       const responseData = await response.json();
 
       expect(response.status).toBe(401);
-      expect(responseData.error).toBe('Missing Authorization header');
+      expect(responseData.error).toBe('Missing x-hmac-signature header');
     });
 
     it('should NEVER bypass authentication for any environment variable combination', async () => {
@@ -176,38 +177,53 @@ describe('SECURITY: Authentication Bypass Prevention', () => {
 
           // SECURITY: Every combination must require authentication
           expect(response.status).toBe(401);
-          expect(responseData.error).toBe('Missing Authorization header');
+          expect(responseData.error).toBe('Missing x-hmac-signature header');
         }
       }
     });
   });
 
   describe('Mandatory Authentication Requirements', () => {
-    it('should require valid Bearer token for all requests', async () => {
+    it('should require valid HMAC signature for all requests', async () => {
       process.env.CRON_SECRET = 'valid-secret-key-with-proper-length-32chars-min-security-requirement';
       process.env.NODE_ENV = 'production';
 
+      // Use the actual HmacAuthService to generate a valid signature
+      const timestamp = Date.now();
+      const method = 'GET';
+      const path = '/api/cron/tier-aware';
+      const { signature } = HmacAuthService.generateSignature(
+        process.env.CRON_SECRET!,
+        method,
+        path,
+        timestamp
+      );
+
       const request = new NextRequest('http://localhost:3000/api/cron/tier-aware', {
         headers: {
-          'authorization': 'Bearer valid-secret-key-with-proper-length-32chars-min-security-requirement',
+          'x-hmac-signature': signature,
+          'x-hmac-timestamp': timestamp.toString(),
           'x-forwarded-for': '127.0.0.1'
         }
       });
 
       // Mock database and other dependencies would be needed for full test
-      // This tests that the auth check passes (doesn't return 401)
+      // This test may still fail with 500 due to missing dependencies
+      // but should not fail with 401 if HMAC validation passes
       const response = await GET(request);
       
-      // Should not be 401 (unauthorized) if auth is valid
+      // Should not be 401 (unauthorized) if HMAC signature is valid
+      // May be 500 due to missing mocks, but that's separate from auth
       expect(response.status).not.toBe(401);
     });
 
-    it('should reject requests with invalid Bearer token', async () => {
+    it('should reject requests with invalid HMAC signature', async () => {
       process.env.CRON_SECRET = 'valid-secret-key-with-proper-length-32chars-min-security-requirement';
       
       const request = new NextRequest('http://localhost:3000/api/cron/tier-aware', {
         headers: {
-          'authorization': 'Bearer invalid-secret-key',
+          'x-hmac-signature': 'invalid-signature-hash',
+          'x-hmac-timestamp': Date.now().toString(),
           'x-forwarded-for': '127.0.0.1'
         }
       });
@@ -216,7 +232,7 @@ describe('SECURITY: Authentication Bypass Prevention', () => {
       const responseData = await response.json();
 
       expect(response.status).toBe(401);
-      expect(responseData.error).toBe('Invalid authorization token');
+      expect(responseData.error).toBe('Invalid signature format');
     });
 
     it('should reject requests without authorization header', async () => {
@@ -232,7 +248,7 @@ describe('SECURITY: Authentication Bypass Prevention', () => {
       const responseData = await response.json();
 
       expect(response.status).toBe(401);
-      expect(responseData.error).toBe('Missing Authorization header');
+      expect(responseData.error).toBe('Missing x-hmac-signature header');
     });
 
     it('should return 500 if CRON_SECRET is not configured', async () => {
@@ -249,8 +265,9 @@ describe('SECURITY: Authentication Bypass Prevention', () => {
       const response = await GET(request);
       const responseData = await response.json();
 
-      expect(response.status).toBe(500);
-      expect(responseData.error).toBe('Server configuration error');
+      // When CRON_SECRET is not configured, it returns 401 with configuration error message
+      expect(response.status).toBe(401);
+      expect(responseData.error).toBe('CRON_SECRET environment variable not configured');
     });
   });
 

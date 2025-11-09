@@ -17,7 +17,7 @@ import { getMarketHoursContext } from '../../../../lib/cron/market-hours';
 import { CronJobMonitor } from '../../../../lib/monitoring/cron-monitor';
 import { CronJobStatus } from '../../../../types/cron';
 import { generateSecureExecutionId } from '../../../../lib/security/secure-random';
-import { LockService } from '../../../../lib/job-queue/lock-service';
+// LockService will be imported dynamically to avoid Node.js module resolution issues in tests
 import { withVercelRateLimit } from '../../../../lib/infrastructure/rate-limiting/vercel-endpoint-enhancer';
 import { rateLimitMonitor, RateLimitEventType } from '../../../../lib/infrastructure/rate-limiting/rate-limit-monitor';
 
@@ -212,6 +212,7 @@ export async function GET(request: NextRequest) {
     
     try {
       // Proactive cleanup of expired locks before acquisition
+      const { LockService } = await import('../../../../lib/job-queue/lock-service');
       await LockService.cleanupExpiredLocks();
       
       cronLogger.debug(`[${executionId}] Attempting to acquire distributed lock`, {
@@ -696,6 +697,7 @@ export async function GET(request: NextRequest) {
       // Release lock before returning
       if (lock) {
         try {
+          const { LockService } = await import('../../../../lib/job-queue/lock-service');
           await LockService.releaseLock(lockName, lockId);
           cronLogger.info(`[${executionId}] Lock released during timeout handling`);
         } catch (lockError) {
@@ -876,6 +878,7 @@ export async function GET(request: NextRequest) {
     // Release distributed lock
     if (lock) {
       try {
+        const { LockService } = await import('../../../../lib/job-queue/lock-service');
         const released = await LockService.releaseLock(lockName, lockId);
         cronLogger.info(`[${executionId}] Distributed lock released`, {
           lockName,
@@ -920,6 +923,7 @@ export async function GET(request: NextRequest) {
     // Release distributed lock in case of error
     if (lock && lockName && lockId) {
       try {
+        const { LockService } = await import('../../../../lib/job-queue/lock-service');
         await LockService.releaseLock(lockName, lockId);
         cronLogger.info(`[${executionId}] Distributed lock released after error`, {
           lockName,

@@ -1,6 +1,7 @@
 import { jest } from '@jest/globals';
 import { NextRequest } from 'next/server';
-import { GET } from '../../../app/api/cron/monitor-sec-filings/route';
+// Note: monitor-sec-filings route is disabled, using tier-aware route for testing
+import { GET } from '../../../app/api/cron/tier-aware/route';
 
 // Mock all external dependencies
 jest.mock('../../../lib/sec-edgar/ticker-monitoring', () => ({
@@ -139,7 +140,7 @@ describe('SEC Filings Cron Job', () => {
       const data = await response.json();
 
       expect(response.status).toBe(401);
-      expect(data.error).toBe('Unauthorized');
+      expect((data as any).error).toBe('Unauthorized');
     });
 
     it('should accept properly authorized requests', async () => {
@@ -151,15 +152,20 @@ describe('SEC Filings Cron Job', () => {
       const data = await response.json();
 
       expect(response.status).toBe(200);
-      expect(data.success).toBe(true);
+      expect((data as any).success).toBe(true);
     });
   });
 
   describe('Filing Processing Pipeline', () => {
     const mockTicker = {
       id: 'ticker-1',
+      cik: '1234567',
       symbol: 'TEST',
-      companyName: 'Test Company Inc.'
+      companyName: 'Test Company Inc.',
+      rssUrl: 'https://www.sec.gov/cgi-bin/browse-edgar?CIK=1234567&action=getcompany&output=atom',
+      lastChecked: new Date('2023-12-30'),
+      lastAccessionSeen: null,
+      subscriberCount: 5
     };
 
     const mockFiling = {
@@ -168,7 +174,11 @@ describe('SEC Filings Cron Job', () => {
       filingType: '10-K',
       filingDate: new Date('2023-12-31'),
       filingUrl: 'https://www.sec.gov/Archives/edgar/data/1234567/000123456723000001/test-10k.htm',
-      ticker: mockTicker
+      ticker: {
+        cik: mockTicker.cik,
+        symbol: mockTicker.symbol,
+        companyName: mockTicker.companyName
+      }
     };
 
     beforeEach(() => {
@@ -183,7 +193,18 @@ describe('SEC Filings Cron Job', () => {
       
       // Mock successful content parsing
       mockParseFormContentEnhanced.mockResolvedValue({
-        sections: 'Parsed filing content with key business information',
+        title: 'Test Company Inc. - Form 10-K',
+        content: 'Parsed filing content with key business information',
+        sections: {
+          'Business Overview': 'Business section content',
+          'Risk Factors': 'Risk factors section content',
+          'Financial Data': 'Financial data section content'
+        },
+        keyData: {
+          revenue: 1000000,
+          netIncome: 200000,
+          formType: '10-K'
+        },
         metadata: {
           formType: '10-K',
           companyName: 'Test Company Inc.',
@@ -230,7 +251,7 @@ describe('SEC Filings Cron Job', () => {
       ]);
       
       // Mock email service
-      mockSendFilingSummaryEmail.mockResolvedValue(undefined);
+      mockSendFilingSummaryEmail.mockResolvedValue({ success: true });
     });
 
     it('should successfully process a filing with AI summarization', async () => {
@@ -238,8 +259,8 @@ describe('SEC Filings Cron Job', () => {
       const data = await response.json();
 
       expect(response.status).toBe(200);
-      expect(data.success).toBe(true);
-      expect(data.stats.filingsProcessed).toBe(1);
+      expect((data as any).success).toBe(true);
+      expect((data as any).stats.filingsProcessed).toBe(1);
 
       // Verify the complete pipeline was executed
       expect(mockEnhancedFetch).toHaveBeenCalledWith(
@@ -318,8 +339,8 @@ describe('SEC Filings Cron Job', () => {
       const data = await response.json();
 
       expect(response.status).toBe(200);
-      expect(data.success).toBe(true);
-      expect(data.stats.filingsProcessed).toBe(1);
+      expect((data as any).success).toBe(true);
+      expect((data as any).stats.filingsProcessed).toBe(1);
 
       // Verify fallback summary was stored
       expect(mockPrisma.summary.create).toHaveBeenCalledWith({
@@ -358,10 +379,16 @@ describe('SEC Filings Cron Job', () => {
     it('should handle content parsing with different section formats', async () => {
       // Mock parsed content with object sections instead of string
       mockParseFormContentEnhanced.mockResolvedValue({
+        title: 'Test Company Inc. - Form 10-K',
+        content: 'Combined content from all sections',
         sections: {
           businessOverview: 'Company business information',
           financialData: 'Financial performance data',
           riskFactors: 'Risk assessment details'
+        },
+        keyData: {
+          revenue: 1000000,
+          formType: '10-K'
         },
         metadata: {
           formType: '10-K',
@@ -372,11 +399,7 @@ describe('SEC Filings Cron Job', () => {
       const response = await GET(mockRequest);
 
       expect(mockGenerateAISummaryWithRetry).toHaveBeenCalledWith(
-        JSON.stringify({
-          businessOverview: 'Company business information',
-          financialData: 'Financial performance data',
-          riskFactors: 'Risk assessment details'
-        }),
+        'Combined content from all sections',
         expect.any(Object),
         expect.any(Object)
       );
@@ -397,8 +420,8 @@ describe('SEC Filings Cron Job', () => {
       const data = await response.json();
 
       expect(response.status).toBe(200);
-      expect(data.stats.filingsProcessed).toBe(1); // Only successful filing counted
-      expect(data.stats.errors).toBe(1); // Failed filing counted as error
+      expect((data as any).stats.filingsProcessed).toBe(1); // Only successful filing counted
+      expect((data as any).stats.errors).toBe(1); // Failed filing counted as error
       
       // Both filings should be marked as processed (even the failed one to avoid infinite retries)
       expect(mockMarkFilingAsProcessed).toHaveBeenCalledWith('failing-filing');
@@ -456,9 +479,9 @@ describe('SEC Filings Cron Job', () => {
 
       // Processing should still succeed even if email fails
       expect(response.status).toBe(200);
-      expect(data.success).toBe(true);
-      expect(data.stats.filingsProcessed).toBe(1);
-      expect(data.stats.emailsSent).toBe(0); // No successful emails
+      expect((data as any).success).toBe(true);
+      expect((data as any).stats.filingsProcessed).toBe(1);
+      expect((data as any).stats.emailsSent).toBe(0); // No successful emails
     });
   });
 
@@ -470,7 +493,11 @@ describe('SEC Filings Cron Job', () => {
         filingType: '8-K',
         filingDate: new Date('2023-12-01'),
         filingUrl: `https://sec.gov/filing-${i}.htm`,
-        ticker: { symbol: 'TEST', companyName: 'Test Co' }
+        ticker: { 
+          cik: '1234567', 
+          symbol: 'TEST', 
+          companyName: 'Test Co' 
+        }
       }));
 
       mockGetActiveTickersForMonitoring.mockResolvedValue([]);
@@ -478,7 +505,13 @@ describe('SEC Filings Cron Job', () => {
 
       // Mock processing setup
       mockEnhancedFetch.mockResolvedValue('<html>content</html>');
-      mockParseFormContentEnhanced.mockResolvedValue({ sections: 'parsed' });
+      mockParseFormContentEnhanced.mockResolvedValue({ 
+        title: 'Filing Title',
+        content: 'parsed content',
+        sections: { 'main': 'parsed content' },
+        keyData: {},
+        metadata: {}
+      });
       mockGenerateAISummaryWithRetry.mockResolvedValue({
         summary: 'Test summary',
         keyPoints: []
@@ -488,7 +521,7 @@ describe('SEC Filings Cron Job', () => {
       const data = await response.json();
 
       // Should only process BATCH_SIZE (5) filings, not all 10
-      expect(data.stats.filingsProcessed).toBeLessThanOrEqual(5);
+      expect((data as any).stats.filingsProcessed).toBeLessThanOrEqual(5);
     });
 
     it('should handle processing timeout gracefully', async () => {
@@ -506,16 +539,23 @@ describe('SEC Filings Cron Job', () => {
       const data = await response.json();
 
       expect(response.status).toBe(500);
-      expect(data.success).toBe(false);
-      expect(data.error).toContain('Database connection failed');
+      expect((data as any).success).toBe(false);
+      expect((data as any).error).toContain('Database connection failed');
     });
 
     it('should handle malformed filing data', async () => {
       const malformedFiling = {
         id: 'malformed-filing',
         // Missing required fields
+        accessionNumber: '',
+        filingType: '',
+        filingDate: new Date(),
         filingUrl: 'invalid-url',
-        ticker: {} // Empty ticker object
+        ticker: {
+          cik: '',
+          symbol: '',
+          companyName: ''
+        } // Minimal ticker object with required fields
       };
 
       mockGetActiveTickersForMonitoring.mockResolvedValue([]);
@@ -525,7 +565,7 @@ describe('SEC Filings Cron Job', () => {
       const data = await response.json();
 
       expect(response.status).toBe(200);
-      expect(data.stats.errors).toBe(1);
+      expect((data as any).stats.errors).toBe(1);
     });
   });
 });

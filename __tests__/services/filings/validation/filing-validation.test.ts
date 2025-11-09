@@ -146,6 +146,38 @@ const mockInternalFunctions = {
     };
   },
 
+  getFilingContent: async (accessionNumber: string, filename?: string, cik?: string) => {
+    // Delegate to the mocked SECEdgarClient for consistent behavior
+    try {
+      const extensions = ['htm', 'html', 'txt'];
+      const filenamesToTry = filename ? [filename] : extensions.map(ext => `${accessionNumber}.${ext}`);
+      
+      for (const filenameToTry of filenamesToTry) {
+        try {
+          const url = `https://www.sec.gov/Archives/edgar/data/${cik}/${accessionNumber.replace(/-/g, '')}/${filenameToTry}`;
+          const content = await mockSecClient.getFilingDocument(url, { handleNotFound: true });
+          if (content) return content;
+        } catch (error) {
+          // Continue to next extension if file not found
+          if (error instanceof Error && !error.message.includes('not found')) {
+            throw error; // Re-throw non-404 errors
+          }
+        }
+      }
+      
+      // If we get here, no file was found
+      throw new Error(`Filed document not found for ${accessionNumber}`);
+    } catch (error) {
+      if (typeof error === 'string') {
+        throw `Failed to get filing content for ${accessionNumber}: ${error}`;
+      } else if (error instanceof Error) {
+        throw new Error(`Failed to get filing content for ${accessionNumber}: ${error.message}`);
+      } else {
+        throw new Error(`Failed to get filing content for ${accessionNumber}: Unknown error`);
+      }
+    }
+  },
+
   validateAISummary: (summaryText: string, keyPoints: string[], ticker: string, formType: string) => {
     const suggestions: string[] = [];
     
@@ -188,7 +220,7 @@ const mockInternalFunctions = {
     ];
     
     const lowerSummary = summaryText.toLowerCase();
-    const hasTruncationIndicators = truncationIndicators.some(indicator => lowerSummary.includes(indicator));
+    const hasTruncationIndicators = truncationIndicators.some(indicator => lowerSummary.includes(indicator.toLowerCase()));
     if (hasTruncationIndicators) {
       return {
         isValid: false,
@@ -300,7 +332,10 @@ describe('Filing Validation Functions', () => {
 
       it('should accept content at maximum boundary', () => {
         const maxSize = 100000000;
-        const maxContent = '<html><body>SEC FORM 10-K ' + 'x'.repeat(maxSize - 30) + '</body></html>';
+        const prefix = '<html><body>SEC FORM 10-K ';
+        const suffix = '</body></html>';
+        const fillLength = maxSize - prefix.length - suffix.length;
+        const maxContent = prefix + 'x'.repeat(fillLength) + suffix;
         const result = validateContentForProcessing(maxContent, 'AAPL', '10-K');
         expect(result.isValid).toBe(true);
         expect(result.contentLength).toBe(maxSize);
@@ -519,14 +554,14 @@ describe('Filing Validation Functions', () => {
 
       truncationIndicators.forEach((indicator) => {
         it(`should detect truncation indicator: "${indicator}"`, () => {
-          const summaryWithTruncation = `This is a valid summary that meets minimum length requirements but contains ${indicator} at the end.`;
+          const summaryWithTruncation = `This is a valid summary that meets minimum length requirements for 8-K forms and should pass basic validation but contains ${indicator} at the end, which indicates truncation.`;
           const result = validateAISummary(summaryWithTruncation, ['key point'], 'AAPL', '8-K');
           expect(result.isValid).toBe(false);
           expect(result.reason).toBe('Summary appears to be truncated or incomplete');
         });
 
         it(`should detect truncation indicator case-insensitively: "${indicator.toUpperCase()}"`, () => {
-          const summaryWithTruncation = `This is a valid summary that meets minimum length requirements but contains ${indicator.toUpperCase()} at the end.`;
+          const summaryWithTruncation = `This is a valid summary that meets minimum length requirements for 8-K forms and should pass basic validation but contains ${indicator.toUpperCase()} at the end, which indicates truncation.`;
           const result = validateAISummary(summaryWithTruncation, ['key point'], 'AAPL', '8-K');
           expect(result.isValid).toBe(false);
           expect(result.reason).toBe('Summary appears to be truncated or incomplete');
@@ -546,14 +581,14 @@ describe('Filing Validation Functions', () => {
 
       placeholderIndicators.forEach((indicator) => {
         it(`should detect placeholder content: "${indicator}"`, () => {
-          const summaryWithPlaceholder = `Unfortunately, we were ${indicator} for this filing due to technical issues with the content processing.`;
+          const summaryWithPlaceholder = `Unfortunately, we were ${indicator} for this filing due to technical issues with the content processing. This text is made longer to meet minimum requirements.`;
           const result = validateAISummary(summaryWithPlaceholder, ['key point'], 'AAPL', '8-K');
           expect(result.isValid).toBe(false);
           expect(result.reason).toBe('Summary contains placeholder or error content instead of actual analysis');
         });
 
         it(`should detect placeholder content case-insensitively: "${indicator.toUpperCase()}"`, () => {
-          const summaryWithPlaceholder = `Unfortunately, we were ${indicator.toUpperCase()} for this filing due to technical issues.`;
+          const summaryWithPlaceholder = `Unfortunately, we were ${indicator.toUpperCase()} for this filing due to technical issues. This text is made longer to meet minimum requirements.`;
           const result = validateAISummary(summaryWithPlaceholder, ['key point'], 'AAPL', '8-K');
           expect(result.isValid).toBe(false);
           expect(result.reason).toBe('Summary contains placeholder or error content instead of actual analysis');
@@ -563,21 +598,21 @@ describe('Filing Validation Functions', () => {
 
     describe('Key points validation and suggestions', () => {
       it('should suggest improvement when no key points provided', () => {
-        const summary = 'This is a valid summary that meets all minimum length requirements and contains relevant content.';
+        const summary = 'This is a valid summary that meets all minimum length requirements and contains relevant content for 8-K validation testing purposes.';
         const result = validateAISummary(summary, [], 'AAPL', '8-K');
         expect(result.isValid).toBe(true);
         expect(result.suggestions).toContain('No key points provided - consider regenerating with key points extraction');
       });
 
       it('should suggest improvement when key points are too brief', () => {
-        const summary = 'This is a valid summary that meets all minimum length requirements and contains relevant content.';
+        const summary = 'This is a valid summary that meets all minimum length requirements and contains relevant content for 8-K validation testing purposes.';
         const result = validateAISummary(summary, ['Short'], 'AAPL', '8-K');
         expect(result.isValid).toBe(true);
         expect(result.suggestions).toContain('Key points appear too brief or generic');
       });
 
       it('should accept well-formed key points', () => {
-        const summary = 'This is a valid summary that meets all minimum length requirements and contains relevant content.';
+        const summary = 'This is a valid summary that meets all minimum length requirements and contains relevant content for 8-K validation testing purposes.';
         const keyPoints = ['Detailed key point about quarterly earnings performance', 'Another substantive point about business operations'];
         const result = validateAISummary(summary, keyPoints, 'AAPL', '8-K');
         expect(result.isValid).toBe(true);
@@ -585,14 +620,14 @@ describe('Filing Validation Functions', () => {
       });
 
       it('should handle null key points', () => {
-        const summary = 'This is a valid summary that meets all minimum length requirements and contains relevant content.';
+        const summary = 'This is a valid summary that meets all minimum length requirements and contains relevant content for 8-K validation testing purposes.';
         const result = validateAISummary(summary, null as any, 'AAPL', '8-K');
         expect(result.isValid).toBe(true);
         expect(result.suggestions).toContain('No key points provided - consider regenerating with key points extraction');
       });
 
       it('should handle undefined key points', () => {
-        const summary = 'This is a valid summary that meets all minimum length requirements and contains relevant content.';
+        const summary = 'This is a valid summary that meets all minimum length requirements and contains relevant content for 8-K validation testing purposes.';
         const result = validateAISummary(summary, undefined as any, 'AAPL', '8-K');
         expect(result.isValid).toBe(true);
         expect(result.suggestions).toContain('No key points provided - consider regenerating with key points extraction');
@@ -601,21 +636,21 @@ describe('Filing Validation Functions', () => {
 
     describe('Form-specific content expectations', () => {
       it('should suggest financial terminology for 10-K filings without financial terms', () => {
-        const summary = 'This filing discusses general company matters and strategic initiatives without specific financial details.';
+        const summary = 'This filing discusses general company matters and strategic initiatives without specific financial details. The document covers various operational aspects of the business including management changes, corporate governance updates, and strategic planning initiatives that will shape the company direction over the next fiscal year period.';
         const result = validateAISummary(summary, ['General point'], 'AAPL', '10-K');
         expect(result.isValid).toBe(true);
         expect(result.suggestions).toContain('Financial filing summary lacks financial terminology - may need regeneration');
       });
 
       it('should suggest financial terminology for 10-Q filings without financial terms', () => {
-        const summary = 'This filing discusses general company matters and strategic initiatives without specific financial details.';
+        const summary = 'This filing discusses general company matters and strategic initiatives without specific financial details. The quarterly report covers operational updates and business developments for the quarter.';
         const result = validateAISummary(summary, ['General point'], 'AAPL', '10-Q');
         expect(result.isValid).toBe(true);
         expect(result.suggestions).toContain('Financial filing summary lacks financial terminology - may need regeneration');
       });
 
       it('should accept 10-K filings with financial terminology', () => {
-        const summary = 'This quarterly filing shows strong revenue growth and improved earnings compared to last quarter, with financial performance exceeding expectations.';
+        const summary = 'This annual filing shows strong revenue growth and improved earnings compared to last quarter, with financial performance exceeding expectations. The comprehensive annual report details the company financial position, including detailed analysis of revenue streams, operating expenses, and profitability metrics across all business segments and geographical markets.';
         const result = validateAISummary(summary, ['Revenue increased 15%'], 'AAPL', '10-K');
         expect(result.isValid).toBe(true);
         expect(result.suggestions?.filter(s => s.includes('financial terminology'))).toHaveLength(0);
@@ -738,6 +773,7 @@ describe('Filing Validation Functions', () => {
   });
 
   describe('getFilingContent fallback scenarios', () => {
+    const { getFilingContent } = mockInternalFunctions;
     let mockSecClient: any;
 
     beforeEach(() => {

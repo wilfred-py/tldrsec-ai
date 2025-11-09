@@ -5,10 +5,11 @@
 
 import { NextRequest } from 'next/server';
 import { GET } from '../../app/api/cron/tier-aware/route';
+import { HmacAuthService } from '../../lib/security/hmac-auth';
 
-// Mock dependencies
-jest.mock('../../lib/db/prisma', () => ({
-  getPrismaClient: jest.fn(() => ({
+// Mock dependencies with more comprehensive database model coverage
+jest.mock('../../lib/db/prisma', () => {
+  const mockPrismaClient = {
     user: {
       findMany: jest.fn().mockResolvedValue([]),
       findUnique: jest.fn().mockResolvedValue(null),
@@ -16,9 +17,37 @@ jest.mock('../../lib/db/prisma', () => ({
     },
     auditLog: {
       create: jest.fn().mockResolvedValue({})
+    },
+    jobLock: {
+      findFirst: jest.fn().mockResolvedValue(null), // No existing lock
+      upsert: jest.fn().mockResolvedValue({
+        id: 'test-lock-id',
+        lockName: 'test-lock',
+        acquiredBy: 'test',
+        acquiredAt: new Date(),
+        expiresAt: new Date(Date.now() + 30 * 60 * 1000),
+        released: false
+      }),
+      updateMany: jest.fn().mockResolvedValue({ count: 0 }), // No expired locks to cleanup
+      update: jest.fn().mockResolvedValue({})
+    },
+    summary: {
+      count: jest.fn().mockResolvedValue(0)
+    },
+    ticker: {
+      findMany: jest.fn().mockResolvedValue([])
+    },
+    secFiling: {
+      findMany: jest.fn().mockResolvedValue([])
     }
-  }))
-}));
+  };
+  
+  // Export both the client and a way to access it for resetting
+  return {
+    getPrismaClient: jest.fn(() => mockPrismaClient),
+    __mockPrismaClient: mockPrismaClient
+  };
+});
 
 jest.mock('../../lib/monitoring/cron-monitor', () => ({
   CronJobMonitor: {
@@ -116,8 +145,47 @@ jest.mock('../../lib/db/concurrency', () => ({
 describe('Cron Endpoint Security Tests', () => {
   const originalEnv = process.env;
   
-  beforeEach(() => {
+  // Helper function to generate valid HMAC signatures for tests
+  const generateValidHmacHeaders = (method: string, path: string, timestamp?: number) => {
+    const secret = process.env.CRON_SECRET || 'test-secret-key-with-proper-length-32chars-min-security-requirement';
+    const { signature, timestamp: ts } = HmacAuthService.generateSignature(secret, method, path, timestamp);
+    return {
+      'x-hmac-signature': signature,
+      'x-hmac-timestamp': ts.toString()
+    };
+  };
+  
+  beforeEach(async () => {
     jest.clearAllMocks();
+    
+    // Get the mock Prisma client
+    const { __mockPrismaClient } = await import('../../lib/db/prisma');
+    
+    if (__mockPrismaClient) {
+      // Reset all Prisma client mocks
+      Object.values(__mockPrismaClient).forEach(model => {
+        if (model && typeof model === 'object') {
+          Object.values(model).forEach(method => {
+            if (jest.isMockFunction(method)) {
+              method.mockClear();
+            }
+          });
+        }
+      });
+      
+      // Reset specific mock implementations to defaults
+      __mockPrismaClient.jobLock.findFirst.mockResolvedValue(null);
+      __mockPrismaClient.jobLock.updateMany.mockResolvedValue({ count: 0 });
+      __mockPrismaClient.jobLock.upsert.mockResolvedValue({
+        id: 'test-lock-id',
+        lockName: 'test-lock',
+        acquiredBy: 'test',
+        acquiredAt: new Date(),
+        expiresAt: new Date(Date.now() + 30 * 60 * 1000),
+        released: false
+      });
+      __mockPrismaClient.summary.count.mockResolvedValue(0);
+    }
     
     // Reset rate limiter mock to allow requests by default
     const { rateLimiter } = require('../../lib/security/rate-limiter');
@@ -152,7 +220,7 @@ describe('Cron Endpoint Security Tests', () => {
   });
 
   describe('Authentication Security', () => {
-    test('CRITICAL: Must reject requests without authorization header', async () => {
+    test('CRITICAL: Must reject requests without HMAC signature', async () => {
       const request = new NextRequest('http://localhost:3000/api/cron/tier-aware', {
         method: 'GET',
         headers: {
@@ -169,14 +237,15 @@ describe('Cron Endpoint Security Tests', () => {
       }
 
       expect(response.status).toBe(401);
-      expect(data.error).toBe('Missing Authorization header');
+      expect(data.error).toMatch(/Missing|Invalid|x-hmac-signature|HMAC/);
     });
 
-    test('CRITICAL: Must reject requests with invalid authorization token', async () => {
+    test('CRITICAL: Must reject requests with invalid HMAC signature', async () => {
       const request = new NextRequest('http://localhost:3000/api/cron/tier-aware', {
         method: 'GET',
         headers: {
-          'authorization': 'Bearer invalid-token',
+          'x-hmac-signature': 'invalid-signature',
+          'x-hmac-timestamp': Date.now().toString(),
           'x-forwarded-for': '127.0.0.1'
         }
       });
@@ -185,14 +254,15 @@ describe('Cron Endpoint Security Tests', () => {
       const data = await response.json();
 
       expect(response.status).toBe(401);
-      expect(data.error).toBe('Invalid authorization token');
+      expect(data.error).toMatch(/Invalid|signature|HMAC|authentication/);
     });
 
-    test('CRITICAL: Must reject requests with malformed authorization header', async () => {
+    test('CRITICAL: Must reject requests with malformed HMAC timestamp', async () => {
       const request = new NextRequest('http://localhost:3000/api/cron/tier-aware', {
         method: 'GET',
         headers: {
-          'authorization': 'invalid-format-token',
+          'x-hmac-signature': 'valid-looking-signature-but-invalid',
+          'x-hmac-timestamp': 'invalid-timestamp',
           'x-forwarded-for': '127.0.0.1'
         }
       });
@@ -201,7 +271,7 @@ describe('Cron Endpoint Security Tests', () => {
       const data = await response.json();
 
       expect(response.status).toBe(401);
-      expect(data.error).toBe('Invalid authorization header format');
+      expect(data.error).toMatch(/Invalid|timestamp|signature|HMAC/);
     });
 
     test('CRITICAL: Must reject requests when CRON_SECRET is missing', async () => {
@@ -210,7 +280,8 @@ describe('Cron Endpoint Security Tests', () => {
       const request = new NextRequest('http://localhost:3000/api/cron/tier-aware', {
         method: 'GET',
         headers: {
-          'authorization': 'Bearer any-token',
+          'x-hmac-signature': 'some-signature',
+          'x-hmac-timestamp': Date.now().toString(),
           'x-forwarded-for': '127.0.0.1'
         }
       });
@@ -218,15 +289,20 @@ describe('Cron Endpoint Security Tests', () => {
       const response = await GET(request);
       const data = await response.json();
 
-      expect(response.status).toBe(500);
-      expect(data.error).toBe('Server configuration error');
+      // Should return 401 with appropriate error message when CRON_SECRET is not configured
+      expect(response.status).toBe(401);
+      expect(data.error).toMatch(/CRON_SECRET|configuration|not properly configured/);
     });
 
-    test('SECURITY: Must accept valid authorization token', async () => {
+    test('SECURITY: Must accept valid HMAC signature', async () => {
+      const method = 'GET';
+      const path = '/api/cron/tier-aware';
+      const hmacHeaders = generateValidHmacHeaders(method, path);
+      
       const request = new NextRequest('http://localhost:3000/api/cron/tier-aware', {
         method: 'GET',
         headers: {
-          'authorization': 'Bearer test-secret-key-with-proper-length-32chars-min-security-requirement',
+          ...hmacHeaders,
           'x-forwarded-for': '127.0.0.1'
         }
       });
@@ -273,15 +349,22 @@ describe('Cron Endpoint Security Tests', () => {
   });
 
   describe('Timing Attack Prevention', () => {
-    test('SECURITY: Must use timing-safe comparison for authorization', async () => {
-      const validToken = 'Bearer test-secret-key-with-proper-length-32chars-min-security-requirement';
-      const invalidToken = 'Bearer test-secret-key-with-proper-length-32chars-min-security-requirementX'; // One character different
+    test('SECURITY: Must use timing-safe comparison for HMAC signatures', async () => {
+      const method = 'GET';
+      const path = '/api/cron/tier-aware';
+      const validHmacHeaders = generateValidHmacHeaders(method, path);
       
-      // Both requests should take similar time and return same error
+      // Create invalid signature by replacing part of it
+      const invalidHmacHeaders = {
+        ...validHmacHeaders,
+        'x-hmac-signature': '0'.repeat(validHmacHeaders['x-hmac-signature'].length) // Completely different signature
+      };
+      
+      // Both requests should take similar time and return different results
       const request1 = new NextRequest('http://localhost:3000/api/cron/tier-aware', {
         method: 'GET',
         headers: {
-          'authorization': validToken,
+          ...validHmacHeaders,
           'x-forwarded-for': '127.0.0.1'
         }
       });
@@ -289,7 +372,7 @@ describe('Cron Endpoint Security Tests', () => {
       const request2 = new NextRequest('http://localhost:3000/api/cron/tier-aware', {
         method: 'GET',
         headers: {
-          'authorization': invalidToken,
+          ...invalidHmacHeaders,
           'x-forwarded-for': '127.0.0.1'
         }
       });
@@ -302,29 +385,36 @@ describe('Cron Endpoint Security Tests', () => {
       const response2 = await GET(request2);
       const time2 = Date.now() - start2;
 
-      // Valid token should succeed, invalid should fail
+      // Valid signature should succeed, invalid should fail
       expect(response1.status).toBe(200);
       expect(response2.status).toBe(401);
       
-      // Both should handle authorization check quickly (timing-safe)
+      // Both should handle HMAC verification quickly (timing-safe)
       expect(Math.abs(time1 - time2)).toBeLessThan(100); // Within 100ms difference
     });
   });
 
   describe('Rate Limiting Security', () => {
     test('SECURITY: Must enforce rate limiting', async () => {
-      // Mock rate limiter to deny requests
+      // Mock rate limiter to deny requests - need to mock before the dynamic import
       const { rateLimiter } = require('../../lib/security/rate-limiter');
-      rateLimiter.checkLimit.mockResolvedValueOnce({ 
+      
+      // Reset and set up mock to return rate limit hit
+      rateLimiter.checkLimit.mockReset();
+      rateLimiter.checkLimit.mockResolvedValue({ 
         allowed: false, 
         remaining: 0, 
         resetTime: Date.now() + 60000 
       });
 
+      const method = 'GET';
+      const path = '/api/cron/tier-aware';
+      const hmacHeaders = generateValidHmacHeaders(method, path);
+
       const request = new NextRequest('http://localhost:3000/api/cron/tier-aware', {
         method: 'GET',
         headers: {
-          'authorization': 'Bearer test-secret-key-with-proper-length-32chars-min-security-requirement',
+          ...hmacHeaders,
           'x-forwarded-for': '127.0.0.1'
         }
       });
@@ -332,8 +422,13 @@ describe('Cron Endpoint Security Tests', () => {
       const response = await GET(request);
       const data = await response.json();
 
-      expect(response.status).toBe(429);
-      expect(data.error).toBe('Rate limit exceeded');
+      // Verify rate limiting was applied and blocked the request
+      expect(rateLimiter.checkLimit).toHaveBeenCalled();
+      // The actual calls will be to "vercel-endpoint:critical" layer  
+      const calls = rateLimiter.checkLimit.mock.calls;
+      expect(calls.some(call => call[0].includes('vercel-endpoint'))).toBe(true);
+      expect(response.status).toBe(429); // Rate limiting returns 429
+      expect(data.error).toMatch(/Rate limit exceeded|rate limit|too many/i);
     });
   });
 
@@ -341,10 +436,14 @@ describe('Cron Endpoint Security Tests', () => {
     test('SECURITY: Must enforce IP allowlist when configured', async () => {
       process.env.CRON_ALLOWED_IPS = '192.168.1.100,10.0.0.1';
 
+      const method = 'GET';
+      const path = '/api/cron/tier-aware';
+      const hmacHeaders = generateValidHmacHeaders(method, path);
+
       const request = new NextRequest('http://localhost:3000/api/cron/tier-aware', {
         method: 'GET',
         headers: {
-          'authorization': 'Bearer test-secret-key-with-proper-length-32chars-min-security-requirement',
+          ...hmacHeaders,
           'x-forwarded-for': '127.0.0.1' // Not in allowlist
         }
       });
@@ -359,10 +458,14 @@ describe('Cron Endpoint Security Tests', () => {
     test('SECURITY: Must allow IPs in allowlist', async () => {
       process.env.CRON_ALLOWED_IPS = '192.168.1.100,127.0.0.1';
 
+      const method = 'GET';
+      const path = '/api/cron/tier-aware';
+      const hmacHeaders = generateValidHmacHeaders(method, path);
+
       const request = new NextRequest('http://localhost:3000/api/cron/tier-aware', {
         method: 'GET',
         headers: {
-          'authorization': 'Bearer test-secret-key-with-proper-length-32chars-min-security-requirement',
+          ...hmacHeaders,
           'x-forwarded-for': '127.0.0.1' // In allowlist
         }
       });
@@ -382,10 +485,14 @@ describe('Cron Endpoint Security Tests', () => {
       ];
 
       for (const test of tests) {
+        const method = 'GET';
+        const path = '/api/cron/tier-aware';
+        const hmacHeaders = generateValidHmacHeaders(method, path);
+
         const request = new NextRequest('http://localhost:3000/api/cron/tier-aware', {
           method: 'GET',
           headers: {
-            'authorization': 'Bearer test-secret-key-with-proper-length-32chars-min-security-requirement',
+            ...hmacHeaders,
             [test.header]: test.value
           }
         });

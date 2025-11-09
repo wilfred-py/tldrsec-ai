@@ -515,8 +515,10 @@ describe('Middleware Security System', () => {
     });
 
     it('should fail secure on validation errors', async () => {
-      // Mock rate limiter to throw an error
-      mockRateLimiter.mockRejectedValue(new Error('Rate limiter failure'));
+      // Mock IPValidator to throw an error that isn't caught internally
+      const { IPValidator } = await import('../../lib/security/middleware-security');
+      const originalIsAllowed = IPValidator.isAllowed;
+      IPValidator.isAllowed = jest.fn().mockRejectedValue(new Error('Validation system failure'));
 
       const request = new NextRequest('https://test.com/api/cron/test', {
         headers: {
@@ -529,6 +531,9 @@ describe('Middleware Security System', () => {
       expect(result.allowed).toBe(false);
       expect(result.statusCode).toBe(500);
       expect(result.reason).toBe('Security validation error');
+
+      // Restore original function
+      IPValidator.isAllowed = originalIsAllowed;
     });
 
     it('should handle multiple authentication methods', async () => {
