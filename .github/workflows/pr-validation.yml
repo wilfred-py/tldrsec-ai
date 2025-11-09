@@ -73,16 +73,16 @@ jobs:
           npm run lint
           npm run build
         env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL || 'postgresql://test:test@localhost:5432/test_db' }}
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY || 'sk-test-anthropic-key' }}
-          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY || 're_test_resend_key' }}
-          CLERK_SECRET_KEY: ${{ secrets.CLERK_SECRET_KEY || 'sk_test_abcdefghijklmnopqrstuvwxyz123456789' }}
-          NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ vars.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY || '' }}
-          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY || 'sk-or-test-key' }}
-          TLDRSEC_AI_SUMMARIZER: ${{ secrets.TLDRSEC_AI_SUMMARIZER || 'sk-test-summarizer-key' }}
-          NEXT_PUBLIC_SUPABASE_URL: ${{ vars.NEXT_PUBLIC_SUPABASE_URL || 'https://build-placeholder.supabase.co' }}
-          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ vars.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || 'eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJzdXBhYmFzZSIsImlhdCI6MTY0ODc3MDQ2MCwiZXhwIjo0MTAyNDQ0ODAwLCJhdWQiOiJzdXBhYmFzZSIsInN1YiI6IjAwMDAwMDAwLTAwMDAtMDAwMC0wMDAwLTAwMDAwMDAwMDAwMCIsInJvbGUiOiJhbm9uIn0.fake-key-for-build' }}
-          SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY || 'fake-service-key-for-build' }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          CLERK_SECRET_KEY: ${{ secrets.CLERK_SECRET_KEY }}
+          NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ vars.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY  }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          TLDRSEC_AI_SUMMARIZER: ${{ secrets.TLDRSEC_AI_SUMMARIZER }}
+          NEXT_PUBLIC_SUPABASE_URL: ${{ vars.NEXT_PUBLIC_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ vars.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY }}
+          SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY  }}
           
       - name: Security Scan
         run: npm audit --audit-level=high
@@ -90,16 +90,16 @@ jobs:
       - name: Unit Tests
         run: npm run test
         env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL || 'postgresql://test:test@localhost:5432/test_db' }}
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY || 'sk-test-anthropic-key' }}
-          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY || 're_test_resend_key' }}
-          CLERK_SECRET_KEY: ${{ secrets.CLERK_SECRET_KEY || 'sk_test_abcdefghijklmnopqrstuvwxyz123456789' }}
-          NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ vars.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY || '' }}
-          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY || 'sk-or-test-key' }}
-          TLDRSEC_AI_SUMMARIZER: ${{ secrets.TLDRSEC_AI_SUMMARIZER || 'sk-test-summarizer-key' }}
-          NEXT_PUBLIC_SUPABASE_URL: ${{ vars.NEXT_PUBLIC_SUPABASE_URL || 'https://build-placeholder.supabase.co' }}
-          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ vars.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || 'eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJzdXBhYmFzZSIsImlhdCI6MTY0ODc3MDQ2MCwiZXhwIjo0MTAyNDQ0ODAwLCJhdWQiOiJzdXBhYmFzZSIsInN1YiI6IjAwMDAwMDAwLTAwMDAtMDAwMC0wMDAwLTAwMDAwMDAwMDAwMCIsInJvbGUiOiJhbm9uIn0.fake-key-for-build' }}
-          SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY || 'fake-service-key-for-build' }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          CLERK_SECRET_KEY: ${{ secrets.CLERK_SECRET_KEY }}
+          NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ vars.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          TLDRSEC_AI_SUMMARIZER: ${{ secrets.TLDRSEC_AI_SUMMARIZER }}
+          NEXT_PUBLIC_SUPABASE_URL: ${{ vars.NEXT_PUBLIC_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ vars.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY }}
+          SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
         
       - name: Database Connection Test
         run: npm run db:test || echo "⚠️ Database connection test skipped - no live database available"
