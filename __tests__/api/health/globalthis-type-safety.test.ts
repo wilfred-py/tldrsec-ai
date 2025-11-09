@@ -30,6 +30,7 @@ describe('GlobalThis Type Safety Tests', () => {
     });
 
     afterEach(() => {
+      // @ts-ignore - restoring global state in tests
       global.globalThis = originalGlobalThis;
       global.process = originalProcess;
     });
@@ -37,6 +38,7 @@ describe('GlobalThis Type Safety Tests', () => {
     it('should handle undefined globalThis safely', async () => {
       // Simulate environment where globalThis might be undefined/null
       const mockGlobalThis = undefined as any;
+      // @ts-ignore - mocking globalThis for testing
       global.globalThis = mockGlobalThis;
 
       // Import route handler after mocking globalThis
@@ -54,6 +56,7 @@ describe('GlobalThis Type Safety Tests', () => {
     it('should handle globalThis without EdgeRuntime property', async () => {
       // Simulate environment where globalThis exists but EdgeRuntime is undefined
       const mockGlobalThis = {} as any;
+      // @ts-ignore - mocking globalThis for testing
       global.globalThis = mockGlobalThis;
 
       const { GET } = await import('../../../app/api/health/route');
@@ -62,7 +65,7 @@ describe('GlobalThis Type Safety Tests', () => {
       const response = await GET(request);
       
       expect(response.status).toBe(200);
-      const data = await response.json();
+      const data = await response.json() as { runtime: string };
       expect(data.runtime).toBe('node');
     });
 
@@ -71,6 +74,7 @@ describe('GlobalThis Type Safety Tests', () => {
       const mockGlobalThis = {
         EdgeRuntime: 'edge-runtime'
       } as any;
+      // @ts-ignore - mocking globalThis for testing
       global.globalThis = mockGlobalThis;
 
       const { GET } = await import('../../../app/api/health/route');
@@ -79,11 +83,12 @@ describe('GlobalThis Type Safety Tests', () => {
       const response = await GET(request);
       
       expect(response.status).toBe(200);
-      const data = await response.json();
+      const data = await response.json() as { runtime: string };
       expect(data.runtime).toBe('edge');
     });
 
     it('should handle null globalThis gracefully', async () => {
+      // @ts-ignore - mocking globalThis for testing
       global.globalThis = null as any;
 
       const { GET } = await import('../../../app/api/health/route');
@@ -109,6 +114,7 @@ describe('GlobalThis Type Safety Tests', () => {
       ];
 
       for (const testGlobalThis of testCases) {
+        // @ts-ignore - mocking globalThis for testing
         global.globalThis = testGlobalThis as any;
         
         const { GET } = await import('../../../app/api/health/route');
@@ -117,7 +123,7 @@ describe('GlobalThis Type Safety Tests', () => {
         const response = await GET(request);
         
         expect(response.status).toBe(200);
-        const data = await response.json();
+        const data = await response.json() as { runtime: string };
         
         // Should detect edge runtime only when EdgeRuntime is truthy
         const expectedRuntime = testGlobalThis.EdgeRuntime ? 'edge' : 'node';
@@ -126,6 +132,7 @@ describe('GlobalThis Type Safety Tests', () => {
     });
 
     it('should handle process.env.RUNTIME override correctly', async () => {
+      // @ts-ignore - mocking globalThis for testing
       global.globalThis = {} as any;
       process.env.RUNTIME = 'edge';
 
@@ -135,7 +142,7 @@ describe('GlobalThis Type Safety Tests', () => {
       const response = await GET(request);
       
       expect(response.status).toBe(200);
-      const data = await response.json();
+      const data = await response.json() as { runtime: string };
       expect(data.runtime).toBe('edge');
       
       delete process.env.RUNTIME;

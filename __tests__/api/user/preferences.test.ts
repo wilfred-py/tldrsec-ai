@@ -71,7 +71,13 @@ describe('User Preferences API', () => {
         form10Q: true,
         form8K: true,
         form4: false,
-        otherFilings: false
+        otherFilings: {
+          formN2: false,
+          formNMFP: false,
+          formD: false,
+          form497: false,
+          formSD: false
+        }
       },
       contentPreferences: {
         includeSummary: true,

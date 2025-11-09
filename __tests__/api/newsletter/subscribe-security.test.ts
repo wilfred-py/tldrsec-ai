@@ -397,7 +397,7 @@ describe('Newsletter Subscription API Security', () => {
       
       expect(response.status).toBe(500);
       
-      const data = await response.json();
+      const data = await response.json() as { error: string; code: string };
       expect(data).toHaveProperty('error');
       expect(data).toHaveProperty('code', 'DATABASE_ERROR');
       
@@ -485,7 +485,7 @@ describe('Newsletter Subscription API Security', () => {
       
       expect(response.status).toBe(400);
       
-      const data = await response.json();
+      const data = await response.json() as { error: string };
       
       // Error should be generic, not revealing internal details
       expect(data.error).not.toContain('validation-schemas.ts');
@@ -509,7 +509,7 @@ describe('Newsletter Subscription API Security', () => {
       // Both should receive the same generic success message
       for (const response of responses) {
         if (response.status === 200) {
-          const data = await response.json();
+          const data = await response.json() as { message: string; alreadySubscribed?: boolean };
           expect(data.message).toBe(
             'Thank you for subscribing! You\'ll receive a confirmation email shortly.'
           );

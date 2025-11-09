@@ -74,7 +74,7 @@ describe('Summary API Route', () => {
 
     // Execute
     const request = new Request('https://example.com/api/summaries/summary123');
-    const response = await GET(request, { params: { id: mockSummaryId } });
+    const response = await GET(request, { params: Promise.resolve({ id: mockSummaryId }) });
     const responseBody = await response.json();
 
     // Assert
@@ -89,7 +89,7 @@ describe('Summary API Route', () => {
 
     // Execute
     const request = new Request('https://example.com/api/summaries/summary123');
-    const response = await GET(request, { params: { id: mockSummaryId } });
+    const response = await GET(request, { params: Promise.resolve({ id: mockSummaryId }) });
     const responseBody = await response.json();
 
     // Assert
@@ -106,7 +106,7 @@ describe('Summary API Route', () => {
 
     // Execute
     const request = new Request('https://example.com/api/summaries/summary123');
-    const response = await GET(request, { params: { id: mockSummaryId } });
+    const response = await GET(request, { params: Promise.resolve({ id: mockSummaryId }) });
     const responseBody = await response.json();
 
     // Assert
@@ -124,7 +124,7 @@ describe('Summary API Route', () => {
 
     // Execute
     const request = new Request('https://example.com/api/summaries/summary123');
-    const response = await GET(request, { params: { id: mockSummaryId } });
+    const response = await GET(request, { params: Promise.resolve({ id: mockSummaryId }) });
     const responseBody = await response.json();
 
     // Assert
@@ -146,7 +146,7 @@ describe('Summary API Route', () => {
 
     // Execute
     const request = new Request('https://example.com/api/summaries/summary123');
-    const response = await GET(request, { params: { id: mockSummaryId } });
+    const response = await GET(request, { params: Promise.resolve({ id: mockSummaryId }) });
     const responseBody = await response.json();
 
     // Assert
@@ -162,7 +162,7 @@ describe('Summary API Route', () => {
 
     // Execute
     const request = new Request('https://example.com/api/summaries/summary123');
-    const response = await GET(request, { params: { id: mockSummaryId } });
+    const response = await GET(request, { params: Promise.resolve({ id: mockSummaryId }) });
     const responseBody = await response.json();
 
     // Assert
@@ -180,7 +180,7 @@ describe('Summary API Route', () => {
 
     // Execute
     const request = new Request('https://example.com/api/summaries/summary123');
-    const response = await GET(request, { params: { id: mockSummaryId } });
+    const response = await GET(request, { params: Promise.resolve({ id: mockSummaryId }) });
     const responseBody = await response.json();
 
     // Assert
