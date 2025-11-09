@@ -73,16 +73,17 @@ jobs:
           npm run lint
           npm run build
         env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
-          CLERK_SECRET_KEY: ${{ secrets.CLERK_SECRET_KEY }}
-          NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ vars.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY  }}
-          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
-          TLDRSEC_AI_SUMMARIZER: ${{ secrets.TLDRSEC_AI_SUMMARIZER }}
-          NEXT_PUBLIC_SUPABASE_URL: ${{ vars.NEXT_PUBLIC_SUPABASE_URL }}
-          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ vars.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY }}
-          SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY  }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL || 'postgresql://test:test@localhost:5432/test_db' }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY || 'test-key' }}
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY || 'test-key' }}
+          CLERK_SECRET_KEY: ${{ secrets.CLERK_SECRET_KEY || 'test-key' }}
+          NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ vars.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY || 'test-key' }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY || 'test-key' }}
+          TLDRSEC_AI_SUMMARIZER: ${{ secrets.TLDRSEC_AI_SUMMARIZER || 'test-key' }}
+          NEXT_PUBLIC_SUPABASE_URL: ${{ vars.NEXT_PUBLIC_SUPABASE_URL || 'test-url' }}
+          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ vars.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || 'test-key' }}
+          SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY || 'test-key' }}
+          CI: true
           
       - name: Security Scan
         run: npm audit --audit-level=high
@@ -195,10 +196,28 @@ jobs:
           # Make validation script executable
           chmod +x build-validation.sh
           
-          # Run validation script
+          # Run validation script with fallback handling
           if [ -z "$CLOUDFLARE_API_TOKEN" ]; then
             echo "⚠️ CLOUDFLARE_API_TOKEN not configured, performing local validation only"
-            ./build-validation.sh
+            
+            # Run local validation without API calls
+            echo "📝 Validating JavaScript syntax..."
+            node --check index.js
+            echo "✅ JavaScript syntax valid"
+            
+            echo "⚙️ Validating wrangler configuration..."
+            if ! grep -q "name.*=.*cloudflare-cron" wrangler.toml; then
+              echo "❌ wrangler.toml missing valid name entry"
+              exit 1
+            fi
+            
+            if ! grep -q "main.*=.*index.js" wrangler.toml; then
+              echo "❌ wrangler.toml missing valid main entry"
+              exit 1
+            fi
+            echo "✅ Configuration valid"
+            
+            echo "✅ Local validation completed successfully"
           else
             echo "✅ Running full validation with API token"
             ./build-validation.sh

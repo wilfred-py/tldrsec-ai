@@ -7,8 +7,15 @@ export async function trackPageAnalytics(
     utm_source?: string | null;
     utm_medium?: string | null;
     utm_campaign?: string | null;
+    [key: string]: string | null | undefined; // Allow additional parameters for flexibility
   }
 ) {
+  // Skip analytics in test or CI environments
+  if (process.env.NODE_ENV === 'test' || process.env.CI === 'true') {
+    console.log(`[Analytics] ${pageVariant}:${action}`, utmParams);
+    return;
+  }
+
   try {
     await supabase.from('page_analytics').insert({
       page_variant: pageVariant,
