@@ -97,16 +97,16 @@ jobs:
         run: |
           # Test pipeline health history queries
           psql $DATABASE_URL -c "
-            INSERT INTO \"PipelineHealthHistory\" (id, \"pipelineStatus\", \"processingLatency\", \"successRate\", \"errorCount\", \"activeJobs\", \"queueDepth\", \"memoryUsage\")
-            VALUES ('test_health_1', 'healthy', 5000, 98.5, 2, 3, 10, 512.0);
+            INSERT INTO \"PipelineHealthHistory\" (id, \"pipelineStatus\", \"processingLatency\", \"successRate\", \"errorCount\", \"activeJobs\", \"queueDepth\", \"memoryUsage\", \"createdAt\")
+            VALUES ('test_health_1', 'healthy', 5000, 98.5, 2, 3, 10, 512.0, NOW());
             
             SELECT COUNT(*) FROM \"PipelineHealthHistory\" WHERE \"pipelineStatus\" = 'healthy';
           "
           
           # Test error alert queries
           psql $DATABASE_URL -c "
-            INSERT INTO \"ErrorAlert\" (id, \"alertType\", source, message, resolved)
-            VALUES ('test_alert_1', 'warning', 'pipeline', 'Test alert message', false);
+            INSERT INTO \"ErrorAlert\" (id, \"alertType\", source, message, resolved, \"createdAt\", \"updatedAt\")
+            VALUES ('test_alert_1', 'warning', 'pipeline', 'Test alert message', false, NOW(), NOW());
             
             SELECT COUNT(*) FROM \"ErrorAlert\" WHERE resolved = false;
           "
