@@ -49,6 +49,15 @@ const config: Config = {
           '4': 'hsl(var(--chart-4))',
           '5': 'hsl(var(--chart-5))',
         },
+        fintech: {
+          primary: 'oklch(var(--fintech-primary))',
+          secondary: 'oklch(var(--fintech-secondary))',
+          accent: 'oklch(var(--fintech-accent))',
+          success: 'oklch(var(--fintech-success))',
+          'bg-subtle': 'oklch(var(--fintech-bg-subtle))',
+          'text-primary': 'oklch(var(--fintech-text-primary))',
+          'text-secondary': 'oklch(var(--fintech-text-secondary))',
+        },
       },
       borderRadius: {
         lg: 'var(--radius)',
