@@ -17,12 +17,12 @@ export function ProfessionalFooter() {
           </div>
           <div className="flex items-center gap-2">
             <TrendingUp className="w-4 h-4 text-fintech-accent" />
-            <span>AI-powered Analysis</span>
+            <span>AI-partnered Analysis</span>
           </div>
         </div>
         
         <div className="text-center mt-6 text-xs text-gray-400">
-          Professional SEC filing analysis for disciplined investors
+          Professional SEC filing analysis for focused investors
         </div>
       </div>
     </footer>

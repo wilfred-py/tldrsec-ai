@@ -69,24 +69,24 @@ export function WaitlistForm() {
 
   if (status === 'success') {
     return (
-      <Card className="border-fintech-success/20 bg-gradient-to-br from-fintech-success/5 to-fintech-accent/5 shadow-lg">
+      <Card className="border-green-200 bg-gradient-to-br from-green-50 to-blue-50 shadow-lg">
         <CardContent className="p-8 text-center">
           <div className="mb-6">
             {/* Enhanced success icon */}
-            <div className="w-16 h-16 bg-fintech-success/10 rounded-full flex items-center justify-center mx-auto mb-4">
-              <CheckCircle className="w-8 h-8 text-fintech-success" />
+            <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <CheckCircle className="w-8 h-8 text-green-600" />
             </div>
             
-            <Badge variant="secondary" className="bg-fintech-success/10 text-fintech-success border-fintech-success/20 mb-3">
+            <Badge variant="secondary" className="bg-green-100 text-green-700 border-green-200 mb-3">
               🎉 You&apos;re on the waitlist!
             </Badge>
           </div>
           
-          <h3 className="text-xl font-semibold text-fintech-text-primary mb-3">
+          <h3 className="text-xl font-semibold text-slate-900 mb-3">
             You&apos;re officially on the list!
           </h3>
           
-          <p className="text-fintech-text-secondary text-base mb-6 leading-relaxed">
+          <p className="text-slate-600 text-base mb-6 leading-relaxed">
             {successMessage.includes('already') 
               ? 'You\'re already on our waitlist. We\'ll notify you as soon as we launch and you can start saving hours on filing analysis.'
               : 'Perfect! Check your email to confirm. You&apos;re now on the waitlist with 247+ focused investors who value their time.'
@@ -105,7 +105,7 @@ export function WaitlistForm() {
           placeholder="Enter your email to join the waitlist"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
-          className="h-14 text-lg bg-white border-2 border-gray-100 placeholder:text-fintech-text-secondary focus:border-fintech-primary focus:ring-fintech-primary/20 rounded-xl shadow-sm"
+          className="h-14 text-lg bg-white border-2 border-gray-100 placeholder:text-slate-500 focus:border-blue-600 focus:ring-blue-600/20 rounded-xl shadow-sm"
           disabled={status === 'loading'}
           autoFocus
         />
@@ -121,7 +121,7 @@ export function WaitlistForm() {
       <Button 
         type="submit" 
         disabled={status === 'loading' || !email}
-        className="w-full h-14 bg-fintech-primary hover:bg-fintech-secondary text-white text-lg font-semibold rounded-xl transition-all duration-200 disabled:opacity-50 shadow-lg hover:shadow-xl"
+        className="w-full h-14 bg-blue-600 hover:bg-blue-700 text-white text-lg font-semibold rounded-xl transition-all duration-200 disabled:opacity-50 shadow-lg hover:shadow-xl"
       >
         {status === 'loading' ? (
           <>

@@ -24,9 +24,9 @@ export function FocusedInvestorHero() {
             
             {/* Enhanced subheading */}
             <p className="text-xl md:text-2xl text-fintech-text-secondary mb-16 leading-relaxed font-light max-w-3xl mx-auto">
-              Get the insights you need to make informed buy, sell, or hold decisions.{' '}
-              <span className="font-medium text-fintech-accent">AI-powered summaries of every filing</span>{' '}
-              from companies in your portfolio, delivered to your inbox.
+            
+              <span className="font-medium text-fintech-accent">Insightful summaries of every SEC filing</span>{' '}
+              from companies in your portfolio, delivered straight to your inbox.
             </p>
             
             {/* Form section with enhanced spacing */}
@@ -40,7 +40,7 @@ export function FocusedInvestorHero() {
         </div>
       </main>
       
-      <ProfessionalFooter />
+      {/* <ProfessionalFooter /> */}
     </div>
   );
 }
