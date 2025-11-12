@@ -32,6 +32,15 @@ const config = {
     }],
   },
   moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'mjs'],
+  transformIgnorePatterns: [
+    'node_modules/(?!((@clerk\\/.*\\.mjs)|(@clerk\\/.*)|(@jest\\/transform)|(@babel\\/preset-env)))',
+  ],
+  extensionsToTreatAsEsm: ['.ts', '.tsx'],
+  globals: {
+    'ts-jest': {
+      useESM: true,
+    },
+  },
 };
 
 // createJestConfig is exported this way to ensure that next/jest can load the Next.js config which is async

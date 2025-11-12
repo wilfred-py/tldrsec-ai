@@ -9,7 +9,7 @@
  */
 
 import { getFilingById } from '../services/filing/getFilingById';
-import { getPrismaClient } from '../lib/db';
+import { prisma } from '../lib/db';
 import { logger } from '../lib/logging';
 
 // Sample filing IDs with XML content
