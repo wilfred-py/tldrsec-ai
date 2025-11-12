@@ -3,7 +3,7 @@
 import { WaitlistForm } from '@/components/waitlist/waitlist-form';
 import { WaitlistCounter } from './waitlist-counter';
 import { FloatingElements } from './floating-elements';
-import { ProfessionalFooter } from './professional-footer';
+// import { ProfessionalFooter } from './professional-footer';
 
 export function FocusedInvestorHero() {
   return (
