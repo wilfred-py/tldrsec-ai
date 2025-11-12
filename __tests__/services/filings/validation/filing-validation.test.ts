@@ -612,7 +612,7 @@ describe('Filing Validation Functions', () => {
       });
 
       it('should accept well-formed key points', () => {
-        const summary = 'This is a valid summary that meets all minimum length requirements and contains relevant content for 8-K validation testing purposes.';
+        const summary = 'Apple Inc. (AAPL) filed this 8-K report that meets all minimum length requirements and contains relevant content for validation testing purposes.';
         const keyPoints = ['Detailed key point about quarterly earnings performance', 'Another substantive point about business operations'];
         const result = validateAISummary(summary, keyPoints, 'AAPL', '8-K');
         expect(result.isValid).toBe(true);
@@ -636,14 +636,14 @@ describe('Filing Validation Functions', () => {
 
     describe('Form-specific content expectations', () => {
       it('should suggest financial terminology for 10-K filings without financial terms', () => {
-        const summary = 'This filing discusses general company matters and strategic initiatives without specific financial details. The document covers various operational aspects of the business including management changes, corporate governance updates, and strategic planning initiatives that will shape the company direction over the next fiscal year period.';
+        const summary = 'Apple Inc. (AAPL) filing discusses general company matters and strategic initiatives without specific details. The document covers various operational aspects of the business including management changes, corporate governance updates, and strategic planning initiatives that will shape the company direction over the next fiscal year period.';
         const result = validateAISummary(summary, ['General point'], 'AAPL', '10-K');
         expect(result.isValid).toBe(true);
         expect(result.suggestions).toContain('Financial filing summary lacks financial terminology - may need regeneration');
       });
 
       it('should suggest financial terminology for 10-Q filings without financial terms', () => {
-        const summary = 'This filing discusses general company matters and strategic initiatives without specific financial details. The quarterly report covers operational updates and business developments for the quarter.';
+        const summary = 'Apple Inc. (AAPL) filing discusses general company matters and strategic initiatives without specific details. The quarterly report covers operational updates and business developments for the quarter.';
         const result = validateAISummary(summary, ['General point'], 'AAPL', '10-Q');
         expect(result.isValid).toBe(true);
         expect(result.suggestions).toContain('Financial filing summary lacks financial terminology - may need regeneration');
@@ -666,10 +666,10 @@ describe('Filing Validation Functions', () => {
       const financialTerms = ['financial', 'revenue', 'earnings'];
       financialTerms.forEach((term) => {
         it(`should accept 10-K with financial term: "${term}"`, () => {
-          const summary = `This annual filing discusses company performance and shows significant ${term} improvements over the previous year.`;
+          const summary = `Apple Inc. (AAPL) annual filing discusses comprehensive company performance metrics and demonstrates significant ${term} improvements over the previous year. The comprehensive annual report provides detailed analysis of business operations, market positioning, strategic initiatives, management assessment of risks and opportunities, as well as forward-looking guidance for stakeholders. This filing contains substantive content that meets the minimum length requirements for proper 10-K validation while including the necessary ${term} terminology to satisfy financial content expectations.`;
           const result = validateAISummary(summary, ['Financial performance'], 'AAPL', '10-K');
           expect(result.isValid).toBe(true);
-          expect(result.suggestions?.filter(s => s.includes('financial terminology'))).toHaveLength(0);
+          expect(result.suggestions?.filter(s => s.includes('financial terminology')) || []).toHaveLength(0);
         });
       });
     });
