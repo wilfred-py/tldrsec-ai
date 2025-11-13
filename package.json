@@ -47,6 +47,7 @@
     "test:cron-endpoint": "npx tsx scripts/test-cron-endpoint.ts",
     "test:cron-comprehensive": "jest __tests__/cron/comprehensive-cron-integration.test.ts __tests__/lib/email/async-email-queue.test.ts --config=jest.config.mjs --verbose",
     "test:cloudflare-worker": "jest __tests__/cloudflare/worker-execution.test.ts --config=jest.config.mjs --verbose",
+    "test:production-waitlist": "bash scripts/test-production-waitlist.sh",
     "test:monitoring-ci": "npx tsx scripts/test-monitoring-ci.ts",
     "test:cloudflare-integration": "node scripts/test-worker-integration-simple.js",
     "test:performance-benchmarks": "npx tsx scripts/performance-benchmarks.ts",

@@ -46,7 +46,15 @@ ALTER TABLE newsletter_subscribers ENABLE ROW LEVEL SECURITY;
 ALTER TABLE newsletter_deliveries ENABLE ROW LEVEL SECURITY;
 ALTER TABLE page_analytics ENABLE ROW LEVEL SECURITY;
 
--- RLS Policies (admin access only)
+-- RLS Policies for newsletter tables (admin access only)
 CREATE POLICY "Admin access" ON newsletter_subscribers FOR ALL USING (false);
 CREATE POLICY "Admin access" ON newsletter_deliveries FOR ALL USING (false);
-CREATE POLICY "Admin access" ON page_analytics FOR ALL USING (false);
+
+-- RLS Policies for page_analytics (allow anonymous inserts)
+DROP POLICY IF EXISTS "Admin access" ON page_analytics;
+CREATE POLICY "Allow anonymous inserts" ON page_analytics
+  FOR INSERT
+  WITH CHECK (true);
+CREATE POLICY "Service role full access" ON page_analytics
+  FOR ALL
+  USING (auth.role() = 'service_role');

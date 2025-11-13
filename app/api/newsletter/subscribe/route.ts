@@ -199,6 +199,31 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (error && error.code !== '23505') { // Not duplicate email error
+      // Detect authentication/connectivity failures
+      const isAuthError = error.message?.includes('JWT') ||
+                          error.message?.includes('service_role') ||
+                          error.code === 'PGRST301'; // Auth failed
+
+      const isConnectivityError = error.message?.includes('ENOTFOUND') ||
+                              error.message?.includes('ETIMEDOUT') ||
+                              error.message?.includes('ECONNREFUSED');
+
+      if (isAuthError) {
+        newsletterLogger.error('Supabase authentication error - check SUPABASE_SECRET_KEY', {
+          error: error.message,
+          code: error.code,
+          hint: 'Verify SUPABASE_SECRET_KEY in environment variables'
+        });
+      }
+
+      if (isConnectivityError) {
+        newsletterLogger.error('Supabase connectivity error - check network/DNS', {
+          error: error.message,
+          url: process.env.NEXT_PUBLIC_SUPABASE_URL,
+          hint: 'Verify Supabase project is active and URL is correct'
+        });
+      }
+
       newsletterLogger.error('Database insertion failed', {
         error: error.message,
         code: error.code,

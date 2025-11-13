@@ -73,6 +73,7 @@ tasks/
 # TaskMaster scripts
 scripts/*
 !scripts/create-task-branch.sh
+!scripts/test-production-waitlist.sh
 
 # Prisma generated files
 lib/generated/
