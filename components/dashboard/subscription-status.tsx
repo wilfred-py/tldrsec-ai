@@ -251,7 +251,7 @@ export function SubscriptionStatus({ userId }: SubscriptionStatusProps) {
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-base">
               <Zap className="h-4 w-4" />
-              This Month&apos;s Impact
+              This Month&#39;s Impact
             </CardTitle>
           </CardHeader>
           <CardContent>
