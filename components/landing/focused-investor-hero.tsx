@@ -33,11 +33,9 @@ export function FocusedInvestorHero() {
             </p>
             
             {/* Form section with enhanced spacing */}
-            {!hasSignedUp && (
-              <div className="max-w-md mx-auto mb-12">
-                <WaitlistForm onSuccess={() => setHasSignedUp(true)} />
-              </div>
-            )}
+            <div className="max-w-md mx-auto mb-12">
+              <WaitlistForm onSuccess={() => setHasSignedUp(true)} />
+            </div>
             
             <WaitlistCounter hideAfterSignup={true} userHasSignedUp={hasSignedUp} />
             
