@@ -1,11 +1,14 @@
 'use client';
 
+import { useState } from 'react';
 import { WaitlistForm } from '@/components/waitlist/waitlist-form';
 import { WaitlistCounter } from './waitlist-counter';
 import { FloatingElements } from './floating-elements';
 // import { ProfessionalFooter } from './professional-footer';
 
 export function FocusedInvestorHero() {
+  const [hasSignedUp, setHasSignedUp] = useState(false);
+
   return (
     <div className="min-h-screen flex flex-col">
       <main className="flex-1 bg-gradient-to-br from-white via-fintech-bg-subtle to-white relative overflow-hidden">
@@ -31,10 +34,10 @@ export function FocusedInvestorHero() {
             
             {/* Form section with enhanced spacing */}
             <div className="max-w-md mx-auto mb-12">
-              <WaitlistForm />
+              <WaitlistForm onSuccess={() => setHasSignedUp(true)} />
             </div>
             
-            <WaitlistCounter />
+            <WaitlistCounter hideAfterSignup={true} userHasSignedUp={hasSignedUp} />
             
           </div>
         </div>

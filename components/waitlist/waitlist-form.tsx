@@ -9,11 +9,14 @@ import { Badge } from '@/components/ui/badge';
 import { CheckCircle, Loader2, AlertCircle } from 'lucide-react';
 import { trackPageAnalytics } from '@/lib/analytics/page-tracking';
 
-export function WaitlistForm() {
+interface WaitlistFormProps {
+  onSuccess?: () => void;
+}
+
+export function WaitlistForm({ onSuccess }: WaitlistFormProps = {}) {
   const [email, setEmail] = useState('');
   const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
   const [errorMessage, setErrorMessage] = useState('');
-  const [successMessage, setSuccessMessage] = useState('');
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -53,9 +56,11 @@ export function WaitlistForm() {
         throw new Error('Subscription failed');
       }
 
-      const result = await response.json();
-      setSuccessMessage(result.message || 'Successfully subscribed!');
+      await response.json();
       setStatus('success');
+      
+      // Call parent success callback
+      onSuccess?.();
       
       // Track successful waitlist signup
       await trackPageAnalytics('home', 'waitlist_signup_success');
@@ -78,19 +83,15 @@ export function WaitlistForm() {
             </div>
             
             <Badge variant="secondary" className="bg-green-100 text-green-700 border-green-200 mb-3">
-              🎉 You&apos;re on the waitlist!
+              🎉 You&#39;re on the waitlist!
             </Badge>
           </div>
           
           <h3 className="text-xl font-semibold text-slate-900 mb-3">
-            You&apos;re officially on the list!
+            We&#39;ve sent you an email confirming your waitlist registration. 
           </h3>
-          
-          <p className="text-slate-600 text-base mb-6 leading-relaxed">
-            {successMessage.includes('already') 
-              ? 'You\'re already on our waitlist. We\'ll notify you as soon as we launch and you can start saving hours on filing analysis.'
-              : 'Perfect! Check your email to confirm. You&apos;re now on the waitlist with 247+ focused investors who value their time.'
-            }
+          <p className="text-slate-600 mb-3">
+            You&#39;ll be notified when the app launches.
           </p>
         </CardContent>
       </Card>
