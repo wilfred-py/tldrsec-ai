@@ -35,6 +35,15 @@
   --sidebar-accent-foreground: oklch(0.205 0 0);
   --sidebar-border: oklch(0.922 0 0);
   --sidebar-ring: oklch(0.708 0 0);
+  
+  /* Fintech brand colors */
+  --fintech-primary: oklch(0.45 0.15 232); /* Professional blue */
+  --fintech-secondary: oklch(0.35 0.12 190); /* Deep trust blue */
+  --fintech-accent: oklch(0.55 0.18 160); /* Subtle teal accent */
+  --fintech-success: oklch(0.45 0.15 145); /* Professional green */
+  --fintech-bg-subtle: oklch(0.99 0.002 232); /* Ultra-light blue bg */
+  --fintech-text-primary: oklch(0.15 0.01 232); /* Near black with blue hint */
+  --fintech-text-secondary: oklch(0.45 0.05 232); /* Professional gray-blue */
 }
 
 .dark {
@@ -69,6 +78,15 @@
   --sidebar-accent-foreground: oklch(0.985 0 0);
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.556 0 0);
+  
+  /* Fintech brand colors (dark mode) */
+  --fintech-primary: oklch(0.55 0.18 232); /* Lighter professional blue */
+  --fintech-secondary: oklch(0.45 0.15 190); /* Lighter deep trust blue */
+  --fintech-accent: oklch(0.65 0.20 160); /* Lighter subtle teal accent */
+  --fintech-success: oklch(0.55 0.18 145); /* Lighter professional green */
+  --fintech-bg-subtle: oklch(0.18 0.008 232); /* Dark blue bg */
+  --fintech-text-primary: oklch(0.95 0.005 232); /* Near white with blue hint */
+  --fintech-text-secondary: oklch(0.65 0.08 232); /* Lighter gray-blue */
 }
 
 @layer base {

@@ -8,7 +8,7 @@
     "build": "prisma generate && next build",
     "start": "next start",
     "lint": "next lint",
-    "test": "jest --config=jest.config.mjs",
+    "test": "NODE_OPTIONS='--no-deprecation' jest --config=jest.config.mjs",
     "test:esm": "node --experimental-vm-modules node_modules/jest/bin/jest.js --config jest.config.mjs",
     "test:ts": "jest --config jest.config.js",
     "test:build": "node --experimental-vm-modules node_modules/jest/bin/jest.js --config=tests/build/jest.config.mjs",

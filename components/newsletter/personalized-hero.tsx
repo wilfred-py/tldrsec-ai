@@ -253,7 +253,9 @@ function PersonalizedHeroInternal({ fallbackContent }: PersonalizedHeroProps) {
               <Button 
                 type="submit" 
                 disabled={status === 'loading' || isPersonalizing}
-                className="w-full bg-white text-violet-600 hover:bg-gray-100 text-lg font-bold py-4 px-8 transition-all duration-200"
+                variant="secondary"
+                size="lg"
+                className="w-full !bg-white !text-violet-700 hover:!bg-gray-50 hover:!text-violet-800 text-lg font-bold py-4 px-8 transition-all duration-200 border-2 border-white/20 shadow-lg"
               >
                 {status === 'loading' ? 'Subscribing...' : content.ctaText}
               </Button>

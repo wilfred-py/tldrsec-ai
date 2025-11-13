@@ -139,6 +139,16 @@ export async function POST(request: NextRequest) {
     // Create Supabase client with service role for admin operations
     const supabase = createSupabaseServiceClient();
     
+    // Convert confidence string to numeric score for database
+    const confidenceToScore = (confidence: string): number => {
+      switch (confidence) {
+        case 'HIGH': return 0.95;
+        case 'MEDIUM': return 0.75;
+        case 'LOW': return 0.25;
+        default: return 0.50; // fallback for unknown values
+      }
+    };
+
     // Prepare secure database insertion with additional security metadata
     const insertData = {
       email,
@@ -150,7 +160,7 @@ export async function POST(request: NextRequest) {
       // Additional security metadata
       subscriber_ip: clientIP,
       email_domain: email.split('@')[1],
-      confidence_score: emailAnalysis.confidence,
+      confidence_score: confidenceToScore(emailAnalysis.confidence),
       is_trusted_domain: emailAnalysis.domain.isTrusted
     };
     

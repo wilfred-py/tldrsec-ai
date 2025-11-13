@@ -1,3 +1,12 @@
+// Suppress Node.js deprecation warnings in tests
+process.removeAllListeners('warning');
+process.on('warning', (warning) => {
+  if (warning.name === 'DeprecationWarning' && warning.message.includes('punycode')) {
+    return; // Suppress punycode deprecation warnings
+  }
+  console.warn(warning.message);
+});
+
 // Import Jest DOM for DOM testing utilities
 require('@testing-library/jest-dom');
 // Import fetch polyfill for testing API calls

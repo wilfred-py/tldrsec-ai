@@ -51,13 +51,18 @@ if ! grep -q "main.*=.*index.js" wrangler.toml; then
 fi
 echo "✅ Configuration valid"
 
-# Run dry-run deployment
+# Run dry-run deployment (only if API token is available)
 echo "🚀 Testing deployment (dry-run)..."
-if npx wrangler deploy --dry-run; then
-    echo "✅ Deployment validation successful"
+if [ -n "$CLOUDFLARE_API_TOKEN" ]; then
+    if npx wrangler deploy --dry-run; then
+        echo "✅ Deployment validation successful"
+    else
+        echo "❌ Deployment validation failed"
+        exit 1
+    fi
 else
-    echo "❌ Deployment validation failed"
-    exit 1
+    echo "⚠️ CLOUDFLARE_API_TOKEN not available, skipping wrangler dry-run"
+    echo "✅ Configuration validation completed (dry-run skipped)"
 fi
 
 echo ""

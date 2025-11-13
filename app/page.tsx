@@ -3,25 +3,25 @@ import { FocusedInvestorHero } from '@/components/landing/focused-investor-hero'
 
 export async function generateMetadata(): Promise<Metadata> {
   return {
-    title: 'SEC Filing Insights for Value Investors',
-    description: 'Cut through complex legal jargon. Get clear insights on great businesses with economic moats and predictable earnings.',
+    title: 'Save 10+ Hours Weekly on SEC Filing Analysis',
+    description: 'Stop spending weekends reading SEC filings. Get AI-powered summaries that help you make informed investment decisions on your portfolio companies.',
     keywords: [
       'SEC filing summaries',
-      'value investing',
-      'economic moats',
-      'Warren Buffett approach',
-      'business analysis',
-      'investment research'
+      'investment time savings',
+      'portfolio analysis',
+      'Buffett-style investing',
+      'filing alerts',
+      'investment decisions'
     ],
     openGraph: {
-      title: 'SEC Filing Insights for Value Investors',
-      description: 'Cut through complex legal jargon. Get clear insights on businesses with economic moats.',
+      title: 'Save 10+ Hours Weekly on SEC Filing Analysis',
+      description: 'Stop spending weekends reading SEC filings. Get AI summaries for informed investment decisions.',
       type: 'website',
     },
     twitter: {
       card: 'summary_large_image',
-      title: 'SEC Filing Insights for Value Investors',
-      description: 'Cut through complex legal jargon. Get clear insights on businesses with economic moats.',
+      title: 'Save 10+ Hours Weekly on SEC Filing Analysis',
+      description: 'Stop spending weekends reading SEC filings. Get AI summaries for informed investment decisions.',
     },
     alternates: {
       canonical: 'https://tldrsec.app',

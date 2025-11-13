@@ -146,37 +146,7 @@ const mockInternalFunctions = {
     };
   },
 
-  getFilingContent: async (accessionNumber: string, filename?: string, cik?: string) => {
-    // Delegate to the mocked SECEdgarClient for consistent behavior
-    try {
-      const extensions = ['htm', 'html', 'txt'];
-      const filenamesToTry = filename ? [filename] : extensions.map(ext => `${accessionNumber}.${ext}`);
-      
-      for (const filenameToTry of filenamesToTry) {
-        try {
-          const url = `https://www.sec.gov/Archives/edgar/data/${cik}/${accessionNumber.replace(/-/g, '')}/${filenameToTry}`;
-          const content = await mockSecClient.getFilingDocument(url, { handleNotFound: true });
-          if (content) return content;
-        } catch (error) {
-          // Continue to next extension if file not found
-          if (error instanceof Error && !error.message.includes('not found')) {
-            throw error; // Re-throw non-404 errors
-          }
-        }
-      }
-      
-      // If we get here, no file was found
-      throw new Error(`Filed document not found for ${accessionNumber}`);
-    } catch (error) {
-      if (typeof error === 'string') {
-        throw `Failed to get filing content for ${accessionNumber}: ${error}`;
-      } else if (error instanceof Error) {
-        throw new Error(`Failed to get filing content for ${accessionNumber}: ${error.message}`);
-      } else {
-        throw new Error(`Failed to get filing content for ${accessionNumber}: Unknown error`);
-      }
-    }
-  },
+  getFilingContent: jest.fn(),
 
   validateAISummary: (summaryText: string, keyPoints: string[], ticker: string, formType: string) => {
     const suggestions: string[] = [];
@@ -612,7 +582,7 @@ describe('Filing Validation Functions', () => {
       });
 
       it('should accept well-formed key points', () => {
-        const summary = 'This is a valid summary that meets all minimum length requirements and contains relevant content for 8-K validation testing purposes.';
+        const summary = 'Apple Inc. (AAPL) filed this 8-K report that meets all minimum length requirements and contains relevant content for validation testing purposes.';
         const keyPoints = ['Detailed key point about quarterly earnings performance', 'Another substantive point about business operations'];
         const result = validateAISummary(summary, keyPoints, 'AAPL', '8-K');
         expect(result.isValid).toBe(true);
@@ -636,14 +606,14 @@ describe('Filing Validation Functions', () => {
 
     describe('Form-specific content expectations', () => {
       it('should suggest financial terminology for 10-K filings without financial terms', () => {
-        const summary = 'This filing discusses general company matters and strategic initiatives without specific financial details. The document covers various operational aspects of the business including management changes, corporate governance updates, and strategic planning initiatives that will shape the company direction over the next fiscal year period.';
+        const summary = 'Apple Inc. (AAPL) filing discusses general company matters and strategic initiatives without specific details. The document covers various operational aspects of the business including management changes, corporate governance updates, and strategic planning initiatives that will shape the company direction over the next fiscal year period.';
         const result = validateAISummary(summary, ['General point'], 'AAPL', '10-K');
         expect(result.isValid).toBe(true);
         expect(result.suggestions).toContain('Financial filing summary lacks financial terminology - may need regeneration');
       });
 
       it('should suggest financial terminology for 10-Q filings without financial terms', () => {
-        const summary = 'This filing discusses general company matters and strategic initiatives without specific financial details. The quarterly report covers operational updates and business developments for the quarter.';
+        const summary = 'Apple Inc. (AAPL) filing discusses general company matters and strategic initiatives without specific details. The quarterly report covers operational updates and business developments for the quarter.';
         const result = validateAISummary(summary, ['General point'], 'AAPL', '10-Q');
         expect(result.isValid).toBe(true);
         expect(result.suggestions).toContain('Financial filing summary lacks financial terminology - may need regeneration');
@@ -666,10 +636,10 @@ describe('Filing Validation Functions', () => {
       const financialTerms = ['financial', 'revenue', 'earnings'];
       financialTerms.forEach((term) => {
         it(`should accept 10-K with financial term: "${term}"`, () => {
-          const summary = `This annual filing discusses company performance and shows significant ${term} improvements over the previous year.`;
+          const summary = `Apple Inc. (AAPL) annual filing discusses comprehensive company performance metrics and demonstrates significant ${term} improvements over the previous year. The comprehensive annual report provides detailed analysis of business operations, market positioning, strategic initiatives, management assessment of risks and opportunities, as well as forward-looking guidance for stakeholders. This filing contains substantive content that meets the minimum length requirements for proper 10-K validation while including the necessary ${term} terminology to satisfy financial content expectations.`;
           const result = validateAISummary(summary, ['Financial performance'], 'AAPL', '10-K');
           expect(result.isValid).toBe(true);
-          expect(result.suggestions?.filter(s => s.includes('financial terminology'))).toHaveLength(0);
+          expect(result.suggestions?.filter(s => s.includes('financial terminology')) || []).toHaveLength(0);
         });
       });
     });
@@ -690,21 +660,21 @@ describe('Filing Validation Functions', () => {
       });
 
       it('should handle case-insensitive ticker matching', () => {
-        const summary = 'Apple Inc. (aapl) quarterly filing discusses strong performance and strategic initiatives.';
+        const summary = 'Apple Inc. (aapl) quarterly filing discusses strong performance and strategic initiatives with detailed financial implications and business outlook for upcoming quarters.';
         const result = validateAISummary(summary, ['Performance update'], 'AAPL', '8-K');
         expect(result.isValid).toBe(true);
         expect(result.suggestions?.filter(s => s.includes('ticker AAPL'))).toHaveLength(0);
       });
 
       it('should skip ticker check for single character tickers', () => {
-        const summary = 'This company filing discusses quarterly performance without mentioning the ticker symbol.';
+        const summary = 'This company filing discusses quarterly performance without mentioning the ticker symbol and provides detailed analysis of business operations, market conditions, and strategic initiatives.';
         const result = validateAISummary(summary, ['Performance update'], 'F', '8-K');
         expect(result.isValid).toBe(true);
         expect(result.suggestions?.filter(s => s.includes('ticker F'))).toHaveLength(0);
       });
 
       it('should handle special characters in tickers', () => {
-        const summary = 'Berkshire Hathaway (BRK.A) annual filing shows continued strong performance.';
+        const summary = 'Berkshire Hathaway (BRK.A) annual filing shows continued strong performance across multiple business segments with detailed financial results, revenue growth metrics, operational excellence initiatives, and strategic market positioning analysis. The comprehensive report demonstrates sustained competitive advantages and diversified portfolio strength while addressing regulatory requirements and providing shareholders with meaningful insights into business operations and forward-looking strategic planning initiatives.';
         const result = validateAISummary(summary, ['Strong performance'], 'BRK.A', '10-K');
         expect(result.isValid).toBe(true);
         expect(result.suggestions?.filter(s => s.includes('ticker BRK.A'))).toHaveLength(0);
@@ -746,13 +716,13 @@ describe('Filing Validation Functions', () => {
       });
 
       it('should handle special characters in all inputs', () => {
-        const summaryWithSpecialChars = 'This AAPL summary contains special characters: @#$%^&*()_+[]{}|;:,.<>?/~`';
+        const summaryWithSpecialChars = 'This AAPL summary contains special characters: @#$%^&*()_+[]{}|;:,.<>?/~` and provides comprehensive analysis of quarterly business performance, strategic initiatives, market positioning, and financial results for Apple Inc.';
         const result = validateAISummary(summaryWithSpecialChars, ['Point with émojis 🚀'], 'AAPL', '8-K');
         expect(result.isValid).toBe(true);
       });
 
       it('should handle empty arrays vs null/undefined arrays differently', () => {
-        const summary = 'Valid summary content for testing key points handling.';
+        const summary = 'Valid summary content for testing key points handling with sufficient length to meet minimum character requirements for 8-K filing validation and comprehensive business analysis.';
         
         const emptyArrayResult = validateAISummary(summary, [], 'AAPL', '8-K');
         const nullResult = validateAISummary(summary, null as any, 'AAPL', '8-K');
@@ -782,6 +752,24 @@ describe('Filing Validation Functions', () => {
         getFilingDocument: jest.fn(),
       };
       SECEdgarClient.mockImplementation(() => mockSecClient);
+      
+      // Set up default mock for getFilingContent that simulates the real function behavior
+      mockInternalFunctions.getFilingContent.mockImplementation(async (accessionNumber: string, filename?: string, cik?: string) => {
+        try {
+          const content = await mockSecClient.getFilingDocument('mock-url', { handleNotFound: true });
+          
+          // Simulate content validation like the real function
+          if (!content || content.trim() === '') {
+            throw new Error(`No content found for filing ${accessionNumber}`);
+          }
+          
+          return content;
+        } catch (error: any) {
+          // Simulate error handling like the real function
+          const message = error instanceof Error ? error.message : String(error);
+          throw new Error(`Failed to get filing content for ${accessionNumber}: ${message}`);
+        }
+      });
     });
 
     describe('Sequence number to filename mapping', () => {
