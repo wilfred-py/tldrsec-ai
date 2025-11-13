@@ -9,7 +9,7 @@ import { jest } from '@jest/globals';
 import type { SECFilingType } from '../../prompts/prompt-types';
 
 // Mock modules with absolute paths for ES Module compatibility
-jest.mock('/Users/wilf/Software/Windsurf Projects/tldrsec-ai/lib/ai/parsers', () => ({
+jest.mock('../../parsers', () => ({
   parseResponse: jest.fn().mockImplementation((responseContent) => {
     // Extract text from content array if it's an array of content objects
     let responseText = responseContent;
@@ -33,7 +33,7 @@ jest.mock('/Users/wilf/Software/Windsurf Projects/tldrsec-ai/lib/ai/parsers', ()
 }));
 
 // Mock the enhanced Claude client with absolute path
-jest.mock('/Users/wilf/Software/Windsurf Projects/tldrsec-ai/lib/ai/enhanced-claude-client', () => ({
+jest.mock('../../enhanced-claude-client', () => ({
   enhancedClaudeClient: {
     sendMessage: jest.fn().mockImplementation(async () => {
       return {

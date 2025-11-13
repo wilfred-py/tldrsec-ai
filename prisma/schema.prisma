@@ -741,3 +741,13 @@ enum ExecutionStatus {
   FAILED
   SKIPPED
 }
+
+model DailyWaitlistCache {
+  id        String   @id @default(uuid())
+  date      DateTime @unique @db.Date
+  baseCount Int
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([date])
+}

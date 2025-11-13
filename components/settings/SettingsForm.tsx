@@ -173,7 +173,7 @@ export default function SettingsForm() {
             </div>
             <div className="flex items-center space-x-2">
               <RadioGroupItem value={NotificationPreference.NONE} id="none" />
-              <Label htmlFor="none">None - Don&apos;t send email notifications</Label>
+              <Label htmlFor="none">None - Don&#39;t send email notifications</Label>
             </div>
           </RadioGroup>
         </div>

@@ -9,16 +9,28 @@ import { Badge } from '@/components/ui/badge';
 import { CheckCircle, Loader2, AlertCircle } from 'lucide-react';
 import { trackPageAnalytics } from '@/lib/analytics/page-tracking';
 
-export function WaitlistForm() {
+interface WaitlistFormProps {
+  onSuccess?: () => void;
+}
+
+export function WaitlistForm({ onSuccess }: WaitlistFormProps = {}) {
   const [email, setEmail] = useState('');
-  const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
+  const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'error' | 'already_subscribed'>('idle');
   const [errorMessage, setErrorMessage] = useState('');
-  const [successMessage, setSuccessMessage] = useState('');
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!email || !email.includes('@')) {
+    // Clear any previous error messages
+    setErrorMessage('');
+    
+    if (!email || email.trim() === '') {
+      setErrorMessage('Please enter your email address');
+      setStatus('error');
+      return;
+    }
+    
+    if (!email.includes('@') || !email.includes('.')) {
       setErrorMessage('Please enter a valid email address');
       setStatus('error');
       return;
@@ -49,13 +61,25 @@ export function WaitlistForm() {
         }),
       });
 
+      const responseData = await response.json();
+
       if (!response.ok) {
+        // Handle duplicate email specifically
+        if (response.status === 409 && responseData.isAlreadySubscribed) {
+          setStatus('already_subscribed');
+          // Call parent success callback for already subscribed as well
+          onSuccess?.();
+          // Track analytics for duplicate attempt
+          await trackPageAnalytics('home', 'waitlist_signup_duplicate');
+          return;
+        }
         throw new Error('Subscription failed');
       }
 
-      const result = await response.json();
-      setSuccessMessage(result.message || 'Successfully subscribed!');
       setStatus('success');
+      
+      // Call parent success callback
+      onSuccess?.();
       
       // Track successful waitlist signup
       await trackPageAnalytics('home', 'waitlist_signup_success');
@@ -78,19 +102,40 @@ export function WaitlistForm() {
             </div>
             
             <Badge variant="secondary" className="bg-green-100 text-green-700 border-green-200 mb-3">
-              🎉 You&apos;re on the waitlist!
+              🎉 You&#39;re on the waitlist!
             </Badge>
           </div>
           
           <h3 className="text-xl font-semibold text-slate-900 mb-3">
-            You&apos;re officially on the list!
+            We&#39;ve sent you an email confirming your waitlist registration. 
           </h3>
+          <p className="text-slate-600 mb-3">
+            You&#39;ll be notified when the app launches.
+          </p>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (status === 'already_subscribed') {
+    return (
+      <Card className="border-yellow-200 bg-gradient-to-br from-yellow-50 to-orange-50 shadow-lg">
+        <CardContent className="p-8 text-center">
+          <div className="mb-6">
+            <div className="w-16 h-16 bg-yellow-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <CheckCircle className="w-8 h-8 text-yellow-600" />
+            </div>
+            
+            <Badge variant="secondary" className="bg-yellow-100 text-yellow-700 border-yellow-200 mb-3">
+              📧 Already subscribed!
+            </Badge>
+          </div>
           
-          <p className="text-slate-600 text-base mb-6 leading-relaxed">
-            {successMessage.includes('already') 
-              ? 'You\'re already on our waitlist. We\'ll notify you as soon as we launch and you can start saving hours on filing analysis.'
-              : 'Perfect! Check your email to confirm. You&apos;re now on the waitlist with 247+ focused investors who value their time.'
-            }
+          <h3 className="text-xl font-semibold text-slate-900 mb-3">
+            This email is already on our waitlist.
+          </h3>
+          <p className="text-slate-600 mb-3">
+            You&apos;ll receive updates when the app launches.
           </p>
         </CardContent>
       </Card>
@@ -104,7 +149,14 @@ export function WaitlistForm() {
           type="email"
           placeholder="Enter your email to join the waitlist"
           value={email}
-          onChange={(e) => setEmail(e.target.value)}
+          onChange={(e) => {
+            setEmail(e.target.value);
+            // Clear error when user starts typing
+            if (status === 'error') {
+              setStatus('idle');
+              setErrorMessage('');
+            }
+          }}
           className="h-14 text-lg bg-white border-2 border-gray-100 placeholder:text-slate-500 focus:border-blue-600 focus:ring-blue-600/20 rounded-xl shadow-sm"
           disabled={status === 'loading'}
           autoFocus
@@ -120,7 +172,7 @@ export function WaitlistForm() {
       
       <Button 
         type="submit" 
-        disabled={status === 'loading' || !email}
+        disabled={status === 'loading'}
         className="w-full h-14 bg-blue-600 hover:bg-blue-700 text-white text-lg font-semibold rounded-xl transition-all duration-200 disabled:opacity-50 shadow-lg hover:shadow-xl"
       >
         {status === 'loading' ? (

@@ -15,20 +15,22 @@ import {
 } from '../../../lib/auth/subscription-auth';
 
 // Mock Clerk
-jest.mock('@clerk/nextjs', () => ({
+jest.mock('@clerk/nextjs/server', () => ({
   auth: jest.fn()
 }));
 
 // Mock Prisma
-jest.mock('../../../lib/db', () => ({
-  prisma: {
-    user: {
-      findUnique: jest.fn()
-    },
-    userSubscription: {
-      findUnique: jest.fn()
-    }
+const mockPrisma = {
+  user: {
+    findUnique: jest.fn()
+  },
+  userSubscription: {
+    findUnique: jest.fn()
   }
+};
+
+jest.mock('../../../lib/db', () => ({
+  prisma: mockPrisma
 }));
 
 describe('SubscriptionAuth', () => {
@@ -107,51 +109,49 @@ describe('SubscriptionAuth', () => {
   });
 
   describe('getAuthenticatedUserId', () => {
-    it('should return user ID when authenticated', () => {
-      const { auth } = require('@clerk/nextjs');
-      auth.mockReturnValue({ userId: 'user-123' });
+    it('should return user ID when authenticated', async () => {
+      const { auth } = require('@clerk/nextjs/server');
+      auth.mockResolvedValue({ userId: 'user-123' });
 
-      const result = getAuthenticatedUserId();
+      const result = await getAuthenticatedUserId();
       expect(result).toBe('user-123');
     });
 
-    it('should throw error when not authenticated', () => {
-      const { auth } = require('@clerk/nextjs');
-      auth.mockReturnValue({ userId: null });
+    it('should throw error when not authenticated', async () => {
+      const { auth } = require('@clerk/nextjs/server');
+      auth.mockResolvedValue({ userId: null });
 
-      expect(() => getAuthenticatedUserId())
-        .toThrow(SubscriptionAuthError);
+      await expect(getAuthenticatedUserId())
+        .rejects.toThrow(SubscriptionAuthError);
       
-      expect(() => getAuthenticatedUserId())
-        .toThrow('Authentication required');
+      await expect(getAuthenticatedUserId())
+        .rejects.toThrow('Authentication required');
     });
 
-    it('should handle auth function returning undefined', () => {
-      const { auth } = require('@clerk/nextjs');
-      auth.mockReturnValue({});
+    it('should handle auth function returning undefined', async () => {
+      const { auth } = require('@clerk/nextjs/server');
+      auth.mockResolvedValue({});
 
-      expect(() => getAuthenticatedUserId())
-        .toThrow(SubscriptionAuthError);
+      await expect(getAuthenticatedUserId())
+        .rejects.toThrow(SubscriptionAuthError);
     });
   });
 
   describe('verifyUserExists', () => {
     it('should pass when user exists', async () => {
-      const { prisma } = require('../../../lib/db');
-      prisma.user.findUnique.mockResolvedValue({ id: 'user-123' });
+      mockPrisma.user.findUnique.mockResolvedValue({ id: 'user-123' });
 
       await expect(verifyUserExists('user-123'))
         .resolves.not.toThrow();
 
-      expect(prisma.user.findUnique).toHaveBeenCalledWith({
+      expect(mockPrisma.user.findUnique).toHaveBeenCalledWith({
         where: { id: 'user-123' },
         select: { id: true }
       });
     });
 
     it('should throw error when user does not exist', async () => {
-      const { prisma } = require('../../../lib/db');
-      prisma.user.findUnique.mockResolvedValue(null);
+      mockPrisma.user.findUnique.mockResolvedValue(null);
 
       await expect(verifyUserExists('user-456'))
         .rejects.toThrow(SubscriptionAuthError);
@@ -161,8 +161,7 @@ describe('SubscriptionAuth', () => {
     });
 
     it('should handle database errors gracefully', async () => {
-      const { prisma } = require('../../../lib/db');
-      prisma.user.findUnique.mockRejectedValue(new Error('Database connection failed'));
+      mockPrisma.user.findUnique.mockRejectedValue(new Error('Database connection failed'));
 
       await expect(verifyUserExists('user-123'))
         .rejects.toThrow('Database connection failed');
@@ -171,10 +170,9 @@ describe('SubscriptionAuth', () => {
 
   describe('verifyActiveSubscription', () => {
     it('should pass for active subscription', async () => {
-      const { prisma } = require('../../../lib/db');
       const futureDate = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
       
-      prisma.userSubscription.findUnique.mockResolvedValue({
+      mockPrisma.userSubscription.findUnique.mockResolvedValue({
         isActive: true,
         currentPeriodEnd: futureDate
       });
@@ -184,9 +182,8 @@ describe('SubscriptionAuth', () => {
     });
 
     it('should throw error for inactive subscription', async () => {
-      const { prisma } = require('../../../lib/db');
       
-      prisma.userSubscription.findUnique.mockResolvedValue({
+      mockPrisma.userSubscription.findUnique.mockResolvedValue({
         isActive: false,
         currentPeriodEnd: new Date()
       });
@@ -199,10 +196,9 @@ describe('SubscriptionAuth', () => {
     });
 
     it('should throw error for expired subscription', async () => {
-      const { prisma } = require('../../../lib/db');
       const pastDate = new Date(Date.now() - 24 * 60 * 60 * 1000);
       
-      prisma.userSubscription.findUnique.mockResolvedValue({
+      mockPrisma.userSubscription.findUnique.mockResolvedValue({
         isActive: true,
         currentPeriodEnd: pastDate
       });
@@ -215,8 +211,7 @@ describe('SubscriptionAuth', () => {
     });
 
     it('should throw error when no subscription found', async () => {
-      const { prisma } = require('../../../lib/db');
-      prisma.userSubscription.findUnique.mockResolvedValue(null);
+      mockPrisma.userSubscription.findUnique.mockResolvedValue(null);
 
       await expect(verifyActiveSubscription('user-123'))
         .rejects.toThrow(SubscriptionAuthError);
@@ -378,7 +373,6 @@ describe('SubscriptionAuth', () => {
     });
 
     it('should not leak sensitive information in error messages', async () => {
-      const { prisma } = require('../../../lib/db');
       prisma.user.findUnique.mockRejectedValue(new Error('Internal database details: connection string, credentials, etc.'));
 
       try {

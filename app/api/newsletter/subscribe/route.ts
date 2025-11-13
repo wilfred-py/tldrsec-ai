@@ -139,6 +139,33 @@ export async function POST(request: NextRequest) {
     // Create Supabase client with service role for admin operations
     const supabase = createSupabaseServiceClient();
     
+    // Check for existing email before insertion
+    // Use case-insensitive comparison on original email (not normalized)
+    // This preserves user's exact email address for delivery while preventing duplicates
+    const { data: existingSubscriber, error: checkError } = await supabase
+      .from('newsletter_subscribers')
+      .select('email, subscribed_at')
+      .ilike('email', email)
+      .single();
+
+    if (existingSubscriber && !checkError) {
+      newsletterLogger.info('Duplicate email subscription attempt', {
+        domain: email.split('@')[1],
+        originalSubscriptionDate: existingSubscriber.subscribed_at,
+        processingTimeMs: Date.now() - startTime
+      });
+
+      return NextResponse.json(
+        {
+          success: false,
+          message: 'This email is already subscribed to our newsletter.',
+          code: 'EMAIL_ALREADY_EXISTS',
+          isAlreadySubscribed: true
+        },
+        { status: 409 }
+      );
+    }
+    
     // Convert confidence string to numeric score for database
     const confidenceToScore = (confidence: string): number => {
       switch (confidence) {
