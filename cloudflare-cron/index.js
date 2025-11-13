@@ -112,6 +112,7 @@ export default {
       const asyncUrl = `${env.PUBLIC_URL}/api/cron/tier-aware-async`;
       const optimizedUrl = `${env.PUBLIC_URL}/api/cron/tier-aware-optimized`;
       const fallbackUrl = `${env.PUBLIC_URL}/api/cron/tier-aware`;
+      const dailyCountUrl = `${env.PUBLIC_URL}/api/cron/update-daily-count`;
       const useAsync = env.USE_ASYNC_PROCESSING !== 'false'; // Default to true for new microservices
       
       const url = useAsync ? asyncUrl : optimizedUrl;
@@ -272,6 +273,29 @@ export default {
       
       const duration = Date.now() - startTime;
       console.log(`[${executionId}] Cron job completed successfully in ${duration}ms`);
+      
+      // Call daily count update endpoint after main cron job
+      try {
+        console.log(`[${executionId}] Calling daily count update endpoint: ${dailyCountUrl}`);
+        
+        const dailyCountResponse = await fetch(dailyCountUrl, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${env.CRON_SECRET}`,
+            'Content-Type': 'application/json',
+            'X-Execution-Id': `${executionId}-daily-count`,
+            'X-Cloudflare-Worker': 'tldrsec-cron',
+            'X-Cron-Source': 'cloudflare-worker'
+          }
+        });
+        
+        const dailyCountResult = dailyCountResponse.ok ? await dailyCountResponse.json() : await dailyCountResponse.text();
+        
+        console.log(`[${executionId}] Daily count update completed:`, dailyCountResult);
+      } catch (dailyCountError) {
+        // Don't fail the main cron job if daily count update fails
+        console.warn(`[${executionId}] Daily count update failed (non-critical):`, dailyCountError.message);
+      }
       
       // Record successful execution and update circuit breaker
       await monitor.recordExecution(executionId, 'completed', { duration, success: true });
