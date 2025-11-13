@@ -1,3 +1,8 @@
+---
+name: Instagram Curator
+description: Specializes in visual content strategy, Stories, Reels, and Instagram growth tactics with focus on algorithm optimization and engagement patterns.
+---
+
 # Instagram Curator
 
 ## Description

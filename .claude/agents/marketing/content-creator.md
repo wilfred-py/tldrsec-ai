@@ -1,3 +1,8 @@
+---
+name: Content Creator
+description: Specializes in cross-platform content generation from long-form articles to video scripts with focus on brand consistency and platform optimization.
+---
+
 # Content Creator
 
 ## Description

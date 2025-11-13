@@ -21,7 +21,7 @@ const mockResultValue: EnhancedSummarizationResult = {
 };
 
 // Mock chunking function
-jest.mock('/Users/wilf/Software/Windsurf Projects/tldrsec-ai/lib/ai/chunking/enhanced-chunker', () => ({
+jest.mock('../../chunking/enhanced-chunker', () => ({
   processDocumentContent: jest.fn().mockImplementation(() => ({
     chunks: ['Small chunk']
   }))
@@ -36,34 +36,24 @@ jest.mock('@anthropic-ai/sdk', () => ({
   }))
 }));
 
-jest.mock('/Users/wilf/Software/Windsurf Projects/tldrsec-ai/lib/ai/claude-client', () => ({
-  claudeClient: {
-    sendMessage: jest.fn()
-  }
-}));
-
-jest.mock('/Users/wilf/Software/Windsurf Projects/tldrsec-ai/lib/ai/enhanced-claude-client', () => ({
-  enhancedClaudeClient: {
-    sendMessage: jest.fn()
-  }
-}));
+// Removed non-existent claude-client mocks
 
 // Use a more explicit mock implementation with proper typing
-jest.mock('/Users/wilf/Software/Windsurf Projects/tldrsec-ai/lib/ai/summarization/chunk-processor', () => ({
+jest.mock('../chunk-processor', () => ({
   processSingleChunk: jest.fn().mockImplementation(() => Promise.resolve(mockResultValue))
 }));
 
 // Use a more explicit mock implementation with proper typing
-jest.mock('/Users/wilf/Software/Windsurf Projects/tldrsec-ai/lib/ai/summarization/batch-processor', () => ({
+jest.mock('../batch-processor', () => ({
   processAllChunks: jest.fn().mockImplementation(() => Promise.resolve(mockResultValue))
 }));
 
-jest.mock('/Users/wilf/Software/Windsurf Projects/tldrsec-ai/lib/ai/summarization/db-utils', () => ({
+jest.mock('../db-utils', () => ({
   updateSummaryWithPartialResult: jest.fn(),
   updateSummaryWithResult: jest.fn()
 }));
 
-jest.mock('/Users/wilf/Software/Windsurf Projects/tldrsec-ai/lib/ai/cache/summary-cache', () => ({
+jest.mock('../../cache/summary-cache', () => ({
   summaryCache: {
     get: jest.fn(),
     set: jest.fn()
@@ -71,12 +61,12 @@ jest.mock('/Users/wilf/Software/Windsurf Projects/tldrsec-ai/lib/ai/cache/summar
 }));
 
 // Mock filing extractor with proper typing
-jest.mock('/Users/wilf/Software/Windsurf Projects/tldrsec-ai/lib/parsers/filing-extractor', () => ({
+jest.mock('../../../parsers/filing-extractor', () => ({
   extractFilingContent: jest.fn().mockImplementation(() => Promise.resolve('Mock filing content'))
 }));
 
 // Mock prisma with proper typing
-jest.mock('/Users/wilf/Software/Windsurf Projects/tldrsec-ai/lib/db/prisma', () => ({
+jest.mock('../../../db/prisma', () => ({
   prisma: {
     filing: {
       findUnique: jest.fn().mockImplementation(() => Promise.resolve({
@@ -200,7 +190,7 @@ describe('EnhancedSummarizationService', () => {
     (service as any)._shouldUseChunking = jest.fn().mockReturnValue(false);
 
     // Reset the chunking mock to default value
-    const { processDocumentContent } = require('/Users/wilf/Software/Windsurf Projects/tldrsec-ai/lib/ai/chunking/enhanced-chunker');
+    const { processDocumentContent } = require('../../chunking/enhanced-chunker');
     (processDocumentContent as jest.Mock).mockReturnValue({
       chunks: ['Single chunk']
     });
@@ -289,7 +279,7 @@ describe('EnhancedSummarizationService', () => {
       (service as any)._getFilingContent = jest.fn().mockImplementation(() => Promise.resolve('Large text that needs chunking'));
       
       // Import the chunking module to mock it for this specific test
-      const { processDocumentContent } = require('/Users/wilf/Software/Windsurf Projects/tldrsec-ai/lib/ai/chunking/enhanced-chunker');
+      const { processDocumentContent } = require('../../chunking/enhanced-chunker');
       
       // Override the mock for this test to return multiple chunks
       (processDocumentContent as jest.Mock).mockReturnValue({

@@ -25,6 +25,8 @@ const config = {
     '^@/app/(.*)$': '<rootDir>/app/$1',
     '^@/__tests__/(.*)$': '<rootDir>/__tests__/$1',
     '\\.(css|less|scss|sass)$': 'identity-obj-proxy',
+    '@clerk/backend': '<rootDir>/__tests__/__mocks__/@clerk/backend.js',
+    '@clerk/nextjs/server$': '<rootDir>/__tests__/__mocks__/@clerk/nextjs.js',
   },
   transform: {
     '^.+\\.(ts|tsx)$': ['ts-jest', {
@@ -33,7 +35,7 @@ const config = {
   },
   moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'mjs'],
   transformIgnorePatterns: [
-    'node_modules/(?!((@clerk\\/.*\\.mjs)|(@clerk\\/.*)|(@jest\\/transform)|(@babel\\/preset-env)))',
+    'node_modules/(?!(@clerk/backend.*\\.mjs|@clerk/.*|react-syntax-highlighter/.*|@jest/transform|@babel/preset-env))',
   ],
   extensionsToTreatAsEsm: ['.ts', '.tsx'],
   globals: {
