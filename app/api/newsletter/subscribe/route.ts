@@ -140,10 +140,12 @@ export async function POST(request: NextRequest) {
     const supabase = createSupabaseServiceClient();
     
     // Check for existing email before insertion
+    // Use case-insensitive comparison on original email (not normalized)
+    // This preserves user's exact email address for delivery while preventing duplicates
     const { data: existingSubscriber, error: checkError } = await supabase
       .from('newsletter_subscribers')
       .select('email, subscribed_at')
-      .eq('email', emailAnalysis.canonical)
+      .ilike('email', email)
       .single();
 
     if (existingSubscriber && !checkError) {

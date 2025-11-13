@@ -221,9 +221,11 @@ export class EmailSecurityValidator {
       const confidence = this.calculateConfidenceScore(allThreats, domainAnalysis);
       
       // Determine overall validity
-      const isValid = formatValidation.isValid && 
-                     domainAnalysis.isValid && 
-                     allThreats.length === 0;
+      // Only reject if format is invalid OR domain is malicious (not just any threat)
+      // This allows legitimate emails with minor warnings to pass through
+      const isValid = formatValidation.isValid &&
+                     !domainAnalysis.isMalicious &&
+                     !domainAnalysis.isDisposable;
       
       const result: EmailSecurityResult = {
         isValid,
@@ -309,34 +311,14 @@ export class EmailSecurityValidator {
   }
   
   /**
-   * Normalize email address (lowercase, remove dots from Gmail, etc.)
+   * Normalize email address for comparison purposes
+   * IMPORTANT: Only lowercase and trim - preserve dots and plus aliases for delivery
+   * Gmail handles dot-equivalence internally, but we MUST preserve the exact address for email delivery
    */
   private static normalizeEmail(email: string): string {
-    // Convert to lowercase
-    const normalized = email.toLowerCase();
-    
-    // Parse components
-    const atIndex = normalized.lastIndexOf('@');
-    if (atIndex === -1) {
-      return normalized;
-    }
-    
-    let localPart = normalized.substring(0, atIndex);
-    const domain = normalized.substring(atIndex + 1);
-    
-    // Gmail-specific normalization
-    if (domain === 'gmail.com' || domain === 'googlemail.com') {
-      // Remove dots from local part
-      localPart = localPart.replace(/\./g, '');
-      
-      // Remove everything after + (aliases)
-      const plusIndex = localPart.indexOf('+');
-      if (plusIndex !== -1) {
-        localPart = localPart.substring(0, plusIndex);
-      }
-    }
-    
-    return `${localPart}@${domain}`;
+    // Only lowercase and trim whitespace
+    // DO NOT remove dots or plus aliases - they are needed for email delivery
+    return email.toLowerCase().trim();
   }
   
   /**
@@ -753,7 +735,8 @@ export class NewsletterSecurityValidator {
         isValid: true,
         data: {
           ...validationResult,
-          email: emailAnalysis.canonical
+          // Return original email, not canonical - preserve user's exact input for delivery
+          email: validationResult.email
         }
       };
       
