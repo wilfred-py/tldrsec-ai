@@ -29,6 +29,29 @@ export async function trackPageAnalytics(
     });
   } catch (error) {
     console.error('Analytics tracking error:', error);
+
+    // Track analytics failures in production
+    if (typeof window !== 'undefined' && process.env.NODE_ENV === 'production') {
+      // Send error to monitoring service (e.g., Sentry, LogRocket)
+      // This helps detect RLS policy or connectivity issues
+      try {
+        fetch('/api/monitoring/client-error', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            error: error instanceof Error ? error.message : 'Unknown error',
+            context: 'page_analytics_insert',
+            pageVariant,
+            action,
+            timestamp: new Date().toISOString()
+          })
+        }).catch(() => {
+          // Silently fail - don't break user experience
+        });
+      } catch {
+        // Double-catch to ensure no error breaks the page
+      }
+    }
   }
 }
 

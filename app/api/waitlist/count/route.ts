@@ -15,7 +15,7 @@ export async function GET() {
     
     console.log('[Waitlist Count API] Checking for cached daily count for:', today.toISOString());
     
-    let cachedEntry = await prisma.dailyWaitlistCache.findUnique({
+    const cachedEntry = await prisma.dailyWaitlistCache.findUnique({
       where: { date: today }
     });
     

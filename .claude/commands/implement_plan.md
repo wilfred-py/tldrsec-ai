@@ -14,6 +14,7 @@ When given a plan path:
 - **Read files fully** - never use limit/offset parameters, you need complete context
 - Think deeply about how the pieces fit together
 - Create a todo list to track your progress
+- Use specialized agents **strategically** when needed (see Agent-Powered Implementation section)
 - Start implementing if you understand what needs to be done
 
 If no plan path provided, ask for one.
@@ -65,14 +66,94 @@ If instructed to execute multiple phases consecutively, skip the pause until the
 do not check off items in the manual testing steps until confirmed by the user.
 
 
+## Agent-Powered Implementation
+
+Use specialized agents from `.claude/agents/` strategically during implementation to verify assumptions and maintain consistency.
+
+### When to Use Agents
+
+Unlike planning (which uses agents extensively upfront), implementation should use agents **selectively** when you encounter specific situations:
+
+#### 1. **When Plan Doesn't Match Reality**
+
+If you find the codebase structure differs from what the plan describes:
+
+```
+Use Task tool with:
+- codebase-analyzer: "Analyze how [component] actually works in [specific files]"
+- codebase-locator: "Find all places where [function/endpoint] is used"
+```
+
+This helps understand WHY the mismatch exists before proposing changes.
+
+#### 2. **Before Writing New Code**
+
+To maintain consistency with existing patterns:
+
+```
+Use Task tool with:
+- codebase-pattern-finder: "Find existing implementations of [component type] to model after"
+```
+
+Ensures your code matches codebase conventions the plan may not detail.
+
+#### 3. **When Debugging Integration Issues**
+
+If components aren't connecting as expected:
+
+```
+Use Task tool with:
+- codebase-analyzer: "Trace data flow from [entry point] to [destination]"
+- codebase-locator: "Find all callers of [modified interface]"
+```
+
+Identifies unexpected dependencies or integration points.
+
+#### 4. **For Complex Refactoring**
+
+When changing code structure across multiple files:
+
+```
+Use Task tool with:
+- codebase-locator: "Find all files importing [module being refactored]"
+- codebase-pattern-finder: "Show how similar refactoring was done for [comparable feature]"
+```
+
+Ensures comprehensive changes without breaking existing code.
+
+### Agent Usage Guidelines
+
+**Key Differences from Planning:**
+- **Planning**: Uses agents proactively upfront for comprehensive research
+- **Implementation**: Uses agents reactively for specific verification and debugging
+
+**Best Practices:**
+1. **Read files first** - Try to solve issues by reading code before spawning agents
+2. **Specific prompts** - Give agents exact file paths and component names
+3. **Targeted use** - Use agents for specific blockers, not general exploration
+4. **Verify findings** - Read the files agents identify to confirm their analysis
+
+### Available Agents Reference
+
+Located in `.claude/agents/`:
+- **humanlayer/** - Codebase understanding
+  - `codebase-locator` - Find files and components
+  - `codebase-analyzer` - Understand implementation details
+  - `codebase-pattern-finder` - Find similar implementations
+  - `thoughts-locator` - Find historical context
+  - `web-search-researcher` - Research external docs
+- **testing/** - Testing specialists
+- **core/** - Core development agents
+- **operations/** - Deployment and infrastructure
+
 ## If You Get Stuck
 
 When something isn't working as expected:
-- First, make sure you've read and understood all the relevant code
+- First, read and understand all relevant code yourself
 - Consider if the codebase has evolved since the plan was written
-- Present the mismatch clearly and ask for guidance
-
-Use sub-tasks sparingly - mainly for targeted debugging or exploring unfamiliar territory.
+- **Use targeted agents** (see Agent-Powered Implementation above) for specific investigation
+- Present the mismatch clearly with evidence from both plan and actual code
+- Ask for guidance on how to proceed
 
 ## Resuming Work
 

@@ -91,11 +91,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - `cd cloudflare-cron && npx wrangler deployments list` - List deployments
 - `cd cloudflare-cron && npx wrangler secret put CRON_SECRET` - Set secrets
 
-### Vercel Deployment Commands  
+### Vercel Deployment Commands
 - `vercel` - Deploy to Vercel
 - `vercel ls` - List Vercel deployments
 - `vercel domain ls` - List custom domains
 - `vercel env` - Manage environment variables
+
+### Health Check Commands
+- `curl https://tldrsec.app/api/health/environment` - **NEW** Check environment variable configuration
+- `npm run test:e2e` - Verify end-to-end functionality including external services
 
 ### Context & Workflow Testing
 - `npm run test:context-workflow` - **NEW** Test processing context tracking and workflow
@@ -351,6 +355,17 @@ This ensures Cloudflare Workers can be deployed independently without database c
 - Validates entire user-facing workflow end-to-end
 - Catches integration issues that unit tests might miss
 - Ensures email notifications work for real users
+
+## Known Issues and Solutions
+
+### Production Issues Resolved (2025-11-14)
+
+#### Issue: Waitlist form working in dev but not prod
+- **Symptom**: 401 errors on page_analytics insert, 500 errors on newsletter subscribe
+- **Root Cause**: RLS policies blocking client-side access, missing environment variables
+- **Solution**: Updated RLS policies, verified Vercel environment configuration
+- **Verification**: Run `npm run test:production-waitlist`
+- **Documentation**: See [docs/plans/2025-11-14-fix-waitlist-production-errors.md](docs/plans/2025-11-14-fix-waitlist-production-errors.md)
 
 ## Recent Updates (Updated: 2025-10-25)
 
