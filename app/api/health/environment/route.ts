@@ -26,10 +26,10 @@ export async function GET() {
       ? { status: 'error', message: 'Missing or placeholder anon key' }
       : { status: 'ok' };
 
-  // Check Supabase service role key
+  // Check Supabase service role key (supports both standard and legacy naming)
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SECRET_KEY;
   checks.checks.supabase_service_key =
-    !process.env.SUPABASE_SECRET_KEY ||
-    process.env.SUPABASE_SECRET_KEY.includes('fake')
+    !serviceRoleKey || serviceRoleKey.includes('fake')
       ? { status: 'error', message: 'Missing or placeholder service role key' }
       : { status: 'ok' };
 
