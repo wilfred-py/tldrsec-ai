@@ -8,6 +8,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { CheckCircle, Loader2, AlertCircle } from 'lucide-react';
 import { trackPageAnalytics } from '@/lib/analytics/page-tracking';
+import { track } from '@vercel/analytics';
 
 interface WaitlistFormProps {
   onSuccess?: () => void;
@@ -77,12 +78,20 @@ export function WaitlistForm({ onSuccess }: WaitlistFormProps = {}) {
       }
 
       setStatus('success');
-      
+
       // Call parent success callback
       onSuccess?.();
-      
+
       // Track successful waitlist signup
       await trackPageAnalytics('home', 'waitlist_signup_success');
+
+      // Track waitlist conversion in Vercel Analytics
+      track('Waitlist Signup', {
+        source: 'waitlist_home',
+        utm_source: new URLSearchParams(window.location.search).get('utm_source') || undefined,
+        utm_medium: new URLSearchParams(window.location.search).get('utm_medium') || undefined,
+        utm_campaign: new URLSearchParams(window.location.search).get('utm_campaign') || undefined,
+      });
 
     } catch (error) {
       setStatus('error');
