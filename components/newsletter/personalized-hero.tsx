@@ -25,8 +25,9 @@ function PersonalizedHeroInternal({ fallbackContent }: PersonalizedHeroProps) {
 
   const [content, setContent] = useState<PersonalizedContent>(defaultContent);
   const [email, setEmail] = useState('');
-  const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
+  const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'error' | 'already-subscribed'>('idle');
   const [isPersonalizing, setIsPersonalizing] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string>('');
   
   // Use AI personalization recovery hook
   const aiRecovery = useAIPersonalizationRecovery();
@@ -149,17 +150,32 @@ function PersonalizedHeroInternal({ fallbackContent }: PersonalizedHeroProps) {
         }),
       });
 
+      const data = await response.json();
+
+      // Handle duplicate email gracefully
+      if (response.status === 409) {
+        setStatus('already-subscribed');
+        setErrorMessage(data.message || 'This email is already subscribed to our newsletter.');
+
+        // Track duplicate attempt
+        await trackPageAnalytics('newsletter', 'personalized_signup_duplicate', {
+          utm_source: new URLSearchParams(window.location.search).get('utm_source'),
+        });
+        return;
+      }
+
       if (!response.ok) {
-        throw new Error('Subscription failed');
+        throw new Error(data.message || 'Subscription failed');
       }
 
       setStatus('success');
-      
+
       // Track successful signup
       await trackPageAnalytics('newsletter', 'personalized_signup_success');
 
     } catch (error) {
       setStatus('error');
+      setErrorMessage('Unable to subscribe at this time. Please try again later.');
       console.error('Newsletter signup error:', error);
     }
   };
@@ -181,6 +197,39 @@ function PersonalizedHeroInternal({ fallbackContent }: PersonalizedHeroProps) {
                 <li>• Weekly newsletter every Sunday morning</li>
                 <li>• Option to upgrade for real-time alerts</li>
               </ul>
+            </div>
+          </div>
+        </div>
+      </section>
+    );
+  }
+
+  if (status === 'already-subscribed') {
+    return (
+      <section className="bg-gradient-to-br from-violet-600 via-purple-600 to-indigo-700 text-white py-20">
+        <div className="container mx-auto px-4 text-center">
+          <div className="max-w-2xl mx-auto">
+            <div className="text-blue-400 text-4xl mb-4">ℹ️</div>
+            <h2 className="text-3xl font-bold mb-4">You&apos;re Already Subscribed!</h2>
+            <p className="text-xl text-purple-100 mb-6">
+              {errorMessage || 'This email is already subscribed to our newsletter.'}
+            </p>
+            <div className="bg-white/10 backdrop-blur-sm rounded-lg p-6 mt-8">
+              <p className="text-lg font-semibold mb-2">What you should expect:</p>
+              <ul className="text-left text-purple-100 space-y-2">
+                <li>• Weekly newsletter every Sunday morning</li>
+                <li>• SEC filing summaries delivered to your inbox</li>
+                <li>• Option to upgrade for real-time alerts</li>
+              </ul>
+            </div>
+            <div className="mt-8">
+              <Button
+                onClick={() => { setStatus('idle'); setEmail(''); }}
+                variant="secondary"
+                className="!bg-white !text-violet-700 hover:!bg-gray-50"
+              >
+                Try Another Email
+              </Button>
             </div>
           </div>
         </div>
@@ -246,7 +295,7 @@ function PersonalizedHeroInternal({ fallbackContent }: PersonalizedHeroProps) {
               
               {status === 'error' && (
                 <p className="text-red-300 text-sm">
-                  Please enter a valid email address
+                  {errorMessage || 'Please enter a valid email address'}
                 </p>
               )}
               

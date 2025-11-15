@@ -11,7 +11,7 @@ interface NewsletterFormProps {
 
 export function NewsletterForm({ ctaText = 'Get Weekly Summaries' }: NewsletterFormProps) {
   const [email, setEmail] = useState('');
-  const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
+  const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'error' | 'already-subscribed'>('idle');
   const [errorMessage, setErrorMessage] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
 
@@ -49,20 +49,33 @@ export function NewsletterForm({ ctaText = 'Get Weekly Summaries' }: NewsletterF
         }),
       });
 
-      if (!response.ok) {
-        throw new Error('Subscription failed');
+      const result = await response.json();
+
+      // Handle duplicate email gracefully
+      if (response.status === 409) {
+        setStatus('already-subscribed');
+        setSuccessMessage(result.message || 'This email is already subscribed to our newsletter.');
+
+        // Track duplicate attempt
+        await trackPageAnalytics('newsletter', 'signup_duplicate', {
+          utm_source: new URLSearchParams(window.location.search).get('utm_source'),
+        });
+        return;
       }
 
-      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(result.message || 'Subscription failed');
+      }
+
       setStatus('success');
       setSuccessMessage(result.message || 'Successfully subscribed!');
-      
+
       // Track successful signup
       await trackPageAnalytics('newsletter', 'signup_success');
 
     } catch (error) {
       setStatus('error');
-      setErrorMessage('Something went wrong. Please try again.');
+      setErrorMessage('Unable to subscribe at this time. Please try again later.');
       console.error('Newsletter signup error:', error);
     }
   };
@@ -73,11 +86,34 @@ export function NewsletterForm({ ctaText = 'Get Weekly Summaries' }: NewsletterF
         <div className="text-green-600 text-2xl mb-2">✓</div>
         <h3 className="text-lg font-semibold mb-2">{successMessage}</h3>
         <p className="text-gray-600">
-          {successMessage.includes('already') 
-            ? 'You will continue to receive our weekly newsletter.'
-            : 'Check your email for a welcome message. Your first newsletter arrives next week.'
-          }
+          Check your email for a welcome message. Your first newsletter arrives next week.
         </p>
+      </div>
+    );
+  }
+
+  if (status === 'already-subscribed') {
+    return (
+      <div className="text-center p-6">
+        <div className="text-blue-600 text-2xl mb-2">ℹ️</div>
+        <h3 className="text-lg font-semibold mb-2">You&apos;re Already Subscribed!</h3>
+        <p className="text-gray-600 mb-4">
+          {successMessage || 'This email is already subscribed to our newsletter.'}
+        </p>
+        <p className="text-gray-600 mb-4">
+          You will continue to receive our weekly newsletter every Sunday.
+        </p>
+        <Button
+          onClick={() => {
+            setStatus('idle');
+            setEmail('');
+            setSuccessMessage('');
+          }}
+          variant="outline"
+          className="mt-2"
+        >
+          Try Another Email
+        </Button>
       </div>
     );
   }
