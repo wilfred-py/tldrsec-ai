@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Counter Debug Test</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="p-8 bg-gray-50">
+  <h1 class="text-2xl font-bold mb-4">Digit Roller Debug Test</h1>
+  
+  <div id="test-results" class="space-y-4">
+    <div class="p-4 bg-white rounded shadow">
+      <h2 class="font-bold mb-2">Test 1: Basic Number Rendering</h2>
+      <div class="text-4xl font-bold">
+        <span class="inline-block relative overflow-hidden" style="min-width: 0.6em; text-align: center; font-variant-numeric: tabular-nums;">
+          <span class="inline-block" style="transform: translate3d(0, 0, 0); backface-visibility: hidden;">1</span>
+        </span>
+        <span class="inline-block relative overflow-hidden" style="min-width: 0.6em; text-align: center; font-variant-numeric: tabular-nums;">
+          <span class="inline-block" style="transform: translate3d(0, 0, 0); backface-visibility: hidden;">4</span>
+        </span>
+        <span class="inline-block relative overflow-hidden" style="min-width: 0.6em; text-align: center; font-variant-numeric: tabular-nums;">
+          <span class="inline-block" style="transform: translate3d(0, 0, 0); backface-visibility: hidden;">7</span>
+        </span>
+      </div>
+    </div>
+
+    <div class="p-4 bg-white rounded shadow">
+      <h2 class="font-bold mb-2">Test 2: With Opacity</h2>
+      <div class="text-4xl font-bold">
+        <span class="inline-block relative overflow-hidden" style="min-width: 0.6em; text-align: center; font-variant-numeric: tabular-nums;">
+          <span class="inline-block" style="transform: translate3d(0, 0, 0); backface-visibility: hidden; opacity: 1;">1</span>
+        </span>
+        <span class="inline-block relative overflow-hidden" style="min-width: 0.6em; text-align: center; font-variant-numeric: tabular-nums;">
+          <span class="inline-block" style="transform: translate3d(0, 0, 0); backface-visibility: hidden; opacity: 1;">4</span>
+        </span>
+        <span class="inline-block relative overflow-hidden" style="min-width: 0.6em; text-align: center; font-variant-numeric: tabular-nums;">
+          <span class="inline-block" style="transform: translate3d(0, 0, 0); backface-visibility: hidden; opacity: 1;">7</span>
+        </span>
+      </div>
+    </div>
+
+    <div class="p-4 bg-white rounded shadow">
+      <h2 class="font-bold mb-2">Test 3: With Y Transform</h2>
+      <div class="text-4xl font-bold">
+        <span class="inline-block relative overflow-hidden" style="min-width: 0.6em; text-align: center; font-variant-numeric: tabular-nums;">
+          <span class="inline-block" style="transform: translate3d(0, 0, 0) translateY(0); backface-visibility: hidden; opacity: 1;">1</span>
+        </span>
+        <span class="inline-block relative overflow-hidden" style="min-width: 0.6em; text-align: center; font-variant-numeric: tabular-nums;">
+          <span class="inline-block" style="transform: translate3d(0, 0, 0) translateY(0); backface-visibility: hidden; opacity: 1;">4</span>
+        </span>
+        <span class="inline-block relative overflow-hidden" style="min-width: 0.6em; text-align: center; font-variant-numeric: tabular-nums;">
+          <span class="inline-block" style="transform: translate3d(0, 0, 0) translateY(0); backface-visibility: hidden; opacity: 1;">7</span>
+        </span>
+      </div>
+    </div>
+
+    <div class="p-4 bg-white rounded shadow">
+      <h2 class="font-bold mb-2">Test 4: Will-Change Property</h2>
+      <div class="text-4xl font-bold">
+        <span class="inline-block relative overflow-hidden" style="min-width: 0.6em; text-align: center; font-variant-numeric: tabular-nums;">
+          <span class="inline-block" style="transform: translate3d(0, 0, 0); backface-visibility: hidden; will-change: transform, opacity; opacity: 1;">1</span>
+        </span>
+        <span class="inline-block relative overflow-hidden" style="min-width: 0.6em; text-align: center; font-variant-numeric: tabular-nums;">
+          <span class="inline-block" style="transform: translate3d(0, 0, 0); backface-visibility: hidden; will-change: transform, opacity; opacity: 1;">4</span>
+        </span>
+        <span class="inline-block relative overflow-hidden" style="min-width: 0.6em; text-align: center; font-variant-numeric: tabular-nums;">
+          <span class="inline-block" style="transform: translate3d(0, 0, 0); backface-visibility: hidden; will-change: transform, opacity; opacity: 1;">7</span>
+        </span>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

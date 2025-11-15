@@ -106,3 +106,6 @@ test-tesla-filing-extraction.js
 *tesla*10k*
 .env*.local
 .playwright-mcp/
+
+# MCP server configuration (contains sensitive tokens)
+.mcp.json

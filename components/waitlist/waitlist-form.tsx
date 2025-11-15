@@ -8,6 +8,8 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { CheckCircle, Loader2, AlertCircle } from 'lucide-react';
 import { trackPageAnalytics } from '@/lib/analytics/page-tracking';
+import { track } from '@vercel/analytics';
+import { getUTMParams } from '@/lib/analytics/utm-utils';
 
 interface WaitlistFormProps {
   onSuccess?: () => void;
@@ -39,12 +41,9 @@ export function WaitlistForm({ onSuccess }: WaitlistFormProps = {}) {
     setStatus('loading');
     setErrorMessage('');
 
-    // Track waitlist signup attempt
-    await trackPageAnalytics('home', 'waitlist_signup_attempt', {
-      utm_source: new URLSearchParams(window.location.search).get('utm_source'),
-      utm_medium: new URLSearchParams(window.location.search).get('utm_medium'),
-      utm_campaign: new URLSearchParams(window.location.search).get('utm_campaign'),
-    });
+    // Track waitlist signup attempt with sanitized UTM parameters
+    const utmParams = getUTMParams();
+    await trackPageAnalytics('home', 'waitlist_signup_attempt', utmParams);
 
     try {
       const response = await fetch('/api/newsletter/subscribe', {
@@ -55,9 +54,7 @@ export function WaitlistForm({ onSuccess }: WaitlistFormProps = {}) {
         body: JSON.stringify({
           email,
           source: 'waitlist_home',
-          utm_source: new URLSearchParams(window.location.search).get('utm_source'),
-          utm_medium: new URLSearchParams(window.location.search).get('utm_medium'),
-          utm_campaign: new URLSearchParams(window.location.search).get('utm_campaign'),
+          ...utmParams,
         }),
       });
 
@@ -77,12 +74,18 @@ export function WaitlistForm({ onSuccess }: WaitlistFormProps = {}) {
       }
 
       setStatus('success');
-      
+
       // Call parent success callback
       onSuccess?.();
-      
+
       // Track successful waitlist signup
       await trackPageAnalytics('home', 'waitlist_signup_success');
+
+      // Track waitlist conversion in Vercel Analytics with sanitized parameters
+      track('Waitlist Signup', {
+        source: 'waitlist_home',
+        ...utmParams,
+      });
 
     } catch (error) {
       setStatus('error');

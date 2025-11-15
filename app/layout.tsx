@@ -7,6 +7,7 @@ import { PostHogProvider } from '@/components/analytics/posthog-provider';
 import { MouseFollowEffect } from '@/components/landing/mouse-follow-effect';
 import { JsonLd } from '@/components/structured-data';
 import { AuthProvider } from '@/lib/context/auth-context';
+import { Analytics } from '@vercel/analytics/react';
 
 const geistSans = Geist({
   variable: '--font-geist-sans',
@@ -76,6 +77,7 @@ export default function RootLayout({
                   {children}
                 </main>
                 <Toaster />
+                <Analytics />
               </>
             ) : (
               // At runtime, use AuthProvider
@@ -86,6 +88,7 @@ export default function RootLayout({
                   {children}
                 </main>
                 <Toaster />
+                <Analytics />
               </AuthProvider>
             )}
           </PostHogProvider>
