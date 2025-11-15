@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Users } from 'lucide-react';
 
 interface WaitlistCounterProps {
@@ -12,13 +12,19 @@ export function WaitlistCounter({ hideAfterSignup = false, userHasSignedUp = fal
   const [count, setCount] = useState<number>(147); // Default base count
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  
+
   // Animation state
   const [animatedCount, setAnimatedCount] = useState<number>(147);
   const [isAnimating, setIsAnimating] = useState(true);
+  const [minAnimationReached, setMinAnimationReached] = useState(false);
+  const [hasCompletedInitialTransition, setHasCompletedInitialTransition] = useState(false);
 
-  useEffect(() => {
-    const fetchCount = async () => {
+  // Polling configuration
+  const POLL_INTERVAL = 30000; // 30 seconds
+  const MAX_POLL_DURATION = 5 * 60 * 1000; // 5 minutes
+  const MIN_ANIMATION_DURATION = 3000; // Minimum 3 seconds of animation before showing real count
+
+  const fetchCount = useCallback(async () => {
       console.log('[WaitlistCounter] Starting fetch request');
       const startTime = Date.now();
       
@@ -80,46 +86,138 @@ export function WaitlistCounter({ hideAfterSignup = false, userHasSignedUp = fal
         setIsLoading(false);
         console.log('[WaitlistCounter] Loading completed');
       }
-    };
+    }, []);
 
+  // Initial fetch effect
+  useEffect(() => {
     fetchCount();
-  }, []);
+
+    // Set minimum animation duration timer
+    const minAnimTimer = setTimeout(() => {
+      setMinAnimationReached(true);
+    }, MIN_ANIMATION_DURATION);
+
+    return () => clearTimeout(minAnimTimer);
+  }, [fetchCount, MIN_ANIMATION_DURATION]);
+
+  // Polling effect - starts after initial fetch completes
+  useEffect(() => {
+    if (isLoading) return; // Wait for initial fetch to complete
+
+    const startTime = Date.now();
+
+    const pollInterval = setInterval(() => {
+      const elapsed = Date.now() - startTime;
+
+      // Stop polling after max duration
+      if (elapsed >= MAX_POLL_DURATION) {
+        console.log('[WaitlistCounter] Polling stopped after max duration');
+        clearInterval(pollInterval);
+        return;
+      }
+
+      console.log('[WaitlistCounter] Polling for updated count...');
+      fetchCount();
+    }, POLL_INTERVAL);
+
+    // Cleanup on unmount
+    return () => {
+      console.log('[WaitlistCounter] Cleaning up polling interval');
+      clearInterval(pollInterval);
+    };
+  }, [isLoading, fetchCount, POLL_INTERVAL, MAX_POLL_DURATION]);
 
   // Animation interval effect - animate from cached base to real count
   useEffect(() => {
     if (!isAnimating || !isLoading) return;
-    
+
+    let timeoutId: NodeJS.Timeout | null = null;
+    let isCancelled = false;
+
     const scheduleNextIncrement = () => {
-      const delay = Math.random() * 2000 + 1000; // 1-3 seconds
-      return setTimeout(() => {
-        if (isAnimating && isLoading) {
-          const increment = Math.floor(Math.random() * 3) + 1; // 1-3 random increment
-          setAnimatedCount(prev => prev + increment);
+      if (isCancelled) return;
+
+      // Random delay between 1-3 seconds as per spec
+      const delay = Math.random() * 2000 + 1000; // 1000-3000ms (1-3 seconds)
+
+      timeoutId = setTimeout(() => {
+        if (isCancelled) return;
+
+        setAnimatedCount(prev => {
+          // Double-check we should still be animating
+          if (!isCancelled) {
+            return prev + Math.floor(Math.random() * 3) + 1; // 1-3 random increment
+          }
+          return prev;
+        });
+
+        // Only schedule next increment if still active
+        if (!isCancelled) {
           scheduleNextIncrement();
         }
       }, delay);
     };
 
-    const timeoutId = scheduleNextIncrement();
-    
-    return () => clearTimeout(timeoutId);
+    scheduleNextIncrement();
+
+    return () => {
+      isCancelled = true;
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+    };
   }, [isAnimating, isLoading]);
 
-  // Smooth transition to real count effect
+  // Smooth transition to real count effect with easing (initial load only)
   useEffect(() => {
-    if (!isLoading && count !== animatedCount) {
+    // Only start transition when:
+    // 1. Loading is done AND minimum animation time has elapsed
+    // 2. We haven't completed the initial transition yet
+    // 3. Count is different from animated count
+    if (!isLoading && minAnimationReached && !hasCompletedInitialTransition && count !== animatedCount) {
       setIsAnimating(false);
-      
-      // Always animate to the real count from API (which includes cached base)
-      if (count > animatedCount) {
-        // For Phase 1, we'll do a simple transition - smooth transition will be enhanced in Phase 2
-        setAnimatedCount(count);
-      } else {
-        // Use real count even if animated count went higher
-        setAnimatedCount(count);
-      }
+
+      const difference = count - animatedCount;
+      const steps = 30; // Number of animation steps
+      const duration = 1500; // Total animation duration in ms
+      const stepDuration = duration / steps;
+
+      // Easing function (ease-out cubic)
+      const easeOutCubic = (t: number): number => {
+        return 1 - Math.pow(1 - t, 3);
+      };
+
+      let currentStep = 0;
+
+      const animateTransition = () => {
+        currentStep++;
+        const progress = currentStep / steps;
+        const easedProgress = easeOutCubic(progress);
+        const newValue = Math.round(animatedCount + (difference * easedProgress));
+
+        setAnimatedCount(newValue);
+
+        if (currentStep < steps) {
+          setTimeout(animateTransition, stepDuration);
+        } else {
+          // Ensure we end exactly at the target count
+          setAnimatedCount(count);
+          setHasCompletedInitialTransition(true);
+        }
+      };
+
+      // Start the animation
+      setTimeout(animateTransition, stepDuration);
     }
-  }, [isLoading, count, animatedCount]);
+  }, [isLoading, minAnimationReached, hasCompletedInitialTransition, count, animatedCount]);
+
+  // Handle polling updates (after initial transition is complete)
+  useEffect(() => {
+    if (hasCompletedInitialTransition && count !== animatedCount) {
+      // Directly update to new count from polling (no animation)
+      setAnimatedCount(count);
+    }
+  }, [hasCompletedInitialTransition, count, animatedCount]);
 
   // Only render if not signed up or hideAfterSignup is false
   if (hideAfterSignup && userHasSignedUp) {
