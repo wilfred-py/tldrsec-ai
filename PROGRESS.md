@@ -1,6 +1,34 @@
-# Current Progress: Waitlist Counter Animation Timing Optimization
+# Current Progress: Waitlist Counter Environment Variable Fix
 
 ## Current Status
+✅ **COMPLETE** - Fixed waitlist counter configuration error by supporting both SUPABASE_SERVICE_ROLE_KEY and SUPABASE_SECRET_KEY environment variables.
+
+## Issue
+The waitlist counter was returning `{"count": 147, "error": "Missing configuration", "hasServiceKey": false}` in production (PR #230) because the code was only checking for `SUPABASE_SECRET_KEY`, but Vercel production environment uses the standard naming convention `SUPABASE_SERVICE_ROLE_KEY`.
+
+## Solution
+Updated [app/api/waitlist/count/route.ts](app/api/waitlist/count/route.ts#L47) to support both environment variable names, matching the pattern used in [lib/supabase/server-client.ts](lib/supabase/server-client.ts#L10):
+
+```typescript
+// Support both SUPABASE_SERVICE_ROLE_KEY (standard) and SUPABASE_SECRET_KEY (legacy)
+const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SECRET_KEY;
+```
+
+## Steps Done
+1. ✅ Identified the "Missing configuration" error from PR #230 comment
+2. ✅ Traced the issue to [app/api/waitlist/count/route.ts:46](app/api/waitlist/count/route.ts#L46)
+3. ✅ Verified that other parts of the codebase support both variable names
+4. ✅ Updated the waitlist count endpoint to support both naming conventions
+5. ✅ Enhanced debug output to show both `hasServiceRoleKey` and `hasSecretKey` flags
+
+**Files Modified:**
+- `app/api/waitlist/count/route.ts` - Lines 46-60
+
+---
+
+# Previous Progress: Waitlist Counter Animation Timing Optimization
+
+## Status
 ✅ **COMPLETE** - Fixed counter animation timing to show smooth 1-4 increments every 4 seconds throughout entire animation lifecycle.
 
 ## Approach

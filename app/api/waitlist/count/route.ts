@@ -43,17 +43,20 @@ export async function GET() {
 
     // Test environment variables for newsletter subscribers
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const serviceKey = process.env.SUPABASE_SECRET_KEY;
-    
+    // Support both SUPABASE_SERVICE_ROLE_KEY (standard) and SUPABASE_SECRET_KEY (legacy)
+    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SECRET_KEY;
+
     if (!supabaseUrl || !serviceKey) {
       console.error('[Waitlist Count API] Missing Supabase environment variables');
-      return NextResponse.json({ 
+      return NextResponse.json({
         count: baseCount,
         error: 'Missing configuration',
-        debug: { 
-          baseCount, 
-          hasSupabaseUrl: !!supabaseUrl, 
+        debug: {
+          baseCount,
+          hasSupabaseUrl: !!supabaseUrl,
           hasServiceKey: !!serviceKey,
+          hasServiceRoleKey: !!process.env.SUPABASE_SERVICE_ROLE_KEY,
+          hasSecretKey: !!process.env.SUPABASE_SECRET_KEY,
           processingTime: Date.now() - startTime
         }
       });
