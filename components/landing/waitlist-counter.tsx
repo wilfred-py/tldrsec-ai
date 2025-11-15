@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { Users } from 'lucide-react';
+import { CounterDisplay } from './counter';
 
 interface WaitlistCounterProps {
   hideAfterSignup?: boolean;
@@ -137,8 +138,8 @@ export function WaitlistCounter({ hideAfterSignup = false, userHasSignedUp = fal
     const scheduleNextIncrement = () => {
       if (isCancelled) return;
 
-      // Random delay between 1-3 seconds as per spec
-      const delay = Math.random() * 2000 + 1000; // 1000-3000ms (1-3 seconds)
+      // 4 second delay between changes
+      const delay = 4000; // 4000ms (4 seconds)
 
       timeoutId = setTimeout(() => {
         if (isCancelled) return;
@@ -146,7 +147,7 @@ export function WaitlistCounter({ hideAfterSignup = false, userHasSignedUp = fal
         setAnimatedCount(prev => {
           // Double-check we should still be animating
           if (!isCancelled) {
-            return prev + Math.floor(Math.random() * 3) + 1; // 1-3 random increment
+            return prev + Math.floor(Math.random() * 4) + 1; // 1-4 random increment
           }
           return prev;
         });
@@ -178,26 +179,37 @@ export function WaitlistCounter({ hideAfterSignup = false, userHasSignedUp = fal
       setIsAnimating(false);
 
       const difference = count - animatedCount;
-      const steps = 30; // Number of animation steps
-      const duration = 1500; // Total animation duration in ms
-      const stepDuration = duration / steps;
 
-      // Easing function (ease-out cubic)
-      const easeOutCubic = (t: number): number => {
-        return 1 - Math.pow(1 - t, 3);
-      };
+      // Calculate number of steps based on difference (1-4 per step to match increment behavior)
+      // Each step increments by 1-4, so divide difference by average increment (2.5)
+      const averageIncrement = 2.5;
+      const steps = Math.max(Math.ceil(difference / averageIncrement), 1);
+
+      // 4 seconds per step to match the rolling animation timing
+      const stepDuration = 4000;
 
       let currentStep = 0;
 
       const animateTransition = () => {
         currentStep++;
-        const progress = currentStep / steps;
-        const easedProgress = easeOutCubic(progress);
-        const newValue = Math.round(animatedCount + (difference * easedProgress));
 
-        setAnimatedCount(newValue);
+        // Calculate increment for this step (1-4 random, but ensure we reach target)
+        const remainingDifference = count - animatedCount;
+        const remainingSteps = steps - currentStep + 1;
 
-        if (currentStep < steps) {
+        // For the last step, use exact remaining difference
+        // Otherwise use random 1-4, but cap at remaining difference
+        let increment: number;
+        if (currentStep >= steps) {
+          increment = remainingDifference;
+        } else {
+          const maxIncrement = Math.min(4, Math.ceil(remainingDifference / remainingSteps));
+          increment = Math.floor(Math.random() * maxIncrement) + 1;
+        }
+
+        setAnimatedCount(prev => Math.min(prev + increment, count));
+
+        if (currentStep < steps && animatedCount + increment < count) {
           setTimeout(animateTransition, stepDuration);
         } else {
           // Ensure we end exactly at the target count
@@ -231,26 +243,24 @@ export function WaitlistCounter({ hideAfterSignup = false, userHasSignedUp = fal
     <div className="flex flex-col items-center justify-center gap-2 text-base text-fintech-text-secondary mt-8">
       <div className="flex items-center gap-2">
         <Users className="w-5 h-5 text-fintech-accent" />
-        <span 
-          className="font-medium transition-all duration-300 ease-out"
+        <span
+          className="font-medium"
           data-testid="waitlist-counter"
         >
-          Join {isLoading ? (
-            <span className="transition-all duration-300 ease-out">
-              {animatedCount.toLocaleString()}
-            </span>
-          ) : (
-            animatedCount.toLocaleString()
-          )} investors already on the waitlist
+          Join <CounterDisplay
+            count={animatedCount}
+            isAnimating={isAnimating || isLoading}
+            className="transition-all duration-300 ease-out"
+          /> investors already on the waitlist
         </span>
       </div>
-      
+
       {/* Debug information in development */}
       {isDev && error && (
         <div className="text-xs text-red-500 mt-1 max-w-sm text-center">
           Debug: {error}
-          <button 
-            onClick={() => window.location.reload()} 
+          <button
+            onClick={() => window.location.reload()}
             className="ml-2 underline"
           >
             Retry
