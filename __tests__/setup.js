@@ -44,6 +44,12 @@ jest.mock('@clerk/nextjs', () => ({
   }),
 }));
 
+// Mock Vercel Analytics
+jest.mock('@vercel/analytics', () => ({
+  track: jest.fn(),
+  Analytics: () => null,
+}));
+
 // Suppress React 18 console errors during tests
 const originalConsoleError = console.error;
 console.error = (...args) => {

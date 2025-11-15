@@ -35,7 +35,7 @@ const config = {
   },
   moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'mjs'],
   transformIgnorePatterns: [
-    'node_modules/(?!(@clerk/backend.*\\.mjs|@clerk/.*|react-syntax-highlighter/.*|@jest/transform|@babel/preset-env))',
+    'node_modules/(?!(@vercel/analytics|@clerk/backend.*\\.mjs|@clerk/.*|react-syntax-highlighter/.*|@jest/transform|@babel/preset-env))',
   ],
   extensionsToTreatAsEsm: ['.ts', '.tsx'],
   globals: {

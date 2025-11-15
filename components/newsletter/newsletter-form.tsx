@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { trackPageAnalytics } from '@/lib/analytics/page-tracking';
 import { track } from '@vercel/analytics';
+import { getUTMParams } from '@/lib/analytics/utm-utils';
 
 interface NewsletterFormProps {
   ctaText?: string;
@@ -28,12 +29,9 @@ export function NewsletterForm({ ctaText = 'Get Weekly Summaries' }: NewsletterF
     setErrorMessage('');
     setSuccessMessage('');
 
-    // Track signup attempt
-    await trackPageAnalytics('newsletter', 'signup_attempt', {
-      utm_source: new URLSearchParams(window.location.search).get('utm_source'),
-      utm_medium: new URLSearchParams(window.location.search).get('utm_medium'),
-      utm_campaign: new URLSearchParams(window.location.search).get('utm_campaign'),
-    });
+    // Track signup attempt with sanitized UTM parameters
+    const utmParams = getUTMParams();
+    await trackPageAnalytics('newsletter', 'signup_attempt', utmParams);
 
     try {
       const response = await fetch('/api/newsletter/subscribe', {
@@ -44,9 +42,7 @@ export function NewsletterForm({ ctaText = 'Get Weekly Summaries' }: NewsletterF
         body: JSON.stringify({
           email,
           source: 'newsletter_page',
-          utm_source: new URLSearchParams(window.location.search).get('utm_source'),
-          utm_medium: new URLSearchParams(window.location.search).get('utm_medium'),
-          utm_campaign: new URLSearchParams(window.location.search).get('utm_campaign'),
+          ...utmParams,
         }),
       });
 
@@ -74,12 +70,10 @@ export function NewsletterForm({ ctaText = 'Get Weekly Summaries' }: NewsletterF
       // Track successful signup
       await trackPageAnalytics('newsletter', 'signup_success');
 
-      // Track signup conversion in Vercel Analytics
+      // Track signup conversion in Vercel Analytics with sanitized parameters
       track('Newsletter Signup', {
         source: 'newsletter_page',
-        utm_source: new URLSearchParams(window.location.search).get('utm_source') || undefined,
-        utm_medium: new URLSearchParams(window.location.search).get('utm_medium') || undefined,
-        utm_campaign: new URLSearchParams(window.location.search).get('utm_campaign') || undefined,
+        ...utmParams,
       });
 
     } catch (error) {
