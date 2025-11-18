@@ -1,0 +1,36 @@
+# Cloudflare Worker Configuration (Root Level Wrapper)
+# This configuration allows Cloudflare's automatic deployment system to work
+# while keeping the actual worker code organized in cloudflare-cron/ subdirectory
+
+name = "cloudflare-cron"
+main = "cloudflare-cron/index.js"
+compatibility_date = "2024-10-01"
+
+# Cron schedule: Every 10 minutes
+[triggers]
+crons = ["*/10 * * * *"]
+
+# Environment variables (non-sensitive)
+[vars]
+PUBLIC_URL = "https://tldrsec.app"
+USE_ASYNC_PROCESSING = "true"
+DEBUG_MODE = "true"
+WORKER_VERSION = "2.4.0-stable"
+RATE_LIMIT_STRATEGY = "adaptive-global-aware"
+
+# Enhanced logging for production monitoring
+[observability.logs]
+enabled = true
+
+# IMPORTANT: Sensitive secrets must be added via Cloudflare Dashboard or wrangler CLI:
+# - CRON_SECRET (required for API authentication) - CRITICAL
+# - VERCEL_AUTOMATION_BYPASS_SECRET (optional for deployment protection)
+#
+# Required Commands:
+#   npx wrangler secret put CRON_SECRET
+#   npx wrangler secret put VERCEL_AUTOMATION_BYPASS_SECRET (optional)
+#
+# Verify secrets with: npx wrangler secret list
+
+# KV namespaces are optional - worker gracefully falls back to memory cache
+# To enable KV storage, create namespaces using cloudflare-cron/wrangler.toml as reference
