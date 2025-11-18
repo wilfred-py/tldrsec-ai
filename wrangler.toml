@@ -13,7 +13,7 @@ crons = ["*/10 * * * *"]
 # Environment variables (non-sensitive)
 [vars]
 PUBLIC_URL = "https://tldrsec.app"
-USE_ASYNC_PROCESSING = "true"
+USE_ASYNC_PROCESSING = "false"
 DEBUG_MODE = "true"
 WORKER_VERSION = "2.4.0-stable"
 RATE_LIMIT_STRATEGY = "adaptive-global-aware"

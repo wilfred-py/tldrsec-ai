@@ -110,11 +110,11 @@ export default {
       
       // Build URLs for Vercel endpoints (async processing with fallback)
       const asyncUrl = `${env.PUBLIC_URL}/api/cron/tier-aware-async`;
-      const optimizedUrl = `${env.PUBLIC_URL}/api/cron/tier-aware-optimized`;
+      const optimizedUrl = `${env.PUBLIC_URL}/api/cron/tier-aware`;
       const fallbackUrl = `${env.PUBLIC_URL}/api/cron/tier-aware`;
       const dailyCountUrl = `${env.PUBLIC_URL}/api/cron/update-daily-count`;
       const useAsync = env.USE_ASYNC_PROCESSING !== 'false'; // Default to true for new microservices
-      
+
       const url = useAsync ? asyncUrl : optimizedUrl;
       console.log(`[${executionId}] Target endpoint: ${url} (${useAsync ? 'async microservices architecture' : 'optimized with 524 prevention'})`);
       console.log(`[${executionId}] PUBLIC_URL: ${env.PUBLIC_URL}`);
@@ -165,8 +165,8 @@ export default {
         'X-Processing-Mode': 'ai-enhanced',
         'X-Debug-Mode': 'true',
         // HMAC Authentication Headers (secure)
-        'X-Hmac-Signature': signatureHex,
-        'X-Hmac-Timestamp': timestamp.toString()
+        'x-hmac-signature': signatureHex,
+        'x-hmac-timestamp': timestamp.toString()
       };
       
       // Add Vercel deployment protection bypass if configured
@@ -400,7 +400,10 @@ async function executeWithAdvancedRateLimiting({
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     const attemptStartTime = Date.now();
     const remainingWorkerTime = workerTimeoutMs - (attemptStartTime - parseInt(headers['X-Request-Start-Time']));
-    
+
+    // Check circuit breaker state before each attempt
+    const circuitState = await circuitBreaker.getState();
+
     console.log(`[${executionId}] Enhanced attempt ${attempt}/${maxAttempts}:`, {
       remainingWorkerTime: `${remainingWorkerTime}ms`,
       circuitState: circuitState.state,
@@ -409,9 +412,6 @@ async function executeWithAdvancedRateLimiting({
       consecutiveRateLimitErrors,
       globalRateLimitProtection: true
     });
-    
-    // Check circuit breaker state before each attempt
-    const circuitState = await circuitBreaker.getState();
     if (circuitState.state === 'OPEN') {
       console.log(`[${executionId}] Circuit breaker is OPEN on attempt ${attempt}, aborting`);
       throw new Error('Circuit breaker is OPEN - too many consecutive failures');
@@ -436,11 +436,11 @@ async function executeWithAdvancedRateLimiting({
     if (remainingWorkerTime < 30000) { // Need at least 30 seconds
       throw new Error(`Insufficient time remaining: ${remainingWorkerTime}ms`);
     }
-    
+
+    // Use the smaller of request timeout or remaining worker time
+    const effectiveTimeout = Math.min(requestTimeoutMs, remainingWorkerTime - 10000); // 10s buffer
+
     try {
-      // Use the smaller of request timeout or remaining worker time
-      const effectiveTimeout = Math.min(requestTimeoutMs, remainingWorkerTime - 10000); // 10s buffer
-      
       // Record request attempt
       await rateLimiter.recordRequest(executionId, url);
       await monitor.recordAttempt(executionId, attempt, { url, attemptStartTime });
