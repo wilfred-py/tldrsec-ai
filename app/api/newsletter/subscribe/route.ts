@@ -270,7 +270,7 @@ export async function POST(request: NextRequest) {
           await resend.sendEmail({
             from: 'notifications@tldrsec.app',
             to: email,
-            subject: 'Welcome to SEC Filing Summaries!',
+            subject: 'You\'re on the waitlist for tldrSEC',
             html: getWelcomeEmailTemplate(email)
           });
           
@@ -359,34 +359,27 @@ function getWelcomeEmailTemplate(_email: string): string {
     <html>
       <head>
         <meta charset="utf-8">
-        <title>Welcome to SEC Filing Summaries</title>
+        <title>You&apos;re on the tldrSEC Waitlist</title>
       </head>
       <body style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-        <h1 style="color: #7c3aed;">Welcome to SEC Filing Summaries!</h1>
-        
-        <p>Thanks for subscribing to our newsletter. You'll receive concise and timely summaries of SEC filings from Fortune 500 companies.</p>
-        
-        <p><strong>What to expect:</strong></p>
+        <h1 style="color: #7c3aed;">You&apos;re on the waitlist!</h1>
+
+        <p>Thanks for joining the waitlist for tldrSEC.</p>
+
+        <p>We&apos;re building a platform that will save you <strong>10+ hours a week</strong> by delivering personalized SEC filing summaries from companies in your portfolio straight to your inbox.</p>
+
+        <p><strong>What we&apos;re building:</strong></p>
         <ul>
-          <li>Weekly digest of major SEC filings</li>
-          <li>Summaries highlighting key insights</li>
-          <li>Coverage of top Fortune 500 companies</li>
+          <li>Personalized tracking of companies in your portfolio</li>
+          <li>Specialized AI agents that analyze form-specific sections in parallel—like an equity research team working together to cross-verify insights across MD&amp;A, financial statements, and risk disclosures</li>
+          <li>Real-time alerts when your tracked companies file</li>
+          <li>Clear, concise summaries that cut hours of analysis down to minutes of focused reading</li>
         </ul>
-        
-        <p>Your first newsletter will arrive within the next week.</p>
-        
-        <div style="background: #f8fafc; padding: 20px; border-radius: 8px; margin: 20px 0;">
-          <p><strong>Want full access to our platform?</strong></p>
-          <p>Track specific companies, get real-time alerts, and access our complete filing archive.</p>
-          <a href="https://tldrsec.app/sign-up?utm_source=newsletter&utm_medium=email&utm_campaign=welcome" 
-             style="background: #7c3aed; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block;">
-            Upgrade to Full Access
-          </a>
+
+        <div style="background: #f8fafc; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #7c3aed;">
+          <p style="margin: 0; color: #475569;"><strong>We&apos;ll notify you when we launch.</strong></p>
+          <p style="margin: 8px 0 0 0; color: #64748b; font-size: 14px;">You&apos;re securing your spot for early access to personalized SEC filing intelligence.</p>
         </div>
-        
-        <p style="color: #6b7280; font-size: 14px;">
-          You can unsubscribe at any time by replying to any newsletter email.
-        </p>
       </body>
     </html>
   `;
