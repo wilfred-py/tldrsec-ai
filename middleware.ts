@@ -60,6 +60,29 @@ const cronAuthMiddleware = async (request: NextRequest): Promise<NextResponse | 
       );
     }
 
+    // Check for HMAC authentication FIRST (Cloudflare Worker uses HMAC)
+    const hmacSignature = request.headers.get('x-hmac-signature');
+    const hmacTimestamp = request.headers.get('x-hmac-timestamp');
+
+    if (hmacSignature && hmacTimestamp) {
+      middlewareLogger.info('HMAC authentication detected, delegating to route handler', {
+        pathname,
+        timestamp: new Date().toISOString()
+      });
+
+      // Set header to bypass remaining middleware checks and indicate HMAC auth
+      const requestHeaders = new Headers(request.headers);
+      requestHeaders.set('x-security-validated', 'true');
+      requestHeaders.set('x-auth-method', 'hmac');
+
+      return NextResponse.next({
+        request: {
+          headers: requestHeaders
+        }
+      });
+    }
+
+    // Fall back to Bearer token authentication for backward compatibility
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
       middlewareLogger.warn('Missing or invalid authorization header for cron request');
       return new NextResponse(
