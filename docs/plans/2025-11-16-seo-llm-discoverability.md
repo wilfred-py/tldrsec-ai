@@ -9,7 +9,7 @@
 
 ## Overview
 
-Transform tldrsec.app into a highly discoverable platform for both traditional search engines (Google, Bing) and AI-powered search tools (ChatGPT, Claude, Perplexity, Gemini) through systematic SEO optimization and programmatic content generation.
+Transform tldrsec.app into a highly discoverable platform for both traditional search engines (Google, Bing) and AI-powered search tools (ChatGPT, Grok, Perplexity, Gemini) through systematic SEO optimization and programmatic content generation.
 
 **Primary Goal**: Drive organic traffic by improving searchability via SEO, programmatic SEO, and LLM optimization techniques.
 
@@ -53,12 +53,21 @@ Transform tldrsec.app into a highly discoverable platform for both traditional s
 
 ### SEO Content Gaps
 
+<<<<<<< HEAD
 **Current State**: Only 2 marketing pages
 - `/` - Homepage
 - `/newsletter` - Newsletter landing
 
 **Missing Educational Content**:
 - Zero SEC filing type guides (10-K, 10-Q, 8-K explanations)
+=======
+**Current State**: Primary focus on landing page and waitlist conversion
+- `/` - Homepage with waitlist signup
+- `/newsletter` - Not currently accessible (future phase)
+
+**Missing Educational Content**:
+- Zero SEC filing type guides (all form types: 10-K, 10-Q, 8-K, 4, 13D, 13F, S-1, DEF 14A, etc.)
+>>>>>>> 31ac7aaf55d8e9e58f67627b6aaf721b5786b7e1
 - No "how it works" pages
 - No investor education resources
 - No blog or content marketing
@@ -89,7 +98,11 @@ Transform tldrsec.app into a highly discoverable platform for both traditional s
 
 ### Programmatic SEO Pages
 ✅ 2,000+ company pages (`/company/[ticker]`)
+<<<<<<< HEAD
 ✅ 20+ filing type education pages (`/filings/[type]`)
+=======
+✅ 30+ filing type education pages (`/filings/[type]`) - All SEC form types covered
+>>>>>>> 31ac7aaf55d8e9e58f67627b6aaf721b5786b7e1
 ✅ Company-specific filing histories (`/company/[ticker]/[type]`)
 ✅ Sector/industry pages (`/sector/[sector]`)
 ✅ Date-based archives (`/filings/[year]/[quarter]`)
@@ -97,7 +110,11 @@ Transform tldrsec.app into a highly discoverable platform for both traditional s
 ### LLM Discoverability
 ✅ FAQ schemas on all educational pages (40-50% ChatGPT citation boost)
 ✅ Answer-first content structure (quotable first sentences)
+<<<<<<< HEAD
 ✅ AI crawler configuration (robots.txt for GPTBot, ClaudeBot, PerplexityBot, Google-Extended)
+=======
+✅ AI crawler configuration (robots.txt for GPTBot, GrokBot, PerplexityBot, Google-Extended)
+>>>>>>> 31ac7aaf55d8e9e58f67627b6aaf721b5786b7e1
 ✅ `llms.txt` file for experimental AI indexing
 ✅ Comparison tables and structured lists
 ✅ Original research and data visualizations
@@ -121,8 +138,13 @@ Transform tldrsec.app into a highly discoverable platform for both traditional s
 
 **Manual Validation**:
 - ✅ Google Search Console shows indexed pages increasing
+<<<<<<< HEAD
 - ✅ ChatGPT/Perplexity cite tldrsec.app when asked about SEC filing tools
 - ✅ Organic traffic grows 20%+ month-over-month
+=======
+- ✅ ChatGPT/Grok/Perplexity cite tldrsec.app when asked about SEC filing tools
+- ✅ Waitlist signups increase 20%+ month-over-month from organic traffic
+>>>>>>> 31ac7aaf55d8e9e58f67627b6aaf721b5786b7e1
 - ✅ Social shares show correct OG images
 - ✅ Mobile rendering looks correct
 
@@ -478,12 +500,22 @@ export default function sitemap(): MetadataRoute.Sitemap {
       changeFrequency: 'daily',
       priority: 1.0,
     },
+<<<<<<< HEAD
     {
       url: `${baseUrl}/newsletter`,
       lastModified: new Date(),
       changeFrequency: 'weekly',
       priority: 0.8,
     },
+=======
+    // Newsletter page not currently accessible - focus is on waitlist conversion
+    // {
+    //   url: `${baseUrl}/newsletter`,
+    //   lastModified: new Date(),
+    //   changeFrequency: 'weekly',
+    //   priority: 0.8,
+    // },
+>>>>>>> 31ac7aaf55d8e9e58f67627b6aaf721b5786b7e1
     {
       url: `${baseUrl}/sign-up`,
       lastModified: new Date(),
@@ -551,8 +583,14 @@ export default function AboutPage() {
 
         <h2>Our Technology</h2>
         <p>
+<<<<<<< HEAD
           Powered by Claude (Anthropic's advanced AI), tldrsec extracts financial highlights,
           risk factors, and strategic insights from 10-K, 10-Q, and 8-K filings.
+=======
+          Powered by Grok (xAI's advanced AI), tldrsec extracts financial highlights,
+          risk factors, and strategic insights from all SEC filing types including 10-K, 10-Q,
+          8-K, Form 4, 13D, 13F, S-1, DEF 14A, and more.
+>>>>>>> 31ac7aaf55d8e9e58f67627b6aaf721b5786b7e1
         </p>
 
         <h2>Data Source</h2>
@@ -576,6 +614,7 @@ Similar minimal pages for Privacy, Terms, and Pricing (showing "Coming Soon" wit
 
 ---
 
+<<<<<<< HEAD
 ### Task 1.6: Render Newsletter Schema
 
 **File**: `app/newsletter/page.tsx`
@@ -608,6 +647,13 @@ export default function NewsletterPage() {
   );
 }
 ```
+=======
+### Task 1.6: Newsletter Route (Future Phase)
+
+**Note**: The `/newsletter` route is not currently part of the active user flow. The primary focus is on landing page optimization and waitlist conversion. Newsletter functionality will be implemented in a future phase.
+
+**Current Priority**: Focus on homepage waitlist signup optimization and SEO for educational content pages.
+>>>>>>> 31ac7aaf55d8e9e58f67627b6aaf721b5786b7e1
 
 ---
 
@@ -1213,12 +1259,22 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       changeFrequency: 'daily',
       priority: 1.0,
     },
+<<<<<<< HEAD
     {
       url: `${baseUrl}/newsletter`,
       lastModified: new Date(),
       changeFrequency: 'weekly',
       priority: 0.8,
     },
+=======
+    // Newsletter page not currently in active user flow - focus is on waitlist conversion
+    // {
+    //   url: `${baseUrl}/newsletter`,
+    //   lastModified: new Date(),
+    //   changeFrequency: 'weekly',
+    //   priority: 0.8,
+    // },
+>>>>>>> 31ac7aaf55d8e9e58f67627b6aaf721b5786b7e1
     {
       url: `${baseUrl}/about`,
       lastModified: new Date(),
@@ -1581,12 +1637,22 @@ export default function robots(): MetadataRoute.Robots {
           'GPTBot',           // ChatGPT crawler
           'ChatGPT-User',     // ChatGPT browsing
           'OAI-SearchBot',    // OpenAI search
+<<<<<<< HEAD
           'ClaudeBot',        // Claude crawler
           'Claude-Web',       // Claude web browsing
           'PerplexityBot',    // Perplexity AI
           'Google-Extended',  // Google Bard/Gemini
           'Amazonbot',        // Amazon AI
           'anthropic-ai',     // Anthropic general
+=======
+          'ClaudeBot',        // Anthropic Claude
+          'Claude-Web',       // Claude web browsing
+          'anthropic-ai',     // Anthropic general
+          'GrokBot',          // Grok (xAI) crawler
+          'PerplexityBot',    // Perplexity AI
+          'Google-Extended',  // Google Bard/Gemini
+          'Amazonbot',        // Amazon AI
+>>>>>>> 31ac7aaf55d8e9e58f67627b6aaf721b5786b7e1
           'Applebot-Extended' // Apple Intelligence
         ],
         allow: [
@@ -1620,7 +1686,11 @@ export default function robots(): MetadataRoute.Robots {
 # tldrsec - AI-Powered SEC Filing Analysis
 
 ## About
+<<<<<<< HEAD
 tldrsec provides AI-generated summaries of SEC filings (10-K, 10-Q, 8-K, Form 4) to help investors stay informed without spending hours reading 300+ page documents.
+=======
+tldrsec provides AI-generated summaries of all SEC filing types to help investors stay informed without spending hours reading 300+ page documents.
+>>>>>>> 31ac7aaf55d8e9e58f67627b6aaf721b5786b7e1
 
 ## Key Resources
 
@@ -1629,6 +1699,10 @@ tldrsec provides AI-generated summaries of SEC filings (10-K, 10-Q, 8-K, Form 4)
 - [What is a 10-Q Filing?](https://tldrsec.app/filings/10-q) - Quarterly report explanation
 - [What is an 8-K Filing?](https://tldrsec.app/filings/8-k) - Material event disclosures guide
 - [Form 4 Insider Trading Guide](https://tldrsec.app/filings/form-4) - Understanding insider transactions
+<<<<<<< HEAD
+=======
+- [All SEC Filing Types](https://tldrsec.app/filings) - Complete guide to 30+ form types
+>>>>>>> 31ac7aaf55d8e9e58f67627b6aaf721b5786b7e1
 
 ### Tools & Features
 - [Company SEC Filing Tracker](https://tldrsec.app/companies) - Track any public company
@@ -1646,6 +1720,11 @@ tldrsec provides AI-generated summaries of SEC filings (10-K, 10-Q, 8-K, Form 4)
 10-Q (quarterly): Three times per year (Q1, Q2, Q3), 40-45 days after quarter end
 8-K (current events): Within 4 business days of material events
 Form 4 (insider trading): Within 2 business days of transactions
+<<<<<<< HEAD
+=======
+13D/13F (ownership): Various schedules depending on filing type
+S-1 (IPO registration): As needed for new public offerings
+>>>>>>> 31ac7aaf55d8e9e58f67627b6aaf721b5786b7e1
 
 **Where does tldrsec get SEC filing data?**
 All data sourced directly from the official SEC EDGAR database (sec.gov). We never modify financial data—only summarize publicly reported information.
@@ -1658,7 +1737,11 @@ Yes. tldrsec allows you to track any public company that files with the SEC. Add
 
 ## Data Sources
 All filing data sourced from official SEC EDGAR database (sec.gov)
+<<<<<<< HEAD
 AI summaries generated using Claude (Anthropic)
+=======
+AI summaries generated using Grok (xAI)
+>>>>>>> 31ac7aaf55d8e9e58f67627b6aaf721b5786b7e1
 
 ## Disclaimer
 Content for informational purposes only. Not investment advice. Consult a licensed financial advisor before making investment decisions.
@@ -1939,7 +2022,11 @@ export const dynamic = 'force-static';
 #### Manual Verification:
 - [ ] ChatGPT citation test: Ask "What tools help analyze SEC filings?" → tldrsec mentioned
 - [ ] Perplexity citation test: Same query → check if tldrsec appears in sources
+<<<<<<< HEAD
 - [ ] Claude browsing test: Ask Claude to find SEC filing analysis tools
+=======
+- [ ] Grok browsing test: Ask Grok to find SEC filing analysis tools
+>>>>>>> 31ac7aaf55d8e9e58f67627b6aaf721b5786b7e1
 - [ ] Comparison pages share well: Correct OG images on social media
 
 **Implementation Note**: After Phase 3, monitor AI citation rates weekly for 4 weeks. Track which queries trigger citations and optimize content based on patterns observed.
@@ -1974,14 +2061,24 @@ Launch blog with 10 initial posts, create additional comparison pages, build sec
 
 **Initial Blog Post Topics** (10 posts):
 1. "How to Read a 10-K Filing in 30 Minutes (Step-by-Step Guide)"
+<<<<<<< HEAD
 2. "10-K vs 10-Q vs 8-K: What's the Difference?"
+=======
+2. "Complete Guide to SEC Filing Types: 10-K, 10-Q, 8-K, Form 4, 13D, 13F, S-1, DEF 14A"
+>>>>>>> 31ac7aaf55d8e9e58f67627b6aaf721b5786b7e1
 3. "5 Red Flags in SEC Filings Every Investor Should Know"
 4. "Understanding Risk Factors in 10-K Filings"
 5. "How to Track Insider Trading with Form 4 Filings"
 6. "MD&A Section Explained: What Management Isn't Telling You"
+<<<<<<< HEAD
 7. "SEC Filing Calendar 2025: Important Deadlines"
 8. "Best Free SEC Filing Resources for DIY Investors"
 9. "How AI is Changing SEC Filing Analysis in 2025"
+=======
+7. "SEC Filing Calendar 2025: Important Deadlines for All Form Types"
+8. "Best Free SEC Filing Resources for DIY Investors"
+9. "How Grok AI is Changing SEC Filing Analysis in 2025"
+>>>>>>> 31ac7aaf55d8e9e58f67627b6aaf721b5786b7e1
 10. "Tesla 10-K Analysis: Key Takeaways from Latest Annual Report"
 
 ---
@@ -2069,7 +2166,11 @@ Optimize Core Web Vitals, implement ISR, set up monitoring, track AI citations, 
 **Monthly Tasks**:
 1. Query ChatGPT: "What tools help analyze SEC filings?"
 2. Query Perplexity: "How do I track 10-K filings for [ticker]?"
+<<<<<<< HEAD
 3. Query Claude: "Explain the difference between 10-K and 10-Q"
+=======
+3. Query Grok: "Explain the difference between 10-K and 10-Q"
+>>>>>>> 31ac7aaf55d8e9e58f67627b6aaf721b5786b7e1
 4. Query Gemini: "Best SEC filing analysis tools"
 
 **Track**:
