@@ -95,8 +95,8 @@ export async function GET(request: NextRequest) {
     return Math.min(parsed, 600000); // Cap at 10 minutes maximum
   };
   
-  const workerTimeoutMs = parseTimeoutHeader(request.headers.get('x-worker-timeout'), 600000); // 10 minutes default
-  const effectiveTimeoutMs = parseTimeoutHeader(request.headers.get('x-effective-timeout'), 540000); // 9 minutes default
+  const workerTimeoutMs = parseTimeoutHeader(request.headers.get('x-worker-timeout'), 300000); // 5 minutes default (Vercel limit)
+  const effectiveTimeoutMs = parseTimeoutHeader(request.headers.get('x-effective-timeout'), 270000); // 4.5 minutes default (fits Vercel's 5-min limit)
   const timeoutBuffer = 30000; // 30 seconds buffer for cleanup
   
   cronLogger.info(`[${executionId}] Starting tier-aware cron with timeout protection`, {
