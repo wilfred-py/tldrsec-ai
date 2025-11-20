@@ -376,7 +376,7 @@ export async function GET(request: NextRequest) {
       }
 
       // CIRCUIT BREAKER: Skip backlog if we have very limited time (less than 3 minutes)
-      const minimumTimeForBacklog = 180000; // 3 minutes
+      const minimumTimeForBacklog = 90000; // 1.5 minutes (reduced from 3 min for 4.5 min timeout)
       if (timeCheck.remaining < minimumTimeForBacklog) {
         skipBacklogDueToTimeConstraints = true;
         cronLogger.warn(`[${executionId}] CIRCUIT BREAKER ACTIVE: Skipping backlog processing due to insufficient time`, {
@@ -405,7 +405,7 @@ export async function GET(request: NextRequest) {
         }
 
         // Process backlog with optimized limits (max 20 filings with parallel processing)
-        const maxBacklogFilings = Math.min(20, unprocessedCount);
+        const maxBacklogFilings = Math.min(5, unprocessedCount);  // Reduced from 20 to 5 for 4.5 min timeout
         const backlogTimeLimit = Math.min(120000, timeCheck.remaining - 30000); // Reserve 30s for cleanup, allow 2 mins
         
         if (backlogTimeLimit > 10000) { // Only process if we have at least 10 seconds
