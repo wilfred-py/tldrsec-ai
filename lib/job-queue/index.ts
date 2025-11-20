@@ -397,6 +397,24 @@ export class JobQueueService {
   }
 
   /**
+   * Get current queue depth for a specific job type
+   * Used for estimation of completion time
+   */
+  static async getQueueDepth(jobType: JobType): Promise<number> {
+    try {
+      return await prisma.jobQueue.count({
+        where: {
+          jobType,
+          status: { in: ['PENDING', 'RETRYING'] },
+        }
+      });
+    } catch (error) {
+      console.error('Error getting queue depth:', error);
+      throw error;
+    }
+  }
+
+  /**
    * Clean up old completed jobs
    */
   static async cleanupOldJobs(olderThan: Date) {
