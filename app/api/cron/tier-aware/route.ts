@@ -380,8 +380,16 @@ export async function GET(request: NextRequest) {
       unprocessedCount = unprocessedFilings.length;
 
       // Determine if we should skip backlog due to time constraints
-      const backlogTimeRemainingMs = MAX_EXECUTION_TIME_MS - (Date.now() - startTime);
+      const backlogTimeRemainingMs = effectiveTimeoutMs - (Date.now() - startTime);
       const skipBacklogDueToTimeConstraints = backlogTimeRemainingMs < 30000;
+
+      cronLogger.info(`[${executionId}] Backlog queueing decision`, {
+        unprocessedCount,
+        backlogTimeRemainingMs,
+        skipBacklogDueToTimeConstraints,
+        effectiveTimeoutMs,
+        elapsed: Date.now() - startTime
+      });
 
       if (unprocessedCount > 0 && !skipBacklogDueToTimeConstraints) {
         const queueStartTime = Date.now();
@@ -397,7 +405,7 @@ export async function GET(request: NextRequest) {
         }
 
         // Collect all filings to queue (limit to prevent timeout)
-        const maxBacklogFilings = Math.min(5, unprocessedCount);
+        const maxBacklogFilings = Math.min(50, unprocessedCount);
         const backlogFilings = unprocessedFilings.slice(0, maxBacklogFilings);
         const filingsToQueue: FilingJobPayload[] = [];
 
