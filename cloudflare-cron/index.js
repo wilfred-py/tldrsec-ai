@@ -37,7 +37,7 @@ export default {
     
     // Enhanced rate limiting configuration with global subrequest awareness
     const WORKER_TIMEOUT_MS = 10 * 60 * 1000; // 10 minutes (maximum Cloudflare limit)
-    const REQUEST_TIMEOUT_MS = 9 * 60 * 1000; // 9 minutes for individual request
+    const REQUEST_TIMEOUT_MS = 4.5 * 60 * 1000; // 4.5 minutes for individual request (aligns with Vercel 5-min limit)
     const MAX_ATTEMPTS = 5; // Intelligent retry attempts
     const INITIAL_BACKOFF_MS = 500; // Fast initial recovery
     const MAX_BACKOFF_MS = 180000; // 3 minutes maximum backoff for severe rate limiting
