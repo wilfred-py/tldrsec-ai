@@ -27,6 +27,7 @@ import { CronUserProcessingService } from '../../../../lib/cron/user-processing-
 import { CronSecFilingService } from '../../../../lib/cron/sec-filing-service';
 import { CronFilingProcessor } from '../../../../lib/cron/filing-processor';
 import type { CronResults } from '../../../../lib/cron/types';
+import { AsyncFilingQueue, type FilingJobPayload } from '../../../../lib/cron/async-filing-queue';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -361,41 +362,40 @@ export async function GET(request: NextRequest) {
       eligibleUsers: eligibleUsers.length
     });
 
-    // STEP 2.5: Backlog Processing Phase - Process unprocessed filings with timeout protection and circuit breaker
-    cronLogger.debug(`[${executionId}] Checkpoint 5.5: Starting backlog processing for unprocessed filings`);
-    
+    // STEP 2.5: Backlog Processing Phase - Queue unprocessed filings for async processing
+    cronLogger.debug(`[${executionId}] Checkpoint 5.5: Starting backlog queueing for unprocessed filings`);
+
     let unprocessedCount = 0;
-    let backlogProcessedCount = 0;
-    let skipBacklogDueToTimeConstraints = false;
-    
+    let backlogQueuedCount = 0;
+
     try {
-      // Check timeout before starting backlog processing
+      // Check timeout before starting backlog queueing
       timeCheck = checkTimeRemaining();
       if (!timeCheck.shouldContinue) {
-        throw new Error(`Timeout approaching before backlog processing: ${timeCheck.remaining}ms remaining`);
+        throw new Error(`Timeout approaching before backlog queueing: ${timeCheck.remaining}ms remaining`);
       }
 
-      // CIRCUIT BREAKER: Skip backlog if we have very limited time (less than 3 minutes)
-      const minimumTimeForBacklog = 90000; // 1.5 minutes (reduced from 3 min for 4.5 min timeout)
-      if (timeCheck.remaining < minimumTimeForBacklog) {
-        skipBacklogDueToTimeConstraints = true;
-        cronLogger.warn(`[${executionId}] CIRCUIT BREAKER ACTIVE: Skipping backlog processing due to insufficient time`, {
-          timeRemaining: timeCheck.remaining,
-          minimumRequired: minimumTimeForBacklog,
-          reason: 'Prioritizing new filing monitoring over backlog to prevent 524 timeouts'
-        });
-      }
-
+      // Get unprocessed filings from database
       const unprocessedFilings = await import('../../../../lib/sec-edgar/ticker-monitoring').then(m => m.getUnprocessedFilings(100));
       unprocessedCount = unprocessedFilings.length;
-      
+
+      // Determine if we should skip backlog due to time constraints
+      const backlogTimeRemainingMs = effectiveTimeoutMs - (Date.now() - startTime);
+      const skipBacklogDueToTimeConstraints = backlogTimeRemainingMs < 30000;
+
+      cronLogger.info(`[${executionId}] Backlog queueing decision`, {
+        unprocessedCount,
+        backlogTimeRemainingMs,
+        skipBacklogDueToTimeConstraints,
+        effectiveTimeoutMs,
+        elapsed: Date.now() - startTime
+      });
+
       if (unprocessedCount > 0 && !skipBacklogDueToTimeConstraints) {
-        cronLogger.warn(`[${executionId}] BACKLOG DETECTED: ${unprocessedCount} unprocessed filings found - processing with time limit`, {
-          backlogSize: unprocessedCount,
-          targetFilings: 0,
-          timeRemaining: timeCheck.remaining
-        });
-        
+        const queueStartTime = Date.now();
+
+        cronLogger.info(`[${executionId}] Queueing ${unprocessedCount} backlog filings for async processing`);
+
         // Record backlog metrics
         if (monitor) {
           await monitor.recordMetric('unprocessed_filings_backlog', {
@@ -404,193 +404,74 @@ export async function GET(request: NextRequest) {
           });
         }
 
-        // Process backlog with optimized limits (max 20 filings with parallel processing)
-        const maxBacklogFilings = Math.min(5, unprocessedCount);  // Reduced from 20 to 5 for 4.5 min timeout
-        const backlogTimeLimit = Math.min(120000, timeCheck.remaining - 30000); // Reserve 30s for cleanup, allow 2 mins
-        
-        if (backlogTimeLimit > 10000) { // Only process if we have at least 10 seconds
-          cronLogger.info(`[${executionId}] Processing up to ${maxBacklogFilings} backlog filings with ${backlogTimeLimit}ms time limit using parallel processing`);
+        // Collect all filings to queue (limit to prevent timeout)
+        const maxBacklogFilings = Math.min(50, unprocessedCount);
+        const backlogFilings = unprocessedFilings.slice(0, maxBacklogFilings);
+        const filingsToQueue: FilingJobPayload[] = [];
 
-          const backlogStartTime = Date.now();
-          const PARALLEL_BATCH_SIZE = 3; // Process 3 filings simultaneously
-          const batches = [];
-          const totalBatches = Math.min(maxBacklogFilings, unprocessedFilings.length);
+        // Get database client
+        const { getPrismaClient } = await import('../../../../lib/db/prisma');
+        const prisma = getPrismaClient();
 
-          // Create batches for parallel processing
-          for (let i = 0; i < totalBatches; i += PARALLEL_BATCH_SIZE) {
-            const batch = unprocessedFilings.slice(i, Math.min(i + PARALLEL_BATCH_SIZE, totalBatches));
-            batches.push(batch);
-          }
+        for (const filing of backlogFilings) {
+          if (!filing?.accessionNumber) continue;
 
-          for (const [batchIndex, batch] of batches.entries()) {
-            const timeElapsed = Date.now() - backlogStartTime;
-            if (timeElapsed > backlogTimeLimit) {
-              cronLogger.warn(`[${executionId}] Backlog processing timeout after ${timeElapsed}ms in batch ${batchIndex}`);
-              break;
-            }
-
-            if (backlogProcessedCount >= maxBacklogFilings) {
-              cronLogger.info(`[${executionId}] Reached max backlog filing limit (${maxBacklogFilings})`);
-              break;
-            }
-
-            cronLogger.debug(`[${executionId}] Processing batch ${batchIndex + 1}/${batches.length} (${batch.length} filings)`);
-
-            // Process batch in parallel with rate limiting
-            const batchPromises = batch.map(async (filing, filingIndex) => {
-              if (!filing?.accessionNumber) return null;
-
-              try {
-                // Add small delay between filings in the same batch to respect SEC rate limits
-                if (filingIndex > 0) {
-                  await new Promise(resolve => setTimeout(resolve, 200));
-                }
-
-                // FIXED: Actually process filing with E2E pipeline (summary + email) before marking as processed
-                const { getPrismaClient } = await import('../../../../lib/db/prisma');
-                const prisma = getPrismaClient();
-                
-                // Find users who should receive this filing
-                const usersForTicker = await prisma.user.findMany({
-                  where: {
-                    tickers: {
-                      some: {
-                        symbol: filing.ticker.symbol
-                      }
-                    }
-                  },
-                  select: {
-                    id: true,
-                    email: true,
-                    subscriptionTier: true,
-                    processingBudget: true,
-                    budgetUsed: true,
-                    tickers: {
-                      where: {
-                        symbol: filing.ticker.symbol
-                      },
-                      select: {
-                        symbol: true,
-                        companyName: true
-                      }
-                    }
-                  }
-                });
-
-                if (usersForTicker.length === 0) {
-                  cronLogger.warn(`[${executionId}] No users found for ticker ${filing.ticker.symbol}, skipping filing ${filing.accessionNumber}`);
-                  return null;
-                }
-
-                let totalProcessedForFiling = 0;
-                
-                // Process filing for each user who subscribes to this ticker
-                for (const user of usersForTicker) {
-                  try {
-                    // ENHANCED: Validate processSingleFiling method accessibility before calling
-                    if (typeof CronFilingProcessor.processSingleFiling !== 'function') {
-                      throw new Error('CronFilingProcessor.processSingleFiling is not accessible or not a function');
-                    }
-
-                    cronLogger.debug(`[${executionId}] Calling CronFilingProcessor.processSingleFiling for filing ${filing.accessionNumber}`, {
-                      userId: user.id,
-                      ticker: filing.ticker.symbol,
-                      methodAccessible: typeof CronFilingProcessor.processSingleFiling === 'function'
-                    });
-
-                    // Use the PROPER filing processor that does real E2E processing
-                    const result = await CronFilingProcessor.processSingleFiling(
-                      filing,
-                      user,
-                      user.subscriptionTier,
-                      { symbol: filing.ticker.symbol, cik: filing.ticker.cik },
-                      { companyName: filing.ticker.companyName }
-                    );
-
-                    // ENHANCED: Validate result structure
-                    if (!result || typeof result !== 'object') {
-                      throw new Error(`Invalid result returned from processSingleFiling: ${typeof result}`);
-                    }
-
-                    if (result.success) {
-                      totalProcessedForFiling++;
-                      cronLogger.info(`[${executionId}] Successfully processed filing ${filing.accessionNumber} for user ${user.email} (${user.subscriptionTier})`, {
-                        cost: result.cost,
-                        ticker: filing.ticker.symbol
-                      });
-                    } else {
-                      cronLogger.error(`[${executionId}] Failed to process filing ${filing.accessionNumber} for user ${user.email}`, {
-                        error: result.error,
-                        ticker: filing.ticker.symbol
-                      });
-                    }
-                  } catch (userProcessingError) {
-                    const errorMessage = userProcessingError instanceof Error ? userProcessingError.message : 'Unknown error';
-                    
-                    // ENHANCED: Detect specific error types for better debugging
-                    const isAccessError = errorMessage.includes('private and only accessible') || 
-                                          errorMessage.includes('not accessible') ||
-                                          errorMessage.includes('not a function');
-                    
-                    const isTypeError = userProcessingError instanceof TypeError;
-                    
-                    cronLogger.error(`[${executionId}] CRITICAL: Error processing filing ${filing.accessionNumber} for user ${user.email}`, {
-                      error: errorMessage,
-                      errorType: userProcessingError?.constructor?.name || 'Unknown',
-                      isAccessError,
-                      isTypeError,
-                      ticker: filing.ticker.symbol,
-                      userId: user.id,
-                      methodType: typeof CronFilingProcessor.processSingleFiling,
-                      alertLevel: isAccessError ? 'CRITICAL_METHOD_ACCESS' : 'ERROR'
-                    });
-                    
-                    // If this is a method access error, we need to track this specifically
-                    if (isAccessError || isTypeError) {
-                      cronLogger.error(`[${executionId}] SYSTEM ERROR: CronFilingProcessor.processSingleFiling method access issue detected`, {
-                        possibleCause: 'Method visibility or import issues',
-                        recommendation: 'Check if processSingleFiling is public static and properly exported'
-                      });
-                    }
-                  }
-                }
-
-                // Only mark as processed if at least one user was successfully processed
-                if (totalProcessedForFiling > 0) {
-                  const { markFilingAsProcessedByAccession } = await import('../../../../lib/sec-edgar/ticker-monitoring');
-                  await markFilingAsProcessedByAccession(filing.accessionNumber, filing.ticker.symbol);
-                  
-                  cronLogger.info(`[${executionId}] Successfully processed backlog filing ${filing.accessionNumber} (${filing.ticker.symbol}) for ${totalProcessedForFiling} users`);
-                  return totalProcessedForFiling;
-                } else {
-                  cronLogger.warn(`[${executionId}] Filing ${filing.accessionNumber} (${filing.ticker.symbol}) failed for all users, leaving as unprocessed`);
-                  return null;
-                }
-              } catch (filingError) {
-                cronLogger.error(`[${executionId}] Failed to process backlog filing ${filing.accessionNumber}`, {
-                  error: filingError instanceof Error ? filingError.message : 'Unknown error'
-                });
-                return null; // Return null for failed filings
+          // Get users subscribed to this ticker
+          const usersForTicker = await prisma.user.findMany({
+            where: {
+              tickers: {
+                some: { symbol: filing.ticker.symbol }
               }
+            },
+            select: {
+              id: true,
+              email: true,
+              subscriptionTier: true,
+            }
+          });
+
+          // Queue job for each user
+          for (const user of usersForTicker) {
+            filingsToQueue.push({
+              userId: user.id,
+              userEmail: user.email,
+              userTier: user.subscriptionTier,
+              ticker: {
+                symbol: filing.ticker.symbol,
+                companyName: filing.ticker.companyName,
+                cik: filing.ticker.cik,
+              },
+              filing: {
+                filingId: filing.filingId,
+                formType: filing.filingType,
+                filingDate: filing.filingDate,
+                filingUrl: filing.filingUrl,
+                accessionNumber: filing.accessionNumber,
+              },
+              executionContext: {
+                executionId,
+                cronTriggerTime: new Date().toISOString(),
+                sourceContext: 'backlog',
+              },
             });
-
-            const batchResults = await Promise.allSettled(batchPromises);
-
-            // Count successful processing
-            for (const result of batchResults) {
-              if (result.status === 'fulfilled' && result.value !== null) {
-                backlogProcessedCount += result.value;
-              }
-            }
-
-            // Add delay between batches to respect SEC API limits (500ms)
-            if (batchIndex < batches.length - 1) {
-              await new Promise(resolve => setTimeout(resolve, 500));
-            }
           }
-        } else {
-          cronLogger.warn(`[${executionId}] Insufficient time for backlog processing (${backlogTimeLimit}ms available)`);
         }
+
+        // Queue all filings in batch (FAST - returns immediately)
+        const queueResults = await AsyncFilingQueue.queueMultipleFilings(filingsToQueue);
+
+        const queueDuration = Date.now() - queueStartTime;
+        const successCount = queueResults.filter(r => r.success).length;
+
+        cronLogger.info(`[${executionId}] Backlog filings queued`, {
+          totalFilings: filingsToQueue.length,
+          successfullyQueued: successCount,
+          failed: filingsToQueue.length - successCount,
+          queueDuration,
+          averageQueueTime: queueDuration / filingsToQueue.length,
+        });
+
+        backlogQueuedCount = successCount;
       } else if (skipBacklogDueToTimeConstraints) {
         cronLogger.warn(`[${executionId}] CIRCUIT BREAKER: Backlog exists (${unprocessedCount} filings) but skipped due to time constraints`, {
           unprocessedFilings: unprocessedCount,
@@ -602,54 +483,50 @@ export async function GET(request: NextRequest) {
         cronLogger.info(`[${executionId}] No backlog detected - all filings processed`);
       }
     } catch (backlogCheckError) {
-      cronLogger.error(`[${executionId}] Failed to check/process backlog`, {
+      cronLogger.error(`[${executionId}] Failed to check/queue backlog`, {
         error: backlogCheckError instanceof Error ? backlogCheckError.message : 'Unknown error'
       });
     }
     
-    cronLogger.debug(`[${executionId}] Checkpoint 5.6: Backlog processing completed`, {
+    cronLogger.debug(`[${executionId}] Checkpoint 5.6: Backlog queueing completed`, {
       unprocessedFilingsFound: unprocessedCount,
-      backlogProcessed: backlogProcessedCount
+      backlogQueued: backlogQueuedCount
     });
 
-    // ENHANCED MONITORING: Track backlog processing health
+    // ENHANCED MONITORING: Track backlog queueing health
     if (unprocessedCount > 0) {
-      const backlogProcessingRate = (backlogProcessedCount / unprocessedCount * 100).toFixed(2);
-      const remainingBacklog = unprocessedCount - backlogProcessedCount;
-      
-      cronLogger.info(`[${executionId}] BACKLOG PROCESSING HEALTH CHECK`, {
+      const backlogQueueingRate = (backlogQueuedCount / unprocessedCount * 100).toFixed(2);
+
+      cronLogger.info(`[${executionId}] BACKLOG QUEUEING HEALTH CHECK`, {
         totalBacklogFound: unprocessedCount,
-        successfullyProcessed: backlogProcessedCount,
-        processingRate: `${backlogProcessingRate}%`,
-        remainingBacklog,
-        targetReached: remainingBacklog === 0,
-        healthStatus: remainingBacklog === 0 ? 'HEALTHY' : 
-                     backlogProcessedCount > 0 ? 'IMPROVING' : 'CRITICAL'
+        successfullyQueued: backlogQueuedCount,
+        queueingRate: `${backlogQueueingRate}%`,
+        processingMode: 'async',
+        healthStatus: backlogQueuedCount > 0 ? 'QUEUED' : 'FAILED'
       });
 
-      // Alert if backlog processing completely failed
-      if (backlogProcessedCount === 0 && monitor) {
-        await monitor.createAlert('BACKLOG_PROCESSING_FAILURE', {
+      // Alert if backlog queueing completely failed
+      if (backlogQueuedCount === 0 && monitor) {
+        await monitor.createAlert('BACKLOG_QUEUEING_FAILURE', {
           severity: 'HIGH',
-          message: `Backlog of ${unprocessedCount} filings found but none were successfully processed with E2E pipeline`,
+          message: `Backlog of ${unprocessedCount} filings found but none were successfully queued`,
           details: {
             unprocessedFilingsFound: unprocessedCount,
-            backlogProcessed: backlogProcessedCount,
-            possibleCause: 'E2E processing (summary generation or email delivery) failing for all filings'
+            backlogQueued: backlogQueuedCount,
+            possibleCause: 'Job queue system may be unavailable'
           }
         });
       }
 
-      // Alert if significant backlog remains
-      if (remainingBacklog > 10 && monitor) {
-        await monitor.createAlert('LARGE_BACKLOG_REMAINING', {
+      // Alert if significant backlog exists
+      if (unprocessedCount > 10 && monitor) {
+        await monitor.createAlert('LARGE_BACKLOG_DETECTED', {
           severity: 'MEDIUM',
-          message: `Large backlog of ${remainingBacklog} unprocessed filings remains after processing`,
+          message: `Large backlog of ${unprocessedCount} unprocessed filings detected`,
           details: {
             totalBacklogFound: unprocessedCount,
-            processedThisRun: backlogProcessedCount,
-            remainingBacklog,
-            processingRate: `${backlogProcessingRate}%`
+            queuedThisRun: backlogQueuedCount,
+            processingMode: 'async'
           }
         });
       }
@@ -758,116 +635,26 @@ export async function GET(request: NextRequest) {
         newFilingsFound: number;
         errors: number;
       };
-      backlogProcessing: {
+      backlogQueueing: {
         unprocessedFound: number;
-        backlogProcessed: number;
+        backlogQueued: number;
       };
     } = {
       ...processingResults,
       filingMonitoring: filingMonitoringResults,
-      backlogProcessing: {
+      backlogQueueing: {
         unprocessedFound: unprocessedCount,
-        backlogProcessed: backlogProcessedCount
+        backlogQueued: backlogQueuedCount
       }
     };
 
-    // ENHANCED CRITICAL MONITORING: Alert when filings are detected but not processed OR backlog exists
-    const totalFilingsAvailable = filingMonitoringResults.newFilingsFound + unprocessedCount;
-    const totalFilingsProcessed = processingResults.filingsProcessed + backlogProcessedCount;
-    
-    // Calculate remaining unprocessed after this run
-    const remainingUnprocessed = unprocessedCount - backlogProcessedCount;
-    
-    if (filingMonitoringResults.newFilingsFound > 0 && totalFilingsProcessed === 0) {
-      cronLogger.error(`[${executionId}] CRITICAL: Filings detected but not processed!`, {
-        newFilingsFound: filingMonitoringResults.newFilingsFound,
-        unprocessedBacklog: unprocessedCount,
-        backlogProcessed: backlogProcessedCount,
-        totalFilingsAvailable,
-        totalFilingsProcessed,
-        usersProcessed: processingResults.usersProcessed,
-        eligibleUsers: eligibleUsers.length,
-        alert: 'FILING_PROCESSING_FAILURE'
+    // ASYNC PROCESSING MONITORING: Track queueing health (processing happens in background)
+    if (backlogQueuedCount > 0) {
+      cronLogger.info(`[${executionId}] BACKLOG QUEUED: Successfully queued ${backlogQueuedCount} backlog filings for async processing`, {
+        backlogQueued: backlogQueuedCount,
+        unprocessedFilings: unprocessedCount,
+        processingMode: 'async'
       });
-      
-      // Create alert in monitoring system
-      if (monitor) {
-        await monitor.createAlert('FILING_PROCESSING_FAILURE', {
-          severity: 'CRITICAL',
-          message: `${filingMonitoringResults.newFilingsFound} new filings + ${unprocessedCount} backlog filings detected but none processed`,
-          details: {
-            newFilingsFound: filingMonitoringResults.newFilingsFound,
-            unprocessedBacklog: unprocessedCount,
-            backlogProcessed: backlogProcessedCount,
-            totalFilingsAvailable,
-            totalFilingsProcessed,
-            usersProcessed: processingResults.usersProcessed,
-            target: 'Process ALL filings to reach 0 unprocessed'
-          }
-        });
-      }
-    } else if (remainingUnprocessed > 0) {
-      cronLogger.warn(`[${executionId}] BACKLOG PROGRESS: ${backlogProcessedCount} processed, ${remainingUnprocessed} remain (Target: 0)`, {
-        unprocessedBacklog: unprocessedCount,
-        backlogProcessed: backlogProcessedCount,
-        remainingUnprocessed,
-        newFilingsFound: filingMonitoringResults.newFilingsFound,
-        filingsProcessed: processingResults.filingsProcessed,
-        target: 'All unprocessed filings should be processed each run'
-      });
-    } else if (backlogProcessedCount > 0) {
-      cronLogger.info(`[${executionId}] BACKLOG CLEARED: Successfully processed ${backlogProcessedCount} backlog filings - target reached!`, {
-        backlogProcessed: backlogProcessedCount,
-        remainingUnprocessed: 0
-      });
-    } else if (filingMonitoringResults.newFilingsFound > processingResults.filingsProcessed) {
-      cronLogger.warn(`[${executionId}] WARNING: Not all detected filings were processed`, {
-        newFilingsFound: filingMonitoringResults.newFilingsFound,
-        filingsProcessed: processingResults.filingsProcessed,
-        processingRate: (processingResults.filingsProcessed / filingMonitoringResults.newFilingsFound * 100).toFixed(2) + '%'
-      });
-    }
-
-    // FINAL VALIDATION: Check if summaries were actually created during this run
-    if (totalFilingsProcessed > 0) {
-      try {
-        const { getPrismaClient } = await import('../../../../lib/db/prisma');
-        const prisma = getPrismaClient();
-        
-        // Check summaries created in the last 5 minutes (this cron run)
-        const recentSummaries = await prisma.summary.count({
-          where: {
-            createdAt: {
-              gte: new Date(startTime)
-            }
-          }
-        });
-
-        cronLogger.info(`[${executionId}] POST-EXECUTION VALIDATION`, {
-          filingsProcessedThisRun: totalFilingsProcessed,
-          summariesCreatedThisRun: recentSummaries,
-          validationStatus: recentSummaries > 0 ? 'PASS' : 'FAIL',
-          alert: recentSummaries === 0 && totalFilingsProcessed > 0 ? 'SUMMARIES_NOT_CREATED' : null
-        });
-
-        // Critical alert if filings were processed but no summaries created
-        if (totalFilingsProcessed > 0 && recentSummaries === 0 && monitor) {
-          await monitor.createAlert('SUMMARIES_NOT_CREATED', {
-            severity: 'CRITICAL',
-            message: `${totalFilingsProcessed} filings marked as processed but 0 summaries created during this run`,
-            details: {
-              filingsProcessed: totalFilingsProcessed,
-              summariesCreated: recentSummaries,
-              executionStartTime: new Date(startTime).toISOString(),
-              possibleCause: 'Filing processor may not be calling summary generation or database storage is failing'
-            }
-          });
-        }
-      } catch (validationError) {
-        cronLogger.error(`[${executionId}] Post-execution validation failed`, {
-          error: validationError instanceof Error ? validationError.message : 'Unknown error'
-        });
-      }
     }
 
     // Complete monitoring
@@ -895,28 +682,38 @@ export async function GET(request: NextRequest) {
     }
     
     clearTimeout(timeoutId);
-    
-    cronLogger.info(`[${executionId}] Tier-aware cron job completed successfully with backlog processing`, {
+
+    cronLogger.info(`[${executionId}] Tier-aware cron job completed successfully with async queueing`, {
       ...results,
       executionId: monitorResult.executionId,
       duration: monitorResult.duration,
       duplicatePreventionActive: true,
       distributedLockUsed: lock !== null,
-      processingHealth: remainingUnprocessed === 0 ? 'Healthy - No backlog' : 
-                       backlogProcessedCount > 0 ? 'Improving - Backlog reducing' :
-                       filingMonitoringResults.newFilingsFound === 0 ? 'No new filings' : 'CRITICAL',
-      backlogStatus: remainingUnprocessed === 0 ? 'TARGET REACHED' : `${remainingUnprocessed} remaining`
+      processingMode: 'async',
+      backlogStatus: backlogQueuedCount > 0 ? `${backlogQueuedCount} jobs queued` : 'No backlog'
     });
 
     return NextResponse.json({
       success: true,
       executionId: monitorResult.executionId,
       duration: monitorResult.duration,
+      processingMode: 'async',
       marketContext: {
         isMarketHours: marketContext.isMarketHours,
         isMarketDay: marketContext.isMarketDay
       },
+      queue: {
+        filingsQueued: backlogQueuedCount || 0,
+        estimatedCompletionTime: new Date(Date.now() + 300000), // 5 minutes estimate
+        message: 'Filings queued for background processing'
+      },
       results
+    }, {
+      headers: {
+        'X-Processing-Mode': 'async',
+        'X-Execution-ID': executionId,
+        'X-Filings-Queued': String(backlogQueuedCount || 0),
+      }
     });
 
   } catch (error) {

@@ -104,8 +104,9 @@ export class JobQueueService {
       // Validate and sanitize payload
       const sanitizedPayload = sanitizeJSON(payload) as JobPayload;
       
-      // Check for malicious patterns in payload (skip for email jobs)
-      if (jobType !== 'ASYNC_EMAIL_DIGEST') {
+      // Check for malicious patterns in payload (skip for email and filing jobs)
+      // Skip security scanning for filing jobs as they contain SEC URLs and filing data that may trigger false positives
+      if (jobType !== 'ASYNC_EMAIL_DIGEST' && jobType !== 'ASYNC_SUMMARIZE_FILING') {
         const payloadString = JSON.stringify(sanitizedPayload);
         const detection = detectMaliciousPatterns(payloadString);
         if (detection.detected) {
@@ -392,6 +393,24 @@ export class JobQueueService {
       });
     } catch (error) {
       console.error(`Error marking job ${id} for retry:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get current queue depth for a specific job type
+   * Used for estimation of completion time
+   */
+  static async getQueueDepth(jobType: JobType): Promise<number> {
+    try {
+      return await prisma.jobQueue.count({
+        where: {
+          jobType,
+          status: { in: ['PENDING', 'RETRYING'] },
+        }
+      });
+    } catch (error) {
+      console.error('Error getting queue depth:', error);
       throw error;
     }
   }
