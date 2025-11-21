@@ -4,10 +4,6 @@
     {
       "path": "/api/cron/tier-aware",
       "schedule": "0 9 * * 1,2,3,4,5"
-    },
-    {
-      "path": "/api/cron/process-filing-queue",
-      "schedule": "*/5 * * * *"
     }
   ],
   "functions": {
