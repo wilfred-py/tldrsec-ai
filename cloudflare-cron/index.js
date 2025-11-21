@@ -505,7 +505,7 @@ async function executeWithAdvancedRateLimiting({
       const attemptDuration = Date.now() - attemptStartTime;
       console.log(`[${executionId}] Enhanced attempt ${attempt} succeeded in ${attemptDuration}ms:`, {
         duration: attemptDuration,
-        url: url.replace(env.PUBLIC_URL, '[PUBLIC_URL]'),
+        url: url,
         circuitStateAfter: 'SUCCESS_RECORDED',
         rateLimitCountersReset: true,
         performanceMetrics: {
