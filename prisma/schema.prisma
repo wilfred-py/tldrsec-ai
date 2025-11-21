@@ -396,6 +396,7 @@ model CronJobMetrics {
   operationalCostTotal  Float            @default(0)
   costPerFiling         Float?
   costPerUser           Float?
+  summariesPerDollar    Float?           // Key metric: summaries generated per dollar spent
   avgMemoryUsageMb      Float?
   peakMemoryUsageMb     Float?
   dbQueryCount          Int?

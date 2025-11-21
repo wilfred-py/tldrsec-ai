@@ -108,81 +108,85 @@ export default {
         };
       }
       
-      // Build URLs for Vercel endpoints (async processing with fallback)
-      const asyncUrl = `${env.PUBLIC_URL}/api/cron/tier-aware-async`;
-      const optimizedUrl = `${env.PUBLIC_URL}/api/cron/tier-aware`;
-      const fallbackUrl = `${env.PUBLIC_URL}/api/cron/tier-aware`;
+      // Build URLs for Vercel endpoints (dual endpoint pattern for async pipeline)
+      const tierAwareUrl = `${env.PUBLIC_URL}/api/cron/tier-aware`; // Primary: queues new filings
+      const workerUrl = `${env.PUBLIC_URL}/api/cron/process-filing-queue`; // Secondary: processes queued jobs
       const dailyCountUrl = `${env.PUBLIC_URL}/api/cron/update-daily-count`;
-      const useAsync = env.USE_ASYNC_PROCESSING !== 'false'; // Default to true for new microservices
 
-      const url = useAsync ? asyncUrl : optimizedUrl;
-      console.log(`[${executionId}] Target endpoint: ${url} (${useAsync ? 'async microservices architecture' : 'optimized with 524 prevention'})`);
+      console.log(`[${executionId}] Dual endpoint configuration:`, {
+        tierAware: tierAwareUrl,
+        worker: workerUrl,
+        pattern: 'Sequential execution - queue then process'
+      });
       console.log(`[${executionId}] PUBLIC_URL: ${env.PUBLIC_URL}`);
       console.log(`[${executionId}] CRON_SECRET configured: ${env.CRON_SECRET ? 'Yes (' + env.CRON_SECRET.length + ' chars)' : 'No'}`);
       
-      // Generate HMAC signature for secure authentication
-      const urlObj = new URL(url);
-      const method = 'GET';
-      const path = urlObj.pathname;
-      const timestamp = Date.now();
-      
-      // Create HMAC payload: timestamp:method:path
-      const payload = `${timestamp}:${method.toUpperCase()}:${path}`;
-      
-      // Generate HMAC-SHA256 signature
-      const encoder = new TextEncoder();
-      const key = await crypto.subtle.importKey(
-        'raw',
-        encoder.encode(env.CRON_SECRET),
-        { name: 'HMAC', hash: 'SHA-256' },
-        false,
-        ['sign']
-      );
-      const signature = await crypto.subtle.sign('HMAC', key, encoder.encode(payload));
-      const signatureHex = Array.from(new Uint8Array(signature))
-        .map(byte => byte.toString(16).padStart(2, '0'))
-        .join('');
+      // Helper function to generate HMAC signature for a specific URL
+      const generateSignature = async (targetUrl) => {
+        const urlObj = new URL(targetUrl);
+        const method = 'GET';
+        const path = urlObj.pathname;
+        const timestamp = Date.now();
 
-      console.log(`[${executionId}] Generated HMAC signature for secure authentication`, {
-        method,
-        path,
-        timestamp,
-        payloadLength: payload.length,
-        signatureLength: signatureHex.length
-      });
+        // Create HMAC payload: timestamp:method:path
+        const payload = `${timestamp}:${method.toUpperCase()}:${path}`;
 
-      // Prepare headers with HMAC authentication
-      const headers = {
-        'Content-Type': 'application/json',
-        'User-Agent': 'TLDRSEC-Cloudflare-Worker-HMAC/2.4.0',
-        'X-Cloudflare-Worker': 'tldrsec-cron',
-        'X-Cron-Source': 'cloudflare-worker',
-        'X-Execution-Id': executionId,
-        'X-Worker-Timeout': WORKER_TIMEOUT_MS.toString(),
-        'X-Effective-Timeout': REQUEST_TIMEOUT_MS.toString(),
-        'X-Request-Start-Time': startTime.toString(),
-        'X-Cron-Frequency': '10-minutes',
-        'X-Processing-Mode': 'ai-enhanced',
-        'X-Debug-Mode': 'true',
-        // HMAC Authentication Headers (secure)
-        'x-hmac-signature': signatureHex,
-        'x-hmac-timestamp': timestamp.toString()
+        // Generate HMAC-SHA256 signature
+        const encoder = new TextEncoder();
+        const key = await crypto.subtle.importKey(
+          'raw',
+          encoder.encode(env.CRON_SECRET),
+          { name: 'HMAC', hash: 'SHA-256' },
+          false,
+          ['sign']
+        );
+        const signature = await crypto.subtle.sign('HMAC', key, encoder.encode(payload));
+        const signatureHex = Array.from(new Uint8Array(signature))
+          .map(byte => byte.toString(16).padStart(2, '0'))
+          .join('');
+
+        return { signatureHex, timestamp, method, path, payload };
       };
-      
-      // Add Vercel deployment protection bypass if configured
-      if (env.VERCEL_AUTOMATION_BYPASS_SECRET) {
-        headers['x-vercel-protection-bypass'] = env.VERCEL_AUTOMATION_BYPASS_SECRET;
-        headers['x-vercel-set-bypass-cookie'] = 'true';
-        console.log(`[${executionId}] Configured with deployment protection bypass`);
-      }
-      
-      // Execute with advanced rate limiting and circuit breaker protection
-      let result;
+
+      // Helper function to create headers for a request
+      const createHeaders = (signatureHex, timestamp) => {
+        const headers = {
+          'Content-Type': 'application/json',
+          'User-Agent': 'TLDRSEC-Cloudflare-Worker-HMAC/2.4.0',
+          'X-Cloudflare-Worker': 'tldrsec-cron',
+          'X-Cron-Source': 'cloudflare-worker',
+          'X-Execution-Id': executionId,
+          'X-Worker-Timeout': WORKER_TIMEOUT_MS.toString(),
+          'X-Effective-Timeout': REQUEST_TIMEOUT_MS.toString(),
+          'X-Request-Start-Time': startTime.toString(),
+          'X-Cron-Frequency': '10-minutes',
+          'X-Processing-Mode': 'async',
+          'X-Debug-Mode': 'true',
+          // HMAC Authentication Headers (secure)
+          'x-hmac-signature': signatureHex,
+          'x-hmac-timestamp': timestamp.toString()
+        };
+
+        // Add Vercel deployment protection bypass if configured
+        if (env.VERCEL_AUTOMATION_BYPASS_SECRET) {
+          headers['x-vercel-protection-bypass'] = env.VERCEL_AUTOMATION_BYPASS_SECRET;
+          headers['x-vercel-set-bypass-cookie'] = 'true';
+        }
+
+        return headers;
+      };
+
+      // STEP 1: Call tier-aware endpoint to queue new filings
+      console.log(`[${executionId}] Step 1: Calling tier-aware endpoint to queue filings...`);
+      let tierAwareResult;
       try {
-        result = await executeWithAdvancedRateLimiting({
+        const { signatureHex, timestamp } = await generateSignature(tierAwareUrl);
+        const tierAwareHeaders = createHeaders(signatureHex, timestamp);
+
+        tierAwareResult = await executeWithAdvancedRateLimiting({
           executionId,
-          url,
-          headers,
+          url: tierAwareUrl,
+          headers: tierAwareHeaders,
           workerTimeoutMs: WORKER_TIMEOUT_MS,
           requestTimeoutMs: REQUEST_TIMEOUT_MS,
           maxAttempts: MAX_ATTEMPTS,
@@ -201,83 +205,92 @@ export default {
             breakerThreshold: CIRCUIT_BREAKER_THRESHOLD
           }
         });
-      } catch (primaryError) {
-        const errorType = classifyError(primaryError);
-        
-        // Multi-tier fallback with enhanced rate limiting: async -> optimized -> original
-        if (useAsync && (errorType === 'ENDPOINT_NOT_FOUND' || errorType === 'AUTHENTICATION_ERROR' || errorType === 'RATE_LIMITED')) {
-          console.log(`[${executionId}] Async endpoint failed (${errorType}), attempting fallback to optimized endpoint with rate limiting`);
-          
-          try {
-            result = await executeWithAdvancedRateLimiting({
-              executionId,
-              url: optimizedUrl,
-              headers,
-              workerTimeoutMs: WORKER_TIMEOUT_MS,
-              requestTimeoutMs: REQUEST_TIMEOUT_MS,
-              maxAttempts: 2, // Limited attempts for fallback endpoints
-              initialBackoffMs: INITIAL_BACKOFF_MS,
-              maxBackoffMs: MAX_BACKOFF_MS,
-              jitterPercentage: JITTER_PERCENTAGE,
-              rateLimiter,
-              circuitBreaker,
-              monitor,
-              rateLimitConfig: {
-                windowMs: RATE_LIMIT_WINDOW_MS,
-                maxRequests: MAX_REQUESTS_PER_WINDOW,
-                burstLimit: MAX_BURST_REQUESTS,
-                globalLimit: GLOBAL_SUBREQUEST_LIMIT,
-                burstWindowMs: BURST_PROTECTION_WINDOW_MS,
-                breakerThreshold: CIRCUIT_BREAKER_THRESHOLD
-              }
-            });
-            
-            console.log(`[${executionId}] Fallback to optimized endpoint successful`);
-          } catch (optimizedError) {
-            console.log(`[${executionId}] Optimized endpoint also failed, attempting final fallback to original endpoint`);
-            
-            try {
-              result = await executeWithAdvancedRateLimiting({
-                executionId,
-                url: fallbackUrl,
-                headers,
-                workerTimeoutMs: WORKER_TIMEOUT_MS,
-                requestTimeoutMs: REQUEST_TIMEOUT_MS,
-                maxAttempts: 2, // Limited attempts for final fallback
-                initialBackoffMs: INITIAL_BACKOFF_MS,
-                maxBackoffMs: MAX_BACKOFF_MS,
-                jitterPercentage: JITTER_PERCENTAGE,
-                rateLimiter,
-                circuitBreaker,
-                monitor,
-                rateLimitConfig: {
-                  windowMs: RATE_LIMIT_WINDOW_MS,
-                  maxRequests: MAX_REQUESTS_PER_WINDOW,
-                  burstLimit: MAX_BURST_REQUESTS,
-                  globalLimit: GLOBAL_SUBREQUEST_LIMIT,
-                  burstWindowMs: BURST_PROTECTION_WINDOW_MS,
-                  breakerThreshold: CIRCUIT_BREAKER_THRESHOLD
-                }
-              });
-              
-              console.log(`[${executionId}] Final fallback to original endpoint successful`);
-            } catch (finalError) {
-              console.error(`[${executionId}] All endpoints failed`);
-              throw primaryError; // Throw original error
-            }
-          }
-        } else {
-          throw primaryError;
-        }
+
+        console.log(`[${executionId}] Step 1 completed: tier-aware endpoint success`, {
+          queuedJobs: tierAwareResult?.queue?.filingsQueued || 0,
+          queueDepth: tierAwareResult?.queue?.queueDepth || 0
+        });
+      } catch (tierAwareError) {
+        console.error(`[${executionId}] Step 1 failed: tier-aware endpoint error`, {
+          error: tierAwareError.message
+        });
+        throw tierAwareError; // Don't proceed if queueing fails
       }
-      
+
+      // STEP 2: Call process-filing-queue endpoint to process queued jobs
+      console.log(`[${executionId}] Step 2: Calling process-filing-queue endpoint to process jobs...`);
+      let workerResult;
+      try {
+        const { signatureHex, timestamp } = await generateSignature(workerUrl);
+        const workerHeaders = createHeaders(signatureHex, timestamp);
+
+        workerResult = await executeWithAdvancedRateLimiting({
+          executionId,
+          url: workerUrl,
+          headers: workerHeaders,
+          workerTimeoutMs: WORKER_TIMEOUT_MS,
+          requestTimeoutMs: REQUEST_TIMEOUT_MS,
+          maxAttempts: MAX_ATTEMPTS,
+          initialBackoffMs: INITIAL_BACKOFF_MS,
+          maxBackoffMs: MAX_BACKOFF_MS,
+          jitterPercentage: JITTER_PERCENTAGE,
+          rateLimiter,
+          circuitBreaker,
+          monitor,
+          rateLimitConfig: {
+            windowMs: RATE_LIMIT_WINDOW_MS,
+            maxRequests: MAX_REQUESTS_PER_WINDOW,
+            burstLimit: MAX_BURST_REQUESTS,
+            globalLimit: GLOBAL_SUBREQUEST_LIMIT,
+            burstWindowMs: BURST_PROTECTION_WINDOW_MS,
+            breakerThreshold: CIRCUIT_BREAKER_THRESHOLD
+          }
+        });
+
+        console.log(`[${executionId}] Step 2 completed: process-filing-queue endpoint success`);
+      } catch (workerError) {
+        console.error(`[${executionId}] Step 2 failed: process-filing-queue endpoint error`, {
+          error: workerError.message
+        });
+        // Don't throw - log warning but consider execution partially successful if tier-aware succeeded
+        console.warn(`[${executionId}] Worker endpoint failed but tier-aware succeeded - filings queued for next run`);
+      }
+
+      // Combine results for final response
+      // Combine results from both endpoints
+      const result = {
+        tierAware: tierAwareResult,
+        worker: workerResult,
+        combinedSuccess: tierAwareResult?.success && workerResult?.success,
+        metrics: {
+          tierAware: {
+            duration: tierAwareResult?.duration || 0,
+            filesProcessed: tierAwareResult?.filesProcessed || 0,
+            status: tierAwareResult?.success ? 'success' : 'failed'
+          },
+          worker: {
+            duration: workerResult?.duration || 0,
+            filesProcessed: workerResult?.filesProcessed || 0,
+            status: workerResult?.success ? 'success' : 'failed'
+          }
+        }
+      };
+
       const duration = Date.now() - startTime;
-      console.log(`[${executionId}] Cron job completed successfully in ${duration}ms`);
-      
+
+      console.log(`[${executionId}] Dual endpoint execution completed in ${duration}ms:`, {
+        tierAwareSuccess: result.metrics.tierAware.status,
+        workerSuccess: result.metrics.worker.status,
+        combinedSuccess: result.combinedSuccess,
+        totalDuration: duration,
+        tierAwareDuration: result.metrics.tierAware.duration,
+        workerDuration: result.metrics.worker.duration
+      });
+
       // Call daily count update endpoint after main cron job
       try {
         console.log(`[${executionId}] Calling daily count update endpoint: ${dailyCountUrl}`);
-        
+
         const dailyCountResponse = await fetch(dailyCountUrl, {
           method: 'POST',
           headers: {
@@ -288,20 +301,50 @@ export default {
             'X-Cron-Source': 'cloudflare-worker'
           }
         });
-        
+
         const dailyCountResult = dailyCountResponse.ok ? await dailyCountResponse.json() : await dailyCountResponse.text();
-        
+
         console.log(`[${executionId}] Daily count update completed:`, dailyCountResult);
       } catch (dailyCountError) {
         // Don't fail the main cron job if daily count update fails
         console.warn(`[${executionId}] Daily count update failed (non-critical):`, dailyCountError.message);
       }
-      
-      // Record successful execution and update circuit breaker
-      await monitor.recordExecution(executionId, 'completed', { duration, success: true });
-      await circuitBreaker.recordSuccess();
-      await rateLimiter.recordSuccess(executionId);
-      
+
+      // Update circuit breaker based on combined success
+      // Only mark as success if BOTH endpoints succeed
+      if (result.combinedSuccess) {
+        await monitor.recordExecution(executionId, 'completed', {
+          duration,
+          success: true,
+          tierAwareMetrics: result.metrics.tierAware,
+          workerMetrics: result.metrics.worker
+        });
+        await circuitBreaker.recordSuccess();
+        await rateLimiter.recordSuccess(executionId);
+
+        console.log(`[${executionId}] Both endpoints succeeded - circuit breaker updated`);
+      } else {
+        // Partial failure - at least one endpoint failed
+        const failureReason = !tierAwareResult?.success
+          ? 'tier-aware endpoint failed'
+          : 'worker endpoint failed';
+
+        console.warn(`[${executionId}] Partial failure: ${failureReason}`);
+
+        await monitor.recordExecution(executionId, 'partial_failure', {
+          duration,
+          success: false,
+          failureReason,
+          tierAwareMetrics: result.metrics.tierAware,
+          workerMetrics: result.metrics.worker
+        });
+
+        // Record failure in circuit breaker
+        const error = new Error(`Dual endpoint execution failed: ${failureReason}`);
+        await circuitBreaker.recordFailure(error);
+        await rateLimiter.recordFailure(executionId, 'PARTIAL_FAILURE');
+      }
+
       return result;
       
     } catch (error) {
@@ -462,7 +505,7 @@ async function executeWithAdvancedRateLimiting({
       const attemptDuration = Date.now() - attemptStartTime;
       console.log(`[${executionId}] Enhanced attempt ${attempt} succeeded in ${attemptDuration}ms:`, {
         duration: attemptDuration,
-        url: url.replace(env.PUBLIC_URL, '[PUBLIC_URL]'),
+        url: url,
         circuitStateAfter: 'SUCCESS_RECORDED',
         rateLimitCountersReset: true,
         performanceMetrics: {
