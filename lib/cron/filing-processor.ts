@@ -547,6 +547,34 @@ export class CronFilingProcessor {
     try {
       // Create filing object for processing
       const filingRecord = filing as { id: string; accessionNumber: string; filingType?: string; filingDate?: Date; filingUrl?: string };
+
+      // Validate required fields
+      if (!filingRecord?.id) {
+        processorLogger.error('Filing record missing required id field', {
+          filing,
+          filingRecord,
+          accessionNumber: filingRecord?.accessionNumber
+        });
+        return {
+          success: false,
+          cost: 0,
+          error: 'Filing record missing required id field'
+        };
+      }
+
+      if (!filingRecord.accessionNumber) {
+        processorLogger.error('Filing record missing required accessionNumber field', {
+          filing,
+          filingRecord,
+          id: filingRecord.id
+        });
+        return {
+          success: false,
+          cost: 0,
+          error: 'Filing record missing required accessionNumber field'
+        };
+      }
+
       const filingForProcessing: FilingForProcessing = {
         id: filingRecord.id,
         accessionNumber: filingRecord.accessionNumber,
