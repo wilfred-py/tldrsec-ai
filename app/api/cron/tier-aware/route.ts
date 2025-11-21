@@ -599,35 +599,93 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    // STEP 4: Process Eligible Users with Filing Processing (with timeout protection)
-    cronLogger.debug(`[${executionId}] Checkpoint 8: Starting user processing pipeline`);
-    const processingResults = await Promise.race([
-      CronUserProcessingService.processEligibleUsers(
-        eligibleUsers,
-        allUsers,
-        monitor,
-        // Filing processor function - bridges the service layers
-        async (user, tier, userFilingResults) => {
-          if (userFilingResults) {
-            // Use optimized deduplication processing
-            return await CronFilingProcessor.processUserWithDeduplicatedFilings(
-              user,
-              tier,
-              userFilingResults
-            );
-          } else {
-            // Fallback to original processing method
-            return await CronFilingProcessor.processUserTierFilings(user, tier);
-          }
-        }
-      ),
-      new Promise<never>((_, reject) => {
-        timeoutController.signal.addEventListener('abort', () => {
-          reject(new Error('User processing aborted due to timeout'));
+    // STEP 4: Queue User Filings for Async Processing (FAST - returns immediately)
+    cronLogger.debug(`[${executionId}] Checkpoint 8: Queueing user filings for async processing`);
+
+    const userQueueStartTime = Date.now();
+    const userFilingsToQueue: FilingJobPayload[] = [];
+
+    // Build filing jobs for each eligible user and their tickers
+    for (const eligibleUser of eligibleUsers) {
+      const user = allUsers.find(u => u.id === eligibleUser.userId);
+      if (!user || !user.tickers || user.tickers.length === 0) {
+        continue;
+      }
+
+      // For each user, we need to create jobs for their tracked tickers
+      // The actual filing discovery happens in the background worker
+      for (const ticker of user.tickers) {
+        userFilingsToQueue.push({
+          userId: user.id,
+          userEmail: user.email || '',
+          userTier: eligibleUser.tier,
+          ticker: {
+            symbol: ticker.symbol,
+            companyName: ticker.companyName || ticker.symbol,
+            cik: ticker.cik || '',
+          },
+          filing: {
+            // Placeholder values - actual filing will be discovered by worker
+            filingId: '', // Will be determined by worker
+            formType: 'ANY', // Worker will process all relevant form types
+            filingDate: new Date().toISOString(),
+            filingUrl: '', // Will be discovered by worker
+            accessionNumber: '', // Will be discovered by worker
+          },
+          executionContext: {
+            executionId,
+            cronTriggerTime: new Date().toISOString(),
+            sourceContext: 'cron',
+          },
+          metadata: {
+            processAllFormTypes: true, // Signal to worker to discover and process filings
+            userTier: eligibleUser.tier,
+          },
         });
-      })
-    ]);
-    cronLogger.debug(`[${executionId}] Checkpoint 9: User processing pipeline completed`);
+      }
+    }
+
+    // Queue all user filings in batch (FAST - returns immediately)
+    const queueResults = await AsyncFilingQueue.queueMultipleFilings(userFilingsToQueue);
+    const userQueueDuration = Date.now() - userQueueStartTime;
+    const successCount = queueResults.filter(r => r.success).length;
+
+    cronLogger.info(`[${executionId}] User filings queued for async processing`, {
+      totalJobs: userFilingsToQueue.length,
+      successfullyQueued: successCount,
+      failed: userFilingsToQueue.length - successCount,
+      queueDuration: userQueueDuration,
+      averageQueueTime: userFilingsToQueue.length > 0 ? userQueueDuration / userFilingsToQueue.length : 0,
+      eligibleUsers: eligibleUsers.length,
+      totalTickers: userFilingsToQueue.length,
+    });
+
+    // Build processing results from queue operation
+    const processingResults = {
+      usersProcessed: eligibleUsers.length,
+      filingsProcessed: 0, // Filings will be processed async
+      emailsSent: 0, // Emails will be sent async
+      totalCostUSD: 0, // Cost will be tracked async
+      tierBreakdown: eligibleUsers.reduce((acc, user) => {
+        acc[user.tier] = (acc[user.tier] || 0) + 1;
+        return acc;
+      }, {} as Record<string, number>),
+      errorBreakdown: {
+        budgetExceeded: 0,
+        concurrencyConflicts: 0,
+        costValidationFailed: 0,
+        tierMismatch: 0,
+        unknownErrors: userFilingsToQueue.length - successCount,
+      },
+      cacheMetrics: {
+        hits: 0,
+        misses: 0,
+        hitRatio: 0,
+        apiCallsSaved: 0,
+      },
+    };
+
+    cronLogger.debug(`[${executionId}] Checkpoint 9: User filing queueing completed`);
 
     // STEP 5: Prepare Final Results
     const results: CronResults & {
@@ -709,22 +767,26 @@ export async function GET(request: NextRequest) {
       executionId: monitorResult.executionId,
       duration: monitorResult.duration,
       processingMode: 'async',
+      message: 'Filings queued for async processing',
       marketContext: {
         isMarketHours: marketContext.isMarketHours,
         isMarketDay: marketContext.isMarketDay
       },
       queue: {
         filingsQueued: backlogQueuedCount || 0,
+        userFilingsQueued: successCount || 0,
+        totalQueued: (backlogQueuedCount || 0) + (successCount || 0),
         queueDepth: queueHealth.metrics.queueDepth,
         estimatedCompletionMinutes: queueHealth.metrics.estimatedProcessingTime,
         healthy: queueHealth.healthy,
       },
       results
     }, {
+      status: 202, // 202 Accepted - processing will happen asynchronously
       headers: {
         'X-Processing-Mode': 'async',
         'X-Execution-ID': executionId,
-        'X-Filings-Queued': String(backlogQueuedCount || 0),
+        'X-Filings-Queued': String((backlogQueuedCount || 0) + (successCount || 0)),
       }
     });
 
