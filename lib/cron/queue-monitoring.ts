@@ -68,11 +68,11 @@ export class QueueMonitoringService {
 
       // Average processing time (last 24h)
       prisma.$queryRaw<Array<{ avg_seconds: number | null }>>`
-        SELECT AVG(EXTRACT(EPOCH FROM (completed_at - started_at))) as avg_seconds
+        SELECT AVG(EXTRACT(EPOCH FROM ("completedAt" - "startedAt"))) as avg_seconds
         FROM "JobQueue"
-        WHERE job_type = ${jobType}
+        WHERE "jobType" = ${jobType}
           AND status = 'COMPLETED'
-          AND completed_at >= ${oneDayAgo}
+          AND "completedAt" >= ${oneDayAgo}
       `,
 
       // Oldest pending job
