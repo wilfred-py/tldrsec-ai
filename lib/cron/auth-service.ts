@@ -16,19 +16,34 @@ export class CronAuthService {
    */
   static async validateCronRequest(request: NextRequest): Promise<AuthValidationResult> {
     try {
-      // Check if middleware already validated auth (production requests have special header)
-      const middlewareValidated = request.headers.get('x-security-validated') === 'true';
-      
-      if (middlewareValidated) {
-        authLogger.debug('Auth validation already handled by middleware.ts');
-        return { isValid: true };
-      }
-
-      const clientIP = request.headers.get('x-forwarded-for') || 
-                      request.headers.get('x-real-ip') || 
+      const clientIP = request.headers.get('x-forwarded-for') ||
+                      request.headers.get('x-real-ip') ||
                       'unknown';
 
-      // Step 1: HMAC Signature Validation (replaces header-based auth)
+      // Step 1: Check if middleware already validated auth (production requests have special header)
+      const middlewareValidated = request.headers.get('x-security-validated') === 'true';
+
+      if (middlewareValidated) {
+        authLogger.debug('Auth validation already handled by middleware.ts');
+        return { isValid: true, clientIP };
+      }
+
+      // Step 2: Check for Vercel Cron internal authentication (highest priority)
+      const vercelCronHeader = request.headers.get('x-vercel-cron');
+      if (vercelCronHeader === '1' || vercelCronHeader === 'true') {
+        authLogger.info('Vercel internal cron authentication detected', {
+          clientIP,
+          method: request.method,
+          path: new URL(request.url).pathname
+        });
+        return {
+          isValid: true,
+          clientIP,
+          vercelCron: true
+        };
+      }
+
+      // Step 3: HMAC Signature Validation (for Cloudflare Worker requests)
       authLogger.debug('Validating HMAC signature for cron request', {
         method: request.method,
         path: new URL(request.url).pathname,
@@ -43,10 +58,10 @@ export class CronAuthService {
           timestamp: hmacValidation.timestamp,
           skew: hmacValidation.skew
         });
-        return { 
-          isValid: false, 
+        return {
+          isValid: false,
           error: hmacValidation.error || 'HMAC authentication failed',
-          clientIP 
+          clientIP
         };
       }
 
@@ -56,20 +71,20 @@ export class CronAuthService {
         skew: hmacValidation.skew
       });
 
-      // Step 2: IP allowlist validation (optional additional security)
+      // Step 4: IP allowlist validation (optional additional security)
       const ipValidation = this.validateIPAllowlist(clientIP);
       if (!ipValidation.isValid) {
         return { ...ipValidation, clientIP };
       }
 
-      // Step 3: Rate limiting for direct calls
+      // Step 5: Rate limiting for direct calls
       const rateLimitValidation = await this.validateRateLimit(clientIP);
       if (!rateLimitValidation.isValid) {
         return { ...rateLimitValidation, clientIP };
       }
 
-      return { 
-        isValid: true, 
+      return {
+        isValid: true,
         clientIP,
         hmacValidated: true,
         timestamp: hmacValidation.timestamp,
@@ -77,7 +92,7 @@ export class CronAuthService {
       };
 
     } catch (error) {
-      authLogger.error('Authentication validation failed', { 
+      authLogger.error('Authentication validation failed', {
         error: error instanceof Error ? error.message : 'Unknown error',
         url: request.url,
         method: request.method
