@@ -1301,9 +1301,9 @@ checkStatus()
 
 #### Automated Verification:
 - [ ] Queue status endpoint returns 200: `curl https://tldrsec.app/api/cron/queue-status`
-- [ ] Status check script runs: `npm run queue:status`
-- [ ] Health metrics include all required fields
-- [ ] Linting passes: `npm run lint`
+- [x] Status check script runs: `npm run queue:status`
+- [x] Health metrics include all required fields
+- [x] Linting passes: `npm run lint`
 
 #### Manual Verification:
 - [ ] Queue status endpoint shows real-time metrics

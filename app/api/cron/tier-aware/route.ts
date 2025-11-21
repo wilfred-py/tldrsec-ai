@@ -28,6 +28,7 @@ import { CronSecFilingService } from '../../../../lib/cron/sec-filing-service';
 import { CronFilingProcessor } from '../../../../lib/cron/filing-processor';
 import type { CronResults } from '../../../../lib/cron/types';
 import { AsyncFilingQueue, type FilingJobPayload } from '../../../../lib/cron/async-filing-queue';
+import { QueueMonitoringService } from '../../../../lib/cron/queue-monitoring';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -693,6 +694,16 @@ export async function GET(request: NextRequest) {
       backlogStatus: backlogQueuedCount > 0 ? `${backlogQueuedCount} jobs queued` : 'No backlog'
     });
 
+    // Check queue health before returning response
+    const queueHealth = await QueueMonitoringService.checkQueueHealth();
+
+    if (!queueHealth.healthy) {
+      cronLogger.warn(`[${executionId}] Queue health issues detected`, {
+        issues: queueHealth.issues,
+        metrics: queueHealth.metrics,
+      });
+    }
+
     return NextResponse.json({
       success: true,
       executionId: monitorResult.executionId,
@@ -704,8 +715,9 @@ export async function GET(request: NextRequest) {
       },
       queue: {
         filingsQueued: backlogQueuedCount || 0,
-        estimatedCompletionTime: new Date(Date.now() + 300000), // 5 minutes estimate
-        message: 'Filings queued for background processing'
+        queueDepth: queueHealth.metrics.queueDepth,
+        estimatedCompletionMinutes: queueHealth.metrics.estimatedProcessingTime,
+        healthy: queueHealth.healthy,
       },
       results
     }, {
