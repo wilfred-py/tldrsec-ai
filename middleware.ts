@@ -1182,6 +1182,7 @@ export default async function middleware(request: NextRequest) {
         '/api/cron/microservices',
         '/api/cron/process-jobs',
         '/api/cron/unified',
+        '/api/cron/queue-status', // Public monitoring endpoint
         
         // Marketing pages
         '/',
