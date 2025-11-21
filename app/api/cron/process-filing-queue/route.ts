@@ -13,8 +13,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { BackgroundFilingWorker } from '@/lib/cron/background-filing-worker';
 import { logger } from '@/lib/logging';
+import { CronAuthService } from '@/lib/cron/auth-service';
 
 const routeLogger = logger.child('process-filing-queue');
+
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
 
 /**
  * API endpoint to trigger background filing processing
@@ -26,21 +30,25 @@ export async function GET(request: NextRequest) {
   routeLogger.info('Filing queue processing triggered', { executionId });
 
   try {
-    // Verify CRON_SECRET
-    const authHeader = request.headers.get('authorization');
-    const providedSecret = authHeader?.replace('Bearer ', '');
-
-    if (providedSecret !== process.env.CRON_SECRET) {
+    // Verify authentication using CronAuthService (handles both Vercel cron and Bearer token)
+    const authResult = await CronAuthService.validateCronRequest(request);
+    if (!authResult.isValid) {
       routeLogger.warn('Unauthorized filing queue processing attempt', {
         executionId,
-        hasAuthHeader: !!authHeader,
+        error: authResult.error,
+        clientIP: authResult.clientIP,
       });
 
       return NextResponse.json(
-        { error: 'Unauthorized' },
+        { error: 'Unauthorized', details: authResult.error },
         { status: 401 }
       );
     }
+
+    routeLogger.info('Authentication successful', {
+      executionId,
+      clientIP: authResult.clientIP
+    });
 
     // Create worker instance for this execution
     const worker = new BackgroundFilingWorker({
