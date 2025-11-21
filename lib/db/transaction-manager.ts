@@ -247,23 +247,35 @@ export class FilingTransactionManager {
     operation: (tx: Prisma.TransactionClient, filing: Record<string, unknown>) => Promise<T>,
     options: TransactionOptions = {}
   ): Promise<TransactionResult<T>> {
+    // Validate input parameters
+    if (!filingId) {
+      throw new Error('filingId is required and cannot be null or undefined');
+    }
+    if (!userId) {
+      throw new Error('userId is required and cannot be null or undefined');
+    }
+
     return TransactionManager.executeTransaction(
       async (tx, context) => {
         // Step 1: Determine lookup strategy based on filingId format
         const isSyntheticId = this.isSyntheticFilingId(filingId);
         let filing;
-        
+
         if (isSyntheticId) {
           // Extract accession number from synthetic ID (format: accessionNumber-TICKER)
           const accessionNumber = this.extractAccessionNumber(filingId);
-          
+
+          if (!accessionNumber) {
+            throw new Error(`Failed to extract accession number from synthetic filing ID: ${filingId}`);
+          }
+
           transactionLogger.debug('Looking up filing by accession number (synthetic ID detected)', {
             transactionId: context.id,
             originalFilingId: filingId,
             extractedAccessionNumber: accessionNumber,
             userId
           });
-          
+
           // Look up by accessionNumber instead of id
           filing = await tx.rssFilingCheck.findUnique({
             where: { accessionNumber },
@@ -284,7 +296,7 @@ export class FilingTransactionManager {
             filingId,
             userId
           });
-          
+
           filing = await tx.rssFilingCheck.findUnique({
             where: { id: filingId },
             include: {

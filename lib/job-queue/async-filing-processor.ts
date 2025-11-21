@@ -59,9 +59,20 @@ export class AsyncFilingProcessor {
       timeout?: number;
     } = {}
   ): Promise<{ jobId: string; estimatedCompletionTime: Date }> {
+    // Validate required fields
+    if (!filing.filingId) {
+      throw new Error('filing.filingId is required and cannot be null or undefined');
+    }
+    if (!filing.userId) {
+      throw new Error('filing.userId is required and cannot be null or undefined');
+    }
+    if (!filing.ticker) {
+      throw new Error('filing.ticker is required and cannot be null or undefined');
+    }
+
     const jobId = uuidv4();
     const now = new Date();
-    
+
     // Calculate priority-based scheduling
     const priorityDelayMs = this.calculatePriorityDelay(filing.priority);
     const scheduledFor = options.scheduledFor || new Date(now.getTime() + priorityDelayMs);

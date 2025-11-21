@@ -98,6 +98,7 @@
     "test:async-email-queue:unit": "jest __tests__/lib/email/async-email-queue.test.ts --config=jest.config.mjs --verbose",
     "test:async-email-queue:security": "jest __tests__/lib/email/security-helpers.test.ts --config=jest.config.mjs --verbose",
     "test:async-email-queue:integration": "jest __tests__/lib/job-queue/async-email-integration.test.ts --config=jest.config.mjs --verbose",
+    "monitor:queue": "node scripts/monitor-queue-progression.js",
     "test:async-email-queue:queue-manager": "jest __tests__/lib/job-queue/queue-manager.test.ts --config=jest.config.mjs --verbose",
     "test:async-email-queue:comprehensive": "jest __tests__/integration/async-email-queue-comprehensive.test.ts --config=jest.config.mjs --verbose",
     "test:async-email-queue:all": "jest __tests__/lib/email/async-email-queue.test.ts __tests__/lib/email/security-helpers.test.ts __tests__/lib/job-queue/async-email-integration.test.ts __tests__/lib/job-queue/queue-manager.test.ts __tests__/integration/async-email-queue-comprehensive.test.ts --config=jest.config.mjs --verbose --coverage",
