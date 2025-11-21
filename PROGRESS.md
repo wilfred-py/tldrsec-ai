@@ -191,6 +191,30 @@ Fixed authentication mismatch in `/api/cron/process-filing-queue` endpoint that 
 
 ## Recently Completed (Last 30 Days)
 
+### E2E Pipeline Deep Dive Research ✅ COMPLETE (2025-11-21)
+**Purpose**: Comprehensive documentation of async cron pipeline architecture, authentication flows, and debugging analysis.
+
+**Scope**: Complete e2e flow from Cloudflare Worker → Tier-aware endpoint → Async queue → Background worker → Filing processor → Email delivery.
+
+**Key Findings**:
+- Documented 4 authentication patterns (HMAC, Vercel internal, Bearer, IP allowlist)
+- Mapped complete job lifecycle (PENDING → PROCESSING → COMPLETED/FAILED)
+- Identified 8 tracked metrics and 4 automated health checks
+- Analyzed 5-step filing processing pipeline with transaction wrapper
+- Confirmed circuit breaker fix resolved authentication issues
+
+**Documentation**: [E2E Pipeline Deep Dive](thoughts/shared/research/2025-11-21-e2e-summarization-pipeline-deep-dive.md) (1,800+ lines)
+
+**Research Method**: 8 parallel research agents analyzing distinct components:
+1. Cloudflare Worker configuration and deployment
+2. Tier-aware cron endpoint authentication and queueing
+3. Process-filing-queue endpoint and worker integration
+4. Async filing queue implementation with idempotency
+5. Background filing worker batch processing
+6. CronFilingProcessor 5-step pipeline
+7. Authentication patterns across codebase
+8. Queue monitoring service with health checks
+
 ### Circuit Breaker Authentication Fix ✅ COMPLETE (2025-11-21)
 **Root Cause**: Process-filing-queue endpoint rejected Vercel cron with 401 (expected Bearer token, but Vercel uses internal auth). Circuit breaker opened after 3 failures. 51 jobs accumulated for 10.9 hours with zero processing.
 
