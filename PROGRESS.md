@@ -1,49 +1,46 @@
-# Current Progress: Async Pipeline - Root Cause Fixed, Deploying
+# Current Progress: Async Pipeline - Fix Deployed to Production
 
 ## Current Status
-**🔧 FIX DEPLOYED: Empty Filing ID Bug Resolved**
+**✅ FIX DEPLOYED: Empty Filing ID Bug Resolved**
 
 **Date**: 2025-11-22
-**Branch**: feature/complete-async-pipeline-integration
-**Deployment**: Pending (fix ready, awaiting Vercel deployment)
+**Branch**: main (merged)
+**Deployments**:
+- ✅ commit 1e68ccb: Disable STEP 4 placeholder job creation
+- ✅ commit f0ab415: Fix field name mismatch in backlog (id vs filingId)
 
-### Root Cause Identified & Fixed (2025-11-22 14:00 +07)
+### Root Causes Identified & Fixed (2025-11-22)
+
+#### Bug 1: STEP 4 Placeholder Job Creation (Fixed - commit 1e68ccb)
 **Problem**: All 87 failed jobs had the same error: `"Filing record missing required id field"`
 
-**Investigation revealed**:
+The tier-aware route (STEP 4) was creating jobs with **placeholder/empty filing data**:
 ```
-Job Payload Analysis:
-- filingId: '' (empty string)
-- filingUrl: '' (empty string)
-- accessionNumber: '' (empty string)
-- formType: 'ANY'
+Job Payload: filingId='', filingUrl='', accessionNumber='', formType='ANY'
 ```
 
-The tier-aware route (STEP 4) was creating jobs with **placeholder/empty filing data**, expecting the background worker to discover actual filings. But the worker simply passed these empty values to `CronFilingProcessor.processSingleFiling()` which correctly rejected them.
+**Fix**: Disabled STEP 4 placeholder job creation. Pipeline now relies on backlog queueing (STEP 3).
 
-### Fix Applied
-**File**: `app/api/cron/tier-aware/route.ts` (lines 602-617)
-**Change**: Disabled STEP 4 placeholder job creation. Pipeline now relies entirely on backlog queueing mechanism (STEP 3) which properly queues jobs with real filing data from unprocessed SecFiling records.
+#### Bug 2: Field Name Mismatch in Backlog (Fixed - commit f0ab415)
+**Problem**: Backlog mechanism (STEP 3) was also creating jobs with empty `filingId`
 
-### Queue Cleanup Completed
+**Root Cause**: `getUnprocessedFilings()` returns objects with `id` field, but tier-aware route line 446 was using `filing.filingId` (non-existent).
+
+**Fix**: Changed `filing.filingId` to `filing.id` in backlog job creation.
+
+### Queue Cleanup (2 rounds)
 ```
-📊 Before cleanup:
-- FAILED: 88 jobs
-- PENDING: 60 jobs
-- RETRYING: 4 jobs
+Round 1 (STEP 4 fix):
+- Deleted 87 FAILED + 64 PENDING/RETRYING placeholder jobs
 
-📊 After cleanup:
-- FAILED: 1 job (unrelated "User not found" error)
-- Queue is now clean!
-
-🗑️ Deleted:
-- 87 FAILED jobs with "Filing record missing required id field" error
-- 64 PENDING/RETRYING jobs with empty filingId
+Round 2 (STEP 3 fix):
+- Deleted 53 PENDING/RETRYING backlog jobs with empty filingId
+- Queue now clean (1 unrelated FAILED job)
 ```
 
 ### Previous Issues (Also Fixed)
 1. **"env is not defined" bug** - Fixed in Cloudflare Worker (version 779ebe11)
-2. **Empty filing ID bug** - Fixed in tier-aware route (this fix)
+2. **Empty filing ID bugs** - Both STEP 4 and STEP 3 issues fixed (commits 1e68ccb, f0ab415)
 
 ## Deployment Completed
 
