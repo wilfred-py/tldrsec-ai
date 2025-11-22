@@ -86,6 +86,15 @@ export class BackgroundFilingWorker {
   async processBatch(): Promise<void> {
     const batchStartTime = Date.now();
 
+    // First, recover any stale PROCESSING jobs (stuck > 5 minutes)
+    const recoveredCount = await this.recoverStaleJobs();
+    if (recoveredCount > 0) {
+      workerLogger.info('Recovered stale jobs', {
+        processId: this.processId,
+        recoveredCount,
+      });
+    }
+
     // Get jobs to process
     const jobs = await JobQueueService.getJobsToProcess(
       this.batchSize,
@@ -115,6 +124,80 @@ export class BackgroundFilingWorker {
       duration: batchDuration,
       averageJobTime: batchDuration / jobs.length,
     });
+  }
+
+  /**
+   * Recover stale PROCESSING jobs that got stuck due to timeouts
+   * Jobs stuck in PROCESSING for more than 5 minutes are reset to RETRYING
+   */
+  private async recoverStaleJobs(): Promise<number> {
+    const STALE_THRESHOLD_MS = 5 * 60 * 1000; // 5 minutes
+    const staleThreshold = new Date(Date.now() - STALE_THRESHOLD_MS);
+
+    try {
+      // Find stale PROCESSING jobs
+      const staleJobs = await prisma.jobQueue.findMany({
+        where: {
+          status: 'PROCESSING',
+          startedAt: { lt: staleThreshold },
+          jobType: 'ASYNC_SUMMARIZE_FILING',
+        },
+        select: {
+          id: true,
+          retryCount: true,
+          maxRetries: true,
+        },
+      });
+
+      if (staleJobs.length === 0) {
+        return 0;
+      }
+
+      let recoveredCount = 0;
+      for (const job of staleJobs) {
+        const newRetryCount = job.retryCount + 1;
+        const shouldFail = newRetryCount >= job.maxRetries;
+
+        if (shouldFail) {
+          // Max retries exceeded - mark as FAILED
+          await prisma.jobQueue.update({
+            where: { id: job.id },
+            data: {
+              status: 'FAILED',
+              failedAt: new Date(),
+              lastError: `Stale job recovery: exceeded max retries (${job.maxRetries}) after timeout`,
+            },
+          });
+        } else {
+          // Reset to RETRYING for another attempt
+          await prisma.jobQueue.update({
+            where: { id: job.id },
+            data: {
+              status: 'RETRYING',
+              startedAt: null,
+              retryCount: newRetryCount,
+              lastError: `Stale job recovery: reset after timeout (attempt ${newRetryCount}/${job.maxRetries})`,
+            },
+          });
+          recoveredCount++;
+        }
+      }
+
+      workerLogger.warn('Recovered stale PROCESSING jobs', {
+        processId: this.processId,
+        totalStale: staleJobs.length,
+        recovered: recoveredCount,
+        failedDueToMaxRetries: staleJobs.length - recoveredCount,
+      });
+
+      return recoveredCount;
+    } catch (error) {
+      workerLogger.error('Failed to recover stale jobs', {
+        processId: this.processId,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
+      return 0;
+    }
   }
 
   /**
