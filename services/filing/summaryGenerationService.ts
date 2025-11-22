@@ -139,10 +139,10 @@ export async function generateAISummary(
         temperature: 0.1,
         system: 'You are a financial expert specializing in SEC filing analysis. Provide accurate, comprehensive summaries in valid JSON format with detailed insights valuable to investors.',
         requestType: 'standard',
-        timeout: parseInt(process.env.AI_SUMMARY_TIMEOUT_MS || '240000', 10), // 4 minutes - reasonable for complex filing processing
+        timeout: parseInt(process.env.AI_SUMMARY_TIMEOUT_MS || '100000', 10), // 100s - must fit within 150s job timeout (leaves ~50s for SEC fetch + DB ops)
         requiredCapabilities: ['reasoning'],
         costLimit: 0.50, // $0.50 maximum per summary for cost control
-        remainingExecutionTime: 240000 // Estimate 4 minutes remaining for dynamic timeout calculation
+        remainingExecutionTime: 100000 // 100s - aligned with job timeout constraint
       }
     );
 

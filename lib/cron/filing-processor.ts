@@ -1130,6 +1130,10 @@ export class CronFilingProcessor {
         });
 
         try {
+          // CRITICAL: maxRetries=0 to ensure single AI attempt fits within 150s job timeout
+          // Time budget: 150s total - 30s (SEC fetch) - 5s (overhead) = ~115s for AI
+          // With maxRetries=0, we get 1 attempt × 100s timeout = 100s < 115s budget ✓
+          // Previous maxRetries=2 caused 3 attempts × 100s = 300s > 150s timeout (FAILED)
           summaryResult = await generateAISummaryWithRetry(
             filingContent,
             {
@@ -1141,7 +1145,7 @@ export class CronFilingProcessor {
               name: filingForProcessing.tickerData.companyName,
               ticker: filingForProcessing.tickerData.symbol
             },
-            2 // max retries
+            0 // FIXED: Zero retries - single AI attempt to fit 150s job timeout
           );
 
           processorLogger.info(`✅ OPENROUTER AI CALL COMPLETED`, {

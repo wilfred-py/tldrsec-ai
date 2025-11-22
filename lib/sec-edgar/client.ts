@@ -13,13 +13,18 @@ import { sleep } from '../utils';
 
 /**
  * Default SEC EDGAR API configuration
+ *
+ * IMPORTANT: These values must be kept LOW to fit within the 150s FILING_PROCESSING_TIMEOUT.
+ * - maxRetries: 2 (reduced from 3) - fail fast, don't waste time retrying
+ * - retryDelay: 1000ms initial with 5s max - prevents long waits on transient errors
+ * - Combined with filing-errors.ts retry config, total worst case ~20s retry time
  */
 const DEFAULT_CONFIG: SECEdgarConfig = {
   userAgent: 'TLDRSEC wilfredchen1@gmail.com', // SEC compliant User-Agent format
   maxRequestsPerSecond: 10, // SEC fair access policy limit
   baseUrl: 'https://www.sec.gov',
-  maxRetries: 3,
-  retryDelay: 1000
+  maxRetries: 2,      // Reduced from 3 - fail fast, fits 150s timeout
+  retryDelay: 1000    // 1s initial, capped at 5s max (see getRetryDelay)
 };
 
 /**
@@ -72,11 +77,14 @@ export class SECEdgarClient {
 
   /**
    * Calculate exponential backoff delay for retries
+   *
+   * IMPORTANT: Max delay reduced from 30s to 5s to fit within 150s FILING_PROCESSING_TIMEOUT.
+   * With initial delay of 1s and backoff multiplier of 2: 1s → 2s → 4s → 5s (capped)
    */
   private getRetryDelay(retryCount: number): number {
     return Math.min(
       this.config.retryDelay * Math.pow(2, retryCount),
-      30000 // Max 30 seconds delay
+      5000 // Max 5 seconds delay (reduced from 30s to fit 150s timeout)
     );
   }
 

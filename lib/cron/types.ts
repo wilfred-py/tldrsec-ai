@@ -180,7 +180,9 @@ export const DAILY_COST_LIMITS = {
 // Security constants
 export const MAX_CONCURRENT_RSS_CHECKS = 3;
 export const MAX_CONCURRENT_USER_PROCESSING = 3;
-export const FILING_PROCESSING_TIMEOUT = 180000; // 3 minutes - increased for AI summarization + content fetching
+// IMPORTANT: Must be less than Vercel maxDuration (180s) to allow error handling before function kills
+// 150s timeout + 30s buffer for cleanup = 180s maxDuration
+export const FILING_PROCESSING_TIMEOUT = 150000; // 2.5 minutes - allows 30s buffer before Vercel kills function
 
 // Platform detection types
 export type CronPlatform = 'RAILWAY_CRON' | 'VERCEL_CRON' | 'MANUAL_TRIGGER';

@@ -191,12 +191,17 @@ export interface RetryConfig {
 
 /**
  * Default retry configuration
+ *
+ * IMPORTANT: These values must be kept LOW to fit within the 150s FILING_PROCESSING_TIMEOUT.
+ * - Total worst case: 2 attempts × 5s max delay = ~10s (+ actual API call time)
+ * - This leaves plenty of time for AI summarization (~60-90s) and other steps
+ * - Previous config (3 attempts, 30s max delay) caused jobs to exceed 5-minute stale threshold
  */
 export const DEFAULT_RETRY_CONFIG: RetryConfig = {
-  maxAttempts: 3,
-  initialDelay: 1000, // 1 second
-  maxDelay: 30000, // 30 seconds
-  backoffMultiplier: 2.0,
+  maxAttempts: 2,        // Reduced from 3 - fail fast, don't waste time retrying
+  initialDelay: 1000,    // 1 second (unchanged)
+  maxDelay: 5000,        // Reduced from 30s to 5s - prevents long waits
+  backoffMultiplier: 1.5, // Reduced from 2.0 - gentler backoff
   retryableErrorCodes: [
     FILING_ERROR_CODES.RATE_LIMITED,
     FILING_ERROR_CODES.SERVER_ERROR,

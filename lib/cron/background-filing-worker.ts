@@ -13,9 +13,22 @@ import { CronFilingProcessor } from './filing-processor';
 import { getPrismaClient } from '../db/prisma';
 import type { FilingJobPayload } from './async-filing-queue';
 import type { JobQueue } from '@prisma/client';
+import { FILING_PROCESSING_TIMEOUT } from './types';
 
 const workerLogger = logger.child('background-filing-worker');
 const prisma = getPrismaClient();
+
+/**
+ * Create a timeout promise that rejects after the specified duration
+ * Used to enforce hard timeout at application level (not just database level)
+ */
+function createTimeoutPromise(timeoutMs: number, jobId: string): Promise<never> {
+  return new Promise((_, reject) => {
+    setTimeout(() => {
+      reject(new Error(`Job ${jobId} exceeded ${timeoutMs}ms timeout - force failing to prevent stale job`));
+    }, timeoutMs);
+  });
+}
 
 /**
  * Background Filing Worker Class
@@ -201,7 +214,10 @@ export class BackgroundFilingWorker {
   }
 
   /**
-   * Process a single filing job
+   * Process a single filing job with application-level timeout enforcement
+   *
+   * IMPORTANT: The timeout wrapper ensures jobs fail cleanly within FILING_PROCESSING_TIMEOUT
+   * before Vercel's 180s function timeout kills the process without cleanup.
    */
   private async processJob(job: JobQueue): Promise<void> {
     const jobStartTime = Date.now();
@@ -214,6 +230,7 @@ export class BackgroundFilingWorker {
       formType: payload.filing.formType,
       userId: payload.userId,
       executionId: payload.executionContext.executionId,
+      timeoutMs: FILING_PROCESSING_TIMEOUT,
     });
 
     try {
@@ -222,37 +239,12 @@ export class BackgroundFilingWorker {
         startedAt: new Date(),
       });
 
-      // Get user from database
-      const user = await prisma.user.findUnique({
-        where: { id: payload.userId },
-        include: {
-          tickers: {
-            where: { symbol: payload.ticker.symbol },
-          },
-        },
-      });
-
-      if (!user) {
-        throw new Error(`User not found: ${payload.userId}`);
-      }
-
-      // Process filing using existing processor
-      const result = await CronFilingProcessor.processSingleFiling(
-        {
-          id: payload.filing.filingId,
-          accessionNumber: payload.filing.accessionNumber,
-          filingType: payload.filing.formType,
-          filingDate: new Date(payload.filing.filingDate),
-          filingUrl: payload.filing.filingUrl,
-        },
-        user,
-        payload.userTier,
-        {
-          symbol: payload.ticker.symbol,
-          cik: payload.ticker.cik,
-        },
-        payload.ticker
-      );
+      // Wrap the actual processing with a timeout to ensure we fail cleanly
+      // before Vercel kills the function at 180s
+      const result = await Promise.race([
+        this.executeFilingProcessing(job, payload),
+        createTimeoutPromise(FILING_PROCESSING_TIMEOUT, job.id),
+      ]);
 
       if (result.success) {
         // Update job status to COMPLETED
@@ -278,22 +270,65 @@ export class BackgroundFilingWorker {
       }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      const isTimeout = errorMessage.includes('exceeded') && errorMessage.includes('timeout');
 
       workerLogger.error('Filing job failed', {
         processId: this.processId,
         jobId: job.id,
         ticker: payload.ticker.symbol,
         error: errorMessage,
+        isTimeout,
         retryCount: job.retryCount,
         maxRetries: job.maxRetries,
+        duration: Date.now() - jobStartTime,
       });
 
       // Update job status to FAILED (JobQueueService handles retries)
       await JobQueueService.updateJobStatus(job.id, 'FAILED', {
         failedAt: new Date(),
-        error: errorMessage,
+        error: isTimeout ? `Application timeout after ${FILING_PROCESSING_TIMEOUT}ms` : errorMessage,
       });
     }
+  }
+
+  /**
+   * Execute the actual filing processing logic (separated for timeout wrapping)
+   */
+  private async executeFilingProcessing(
+    job: JobQueue,
+    payload: FilingJobPayload
+  ): Promise<{ success: boolean; cost?: number; error?: string; processingContext?: unknown }> {
+    // Get user from database
+    const user = await prisma.user.findUnique({
+      where: { id: payload.userId },
+      include: {
+        tickers: {
+          where: { symbol: payload.ticker.symbol },
+        },
+      },
+    });
+
+    if (!user) {
+      return { success: false, error: `User not found: ${payload.userId}` };
+    }
+
+    // Process filing using existing processor
+    return await CronFilingProcessor.processSingleFiling(
+      {
+        id: payload.filing.filingId,
+        accessionNumber: payload.filing.accessionNumber,
+        filingType: payload.filing.formType,
+        filingDate: new Date(payload.filing.filingDate),
+        filingUrl: payload.filing.filingUrl,
+      },
+      user,
+      payload.userTier,
+      {
+        symbol: payload.ticker.symbol,
+        cik: payload.ticker.cik,
+      },
+      payload.ticker
+    );
   }
 }
 
