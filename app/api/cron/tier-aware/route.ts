@@ -443,7 +443,7 @@ export async function GET(request: NextRequest) {
                 cik: filing.ticker.cik,
               },
               filing: {
-                filingId: filing.filingId,
+                filingId: filing.id, // Fixed: use filing.id from getUnprocessedFilings(), not filingId
                 formType: filing.filingType,
                 filingDate: filing.filingDate,
                 filingUrl: filing.filingUrl,
