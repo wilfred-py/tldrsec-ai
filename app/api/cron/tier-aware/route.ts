@@ -599,65 +599,21 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    // STEP 4: Queue User Filings for Async Processing (FAST - returns immediately)
-    cronLogger.debug(`[${executionId}] Checkpoint 8: Queueing user filings for async processing`);
+    // STEP 4: Skip placeholder job creation (DISABLED)
+    // NOTE: Previously this created jobs with empty filing IDs which caused all jobs to fail
+    // with "Filing record missing required id field" error.
+    // Filing processing now relies entirely on the backlog queueing mechanism (STEP 3)
+    // which properly queues jobs with real filing data from unprocessed SecFiling records.
+    cronLogger.debug(`[${executionId}] Checkpoint 8: Skipping placeholder job creation (using backlog queueing only)`);
 
-    const userQueueStartTime = Date.now();
-    const userFilingsToQueue: FilingJobPayload[] = [];
+    // Count eligible users for reporting purposes only
+    const successCount = 0; // No jobs queued in this step anymore
+    const userQueueDuration = 0;
 
-    // Build filing jobs for each eligible user and their tickers
-    for (const eligibleUser of eligibleUsers) {
-      const user = allUsers.find(u => u.id === eligibleUser.userId);
-      if (!user || !user.tickers || user.tickers.length === 0) {
-        continue;
-      }
-
-      // For each user, we need to create jobs for their tracked tickers
-      // The actual filing discovery happens in the background worker
-      for (const ticker of user.tickers) {
-        userFilingsToQueue.push({
-          userId: user.id,
-          userEmail: user.email || '',
-          userTier: eligibleUser.tier,
-          ticker: {
-            symbol: ticker.symbol,
-            companyName: ticker.companyName || ticker.symbol,
-            cik: ticker.cik || '',
-          },
-          filing: {
-            // Placeholder values - actual filing will be discovered by worker
-            filingId: '', // Will be determined by worker
-            formType: 'ANY', // Worker will process all relevant form types
-            filingDate: new Date().toISOString(),
-            filingUrl: '', // Will be discovered by worker
-            accessionNumber: '', // Will be discovered by worker
-          },
-          executionContext: {
-            executionId,
-            cronTriggerTime: new Date().toISOString(),
-            sourceContext: 'cron',
-          },
-          metadata: {
-            processAllFormTypes: true, // Signal to worker to discover and process filings
-            userTier: eligibleUser.tier,
-          },
-        });
-      }
-    }
-
-    // Queue all user filings in batch (FAST - returns immediately)
-    const queueResults = await AsyncFilingQueue.queueMultipleFilings(userFilingsToQueue);
-    const userQueueDuration = Date.now() - userQueueStartTime;
-    const successCount = queueResults.filter(r => r.success).length;
-
-    cronLogger.info(`[${executionId}] User filings queued for async processing`, {
-      totalJobs: userFilingsToQueue.length,
-      successfullyQueued: successCount,
-      failed: userFilingsToQueue.length - successCount,
-      queueDuration: userQueueDuration,
-      averageQueueTime: userFilingsToQueue.length > 0 ? userQueueDuration / userFilingsToQueue.length : 0,
+    cronLogger.info(`[${executionId}] User filing queueing skipped - relying on backlog mechanism`, {
       eligibleUsers: eligibleUsers.length,
-      totalTickers: userFilingsToQueue.length,
+      reason: 'Placeholder jobs with empty filingId caused failures; backlog queueing provides real filing data',
+      backlogQueuedThisRun: backlogQueuedCount,
     });
 
     // Build processing results from queue operation
@@ -675,7 +631,7 @@ export async function GET(request: NextRequest) {
         concurrencyConflicts: 0,
         costValidationFailed: 0,
         tierMismatch: 0,
-        unknownErrors: userFilingsToQueue.length - successCount,
+        unknownErrors: 0, // No placeholder jobs queued anymore
       },
       cacheMetrics: {
         hits: 0,

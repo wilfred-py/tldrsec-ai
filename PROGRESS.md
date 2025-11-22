@@ -1,14 +1,49 @@
-# Current Progress: Async Pipeline Deployed and Operational
+# Current Progress: Async Pipeline - Root Cause Fixed, Deploying
 
 ## Current Status
-**✅ DEPLOYED TO PRODUCTION - Pipeline Running**
+**🔧 FIX DEPLOYED: Empty Filing ID Bug Resolved**
 
-**Date**: 2025-11-21
+**Date**: 2025-11-22
 **Branch**: feature/complete-async-pipeline-integration
-**Deployment**: Complete and verified operational
+**Deployment**: Pending (fix ready, awaiting Vercel deployment)
 
-### Deployment Summary
-Successfully deployed all 4 phases of async pipeline integration. Cloudflare Worker deployed with dual endpoint pattern, calling both tier-aware (queueing) and process-filing-queue (processing) endpoints every 10 minutes. Verified operational with 52 jobs queued from first cron execution at 22:00 CST.
+### Root Cause Identified & Fixed (2025-11-22 14:00 +07)
+**Problem**: All 87 failed jobs had the same error: `"Filing record missing required id field"`
+
+**Investigation revealed**:
+```
+Job Payload Analysis:
+- filingId: '' (empty string)
+- filingUrl: '' (empty string)
+- accessionNumber: '' (empty string)
+- formType: 'ANY'
+```
+
+The tier-aware route (STEP 4) was creating jobs with **placeholder/empty filing data**, expecting the background worker to discover actual filings. But the worker simply passed these empty values to `CronFilingProcessor.processSingleFiling()` which correctly rejected them.
+
+### Fix Applied
+**File**: `app/api/cron/tier-aware/route.ts` (lines 602-617)
+**Change**: Disabled STEP 4 placeholder job creation. Pipeline now relies entirely on backlog queueing mechanism (STEP 3) which properly queues jobs with real filing data from unprocessed SecFiling records.
+
+### Queue Cleanup Completed
+```
+📊 Before cleanup:
+- FAILED: 88 jobs
+- PENDING: 60 jobs
+- RETRYING: 4 jobs
+
+📊 After cleanup:
+- FAILED: 1 job (unrelated "User not found" error)
+- Queue is now clean!
+
+🗑️ Deleted:
+- 87 FAILED jobs with "Filing record missing required id field" error
+- 64 PENDING/RETRYING jobs with empty filingId
+```
+
+### Previous Issues (Also Fixed)
+1. **"env is not defined" bug** - Fixed in Cloudflare Worker (version 779ebe11)
+2. **Empty filing ID bug** - Fixed in tier-aware route (this fix)
 
 ## Deployment Completed
 
