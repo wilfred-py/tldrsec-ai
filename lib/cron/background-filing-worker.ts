@@ -5,6 +5,11 @@
  * Follows proven background worker patterns for reliable job processing.
  *
  * Pattern: Continuously poll queue and process jobs in batches
+ *
+ * TIMEOUT ARCHITECTURE:
+ * - Uses AbortController to properly cancel in-flight requests on timeout
+ * - Prevents resource leaks from orphaned promises after Promise.race timeout
+ * - Signal propagated to SEC and AI clients for proper request cancellation
  */
 
 import { logger } from '../logging';
@@ -19,15 +24,42 @@ const workerLogger = logger.child('background-filing-worker');
 const prisma = getPrismaClient();
 
 /**
- * Create a timeout promise that rejects after the specified duration
- * Used to enforce hard timeout at application level (not just database level)
+ * Create an abortable timeout for job processing
+ *
+ * Returns an AbortController and a timeout promise that:
+ * 1. Rejects after the specified timeout
+ * 2. Calls abort() on the controller to cancel in-flight requests
+ * 3. Cleans up the timer if abort is called externally
+ *
+ * This prevents resource leaks from orphaned promises when using Promise.race
  */
-function createTimeoutPromise(timeoutMs: number, jobId: string): Promise<never> {
-  return new Promise((_, reject) => {
-    setTimeout(() => {
-      reject(new Error(`Job ${jobId} exceeded ${timeoutMs}ms timeout - force failing to prevent stale job`));
+function createAbortableTimeout(timeoutMs: number, jobId: string): {
+  controller: AbortController;
+  timeoutPromise: Promise<never>;
+  cleanup: () => void;
+} {
+  const controller = new AbortController();
+  let timeoutId: ReturnType<typeof setTimeout> | null = null;
+
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    timeoutId = setTimeout(() => {
+      controller.abort();
+      reject(new Error(`Job ${jobId} exceeded ${timeoutMs}ms timeout - aborted`));
     }, timeoutMs);
   });
+
+  // Cleanup function to clear timeout if processing completes early
+  const cleanup = () => {
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+      timeoutId = null;
+    }
+  };
+
+  // Also cleanup if abort is called externally
+  controller.signal.addEventListener('abort', cleanup, { once: true });
+
+  return { controller, timeoutPromise, cleanup };
 }
 
 /**
@@ -218,6 +250,9 @@ export class BackgroundFilingWorker {
    *
    * IMPORTANT: The timeout wrapper ensures jobs fail cleanly within FILING_PROCESSING_TIMEOUT
    * before Vercel's 180s function timeout kills the process without cleanup.
+   *
+   * Uses AbortController to properly cancel in-flight requests when timeout fires,
+   * preventing resource leaks from orphaned promises.
    */
   private async processJob(job: JobQueue): Promise<void> {
     const jobStartTime = Date.now();
@@ -233,6 +268,12 @@ export class BackgroundFilingWorker {
       timeoutMs: FILING_PROCESSING_TIMEOUT,
     });
 
+    // Create abortable timeout - allows us to cancel in-flight requests on timeout
+    const { controller, timeoutPromise, cleanup } = createAbortableTimeout(
+      FILING_PROCESSING_TIMEOUT,
+      job.id
+    );
+
     try {
       // Update job status to PROCESSING
       await JobQueueService.updateJobStatus(job.id, 'PROCESSING', {
@@ -241,10 +282,14 @@ export class BackgroundFilingWorker {
 
       // Wrap the actual processing with a timeout to ensure we fail cleanly
       // before Vercel kills the function at 180s
+      // Pass abort signal to processing so in-flight requests can be cancelled
       const result = await Promise.race([
-        this.executeFilingProcessing(job, payload),
-        createTimeoutPromise(FILING_PROCESSING_TIMEOUT, job.id),
+        this.executeFilingProcessing(job, payload, controller.signal),
+        timeoutPromise,
       ]);
+
+      // Cleanup timeout timer on success
+      cleanup();
 
       if (result.success) {
         // Update job status to COMPLETED
@@ -269,8 +314,13 @@ export class BackgroundFilingWorker {
         throw new Error(result.error || 'Filing processing failed');
       }
     } catch (error) {
+      // Ensure we abort any in-flight requests on error
+      controller.abort();
+      cleanup();
+
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       const isTimeout = errorMessage.includes('exceeded') && errorMessage.includes('timeout');
+      const isAborted = errorMessage.includes('aborted') || controller.signal.aborted;
 
       workerLogger.error('Filing job failed', {
         processId: this.processId,
@@ -278,6 +328,7 @@ export class BackgroundFilingWorker {
         ticker: payload.ticker.symbol,
         error: errorMessage,
         isTimeout,
+        isAborted,
         retryCount: job.retryCount,
         maxRetries: job.maxRetries,
         duration: Date.now() - jobStartTime,
@@ -286,18 +337,30 @@ export class BackgroundFilingWorker {
       // Update job status to FAILED (JobQueueService handles retries)
       await JobQueueService.updateJobStatus(job.id, 'FAILED', {
         failedAt: new Date(),
-        error: isTimeout ? `Application timeout after ${FILING_PROCESSING_TIMEOUT}ms` : errorMessage,
+        error: isTimeout || isAborted
+          ? `Application timeout after ${FILING_PROCESSING_TIMEOUT}ms (requests aborted)`
+          : errorMessage,
       });
     }
   }
 
   /**
    * Execute the actual filing processing logic (separated for timeout wrapping)
+   *
+   * @param job - The job queue entry
+   * @param payload - The filing job payload with user, ticker, and filing info
+   * @param signal - Optional AbortSignal for cancelling in-flight requests on timeout
    */
   private async executeFilingProcessing(
     job: JobQueue,
-    payload: FilingJobPayload
+    payload: FilingJobPayload,
+    signal?: AbortSignal
   ): Promise<{ success: boolean; cost?: number; error?: string; processingContext?: unknown }> {
+    // Check if already aborted before starting
+    if (signal?.aborted) {
+      return { success: false, error: 'Job was aborted before processing started' };
+    }
+
     // Get user from database
     const user = await prisma.user.findUnique({
       where: { id: payload.userId },
@@ -312,7 +375,13 @@ export class BackgroundFilingWorker {
       return { success: false, error: `User not found: ${payload.userId}` };
     }
 
+    // Check if aborted after DB query
+    if (signal?.aborted) {
+      return { success: false, error: 'Job was aborted after user lookup' };
+    }
+
     // Process filing using existing processor
+    // Pass signal through for proper request cancellation
     return await CronFilingProcessor.processSingleFiling(
       {
         id: payload.filing.filingId,
@@ -327,7 +396,8 @@ export class BackgroundFilingWorker {
         symbol: payload.ticker.symbol,
         cik: payload.ticker.cik,
       },
-      payload.ticker
+      payload.ticker,
+      signal // Pass abort signal to processor
     );
   }
 }

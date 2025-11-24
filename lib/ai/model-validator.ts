@@ -140,10 +140,10 @@ export class ModelValidatorService {
         pricingFound = true;
 
         // Extract potential pricing from model name patterns
-        if (modelId.includes('grok-4-fast-reasoning')) {
+        if (modelId.includes('grok-4.1-fast') || modelId.includes('grok-4-fast')) {
           suggestedInputCost = 0.30; // $0.30/M tokens
           suggestedOutputCost = 0.50; // $0.50/M tokens
-        } else if (modelId.includes('grok-code-fast-1')) {
+        } else if (modelId.includes('grok-3') || modelId.includes('grok-code-fast-1')) {
           suggestedInputCost = 0.15; // $0.15/M tokens
           suggestedOutputCost = 0.25; // $0.25/M tokens
         }
@@ -211,20 +211,21 @@ export class ModelValidatorService {
    * Get pricing from environment variables for a model
    */
   private static getEnvironmentPricing(modelId: string): { inputCost: number; outputCost: number } | null {
-    switch (modelId) {
-      case 'x-ai/grok-4-fast-reasoning':
-        return {
-          inputCost: parseFloat(process.env.XAI_GROK4_INPUT_COST || '0.30'),
-          outputCost: parseFloat(process.env.XAI_GROK4_OUTPUT_COST || '0.50')
-        };
-      case 'x-ai/grok-code-fast-1':
-        return {
-          inputCost: parseFloat(process.env.XAI_GROK2_INPUT_COST || '0.15'),
-          outputCost: parseFloat(process.env.XAI_GROK2_OUTPUT_COST || '0.25')
-        };
-      default:
-        return null;
+    // xAI Grok 4 series models
+    if (modelId.includes('grok-4.1-fast') || modelId.includes('grok-4-fast') || modelId.includes('grok-4')) {
+      return {
+        inputCost: parseFloat(process.env.XAI_GROK4_INPUT_COST || '0.30'),
+        outputCost: parseFloat(process.env.XAI_GROK4_OUTPUT_COST || '0.50')
+      };
     }
+    // xAI Grok 3 series models
+    if (modelId.includes('grok-3') || modelId.includes('grok-code-fast-1')) {
+      return {
+        inputCost: parseFloat(process.env.XAI_GROK2_INPUT_COST || '0.15'),
+        outputCost: parseFloat(process.env.XAI_GROK2_OUTPUT_COST || '0.25')
+      };
+    }
+    return null;
   }
 
   /**

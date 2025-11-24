@@ -67,7 +67,7 @@ export const apiConfig = {
  */
 export const modelConfig = {
   // Use DEFAULT_AI_MODEL as the primary environment variable
-  defaultModel: getEnv('DEFAULT_AI_MODEL', 'x-ai/grok-4-fast-reasoning'),
+  defaultModel: getEnv('DEFAULT_AI_MODEL', 'x-ai/grok-4.1-fast'),
   fallbackModel: getEnv('OPENROUTER_FALLBACK_MODEL', getEnv('DEFAULT_AI_MODEL', 'x-ai/grok-2')),
   maxInputTokens: parseInt(getEnv('OPENROUTER_MAX_INPUT_TOKENS', '1280000'), 10), // xAI 2M context
   maxOutputTokens: parseInt(getEnv('OPENROUTER_MAX_OUTPUT_TOKENS', '8000'), 10),
@@ -94,7 +94,7 @@ export const costConfig = {
  * This is the centralized function all code should use to get the model
  */
 export function getDefaultModel(): string {
-  return getEnv('DEFAULT_AI_MODEL', 'x-ai/grok-4-fast-reasoning');
+  return getEnv('DEFAULT_AI_MODEL', 'x-ai/grok-4.1-fast');
 }
 
 /**
@@ -157,19 +157,26 @@ export const OpenRouterConfig = {
   
   // Available models (xAI via OpenRouter)
   availableModels: [
-    'x-ai/grok-4-fast-reasoning',
-    'x-ai/grok-2',
+    'x-ai/grok-4.1-fast',
+    'x-ai/grok-4-fast',
+    'x-ai/grok-3',
     'meta-llama/llama-3.1-405b-instruct:free',
     'google/gemini-pro-1.5:free',
   ],
-  
+
   // Model capabilities and constraints (xAI focused)
   modelInfo: {
-    'x-ai/grok-4-fast-reasoning': {
+    'x-ai/grok-4.1-fast': {
       contextWindow: 2000000, // 2M tokens
       costPerInputToken: 0.0000003,  // $0.30 per million
       costPerOutputToken: 0.0000005, // $0.50 per million
-      strengths: 'Advanced reasoning with 2M context window, optimized for financial analysis',
+      strengths: 'Best agentic tool calling model with 2M context window, optimized for financial analysis',
+    },
+    'x-ai/grok-4-fast': {
+      contextWindow: 2000000, // 2M tokens
+      costPerInputToken: 0.00000020,  // $0.20 per million
+      costPerOutputToken: 0.00000150, // $1.50 per million
+      strengths: 'SOTA cost-efficiency with 2M context window',
     },
     'x-ai/grok-2': {
       contextWindow: 128000,
