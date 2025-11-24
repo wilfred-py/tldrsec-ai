@@ -14,23 +14,23 @@ import { sleep } from '../utils';
 /**
  * Default SEC EDGAR API configuration
  *
- * IMPORTANT: These values must be kept LOW to fit within the 150s FILING_PROCESSING_TIMEOUT.
+ * IMPORTANT: These values must fit within the 165s FILING_PROCESSING_TIMEOUT.
  *
- * Timeout Budget Analysis (150s total):
- * - SEC fetch: 60s max
- * - AI summarization: 60s
- * - Buffer: 30s
+ * Timeout Budget Analysis (165s total, with 15s buffer before Vercel 180s limit):
+ * - SEC fetch: up to 120s worst case
+ * - AI summarization: up to 60s
+ * - Total: 180s worst case (fits 165s budget in typical cases)
  *
  * Filing retrieval worst case (attemptFilingRetrieval):
  * - Index page fetch: 15s
  * - Extension probing (up to 4): 4 × 15s = 60s
  * - Fallback probing (up to 3): 3 × 15s = 45s
- * - Total worst case: ~120s (TOO HIGH for 60s budget)
+ * - Total worst case: ~120s
  *
- * Mitigation: With 15s timeout per request, typically only 1-2 requests needed:
+ * Expected case (typical filings):
  * - Index fetch: 15s
  * - Document fetch: 15s
- * - Expected case: ~30s (fits 60s budget with buffer) ✓
+ * - Total expected: ~30s (much better than worst case) ✓
  *
  * Note: maxRetries=0 means no retry at this level. Job queue handles retries.
  */
@@ -38,9 +38,9 @@ const DEFAULT_CONFIG: SECEdgarConfig = {
   userAgent: 'TLDRSEC wilfredchen1@gmail.com', // SEC compliant User-Agent format
   maxRequestsPerSecond: 10, // SEC fair access policy limit
   baseUrl: 'https://www.sec.gov',
-  maxRetries: 0,      // CRITICAL: No retries - single 30s attempt per request
+  maxRetries: 0,      // CRITICAL: No retries - single 15s attempt per request
                       // Filing retrieval makes 2+ requests per filing (index + doc)
-                      // With maxRetries=0: 2 requests × 30s = 60s SEC budget ✓
+                      // With maxRetries=0: typical 2 requests × 15s = 30s ✓
   retryDelay: 1000    // 1s initial (unused with maxRetries=0)
 };
 

@@ -181,8 +181,14 @@ export const DAILY_COST_LIMITS = {
 export const MAX_CONCURRENT_RSS_CHECKS = 3;
 export const MAX_CONCURRENT_USER_PROCESSING = 3;
 // IMPORTANT: Must be less than Vercel maxDuration (180s) to allow error handling before function kills
-// 150s timeout + 30s buffer for cleanup = 180s maxDuration
-export const FILING_PROCESSING_TIMEOUT = 150000; // 2.5 minutes - allows 30s buffer before Vercel kills function
+// 165s timeout + 15s buffer for cleanup = 180s maxDuration
+// Analysis: With 15s SEC timeout per request, worst case is:
+// - Index fetch: 15s
+// - Extension probing (4 attempts): 60s
+// - Fallback probing (3 attempts): 45s
+// - AI summarization: 60s
+// Total worst case: ~180s, but typically only 2-3 requests needed (~45-60s)
+export const FILING_PROCESSING_TIMEOUT = 165000; // 2.75 minutes - realistic budget for SEC fetch + AI
 
 // Platform detection types
 export type CronPlatform = 'RAILWAY_CRON' | 'VERCEL_CRON' | 'MANUAL_TRIGGER';
