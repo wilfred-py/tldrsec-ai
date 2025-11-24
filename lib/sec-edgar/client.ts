@@ -15,16 +15,24 @@ import { sleep } from '../utils';
  * Default SEC EDGAR API configuration
  *
  * IMPORTANT: These values must be kept LOW to fit within the 150s FILING_PROCESSING_TIMEOUT.
- * - maxRetries: 2 (reduced from 3) - fail fast, don't waste time retrying
- * - retryDelay: 1000ms initial with 5s max - prevents long waits on transient errors
- * - Combined with filing-errors.ts retry config, total worst case ~20s retry time
+ *
+ * Timeout Budget Analysis (150s total):
+ * - SEC fetch: 60s max (2 attempts × 30s timeout)
+ * - AI summarization: 60s
+ * - Buffer: 30s
+ *
+ * With maxRetries: 1 (2 total attempts):
+ * - Attempt 1: 30s timeout
+ * - Backoff: 1s delay
+ * - Attempt 2: 30s timeout
+ * - Total worst case: ~61s (fits 60s budget with small overage)
  */
 const DEFAULT_CONFIG: SECEdgarConfig = {
   userAgent: 'TLDRSEC wilfredchen1@gmail.com', // SEC compliant User-Agent format
   maxRequestsPerSecond: 10, // SEC fair access policy limit
   baseUrl: 'https://www.sec.gov',
-  maxRetries: 2,      // Reduced from 3 - fail fast, fits 150s timeout
-  retryDelay: 1000    // 1s initial, capped at 5s max (see getRetryDelay)
+  maxRetries: 1,      // Reduced from 2: 2 attempts × 30s = 60s max (fits 60s budget)
+  retryDelay: 1000    // 1s initial, capped at 3s max (see getRetryDelay)
 };
 
 /**
@@ -78,13 +86,13 @@ export class SECEdgarClient {
   /**
    * Calculate exponential backoff delay for retries
    *
-   * IMPORTANT: Max delay reduced from 30s to 5s to fit within 150s FILING_PROCESSING_TIMEOUT.
-   * With initial delay of 1s and backoff multiplier of 2: 1s → 2s → 4s → 5s (capped)
+   * IMPORTANT: Max delay reduced from 5s to 3s to fit within 60s SEC fetch budget.
+   * With maxRetries: 1 (2 total attempts), delays are minimal: 1s → 2s → 3s (capped)
    */
   private getRetryDelay(retryCount: number): number {
     return Math.min(
       this.config.retryDelay * Math.pow(2, retryCount),
-      5000 // Max 5 seconds delay (reduced from 30s to fit 150s timeout)
+      3000 // Max 3 seconds delay (reduced from 5s to fit 60s budget)
     );
   }
 

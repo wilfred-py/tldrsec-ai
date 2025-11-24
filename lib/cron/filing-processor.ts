@@ -536,15 +536,37 @@ export class CronFilingProcessor {
 
   /**
    * Process a single filing with transaction boundaries
+   *
+   * @param filing - The SEC filing record to process
+   * @param user - The user requesting the filing
+   * @param tier - User's subscription tier
+   * @param tickerValidation - Validated ticker information (symbol and CIK)
+   * @param originalTicker - Original ticker data including company name
+   * @param signal - Optional AbortSignal for cancelling in-flight requests on timeout
    */
   public static async processSingleFiling(
     filing: unknown,
     user: DatabaseUser | User,
     tier: string,
     tickerValidation: { symbol: string; cik: string },
-    originalTicker: { companyName?: string }
+    originalTicker: { companyName?: string },
+    signal?: AbortSignal
   ): Promise<{ success: boolean; cost: number; error?: string; processingContext?: ProcessingContext }> {
     try {
+      // Check if already aborted before starting
+      if (signal?.aborted) {
+        processorLogger.warn('Filing processing aborted before starting', {
+          userId: user.id,
+          ticker: tickerValidation.symbol,
+          reason: 'Job timeout exceeded'
+        });
+        return {
+          success: false,
+          cost: 0,
+          error: 'Processing aborted: Job timeout exceeded before filing processing started'
+        };
+      }
+
       // Create filing object for processing
       const filingRecord = filing as { id: string; accessionNumber: string; filingType?: string; filingDate?: Date; filingUrl?: string };
 
