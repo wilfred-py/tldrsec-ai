@@ -17,17 +17,22 @@ import { sleep } from '../utils';
  * IMPORTANT: These values must be kept LOW to fit within the 150s FILING_PROCESSING_TIMEOUT.
  *
  * Timeout Budget Analysis (150s total):
- * - SEC fetch: 60s max (2 requests × 30s timeout, no retries)
+ * - SEC fetch: 60s max
  * - AI summarization: 60s
  * - Buffer: 30s
  *
- * With maxRetries: 0 (single attempt per request):
- * - Index page fetch: 30s timeout
- * - Document fetch: 30s timeout
- * - Total worst case: ~60s (fits 60s budget) ✓
+ * Filing retrieval worst case (attemptFilingRetrieval):
+ * - Index page fetch: 15s
+ * - Extension probing (up to 4): 4 × 15s = 60s
+ * - Fallback probing (up to 3): 3 × 15s = 45s
+ * - Total worst case: ~120s (TOO HIGH for 60s budget)
  *
- * Note: Filing retrieval makes 2+ requests per filing (index + document).
- * Retries are disabled at this level; transient errors handled by job retry.
+ * Mitigation: With 15s timeout per request, typically only 1-2 requests needed:
+ * - Index fetch: 15s
+ * - Document fetch: 15s
+ * - Expected case: ~30s (fits 60s budget with buffer) ✓
+ *
+ * Note: maxRetries=0 means no retry at this level. Job queue handles retries.
  */
 const DEFAULT_CONFIG: SECEdgarConfig = {
   userAgent: 'TLDRSEC wilfredchen1@gmail.com', // SEC compliant User-Agent format
@@ -55,7 +60,7 @@ export class SECEdgarClient {
     // Initialize axios client with default configuration
     this.client = axios.create({
       baseURL: this.config.baseUrl,
-      timeout: 30000, // 30 seconds timeout
+      timeout: 15000, // 15 seconds timeout - reduced to fit more requests within 60s budget
       headers: {
         'User-Agent': this.config.userAgent, // Required by SEC
         'Accept': 'application/json, text/html, application/xml, */*',
