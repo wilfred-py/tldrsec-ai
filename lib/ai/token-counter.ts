@@ -60,7 +60,7 @@ export function estimateMessagesTokenCount(messages: MessageForTokenCount[]): nu
  * 
  * @param inputTokens Number of input tokens
  * @param outputTokens Number of output tokens
- * @param model AI model name (defaults to xAI grok-4-fast-reasoning)
+ * @param model AI model name (defaults to xAI grok-4.1-fast)
  * @returns Cost in USD
  */
 export function calculateCost(
@@ -70,23 +70,28 @@ export function calculateCost(
 ): { inputCost: number; outputCost: number; totalCost: number } {
   // xAI price structure through OpenRouter using environment variables
   const prices: Record<string, { input: number; output: number }> = {
-    // xAI models (primary) - environment configured models
-    'x-ai/grok-4-fast-reasoning': {
+    // xAI Grok 4.1 series (primary) - best agentic tool calling
+    'x-ai/grok-4.1-fast': {
       input: parseFloat(process.env.XAI_GROK4_INPUT_COST || '0.30') / 1000000,
       output: parseFloat(process.env.XAI_GROK4_OUTPUT_COST || '0.50') / 1000000
     },
+    // xAI Grok 4 series - SOTA cost-efficiency
+    'x-ai/grok-4-fast': {
+      input: 0.0000002,  // $0.20 per million tokens
+      output: 0.0000015  // $1.50 per million tokens
+    },
     'x-ai/grok-4': {
-      input: 0.0000002,  // $0.20 per million tokens (from test expectation)
-      output: 0.0000005  // $0.50 per million tokens (from test expectation)
+      input: 0.0000002,  // $0.20 per million tokens
+      output: 0.0000015  // $1.50 per million tokens
+    },
+    // xAI Grok 3 series (fallback)
+    'x-ai/grok-3': {
+      input: parseFloat(process.env.XAI_GROK2_INPUT_COST || '0.15') / 1000000,
+      output: parseFloat(process.env.XAI_GROK2_OUTPUT_COST || '0.25') / 1000000
     },
     'x-ai/grok-code-fast-1': {
       input: parseFloat(process.env.XAI_GROK2_INPUT_COST || '0.15') / 1000000,
       output: parseFloat(process.env.XAI_GROK2_OUTPUT_COST || '0.25') / 1000000
-    },
-    // xAI models (additional)
-    'x-ai/grok-4-fast:free': {
-      input: 0,          // Free tier (limited usage)
-      output: 0
     },
     // Legacy Claude models (deprecated but kept for backward compatibility)
     'claude-sonnet-4-20250514': {
