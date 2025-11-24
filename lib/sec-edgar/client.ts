@@ -17,22 +17,26 @@ import { sleep } from '../utils';
  * IMPORTANT: These values must be kept LOW to fit within the 150s FILING_PROCESSING_TIMEOUT.
  *
  * Timeout Budget Analysis (150s total):
- * - SEC fetch: 60s max (2 attempts × 30s timeout)
+ * - SEC fetch: 60s max (2 requests × 30s timeout, no retries)
  * - AI summarization: 60s
  * - Buffer: 30s
  *
- * With maxRetries: 1 (2 total attempts):
- * - Attempt 1: 30s timeout
- * - Backoff: 1s delay
- * - Attempt 2: 30s timeout
- * - Total worst case: ~61s (fits 60s budget with small overage)
+ * With maxRetries: 0 (single attempt per request):
+ * - Index page fetch: 30s timeout
+ * - Document fetch: 30s timeout
+ * - Total worst case: ~60s (fits 60s budget) ✓
+ *
+ * Note: Filing retrieval makes 2+ requests per filing (index + document).
+ * Retries are disabled at this level; transient errors handled by job retry.
  */
 const DEFAULT_CONFIG: SECEdgarConfig = {
   userAgent: 'TLDRSEC wilfredchen1@gmail.com', // SEC compliant User-Agent format
   maxRequestsPerSecond: 10, // SEC fair access policy limit
   baseUrl: 'https://www.sec.gov',
-  maxRetries: 1,      // Reduced from 2: 2 attempts × 30s = 60s max (fits 60s budget)
-  retryDelay: 1000    // 1s initial, capped at 3s max (see getRetryDelay)
+  maxRetries: 0,      // CRITICAL: No retries - single 30s attempt per request
+                      // Filing retrieval makes 2+ requests per filing (index + doc)
+                      // With maxRetries=0: 2 requests × 30s = 60s SEC budget ✓
+  retryDelay: 1000    // 1s initial (unused with maxRetries=0)
 };
 
 /**

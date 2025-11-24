@@ -193,13 +193,20 @@ export interface RetryConfig {
  * Default retry configuration
  *
  * IMPORTANT: These values must be kept LOW to fit within the 150s FILING_PROCESSING_TIMEOUT.
- * - Total worst case: 2 attempts × 5s max delay = ~10s (+ actual API call time)
- * - This leaves plenty of time for AI summarization (~60-90s) and other steps
- * - Previous config (3 attempts, 30s max delay) caused jobs to exceed 5-minute stale threshold
+ *
+ * Timeout Budget Analysis (150s total job timeout):
+ * - SEC fetch: Each attempt makes 2+ requests (index + document)
+ * - Each SEC request has 30s timeout × 1 retry = ~60s worst case per request
+ * - With maxAttempts=1: 2 requests × ~60s = ~120s (TOO HIGH!)
+ *
+ * Solution: maxAttempts=1 + reduce SEC client retries separately
+ * - Filing retrieval: 1 attempt only (no retries at this level)
+ * - SEC client: 0 retries (30s timeout per request)
+ * - Expected: ~60s SEC + 60s AI = 120s < 150s budget ✓
  */
 export const DEFAULT_RETRY_CONFIG: RetryConfig = {
-  maxAttempts: 2,        // Reduced from 3 - fail fast, don't waste time retrying
-  initialDelay: 1000,    // 1 second (unchanged)
+  maxAttempts: 1,        // CRITICAL: Single attempt - each attempt makes multiple SEC requests
+  initialDelay: 1000,    // 1 second (unused with maxAttempts=1)
   maxDelay: 5000,        // Reduced from 30s to 5s - prevents long waits
   backoffMultiplier: 1.5, // Reduced from 2.0 - gentler backoff
   retryableErrorCodes: [
