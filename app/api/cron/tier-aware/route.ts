@@ -151,6 +151,9 @@ export async function GET(request: NextRequest) {
     // Set USE_3_PHASE_PIPELINE=true to enable simplified discovery-based processing
     const use3PhasePipeline = process.env.USE_3_PHASE_PIPELINE === 'true';
 
+    // DEBUG: Log environment variable value to diagnose why 3-phase pipeline isn't activating
+    cronLogger.info(`[${executionId}] Feature flag check: USE_3_PHASE_PIPELINE="${process.env.USE_3_PHASE_PIPELINE}" (type: ${typeof process.env.USE_3_PHASE_PIPELINE}, evaluated: ${use3PhasePipeline})`);
+
     if (use3PhasePipeline) {
       cronLogger.info(`[${executionId}] Using 3-phase async pipeline mode`);
 
