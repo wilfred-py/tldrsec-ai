@@ -111,7 +111,16 @@ export class JobQueueService {
       
       // Check for malicious patterns in payload (skip for email and filing jobs)
       // Skip security scanning for filing jobs as they contain SEC URLs and filing data that may trigger false positives
-      if (jobType !== 'ASYNC_EMAIL_DIGEST' && jobType !== 'ASYNC_SUMMARIZE_FILING') {
+      // Also skip 3-phase pipeline jobs as they contain execution IDs and market context that may trigger false positives
+      const skipSecurityScan = [
+        'ASYNC_EMAIL_DIGEST',
+        'ASYNC_SUMMARIZE_FILING',
+        'ASYNC_DISCOVER_FILINGS',
+        'ASYNC_FETCH_FILING',
+        'ASYNC_SUMMARIZE_CACHED'
+      ].includes(jobType);
+
+      if (!skipSecurityScan) {
         const payloadString = JSON.stringify(sanitizedPayload);
         const detection = detectMaliciousPatterns(payloadString);
         if (detection.detected) {
