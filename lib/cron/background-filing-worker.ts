@@ -253,18 +253,25 @@ export class BackgroundFilingWorker {
    *
    * Uses AbortController to properly cancel in-flight requests when timeout fires,
    * preventing resource leaks from orphaned promises.
+   *
+   * Routes job to appropriate handler based on jobType:
+   * - ASYNC_DISCOVER_FILINGS -> discovery-handler
+   * - ASYNC_FETCH_FILING -> fetch-handler
+   * - ASYNC_SUMMARIZE_CACHED -> summarize-cached-handler
+   * - ASYNC_SUMMARIZE_FILING -> legacy filing processor
    */
   private async processJob(job: JobQueue): Promise<void> {
     const jobStartTime = Date.now();
     const payload = job.payload as unknown as FilingJobPayload;
 
-    workerLogger.info('Processing filing job', {
+    workerLogger.info('Processing job', {
       processId: this.processId,
       jobId: job.id,
-      ticker: payload.ticker.symbol,
-      formType: payload.filing.formType,
+      jobType: job.jobType,
+      ticker: payload.ticker?.symbol,
+      formType: payload.filing?.formType,
       userId: payload.userId,
-      executionId: payload.executionContext.executionId,
+      executionId: payload.executionContext?.executionId,
       timeoutMs: FILING_PROCESSING_TIMEOUT,
     });
 
@@ -280,11 +287,11 @@ export class BackgroundFilingWorker {
         startedAt: new Date(),
       });
 
+      // Route to appropriate handler based on jobType
       // Wrap the actual processing with a timeout to ensure we fail cleanly
       // before Vercel kills the function at 180s
-      // Pass abort signal to processing so in-flight requests can be cancelled
       const result = await Promise.race([
-        this.executeFilingProcessing(job, payload, controller.signal),
+        this.routeJobToHandler(job, payload, controller.signal),
         timeoutPromise,
       ]);
 
@@ -297,21 +304,24 @@ export class BackgroundFilingWorker {
           completedAt: new Date(),
           result: {
             cost: result.cost,
-            processingContext: result.processingContext,
+            ...result, // Include all handler-specific result data
           },
         });
 
         const jobDuration = Date.now() - jobStartTime;
-        workerLogger.info('Filing job completed successfully', {
+        workerLogger.info('Job completed successfully', {
           processId: this.processId,
           jobId: job.id,
-          ticker: payload.ticker.symbol,
+          jobType: job.jobType,
+          ticker: payload.ticker?.symbol,
           cost: result.cost,
           duration: jobDuration,
-          isCached: result.processingContext?.isCached,
+          ...(result.filingsDiscovered !== undefined && { filingsDiscovered: result.filingsDiscovered }),
+          ...(result.cached !== undefined && { cached: result.cached }),
+          ...(result.summaryId && { summaryId: result.summaryId }),
         });
       } else {
-        throw new Error(result.error || 'Filing processing failed');
+        throw new Error(result.error || 'Job processing failed');
       }
     } catch (error) {
       // Ensure we abort any in-flight requests on error
@@ -345,7 +355,60 @@ export class BackgroundFilingWorker {
   }
 
   /**
+   * Route job to appropriate handler based on jobType
+   *
+   * @param job - The job queue entry
+   * @param payload - The job payload
+   * @param signal - Optional AbortSignal for cancelling in-flight requests on timeout
+   */
+  private async routeJobToHandler(
+    job: JobQueue,
+    payload: any,
+    signal?: AbortSignal
+  ): Promise<any> {
+    // Check if already aborted before routing
+    if (signal?.aborted) {
+      return { success: false, error: 'Job was aborted before routing started' };
+    }
+
+    try {
+      switch (job.jobType) {
+        case 'ASYNC_DISCOVER_FILINGS': {
+          const { handleDiscovery } = await import('./handlers/discovery-handler');
+          return await handleDiscovery(payload);
+        }
+
+        case 'ASYNC_FETCH_FILING': {
+          const { handleFetch } = await import('./handlers/fetch-handler');
+          return await handleFetch(payload);
+        }
+
+        case 'ASYNC_SUMMARIZE_CACHED': {
+          const { handleSummarizeCached } = await import('./handlers/summarize-cached-handler');
+          return await handleSummarizeCached(payload);
+        }
+
+        case 'ASYNC_SUMMARIZE_FILING':
+        default:
+          // Legacy filing processing for backward compatibility
+          return await this.executeFilingProcessing(job, payload as FilingJobPayload, signal);
+      }
+    } catch (error) {
+      workerLogger.error('Handler routing failed', {
+        jobId: job.id,
+        jobType: job.jobType,
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown routing error'
+      };
+    }
+  }
+
+  /**
    * Execute the actual filing processing logic (separated for timeout wrapping)
+   * LEGACY: Used for ASYNC_SUMMARIZE_FILING and backward compatibility
    *
    * @param job - The job queue entry
    * @param payload - The filing job payload with user, ticker, and filing info
