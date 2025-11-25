@@ -140,11 +140,12 @@ export class BackgroundFilingWorker {
       });
     }
 
-    // Get jobs to process - prioritize 3-phase async jobs
-    // Query for all async job types to enable the full 3-phase pipeline
+    // Get jobs to process - ONLY 3-phase async jobs
+    // IMPORTANT: Exclude ASYNC_SUMMARIZE_FILING (legacy sync jobs that timeout)
+    // Legacy jobs are still handled by tier-aware endpoint's sync processing path
     const jobs = await JobQueueService.getJobsToProcessMultipleTypes(
       this.batchSize,
-      ['ASYNC_DISCOVER_FILINGS', 'ASYNC_FETCH_FILING', 'ASYNC_SUMMARIZE_CACHED', 'ASYNC_SUMMARIZE_FILING'] as JobType[]
+      ['ASYNC_DISCOVER_FILINGS', 'ASYNC_FETCH_FILING', 'ASYNC_SUMMARIZE_CACHED'] as JobType[]
     );
 
     if (jobs.length === 0) {
@@ -181,13 +182,14 @@ export class BackgroundFilingWorker {
     const staleThreshold = new Date(Date.now() - STALE_THRESHOLD_MS);
 
     try {
-      // Find stale PROCESSING jobs - include all async job types (3-phase + legacy)
+      // Find stale PROCESSING jobs - ONLY 3-phase async jobs
+      // IMPORTANT: Exclude ASYNC_SUMMARIZE_FILING (legacy sync jobs handled elsewhere)
       const staleJobs = await prisma.jobQueue.findMany({
         where: {
           status: 'PROCESSING',
           startedAt: { lt: staleThreshold },
           jobType: {
-            in: ['ASYNC_DISCOVER_FILINGS', 'ASYNC_FETCH_FILING', 'ASYNC_SUMMARIZE_CACHED', 'ASYNC_SUMMARIZE_FILING'],
+            in: ['ASYNC_DISCOVER_FILINGS', 'ASYNC_FETCH_FILING', 'ASYNC_SUMMARIZE_CACHED'],
           },
         },
         select: {
