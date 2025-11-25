@@ -1,10 +1,10 @@
 # Current Progress: 3-Phase Async Pipeline Implementation
 
 ## Current Status
-**Date**: 2025-11-25 (12:10 AEDT)
+**Date**: 2025-11-25 (15:45 AEDT)
 **Branch**: feature/async-3-phase-pipeline
-**Last Commit**: 740f7a0 (Phase 1-3 handlers implemented)
-**Deployment**: Development (not yet deployed)
+**Last Commit**: 1372bac (3-phase pipeline fully implemented)
+**Deployment**: Development (ready for testing)
 
 ## Approach: 3-Phase Async Pipeline with 202 Pattern
 
@@ -45,19 +45,25 @@ Phase 3: ASYNC_SUMMARIZE_CACHED (17-90s)
    - ✅ [lib/cron/handlers/fetch-handler.ts](lib/cron/handlers/fetch-handler.ts) - Phase 2
    - ✅ [lib/cron/handlers/summarize-cached-handler.ts](lib/cron/handlers/summarize-cached-handler.ts) - Phase 3
 
+4. **Worker Routing** (commit 706461f): ✅ Updated [lib/cron/background-filing-worker.ts](lib/cron/background-filing-worker.ts)
+   - Added `routeJobToHandler` method for dynamic handler routing
+   - Supports all 3 new job types with dynamic imports
+   - Backward compatible with legacy `ASYNC_SUMMARIZE_FILING`
+
+5. **Endpoint 202 Pattern** (commit 1372bac): ✅ Modified [app/api/cron/tier-aware/route.ts](app/api/cron/tier-aware/route.ts)
+   - Added `USE_3_PHASE_PIPELINE` environment variable feature flag
+   - Queues single ASYNC_DISCOVER_FILINGS job when enabled
+   - Returns 202 Accepted immediately (<5s response time)
+   - Falls back to legacy processing if disabled or on error
+   - Enables gradual rollout and easy rollback
+
 ## Next Steps 🚧
 
-4. **Worker Routing**: Update [lib/cron/background-filing-worker.ts](lib/cron/background-filing-worker.ts)
-   - Add handler routing for 3 new job types
-   - Import and call appropriate handlers based on jobType
-
-5. **Endpoint 202 Pattern**: Modify [app/api/cron/tier-aware/route.ts](app/api/cron/tier-aware/route.ts)
-   - Queue single ASYNC_DISCOVER_FILINGS job
-   - Return 202 Accepted immediately
-   - Remove direct user processing loop
-
-6. **Testing**: Create end-to-end test
+6. **Testing**: Create end-to-end test for 3-phase pipeline
 7. **Deployment**: Deploy to production and verify
+   - Set `USE_3_PHASE_PIPELINE=true` to enable
+   - Monitor job queue processing
+   - Verify Phase 1 → Phase 2 → Phase 3 flow
 
 ---
 
