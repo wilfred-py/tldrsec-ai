@@ -140,10 +140,11 @@ export class BackgroundFilingWorker {
       });
     }
 
-    // Get jobs to process
-    const jobs = await JobQueueService.getJobsToProcess(
+    // Get jobs to process - prioritize 3-phase async jobs
+    // Query for all async job types to enable the full 3-phase pipeline
+    const jobs = await JobQueueService.getJobsToProcessMultipleTypes(
       this.batchSize,
-      'ASYNC_SUMMARIZE_FILING' as JobType
+      ['ASYNC_DISCOVER_FILINGS', 'ASYNC_FETCH_FILING', 'ASYNC_SUMMARIZE_CACHED', 'ASYNC_SUMMARIZE_FILING'] as JobType[]
     );
 
     if (jobs.length === 0) {
@@ -180,12 +181,14 @@ export class BackgroundFilingWorker {
     const staleThreshold = new Date(Date.now() - STALE_THRESHOLD_MS);
 
     try {
-      // Find stale PROCESSING jobs
+      // Find stale PROCESSING jobs - include all async job types (3-phase + legacy)
       const staleJobs = await prisma.jobQueue.findMany({
         where: {
           status: 'PROCESSING',
           startedAt: { lt: staleThreshold },
-          jobType: 'ASYNC_SUMMARIZE_FILING',
+          jobType: {
+            in: ['ASYNC_DISCOVER_FILINGS', 'ASYNC_FETCH_FILING', 'ASYNC_SUMMARIZE_CACHED', 'ASYNC_SUMMARIZE_FILING'],
+          },
         },
         select: {
           id: true,

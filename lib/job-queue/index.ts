@@ -261,12 +261,72 @@ export class JobQueueService {
   }
 
   /**
+   * Get jobs to process for multiple job types (3-phase pipeline)
+   *
+   * SECURITY: Validates parameters and limits result size
+   */
+  static async getJobsToProcessMultipleTypes(limit: number = 10, jobTypes: JobType[]) {
+    try {
+      // Validate limit parameter
+      const validatedLimit = z.number().int().min(1).max(100).parse(limit);
+
+      // Validate job types array
+      if (!Array.isArray(jobTypes) || jobTypes.length === 0) {
+        throw new Error('jobTypes must be a non-empty array');
+      }
+
+      const validJobTypes: JobType[] = [
+        'CHECK_FILINGS', 'PROCESS_FILING', 'ARCHIVE_FILINGS',
+        'CHECK_10K_FILINGS', 'CHECK_10Q_FILINGS', 'CHECK_8K_FILINGS', 'CHECK_FORM4_FILINGS',
+        'SUMMARIZE_FILING', 'SEND_FILING_NOTIFICATION', 'COMPILE_DAILY_DIGEST',
+        'ASYNC_SUMMARIZE_FILING', 'ASYNC_EMAIL_DIGEST', 'ASYNC_FILING_CLEANUP', 'ASYNC_WEBHOOK_NOTIFICATION',
+        'ASYNC_DISCOVER_FILINGS', 'ASYNC_FETCH_FILING', 'ASYNC_SUMMARIZE_CACHED'
+      ];
+
+      // Validate each job type
+      for (const jobType of jobTypes) {
+        if (!validJobTypes.includes(jobType)) {
+          throw new Error(`Invalid job type: ${jobType}`);
+        }
+      }
+
+      const now = new Date();
+
+      return await prisma.jobQueue.findMany({
+        where: {
+          status: {
+            in: ['PENDING', 'RETRYING']
+          },
+          scheduledFor: {
+            lte: now
+          },
+          jobType: {
+            in: jobTypes
+          },
+          retryCount: {
+            lt: prisma.jobQueue.fields.maxRetries
+          }
+        },
+        orderBy: [
+          { priority: 'desc' },
+          { scheduledFor: 'asc' },
+          { createdAt: 'asc' }
+        ],
+        take: validatedLimit
+      });
+    } catch (error) {
+      console.error('Error getting jobs to process:', error);
+      throw error;
+    }
+  }
+
+  /**
    * Get the next job to process
    */
   static async getNextJob(jobTypes?: JobType[]) {
     try {
       const now = new Date();
-      
+
       return await prisma.jobQueue.findFirst({
         where: {
           status: {
@@ -275,8 +335,8 @@ export class JobQueueService {
           scheduledFor: {
             lte: now
           },
-          ...(jobTypes && jobTypes.length > 0 
-            ? { jobType: { in: jobTypes } } 
+          ...(jobTypes && jobTypes.length > 0
+            ? { jobType: { in: jobTypes } }
             : {}),
           retryCount: {
             lt: prisma.jobQueue.fields.maxRetries
