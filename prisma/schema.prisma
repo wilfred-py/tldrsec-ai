@@ -223,6 +223,25 @@ model SecCompanyCache {
   updatedAt DateTime @updatedAt
 }
 
+model FilingContentCache {
+  id              String   @id @default(cuid())
+  accessionNumber String   @unique
+  cik             String
+  formType        String
+  content         String   @db.Text
+  contentLength   Int
+  contentHash     String
+  fetchedAt       DateTime @default(now())
+  expiresAt       DateTime
+  fetchDuration   Int
+  fetchError      String?
+  status          String   @default("CACHED")
+
+  @@index([accessionNumber])
+  @@index([expiresAt])
+  @@index([status])
+}
+
 model SecFetchAttempt {
   id           String    @id @default(uuid())
   filingId     String
