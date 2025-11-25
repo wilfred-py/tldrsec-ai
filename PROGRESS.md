@@ -1,10 +1,10 @@
 # Current Progress: 3-Phase Pipeline Production Validation
 
 ## Current Status
-**Date**: 2025-11-26 (06:55 AEDT)
-**Branch**: main (PR 245 merged + security fix)
-**Deployment**: Production - commit 1483d4b (deployed 5 min ago)
-**Status**: ✅ **RESOLVED** - 3-phase pipeline ACTIVE in production
+**Date**: 2025-11-26 (07:47 AEDT)
+**Branch**: main (PR 246 merged)
+**Deployment**: Production - commit 1483d4b
+**Status**: ⚠️ **PHASE 1 VALIDATED, PHASE 2/3 BLOCKED** - Background worker not running
 
 ## RESOLUTION SUMMARY (06:55 AEDT)
 
@@ -172,52 +172,123 @@ Phase 3: ASYNC_SUMMARIZE_CACHED (17-90s)
 3. ✅ **3-Phase Pipeline Activated** - Manual test confirms activation
 4. ✅ **Phase 1 Job Created** - Discovery job queued successfully
 
-### MONITORING (07:05 AEDT):
+### MONITORING (07:47 AEDT):
 
-## 🎉 AUTOMATIC 3-PHASE ACTIVATION CONFIRMED (07:00 AEDT)
+## 🎉 PHASE 1 VALIDATION: THREE CONSECUTIVE AUTOMATIC ACTIVATIONS CONFIRMED
 
-**Cloudflare Worker Cron Execution**: ✅ **SUCCESS**
-- Timestamp: 2025-11-25T20:00:29.162Z
-- Job Created: ASYNC_DISCOVER_FILINGS (Phase 1)
-- Job ID: 49740c07-562b-4354-b5fd-ca7ba574cd08
-- Status: PENDING
+**Cloudflare Worker Cron Executions**:
+
+1. **07:00 AEDT** - Job ID: `49740c07-562b-4354-b5fd-ca7ba574cd08` ✅
+2. **07:10 AEDT** - Job ID: `9f34a594-b2ba-4e25-9289-b5150a438f3a` ✅
+3. **07:20 AEDT** - Job ID: `05dc37b4-b44b-4dd0-bae5-8ac2870b0ff6` ✅
 
 **Verification**:
 ```bash
-Watch-pipeline: [7:00:49 am] Phase1:1 → Phase1:2 ✅
-Database query: 1 ASYNC_DISCOVER_FILINGS job created at 20:00 UTC ✅
+Watch-pipeline monitoring:
+[7:00:49 am] Phase1:2 ✅ (first automatic)
+[7:10:49 am] Phase1:3 ✅ (second automatic)
+[7:20:49 am] Phase1:4 ✅ (third automatic)
 ```
 
-**This confirms end-to-end automatic pipeline activation:**
+**Phase 1 Confirmed Working:**
 1. ✅ Cloudflare Worker triggered every 10 minutes
 2. ✅ Cloudflare Worker calls Vercel `/api/cron/tier-aware`
 3. ✅ Environment variable `USE_3_PHASE_PIPELINE="true"` working
 4. ✅ Feature flag logic activates 3-phase pipeline
-5. ✅ Security scanning fix prevents blocking
+5. ✅ Security scanning fix (PR 246) prevents blocking
 6. ✅ Phase 1 discovery jobs created without manual intervention
 
-### Current Pipeline State:
+## ⚠️ PHASE 2/3 VALIDATION: BLOCKED - Background Worker Not Running
 
-**Phase 1 Jobs**: 2 total
-- Manual test: 705983f2-0da9-4669-ade9-335adf6cd576 (06:53 AEDT) - PENDING
-- Automatic cron: 49740c07-562b-4354-b5fd-ca7ba574cd08 (07:00 AEDT) - PENDING
+**Root Cause**: Missing Vercel cron configuration for `/api/cron/process-filing-queue`
 
-**Phase 2 Jobs**: 0 (awaiting background worker)
-**Phase 3 Jobs**: 0 (awaiting Phase 2)
-**FilingContentCache**: Empty (will populate after Phase 2)
+**Current Pipeline State**:
+- **Phase 1 Jobs**: 4 PENDING (oldest: 54 minutes)
+  - Manual test: `705983f2-0da9-4669-ade9-335adf6cd576` (06:53 AEDT)
+  - Auto cron 1: `49740c07-562b-4354-b5fd-ca7ba574cd08` (07:00 AEDT)
+  - Auto cron 2: `9f34a594-b2ba-4e25-9289-b5150a438f3a` (07:10 AEDT)
+  - Auto cron 3: `05dc37b4-b44b-4dd0-bae5-8ac2870b0ff6` (07:20 AEDT)
+- **Phase 2 Jobs**: 0 (background worker not running)
+- **Phase 3 Jobs**: 0 (awaiting Phase 2)
+- **FilingContentCache**: Empty
+- **Background Worker Status**: 0 jobs PROCESSING, 0 jobs COMPLETED in last hour
 
-### Next Validation Steps:
+**Issue Analysis**:
 
-1. **Background Worker Processing** ⏳ IN PROGRESS
-   - Wait for background worker to pick up Phase 1 jobs
-   - Expected: Phase 2 jobs (ASYNC_FETCH_FILING) created within 2-3 minutes
-   - Monitor with: `node validate-3phase-pipeline.mjs`
+The background worker endpoint `/api/cron/process-filing-queue` is not being triggered. This endpoint is responsible for:
+1. Processing Phase 1 discovery jobs
+2. Creating Phase 2 fetch jobs
+3. Processing Phase 2 and creating Phase 3 jobs
 
-2. **Next Cloudflare Cron** (07:10 AEDT - 5 minutes)
-   - Verify continued 3-phase activation
-   - Expected: Additional Phase 1 discovery jobs
+**Current `vercel.json` Configuration** ([vercel.json:3-8](vercel.json#L3-L8)):
+```json
+"crons": [
+  {
+    "path": "/api/cron/tier-aware",
+    "schedule": "0 9 * * 1,2,3,4,5"
+  }
+]
+```
 
-3. **Success Criteria** (To verify in next hour)
+**Missing Configuration**:
+```json
+{
+  "path": "/api/cron/process-filing-queue",
+  "schedule": "*/5 * * * *"  // Every 5 minutes
+}
+```
+
+**Total Queue Depth**: 23 PENDING jobs
+
+### Investigation: Background Worker Timeout Issue ⚠️
+
+**ACTUAL Root Cause** (2025-11-25 20:47 UTC): Background worker endpoint is timing out with **HTTP 524 errors**, not authentication issues.
+
+**Cloudflare Worker Logs Evidence** (20:40 UTC execution):
+```
+Step 1: tier-aware endpoint ✅ SUCCESS (6.6s)
+  - Created discovery job: 39eaa657-0083-4664-aba2-d20adfde7add
+  - Processing mode: 3-phase-async
+
+Step 2: process-filing-queue endpoint ❌ TIMEOUT (524)
+  - Attempt 1: Failed after 125.0s (HTTP 524)
+  - Attempt 2: Failed after 125.1s (HTTP 524)
+  - Attempt 3: Failed after 125.0s (HTTP 524)
+  - Circuit breaker: OPENED after 3 failures
+  - Total execution time: 387s (6.5 minutes)
+```
+
+**Key Findings**:
+1. Authentication IS working (Cloudflare Worker sends correct HMAC headers)
+2. Endpoint starts processing but **times out after ~125 seconds**
+3. [vercel.json:19](vercel.json#L19) sets `maxDuration: 180` but Vercel kills function at ~125s
+4. Background worker is likely exceeding execution time processing Phase 1 → Phase 2 transition
+
+**Configuration** ([app/api/cron/process-filing-queue/route.ts:54-59](app/api/cron/process-filing-queue/route.ts#L54-L59)):
+```typescript
+const worker = new BackgroundFilingWorker({
+  batchSize: 1,           // Process 1 filing per invocation
+  processingInterval: 0,  // No wait between batches
+});
+```
+
+**Likely Issue**: BackgroundFilingWorker.processBatch() is processing a Phase 1 job, which then triggers Phase 2 (SEC filing fetch), which can take 120s+ based on SEC multi-request pattern (8 requests × 15s = 120s).
+
+### Next Steps:
+
+1. **Debug HMAC Authentication Failure** ⏳ IN PROGRESS
+   - Monitor Cloudflare Worker logs for Step 2 execution details
+   - Check if Step 2 is even being called or failing immediately
+   - Review HMAC signature generation vs validation logic
+   - Verify CRON_SECRET consistency between Cloudflare and Vercel
+
+2. **Verify Phase 2/3 Execution** (After auth fixed)
+   - Monitor Phase 1 jobs transitioning to PROCESSING/COMPLETED
+   - Wait for Phase 2 jobs (ASYNC_FETCH_FILING) to appear
+   - Verify FilingContentCache population
+   - Confirm Phase 3 jobs (ASYNC_SUMMARIZE_CACHED) creation
+
+3. **Success Criteria**
    - Background worker processes Phase 1 → Phase 2 → Phase 3
    - FilingContentCache populated after Phase 2
    - Jobs reach COMPLETED status with summaries generated
@@ -285,3 +356,6 @@ Fixed 401 errors on process-filing-queue endpoint using CronAuthService.validate
 - [check-recent-activity.mjs](check-recent-activity.mjs) - Database activity analysis
 - [check-env-var.mjs](check-env-var.mjs) - Local environment variable verification
 - [clear-pending-jobs.mjs](clear-pending-jobs.mjs) - Batch job cleanup utility
+- [check-700-cron.mjs](check-700-cron.mjs) - Verify 07:00 AEDT cron execution
+- [check-710-cron.mjs](check-710-cron.mjs) - Verify 07:10 AEDT cron execution
+- [check-720-cron.mjs](check-720-cron.mjs) - Verify 07:20 AEDT cron execution
