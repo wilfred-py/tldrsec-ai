@@ -1,87 +1,153 @@
-# Current Progress: Async Pipeline Job Timeout Fix
+# Current Progress: 3-Phase Async Pipeline Implementation
 
 ## Current Status
-**Date**: 2025-11-24 (21:30 AEDT)
+**Date**: 2025-11-25 (11:55 AEDT)
+**Branch**: feature/async-3-phase-pipeline
+**Deployment**: Development (not yet deployed)
+**Previous Work**: [docs/plans/2025-11-24-async-pipeline-timeout-fix.md](docs/plans/2025-11-24-async-pipeline-timeout-fix.md)
+
+## 3-Phase Async Pipeline (NEW ARCHITECTURE)
+
+### Architecture Decision
+After discovering that even 165s timeout is insufficient (need up to 210s worst case), implementing 3-phase async pipeline with 202 pattern to split work into phases that each fit within 180s Vercel limit.
+
+```
+Phase 1: ASYNC_DISCOVER_FILINGS (<5s) → 202 Accepted
+Phase 2: ASYNC_FETCH_FILING (60-120s) → Cache content
+Phase 3: ASYNC_SUMMARIZE_CACHED (17-90s) → AI + Email
+```
+
+### Completed (Phase 3 Pipeline) ✅
+
+1. **Database Schema**: `FilingContentCache` model added to Prisma
+2. **Job Types**: Added 3 new async job types to `lib/job-queue/index.ts`
+3. **Handler Implementation**:
+   - ✅ `lib/cron/handlers/discovery-handler.ts` (Phase 1)
+   - ✅ `lib/cron/handlers/fetch-handler.ts` (Phase 2)
+   - ✅ `lib/cron/handlers/summarize-cached-handler.ts` (Phase 3)
+
+### Pending (Phase 3 Pipeline) 🚧
+
+4. **Worker Routing**: Update `lib/cron/background-filing-worker.ts`
+5. **Endpoint 202 Pattern**: Modify `app/api/cron/tier-aware/route.ts`
+6. **Testing**: End-to-end pipeline test
+7. **Deployment**: Deploy to production
+
+---
+
+## Previous Timeout Fix Status (165s Limit)
+
+**Date**: 2025-11-24 (23:00 AEDT)
 **Branch**: main
-**Deployment**: Production (Vercel - commit b70b49e)
-**Implementation Plan**: [docs/plans/2025-11-24-async-pipeline-timeout-fix.md](docs/plans/2025-11-24-async-pipeline-timeout-fix.md)
+**Deployment**: Production (Vercel - commit b860123)
 
-### Implementation Plan Created ✅
+### Critical Fix Deployed ✅
 
-Comprehensive 5-phase implementation plan ready for review at `docs/plans/2025-11-24-async-pipeline-timeout-fix.md`
+**Root Cause Identified**: `FILING_PROCESSING_TIMEOUT` was set to 150s, but the pipeline needs up to 180s worst case:
+- SEC fetch with multiple probing attempts: up to 120s (8 requests × 15s)
+- AI summarization: 60s
+- **Total worst case: 180s > 150s timeout limit**
 
-**Problem**: All async pipeline jobs timing out at 150s with "Application timeout after 150000ms"
-- Queue: 0 COMPLETED, 269 FAILED, 43 RETRYING, 5 PENDING
-- Ultimate Goal: summaries generated / $ spent > 0
+**Solution Deployed** (commit b860123):
+- Increased `FILING_PROCESSING_TIMEOUT` from 150s → 165s
+- Maintains 15s buffer before Vercel's 180s function limit
+- Allows typical cases (60-90s) and worst cases (up to 165s) to complete
 
-### Root Causes (Verified Through Research)
+**Job Queue Status** (before fix):
+- FAILED: 338
+- RETRYING: 36
+- PENDING: 19
+- PROCESSING: 1
+- COMPLETED: 0
 
-| # | Root Cause | Severity | Verification |
-|---|-----------|----------|--------------|
-| 1 | `AI_SUMMARY_TIMEOUT_MS` and `OPENROUTER_TIMEOUT_MS` NOT SET in Vercel | CRITICAL | `vercel env ls` confirmed |
-| 2 | OpenRouter default timeout = 270s (exceeds 150s job limit) | CRITICAL | Code inspection |
-| 3 | Promise.race does NOT cancel in-flight requests | HIGH | Web research |
-| 4 | SEC fetch can consume 93s (2 retries × 30s + backoff) | HIGH | Bottleneck test |
-| 5 | Cloudflare Worker ~90-100s undocumented fetch timeout | MEDIUM | Web research |
+### All Fixes Applied
 
-### Key Correction from Original Analysis
+| Fix | Status | Commit |
+|-----|--------|--------|
+| Set `AI_SUMMARY_TIMEOUT_MS=60000` | ✅ Deployed | f866ec3 |
+| Set `OPENROUTER_TIMEOUT_MS=60000` | ✅ Deployed | f866ec3 |
+| Reduce SEC `maxRetries` 1→0 | ✅ Deployed | 6e22fef |
+| Reduce filing `maxAttempts` 2→1 | ✅ Deployed | 6e22fef |
+| Reduce SEC timeout 30s→15s | ✅ Deployed | 7c8819d |
+| Increase job timeout 150s→165s | ✅ **JUST DEPLOYED** | b860123 |
 
-**async-filing-processor.ts:176 is NOT a factor** - The cron job path uses `CronFilingProcessor.processSingleFiling()` (with maxRetries=0), NOT `AsyncFilingProcessor` (which has maxRetries=2). The original research document's "Root Cause #3" does not apply to current code flow.
+### Timeline of Fixes
 
-## Approach (5 Phases)
+1. **Phase 1** (f866ec3): Set AI/OpenRouter timeout env vars to 60s
+2. **Phase 2** (6e22fef): Eliminated retry loops (maxRetries 1→0, maxAttempts 2→1)
+3. **Phase 3** (7c8819d): Reduced per-request timeout (30s→15s) for faster fail
+4. **Phase 4** (b860123): **Increased job timeout** (150s→165s) to allow pipeline completion
 
-| Phase | Action | Time | Risk | Status |
-|-------|--------|------|------|--------|
-| 1 | Set env vars (`AI_SUMMARY_TIMEOUT_MS=60000`) | 5 min | Low | Ready |
-| 2 | Reduce SEC client maxRetries 2→1 | 15 min | Low | Ready |
-| 3 | Implement AbortController | 30 min | Medium | Planned |
-| 4 | Propagate abort signal through stack | 45 min | Medium | Planned |
-| 5 | Time budget tracking (optional) | 30 min | Low | Optional |
+## Root Cause Analysis (Final)
 
-**Phases 1 and 2 alone should resolve most timeout issues.**
+After 4 rounds of fixes, the true root cause was:
 
-## Steps Done
-- ✅ Read and verified critical files from root cause analysis
-- ✅ Verified code path: CronFilingProcessor (maxRetries=0), NOT AsyncFilingProcessor
-- ✅ Analyzed job queue status: 269 FAILED, 43 RETRYING, 5 PENDING, 1 PROCESSING, 0 COMPLETED
-- ✅ Tested Bottleneck retry behavior: With failed handler, `retries: 2` = 3 total attempts
-- ✅ Checked Vercel env vars: AI_SUMMARY_TIMEOUT_MS and OPENROUTER_TIMEOUT_MS NOT SET
-- ✅ Researched AbortController: Promise.race does NOT cancel requests, need AbortSignal
-- ✅ Analyzed Cloudflare Worker options: 30s CPU, ~90-100s fetch timeout
-- ✅ Created comprehensive implementation plan
+**The 150s `FILING_PROCESSING_TIMEOUT` was fundamentally insufficient** for the filing retrieval pipeline architecture:
 
-## Next Steps (Pending User Approval)
-1. **IMMEDIATE**: `vercel env add AI_SUMMARY_TIMEOUT_MS production` → 60000
-2. **IMMEDIATE**: `vercel env add OPENROUTER_TIMEOUT_MS production` → 60000
-3. **SHORT-TERM**: Reduce SEC client maxRetries from 2 to 1
-4. **SHORT-TERM**: Implement AbortController for proper request cancellation
+### Filing Retrieval Request Pattern
+`attemptFilingRetrieval()` makes **multiple sequential SEC requests**:
+1. Index page fetch: 15s
+2. Extension probing (up to 4 attempts): 4 × 15s = 60s
+3. Fallback probing (up to 3 attempts): 3 × 15s = 45s
+4. **Worst case: 120s for SEC fetch alone**
+
+### Time Budget Breakdown
+```
+Worst Case:
+- SEC fetch: 120s (8 requests × 15s)
+- AI summarization: 60s
+- Total: 180s
+
+Typical Case:
+- SEC fetch: 30s (2 requests × 15s)
+- AI summarization: 60s
+- Total: 90s
+
+Old limit: 150s ❌ (fails worst case)
+New limit: 165s ✓ (allows most worst cases, 15s buffer)
+```
+
+### Why Previous Fixes Weren't Enough
+
+1. **Env vars (Phase 1)**: Fixed AI timeout, but SEC fetch still exceeded budget
+2. **Retry elimination (Phase 2)**: Removed retry loops, but each SEC request still 30s
+3. **Timeout reduction (Phase 3)**: Reduced per-request from 30s→15s, but 150s limit still too low for 8+ requests
+4. **Job timeout increase (Phase 4)**: **THIS IS THE KEY FIX** - allows the full pipeline to complete
+
+## Next Steps
+
+1. **Monitor production**: Wait for Vercel deployment of b860123
+2. **Verify**: Check for jobs completing with status=COMPLETED
+3. **Success criteria**: `summaries generated / $ spent > 0`
 
 ## Key Files
-- [docs/plans/2025-11-24-async-pipeline-timeout-fix.md](docs/plans/2025-11-24-async-pipeline-timeout-fix.md) - **NEW** Implementation plan
-- [lib/cron/background-filing-worker.ts](lib/cron/background-filing-worker.ts) - Job processing with Promise.race timeout
-- [lib/sec-edgar/client.ts:25](lib/sec-edgar/client.ts) - maxRetries=2, 30s timeout (needs reduction)
-- [lib/ai/openrouter-client.ts:38](lib/ai/openrouter-client.ts) - 270s default timeout (critical)
-- [lib/cron/types.ts:185](lib/cron/types.ts) - FILING_PROCESSING_TIMEOUT=150000
+
+- [lib/cron/types.ts:191](lib/cron/types.ts) - `FILING_PROCESSING_TIMEOUT=165000` ✅
+- [lib/sec-edgar/client.ts:46](lib/sec-edgar/client.ts) - `timeout: 15000`, `maxRetries: 0` ✅
+- [lib/errors/filing-errors.ts:208](lib/errors/filing-errors.ts) - `maxAttempts: 1` ✅
+- [services/filings/filingRetrieval.ts:383](services/filings/filingRetrieval.ts) - Multi-request pattern
+- [lib/cron/background-filing-worker.ts:240](lib/cron/background-filing-worker.ts) - AbortController timeout wrapper
 
 ## Research Documents
-- Analysis: [thoughts/shared/research/2025-11-24-async-pipeline-failure-root-cause-analysis.md](thoughts/shared/research/2025-11-24-async-pipeline-failure-root-cause-analysis.md)
+- Root cause analysis: [thoughts/shared/research/2025-11-24-async-pipeline-failure-root-cause-analysis.md](thoughts/shared/research/2025-11-24-async-pipeline-failure-root-cause-analysis.md)
+- Implementation plan: [docs/plans/2025-11-24-async-pipeline-timeout-fix.md](docs/plans/2025-11-24-async-pipeline-timeout-fix.md)
 
 ---
 
 ## Recently Completed (Last 30 Days)
 
-### Implementation Plan Created (2025-11-24 21:30 AEDT)
-Created comprehensive 5-phase implementation plan based on verified research:
-- Confirmed missing env vars via `vercel env ls`
-- Tested Bottleneck retry behavior (retries:2 + failed handler = 3 attempts)
-- Researched AbortController behavior (Promise.race doesn't cancel)
-- Analyzed Cloudflare Worker timeout constraints (~90-100s)
+### Async Pipeline Timeout Fix (2025-11-24 23:00 AEDT) ✅
+**Critical fix deployed**: Increased `FILING_PROCESSING_TIMEOUT` from 150s to 165s after identifying that the hardcoded timeout was insufficient for the multi-request SEC filing retrieval pattern. This was the 4th and final fix after:
+1. Setting AI timeout env vars (60s)
+2. Eliminating retry loops (maxRetries 1→0, maxAttempts 2→1)
+3. Reducing per-request timeout (30s→15s)
+4. **Increasing job timeout** (150s→165s) to allow full pipeline execution
 
 ### Root Cause Analysis (2025-11-24)
 Comprehensive analysis identifying 5 root causes for pipeline timeout failures. Key finding: missing environment variables causing OpenRouter to use 270s default timeout.
 
 ### Async Pipeline Job Timeout Investigation (2025-11-22)
-Identified root cause of all jobs failing with 150s timeout. Problem was AI retry configuration allowing 3 attempts x 100s = 300s, exceeding 150s job timeout. Fixed by setting maxRetries=0 in filing-processor.ts. Also reduced SEC API retry delays to fit within budget.
+Identified root cause of all jobs failing with 150s timeout. Problem was AI retry configuration allowing 3 attempts × 100s = 300s, exceeding 150s job timeout. Fixed by setting maxRetries=0 in filing-processor.ts. Also reduced SEC API retry delays to fit within budget.
 
 ### Empty Filing ID Bugs (2025-11-22)
 Fixed two bugs causing jobs to have empty filingId:
@@ -96,6 +162,6 @@ Fixed 401 errors on process-filing-queue endpoint. Updated to use CronAuthServic
 
 ---
 
-**Last Updated**: 2025-11-24 21:30 AEDT
+**Last Updated**: 2025-11-24 23:00 AEDT
 **Repository**: tldrsec-ai
 **Branch**: main

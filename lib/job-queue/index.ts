@@ -4,9 +4,9 @@ import { z } from 'zod';
 import { sanitizeJSON, detectMaliciousPatterns } from '../validation/sanitizers';
 
 // Job types (Enhanced for Phase 2 async processing)
-export type JobType = 
-  | 'CHECK_FILINGS' 
-  | 'PROCESS_FILING' 
+export type JobType =
+  | 'CHECK_FILINGS'
+  | 'PROCESS_FILING'
   | 'ARCHIVE_FILINGS'
   | 'CHECK_10K_FILINGS'
   | 'CHECK_10Q_FILINGS'
@@ -19,7 +19,11 @@ export type JobType =
   | 'ASYNC_SUMMARIZE_FILING'
   | 'ASYNC_EMAIL_DIGEST'
   | 'ASYNC_FILING_CLEANUP'
-  | 'ASYNC_WEBHOOK_NOTIFICATION';
+  | 'ASYNC_WEBHOOK_NOTIFICATION'
+  // Phase 3: 3-phase async pipeline (202 pattern)
+  | 'ASYNC_DISCOVER_FILINGS'  // Fast discovery job (<5s)
+  | 'ASYNC_FETCH_FILING'       // SEC content fetch (60-120s)
+  | 'ASYNC_SUMMARIZE_CACHED';  // AI summarization using cached content (17-90s)
 
 // Job status
 export type JobStatus = 
@@ -94,7 +98,8 @@ export class JobQueueService {
         'CHECK_FILINGS', 'PROCESS_FILING', 'ARCHIVE_FILINGS',
         'CHECK_10K_FILINGS', 'CHECK_10Q_FILINGS', 'CHECK_8K_FILINGS', 'CHECK_FORM4_FILINGS',
         'SUMMARIZE_FILING', 'SEND_FILING_NOTIFICATION', 'COMPILE_DAILY_DIGEST',
-        'ASYNC_SUMMARIZE_FILING', 'ASYNC_EMAIL_DIGEST', 'ASYNC_FILING_CLEANUP', 'ASYNC_WEBHOOK_NOTIFICATION'
+        'ASYNC_SUMMARIZE_FILING', 'ASYNC_EMAIL_DIGEST', 'ASYNC_FILING_CLEANUP', 'ASYNC_WEBHOOK_NOTIFICATION',
+        'ASYNC_DISCOVER_FILINGS', 'ASYNC_FETCH_FILING', 'ASYNC_SUMMARIZE_CACHED'
       ];
       
       if (!validJobTypes.includes(jobType)) {
