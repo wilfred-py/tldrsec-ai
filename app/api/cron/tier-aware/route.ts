@@ -147,6 +147,79 @@ export async function GET(request: NextRequest) {
     cronLogger.info(`[${executionId}] Starting tier-aware SEC filing cron job with bulletproof duplicate email prevention`);
     cronLogger.debug(`[${executionId}] Checkpoint 1: Route function started with enhanced security features`);
 
+    // FEATURE FLAG: 3-Phase Async Pipeline with 202 Pattern
+    // Set USE_3_PHASE_PIPELINE=true to enable simplified discovery-based processing
+    const use3PhasePipeline = process.env.USE_3_PHASE_PIPELINE === 'true';
+
+    if (use3PhasePipeline) {
+      cronLogger.info(`[${executionId}] Using 3-phase async pipeline mode`);
+
+      // Simplified 202 pattern: Queue single ASYNC_DISCOVER_FILINGS job and return immediately
+      try {
+        const { JobQueueService } = await import('../../../../lib/job-queue');
+
+        const discoveryJob = await JobQueueService.addJob({
+          jobType: 'ASYNC_DISCOVER_FILINGS',
+          payload: {
+            executionId,
+            cronTriggerTime: new Date().toISOString(),
+            marketHoursContext: await getMarketHoursContext()
+          },
+          priority: 10, // High priority for discovery jobs
+          maxAttempts: 3
+        });
+
+        if (!discoveryJob) {
+          throw new Error('Failed to queue discovery job');
+        }
+
+        const duration = Date.now() - startTime;
+
+        cronLogger.info(`[${executionId}] Discovery job queued successfully (3-phase pipeline)`, {
+          discoveryJobId: discoveryJob.id,
+          duration,
+          mode: '3-phase-async'
+        });
+
+        // Complete monitoring
+        if (monitor) {
+          await monitor.complete(CronJobStatus.SUCCESS, '3-phase pipeline: discovery job queued');
+        }
+
+        clearTimeout(timeoutId);
+
+        return NextResponse.json({
+          success: true,
+          executionId,
+          duration,
+          processingMode: '3-phase-async',
+          message: 'Discovery job queued for 3-phase async processing',
+          discoveryJob: {
+            id: discoveryJob.id,
+            status: discoveryJob.status
+          }
+        }, {
+          status: 202, // 202 Accepted - processing will happen asynchronously
+          headers: {
+            'X-Processing-Mode': '3-phase-async',
+            'X-Execution-ID': executionId,
+            'X-Discovery-Job-ID': discoveryJob.id
+          }
+        });
+
+      } catch (pipelineError) {
+        cronLogger.error(`[${executionId}] Failed to queue discovery job in 3-phase pipeline`, {
+          error: pipelineError instanceof Error ? pipelineError.message : 'Unknown error'
+        });
+
+        // Fall through to legacy processing on error
+        cronLogger.warn(`[${executionId}] Falling back to legacy processing due to 3-phase pipeline error`);
+      }
+    }
+
+    // LEGACY PROCESSING: Complex backlog queueing (original implementation)
+    cronLogger.debug(`[${executionId}] Using legacy backlog processing mode`);
+
     // Check if we're already approaching timeout
     const checkTimeRemaining = () => {
       const elapsed = Date.now() - startTime;

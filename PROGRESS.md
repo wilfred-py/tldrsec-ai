@@ -1,37 +1,63 @@
 # Current Progress: 3-Phase Async Pipeline Implementation
 
 ## Current Status
-**Date**: 2025-11-25 (11:55 AEDT)
+**Date**: 2025-11-25 (12:10 AEDT)
 **Branch**: feature/async-3-phase-pipeline
+**Last Commit**: 740f7a0 (Phase 1-3 handlers implemented)
 **Deployment**: Development (not yet deployed)
-**Previous Work**: [docs/plans/2025-11-24-async-pipeline-timeout-fix.md](docs/plans/2025-11-24-async-pipeline-timeout-fix.md)
 
-## 3-Phase Async Pipeline (NEW ARCHITECTURE)
+## Approach: 3-Phase Async Pipeline with 202 Pattern
 
-### Architecture Decision
-After discovering that even 165s timeout is insufficient (need up to 210s worst case), implementing 3-phase async pipeline with 202 pattern to split work into phases that each fit within 180s Vercel limit.
+**Problem**: Even 165s timeout insufficient (worst case needs 210s: 120s SEC fetch + 90s AI)
+**Solution**: Split into 3 independent phases that each fit within 180s Vercel limit
 
 ```
-Phase 1: ASYNC_DISCOVER_FILINGS (<5s) → 202 Accepted
-Phase 2: ASYNC_FETCH_FILING (60-120s) → Cache content
-Phase 3: ASYNC_SUMMARIZE_CACHED (17-90s) → AI + Email
+Phase 1: ASYNC_DISCOVER_FILINGS (<5s)
+  - Check SEC RSS for new filings
+  - Queue Phase 2 jobs for each filing
+  - Return 202 Accepted immediately
+
+Phase 2: ASYNC_FETCH_FILING (60-120s)
+  - Fetch SEC content from EDGAR
+  - Store in FilingContentCache (24h TTL)
+  - Queue Phase 3 job
+
+Phase 3: ASYNC_SUMMARIZE_CACHED (17-90s)
+  - Retrieve cached content
+  - Generate AI summary via OpenRouter
+  - Send email notification
 ```
 
-### Completed (Phase 3 Pipeline) ✅
+## Steps Completed ✅
 
-1. **Database Schema**: `FilingContentCache` model added to Prisma
-2. **Job Types**: Added 3 new async job types to `lib/job-queue/index.ts`
-3. **Handler Implementation**:
-   - ✅ `lib/cron/handlers/discovery-handler.ts` (Phase 1)
-   - ✅ `lib/cron/handlers/fetch-handler.ts` (Phase 2)
-   - ✅ `lib/cron/handlers/summarize-cached-handler.ts` (Phase 3)
+1. **Database Schema**: Added `FilingContentCache` model to Prisma
+   - 24h TTL for cached content
+   - SHA-256 hash for deduplication
+   - Error caching (1h TTL) for circuit breaking
 
-### Pending (Phase 3 Pipeline) 🚧
+2. **Job Types**: Added 3 new async types to `lib/job-queue/index.ts`
+   - `ASYNC_DISCOVER_FILINGS`
+   - `ASYNC_FETCH_FILING`
+   - `ASYNC_SUMMARIZE_CACHED`
 
-4. **Worker Routing**: Update `lib/cron/background-filing-worker.ts`
-5. **Endpoint 202 Pattern**: Modify `app/api/cron/tier-aware/route.ts`
-6. **Testing**: End-to-end pipeline test
-7. **Deployment**: Deploy to production
+3. **Handler Implementation** (commit 740f7a0):
+   - ✅ [lib/cron/handlers/discovery-handler.ts](lib/cron/handlers/discovery-handler.ts) - Phase 1
+   - ✅ [lib/cron/handlers/fetch-handler.ts](lib/cron/handlers/fetch-handler.ts) - Phase 2
+   - ✅ [lib/cron/handlers/summarize-cached-handler.ts](lib/cron/handlers/summarize-cached-handler.ts) - Phase 3
+
+## Next Steps 🚧
+
+4. **Worker Routing**: Update [lib/cron/background-filing-worker.ts](lib/cron/background-filing-worker.ts)
+   - Add handler routing for 3 new job types
+   - Import and call appropriate handlers based on jobType
+
+5. **Endpoint 202 Pattern**: Modify [app/api/cron/tier-aware/route.ts](app/api/cron/tier-aware/route.ts)
+   - Queue single ASYNC_DISCOVER_FILINGS job
+   - Return 202 Accepted immediately
+   - Remove direct user processing loop
+
+6. **Testing**: Create end-to-end test
+7. **Deployment**: Deploy to production and verify
 
 ---
 
