@@ -50,11 +50,14 @@ export async function GET(request: NextRequest) {
       clientIP: authResult.clientIP
     });
 
-    // Create worker instance for this execution
-    // NOTE: batchSize=1 because maxDuration=180s (Vercel limit)
-    // FILING_PROCESSING_TIMEOUT=150s gives 30s buffer for error handling before Vercel kills function
+    // Create worker with dynamic batch sizing
+    // Worker now handles batch size selection based on job type:
+    // - Discovery jobs: 10 per batch (fast, 2-5s each)
+    // - Fetch jobs: 2 per batch (medium, 60-120s each)
+    // - Summarize jobs: 3 per batch (slow, 17-90s each)
+    // This maximizes throughput while staying within Vercel's 180s timeout
     const worker = new BackgroundFilingWorker({
-      batchSize: 1,           // Process 1 filing per invocation (timeout constraint)
+      batchSize: 10,          // Max batch size (discovery jobs), worker will adjust per type
       processingInterval: 0,  // No wait between batches (single run)
     });
 

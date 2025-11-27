@@ -190,6 +190,32 @@ export const MAX_CONCURRENT_USER_PROCESSING = 3;
 // Total worst case: ~180s, but typically only 2-3 requests needed (~45-60s)
 export const FILING_PROCESSING_TIMEOUT = 165000; // 2.75 minutes - realistic budget for SEC fetch + AI
 
+/**
+ * Dynamic batch sizing based on job type execution characteristics.
+ * These values are tuned to stay within Vercel's 180s function timeout
+ * with 15s safety buffer.
+ *
+ * Calculation methodology:
+ * - Discovery: 2-5s per job → 10 jobs = 20-50s (well within timeout)
+ * - Fetch: 60-120s per job → 2 jobs = 120-240s (at limit, but sequential)
+ * - Summarize: 17-90s per job → 3 jobs = 51-270s (at limit for worst case)
+ */
+export const JOB_BATCH_SIZES: Record<string, number> = {
+  ASYNC_DISCOVER_FILINGS: 10,    // Fast jobs: 2-5s each
+  ASYNC_FETCH_FILING: 2,          // Medium jobs: 60-120s each
+  ASYNC_SUMMARIZE_CACHED: 3,      // Slow jobs: 17-90s each
+  // Legacy jobs use default
+  DEFAULT: 1,
+};
+
+/**
+ * Get batch size for a specific job type.
+ * Returns the configured batch size or default if not specified.
+ */
+export function getBatchSizeForJobType(jobType: string): number {
+  return JOB_BATCH_SIZES[jobType] ?? JOB_BATCH_SIZES.DEFAULT;
+}
+
 // Platform detection types
 export type CronPlatform = 'RAILWAY_CRON' | 'VERCEL_CRON' | 'MANUAL_TRIGGER';
 

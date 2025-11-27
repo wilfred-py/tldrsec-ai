@@ -18,7 +18,7 @@ import { CronFilingProcessor } from './filing-processor';
 import { getPrismaClient } from '../db/prisma';
 import type { FilingJobPayload } from './async-filing-queue';
 import type { JobQueue } from '@prisma/client';
-import { FILING_PROCESSING_TIMEOUT } from './types';
+import { FILING_PROCESSING_TIMEOUT, getBatchSizeForJobType } from './types';
 
 const workerLogger = logger.child('background-filing-worker');
 const prisma = getPrismaClient();
@@ -143,19 +143,50 @@ export class BackgroundFilingWorker {
     // Get jobs to process - ONLY 3-phase async jobs
     // IMPORTANT: Exclude ASYNC_SUMMARIZE_FILING (legacy sync jobs that timeout)
     // Legacy jobs are still handled by tier-aware endpoint's sync processing path
-    const jobs = await JobQueueService.getJobsToProcessMultipleTypes(
-      this.batchSize,
-      ['ASYNC_DISCOVER_FILINGS', 'ASYNC_FETCH_FILING', 'ASYNC_SUMMARIZE_CACHED'] as JobType[]
-    );
+    //
+    // Dynamic batch sizing strategy:
+    // 1. First, try to get discovery jobs (fast, can batch 10)
+    // 2. If no discovery jobs, try fetch jobs (medium, batch 2)
+    // 3. If no fetch jobs, try summarize jobs (slow, batch 3)
+    // This ensures we maximize throughput while staying within timeout limits.
 
+    const jobTypes = ['ASYNC_DISCOVER_FILINGS', 'ASYNC_FETCH_FILING', 'ASYNC_SUMMARIZE_CACHED'] as JobType[];
+    let jobs: JobQueue[] = [];
+
+    // Try each job type with its optimal batch size
+    for (const jobType of jobTypes) {
+      if (jobs.length > 0) break; // Already have jobs to process
+
+      const batchSize = getBatchSizeForJobType(jobType);
+      const typeJobs = await JobQueueService.getJobsToProcessMultipleTypes(
+        batchSize,
+        [jobType]
+      );
+
+      if (typeJobs.length > 0) {
+        jobs = typeJobs;
+        workerLogger.info('Fetched jobs with dynamic batch sizing', {
+          processId: this.processId,
+          jobType,
+          batchSize,
+          jobCount: typeJobs.length,
+        });
+      }
+    }
+
+    // Log batch processing summary
     if (jobs.length === 0) {
-      workerLogger.debug('No jobs to process', { processId: this.processId });
+      workerLogger.debug('No jobs available to process', {
+        processId: this.processId,
+        checkedTypes: jobTypes,
+      });
       return;
     }
 
-    workerLogger.info('Processing job batch', {
+    workerLogger.info('Starting batch processing', {
       processId: this.processId,
       jobCount: jobs.length,
+      jobTypes: jobs.map(j => j.jobType),
       jobIds: jobs.map(j => j.id),
     });
 
