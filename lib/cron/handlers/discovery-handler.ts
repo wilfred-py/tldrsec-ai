@@ -99,17 +99,30 @@ export async function handleDiscovery(
         const { getPrismaClient } = await import('../../db/prisma');
         const prisma = getPrismaClient();
 
-        const tickers = await prisma.ticker.findMany({
+        const userTickers = await prisma.ticker.findMany({
           where: { userId: user.id },
           select: {
             id: true,
             symbol: true,
-            companyName: true,
-            cik: true
+            companyName: true
           }
         });
 
-        if (tickers.length === 0) continue;
+        if (userTickers.length === 0) continue;
+
+        // Enrich tickers with CIK from CikMapping table
+        // Note: CikMapping uses 'ticker' field, not 'symbol'
+        const tickers = await Promise.all(
+          userTickers.map(async (ticker) => {
+            const cikMapping = await prisma.cikMapping.findFirst({
+              where: { ticker: ticker.symbol }
+            });
+            return {
+              ...ticker,
+              cik: cikMapping?.cik || null
+            };
+          })
+        );
 
         // Check for new filings for this user's tickers
         const newFilings = await CronSecFilingService.checkForNewFilings(
