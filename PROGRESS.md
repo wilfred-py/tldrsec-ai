@@ -1,115 +1,115 @@
-# Current Progress: 3-Phase Pipeline & Job Processing Scalability
+# Current Progress: Tier 1 Quick Wins Implementation
 
 ## Current Status
-**Date**: 2025-11-27 (17:45 AEDT)
-**Branch**: main
-**Deployment**: Production - commit 7c3be76
-**Status**: PLAN READY - Tier 1 Quick Wins Implementation Plan Created
+**Date**: 2025-11-27 (19:40 AEDT)
+**Branch**: feature/tier1-dynamic-batch-sizing
+**Base**: main (commit 7c3be76)
+**Status**: PHASES 1 & 2 COMPLETE - Awaiting Manual Verification
 
 ---
 
 ## Active Work: Scalable Job Processing - Tier 1 Quick Wins
 
-### Implementation Plan Created
+### Implementation Plan
 **Plan**: [docs/plans/2025-11-27-scalable-job-processing-tier1-quick-wins.md](docs/plans/2025-11-27-scalable-job-processing-tier1-quick-wins.md)
 
-### Plan Summary
-Implements Tier 1 "Quick Wins" to unblock pipeline and achieve 6-20x throughput improvement.
+### Approach
+Implementing Tier 1 "Quick Wins" in 2 phases to unblock 3-phase filing pipeline and achieve 6-20x throughput improvement.
 
-**Phase 1: Increase Cron Frequency** (2x improvement)
-- Change Cloudflare Worker: `*/10` → `*/5 * * * *`
-- Single line change in `cloudflare-cron/wrangler.toml:10`
+---
 
-**Phase 2: Dynamic Batch Sizing** (3-10x improvement)
-- Add job-type-specific batch sizes to `lib/cron/types.ts`
-- Discovery jobs: 10 per batch (fast, 2-5s each)
-- Fetch jobs: 2 per batch (medium, 60-120s each)
-- Summarize jobs: 3 per batch (slow, 17-90s each)
-- Modify `BackgroundFilingWorker` to select batch size per job type
+## Steps Completed
 
-**Phase 3: Verify Pipeline Unblocked**
-- Database validation queries
-- E2E test verification
-- VRT Form 4 summary confirmation
+### Phase 1: Increase Cron Frequency - DONE
+- [x] Changed `cloudflare-cron/wrangler.toml` cron schedule from `*/10` to `*/5 * * * *`
+- [x] Validated with `npx wrangler deploy --dry-run`
+- [x] TypeScript build passes
 
-### Expected Results
+### Phase 2: Dynamic Batch Sizing - DONE
+- [x] Added `JOB_BATCH_SIZES` constants to `lib/cron/types.ts`:
+  - `ASYNC_DISCOVER_FILINGS: 10` (fast jobs: 2-5s each)
+  - `ASYNC_FETCH_FILING: 2` (medium jobs: 60-120s each)
+  - `ASYNC_SUMMARIZE_CACHED: 3` (slow jobs: 17-90s each)
+  - `DEFAULT: 1` (legacy fallback)
+- [x] Added `getBatchSizeForJobType()` function
+- [x] Updated `lib/cron/background-filing-worker.ts`:
+  - Imports `getBatchSizeForJobType`
+  - Dynamic batch sizing with job type priority (discovery → fetch → summarize)
+  - Enhanced logging for batch size selection
+- [x] Updated `app/api/cron/process-filing-queue/route.ts`:
+  - Changed `batchSize: 1` to `batchSize: 10` (max for discovery, worker adjusts per type)
+- [x] TypeScript compiles successfully
+- [x] Lint passes (pre-existing warnings only)
+
+---
+
+## Files Changed (This Branch)
+
+1. `cloudflare-cron/wrangler.toml` - Cron `*/10` → `*/5`
+2. `lib/cron/types.ts` - Added `JOB_BATCH_SIZES` and `getBatchSizeForJobType()`
+3. `lib/cron/background-filing-worker.ts` - Dynamic batch sizing in `processBatch()`
+4. `app/api/cron/process-filing-queue/route.ts` - `batchSize: 10` for max throughput
+5. `docs/plans/2025-11-27-scalable-job-processing-tier1-quick-wins.md` - Updated checkboxes
+
+---
+
+## Current State: Manual Verification Needed
+
+### Automated Tests Passed
+- TypeScript build: PASS
+- Cloudflare Worker dry-run: PASS
+- Lint: PASS (pre-existing warnings only)
+
+### Manual Verification Required
+
+**Phase 1:**
+- [ ] Deploy Cloudflare Worker: `cd cloudflare-cron && npx wrangler deploy`
+- [ ] Check Cloudflare dashboard shows new cron schedule
+- [ ] Wait 10 minutes, confirm worker runs twice
+- [ ] Both runs successfully call Vercel endpoints
+
+**Phase 2:**
+- [ ] Deploy to Vercel
+- [ ] Check logs for "Fetched jobs with dynamic batch sizing" messages
+- [ ] Verify discovery jobs process in batches of 10
+- [ ] Verify fetch jobs process in batches of 2
+- [ ] Verify summarize jobs process in batches of 3
+- [ ] Confirm Phase 2/3 jobs are created after discovery
+
+**Deployment Order:**
+1. Deploy Vercel changes first (backward compatible)
+2. Deploy Cloudflare Worker changes second
+3. Monitor for 30 minutes
+
+---
+
+## Next Steps After Manual Verification
+
+### Phase 3: Verify Pipeline Unblocked
+- Run database verification queries
+- Confirm VRT Form 4 filings discovered and processed
+- Check email notifications sent
+- Verify job queue backlog cleared
+
+### Then:
+- Commit changes
+- Merge to main
+- Create Tier 2 plan: Filing-level idempotency
+
+---
+
+## Expected Improvements
+
 | Metric | Before | After | Improvement |
 |--------|--------|-------|-------------|
 | Cron frequency | 10 min | 5 min | 2x |
 | Discovery jobs/batch | 1 | 10 | 10x |
+| Fetch jobs/batch | 1 | 2 | 2x |
+| Summarize jobs/batch | 1 | 3 | 3x |
 | **Total throughput** | 6 jobs/hr | 36-120 jobs/hr | **6-20x** |
 
 ---
 
-## Investigation Complete: VRT Form 4 Processing Failure
-
-### Root Cause Analysis (2025-11-27)
-
-**Finding 1: Filings Never Discovered**
-- Last VRT check: Nov 25, 2025 19:51 UTC
-- New Form 4s filed: Nov 25, 2025 20:14-20:15 EST (after last check)
-- Discovery stopped because BackgroundFilingWorker times out
-
-**Finding 2: Phase 2/3 Pipeline Blocked**
-- Phase 1 (Discovery): 9 PENDING, 140 COMPLETED jobs
-- Phase 2 (Fetch): 0 jobs ever created
-- Phase 3 (Summarize): 0 jobs ever created
-- Root cause: HTTP 524 timeout (~125s) blocking Phase 1→Phase 2 transition
-
-### Database Validation Results
-
-**VRT Status: CORRECT**
-- CIK: `0001674101` (Vertiv Holdings Co) - `fix-vrt-mapping.sql` NOT needed
-- TickerMonitoring: Active with correct RSS URL
-- Subscribers: 2 users
-
-**CIK Mapping Gaps: 3 Tickers Missing**
-| Ticker | Company | CIK |
-|--------|---------|-----|
-| COIN | Coinbase Global Inc | 0001679788 |
-| CMG | Chipotle Mexican Grill, Inc. | 0001058090 |
-| GOOG | Alphabet Inc. | 0001652044 |
-
-### Research Document
-Full investigation: [thoughts/shared/research/2025-11-27-vrt-form4-processing-failure-investigation.md](thoughts/shared/research/2025-11-27-vrt-form4-processing-failure-investigation.md)
-
----
-
-## Next Steps (Prioritized)
-
-### Immediate (Ready to Implement)
-1. [ ] Review and approve Tier 1 Quick Wins plan
-2. [ ] Implement Phase 1: Cron frequency change
-3. [ ] Implement Phase 2: Dynamic batch sizing
-4. [ ] Deploy and verify pipeline unblocked
-
-### Short-term
-5. [ ] Add CIK mappings for COIN, CMG, GOOG
-6. [ ] Clear legacy FAILED jobs from queue
-7. [ ] Create Tier 2 plan: Filing-level idempotency
-
----
-
-## Recently Completed (Last 30 Days)
-
-### Tier 1 Quick Wins Plan Created (2025-11-27) - JUST COMPLETED
-- Created implementation plan for scalable job processing
-- Research-backed batch size recommendations
-- 3-phase implementation with success criteria
-
-### VRT Form 4 Investigation (2025-11-27) - JUST COMPLETED
-- Root cause: Pipeline blocked at Phase 1→Phase 2 (HTTP 524 timeout)
-- VRT CIK mapping confirmed correct
-- CIK gaps identified: COIN, CMG, GOOG
-
-### 3-Phase Pipeline Security Fix (2025-11-26) - COMPLETE
-Fixed security scanning blocking 3-phase job types.
-
-### 3-Phase Async Pipeline Implementation (2025-11-25) - COMPLETE
-Split processing into 3 phases to avoid 210s timeout.
-
----
-
-**Last Updated**: 2025-11-27 17:45 AEDT
+**Last Updated**: 2025-11-27 19:40 AEDT
 **Repository**: tldrsec-ai
-**Branch**: main
+**Branch**: feature/tier1-dynamic-batch-sizing
