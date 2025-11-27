@@ -5,9 +5,9 @@ name = "cloudflare-cron"
 main = "index.js"
 compatibility_date = "2024-10-01"
 
-# Cron schedule: Every 10 minutes
+# Cron schedule: Every 5 minutes (doubled frequency for 2x throughput)
 [triggers]
-crons = ["*/10 * * * *"]
+crons = ["*/5 * * * *"]
 
 # Environment variables (non-sensitive)
 [vars]
