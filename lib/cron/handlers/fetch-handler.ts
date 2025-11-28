@@ -133,17 +133,19 @@ export async function handleFetch(
       accessionNumber: filing.accessionNumber
     });
 
-    const { attemptFilingRetrieval } = await import('../../../services/filings/filingRetrieval');
+    // Use exported getFilingContentWithRetry function for robust filing retrieval
+    const { getFilingContentWithRetry } = await import('../../../services/filings/filingRetrieval');
 
     let content: string;
     let fetchError: string | undefined;
 
     try {
-      const retrievalResult = await attemptFilingRetrieval(
-        ticker.cik || '',
+      // Call the properly exported function
+      // Parameters: accessionNumber, documentIdentifier (use "1" for main document), cik
+      const retrievalResult = await getFilingContentWithRetry(
         filing.accessionNumber,
-        filing.formType,
-        filing.filingUrl
+        '1', // Main document sequence
+        ticker.cik || undefined
       );
 
       if (retrievalResult.success && retrievalResult.content) {
@@ -151,10 +153,11 @@ export async function handleFetch(
         fetchLogger.info(`[${executionId}] Content fetched successfully`, {
           accessionNumber: filing.accessionNumber,
           contentLength: content.length,
-          fetchDuration: Date.now() - startTime
+          fetchDuration: Date.now() - startTime,
+          attemptCount: retrievalResult.metadata?.attemptCount
         });
       } else {
-        throw new Error(retrievalResult.error || 'Failed to retrieve filing content');
+        throw new Error(retrievalResult.error?.message || 'Failed to retrieve filing content');
       }
     } catch (retrievalError) {
       fetchError = retrievalError instanceof Error ? retrievalError.message : 'Unknown retrieval error';
