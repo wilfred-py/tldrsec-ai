@@ -180,30 +180,30 @@ export const DAILY_COST_LIMITS = {
 // Security constants
 export const MAX_CONCURRENT_RSS_CHECKS = 3;
 export const MAX_CONCURRENT_USER_PROCESSING = 3;
-// IMPORTANT: Must be less than Vercel maxDuration (180s) to allow error handling before function kills
-// 165s timeout + 15s buffer for cleanup = 180s maxDuration
-// Analysis: With 15s SEC timeout per request, worst case is:
-// - Index fetch: 15s
-// - Extension probing (4 attempts): 60s
-// - Fallback probing (3 attempts): 45s
-// - AI summarization: 60s
-// Total worst case: ~180s, but typically only 2-3 requests needed (~45-60s)
-export const FILING_PROCESSING_TIMEOUT = 165000; // 2.75 minutes - realistic budget for SEC fetch + AI
+// IMPORTANT: Must be less than Vercel maxDuration (300s) to allow error handling before function kills
+// Updated 2025-11-28: Increased to match OpenRouter timeout (270s) for AI summarization
+// Vercel maxDuration is now 300s, giving 30s buffer for cleanup after job timeout
+// AI summarization via OpenRouter can take up to 270s for complex filings
+export const FILING_PROCESSING_TIMEOUT = 270000; // 4.5 minutes - matches OpenRouter timeout
 
 /**
  * Dynamic batch sizing based on job type execution characteristics.
- * These values are tuned to stay within Vercel's 180s function timeout
- * with 15s safety buffer.
+ * These values are tuned to stay within Vercel's 300s function timeout
+ * with 30s safety buffer.
  *
- * Calculation methodology:
+ * Calculation methodology (updated 2025-11-28):
  * - Discovery: 2-5s per job → 10 jobs = 20-50s (well within timeout)
- * - Fetch: 60-120s per job → 2 jobs = 120-240s (at limit, but sequential)
- * - Summarize: 17-90s per job → 3 jobs = 51-270s (at limit for worst case)
+ * - Fetch: 4-10s per job (optimized) → 5 jobs = 20-50s (well within timeout)
+ * - Summarize: 30-270s per job (AI) → 1 job = 30-270s (needs full timeout budget)
+ *
+ * IMPORTANT: Summarize jobs reduced to 1 because OpenRouter AI calls can take
+ * up to 270s for complex filings (87KB+ content). Processing multiple jobs
+ * would exceed the 300s function timeout.
  */
 export const JOB_BATCH_SIZES: Record<string, number> = {
   ASYNC_DISCOVER_FILINGS: 10,    // Fast jobs: 2-5s each
-  ASYNC_FETCH_FILING: 2,          // Medium jobs: 60-120s each
-  ASYNC_SUMMARIZE_CACHED: 3,      // Slow jobs: 17-90s each
+  ASYNC_FETCH_FILING: 5,          // Fast jobs now: 4-10s each (optimized)
+  ASYNC_SUMMARIZE_CACHED: 1,      // Slow jobs: 30-270s each (AI processing)
   // Legacy jobs use default
   DEFAULT: 1,
 };

@@ -12,7 +12,7 @@
       "memory": 1024
     },
     "app/api/cron/process-filing-queue/route.ts": {
-      "maxDuration": 180,
+      "maxDuration": 300,
       "memory": 1024
     },
     "app/api/filings/enhanced-summary/route.ts": {
