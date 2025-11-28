@@ -352,6 +352,15 @@ async function fetchFilingContentOptimized(
     throw new Error(`Index page is empty or too short for ${accessionNumber}`);
   }
 
+  // Validate that we received an actual EDGAR index page, not a redirect to SEC search
+  // SEC sometimes returns the search page HTML when a filing isn't available or when there's an issue
+  if (indexContent.includes('href="https://www.sec.gov/search-filings"') ||
+      indexContent.includes('rel="canonical" href="https://www.sec.gov/search-filings"') ||
+      indexContent.includes('smartSearch.js') ||
+      (indexContent.includes('search-filings') && !indexContent.includes('EDGAR Filing Documents'))) {
+    throw new Error(`SEC returned search page instead of filing index for ${accessionNumber}`);
+  }
+
   // Step 2: Parse index to find primary document URL
   // Look for the main filing document (typically .xml for Form 4, .htm for 10-K/10-Q, etc.)
   const documentUrl = extractPrimaryDocumentUrl(indexContent, effectiveCik, formattedAccession, executionId);
@@ -390,6 +399,13 @@ async function fetchFilingContentOptimized(
   // Validate content doesn't contain NoSuchKey error
   if (content.includes('NoSuchKey') || content.includes('<Code>NoSuchKey</Code>')) {
     throw new Error(`Document not found (NoSuchKey) for ${accessionNumber}`);
+  }
+
+  // Validate that content is NOT the SEC search page (redirect detection)
+  if (content.includes('href="https://www.sec.gov/search-filings"') ||
+      content.includes('rel="canonical" href="https://www.sec.gov/search-filings"') ||
+      content.includes('smartSearch.js')) {
+    throw new Error(`SEC returned search page instead of document content for ${accessionNumber}`);
   }
 
   fetchLogger.debug(`[${executionId}] Successfully fetched document`, {
