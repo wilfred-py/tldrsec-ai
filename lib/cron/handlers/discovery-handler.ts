@@ -64,6 +64,8 @@ export async function handleDiscovery(
     });
 
     // Get eligible users (FAST - just database query)
+    // Note: allUsers contains DatabaseUser objects with full user data (id, email, subscriptionTier, tickers)
+    //       eligibleUsers contains EligibleUser objects with just (userId, tier)
     const { allUsers, eligibleUsers } = await CronUserProcessingService.getEligibleUsersForProcessing(
       marketContext,
       {
@@ -93,14 +95,23 @@ export async function handleDiscovery(
     let totalFilingsDiscovered = 0;
     let totalFetchJobsQueued = 0;
 
-    for (const user of eligibleUsers) {
+    for (const eligibleUser of eligibleUsers) {
       try {
+        // Look up full user data from allUsers (DatabaseUser) using eligibleUser.userId
+        const fullUser = allUsers.find(u => u.id === eligibleUser.userId);
+        if (!fullUser) {
+          discoveryLogger.warn(`[${executionId}] Could not find full user data for eligible user`, {
+            userId: eligibleUser.userId
+          });
+          continue;
+        }
+
         // Get user's tracked tickers
         const { getPrismaClient } = await import('../../db/prisma');
         const prisma = getPrismaClient();
 
         const userTickers = await prisma.ticker.findMany({
-          where: { userId: user.id },
+          where: { userId: fullUser.id },
           select: {
             id: true,
             symbol: true,
@@ -127,12 +138,12 @@ export async function handleDiscovery(
         // Check for new filings for this user's tickers
         const newFilings = await CronSecFilingService.checkForNewFilings(
           tickers,
-          user.id
+          fullUser.id
         );
 
         discoveryLogger.debug(`[${executionId}] Filings discovered for user`, {
-          userId: user.id,
-          userEmail: user.email,
+          userId: fullUser.id,
+          userEmail: fullUser.email,
           tickerCount: tickers.length,
           filingsFound: newFilings.length
         });
@@ -145,9 +156,9 @@ export async function handleDiscovery(
             const fetchJob = await JobQueueService.addJob({
               jobType: 'ASYNC_FETCH_FILING',
               payload: {
-                userId: user.id,
-                userEmail: user.email,
-                userTier: user.subscriptionTier || 'FREE',
+                userId: fullUser.id,
+                userEmail: fullUser.email,
+                userTier: fullUser.subscriptionTier || 'FREE',
                 ticker: {
                   symbol: filing.ticker,
                   companyName: tickers.find(t => t.symbol === filing.ticker)?.companyName,
@@ -167,8 +178,8 @@ export async function handleDiscovery(
                   discoveryPhaseCompletedAt: new Date().toISOString()
                 }
               },
-              priority: user.subscriptionTier === 'PREMIUM' ? 8 :
-                       user.subscriptionTier === 'PLUS' ? 6 : 5,
+              priority: fullUser.subscriptionTier === 'PREMIUM' ? 8 :
+                       fullUser.subscriptionTier === 'PLUS' ? 6 : 5,
               maxAttempts: 3
             });
 
@@ -177,7 +188,7 @@ export async function handleDiscovery(
             }
           } catch (queueError) {
             discoveryLogger.error(`[${executionId}] Failed to queue fetch job`, {
-              userId: user.id,
+              userId: fullUser.id,
               filingId: filing.id,
               error: queueError instanceof Error ? queueError.message : 'Unknown error'
             });
@@ -185,7 +196,7 @@ export async function handleDiscovery(
         }
       } catch (userError) {
         discoveryLogger.error(`[${executionId}] Failed to process user in discovery`, {
-          userId: user.id,
+          userId: eligibleUser.userId,
           error: userError instanceof Error ? userError.message : 'Unknown error'
         });
       }
