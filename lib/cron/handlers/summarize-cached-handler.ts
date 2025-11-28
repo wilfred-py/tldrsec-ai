@@ -12,7 +12,8 @@
 
 import { logger } from '../../logging';
 import type { JobPayload } from '../../job-queue';
-import { generateSummary } from '../../../services/filing/summaryGenerationService';
+import { generateAISummary } from '../../../services/filing/summaryGenerationService';
+import { sendFilingSummaryEmail } from '../../email/summary-service';
 import type { FetchJobPayload } from './fetch-handler';
 
 const summarizeLogger = logger.child('summarize-cached-handler');
@@ -97,13 +98,28 @@ export async function handleSummarizeCached(
       contentLength: cachedContent.contentLength
     });
 
-    // Check if summary already exists for this filing+user combination
-    const existingSummary = await prisma.summary.findFirst({
+    // Look up the user's ticker ID for this symbol
+    const userTicker = await prisma.ticker.findFirst({
       where: {
         userId,
-        ticker: ticker.symbol,
-        formType: filing.formType,
-        accessionNumber: filing.accessionNumber
+        symbol: ticker.symbol
+      },
+      select: {
+        id: true
+      }
+    });
+
+    if (!userTicker) {
+      throw new Error(`Ticker ${ticker.symbol} not found for user ${userId}`);
+    }
+
+    // Check if summary already exists for this filing+user combination
+    // Note: Summary model uses tickerId (not userId directly) and filingType (not formType)
+    const existingSummary = await prisma.summary.findFirst({
+      where: {
+        tickerId: userTicker.id,
+        filingType: filing.formType,
+        filingUrl: filing.filingUrl
       },
       select: {
         id: true,
@@ -117,15 +133,22 @@ export async function handleSummarizeCached(
         createdAt: existingSummary.createdAt
       });
 
-      // Summary exists, just send email notification
+      // Summary exists, just send email notification using correct signature:
+      // sendFilingSummaryEmail(recipientEmail, { companyName, ticker, filingType, filingDate, summary, filingUrl })
       try {
-        const { sendFilingSummaryEmail } = await import('../../email/notification-service');
-        await sendFilingSummaryEmail({
-          userEmail,
-          summaryId: existingSummary.id,
+        // Need to fetch the summary text to include in email
+        const existingSummaryFull = await prisma.summary.findUnique({
+          where: { id: existingSummary.id },
+          select: { summaryText: true }
+        });
+
+        await sendFilingSummaryEmail(userEmail, {
+          companyName: ticker.companyName || ticker.symbol,
           ticker: ticker.symbol,
-          formType: filing.formType,
-          companyName: ticker.companyName || ticker.symbol
+          filingType: filing.formType,
+          filingDate: new Date(filing.filingDate),
+          summary: existingSummaryFull?.summaryText || 'Summary available in dashboard',
+          filingUrl: filing.filingUrl
         });
 
         return {
@@ -157,13 +180,14 @@ export async function handleSummarizeCached(
       formType: filing.formType
     });
 
-    const summaryResult = await generateSummary(
+    // Call generateAISummary with correct SECFiling and Company types
+    const summaryResult = await generateAISummary(
       cachedContent.content,
       {
         formType: filing.formType,
-        filingDate: filing.filingDate,
+        filingDate: typeof filing.filingDate === 'string' ? filing.filingDate : filing.filingDate.toISOString(),
         accessionNumber: filing.accessionNumber,
-        url: filing.filingUrl
+        filingUrl: filing.filingUrl
       },
       {
         name: ticker.companyName || ticker.symbol,
@@ -172,8 +196,9 @@ export async function handleSummarizeCached(
       }
     );
 
-    if (!summaryResult.success || !summaryResult.summary) {
-      throw new Error(summaryResult.error || 'Failed to generate summary');
+    // Check processingStatus (not success) - SummaryGenerationResult uses processingStatus field
+    if (summaryResult.processingStatus !== 'SUCCESS' || !summaryResult.summary) {
+      throw new Error(summaryResult.error || summaryResult.processingError || 'Failed to generate summary');
     }
 
     const summarizeDuration = Date.now() - startTime;
@@ -187,20 +212,20 @@ export async function handleSummarizeCached(
     });
 
     // Save summary to database
+    // Note: Summary model uses tickerId, filingType, filingUrl, summaryText (not userId, formType, summary)
     const summary = await prisma.summary.create({
       data: {
-        userId,
-        ticker: ticker.symbol,
-        companyName: ticker.companyName || ticker.symbol,
-        formType: filing.formType,
+        tickerId: userTicker.id,
+        filingType: filing.formType,
         filingDate: new Date(filing.filingDate),
-        accessionNumber: filing.accessionNumber,
-        summary: summaryResult.summary,
-        modelVersion: summaryResult.modelVersion || 'openrouter/grok-4.1-fast',
-        promptVersion: summaryResult.promptVersion || 'v1',
+        filingUrl: filing.filingUrl,
+        summaryText: summaryResult.summary,
+        modelVersion: summaryResult.model || 'x-ai/grok-4-fast:free',
+        promptVersion: 'v1',
         totalCost: summaryResult.cost || 0,
         inputTokens: summaryResult.inputTokens || 0,
         outputTokens: summaryResult.outputTokens || 0,
+        isCacheHit: executionContext.cacheHit || false,
         metadata: {
           executionId,
           cacheId,
@@ -210,7 +235,11 @@ export async function handleSummarizeCached(
           sourceContext: executionContext.sourceContext,
           discoveryPhaseCompletedAt: executionContext.discoveryPhaseCompletedAt,
           fetchPhaseCompletedAt: executionContext.fetchPhaseCompletedAt,
-          summarizePhaseCompletedAt: new Date().toISOString()
+          summarizePhaseCompletedAt: new Date().toISOString(),
+          ticker: ticker.symbol,
+          companyName: ticker.companyName,
+          accessionNumber: filing.accessionNumber,
+          userId
         }
       }
     });
@@ -222,16 +251,17 @@ export async function handleSummarizeCached(
       formType: filing.formType
     });
 
-    // Send email notification
+    // Send email notification using correct signature:
+    // sendFilingSummaryEmail(recipientEmail, { companyName, ticker, filingType, filingDate, summary, filingUrl })
     let emailSent = false;
     try {
-      const { sendFilingSummaryEmail } = await import('../../email/notification-service');
-      await sendFilingSummaryEmail({
-        userEmail,
-        summaryId: summary.id,
+      await sendFilingSummaryEmail(userEmail, {
+        companyName: ticker.companyName || ticker.symbol,
         ticker: ticker.symbol,
-        formType: filing.formType,
-        companyName: ticker.companyName || ticker.symbol
+        filingType: filing.formType,
+        filingDate: new Date(filing.filingDate),
+        summary: summaryResult.summary,
+        filingUrl: filing.filingUrl
       });
 
       emailSent = true;
@@ -247,12 +277,14 @@ export async function handleSummarizeCached(
     }
 
     // Update user's budget usage
+    // Note: budgetUsed is stored as Int (in micro-dollars, multiply cost by 1,000,000)
     try {
+      const costInMicroDollars = Math.round((summaryResult.cost || 0) * 1000000);
       await prisma.user.update({
         where: { id: userId },
         data: {
           budgetUsed: {
-            increment: summaryResult.cost || 0
+            increment: costInMicroDollars
           },
           lastProcessedAt: new Date()
         }
