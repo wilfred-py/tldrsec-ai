@@ -19,6 +19,7 @@ import { JobQueueService } from '../../job-queue';
 import type { JobPayload } from '../../job-queue';
 import { createHash } from 'crypto';
 import { SECEdgarClient } from '../../sec-edgar/client';
+import { verifyFilingContent, type FilingMetadata, type ContentVerificationResult } from '../../validation/filing-content-verifier';
 
 const fetchLogger = logger.child('fetch-handler');
 
@@ -54,6 +55,11 @@ export interface FetchResult {
   fetchDuration?: number;
   summarizeJobQueued: boolean;
   error?: string;
+  contentVerification?: {
+    isVerified: boolean;
+    confidence: number;
+    warnings?: string[];
+  };
 }
 
 /**
@@ -141,6 +147,7 @@ export async function handleFetch(
 
     let content: string;
     let fetchError: string | undefined;
+    let verificationResult: ContentVerificationResult | undefined;
 
     try {
       // OPTIMIZED: Fast direct fetch instead of slow multi-retry approach
@@ -156,6 +163,43 @@ export async function handleFetch(
         contentLength: content.length,
         fetchDuration: Date.now() - startTime
       });
+
+      // STEP 2.5: Verify content matches expected filing metadata (Gap 1 fix)
+      // This ensures we fetched the correct filing and not a redirect or wrong content
+      const expectedMetadata: FilingMetadata = {
+        accessionNumber: filing.accessionNumber,
+        cik: ticker.cik || '',
+        formType: filing.formType,
+        companyName: ticker.companyName || ticker.symbol
+      };
+
+      verificationResult = verifyFilingContent(content, expectedMetadata);
+
+      fetchLogger.info(`[${executionId}] Content verification result`, {
+        accessionNumber: filing.accessionNumber,
+        isVerified: verificationResult.isVerified,
+        confidence: verificationResult.confidence,
+        accessionMatches: verificationResult.accessionNumber.matches,
+        cikMatches: verificationResult.cik.matches,
+        formTypeMatches: verificationResult.formType.matches,
+        companyNameSimilarity: verificationResult.companyName.similarity,
+        warnings: verificationResult.warnings.length > 0 ? verificationResult.warnings : undefined,
+        errors: verificationResult.errors.length > 0 ? verificationResult.errors : undefined
+      });
+
+      // Log warning if verification confidence is low, but continue processing
+      // (informational only initially as per plan - don't block on low confidence)
+      if (!verificationResult.isVerified || verificationResult.confidence < 60) {
+        fetchLogger.warn(`[${executionId}] Content verification confidence is low`, {
+          accessionNumber: filing.accessionNumber,
+          confidence: verificationResult.confidence,
+          isVerified: verificationResult.isVerified,
+          errors: verificationResult.errors,
+          warnings: verificationResult.warnings,
+          extractedMetadata: verificationResult.extractedMetadata,
+          action: 'Proceeding with processing despite low confidence (warn only)'
+        });
+      }
     } catch (retrievalError) {
       fetchError = retrievalError instanceof Error ? retrievalError.message : 'Unknown retrieval error';
       fetchLogger.error(`[${executionId}] Failed to fetch content`, {
@@ -266,7 +310,12 @@ export async function handleFetch(
       cacheId: cachedContent.id,
       contentLength: content.length,
       fetchDuration,
-      summarizeJobQueued: !!summarizeJob
+      summarizeJobQueued: !!summarizeJob,
+      contentVerification: verificationResult ? {
+        isVerified: verificationResult.isVerified,
+        confidence: verificationResult.confidence,
+        warnings: verificationResult.warnings.length > 0 ? verificationResult.warnings : undefined
+      } : undefined
     };
 
   } catch (error) {
@@ -438,12 +487,27 @@ function extractPrimaryDocumentUrl(
   const hrefs: { href: string; type: string }[] = [];
 
   for (const match of hrefMatches) {
-    const href = match[1];
+    let href = match[1];
     const type = match[2].toLowerCase();
 
     // Skip non-filing documents like stylesheets
     if (href.includes('xsl') && !href.includes('form')) {
       continue;
+    }
+
+    // Skip SEC navigation links (not actual filing documents)
+    // These include: /index.htm, /edgar/*, company search, etc.
+    if (href === '/index.htm' || href.startsWith('/edgar/') || href.includes('searchedgar')) {
+      continue;
+    }
+
+    // Handle XBRL viewer URLs: /ix?doc=/Archives/edgar/data/...
+    // Extract the actual document path from the viewer URL
+    if (href.startsWith('/ix?doc=')) {
+      const docMatch = href.match(/\/ix\?doc=([^&]+)/);
+      if (docMatch) {
+        href = docMatch[1];
+      }
     }
 
     hrefs.push({ href, type });

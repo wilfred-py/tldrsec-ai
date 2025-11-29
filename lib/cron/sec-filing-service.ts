@@ -44,7 +44,106 @@ interface TickerValidation {
   error?: string;
 }
 
+// Interface for filing with ticker context (used by discovery handler)
+export interface FilingWithTicker {
+  id: string;
+  accessionNumber: string;
+  formType: string;
+  filingDate: string;
+  url: string;
+  ticker: string;
+  title: string;
+}
+
 export class CronSecFilingService {
+  /**
+   * Check for new filings for a user's tickers
+   * Used by discovery-handler to find new filings across all tracked tickers
+   *
+   * @param userTickers - Array of user's tracked tickers with basic info
+   * @param userId - The user ID (for logging)
+   * @returns Array of new filings with ticker context
+   */
+  static async checkForNewFilings(
+    userTickers: Array<{ id: string; symbol: string; companyName: string | null; cik: string | null }>,
+    userId: string
+  ): Promise<FilingWithTicker[]> {
+    const allNewFilings: FilingWithTicker[] = [];
+
+    for (const userTicker of userTickers) {
+      try {
+        // Skip tickers without CIK
+        if (!userTicker.cik) {
+          filingLogger.debug(`Skipping ticker ${userTicker.symbol} - no CIK`, { userId });
+          continue;
+        }
+
+        // Look up TickerMonitoring record to get full ActiveTicker info
+        const { getPrismaClient } = await import('../db/prisma');
+        const prisma = getPrismaClient();
+
+        const tickerMonitoring = await prisma.tickerMonitoring.findFirst({
+          where: { cik: userTicker.cik }
+        });
+
+        if (!tickerMonitoring) {
+          filingLogger.debug(`No TickerMonitoring record for ${userTicker.symbol} (CIK: ${userTicker.cik})`, { userId });
+          continue;
+        }
+
+        // Convert to ActiveTicker format expected by checkTickerForNewFilings
+        const activeTicker = {
+          id: tickerMonitoring.id,
+          cik: tickerMonitoring.cik,
+          symbol: tickerMonitoring.symbol,
+          companyName: tickerMonitoring.companyName || userTicker.companyName || '',
+          rssUrl: tickerMonitoring.rssUrl || '',
+          lastChecked: tickerMonitoring.lastChecked,
+          lastAccessionSeen: tickerMonitoring.lastAccessionSeen,
+          subscriberCount: 1 // Not critical for this use case
+        };
+
+        // Check for new filings using the existing function
+        const newFilings = await checkTickerForNewFilings(activeTicker);
+
+        filingLogger.debug(`Checked ${userTicker.symbol} for new filings`, {
+          userId,
+          ticker: userTicker.symbol,
+          newFilingsFound: newFilings.length
+        });
+
+        // Convert RSSFilingEntry to FilingWithTicker format
+        for (const filing of newFilings) {
+          allNewFilings.push({
+            id: `${userTicker.symbol}-${filing.accessionNumber}`,
+            accessionNumber: filing.accessionNumber,
+            formType: filing.filingType,
+            filingDate: filing.filingDate.toISOString().split('T')[0],
+            url: filing.filingUrl,
+            ticker: userTicker.symbol,
+            title: filing.title
+          });
+        }
+      } catch (error) {
+        filingLogger.error(`Failed to check filings for ${userTicker.symbol}`, {
+          userId,
+          ticker: userTicker.symbol,
+          error: error instanceof Error ? error.message : 'Unknown error'
+        });
+        // Continue with other tickers
+      }
+    }
+
+    filingLogger.info(`Discovered ${allNewFilings.length} new filings for user`, {
+      userId,
+      tickersChecked: userTickers.length,
+      filingsFound: allNewFilings.length,
+      filings: allNewFilings.map(f => ({ ticker: f.ticker, form: f.formType, accession: f.accessionNumber }))
+    });
+
+    return allNewFilings;
+  }
+
   /**
    * Core SEC filing monitoring - runs continuously regardless of market hours
    * SEC filings can be published 24/7 including weekends and holidays
