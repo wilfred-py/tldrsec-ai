@@ -588,22 +588,92 @@ export function verifyFilingContent(
 }
 
 /**
- * Async wrapper for verifyFilingContent that can be extended for async operations
+ * Async wrapper for verifyFilingContent with proper error handling
  */
 export async function verifyFilingContentAsync(
   content: string,
   expectedMetadata: FilingMetadata
 ): Promise<ContentVerificationResult> {
-  return verifyFilingContent(content, expectedMetadata);
+  // Input validation
+  if (!content) {
+    throw new Error('Content parameter is required');
+  }
+  if (!expectedMetadata) {
+    throw new Error('ExpectedMetadata parameter is required');
+  }
+  if (!expectedMetadata.accessionNumber || !expectedMetadata.cik || !expectedMetadata.formType || !expectedMetadata.companyName) {
+    throw new Error('ExpectedMetadata must include accessionNumber, cik, formType, and companyName');
+  }
+
+  try {
+    return verifyFilingContent(content, expectedMetadata);
+  } catch (error) {
+    console.error('Filing content verification failed:', error);
+    
+    // Return error result instead of throwing
+    return {
+      isVerified: false,
+      accessionNumber: { expected: expectedMetadata.accessionNumber, extracted: null, matches: false },
+      cik: { expected: expectedMetadata.cik, extracted: null, matches: false },
+      formType: { expected: expectedMetadata.formType, extracted: null, matches: false },
+      companyName: { expected: expectedMetadata.companyName, extracted: null, matches: false },
+      filingDate: { expected: expectedMetadata.filingDate, extracted: null, matches: false },
+      confidence: 0,
+      errors: [`Verification failed: ${error instanceof Error ? error.message : 'Unknown error'}`],
+      warnings: [],
+      contentLength: content?.length || 0,
+      extractedMetadata: {
+        accessionNumber: null,
+        cik: null,
+        formType: null,
+        companyName: null,
+        filingDate: null
+      }
+    };
+  }
 }
 
 /**
- * Batch verification for multiple filings
+ * Batch verification for multiple filings with error handling
  */
 export async function batchVerifyFilingContent(
   filings: Array<{ content: string; metadata: FilingMetadata }>
 ): Promise<ContentVerificationResult[]> {
-  return filings.map(({ content, metadata }) =>
-    verifyFilingContent(content, metadata)
-  );
+  if (!filings || !Array.isArray(filings)) {
+    throw new Error('Filings must be a non-empty array');
+  }
+
+  const results: ContentVerificationResult[] = [];
+  
+  for (const filing of filings) {
+    try {
+      const result = await verifyFilingContentAsync(filing.content, filing.metadata);
+      results.push(result);
+    } catch (error) {
+      console.error(`Batch verification failed for filing ${filing.metadata.accessionNumber}:`, error);
+      
+      // Add error result to batch
+      results.push({
+        isVerified: false,
+        accessionNumber: { expected: filing.metadata.accessionNumber, extracted: null, matches: false },
+        cik: { expected: filing.metadata.cik, extracted: null, matches: false },
+        formType: { expected: filing.metadata.formType, extracted: null, matches: false },
+        companyName: { expected: filing.metadata.companyName, extracted: null, matches: false },
+        filingDate: { expected: filing.metadata.filingDate, extracted: null, matches: false },
+        confidence: 0,
+        errors: [`Batch verification failed: ${error instanceof Error ? error.message : 'Unknown error'}`],
+        warnings: [],
+        contentLength: filing.content?.length || 0,
+        extractedMetadata: {
+          accessionNumber: null,
+          cik: null,
+          formType: null,
+          companyName: null,
+          filingDate: null
+        }
+      });
+    }
+  }
+  
+  return results;
 }
