@@ -194,8 +194,12 @@ SEC Content Fetch
 - [x] Pipeline comprehensive test passes: `npm run test:pipeline:comprehensive` ✅ (2025-11-29) - 100% pass rate
 
 #### Manual Verification:
-- [ ] Logs show content verification confidence scores
+- [x] Code deployed to Vercel production ✅ (2025-11-29 07:24 UTC)
+- [x] Cloudflare Worker cron job executing successfully ✅ (verified via wrangler tail)
+- [ ] Logs show content verification confidence scores (pending - requires new filing processing)
 - [ ] Low confidence filings are flagged in logs but still processed
+
+**Note**: Manual verification of log output pending - validation code is deployed but existing completed jobs were processed before deployment. New jobs will show validation results.
 
 ---
 
@@ -218,9 +222,12 @@ SEC Content Fetch
 - [ ] E2E all tickers test passes: `npm run test:e2e:all-tickers:skip-email` (requires live API calls)
 
 #### Manual Verification:
-- [ ] Production summaries show validation scores in logs
-- [ ] Summary metadata includes validation results
+- [x] Code deployed to Vercel production ✅ (2025-11-29 07:24 UTC)
+- [ ] Production summaries show validation scores in logs (pending - requires new filing summarization)
+- [ ] Summary metadata includes validation results (pending - no new summaries yet)
 - [ ] Validation doesn't significantly impact processing time (<5s overhead)
+
+**Note**: Manual verification of AI validation pending - no new summaries have been generated since deployment. Validation metadata will appear in summaryJSON.validation field when new filings are summarized.
 
 ---
 
