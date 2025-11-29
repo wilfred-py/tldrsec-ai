@@ -232,7 +232,7 @@ export async function sendFilingSummaryEmail(
 ): Promise<{ success: boolean; error?: string }> {
   try {
     // Generate email content using filing data
-    const { html, text } = getEmailTemplate(EmailType.FILING_NOTIFICATION, {
+    const { html, text } = await getEmailTemplate(EmailType.FILING_NOTIFICATION, {
       recipientName: 'Investor',
       recipientEmail,
       companyName: filingData.companyName,

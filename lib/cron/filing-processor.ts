@@ -12,6 +12,7 @@ import { generateSecureCorrelationId } from '../security/secure-random';
 import { CronSecFilingService } from './sec-filing-service';
 import { CronBudgetService } from './budget-service';
 import { boundedContextManager } from './bounded-context-manager';
+import { validateSummaryWithAI, type SummaryValidationResult } from '../validation/summary-content-validator';
 import type {
   DatabaseUser,
   User,
@@ -1234,6 +1235,82 @@ export class CronFilingProcessor {
 
       const actualCost = summaryResult.cost || 0;
 
+      // STEP 3.5: Validate AI-generated summary quality (Gap 3 fix - HIGH PRIORITY)
+      // This validates that the summary accurately reflects the source content
+      // Only validate new AI-generated summaries, not cached ones
+      let validationResult: SummaryValidationResult | undefined;
+
+      if (!processingContext.isCached && summaryResult.summary) {
+        processorLogger.info(`🔄 STEP 3.5: Validating AI summary quality for filing ${filingForProcessing.accessionNumber}`, {
+          userId: user.id,
+          ticker: filingForProcessing.tickerData.symbol,
+          summaryLength: summaryResult.summary.length,
+          formType: filingForProcessing.formType
+        });
+
+        const validationStartTime = Date.now();
+
+        try {
+          validationResult = await validateSummaryWithAI({
+            summaryText: summaryResult.summary,
+            sourceContent: filingContent,
+            ticker: filingForProcessing.tickerData.symbol,
+            formType: filingForProcessing.formType,
+            companyName: filingForProcessing.tickerData.companyName,
+            filingDate: filingForProcessing.filingDate.toISOString()
+          });
+
+          const validationDuration = Date.now() - validationStartTime;
+
+          processorLogger.info(`✅ STEP 3.5 COMPLETE: AI summary validation for filing ${filingForProcessing.accessionNumber}`, {
+            userId: user.id,
+            ticker: filingForProcessing.tickerData.symbol,
+            isValid: validationResult.isValid,
+            confidenceScore: validationResult.confidenceScore,
+            accuracyScore: validationResult.accuracyScore,
+            completenessScore: validationResult.completenessScore,
+            relevanceScore: validationResult.relevanceScore,
+            validationDurationMs: validationDuration,
+            issues: validationResult.issues.length > 0 ? validationResult.issues : undefined,
+            strengths: validationResult.strengths.length > 0 ? validationResult.strengths : undefined,
+            overallAssessment: validationResult.overallAssessment,
+            nextStep: 'Store summary in database'
+          });
+
+          // Log warning if validation fails, but continue processing
+          // (informational only initially as per plan - don't block on low scores)
+          if (!validationResult.isValid || validationResult.confidenceScore < 50) {
+            processorLogger.warn(`⚠️ AI summary validation flagged issues for filing ${filingForProcessing.accessionNumber}`, {
+              userId: user.id,
+              ticker: filingForProcessing.tickerData.symbol,
+              isValid: validationResult.isValid,
+              confidenceScore: validationResult.confidenceScore,
+              accuracyScore: validationResult.accuracyScore,
+              completenessScore: validationResult.completenessScore,
+              relevanceScore: validationResult.relevanceScore,
+              issues: validationResult.issues,
+              overallAssessment: validationResult.overallAssessment,
+              action: 'Proceeding with storing summary despite validation issues (warn only)'
+            });
+          }
+        } catch (validationError) {
+          processorLogger.error(`❌ STEP 3.5 FAILED: AI summary validation error for filing ${filingForProcessing.accessionNumber}`, {
+            error: validationError instanceof Error ? validationError.message : 'Unknown validation error',
+            userId: user.id,
+            ticker: filingForProcessing.tickerData.symbol,
+            validationTimeMs: Date.now() - validationStartTime,
+            action: 'Proceeding with storing summary despite validation error'
+          });
+          // Don't fail the whole process for validation errors - validation is informational
+        }
+      } else {
+        processorLogger.debug(`Skipping AI summary validation for cached summary`, {
+          userId: user.id,
+          ticker: filingForProcessing.tickerData.symbol,
+          isCached: processingContext.isCached
+        });
+      }
+
       // STEP 4: Store the summary in database using transaction context
       processorLogger.info(`🔄 STEP 4: Storing summary in database for filing ${filingForProcessing.accessionNumber}`, {
         userId: user.id,
@@ -1266,7 +1343,19 @@ export class CronFilingProcessor {
                 keyPoints: summaryResult.keyPoints || [],
                 cost: actualCost,
                 inputTokens: summaryResult.inputTokens || 0,
-                outputTokens: summaryResult.outputTokens || 0
+                outputTokens: summaryResult.outputTokens || 0,
+                // AI Summary Validation Results (Gap 3 fix)
+                validation: validationResult ? {
+                  isValid: validationResult.isValid,
+                  confidenceScore: validationResult.confidenceScore,
+                  accuracyScore: validationResult.accuracyScore,
+                  completenessScore: validationResult.completenessScore,
+                  relevanceScore: validationResult.relevanceScore,
+                  issues: validationResult.issues,
+                  strengths: validationResult.strengths,
+                  overallAssessment: validationResult.overallAssessment,
+                  validationDurationMs: validationResult.validationDurationMs
+                } : undefined
               },
               tokensUsed: summaryResult.tokensUsed || 0,
               cost: actualCost,

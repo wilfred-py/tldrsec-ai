@@ -61,6 +61,27 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ### Real Pipeline Testing
 - `npm run test:pipeline:real` - **Execute real production pipeline** with live API calls, actual database users, SEC filings, and email delivery (10-minute test)
 - `npm run test:pipeline:analyze` - Analyze current database state including users, tickers, summaries, budgets, and unprocessed filings
+- `npm run test:pipeline:comprehensive` - **MANDATORY** Comprehensive pipeline validation (CIK, content verification, regression tests)
+- `npm run test:pipeline:comprehensive:quick` - Quick comprehensive validation (~25s)
+
+### Pipeline Validation Testing
+- `npm run test:cik-validation` - Validate CIK mappings for all user-tracked tickers
+- `npm run test:content-verification` - Verify SEC content fetched matches filing metadata
+- `npm run test:regression:filings` - Known filing regression suite (URL construction, content fetching)
+- `npm run test:regression:filings:quick` - Quick regression test (one of each form type)
+
+### Comprehensive Pipeline E2E Testing
+- `npm run test:e2e:all-tickers` - **NEW** Full E2E pipeline validation for all user-tracked tickers
+  - Dynamically queries all tickers from database
+  - Executes complete 3-phase pipeline (Discovery -> Fetch -> Summarize)
+  - Validates content metadata accuracy
+  - Validates summary quality with AI
+  - Sends emails to configured recipients
+  - 3-minute timeout per ticker
+  - Scales automatically with new tickers
+- `npm run test:e2e:all-tickers:verbose` - Verbose output with detailed results table
+- `npm run test:e2e:all-tickers:skip-email` - Skip email delivery during testing
+- `npm run test:e2e:ticker=SYMBOL` - Test single ticker (e.g., `--ticker=VRT`)
 
 ### Parser-Specific Testing
 - `npm run test:pdf` - Test PDF parser functionality
@@ -274,15 +295,21 @@ Required environment variables:
 
 ### Mandatory Pre-Commit Testing
 
-**CRITICAL: Before any commit or deployment, you MUST run the end-to-end test to ensure the complete summarization pipeline is working:**
+**CRITICAL: Before any commit or deployment, you MUST run the comprehensive pipeline validation and end-to-end tests:**
 
 ```bash
-npm run test:e2e
+npm run test:pipeline:comprehensive  # Pipeline validation (~25s)
+npm run test:e2e                      # E2E email test
 ```
 
-This test validates:
+The comprehensive pipeline test validates:
+- ✅ CIK mappings for all 13 user-tracked tickers
+- ✅ Content verification against SEC metadata (100% confidence)
+- ✅ Known filing regression suite (URL construction, content fetching)
+
+The E2E test validates:
 - ✅ Environment configuration (API keys, database connection)
-- ✅ SEC filing retrieval functionality  
+- ✅ SEC filing retrieval functionality
 - ✅ AI summarization pipeline
 - ✅ Email delivery to TEST_EMAIL address
 
@@ -299,10 +326,11 @@ Required environment variables for E2E testing:
 1. **Complete your code changes**
 2. **Run comprehensive tests:**
    ```bash
-   npm run lint                    # Code quality
-   npm run test                    # Unit tests  
-   npm run test:e2e               # End-to-end email test
-   npm run test:cron-comprehensive # Cron integration tests
+   npm run lint                           # Code quality
+   npm run test                           # Unit tests
+   npm run test:pipeline:comprehensive    # Pipeline validation (CIK, content, regression)
+   npm run test:e2e                       # End-to-end email test
+   npm run test:cron-comprehensive        # Cron integration tests
    ```
 3. **Verify TEST_EMAIL received summary** - Check your inbox
 4. **Only commit if ALL tests pass** - No exceptions
@@ -312,6 +340,7 @@ Required environment variables for E2E testing:
 
 - [ ] All linting passes (`npm run lint`)
 - [ ] Unit tests pass (`npm run test`)
+- [ ] **Pipeline comprehensive test passes (`npm run test:pipeline:comprehensive`)**
 - [ ] **E2E test passes (`npm run test:e2e`)**
 - [ ] **Cron integration tests pass (`npm run test:cron-comprehensive`)**
 - [ ] **TEST_EMAIL received summary email**
