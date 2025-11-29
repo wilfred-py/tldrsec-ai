@@ -731,6 +731,22 @@ export async function getEmailTemplate(
         text: generatePlainTextEmail([data.filing], [])
       };
     }
+    case EmailType.FILING_NOTIFICATION: {
+      // Create filing object matching SECFilingEmailTemplate expected format
+      const filing = {
+        companyName: data.companyName as string,
+        symbol: data.ticker as string,
+        filingType: data.filingType as string,
+        filingDate: data.filingDate as Date,
+        summaryText: data.summary as string,
+        filingUrl: data.filingUrl as string
+      };
+      const html = await renderAsync(SECFilingEmailTemplateComponent({ filing }));
+      return {
+        html,
+        text: generatePlainTextEmail([filing], [])
+      };
+    }
     default:
       throw new Error(`Template type "${templateType}" not implemented`);
   }

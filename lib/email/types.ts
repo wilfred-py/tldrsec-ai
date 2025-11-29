@@ -26,6 +26,7 @@ export enum EmailType {
   FORM4 = 'form4',
   PASSWORD_RESET = 'password-reset',
   VERIFICATION = 'verification',
+  FILING_NOTIFICATION = 'filing-notification',
 }
 
 /**
