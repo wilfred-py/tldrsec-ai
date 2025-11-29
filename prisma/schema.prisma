@@ -771,3 +771,46 @@ model DailyWaitlistCache {
 
   @@index([date])
 }
+
+model DailyPipelineVerification {
+  id                    String   @id @default(uuid())
+  verificationDate      DateTime @db.Date
+  runAt                 DateTime @default(now())
+
+  // Filing counts
+  filingsDiscovered     Int      @default(0)
+  filingsCompleted      Int      @default(0)
+  filingsPending        Int      @default(0)
+  filingsFailed         Int      @default(0)
+
+  // Phase breakdown
+  fetchSuccessCount     Int      @default(0)
+  fetchFailedCount      Int      @default(0)
+  summarizeSuccessCount Int      @default(0)
+  summarizeFailedCount  Int      @default(0)
+  emailsSentCount       Int      @default(0)
+  uniqueUsersNotified   Int      @default(0)
+
+  // OpenRouter API costs (aggregated from summaries generated this day)
+  aiTotalCostUsd        Float    @default(0)
+  aiInputTokens         Int      @default(0)
+  aiOutputTokens        Int      @default(0)
+  aiTotalTokens         Int      @default(0)
+  aiModelBreakdown      Json?    // { "model-name": { cost, inputTokens, outputTokens } }
+
+  // Remediation stats
+  remediationAttempted  Int      @default(0)
+  remediationSucceeded  Int      @default(0)
+  remediationFailed     Int      @default(0)
+
+  // Detailed results (JSON array of filing verification results)
+  filingDetails         Json?
+
+  // Execution metadata
+  durationMs            Int?
+  errors                String[]
+
+  @@unique([verificationDate])
+  @@index([verificationDate])
+  @@index([runAt])
+}

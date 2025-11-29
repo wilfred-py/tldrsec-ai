@@ -64,6 +64,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - `npm run test:pipeline:comprehensive` - **MANDATORY** Comprehensive pipeline validation (CIK, content verification, regression tests)
 - `npm run test:pipeline:comprehensive:quick` - Quick comprehensive validation (~25s)
 
+### Daily Verification
+- `npm run verify:daily` - **NEW** Verify yesterday's filings completed full pipeline (Discovery → Fetch → Summarize → Email)
+- `npm run verify:daily -- --date=2025-11-28` - Verify specific date
+- `npm run verify:daily:no-remediation` - Skip auto-remediation for dry-run
+
 ### Pipeline Validation Testing
 - `npm run test:cik-validation` - Validate CIK mappings for all user-tracked tickers
 - `npm run test:content-verification` - Verify SEC content fetched matches filing metadata
