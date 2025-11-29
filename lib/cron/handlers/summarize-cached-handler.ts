@@ -15,6 +15,7 @@ import type { JobPayload } from '../../job-queue';
 import { generateAISummary } from '../../../services/filing/summaryGenerationService';
 import { sendFilingSummaryEmail } from '../../email/summary-service';
 import type { FetchJobPayload } from './fetch-handler';
+import { verifyFilingContent, type FilingMetadata } from '../../validation/filing-content-verifier';
 
 const summarizeLogger = logger.child('summarize-cached-handler');
 
@@ -97,6 +98,44 @@ export async function handleSummarizeCached(
       cacheId,
       contentLength: cachedContent.contentLength
     });
+
+    // STEP 2.5: Verify cached content matches expected filing metadata (Gap 2 fix)
+    // This validates cache integrity before expensive AI processing
+    const expectedMetadata: FilingMetadata = {
+      accessionNumber: filing.accessionNumber,
+      cik: ticker.cik || '',
+      formType: filing.formType,
+      companyName: ticker.companyName || ticker.symbol
+    };
+
+    const verificationResult = verifyFilingContent(cachedContent.content, expectedMetadata);
+
+    summarizeLogger.info(`[${executionId}] Cached content verification result`, {
+      accessionNumber: filing.accessionNumber,
+      isVerified: verificationResult.isVerified,
+      confidence: verificationResult.confidence,
+      accessionMatches: verificationResult.accessionNumber.matches,
+      cikMatches: verificationResult.cik.matches,
+      formTypeMatches: verificationResult.formType.matches,
+      companyNameSimilarity: verificationResult.companyName.similarity,
+      warnings: verificationResult.warnings.length > 0 ? verificationResult.warnings : undefined,
+      errors: verificationResult.errors.length > 0 ? verificationResult.errors : undefined
+    });
+
+    // Log warning if verification confidence is low, but continue processing
+    // (informational only initially as per plan - don't block on low confidence)
+    if (!verificationResult.isVerified || verificationResult.confidence < 60) {
+      summarizeLogger.warn(`[${executionId}] Cached content verification confidence is low`, {
+        accessionNumber: filing.accessionNumber,
+        cacheId,
+        confidence: verificationResult.confidence,
+        isVerified: verificationResult.isVerified,
+        errors: verificationResult.errors,
+        warnings: verificationResult.warnings,
+        extractedMetadata: verificationResult.extractedMetadata,
+        action: 'Proceeding with AI summarization despite low confidence (warn only)'
+      });
+    }
 
     // Look up the user's ticker ID for this symbol
     const userTicker = await prisma.ticker.findFirst({
