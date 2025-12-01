@@ -16,6 +16,8 @@
 import 'dotenv/config';
 import { PrismaClient, Prisma } from '@prisma/client';
 import chalk from 'chalk';
+import { fileURLToPath } from 'url';
+import path from 'path';
 
 const prisma = new PrismaClient({
   log: ['error', 'warn'],
@@ -830,7 +832,14 @@ async function main() {
 }
 
 // Run only if this file is executed directly (not imported)
-if (require.main === module) {
+// ES module equivalent of require.main === module
+const __filename = fileURLToPath(import.meta.url);
+const isMainModule = process.argv[1] && (
+  path.resolve(process.argv[1]) === __filename ||
+  path.resolve(process.argv[1]) === path.resolve(__filename)
+);
+
+if (isMainModule) {
   main().catch(console.error);
 }
 
