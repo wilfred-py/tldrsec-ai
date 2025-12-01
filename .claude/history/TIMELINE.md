@@ -4,8 +4,21 @@ This file provides a chronological index of all completed projects across archiv
 
 ## Navigation
 - **Current Active Work**: See main `PROGRESS.md`
-- **Recent Completed (Last 30 Days)**: See main `PROGRESS.md`
+- **Recent Completed (Last 30 Days)**: See main `PROGRESS.md` and "Recent Activity" below
 - **Historical Archives**: See weekly files below
+
+---
+
+## Recent Activity (Not Yet Archived)
+
+**Projects completed in last 30 days** (tracked in PROGRESS.md):
+- Email Summarization Improvements - Phase 1 (2025-12-01) 🔄 Active - Populate summaryJSON field
+- Daily Pipeline Verification - COMPLETE (2025-11-30) 🔄 Active in PROGRESS.md
+- Production Pipeline Validation Confidence Research (2025-11-29) 🔄 Active in PROGRESS.md
+- Dry-Run Validation Testing (2025-11-29) 🔄 Active in PROGRESS.md
+- Filing Validation Integration (2025-11-29) 🔄 Active in PROGRESS.md
+
+*These will be archived once they are older than 30 days AND PROGRESS.md exceeds 500 lines*
 
 ---
 
@@ -40,14 +53,16 @@ This file provides a chronological index of all completed projects across archiv
 ---
 
 ## Archive Statistics
-- **Total Archived Projects**: 13 (Critical Security Fixes, Testing Framework, Prevention System, CI/CD Resolution, Newsletter PMF Validation, TypeScript Fixes, Database Migration Fix, Security Vulnerability Fix, GitHub MCP Installation, Debug PR Command System, Newsletter Subscription Fix, Test Infrastructure Fixes)
-- **Current PROGRESS.md Lines**: 188 (Successfully compacted from 556 lines)
-- **Last Archive Update**: 2025-11-13
-- **Archive System**: ✅ ACTIVE (500 line threshold implemented)
-- **Archives Created**: 
-  - `27-Oct-2025.md` - Newsletter & Security implementations  
-  - `03-Nov-2025.md` - Critical infrastructure fixes
-  - `10-Nov-2025.md` - Landing page & UI optimizations
+- **Total Archived Projects**: 17 projects across 3 weekly archives
+- **Current PROGRESS.md Lines**: 110 lines (threshold: 500)
+- **Last Archive Check**: 2025-12-01
+- **Last Archive Update**: 2025-11-14 (most recent archival action)
+- **Recent Activity (Not Yet Archived)**: 5 projects completed in last 30 days
+- **Archive System**: ✅ ACTIVE (auto-archives when >500 lines AND projects >30 days old)
+- **Archives Created**:
+  - `27-Oct-2025.md` - Newsletter & Security implementations (6 projects)
+  - `03-Nov-2025.md` - Critical infrastructure fixes (4 projects)
+  - `10-Nov-2025.md` - Landing page & UI optimizations (7 projects)
 
 ---
 

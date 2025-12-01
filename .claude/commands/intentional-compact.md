@@ -70,14 +70,24 @@ You are tasked with compacting the context window by managing PROGRESS.md size a
 
 ### Step 4: Synchronize TIMELINE.md with PROGRESS.md
 
-Ensure TIMELINE.md accurately reflects all archived content:
+**ALWAYS perform this step, regardless of whether archival occurred.**
 
-1. **Verify Archive Statistics are current**:
-   - Count total archived projects
-   - Update "Current PROGRESS.md Lines" count
-   - Update "Last Archive Update" date to today
+Ensure TIMELINE.md accurately reflects current state:
 
-2. **Verify all archive links work**:
+1. **Update Archive Statistics** (MANDATORY every run):
+   - Count current PROGRESS.md lines: `wc -l PROGRESS.md`
+   - Update "Current PROGRESS.md Lines" to actual current count
+   - Update "Last Archive Update" date to today (YYYY-MM-DD format)
+   - Count total archived projects across all archive files
+   - Update "Total Archived Projects" count
+
+2. **Add Recent Completions Section** (if applicable):
+   - If PROGRESS.md contains "Recently Completed (Last 30 Days)" section
+   - Add these as references in TIMELINE.md under a "Recent Activity (Not Yet Archived)" section
+   - Format: `- [Project Name] (YYYY-MM-DD) 🔄 (Active in PROGRESS.md)`
+   - This provides visibility of recent work before it's eligible for archival
+
+3. **Verify all archive links work**:
    - Each weekly entry should have a valid relative link
    - Each project bullet should accurately describe what was archived
 
@@ -90,10 +100,18 @@ Ensure TIMELINE.md accurately reflects all archived content:
 
 2. **Report archival actions taken**:
    - If archived: "Archived [N] project(s) to [file path(s)]"
-   - If not archived: "No archival performed"
+   - If not archived: "No archival performed (PROGRESS.md: [X] lines, threshold: 500)"
 
-3. **Clear context instruction**:
-   - State: "Context compacted. For future sessions, refer to PROGRESS.md for current state and TIMELINE.md for historical context."
+3. **Report TIMELINE.md sync status** (MANDATORY):
+   - State: "TIMELINE.md updated with current statistics:"
+   - Report: "Current PROGRESS.md Lines: [X]"
+   - Report: "Total Archived Projects: [N]"
+   - Report: "Last Archive Update: [date]"
+   - If recent completions added: "Recent completions (<30 days) now visible in TIMELINE.md"
+
+4. **Clear context instruction**:
+   - State: "Context management complete. TIMELINE.md is now synchronized with current PROGRESS.md state."
+   - State: "For future sessions, refer to PROGRESS.md for current state and TIMELINE.md for complete historical context."
 
 ## Archive File Format Reference
 
@@ -134,8 +152,18 @@ Ensure TIMELINE.md accurately reflects all archived content:
 
 ## Navigation
 - **Current Active Work**: See main `PROGRESS.md`
-- **Recent Completed (Last 30 Days)**: See main `PROGRESS.md`
+- **Recent Completed (Last 30 Days)**: See main `PROGRESS.md` and "Recent Activity" below
 - **Historical Archives**: See weekly files below
+
+---
+
+## Recent Activity (Not Yet Archived)
+
+**Projects completed in last 30 days** (tracked in PROGRESS.md):
+- [Project Name] (YYYY-MM-DD) 🔄 Active in PROGRESS.md
+- [Another Recent Project] (YYYY-MM-DD) 🔄 Active in PROGRESS.md
+
+*These will be archived once they are older than 30 days AND PROGRESS.md exceeds 500 lines*
 
 ---
 
@@ -170,7 +198,9 @@ Example: If project completed on Wednesday Nov 27, 2025:
 
 ## Remember
 
+- **ALWAYS sync TIMELINE.md statistics** - Update Archive Statistics every run, regardless of archival
 - **Always preserve full technical details** when archiving - nothing gets summarized or lost
 - **Update both TIMELINE.md AND the archive file** when archiving
 - **Keep PROGRESS.md under 500 lines** for optimal context window performance
 - **Never archive active/in-progress work** - only completed projects >30 days old
+- **Recent Activity visibility** - Add recently completed projects (<30 days) to TIMELINE.md "Recent Activity" section for historical tracking
