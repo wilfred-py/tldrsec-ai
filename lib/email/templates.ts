@@ -739,7 +739,8 @@ export async function getEmailTemplate(
         filingType: data.filingType as string,
         filingDate: data.filingDate as Date,
         summaryText: data.summary as string,
-        filingUrl: data.filingUrl as string
+        filingUrl: data.filingUrl as string,
+        summaryData: data.summaryData as Record<string, unknown> | undefined  // Pass structured AI data to template
       };
       const html = await renderAsync(SECFilingEmailTemplateComponent({ filing }));
       return {

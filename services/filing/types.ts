@@ -94,6 +94,8 @@ export interface EmailMessage {
 export interface SummaryGenerationResult {
   summary: string;
   keyPoints: string[];
+  /** Raw structured JSON from AI response - preserved for email templates and database storage */
+  data?: Record<string, unknown>;
   tokensUsed?: number;
   inputTokens?: number;
   outputTokens?: number;

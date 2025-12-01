@@ -220,7 +220,7 @@ export async function sendLatestSummariesEmail(): Promise<{ success: boolean; er
  * Send a filing summary email for a specific filing
  */
 export async function sendFilingSummaryEmail(
-  recipientEmail: string, 
+  recipientEmail: string,
   filingData: {
     companyName: string;
     ticker: string;
@@ -228,6 +228,7 @@ export async function sendFilingSummaryEmail(
     filingDate: Date;
     summary: string;
     filingUrl: string;
+    summaryData?: Record<string, unknown>;  // Structured AI response for rich email templates
   }
 ): Promise<{ success: boolean; error?: string }> {
   try {
@@ -241,6 +242,7 @@ export async function sendFilingSummaryEmail(
       filingDate: filingData.filingDate,
       summary: filingData.summary,
       filingUrl: filingData.filingUrl,
+      summaryData: filingData.summaryData,  // Pass structured data to email template
       unsubscribeUrl: `${process.env.NEXT_PUBLIC_APP_URL}/settings/notifications`,
       preferencesUrl: `${process.env.NEXT_PUBLIC_APP_URL}/settings`
     });

@@ -259,6 +259,7 @@ export async function handleSummarizeCached(
         filingDate: new Date(filing.filingDate),
         filingUrl: filing.filingUrl,
         summaryText: summaryResult.summary,
+        summaryJSON: summaryResult.data || null,  // Preserve structured AI response for email templates
         modelVersion: summaryResult.model || 'x-ai/grok-4-fast:free',
         promptVersion: 'v1',
         totalCost: summaryResult.cost || 0,
@@ -291,7 +292,7 @@ export async function handleSummarizeCached(
     });
 
     // Send email notification using correct signature:
-    // sendFilingSummaryEmail(recipientEmail, { companyName, ticker, filingType, filingDate, summary, filingUrl })
+    // sendFilingSummaryEmail(recipientEmail, { companyName, ticker, filingType, filingDate, summary, filingUrl, summaryData })
     let emailSent = false;
     try {
       await sendFilingSummaryEmail(userEmail, {
@@ -300,7 +301,8 @@ export async function handleSummarizeCached(
         filingType: filing.formType,
         filingDate: new Date(filing.filingDate),
         summary: summaryResult.summary,
-        filingUrl: filing.filingUrl
+        filingUrl: filing.filingUrl,
+        summaryData: summaryResult.data  // Pass structured AI data to email template
       });
 
       emailSent = true;

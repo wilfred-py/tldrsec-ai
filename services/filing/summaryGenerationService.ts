@@ -261,6 +261,7 @@ export async function generateAISummary(
     return {
       summary,
       keyPoints,
+      data: summaryJSON,  // Preserve raw structured JSON for email templates and database storage
       tokensUsed: totalTokens,
       inputTokens,
       outputTokens,
