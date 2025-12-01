@@ -45,7 +45,9 @@ describe('Email Section Components', () => {
     it('renders children content', () => {
       const { container } = render(
         <SectionCard>
-          <div>Test Content</div>
+          <tr>
+            <td>Test Content</td>
+          </tr>
         </SectionCard>
       );
       expect(container.textContent).toContain('Test Content');

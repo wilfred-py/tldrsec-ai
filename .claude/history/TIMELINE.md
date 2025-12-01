@@ -12,7 +12,10 @@ This file provides a chronological index of all completed projects across archiv
 ## Recent Activity (Not Yet Archived)
 
 **Projects completed in last 30 days** (tracked in PROGRESS.md):
-- Email Summarization Improvements - Phase 1 (2025-12-01) 🔄 Active - Populate summaryJSON field
+- Email Summarization Improvements - Phase 1 & 2 (2025-12-01) 🔄 Active
+  - Phase 1: Populate summaryJSON field ✅
+  - Phase 2: Morning Brew-style email templates ✅
+  - Phase 3: Journalist tone AI prompts (pending)
 - Daily Pipeline Verification - COMPLETE (2025-11-30) 🔄 Active in PROGRESS.md
 - Production Pipeline Validation Confidence Research (2025-11-29) 🔄 Active in PROGRESS.md
 - Dry-Run Validation Testing (2025-11-29) 🔄 Active in PROGRESS.md
@@ -54,8 +57,8 @@ This file provides a chronological index of all completed projects across archiv
 
 ## Archive Statistics
 - **Total Archived Projects**: 17 projects across 3 weekly archives
-- **Current PROGRESS.md Lines**: 110 lines (threshold: 500)
-- **Last Archive Check**: 2025-12-01
+- **Current PROGRESS.md Lines**: 130 lines (threshold: 500)
+- **Last Archive Check**: 2025-12-02
 - **Last Archive Update**: 2025-11-14 (most recent archival action)
 - **Recent Activity (Not Yet Archived)**: 5 projects completed in last 30 days
 - **Archive System**: ✅ ACTIVE (auto-archives when >500 lines AND projects >30 days old)
