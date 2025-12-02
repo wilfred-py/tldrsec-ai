@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { EmailColors, formatCurrency, formatNumber, formatPercent, getChangeStyle, getChangeArrow } from '../design-system';
+import { EmailColors, markdownToHtml } from '../design-system';
 import { EmailHeader } from './sections/EmailHeader';
 import { EmailFooter } from './sections/EmailFooter';
 import { SectionCard } from './sections/SectionCard';
@@ -219,13 +219,14 @@ export function Form4MinimalistTemplate({ filing }: Form4MinimalistTemplateProps
                 <SectionCard>
                   <SectionHeader emoji="📝" title="Summary" />
                   <tr>
-                    <td style={{
-                      fontSize: '14px',
-                      lineHeight: '1.6',
-                      color: EmailColors.text.body,
-                    }}>
-                      {summaryText}
-                    </td>
+                    <td
+                      style={{
+                        fontSize: '14px',
+                        lineHeight: '1.6',
+                        color: EmailColors.text.body,
+                      }}
+                      dangerouslySetInnerHTML={{ __html: markdownToHtml(summaryText) }}
+                    />
                   </tr>
                 </SectionCard>
               )}
