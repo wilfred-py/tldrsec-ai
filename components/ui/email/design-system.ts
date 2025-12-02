@@ -279,3 +279,85 @@ export function getChangeArrow(change: number | string | undefined): string {
 
   return num > 0 ? '↑' : '↓';
 }
+
+/**
+ * Convert markdown to email-safe HTML
+ * Handles common patterns: headers, bold, italic, tables, lists, newlines
+ * Email-safe: Uses inline styles compatible with email clients
+ */
+export function markdownToHtml(markdown: string | undefined): string {
+  if (!markdown) return '';
+
+  let html = markdown;
+
+  // Escape HTML entities first (before adding our own HTML)
+  html = html
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+
+  // Convert markdown tables to HTML tables
+  // Match table with header row, separator row, and data rows
+  html = html.replace(
+    /\|(.+)\|\n\|[-:\s|]+\|\n((?:\|.+\|\n?)+)/g,
+    (match, headerRow, bodyRows) => {
+      const headers = headerRow.split('|').map((h: string) => h.trim()).filter(Boolean);
+      const rows = bodyRows.trim().split('\n').map((row: string) =>
+        row.split('|').map((cell: string) => cell.trim()).filter(Boolean)
+      );
+
+      const tableStyle = `border-collapse: collapse; width: 100%; margin: 12px 0; font-size: 13px;`;
+      const thStyle = `padding: 8px 12px; text-align: left; border-bottom: 2px solid ${EmailColors.structure.border}; background-color: ${EmailColors.structure.backgroundAlt}; font-weight: 600; color: ${EmailColors.text.headline};`;
+      const tdStyle = `padding: 8px 12px; text-align: left; border-bottom: 1px solid ${EmailColors.structure.borderLight}; color: ${EmailColors.text.body};`;
+
+      let tableHtml = `<table style="${tableStyle}"><thead><tr>`;
+      headers.forEach((h: string) => {
+        tableHtml += `<th style="${thStyle}">${h}</th>`;
+      });
+      tableHtml += `</tr></thead><tbody>`;
+      rows.forEach((row: string[]) => {
+        tableHtml += `<tr>`;
+        row.forEach((cell: string) => {
+          tableHtml += `<td style="${tdStyle}">${cell}</td>`;
+        });
+        tableHtml += `</tr>`;
+      });
+      tableHtml += `</tbody></table>`;
+      return tableHtml;
+    }
+  );
+
+  // Convert headers (### Header -> <h3>)
+  html = html.replace(/^### (.+)$/gm, `<h3 style="margin: 16px 0 8px; font-size: 14px; font-weight: 600; color: ${EmailColors.text.headline};">$1</h3>`);
+  html = html.replace(/^## (.+)$/gm, `<h2 style="margin: 16px 0 8px; font-size: 15px; font-weight: 600; color: ${EmailColors.text.headline};">$1</h2>`);
+  html = html.replace(/^# (.+)$/gm, `<h1 style="margin: 16px 0 8px; font-size: 16px; font-weight: 600; color: ${EmailColors.text.headline};">$1</h1>`);
+
+  // Convert bold (**text** or __text__)
+  html = html.replace(/\*\*([^*]+)\*\*/g, `<strong style="font-weight: 600;">$1</strong>`);
+  html = html.replace(/__([^_]+)__/g, `<strong style="font-weight: 600;">$1</strong>`);
+
+  // Convert italic (*text* or _text_) - be careful not to match bold
+  html = html.replace(/(?<!\*)\*([^*]+)\*(?!\*)/g, `<em>$1</em>`);
+  html = html.replace(/(?<!_)_([^_]+)_(?!_)/g, `<em>$1</em>`);
+
+  // Convert bullet lists (- item or * item)
+  html = html.replace(/^[-*] (.+)$/gm, `<div style="padding: 4px 0 4px 16px; position: relative;"><span style="position: absolute; left: 0; color: ${EmailColors.text.meta};">•</span>$1</div>`);
+
+  // Convert numbered lists (1. item)
+  let listCounter = 0;
+  html = html.replace(/^(\d+)\. (.+)$/gm, (_, num, content) => {
+    listCounter = parseInt(num);
+    return `<div style="padding: 4px 0 4px 24px; position: relative;"><span style="position: absolute; left: 0; color: ${EmailColors.text.meta}; font-weight: 500;">${listCounter}.</span>${content}</div>`;
+  });
+
+  // Convert line breaks to <br> (but not if followed by a block element)
+  html = html.replace(/\n\n/g, '</p><p style="margin: 12px 0;">');
+  html = html.replace(/\n(?!<)/g, '<br>');
+
+  // Wrap in paragraph if not already wrapped
+  if (!html.startsWith('<')) {
+    html = `<p style="margin: 0;">${html}</p>`;
+  }
+
+  return html;
+}
