@@ -5,11 +5,41 @@
  * email notification types and SEC filing categories.
  */
 
-import { EmailType } from './types';
+import { EmailType, FilingTemplateData } from './types';
 import { renderAsync } from '@react-email/render';
 import * as SECFilingEmailTemplate from '../../components/email/templates/SECFilingEmailTemplate';
 const { default: SECFilingEmailTemplateComponent } = SECFilingEmailTemplate;
 import { markdownToHtml } from '../../components/ui/email/design-system';
+
+// Import minimalist templates for Phase 2 design
+import { Form4MinimalistTemplate } from '../../components/ui/email/templates/form4-minimalist-template';
+import { Form10KMinimalistTemplate } from '../../components/ui/email/templates/10k-minimalist-template';
+import { Form10QMinimalistTemplate } from '../../components/ui/email/templates/10q-minimalist-template';
+import { GenericMinimalistTemplate } from '../../components/ui/email/templates/generic-minimalist-template';
+import * as React from 'react';
+
+/**
+ * Template registry for O(1) lookup - Morning Brew style minimalist templates
+ * Maps filing types to their corresponding minimalist template components
+ */
+const MINIMALIST_TEMPLATE_REGISTRY: Record<string, React.ComponentType<{ filing: FilingTemplateData }>> = {
+  'FORM4': Form4MinimalistTemplate,
+  'FORM 4': Form4MinimalistTemplate,
+  '4': Form4MinimalistTemplate,
+  '10-K': Form10KMinimalistTemplate,
+  '10K': Form10KMinimalistTemplate,
+  '10-Q': Form10QMinimalistTemplate,
+  '10Q': Form10QMinimalistTemplate,
+};
+
+/**
+ * Get the appropriate minimalist template for a filing type
+ * Falls back to generic template if no specific template exists
+ */
+function getMinimalistTemplate(filingType: string): React.ComponentType<{ filing: FilingTemplateData }> {
+  const normalizedType = filingType?.toUpperCase().trim() || '';
+  return MINIMALIST_TEMPLATE_REGISTRY[normalizedType] || GenericMinimalistTemplate;
+}
 
 // Helper function to generate plain text version of email
 function generatePlainTextEmail(filings: Record<string, unknown>[], errors: Record<string, unknown>[]) {
@@ -706,6 +736,7 @@ Manage preferences: ${data.preferencesUrl}
 
 /**
  * Generate an HTML version of a template
+ * Updated to use minimalist Morning Brew-style templates for SEC filings
  */
 export async function getEmailTemplate(
   templateType: EmailType,
@@ -713,7 +744,10 @@ export async function getEmailTemplate(
 ): Promise<{ html: string; text: string }> {
   switch (templateType) {
     case EmailType.IMMEDIATE: {
-      const html = await renderAsync(SECFilingEmailTemplateComponent({ filing: data.filing }));
+      // Use minimalist template based on filing type
+      const filing = data.filing as FilingTemplateData;
+      const MinimalistTemplate = getMinimalistTemplate(filing?.filingType || '');
+      const html = await renderAsync(React.createElement(MinimalistTemplate, { filing }));
       return {
         html,
         text: generatePlainTextEmail([data.filing], [])
@@ -724,24 +758,28 @@ export async function getEmailTemplate(
     case EmailType.WELCOME:
       return welcomeTemplate(data);
     case EmailType.FORM4: {
-      const html = await renderAsync(SECFilingEmailTemplateComponent({ filing: data.filing }));
+      // Use Form 4 minimalist template
+      const filing = data.filing as FilingTemplateData;
+      const html = await renderAsync(React.createElement(Form4MinimalistTemplate, { filing }));
       return {
         html,
         text: generatePlainTextEmail([data.filing], [])
       };
     }
     case EmailType.FILING_NOTIFICATION: {
-      // Create filing object matching SECFilingEmailTemplate expected format
-      const filing = {
+      // Create filing object matching minimalist template expected format
+      const filing: FilingTemplateData = {
         companyName: data.companyName as string,
         symbol: data.ticker as string,
         filingType: data.filingType as string,
-        filingDate: data.filingDate as Date,
+        filingDate: data.filingDate as string,
         summaryText: data.summary as string,
         filingUrl: data.filingUrl as string,
-        summaryData: data.summaryData as Record<string, unknown> | undefined  // Pass structured AI data to template
+        summaryData: data.summaryData as FilingTemplateData['summaryData']
       };
-      const html = await renderAsync(SECFilingEmailTemplateComponent({ filing }));
+      // Use minimalist template based on filing type
+      const MinimalistTemplate = getMinimalistTemplate(filing.filingType);
+      const html = await renderAsync(React.createElement(MinimalistTemplate, { filing }));
       return {
         html,
         text: generatePlainTextEmail([filing], [])

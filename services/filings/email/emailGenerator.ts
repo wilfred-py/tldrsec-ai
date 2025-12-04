@@ -3,6 +3,14 @@ import { getFormMetadata } from '../../../lib/sec-edgar/form-registry';
 import { emailClient } from '../../../lib/email';
 import { prisma } from '../../../lib/db';
 import { monitoring } from '@/lib/monitoring';
+import { renderAsync } from '@react-email/render';
+import * as React from 'react';
+import { Form4MinimalistTemplate } from '../../../components/ui/email/templates/form4-minimalist-template';
+import { Form10KMinimalistTemplate } from '../../../components/ui/email/templates/10k-minimalist-template';
+import { Form10QMinimalistTemplate } from '../../../components/ui/email/templates/10q-minimalist-template';
+import { GenericMinimalistTemplate } from '../../../components/ui/email/templates/generic-minimalist-template';
+import { FilingTemplateData } from '../../../lib/email/types';
+import { EmailColors } from '../../../components/ui/email/design-system';
 
 // Define a safe version of recordEmailSent that handles missing function
 const safeRecordEmailSent = (emailType: string, recipient: string, success: boolean, tags: Record<string, string> = {}): void => {
@@ -16,86 +24,148 @@ const safeRecordEmailSent = (emailType: string, recipient: string, success: bool
 };
 
 /**
- * Generate an HTML version of the email
+ * Template registry for O(1) lookup - Morning Brew style minimalist templates
  */
-export function generateHtmlEmail(summaries: FilingSummaryResult[], errors: {ticker: string, error: string}[] = []): string {
-  let html = `<!DOCTYPE html>
-  <html>
-  <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>SEC Filing Summaries</title>
-    <style>
-      body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 800px; margin: 0 auto; padding: 20px; }
-      h1 { color: #2c3e50; }
-      h2 { color: #3498db; margin-top: 30px; }
-      .filing { border: 1px solid #ddd; padding: 15px; margin-bottom: 20px; border-radius: 5px; }
-      .meta { color: #7f8c8d; font-size: 0.9em; margin-bottom: 10px; }
-      .key-points { background-color: #f9f9f9; padding: 10px 15px; border-left: 3px solid #3498db; }
-      .key-point { margin-bottom: 8px; }
-      .sec-link { display: inline-block; margin-top: 15px; color: #2980b9; text-decoration: none; }
-      .sec-link:hover { text-decoration: underline; }
-      .divider { border-top: 1px solid #eee; margin: 20px 0; }
-      .footer { font-size: 0.8em; color: #7f8c8d; margin-top: 30px; text-align: center; }
-      .error { color: #e74c3c; }
-    </style>
-  </head>
-  <body>
-    <h1>SEC Filing Summaries - ${new Date().toLocaleDateString()}</h1>`;
-  
-  // Add summaries
-  summaries.forEach(summary => {
-    // Normalize the form type before metadata lookup
-    const normalizedFilingType = summary.filingType.replace(/\//g, '-').toUpperCase();
-    const formMetadata = getFormMetadata(normalizedFilingType);
-    const formName = formMetadata ? formMetadata.displayName : summary.filingType;
-    const filingDate = new Date(summary.filingDate).toLocaleDateString();
-    
-    html += `<div class="filing">
-      <h2>${summary.companyName} (${summary.ticker}) - ${formName}</h2>
-      <div class="meta">Filed on: ${filingDate}</div>
-      
-      <p>${summary.summaryText || `This is a ${formName} filing from ${summary.companyName}. View the original filing for complete details.`}</p>
-      
-      <div class="key-points">
-        <h3>Key Points:</h3>
-        <ul>`;
-        
-    summary.keyPoints.forEach(point => {
-      html += `<li class="key-point">${point}</li>`;
-    });
-    
-    html += `</ul>
-      </div>
-      
-      <a href="${summary.url}" class="sec-link">View on SEC Website</a>
-    </div>
-    <div class="divider"></div>`;
+const MINIMALIST_TEMPLATE_REGISTRY: Record<string, React.ComponentType<{ filing: FilingTemplateData }>> = {
+  'FORM4': Form4MinimalistTemplate,
+  'FORM 4': Form4MinimalistTemplate,
+  '4': Form4MinimalistTemplate,
+  '10-K': Form10KMinimalistTemplate,
+  '10K': Form10KMinimalistTemplate,
+  '10-Q': Form10QMinimalistTemplate,
+  '10Q': Form10QMinimalistTemplate,
+};
+
+/**
+ * Get the appropriate minimalist template for a filing type
+ */
+function getMinimalistTemplate(filingType: string): React.ComponentType<{ filing: FilingTemplateData }> {
+  const normalizedType = filingType?.toUpperCase().trim() || '';
+  return MINIMALIST_TEMPLATE_REGISTRY[normalizedType] || GenericMinimalistTemplate;
+}
+
+/**
+ * Convert FilingSummaryResult to FilingTemplateData for minimalist templates
+ */
+function toFilingTemplateData(summary: FilingSummaryResult): FilingTemplateData {
+  // Extract summaryJSON from rawData if available (populated by Phase 1)
+  const summaryJSON = (summary.rawData as Record<string, unknown>)?.summaryJSON ||
+                      (summary as Record<string, unknown>).summaryJSON ||
+                      {};
+
+  return {
+    companyName: summary.companyName,
+    symbol: summary.ticker,
+    ticker: summary.ticker,
+    filingType: summary.filingType,
+    filingDate: summary.filingDate,
+    filingUrl: summary.url,
+    summaryText: summary.summaryText,
+    summaryData: summaryJSON as FilingTemplateData['summaryData'],
+  };
+}
+
+/**
+ * Generate an HTML version of the email using minimalist templates
+ * Morning Brew-style design: clean, scannable, modern
+ */
+export async function generateHtmlEmail(summaries: FilingSummaryResult[], errors: {ticker: string, error: string}[] = []): Promise<string> {
+  // Render each filing with the appropriate minimalist template
+  const filingHtmlParts: string[] = [];
+
+  for (const summary of summaries) {
+    const filing = toFilingTemplateData(summary);
+    const MinimalistTemplate = getMinimalistTemplate(summary.filingType);
+
+    // Render the minimalist template for this filing
+    const filingHtml = await renderAsync(React.createElement(MinimalistTemplate, { filing }));
+    filingHtmlParts.push(filingHtml);
+  }
+
+  // Build the combined email with Morning Brew-style header
+  const formattedDate = new Date().toLocaleDateString('en-US', {
+    weekday: 'long',
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric'
   });
-  
+
+  let html = `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SEC Filing Summaries - ${formattedDate}</title>
+</head>
+<body style="margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; background-color: ${EmailColors.structure.background}; color: ${EmailColors.text.body};">
+  <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
+    <!-- Email Header -->
+    <div style="text-align: center; padding: 20px 0; border-bottom: 2px solid ${EmailColors.structure.border};">
+      <h1 style="margin: 0; font-size: 28px; color: ${EmailColors.text.headline};">📄 SEC Filing Digest</h1>
+      <p style="margin: 8px 0 0; color: ${EmailColors.text.meta}; font-size: 14px;">${formattedDate}</p>
+      <p style="margin: 4px 0 0; color: ${EmailColors.text.meta}; font-size: 12px;">${summaries.length} filing${summaries.length !== 1 ? 's' : ''} for your tracked companies</p>
+    </div>
+
+    <!-- Filing Summaries -->
+    <div style="padding: 20px 0;">`;
+
+  // Add each rendered filing section
+  for (let i = 0; i < filingHtmlParts.length; i++) {
+    // Extract inner content from each template (skip doctype, html, body wrappers)
+    const innerContent = extractInnerContent(filingHtmlParts[i]);
+    html += `
+      <div style="margin-bottom: 25px; padding-bottom: 25px; border-bottom: 1px solid ${EmailColors.structure.border};">
+        ${innerContent}
+      </div>`;
+  }
+
   // Add errors if any
   if (errors.length > 0) {
-    html += `<div class="error">
-      <h3>Issues Encountered:</h3>
-      <ul>`;
-    
+    html += `
+      <div style="background-color: #fef2f2; border: 1px solid #fecaca; padding: 15px; border-radius: 8px; margin-top: 20px;">
+        <h3 style="margin: 0 0 10px; color: #dc2626; font-size: 14px;">⚠️ Issues Encountered</h3>
+        <ul style="margin: 0; padding-left: 20px;">`;
+
     errors.forEach(err => {
-      html += `<li>${err.ticker}: ${err.error}</li>`;
+      html += `<li style="color: #7f1d1d; font-size: 13px; margin-bottom: 4px;">${err.ticker}: ${err.error}</li>`;
     });
-    
+
     html += `</ul>
-    </div>`;
+      </div>`;
   }
-  
+
   // Add footer
-  html += `<div class="footer">
-      <p>This email was generated automatically by TLDR SEC. For more information, visit <a href="https://tldrsec.app">tldrsec.app</a>.</p>
-      <p>To unsubscribe, reply to this email with "unsubscribe" in the subject line.</p>
+  html += `
     </div>
-  </body>
-  </html>`;
-  
+
+    <!-- Footer -->
+    <div style="text-align: center; padding: 20px; border-top: 1px solid ${EmailColors.structure.border}; margin-top: 20px;">
+      <p style="margin: 0 0 8px; color: ${EmailColors.text.meta}; font-size: 12px;">
+        Powered by <a href="https://tldrsec.app" style="color: ${EmailColors.brand.primary}; text-decoration: none;">TLDR SEC</a>
+      </p>
+      <p style="margin: 0; color: ${EmailColors.text.meta}; font-size: 11px;">
+        <a href="${process.env.NEXT_PUBLIC_APP_URL || 'https://tldrsec.app'}/settings/notifications" style="color: ${EmailColors.text.meta}; text-decoration: underline;">Manage notification preferences</a>
+      </p>
+    </div>
+  </div>
+</body>
+</html>`;
+
   return html;
+}
+
+/**
+ * Extract inner content from a fully rendered HTML email template
+ * Removes the DOCTYPE, html, head, and body wrappers
+ */
+function extractInnerContent(fullHtml: string): string {
+  // Find the main content div inside the template
+  const bodyMatch = fullHtml.match(/<body[^>]*>([\s\S]*)<\/body>/i);
+  if (bodyMatch) {
+    return bodyMatch[1];
+  }
+  // Fallback: return as-is if no body tag found
+  return fullHtml;
 }
 
 /**
@@ -190,8 +260,8 @@ export async function sendSummaryEmail(email: string, summaries: FilingSummaryRe
   }
   
   try {
-    // Generate email content
-    const emailHtml = generateHtmlEmail(summaries, errors);
+    // Generate email content using minimalist templates
+    const emailHtml = await generateHtmlEmail(summaries, errors);
     const plainText = generatePlainTextEmail(summaries, errors);
     
     console.log(`[INFO][EmailGenerator] 📧 Sending email to ${email} with ${summaries.length} summaries and ${errors.length} errors`);
