@@ -34,6 +34,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - `npm run db:studio` - Open Prisma Studio
 - `npm run db:test` - Test database connection
 
+### Route Management
+- `npm run routes:enable-dev` - Enable development-essential API routes (system health, processing metrics, companies list/search)
+- `npm run routes:disable-non-essential` - Disable non-essential routes for Vercel Hobby plan deployment
+- `npm run routes:disable-preserve-dev` - Disable non-essential routes while preserving development routes
+
 ### Specialized Testing
 - `npm run test:parsers` - Run SEC filing parser tests
 - `npm run test:tesla` - Test Tesla filing parsing

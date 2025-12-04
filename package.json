@@ -39,6 +39,9 @@
     "db:push": "prisma db push",
     "db:studio": "prisma studio",
     "db:test": "npx tsx lib/test-db.ts",
+    "routes:enable-dev": "bash scripts/enable-development-routes.sh",
+    "routes:disable-non-essential": "bash scripts/disable-non-essential-routes.sh",
+    "routes:disable-preserve-dev": "PRESERVE_DEV_ROUTES=true bash scripts/disable-non-essential-routes.sh",
     "check-stuck-jobs": "npx tsx scripts/check-stuck-jobs.ts",
     "clean-stuck-jobs": "npx tsx scripts/clean-stuck-jobs.ts",
     "seed:cik-mappings": "npx tsx scripts/seed-cik-mappings.ts",
@@ -221,7 +224,7 @@
     "xpath": "^0.0.34",
     "xss": "^1.0.15",
     "yargs": "^17.7.2",
-    "zod": "^3.25.76",
+    "zod": "3.25.76",
     "zustand": "^5.0.4"
   },
   "engines": {
