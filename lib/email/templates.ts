@@ -9,6 +9,7 @@ import { EmailType } from './types';
 import { renderAsync } from '@react-email/render';
 import * as SECFilingEmailTemplate from '../../components/email/templates/SECFilingEmailTemplate';
 const { default: SECFilingEmailTemplateComponent } = SECFilingEmailTemplate;
+import { markdownToHtml } from '../../components/ui/email/design-system';
 
 // Helper function to generate plain text version of email
 function generatePlainTextEmail(filings: Record<string, unknown>[], errors: Record<string, unknown>[]) {
@@ -529,20 +530,18 @@ export function digestTemplate(
         else if (filing.filingType === '8-K') {
           htmlContent += `
             <p><strong>Event:</strong> ${json.eventType || 'N/A'}</p>
-            <p>${json.summary || ''}</p>
+            ${markdownToHtml(String(json.summary || ''))}
           `;
-        } 
-        else if (filing.filingType === 'Form4') {
+        }
+        else if (filing.filingType === 'Form4' || filing.filingType === 'Form 4') {
           htmlContent += `
             <p><strong>Insider:</strong> ${json.filerName || 'N/A'}</p>
-            <p>${json.summary || ''}</p>
+            ${markdownToHtml(String(json.summary || ''))}
           `;
         }
       } else if (filing.summaryText) {
-        // Fallback to plain text summary (truncated)
-        const snippet = filing.summaryText.substring(0, 150) + 
-          (filing.summaryText.length > 150 ? '...' : '');
-        htmlContent += `<p>${snippet}</p>`;
+        // Convert markdown to HTML for proper rendering
+        htmlContent += markdownToHtml(filing.summaryText);
       }
       
       htmlContent += `
