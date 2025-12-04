@@ -281,82 +281,71 @@ export function getChangeArrow(change: number | string | undefined): string {
 }
 
 /**
- * Convert markdown to email-safe HTML
- * Handles common patterns: headers, bold, italic, tables, lists, newlines
- * Email-safe: Uses inline styles compatible with email clients
+ * Convert markdown text to email-safe HTML with inline styles
+ * Handles: headers, bold, italic, bullet lists, numbered lists, tables, line breaks
  */
 export function markdownToHtml(markdown: string | undefined): string {
   if (!markdown) return '';
 
   let html = markdown;
 
-  // Escape HTML entities first (before adding our own HTML)
-  html = html
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;');
+  // Escape HTML entities first (but preserve intentional HTML)
+  html = html.replace(/&(?!amp;|lt;|gt;|quot;|#)/g, '&amp;');
 
-  // Convert markdown tables to HTML tables
-  // Match table with header row, separator row, and data rows
-  html = html.replace(
-    /\|(.+)\|\n\|[-:\s|]+\|\n((?:\|.+\|\n?)+)/g,
-    (match, headerRow, bodyRows) => {
-      const headers = headerRow.split('|').map((h: string) => h.trim()).filter(Boolean);
-      const rows = bodyRows.trim().split('\n').map((row: string) =>
-        row.split('|').map((cell: string) => cell.trim()).filter(Boolean)
-      );
+  // Convert markdown tables to styled HTML tables
+  const tableRegex = /\|(.+)\|\n\|[-:\s|]+\|\n((?:\|.+\|\n?)+)/g;
+  html = html.replace(tableRegex, (match, header, body) => {
+    const headerCells = header.split('|').filter((c: string) => c.trim()).map((c: string) => c.trim());
+    const bodyRows = body.trim().split('\n').map((row: string) =>
+      row.split('|').filter((c: string) => c.trim()).map((c: string) => c.trim())
+    );
 
-      const tableStyle = `border-collapse: collapse; width: 100%; margin: 12px 0; font-size: 13px;`;
-      const thStyle = `padding: 8px 12px; text-align: left; border-bottom: 2px solid ${EmailColors.structure.border}; background-color: ${EmailColors.structure.backgroundAlt}; font-weight: 600; color: ${EmailColors.text.headline};`;
-      const tdStyle = `padding: 8px 12px; text-align: left; border-bottom: 1px solid ${EmailColors.structure.borderLight}; color: ${EmailColors.text.body};`;
+    const headerHtml = headerCells.map((cell: string) =>
+      `<th style="padding:8px 12px;text-align:left;font-weight:600;border-bottom:2px solid ${EmailColors.structure.border};color:${EmailColors.text.headline};font-size:12px;text-transform:uppercase;">${cell}</th>`
+    ).join('');
 
-      let tableHtml = `<table style="${tableStyle}"><thead><tr>`;
-      headers.forEach((h: string) => {
-        tableHtml += `<th style="${thStyle}">${h}</th>`;
-      });
-      tableHtml += `</tr></thead><tbody>`;
-      rows.forEach((row: string[]) => {
-        tableHtml += `<tr>`;
-        row.forEach((cell: string) => {
-          tableHtml += `<td style="${tdStyle}">${cell}</td>`;
-        });
-        tableHtml += `</tr>`;
-      });
-      tableHtml += `</tbody></table>`;
-      return tableHtml;
-    }
-  );
+    const bodyHtml = bodyRows.map((row: string[], idx: number) => {
+      const bgColor = idx % 2 === 0 ? EmailColors.structure.background : EmailColors.structure.backgroundAlt;
+      return `<tr style="background-color:${bgColor}">${row.map(cell =>
+        `<td style="padding:8px 12px;border-bottom:1px solid ${EmailColors.structure.borderLight};font-size:14px;color:${EmailColors.text.body};">${cell}</td>`
+      ).join('')}</tr>`;
+    }).join('');
 
-  // Convert headers (### Header -> <h3>)
-  html = html.replace(/^### (.+)$/gm, `<h3 style="margin: 16px 0 8px; font-size: 14px; font-weight: 600; color: ${EmailColors.text.headline};">$1</h3>`);
-  html = html.replace(/^## (.+)$/gm, `<h2 style="margin: 16px 0 8px; font-size: 15px; font-weight: 600; color: ${EmailColors.text.headline};">$1</h2>`);
-  html = html.replace(/^# (.+)$/gm, `<h1 style="margin: 16px 0 8px; font-size: 16px; font-weight: 600; color: ${EmailColors.text.headline};">$1</h1>`);
+    return `<table style="width:100%;border-collapse:collapse;margin:12px 0;"><thead><tr>${headerHtml}</tr></thead><tbody>${bodyHtml}</tbody></table>`;
+  });
+
+  // Convert headers (### Header -> styled div)
+  html = html.replace(/^### (.+)$/gm, `<div style="font-size:14px;font-weight:600;color:${EmailColors.text.headline};margin:16px 0 8px 0;">$1</div>`);
+  html = html.replace(/^## (.+)$/gm, `<div style="font-size:15px;font-weight:600;color:${EmailColors.text.headline};margin:16px 0 8px 0;">$1</div>`);
+  html = html.replace(/^# (.+)$/gm, `<div style="font-size:16px;font-weight:700;color:${EmailColors.text.headline};margin:16px 0 8px 0;">$1</div>`);
 
   // Convert bold (**text** or __text__)
-  html = html.replace(/\*\*([^*]+)\*\*/g, `<strong style="font-weight: 600;">$1</strong>`);
-  html = html.replace(/__([^_]+)__/g, `<strong style="font-weight: 600;">$1</strong>`);
+  html = html.replace(/\*\*(.+?)\*\*/g, `<strong style="font-weight:600;color:${EmailColors.text.headline};">$1</strong>`);
+  html = html.replace(/__(.+?)__/g, `<strong style="font-weight:600;color:${EmailColors.text.headline};">$1</strong>`);
 
   // Convert italic (*text* or _text_) - be careful not to match bold
-  html = html.replace(/(?<!\*)\*([^*]+)\*(?!\*)/g, `<em>$1</em>`);
-  html = html.replace(/(?<!_)_([^_]+)_(?!_)/g, `<em>$1</em>`);
+  html = html.replace(/(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)/g, '<em style="font-style:italic;">$1</em>');
+  html = html.replace(/(?<!_)_(?!_)(.+?)(?<!_)_(?!_)/g, '<em style="font-style:italic;">$1</em>');
 
   // Convert bullet lists (- item or * item)
-  html = html.replace(/^[-*] (.+)$/gm, `<div style="padding: 4px 0 4px 16px; position: relative;"><span style="position: absolute; left: 0; color: ${EmailColors.text.meta};">•</span>$1</div>`);
+  html = html.replace(/^[\-\*] (.+)$/gm, `<div style="padding:4px 0 4px 16px;font-size:14px;color:${EmailColors.text.body};"><span style="color:${EmailColors.text.meta};margin-right:8px;">•</span>$1</div>`);
 
   // Convert numbered lists (1. item)
   let listCounter = 0;
-  html = html.replace(/^(\d+)\. (.+)$/gm, (_, num, content) => {
-    listCounter = parseInt(num);
-    return `<div style="padding: 4px 0 4px 24px; position: relative;"><span style="position: absolute; left: 0; color: ${EmailColors.text.meta}; font-weight: 500;">${listCounter}.</span>${content}</div>`;
+  html = html.replace(/^(\d+)\. (.+)$/gm, (match, num, content) => {
+    listCounter++;
+    return `<div style="padding:4px 0 4px 16px;font-size:14px;color:${EmailColors.text.body};"><span style="color:${EmailColors.text.meta};margin-right:8px;">${num}.</span>${content}</div>`;
   });
 
-  // Convert line breaks to <br> (but not if followed by a block element)
-  html = html.replace(/\n\n/g, '</p><p style="margin: 12px 0;">');
-  html = html.replace(/\n(?!<)/g, '<br>');
+  // Convert line breaks (double newline = paragraph break)
+  html = html.replace(/\n\n/g, '</p><p style="margin:12px 0;">');
+
+  // Convert single newlines to <br> only where appropriate (not after block elements)
+  html = html.replace(/(?<!<\/div>|<\/table>|<\/p>)\n(?!<)/g, '<br>');
 
   // Wrap in paragraph if not already wrapped
-  if (!html.startsWith('<')) {
-    html = `<p style="margin: 0;">${html}</p>`;
+  if (!html.startsWith('<') && !html.startsWith('</')) {
+    html = `<p style="margin:0;">${html}</p>`;
   }
 
   return html;

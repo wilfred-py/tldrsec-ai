@@ -126,6 +126,17 @@ describe('Email Section Components', () => {
       expect(container.textContent).toContain('Test Value');
     });
 
+    it('handles empty value', () => {
+      const { container } = render(
+        <table>
+          <tbody>
+            <DataRow label="Test Label" value="" />
+          </tbody>
+        </table>
+      );
+      expect(container.textContent).toContain('Test Label');
+    });
+
     it('handles numeric value', () => {
       const { container } = render(
         <table>
@@ -146,12 +157,14 @@ describe('Email Section Components', () => {
           </tbody>
         </table>
       );
+      // DataRow renders change in a third column
       expect(container.textContent).toContain('+5%');
     });
   });
 
   describe('BulletList', () => {
     it('renders list items', () => {
+      // BulletList expects objects with text property
       const items = [
         { text: 'Item 1' },
         { text: 'Item 2' },
@@ -164,6 +177,7 @@ describe('Email Section Components', () => {
           </tbody>
         </table>
       );
+      // BulletList uses table rows with bullet spans, not <li> elements
       expect(container.textContent).toContain('Item 1');
       expect(container.textContent).toContain('Item 2');
       expect(container.textContent).toContain('Item 3');
@@ -177,6 +191,7 @@ describe('Email Section Components', () => {
           </tbody>
         </table>
       );
+      // Empty array renders an empty table
       expect(container.querySelectorAll('tr').length).toBeGreaterThanOrEqual(0);
     });
 

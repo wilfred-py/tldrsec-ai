@@ -12,9 +12,15 @@ This file provides a chronological index of all completed projects across archiv
 ## Recent Activity (Not Yet Archived)
 
 **Projects completed in last 30 days** (tracked in PROGRESS.md):
-- Email Summarization Improvements - Phase 3 (2025-12-02) 🔄 Active - Journalist tone AI prompts (Matt Levine style)
-- Email Summarization Improvements - Phase 2 (2025-12-02) 🔄 Active - Morning Brew-style minimalist templates
-- Email Summarization Improvements - Phase 1 (2025-12-01) 🔄 Active - Populate summaryJSON field
+- Digest Email Markdown Rendering Fix (2025-12-04) 🔄 Complete - Fixed digestTemplate() to use markdownToHtml() for proper email rendering
+- Minimalist Email Template E2E Validation (2025-12-04) 🔄 Complete - Sent test email with 5 summaries to validate minimalist design
+- Email Template Test Fix (2025-12-04) 🔄 Complete - Updated SECFilingEmailTemplate.test.tsx assertions for minimalist templates
+- Email Template Design Validation Research (2025-12-04) 🔄 Research - Confirmed minimalist templates ARE being used correctly, test assertions outdated
+- Email Markdown Rendering Fix (2025-12-04) 🔄 Complete - Added markdownToHtml() function to design-system.ts
+- Morning Pipeline Source Verification (2025-12-03) 🔄 Research - Confirmed production pipeline origin
+- Email Summarization Improvements - Phase 3 (2025-12-02) 🔄 Complete - Journalist tone AI prompts (Matt Levine style)
+- Email Summarization Improvements - Phase 2 (2025-12-01) 🔄 Complete - Minimalist templates integrated
+- Email Summarization Improvements - Phase 1 (2025-12-01) 🔄 Complete - Populate summaryJSON field
 - Daily Pipeline Verification - COMPLETE (2025-11-30) 🔄 Active in PROGRESS.md
 - Production Pipeline Validation Confidence Research (2025-11-29) 🔄 Active in PROGRESS.md
 - Filing Validation Integration (2025-11-29) 🔄 Active in PROGRESS.md
@@ -55,10 +61,10 @@ This file provides a chronological index of all completed projects across archiv
 
 ## Archive Statistics
 - **Total Archived Projects**: 17 projects across 3 weekly archives
-- **Current PROGRESS.md Lines**: 92 lines (threshold: 500)
-- **Last Archive Check**: 2025-12-02
+- **Current PROGRESS.md Lines**: 110 lines (threshold: 500)
+- **Last Archive Check**: 2025-12-04
 - **Last Archive Update**: 2025-11-14 (most recent archival action)
-- **Recent Activity (Not Yet Archived)**: 6 projects completed in last 30 days
+- **Recent Activity (Not Yet Archived)**: 12 projects completed in last 30 days
 - **Archive System**: ✅ ACTIVE (auto-archives when >500 lines AND projects >30 days old)
 - **Archives Created**:
   - `27-Oct-2025.md` - Newsletter & Security implementations (6 projects)
