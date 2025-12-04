@@ -1,81 +1,50 @@
-# Current Progress: Daily Pipeline Verification Implementation
+# Current Progress: Email Summarization Improvements
 
 ## Current Status
-**Date**: 2025-11-30
-**Branch**: feature/daily-pipeline-verification
-**Status**: ✅ Implementation complete, manual verification passed
+**Date**: 2025-12-02
+**Branch**: feat/journalist-tone-prompts
+**Status**: Phase 1, 2 & 3 Complete ✅
 
 ---
 
-## Current Session: Daily Pipeline Verification - COMPLETE ✅
+## Current Session: Email Summarization System Improvements
 
-### Implementation Summary
+### Phase 1: Populate summaryJSON Field ✅ COMPLETE (2025-12-01)
+- Added `data?: Record<string, unknown>` to `SummaryGenerationResult` interface
+- Saving AI-generated structured JSON to `summaryJSON` database field
+- Passing `summaryData` to email templates
 
-Built automated daily verification system that checks all SEC filings from previous day completed the full pipeline: Discovery → Fetch → Summarize → Email
+### Phase 2: Morning Brew-Style Email Templates ✅ COMPLETE (2025-12-02)
+- Created design system: `components/ui/email/design-system.ts`
+- Created 7 reusable section components in `components/ui/email/templates/sections/`
+- Created 4 minimalist templates: Form 4, 10-K, 10-Q, Generic
+- Updated template router with registry pattern for O(1) lookup
+- E2E test passed - email sent successfully
+- Manual verification passed - screenshot confirmed minimalist design
 
-| Phase | Description | Status |
-|-------|-------------|--------|
-| 1 | Database Schema (`DailyPipelineVerification` table) | ✅ Complete |
-| 2 | Core Verification Logic (4-phase checking) | ✅ Complete |
-| 3 | Auto-Remediation (re-queue failed filings) | ✅ Complete |
-| 4 | Console Reporting & DB Persistence | ✅ Complete |
-| 5 | npm scripts & Documentation | ✅ Complete |
-
-### Files Created/Modified
-
-| File | Change |
-|------|--------|
-| `prisma/schema.prisma` | Added `DailyPipelineVerification` model |
-| `scripts/verify-daily-pipeline.ts` | New 846-line verification script |
-| `package.json` | Added `verify:daily` and `verify:daily:no-remediation` scripts |
-| `CLAUDE.md` | Added Daily Verification section |
-
-### Manual Verification Results ✅
-
-| Check | Status | Notes |
-|-------|--------|-------|
-| Console output readable | ✅ | Tables, headers, metrics display correctly |
-| Status icons render | ✅ | ✅⏳❌ all rendering properly |
-| Upsert works | ✅ | Re-running same date updates existing record |
-| Database persistence | ✅ | Results saved without errors |
-
-### Operational Guidance
-
-**When to run (AEST):** 8:00-9:00 AM weekday mornings
-- US market closes 4 PM ET = 8:00 AM AEST next day
-- Gives overnight filings time to be discovered and processed
-
-**What to look for:**
-- Green: `✅ Completed: X (100%)` - All filings processed
-- Yellow: `⏳ Pending: X` - Jobs still processing (may be fine early morning)
-- Red: `❌ Failed: X` with `⚠️ ACTION REQUIRED` - Manual intervention needed
-
-**Weekend expectations:**
-- Saturday AEST → verifying Friday US filings (expect activity)
-- Sunday AEST → verifying Saturday US filings (expect near-zero)
-- Monday AEST → verifying Sunday US filings (expect zero)
-
-### Usage
-
-```bash
-npm run verify:daily                       # Verify yesterday + auto-remediate
-npm run verify:daily:no-remediation        # Dry-run without remediation
-npm run verify:daily -- --date=2025-11-28  # Verify specific date
-```
+### Phase 3: Journalist Tone AI Prompts ✅ COMPLETE (2025-12-02)
+- Rewrote `lib/ai/prompts/form-4.ts` - Matt Levine style, lead with punchline
+- Rewrote `lib/ai/prompts/form-10k.ts` - Financial journalist, comparative framing
+- Rewrote `lib/ai/prompts/form-10q.ts` - Quarterly trend focus, YoY comparisons
+- Created `lib/ai/prompts/form-8k.ts` - Breaking news style (was empty before)
+- **Updated production code**: `services/filing/summaryGenerationService.ts` `generateSummaryPrompt()`
+- E2E test passed - all 5 tickers (TSLA, VRT, COIN, KO, NVDA) generated summaries
+- Email sent successfully with new journalist-tone summaries
 
 ---
 
 ## Recently Completed (Last 30 Days)
 
-### Production Pipeline Validation Confidence Research ✅
+### Daily Pipeline Verification ✅ (2025-11-30)
+- Automated verification: Discovery → Fetch → Summarize → Email
+- Script: `scripts/verify-daily-pipeline.ts`
+- Commands: `npm run verify:daily`, `npm run verify:daily:no-remediation`
+
+### Production Pipeline Validation Confidence Research ✅ (2025-11-29)
 - Research doc: `thoughts/shared/research/2025-11-29-production-pipeline-validation-confidence.md`
 - Key finding: Comprehensive validation infrastructure already exists
 
-### Dry-Run Validation Testing ✅
-- All 10 tests PASSED (5 content verification + 5 AI summary validation)
-- Script: `scripts/validation-dry-run-test.ts`
-
-### Filing Validation Integration ✅
+### Filing Validation Integration ✅ (2025-11-29)
 - Gap 1-3 resolved (content verification, cache verification, AI validation)
 - All validators integrated into production pipeline
 
@@ -104,7 +73,19 @@ cd cloudflare-cron && npx wrangler tail --format=pretty
 
 ---
 
-**Last Updated**: 2025-11-30
+**Last Updated**: 2025-12-02
 **Repository**: tldrsec-ai
-**Branch**: feature/daily-pipeline-verification
-**Implementation Plan**: docs/plans/2025-11-29-daily-pipeline-verification.md
+**Branch**: feat/journalist-tone-prompts
+**Implementation Plan**: docs/plans/2025-12-01-email-summarization-improvement-plan.md
+
+---
+
+## Phase 3 Tone Guidelines (Reference)
+
+**Matt Levine-style journalist tone:**
+- Lead with the punchline (most important fact first)
+- Hyper-specific: "$2.04M at $340/share" not "significant value"
+- Active voice: "Bezos dumped $3B" not "shares were disposed of"
+- No jargon: "Sales" not "revenue generation"
+- Conversational asides: "Not a great look, but the sale was pre-planned"
+- Concise: Every sentence earns its place

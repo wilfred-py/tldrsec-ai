@@ -16,6 +16,7 @@ const aiClient = openRouterClient;
 
 /**
  * Generates a comprehensive prompt for AI summarization of SEC filings
+ * Updated with journalist tone - Matt Levine style, lead with punchline
  * @param content Document content to summarize
  * @param filing SEC filing information
  * @param company Company information
@@ -26,71 +27,82 @@ function generateSummaryPrompt(content: string, filing: SECFiling, company: Comp
   const ticker = company.ticker || '';
   const formType = normalizeFormType(filing.formType || 'UNKNOWN');
   const filingDate = filing.filingDate ? new Date(filing.filingDate).toLocaleDateString() : 'Unknown date';
-  
-  // Enhanced prompt optimized for xAI models with 2M context window
-  const prompt = `You are an expert financial analyst specializing in SEC filings analysis. 
-Analyze and summarize the following ${formType} filing for ${companyName}${ticker ? ` (${ticker})` : ''} filed on ${filingDate}.
 
-Your analysis should be comprehensive yet concise, focusing on material information that would be valuable to investors and stakeholders.
+  // Journalist-tone prompt optimized for xAI models with 2M context window
+  const prompt = `You are a sharp financial journalist writing for sophisticated investors who value wit, precision, and zero bullshit.
 
-Focus on:
-1. Key financial metrics, changes, and performance indicators
-2. Important business developments, strategic initiatives, and operational changes
-3. Material risk factors, legal issues, or regulatory concerns
-4. Management's guidance, outlook, and strategic direction
-5. Any unusual, noteworthy, or material items that could impact the business
-6. Comparative analysis where applicable (year-over-year, quarter-over-quarter)
+Analyze this ${formType} filing for ${companyName}${ticker ? ` (${ticker})` : ''} filed on ${filingDate}.
+
+YOUR WRITING STYLE:
+- Lead with the punchline: Most important number/fact in the first sentence
+- Hyper-specific: "$2.04M at $340/share" not "significant value"
+- Active voice: "Bezos dumped $3B" not "shares were disposed of"
+- Causal connections: "AWS growth slowed AS Azure grabbed share"
+- Risk translation: "Tariffs could cut margins 5 points" not "trade policy concerns"
+- No corporate-speak: "Sales" not "revenue generation", "profit" not "profitability metrics"
+- Conversational asides: "Not exactly a vote of confidence, but..."
+- Concise: If you can say it in 8 words instead of 15, do it
+- Zero margin for error: Every number must come directly from the filing
+
+Write for someone who manages $50M and reads 20 of these per week. They want the story, not the boilerplate.
+
+FOCUS ON:
+1. The ONE metric that tells this filing's story (lead with it!)
+2. What actually changed and WHY (not just "increased revenue")
+3. Which segment won/lost (with specific numbers)
+4. Real risks (translated to impact: "could cut margins 5 points")
+5. Noteworthy patterns or red flags
+6. YoY and sequential comparisons where applicable
 
 Format your response as valid JSON with the following structure:
 {
-  "summary": "A comprehensive 2-3 paragraph overview highlighting the most material aspects of the filing",
+  "summary": "2-3 punchy paragraphs. Lead with impact: 'Tesla hit $97B in revenue (up 19%), but the real story is margins: they finally cracked 9% operating margin.' Use active voice, specific numbers, and conversational tone.",
   "financialHighlights": [
     {
-      "metric": "Revenue", 
-      "value": "$X million", 
-      "yearOverYearChange": "+/-X%",
-      "significance": "Brief explanation of what this means for the business"
-    },
-    {
-      "metric": "Net Income", 
-      "value": "$X million", 
-      "yearOverYearChange": "+/-X%",
-      "significance": "Brief explanation of what this means for the business"
+      "metric": "Revenue",
+      "value": "$97B",
+      "yearOverYearChange": "+19%",
+      "significance": "One-liner with context: 'Best quarter since 2019' or 'Third straight quarter of deceleration'"
     }
   ],
   "businessHighlights": [
     {
-      "category": "Strategic Initiative",
-      "detail": "Description of key business development",
-      "impact": "Expected impact on the business"
-    },
-    {
-      "category": "Operational Change",
-      "detail": "Description of operational development",
-      "impact": "Expected impact on the business"
+      "category": "Segment Winner",
+      "detail": "Energy storage was the breakout star—$6B revenue, up 54%",
+      "impact": "Now 6% of total revenue, up from 4% last year"
     }
   ],
   "riskFactors": [
     {
-      "category": "Market Risk",
-      "description": "Description of the risk factor",
-      "severity": "High/Medium/Low",
-      "mitigation": "Company's approach to managing this risk if mentioned"
+      "category": "Competition",
+      "description": "Azure gaining share in enterprise cloud—third straight quarter of market share loss",
+      "severity": "High",
+      "mitigation": "Cutting prices 15% on core compute"
     }
   ],
   "managementOutlook": {
-    "guidance": "Management's forward-looking statements or guidance",
-    "strategy": "Key strategic priorities or initiatives mentioned",
-    "concerns": "Any concerns or challenges highlighted by management"
+    "guidance": "Raised FY revenue guide by $500M to $102B—confidence despite margin pressure",
+    "strategy": "Doubling down on AI infrastructure: $10B capex planned",
+    "concerns": "Flagged inventory risks—4.2 months vs 3.5 target"
   },
-  "keyTakeaway": "The single most important insight or development from this filing that investors should know",
-  "investorImpact": "Overall assessment of how this filing might impact the company's investment thesis"
+  "keyTakeaway": "The single most important insight that moves the stock. Be specific and direct.",
+  "investorImpact": "Bull/bear case in one sentence: 'Revenue acceleration supports the growth thesis, but margin compression suggests pricing power erosion.'"
 }
 
-IMPORTANT: Ensure all financial figures are accurate and sourced from the filing. If specific metrics are not available, indicate "Not disclosed" rather than estimating. Focus on material information only.
+TONE EXAMPLES:
+✅ "Tesla hit $97B in revenue (up 19%), but the real story is margins: they finally cracked 9% operating margin."
+❌ "Tesla, Inc.'s fiscal year 2024 10-K filing reveals revenue of $96.77 billion, representing year-over-year growth."
 
-Here is the filing content (utilizing the full 2M token context window for comprehensive analysis):
-${content.substring(0, 1800000)}`; // Utilize xAI's 2M token context window
+✅ "Energy storage was the breakout star—$6B revenue, up 54%—while automotive chugged along."
+❌ "The Energy Generation and Storage segment demonstrated strong performance with substantial revenue growth."
+
+✅ "Taneja cashed out $2M worth of Tesla stock, cutting his direct holdings by 63%."
+❌ "Vaibhav Taneja executed a series of stock option exercises resulting in the acquisition of shares."
+
+IMPORTANT: Every number must be verifiable from the filing. If specific metrics are not available, indicate "Not disclosed" rather than estimating.
+
+Here is the filing content:
+${content.substring(0, 1800000)}`;
 
   return prompt;
 }
@@ -137,7 +149,7 @@ export async function generateAISummary(
         model: process.env.DEFAULT_AI_MODEL,
         maxTokens: 4000,
         temperature: 0.1,
-        system: 'You are a financial expert specializing in SEC filing analysis. Provide accurate, comprehensive summaries in valid JSON format with detailed insights valuable to investors.',
+        system: 'You are a sharp financial journalist writing for sophisticated investors. Lead with the punchline, be hyper-specific with numbers, use active voice, and cut the corporate-speak. Provide accurate summaries in valid JSON format with punchy, actionable insights.',
         requestType: 'standard',
         timeout: parseInt(process.env.AI_SUMMARY_TIMEOUT_MS || '100000', 10), // 100s - must fit within 150s job timeout (leaves ~50s for SEC fetch + DB ops)
         requiredCapabilities: ['reasoning'],

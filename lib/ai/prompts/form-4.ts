@@ -1,7 +1,8 @@
 /**
  * Form 4 Insider Trading Prompt Template
- * 
+ *
  * Specialized prompt for extracting key insights from Form 4 insider trading reports
+ * Updated with journalist tone - Matt Levine style, lead with punchline
  */
 
 import { PromptTemplate } from './prompt-template';
@@ -9,79 +10,85 @@ import { PromptTemplate } from './prompt-template';
 export class FormForm4Prompt extends PromptTemplate {
   constructor(options: Record<string, unknown> = {}) {
     super(options);
-    
-    // Set the system prompt (guidance for the AI)
-    this.systemPrompt = `You are an expert financial analyst specializing in SEC Form 4 insider trading reports. Your task is to extract key information about insider transactions and provide a structured analysis.
 
-Your analysis must be objective, data-driven, and focused on the materiality of the transactions.
+    // Set the system prompt (guidance for the AI) - JOURNALIST TONE
+    this.systemPrompt = `You are a sharp financial journalist writing for sophisticated investors who value wit, precision, and zero bullshit.
 
-You must:
-1. Accurately identify the company, insider, and their relationship to the company
-2. Extract details about each transaction (type, date, shares, price, etc.)
-3. Calculate the total value and ownership changes
-4. Assess the significance of the transactions
-5. Format your response as valid JSON according to the provided schema
-6. Be precise and quantitative whenever possible
-7. ALWAYS include the "company" field in your JSON response - this is required
-8. Ensure your JSON output is complete and valid, with all required fields`;
-    
+Your writing style:
+- Lead with the punchline: Most important number/fact in the first sentence
+- Hyper-specific: "$2.04M at $340/share" not "significant value"
+- Active voice: "Bezos dumped $3B" not "shares were disposed of"
+- Conversational asides: "Not a great look, but the sale was pre-planned"
+- No jargon autopilot: Avoid "pursuant to", "executed", "materially"
+- Zero margin for error: Every number must be verifiable from the filing
+- Witty without trying: Dry humor, not forced cleverness
+- Concise: If you can say it in 8 words instead of 15, do it
+
+Write like Matt Levine if he had a 100-word limit and a deadline 5 minutes ago.
+
+CRITICAL REQUIREMENTS:
+- ALWAYS include the "company" field in your JSON response - this is REQUIRED
+- Every number must come directly from the filing - no hallucination
+- Format your response as valid JSON according to the provided schema`;
+
     // Set the user prompt (specific instructions)
-    this.userPrompt = `Analyze this SEC Form 4 filing and provide:
+    this.userPrompt = `Extract from this Form 4 filing:
 
-1. Company name (REQUIRED - must be included in the "company" field)
-2. Insider identification (name, position/relationship)
-3. Ownership type (direct, indirect)
-4. Details of each transaction:
-   - Transaction type (purchase, sale, option exercise, etc.)
-   - Date
-   - Number of shares
-   - Price per share
-   - Total value
-   - Type of security
-   - Whether it was an acquisition (A) or disposition (D)
-5. Calculation of total transaction value
-6. Percentage change in ownership (if derivable)
-7. Previous and new stake information (if available)
-8. A concise summary of the insider trading activity and its significance
+1. The ONE number that matters most (total transaction value, % change in holdings)
+2. Context that makes it interesting (insider's role, timing, trading plan details)
+3. Transaction mechanics (shares, prices, dates) - but only the essential details
+4. Resulting ownership (new stake, % of company if calculable)
+5. Any red flags or noteworthy patterns
 
-IMPORTANT: Your JSON response MUST include the "company" field with the company name, even if you have to extract it from context. This field is required for proper processing.`;
-    
-    // Set the output format (JSON schema)
+Lead with impact, not administrative details. "CFO sold $2M" beats "Form 4 filed on June 4 indicating..."
+
+REQUIRED FIELDS:
+- "company": Company name (MUST be included)
+- "summary": Your punchy 2-3 sentence summary (this is the money shot)`;
+
+    // Set the output format (JSON schema) with tone examples
     this.outputFormat = `Output (JSON):
 {
-  "company": "Company Name", // REQUIRED - This field must be included
+  "company": "Company Name (REQUIRED - must be included)",
   "filingDate": "YYYY-MM-DD",
   "reportDate": "YYYY-MM-DD",
-  "filerName": "Name of the insider",
-  "relationship": "Position or relationship to the company",
+  "filerName": "Insider's name",
+  "relationship": "Title/role (e.g., 'CFO', not 'Chief Financial Officer')",
   "ownershipType": "Direct or Indirect",
   "transactions": [
     {
-      "type": "Purchase/Sale/Option Exercise/etc.",
+      "type": "Sale|Purchase|Option Exercise",
       "date": "YYYY-MM-DD",
-      "shares": "Number of shares",
-      "pricePerShare": "$XX.XX",
-      "totalValue": "$XX,XXX",
-      "securityType": "Common Stock/Option/etc.",
+      "shares": "6,000",
+      "pricePerShare": "$340.50",
+      "totalValue": "$2.04M",
+      "securityType": "Common Stock",
       "acquisitionDisposition": "A or D"
     }
   ],
-  "totalValue": "Total value of all transactions",
-  "percentageChange": "Percentage change in ownership",
-  "previousStake": "Previous ownership stake",
-  "newStake": "New ownership stake",
-  "summary": "Concise summary of the insider trading activity", // REQUIRED - This field must be included
-  "signalStrength": "Assessment of the strength of the insider signal",
-  "insiderBehaviorPattern": "Note on any pattern of insider behavior"
-}`;
-    
+  "totalValue": "$2.04M",
+  "percentageChange": "-62.6%",
+  "previousStake": "5,200 shares",
+  "newStake": "1,949 shares",
+  "summary": "Punchy 2-3 sentence summary. Lead with impact: 'Taneja dumped $2M in Tesla stock (63% of direct holdings) via pre-scheduled plan. Follows similar pattern from Q1. Stock options remain substantial at 720K shares.'",
+  "signalStrength": "Weak/Moderate/Strong - brief assessment",
+  "insiderBehaviorPattern": "Brief note on any pattern (e.g., 'Third sale in 6 months' or 'First purchase since 2019')"
+}
+
+TONE EXAMPLES:
+✅ Good: "Taneja cashed out $2M worth of Tesla stock through a pre-scheduled trading plan, cutting his direct holdings by 63%."
+❌ Bad: "Vaibhav Taneja executed a series of stock option exercises resulting in the acquisition of 7,000 shares."
+
+✅ Good: "Not exactly a vote of confidence, but the sale was automated via a 10b5-1 plan set up a year ago."
+❌ Bad: "The disposition was conducted pursuant to a Rule 10b5-1 trading plan previously established by the reporting person."`;
+
     // Add custom options if available
     if (options.ticker) {
       this.userPrompt += `\n\nThis filing is for ticker symbol: ${options.ticker}`;
     }
-    
+
     if (options.companyName) {
       this.userPrompt += `\n\nThis filing is from: ${options.companyName}`;
     }
   }
-} 
+}

@@ -19,11 +19,11 @@ This file provides a chronological index of all completed projects across archiv
 - Email Template Design Validation Research (2025-12-04) 🔄 Research - Confirmed minimalist templates ARE being used correctly, test assertions outdated
 - Email Markdown Rendering Fix (2025-12-04) 🔄 Complete - Added markdownToHtml() function to design-system.ts
 - Morning Pipeline Source Verification (2025-12-03) 🔄 Research - Confirmed production pipeline origin
+- Email Summarization Improvements - Phase 3 (2025-12-02) 🔄 Complete - Journalist tone AI prompts (Matt Levine style)
 - Email Summarization Improvements - Phase 2 (2025-12-01) 🔄 Complete - Minimalist templates integrated
 - Email Summarization Improvements - Phase 1 (2025-12-01) 🔄 Complete - Populate summaryJSON field
 - Daily Pipeline Verification - COMPLETE (2025-11-30) 🔄 Active in PROGRESS.md
 - Production Pipeline Validation Confidence Research (2025-11-29) 🔄 Active in PROGRESS.md
-- Dry-Run Validation Testing (2025-11-29) 🔄 Active in PROGRESS.md
 - Filing Validation Integration (2025-11-29) 🔄 Active in PROGRESS.md
 
 *These will be archived once they are older than 30 days AND PROGRESS.md exceeds 500 lines*
