@@ -55,13 +55,7 @@ jest.mock('../../lib/security/security-monitoring', () => ({
   }
 }));
 
-jest.mock('../../lib/cron/market-hours', () => ({
-  getMarketHoursContext: jest.fn().mockReturnValue({
-    isMarketHours: false,
-    isMarketDay: true,
-    isHoliday: false,
-    currentTime: new Date()
-  }),
+jest.mock('../../lib/cron/tier-eligibility', () => ({
   getUserProcessingStatuses: jest.fn().mockReturnValue([]),
   getEligibleUsers: jest.fn().mockReturnValue([])
 }));

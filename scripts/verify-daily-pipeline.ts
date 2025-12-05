@@ -151,41 +151,38 @@ async function getDiscoveredFilings(start: Date, end: Date): Promise<Array<{
 }
 
 // Phase 2: Check fetch status for a filing
+// Uses FilingContentCache (current data model) instead of legacy SecFetchAttempt
 async function checkFetchStatus(accessionNumber: string): Promise<{
   fetched: boolean;
   error?: string;
 }> {
-  // First find the SecFiling record
-  const secFiling = await prisma.secFiling.findFirst({
+  // Query FilingContentCache instead of SecFetchAttempt
+  const cachedContent = await prisma.filingContentCache.findUnique({
     where: {
       accessionNumber: accessionNumber,
     },
-    include: {
-      fetchAttempts: {
-        orderBy: {
-          attemptedAt: 'desc',
-        },
-        take: 1,
-      },
-    },
   });
 
-  if (!secFiling) {
-    return { fetched: false, error: 'SecFiling record not found' };
+  if (!cachedContent) {
+    return { fetched: false, error: 'No fetch attempt recorded in cache' };
   }
 
-  if (secFiling.fetchAttempts.length === 0) {
-    return { fetched: false, error: 'No fetch attempts recorded' };
-  }
-
-  const latestAttempt = secFiling.fetchAttempts[0];
-  if (latestAttempt.status === 'success') {
+  // Check if content was successfully cached
+  if (cachedContent.status === 'CACHED') {
     return { fetched: true };
+  }
+
+  // Handle error cases
+  if (cachedContent.status === 'ERROR') {
+    return {
+      fetched: false,
+      error: cachedContent.fetchError || `Fetch status: ${cachedContent.status}`
+    };
   }
 
   return {
     fetched: false,
-    error: latestAttempt.errorMessage || `Fetch status: ${latestAttempt.status}`
+    error: `Unknown cache status: ${cachedContent.status}`
   };
 }
 
