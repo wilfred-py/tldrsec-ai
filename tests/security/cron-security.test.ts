@@ -59,13 +59,7 @@ jest.mock('../../lib/monitoring/cron-monitor', () => ({
   }
 }));
 
-jest.mock('../../lib/cron/market-hours', () => ({
-  getMarketHoursContext: jest.fn().mockReturnValue({
-    isMarketHours: false,
-    isMarketDay: true,
-    isHoliday: false,
-    currentTime: new Date()
-  }),
+jest.mock('../../lib/cron/tier-eligibility', () => ({
   getUserProcessingStatuses: jest.fn().mockReturnValue([]),
   getEligibleUsers: jest.fn().mockReturnValue([])
 }));
@@ -195,14 +189,8 @@ describe('Cron Endpoint Security Tests', () => {
       resetTime: Date.now() + 60000 
     });
     
-    // Reset market hours mock
-    const { getMarketHoursContext, getUserProcessingStatuses, getEligibleUsers } = require('../../lib/cron/market-hours');
-    getMarketHoursContext.mockReturnValue({
-      isMarketHours: false,
-      isMarketDay: true,
-      isHoliday: false,
-      currentTime: new Date()
-    });
+    // Reset tier eligibility mock (24/7 processing - no market hours)
+    const { getUserProcessingStatuses, getEligibleUsers } = require('../../lib/cron/tier-eligibility');
     getUserProcessingStatuses.mockReturnValue([]);
     getEligibleUsers.mockReturnValue([]);
     

@@ -13,11 +13,21 @@ This file provides a chronological index of all completed projects across archiv
 
 **Projects completed in last 30 days** (tracked in PROGRESS.md):
 - Verification Cache Health Metrics (Phase 2) ✅ COMPLETE (2025-12-06) - Added cache health report to daily verification script
-- Remove Market Hours Functionality ✅ COMPLETE (2025-12-06) - Removed all market hours logic, created tier-eligibility.ts, 24/7 processing
-- Email Summarization System Improvements ✅ COMPLETE (2025-12-02) - Phase 1-3: summaryJSON field, minimalist templates, journalist tone prompts
-- Daily Pipeline Verification ✅ COMPLETE (2025-11-30) - Automated verification: Discovery → Fetch → Summarize → Email
-- Production Pipeline Validation Confidence Research ✅ COMPLETE (2025-11-29) - Research doc confirms comprehensive validation infrastructure exists
-- Filing Validation Integration ✅ COMPLETE (2025-11-29) - Gap 1-3 resolved (content, cache, AI validation)
+- Remove Market Hours Functionality ✅ COMPLETE (2025-12-05) - Removed all market hours logic, created tier-eligibility.ts, 24/7 processing
+- Verification Data Model Fix - Phase 1 (2025-12-05) 🔄 Complete - Updated verify-daily-pipeline.ts to check FilingContentCache instead of legacy SecFetchAttempt
+- Development Environment API Fixes (2025-12-05) 🔄 Complete - Fixed dbRetry.transaction() error, enabled 4 dev routes, created route management scripts
+- Digest Email Markdown Rendering Fix (2025-12-04) 🔄 Complete - Fixed digestTemplate() to use markdownToHtml() for proper email rendering
+- Minimalist Email Template E2E Validation (2025-12-04) 🔄 Complete - Sent test email with 5 summaries to validate minimalist design
+- Email Template Test Fix (2025-12-04) 🔄 Complete - Updated SECFilingEmailTemplate.test.tsx assertions for minimalist templates
+- Email Template Design Validation Research (2025-12-04) 🔄 Research - Confirmed minimalist templates ARE being used correctly, test assertions outdated
+- Email Markdown Rendering Fix (2025-12-04) 🔄 Complete - Added markdownToHtml() function to design-system.ts
+- Morning Pipeline Source Verification (2025-12-03) 🔄 Research - Confirmed production pipeline origin
+- Email Summarization Improvements - Phase 3 (2025-12-02) 🔄 Complete - Journalist tone AI prompts (Matt Levine style)
+- Email Summarization Improvements - Phase 2 (2025-12-01) 🔄 Complete - Minimalist templates integrated
+- Email Summarization Improvements - Phase 1 (2025-12-01) 🔄 Complete - Populate summaryJSON field
+- Daily Pipeline Verification - COMPLETE (2025-11-30) 🔄 Active in PROGRESS.md
+- Production Pipeline Validation Confidence Research (2025-11-29) 🔄 Active in PROGRESS.md
+- Filing Validation Integration (2025-11-29) 🔄 Active in PROGRESS.md
 
 *These will be archived once they are older than 30 days AND PROGRESS.md exceeds 500 lines*
 
@@ -58,9 +68,9 @@ This file provides a chronological index of all completed projects across archiv
 - **Current PROGRESS.md Lines**: 91 lines (threshold: 500)
 - **Last Archive Check**: 2025-12-06
 - **Last Archive Update**: 2025-12-06 (statistics sync)
-- **Recent Activity (Not Yet Archived)**: 6 projects completed in last 30 days
+- **Recent Activity (Not Yet Archived)**: 17 projects completed in last 30 days
 - **Archive System**: ✅ ACTIVE (auto-archives when >500 lines AND projects >30 days old)
-- **Current Work**: Verification Cache Health Metrics (Phase 2) ✅ COMPLETE
+- **Current Work**: Pricing Strategy Analysis (in progress)
 - **Archives Created**:
   - `27-Oct-2025.md` - Newsletter & Security implementations (6 projects)
   - `03-Nov-2025.md` - Critical infrastructure fixes (4 projects)

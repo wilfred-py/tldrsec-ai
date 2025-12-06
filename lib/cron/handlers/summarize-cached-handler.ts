@@ -11,7 +11,7 @@
  */
 
 import { logger } from '../../logging';
-import type { JobPayload } from '../../job-queue';
+// Removed unused import: JobPayload
 import { generateAISummary } from '../../../services/filing/summaryGenerationService';
 import { sendFilingSummaryEmail } from '../../email/summary-service';
 import type { FetchJobPayload } from './fetch-handler';
@@ -59,7 +59,7 @@ export async function handleSummarizeCached(
   payload: SummarizeJobPayload
 ): Promise<SummarizeResult> {
   const startTime = Date.now();
-  const { userId, userEmail, userTier, ticker, filing, cacheId, executionContext } = payload;
+  const { userId, userEmail, userTier: _userTier, ticker, filing, cacheId, executionContext } = payload;
   const { executionId } = executionContext;
 
   summarizeLogger.info(`[${executionId}] Starting summarize phase`, {

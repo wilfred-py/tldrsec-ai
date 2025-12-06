@@ -42,8 +42,7 @@ jest.mock('../../../../../lib/security/rate-limiter', () => ({
   }
 }));
 
-jest.mock('../../../../../lib/cron/market-hours', () => ({
-  getMarketHoursContext: jest.fn(),
+jest.mock('../../../../../lib/cron/tier-eligibility', () => ({
   getUserProcessingStatuses: jest.fn(),
   getEligibleUsers: jest.fn(),
   TIER_FREQUENCIES: {},
@@ -150,15 +149,8 @@ describe('/api/cron/tier-aware', () => {
       });
 
       // Mock required dependencies
-      const { getMarketHoursContext, getUserProcessingStatuses, getEligibleUsers } = require('../../../../../lib/cron/market-hours');
+      const { getUserProcessingStatuses, getEligibleUsers } = require('../../../../../lib/cron/tier-eligibility');
       const { getActiveTickersForMonitoring } = require('../../../../../lib/sec-edgar/ticker-monitoring');
-
-      getMarketHoursContext.mockReturnValue({
-        isMarketHours: true,
-        isMarketDay: true,
-        isHoliday: false,
-        currentTime: new Date()
-      });
 
       mockPrisma.user.findMany.mockResolvedValue([]);
       getUserProcessingStatuses.mockReturnValue([]);
@@ -203,15 +195,8 @@ describe('/api/cron/tier-aware', () => {
       });
       
       // Mock required dependencies
-      const { getMarketHoursContext, getUserProcessingStatuses, getEligibleUsers } = require('../../../../../lib/cron/market-hours');
+      const { getUserProcessingStatuses, getEligibleUsers } = require('../../../../../lib/cron/tier-eligibility');
       const { getActiveTickersForMonitoring } = require('../../../../../lib/sec-edgar/ticker-monitoring');
-
-      getMarketHoursContext.mockReturnValue({
-        isMarketHours: true,
-        isMarketDay: true,
-        isHoliday: false,
-        currentTime: new Date()
-      });
 
       mockPrisma.user.findMany.mockResolvedValue([]);
       getUserProcessingStatuses.mockReturnValue([]);
@@ -228,15 +213,7 @@ describe('/api/cron/tier-aware', () => {
 
   describe('Tier Processing Logic', () => {
     beforeEach(() => {
-      const { getMarketHoursContext, getUserProcessingStatuses, getEligibleUsers } = require('../../../../../lib/cron/market-hours');
       const { getActiveTickersForMonitoring, checkTickerForNewFilings } = require('../../../../../lib/sec-edgar/ticker-monitoring');
-
-      getMarketHoursContext.mockReturnValue({
-        isMarketHours: true,
-        isMarketDay: true,
-        isHoliday: false,
-        currentTime: new Date()
-      });
 
       getActiveTickersForMonitoring.mockResolvedValue([]);
       checkTickerForNewFilings.mockResolvedValue([]);
@@ -264,7 +241,7 @@ describe('/api/cron/tier-aware', () => {
         }
       ];
 
-      const { getUserProcessingStatuses, getEligibleUsers } = require('../../../../../lib/cron/market-hours');
+      const { getUserProcessingStatuses, getEligibleUsers } = require('../../../../../lib/cron/tier-eligibility');
       
       mockPrisma.user.findMany.mockResolvedValue(mockUsers);
       
@@ -321,7 +298,7 @@ describe('/api/cron/tier-aware', () => {
         tickers: [{ id: `ticker-${i}`, symbol: 'AAPL', companyName: 'Apple Inc.' }]
       }));
 
-      const { getUserProcessingStatuses, getEligibleUsers } = require('../../../../../lib/cron/market-hours');
+      const { getUserProcessingStatuses, getEligibleUsers } = require('../../../../../lib/cron/tier-eligibility');
       
       mockPrisma.user.findMany.mockResolvedValue(enterpriseUsers);
       
@@ -381,7 +358,7 @@ describe('/api/cron/tier-aware', () => {
         tickers: [{ id: 'ticker1', symbol: 'AAPL', companyName: 'Apple Inc.' }]
       };
 
-      const { getUserProcessingStatuses, getEligibleUsers } = require('../../../../../lib/cron/market-hours');
+      const { getUserProcessingStatuses, getEligibleUsers } = require('../../../../../lib/cron/tier-eligibility');
       
       mockPrisma.user.findMany.mockResolvedValue([mockUser]);
       
@@ -393,17 +370,9 @@ describe('/api/cron/tier-aware', () => {
         { userId: 'user1', tier: 'FREE' }
       ]);
 
-      // Add missing market hours context and other dependencies
-      const { getMarketHoursContext } = require('../../../../../lib/cron/market-hours');
+      // Add missing dependencies
       const { getActiveTickersForMonitoring, checkTickerForNewFilings } = require('../../../../../lib/sec-edgar/ticker-monitoring');
-      
-      getMarketHoursContext.mockReturnValue({
-        isMarketHours: true,
-        isMarketDay: true,
-        isHoliday: false,
-        currentTime: new Date()
-      });
-      
+
       getActiveTickersForMonitoring.mockResolvedValue([]);
       
       // Mock SEC filing processing to return a filing
@@ -448,7 +417,7 @@ describe('/api/cron/tier-aware', () => {
         tickers: [{ id: 'ticker1', symbol: 'AAPL', companyName: 'Apple Inc.' }]
       };
 
-      const { getUserProcessingStatuses, getEligibleUsers } = require('../../../../../lib/cron/market-hours');
+      const { getUserProcessingStatuses, getEligibleUsers } = require('../../../../../lib/cron/tier-eligibility');
       
       mockPrisma.user.findMany.mockResolvedValue([mockUser]);
       
@@ -506,7 +475,7 @@ describe('/api/cron/tier-aware', () => {
         tickers: [{ id: 'ticker1', symbol: 'AAPL', companyName: 'Apple Inc.' }]
       };
 
-      const { getUserProcessingStatuses, getEligibleUsers } = require('../../../../../lib/cron/market-hours');
+      const { getUserProcessingStatuses, getEligibleUsers } = require('../../../../../lib/cron/tier-eligibility');
       
       mockPrisma.user.findMany.mockResolvedValue([mockUser]);
       
@@ -553,17 +522,8 @@ describe('/api/cron/tier-aware', () => {
     });
   });
 
-  describe('Market Hours Context', () => {
-    it('should handle market hours correctly', async () => {
-      const { getMarketHoursContext } = require('../../../../../lib/cron/market-hours');
-      
-      getMarketHoursContext.mockReturnValue({
-        isMarketHours: true,
-        isMarketDay: true,
-        isHoliday: false,
-        currentTime: new Date('2024-01-15T15:30:00.000Z') // Market hours
-      });
-
+  describe('24/7 Processing (No Market Hours)', () => {
+    it('should process filings anytime (24/7 processing)', async () => {
       mockPrisma.user.findMany.mockResolvedValue([]);
 
       const request = new NextRequest('http://localhost:3000/api/cron/tier-aware', {
@@ -571,39 +531,13 @@ describe('/api/cron/tier-aware', () => {
           'authorization': `Bearer ${validSecret}`
         }
       });
-      
+
       const response = await GET(request);
       const data = await response.json();
-      
+
       expect(response.status).toBe(200);
-      expect(data.marketContext.isMarketHours).toBe(true);
-      expect(data.marketContext.isMarketDay).toBe(true);
-    });
-
-    it('should handle off-market hours correctly', async () => {
-      const { getMarketHoursContext } = require('../../../../../lib/cron/market-hours');
-      
-      getMarketHoursContext.mockReturnValue({
-        isMarketHours: false,
-        isMarketDay: true,
-        isHoliday: false,
-        currentTime: new Date('2024-01-15T22:00:00.000Z') // After hours
-      });
-
-      mockPrisma.user.findMany.mockResolvedValue([]);
-
-      const request = new NextRequest('http://localhost:3000/api/cron/tier-aware', {
-        headers: {
-          'authorization': `Bearer ${validSecret}`
-        }
-      });
-      
-      const response = await GET(request);
-      const data = await response.json();
-      
-      expect(response.status).toBe(200);
-      expect(data.marketContext.isMarketHours).toBe(false);
-      expect(data.marketContext.isMarketDay).toBe(true);
+      expect(data.success).toBe(true);
+      // No marketContext expected - 24/7 processing
     });
   });
 
@@ -659,7 +593,7 @@ describe('/api/cron/tier-aware', () => {
         tickers: [{ id: `ticker-${i}`, symbol: 'AAPL', companyName: 'Apple Inc.' }]
       }));
 
-      const { getUserProcessingStatuses, getEligibleUsers } = require('../../../../../lib/cron/market-hours');
+      const { getUserProcessingStatuses, getEligibleUsers } = require('../../../../../lib/cron/tier-eligibility');
       
       mockPrisma.user.findMany.mockResolvedValue(mockUsers);
       
@@ -673,17 +607,9 @@ describe('/api/cron/tier-aware', () => {
       getUserProcessingStatuses.mockReturnValue(userStatuses);
       getEligibleUsers.mockReturnValue(userStatuses.slice(0, 5)); // PROFESSIONAL batch size
 
-      // Add missing market hours context and dependencies
-      const { getMarketHoursContext } = require('../../../../../lib/cron/market-hours');
+      // Add missing dependencies
       const { getActiveTickersForMonitoring, checkTickerForNewFilings } = require('../../../../../lib/sec-edgar/ticker-monitoring');
-      
-      getMarketHoursContext.mockReturnValue({
-        isMarketHours: true,
-        isMarketDay: true,
-        isHoliday: false,
-        currentTime: new Date()
-      });
-      
+
       getActiveTickersForMonitoring.mockResolvedValue([]);
       checkTickerForNewFilings.mockResolvedValue([]);
 

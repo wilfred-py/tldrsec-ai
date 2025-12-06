@@ -1,19 +1,18 @@
 /**
  * Tier-aware SEC filing monitoring cron job (Refactored)
- * 
+ *
  * Core Functions:
  * 1. Monitor SEC RSS feeds for new filings (24/7 - filings can be published anytime)
  * 2. Process users based on subscription tiers and frequency eligibility
  * 3. Apply priority-based resource allocation
  * 4. Respect monthly cost budget limits
- * 5. Adjust processing frequency based on market hours context
- * 
+ *
  * Runs every 10 minutes continuously since SEC filings can be published 24/7
+ * Processing frequency is tier-based only (PRO: 5 min, HOBBY: 120 min)
  */
 
 import { NextRequest, NextResponse } from 'next/server';
 import { logger } from '../../../../lib/logging';
-import { getMarketHoursContext } from '../../../../lib/cron/market-hours';
 import { CronJobMonitor } from '../../../../lib/monitoring/cron-monitor';
 import { CronJobStatus } from '../../../../types/cron';
 import { generateSecureExecutionId } from '../../../../lib/security/secure-random';
@@ -25,7 +24,7 @@ import { rateLimitMonitor, RateLimitEventType } from '../../../../lib/infrastruc
 import { CronAuthService } from '../../../../lib/cron/auth-service';
 import { CronUserProcessingService } from '../../../../lib/cron/user-processing-service';
 import { CronSecFilingService } from '../../../../lib/cron/sec-filing-service';
-import { CronFilingProcessor } from '../../../../lib/cron/filing-processor';
+// Removed unused import: CronFilingProcessor
 import type { CronResults } from '../../../../lib/cron/types';
 import { AsyncFilingQueue, type FilingJobPayload } from '../../../../lib/cron/async-filing-queue';
 import { QueueMonitoringService } from '../../../../lib/cron/queue-monitoring';
@@ -165,8 +164,7 @@ export async function GET(request: NextRequest) {
           jobType: 'ASYNC_DISCOVER_FILINGS',
           payload: {
             executionId,
-            cronTriggerTime: new Date().toISOString(),
-            marketHoursContext: await getMarketHoursContext()
+            cronTriggerTime: new Date().toISOString()
           },
           priority: 10, // High priority for discovery jobs
           maxAttempts: 3
@@ -396,25 +394,8 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    // STEP 2: Get Market Context and User Eligibility
-    cronLogger.debug(`[${executionId}] Checkpoint 2: Starting market context retrieval`);
-    const marketContext = getMarketHoursContext();
-    cronLogger.debug(`[${executionId}] Checkpoint 3: Market context retrieved successfully`);
-    
-    cronLogger.info(`[${executionId}] Processing during ${marketContext.isMarketHours ? 'market' : 'off'} hours`, {
-      isMarketDay: marketContext.isMarketDay,
-      isHoliday: marketContext.isHoliday
-    });
-
-    // Record market context in monitoring
-    if (monitor) {
-      await monitor.recordMetric('market_context', {
-        isMarketHours: marketContext.isMarketHours,
-        isMarketDay: marketContext.isMarketDay,
-        isHoliday: marketContext.isHoliday,
-        currentTime: marketContext.currentTime
-      });
-    }
+    // STEP 2: Get User Eligibility (tier-based, 24/7 processing)
+    cronLogger.debug(`[${executionId}] Checkpoint 2: Starting user eligibility check`);
 
     // Check timeout before expensive operations
     timeCheck = checkTimeRemaining();
@@ -423,18 +404,15 @@ export async function GET(request: NextRequest) {
     }
 
     // Get eligible users for processing with timeout awareness
-    cronLogger.debug(`[${executionId}] Checkpoint 4: Getting eligible users for processing`);
+    cronLogger.debug(`[${executionId}] Checkpoint 3: Getting eligible users for processing`);
     const maxUsersForTimeRemaining = Math.min(100, Math.floor(timeCheck.remaining / 60000) * 10); // ~10 users per minute
-    
-    const { allUsers, eligibleUsers } = await CronUserProcessingService.getEligibleUsersForProcessing(
-      marketContext,
-      {
-        maxUsersPerCycle: maxUsersForTimeRemaining,
-        respectBudgetLimits: true,
-        budgetThreshold: 90
-      }
-    );
-    cronLogger.debug(`[${executionId}] Checkpoint 5: User eligibility check completed`, {
+
+    const { allUsers: _allUsers, eligibleUsers } = await CronUserProcessingService.getEligibleUsersForProcessing({
+      maxUsersPerCycle: maxUsersForTimeRemaining,
+      respectBudgetLimits: true,
+      budgetThreshold: 90
+    });
+    cronLogger.debug(`[${executionId}] Checkpoint 4: User eligibility check completed`, {
       maxUsersForTimeRemaining,
       eligibleUsers: eligibleUsers.length
     });
@@ -666,10 +644,6 @@ export async function GET(request: NextRequest) {
         success: true,
         executionId: monitorResult.executionId,
         duration: monitorResult.duration,
-        marketContext: {
-          isMarketHours: marketContext.isMarketHours,
-          isMarketDay: marketContext.isMarketDay
-        },
         results: partialResults,
         warning: 'Processing completed partially due to timeout constraints'
       });
@@ -684,7 +658,7 @@ export async function GET(request: NextRequest) {
 
     // Count eligible users for reporting purposes only
     const successCount = 0; // No jobs queued in this step anymore
-    const userQueueDuration = 0;
+    const _userQueueDuration = 0; // Placeholder for future metrics
 
     cronLogger.info(`[${executionId}] User filing queueing skipped - relying on backlog mechanism`, {
       eligibleUsers: eligibleUsers.length,
@@ -800,10 +774,6 @@ export async function GET(request: NextRequest) {
       duration: monitorResult.duration,
       processingMode: 'async',
       message: 'Filings queued for async processing',
-      marketContext: {
-        isMarketHours: marketContext.isMarketHours,
-        isMarketDay: marketContext.isMarketDay
-      },
       queue: {
         filingsQueued: backlogQueuedCount || 0,
         userFilingsQueued: successCount || 0,

@@ -364,14 +364,6 @@ describe('Comprehensive Cron Integration Tests', () => {
       resetTime: Date.now() + 60000
     });
 
-    // Setup default market hours context
-    mockMarketHours.getMarketHoursContext.mockReturnValue({
-      isMarketHours: true,
-      isMarketDay: true,
-      isHoliday: false,
-      currentTime: new Date().toISOString()
-    });
-
     // Setup default user processing statuses - matching the actual return structure
     const mockUserProcessingStatuses = [
       {
@@ -393,8 +385,8 @@ describe('Comprehensive Cron Integration Tests', () => {
         }
       }
     ];
-    mockMarketHours.getUserProcessingStatuses.mockReturnValue(mockUserProcessingStatuses);
-    mockMarketHours.getEligibleUsers.mockReturnValue([
+    mockTierEligibility.getUserProcessingStatuses.mockReturnValue(mockUserProcessingStatuses);
+    mockTierEligibility.getEligibleUsers.mockReturnValue([
       {
         tier: 'FREE',
         userId: 'user1'
@@ -626,7 +618,7 @@ describe('Comprehensive Cron Integration Tests', () => {
         process.env.CRON_SECRET = process.env.TEST_CRON_SECRET || 'test-cron-secret-key-minimum-32-chars-long-for-security-validation';
 
         // Mock eligible users to test tier processing
-        mockMarketHours.getEligibleUsers.mockReturnValue([
+        mockTierEligibility.getEligibleUsers.mockReturnValue([
           { tier: 'INSTITUTION', userId: 'user-1' },
           { tier: 'ENTERPRISE', userId: 'user-2' }
         ]);
@@ -775,29 +767,25 @@ describe('Comprehensive Cron Integration Tests', () => {
       process.env.CRON_SECRET = process.env.TEST_CRON_SECRET || 'test-cron-secret-key-minimum-32-chars-long-for-security-validation';
     });
 
-    describe('Market Hours Context', () => {
-      it('should process during market hours with full user eligibility', async () => {
-        // Setup market hours context
-        mockMarketHours.getMarketHoursContext.mockReturnValue({
-          isMarketHours: true,
-          isMarketDay: true,
-          isHoliday: false,
-          currentTime: new Date('2024-01-15T14:30:00Z').toISOString() // 2:30 PM UTC (market hours)
-        });
-
-        mockMarketHours.getUserProcessingStatuses.mockReturnValue([
-          { 
-            userId: 'user-1', 
-            tier: 'PROFESSIONAL', 
-            lastProcessedAt: null,
-            eligibility: { isEligible: true, nextEligibleTime: null, frequency: 30 },
+    describe('Tier-Based Processing (24/7)', () => {
+      it('should process users based on tier eligibility regardless of time', async () => {
+        // 24/7 processing - no market hours distinction
+        mockTierEligibility.getUserProcessingStatuses.mockReturnValue([
+          {
+            userId: 'user-1',
+            tier: 'PRO',
+            isEligible: true,
             priority: 2,
-            budgetStatus: { monthlyBudget: 10.0, budgetUsed: 0, budgetRemaining: 10.0, budgetUtilization: 0 }
+            frequencyMs: 5 * 60 * 1000,
+            timeSinceLastProcess: null,
+            nextEligibleTime: null,
+            budgetPercentUsed: 0,
+            isWithinBudget: true
           }
         ]);
 
-        mockMarketHours.getEligibleUsers.mockReturnValue([
-          { tier: 'PROFESSIONAL', userId: 'user-1' }
+        mockTierEligibility.getEligibleUsers.mockReturnValue([
+          { userId: 'user-1', tier: 'PRO', isEligible: true, priority: 2, frequencyMs: 5 * 60 * 1000, timeSinceLastProcess: null, nextEligibleTime: null, budgetPercentUsed: 0, isWithinBudget: true }
         ]);
 
         const request = createMockRequest({
@@ -808,36 +796,11 @@ describe('Comprehensive Cron Integration Tests', () => {
         const result = await response.json();
 
         expect(response.status).toBe(200);
-        expect(mockMonitor.recordMetric).toHaveBeenCalledWith('market_context', {
-          isMarketHours: true,
-          isMarketDay: true,
-          isHoliday: false,
-          currentTime: expect.any(String)
-        });
+        expect(result.success).toBe(true);
       });
 
-      it('should process during off-market hours with reduced frequency', async () => {
-        // Setup off-market hours context
-        mockMarketHours.getMarketHoursContext.mockReturnValue({
-          isMarketHours: false,
-          isMarketDay: true,
-          isHoliday: false,
-          currentTime: new Date('2024-01-15T22:30:00Z').toISOString() // 10:30 PM UTC (after hours)
-        });
-
-        mockMarketHours.getUserProcessingStatuses.mockReturnValue([
-          { 
-            userId: 'user-1', 
-            tier: 'PROFESSIONAL', 
-            lastProcessedAt: new Date(),
-            eligibility: { isEligible: false, nextEligibleTime: new Date(), frequency: 120 },
-            priority: 2,
-            budgetStatus: { monthlyBudget: 10.0, budgetUsed: 0, budgetRemaining: 10.0, budgetUtilization: 0 }
-          }
-        ]);
-
-        mockMarketHours.getEligibleUsers.mockReturnValue([]);
-
+      it('should process SEC filings 24/7 (not restricted by market hours)', async () => {
+        // SEC filings can be published anytime, so process always
         const request = createMockRequest({
           authorization: `Bearer ${process.env.CRON_SECRET}`
         });
@@ -845,32 +808,7 @@ describe('Comprehensive Cron Integration Tests', () => {
         const response = await tierAwareRoute(request);
         const result = await response.json();
 
-        expect(response.status).toBe(200);
-        expect(result.results.usersProcessed).toBe(0);
-        expect(mockMonitor.recordMetric).toHaveBeenCalledWith('market_context', {
-          isMarketHours: false,
-          isMarketDay: true,
-          isHoliday: false,
-          currentTime: expect.any(String)
-        });
-      });
-
-      it('should process during holidays/weekends (SEC filings can be published 24/7)', async () => {
-        mockMarketHours.getMarketHoursContext.mockReturnValue({
-          isMarketHours: false,
-          isMarketDay: false,
-          isHoliday: true,
-          currentTime: new Date('2024-07-04T10:00:00Z').toISOString() // July 4th holiday
-        });
-
-        const request = createMockRequest({
-          authorization: `Bearer ${process.env.CRON_SECRET}`
-        });
-
-        const response = await tierAwareRoute(request);
-        const result = await response.json();
-
-        // Should still process RSS monitoring (Phase 1) even during holidays
+        // Should process RSS monitoring regardless of time of day
         expect(response.status).toBe(200);
         expect(result.success).toBe(true);
         expect(mockTickerMonitoring.getActiveTickersForMonitoring).toHaveBeenCalled();
@@ -1008,7 +946,7 @@ describe('Comprehensive Cron Integration Tests', () => {
 
         mockPrismaInstance.user.findMany.mockResolvedValue(mockUsers);
         
-        mockMarketHours.getUserProcessingStatuses.mockReturnValue([
+        mockTierEligibility.getUserProcessingStatuses.mockReturnValue([
           { 
             userId: 'user-1', 
             tier: 'INSTITUTION', 
@@ -1027,7 +965,7 @@ describe('Comprehensive Cron Integration Tests', () => {
           }
         ]);
 
-        mockMarketHours.getEligibleUsers.mockReturnValue([
+        mockTierEligibility.getEligibleUsers.mockReturnValue([
           { tier: 'INSTITUTION', userId: 'user-1' },
           { tier: 'FREE', userId: 'user-2' }
         ]);
@@ -1122,7 +1060,7 @@ describe('Comprehensive Cron Integration Tests', () => {
         mockTickerMonitoring.checkTickerForNewFilings.mockResolvedValue([]);
 
         mockPrismaInstance.user.findMany.mockResolvedValue(mockUsers);
-        mockMarketHours.getEligibleUsers.mockReturnValue([]);
+        mockTierEligibility.getEligibleUsers.mockReturnValue([]);
 
         const request = createMockRequest({
           authorization: `Bearer ${process.env.CRON_SECRET}`
@@ -1155,7 +1093,7 @@ describe('Comprehensive Cron Integration Tests', () => {
         // Mock missing CIK mapping
         mockTickerMonitoring.getActiveTickersForMonitoring.mockResolvedValue([]);
         mockPrismaInstance.user.findMany.mockResolvedValue(mockUsers);
-        mockMarketHours.getEligibleUsers.mockReturnValue([
+        mockTierEligibility.getEligibleUsers.mockReturnValue([
           { tier: 'FREE', userId: 'user-1' }
         ]);
 
@@ -1258,7 +1196,7 @@ describe('Comprehensive Cron Integration Tests', () => {
         ];
 
         mockPrismaInstance.user.findMany.mockResolvedValue(mockUsers);
-        mockMarketHours.getEligibleUsers.mockReturnValue([
+        mockTierEligibility.getEligibleUsers.mockReturnValue([
           { tier: 'FREE', userId: 'user-1' }
         ]);
 
@@ -1322,7 +1260,7 @@ describe('Comprehensive Cron Integration Tests', () => {
         ];
 
         mockPrismaInstance.user.findMany.mockResolvedValue(mockUsers);
-        mockMarketHours.getEligibleUsers.mockReturnValue([
+        mockTierEligibility.getEligibleUsers.mockReturnValue([
           { tier: 'PROFESSIONAL', userId: 'user-1' }
         ]);
 
@@ -1459,7 +1397,7 @@ describe('Comprehensive Cron Integration Tests', () => {
       mockTickerMonitoring.checkTickerForNewFilings.mockResolvedValue(mockNewFilings);
       
       mockPrismaInstance.user.findMany.mockResolvedValue(mockUsers);
-      mockMarketHours.getEligibleUsers.mockReturnValue([
+      mockTierEligibility.getEligibleUsers.mockReturnValue([
         { tier: 'PROFESSIONAL', userId: 'user-1' }
       ]);
 
@@ -1580,7 +1518,7 @@ describe('Comprehensive Cron Integration Tests', () => {
       ];
 
       mockPrismaInstance.user.findMany.mockResolvedValue(mockUsers);
-      mockMarketHours.getEligibleUsers.mockReturnValue([
+      mockTierEligibility.getEligibleUsers.mockReturnValue([
         { tier: 'FREE', userId: 'user-1' }
       ]);
 
@@ -1777,7 +1715,7 @@ describe('Comprehensive Cron Integration Tests', () => {
         ];
 
         mockPrismaInstance.user.findMany.mockResolvedValue(mockUsers);
-        mockMarketHours.getEligibleUsers.mockReturnValue([
+        mockTierEligibility.getEligibleUsers.mockReturnValue([
           { tier: 'PROFESSIONAL', userId: 'user-1' }
         ]);
 
@@ -1914,15 +1852,8 @@ describe('Comprehensive Cron Integration Tests', () => {
       resetTime: Date.now() + 60000
     });
 
-    mockMarketHours.getMarketHoursContext.mockReturnValue({
-      isMarketHours: true,
-      isMarketDay: true,
-      isHoliday: false,
-      currentTime: new Date().toISOString()
-    });
-
-    mockMarketHours.getUserProcessingStatuses.mockReturnValue([]);
-    mockMarketHours.getEligibleUsers.mockReturnValue([]);
+    mockTierEligibility.getUserProcessingStatuses.mockReturnValue([]);
+    mockTierEligibility.getEligibleUsers.mockReturnValue([]);
     mockTickerMonitoring.getActiveTickersForMonitoring.mockResolvedValue([]);
     
     mockPrismaInstance.user.findMany.mockResolvedValue([]);
