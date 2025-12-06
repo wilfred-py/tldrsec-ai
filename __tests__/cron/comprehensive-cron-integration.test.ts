@@ -24,7 +24,7 @@ import * as tickerMonitoring from '../../lib/sec-edgar/ticker-monitoring';
 import * as rssParser from '../../lib/sec-edgar/rss-parser';
 import * as summaryService from '../../services/filing/summaryGenerationService';
 import * as emailService from '../../services/filing/sendEmailSummary';
-import { getMarketHoursContext, getUserProcessingStatuses, getEligibleUsers } from '../../lib/cron/market-hours';
+import { getUserProcessingStatuses, getEligibleUsers } from '../../lib/cron/tier-eligibility';
 import { updateUserBudgetWithLock } from '../../lib/db/concurrency';
 import { rateLimiter } from '../../lib/security/rate-limiter';
 
@@ -125,7 +125,7 @@ jest.mock('../../lib/sec-edgar/ticker-monitoring');
 jest.mock('../../lib/sec-edgar/rss-parser');
 jest.mock('../../services/filing/summaryGenerationService');
 jest.mock('../../services/filing/sendEmailSummary');
-jest.mock('../../lib/cron/market-hours');
+jest.mock('../../lib/cron/tier-eligibility');
 jest.mock('../../lib/db/concurrency');
 jest.mock('../../lib/security/rate-limiter');
 jest.mock('../../lib/logging', () => ({
@@ -309,8 +309,7 @@ const mockTickerMonitoring = tickerMonitoring as jest.Mocked<typeof tickerMonito
 const mockRssParser = rssParser as jest.Mocked<typeof rssParser>;
 const mockSummaryService = summaryService as jest.Mocked<typeof summaryService>;
 const mockEmailService = emailService as jest.Mocked<typeof emailService>;
-const mockMarketHours = {
-  getMarketHoursContext: getMarketHoursContext as jest.MockedFunction<typeof getMarketHoursContext>,
+const mockTierEligibility = {
   getUserProcessingStatuses: getUserProcessingStatuses as jest.MockedFunction<typeof getUserProcessingStatuses>,
   getEligibleUsers: getEligibleUsers as jest.MockedFunction<typeof getEligibleUsers>
 };
