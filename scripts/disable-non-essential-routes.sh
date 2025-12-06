@@ -46,6 +46,18 @@ ALL_ROUTES=$(find app/api -name "route.ts" | sort)
 
 # Disable non-essential routes
 for route in $ALL_ROUTES; do
+    # Security: Validate route path to prevent path traversal
+    if [[ ! "$route" =~ ^app/api/.*\.ts$ ]]; then
+        echo "❌ Invalid route path detected: $route (security check failed)"
+        continue
+    fi
+    
+    # Check if file exists and is a regular file
+    if [[ ! -f "$route" ]]; then
+        echo "⚠️ Route file not found: $route"
+        continue
+    fi
+    
     is_essential=false
     for essential in "${ESSENTIAL_ROUTES[@]}"; do
         if [[ "$route" == "$essential" ]]; then
@@ -56,7 +68,12 @@ for route in $ALL_ROUTES; do
     
     if [[ "$is_essential" == false ]]; then
         echo "Disabling: $route"
-        mv "$route" "$route.disabled"
+        # Atomic operation with error checking
+        if mv "$route" "$route.disabled" 2>/dev/null; then
+            echo "✅ Successfully disabled: $route"
+        else
+            echo "❌ Failed to disable: $route (permission or disk space issue)"
+        fi
     else
         echo "Keeping: $route"
     fi
