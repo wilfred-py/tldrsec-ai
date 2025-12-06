@@ -29,7 +29,7 @@ export async function GET(request: NextRequest) {
     const rawQuery = searchParams.get('q') || searchParams.get('query') || '';
     
     // Input validation and sanitization
-    const q = rawQuery.replace(/[<>\"'&\\/]/g, '').trim();
+    const q = rawQuery.replace(/[<>"'&\\/]/g, '').trim();
     
     if (!q || q.length < 1) {
       return NextResponse.json({ companies: [] });

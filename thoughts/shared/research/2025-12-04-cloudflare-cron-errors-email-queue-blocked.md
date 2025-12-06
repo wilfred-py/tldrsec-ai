@@ -45,6 +45,7 @@ The user reports:
 3. **Silent failure handling** in `cloudflare-cron/index.js:251-257` hides the real problem
 4. **The "Invalid time value" error is NOT blocking** - market-hours.ts is only used for logging
 5. **Dec 3 5:28 AM AEST pipeline succeeded** because it falls outside the 5:XX AM UTC error window
+>>>>>>> origin/main
 
 ## Detailed Findings
 

@@ -1,12 +1,9 @@
 #!/bin/bash
+# Script to enable essential development routes for local testing
 
-# Enable development-essential API routes
-# This script re-enables routes that are needed for local development
-# but may have been disabled for Vercel Hobby plan deployment
+echo "Enabling essential development routes..."
 
-echo "Enabling development-essential API routes..."
-
-# Development-essential routes that need to be enabled for local development
+# Development routes to enable
 DEV_ROUTES=(
     "app/api/system/health/route.ts"
     "app/api/system/processing-metrics/route.ts"
@@ -45,10 +42,8 @@ for route in "${DEV_ROUTES[@]}"; do
     fi
 done
 
-echo ""
-echo "=== Summary ==="
-echo "Routes enabled: $enabled_count"
-echo "Already enabled: $already_enabled_count"
-echo "Not found: $not_found_count"
-echo ""
-echo "Development routes are now ready for local development!"
+echo "---"
+echo "Development route activation complete!"
+echo "✅ Enabled: $enabled_count routes"
+echo "ℹ️ Already enabled: $already_enabled_count routes"
+echo "⚠️ Not found: $not_found_count routes"
