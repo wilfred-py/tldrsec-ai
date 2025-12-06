@@ -57,6 +57,15 @@ interface AiModelUsage {
   outputTokens: number;
 }
 
+// Cache health metrics for Phase 2 enhanced reporting
+interface CacheHealthReport {
+  totalCacheEntries: number;
+  successfulCaches: number;
+  errorCaches: number;
+  avgFetchDuration: number;
+  topErrors: Array<{ error: string; count: number }>;
+}
+
 interface VerificationReport {
   verificationDate: Date;
   startTime: Date;
@@ -87,6 +96,9 @@ interface VerificationReport {
   remediationAttempted: number;
   remediationSucceeded: number;
   remediationFailed: number;
+
+  // Phase 2: Cache health metrics
+  cacheHealth?: CacheHealthReport;
 
   durationMs: number;
   errors: string[];
@@ -151,41 +163,85 @@ async function getDiscoveredFilings(start: Date, end: Date): Promise<Array<{
 }
 
 // Phase 2: Check fetch status for a filing
+// Uses FilingContentCache (current data model) instead of legacy SecFetchAttempt
 async function checkFetchStatus(accessionNumber: string): Promise<{
   fetched: boolean;
   error?: string;
 }> {
-  // First find the SecFiling record
-  const secFiling = await prisma.secFiling.findFirst({
+  // Query FilingContentCache instead of SecFetchAttempt
+  const cachedContent = await prisma.filingContentCache.findUnique({
     where: {
       accessionNumber: accessionNumber,
     },
-    include: {
-      fetchAttempts: {
-        orderBy: {
-          attemptedAt: 'desc',
-        },
-        take: 1,
-      },
-    },
   });
 
-  if (!secFiling) {
-    return { fetched: false, error: 'SecFiling record not found' };
+  if (!cachedContent) {
+    return { fetched: false, error: 'No fetch attempt recorded in cache' };
   }
 
-  if (secFiling.fetchAttempts.length === 0) {
-    return { fetched: false, error: 'No fetch attempts recorded' };
-  }
-
-  const latestAttempt = secFiling.fetchAttempts[0];
-  if (latestAttempt.status === 'success') {
+  // Check if content was successfully cached
+  if (cachedContent.status === 'CACHED') {
     return { fetched: true };
+  }
+
+  // Handle error cases
+  if (cachedContent.status === 'ERROR') {
+    return {
+      fetched: false,
+      error: cachedContent.fetchError || `Fetch status: ${cachedContent.status}`
+    };
   }
 
   return {
     fetched: false,
-    error: latestAttempt.errorMessage || `Fetch status: ${latestAttempt.status}`
+    error: `Unknown cache status: ${cachedContent.status}`
+  };
+}
+
+// Phase 2: Generate cache health report for enhanced error reporting
+async function generateCacheHealthReport(startDate: Date, endDate: Date): Promise<CacheHealthReport> {
+  const cacheEntries = await prisma.filingContentCache.findMany({
+    where: {
+      fetchedAt: {
+        gte: startDate,
+        lte: endDate,
+      },
+    },
+    select: {
+      status: true,
+      fetchError: true,
+      fetchDuration: true,
+    },
+  });
+
+  const successfulCaches = cacheEntries.filter(c => c.status === 'CACHED').length;
+  const errorCaches = cacheEntries.filter(c => c.status === 'ERROR').length;
+
+  const entriesWithDuration = cacheEntries.filter(c => c.fetchDuration > 0);
+  const avgFetchDuration = entriesWithDuration.length > 0
+    ? entriesWithDuration.reduce((sum, c) => sum + c.fetchDuration, 0) / entriesWithDuration.length
+    : 0;
+
+  // Aggregate error messages
+  const errorCounts = new Map<string, number>();
+  cacheEntries
+    .filter(c => c.status === 'ERROR' && c.fetchError)
+    .forEach(c => {
+      const error = c.fetchError!;
+      errorCounts.set(error, (errorCounts.get(error) || 0) + 1);
+    });
+
+  const topErrors = Array.from(errorCounts.entries())
+    .map(([error, count]) => ({ error, count }))
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 5);
+
+  return {
+    totalCacheEntries: cacheEntries.length,
+    successfulCaches,
+    errorCaches,
+    avgFetchDuration: Math.round(avgFetchDuration),
+    topErrors,
   };
 }
 
@@ -437,6 +493,9 @@ async function runVerification(targetDate?: string): Promise<VerificationReport>
   // Aggregate AI costs from summaries generated in this date range
   const aiCosts = await aggregateAiCosts(start, end);
 
+  // Phase 2: Generate cache health report
+  const cacheHealth = await generateCacheHealthReport(start, end);
+
   const endTime = new Date();
   const durationMs = endTime.getTime() - startTime.getTime();
 
@@ -463,6 +522,7 @@ async function runVerification(targetDate?: string): Promise<VerificationReport>
     remediationAttempted: 0,
     remediationSucceeded: 0,
     remediationFailed: 0,
+    cacheHealth,
     durationMs,
     errors,
   };
@@ -673,6 +733,33 @@ function displayReport(report: VerificationReport): void {
       for (const [model, usage] of models) {
         console.log(chalk.gray(`    ${model}:`));
         console.log(chalk.gray(`      Cost: $${usage.cost.toFixed(4)} | In: ${usage.inputTokens.toLocaleString()} | Out: ${usage.outputTokens.toLocaleString()}`));
+      }
+    }
+  }
+
+  // Phase 2: Cache health report
+  if (report.cacheHealth) {
+    const ch = report.cacheHealth;
+    console.log(chalk.blue('\n📊 CACHE HEALTH REPORT'));
+    console.log(chalk.gray('-'.repeat(70)));
+    console.log(`  Total cache entries: ${ch.totalCacheEntries}`);
+
+    if (ch.totalCacheEntries > 0) {
+      const successRate = ((ch.successfulCaches / ch.totalCacheEntries) * 100).toFixed(1);
+      const errorRate = ((ch.errorCaches / ch.totalCacheEntries) * 100).toFixed(1);
+
+      console.log(chalk.green(`  Successful caches:   ${ch.successfulCaches} (${successRate}%)`));
+      if (ch.errorCaches > 0) {
+        console.log(chalk.red(`  Error caches:        ${ch.errorCaches} (${errorRate}%)`));
+      }
+      console.log(`  Avg fetch duration:  ${ch.avgFetchDuration}ms`);
+
+      if (ch.topErrors.length > 0) {
+        console.log(chalk.gray('\n  Top errors:'));
+        ch.topErrors.forEach(({ error, count }) => {
+          const truncatedError = error.length > 50 ? error.substring(0, 50) + '...' : error;
+          console.log(chalk.red(`    • ${truncatedError}: ${count} occurrences`));
+        });
       }
     }
   }
