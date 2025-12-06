@@ -12,7 +12,6 @@
 import { logger } from '../../logging';
 import { JobQueueService } from '../../job-queue';
 import type { JobPayload } from '../../job-queue';
-import { getMarketHoursContext } from '../market-hours';
 import { CronUserProcessingService } from '../user-processing-service';
 import { CronSecFilingService } from '../sec-filing-service';
 
@@ -21,7 +20,6 @@ const discoveryLogger = logger.child('discovery-handler');
 export interface DiscoveryJobPayload extends JobPayload {
   executionId: string;
   cronTriggerTime: string;
-  marketHoursContext?: any;
 }
 
 export interface DiscoveryResult {
@@ -55,25 +53,14 @@ export async function handleDiscovery(
   });
 
   try {
-    // Get market hours context
-    const marketContext = await getMarketHoursContext();
-
-    discoveryLogger.debug(`[${executionId}] Market context determined`, {
-      isMarketHours: marketContext.isMarketHours,
-      hoursSinceOpen: marketContext.hoursSinceOpen
-    });
-
     // Get eligible users (FAST - just database query)
     // Note: allUsers contains DatabaseUser objects with full user data (id, email, subscriptionTier, tickers)
     //       eligibleUsers contains EligibleUser objects with just (userId, tier)
-    const { allUsers, eligibleUsers } = await CronUserProcessingService.getEligibleUsersForProcessing(
-      marketContext,
-      {
-        maxUsersPerCycle: 100,
-        respectBudgetLimits: true,
-        budgetThreshold: 90
-      }
-    );
+    const { allUsers, eligibleUsers } = await CronUserProcessingService.getEligibleUsersForProcessing({
+      maxUsersPerCycle: 100,
+      respectBudgetLimits: true,
+      budgetThreshold: 90
+    });
 
     discoveryLogger.info(`[${executionId}] Eligible users identified`, {
       totalUsers: allUsers.length,

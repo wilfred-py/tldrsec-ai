@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { EmailColors, EmailSpacing, EmailBorders } from '../../design-system';
+import { EmailColors, EmailSpacing } from '../../design-system';
 
 interface SectionCardProps {
   children: React.ReactNode;

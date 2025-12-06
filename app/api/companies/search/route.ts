@@ -41,7 +41,6 @@ export async function GET(request: NextRequest) {
         error: 'Search query too long' 
       }, { status: 400 });
     }
-
     const prisma = getPrismaClient();
 
     // Get cached SEC company data

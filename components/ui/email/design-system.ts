@@ -331,9 +331,7 @@ export function markdownToHtml(markdown: string | undefined): string {
   html = html.replace(/^[\-\*] (.+)$/gm, `<div style="padding:4px 0 4px 16px;font-size:14px;color:${EmailColors.text.body};"><span style="color:${EmailColors.text.meta};margin-right:8px;">•</span>$1</div>`);
 
   // Convert numbered lists (1. item)
-  let listCounter = 0;
   html = html.replace(/^(\d+)\. (.+)$/gm, (match, num, content) => {
-    listCounter++;
     return `<div style="padding:4px 0 4px 16px;font-size:14px;color:${EmailColors.text.body};"><span style="color:${EmailColors.text.meta};margin-right:8px;">${num}.</span>${content}</div>`;
   });
 

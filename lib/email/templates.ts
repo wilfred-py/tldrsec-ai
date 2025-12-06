@@ -8,7 +8,7 @@
 import { EmailType, FilingTemplateData } from './types';
 import { renderAsync } from '@react-email/render';
 import * as SECFilingEmailTemplate from '../../components/email/templates/SECFilingEmailTemplate';
-const { default: SECFilingEmailTemplateComponent } = SECFilingEmailTemplate;
+const { default: _SECFilingEmailTemplateComponent } = SECFilingEmailTemplate;
 import { markdownToHtml } from '../../components/ui/email/design-system';
 
 // Import minimalist templates for Phase 2 design

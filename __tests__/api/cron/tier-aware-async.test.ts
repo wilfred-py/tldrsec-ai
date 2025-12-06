@@ -18,12 +18,9 @@ jest.mock('../../../lib/logging', () => ({
   }
 }));
 
-jest.mock('../../../lib/cron/market-hours', () => ({
-  getMarketHoursContext: jest.fn().mockResolvedValue({
-    isMarketOpen: false,
-    timeUntilOpen: 3600000,
-    timeZone: 'America/New_York'
-  })
+jest.mock('../../../lib/cron/tier-eligibility', () => ({
+  getUserProcessingStatuses: jest.fn().mockReturnValue([]),
+  getEligibleUsers: jest.fn().mockReturnValue([])
 }));
 
 jest.mock('../../../lib/monitoring/cron-monitor', () => ({

@@ -49,8 +49,7 @@ jest.mock('../../../lib/security/rate-limiter', () => ({
   }
 }));
 
-jest.mock('../../../lib/cron/market-hours', () => ({
-  getMarketHoursContext: jest.fn(),
+jest.mock('../../../lib/cron/tier-eligibility', () => ({
   getUserProcessingStatuses: jest.fn(),
   getEligibleUsers: jest.fn()
 }));
@@ -103,17 +102,10 @@ describe('Tier-Aware Backwards Compatibility Tests', () => {
       return await callback(mockTx);
     });
     
-    // Setup market hours mocks
-    const { getMarketHoursContext, getUserProcessingStatuses, getEligibleUsers } = require('../../../lib/cron/market-hours');
+    // Setup tier eligibility mocks (24/7 processing - no market hours)
+    const { getUserProcessingStatuses, getEligibleUsers } = require('../../../lib/cron/tier-eligibility');
     const { getActiveTickersForMonitoring, checkTickerForNewFilings } = require('../../../lib/sec-edgar/ticker-monitoring');
-    
-    getMarketHoursContext.mockReturnValue({
-      isMarketHours: true,
-      isMarketDay: true,
-      isHoliday: false,
-      currentTime: new Date()
-    });
-    
+
     getUserProcessingStatuses.mockReturnValue([]);
     getEligibleUsers.mockReturnValue([]);
     getActiveTickersForMonitoring.mockResolvedValue([]);

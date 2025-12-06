@@ -27,13 +27,13 @@ interface TierStatusWidgetProps {
   onUpgrade?: () => void;
 }
 
+// Simplified tier config - 24/7 processing (SEC filings published anytime)
 const TIER_CONFIG = {
   FREE: {
     icon: Users,
     color: 'bg-gray-500',
     textColor: 'text-gray-600',
-    marketFrequency: '30 min',
-    offHoursFrequency: '2 hrs',
+    frequency: '2 hrs',
     budget: 5,
     displayName: 'Free'
   },
@@ -41,8 +41,7 @@ const TIER_CONFIG = {
     icon: Star,
     color: 'bg-blue-500',
     textColor: 'text-blue-600',
-    marketFrequency: '15 min',
-    offHoursFrequency: '1 hr',
+    frequency: '15 min',
     budget: 15,
     displayName: 'Professional'
   },
@@ -50,8 +49,7 @@ const TIER_CONFIG = {
     icon: Building,
     color: 'bg-purple-500',
     textColor: 'text-purple-600',
-    marketFrequency: '5 min',
-    offHoursFrequency: '30 min',
+    frequency: '5 min',
     budget: 60,
     displayName: 'Enterprise'
   },
@@ -59,19 +57,17 @@ const TIER_CONFIG = {
     icon: Crown,
     color: 'bg-amber-500',
     textColor: 'text-amber-600',
-    marketFrequency: '5 min',
-    offHoursFrequency: '5 min',
+    frequency: '5 min',
     budget: Infinity,
     displayName: 'Institution'
   }
 };
 
 export function TierStatusWidget({ user, onUpgrade }: TierStatusWidgetProps) {
-  const [marketHours, setMarketHours] = useState<boolean>(false);
   const [nextUpdate, setNextUpdate] = useState<string>('');
 
   const tierConfig = TIER_CONFIG[user.subscriptionTier];
-  const budgetUsagePercent = user.processingBudget > 0 
+  const budgetUsagePercent = user.processingBudget > 0
     ? Math.min((user.budgetUsed / user.processingBudget) * 100, 100)
     : 0;
 
@@ -79,35 +75,21 @@ export function TierStatusWidget({ user, onUpgrade }: TierStatusWidgetProps) {
   const isBudgetExhausted = budgetUsagePercent >= 100;
 
   useEffect(() => {
-    // Determine if markets are currently open
-    const checkMarketHours = () => {
-      const now = new Date();
-      const estNow = new Date(now.toLocaleString("en-US", {timeZone: "America/New_York"}));
-      const day = estNow.getDay();
-      const hour = estNow.getHours();
-      const minute = estNow.getMinutes();
-      const currentTime = hour * 60 + minute;
-      
-      // Market hours: Monday-Friday 9:30 AM - 4:00 PM EST
-      const isWeekday = day >= 1 && day <= 5;
-      const isMarketTime = currentTime >= 570 && currentTime < 960; // 9:30 AM - 4:00 PM in minutes
-      
-      return isWeekday && isMarketTime;
-    };
-
-    const updateMarketStatus = () => {
-      const isMarketOpen = checkMarketHours();
-      setMarketHours(isMarketOpen);
-      
-      // Calculate next update time
+    // Calculate next update time based on tier frequency (24/7 processing)
+    const updateNextTime = () => {
       const lastProcessed = user.lastCronProcessed ? new Date(user.lastCronProcessed) : new Date(0);
-      const frequencyMinutes = isMarketOpen 
-        ? parseInt(tierConfig.marketFrequency.split(' ')[0])
-        : parseInt(tierConfig.offHoursFrequency.split(' ')[0]) * (tierConfig.offHoursFrequency.includes('hr') ? 60 : 1);
-      
-      const nextUpdateTime = new Date(lastProcessed.getTime() + frequencyMinutes * 60 * 1000);
+
+      // Parse frequency from tier config (e.g., "5 min", "2 hrs")
+      const freqParts = tierConfig.frequency.split(' ');
+      const freqValue = parseInt(freqParts[0]);
+      const freqUnit = freqParts[1];
+      const frequencyMs = freqUnit.includes('hr')
+        ? freqValue * 60 * 60 * 1000
+        : freqValue * 60 * 1000;
+
+      const nextUpdateTime = new Date(lastProcessed.getTime() + frequencyMs);
       const timeUntilNext = Math.max(0, nextUpdateTime.getTime() - Date.now());
-      
+
       if (timeUntilNext === 0) {
         setNextUpdate('Processing now...');
       } else {
@@ -121,8 +103,8 @@ export function TierStatusWidget({ user, onUpgrade }: TierStatusWidgetProps) {
       }
     };
 
-    updateMarketStatus();
-    const interval = setInterval(updateMarketStatus, 1000);
+    updateNextTime();
+    const interval = setInterval(updateNextTime, 1000);
 
     return () => clearInterval(interval);
   }, [user.lastCronProcessed, tierConfig]);
@@ -179,13 +161,10 @@ export function TierStatusWidget({ user, onUpgrade }: TierStatusWidgetProps) {
           <div className="flex items-center justify-between text-sm">
             <div className="flex items-center gap-2">
               <Clock className="h-4 w-4 text-muted-foreground" />
-              <span>
-                {marketHours ? 'Market Hours' : 'Off Hours'}: 
-                Updates every {marketHours ? tierConfig.marketFrequency : tierConfig.offHoursFrequency}
-              </span>
+              <span>Updates every {tierConfig.frequency}</span>
             </div>
           </div>
-          
+
           <div className="flex items-center justify-between text-xs text-muted-foreground">
             <span>Next update in:</span>
             <span className="font-mono">{nextUpdate}</span>
@@ -258,23 +237,23 @@ export function TierStatusWidget({ user, onUpgrade }: TierStatusWidgetProps) {
               <TrendingUp className="h-4 w-4" />
               <span>Upgrade Benefits</span>
             </div>
-            <div className="text-xs text-muted-foreground">
+            <div className="text-xs text-muted-foreground space-y-1">
               {user.subscriptionTier === 'FREE' && (
                 <div>
-                  <span className={TIER_CONFIG.PROFESSIONAL.textColor}>Professional:</span> 
-                  {` Updates every ${TIER_CONFIG.PROFESSIONAL.marketFrequency} (market) / ${TIER_CONFIG.PROFESSIONAL.offHoursFrequency} (off), ${TIER_CONFIG.PROFESSIONAL.budget}min budget`}
+                  <span className={TIER_CONFIG.PROFESSIONAL.textColor}>Professional:</span>
+                  {` Updates every ${TIER_CONFIG.PROFESSIONAL.frequency}, ${TIER_CONFIG.PROFESSIONAL.budget}min budget`}
                 </div>
               )}
               {(user.subscriptionTier === 'FREE' || user.subscriptionTier === 'PROFESSIONAL') && (
                 <div>
-                  <span className={TIER_CONFIG.ENTERPRISE.textColor}>Enterprise:</span> 
-                  {` Updates every ${TIER_CONFIG.ENTERPRISE.marketFrequency}, ${TIER_CONFIG.ENTERPRISE.budget}min budget`}
+                  <span className={TIER_CONFIG.ENTERPRISE.textColor}>Enterprise:</span>
+                  {` Updates every ${TIER_CONFIG.ENTERPRISE.frequency}, ${TIER_CONFIG.ENTERPRISE.budget}min budget`}
                 </div>
               )}
               {user.subscriptionTier !== 'INSTITUTION' && (
                 <div>
-                  <span className={TIER_CONFIG.INSTITUTION.textColor}>Institution:</span> 
-                  {` Updates every ${TIER_CONFIG.INSTITUTION.marketFrequency} continuously, unlimited budget`}
+                  <span className={TIER_CONFIG.INSTITUTION.textColor}>Institution:</span>
+                  {` Updates every ${TIER_CONFIG.INSTITUTION.frequency}, unlimited budget`}
                 </div>
               )}
             </div>

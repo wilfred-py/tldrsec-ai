@@ -12,6 +12,8 @@ This file provides a chronological index of all completed projects across archiv
 ## Recent Activity (Not Yet Archived)
 
 **Projects completed in last 30 days** (tracked in PROGRESS.md):
+- Remove Market Hours Functionality ✅ COMPLETE (2025-12-05) - Removed all market hours logic, created tier-eligibility.ts, 24/7 processing
+- Verification Data Model Fix - Phase 1 (2025-12-05) 🔄 Complete - Updated verify-daily-pipeline.ts to check FilingContentCache instead of legacy SecFetchAttempt
 - Development Environment API Fixes (2025-12-05) 🔄 Complete - Fixed dbRetry.transaction() error, enabled 4 dev routes, created route management scripts
 - Digest Email Markdown Rendering Fix (2025-12-04) 🔄 Complete - Fixed digestTemplate() to use markdownToHtml() for proper email rendering
 - Minimalist Email Template E2E Validation (2025-12-04) 🔄 Complete - Sent test email with 5 summaries to validate minimalist design
@@ -62,11 +64,12 @@ This file provides a chronological index of all completed projects across archiv
 
 ## Archive Statistics
 - **Total Archived Projects**: 17 projects across 3 weekly archives
-- **Current PROGRESS.md Lines**: 110 lines (threshold: 500)
-- **Last Archive Check**: 2025-12-05
-- **Last Archive Update**: 2025-11-14 (most recent archival action)
-- **Recent Activity (Not Yet Archived)**: 13 projects completed in last 30 days
+- **Current PROGRESS.md Lines**: 91 lines (threshold: 500)
+- **Last Archive Check**: 2025-12-06
+- **Last Archive Update**: 2025-12-06 (statistics sync)
+- **Recent Activity (Not Yet Archived)**: 17 projects completed in last 30 days
 - **Archive System**: ✅ ACTIVE (auto-archives when >500 lines AND projects >30 days old)
+- **Current Work**: Email Summarization System Improvements ✅ COMPLETE
 - **Archives Created**:
   - `27-Oct-2025.md` - Newsletter & Security implementations (6 projects)
   - `03-Nov-2025.md` - Critical infrastructure fixes (4 projects)

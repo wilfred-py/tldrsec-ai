@@ -1,5 +1,4 @@
 {
-  "buildCommand": "npm run build",
   "crons": [
     {
       "path": "/api/cron/tier-aware",

@@ -15,7 +15,7 @@ import { sanitize } from '../security/data-sanitizer';
 
 import { logger } from '../logging';
 import { getPrismaClient } from '../db/prisma';
-import { getUserProcessingStatuses, getEligibleUsers } from './market-hours';
+import { getUserProcessingStatuses, getEligibleUsers } from './tier-eligibility';
 import { optimizeCronProcessing } from './ticker-deduplication';
 import { isConcurrencyError } from '../db/concurrency';
 import { CronJobMonitor } from '../monitoring/cron-monitor';
@@ -29,7 +29,7 @@ import type {
   CronResults,
   UserFilingResult,
   // User,
-  MarketContext,
+  // MarketContext, // Removed - market hours no longer used
   EligibilityOptions,
   ProcessingContext
 } from './types';
@@ -48,10 +48,10 @@ function getPrisma() {
 
 export class CronUserProcessingService {
   /**
-   * Get all users eligible for processing based on market context and subscription tiers
+   * Get all users eligible for processing based on subscription tiers
+   * Note: Market hours context removed - SEC filings are processed 24/7
    */
   static async getEligibleUsersForProcessing(
-    marketContext: MarketContext,
     options: EligibilityOptions = {
       maxUsersPerCycle: 100,
       respectBudgetLimits: true,
@@ -88,6 +88,7 @@ export class CronUserProcessingService {
       processingLogger.debug('Users query completed', { userCount: allUsers.length });
 
       // Get processing statuses with eligibility (with null safety)
+      // Note: No market context needed - using tier-eligibility with 24/7 processing
       const userStatuses = getUserProcessingStatuses(
         allUsers
           .filter(u => u && u.id && u.subscriptionTier) // Filter out invalid users
@@ -96,8 +97,7 @@ export class CronUserProcessingService {
             subscriptionTier: CronBudgetService.normalizeTier(u.subscriptionTier), // Normalize tier to HOBBY/PRO
             lastProcessedAt: u.lastCronProcessed,
             budgetUsed: u.budgetUsed || 0
-          })),
-        marketContext
+          }))
       );
 
       processingLogger.debug('User processing statuses calculated', { statusCount: userStatuses.length });
