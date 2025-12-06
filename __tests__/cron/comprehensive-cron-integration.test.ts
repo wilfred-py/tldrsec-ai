@@ -125,7 +125,7 @@ jest.mock('../../lib/sec-edgar/ticker-monitoring');
 jest.mock('../../lib/sec-edgar/rss-parser');
 jest.mock('../../services/filing/summaryGenerationService');
 jest.mock('../../services/filing/sendEmailSummary');
-jest.mock('../../lib/cron/market-hours');
+jest.mock('../../lib/cron/tier-eligibility');
 jest.mock('../../lib/db/concurrency');
 jest.mock('../../lib/security/rate-limiter');
 jest.mock('../../lib/logging', () => ({
