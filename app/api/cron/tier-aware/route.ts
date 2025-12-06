@@ -24,7 +24,7 @@ import { rateLimitMonitor, RateLimitEventType } from '../../../../lib/infrastruc
 import { CronAuthService } from '../../../../lib/cron/auth-service';
 import { CronUserProcessingService } from '../../../../lib/cron/user-processing-service';
 import { CronSecFilingService } from '../../../../lib/cron/sec-filing-service';
-import { CronFilingProcessor } from '../../../../lib/cron/filing-processor';
+// Removed unused import: CronFilingProcessor
 import type { CronResults } from '../../../../lib/cron/types';
 import { AsyncFilingQueue, type FilingJobPayload } from '../../../../lib/cron/async-filing-queue';
 import { QueueMonitoringService } from '../../../../lib/cron/queue-monitoring';
@@ -658,7 +658,7 @@ export async function GET(request: NextRequest) {
 
     // Count eligible users for reporting purposes only
     const successCount = 0; // No jobs queued in this step anymore
-    const userQueueDuration = 0;
+    const _userQueueDuration = 0; // Placeholder for future metrics
 
     cronLogger.info(`[${executionId}] User filing queueing skipped - relying on backlog mechanism`, {
       eligibleUsers: eligibleUsers.length,

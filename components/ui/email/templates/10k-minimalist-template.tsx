@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { EmailColors, formatCurrency, formatPercent, getChangeStyle, getChangeArrow, markdownToHtml } from '../design-system';
+import { EmailColors, getChangeStyle, getChangeArrow, markdownToHtml } from '../design-system';
 import { EmailHeader } from './sections/EmailHeader';
 import { EmailFooter } from './sections/EmailFooter';
 import { SectionCard } from './sections/SectionCard';
@@ -54,7 +54,7 @@ export function Form10KMinimalistTemplate({ filing }: Form10KMinimalistTemplateP
   }> | undefined;
 
   // Extract simple summary if available
-  const parsedContent = rawData?.parsedContent as Record<string, unknown> | undefined;
+  const _parsedContent = rawData?.parsedContent as Record<string, unknown> | undefined;
 
   return (
     <div style={{

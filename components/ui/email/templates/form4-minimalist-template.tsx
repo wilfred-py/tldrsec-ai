@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { EmailColors, formatCurrency, formatNumber, formatPercent, getChangeStyle, getChangeArrow, markdownToHtml } from '../design-system';
+import { EmailColors, markdownToHtml } from '../design-system';
 import { EmailHeader } from './sections/EmailHeader';
 import { EmailFooter } from './sections/EmailFooter';
 import { SectionCard } from './sections/SectionCard';

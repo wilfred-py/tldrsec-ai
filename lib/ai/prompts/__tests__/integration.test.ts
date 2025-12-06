@@ -9,7 +9,7 @@ import { Form8KPrompt } from '../form-8k';
 import { FormForm4Prompt } from '../form-4';
 
 // Mock filing data for testing
-const mockFiling = {
+const _mockFiling = {
   id: 'test-filing-123',
   companyName: 'Test Corp',
   formType: '10-K',
@@ -22,7 +22,7 @@ const mockFiling = {
   ticker: 'TEST'
 };
 
-const mockSummary = {
+const _mockSummary = {
   id: 'summary-123',
   filingId: 'test-filing-123',
   summary: JSON.stringify({
