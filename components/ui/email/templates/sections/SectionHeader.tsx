@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { EmailColors, EmailTypography } from '../../design-system';
+import { EmailColors } from '../../design-system';
 
 interface SectionHeaderProps {
   emoji?: string;

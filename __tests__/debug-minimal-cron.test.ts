@@ -39,13 +39,7 @@ jest.mock('../lib/sec-edgar/ticker-monitoring', () => ({
   markFilingAsProcessedByAccession: jest.fn().mockResolvedValue(undefined)
 }));
 
-jest.mock('../lib/cron/market-hours', () => ({
-  getMarketHoursContext: jest.fn().mockReturnValue({
-    isMarketHours: false,
-    isMarketDay: false,
-    isHoliday: false,
-    currentTime: new Date().toISOString()
-  }),
+jest.mock('../lib/cron/tier-eligibility', () => ({
   getUserProcessingStatuses: jest.fn().mockReturnValue([]),
   getEligibleUsers: jest.fn().mockReturnValue([])
 }));

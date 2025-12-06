@@ -13,6 +13,9 @@ This file provides a chronological index of all completed projects across archiv
 
 **Projects completed in last 30 days** (tracked in PROGRESS.md):
 - Development Environment API Fixes (2025-12-06) ✅ COMPLETE - Fixed dbRetry.transaction() → dbRetry.mutation() in user tickers route, branch: fix/development-api-routes
+- Verification Cache Health Metrics (Phase 2) ✅ COMPLETE (2025-12-06) - Added cache health report to daily verification script
+- Remove Market Hours Functionality ✅ COMPLETE (2025-12-05) - Removed all market hours logic, created tier-eligibility.ts, 24/7 processing
+- Verification Data Model Fix - Phase 1 (2025-12-05) 🔄 Complete - Updated verify-daily-pipeline.ts to check FilingContentCache instead of legacy SecFetchAttempt
 - Digest Email Markdown Rendering Fix (2025-12-04) 🔄 Complete - Fixed digestTemplate() to use markdownToHtml() for proper email rendering
 - Minimalist Email Template E2E Validation (2025-12-04) 🔄 Complete - Sent test email with 5 summaries to validate minimalist design
 - Email Template Test Fix (2025-12-04) 🔄 Complete - Updated SECFilingEmailTemplate.test.tsx assertions for minimalist templates
@@ -64,13 +67,14 @@ This file provides a chronological index of all completed projects across archiv
 - **Total Archived Projects**: 17 projects across 3 weekly archives
 - **Current PROGRESS.md Lines**: 91 lines (threshold: 500)
 - **Last Archive Check**: 2025-12-06
-- **Last Archive Update**: 2025-11-14 (most recent archival action)
-- **Recent Activity (Not Yet Archived)**: 14 projects completed in last 30 days
+- **Last Archive Update**: 2025-12-06 (statistics sync)
+- **Recent Activity (Not Yet Archived)**: 17 projects completed in last 30 days
 - **Plans Completion Status** (2025-12-06):
   - Email Summarization Improvements (2025-12-01): ✅ 100% COMPLETE
   - Fix Development Environment API Issues (2025-12-04): ✅ 100% COMPLETE (dbRetry.mutation fix applied)
   - Fix Verification Data Model Mismatch (2025-12-04): ❌ 0% (not started)
 - **Archive System**: ✅ ACTIVE (auto-archives when >500 lines AND projects >30 days old)
+- **Current Work**: Pricing Strategy Analysis (in progress)
 - **Archives Created**:
   - `27-Oct-2025.md` - Newsletter & Security implementations (6 projects)
   - `03-Nov-2025.md` - Critical infrastructure fixes (4 projects)

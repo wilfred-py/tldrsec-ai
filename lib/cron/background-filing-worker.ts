@@ -399,9 +399,9 @@ export class BackgroundFilingWorker {
    */
   private async routeJobToHandler(
     job: JobQueue,
-    payload: any,
+    payload: unknown,
     signal?: AbortSignal
-  ): Promise<any> {
+  ): Promise<unknown> {
     // Check if already aborted before routing
     if (signal?.aborted) {
       return { success: false, error: 'Job was aborted before routing started' };

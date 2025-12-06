@@ -76,7 +76,7 @@ export async function handleFetch(
   payload: FetchJobPayload
 ): Promise<FetchResult> {
   const startTime = Date.now();
-  const { userId, userEmail, userTier, ticker, filing, executionContext } = payload;
+  const { userId, userEmail: _userEmail, userTier, ticker, filing, executionContext } = payload;
   const { executionId } = executionContext;
 
   fetchLogger.info(`[${executionId}] Starting fetch phase`, {
