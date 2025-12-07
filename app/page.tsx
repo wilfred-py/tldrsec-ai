@@ -6,8 +6,13 @@ import { createSupabaseServiceClient } from '@/lib/supabase/server-client';
 // Initial seed value - must match the API endpoint
 const INITIAL_SEED = 147;
 
-// Fetch the initial count for SSR
-async function getInitialCount(): Promise<number> {
+interface CounterData {
+  baseCount: number;  // Starting point for animation (yesterday's end-of-day total)
+  realCount: number;  // Current real count (target for animation)
+}
+
+// Fetch counter data for SSR - provides both starting point and target
+async function getCounterData(): Promise<CounterData> {
   try {
     const prisma = getPrismaClient();
 
@@ -41,15 +46,28 @@ async function getInitialCount(): Promise<number> {
     if (cachedEntry) {
       const subscriberCountAtEOD = cachedEntry.subscriberCountAtEOD || 0;
       const newSubscribersToday = subscriberCount - subscriberCountAtEOD;
-      return cachedEntry.baseCount + newSubscribersToday;
+
+      // baseCount = yesterday's end-of-day total (the cached value)
+      // realCount = baseCount + new signups today
+      return {
+        baseCount: cachedEntry.baseCount,
+        realCount: cachedEntry.baseCount + newSubscribersToday
+      };
     }
 
-    // No cache - calculate from scratch
-    return INITIAL_SEED + subscriberCount;
+    // No cache - use INITIAL_SEED as base, calculate real from scratch
+    const realCount = INITIAL_SEED + subscriberCount;
+    return {
+      baseCount: INITIAL_SEED,
+      realCount: realCount
+    };
 
   } catch (error) {
-    console.error('[Landing Page] Error fetching initial count:', error);
-    return INITIAL_SEED;
+    console.error('[Landing Page] Error fetching counter data:', error);
+    return {
+      baseCount: INITIAL_SEED,
+      realCount: INITIAL_SEED
+    };
   }
 }
 
@@ -82,7 +100,7 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 export default async function Home() {
-  const initialCount = await getInitialCount();
+  const { baseCount, realCount } = await getCounterData();
 
-  return <FocusedInvestorHero initialCount={initialCount} />;
+  return <FocusedInvestorHero baseCount={baseCount} realCount={realCount} />;
 }

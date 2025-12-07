@@ -1,128 +1,146 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Users } from 'lucide-react';
 import { CounterDisplay } from './counter';
 
 // Default fallback value
-const DEFAULT_COUNT = 147;
+const DEFAULT_BASE = 147;
+
+// Animation configuration
+const ANIMATION_DURATION = 12000; // 12 seconds total animation
+const ANIMATION_STEP_INTERVAL = 800; // Update every 800ms for smooth animation
 
 interface WaitlistCounterProps {
   hideAfterSignup?: boolean;
   userHasSignedUp?: boolean;
-  initialCount?: number; // SSR-provided initial count
+  baseCount?: number;  // SSR-provided starting point (yesterday's end-of-day)
+  realCount?: number;  // SSR-provided target (current real count)
 }
 
 export function WaitlistCounter({
   hideAfterSignup = false,
   userHasSignedUp = false,
-  initialCount
+  baseCount,
+  realCount
 }: WaitlistCounterProps) {
-  // Use SSR-provided initialCount if available, otherwise use default
-  const startingCount = initialCount ?? DEFAULT_COUNT;
+  // Use SSR-provided values if available
+  const startingBase = baseCount ?? DEFAULT_BASE;
+  const startingReal = realCount ?? DEFAULT_BASE;
 
-  const [count, setCount] = useState<number>(startingCount);
-  const [isLoading, setIsLoading] = useState(true);
+  // Current displayed count (animated)
+  const [displayedCount, setDisplayedCount] = useState<number>(startingBase);
+  // Target count from API (for live updates after animation)
+  const [targetCount, setTargetCount] = useState<number>(startingReal);
+  // Animation state
+  const [isAnimating, setIsAnimating] = useState(true);
+  const [animationComplete, setAnimationComplete] = useState(false);
+  // Loading/error state
   const [error, setError] = useState<string | null>(null);
 
-  // Animation state - start from SSR count (no animation needed if we have real data)
-  const [animatedCount, setAnimatedCount] = useState<number>(startingCount);
-  // If we have an SSR-provided count, skip the initial animation
-  const [isAnimating, setIsAnimating] = useState(!initialCount);
-  const [minAnimationReached, setMinAnimationReached] = useState(!!initialCount);
-  const [hasCompletedInitialTransition, setHasCompletedInitialTransition] = useState(!!initialCount);
+  // Refs to track animation progress
+  const animationStartTime = useRef<number>(Date.now());
+  const animationStartValue = useRef<number>(startingBase);
+  const animationTargetValue = useRef<number>(startingReal);
 
   // Polling configuration
   const POLL_INTERVAL = 30000; // 30 seconds
   const MAX_POLL_DURATION = 5 * 60 * 1000; // 5 minutes
-  const MIN_ANIMATION_DURATION = 3000; // Minimum 3 seconds of animation before showing real count
 
+  // Fetch latest count from API
   const fetchCount = useCallback(async () => {
-      console.log('[WaitlistCounter] Starting fetch request');
-      const startTime = Date.now();
-      
-      try {
-        // Add timeout to prevent indefinite loading
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => {
-          console.log('[WaitlistCounter] Request timeout - aborting');
-          controller.abort();
-        }, 8000); // 8 second timeout
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 8000);
 
-        console.log('[WaitlistCounter] Making fetch request to /api/waitlist/count');
-        const response = await fetch('/api/waitlist/count', {
-          signal: controller.signal,
-        });
+      const response = await fetch('/api/waitlist/count', {
+        signal: controller.signal,
+      });
 
-        clearTimeout(timeoutId);
-        
-        console.log('[WaitlistCounter] Response received:', {
-          status: response.status,
-          statusText: response.statusText,
-          ok: response.ok,
-          responseTime: Date.now() - startTime
-        });
+      clearTimeout(timeoutId);
 
-        if (!response.ok) {
-          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-        }
-
-        const data = await response.json();
-        console.log('[WaitlistCounter] Response data:', data);
-
-        if (typeof data.count === 'number') {
-          setCount(data.count);
-          console.log('[WaitlistCounter] Count updated to:', data.count);
-        } else {
-          throw new Error('Invalid response format - count is not a number');
-        }
-
-        // Check for any error messages in the response
-        if (data.error) {
-          console.warn('[WaitlistCounter] API returned error:', data.error);
-          setError(data.error);
-        }
-
-      } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-        console.error('[WaitlistCounter] Fetch error:', {
-          error: errorMessage,
-          responseTime: Date.now() - startTime,
-          errorType: error instanceof Error ? error.constructor.name : typeof error
-        });
-        
-        setError(errorMessage);
-        
-        // Keep default count on error - don't change it
-        console.log('[WaitlistCounter] Keeping default count due to error');
-      } finally {
-        setIsLoading(false);
-        console.log('[WaitlistCounter] Loading completed');
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
-    }, []);
 
-  // Initial fetch effect
+      const data = await response.json();
+
+      if (typeof data.count === 'number') {
+        setTargetCount(data.count);
+        console.log('[WaitlistCounter] Live update - count:', data.count);
+      }
+
+      if (data.error) {
+        console.warn('[WaitlistCounter] API returned error:', data.error);
+        setError(data.error);
+      }
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Unknown error';
+      console.error('[WaitlistCounter] Fetch error:', errorMessage);
+      setError(errorMessage);
+    }
+  }, []);
+
+  // Animation effect - animate from baseCount to realCount over ~12 seconds
   useEffect(() => {
-    fetchCount();
+    if (!isAnimating) return;
 
-    // Set minimum animation duration timer
-    const minAnimTimer = setTimeout(() => {
-      setMinAnimationReached(true);
-    }, MIN_ANIMATION_DURATION);
+    const startValue = animationStartValue.current;
+    const targetValue = animationTargetValue.current;
+    const difference = targetValue - startValue;
 
-    return () => clearTimeout(minAnimTimer);
-  }, [fetchCount, MIN_ANIMATION_DURATION]);
+    // If no difference, complete immediately
+    if (difference <= 0) {
+      setDisplayedCount(targetValue);
+      setIsAnimating(false);
+      setAnimationComplete(true);
+      return;
+    }
 
-  // Polling effect - starts after initial fetch completes
+    // Calculate total steps
+    const totalSteps = Math.ceil(ANIMATION_DURATION / ANIMATION_STEP_INTERVAL);
+    let currentStep = 0;
+
+    const animationInterval = setInterval(() => {
+      currentStep++;
+
+      // Use easeOutQuad for natural deceleration
+      const progress = Math.min(currentStep / totalSteps, 1);
+      const easedProgress = 1 - (1 - progress) * (1 - progress);
+
+      // Calculate new value with some randomness for organic feel
+      const baseValue = startValue + Math.floor(difference * easedProgress);
+      // Add slight randomness (±1) except at the end
+      const randomOffset = progress >= 0.95 ? 0 : Math.floor(Math.random() * 3) - 1;
+      const newValue = Math.min(Math.max(baseValue + randomOffset, startValue), targetValue);
+
+      setDisplayedCount(newValue);
+
+      // Complete animation
+      if (progress >= 1) {
+        clearInterval(animationInterval);
+        setDisplayedCount(targetValue);
+        setIsAnimating(false);
+        setAnimationComplete(true);
+        console.log('[WaitlistCounter] Animation complete at:', targetValue);
+      }
+    }, ANIMATION_STEP_INTERVAL);
+
+    return () => clearInterval(animationInterval);
+  }, [isAnimating]);
+
+  // Polling effect - starts after animation completes
   useEffect(() => {
-    if (isLoading) return; // Wait for initial fetch to complete
+    if (!animationComplete) return;
 
     const startTime = Date.now();
+
+    // Initial fetch to get latest count
+    fetchCount();
 
     const pollInterval = setInterval(() => {
       const elapsed = Date.now() - startTime;
 
-      // Stop polling after max duration
       if (elapsed >= MAX_POLL_DURATION) {
         console.log('[WaitlistCounter] Polling stopped after max duration');
         clearInterval(pollInterval);
@@ -133,122 +151,44 @@ export function WaitlistCounter({
       fetchCount();
     }, POLL_INTERVAL);
 
-    // Cleanup on unmount
-    return () => {
-      console.log('[WaitlistCounter] Cleaning up polling interval');
-      clearInterval(pollInterval);
-    };
-  }, [isLoading, fetchCount, POLL_INTERVAL, MAX_POLL_DURATION]);
+    return () => clearInterval(pollInterval);
+  }, [animationComplete, fetchCount]);
 
-  // Animation interval effect - animate from cached base to real count
+  // Handle live updates (after animation is complete)
   useEffect(() => {
-    if (!isAnimating || !isLoading) return;
+    if (animationComplete && targetCount !== displayedCount) {
+      // Animate smoothly to new count
+      const difference = targetCount - displayedCount;
+      if (difference > 0) {
+        // Quick animation for live updates (1-2 seconds)
+        const steps = Math.min(difference, 5);
+        const stepDuration = 300;
+        let step = 0;
 
-    let timeoutId: NodeJS.Timeout | null = null;
-    let isCancelled = false;
+        const updateInterval = setInterval(() => {
+          step++;
+          const increment = Math.ceil(difference / steps);
+          setDisplayedCount(prev => Math.min(prev + increment, targetCount));
 
-    const scheduleNextIncrement = () => {
-      if (isCancelled) return;
-
-      // 4 second delay between changes
-      const delay = 4000; // 4000ms (4 seconds)
-
-      timeoutId = setTimeout(() => {
-        if (isCancelled) return;
-
-        setAnimatedCount(prev => {
-          // Double-check we should still be animating
-          if (!isCancelled) {
-            return prev + Math.floor(Math.random() * 4) + 1; // 1-4 random increment
+          if (step >= steps) {
+            clearInterval(updateInterval);
+            setDisplayedCount(targetCount);
           }
-          return prev;
-        });
+        }, stepDuration);
 
-        // Only schedule next increment if still active
-        if (!isCancelled) {
-          scheduleNextIncrement();
-        }
-      }, delay);
-    };
-
-    scheduleNextIncrement();
-
-    return () => {
-      isCancelled = true;
-      if (timeoutId) {
-        clearTimeout(timeoutId);
+        return () => clearInterval(updateInterval);
+      } else {
+        // Instant update if count decreased (shouldn't happen normally)
+        setDisplayedCount(targetCount);
       }
-    };
-  }, [isAnimating, isLoading]);
-
-  // Smooth transition to real count effect with easing (initial load only)
-  useEffect(() => {
-    // Only start transition when:
-    // 1. Loading is done AND minimum animation time has elapsed
-    // 2. We haven't completed the initial transition yet
-    // 3. Count is different from animated count
-    if (!isLoading && minAnimationReached && !hasCompletedInitialTransition && count !== animatedCount) {
-      setIsAnimating(false);
-
-      const difference = count - animatedCount;
-
-      // Calculate number of steps based on difference (1-4 per step to match increment behavior)
-      // Each step increments by 1-4, so divide difference by average increment (2.5)
-      const averageIncrement = 2.5;
-      const steps = Math.max(Math.ceil(difference / averageIncrement), 1);
-
-      // 4 seconds per step to match the rolling animation timing
-      const stepDuration = 4000;
-
-      let currentStep = 0;
-
-      const animateTransition = () => {
-        currentStep++;
-
-        // Calculate increment for this step (1-4 random, but ensure we reach target)
-        const remainingDifference = count - animatedCount;
-        const remainingSteps = steps - currentStep + 1;
-
-        // For the last step, use exact remaining difference
-        // Otherwise use random 1-4, but cap at remaining difference
-        let increment: number;
-        if (currentStep >= steps) {
-          increment = remainingDifference;
-        } else {
-          const maxIncrement = Math.min(4, Math.ceil(remainingDifference / remainingSteps));
-          increment = Math.floor(Math.random() * maxIncrement) + 1;
-        }
-
-        setAnimatedCount(prev => Math.min(prev + increment, count));
-
-        if (currentStep < steps && animatedCount + increment < count) {
-          setTimeout(animateTransition, stepDuration);
-        } else {
-          // Ensure we end exactly at the target count
-          setAnimatedCount(count);
-          setHasCompletedInitialTransition(true);
-        }
-      };
-
-      // Start the animation
-      setTimeout(animateTransition, stepDuration);
     }
-  }, [isLoading, minAnimationReached, hasCompletedInitialTransition, count, animatedCount]);
-
-  // Handle polling updates (after initial transition is complete)
-  useEffect(() => {
-    if (hasCompletedInitialTransition && count !== animatedCount) {
-      // Directly update to new count from polling (no animation)
-      setAnimatedCount(count);
-    }
-  }, [hasCompletedInitialTransition, count, animatedCount]);
+  }, [animationComplete, targetCount, displayedCount]);
 
   // Only render if not signed up or hideAfterSignup is false
   if (hideAfterSignup && userHasSignedUp) {
     return null;
   }
 
-  // Add a retry button for debugging in development
   const isDev = process.env.NODE_ENV === 'development';
 
   return (
@@ -260,8 +200,8 @@ export function WaitlistCounter({
           data-testid="waitlist-counter"
         >
           Join <CounterDisplay
-            count={animatedCount}
-            isAnimating={isAnimating || isLoading}
+            count={displayedCount}
+            isAnimating={isAnimating}
             className="transition-all duration-300 ease-out"
           /> investors already on the waitlist
         </span>
