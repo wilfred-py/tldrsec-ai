@@ -13,10 +13,10 @@ This file provides a chronological index of all completed projects across archiv
 
 **Projects completed in last 30 days** (tracked in PROGRESS.md):
 - Live Counter SSR Animation Fix ✅ COMPLETE (2025-12-08) - Synthetic 20-count gap for always-visible animation from base to real count over 12 seconds with live polling
+- Development Environment API Fixes (2025-12-06) ✅ COMPLETE - Fixed dbRetry.transaction() → dbRetry.mutation() in user tickers route, branch: fix/development-api-routes
 - Verification Cache Health Metrics (Phase 2) ✅ COMPLETE (2025-12-06) - Added cache health report to daily verification script
 - Remove Market Hours Functionality ✅ COMPLETE (2025-12-05) - Removed all market hours logic, created tier-eligibility.ts, 24/7 processing
 - Verification Data Model Fix - Phase 1 (2025-12-05) 🔄 Complete - Updated verify-daily-pipeline.ts to check FilingContentCache instead of legacy SecFetchAttempt
-- Development Environment API Fixes (2025-12-05) 🔄 Complete - Fixed dbRetry.transaction() error, enabled 4 dev routes, created route management scripts
 - Digest Email Markdown Rendering Fix (2025-12-04) 🔄 Complete - Fixed digestTemplate() to use markdownToHtml() for proper email rendering
 - Minimalist Email Template E2E Validation (2025-12-04) 🔄 Complete - Sent test email with 5 summaries to validate minimalist design
 - Email Template Test Fix (2025-12-04) 🔄 Complete - Updated SECFilingEmailTemplate.test.tsx assertions for minimalist templates
@@ -70,6 +70,10 @@ This file provides a chronological index of all completed projects across archiv
 - **Last Archive Check**: 2025-12-08
 - **Last Archive Update**: 2025-12-08 (statistics sync)
 - **Recent Activity (Not Yet Archived)**: 18 projects completed in last 30 days
+- **Plans Completion Status** (2025-12-06):
+  - Email Summarization Improvements (2025-12-01): ✅ 100% COMPLETE
+  - Fix Development Environment API Issues (2025-12-04): ✅ 100% COMPLETE (dbRetry.mutation fix applied)
+  - Fix Verification Data Model Mismatch (2025-12-04): ❌ 0% (not started)
 - **Archive System**: ✅ ACTIVE (auto-archives when >500 lines AND projects >30 days old)
 - **Current Work**: Live Counter SSR Animation (complete)
 - **Archives Created**:

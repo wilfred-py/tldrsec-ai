@@ -44,7 +44,7 @@ export async function GET() {
       console.log(`User not found. Creating new user for ${primaryEmail} with auth ID ${userId}`);
       
       try {
-        const newUser = await dbRetry.transaction(() =>
+        const newUser = await dbRetry.mutation(() =>
           prisma.user.create({
             data: {
               id: userId, // Use Clerk user ID as primary key for consistency
