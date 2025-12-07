@@ -12,7 +12,7 @@ This file provides a chronological index of all completed projects across archiv
 ## Recent Activity (Not Yet Archived)
 
 **Projects completed in last 30 days** (tracked in PROGRESS.md):
-- Live Counter SSR Animation Fix ✅ COMPLETE (2025-12-08) - Fixed counter to show daily base + animate to real count over 12 seconds with live updates
+- Live Counter SSR Animation Fix ✅ COMPLETE (2025-12-08) - Synthetic 20-count gap for always-visible animation from base to real count over 12 seconds with live polling
 - Verification Cache Health Metrics (Phase 2) ✅ COMPLETE (2025-12-06) - Added cache health report to daily verification script
 - Remove Market Hours Functionality ✅ COMPLETE (2025-12-05) - Removed all market hours logic, created tier-eligibility.ts, 24/7 processing
 - Verification Data Model Fix - Phase 1 (2025-12-05) 🔄 Complete - Updated verify-daily-pipeline.ts to check FilingContentCache instead of legacy SecFetchAttempt
