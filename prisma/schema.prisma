@@ -763,11 +763,12 @@ enum ExecutionStatus {
 }
 
 model DailyWaitlistCache {
-  id        String   @id @default(uuid())
-  date      DateTime @unique @db.Date
-  baseCount Int
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id                    String   @id @default(uuid())
+  date                  DateTime @unique @db.Date
+  baseCount             Int      // 147 + total subscribers at EOD (the starting display value for this day)
+  subscriberCountAtEOD  Int      @default(0) // Total subscribers when this cache was created (for delta calculation)
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
 
   @@index([date])
 }

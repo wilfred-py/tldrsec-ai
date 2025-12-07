@@ -6,7 +6,11 @@ import { WaitlistCounter } from './waitlist-counter';
 import { FloatingElements } from './floating-elements';
 // import { ProfessionalFooter } from './professional-footer';
 
-export function FocusedInvestorHero() {
+interface FocusedInvestorHeroProps {
+  initialCount?: number;
+}
+
+export function FocusedInvestorHero({ initialCount }: FocusedInvestorHeroProps) {
   const [hasSignedUp, setHasSignedUp] = useState(false);
 
   return (
@@ -37,7 +41,7 @@ export function FocusedInvestorHero() {
               <WaitlistForm onSuccess={() => setHasSignedUp(true)} />
             </div>
             
-            <WaitlistCounter hideAfterSignup={true} userHasSignedUp={hasSignedUp} />
+            <WaitlistCounter hideAfterSignup={true} userHasSignedUp={hasSignedUp} initialCount={initialCount} />
             
           </div>
         </div>

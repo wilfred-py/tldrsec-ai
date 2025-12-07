@@ -4,21 +4,33 @@ import { useState, useEffect, useCallback } from 'react';
 import { Users } from 'lucide-react';
 import { CounterDisplay } from './counter';
 
+// Default fallback value
+const DEFAULT_COUNT = 147;
+
 interface WaitlistCounterProps {
   hideAfterSignup?: boolean;
   userHasSignedUp?: boolean;
+  initialCount?: number; // SSR-provided initial count
 }
 
-export function WaitlistCounter({ hideAfterSignup = false, userHasSignedUp = false }: WaitlistCounterProps) {
-  const [count, setCount] = useState<number>(147); // Default base count
+export function WaitlistCounter({
+  hideAfterSignup = false,
+  userHasSignedUp = false,
+  initialCount
+}: WaitlistCounterProps) {
+  // Use SSR-provided initialCount if available, otherwise use default
+  const startingCount = initialCount ?? DEFAULT_COUNT;
+
+  const [count, setCount] = useState<number>(startingCount);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Animation state
-  const [animatedCount, setAnimatedCount] = useState<number>(147);
-  const [isAnimating, setIsAnimating] = useState(true);
-  const [minAnimationReached, setMinAnimationReached] = useState(false);
-  const [hasCompletedInitialTransition, setHasCompletedInitialTransition] = useState(false);
+  // Animation state - start from SSR count (no animation needed if we have real data)
+  const [animatedCount, setAnimatedCount] = useState<number>(startingCount);
+  // If we have an SSR-provided count, skip the initial animation
+  const [isAnimating, setIsAnimating] = useState(!initialCount);
+  const [minAnimationReached, setMinAnimationReached] = useState(!!initialCount);
+  const [hasCompletedInitialTransition, setHasCompletedInitialTransition] = useState(!!initialCount);
 
   // Polling configuration
   const POLL_INTERVAL = 30000; // 30 seconds
