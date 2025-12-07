@@ -1,65 +1,39 @@
 import type { Metadata } from 'next';
 import { FocusedInvestorHero } from '@/components/landing/focused-investor-hero';
-import { getPrismaClient } from '@/lib/db/prisma';
 import { createSupabaseServiceClient } from '@/lib/supabase/server-client';
 
 // Initial seed value - must match the API endpoint
 const INITIAL_SEED = 147;
+// Synthetic gap for animation effect - always animate up by this amount
+const ANIMATION_GAP = 20;
 
 interface CounterData {
-  baseCount: number;  // Starting point for animation (yesterday's end-of-day total)
+  baseCount: number;  // Starting point for animation (synthetic, 20 less than real)
   realCount: number;  // Current real count (target for animation)
 }
 
 // Fetch counter data for SSR - provides both starting point and target
 async function getCounterData(): Promise<CounterData> {
   try {
-    const prisma = getPrismaClient();
-
-    // Get today's date normalized to midnight
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
-    // Try to get today's cache entry
-    let cachedEntry = await prisma.dailyWaitlistCache.findUnique({
-      where: { date: today }
-    });
-
-    // If no cache for today, try yesterday
-    if (!cachedEntry) {
-      const yesterday = new Date(today);
-      yesterday.setDate(yesterday.getDate() - 1);
-
-      cachedEntry = await prisma.dailyWaitlistCache.findUnique({
-        where: { date: yesterday }
-      });
-    }
+    const supabase = createSupabaseServiceClient();
 
     // Get current subscriber count
-    const supabase = createSupabaseServiceClient();
     const { count: currentSubscriberCount } = await supabase
       .from('newsletter_subscribers')
       .select('*', { count: 'exact', head: true });
 
     const subscriberCount = currentSubscriberCount || 0;
 
-    if (cachedEntry) {
-      const subscriberCountAtEOD = cachedEntry.subscriberCountAtEOD || 0;
-      const newSubscribersToday = subscriberCount - subscriberCountAtEOD;
-
-      // baseCount = yesterday's end-of-day total (the cached value)
-      // realCount = baseCount + new signups today
-      return {
-        baseCount: cachedEntry.baseCount,
-        realCount: cachedEntry.baseCount + newSubscribersToday
-      };
-    }
-
-    // No cache - use INITIAL_SEED as base, calculate real from scratch
+    // Real count = seed + actual subscribers
     const realCount = INITIAL_SEED + subscriberCount;
+
+    // Synthetic base count = real count - 20 (creates animation effect)
+    // Minimum base is INITIAL_SEED to never show below seed value
+    const baseCount = Math.max(INITIAL_SEED, realCount - ANIMATION_GAP);
+
     return {
-      baseCount: INITIAL_SEED,
-      realCount: realCount
+      baseCount,
+      realCount
     };
 
   } catch (error) {
