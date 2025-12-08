@@ -12,6 +12,7 @@ This file provides a chronological index of all completed projects across archiv
 ## Recent Activity (Not Yet Archived)
 
 **Projects completed in last 30 days** (tracked in PROGRESS.md):
+- **Job Queue Processing Gap Investigation** 🔄 ONGOING (2025-12-09) - Research completed. Root cause identified: Job type priority system checks discovery jobs first; fetch jobs never selected if any discovery jobs exist. Research doc: `thoughts/shared/research/2025-12-09-fetch-job-processing-cloudflare-investigation.md`
 - Live Counter SSR Animation Fix ✅ COMPLETE (2025-12-08) - Synthetic 20-count gap for always-visible animation from base to real count over 12 seconds with live polling
 - Development Environment API Fixes (2025-12-06) ✅ COMPLETE - Fixed dbRetry.transaction() → dbRetry.mutation() in user tickers route, branch: fix/development-api-routes
 - Verification Cache Health Metrics (Phase 2) ✅ COMPLETE (2025-12-06) - Added cache health report to daily verification script
@@ -67,15 +68,17 @@ This file provides a chronological index of all completed projects across archiv
 ## Archive Statistics
 - **Total Archived Projects**: 17 projects across 3 weekly archives
 - **Current PROGRESS.md Lines**: 91 lines (threshold: 500)
-- **Last Archive Check**: 2025-12-08
-- **Last Archive Update**: 2025-12-08 (statistics sync)
-- **Recent Activity (Not Yet Archived)**: 18 projects completed in last 30 days
-- **Plans Completion Status** (2025-12-06):
-  - Email Summarization Improvements (2025-12-01): ✅ 100% COMPLETE
-  - Fix Development Environment API Issues (2025-12-04): ✅ 100% COMPLETE (dbRetry.mutation fix applied)
-  - Fix Verification Data Model Mismatch (2025-12-04): ❌ 0% (not started)
+- **Last Archive Check**: 2025-12-09
+- **Last Archive Update**: 2025-12-09 (statistics sync)
+- **Recent Activity (Not Yet Archived)**: 19 projects completed in last 30 days
+- **Active Investigation** (2025-12-09):
+  - **ROOT CAUSE IDENTIFIED**: Job type priority system in BackgroundFilingWorker checks ASYNC_DISCOVER_FILINGS first; if any discovery jobs exist, ASYNC_FETCH_FILING jobs are never selected
+  - Research document: `thoughts/shared/research/2025-12-09-fetch-job-processing-cloudflare-investigation.md`
+  - Key files: `lib/cron/background-filing-worker.ts:157-174` (priority loop), `lib/cron/types.ts:203-209` (batch sizes)
+  - Batch sizes: Discovery=10, Fetch=5, Summarize=1
+  - ~1s Cloudflare response suggests empty batch selection (no jobs processed)
 - **Archive System**: ✅ ACTIVE (auto-archives when >500 lines AND projects >30 days old)
-- **Current Work**: Live Counter SSR Animation (complete)
+- **Current Work**: Fix job type priority to allow fetch jobs to process
 - **Archives Created**:
   - `27-Oct-2025.md` - Newsletter & Security implementations (6 projects)
   - `03-Nov-2025.md` - Critical infrastructure fixes (4 projects)

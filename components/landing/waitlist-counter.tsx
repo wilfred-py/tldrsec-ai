@@ -39,7 +39,7 @@ export function WaitlistCounter({
   const [error, setError] = useState<string | null>(null);
 
   // Refs to track animation progress
-  const animationStartTime = useRef<number>(Date.now());
+  const _animationStartTime = useRef<number>(Date.now());
   const animationStartValue = useRef<number>(startingBase);
   const animationTargetValue = useRef<number>(startingReal);
 
@@ -152,6 +152,7 @@ export function WaitlistCounter({
     }, POLL_INTERVAL);
 
     return () => clearInterval(pollInterval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- MAX_POLL_DURATION and POLL_INTERVAL are constants
   }, [animationComplete, fetchCount]);
 
   // Handle live updates (after animation is complete)
