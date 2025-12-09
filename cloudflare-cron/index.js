@@ -110,7 +110,12 @@ export default {
       
       // Build URLs for Vercel endpoints (dual endpoint pattern for async pipeline)
       const tierAwareUrl = `${env.PUBLIC_URL}/api/cron/tier-aware`; // Primary: queues new filings
-      const workerUrl = `${env.PUBLIC_URL}/api/cron/process-filing-queue`; // Secondary: processes queued jobs
+      // Step 2: Process Filing Queue
+      // IMPORTANT: We filter to ASYNC_FETCH_FILING and ASYNC_SUMMARIZE_CACHED only.
+      // This prevents the discovery job queued in Step 1 from blocking fetch/summarize
+      // jobs. Discovery jobs will be processed in subsequent cron cycles when no
+      // fetch/summarize jobs are pending.
+      const workerUrl = `${env.PUBLIC_URL}/api/cron/process-filing-queue?jobTypes=ASYNC_FETCH_FILING,ASYNC_SUMMARIZE_CACHED`; // Secondary: processes queued jobs (excluding discovery)
       const dailyCountUrl = `${env.PUBLIC_URL}/api/cron/update-daily-count`;
 
       console.log(`[${executionId}] Dual endpoint configuration:`, {

@@ -6,6 +6,15 @@ description: Create detailed implementation plans through interactive research a
 
 You are tasked with creating detailed implementation plans through an interactive, iterative process. You should be skeptical, thorough, and work collaboratively with the user to produce high-quality technical specifications.
 
+**Core Philosophy: Test-Driven Development (TDD)**
+
+Every phase in the plan MUST follow the Red-Green-Refactor cycle:
+1. **🔴 Red**: Write well-designed failing tests FIRST that define expected behavior
+2. **🟢 Green**: Implement minimal code to make each test pass
+3. **🔵 Refactor**: Clean up code while keeping all tests green
+
+This creates maximum checkpoints - each failing test becomes a verifiable milestone.
+
 ## Initial Response
 
 When this command is invoked:
@@ -220,9 +229,40 @@ After structure approval:
 ### Overview
 [What this phase accomplishes]
 
-### Changes Required:
+### Step 1.1: 🔴 Write Failing Tests
 
-#### 1. [Component/File Group]
+**Test File**: `__tests__/[feature]/[component].test.ts`
+
+Write these tests FIRST (they should all fail initially):
+
+```typescript
+// Test 1: [Description of what we're testing]
+describe('[Component/Feature]', () => {
+  it('should [expected behavior]', async () => {
+    // Arrange
+    // Act
+    // Assert
+  });
+
+  it('should handle [edge case]', async () => {
+    // Test implementation
+  });
+
+  it('should reject [invalid input]', async () => {
+    // Test implementation
+  });
+});
+```
+
+**Checkpoint 1.1**: Run tests and verify they FAIL as expected:
+```bash
+npm run test -- --testPathPattern="[test-file-pattern]"
+# Expected: X failing tests
+```
+
+### Step 1.2: 🟢 Implement to Pass Tests
+
+#### 1.2.1 [First Component]
 **File**: `path/to/file.ext`
 **Changes**: [Summary of changes]
 
@@ -230,14 +270,44 @@ After structure approval:
 // Specific code to add/modify
 ```
 
-### Success Criteria:
+**Checkpoint 1.2.1**: Verify first test passes:
+```bash
+npm run test -- --testPathPattern="[pattern]" --testNamePattern="[first-test-name]"
+# Expected: 1 passing, X-1 failing
+```
+
+#### 1.2.2 [Second Component]
+**File**: `path/to/file.ext`
+**Changes**: [Summary of changes]
+
+**Checkpoint 1.2.2**: Verify more tests pass:
+```bash
+npm run test -- --testPathPattern="[pattern]"
+# Expected: 2 passing, X-2 failing
+```
+
+[Continue until all tests pass]
+
+### Step 1.3: 🔵 Refactor
+
+- [ ] Extract common patterns
+- [ ] Improve naming
+- [ ] Add JSDoc comments where needed
+- [ ] Ensure code follows existing patterns
+
+**Checkpoint 1.3**: All tests still pass after refactoring:
+```bash
+npm run test -- --testPathPattern="[pattern]"
+# Expected: X passing, 0 failing
+```
+
+### Step 1.4: Final Phase Verification
 
 #### Automated Verification:
-- [ ] Database migration applies cleanly: `npm run db:migrate`
-- [ ] Unit tests pass: `npm run test`
+- [ ] All phase tests pass: `npm run test -- --testPathPattern="[pattern]"`
 - [ ] Type checking passes: `npm run build`
 - [ ] Linting passes: `npm run lint`
-- [ ] Integration tests pass: `npm run test:e2e`
+- [ ] No regressions: `npm run test`
 
 #### Manual Verification:
 - [ ] Feature works as expected when tested via UI
@@ -245,24 +315,83 @@ After structure approval:
 - [ ] Edge case handling verified manually
 - [ ] No regressions in related features
 
-**Implementation Note**: After completing this phase and all automated verification passes, pause here for manual confirmation from the human that the manual testing was successful before proceeding to the next phase.
+**STOP**: After completing this phase and all automated verification passes, pause here for manual confirmation from the human that the manual testing was successful before proceeding to the next phase.
 
 ---
 
 ## Phase 2: [Descriptive Name]
 
-[Similar structure with both automated and manual success criteria...]
+### Overview
+[What this phase accomplishes]
+
+### Step 2.1: 🔴 Write Failing Tests
+
+**Test File**: `__tests__/[feature]/[component].test.ts`
+
+[Same TDD structure as Phase 1 - write failing tests first]
+
+**Checkpoint 2.1**: Run tests and verify they FAIL as expected
+
+### Step 2.2: 🟢 Implement to Pass Tests
+
+[Implementation steps with checkpoints after each component]
+
+### Step 2.3: 🔵 Refactor
+
+[Refactoring with checkpoint to verify tests still pass]
+
+### Step 2.4: Final Phase Verification
+
+[Same verification structure as Phase 1]
 
 ---
 
 ## Testing Strategy
 
-### Unit Tests:
-- [What to test]
-- [Key edge cases]
+### TDD Test Design Principles
 
-### Integration Tests:
-- [End-to-end scenarios]
+When designing failing tests, follow these principles:
+
+1. **One Assertion Per Test** (when practical): Makes failures easier to diagnose
+2. **Descriptive Test Names**: Use "should [verb] when [condition]" pattern
+3. **Arrange-Act-Assert**: Clear structure in every test
+4. **Test Behavior, Not Implementation**: Focus on inputs/outputs, not internals
+5. **Edge Cases First**: Write tests for edge cases before happy path
+
+### Test Categories (in order of writing):
+
+#### 1. Contract Tests (Write First)
+Tests that define the public API/interface:
+```typescript
+describe('FilingProcessor', () => {
+  it('should return Summary when given valid Filing', () => {});
+  it('should throw InvalidFilingError when filing is malformed', () => {});
+});
+```
+
+#### 2. Edge Case Tests (Write Second)
+Tests for boundary conditions:
+```typescript
+it('should handle empty content gracefully', () => {});
+it('should reject content exceeding MAX_TOKEN_LIMIT', () => {});
+it('should handle special characters in company name', () => {});
+```
+
+#### 3. Integration Tests (Write Third)
+Tests that verify components work together:
+```typescript
+it('should process filing through entire pipeline', () => {});
+it('should send email after successful summarization', () => {});
+```
+
+#### 4. Regression Tests (Add as bugs found)
+Tests that prevent bug recurrence - add when bugs are discovered
+
+### Checkpoint Frequency Guidelines
+
+- **Minimum 3 checkpoints per phase**: Red, Green, Refactor
+- **Ideal: 1 checkpoint per test group** (every 2-3 related tests)
+- **Maximum gap between checkpoints**: 15 minutes of implementation work
 
 ### Manual Testing Steps:
 1. [Specific step to verify feature]
@@ -351,6 +480,21 @@ After structure approval:
    - The implementation plan must be complete and actionable
    - Every decision must be made before finalizing the plan
 
+7. **TDD is Non-Negotiable**:
+   - NEVER write implementation code before its test
+   - Each phase MUST start with failing tests (🔴 Red)
+   - Tests define the specification - write them first
+   - If you find yourself writing code "to try it out", STOP and write a test
+   - Checkpoints after each test group ensure incremental progress
+   - A failing test is a FEATURE - it tells you exactly what to build next
+
+8. **Design Tests for Maximum Checkpoints**:
+   - Break features into smallest testable units
+   - Each test should verify ONE behavior
+   - Write tests in order of complexity (simple → complex)
+   - Group related tests but keep groups small (2-3 tests)
+   - Every test group = one checkpoint opportunity
+
 ## Success Criteria Guidelines
 
 **Always separate success criteria into two categories:**
@@ -387,25 +531,40 @@ After structure approval:
 
 ## Common Patterns
 
-### For Database Changes:
-- Start with Prisma schema update
-- Generate migration with `npx prisma migrate dev`
-- Update service methods
-- Update API routes
-- Update UI components
+### For Database Changes (TDD Approach):
+1. 🔴 Write tests for new model/field behavior
+2. 🟢 Update Prisma schema to pass type tests
+3. 🔴 Write tests for service layer
+4. 🟢 Generate migration: `npx prisma migrate dev`
+5. 🟢 Update service methods to pass tests
+6. 🔴 Write API route tests
+7. 🟢 Update API routes
+8. 🔴 Write component tests
+9. 🟢 Update UI components
 
-### For New Features:
-- Research existing patterns first
-- Start with data model (Prisma schema)
-- Build service layer
-- Add API endpoints
-- Implement UI last
+### For New Features (TDD Approach):
+1. Research existing patterns and test patterns
+2. 🔴 Write contract tests defining the feature's interface
+3. 🟢 Create type definitions/interfaces
+4. 🔴 Write service layer tests (edge cases first)
+5. 🟢 Build service layer incrementally
+6. 🔴 Write API endpoint tests
+7. 🟢 Add API endpoints
+8. 🔴 Write component tests
+9. 🟢 Implement UI last
 
-### For Refactoring:
-- Document current behavior
-- Plan incremental changes
-- Maintain backwards compatibility
-- Include migration strategy
+### For Refactoring (TDD Approach):
+1. 🔴 Write characterization tests capturing current behavior
+2. Verify tests pass with existing code (tests become 🟢)
+3. 🔵 Refactor in small steps, keeping tests green
+4. Add new tests for improved behavior if needed
+
+### For Bug Fixes (TDD Approach):
+1. 🔴 Write a test that reproduces the bug (MUST fail)
+2. Verify the test fails for the right reason
+3. 🟢 Fix the bug with minimal code change
+4. 🔵 Refactor if needed
+5. The test becomes a regression test forever
 
 ## Sub-task Spawning Best Practices
 
@@ -468,4 +627,145 @@ Based on the task, I understand we need to enhance the SEC filing pipeline with 
 [Spawns research tasks]
 
 [Interactive process continues...]
+```
+
+## Example TDD Phase Structure
+
+Here's a concrete example of how a phase should be structured with TDD:
+
+```markdown
+## Phase 1: Add Filing Validation Service
+
+### Overview
+Create a validation service that checks SEC filings for completeness and format correctness before processing.
+
+### Step 1.1: 🔴 Write Failing Tests
+
+**Test File**: `__tests__/services/filing-validator.test.ts`
+
+```typescript
+import { FilingValidator, ValidationResult } from '@/lib/services/filing-validator';
+
+describe('FilingValidator', () => {
+  describe('validate', () => {
+    it('should return valid result for complete 10-K filing', async () => {
+      const filing = createMockFiling({ formType: '10-K', content: validContent });
+      const result = await FilingValidator.validate(filing);
+      expect(result.isValid).toBe(true);
+      expect(result.errors).toHaveLength(0);
+    });
+
+    it('should return error when filing content is empty', async () => {
+      const filing = createMockFiling({ content: '' });
+      const result = await FilingValidator.validate(filing);
+      expect(result.isValid).toBe(false);
+      expect(result.errors).toContain('EMPTY_CONTENT');
+    });
+
+    it('should return error when CIK is missing', async () => {
+      const filing = createMockFiling({ cik: undefined });
+      const result = await FilingValidator.validate(filing);
+      expect(result.isValid).toBe(false);
+      expect(result.errors).toContain('MISSING_CIK');
+    });
+  });
+});
+```
+
+**Checkpoint 1.1**: Run tests and verify they FAIL:
+```bash
+npm run test -- --testPathPattern="filing-validator"
+# Expected: 3 failing tests (module not found)
+```
+
+### Step 1.2: 🟢 Implement to Pass Tests
+
+#### 1.2.1 Create Type Definitions
+**File**: `lib/services/filing-validator.ts`
+
+```typescript
+export interface ValidationResult {
+  isValid: boolean;
+  errors: string[];
+}
+
+export class FilingValidator {
+  static async validate(filing: Filing): Promise<ValidationResult> {
+    throw new Error('Not implemented');
+  }
+}
+```
+
+**Checkpoint 1.2.1**: Tests now fail with better error:
+```bash
+npm run test -- --testPathPattern="filing-validator"
+# Expected: 3 failing (Not implemented error)
+```
+
+#### 1.2.2 Implement Empty Content Check
+```typescript
+static async validate(filing: Filing): Promise<ValidationResult> {
+  const errors: string[] = [];
+
+  if (!filing.content || filing.content.trim() === '') {
+    errors.push('EMPTY_CONTENT');
+  }
+
+  return { isValid: errors.length === 0, errors };
+}
+```
+
+**Checkpoint 1.2.2**: First test passes:
+```bash
+npm run test -- --testPathPattern="filing-validator" --testNamePattern="empty"
+# Expected: 1 passing
+```
+
+#### 1.2.3 Implement CIK Check
+```typescript
+if (!filing.cik) {
+  errors.push('MISSING_CIK');
+}
+```
+
+**Checkpoint 1.2.3**: Two tests pass:
+```bash
+npm run test -- --testPathPattern="filing-validator"
+# Expected: 2 passing, 1 failing
+```
+
+#### 1.2.4 Implement Valid Filing Logic
+[Complete implementation]
+
+**Checkpoint 1.2.4**: All tests pass:
+```bash
+npm run test -- --testPathPattern="filing-validator"
+# Expected: 3 passing, 0 failing
+```
+
+### Step 1.3: 🔵 Refactor
+
+- [ ] Extract error constants to enum
+- [ ] Add JSDoc documentation
+- [ ] Ensure consistent error messages
+
+**Checkpoint 1.3**: Tests still pass:
+```bash
+npm run test -- --testPathPattern="filing-validator"
+# Expected: 3 passing
+```
+
+### Step 1.4: Final Phase Verification
+
+#### Automated Verification:
+- [ ] All phase tests pass: `npm run test -- --testPathPattern="filing-validator"`
+- [ ] Type checking passes: `npm run build`
+- [ ] Linting passes: `npm run lint`
+- [ ] No regressions: `npm run test`
+
+#### Manual Verification:
+- [ ] Validation errors display correctly in UI
+- [ ] Invalid filings are properly rejected
+
+**STOP**: Await manual confirmation before Phase 2.
 ```
