@@ -73,14 +73,17 @@ export class BackgroundFilingWorker {
   private processId: string;
   private batchSize: number;
   private processingInterval: number;
+  private jobTypes?: JobType[];  // Optional filter for job types to process
 
   constructor(options: {
     batchSize?: number;
     processingInterval?: number;
+    jobTypes?: JobType[];  // Optional job type filter
   } = {}) {
     this.processId = `filing-worker-${process.pid}-${Date.now()}`;
     this.batchSize = options.batchSize || 3; // Process 3 filings at a time
     this.processingInterval = options.processingInterval || 30000; // 30 seconds between batches
+    this.jobTypes = options.jobTypes;  // Store filter (undefined means use default)
   }
 
   /**
@@ -150,11 +153,21 @@ export class BackgroundFilingWorker {
     // 3. If no fetch jobs, try summarize jobs (slow, batch 3)
     // This ensures we maximize throughput while staying within timeout limits.
 
-    const jobTypes = ['ASYNC_DISCOVER_FILINGS', 'ASYNC_FETCH_FILING', 'ASYNC_SUMMARIZE_CACHED'] as JobType[];
+    const defaultJobTypes: JobType[] = ['ASYNC_DISCOVER_FILINGS', 'ASYNC_FETCH_FILING', 'ASYNC_SUMMARIZE_CACHED'];
+    const jobTypesToProcess = this.jobTypes ?? defaultJobTypes;
+
+    // Log if using filter
+    if (this.jobTypes) {
+      workerLogger.info('Processing with job type filter', {
+        processId: this.processId,
+        filteredTypes: this.jobTypes,
+      });
+    }
+
     let jobs: JobQueue[] = [];
 
     // Try each job type with its optimal batch size
-    for (const jobType of jobTypes) {
+    for (const jobType of jobTypesToProcess) {
       if (jobs.length > 0) break; // Already have jobs to process
 
       const batchSize = getBatchSizeForJobType(jobType);
@@ -178,7 +191,7 @@ export class BackgroundFilingWorker {
     if (jobs.length === 0) {
       workerLogger.debug('No jobs available to process', {
         processId: this.processId,
-        checkedTypes: jobTypes,
+        checkedTypes: jobTypesToProcess,
       });
       return;
     }

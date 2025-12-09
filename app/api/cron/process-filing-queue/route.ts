@@ -14,6 +14,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { BackgroundFilingWorker } from '@/lib/cron/background-filing-worker';
 import { logger } from '@/lib/logging';
 import { CronAuthService } from '@/lib/cron/auth-service';
+import type { JobType } from '@/lib/job-queue';
 
 const routeLogger = logger.child('process-filing-queue');
 
@@ -28,6 +29,41 @@ export async function GET(request: NextRequest) {
   const executionId = `queue-processor-${Date.now()}`;
 
   routeLogger.info('Filing queue processing triggered', { executionId });
+
+  // Extract and validate jobTypes query parameter
+  const searchParams = request.nextUrl.searchParams;
+  const jobTypesParam = searchParams.get('jobTypes');
+
+  let jobTypesFilter: JobType[] | undefined;
+  if (jobTypesParam) {
+    const requestedTypes = jobTypesParam.split(',').map(t => t.trim()).filter(Boolean);
+
+    // Validate against allowed job types
+    const allowedTypes: JobType[] = [
+      'ASYNC_DISCOVER_FILINGS',
+      'ASYNC_FETCH_FILING',
+      'ASYNC_SUMMARIZE_CACHED'
+    ];
+
+    const invalidTypes = requestedTypes.filter(t => !allowedTypes.includes(t as JobType));
+    if (invalidTypes.length > 0) {
+      routeLogger.warn('Invalid job types requested', {
+        executionId,
+        invalidTypes,
+        requestedTypes,
+      });
+      return NextResponse.json(
+        { error: 'Invalid job types', invalidTypes },
+        { status: 400 }
+      );
+    }
+
+    jobTypesFilter = requestedTypes as JobType[];
+    routeLogger.info('Job type filter applied', {
+      executionId,
+      jobTypes: jobTypesFilter,
+    });
+  }
 
   try {
     // Verify authentication using CronAuthService (handles both Vercel cron and Bearer token)
@@ -59,6 +95,7 @@ export async function GET(request: NextRequest) {
     const worker = new BackgroundFilingWorker({
       batchSize: 10,          // Max batch size (discovery jobs), worker will adjust per type
       processingInterval: 0,  // No wait between batches (single run)
+      jobTypes: jobTypesFilter,  // Pass filter if provided
     });
 
     // Process one batch and return
@@ -76,6 +113,7 @@ export async function GET(request: NextRequest) {
       executionId,
       duration,
       message: 'Filing queue batch processed',
+      jobTypesFilter: jobTypesFilter || 'all',  // Show what was filtered
     });
   } catch (error) {
     routeLogger.error('Filing queue processing failed', {
