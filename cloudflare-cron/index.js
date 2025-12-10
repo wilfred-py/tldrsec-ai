@@ -108,20 +108,21 @@ export default {
         };
       }
       
-      // Build URLs for Vercel endpoints (dual endpoint pattern for async pipeline)
-      const tierAwareUrl = `${env.PUBLIC_URL}/api/cron/tier-aware`; // Primary: queues new filings
-      // Step 2: Process Filing Queue
-      // IMPORTANT: We filter to ASYNC_FETCH_FILING and ASYNC_SUMMARIZE_CACHED only.
-      // This prevents the discovery job queued in Step 1 from blocking fetch/summarize
-      // jobs. Discovery jobs will be processed in subsequent cron cycles when no
-      // fetch/summarize jobs are pending.
-      const workerUrl = `${env.PUBLIC_URL}/api/cron/process-filing-queue?jobTypes=ASYNC_FETCH_FILING,ASYNC_SUMMARIZE_CACHED`; // Secondary: processes queued jobs (excluding discovery)
+      // Build URLs for Vercel endpoints (three-step pipeline for async processing)
+      const tierAwareUrl = `${env.PUBLIC_URL}/api/cron/tier-aware`; // Step 1: queues new filings
+      // Step 2: Process fetch jobs (content retrieval from SEC)
+      // IMPORTANT: We separate fetch and summarize jobs to ensure both get processing time.
+      // The previous combined approach caused summarize jobs to be blocked by the fetch backlog.
+      const fetchUrl = `${env.PUBLIC_URL}/api/cron/process-filing-queue?jobTypes=ASYNC_FETCH_FILING`;
+      // Step 3: Process summarize jobs (AI summarization)
+      const summarizeUrl = `${env.PUBLIC_URL}/api/cron/process-filing-queue?jobTypes=ASYNC_SUMMARIZE_CACHED`;
       const dailyCountUrl = `${env.PUBLIC_URL}/api/cron/update-daily-count`;
 
-      console.log(`[${executionId}] Dual endpoint configuration:`, {
-        tierAware: tierAwareUrl,
-        worker: workerUrl,
-        pattern: 'Sequential execution - queue then process'
+      console.log(`[${executionId}] Three-step pipeline configuration:`, {
+        step1: tierAwareUrl,
+        step2: fetchUrl,
+        step3: summarizeUrl,
+        pattern: 'Sequential execution: discover → fetch → summarize'
       });
       console.log(`[${executionId}] PUBLIC_URL: ${env.PUBLIC_URL}`);
       console.log(`[${executionId}] CRON_SECRET configured: ${env.CRON_SECRET ? 'Yes (' + env.CRON_SECRET.length + ' chars)' : 'No'}`);
@@ -222,17 +223,18 @@ export default {
         throw tierAwareError; // Don't proceed if queueing fails
       }
 
-      // STEP 2: Call process-filing-queue endpoint to process queued jobs
-      console.log(`[${executionId}] Step 2: Calling process-filing-queue endpoint to process jobs...`);
-      let workerResult;
+      // STEP 2: Call process-filing-queue endpoint to process fetch jobs
+      console.log(`[${executionId}] ====== STEP 2: FETCH JOBS ======`);
+      console.log(`[${executionId}] Step 2: Calling process-filing-queue endpoint to process fetch jobs...`);
+      let fetchResult;
       try {
-        const { signatureHex, timestamp } = await generateSignature(workerUrl);
-        const workerHeaders = createHeaders(signatureHex, timestamp);
+        const { signatureHex, timestamp } = await generateSignature(fetchUrl);
+        const fetchHeaders = createHeaders(signatureHex, timestamp);
 
-        workerResult = await executeWithAdvancedRateLimiting({
+        fetchResult = await executeWithAdvancedRateLimiting({
           executionId,
-          url: workerUrl,
-          headers: workerHeaders,
+          url: fetchUrl,
+          headers: fetchHeaders,
           workerTimeoutMs: WORKER_TIMEOUT_MS,
           requestTimeoutMs: REQUEST_TIMEOUT_MS,
           maxAttempts: MAX_ATTEMPTS,
@@ -252,44 +254,95 @@ export default {
           }
         });
 
-        console.log(`[${executionId}] Step 2 completed: process-filing-queue endpoint success`);
-      } catch (workerError) {
-        console.error(`[${executionId}] Step 2 failed: process-filing-queue endpoint error`, {
-          error: workerError.message
+        console.log(`[${executionId}] Step 2 completed: fetch jobs endpoint success`);
+      } catch (fetchError) {
+        console.error(`[${executionId}] Step 2 failed: fetch jobs endpoint error`, {
+          error: fetchError.message
         });
-        // Don't throw - log warning but consider execution partially successful if tier-aware succeeded
-        console.warn(`[${executionId}] Worker endpoint failed but tier-aware succeeded - filings queued for next run`);
+        // Don't throw - log warning but continue to Step 3
+        console.warn(`[${executionId}] Fetch endpoint failed but continuing to summarize step`);
       }
 
-      // Combine results for final response
-      // Combine results from both endpoints
+      // ========================================
+      // STEP 3: Process Summarize Jobs (AI Processing)
+      // ========================================
+      console.log(`[${executionId}] ====== STEP 3: SUMMARIZE JOBS ======`);
+      console.log(`[${executionId}] Step 3: Calling process-filing-queue endpoint to process summarize jobs...`);
+      let summarizeResult;
+      try {
+        const { signatureHex: step3Signature, timestamp: step3Timestamp } = await generateSignature(summarizeUrl);
+        const summarizeHeaders = createHeaders(step3Signature, step3Timestamp);
+        console.log(`[${executionId}] Step 3 URL: ${summarizeUrl}`);
+        console.log(`[${executionId}] Step 3 signature generated, timestamp: ${step3Timestamp}`);
+
+        summarizeResult = await executeWithAdvancedRateLimiting({
+          executionId,
+          url: summarizeUrl,
+          headers: summarizeHeaders,
+          workerTimeoutMs: WORKER_TIMEOUT_MS,
+          requestTimeoutMs: REQUEST_TIMEOUT_MS,
+          maxAttempts: MAX_ATTEMPTS,
+          initialBackoffMs: INITIAL_BACKOFF_MS,
+          maxBackoffMs: MAX_BACKOFF_MS,
+          jitterPercentage: JITTER_PERCENTAGE,
+          rateLimiter,
+          circuitBreaker,
+          monitor,
+          rateLimitConfig: {
+            windowMs: RATE_LIMIT_WINDOW_MS,
+            maxRequests: MAX_REQUESTS_PER_WINDOW,
+            burstLimit: MAX_BURST_REQUESTS,
+            globalLimit: GLOBAL_SUBREQUEST_LIMIT,
+            burstWindowMs: BURST_PROTECTION_WINDOW_MS,
+            breakerThreshold: CIRCUIT_BREAKER_THRESHOLD
+          }
+        });
+
+        console.log(`[${executionId}] Step 3 completed: summarize jobs endpoint success`);
+      } catch (summarizeError) {
+        console.error(`[${executionId}] Step 3 failed: summarize jobs endpoint error`, {
+          error: summarizeError.message
+        });
+        // Don't throw - log warning but consider execution partially successful
+        console.warn(`[${executionId}] Summarize endpoint failed - jobs will retry on next cycle`);
+      }
+
+      // Combine results from all three endpoints
       const result = {
         tierAware: tierAwareResult,
-        worker: workerResult,
-        combinedSuccess: tierAwareResult?.success && workerResult?.success,
+        fetch: fetchResult,
+        summarize: summarizeResult,
+        combinedSuccess: tierAwareResult?.success && fetchResult?.success && summarizeResult?.success,
         metrics: {
           tierAware: {
             duration: tierAwareResult?.duration || 0,
             filesProcessed: tierAwareResult?.filesProcessed || 0,
             status: tierAwareResult?.success ? 'success' : 'failed'
           },
-          worker: {
-            duration: workerResult?.duration || 0,
-            filesProcessed: workerResult?.filesProcessed || 0,
-            status: workerResult?.success ? 'success' : 'failed'
+          fetch: {
+            duration: fetchResult?.duration || 0,
+            filesProcessed: fetchResult?.filesProcessed || 0,
+            status: fetchResult?.success ? 'success' : 'failed'
+          },
+          summarize: {
+            duration: summarizeResult?.duration || 0,
+            filesProcessed: summarizeResult?.filesProcessed || 0,
+            status: summarizeResult?.success ? 'success' : 'failed'
           }
         }
       };
 
       const duration = Date.now() - startTime;
 
-      console.log(`[${executionId}] Dual endpoint execution completed in ${duration}ms:`, {
-        tierAwareSuccess: result.metrics.tierAware.status,
-        workerSuccess: result.metrics.worker.status,
+      console.log(`[${executionId}] Three-step pipeline execution completed in ${duration}ms:`, {
+        step1TierAware: result.metrics.tierAware.status,
+        step2Fetch: result.metrics.fetch.status,
+        step3Summarize: result.metrics.summarize.status,
         combinedSuccess: result.combinedSuccess,
         totalDuration: duration,
         tierAwareDuration: result.metrics.tierAware.duration,
-        workerDuration: result.metrics.worker.duration
+        fetchDuration: result.metrics.fetch.duration,
+        summarizeDuration: result.metrics.summarize.duration
       });
 
       // Call daily count update endpoint after main cron job
@@ -316,23 +369,26 @@ export default {
       }
 
       // Update circuit breaker based on combined success
-      // Only mark as success if BOTH endpoints succeed
+      // Only mark as success if ALL THREE endpoints succeed
       if (result.combinedSuccess) {
         await monitor.recordExecution(executionId, 'completed', {
           duration,
           success: true,
           tierAwareMetrics: result.metrics.tierAware,
-          workerMetrics: result.metrics.worker
+          fetchMetrics: result.metrics.fetch,
+          summarizeMetrics: result.metrics.summarize
         });
         await circuitBreaker.recordSuccess();
         await rateLimiter.recordSuccess(executionId);
 
-        console.log(`[${executionId}] Both endpoints succeeded - circuit breaker updated`);
+        console.log(`[${executionId}] All three endpoints succeeded - circuit breaker updated`);
       } else {
         // Partial failure - at least one endpoint failed
-        const failureReason = !tierAwareResult?.success
-          ? 'tier-aware endpoint failed'
-          : 'worker endpoint failed';
+        const failedSteps = [];
+        if (!tierAwareResult?.success) failedSteps.push('tier-aware');
+        if (!fetchResult?.success) failedSteps.push('fetch');
+        if (!summarizeResult?.success) failedSteps.push('summarize');
+        const failureReason = `${failedSteps.join(', ')} endpoint(s) failed`;
 
         console.warn(`[${executionId}] Partial failure: ${failureReason}`);
 
@@ -341,11 +397,12 @@ export default {
           success: false,
           failureReason,
           tierAwareMetrics: result.metrics.tierAware,
-          workerMetrics: result.metrics.worker
+          fetchMetrics: result.metrics.fetch,
+          summarizeMetrics: result.metrics.summarize
         });
 
         // Record failure in circuit breaker
-        const error = new Error(`Dual endpoint execution failed: ${failureReason}`);
+        const error = new Error(`Three-step pipeline execution failed: ${failureReason}`);
         await circuitBreaker.recordFailure(error);
         await rateLimiter.recordFailure(executionId, 'PARTIAL_FAILURE');
       }
