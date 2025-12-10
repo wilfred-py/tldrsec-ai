@@ -12,6 +12,7 @@ This file provides a chronological index of all completed projects across archiv
 ## Recent Activity (Not Yet Archived)
 
 **Projects completed in last 30 days** (tracked in PROGRESS.md):
+- **Summarization Jobs Blocked by Fetch Backlog Fix** 🔄 IN PROGRESS (2025-12-10) - Splitting Cloudflare Worker Step 2 into separate Step 2 (fetch jobs) and Step 3 (summarize jobs) to ensure summarize jobs get processing time. Branch: `fix/summarization-jobs-blocked-by-fetch-backlog`. Files: `cloudflare-cron/index.js`. Status: Implementation complete, awaiting deployment.
 - **Fetch Job Processing Race Condition Fix** ✅ COMPLETE & VERIFIED (2025-12-09) - Added `jobTypes` query parameter to process-filing-queue endpoint; Cloudflare Worker now calls with `?jobTypes=ASYNC_FETCH_FILING,ASYNC_SUMMARIZE_CACHED` to exclude discovery jobs from blocking fetch jobs. **Production verified**: Step 2 now processes for 30+ seconds (vs 1s before). Branch: `fix/fetch-job-processing-race-condition`. Files: `lib/cron/background-filing-worker.ts`, `app/api/cron/process-filing-queue/route.ts`, `cloudflare-cron/index.js`, `__tests__/cron/process-filing-queue-filter.test.ts` (10 tests)
 - Live Counter SSR Animation Fix ✅ COMPLETE (2025-12-08) - Synthetic 20-count gap for always-visible animation from base to real count over 12 seconds with live polling
 - Development Environment API Fixes (2025-12-06) ✅ COMPLETE - Fixed dbRetry.transaction() → dbRetry.mutation() in user tickers route, branch: fix/development-api-routes
@@ -68,11 +69,12 @@ This file provides a chronological index of all completed projects across archiv
 ## Archive Statistics
 - **Total Archived Projects**: 17 projects across 3 weekly archives
 - **Current PROGRESS.md Lines**: 91 lines (threshold: 500)
-- **Last Archive Check**: 2025-12-09
-- **Last Archive Update**: 2025-12-09 (statistics sync)
-- **Recent Activity (Not Yet Archived)**: 20 projects completed in last 30 days
+- **Last Archive Check**: 2025-12-10
+- **Last Archive Update**: 2025-12-10 (no archival needed - under 500 lines)
+- **Recent Activity (Not Yet Archived)**: 21 projects completed in last 30 days
 - **Archive System**: ✅ ACTIVE (auto-archives when >500 lines AND projects >30 days old)
-- **Latest Completion** (2025-12-09): Fetch Job Processing Race Condition Fix - ✅ DEPLOYED & VERIFIED IN PRODUCTION
+- **Current Work** (2025-12-10): Summarization Jobs Blocked by Fetch Backlog Fix - 🔄 IMPLEMENTATION COMPLETE, AWAITING DEPLOYMENT
+- **Cron Pipeline Status** (2025-12-10): Three-step pipeline implemented (discover → fetch → summarize)
 - **Archives Created**:
   - `27-Oct-2025.md` - Newsletter & Security implementations (6 projects)
   - `03-Nov-2025.md` - Critical infrastructure fixes (4 projects)
