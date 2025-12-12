@@ -12,7 +12,8 @@ This file provides a chronological index of all completed projects across archiv
 ## Recent Activity (Not Yet Archived)
 
 **Projects completed in last 30 days** (tracked in PROGRESS.md):
-- **Summarization Jobs Blocked by Fetch Backlog Fix** 🔄 IN PROGRESS (2025-12-10) - Splitting Cloudflare Worker Step 2 into separate Step 2 (fetch jobs) and Step 3 (summarize jobs) to ensure summarize jobs get processing time. Branch: `fix/summarization-jobs-blocked-by-fetch-backlog`. Files: `cloudflare-cron/index.js`. Status: Implementation complete, awaiting deployment.
+- **Job Selection Prisma Field Reference Bug Fix** ✅ COMPLETE (2025-12-12) - Fixed critical bug where `prisma.jobQueue.fields.maxRetries` field reference pattern blocked 756 PENDING jobs for 12+ days. Solution: Replaced Prisma field references with raw SQL `$queryRaw` for row-level column comparison (`"retryCount" < "maxRetries"`). All 3 methods fixed: `getJobsToProcess()`, `getJobsToProcessMultipleTypes()`, `getNextJob()`. Verification: 6/6 tests pass via `scripts/verify-raw-sql-fix.ts`. Branch: `fix/job-selection-prisma-field-reference-bug`. Files: `lib/job-queue/index.ts`, `scripts/verify-raw-sql-fix.ts`, `docs/plans/2025-12-12-fix-job-selection-prisma-field-reference-bug.md`
+- **Summarization Jobs Blocked by Fetch Backlog Fix** ✅ COMPLETE & DEPLOYED (2025-12-10) - Split Cloudflare Worker into 3-step pipeline (discover → fetch → summarize). Root cause: Vercel hadn't redeployed since `jobTypes` filter merged. Solution: Triggered Vercel redeploy via git push. Verification: Endpoint now returns `jobTypesFilter` field. Branch: `fix/summarization-jobs-blocked-by-fetch-backlog` (merged to main). Deployment: Cloudflare Worker ID `dff62c35-7bbb-489e-a253-86e974a251db`, Vercel commit `e15aed1`. Files: `cloudflare-cron/index.js`, `docs/plans/2025-12-10-fix-summarization-jobs-DEPLOYMENT-SUMMARY.md`
 - **Fetch Job Processing Race Condition Fix** ✅ COMPLETE & VERIFIED (2025-12-09) - Added `jobTypes` query parameter to process-filing-queue endpoint; Cloudflare Worker now calls with `?jobTypes=ASYNC_FETCH_FILING,ASYNC_SUMMARIZE_CACHED` to exclude discovery jobs from blocking fetch jobs. **Production verified**: Step 2 now processes for 30+ seconds (vs 1s before). Branch: `fix/fetch-job-processing-race-condition`. Files: `lib/cron/background-filing-worker.ts`, `app/api/cron/process-filing-queue/route.ts`, `cloudflare-cron/index.js`, `__tests__/cron/process-filing-queue-filter.test.ts` (10 tests)
 - Live Counter SSR Animation Fix ✅ COMPLETE (2025-12-08) - Synthetic 20-count gap for always-visible animation from base to real count over 12 seconds with live polling
 - Development Environment API Fixes (2025-12-06) ✅ COMPLETE - Fixed dbRetry.transaction() → dbRetry.mutation() in user tickers route, branch: fix/development-api-routes
@@ -69,12 +70,12 @@ This file provides a chronological index of all completed projects across archiv
 ## Archive Statistics
 - **Total Archived Projects**: 17 projects across 3 weekly archives
 - **Current PROGRESS.md Lines**: 91 lines (threshold: 500)
-- **Last Archive Check**: 2025-12-10
-- **Last Archive Update**: 2025-12-10 (no archival needed - under 500 lines)
-- **Recent Activity (Not Yet Archived)**: 21 projects completed in last 30 days
+- **Last Archive Check**: 2025-12-12
+- **Last Archive Update**: 2025-12-12 (no archival needed - under 500 lines)
+- **Recent Activity (Not Yet Archived)**: 22 projects completed in last 30 days
 - **Archive System**: ✅ ACTIVE (auto-archives when >500 lines AND projects >30 days old)
-- **Current Work** (2025-12-10): Summarization Jobs Blocked by Fetch Backlog Fix - 🔄 IMPLEMENTATION COMPLETE, AWAITING DEPLOYMENT
-- **Cron Pipeline Status** (2025-12-10): Three-step pipeline implemented (discover → fetch → summarize)
+- **Current Work** (2025-12-12): ✅ Job Selection Bug Fix COMPLETE - Replaced Prisma field references with raw SQL for retryCount < maxRetries comparison
+- **Cron Pipeline Status** (2025-12-12): ✅ Infrastructure working (Worker + 3 endpoints) | ✅ Job selection query fixed (awaiting deployment)
 - **Archives Created**:
   - `27-Oct-2025.md` - Newsletter & Security implementations (6 projects)
   - `03-Nov-2025.md` - Critical infrastructure fixes (4 projects)

@@ -1,3 +1,19 @@
+/**
+ * JOB QUEUE SERVICE
+ *
+ * WARNING: DO NOT USE `prisma.jobQueue.fields.maxRetries` in WHERE clauses!
+ *
+ * HISTORY: In December 2025, a bug was discovered where using Prisma's field
+ * reference syntax for row-level column comparison didn't work correctly.
+ * The pattern `retryCount: { lt: prisma.jobQueue.fields.maxRetries }` silently
+ * returned 0 results, blocking 756 jobs from processing for 12+ days.
+ *
+ * SOLUTION: Use raw SQL ($queryRaw) for any query that needs to compare
+ * two columns in the same row: `"retryCount" < "maxRetries"`
+ *
+ * REFERENCE: thoughts/shared/research/2025-12-10-pipeline-job-selection-query-analysis.md
+ */
+
 import { prisma } from '../db/prisma';
 import { v4 as uuidv4 } from 'uuid';
 import { z } from 'zod';
@@ -48,6 +64,38 @@ export interface JobResultData {
   result?: any;
   stack?: string;
   error?: string;
+}
+
+/**
+ * Type for raw SQL job query results.
+ * Used with $queryRaw to ensure type safety.
+ *
+ * NOTE: This type exists because we use raw SQL for row-level column comparison
+ * (retryCount < maxRetries). The original Prisma query used field references
+ * which didn't work correctly.
+ *
+ * BUG REFERENCE: thoughts/shared/research/2025-12-10-pipeline-job-selection-query-analysis.md
+ */
+interface RawJobQueueRow {
+  id: string;
+  jobType: string;
+  status: string;
+  priority: number;
+  payload: any;
+  idempotencyKey: string | null;
+  createdAt: Date;
+  scheduledFor: Date;
+  startedAt: Date | null;
+  completedAt: Date | null;
+  failedAt: Date | null;
+  retryCount: number;
+  maxRetries: number;
+  lastError: string | null;
+  executionTime: number | null;
+  result: any;
+  costUSD: any;
+  timeoutFlagged: boolean;
+  tokenUsage: any;
 }
 
 /**
@@ -210,14 +258,23 @@ export class JobQueueService {
 
   /**
    * Get jobs to process
-   * 
+   *
    * SECURITY: Validates parameters and limits result size
+   *
+   * NOTE: This method uses raw SQL ($queryRaw) instead of Prisma's query builder.
+   *
+   * REASON: The original Prisma query used `prisma.jobQueue.fields.maxRetries`
+   * for row-level column comparison (retryCount < maxRetries), but this pattern
+   * requires the `fieldReference` preview feature which wasn't enabled.
+   * Raw SQL provides reliable, explicit row-level comparison.
+   *
+   * BUG REFERENCE: thoughts/shared/research/2025-12-10-pipeline-job-selection-query-analysis.md
    */
   static async getJobsToProcess(limit: number = 10, jobType?: JobType) {
     try {
       // Validate limit parameter
       const validatedLimit = z.number().int().min(1).max(100).parse(limit);
-      
+
       // Validate job type if provided
       if (jobType) {
         const validJobTypes: JobType[] = [
@@ -226,34 +283,39 @@ export class JobQueueService {
           'SUMMARIZE_FILING', 'SEND_FILING_NOTIFICATION', 'COMPILE_DAILY_DIGEST',
           'ASYNC_SUMMARIZE_FILING', 'ASYNC_EMAIL_DIGEST', 'ASYNC_FILING_CLEANUP', 'ASYNC_WEBHOOK_NOTIFICATION'
         ];
-        
+
         if (!validJobTypes.includes(jobType)) {
           throw new Error(`Invalid job type: ${jobType}`);
         }
       }
-      
+
       const now = new Date();
-      
-      return await prisma.jobQueue.findMany({
-        where: {
-          status: {
-            in: ['PENDING', 'RETRYING']
-          },
-          scheduledFor: {
-            lte: now
-          },
-          ...(jobType ? { jobType } : {}),
-          retryCount: {
-            lt: prisma.jobQueue.fields.maxRetries
-          }
-        },
-        orderBy: [
-          { priority: 'desc' },
-          { scheduledFor: 'asc' },
-          { createdAt: 'asc' }
-        ],
-        take: validatedLimit
-      });
+
+      // Use raw SQL to correctly compare retryCount < maxRetries
+      if (jobType) {
+        const jobs = await prisma.$queryRaw<RawJobQueueRow[]>`
+          SELECT *
+          FROM "JobQueue"
+          WHERE "status" IN ('PENDING', 'RETRYING')
+            AND "scheduledFor" <= ${now}
+            AND "jobType" = ${jobType}
+            AND "retryCount" < "maxRetries"
+          ORDER BY "priority" DESC, "scheduledFor" ASC, "createdAt" ASC
+          LIMIT ${validatedLimit}
+        `;
+        return jobs;
+      } else {
+        const jobs = await prisma.$queryRaw<RawJobQueueRow[]>`
+          SELECT *
+          FROM "JobQueue"
+          WHERE "status" IN ('PENDING', 'RETRYING')
+            AND "scheduledFor" <= ${now}
+            AND "retryCount" < "maxRetries"
+          ORDER BY "priority" DESC, "scheduledFor" ASC, "createdAt" ASC
+          LIMIT ${validatedLimit}
+        `;
+        return jobs;
+      }
     } catch (error) {
       console.error('Error getting jobs to process:', error);
       throw error;
@@ -264,6 +326,15 @@ export class JobQueueService {
    * Get jobs to process for multiple job types (3-phase pipeline)
    *
    * SECURITY: Validates parameters and limits result size
+   *
+   * NOTE: This method uses raw SQL ($queryRaw) instead of Prisma's query builder.
+   *
+   * REASON: The original Prisma query used `prisma.jobQueue.fields.maxRetries`
+   * for row-level column comparison (retryCount < maxRetries), but this pattern
+   * requires the `fieldReference` preview feature which wasn't enabled.
+   * Raw SQL provides reliable, explicit row-level comparison.
+   *
+   * BUG REFERENCE: thoughts/shared/research/2025-12-10-pipeline-job-selection-query-analysis.md
    */
   static async getJobsToProcessMultipleTypes(limit: number = 10, jobTypes: JobType[]) {
     try {
@@ -292,28 +363,20 @@ export class JobQueueService {
 
       const now = new Date();
 
-      return await prisma.jobQueue.findMany({
-        where: {
-          status: {
-            in: ['PENDING', 'RETRYING']
-          },
-          scheduledFor: {
-            lte: now
-          },
-          jobType: {
-            in: jobTypes
-          },
-          retryCount: {
-            lt: prisma.jobQueue.fields.maxRetries
-          }
-        },
-        orderBy: [
-          { priority: 'desc' },
-          { scheduledFor: 'asc' },
-          { createdAt: 'asc' }
-        ],
-        take: validatedLimit
-      });
+      // Use raw SQL to correctly compare retryCount < maxRetries
+      // This is necessary because Prisma's field reference pattern wasn't working
+      const jobs = await prisma.$queryRaw<RawJobQueueRow[]>`
+        SELECT *
+        FROM "JobQueue"
+        WHERE "status" IN ('PENDING', 'RETRYING')
+          AND "scheduledFor" <= ${now}
+          AND "jobType" = ANY(${jobTypes})
+          AND "retryCount" < "maxRetries"
+        ORDER BY "priority" DESC, "scheduledFor" ASC, "createdAt" ASC
+        LIMIT ${validatedLimit}
+      `;
+
+      return jobs;
     } catch (error) {
       console.error('Error getting jobs to process:', error);
       throw error;
@@ -322,32 +385,45 @@ export class JobQueueService {
 
   /**
    * Get the next job to process
+   *
+   * NOTE: This method uses raw SQL ($queryRaw) instead of Prisma's query builder.
+   *
+   * REASON: The original Prisma query used `prisma.jobQueue.fields.maxRetries`
+   * for row-level column comparison (retryCount < maxRetries), but this pattern
+   * requires the `fieldReference` preview feature which wasn't enabled.
+   * Raw SQL provides reliable, explicit row-level comparison.
+   *
+   * BUG REFERENCE: thoughts/shared/research/2025-12-10-pipeline-job-selection-query-analysis.md
    */
   static async getNextJob(jobTypes?: JobType[]) {
     try {
       const now = new Date();
 
-      return await prisma.jobQueue.findFirst({
-        where: {
-          status: {
-            in: ['PENDING', 'RETRYING']
-          },
-          scheduledFor: {
-            lte: now
-          },
-          ...(jobTypes && jobTypes.length > 0
-            ? { jobType: { in: jobTypes } }
-            : {}),
-          retryCount: {
-            lt: prisma.jobQueue.fields.maxRetries
-          }
-        },
-        orderBy: [
-          { priority: 'desc' },
-          { scheduledFor: 'asc' },
-          { createdAt: 'asc' }
-        ]
-      });
+      // Use raw SQL to correctly compare retryCount < maxRetries
+      if (jobTypes && jobTypes.length > 0) {
+        const jobs = await prisma.$queryRaw<RawJobQueueRow[]>`
+          SELECT *
+          FROM "JobQueue"
+          WHERE "status" IN ('PENDING', 'RETRYING')
+            AND "scheduledFor" <= ${now}
+            AND "jobType" = ANY(${jobTypes})
+            AND "retryCount" < "maxRetries"
+          ORDER BY "priority" DESC, "scheduledFor" ASC, "createdAt" ASC
+          LIMIT 1
+        `;
+        return jobs[0] || null;
+      } else {
+        const jobs = await prisma.$queryRaw<RawJobQueueRow[]>`
+          SELECT *
+          FROM "JobQueue"
+          WHERE "status" IN ('PENDING', 'RETRYING')
+            AND "scheduledFor" <= ${now}
+            AND "retryCount" < "maxRetries"
+          ORDER BY "priority" DESC, "scheduledFor" ASC, "createdAt" ASC
+          LIMIT 1
+        `;
+        return jobs[0] || null;
+      }
     } catch (error) {
       console.error('Error getting next job:', error);
       throw error;
