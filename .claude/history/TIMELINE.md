@@ -12,6 +12,8 @@ This file provides a chronological index of all completed projects across archiv
 ## Recent Activity (Not Yet Archived)
 
 **Projects completed in last 30 days** (tracked in PROGRESS.md):
+- **Cascade Delete Trigger for Orphaned Jobs** ✅ COMPLETE (2025-12-14) - Prevents orphaned jobs when users are deleted. Added `userId` column to JobQueue with FK constraint. Created BEFORE DELETE trigger on User table to mark jobs as DEAD_LETTER. Created sync trigger to auto-populate userId from payload JSON. Migration applied, 14,061 orphaned jobs cleaned up. Branch: `feature/cascade-delete-orphaned-jobs`. Files: `prisma/schema.prisma`, `prisma/migrations/20251212_cascade_delete_orphaned_jobs.sql`, `scripts/verify-cascade-delete-trigger.ts`, `docs/plans/2025-12-12-cascade-delete-orphaned-jobs.md`
+- **Orphaned Jobs Cleanup - Pipeline Unblocked** ✅ COMPLETE (2025-12-12) - Root cause of stalled pipeline: 12,169 jobs (100% of backlog) referenced DELETED user `4b396924...`. Solution: Created cleanup scripts to identify and mark orphaned jobs as DEAD_LETTER. Pipeline now unblocked with 90 valid jobs remaining. 35 jobs completed in first hour post-cleanup. Scripts created: `scripts/check-orphaned-summarize-jobs.ts`, `scripts/cleanup-orphaned-summarize-jobs.ts`, `scripts/debug-summarize-job-flow.ts`, `scripts/verify-pipeline-status.ts`. Documentation: `docs/plans/actioned/2025-12-12-clear-stale-locks-unblock-pipeline.md`
 - **Job Selection Prisma Field Reference Bug Fix** ✅ COMPLETE (2025-12-12) - Fixed critical bug where `prisma.jobQueue.fields.maxRetries` field reference pattern blocked 756 PENDING jobs for 12+ days. Solution: Replaced Prisma field references with raw SQL `$queryRaw` for row-level column comparison (`"retryCount" < "maxRetries"`). All 3 methods fixed: `getJobsToProcess()`, `getJobsToProcessMultipleTypes()`, `getNextJob()`. Verification: 6/6 tests pass via `scripts/verify-raw-sql-fix.ts`. Branch: `fix/job-selection-prisma-field-reference-bug`. Files: `lib/job-queue/index.ts`, `scripts/verify-raw-sql-fix.ts`, `docs/plans/2025-12-12-fix-job-selection-prisma-field-reference-bug.md`
 - **Summarization Jobs Blocked by Fetch Backlog Fix** ✅ COMPLETE & DEPLOYED (2025-12-10) - Split Cloudflare Worker into 3-step pipeline (discover → fetch → summarize). Root cause: Vercel hadn't redeployed since `jobTypes` filter merged. Solution: Triggered Vercel redeploy via git push. Verification: Endpoint now returns `jobTypesFilter` field. Branch: `fix/summarization-jobs-blocked-by-fetch-backlog` (merged to main). Deployment: Cloudflare Worker ID `dff62c35-7bbb-489e-a253-86e974a251db`, Vercel commit `e15aed1`. Files: `cloudflare-cron/index.js`, `docs/plans/2025-12-10-fix-summarization-jobs-DEPLOYMENT-SUMMARY.md`
 - **Fetch Job Processing Race Condition Fix** ✅ COMPLETE & VERIFIED (2025-12-09) - Added `jobTypes` query parameter to process-filing-queue endpoint; Cloudflare Worker now calls with `?jobTypes=ASYNC_FETCH_FILING,ASYNC_SUMMARIZE_CACHED` to exclude discovery jobs from blocking fetch jobs. **Production verified**: Step 2 now processes for 30+ seconds (vs 1s before). Branch: `fix/fetch-job-processing-race-condition`. Files: `lib/cron/background-filing-worker.ts`, `app/api/cron/process-filing-queue/route.ts`, `cloudflare-cron/index.js`, `__tests__/cron/process-filing-queue-filter.test.ts` (10 tests)
@@ -70,12 +72,12 @@ This file provides a chronological index of all completed projects across archiv
 ## Archive Statistics
 - **Total Archived Projects**: 17 projects across 3 weekly archives
 - **Current PROGRESS.md Lines**: 91 lines (threshold: 500)
-- **Last Archive Check**: 2025-12-12
-- **Last Archive Update**: 2025-12-12 (no archival needed - under 500 lines)
-- **Recent Activity (Not Yet Archived)**: 22 projects completed in last 30 days
+- **Last Archive Check**: 2025-12-14
+- **Last Archive Update**: 2025-12-14 (no archival needed - under 500 lines)
+- **Recent Activity (Not Yet Archived)**: 24 projects completed in last 30 days
 - **Archive System**: ✅ ACTIVE (auto-archives when >500 lines AND projects >30 days old)
-- **Current Work** (2025-12-12): ✅ Job Selection Bug Fix COMPLETE - Replaced Prisma field references with raw SQL for retryCount < maxRetries comparison
-- **Cron Pipeline Status** (2025-12-12): ✅ Infrastructure working (Worker + 3 endpoints) | ✅ Job selection query fixed (awaiting deployment)
+- **Current Work** (2025-12-14): ✅ Cascade Delete Trigger COMPLETE - Database trigger prevents orphaned jobs, 14,061 additional orphaned jobs cleaned, userId column backfilled
+- **Cron Pipeline Status** (2025-12-14): ✅ FULLY OPERATIONAL - Cascade delete trigger active, 142 valid jobs with userId, 70 active jobs processing
 - **Archives Created**:
   - `27-Oct-2025.md` - Newsletter & Security implementations (6 projects)
   - `03-Nov-2025.md` - Critical infrastructure fixes (4 projects)

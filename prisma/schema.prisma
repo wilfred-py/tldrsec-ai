@@ -33,6 +33,7 @@ model User {
   lastTierUpgrade       DateTime?
   auditLogs             AuditLog[]
   filingUsage           FilingUsage[]
+  jobs                  JobQueue[]
   notificationsSent     NotificationSent[]
   cacheAccesses         SummaryCacheAccess[]
   emailDeliveries       SummaryEmailDelivery[]
@@ -162,6 +163,10 @@ model JobQueue {
   costUSD        Decimal?      @db.Decimal(10, 4)
   timeoutFlagged Boolean       @default(false)
   tokenUsage     Json?
+  // Database trigger auto-populates userId from payload->userId JSON field
+  // When a user is deleted, trigger marks associated jobs as DEAD_LETTER
+  userId         String?       // Auto-populated by trigger, enables cascade handling
+  user           User?         @relation(fields: [userId], references: [id], onDelete: SetNull)
   progress       JobProgress[]
 
   @@index([status, scheduledFor])
@@ -169,6 +174,7 @@ model JobQueue {
   @@index([idempotencyKey])
   @@index([createdAt])
   @@index([timeoutFlagged, createdAt])
+  @@index([userId])
 }
 
 model JobProgress {

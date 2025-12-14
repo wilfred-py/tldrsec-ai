@@ -74,6 +74,7 @@ tasks/
 scripts/*
 !scripts/create-task-branch.sh
 !scripts/test-production-waitlist.sh
+!scripts/verify-cascade-delete-trigger.ts
 
 # Prisma generated files
 lib/generated/
