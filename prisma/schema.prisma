@@ -163,7 +163,9 @@ model JobQueue {
   costUSD        Decimal?      @db.Decimal(10, 4)
   timeoutFlagged Boolean       @default(false)
   tokenUsage     Json?
-  userId         String?       // Extracted from payload for cascade delete trigger
+  // Database trigger auto-populates userId from payload->userId JSON field
+  // When a user is deleted, trigger marks associated jobs as DEAD_LETTER
+  userId         String?       // Auto-populated by trigger, enables cascade handling
   user           User?         @relation(fields: [userId], references: [id], onDelete: SetNull)
   progress       JobProgress[]
 

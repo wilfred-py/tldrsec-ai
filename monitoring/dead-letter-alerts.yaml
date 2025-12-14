@@ -1,0 +1,86 @@
+# Monitoring configuration for DEAD_LETTER job accumulation
+# Deploy this to your monitoring system (Datadog, CloudWatch, etc.)
+
+alerts:
+  - name: high_dead_letter_job_count
+    description: Alert when DEAD_LETTER jobs exceed threshold
+    query: |
+      SELECT COUNT(*) as dead_letter_count
+      FROM "JobQueue"
+      WHERE status = 'DEAD_LETTER'
+      AND "createdAt" > NOW() - INTERVAL '24 hours'
+    threshold: 1000
+    severity: warning
+    notification_channels:
+      - email: engineering@tldrsec.app
+      - slack: #alerts-production
+    
+  - name: rapid_dead_letter_accumulation
+    description: Alert on rapid increase in DEAD_LETTER jobs
+    query: |
+      SELECT COUNT(*) as recent_dead_letters
+      FROM "JobQueue"
+      WHERE status = 'DEAD_LETTER'
+      AND "createdAt" > NOW() - INTERVAL '1 hour'
+    threshold: 100
+    severity: critical
+    notification_channels:
+      - pagerduty: database-team
+      - slack: #alerts-critical
+
+  - name: orphaned_job_trigger_failures
+    description: Monitor for trigger execution failures
+    query: |
+      SELECT COUNT(*) as orphaned_jobs
+      FROM "JobQueue" j
+      LEFT JOIN "User" u ON j."userId" = u.id
+      WHERE j."userId" IS NOT NULL
+      AND u.id IS NULL
+    threshold: 1
+    severity: critical
+    notification_channels:
+      - pagerduty: database-team
+
+dashboards:
+  - name: dead_letter_jobs_dashboard
+    panels:
+      - title: "DEAD_LETTER Jobs Over Time"
+        type: line_chart
+        query: |
+          SELECT 
+            DATE_TRUNC('hour', "createdAt") as hour,
+            COUNT(*) as count
+          FROM "JobQueue"
+          WHERE status = 'DEAD_LETTER'
+          AND "createdAt" > NOW() - INTERVAL '7 days'
+          GROUP BY hour
+          ORDER BY hour
+      
+      - title: "Dead Letter Jobs by Type"
+        type: pie_chart
+        query: |
+          SELECT 
+            "jobType",
+            COUNT(*) as count
+          FROM "JobQueue"
+          WHERE status = 'DEAD_LETTER'
+          GROUP BY "jobType"
+      
+      - title: "User Deletion Impact"
+        type: metric
+        query: |
+          SELECT 
+            COUNT(DISTINCT "userId") as deleted_users_with_jobs
+          FROM "JobQueue"
+          WHERE status = 'DEAD_LETTER'
+          AND "userId" IS NOT NULL
+
+retention:
+  dead_letter_cleanup:
+    description: Automatically purge old DEAD_LETTER jobs
+    schedule: "0 2 * * *"  # Daily at 2 AM
+    query: |
+      DELETE FROM "JobQueue"
+      WHERE status = 'DEAD_LETTER'
+      AND "createdAt" < NOW() - INTERVAL '30 days'
+    max_records: 10000  # Batch size to prevent lock contention
