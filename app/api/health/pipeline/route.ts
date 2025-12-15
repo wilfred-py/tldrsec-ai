@@ -15,7 +15,7 @@
  * - ERROR: Unable to determine pipeline status
  */
 
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { logger } from '../../../../lib/logging';
 
 export const runtime = 'nodejs';
@@ -45,10 +45,42 @@ interface PipelineHealthResponse {
   timestamp: string;
 }
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   const startTime = Date.now();
   const issues: string[] = [];
   const recommendations: string[] = [];
+
+  // Add rate limiting to prevent abuse of expensive database queries
+  try {
+    const clientIP = request.headers.get('x-forwarded-for') || 
+                    request.headers.get('x-real-ip') || 
+                    request.ip || 
+                    'unknown';
+    
+    // Import rate limiter dynamically
+    const { rateLimiter } = await import('../../../../lib/security/rate-limiter');
+    const rateLimitResult = await rateLimiter.checkLimit('health-endpoint', clientIP);
+    
+    if (!rateLimitResult || !rateLimitResult.allowed) {
+      pipelineLogger.warn('Health endpoint rate limit exceeded', { clientIP });
+      return NextResponse.json({
+        status: 'ERROR',
+        error: 'Rate limit exceeded. Please try again later.',
+        timestamp: new Date().toISOString()
+      }, { 
+        status: 429,
+        headers: {
+          'Retry-After': '60',
+          'X-RateLimit-Remaining': '0'
+        }
+      });
+    }
+  } catch (rateLimitError) {
+    // Continue if rate limiter fails, but log the issue
+    pipelineLogger.warn('Rate limiter check failed', { 
+      error: rateLimitError instanceof Error ? rateLimitError.message : 'Unknown error' 
+    });
+  }
 
   try {
     // Dynamic import to avoid build-time dependencies
@@ -198,7 +230,10 @@ export async function GET() {
       headers: {
         'Cache-Control': 'no-store, no-cache, must-revalidate',
         'X-Pipeline-Status': status,
-        'X-Response-Time': `${duration}ms`
+        'X-Response-Time': `${duration}ms`,
+        'X-Content-Type-Options': 'nosniff',
+        'X-Frame-Options': 'DENY',
+        'X-XSS-Protection': '1; mode=block'
       }
     });
 
@@ -229,14 +264,17 @@ export async function GET() {
       lastCompletion: null,
       minutesSinceLastCompletion: null,
       issues: ['Failed to check pipeline health'],
-      recommendations: ['Check database connectivity and Prisma client'],
+      recommendations: ['Check system health or contact support'],
       timestamp: new Date().toISOString()
     } as PipelineHealthResponse, {
       status: 500,
       headers: {
         'Cache-Control': 'no-store',
         'X-Pipeline-Status': 'ERROR',
-        'X-Response-Time': `${duration}ms`
+        'X-Response-Time': `${duration}ms`,
+        'X-Content-Type-Options': 'nosniff',
+        'X-Frame-Options': 'DENY',
+        'X-XSS-Protection': '1; mode=block'
       }
     });
   }

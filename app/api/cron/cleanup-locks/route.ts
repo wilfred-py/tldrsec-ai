@@ -113,7 +113,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({
       success: false,
-      error: 'Lock cleanup failed',
+      error: 'Internal system error during cleanup',
       executionId,
       duration
     }, { status: 500 });
