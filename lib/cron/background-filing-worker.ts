@@ -373,13 +373,18 @@ export class BackgroundFilingWorker {
         throw new Error(result.error || 'Job processing failed');
       }
     } catch (error) {
-      // Ensure we abort any in-flight requests on error
+      // IMPORTANT: Capture error message BEFORE calling abort(), because abort() sets
+      // controller.signal.aborted = true, and we were incorrectly using that to mask errors
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      const isTimeout = errorMessage.includes('exceeded') && errorMessage.includes('timeout');
+      // Only check if the error itself mentions abort, not if we manually aborted after catching
+      const wasAbortedByTimeout = errorMessage.includes('aborted') || errorMessage.includes('AbortError');
+
+      // Now abort any in-flight requests to clean up
       controller.abort();
       cleanup();
 
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      const isTimeout = errorMessage.includes('exceeded') && errorMessage.includes('timeout');
-      const isAborted = errorMessage.includes('aborted') || controller.signal.aborted;
+      const duration = Date.now() - jobStartTime;
 
       workerLogger.error('Filing job failed', {
         processId: this.processId,
@@ -387,17 +392,20 @@ export class BackgroundFilingWorker {
         ticker: payload.ticker.symbol,
         error: errorMessage,
         isTimeout,
-        isAborted,
+        wasAbortedByTimeout,
         retryCount: job.retryCount,
         maxRetries: job.maxRetries,
-        duration: Date.now() - jobStartTime,
+        duration,
       });
 
       // Update job status to FAILED (JobQueueService handles retries)
+      // BUG FIX: Only report timeout message for actual timeouts, not all errors
+      // Previously, we were checking controller.signal.aborted AFTER calling abort(),
+      // which meant ALL errors were incorrectly reported as "Application timeout"
       await JobQueueService.updateJobStatus(job.id, 'FAILED', {
         failedAt: new Date(),
-        error: isTimeout || isAborted
-          ? `Application timeout after ${FILING_PROCESSING_TIMEOUT}ms (requests aborted)`
+        error: isTimeout || wasAbortedByTimeout
+          ? `Application timeout after ${duration}ms (requests aborted): ${errorMessage}`
           : errorMessage,
       });
     }
