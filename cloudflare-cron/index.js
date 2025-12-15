@@ -108,8 +108,11 @@ export default {
         };
       }
       
-      // Build URLs for Vercel endpoints (three-step pipeline for async processing)
-      const tierAwareUrl = `${env.PUBLIC_URL}/api/cron/tier-aware`; // Step 1: queues new filings
+      // Build URLs for Vercel endpoints (four-step pipeline for async processing)
+      // Step 0: Proactive lock cleanup (PREVENTS PIPELINE STALLS!)
+      const cleanupLocksUrl = `${env.PUBLIC_URL}/api/cron/cleanup-locks`;
+      // Step 1: Queue new filings for discovery
+      const tierAwareUrl = `${env.PUBLIC_URL}/api/cron/tier-aware`;
       // Step 2: Process fetch jobs (content retrieval from SEC)
       // IMPORTANT: We separate fetch and summarize jobs to ensure both get processing time.
       // The previous combined approach caused summarize jobs to be blocked by the fetch backlog.
@@ -118,11 +121,12 @@ export default {
       const summarizeUrl = `${env.PUBLIC_URL}/api/cron/process-filing-queue?jobTypes=ASYNC_SUMMARIZE_CACHED`;
       const dailyCountUrl = `${env.PUBLIC_URL}/api/cron/update-daily-count`;
 
-      console.log(`[${executionId}] Three-step pipeline configuration:`, {
+      console.log(`[${executionId}] Four-step pipeline configuration:`, {
+        step0: cleanupLocksUrl,
         step1: tierAwareUrl,
         step2: fetchUrl,
         step3: summarizeUrl,
-        pattern: 'Sequential execution: discover → fetch → summarize'
+        pattern: 'Sequential execution: cleanup → discover → fetch → summarize'
       });
       console.log(`[${executionId}] PUBLIC_URL: ${env.PUBLIC_URL}`);
       console.log(`[${executionId}] CRON_SECRET configured: ${env.CRON_SECRET ? 'Yes (' + env.CRON_SECRET.length + ' chars)' : 'No'}`);
@@ -182,7 +186,59 @@ export default {
         return headers;
       };
 
-      // STEP 1: Call tier-aware endpoint to queue new filings
+      // ========================================
+      // STEP 0: Proactive Lock Cleanup (CRITICAL!)
+      // ========================================
+      // This step MUST run first to prevent pipeline stalls from stale locks.
+      // The pipeline was stalled for 8 days due to an expired lock that was never cleaned up.
+      console.log(`[${executionId}] ====== STEP 0: LOCK CLEANUP ======`);
+      console.log(`[${executionId}] Step 0: Calling cleanup-locks endpoint to clear stale locks...`);
+      let cleanupResult;
+      try {
+        const { signatureHex: step0Signature, timestamp: step0Timestamp } = await generateSignature(cleanupLocksUrl);
+        const cleanupHeaders = createHeaders(step0Signature, step0Timestamp);
+
+        cleanupResult = await executeWithAdvancedRateLimiting({
+          executionId,
+          url: cleanupLocksUrl,
+          headers: cleanupHeaders,
+          workerTimeoutMs: WORKER_TIMEOUT_MS,
+          requestTimeoutMs: 30000, // 30 seconds is plenty for lock cleanup
+          maxAttempts: 2, // Quick retry, don't waste time
+          initialBackoffMs: INITIAL_BACKOFF_MS,
+          maxBackoffMs: 5000, // Max 5 second backoff
+          jitterPercentage: JITTER_PERCENTAGE,
+          rateLimiter,
+          circuitBreaker,
+          monitor,
+          rateLimitConfig: {
+            windowMs: RATE_LIMIT_WINDOW_MS,
+            maxRequests: MAX_REQUESTS_PER_WINDOW,
+            burstLimit: MAX_BURST_REQUESTS,
+            globalLimit: GLOBAL_SUBREQUEST_LIMIT,
+            burstWindowMs: BURST_PROTECTION_WINDOW_MS,
+            breakerThreshold: CIRCUIT_BREAKER_THRESHOLD
+          }
+        });
+
+        console.log(`[${executionId}] Step 0 completed: lock cleanup success`, {
+          locksCleared: cleanupResult?.cleanup?.expiredLocksCleared || 0,
+          healthStatus: cleanupResult?.health?.status || 'UNKNOWN',
+          activeLocks: cleanupResult?.health?.activeLocks || 0,
+          staleLocks: cleanupResult?.health?.staleLocksCount || 0
+        });
+      } catch (cleanupError) {
+        // Log but don't fail - cleanup is important but shouldn't block pipeline
+        console.warn(`[${executionId}] Step 0 warning: lock cleanup failed (continuing anyway)`, {
+          error: cleanupError.message
+        });
+        cleanupResult = { success: false, error: cleanupError.message };
+      }
+
+      // ========================================
+      // STEP 1: Queue Discovery Jobs
+      // ========================================
+      console.log(`[${executionId}] ====== STEP 1: DISCOVERY ======`);
       console.log(`[${executionId}] Step 1: Calling tier-aware endpoint to queue filings...`);
       let tierAwareResult;
       try {
@@ -307,13 +363,21 @@ export default {
         console.warn(`[${executionId}] Summarize endpoint failed - jobs will retry on next cycle`);
       }
 
-      // Combine results from all three endpoints
+      // Combine results from all four endpoints
       const result = {
+        cleanup: cleanupResult,
         tierAware: tierAwareResult,
         fetch: fetchResult,
         summarize: summarizeResult,
+        // Note: cleanup failures don't fail the whole pipeline, but other steps do
         combinedSuccess: tierAwareResult?.success && fetchResult?.success && summarizeResult?.success,
         metrics: {
+          cleanup: {
+            duration: cleanupResult?.duration || 0,
+            locksCleared: cleanupResult?.cleanup?.expiredLocksCleared || 0,
+            healthStatus: cleanupResult?.health?.status || 'UNKNOWN',
+            status: cleanupResult?.success ? 'success' : 'warning' // warning, not failed
+          },
           tierAware: {
             duration: tierAwareResult?.duration || 0,
             filesProcessed: tierAwareResult?.filesProcessed || 0,
@@ -334,12 +398,16 @@ export default {
 
       const duration = Date.now() - startTime;
 
-      console.log(`[${executionId}] Three-step pipeline execution completed in ${duration}ms:`, {
+      console.log(`[${executionId}] Four-step pipeline execution completed in ${duration}ms:`, {
+        step0Cleanup: result.metrics.cleanup.status,
+        step0LocksCleared: result.metrics.cleanup.locksCleared,
+        step0HealthStatus: result.metrics.cleanup.healthStatus,
         step1TierAware: result.metrics.tierAware.status,
         step2Fetch: result.metrics.fetch.status,
         step3Summarize: result.metrics.summarize.status,
         combinedSuccess: result.combinedSuccess,
         totalDuration: duration,
+        cleanupDuration: result.metrics.cleanup.duration,
         tierAwareDuration: result.metrics.tierAware.duration,
         fetchDuration: result.metrics.fetch.duration,
         summarizeDuration: result.metrics.summarize.duration
@@ -368,12 +436,61 @@ export default {
         console.warn(`[${executionId}] Daily count update failed (non-critical):`, dailyCountError.message);
       }
 
+      // ========================================
+      // OPTIONAL: Pipeline Health Check (Monitoring)
+      // ========================================
+      // This runs after the main pipeline to log health status for monitoring.
+      // It's non-blocking and won't affect the pipeline execution.
+      try {
+        const healthUrl = `${env.PUBLIC_URL}/api/health/pipeline`;
+        console.log(`[${executionId}] Checking pipeline health: ${healthUrl}`);
+
+        const healthResponse = await fetch(healthUrl, {
+          method: 'GET',
+          headers: {
+            'X-Execution-Id': `${executionId}-health`,
+            'X-Cloudflare-Worker': 'tldrsec-cron'
+          }
+        });
+
+        if (healthResponse.ok) {
+          const healthData = await healthResponse.json();
+          console.log(`[${executionId}] Pipeline Health Check:`, {
+            status: healthData.status,
+            locks: healthData.locks,
+            pendingJobs: healthData.jobs?.pending,
+            processingJobs: healthData.jobs?.processing,
+            completedLast1h: healthData.jobs?.completedLast1h,
+            minutesSinceLastCompletion: healthData.minutesSinceLastCompletion,
+            issues: healthData.issues?.length || 0
+          });
+
+          // Log warning if pipeline health is degraded or critical
+          if (healthData.status === 'CRITICAL') {
+            console.error(`[${executionId}] PIPELINE HEALTH CRITICAL!`, {
+              issues: healthData.issues,
+              recommendations: healthData.recommendations
+            });
+          } else if (healthData.status === 'DEGRADED') {
+            console.warn(`[${executionId}] Pipeline health degraded:`, {
+              issues: healthData.issues
+            });
+          }
+        } else {
+          console.warn(`[${executionId}] Health check returned status ${healthResponse.status}`);
+        }
+      } catch (healthError) {
+        // Don't fail the main cron job if health check fails
+        console.warn(`[${executionId}] Health check failed (non-critical):`, healthError.message);
+      }
+
       // Update circuit breaker based on combined success
       // Only mark as success if ALL THREE endpoints succeed
       if (result.combinedSuccess) {
         await monitor.recordExecution(executionId, 'completed', {
           duration,
           success: true,
+          cleanupMetrics: result.metrics.cleanup,
           tierAwareMetrics: result.metrics.tierAware,
           fetchMetrics: result.metrics.fetch,
           summarizeMetrics: result.metrics.summarize
@@ -381,7 +498,7 @@ export default {
         await circuitBreaker.recordSuccess();
         await rateLimiter.recordSuccess(executionId);
 
-        console.log(`[${executionId}] All three endpoints succeeded - circuit breaker updated`);
+        console.log(`[${executionId}] All processing endpoints succeeded - circuit breaker updated`);
       } else {
         // Partial failure - at least one endpoint failed
         const failedSteps = [];
@@ -396,13 +513,14 @@ export default {
           duration,
           success: false,
           failureReason,
+          cleanupMetrics: result.metrics.cleanup,
           tierAwareMetrics: result.metrics.tierAware,
           fetchMetrics: result.metrics.fetch,
           summarizeMetrics: result.metrics.summarize
         });
 
         // Record failure in circuit breaker
-        const error = new Error(`Three-step pipeline execution failed: ${failureReason}`);
+        const error = new Error(`Pipeline execution failed: ${failureReason}`);
         await circuitBreaker.recordFailure(error);
         await rateLimiter.recordFailure(executionId, 'PARTIAL_FAILURE');
       }

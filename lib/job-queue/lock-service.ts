@@ -179,14 +179,14 @@ export class LockService {
   }
 
   /**
-   * Clean up expired locks
+   * Clean up expired locks using Prisma
    */
   static async cleanupExpiredLocks() {
     try {
       // Dynamic import to avoid build-time dependencies
       const { getPrismaClient } = await import('../db/prisma');
       const prisma = getPrismaClient();
-      
+
       const result = await prisma.jobLock.updateMany({
         where: {
           released: false,
@@ -200,11 +200,67 @@ export class LockService {
       if (result.count > 0) {
         console.log(`Cleaned up ${result.count} expired locks`);
       }
-      
+
       return result.count;
     } catch (error) {
       console.error('Failed to clean up expired locks:', error);
       // Don't throw here, just log the error to avoid blocking other operations
+      return 0;
+    }
+  }
+
+  /**
+   * Cleanup expired locks using raw SQL for atomic operation
+   * This is a defense-in-depth mechanism that bypasses Prisma ORM
+   * for maximum reliability in cleanup operations.
+   *
+   * Use this when you need guaranteed atomic cleanup that doesn't
+   * depend on Prisma's query building.
+   */
+  static async cleanupExpiredLocksAtomic(): Promise<number> {
+    try {
+      const { getPrismaClient } = await import('../db/prisma');
+      const prisma = getPrismaClient();
+
+      // Use raw SQL for atomic cleanup - bypasses Prisma ORM entirely
+      const result = await prisma.$executeRaw`
+        UPDATE "JobLock"
+        SET released = true
+        WHERE released = false
+          AND "expiresAt" < NOW()
+      `;
+
+      if (result > 0) {
+        console.log(`[LockService] Atomic cleanup: ${result} expired locks marked as released`);
+      }
+
+      return result;
+    } catch (error) {
+      console.error('[LockService] Atomic cleanup failed:', error);
+      return 0;
+    }
+  }
+
+  /**
+   * Force cleanup ALL locks (for emergency recovery)
+   * WARNING: This will release ALL locks regardless of expiration status.
+   * Use only in emergency situations when the pipeline is completely stalled.
+   */
+  static async forceCleanupAllLocks(): Promise<number> {
+    try {
+      const { getPrismaClient } = await import('../db/prisma');
+      const prisma = getPrismaClient();
+
+      const result = await prisma.$executeRaw`
+        UPDATE "JobLock"
+        SET released = true
+        WHERE released = false
+      `;
+
+      console.log(`[LockService] FORCE CLEANUP: ${result} locks forcefully released`);
+      return result;
+    } catch (error) {
+      console.error('[LockService] Force cleanup failed:', error);
       return 0;
     }
   }
