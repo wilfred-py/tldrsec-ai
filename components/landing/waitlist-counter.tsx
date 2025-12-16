@@ -9,8 +9,8 @@ const DEFAULT_BASE = 147;
 
 // Animation configuration
 const ANIMATION_DURATION = 60000; // 60 seconds total animation
-const ANIMATION_STEP_INTERVAL_MIN = 2500; // Minimum step interval (2.5s)
-const ANIMATION_STEP_INTERVAL_MAX = 4000; // Maximum step interval (4s)
+const ANIMATION_STEP_INTERVAL_MIN = 3500; // Minimum step interval (3.5s)
+const ANIMATION_STEP_INTERVAL_MAX = 5000; // Maximum step interval (5s)
 
 // Generate random step interval between min and max
 const getRandomStepInterval = () =>
