@@ -9,7 +9,7 @@ const DEFAULT_BASE = 147;
 
 // Animation configuration
 const ANIMATION_DURATION = 60000; // 60 seconds total animation
-const ANIMATION_STEP_INTERVAL = 1200; // Update every 1.2s for slower, more readable animation
+const ANIMATION_STEP_INTERVAL = 2200; // Update every 2.2s for slower, more readable animation
 
 interface WaitlistCounterProps {
   hideAfterSignup?: boolean;
