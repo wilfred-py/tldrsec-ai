@@ -12,6 +12,8 @@ This file provides a chronological index of all completed projects across archiv
 ## Recent Activity (Not Yet Archived)
 
 **Projects completed in last 30 days** (tracked in PROGRESS.md):
+- **Circuit Breaker Reset Fix for Discovery Timeouts** ✅ COMPLETE (2025-12-17) - Discovery jobs were causing HTTP 524 timeouts (>100s), triggering circuit breaker to OPEN state after 3 failures. This blocked Steps 2-3 (fetch/summarize) from executing. Fix: (1) Reset circuit breaker after discovery timeout so Steps 2-3 can proceed, (2) Reduced discovery timeout to 90s and max attempts to 1 for fail-fast behavior. Deployed Cloudflare Worker at 10:15:49 UTC. Pipeline immediately resumed processing. Files: `cloudflare-cron/index.js`. Worker Version: `b3cc9c12-45b0-414e-9442-b2f46fd0c0c8`
+- **Cloudflare Worker Deployment & E2E Validation** ✅ COMPLETE (2025-12-16) - Discovered Cloudflare Worker was not redeployed after code fix. Last deployment: 2025-12-12, but fix merged: 2025-12-16. 586 discovery jobs stuck PENDING. Deployed worker at 09:23:39Z, pipeline immediately operational. 31 discovery jobs completed within 15 minutes. Research: `thoughts/shared/research/2025-12-16-pipeline-e2e-validation-cloudflare-deployment.md`
 - **Pipeline Discovery, Email Tracking & Summary Sharing** ✅ COMPLETE (2025-12-16) - 4-phase fix for stalled pipeline. (1) Added Step 1.5 to Cloudflare Worker for ASYNC_DISCOVER_FILINGS processing - unblocked 575 stuck jobs. (2) Ticker-centric discovery in `discovery-handler.ts` - now creates jobs for ALL users tracking a ticker, not just first user. (3) Email tracking in `summarize-cached-handler.ts` - updates `Summary.sentToUser`, `totalEmailsSent`, creates `SummaryEmailDelivery` records. (4) Summary sharing - checks for existing summary before AI call, reuses content across users (saves API costs). Branch: `fix/pipeline-discovery-and-summary-sharing`. Files: `cloudflare-cron/index.js`, `lib/cron/handlers/discovery-handler.ts`, `lib/cron/handlers/summarize-cached-handler.ts`, `lib/cron/sec-filing-service.ts`. Commits: `25e3ad7`, `248e38a`, `601d009`.
 - **Pipeline Error Handling & Model Configuration Fix** ✅ COMPLETE (2025-12-16) - Pipeline was stalled for 11+ days due to TWO hidden issues. (1) Error handling bug in `lib/cron/background-filing-worker.ts:375-410` - called `controller.abort()` BEFORE checking `controller.signal.aborted`, causing ALL errors to be reported as "Application timeout after 270000ms" instead of actual error. (2) Corrupted environment variable `DEFAULT_AI_MODEL="x-ai/grok-4-fast-reasoning\n"` with literal newline, and model name was invalid (should be `grok-4.1-fast`). Fix: Capture error message before abort(), updated env var to `x-ai/grok-4.1-fast`. Commits: `0da4393`, `4b699e8`. Verification: 3 jobs completed successfully (14-32 second execution times). Pipeline now operational.
 - **Proactive Lock Cleanup - Pipeline Stall Prevention** ✅ COMPLETE (2025-12-15) - Pipeline was stalled 8+ days due to expired locks that were never cleaned up. Added `/api/cron/cleanup-locks` endpoint called as Step 0 by Cloudflare Worker. Added `/api/health/pipeline` endpoint for comprehensive pipeline monitoring. Added `cleanupExpiredLocksAtomic()` and `forceCleanupAllLocks()` methods to LockService. Created database migration for PostgreSQL cleanup function. Updated Cloudflare Worker to 4-step pipeline: cleanup → discover → fetch → summarize. Emergency cleanup cleared 5 stale locks. PR #263. Branch: `fix/proactive-lock-cleanup`. Files: `app/api/cron/cleanup-locks/route.ts`, `app/api/health/pipeline/route.ts`, `lib/job-queue/lock-service.ts`, `cloudflare-cron/index.js`, `prisma/migrations/20251215_add_lock_cleanup_function.sql`, `__tests__/lib/job-queue/lock-cleanup.test.ts` (23 tests)
@@ -75,12 +77,12 @@ This file provides a chronological index of all completed projects across archiv
 ## Archive Statistics
 - **Total Archived Projects**: 17 projects across 3 weekly archives
 - **Current PROGRESS.md Lines**: 91 lines (threshold: 500)
-- **Last Archive Check**: 2025-12-16
-- **Last Archive Update**: 2025-12-16 (no archival needed - under 500 lines)
-- **Recent Activity (Not Yet Archived)**: 26 projects completed in last 30 days
+- **Last Archive Check**: 2025-12-17
+- **Last Archive Update**: 2025-12-17 (no archival needed - under 500 lines)
+- **Recent Activity (Not Yet Archived)**: 28 projects completed in last 30 days
 - **Archive System**: ✅ ACTIVE (auto-archives when >500 lines AND projects >30 days old)
-- **Current Work** (2025-12-16): ✅ Pipeline Error Handling & Model Fix COMPLETE - Fixed error masking bug + corrupted env var
-- **Cron Pipeline Status** (2025-12-16): ✅ FULLY OPERATIONAL - AI summarization working, 3 jobs completed (14-32s exec time), 35 total completed
+- **Current Work** (2025-12-17): ✅ Circuit Breaker Reset Fix COMPLETE - Discovery timeouts no longer block fetch/summarize steps
+- **Cron Pipeline Status** (2025-12-17): ✅ FULLY OPERATIONAL - All 5 steps executing successfully, circuit breaker resets after discovery timeouts
 - **Archives Created**:
   - `27-Oct-2025.md` - Newsletter & Security implementations (6 projects)
   - `03-Nov-2025.md` - Critical infrastructure fixes (4 projects)
