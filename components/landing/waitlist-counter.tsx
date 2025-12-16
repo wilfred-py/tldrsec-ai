@@ -8,8 +8,8 @@ import { CounterDisplay } from './counter';
 const DEFAULT_BASE = 147;
 
 // Animation configuration
-const ANIMATION_DURATION = 12000; // 12 seconds total animation
-const ANIMATION_STEP_INTERVAL = 800; // Update every 800ms for smooth animation
+const ANIMATION_DURATION = 30000; // 30 seconds total animation
+const ANIMATION_STEP_INTERVAL = 500; // Update every 500ms for smoother animation
 
 interface WaitlistCounterProps {
   hideAfterSignup?: boolean;
