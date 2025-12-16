@@ -213,8 +213,154 @@ export async function handleSummarizeCached(
       }
     }
 
-    // Generate AI summary
-    summarizeLogger.debug(`[${executionId}] Generating AI summary`, {
+    // Check if any other user already has a summary for this same filing (shared summary cache)
+    // This allows us to reuse AI-generated summaries across users, reducing API costs
+    const sharedSummary = await prisma.summary.findFirst({
+      where: {
+        filingUrl: filing.filingUrl,
+        filingType: filing.formType,
+        // Ensure we have a valid summary (not a failed one)
+        summaryText: { not: '' }
+      },
+      select: {
+        id: true,
+        summaryText: true,
+        summaryJSON: true,
+        modelVersion: true,
+        inputTokens: true,
+        outputTokens: true,
+        totalCost: true,
+        createdAt: true
+      },
+      orderBy: {
+        createdAt: 'desc'  // Get the most recent one
+      }
+    });
+
+    if (sharedSummary) {
+      summarizeLogger.info(`[${executionId}] Reusing shared summary from another user`, {
+        sharedSummaryId: sharedSummary.id,
+        userId,
+        ticker: ticker.symbol,
+        formType: filing.formType
+      });
+
+      // Create a new Summary record for this user using the shared content
+      const summary = await prisma.summary.create({
+        data: {
+          tickerId: userTicker.id,
+          filingType: filing.formType,
+          filingDate: new Date(filing.filingDate),
+          filingUrl: filing.filingUrl,
+          summaryText: sharedSummary.summaryText,
+          summaryJSON: sharedSummary.summaryJSON || null,
+          modelVersion: sharedSummary.modelVersion || 'x-ai/grok-4-fast:free',
+          promptVersion: 'v1',
+          totalCost: 0,  // No additional AI cost for shared summary
+          inputTokens: 0,
+          outputTokens: 0,
+          isCacheHit: true,  // Mark as cache hit
+          metadata: {
+            executionId,
+            cacheId,
+            cacheHit: true,
+            summarizeDuration: 0,
+            cronTriggerTime: executionContext.cronTriggerTime,
+            sourceContext: executionContext.sourceContext,
+            discoveryPhaseCompletedAt: executionContext.discoveryPhaseCompletedAt,
+            fetchPhaseCompletedAt: executionContext.fetchPhaseCompletedAt,
+            summarizePhaseCompletedAt: new Date().toISOString(),
+            ticker: ticker.symbol,
+            companyName: ticker.companyName,
+            accessionNumber: filing.accessionNumber,
+            userId,
+            sharedFromSummaryId: sharedSummary.id,
+            sharedFromCreatedAt: sharedSummary.createdAt.toISOString(),
+            originalCost: sharedSummary.totalCost,
+            originalInputTokens: sharedSummary.inputTokens,
+            originalOutputTokens: sharedSummary.outputTokens
+          }
+        }
+      });
+
+      summarizeLogger.info(`[${executionId}] Shared summary saved for user`, {
+        summaryId: summary.id,
+        userId,
+        ticker: ticker.symbol,
+        sharedFromSummaryId: sharedSummary.id,
+        costSaved: sharedSummary.totalCost
+      });
+
+      // Send email notification
+      let emailSent = false;
+      try {
+        await sendFilingSummaryEmail(userEmail, {
+          companyName: ticker.companyName || ticker.symbol,
+          ticker: ticker.symbol,
+          filingType: filing.formType,
+          filingDate: new Date(filing.filingDate),
+          summary: sharedSummary.summaryText,
+          filingUrl: filing.filingUrl,
+          summaryData: sharedSummary.summaryJSON as Record<string, unknown> | undefined
+        });
+
+        emailSent = true;
+        summarizeLogger.info(`[${executionId}] Email notification sent for shared summary`, {
+          summaryId: summary.id,
+          userEmail
+        });
+
+        // Update email tracking
+        try {
+          await prisma.summary.update({
+            where: { id: summary.id },
+            data: {
+              sentToUser: true,
+              totalEmailsSent: { increment: 1 }
+            }
+          });
+
+          await prisma.summaryEmailDelivery.create({
+            data: {
+              summaryId: summary.id,
+              userId: userId,
+              emailAddress: userEmail,
+              deliveryStatus: 'sent'
+            }
+          });
+        } catch (trackingError) {
+          summarizeLogger.warn(`[${executionId}] Failed to update email tracking for shared summary`, {
+            summaryId: summary.id,
+            error: trackingError instanceof Error ? trackingError.message : 'Unknown error'
+          });
+        }
+      } catch (emailError) {
+        summarizeLogger.error(`[${executionId}] Failed to send email for shared summary`, {
+          summaryId: summary.id,
+          error: emailError instanceof Error ? emailError.message : 'Unknown error'
+        });
+      }
+
+      return {
+        success: true,
+        summaryId: summary.id,
+        cost: 0,
+        tokenUsage: {
+          inputTokens: 0,
+          outputTokens: 0
+        },
+        summarizeDuration: Date.now() - startTime,
+        emailSent,
+        metadata: {
+          shared: true,
+          sharedFromSummaryId: sharedSummary.id,
+          costSaved: sharedSummary.totalCost
+        }
+      };
+    }
+
+    // No shared summary found - generate AI summary
+    summarizeLogger.debug(`[${executionId}] Generating AI summary (no shared summary available)`, {
       contentLength: cachedContent.content.length,
       formType: filing.formType
     });
@@ -310,6 +456,39 @@ export async function handleSummarizeCached(
         summaryId: summary.id,
         userEmail
       });
+
+      // Update Summary record to reflect email was sent
+      try {
+        await prisma.summary.update({
+          where: { id: summary.id },
+          data: {
+            sentToUser: true,
+            totalEmailsSent: { increment: 1 }
+          }
+        });
+
+        // Create SummaryEmailDelivery record for tracking
+        await prisma.summaryEmailDelivery.create({
+          data: {
+            summaryId: summary.id,
+            userId: userId,
+            emailAddress: userEmail,
+            deliveryStatus: 'sent'
+          }
+        });
+
+        summarizeLogger.debug(`[${executionId}] Email tracking records updated`, {
+          summaryId: summary.id,
+          userId
+        });
+      } catch (trackingError) {
+        // Don't fail the job if tracking update fails - email was still sent
+        summarizeLogger.warn(`[${executionId}] Failed to update email tracking records`, {
+          summaryId: summary.id,
+          userId,
+          error: trackingError instanceof Error ? trackingError.message : 'Unknown error'
+        });
+      }
     } catch (emailError) {
       summarizeLogger.error(`[${executionId}] Failed to send email notification`, {
         summaryId: summary.id,

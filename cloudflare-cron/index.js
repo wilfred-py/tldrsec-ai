@@ -108,11 +108,13 @@ export default {
         };
       }
       
-      // Build URLs for Vercel endpoints (four-step pipeline for async processing)
+      // Build URLs for Vercel endpoints (five-step pipeline for async processing)
       // Step 0: Proactive lock cleanup (PREVENTS PIPELINE STALLS!)
       const cleanupLocksUrl = `${env.PUBLIC_URL}/api/cron/cleanup-locks`;
       // Step 1: Queue new filings for discovery
       const tierAwareUrl = `${env.PUBLIC_URL}/api/cron/tier-aware`;
+      // Step 1.5: Process discovery jobs (RSS feed checking, queues fetch jobs)
+      const discoveryUrl = `${env.PUBLIC_URL}/api/cron/process-filing-queue?jobTypes=ASYNC_DISCOVER_FILINGS`;
       // Step 2: Process fetch jobs (content retrieval from SEC)
       // IMPORTANT: We separate fetch and summarize jobs to ensure both get processing time.
       // The previous combined approach caused summarize jobs to be blocked by the fetch backlog.
@@ -121,12 +123,13 @@ export default {
       const summarizeUrl = `${env.PUBLIC_URL}/api/cron/process-filing-queue?jobTypes=ASYNC_SUMMARIZE_CACHED`;
       const dailyCountUrl = `${env.PUBLIC_URL}/api/cron/update-daily-count`;
 
-      console.log(`[${executionId}] Four-step pipeline configuration:`, {
+      console.log(`[${executionId}] Five-step pipeline configuration:`, {
         step0: cleanupLocksUrl,
         step1: tierAwareUrl,
+        step1_5: discoveryUrl,
         step2: fetchUrl,
         step3: summarizeUrl,
-        pattern: 'Sequential execution: cleanup → discover → fetch → summarize'
+        pattern: 'Sequential execution: cleanup → queue discovery → process discovery → fetch → summarize'
       });
       console.log(`[${executionId}] PUBLIC_URL: ${env.PUBLIC_URL}`);
       console.log(`[${executionId}] CRON_SECRET configured: ${env.CRON_SECRET ? 'Yes (' + env.CRON_SECRET.length + ' chars)' : 'No'}`);
@@ -279,7 +282,58 @@ export default {
         throw tierAwareError; // Don't proceed if queueing fails
       }
 
-      // STEP 2: Call process-filing-queue endpoint to process fetch jobs
+      // ========================================
+      // STEP 1.5: Process Discovery Jobs (CRITICAL!)
+      // ========================================
+      // This step processes the ASYNC_DISCOVER_FILINGS jobs queued in Step 1.
+      // Without this step, discovery jobs accumulate indefinitely in PENDING status.
+      // Discovery jobs check RSS feeds for each user's tickers and queue fetch jobs.
+      console.log(`[${executionId}] ====== STEP 1.5: DISCOVERY JOBS ======`);
+      console.log(`[${executionId}] Step 1.5: Processing discovery jobs...`);
+      let discoveryResult;
+      try {
+        const { signatureHex: discoverySignature, timestamp: discoveryTimestamp } = await generateSignature(discoveryUrl);
+        const discoveryHeaders = createHeaders(discoverySignature, discoveryTimestamp);
+
+        discoveryResult = await executeWithAdvancedRateLimiting({
+          executionId,
+          url: discoveryUrl,
+          headers: discoveryHeaders,
+          workerTimeoutMs: WORKER_TIMEOUT_MS,
+          requestTimeoutMs: REQUEST_TIMEOUT_MS,
+          maxAttempts: MAX_ATTEMPTS,
+          initialBackoffMs: INITIAL_BACKOFF_MS,
+          maxBackoffMs: MAX_BACKOFF_MS,
+          jitterPercentage: JITTER_PERCENTAGE,
+          rateLimiter,
+          circuitBreaker,
+          monitor,
+          rateLimitConfig: {
+            windowMs: RATE_LIMIT_WINDOW_MS,
+            maxRequests: MAX_REQUESTS_PER_WINDOW,
+            burstLimit: MAX_BURST_REQUESTS,
+            globalLimit: GLOBAL_SUBREQUEST_LIMIT,
+            burstWindowMs: BURST_PROTECTION_WINDOW_MS,
+            breakerThreshold: CIRCUIT_BREAKER_THRESHOLD
+          }
+        });
+
+        console.log(`[${executionId}] Step 1.5 completed: discovery jobs processed`, {
+          jobsProcessed: discoveryResult?.processed || 0,
+          fetchJobsQueued: discoveryResult?.queued || 0
+        });
+      } catch (discoveryError) {
+        console.error(`[${executionId}] Step 1.5 failed: discovery jobs error`, {
+          error: discoveryError.message
+        });
+        // Continue to fetch step even if discovery fails - jobs will retry on next cycle
+        console.warn(`[${executionId}] Discovery processing failed, continuing to fetch step`);
+        discoveryResult = { success: false, error: discoveryError.message };
+      }
+
+      // ========================================
+      // STEP 2: Process Fetch Jobs (Content Retrieval)
+      // ========================================
       console.log(`[${executionId}] ====== STEP 2: FETCH JOBS ======`);
       console.log(`[${executionId}] Step 2: Calling process-filing-queue endpoint to process fetch jobs...`);
       let fetchResult;
@@ -363,13 +417,15 @@ export default {
         console.warn(`[${executionId}] Summarize endpoint failed - jobs will retry on next cycle`);
       }
 
-      // Combine results from all four endpoints
+      // Combine results from all five endpoints (including discovery)
       const result = {
         cleanup: cleanupResult,
         tierAware: tierAwareResult,
+        discovery: discoveryResult,
         fetch: fetchResult,
         summarize: summarizeResult,
-        // Note: cleanup failures don't fail the whole pipeline, but other steps do
+        // Note: cleanup and discovery failures don't fail the whole pipeline
+        // Discovery failures are non-fatal - jobs will retry on next cycle
         combinedSuccess: tierAwareResult?.success && fetchResult?.success && summarizeResult?.success,
         metrics: {
           cleanup: {
@@ -382,6 +438,12 @@ export default {
             duration: tierAwareResult?.duration || 0,
             filesProcessed: tierAwareResult?.filesProcessed || 0,
             status: tierAwareResult?.success ? 'success' : 'failed'
+          },
+          discovery: {
+            duration: discoveryResult?.duration || 0,
+            jobsProcessed: discoveryResult?.processed || 0,
+            fetchJobsQueued: discoveryResult?.queued || 0,
+            status: discoveryResult?.success ? 'success' : 'warning' // warning, not failed
           },
           fetch: {
             duration: fetchResult?.duration || 0,
@@ -398,17 +460,20 @@ export default {
 
       const duration = Date.now() - startTime;
 
-      console.log(`[${executionId}] Four-step pipeline execution completed in ${duration}ms:`, {
+      console.log(`[${executionId}] Five-step pipeline execution completed in ${duration}ms:`, {
         step0Cleanup: result.metrics.cleanup.status,
         step0LocksCleared: result.metrics.cleanup.locksCleared,
         step0HealthStatus: result.metrics.cleanup.healthStatus,
         step1TierAware: result.metrics.tierAware.status,
+        step1_5Discovery: result.metrics.discovery.status,
+        step1_5JobsProcessed: result.metrics.discovery.jobsProcessed,
         step2Fetch: result.metrics.fetch.status,
         step3Summarize: result.metrics.summarize.status,
         combinedSuccess: result.combinedSuccess,
         totalDuration: duration,
         cleanupDuration: result.metrics.cleanup.duration,
         tierAwareDuration: result.metrics.tierAware.duration,
+        discoveryDuration: result.metrics.discovery.duration,
         fetchDuration: result.metrics.fetch.duration,
         summarizeDuration: result.metrics.summarize.duration
       });

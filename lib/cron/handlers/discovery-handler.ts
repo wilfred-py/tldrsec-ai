@@ -3,8 +3,12 @@
  *
  * Purpose: Fast discovery of new SEC filings (<5s target)
  * - Check SEC RSS feeds for new filings
- * - Identify eligible users for each filing
- * - Queue ASYNC_FETCH_FILING jobs for content retrieval
+ * - Identify ALL users tracking each ticker (multi-user support)
+ * - Queue ASYNC_FETCH_FILING jobs for content retrieval for EACH user
+ *
+ * IMPORTANT: When a filing is discovered, we create jobs for ALL users
+ * tracking that ticker, not just the first user processed. This ensures
+ * all users receive email notifications for filings they track.
  *
  * This handler runs quickly and returns 202 Accepted immediately
  */
@@ -12,7 +16,6 @@
 import { logger } from '../../logging';
 import { JobQueueService } from '../../job-queue';
 import type { JobPayload } from '../../job-queue';
-import { CronUserProcessingService } from '../user-processing-service';
 import { CronSecFilingService } from '../sec-filing-service';
 
 const discoveryLogger = logger.child('discovery-handler');
@@ -27,6 +30,8 @@ export interface DiscoveryResult {
   filingsDiscovered: number;
   fetchJobsQueued: number;
   eligibleUsers: number;
+  uniqueTickers: number;
+  usersPerFiling: number;
   duration: number;
   error?: string;
 }
@@ -34,10 +39,14 @@ export interface DiscoveryResult {
 /**
  * Phase 1: Discover new filings and queue fetch jobs
  *
- * Fast operation (<5s) that:
- * 1. Gets eligible users based on tier and frequency
- * 2. Checks SEC RSS feeds for new filings
- * 3. Queues ASYNC_FETCH_FILING jobs for each filing+user combination
+ * Fast operation (<5s) that uses TICKER-CENTRIC discovery:
+ * 1. Gets all unique tickers across ALL users
+ * 2. Checks SEC RSS feeds ONCE per unique ticker
+ * 3. For each new filing, finds ALL users tracking that ticker
+ * 4. Queues ASYNC_FETCH_FILING jobs for EACH user (multi-user support)
+ *
+ * This ensures all users tracking a ticker get notified when a filing is discovered,
+ * not just the first user processed.
  *
  * Does NOT fetch content or summarize - just discovers and queues
  */
@@ -47,109 +56,135 @@ export async function handleDiscovery(
   const startTime = Date.now();
   const { executionId, cronTriggerTime } = payload;
 
-  discoveryLogger.info(`[${executionId}] Starting discovery phase`, {
+  discoveryLogger.info(`[${executionId}] Starting discovery phase (ticker-centric)`, {
     cronTriggerTime,
     timestamp: new Date().toISOString()
   });
 
   try {
-    // Get eligible users (FAST - just database query)
-    // Note: allUsers contains DatabaseUser objects with full user data (id, email, subscriptionTier, tickers)
-    //       eligibleUsers contains EligibleUser objects with just (userId, tier)
-    const { allUsers, eligibleUsers } = await CronUserProcessingService.getEligibleUsersForProcessing({
-      maxUsersPerCycle: 100,
-      respectBudgetLimits: true,
-      budgetThreshold: 90
+    const { getPrismaClient } = await import('../../db/prisma');
+    const prisma = getPrismaClient();
+
+    // STEP 1: Get all unique ticker symbols across ALL users
+    // This is more efficient than per-user discovery
+    const uniqueTickerSymbols = await prisma.ticker.findMany({
+      select: {
+        symbol: true
+      },
+      distinct: ['symbol']
     });
 
-    discoveryLogger.info(`[${executionId}] Eligible users identified`, {
-      totalUsers: allUsers.length,
-      eligibleUsers: eligibleUsers.length
+    const tickerSymbols = uniqueTickerSymbols.map(t => t.symbol);
+
+    discoveryLogger.info(`[${executionId}] Unique tickers identified`, {
+      uniqueTickerCount: tickerSymbols.length,
+      tickers: tickerSymbols
     });
 
-    if (eligibleUsers.length === 0) {
-      discoveryLogger.info(`[${executionId}] No eligible users - discovery complete`);
+    if (tickerSymbols.length === 0) {
+      discoveryLogger.info(`[${executionId}] No tickers found - discovery complete`);
       return {
         success: true,
         filingsDiscovered: 0,
         fetchJobsQueued: 0,
         eligibleUsers: 0,
+        uniqueTickers: 0,
+        usersPerFiling: 0,
         duration: Date.now() - startTime
       };
     }
 
-    // Check for new filings for eligible users (FAST - RSS feed check)
-    let totalFilingsDiscovered = 0;
+    // STEP 2: Enrich tickers with CIK from CikMapping table
+    const tickersWithCik = await Promise.all(
+      tickerSymbols.map(async (symbol) => {
+        const cikMapping = await prisma.cikMapping.findFirst({
+          where: { ticker: symbol }
+        });
+        // Get company name from any user's ticker record
+        const tickerRecord = await prisma.ticker.findFirst({
+          where: { symbol },
+          select: { companyName: true }
+        });
+        return {
+          symbol,
+          companyName: tickerRecord?.companyName || symbol,
+          cik: cikMapping?.cik || null
+        };
+      })
+    );
+
+    // STEP 3: Check RSS feeds for new filings (ONCE per ticker, not per user)
+    // We pass null for userId since we're doing ticker-centric discovery
+    const allNewFilings = await CronSecFilingService.checkForNewFilings(
+      tickersWithCik.map(t => ({ id: t.symbol, symbol: t.symbol, companyName: t.companyName, cik: t.cik })),
+      null // No specific user - ticker-centric discovery
+    );
+
+    discoveryLogger.info(`[${executionId}] Filings discovered across all tickers`, {
+      filingsFound: allNewFilings.length,
+      tickers: Array.from(new Set(allNewFilings.map(f => f.ticker)))
+    });
+
     let totalFetchJobsQueued = 0;
+    let totalUsersProcessed = 0;
+    const usersPerFilingCounts: number[] = [];
 
-    for (const eligibleUser of eligibleUsers) {
+    // STEP 4: For each filing, find ALL users tracking that ticker and create jobs
+    for (const filing of allNewFilings) {
       try {
-        // Look up full user data from allUsers (DatabaseUser) using eligibleUser.userId
-        const fullUser = allUsers.find(u => u.id === eligibleUser.userId);
-        if (!fullUser) {
-          discoveryLogger.warn(`[${executionId}] Could not find full user data for eligible user`, {
-            userId: eligibleUser.userId
-          });
-          continue;
-        }
-
-        // Get user's tracked tickers
-        const { getPrismaClient } = await import('../../db/prisma');
-        const prisma = getPrismaClient();
-
-        const userTickers = await prisma.ticker.findMany({
-          where: { userId: fullUser.id },
+        // Find ALL users who track this ticker
+        const usersForTicker = await prisma.user.findMany({
+          where: {
+            tickers: {
+              some: { symbol: filing.ticker }
+            }
+          },
           select: {
             id: true,
-            symbol: true,
-            companyName: true
+            email: true,
+            subscriptionTier: true,
+            tickers: {
+              where: { symbol: filing.ticker },
+              select: { id: true, companyName: true }
+            }
           }
         });
 
-        if (userTickers.length === 0) continue;
-
-        // Enrich tickers with CIK from CikMapping table
-        // Note: CikMapping uses 'ticker' field, not 'symbol'
-        const tickers = await Promise.all(
-          userTickers.map(async (ticker) => {
-            const cikMapping = await prisma.cikMapping.findFirst({
-              where: { ticker: ticker.symbol }
-            });
-            return {
-              ...ticker,
-              cik: cikMapping?.cik || null
-            };
-          })
-        );
-
-        // Check for new filings for this user's tickers
-        const newFilings = await CronSecFilingService.checkForNewFilings(
-          tickers,
-          fullUser.id
-        );
-
-        discoveryLogger.debug(`[${executionId}] Filings discovered for user`, {
-          userId: fullUser.id,
-          userEmail: fullUser.email,
-          tickerCount: tickers.length,
-          filingsFound: newFilings.length
+        discoveryLogger.debug(`[${executionId}] Users found for filing`, {
+          ticker: filing.ticker,
+          formType: filing.formType,
+          usersCount: usersForTicker.length,
+          users: usersForTicker.map(u => u.email)
         });
 
-        totalFilingsDiscovered += newFilings.length;
+        usersPerFilingCounts.push(usersForTicker.length);
 
-        // Queue ASYNC_FETCH_FILING jobs for each filing
-        for (const filing of newFilings) {
+        // Create ASYNC_FETCH_FILING job for EACH user tracking this ticker
+        for (const user of usersForTicker) {
           try {
+            // Get this user's specific ticker record for linking
+            const userTicker = user.tickers[0];
+            if (!userTicker) {
+              discoveryLogger.warn(`[${executionId}] User has no ticker record for symbol`, {
+                userId: user.id,
+                symbol: filing.ticker
+              });
+              continue;
+            }
+
+            const tickerInfo = tickersWithCik.find(t => t.symbol === filing.ticker);
+
             const fetchJob = await JobQueueService.addJob({
               jobType: 'ASYNC_FETCH_FILING',
               payload: {
-                userId: fullUser.id,
-                userEmail: fullUser.email,
-                userTier: fullUser.subscriptionTier || 'FREE',
+                userId: user.id,
+                userEmail: user.email,
+                userTier: user.subscriptionTier || 'FREE',
                 ticker: {
+                  id: userTicker.id,
                   symbol: filing.ticker,
-                  companyName: tickers.find(t => t.symbol === filing.ticker)?.companyName,
-                  cik: tickers.find(t => t.symbol === filing.ticker)?.cik
+                  companyName: userTicker.companyName || tickerInfo?.companyName,
+                  cik: tickerInfo?.cik
                 },
                 filing: {
                   filingId: filing.id,
@@ -161,49 +196,61 @@ export async function handleDiscovery(
                 executionContext: {
                   executionId,
                   cronTriggerTime,
-                  sourceContext: 'discovery',
-                  discoveryPhaseCompletedAt: new Date().toISOString()
+                  sourceContext: 'discovery-multi-user',
+                  discoveryPhaseCompletedAt: new Date().toISOString(),
+                  totalUsersForTicker: usersForTicker.length
                 }
               },
-              priority: fullUser.subscriptionTier === 'PREMIUM' ? 8 :
-                       fullUser.subscriptionTier === 'PLUS' ? 6 : 5,
+              priority: user.subscriptionTier === 'ENTERPRISE' ? 8 :
+                       user.subscriptionTier === 'PROFESSIONAL' ? 7 :
+                       user.subscriptionTier === 'INSTITUTION' ? 7 : 5,
               maxAttempts: 3
             });
 
             if (fetchJob) {
               totalFetchJobsQueued++;
+              totalUsersProcessed++;
             }
           } catch (queueError) {
-            discoveryLogger.error(`[${executionId}] Failed to queue fetch job`, {
-              userId: fullUser.id,
+            discoveryLogger.error(`[${executionId}] Failed to queue fetch job for user`, {
+              userId: user.id,
+              ticker: filing.ticker,
               filingId: filing.id,
               error: queueError instanceof Error ? queueError.message : 'Unknown error'
             });
           }
         }
-      } catch (userError) {
-        discoveryLogger.error(`[${executionId}] Failed to process user in discovery`, {
-          userId: eligibleUser.userId,
-          error: userError instanceof Error ? userError.message : 'Unknown error'
+      } catch (filingError) {
+        discoveryLogger.error(`[${executionId}] Failed to process filing in discovery`, {
+          ticker: filing.ticker,
+          filingId: filing.id,
+          error: filingError instanceof Error ? filingError.message : 'Unknown error'
         });
       }
     }
 
     const duration = Date.now() - startTime;
+    const avgUsersPerFiling = usersPerFilingCounts.length > 0
+      ? Math.round(usersPerFilingCounts.reduce((a, b) => a + b, 0) / usersPerFilingCounts.length * 10) / 10
+      : 0;
 
-    discoveryLogger.info(`[${executionId}] Discovery phase completed`, {
-      eligibleUsers: eligibleUsers.length,
-      filingsDiscovered: totalFilingsDiscovered,
+    discoveryLogger.info(`[${executionId}] Discovery phase completed (ticker-centric)`, {
+      uniqueTickers: tickerSymbols.length,
+      filingsDiscovered: allNewFilings.length,
       fetchJobsQueued: totalFetchJobsQueued,
+      usersProcessed: totalUsersProcessed,
+      avgUsersPerFiling,
       duration,
-      averageTimePerUser: Math.round(duration / eligibleUsers.length)
+      averageTimePerTicker: tickerSymbols.length > 0 ? Math.round(duration / tickerSymbols.length) : 0
     });
 
     return {
       success: true,
-      filingsDiscovered: totalFilingsDiscovered,
+      filingsDiscovered: allNewFilings.length,
       fetchJobsQueued: totalFetchJobsQueued,
-      eligibleUsers: eligibleUsers.length,
+      eligibleUsers: totalUsersProcessed,
+      uniqueTickers: tickerSymbols.length,
+      usersPerFiling: avgUsersPerFiling,
       duration
     };
 
@@ -220,6 +267,8 @@ export async function handleDiscovery(
       filingsDiscovered: 0,
       fetchJobsQueued: 0,
       eligibleUsers: 0,
+      uniqueTickers: 0,
+      usersPerFiling: 0,
       duration,
       error: error instanceof Error ? error.message : 'Unknown error'
     };
