@@ -9,7 +9,12 @@ const DEFAULT_BASE = 147;
 
 // Animation configuration
 const ANIMATION_DURATION = 60000; // 60 seconds total animation
-const ANIMATION_STEP_INTERVAL = 2200; // Update every 2.2s for slower, more readable animation
+const ANIMATION_STEP_INTERVAL_MIN = 2500; // Minimum step interval (2.5s)
+const ANIMATION_STEP_INTERVAL_MAX = 4000; // Maximum step interval (4s)
+
+// Generate random step interval between min and max
+const getRandomStepInterval = () =>
+  Math.random() * (ANIMATION_STEP_INTERVAL_MAX - ANIMATION_STEP_INTERVAL_MIN) + ANIMATION_STEP_INTERVAL_MIN;
 
 interface WaitlistCounterProps {
   hideAfterSignup?: boolean;
@@ -97,11 +102,13 @@ export function WaitlistCounter({
       return;
     }
 
-    // Calculate total steps
-    const totalSteps = Math.ceil(ANIMATION_DURATION / ANIMATION_STEP_INTERVAL);
+    // Calculate average step interval and total steps
+    const avgStepInterval = (ANIMATION_STEP_INTERVAL_MIN + ANIMATION_STEP_INTERVAL_MAX) / 2;
+    const totalSteps = Math.ceil(ANIMATION_DURATION / avgStepInterval);
     let currentStep = 0;
+    let timeoutId: NodeJS.Timeout;
 
-    const animationInterval = setInterval(() => {
+    const runStep = () => {
       currentStep++;
 
       // Use easeOutQuad for natural deceleration
@@ -116,17 +123,22 @@ export function WaitlistCounter({
 
       setDisplayedCount(newValue);
 
-      // Complete animation
+      // Complete animation or schedule next step
       if (progress >= 1) {
-        clearInterval(animationInterval);
         setDisplayedCount(targetValue);
         setIsAnimating(false);
         setAnimationComplete(true);
         console.log('[WaitlistCounter] Animation complete at:', targetValue);
+      } else {
+        // Schedule next step with random interval
+        timeoutId = setTimeout(runStep, getRandomStepInterval());
       }
-    }, ANIMATION_STEP_INTERVAL);
+    };
 
-    return () => clearInterval(animationInterval);
+    // Start first step with random interval
+    timeoutId = setTimeout(runStep, getRandomStepInterval());
+
+    return () => clearTimeout(timeoutId);
   }, [isAnimating]);
 
   // Polling effect - starts after animation completes
