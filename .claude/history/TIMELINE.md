@@ -77,12 +77,12 @@ This file provides a chronological index of all completed projects across archiv
 ## Archive Statistics
 - **Total Archived Projects**: 17 projects across 3 weekly archives
 - **Current PROGRESS.md Lines**: 91 lines (threshold: 500)
-- **Last Archive Check**: 2025-12-16
-- **Last Archive Update**: 2025-12-16 (no archival needed - under 500 lines)
-- **Recent Activity (Not Yet Archived)**: 27 projects completed in last 30 days
+- **Last Archive Check**: 2025-12-17
+- **Last Archive Update**: 2025-12-17 (no archival needed - under 500 lines)
+- **Recent Activity (Not Yet Archived)**: 28 projects completed in last 30 days
 - **Archive System**: ✅ ACTIVE (auto-archives when >500 lines AND projects >30 days old)
-- **Current Work** (2025-12-16): ✅ Cloudflare Worker Deployment & E2E Validation COMPLETE - Deployed worker after discovering it wasn't updated since 2025-12-12
-- **Cron Pipeline Status** (2025-12-16): ✅ FULLY OPERATIONAL - Discovery jobs processing at ~2/min, 31 completed in first 15 min after deployment
+- **Current Work** (2025-12-17): ✅ Circuit Breaker Reset Fix COMPLETE - Discovery timeouts no longer block fetch/summarize steps
+- **Cron Pipeline Status** (2025-12-17): ✅ FULLY OPERATIONAL - All 5 steps executing successfully, circuit breaker resets after discovery timeouts
 - **Archives Created**:
   - `27-Oct-2025.md` - Newsletter & Security implementations (6 projects)
   - `03-Nov-2025.md` - Critical infrastructure fixes (4 projects)
