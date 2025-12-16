@@ -295,13 +295,19 @@ export default {
         const { signatureHex: discoverySignature, timestamp: discoveryTimestamp } = await generateSignature(discoveryUrl);
         const discoveryHeaders = createHeaders(discoverySignature, discoveryTimestamp);
 
+        // Discovery uses reduced timeout (90s) and single attempt to leave time for Steps 2-3
+        // Discovery processes many tickers via SEC API and can legitimately take >100s
+        // If it fails, jobs retry on next cron cycle - no need to retry within same invocation
+        const DISCOVERY_TIMEOUT_MS = 90 * 1000; // 90 seconds (reduced from 270s)
+        const DISCOVERY_MAX_ATTEMPTS = 1; // No retries - fails fast to allow Steps 2-3
+
         discoveryResult = await executeWithAdvancedRateLimiting({
           executionId,
           url: discoveryUrl,
           headers: discoveryHeaders,
           workerTimeoutMs: WORKER_TIMEOUT_MS,
-          requestTimeoutMs: REQUEST_TIMEOUT_MS,
-          maxAttempts: MAX_ATTEMPTS,
+          requestTimeoutMs: DISCOVERY_TIMEOUT_MS,  // Reduced from REQUEST_TIMEOUT_MS
+          maxAttempts: DISCOVERY_MAX_ATTEMPTS,     // Reduced from MAX_ATTEMPTS
           initialBackoffMs: INITIAL_BACKOFF_MS,
           maxBackoffMs: MAX_BACKOFF_MS,
           jitterPercentage: JITTER_PERCENTAGE,
@@ -329,6 +335,20 @@ export default {
         // Continue to fetch step even if discovery fails - jobs will retry on next cycle
         console.warn(`[${executionId}] Discovery processing failed, continuing to fetch step`);
         discoveryResult = { success: false, error: discoveryError.message };
+
+        // CRITICAL FIX: Reset circuit breaker after discovery timeout
+        // Discovery jobs can take 100+ seconds (processing many tickers via SEC API)
+        // which triggers 524 timeouts. This should NOT block fetch/summarize steps
+        // since those are different endpoints that work correctly.
+        // See: 2025-12-16 pipeline stall investigation - discovery timeout causing
+        // circuit breaker to open and block Steps 2-3.
+        const isDiscoveryTimeout = discoveryError.message?.includes('Circuit breaker') ||
+                                   discoveryError.message?.includes('524') ||
+                                   discoveryError.message?.includes('timeout');
+        if (isDiscoveryTimeout) {
+          console.log(`[${executionId}] Resetting circuit breaker after discovery timeout to allow Steps 2-3`);
+          await circuitBreaker.reset();
+        }
       }
 
       // ========================================
