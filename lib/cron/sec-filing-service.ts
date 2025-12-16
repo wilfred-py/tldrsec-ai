@@ -75,11 +75,11 @@ export class CronSecFilingService {
     const logContext = userId ? { userId } : { mode: 'ticker-centric' };
     const allNewFilings: FilingWithTicker[] = [];
 
-    for (const userTicker of userTickers) {
+    for (const tickerItem of tickers) {
       try {
         // Skip tickers without CIK
-        if (!userTicker.cik) {
-          filingLogger.debug(`Skipping ticker ${userTicker.symbol} - no CIK`, { userId });
+        if (!tickerItem.cik) {
+          filingLogger.debug(`Skipping ticker ${tickerItem.symbol} - no CIK`, logContext);
           continue;
         }
 
@@ -88,11 +88,11 @@ export class CronSecFilingService {
         const prisma = getPrismaClient();
 
         const tickerMonitoring = await prisma.tickerMonitoring.findFirst({
-          where: { cik: userTicker.cik }
+          where: { cik: tickerItem.cik }
         });
 
         if (!tickerMonitoring) {
-          filingLogger.debug(`No TickerMonitoring record for ${userTicker.symbol} (CIK: ${userTicker.cik})`, { userId });
+          filingLogger.debug(`No TickerMonitoring record for ${tickerItem.symbol} (CIK: ${tickerItem.cik})`, logContext);
           continue;
         }
 
@@ -101,7 +101,7 @@ export class CronSecFilingService {
           id: tickerMonitoring.id,
           cik: tickerMonitoring.cik,
           symbol: tickerMonitoring.symbol,
-          companyName: tickerMonitoring.companyName || userTicker.companyName || '',
+          companyName: tickerMonitoring.companyName || tickerItem.companyName || '',
           rssUrl: tickerMonitoring.rssUrl || '',
           lastChecked: tickerMonitoring.lastChecked,
           lastAccessionSeen: tickerMonitoring.lastAccessionSeen,
@@ -111,37 +111,37 @@ export class CronSecFilingService {
         // Check for new filings using the existing function
         const newFilings = await checkTickerForNewFilings(activeTicker);
 
-        filingLogger.debug(`Checked ${userTicker.symbol} for new filings`, {
-          userId,
-          ticker: userTicker.symbol,
+        filingLogger.debug(`Checked ${tickerItem.symbol} for new filings`, {
+          ...logContext,
+          ticker: tickerItem.symbol,
           newFilingsFound: newFilings.length
         });
 
         // Convert RSSFilingEntry to FilingWithTicker format
         for (const filing of newFilings) {
           allNewFilings.push({
-            id: `${userTicker.symbol}-${filing.accessionNumber}`,
+            id: `${tickerItem.symbol}-${filing.accessionNumber}`,
             accessionNumber: filing.accessionNumber,
             formType: filing.filingType,
             filingDate: filing.filingDate.toISOString().split('T')[0],
             url: filing.filingUrl,
-            ticker: userTicker.symbol,
+            ticker: tickerItem.symbol,
             title: filing.title
           });
         }
       } catch (error) {
-        filingLogger.error(`Failed to check filings for ${userTicker.symbol}`, {
-          userId,
-          ticker: userTicker.symbol,
+        filingLogger.error(`Failed to check filings for ${tickerItem.symbol}`, {
+          ...logContext,
+          ticker: tickerItem.symbol,
           error: error instanceof Error ? error.message : 'Unknown error'
         });
         // Continue with other tickers
       }
     }
 
-    filingLogger.info(`Discovered ${allNewFilings.length} new filings for user`, {
-      userId,
-      tickersChecked: userTickers.length,
+    filingLogger.info(`Discovered ${allNewFilings.length} new filings`, {
+      ...logContext,
+      tickersChecked: tickers.length,
       filingsFound: allNewFilings.length,
       filings: allNewFilings.map(f => ({ ticker: f.ticker, form: f.formType, accession: f.accessionNumber }))
     });

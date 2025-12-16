@@ -16,7 +16,6 @@
 import { logger } from '../../logging';
 import { JobQueueService } from '../../job-queue';
 import type { JobPayload } from '../../job-queue';
-import { CronUserProcessingService } from '../user-processing-service';
 import { CronSecFilingService } from '../sec-filing-service';
 
 const discoveryLogger = logger.child('discovery-handler');
@@ -123,7 +122,7 @@ export async function handleDiscovery(
 
     discoveryLogger.info(`[${executionId}] Filings discovered across all tickers`, {
       filingsFound: allNewFilings.length,
-      tickers: [...new Set(allNewFilings.map(f => f.ticker))]
+      tickers: Array.from(new Set(allNewFilings.map(f => f.ticker)))
     });
 
     let totalFetchJobsQueued = 0;
@@ -202,8 +201,9 @@ export async function handleDiscovery(
                   totalUsersForTicker: usersForTicker.length
                 }
               },
-              priority: user.subscriptionTier === 'PREMIUM' ? 8 :
-                       user.subscriptionTier === 'PLUS' ? 6 : 5,
+              priority: user.subscriptionTier === 'ENTERPRISE' ? 8 :
+                       user.subscriptionTier === 'PROFESSIONAL' ? 7 :
+                       user.subscriptionTier === 'INSTITUTION' ? 7 : 5,
               maxAttempts: 3
             });
 
