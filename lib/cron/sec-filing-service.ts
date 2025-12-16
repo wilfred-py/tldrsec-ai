@@ -57,17 +57,22 @@ export interface FilingWithTicker {
 
 export class CronSecFilingService {
   /**
-   * Check for new filings for a user's tickers
+   * Check for new filings across tickers
    * Used by discovery-handler to find new filings across all tracked tickers
    *
-   * @param userTickers - Array of user's tracked tickers with basic info
-   * @param userId - The user ID (for logging)
+   * Supports two modes:
+   * 1. User-centric: Pass userId for user-specific discovery (legacy)
+   * 2. Ticker-centric: Pass null for userId for multi-user discovery (preferred)
+   *
+   * @param tickers - Array of tickers with basic info
+   * @param userId - The user ID (for logging) - null for ticker-centric discovery
    * @returns Array of new filings with ticker context
    */
   static async checkForNewFilings(
-    userTickers: Array<{ id: string; symbol: string; companyName: string | null; cik: string | null }>,
-    userId: string
+    tickers: Array<{ id: string; symbol: string; companyName: string | null; cik: string | null }>,
+    userId: string | null
   ): Promise<FilingWithTicker[]> {
+    const logContext = userId ? { userId } : { mode: 'ticker-centric' };
     const allNewFilings: FilingWithTicker[] = [];
 
     for (const userTicker of userTickers) {
