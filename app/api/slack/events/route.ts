@@ -31,7 +31,8 @@ async function verifySlackRequest(
   request: NextRequest,
   body: string
 ): Promise<boolean> {
-  const signingSecret = process.env.SLACK_SIGNING_SECRET;
+  // Trim any whitespace/newlines from env var (common CLI artifact)
+  const signingSecret = process.env.SLACK_SIGNING_SECRET?.trim();
   if (!signingSecret) {
     slackEventsLogger.warn('SLACK_SIGNING_SECRET not configured');
     return false;
