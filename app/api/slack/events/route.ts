@@ -125,19 +125,21 @@ export async function POST(request: NextRequest) {
     // Clone request to read body twice (once for verification, once for parsing)
     const body = await request.text();
 
-    // Verify request signature
+    // Parse the event payload first to check for url_verification
+    const payload: SlackEventPayload = JSON.parse(body);
+
+    // Handle URL verification challenge BEFORE signature verification
+    // This is required for initial Slack app setup
+    if (payload.type === 'url_verification') {
+      slackEventsLogger.info('Received URL verification challenge');
+      return handleUrlVerification(payload as SlackUrlVerification);
+    }
+
+    // Verify request signature for all other requests
     const isValid = await verifySlackRequest(request, body);
     if (!isValid) {
       slackEventsLogger.warn('Invalid Slack request signature');
       return NextResponse.json({ error: 'Invalid signature' }, { status: 401 });
-    }
-
-    // Parse the event payload
-    const payload: SlackEventPayload = JSON.parse(body);
-
-    // Handle URL verification
-    if (payload.type === 'url_verification') {
-      return handleUrlVerification(payload as SlackUrlVerification);
     }
 
     // Handle event callbacks
