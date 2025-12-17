@@ -294,6 +294,22 @@ Required environment variables:
 - `RESEND_API_KEY` - Email service (validated and working ✅)
 - **Monitoring Variables** - Alert email recipients and escalation paths
 
+### Slack Pipeline Monitor Configuration (Optional)
+For real-time pipeline notifications in Slack:
+- `SLACK_WEBHOOK_URL` - Incoming Webhook URL for posting cron results
+- `SLACK_ALERTS_WEBHOOK_URL` - (Optional) Separate webhook for critical alerts
+- `SLACK_BOT_TOKEN` - Bot User OAuth Token (starts with `xoxb-`) for @mention responses
+- `SLACK_SIGNING_SECRET` - Signing secret for verifying incoming Slack events
+
+**Setup Steps:**
+1. Create a Slack App at https://api.slack.com/apps
+2. Enable Incoming Webhooks and create one for your channel
+3. Add Bot Token Scopes: `chat:write`, `app_mentions:read`
+4. Install to workspace and copy Bot Token
+5. Get Signing Secret from Basic Information page
+6. Configure Event Subscriptions URL: `https://tldrsec.app/api/slack/events`
+7. Add environment variables to Vercel: `vercel env add SLACK_WEBHOOK_URL production preview development`
+
 ### Background Jobs
 - Cron jobs for SEC filing monitoring (`/api/cron/`)
 - Job queue system with retry logic and dead letter queue
