@@ -24,18 +24,40 @@ import type {
 // Helper Functions
 // =============================================================================
 
+/**
+ * Creates a markdown text object for Slack Block Kit
+ * @param text - The markdown-formatted text content
+ * @returns TextObject with markdown formatting
+ */
 function mrkdwn(text: string): TextObject {
   return { type: 'mrkdwn', text };
 }
 
+/**
+ * Creates a plain text object for Slack Block Kit
+ * @param text - The plain text content
+ * @param emoji - Whether to parse emoji (default: true)
+ * @returns TextObject with plain text formatting
+ */
 function plainText(text: string, emoji = true): TextObject {
   return { type: 'plain_text', text, emoji };
 }
 
+/**
+ * Creates a header block for Slack messages
+ * @param text - The header text content
+ * @returns HeaderBlock for use in Slack Block Kit
+ */
 function header(text: string): HeaderBlock {
   return { type: 'header', text: plainText(text) };
 }
 
+/**
+ * Creates a section block with optional fields for Slack messages
+ * @param text - The main section text content (markdown supported)
+ * @param fields - Optional array of field strings for side-by-side display
+ * @returns SectionBlock for use in Slack Block Kit
+ */
 function section(text: string, fields?: string[]): SectionBlock {
   const block: SectionBlock = { type: 'section', text: mrkdwn(text) };
   if (fields) {
