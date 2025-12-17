@@ -41,7 +41,10 @@ async function verifySlackRequest(
   const signature = request.headers.get('x-slack-signature');
 
   if (!timestamp || !signature) {
-    slackEventsLogger.warn('Missing Slack signature headers');
+    slackEventsLogger.warn('Missing Slack signature headers', {
+      hasTimestamp: !!timestamp,
+      hasSignature: !!signature,
+    });
     return false;
   }
 
@@ -52,6 +55,7 @@ async function verifySlackRequest(
     slackEventsLogger.warn('Slack request timestamp too old', {
       requestTime,
       currentTime,
+      diff: Math.abs(currentTime - requestTime),
     });
     return false;
   }
@@ -62,17 +66,37 @@ async function verifySlackRequest(
   hmac.update(baseString);
   const expectedSignature = `v0=${hmac.digest('hex')}`;
 
+  // Log signature details for debugging (without exposing secrets)
+  slackEventsLogger.debug('Signature verification attempt', {
+    timestamp,
+    signaturePrefix: signature.substring(0, 10),
+    expectedPrefix: expectedSignature.substring(0, 10),
+    secretLength: signingSecret.length,
+    bodyLength: body.length,
+  });
+
   // Compare signatures using timing-safe comparison
   try {
     const signatureBuffer = Buffer.from(signature);
     const expectedBuffer = Buffer.from(expectedSignature);
 
     if (signatureBuffer.length !== expectedBuffer.length) {
+      slackEventsLogger.warn('Signature length mismatch', {
+        receivedLength: signatureBuffer.length,
+        expectedLength: expectedBuffer.length,
+      });
       return false;
     }
 
-    return crypto.timingSafeEqual(signatureBuffer, expectedBuffer);
-  } catch {
+    const isValid = crypto.timingSafeEqual(signatureBuffer, expectedBuffer);
+    if (!isValid) {
+      slackEventsLogger.warn('Signature mismatch - check SLACK_SIGNING_SECRET matches App Basic Info');
+    }
+    return isValid;
+  } catch (err) {
+    slackEventsLogger.error('Signature comparison error', {
+      error: err instanceof Error ? err.message : 'Unknown',
+    });
     return false;
   }
 }
