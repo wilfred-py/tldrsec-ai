@@ -179,9 +179,16 @@ export async function POST(request: NextRequest) {
 
 // GET handler for testing endpoint availability
 export async function GET() {
+  const hasSigningSecret = !!process.env.SLACK_SIGNING_SECRET;
+  const hasBotToken = !!process.env.SLACK_BOT_TOKEN;
+
   return NextResponse.json({
     status: 'ok',
     message: 'Slack events endpoint is active',
     timestamp: new Date().toISOString(),
+    config: {
+      signingSecretConfigured: hasSigningSecret,
+      botTokenConfigured: hasBotToken,
+    },
   });
 }
