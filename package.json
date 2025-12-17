@@ -168,6 +168,8 @@
     "@radix-ui/react-tooltip": "^1.2.7",
     "@react-email/components": "^0.0.42",
     "@react-email/render": "^1.1.2",
+    "@slack/bolt": "4.6.0",
+    "@slack/web-api": "7.13.0",
     "@supabase/ssr": "0.7.0",
     "@supabase/supabase-js": "2.78.0",
     "@tanstack/react-table": "^8.21.3",

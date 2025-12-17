@@ -28,6 +28,9 @@ import { CronSecFilingService } from '../../../../lib/cron/sec-filing-service';
 import type { CronResults } from '../../../../lib/cron/types';
 import { AsyncFilingQueue, type FilingJobPayload } from '../../../../lib/cron/async-filing-queue';
 import { QueueMonitoringService } from '../../../../lib/cron/queue-monitoring';
+import { slackWebhookService } from '../../../../lib/slack/webhook-service';
+import { evaluateAlertRules } from '../../../../lib/slack/alert-rules';
+import type { CronExecutionResult } from '../../../../lib/slack/types';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -765,6 +768,48 @@ export async function GET(request: NextRequest) {
       cronLogger.warn(`[${executionId}] Queue health issues detected`, {
         issues: queueHealth.issues,
         metrics: queueHealth.metrics,
+      });
+    }
+
+    // Post to Slack (fire-and-forget to avoid blocking response)
+    const cronResult: CronExecutionResult = {
+      success: true,
+      executionId: monitorResult.executionId,
+      duration: monitorResult.duration,
+      processingMode: 'async',
+      message: 'Filings queued for async processing',
+      queue: {
+        filingsQueued: backlogQueuedCount || 0,
+        userFilingsQueued: successCount || 0,
+        totalQueued: (backlogQueuedCount || 0) + (successCount || 0),
+        queueDepth: queueHealth.metrics.queueDepth,
+        estimatedCompletionMinutes: queueHealth.metrics.estimatedProcessingTime,
+        healthy: queueHealth.healthy,
+      },
+      results: {
+        filingMonitoring: filingMonitoringResults,
+        backlogQueueing: {
+          unprocessedFound: unprocessedCount,
+          backlogQueued: backlogQueuedCount,
+        },
+      },
+    };
+
+    // Evaluate alert rules and post to Slack
+    const triggeredAlerts = evaluateAlertRules(cronResult, queueHealth);
+
+    // Post cron results to Slack (async, non-blocking)
+    slackWebhookService.postCronResults(cronResult, queueHealth).catch(err => {
+      cronLogger.warn(`[${executionId}] Failed to post to Slack`, { error: err.message });
+    });
+
+    // Post alerts if any were triggered
+    if (triggeredAlerts.length > 0) {
+      cronLogger.info(`[${executionId}] ${triggeredAlerts.length} alerts triggered`, {
+        alerts: triggeredAlerts.map(a => a.rule.id),
+      });
+      slackWebhookService.postAlerts(triggeredAlerts, cronResult, queueHealth).catch(err => {
+        cronLogger.warn(`[${executionId}] Failed to post alerts to Slack`, { error: err.message });
       });
     }
 
