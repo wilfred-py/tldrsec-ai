@@ -30,7 +30,8 @@ let webClient: WebClient | null = null;
 
 function getWebClient(): WebClient | null {
   if (!webClient) {
-    const token = process.env.SLACK_BOT_TOKEN;
+    // Clean up env var: trim whitespace AND remove literal \n that CLI tools add
+    const token = process.env.SLACK_BOT_TOKEN?.trim().replace(/\\n$/, '');
     if (!token) {
       conversationLogger.warn('SLACK_BOT_TOKEN not configured');
       return null;
