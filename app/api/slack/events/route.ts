@@ -68,11 +68,13 @@ async function verifySlackRequest(
   const expectedSignature = `v0=${hmac.digest('hex')}`;
 
   // Log signature details for debugging (without exposing secrets)
-  slackEventsLogger.debug('Signature verification attempt', {
+  const rawSecretLength = process.env.SLACK_SIGNING_SECRET?.length || 0;
+  slackEventsLogger.info('Signature verification attempt', {
     timestamp,
     signaturePrefix: signature.substring(0, 10),
     expectedPrefix: expectedSignature.substring(0, 10),
-    secretLength: signingSecret.length,
+    rawSecretLength,
+    cleanedSecretLength: signingSecret.length,
     bodyLength: body.length,
   });
 
