@@ -13,6 +13,8 @@ import crypto from 'crypto';
 import { logger } from '../../../../lib/logging';
 import type { SlackEventPayload, SlackEvent, SlackUrlVerification } from '../../../../lib/slack/types';
 import { handleConversation } from '../../../../lib/slack/conversation-handler';
+import { checkRateLimit, getRateLimitHeaders } from '../../../../lib/slack/rate-limiter';
+import { validateSlackPayload, validatePayloadComplexity, detectSuspiciousPatterns } from '../../../../lib/slack/input-validation';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -148,36 +150,172 @@ async function handleAppMention(event: SlackEvent): Promise<void> {
 // =============================================================================
 
 export async function POST(request: NextRequest) {
+  let clientIp = 'unknown';
+  let requestBody = '';
+  
   try {
-    // Clone request to read body twice (once for verification, once for parsing)
-    const body = await request.text();
+    // Get client IP for rate limiting
+    clientIp = request.headers.get('x-forwarded-for')?.split(',')[0] || 
+               request.headers.get('x-real-ip') || 
+               'unknown';
 
-    // Parse the event payload first to check for url_verification
-    const payload: SlackEventPayload = JSON.parse(body);
+    // Apply rate limiting for webhook endpoint
+    const webhookRateLimit = checkRateLimit('slack_webhook', clientIp);
+    if (!webhookRateLimit.allowed) {
+      slackEventsLogger.warn('Rate limit exceeded for Slack webhook', {
+        clientIp,
+        resetTime: new Date(webhookRateLimit.resetTime).toISOString(),
+      });
+
+      return NextResponse.json(
+        { error: 'Rate limit exceeded. Please try again later.' },
+        { 
+          status: 429,
+          headers: getRateLimitHeaders('slack_webhook', clientIp),
+        }
+      );
+    }
+
+    // Clone request to read body twice (once for verification, once for parsing)
+    requestBody = await request.text();
+
+    // Validate request body size (prevent DoS)
+    if (requestBody.length > 10 * 1024) { // 10KB limit
+      slackEventsLogger.warn('Request body too large', {
+        clientIp,
+        bodySize: requestBody.length,
+      });
+      return NextResponse.json(
+        { error: 'Request body too large' },
+        { status: 413 }
+      );
+    }
+
+    // Parse the event payload with error handling
+    let payload: SlackEventPayload;
+    try {
+      payload = JSON.parse(requestBody);
+    } catch (parseError) {
+      slackEventsLogger.warn('Invalid JSON payload', {
+        clientIp,
+        error: parseError instanceof Error ? parseError.message : 'Unknown parse error',
+        bodyPreview: requestBody.substring(0, 100),
+      });
+      return NextResponse.json(
+        { error: 'Invalid JSON payload' },
+        { status: 400 }
+      );
+    }
+
+    // Validate payload complexity to prevent DoS
+    const complexityValidation = validatePayloadComplexity(payload);
+    if (!complexityValidation.valid) {
+      slackEventsLogger.warn('Payload complexity validation failed', {
+        clientIp,
+        errors: complexityValidation.errors,
+      });
+      return NextResponse.json(
+        { error: 'Payload too complex' },
+        { status: 400 }
+      );
+    }
+
+    // Comprehensive input validation and sanitization
+    const payloadValidation = validateSlackPayload(payload);
+    if (!payloadValidation.valid) {
+      slackEventsLogger.warn('Payload validation failed', {
+        clientIp,
+        errors: payloadValidation.errors,
+      });
+      return NextResponse.json(
+        { error: 'Invalid payload format' },
+        { status: 400 }
+      );
+    }
+
+    // Check for suspicious patterns in text content
+    if (payload.type === 'event_callback' && payload.event?.text) {
+      const suspiciousPatterns = detectSuspiciousPatterns(payload.event.text);
+      if (suspiciousPatterns.length > 0) {
+        slackEventsLogger.warn('Suspicious patterns detected in message text', {
+          clientIp,
+          patterns: suspiciousPatterns,
+          textPreview: payload.event.text.substring(0, 100),
+        });
+        return NextResponse.json(
+          { error: 'Message contains invalid content' },
+          { status: 400 }
+        );
+      }
+    }
+
+    // Use sanitized payload for further processing
+    payload = payloadValidation.sanitized || payload;
 
     // Handle URL verification challenge BEFORE signature verification
     // This is required for initial Slack app setup
     if (payload.type === 'url_verification') {
-      slackEventsLogger.info('Received URL verification challenge');
+      slackEventsLogger.info('Received URL verification challenge', { clientIp });
       return handleUrlVerification(payload as SlackUrlVerification);
     }
 
     // Verify request signature for all other requests
-    const isValid = await verifySlackRequest(request, body);
+    let isValid = false;
+    try {
+      isValid = await verifySlackRequest(request, requestBody);
+    } catch (verifyError) {
+      slackEventsLogger.error('Error during signature verification', {
+        clientIp,
+        error: verifyError instanceof Error ? verifyError.message : 'Unknown verification error',
+      });
+      return NextResponse.json(
+        { error: 'Signature verification failed' },
+        { status: 401 }
+      );
+    }
+
     if (!isValid) {
-      slackEventsLogger.warn('Invalid Slack request signature');
+      slackEventsLogger.warn('Invalid Slack request signature', { clientIp });
       return NextResponse.json({ error: 'Invalid signature' }, { status: 401 });
     }
 
-    // Handle event callbacks
+    // Handle event callbacks with error boundaries
     if (payload.type === 'event_callback' && payload.event) {
       const event = payload.event;
 
+      // Validate event structure
+      if (!event.type) {
+        slackEventsLogger.warn('Event missing type field', { clientIp, payload });
+        return NextResponse.json({ ok: true }); // Acknowledge but ignore
+      }
+
       // Respond immediately to acknowledge receipt (Slack 3-second requirement)
-      // Process the event asynchronously
+      // Process the event asynchronously with error handling
       if (event.type === 'app_mention') {
+        // Validate required fields for app_mention
+        if (!event.user || !event.channel || !event.text) {
+          slackEventsLogger.warn('app_mention event missing required fields', {
+            clientIp,
+            hasUser: !!event.user,
+            hasChannel: !!event.channel,
+            hasText: !!event.text,
+          });
+          return NextResponse.json({ ok: true }); // Acknowledge but ignore
+        }
+
         // Fire-and-forget: start processing but don't wait
-        handleAppMention(event);
+        // Wrap in additional error boundary
+        setImmediate(() => {
+          handleAppMention(event).catch(mentionError => {
+            slackEventsLogger.error('Critical error in app mention handler', {
+              error: mentionError instanceof Error ? mentionError.message : 'Unknown mention error',
+              stack: mentionError instanceof Error ? mentionError.stack : undefined,
+              user: event.user,
+              channel: event.channel,
+              clientIp,
+            });
+          });
+        });
 
         // Return acknowledgment immediately
         return NextResponse.json({ ok: true });
@@ -188,20 +326,25 @@ export async function POST(request: NextRequest) {
         slackEventsLogger.debug('Received message event', {
           channel: event.channel,
           user: event.user,
+          clientIp,
         });
         return NextResponse.json({ ok: true });
       }
 
-      slackEventsLogger.debug('Unhandled event type', { type: event.type });
+      slackEventsLogger.debug('Unhandled event type', { type: event.type, clientIp });
     }
 
     return NextResponse.json({ ok: true });
   } catch (error) {
-    slackEventsLogger.error('Error processing Slack event', {
+    slackEventsLogger.error('Critical error processing Slack event', {
       error: error instanceof Error ? error.message : 'Unknown error',
+      stack: error instanceof Error ? error.stack : undefined,
+      clientIp,
+      bodyLength: requestBody.length,
+      bodyPreview: requestBody.substring(0, 200),
     });
 
-    // Return 200 to prevent Slack from retrying
+    // Return 200 to prevent Slack from retrying (prevents infinite retry loops)
     return NextResponse.json({ ok: false, error: 'Internal error' }, { status: 200 });
   }
 }
