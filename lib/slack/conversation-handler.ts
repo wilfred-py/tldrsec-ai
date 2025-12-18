@@ -19,6 +19,7 @@ import {
   formatErrorMessage,
 } from './message-formatter';
 import { generateDailyReport } from './daily-report-handler';
+import { requireAuthorization } from './user-authorization';
 
 const conversationLogger = logger.child('slack-conversation');
 
@@ -237,23 +238,63 @@ export async function handleConversation(mention: ParsedMention): Promise<void> 
         break;
 
       case 'status':
+        const statusAuth = requireAuthorization(mention.userId, 'view_pipeline_status');
+        if (!statusAuth.authorized) {
+          response = { 
+            text: statusAuth.errorMessage!,
+            blocks: [{ type: 'section', text: { type: 'mrkdwn', text: statusAuth.errorMessage! } }]
+          };
+          break;
+        }
         response = await handleStatusIntent();
         break;
 
       case 'daily_report':
+        const dailyAuth = requireAuthorization(mention.userId, 'view_daily_reports');
+        if (!dailyAuth.authorized) {
+          response = { 
+            text: dailyAuth.errorMessage!,
+            blocks: [{ type: 'section', text: { type: 'mrkdwn', text: dailyAuth.errorMessage! } }]
+          };
+          break;
+        }
         response = await handleDailyReportIntent(parameters);
         break;
 
       case 'failures':
+        const failuresAuth = requireAuthorization(mention.userId, 'view_failure_details');
+        if (!failuresAuth.authorized) {
+          response = { 
+            text: failuresAuth.errorMessage!,
+            blocks: [{ type: 'section', text: { type: 'mrkdwn', text: failuresAuth.errorMessage! } }]
+          };
+          break;
+        }
         response = await handleFailuresIntent();
         break;
 
       case 'costs':
+        const costsAuth = requireAuthorization(mention.userId, 'view_cost_data');
+        if (!costsAuth.authorized) {
+          response = { 
+            text: costsAuth.errorMessage!,
+            blocks: [{ type: 'section', text: { type: 'mrkdwn', text: costsAuth.errorMessage! } }]
+          };
+          break;
+        }
         response = await handleCostsIntent();
         break;
 
       case 'weekly_report':
       case 'trends':
+        const weeklyAuth = requireAuthorization(mention.userId, 'view_daily_reports');
+        if (!weeklyAuth.authorized) {
+          response = { 
+            text: weeklyAuth.errorMessage!,
+            blocks: [{ type: 'section', text: { type: 'mrkdwn', text: weeklyAuth.errorMessage! } }]
+          };
+          break;
+        }
         response = await handleWeeklyIntent();
         break;
 

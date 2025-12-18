@@ -64,17 +64,39 @@ export function EmailHeader({
         {/* Headline row */}
         <tr>
           <td style={{ padding: '20px 15px 16px' }}>
+            {/* Filing type badge */}
+            <div style={{
+              display: 'inline-block',
+              padding: '3px 8px',
+              backgroundColor: '#F3F4F6',
+              borderRadius: '4px',
+              fontSize: '11px',
+              fontWeight: 600,
+              color: EmailColors.text.meta,
+              textTransform: 'uppercase' as const,
+              letterSpacing: '0.5px',
+              marginBottom: '8px',
+            }}>
+              {filingType} {filerName ? '| Insider' : ''}
+            </div>
+
             <h1 style={{
-              margin: '0 0 8px 0',
-              fontSize: '20px',
+              margin: '0 0 4px 0',
+              fontSize: '22px',
               fontWeight: 700,
               color: EmailColors.text.headline,
               lineHeight: '1.3',
             }}>
-              {ticker} {filingType}
-              {filerName && ` | ${filerName}`}
-              {filerRole && <span style={{ fontWeight: 400, color: EmailColors.text.meta }}> ({filerRole})</span>}
+              {ticker}: {filerName || companyName}
+              {filerName && filerRole && (
+                <span style={{
+                  fontWeight: 400,
+                  fontSize: '16px',
+                  color: EmailColors.text.meta
+                }}>, {filerRole}</span>
+              )}
             </h1>
+
             <p style={{
               margin: '0',
               fontSize: '14px',

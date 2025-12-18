@@ -14,6 +14,7 @@ import type {
   TriggeredAlert,
   WebhookServiceConfig,
   AlertDeduplicationEntry,
+  JobProcessingResult,
 } from './types';
 import {
   formatCronCompletionMessage,
@@ -21,6 +22,7 @@ import {
   formatDailySummaryMessage,
   formatStatusMessage,
   formatErrorMessage,
+  formatJobProcessingMessage,
 } from './message-formatter';
 import type { DailySummaryMetrics } from './types';
 
@@ -353,6 +355,54 @@ class SlackWebhookService {
     }
 
     return this.postToWebhook(payload, this.config.webhookUrl);
+  }
+
+  /**
+   * Post job processing results to Slack
+   * Called after process-filing-queue completes a batch
+   */
+  async postJobProcessingResults(
+    result: JobProcessingResult
+  ): Promise<void> {
+    if (!this.isConfigured() || !this.config) {
+      slackLogger.debug('Slack not configured, skipping job processing post');
+      return;
+    }
+
+    // Skip notification if no jobs were processed
+    if (result.jobs.total === 0) {
+      slackLogger.debug('No jobs processed, skipping Slack notification');
+      return;
+    }
+
+    try {
+      const payload = formatJobProcessingMessage(result);
+
+      // Double-check payload has content (formatter returns empty for 0 jobs)
+      if (!payload.text && (!payload.blocks || payload.blocks.length === 0)) {
+        slackLogger.debug('Empty payload, skipping Slack notification');
+        return;
+      }
+
+      const response = await this.postToWebhook(payload, this.config.webhookUrl);
+
+      if (response.ok) {
+        slackLogger.debug('Posted job processing results to Slack', {
+          executionId: result.executionId,
+          totalJobs: result.jobs.total,
+          successful: result.jobs.processed.filter(j => j.success).length,
+          failed: result.jobs.processed.filter(j => !j.success).length,
+        });
+      } else {
+        slackLogger.warn('Failed to post job processing results to Slack', {
+          error: response.error,
+        });
+      }
+    } catch (error) {
+      slackLogger.error('Error posting job processing results to Slack', {
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
+    }
   }
 }
 
