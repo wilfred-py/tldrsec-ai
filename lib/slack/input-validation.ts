@@ -16,17 +16,7 @@ const validationLogger = logger.child('slack-validation');
 interface ValidationResult {
   valid: boolean;
   errors: string[];
-  sanitized?: any;
-}
-
-interface SlackUserValidation {
-  id: string;
-  pattern: RegExp;
-}
-
-interface SlackChannelValidation {
-  id: string;
-  pattern: RegExp;
+  sanitized?: Record<string, unknown>;
 }
 
 // Slack ID patterns for validation
@@ -161,7 +151,7 @@ export function validateMessageText(text: string): ValidationResult {
 /**
  * Validate URL verification payload
  */
-export function validateUrlVerificationPayload(payload: any): ValidationResult {
+export function validateUrlVerificationPayload(payload: Record<string, unknown>): ValidationResult {
   const errors: string[] = [];
   
   if (!payload || typeof payload !== 'object') {
@@ -197,7 +187,7 @@ export function validateUrlVerificationPayload(payload: any): ValidationResult {
 /**
  * Validate app mention event
  */
-export function validateAppMentionEvent(event: any): ValidationResult {
+export function validateAppMentionEvent(event: Record<string, unknown>): ValidationResult {
   const errors: string[] = [];
   
   if (!event || typeof event !== 'object') {
@@ -252,7 +242,7 @@ export function validateAppMentionEvent(event: any): ValidationResult {
 /**
  * Validate event callback payload
  */
-export function validateEventCallbackPayload(payload: any): ValidationResult {
+export function validateEventCallbackPayload(payload: Record<string, unknown>): ValidationResult {
   const errors: string[] = [];
   
   if (!payload || typeof payload !== 'object') {
@@ -308,7 +298,7 @@ export function validateEventCallbackPayload(payload: any): ValidationResult {
 /**
  * Main validation function for any Slack payload
  */
-export function validateSlackPayload(payload: any): ValidationResult {
+export function validateSlackPayload(payload: Record<string, unknown>): ValidationResult {
   try {
     if (!payload || typeof payload !== 'object') {
       return {
@@ -382,7 +372,7 @@ export function detectSuspiciousPatterns(text: string): string[] {
 /**
  * Rate limit validation based on payload complexity
  */
-export function validatePayloadComplexity(payload: any): ValidationResult {
+export function validatePayloadComplexity(payload: Record<string, unknown>): ValidationResult {
   const errors: string[] = [];
   
   const jsonString = JSON.stringify(payload);

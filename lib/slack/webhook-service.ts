@@ -41,6 +41,26 @@ const DEFAULT_CONFIG: Omit<WebhookServiceConfig, 'webhookUrl'> = {
 // Alert deduplication window (15 minutes)
 const ALERT_DEDUP_WINDOW_MS = 15 * 60 * 1000;
 
+// Hourly summary batching window (60 minutes)
+const HOURLY_BATCH_WINDOW_MS = 60 * 60 * 1000;
+
+// =============================================================================
+// Hourly Batch Accumulator Types
+// =============================================================================
+
+interface HourlyBatchAccumulator {
+  startTime: Date;
+  runsCount: number;
+  totalDuration: number;
+  filingsDiscovered: number;
+  fetchJobsQueued: number;
+  summarizeJobsRun: number;
+  summariesGenerated: number;
+  emailsSent: number;
+  errors: number;
+  lastHealth: QueueHealthStatus | null;
+}
+
 // =============================================================================
 // Webhook Service Class
 // =============================================================================
@@ -49,6 +69,7 @@ class SlackWebhookService {
   private config: WebhookServiceConfig | null = null;
   private lastMessageTime = 0;
   private alertDeduplication: Map<string, AlertDeduplicationEntry> = new Map();
+  private hourlyBatch: HourlyBatchAccumulator | null = null;
 
   /**
    * Initialize the service with configuration
@@ -185,11 +206,222 @@ class SlackWebhookService {
   }
 
   // ===========================================================================
+  // Hourly Batching Methods
+  // ===========================================================================
+
+  /**
+   * Initialize or get current hourly batch accumulator
+   */
+  private getOrCreateHourlyBatch(): HourlyBatchAccumulator {
+    const now = new Date();
+
+    // If no batch exists or current batch is older than 1 hour, create new one
+    if (!this.hourlyBatch ||
+        now.getTime() - this.hourlyBatch.startTime.getTime() >= HOURLY_BATCH_WINDOW_MS) {
+      this.hourlyBatch = {
+        startTime: now,
+        runsCount: 0,
+        totalDuration: 0,
+        filingsDiscovered: 0,
+        fetchJobsQueued: 0,
+        summarizeJobsRun: 0,
+        summariesGenerated: 0,
+        emailsSent: 0,
+        errors: 0,
+        lastHealth: null,
+      };
+    }
+
+    return this.hourlyBatch;
+  }
+
+  /**
+   * Check if the hourly batch window has elapsed and we should post summary
+   */
+  private shouldPostHourlySummary(): boolean {
+    if (!this.hourlyBatch) return false;
+    const now = Date.now();
+    return now - this.hourlyBatch.startTime.getTime() >= HOURLY_BATCH_WINDOW_MS;
+  }
+
+  /**
+   * Accumulate cron results into the hourly batch
+   */
+  private accumulateCronResults(
+    result: CronExecutionResult,
+    health: QueueHealthStatus
+  ): void {
+    const batch = this.getOrCreateHourlyBatch();
+
+    batch.runsCount++;
+    batch.totalDuration += result.duration;
+    batch.filingsDiscovered += result.results.filingMonitoring.newFilingsFound;
+    batch.errors += result.results.filingMonitoring.errors;
+    batch.lastHealth = health;
+
+    // Note: fetchJobsQueued, summarizeJobsRun, summariesGenerated, emailsSent
+    // are tracked via postJobProcessingResults, not here
+  }
+
+  /**
+   * Accumulate job processing results into the hourly batch
+   */
+  private accumulateJobResults(result: JobProcessingResult): void {
+    const batch = this.getOrCreateHourlyBatch();
+
+    // Extract metrics from job results
+    if (result.pipeline) {
+      batch.fetchJobsQueued += result.pipeline.fetch.summarizeJobsQueued;
+      batch.summarizeJobsRun += result.pipeline.summarize.jobsRun;
+      batch.summariesGenerated += result.pipeline.summarize.summariesGenerated;
+      batch.emailsSent += result.pipeline.summarize.emailsSent;
+    }
+  }
+
+  /**
+   * Check if cron results have meaningful activity worth immediate notification
+   */
+  private hasMeaningfulActivity(result: CronExecutionResult): boolean {
+    // Meaningful = new filings found OR errors occurred
+    return result.results.filingMonitoring.newFilingsFound > 0 ||
+           result.results.filingMonitoring.errors > 0 ||
+           !result.success;
+  }
+
+  /**
+   * Check if job processing results have meaningful activity
+   */
+  private hasMeaningfulJobActivity(result: JobProcessingResult): boolean {
+    // Meaningful = summaries generated OR emails sent OR errors
+    if (!result.pipeline) {
+      // No pipeline metrics - check if any jobs failed
+      return result.jobs.processed.some(j => !j.success);
+    }
+
+    return result.pipeline.summarize.summariesGenerated > 0 ||
+           result.pipeline.summarize.emailsSent > 0 ||
+           result.jobs.processed.some(j => !j.success);
+  }
+
+  /**
+   * Format and post hourly summary message
+   */
+  private async postHourlySummaryMessage(): Promise<void> {
+    if (!this.hourlyBatch || !this.config) return;
+
+    const batch = this.hourlyBatch;
+    const avgDuration = batch.runsCount > 0
+      ? Math.round(batch.totalDuration / batch.runsCount)
+      : 0;
+
+    // Determine status emoji based on activity
+    let statusEmoji = ':white_check_mark:';
+    let statusText = 'All Quiet';
+
+    if (batch.errors > 0) {
+      statusEmoji = ':warning:';
+      statusText = `${batch.errors} errors`;
+    } else if (batch.filingsDiscovered > 0 || batch.emailsSent > 0) {
+      statusEmoji = ':chart_with_upwards_trend:';
+      statusText = 'Activity';
+    }
+
+    const endTime = new Date();
+    const startTimeStr = batch.startTime.toLocaleTimeString('en-US', {
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false
+    });
+    const endTimeStr = endTime.toLocaleTimeString('en-US', {
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false
+    });
+
+    const payload: SlackWebhookPayload = {
+      text: `Hourly Summary: ${statusText}`,
+      blocks: [
+        {
+          type: 'section',
+          text: {
+            type: 'mrkdwn',
+            text: `${statusEmoji} *Hourly Pipeline Summary* (${startTimeStr} - ${endTimeStr} UTC)`
+          }
+        },
+        {
+          type: 'section',
+          fields: [
+            {
+              type: 'mrkdwn',
+              text: `*Cron Runs:* ${batch.runsCount}`
+            },
+            {
+              type: 'mrkdwn',
+              text: `*Avg Duration:* ${avgDuration}ms`
+            },
+            {
+              type: 'mrkdwn',
+              text: `*Filings Found:* ${batch.filingsDiscovered}`
+            },
+            {
+              type: 'mrkdwn',
+              text: `*Summaries:* ${batch.summariesGenerated}`
+            },
+            {
+              type: 'mrkdwn',
+              text: `*Emails Sent:* ${batch.emailsSent}`
+            },
+            {
+              type: 'mrkdwn',
+              text: `*Errors:* ${batch.errors}`
+            }
+          ]
+        }
+      ]
+    };
+
+    // Add queue health context if available
+    if (batch.lastHealth) {
+      const healthEmoji = batch.lastHealth.healthy ? ':green_circle:' : ':red_circle:';
+      payload.blocks?.push({
+        type: 'context',
+        elements: [
+          {
+            type: 'mrkdwn',
+            text: `${healthEmoji} Queue: ${batch.lastHealth.metrics.pendingJobs} pending | ${batch.lastHealth.metrics.failedLast24h} failed (24h)`
+          }
+        ]
+      });
+    }
+
+    try {
+      const response = await this.postToWebhook(payload, this.config.webhookUrl);
+      if (response.ok) {
+        slackLogger.info('Posted hourly summary to Slack', {
+          runs: batch.runsCount,
+          filings: batch.filingsDiscovered,
+          emails: batch.emailsSent,
+        });
+      }
+    } catch (error) {
+      slackLogger.error('Error posting hourly summary to Slack', {
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
+    }
+
+    // Reset the batch for next hour
+    this.hourlyBatch = null;
+  }
+
+  // ===========================================================================
   // Public Methods
   // ===========================================================================
 
   /**
    * Post cron execution results to Slack
+   *
+   * Uses hourly batching for quiet runs (no new filings, no errors).
+   * Posts immediately if there's meaningful activity or errors.
    */
   async postCronResults(
     result: CronExecutionResult,
@@ -200,12 +432,31 @@ class SlackWebhookService {
       return;
     }
 
+    // Always accumulate results for hourly summary
+    this.accumulateCronResults(result, health);
+
+    // Check if hourly window has elapsed - post summary if so
+    if (this.shouldPostHourlySummary()) {
+      await this.postHourlySummaryMessage();
+    }
+
+    // Only post immediate notification if there's meaningful activity
+    if (!this.hasMeaningfulActivity(result)) {
+      slackLogger.debug('No meaningful activity, batching for hourly summary', {
+        executionId: result.executionId,
+        newFilings: result.results.filingMonitoring.newFilingsFound,
+        errors: result.results.filingMonitoring.errors,
+      });
+      return;
+    }
+
+    // Post immediately for meaningful activity
     try {
       const payload = formatCronCompletionMessage(result, health);
       const response = await this.postToWebhook(payload, this.config.webhookUrl);
 
       if (response.ok) {
-        slackLogger.debug('Posted cron results to Slack', {
+        slackLogger.debug('Posted cron results to Slack (immediate)', {
           executionId: result.executionId,
           newFilings: result.results.filingMonitoring.newFilingsFound,
         });
@@ -360,6 +611,9 @@ class SlackWebhookService {
   /**
    * Post job processing results to Slack
    * Called after process-filing-queue completes a batch
+   *
+   * Uses hourly batching for quiet runs (no summaries, no emails, no errors).
+   * Posts immediately if there's meaningful activity.
    */
   async postJobProcessingResults(
     result: JobProcessingResult
@@ -372,6 +626,18 @@ class SlackWebhookService {
     // Skip notification if no jobs were processed
     if (result.jobs.total === 0) {
       slackLogger.debug('No jobs processed, skipping Slack notification');
+      return;
+    }
+
+    // Always accumulate results for hourly summary
+    this.accumulateJobResults(result);
+
+    // Only post immediate notification if there's meaningful activity
+    if (!this.hasMeaningfulJobActivity(result)) {
+      slackLogger.debug('No meaningful job activity, batching for hourly summary', {
+        executionId: result.executionId,
+        totalJobs: result.jobs.total,
+      });
       return;
     }
 
