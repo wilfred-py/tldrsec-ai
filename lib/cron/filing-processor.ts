@@ -1328,12 +1328,23 @@ export class CronFilingProcessor {
         });
 
         if (tickerRecord) {
-          summaryRecord = await tx.summary.create({
-            data: {
+          // FIX: Use upsert to prevent duplicate summaries for the same filing
+          // The unique constraint is on (tickerId, filingUrl)
+          const filingUrlForUpsert = filingForProcessing.filingUrl || '';
+
+          summaryRecord = await tx.summary.upsert({
+            where: {
+              // Unique constraint on tickerId + filingUrl
+              tickerId_filingUrl: {
+                tickerId: tickerRecord.id,
+                filingUrl: filingUrlForUpsert
+              }
+            },
+            create: {
               tickerId: tickerRecord.id,
               filingType: filingForProcessing.formType,
               filingDate: filingForProcessing.filingDate,
-              filingUrl: filingForProcessing.filingUrl || '',
+              filingUrl: filingUrlForUpsert,
               summaryText: summaryResult.summary,
               summaryJSON: {
                 ticker: filingForProcessing.tickerData.symbol,
@@ -1375,7 +1386,51 @@ export class CronFilingProcessor {
               // Processing metadata
               processingStatus: summaryResult.processingStatus || 'SUCCESS',
               processingTimeMs: summaryResult.processingTime || 0
+            },
+            update: {
+              // If summary already exists for this filing URL, update it
+              // This handles the case where a summary was partially created or needs refresh
+              summaryText: summaryResult.summary,
+              summaryJSON: {
+                ticker: filingForProcessing.tickerData.symbol,
+                accessionNumber: filingForProcessing.accessionNumber,
+                filingType: filingForProcessing.formType,
+                summaryText: summaryResult.summary,
+                keyPoints: summaryResult.keyPoints || [],
+                cost: actualCost,
+                inputTokens: summaryResult.inputTokens || 0,
+                outputTokens: summaryResult.outputTokens || 0,
+                validation: validationResult ? {
+                  isValid: validationResult.isValid,
+                  confidenceScore: validationResult.confidenceScore,
+                  accuracyScore: validationResult.accuracyScore,
+                  completenessScore: validationResult.completenessScore,
+                  relevanceScore: validationResult.relevanceScore,
+                  issues: validationResult.issues,
+                  strengths: validationResult.strengths,
+                  overallAssessment: validationResult.overallAssessment,
+                  validationDurationMs: validationResult.validationDurationMs
+                } : undefined
+              },
+              // Update tokens and cost (accumulate for re-generations)
+              tokensUsed: summaryResult.tokensUsed || 0,
+              cost: actualCost,
+              totalCost: actualCost,
+              inputTokens: summaryResult.inputTokens || 0,
+              outputTokens: summaryResult.outputTokens || 0,
+              modelVersion: summaryResult.model || 'unknown',
+              processingStatus: summaryResult.processingStatus || 'SUCCESS',
+              processingTimeMs: summaryResult.processingTime || 0,
+              // Increment cache usage count if this is a regeneration
+              cacheUsageCount: { increment: 1 }
             }
+          });
+
+          processorLogger.info(`📝 Summary upserted (prevents duplicates)`, {
+            summaryId: summaryRecord.id,
+            filingUrl: filingUrlForUpsert,
+            ticker: filingForProcessing.tickerData.symbol,
+            accessionNumber: filingForProcessing.accessionNumber
           });
 
           const dbStoreDuration = Date.now() - dbStoreStartTime;

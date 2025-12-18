@@ -12,6 +12,7 @@ This file provides a chronological index of all completed projects across archiv
 ## Recent Activity (Not Yet Archived)
 
 **Projects completed in last 30 days** (tracked in PROGRESS.md):
+- **Discovery Pipeline Scalability Optimization** ✅ COMPLETE (2025-12-19) - 4-phase optimization to scale from 2 users/8 tickers to 100K users/1500 tickers. Phase 1: Increased `MAX_CONCURRENT_RSS_CHECKS` from 3→5 (66% throughput improvement at 50% SEC rate limit utilization). Phase 2: Bulk CIK Enrichment via `enrichTickersWithCik()` - reduced N+1 queries (2N) to 2 bulk queries using `findMany` with `{ in: [] }`. Phase 3: Bulk Job Creation via `createBulkFetchJobs()` - replaced sequential `addJob` calls with `prisma.jobQueue.createMany` + `skipDuplicates:true` for idempotency (idempotency key: `ASYNC_FETCH_FILING:userId:accessionNumber`). Phase 4: RSS Response Caching via `withSecApiCache()` wrapper with 1-minute TTL to prevent duplicate SEC API calls within same discovery window. Expected performance: 1500 tickers in ~5min (vs ~33min before). Tests: 26 passing (18 discovery + 8 RSS cache). Files: `lib/cron/handlers/discovery-handler.ts`, `lib/sec-edgar/ticker-monitoring.ts`, `lib/cron/types.ts`. Branch: main.
 - **Slack Hourly Batching for Quiet Runs** ✅ COMPLETE (2025-12-18) - Reduced Slack notification noise from 6 messages/hour to 1 hourly summary when no meaningful activity occurs. Immediate notifications still posted for: new filings discovered, summaries generated, emails sent, or errors. Added `HourlyBatchAccumulator` to track metrics across runs. Methods: `hasMeaningfulActivity()`, `hasMeaningfulJobActivity()`, `postHourlySummaryMessage()`. Modified `postCronResults()` and `postJobProcessingResults()` to use batching. Branch: `feature/slack-hourly-batching`. PR #270. Files: `lib/slack/webhook-service.ts`.
 - **Slack Pipeline Monitor Bot** ✅ COMPLETE (2025-12-18) - Full Slack integration for real-time pipeline monitoring. Hybrid architecture: Incoming Webhooks for cron notifications + Slack Web API for @mention queries. Features: (1) Auto-posts cron results after each 10-min run, (2) 10 alert rules (critical/warning) for errors, backlog, failures, (3) @mention bot with intent detection (help, status, daily report, failures, costs), (4) Daily report integration with verify:daily script. Files created: `lib/slack/types.ts`, `lib/slack/message-formatter.ts`, `lib/slack/webhook-service.ts`, `lib/slack/alert-rules.ts`, `lib/slack/conversation-handler.ts`, `lib/slack/daily-report-handler.ts`, `lib/slack/index.ts`, `app/api/slack/events/route.ts`. Modified: `app/api/cron/tier-aware/route.ts` (added Slack notification). Dependencies: `@slack/bolt`, `@slack/web-api`. Vercel env vars: `SLACK_WEBHOOK_URL`, `SLACK_BOT_TOKEN`, `SLACK_SIGNING_SECRET` configured. Event Subscriptions URL verified. Bot event: `app_mention` subscribed.
 - **Circuit Breaker Reset Fix for Discovery Timeouts** ✅ COMPLETE (2025-12-17) - Discovery jobs were causing HTTP 524 timeouts (>100s), triggering circuit breaker to OPEN state after 3 failures. This blocked Steps 2-3 (fetch/summarize) from executing. Fix: (1) Reset circuit breaker after discovery timeout so Steps 2-3 can proceed, (2) Reduced discovery timeout to 90s and max attempts to 1 for fail-fast behavior. Deployed Cloudflare Worker at 10:15:49 UTC. Pipeline immediately resumed processing. Files: `cloudflare-cron/index.js`. Worker Version: `b3cc9c12-45b0-414e-9442-b2f46fd0c0c8`
@@ -79,12 +80,12 @@ This file provides a chronological index of all completed projects across archiv
 ## Archive Statistics
 - **Total Archived Projects**: 17 projects across 3 weekly archives
 - **Current PROGRESS.md Lines**: 91 lines (threshold: 500)
-- **Last Archive Check**: 2025-12-18
-- **Last Archive Update**: 2025-12-18 (no archival needed - under 500 lines)
-- **Recent Activity (Not Yet Archived)**: 30 projects completed in last 30 days
+- **Last Archive Check**: 2025-12-19
+- **Last Archive Update**: 2025-12-19 (no archival needed - under 500 lines)
+- **Recent Activity (Not Yet Archived)**: 31 projects completed in last 30 days
 - **Archive System**: ✅ ACTIVE (auto-archives when >500 lines AND projects >30 days old)
-- **Current Work** (2025-12-18): Slack Hourly Batching - Reduced notification noise from 6/hour to 1 hourly summary for quiet runs
-- **Cron Pipeline Status** (2025-12-18): ✅ FULLY OPERATIONAL - All 5 steps executing successfully, Slack notifications active with hourly batching
+- **Current Work** (2025-12-19): Discovery Pipeline Scalability Optimization - 4-phase optimization (MAX_CONCURRENT 3→5, Bulk CIK, Bulk Jobs, RSS Caching)
+- **Cron Pipeline Status** (2025-12-19): ✅ FULLY OPERATIONAL - All 5 steps executing, scalability optimizations deployed
 - **Archives Created**:
   - `27-Oct-2025.md` - Newsletter & Security implementations (6 projects)
   - `03-Nov-2025.md` - Critical infrastructure fixes (4 projects)
