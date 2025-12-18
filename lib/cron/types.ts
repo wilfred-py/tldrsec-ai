@@ -177,8 +177,9 @@ export const DAILY_COST_LIMITS = {
   HOBBY: Number(process.env.HOBBY_COST_LIMIT) || 2.00  // $2/day per user - realistic for 3 tickers with AI processing
 } as const;
 
-// Security constants
-export const MAX_CONCURRENT_RSS_CHECKS = 3;
+// Security constants - optimized for 50% SEC rate limit utilization
+// SEC limit: 10 req/s, using 5 concurrent + 1s delay = ~2.5 req/s effective
+export const MAX_CONCURRENT_RSS_CHECKS = 5;
 export const MAX_CONCURRENT_USER_PROCESSING = 3;
 // IMPORTANT: Must be less than Vercel maxDuration (300s) to allow error handling before function kills
 // Updated 2025-11-28: Increased to match OpenRouter timeout (270s) for AI summarization
