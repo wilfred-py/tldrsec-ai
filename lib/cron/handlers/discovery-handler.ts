@@ -14,7 +14,6 @@
  */
 
 import { logger } from '../../logging';
-import { JobQueueService } from '../../job-queue';
 import type { JobPayload } from '../../job-queue';
 import { CronSecFilingService } from '../sec-filing-service';
 
@@ -34,6 +33,178 @@ export interface DiscoveryResult {
   usersPerFiling: number;
   duration: number;
   error?: string;
+}
+
+/**
+ * Enriched ticker data with CIK and company name
+ */
+export interface EnrichedTicker {
+  symbol: string;
+  companyName: string;
+  cik: string | null;
+}
+
+/**
+ * Bulk enrich ticker symbols with CIK and company name data
+ * Reduces N+1 queries (2N) to 2 bulk queries
+ *
+ * @param tickerSymbols - Array of ticker symbols to enrich
+ * @returns Array of enriched ticker data with CIK and company name
+ */
+export async function enrichTickersWithCik(
+  tickerSymbols: string[]
+): Promise<EnrichedTicker[]> {
+  if (tickerSymbols.length === 0) {
+    return [];
+  }
+
+  const { getPrismaClient } = await import('../../db/prisma');
+  const prisma = getPrismaClient();
+
+  // Bulk query 1: Get all CIK mappings in one query
+  const cikMappings = await prisma.cikMapping.findMany({
+    where: { ticker: { in: tickerSymbols } }
+  });
+  const cikMap = new Map(cikMappings.map(c => [c.ticker, c.cik]));
+
+  // Bulk query 2: Get all company names in one query
+  const tickerRecords = await prisma.ticker.findMany({
+    where: { symbol: { in: tickerSymbols } },
+    select: { symbol: true, companyName: true },
+    distinct: ['symbol']
+  });
+  const companyNameMap = new Map(
+    tickerRecords.map(t => [t.symbol, t.companyName])
+  );
+
+  // Build enriched result
+  return tickerSymbols.map(symbol => ({
+    symbol,
+    companyName: companyNameMap.get(symbol) || symbol,
+    cik: cikMap.get(symbol) || null
+  }));
+}
+
+/**
+ * User data for bulk job creation
+ */
+export interface UserForFiling {
+  id: string;
+  email: string;
+  subscriptionTier: string;
+  tickers: Array<{ id: string; companyName: string | null }>;
+}
+
+/**
+ * Filing data for bulk job creation
+ */
+export interface FilingForBulkJob {
+  ticker: string;
+  formType: string;
+  filingDate: string;
+  url: string;
+  accessionNumber: string;
+  id: string;
+  title?: string;
+}
+
+/**
+ * Execution context for bulk job creation
+ */
+export interface BulkJobExecutionContext {
+  executionId: string;
+  cronTriggerTime: string;
+}
+
+/**
+ * Get priority based on subscription tier
+ */
+function getPriorityForTier(tier: string): number {
+  switch (tier) {
+    case 'ENTERPRISE':
+      return 8;
+    case 'PROFESSIONAL':
+    case 'INSTITUTION':
+      return 7;
+    default:
+      return 5;
+  }
+}
+
+/**
+ * Bulk create fetch jobs for all users tracking a filing
+ * Replaces sequential addJob calls with efficient createMany operation
+ *
+ * @param usersForFiling - Users who track this filing's ticker
+ * @param filing - The SEC filing discovered
+ * @param tickerInfo - Enriched ticker data with CIK
+ * @param executionContext - Execution context for tracing
+ * @returns Number of jobs created
+ */
+export async function createBulkFetchJobs(
+  usersForFiling: UserForFiling[],
+  filing: FilingForBulkJob,
+  tickerInfo: EnrichedTicker,
+  executionContext: BulkJobExecutionContext
+): Promise<number> {
+  if (usersForFiling.length === 0) {
+    return 0;
+  }
+
+  const { getPrismaClient } = await import('../../db/prisma');
+  const prisma = getPrismaClient();
+
+  // Build job records for all users
+  const jobRecords = usersForFiling
+    .filter(user => user.tickers.length > 0) // Skip users without ticker records
+    .map(user => {
+      const userTicker = user.tickers[0];
+      return {
+        jobType: 'ASYNC_FETCH_FILING',
+        status: 'PENDING' as const,
+        priority: getPriorityForTier(user.subscriptionTier),
+        maxAttempts: 3,
+        attemptCount: 0,
+        idempotencyKey: `ASYNC_FETCH_FILING:${user.id}:${filing.accessionNumber}`,
+        payload: {
+          userId: user.id,
+          userEmail: user.email,
+          userTier: user.subscriptionTier || 'FREE',
+          ticker: {
+            id: userTicker.id,
+            symbol: filing.ticker,
+            companyName: userTicker.companyName || tickerInfo.companyName,
+            cik: tickerInfo.cik
+          },
+          filing: {
+            filingId: filing.id,
+            formType: filing.formType,
+            filingDate: filing.filingDate,
+            filingUrl: filing.url,
+            accessionNumber: filing.accessionNumber
+          },
+          executionContext: {
+            executionId: executionContext.executionId,
+            cronTriggerTime: executionContext.cronTriggerTime,
+            sourceContext: 'discovery-bulk',
+            discoveryPhaseCompletedAt: new Date().toISOString(),
+            totalUsersForTicker: usersForFiling.length
+          }
+        }
+      };
+    });
+
+  if (jobRecords.length === 0) {
+    return 0;
+  }
+
+  // Bulk insert with skipDuplicates for idempotency
+  const result = await prisma.jobQueue.createMany({
+    data: jobRecords,
+    skipDuplicates: true
+  });
+
+  return result.count;
 }
 
 /**
@@ -94,24 +265,15 @@ export async function handleDiscovery(
       };
     }
 
-    // STEP 2: Enrich tickers with CIK from CikMapping table
-    const tickersWithCik = await Promise.all(
-      tickerSymbols.map(async (symbol) => {
-        const cikMapping = await prisma.cikMapping.findFirst({
-          where: { ticker: symbol }
-        });
-        // Get company name from any user's ticker record
-        const tickerRecord = await prisma.ticker.findFirst({
-          where: { symbol },
-          select: { companyName: true }
-        });
-        return {
-          symbol,
-          companyName: tickerRecord?.companyName || symbol,
-          cik: cikMapping?.cik || null
-        };
-      })
-    );
+    // STEP 2: Bulk enrich tickers with CIK from CikMapping table
+    // Optimized: 2 bulk queries instead of 2N individual queries
+    const tickersWithCik = await enrichTickersWithCik(tickerSymbols);
+
+    discoveryLogger.debug(`[${executionId}] Enriched tickers with CIK`, {
+      enrichedCount: tickersWithCik.length,
+      tickersWithCik: tickersWithCik.filter(t => t.cik).length,
+      tickersWithoutCik: tickersWithCik.filter(t => !t.cik).length
+    });
 
     // STEP 3: Check RSS feeds for new filings (ONCE per ticker, not per user)
     // We pass null for userId since we're doing ticker-centric discovery
@@ -129,7 +291,7 @@ export async function handleDiscovery(
     let totalUsersProcessed = 0;
     const usersPerFilingCounts: number[] = [];
 
-    // STEP 4: For each filing, find ALL users tracking that ticker and create jobs
+    // STEP 4: For each filing, find ALL users tracking that ticker and create jobs in bulk
     for (const filing of allNewFilings) {
       try {
         // Find ALL users who track this ticker
@@ -159,67 +321,41 @@ export async function handleDiscovery(
 
         usersPerFilingCounts.push(usersForTicker.length);
 
-        // Create ASYNC_FETCH_FILING job for EACH user tracking this ticker
-        for (const user of usersForTicker) {
-          try {
-            // Get this user's specific ticker record for linking
-            const userTicker = user.tickers[0];
-            if (!userTicker) {
-              discoveryLogger.warn(`[${executionId}] User has no ticker record for symbol`, {
-                userId: user.id,
-                symbol: filing.ticker
-              });
-              continue;
-            }
+        // Get ticker info for this filing
+        const tickerInfo = tickersWithCik.find(t => t.symbol === filing.ticker) || {
+          symbol: filing.ticker,
+          companyName: filing.ticker,
+          cik: null
+        };
 
-            const tickerInfo = tickersWithCik.find(t => t.symbol === filing.ticker);
+        // Bulk create jobs for all users tracking this ticker
+        const jobsCreated = await createBulkFetchJobs(
+          usersForTicker.map(u => ({
+            id: u.id,
+            email: u.email || '',
+            subscriptionTier: u.subscriptionTier || 'FREE',
+            tickers: u.tickers
+          })),
+          {
+            ticker: filing.ticker,
+            formType: filing.formType,
+            filingDate: filing.filingDate,
+            url: filing.url,
+            accessionNumber: filing.accessionNumber,
+            id: filing.id
+          },
+          tickerInfo,
+          { executionId, cronTriggerTime }
+        );
 
-            const fetchJob = await JobQueueService.addJob({
-              jobType: 'ASYNC_FETCH_FILING',
-              payload: {
-                userId: user.id,
-                userEmail: user.email,
-                userTier: user.subscriptionTier || 'FREE',
-                ticker: {
-                  id: userTicker.id,
-                  symbol: filing.ticker,
-                  companyName: userTicker.companyName || tickerInfo?.companyName,
-                  cik: tickerInfo?.cik
-                },
-                filing: {
-                  filingId: filing.id,
-                  formType: filing.formType,
-                  filingDate: filing.filingDate,
-                  filingUrl: filing.url,
-                  accessionNumber: filing.accessionNumber
-                },
-                executionContext: {
-                  executionId,
-                  cronTriggerTime,
-                  sourceContext: 'discovery-multi-user',
-                  discoveryPhaseCompletedAt: new Date().toISOString(),
-                  totalUsersForTicker: usersForTicker.length
-                }
-              },
-              priority: user.subscriptionTier === 'ENTERPRISE' ? 8 :
-                       user.subscriptionTier === 'PROFESSIONAL' ? 7 :
-                       user.subscriptionTier === 'INSTITUTION' ? 7 : 5,
-              maxAttempts: 3
-            });
+        totalFetchJobsQueued += jobsCreated;
+        totalUsersProcessed += usersForTicker.filter(u => u.tickers.length > 0).length;
 
-            if (fetchJob) {
-              totalFetchJobsQueued++;
-              totalUsersProcessed++;
-            }
-          } catch (queueError) {
-            discoveryLogger.error(`[${executionId}] Failed to queue fetch job for user`, {
-              userId: user.id,
-              ticker: filing.ticker,
-              filingId: filing.id,
-              error: queueError instanceof Error ? queueError.message : 'Unknown error'
-            });
-          }
-        }
+        discoveryLogger.debug(`[${executionId}] Bulk created jobs for filing`, {
+          ticker: filing.ticker,
+          jobsCreated,
+          usersCount: usersForTicker.length
+        });
       } catch (filingError) {
         discoveryLogger.error(`[${executionId}] Failed to process filing in discovery`, {
           ticker: filing.ticker,

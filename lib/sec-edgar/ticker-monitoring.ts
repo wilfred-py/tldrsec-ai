@@ -3,6 +3,7 @@ import { fetchSecCompanyRSS, generateSecRssUrl, type RSSFilingEntry } from './rs
 import { fetchCompanyFilingsUnified, isDevelopmentEnvironment } from './environment-aware-fetcher';
 import { logger } from '../logging';
 import { upsertTickerMonitoringWithLock, updateTickerMonitoringWithLock, ConcurrencyOptions } from '../db/concurrency';
+import { SecApiCache, getSecApiCache, withSecApiCache } from '../cache/sec-api-cache';
 
 const prisma = getPrismaClient();
 const monitoringLogger = logger.child('ticker-monitoring');
@@ -168,6 +169,9 @@ export async function getActiveTickersForMonitoring(): Promise<ActiveTicker[]> {
 /**
  * Check for new filings for a specific ticker using environment-aware fetcher
  * Automatically uses RSS (local) or REST API (Railway) based on environment
+ *
+ * Uses RSS response caching to prevent duplicate SEC API calls within
+ * the same discovery execution window (60-second TTL).
  */
 export async function checkTickerForNewFilings(ticker: ActiveTicker): Promise<RSSFilingEntry[]> {
   try {
@@ -184,8 +188,21 @@ export async function checkTickerForNewFilings(ticker: ActiveTicker): Promise<RS
       environment: isDevelopmentEnvironment() ? 'Development' : 'Production'
     });
 
-    // Use environment-aware fetcher (RSS for local, REST API for Railway)
-    const filingResponse = await fetchCompanyFilingsUnified(ticker.cik, 20); // Get more entries for better filtering
+    // Generate cache key for RSS feed response
+    const cacheKey = SecApiCache.generateKey('rss_feed', ticker.symbol, { cik: ticker.cik });
+
+    // Use cached RSS response or fetch from SEC API with 1-minute TTL
+    // This prevents duplicate SEC API calls during the same discovery execution
+    const filingResponse = await withSecApiCache(
+      cacheKey,
+      async () => {
+        monitoringLogger.debug(`Fetching RSS feed for ${ticker.symbol} (cache miss)`, {
+          cik: ticker.cik
+        });
+        return await fetchCompanyFilingsUnified(ticker.cik, 20); // Get more entries for better filtering
+      },
+      1 // 1 minute TTL - prevents duplicate calls within same discovery window
+    );
     
     if (!filingResponse.success) {
       throw new Error(`Environment-aware fetch failed: ${filingResponse.error}`);
