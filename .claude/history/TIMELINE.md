@@ -12,6 +12,7 @@ This file provides a chronological index of all completed projects across archiv
 ## Recent Activity (Not Yet Archived)
 
 **Projects completed in last 30 days** (tracked in PROGRESS.md):
+- **Slack Hourly Batching for Quiet Runs** ✅ COMPLETE (2025-12-18) - Reduced Slack notification noise from 6 messages/hour to 1 hourly summary when no meaningful activity occurs. Immediate notifications still posted for: new filings discovered, summaries generated, emails sent, or errors. Added `HourlyBatchAccumulator` to track metrics across runs. Methods: `hasMeaningfulActivity()`, `hasMeaningfulJobActivity()`, `postHourlySummaryMessage()`. Modified `postCronResults()` and `postJobProcessingResults()` to use batching. Branch: `feature/slack-hourly-batching`. PR #270. Files: `lib/slack/webhook-service.ts`.
 - **Slack Pipeline Monitor Bot** ✅ COMPLETE (2025-12-18) - Full Slack integration for real-time pipeline monitoring. Hybrid architecture: Incoming Webhooks for cron notifications + Slack Web API for @mention queries. Features: (1) Auto-posts cron results after each 10-min run, (2) 10 alert rules (critical/warning) for errors, backlog, failures, (3) @mention bot with intent detection (help, status, daily report, failures, costs), (4) Daily report integration with verify:daily script. Files created: `lib/slack/types.ts`, `lib/slack/message-formatter.ts`, `lib/slack/webhook-service.ts`, `lib/slack/alert-rules.ts`, `lib/slack/conversation-handler.ts`, `lib/slack/daily-report-handler.ts`, `lib/slack/index.ts`, `app/api/slack/events/route.ts`. Modified: `app/api/cron/tier-aware/route.ts` (added Slack notification). Dependencies: `@slack/bolt`, `@slack/web-api`. Vercel env vars: `SLACK_WEBHOOK_URL`, `SLACK_BOT_TOKEN`, `SLACK_SIGNING_SECRET` configured. Event Subscriptions URL verified. Bot event: `app_mention` subscribed.
 - **Circuit Breaker Reset Fix for Discovery Timeouts** ✅ COMPLETE (2025-12-17) - Discovery jobs were causing HTTP 524 timeouts (>100s), triggering circuit breaker to OPEN state after 3 failures. This blocked Steps 2-3 (fetch/summarize) from executing. Fix: (1) Reset circuit breaker after discovery timeout so Steps 2-3 can proceed, (2) Reduced discovery timeout to 90s and max attempts to 1 for fail-fast behavior. Deployed Cloudflare Worker at 10:15:49 UTC. Pipeline immediately resumed processing. Files: `cloudflare-cron/index.js`. Worker Version: `b3cc9c12-45b0-414e-9442-b2f46fd0c0c8`
 - **Cloudflare Worker Deployment & E2E Validation** ✅ COMPLETE (2025-12-16) - Discovered Cloudflare Worker was not redeployed after code fix. Last deployment: 2025-12-12, but fix merged: 2025-12-16. 586 discovery jobs stuck PENDING. Deployed worker at 09:23:39Z, pipeline immediately operational. 31 discovery jobs completed within 15 minutes. Research: `thoughts/shared/research/2025-12-16-pipeline-e2e-validation-cloudflare-deployment.md`
@@ -80,10 +81,10 @@ This file provides a chronological index of all completed projects across archiv
 - **Current PROGRESS.md Lines**: 91 lines (threshold: 500)
 - **Last Archive Check**: 2025-12-18
 - **Last Archive Update**: 2025-12-18 (no archival needed - under 500 lines)
-- **Recent Activity (Not Yet Archived)**: 29 projects completed in last 30 days
+- **Recent Activity (Not Yet Archived)**: 30 projects completed in last 30 days
 - **Archive System**: ✅ ACTIVE (auto-archives when >500 lines AND projects >30 days old)
-- **Current Work** (2025-12-18): Form 4 Email Template - Signal-First Design (signal/verdict as hero section for instant materiality assessment)
-- **Cron Pipeline Status** (2025-12-18): ✅ FULLY OPERATIONAL - All 5 steps executing successfully, Slack notifications active
+- **Current Work** (2025-12-18): Slack Hourly Batching - Reduced notification noise from 6/hour to 1 hourly summary for quiet runs
+- **Cron Pipeline Status** (2025-12-18): ✅ FULLY OPERATIONAL - All 5 steps executing successfully, Slack notifications active with hourly batching
 - **Archives Created**:
   - `27-Oct-2025.md` - Newsletter & Security implementations (6 projects)
   - `03-Nov-2025.md` - Critical infrastructure fixes (4 projects)
