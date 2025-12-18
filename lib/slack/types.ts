@@ -332,9 +332,64 @@ export interface ProcessedJobInfo {
   success: boolean;
   durationMs: number;
   error?: string;
+  // Discovery handler metrics (Phase 1)
+  discovery?: {
+    filingsDiscovered: number;
+    fetchJobsQueued: number;
+    eligibleUsers: number;
+    uniqueTickers: number;
+  };
+  // Fetch handler metrics (Phase 2)
+  fetch?: {
+    cached: boolean;
+    contentLength?: number;
+    summarizeJobQueued: boolean;
+  };
+  // Summarize handler metrics (Phase 3)
+  summarize?: {
+    summaryId?: string;
+    cost?: number;
+    inputTokens?: number;
+    outputTokens?: number;
+    emailSent: boolean;
+  };
 }
 
 export type JobType = 'ASYNC_DISCOVER_FILINGS' | 'ASYNC_FETCH_FILING' | 'ASYNC_SUMMARIZE_CACHED';
+
+/**
+ * Aggregated pipeline metrics across all jobs in a batch
+ * Shows flow through each pipeline stage for debugging bottlenecks
+ */
+export interface PipelineMetrics {
+  // Discovery phase aggregates
+  discovery: {
+    jobsRun: number;
+    filingsDiscovered: number;
+    fetchJobsQueued: number;
+    eligibleUsers: number;
+    uniqueTickers: number;
+  };
+  // Fetch phase aggregates
+  fetch: {
+    jobsRun: number;
+    contentsFetched: number;
+    cacheHits: number;
+    summarizeJobsQueued: number;
+  };
+  // Summarize phase aggregates
+  summarize: {
+    jobsRun: number;
+    summariesGenerated: number;
+    emailsSent: number;
+    totalCost: number;
+    totalInputTokens: number;
+    totalOutputTokens: number;
+  };
+  // Unique entities across all jobs
+  uniqueTickers: string[];
+  uniqueFormTypes: string[];
+}
 
 export interface JobProcessingResult {
   executionId: string;
@@ -346,4 +401,6 @@ export interface JobProcessingResult {
     processed: ProcessedJobInfo[];
   };
   recoveredStaleJobs: number;
+  // Aggregated pipeline metrics for visibility
+  pipeline?: PipelineMetrics;
 }

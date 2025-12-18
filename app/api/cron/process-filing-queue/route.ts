@@ -17,7 +17,7 @@ import { logger } from '@/lib/logging';
 import { CronAuthService } from '@/lib/cron/auth-service';
 import type { JobType } from '@/lib/job-queue';
 import { slackWebhookService } from '@/lib/slack/webhook-service';
-import type { JobProcessingResult, JobType as SlackJobType, JobProcessingStats } from '@/lib/slack/types';
+import type { JobProcessingResult, JobType as SlackJobType, JobProcessingStats, PipelineMetrics } from '@/lib/slack/types';
 
 const routeLogger = logger.child('process-filing-queue');
 
@@ -26,6 +26,7 @@ export const dynamic = 'force-dynamic';
 
 /**
  * Convert batch processing result to Slack-compatible format
+ * Aggregates pipeline metrics across all jobs for visibility
  */
 function convertToSlackResult(
   executionId: string,
@@ -46,8 +47,41 @@ function convertToSlackResult(
     'ASYNC_SUMMARIZE_CACHED': 0,
   };
 
+  // Initialize pipeline metrics aggregation
+  const pipeline: PipelineMetrics = {
+    discovery: {
+      jobsRun: 0,
+      filingsDiscovered: 0,
+      fetchJobsQueued: 0,
+      eligibleUsers: 0,
+      uniqueTickers: 0,
+    },
+    fetch: {
+      jobsRun: 0,
+      contentsFetched: 0,
+      cacheHits: 0,
+      summarizeJobsQueued: 0,
+    },
+    summarize: {
+      jobsRun: 0,
+      summariesGenerated: 0,
+      emailsSent: 0,
+      totalCost: 0,
+      totalInputTokens: 0,
+      totalOutputTokens: 0,
+    },
+    uniqueTickers: [],
+    uniqueFormTypes: [],
+  };
+
+  // Track unique entities
+  const tickerSet = new Set<string>();
+  const formTypeSet = new Set<string>();
+
   for (const job of batchResult.jobsProcessed) {
     const jobType = job.jobType as SlackJobType;
+
+    // Aggregate per-type stats
     if (byType[jobType]) {
       byType[jobType].total++;
       if (job.success) {
@@ -57,7 +91,38 @@ function convertToSlackResult(
       }
       timeSums[jobType] += job.durationMs;
     }
+
+    // Track unique entities
+    if (job.ticker) tickerSet.add(job.ticker);
+    if (job.formType) formTypeSet.add(job.formType);
+
+    // Aggregate pipeline metrics by job type
+    if (job.success) {
+      if (jobType === 'ASYNC_DISCOVER_FILINGS' && job.discovery) {
+        pipeline.discovery.jobsRun++;
+        pipeline.discovery.filingsDiscovered += job.discovery.filingsDiscovered;
+        pipeline.discovery.fetchJobsQueued += job.discovery.fetchJobsQueued;
+        pipeline.discovery.eligibleUsers += job.discovery.eligibleUsers;
+        pipeline.discovery.uniqueTickers += job.discovery.uniqueTickers;
+      } else if (jobType === 'ASYNC_FETCH_FILING' && job.fetch) {
+        pipeline.fetch.jobsRun++;
+        pipeline.fetch.contentsFetched++;
+        if (job.fetch.cached) pipeline.fetch.cacheHits++;
+        if (job.fetch.summarizeJobQueued) pipeline.fetch.summarizeJobsQueued++;
+      } else if (jobType === 'ASYNC_SUMMARIZE_CACHED' && job.summarize) {
+        pipeline.summarize.jobsRun++;
+        if (job.summarize.summaryId) pipeline.summarize.summariesGenerated++;
+        if (job.summarize.emailSent) pipeline.summarize.emailsSent++;
+        pipeline.summarize.totalCost += job.summarize.cost || 0;
+        pipeline.summarize.totalInputTokens += job.summarize.inputTokens || 0;
+        pipeline.summarize.totalOutputTokens += job.summarize.outputTokens || 0;
+      }
+    }
   }
+
+  // Set unique entities
+  pipeline.uniqueTickers = Array.from(tickerSet);
+  pipeline.uniqueFormTypes = Array.from(formTypeSet);
 
   // Calculate averages
   for (const jobType of Object.keys(byType) as SlackJobType[]) {
@@ -81,9 +146,13 @@ function convertToSlackResult(
         success: job.success,
         durationMs: job.durationMs,
         error: job.error,
+        discovery: job.discovery,
+        fetch: job.fetch,
+        summarize: job.summarize,
       })),
     },
     recoveredStaleJobs: batchResult.recoveredStaleJobs,
+    pipeline,
   };
 }
 
