@@ -464,6 +464,24 @@ function getJobTypeLabel(jobType: JobType): string {
   }
 }
 
+/**
+ * Format token cost for display
+ */
+function formatCost(cost: number): string {
+  if (cost === 0) return '$0.00';
+  if (cost < 0.01) return `$${cost.toFixed(4)}`;
+  return `$${cost.toFixed(3)}`;
+}
+
+/**
+ * Format token count for display
+ */
+function formatTokens(tokens: number): string {
+  if (tokens >= 1000000) return `${(tokens / 1000000).toFixed(1)}M`;
+  if (tokens >= 1000) return `${(tokens / 1000).toFixed(1)}k`;
+  return tokens.toString();
+}
+
 export function formatJobProcessingMessage(
   result: JobProcessingResult
 ): SlackWebhookPayload {
@@ -482,6 +500,7 @@ export function formatJobProcessingMessage(
   // Count successful and failed
   const successful = result.jobs.processed.filter(j => j.success).length;
   const failed = result.jobs.processed.filter(j => !j.success).length;
+  const pipeline = result.pipeline;
 
   // Header with success/failure indicator
   const headerEmoji = failed === 0 ? ':white_check_mark:' : failed === result.jobs.total ? ':x:' : ':warning:';
@@ -503,9 +522,78 @@ export function formatJobProcessingMessage(
   ];
   blocks.push(section(`*Total:* ${result.jobs.total} jobs\n${summaryParts.join(' | ')}`));
 
-  // Breakdown by job type
+  // Pipeline metrics section (if available)
+  if (pipeline) {
+    blocks.push(divider());
+
+    // Unique entities overview
+    const entityParts: string[] = [];
+    if (pipeline.uniqueTickers.length > 0) {
+      entityParts.push(`:chart_with_upwards_trend: *Tickers:* ${pipeline.uniqueTickers.length} (${pipeline.uniqueTickers.join(', ')})`);
+    }
+    if (pipeline.uniqueFormTypes.length > 0) {
+      entityParts.push(`:page_facing_up: *Form Types:* ${pipeline.uniqueFormTypes.join(', ')}`);
+    }
+    if (entityParts.length > 0) {
+      blocks.push(section(entityParts.join('\n')));
+    }
+
+    // Pipeline flow visualization (Discovery → Fetch → Summarize → Email)
+    const flowParts: string[] = [':arrow_right: *Pipeline Flow*'];
+
+    // Discovery phase
+    if (pipeline.discovery.jobsRun > 0) {
+      flowParts.push(
+        `  :mag: *Discovery:* ${pipeline.discovery.filingsDiscovered} filings → ${pipeline.discovery.fetchJobsQueued} fetch jobs queued`
+      );
+      if (pipeline.discovery.eligibleUsers > 0) {
+        flowParts.push(`    • ${pipeline.discovery.eligibleUsers} users, ${pipeline.discovery.uniqueTickers} tickers`);
+      }
+    }
+
+    // Fetch phase
+    if (pipeline.fetch.jobsRun > 0) {
+      const cacheInfo = pipeline.fetch.cacheHits > 0
+        ? ` (${pipeline.fetch.cacheHits} cache hits)`
+        : '';
+      flowParts.push(
+        `  :link: *Fetch:* ${pipeline.fetch.contentsFetched} contents${cacheInfo} → ${pipeline.fetch.summarizeJobsQueued} summarize jobs queued`
+      );
+    }
+
+    // Summarize phase
+    if (pipeline.summarize.jobsRun > 0) {
+      flowParts.push(
+        `  :brain: *Summarize:* ${pipeline.summarize.summariesGenerated} summaries → ${pipeline.summarize.emailsSent} emails sent`
+      );
+    }
+
+    if (flowParts.length > 1) {
+      blocks.push(section(flowParts.join('\n')));
+    }
+
+    // AI Cost breakdown (if any summarization happened)
+    if (pipeline.summarize.totalCost > 0 || pipeline.summarize.totalInputTokens > 0) {
+      const costParts: string[] = [':moneybag: *AI Usage*'];
+      costParts.push(`  • Cost: *${formatCost(pipeline.summarize.totalCost)}*`);
+      costParts.push(`  • Tokens: ${formatTokens(pipeline.summarize.totalInputTokens)} in / ${formatTokens(pipeline.summarize.totalOutputTokens)} out`);
+      blocks.push(section(costParts.join('\n')));
+    }
+
+    // Users and Emails summary
+    if (pipeline.summarize.emailsSent > 0) {
+      blocks.push(
+        context([
+          `:email: *${pipeline.summarize.emailsSent}* emails sent to subscribers`
+        ])
+      );
+    }
+  }
+
+  // Breakdown by job type (condensed if we have pipeline metrics)
   const jobTypes = Object.keys(result.jobs.byType) as JobType[];
-  if (jobTypes.length > 0) {
+  if (jobTypes.length > 0 && !pipeline) {
+    // Only show detailed breakdown if no pipeline metrics
     const typeBreakdown: string[] = [];
     for (const jobType of jobTypes) {
       const stats = result.jobs.byType[jobType];
@@ -521,27 +609,20 @@ export function formatJobProcessingMessage(
     if (typeBreakdown.length > 0) {
       blocks.push(section(typeBreakdown.join('\n')));
     }
-  }
-
-  // Show individual job details for summaries (the most important ones)
-  const summaryJobs = result.jobs.processed.filter(
-    j => j.jobType === 'ASYNC_SUMMARIZE_CACHED'
-  );
-  if (summaryJobs.length > 0) {
-    blocks.push(divider());
-    const summaryDetails = summaryJobs.slice(0, 5).map(job => {
-      const statusEmoji = job.success ? ':white_check_mark:' : ':x:';
-      const ticker = job.ticker || 'Unknown';
-      const formType = job.formType || '';
-      const time = formatDuration(job.durationMs);
-      return `${statusEmoji} *${ticker}* ${formType} (${time})`;
-    }).join('\n');
-
-    let detailsHeader = ':brain: *Summaries Generated*';
-    if (summaryJobs.length > 5) {
-      detailsHeader += ` (showing 5 of ${summaryJobs.length})`;
+  } else if (jobTypes.length > 0) {
+    // Condensed timing info when we have pipeline metrics
+    const timingParts: string[] = [];
+    for (const jobType of jobTypes) {
+      const stats = result.jobs.byType[jobType];
+      if (stats.total > 0) {
+        const label = getJobTypeLabel(jobType);
+        const avgTime = formatDuration(stats.averageTimeMs);
+        timingParts.push(`${label}: avg ${avgTime}`);
+      }
     }
-    blocks.push(section(`${detailsHeader}\n${summaryDetails}`));
+    if (timingParts.length > 0) {
+      blocks.push(context([`:clock2: ${timingParts.join(' | ')}`]));
+    }
   }
 
   // Show any errors
@@ -563,8 +644,20 @@ export function formatJobProcessingMessage(
     );
   }
 
-  // Fallback text
-  const fallbackText = `Jobs Processed: ${successful}/${result.jobs.total} successful${failed > 0 ? ` (${failed} failed)` : ''}`;
+  // Fallback text with key metrics
+  let fallbackText = `Jobs Processed: ${successful}/${result.jobs.total} successful`;
+  if (failed > 0) fallbackText += ` (${failed} failed)`;
+  if (pipeline) {
+    if (pipeline.uniqueTickers.length > 0) {
+      fallbackText += ` | Tickers: ${pipeline.uniqueTickers.join(', ')}`;
+    }
+    if (pipeline.summarize.emailsSent > 0) {
+      fallbackText += ` | Emails: ${pipeline.summarize.emailsSent}`;
+    }
+    if (pipeline.summarize.totalCost > 0) {
+      fallbackText += ` | Cost: ${formatCost(pipeline.summarize.totalCost)}`;
+    }
+  }
 
   return {
     text: fallbackText,

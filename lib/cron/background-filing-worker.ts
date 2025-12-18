@@ -25,6 +25,7 @@ const prisma = getPrismaClient();
 
 /**
  * Result from processing a single job, used for Slack notifications
+ * Captures detailed metrics from each handler for pipeline visibility
  */
 export interface ProcessedJobResult {
   jobId: string;
@@ -34,10 +35,32 @@ export interface ProcessedJobResult {
   success: boolean;
   durationMs: number;
   error?: string;
+  // Discovery handler metrics (Phase 1)
+  discovery?: {
+    filingsDiscovered: number;
+    fetchJobsQueued: number;
+    eligibleUsers: number;
+    uniqueTickers: number;
+  };
+  // Fetch handler metrics (Phase 2)
+  fetch?: {
+    cached: boolean;
+    contentLength?: number;
+    summarizeJobQueued: boolean;
+  };
+  // Summarize handler metrics (Phase 3)
+  summarize?: {
+    summaryId?: string;
+    cost?: number;
+    inputTokens?: number;
+    outputTokens?: number;
+    emailSent: boolean;
+  };
 }
 
 /**
  * Handler result type for job processing
+ * Union of all handler-specific result types
  */
 export interface HandlerResult {
   success: boolean;
@@ -47,6 +70,19 @@ export interface HandlerResult {
   cached?: boolean;
   summaryId?: string;
   processingContext?: unknown;
+  // Discovery metrics (Phase 1)
+  fetchJobsQueued?: number;
+  eligibleUsers?: number;
+  uniqueTickers?: number;
+  // Fetch metrics (Phase 2)
+  contentLength?: number;
+  summarizeJobQueued?: boolean;
+  // Summarize metrics (Phase 3)
+  tokenUsage?: {
+    inputTokens: number;
+    outputTokens: number;
+  };
+  emailSent?: boolean;
 }
 
 /**
@@ -423,7 +459,8 @@ export class BackgroundFilingWorker {
           ...(result.summaryId && { summaryId: result.summaryId }),
         });
 
-        return {
+        // Build result with handler-specific metrics for Slack notifications
+        const jobResult: ProcessedJobResult = {
           jobId: job.id,
           jobType: job.jobType as JobType,
           ticker: payload.ticker?.symbol,
@@ -431,6 +468,32 @@ export class BackgroundFilingWorker {
           success: true,
           durationMs: jobDuration,
         };
+
+        // Capture handler-specific metrics for pipeline visibility
+        if (job.jobType === 'ASYNC_DISCOVER_FILINGS') {
+          jobResult.discovery = {
+            filingsDiscovered: result.filingsDiscovered || 0,
+            fetchJobsQueued: result.fetchJobsQueued || 0,
+            eligibleUsers: result.eligibleUsers || 0,
+            uniqueTickers: result.uniqueTickers || 0,
+          };
+        } else if (job.jobType === 'ASYNC_FETCH_FILING') {
+          jobResult.fetch = {
+            cached: result.cached || false,
+            contentLength: result.contentLength,
+            summarizeJobQueued: result.summarizeJobQueued || false,
+          };
+        } else if (job.jobType === 'ASYNC_SUMMARIZE_CACHED') {
+          jobResult.summarize = {
+            summaryId: result.summaryId,
+            cost: result.cost,
+            inputTokens: result.tokenUsage?.inputTokens,
+            outputTokens: result.tokenUsage?.outputTokens,
+            emailSent: result.emailSent || false,
+          };
+        }
+
+        return jobResult;
       } else {
         throw new Error(result.error || 'Job processing failed');
       }
