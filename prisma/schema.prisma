@@ -104,6 +104,11 @@ model Summary {
   ticker                Ticker                 @relation(fields: [tickerId], references: [id], onDelete: Cascade)
   cacheAccesses         SummaryCacheAccess[]
   emailDeliveries       SummaryEmailDelivery[]
+
+  // Unique constraint to prevent duplicate summaries for the same filing
+  // A filing is uniquely identified by tickerId + filingUrl
+  @@unique([tickerId, filingUrl])
+  @@index([filingUrl])
 }
 
 model CikMapping {
