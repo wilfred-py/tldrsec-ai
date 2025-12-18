@@ -1,24 +1,103 @@
 import * as React from 'react';
-import { EmailColors, markdownToHtml } from '../design-system';
+import { EmailColors } from '../design-system';
 import { EmailHeader } from './sections/EmailHeader';
 import { EmailFooter } from './sections/EmailFooter';
 import { SectionCard } from './sections/SectionCard';
-import { SectionHeader } from './sections/SectionHeader';
 import { FilingTemplateData } from '../../../../lib/email/types';
 
 interface Form4MinimalistTemplateProps {
   filing: FilingTemplateData;
 }
 
+interface TransactionData {
+  type?: string;
+  shares?: string;
+  pricePerShare?: string;
+  totalValue?: string;
+  acquisitionDisposition?: string;
+}
+
 /**
- * Minimalist Form 4 email template
- * Morning Brew style: clean, scannable, lead with the punchline
+ * Determine signal level and get appropriate styling
+ */
+function getSignalConfig(signalStrength: string, summaryText: string, isSale: boolean, percentChange: string) {
+  const signalLower = signalStrength.toLowerCase();
+  const summaryLower = summaryText?.toLowerCase() || '';
+
+  // Check for 10b5-1 plan (reduces signal significance)
+  const has10b51 = signalLower.includes('10b5-1') || summaryLower.includes('10b5-1');
+
+  // Check for strong signals
+  const isStrong = signalLower.includes('strong') ||
+    (Math.abs(parseFloat(percentChange) || 0) > 50 && !has10b51);
+
+  // Check for weak signals
+  const isWeak = signalLower.includes('weak') || has10b51 ||
+    summaryLower.includes('routine') || summaryLower.includes('auto-pilot');
+
+  if (isStrong) {
+    return {
+      level: 'HIGH',
+      verdict: isSale ? 'Notable Sale' : 'Notable Buy',
+      description: 'This transaction may warrant attention for your investment thesis.',
+      bgColor: '#FEF3C7',
+      borderColor: '#F59E0B',
+      textColor: '#92400E',
+      icon: '⚠️',
+    };
+  } else if (isWeak) {
+    return {
+      level: 'LOW',
+      verdict: 'Routine Transaction',
+      description: has10b51
+        ? 'Pre-scheduled 10b5-1 trade — no discretionary decision by insider.'
+        : 'Likely not material to your investment decision.',
+      bgColor: '#F1F5F9',
+      borderColor: '#94A3B8',
+      textColor: '#475569',
+      icon: '✓',
+    };
+  } else {
+    return {
+      level: 'MODERATE',
+      verdict: 'Worth Monitoring',
+      description: 'Consider in context of broader insider activity patterns.',
+      bgColor: '#EEF2FF',
+      borderColor: '#6366F1',
+      textColor: '#4338CA',
+      icon: '👀',
+    };
+  }
+}
+
+/**
+ * Format text with bold styling for key elements
+ */
+function formatText(text: string): string {
+  if (!text) return '';
+  let html = text;
+  html = html.replace(/&(?!amp;|lt;|gt;|quot;|#)/g, '&amp;');
+  html = html.replace(
+    /(\$[\d,]+(?:\.\d+)?[KMB]?)/g,
+    `<strong style="color:${EmailColors.text.headline};font-weight:700;">$1</strong>`
+  );
+  html = html.replace(
+    /(-?\d+(?:\.\d+)?%)/g,
+    `<strong style="color:${EmailColors.text.headline};font-weight:700;">$1</strong>`
+  );
+  html = html.replace(
+    /([\d,]+)\s+(shares?)/gi,
+    `<strong style="color:${EmailColors.text.headline};font-weight:700;">$1</strong> $2`
+  );
+  html = html.replace(/—/g, '&mdash;');
+  return html;
+}
+
+/**
+ * Form 4 Email Template - Signal-First Design
  *
- * Layout:
- * - Header: ticker, filer name, role
- * - Key Transaction: bullet points with highlighted values
- * - Holdings Summary: inline data (not tables)
- * - CTA: View full filing
+ * The verdict/signal is the HERO - users should know in 2 seconds
+ * if this matters to their portfolio.
  */
 export function Form4MinimalistTemplate({ filing }: Form4MinimalistTemplateProps) {
   const {
@@ -32,25 +111,37 @@ export function Form4MinimalistTemplate({ filing }: Form4MinimalistTemplateProps
     summaryData,
   } = filing;
 
-  // Extract data from summaryData if available
-  const filerName = summaryData?.reportingPerson || 'Insider';
-  const filerRole = summaryData?.position || '';
-  const totalValue = summaryData?.totalValue || '';
-  const percentChange = summaryData?.changePercent || summaryData?.percentOwnership || '';
-  const changeDirection = summaryData?.changeDirection;
-  const transactionType = summaryData?.transactionType || '';
-  const sharesAmount = summaryData?.shareAmount || summaryData?.amount || '';
-  const priceRange = summaryData?.priceRange || summaryData?.price || '';
-  const tradingPlan = summaryData?.tradingPlan || '';
-  const sharesOwned = summaryData?.sharesOwned || '';
-  const sharesRemaining = summaryData?.sharesRemaining || '';
+  const data = summaryData as Record<string, unknown> | undefined;
 
-  // Determine if this is a buy or sell
+  const filerName = (data?.filerName || data?.reportingPerson || 'Insider') as string;
+  const filerRole = (data?.relationship || data?.position || '') as string;
+
+  const transactions = (data?.transactions || []) as TransactionData[];
+  const firstTx = transactions[0] || {};
+
+  const totalValue = (data?.totalValue || firstTx.totalValue || '') as string;
+  const sharesAmount = (firstTx.shares || data?.shareAmount || data?.amount || '') as string;
+  const pricePerShare = (firstTx.pricePerShare || data?.priceRange || data?.price || '') as string;
+  const percentChange = (data?.percentageChange || data?.changePercent || '') as string;
+  const newStake = (data?.newStake || data?.sharesRemaining || '') as string;
+  const previousStake = (data?.previousStake || data?.sharesOwned || '') as string;
+  const signalStrength = (data?.signalStrength || '') as string;
+
+  const transactionType = (firstTx.type || data?.transactionType || '') as string;
+  const acquisitionDisposition = (firstTx.acquisitionDisposition || '') as string;
   const isSale = transactionType?.toLowerCase().includes('sale') ||
     transactionType?.toLowerCase().includes('sell') ||
-    changeDirection === 'decrease';
+    acquisitionDisposition === 'D' ||
+    percentChange?.startsWith('-');
 
   const displayTicker = symbol || ticker || 'N/A';
+  const hasTransactionData = totalValue || sharesAmount || percentChange;
+
+  // Get signal configuration
+  const signal = getSignalConfig(signalStrength, summaryText || '', isSale, percentChange);
+
+  // Extract first sentence as the headline
+  const headline = summaryText?.split(/(?<=[.!?])\s+/)[0] || '';
 
   return (
     <div style={{
@@ -66,8 +157,8 @@ export function Form4MinimalistTemplate({ filing }: Form4MinimalistTemplateProps
         companyName={companyName}
         filingType={filingType}
         filingDate={filingDate}
-        filerName={typeof filerName === 'string' ? filerName : undefined}
-        filerRole={typeof filerRole === 'string' ? filerRole : undefined}
+        filerName={filerName}
+        filerRole={filerRole}
       />
 
       {/* Main content */}
@@ -75,138 +166,167 @@ export function Form4MinimalistTemplate({ filing }: Form4MinimalistTemplateProps
         <tbody>
           <tr>
             <td style={{ padding: '0 15px 20px' }}>
-              {/* Key Transaction Section */}
-              <SectionCard>
-                <SectionHeader emoji="📊" title="Key Transaction" />
-                <tr>
-                  <td>
-                    <table width="100%" cellPadding="0" cellSpacing="0">
-                      <tbody>
-                        {/* Lead with the punchline - total value */}
-                        {totalValue && (
+
+              {/* ═══════════════════════════════════════════════════════════
+                  THE VERDICT - This is the HERO section
+                  Users should know in 2 seconds if this matters
+                  ═══════════════════════════════════════════════════════════ */}
+              <table width="100%" cellPadding="0" cellSpacing="0" style={{
+                backgroundColor: signal.bgColor,
+                borderRadius: '12px',
+                marginBottom: '16px',
+                border: `2px solid ${signal.borderColor}`,
+              }}>
+                <tbody>
+                  <tr>
+                    <td style={{ padding: '20px' }}>
+                      {/* Signal Level Badge */}
+                      <table width="100%" cellPadding="0" cellSpacing="0">
+                        <tbody>
                           <tr>
-                            <td style={{
-                              padding: '4px 0',
-                              fontSize: '14px',
-                              lineHeight: '1.5',
-                              color: EmailColors.text.body,
-                            }}>
-                              <span style={{ marginRight: '8px', color: EmailColors.text.meta }}>•</span>
+                            <td>
                               <span style={{
-                                fontWeight: 600,
-                                color: isSale ? EmailColors.semantic.negative : EmailColors.semantic.positive,
+                                display: 'inline-block',
+                                padding: '4px 12px',
+                                backgroundColor: signal.borderColor,
+                                color: '#FFFFFF',
+                                borderRadius: '20px',
+                                fontSize: '11px',
+                                fontWeight: 700,
+                                letterSpacing: '1px',
+                                textTransform: 'uppercase' as const,
                               }}>
-                                {isSale ? 'Sold' : 'Acquired'} {totalValue}
+                                {signal.icon} {signal.level} SIGNAL
                               </span>
-                              {' '}in {displayTicker} stock
                             </td>
                           </tr>
-                        )}
 
-                        {/* Shares and price */}
-                        {sharesAmount && (
+                          {/* The Verdict */}
                           <tr>
-                            <td style={{
-                              padding: '4px 0',
-                              fontSize: '14px',
-                              lineHeight: '1.5',
-                              color: EmailColors.text.body,
-                            }}>
-                              <span style={{ marginRight: '8px', color: EmailColors.text.meta }}>•</span>
-                              <span style={{ fontWeight: 600 }}>
-                                {sharesAmount} shares
-                              </span>
-                              {priceRange && ` at ${priceRange}`}
-                            </td>
-                          </tr>
-                        )}
-
-                        {/* Percentage change */}
-                        {percentChange && (
-                          <tr>
-                            <td style={{
-                              padding: '4px 0',
-                              fontSize: '14px',
-                              lineHeight: '1.5',
-                              color: EmailColors.text.body,
-                            }}>
-                              <span style={{ marginRight: '8px', color: EmailColors.text.meta }}>•</span>
-                              <span style={{
-                                fontWeight: 600,
-                                color: changeDirection === 'decrease' ? EmailColors.semantic.negative : EmailColors.semantic.positive,
+                            <td style={{ paddingTop: '12px' }}>
+                              <div style={{
+                                fontSize: '24px',
+                                fontWeight: 700,
+                                color: signal.textColor,
+                                lineHeight: '1.2',
                               }}>
-                                {changeDirection === 'decrease' ? '' : '+'}{percentChange}
-                              </span>
-                              {' '}change in holdings
+                                {signal.verdict}
+                              </div>
                             </td>
                           </tr>
-                        )}
 
-                        {/* Trading plan note */}
-                        {tradingPlan && (
+                          {/* Quick explanation */}
                           <tr>
-                            <td style={{
-                              padding: '4px 0',
-                              fontSize: '14px',
-                              lineHeight: '1.5',
-                              color: EmailColors.text.meta,
-                            }}>
-                              <span style={{ marginRight: '8px', color: EmailColors.text.meta }}>•</span>
-                              {tradingPlan}
+                            <td style={{ paddingTop: '8px' }}>
+                              <div style={{
+                                fontSize: '14px',
+                                lineHeight: '1.5',
+                                color: signal.textColor,
+                                opacity: 0.9,
+                              }}>
+                                {signal.description}
+                              </div>
                             </td>
                           </tr>
-                        )}
-                      </tbody>
-                    </table>
-                  </td>
-                </tr>
-              </SectionCard>
+                        </tbody>
+                      </table>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
 
-              {/* Holdings Summary */}
-              {(sharesOwned || sharesRemaining) && (
+              {/* ═══════════════════════════════════════════════════════════
+                  THE NUMBERS - Quick scan metrics
+                  ═══════════════════════════════════════════════════════════ */}
+              {hasTransactionData && (
                 <SectionCard>
-                  <SectionHeader emoji="💼" title="Holdings After Transaction" />
                   <tr>
                     <td>
                       <table width="100%" cellPadding="0" cellSpacing="0">
                         <tbody>
-                          {sharesOwned && (
-                            <tr>
+                          <tr>
+                            {/* Left: Transaction Amount */}
+                            {totalValue && (
                               <td style={{
-                                padding: '8px 0',
-                                fontSize: '14px',
-                                color: EmailColors.text.body,
+                                width: '50%',
+                                padding: '16px',
+                                backgroundColor: isSale ? '#FEF2F2' : '#F0FDF4',
+                                borderRadius: '8px',
+                                verticalAlign: 'top',
                               }}>
-                                <span style={{ color: EmailColors.text.meta }}>Direct ownership:</span>
-                                <span style={{
-                                  float: 'right',
-                                  fontWeight: 600,
-                                  color: EmailColors.text.headline,
+                                <div style={{
+                                  fontSize: '11px',
+                                  fontWeight: 700,
+                                  color: isSale ? '#991B1B' : '#166534',
+                                  textTransform: 'uppercase' as const,
+                                  letterSpacing: '0.5px',
+                                  marginBottom: '4px',
                                 }}>
-                                  {sharesOwned} shares
-                                </span>
-                              </td>
-                            </tr>
-                          )}
-                          {sharesRemaining && sharesRemaining !== sharesOwned && (
-                            <tr>
-                              <td style={{
-                                padding: '8px 0',
-                                fontSize: '14px',
-                                color: EmailColors.text.body,
-                                borderTop: `1px solid ${EmailColors.structure.borderLight}`,
-                              }}>
-                                <span style={{ color: EmailColors.text.meta }}>Total remaining:</span>
-                                <span style={{
-                                  float: 'right',
-                                  fontWeight: 600,
-                                  color: EmailColors.text.headline,
+                                  {isSale ? '📉 Sold' : '📈 Bought'}
+                                </div>
+                                <div style={{
+                                  fontSize: '28px',
+                                  fontWeight: 800,
+                                  color: isSale ? '#DC2626' : '#16A34A',
+                                  lineHeight: '1.1',
                                 }}>
-                                  {sharesRemaining} shares
-                                </span>
+                                  {totalValue}
+                                </div>
+                                {sharesAmount && (
+                                  <div style={{
+                                    fontSize: '13px',
+                                    color: EmailColors.text.meta,
+                                    marginTop: '6px',
+                                  }}>
+                                    {sharesAmount} shares @ {pricePerShare || 'avg'}
+                                  </div>
+                                )}
                               </td>
-                            </tr>
-                          )}
+                            )}
+
+                            {/* Right: Stake Impact */}
+                            <td style={{
+                              width: totalValue ? '50%' : '100%',
+                              padding: '16px',
+                              paddingLeft: totalValue ? '12px' : '16px',
+                              verticalAlign: 'top',
+                            }}>
+                              {percentChange && (
+                                <>
+                                  <div style={{
+                                    fontSize: '11px',
+                                    fontWeight: 700,
+                                    color: EmailColors.text.meta,
+                                    textTransform: 'uppercase' as const,
+                                    letterSpacing: '0.5px',
+                                    marginBottom: '4px',
+                                  }}>
+                                    Stake Impact
+                                  </div>
+                                  <div style={{
+                                    fontSize: '28px',
+                                    fontWeight: 800,
+                                    color: isSale ? '#DC2626' : '#16A34A',
+                                    lineHeight: '1.1',
+                                  }}>
+                                    {percentChange}
+                                  </div>
+                                </>
+                              )}
+                              {(previousStake || newStake) && (
+                                <div style={{
+                                  fontSize: '13px',
+                                  color: EmailColors.text.meta,
+                                  marginTop: '6px',
+                                }}>
+                                  {previousStake && newStake
+                                    ? `${previousStake} → ${newStake}`
+                                    : newStake || previousStake
+                                  }
+                                </div>
+                              )}
+                            </td>
+                          </tr>
                         </tbody>
                       </table>
                     </td>
@@ -214,19 +334,37 @@ export function Form4MinimalistTemplate({ filing }: Form4MinimalistTemplateProps
                 </SectionCard>
               )}
 
-              {/* Summary Text */}
-              {summaryText && (
+              {/* ═══════════════════════════════════════════════════════════
+                  THE STORY - One-liner summary
+                  ═══════════════════════════════════════════════════════════ */}
+              {headline && (
                 <SectionCard>
-                  <SectionHeader emoji="📝" title="Summary" />
                   <tr>
                     <td
                       style={{
-                        fontSize: '14px',
+                        fontSize: '15px',
                         lineHeight: '1.6',
                         color: EmailColors.text.body,
                       }}
-                      dangerouslySetInnerHTML={{ __html: markdownToHtml(summaryText) }}
+                      dangerouslySetInnerHTML={{ __html: formatText(headline) }}
                     />
+                  </tr>
+                </SectionCard>
+              )}
+
+              {/* No data fallback */}
+              {!hasTransactionData && !summaryText && (
+                <SectionCard>
+                  <tr>
+                    <td style={{
+                      fontSize: '14px',
+                      lineHeight: '1.6',
+                      color: EmailColors.text.meta,
+                      textAlign: 'center',
+                      padding: '20px',
+                    }}>
+                      View the full Form 4 filing for transaction details.
+                    </td>
                   </tr>
                 </SectionCard>
               )}
