@@ -67,11 +67,11 @@ async function getVerificationMetrics(
       },
     }),
 
-    // 2. Fetch attempts
+    // 2. Fetch attempts (use attemptedAt, not createdAt)
     prisma.secFetchAttempt.groupBy({
       by: ['status'],
       where: {
-        createdAt: { gte: start, lte: end },
+        attemptedAt: { gte: start, lte: end },
       },
       _count: true,
     }),
