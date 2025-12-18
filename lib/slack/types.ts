@@ -312,3 +312,38 @@ export interface AlertDeduplicationWindow {
   windowMs: number;
   maxAlerts: number;
 }
+
+// =============================================================================
+// Job Processing Types (for process-filing-queue notifications)
+// =============================================================================
+
+export interface JobProcessingStats {
+  total: number;
+  successful: number;
+  failed: number;
+  averageTimeMs: number;
+}
+
+export interface ProcessedJobInfo {
+  jobId: string;
+  jobType: JobType;
+  ticker?: string;
+  formType?: string;
+  success: boolean;
+  durationMs: number;
+  error?: string;
+}
+
+export type JobType = 'ASYNC_DISCOVER_FILINGS' | 'ASYNC_FETCH_FILING' | 'ASYNC_SUMMARIZE_CACHED';
+
+export interface JobProcessingResult {
+  executionId: string;
+  duration: number;
+  jobTypesFilter: JobType[] | 'all';
+  jobs: {
+    total: number;
+    byType: Record<JobType, JobProcessingStats>;
+    processed: ProcessedJobInfo[];
+  };
+  recoveredStaleJobs: number;
+}

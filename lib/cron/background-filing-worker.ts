@@ -24,6 +24,42 @@ const workerLogger = logger.child('background-filing-worker');
 const prisma = getPrismaClient();
 
 /**
+ * Result from processing a single job, used for Slack notifications
+ */
+export interface ProcessedJobResult {
+  jobId: string;
+  jobType: JobType;
+  ticker?: string;
+  formType?: string;
+  success: boolean;
+  durationMs: number;
+  error?: string;
+}
+
+/**
+ * Handler result type for job processing
+ */
+export interface HandlerResult {
+  success: boolean;
+  error?: string;
+  cost?: number;
+  filingsDiscovered?: number;
+  cached?: boolean;
+  summaryId?: string;
+  processingContext?: unknown;
+}
+
+/**
+ * Result from processing a batch of jobs
+ */
+export interface BatchProcessingResult {
+  processId: string;
+  jobsProcessed: ProcessedJobResult[];
+  recoveredStaleJobs: number;
+  batchDuration: number;
+}
+
+/**
  * Create an abortable timeout for job processing
  *
  * Returns an AbortController and a timeout promise that:
@@ -130,9 +166,11 @@ export class BackgroundFilingWorker {
 
   /**
    * Process a batch of queued filing jobs
+   * @returns BatchProcessingResult with details about processed jobs for notifications
    */
-  async processBatch(): Promise<void> {
+  async processBatch(): Promise<BatchProcessingResult> {
     const batchStartTime = Date.now();
+    const jobResults: ProcessedJobResult[] = [];
 
     // First, recover any stale PROCESSING jobs (stuck > 5 minutes)
     const recoveredCount = await this.recoverStaleJobs();
@@ -193,7 +231,12 @@ export class BackgroundFilingWorker {
         processId: this.processId,
         checkedTypes: jobTypesToProcess,
       });
-      return;
+      return {
+        processId: this.processId,
+        jobsProcessed: [],
+        recoveredStaleJobs: recoveredCount,
+        batchDuration: Date.now() - batchStartTime,
+      };
     }
 
     workerLogger.info('Starting batch processing', {
@@ -205,7 +248,8 @@ export class BackgroundFilingWorker {
 
     // Process jobs sequentially (respects SEC API rate limits)
     for (const job of jobs) {
-      await this.processJob(job);
+      const jobResult = await this.processJob(job);
+      jobResults.push(jobResult);
     }
 
     const batchDuration = Date.now() - batchStartTime;
@@ -215,6 +259,13 @@ export class BackgroundFilingWorker {
       duration: batchDuration,
       averageJobTime: batchDuration / jobs.length,
     });
+
+    return {
+      processId: this.processId,
+      jobsProcessed: jobResults,
+      recoveredStaleJobs: recoveredCount,
+      batchDuration,
+    };
   }
 
   /**
@@ -308,8 +359,10 @@ export class BackgroundFilingWorker {
    * - ASYNC_FETCH_FILING -> fetch-handler
    * - ASYNC_SUMMARIZE_CACHED -> summarize-cached-handler
    * - ASYNC_SUMMARIZE_FILING -> legacy filing processor
+   *
+   * @returns ProcessedJobResult with job details for Slack notifications
    */
-  private async processJob(job: JobQueue): Promise<void> {
+  private async processJob(job: JobQueue): Promise<ProcessedJobResult> {
     const jobStartTime = Date.now();
     const payload = job.payload as unknown as FilingJobPayload;
 
@@ -369,6 +422,15 @@ export class BackgroundFilingWorker {
           ...(result.cached !== undefined && { cached: result.cached }),
           ...(result.summaryId && { summaryId: result.summaryId }),
         });
+
+        return {
+          jobId: job.id,
+          jobType: job.jobType as JobType,
+          ticker: payload.ticker?.symbol,
+          formType: payload.filing?.formType,
+          success: true,
+          durationMs: jobDuration,
+        };
       } else {
         throw new Error(result.error || 'Job processing failed');
       }
@@ -389,7 +451,7 @@ export class BackgroundFilingWorker {
       workerLogger.error('Filing job failed', {
         processId: this.processId,
         jobId: job.id,
-        ticker: payload.ticker.symbol,
+        ticker: payload.ticker?.symbol,
         error: errorMessage,
         isTimeout,
         wasAbortedByTimeout,
@@ -402,12 +464,24 @@ export class BackgroundFilingWorker {
       // BUG FIX: Only report timeout message for actual timeouts, not all errors
       // Previously, we were checking controller.signal.aborted AFTER calling abort(),
       // which meant ALL errors were incorrectly reported as "Application timeout"
+      const finalErrorMessage = isTimeout || wasAbortedByTimeout
+        ? `Application timeout after ${duration}ms (requests aborted): ${errorMessage}`
+        : errorMessage;
+
       await JobQueueService.updateJobStatus(job.id, 'FAILED', {
         failedAt: new Date(),
-        error: isTimeout || wasAbortedByTimeout
-          ? `Application timeout after ${duration}ms (requests aborted): ${errorMessage}`
-          : errorMessage,
+        error: finalErrorMessage,
       });
+
+      return {
+        jobId: job.id,
+        jobType: job.jobType as JobType,
+        ticker: payload.ticker?.symbol,
+        formType: payload.filing?.formType,
+        success: false,
+        durationMs: duration,
+        error: finalErrorMessage,
+      };
     }
   }
 
@@ -422,7 +496,7 @@ export class BackgroundFilingWorker {
     job: JobQueue,
     payload: unknown,
     signal?: AbortSignal
-  ): Promise<unknown> {
+  ): Promise<HandlerResult> {
     // Check if already aborted before routing
     if (signal?.aborted) {
       return { success: false, error: 'Job was aborted before routing started' };
@@ -432,17 +506,20 @@ export class BackgroundFilingWorker {
       switch (job.jobType) {
         case 'ASYNC_DISCOVER_FILINGS': {
           const { handleDiscovery } = await import('./handlers/discovery-handler');
-          return await handleDiscovery(payload);
+          type DiscoveryPayloadType = Parameters<typeof handleDiscovery>[0];
+          return await handleDiscovery(payload as DiscoveryPayloadType) as HandlerResult;
         }
 
         case 'ASYNC_FETCH_FILING': {
           const { handleFetch } = await import('./handlers/fetch-handler');
-          return await handleFetch(payload);
+          type FetchPayloadType = Parameters<typeof handleFetch>[0];
+          return await handleFetch(payload as FetchPayloadType) as HandlerResult;
         }
 
         case 'ASYNC_SUMMARIZE_CACHED': {
           const { handleSummarizeCached } = await import('./handlers/summarize-cached-handler');
-          return await handleSummarizeCached(payload);
+          type SummarizePayloadType = Parameters<typeof handleSummarizeCached>[0];
+          return await handleSummarizeCached(payload as SummarizePayloadType) as HandlerResult;
         }
 
         case 'ASYNC_SUMMARIZE_FILING':

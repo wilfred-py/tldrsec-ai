@@ -18,6 +18,8 @@ import type {
   HeaderBlock,
   ContextBlock,
   DividerBlock,
+  JobProcessingResult,
+  JobType,
 } from './types';
 
 // =============================================================================
@@ -427,6 +429,146 @@ export function formatErrorMessage(error: string): SlackWebhookPayload {
       section(`:x: *Error*\n${error}`),
       context([`If this persists, check the logs or contact support.`]),
     ],
+    unfurl_links: false,
+    unfurl_media: false,
+  };
+}
+
+// =============================================================================
+// Job Processing Message (for process-filing-queue notifications)
+// =============================================================================
+
+function getJobTypeEmoji(jobType: JobType): string {
+  switch (jobType) {
+    case 'ASYNC_DISCOVER_FILINGS':
+      return ':mag:';
+    case 'ASYNC_FETCH_FILING':
+      return ':link:';
+    case 'ASYNC_SUMMARIZE_CACHED':
+      return ':brain:';
+    default:
+      return ':gear:';
+  }
+}
+
+function getJobTypeLabel(jobType: JobType): string {
+  switch (jobType) {
+    case 'ASYNC_DISCOVER_FILINGS':
+      return 'Discovery';
+    case 'ASYNC_FETCH_FILING':
+      return 'Fetch';
+    case 'ASYNC_SUMMARIZE_CACHED':
+      return 'Summarize';
+    default:
+      return jobType;
+  }
+}
+
+export function formatJobProcessingMessage(
+  result: JobProcessingResult
+): SlackWebhookPayload {
+  const blocks: SlackBlock[] = [];
+
+  // Skip notification if no jobs were processed
+  if (result.jobs.total === 0) {
+    return {
+      text: '',
+      blocks: [],
+      unfurl_links: false,
+      unfurl_media: false,
+    };
+  }
+
+  // Count successful and failed
+  const successful = result.jobs.processed.filter(j => j.success).length;
+  const failed = result.jobs.processed.filter(j => !j.success).length;
+
+  // Header with success/failure indicator
+  const headerEmoji = failed === 0 ? ':white_check_mark:' : failed === result.jobs.total ? ':x:' : ':warning:';
+  blocks.push(header(`${headerEmoji} Jobs Processed`));
+  blocks.push(divider());
+
+  // Timing context
+  blocks.push(
+    context([
+      `:stopwatch: Duration: *${formatDuration(result.duration)}*`,
+      `:clock1: ${formatTimestamp()}`,
+    ])
+  );
+
+  // Summary section
+  const summaryParts = [
+    `:white_check_mark: ${successful} successful`,
+    `:x: ${failed} failed`,
+  ];
+  blocks.push(section(`*Total:* ${result.jobs.total} jobs\n${summaryParts.join(' | ')}`));
+
+  // Breakdown by job type
+  const jobTypes = Object.keys(result.jobs.byType) as JobType[];
+  if (jobTypes.length > 0) {
+    const typeBreakdown: string[] = [];
+    for (const jobType of jobTypes) {
+      const stats = result.jobs.byType[jobType];
+      if (stats.total > 0) {
+        const emoji = getJobTypeEmoji(jobType);
+        const label = getJobTypeLabel(jobType);
+        const avgTime = formatDuration(stats.averageTimeMs);
+        typeBreakdown.push(
+          `${emoji} *${label}*: ${stats.successful}/${stats.total} (avg ${avgTime})`
+        );
+      }
+    }
+    if (typeBreakdown.length > 0) {
+      blocks.push(section(typeBreakdown.join('\n')));
+    }
+  }
+
+  // Show individual job details for summaries (the most important ones)
+  const summaryJobs = result.jobs.processed.filter(
+    j => j.jobType === 'ASYNC_SUMMARIZE_CACHED'
+  );
+  if (summaryJobs.length > 0) {
+    blocks.push(divider());
+    const summaryDetails = summaryJobs.slice(0, 5).map(job => {
+      const statusEmoji = job.success ? ':white_check_mark:' : ':x:';
+      const ticker = job.ticker || 'Unknown';
+      const formType = job.formType || '';
+      const time = formatDuration(job.durationMs);
+      return `${statusEmoji} *${ticker}* ${formType} (${time})`;
+    }).join('\n');
+
+    let detailsHeader = ':brain: *Summaries Generated*';
+    if (summaryJobs.length > 5) {
+      detailsHeader += ` (showing 5 of ${summaryJobs.length})`;
+    }
+    blocks.push(section(`${detailsHeader}\n${summaryDetails}`));
+  }
+
+  // Show any errors
+  const errors = result.jobs.processed.filter(j => !j.success && j.error);
+  if (errors.length > 0) {
+    blocks.push(divider());
+    const errorDetails = errors.slice(0, 3).map(job => {
+      const ticker = job.ticker || 'Unknown';
+      const label = getJobTypeLabel(job.jobType);
+      return `• *${ticker}* (${label}): ${job.error?.substring(0, 100)}`;
+    }).join('\n');
+    blocks.push(section(`:x: *Errors*\n${errorDetails}`));
+  }
+
+  // Recovered jobs (if any)
+  if (result.recoveredStaleJobs > 0) {
+    blocks.push(
+      context([`:recycle: Recovered ${result.recoveredStaleJobs} stale jobs`])
+    );
+  }
+
+  // Fallback text
+  const fallbackText = `Jobs Processed: ${successful}/${result.jobs.total} successful${failed > 0 ? ` (${failed} failed)` : ''}`;
+
+  return {
+    text: fallbackText,
+    blocks,
     unfurl_links: false,
     unfurl_media: false,
   };
