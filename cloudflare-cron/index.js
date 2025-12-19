@@ -13,11 +13,144 @@ export default {
 
   // Handle scheduled cron events with basic rate limiting
   async scheduled(event, env, ctx) {
+    // Determine which cron schedule triggered this execution
+    // event.cron contains the cron expression that triggered this event
+    const cronExpression = event.cron;
+
+    // Route based on cron expression
+    // "*/5 * * * *" = Pipeline processing (every 5 minutes)
+    // "0 * * * *" = Hourly Slack summary (on the hour)
+    // "0 22 * * *" = Daily Slack report (9 AM AEST = 22:00 UTC)
+
+    if (cronExpression === '0 * * * *') {
+      // Hourly Slack summary
+      return await this.handleHourlySummary(event, env, ctx);
+    }
+
+    if (cronExpression === '0 22 * * *') {
+      // Daily Slack report (9 AM AEST)
+      return await this.handleDailyReport(event, env, ctx);
+    }
+
+    // Default: Pipeline processing (*/5 * * * *)
+    return await this.handlePipelineProcessing(event, env, ctx);
+  },
+
+  // Handle hourly Slack summary
+  async handleHourlySummary(event, env, ctx) {
+    const executionId = `hourly-summary-${Date.now()}`;
+    const startTime = Date.now();
+
+    console.log(`[${executionId}] Starting hourly Slack summary`);
+
+    try {
+      const url = `${env.PUBLIC_URL}/api/cron/slack-hourly-summary`;
+
+      // Generate HMAC signature
+      const timestamp = Date.now();
+      const payload = `${timestamp}:GET:/api/cron/slack-hourly-summary`;
+      const encoder = new TextEncoder();
+      const key = await crypto.subtle.importKey(
+        'raw',
+        encoder.encode(env.CRON_SECRET),
+        { name: 'HMAC', hash: 'SHA-256' },
+        false,
+        ['sign']
+      );
+      const signature = await crypto.subtle.sign('HMAC', key, encoder.encode(payload));
+      const signatureHex = Array.from(new Uint8Array(signature))
+        .map(byte => byte.toString(16).padStart(2, '0'))
+        .join('');
+
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Execution-Id': executionId,
+          'X-Cloudflare-Worker': 'tldrsec-cron',
+          'x-hmac-signature': signatureHex,
+          'x-hmac-timestamp': timestamp.toString(),
+        },
+      });
+
+      const duration = Date.now() - startTime;
+
+      if (response.ok) {
+        console.log(`[${executionId}] Hourly summary completed successfully in ${duration}ms`);
+        return { success: true, executionId, duration };
+      } else {
+        const errorText = await response.text();
+        console.error(`[${executionId}] Hourly summary failed: ${response.status} - ${errorText}`);
+        return { success: false, executionId, duration, error: errorText };
+      }
+    } catch (error) {
+      const duration = Date.now() - startTime;
+      console.error(`[${executionId}] Hourly summary error: ${error.message}`);
+      return { success: false, executionId, duration, error: error.message };
+    }
+  },
+
+  // Handle daily Slack report (9 AM AEST)
+  async handleDailyReport(event, env, ctx) {
+    const executionId = `daily-report-${Date.now()}`;
+    const startTime = Date.now();
+
+    console.log(`[${executionId}] Starting daily Slack report (9 AM AEST)`);
+
+    try {
+      const url = `${env.PUBLIC_URL}/api/cron/slack-daily-report`;
+
+      // Generate HMAC signature
+      const timestamp = Date.now();
+      const payload = `${timestamp}:GET:/api/cron/slack-daily-report`;
+      const encoder = new TextEncoder();
+      const key = await crypto.subtle.importKey(
+        'raw',
+        encoder.encode(env.CRON_SECRET),
+        { name: 'HMAC', hash: 'SHA-256' },
+        false,
+        ['sign']
+      );
+      const signature = await crypto.subtle.sign('HMAC', key, encoder.encode(payload));
+      const signatureHex = Array.from(new Uint8Array(signature))
+        .map(byte => byte.toString(16).padStart(2, '0'))
+        .join('');
+
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Execution-Id': executionId,
+          'X-Cloudflare-Worker': 'tldrsec-cron',
+          'x-hmac-signature': signatureHex,
+          'x-hmac-timestamp': timestamp.toString(),
+        },
+      });
+
+      const duration = Date.now() - startTime;
+
+      if (response.ok) {
+        console.log(`[${executionId}] Daily report completed successfully in ${duration}ms`);
+        return { success: true, executionId, duration };
+      } else {
+        const errorText = await response.text();
+        console.error(`[${executionId}] Daily report failed: ${response.status} - ${errorText}`);
+        return { success: false, executionId, duration, error: errorText };
+      }
+    } catch (error) {
+      const duration = Date.now() - startTime;
+      console.error(`[${executionId}] Daily report error: ${error.message}`);
+      return { success: false, executionId, duration, error: error.message };
+    }
+  },
+
+  // Handle main pipeline processing (every 5 minutes)
+  async handlePipelineProcessing(event, env, ctx) {
     // Initialize monitoring services (KV storage is optional)
     const rateLimiter = new AdvancedRateLimiter(null, null, null); // Use memory fallback
     const circuitBreaker = new CircuitBreaker(null, rateLimiter);
     const monitor = new WorkerMonitor(null); // Use memory fallback
-    
+
     // Generate secure execution ID using crypto API
     const generateSecureExecutionId = () => {
       const timestamp = Date.now();
@@ -26,7 +159,7 @@ export default {
       const randomHex = Array.from(randomArray, byte => byte.toString(16).padStart(2, '0')).join('').substring(0, 16);
       return `cron-${timestamp}-${randomHex}`;
     };
-    
+
     const executionId = generateSecureExecutionId();
     const startTime = Date.now();
     
