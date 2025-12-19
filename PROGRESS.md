@@ -2,14 +2,48 @@
 
 ## Current Status
 **Date**: 2025-12-19
-**Branch**: main
-**Status**: Pipeline Operational ✅ | Discovery Scalability Optimizations Deployed
+**Branch**: feat/supabase-migration
+**Status**: Pipeline Operational ✅ | Supabase Migration Phase 1 Complete
 
 ---
 
-## Current Session: Discovery Pipeline Scalability
+## Current Session: Supabase Database Migration
 
-### Discovery Scalability Optimization ✅ COMPLETE (2025-12-19)
+### Phase 1: Supabase Schema & Config ✅ COMPLETE (2025-12-19)
+Migration from Neon → Supabase PostgreSQL with dual-schema architecture.
+
+**Schema Changes** (prisma/schema.prisma):
+- Added `multiSchema` preview feature to Prisma generator
+- Configured dual-schema support: `app` (11 tables), `pipeline` (19 tables)
+- Added `@@schema()` annotations to all 30 models
+- Added `directUrl` for session-mode connections (migrations, advisory locks)
+
+**New Config Module** (lib/db/supabase-config.ts):
+- `SupabaseConfig` and `RetryConfig` typed interfaces
+- `getSupabaseConfig()` - parses environment variables
+- `validateSupabaseConfig()` - validates configuration
+- `getSupabaseDatabaseUrl()` - returns pooled/direct URL
+- `withRetry()` - exponential backoff retry logic (3 retries, 100ms→5s delay)
+- `canConnectToSupabase()` - connection health check
+
+**Tests**:
+- `__tests__/lib/db/supabase-config.test.ts` - 15 unit tests (all passing)
+- `__tests__/db/supabase-connection.test.ts` - Connection tests with graceful IPv4 skipping
+
+**Supabase Schema Verified via MCP**:
+- app: User, Ticker, SecFiling, Summary, CikMapping, TickerMonitoring, RssFilingCheck, UserSubscription, AuditLog, NotificationSent, SecCompanyCache
+- pipeline: JobQueue, JobProgress, JobLock, SecFetchAttempt, FilingContentCache, FilingUsage, UsagePeriod, CronJobExecution, CronJobMetrics, CronJobAlert, TierProcessingExecution, CronExecutionContext, SummaryCacheAccess, SummaryEmailDelivery, CacheInvalidation, ErrorAlert, MonitoringThreshold, DailyWaitlistCache, DailyPipelineVerification
+- public: newsletter_subscribers (121 records), newsletter_deliveries, page_analytics
+
+**Note**: Local network is IPv4-only, so direct Prisma connections fail. Schema verified via Supabase MCP. Production will use Supavisor pooler.
+
+**Commit**: `06b491f` on `feat/supabase-migration` branch
+
+---
+
+## Recently Completed (Last 30 Days)
+
+### Discovery Scalability Optimization ✅ (2025-12-19)
 4-phase optimization to scale from 2 users/8 tickers to 100K users/1500 tickers.
 
 **Phase 1: Increase Concurrency**
