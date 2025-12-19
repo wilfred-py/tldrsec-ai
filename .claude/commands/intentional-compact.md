@@ -68,28 +68,67 @@ You are tasked with compacting the context window by managing PROGRESS.md size a
    - Remove the full project section that was archived
    - Add reference at bottom: `*Older completed projects archived to .claude/history/ - See TIMELINE.md for full history*`
 
-### Step 4: Synchronize TIMELINE.md with PROGRESS.md
+### Step 4: Synchronize PROGRESS.md with TIMELINE.md (Bidirectional Sync)
 
 **ALWAYS perform this step, regardless of whether archival occurred.**
 
-Ensure TIMELINE.md accurately reflects current state:
+This is a **bidirectional sync** - both files must reflect the same current state.
 
-1. **Update Archive Statistics** (MANDATORY every run):
+#### 4A: Update PROGRESS.md (Detailed Context for Fresh Sessions)
+
+PROGRESS.md is the **detailed context file** for fresh agent sessions. It must contain:
+- Full implementation details (root causes, fixes, file paths, code snippets)
+- Technical specifics needed to continue work or understand decisions
+- Enough context that a new session can pick up where the last left off
+
+1. **Update PROGRESS.md header**:
+   - Update "Date" to today's date
+   - Update "Branch" to current git branch: `git branch --show-current`
+   - Update "Status" to reflect current work
+   - Update "Last Updated" at bottom of file
+
+2. **Ensure Recently Completed section has DETAILED entries**:
+   - Each project should have implementation details, not just one-liners
+   - Include: root cause, fix approach, files modified, verification steps
+   - Format:
+     ```markdown
+     ### [Project Name] ✅ (YYYY-MM-DD)
+     [Brief description of what was done and why]
+
+     **Root Cause/Issue**: [What was wrong]
+     **Fix**: [What was done to fix it]
+     **Files**: `path/to/file.ts`, `another/file.ts`
+     **Verification**: [How it was verified]
+     ```
+
+3. **Move completed Current Session work to Recently Completed**:
+   - If previous "Current Session" work is complete, move it with full details
+   - Start new "Current Session" if there's active work
+
+4. **Remove projects older than 30 days** from "Recently Completed":
+   - These should already be in weekly archive files
+   - Keep PROGRESS.md focused on actionable recent context
+
+#### 4B: Update TIMELINE.md (High-Level Master Index)
+
+TIMELINE.md is the **master timeline index**. It provides:
+- Quick chronological overview of all work
+- Links to archives for deep dives
+- High-level status, NOT detailed implementation
+
+1. **Update Recent Activity table**:
+   - Simple table format: Date | Project | Status
+   - One line per project, no implementation details
+   - Point to PROGRESS.md for details
+
+2. **Update Archive Statistics**:
    - Count current PROGRESS.md lines: `wc -l PROGRESS.md`
-   - Update "Current PROGRESS.md Lines" to actual current count
-   - Update "Last Archive Update" date to today (YYYY-MM-DD format)
-   - Count total archived projects across all archive files
-   - Update "Total Archived Projects" count
+   - Update "Current PROGRESS.md Lines" to actual count
+   - Update "Last Sync" date to today
 
-2. **Add Recent Completions Section** (if applicable):
-   - If PROGRESS.md contains "Recently Completed (Last 30 Days)" section
-   - Add these as references in TIMELINE.md under a "Recent Activity (Not Yet Archived)" section
-   - Format: `- [Project Name] (YYYY-MM-DD) 🔄 (Active in PROGRESS.md)`
-   - This provides visibility of recent work before it's eligible for archival
-
-3. **Verify all archive links work**:
-   - Each weekly entry should have a valid relative link
-   - Each project bullet should accurately describe what was archived
+3. **Verify archive links work**:
+   - Each weekly entry should have valid relative link
+   - Historical details live in archive files, not TIMELINE.md
 
 ### Step 5: Update Progress Summary
 
@@ -198,9 +237,13 @@ Example: If project completed on Wednesday Nov 27, 2025:
 
 ## Remember
 
-- **ALWAYS sync TIMELINE.md statistics** - Update Archive Statistics every run, regardless of archival
-- **Always preserve full technical details** when archiving - nothing gets summarized or lost
-- **Update both TIMELINE.md AND the archive file** when archiving
+- **PROGRESS.md = DETAILED CONTEXT** - Full implementation details for fresh agent sessions
+- **TIMELINE.md = HIGH-LEVEL INDEX** - Quick chronological overview with links to archives
+- **BIDIRECTIONAL SYNC IS MANDATORY** - Both files must reflect the same projects, but at different detail levels
+- **PROGRESS.md is the primary reference** - New sessions should read PROGRESS.md for context
+- **TIMELINE.md is for long-term history** - When you need to trace events over months
+- **Always preserve full technical details in PROGRESS.md** - Root causes, fixes, files, verification
+- **Keep TIMELINE.md entries brief** - Just date, project name, status in a table
+- **Archive files have full details** - When projects are >30 days old, archive preserves everything
 - **Keep PROGRESS.md under 500 lines** for optimal context window performance
 - **Never archive active/in-progress work** - only completed projects >30 days old
-- **Recent Activity visibility** - Add recently completed projects (<30 days) to TIMELINE.md "Recent Activity" section for historical tracking

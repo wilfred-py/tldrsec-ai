@@ -3,18 +3,79 @@
  *
  * Generates daily pipeline verification reports for Slack.
  * Integrates with the verify-daily-pipeline script functionality.
+ *
+ * Enhanced to provide detailed filing-level breakdown matching
+ * the verify-daily-pipeline.ts output format.
+ *
+ * NOTE: Uses raw SQL queries to work with the actual database schema
+ * (tables are in 'public' schema, not 'app' schema as Prisma expects)
  */
 
 import { logger } from '../logging';
 import { getPrismaClient } from '../db/prisma';
-import type { SlackWebhookPayload, DailySummaryMetrics } from './types';
+import { Prisma } from '@prisma/client';
+import type {
+  SlackWebhookPayload,
+  DailySummaryMetrics,
+  FilingVerificationDetail,
+  AiModelCost,
+  CacheHealthMetrics
+} from './types';
 import { formatDailySummaryMessage } from './message-formatter';
 
 const dailyReportLogger = logger.child('slack-daily-report');
 
 // =============================================================================
-// Database Queries (based on verify-daily-pipeline.ts)
+// Database Queries using Raw SQL (to work with public schema)
 // =============================================================================
+
+interface RssFilingRow {
+  id: string;
+  accessionNumber: string;
+  filingType: string;
+  filingDate: Date;
+  createdAt: Date;
+  symbol: string;
+}
+
+interface FilingCacheRow {
+  accessionNumber: string;
+  status: string;
+}
+
+interface SummaryRow {
+  id: string;
+  summaryText: string | null;
+  processingStatus: string | null;
+}
+
+interface EmailDeliveryRow {
+  id: string;
+  deliveryStatus: string;
+}
+
+interface SummaryStatsRow {
+  totalCost: number | null;
+  inputTokens: number | null;
+  outputTokens: number | null;
+  tokensUsed: number | null;
+  model: string | null;
+}
+
+interface CacheStatsRow {
+  status: string;
+  fetchDuration: number;
+}
+
+interface CronExecRow {
+  tickersChecked: number | null;
+}
+
+interface RemediationRow {
+  remediationAttempted: number;
+  remediationSucceeded: number;
+  remediationFailed: number;
+}
 
 /**
  * Get date range for a specific date or yesterday
@@ -29,13 +90,13 @@ function getDateRange(targetDate?: string): { start: Date; end: Date; dateStr: s
     date.setDate(date.getDate() - 1); // Yesterday
   }
 
-  // Start of day (midnight)
+  // Start of day (midnight UTC)
   const start = new Date(date);
-  start.setHours(0, 0, 0, 0);
+  start.setUTCHours(0, 0, 0, 0);
 
-  // End of day (23:59:59.999)
+  // End of day (23:59:59.999 UTC)
   const end = new Date(date);
-  end.setHours(23, 59, 59, 999);
+  end.setUTCHours(23, 59, 59, 999);
 
   // Format date string
   const dateStr = date.toISOString().split('T')[0];
@@ -44,123 +105,263 @@ function getDateRange(targetDate?: string): { start: Date; end: Date; dateStr: s
 }
 
 /**
+ * Get all discovered filings in date range with their full verification status
+ * Uses raw SQL to query the public schema directly
+ */
+async function getDiscoveredFilingsWithStatus(
+  start: Date,
+  end: Date
+): Promise<FilingVerificationDetail[]> {
+  const prisma = getPrismaClient();
+
+  // Get discovered filings from RssFilingCheck joined with TickerMonitoring
+  const discoveredFilings = await prisma.$queryRaw<RssFilingRow[]>`
+    SELECT
+      r.id,
+      r."accessionNumber",
+      r."filingType",
+      r."filingDate",
+      r."createdAt",
+      t.symbol
+    FROM public."RssFilingCheck" r
+    JOIN public."TickerMonitoring" t ON r."tickerMonitoringId" = t.id
+    WHERE r."createdAt" >= ${start} AND r."createdAt" <= ${end}
+    ORDER BY r."createdAt" DESC
+  `;
+
+  const filingDetails: FilingVerificationDetail[] = [];
+
+  for (const filing of discoveredFilings) {
+    const detail: FilingVerificationDetail = {
+      ticker: filing.symbol,
+      formType: filing.filingType,
+      accessionNumber: filing.accessionNumber,
+      filingDate: filing.filingDate,
+      status: 'PENDING',
+      discovered: true,
+      fetched: false,
+      summarized: false,
+      emailed: false,
+      emailCount: 0,
+    };
+
+    // Check fetch status via FilingContentCache
+    const cacheResult = await prisma.$queryRaw<FilingCacheRow[]>`
+      SELECT "accessionNumber", status
+      FROM public."FilingContentCache"
+      WHERE "accessionNumber" = ${filing.accessionNumber}
+      LIMIT 1
+    `;
+    detail.fetched = cacheResult.length > 0 && cacheResult[0].status === 'CACHED';
+
+    if (detail.fetched) {
+      // Check summarization status
+      const accessionNoDashes = filing.accessionNumber.replace(/-/g, '');
+      const summaryResult = await prisma.$queryRaw<SummaryRow[]>`
+        SELECT s.id, s."summaryText", s."processingStatus"
+        FROM public."Summary" s
+        LEFT JOIN public."SecFiling" sf ON s."secFilingId" = sf.id
+        WHERE sf."accessionNumber" = ${filing.accessionNumber}
+           OR s."filingUrl" LIKE ${'%' + accessionNoDashes + '%'}
+        LIMIT 1
+      `;
+
+      if (summaryResult.length > 0) {
+        const summary = summaryResult[0];
+        detail.summarized = !!(summary.summaryText && summary.summaryText.trim().length > 0);
+
+        if (detail.summarized) {
+          // Check email delivery status
+          const deliveries = await prisma.$queryRaw<EmailDeliveryRow[]>`
+            SELECT id, "deliveryStatus"
+            FROM public."SummaryEmailDelivery"
+            WHERE "summaryId" = ${summary.id}
+              AND "deliveryStatus" IN ('sent', 'delivered')
+          `;
+          detail.emailed = deliveries.length > 0;
+          detail.emailCount = deliveries.length;
+        }
+      }
+    }
+
+    // Determine overall status
+    if (detail.fetched && detail.summarized && detail.emailed) {
+      detail.status = 'COMPLETE';
+    } else if (!detail.fetched) {
+      detail.status = 'FAILED';
+    } else {
+      detail.status = 'PENDING';
+    }
+
+    filingDetails.push(detail);
+  }
+
+  return filingDetails;
+}
+
+/**
+ * Get AI cost breakdown by model
+ */
+async function getAiCostBreakdown(
+  start: Date,
+  end: Date
+): Promise<{
+  total: number;
+  inputTokens: number;
+  outputTokens: number;
+  totalTokens: number;
+  modelBreakdown: Record<string, AiModelCost>;
+}> {
+  const prisma = getPrismaClient();
+
+  const summaries = await prisma.$queryRaw<SummaryStatsRow[]>`
+    SELECT "totalCost", "inputTokens", "outputTokens", "tokensUsed", model
+    FROM public."Summary"
+    WHERE "createdAt" >= ${start} AND "createdAt" <= ${end}
+  `;
+
+  const modelBreakdown: Record<string, AiModelCost> = {};
+  let total = 0;
+  let inputTokens = 0;
+  let outputTokens = 0;
+  let totalTokens = 0;
+
+  for (const summary of summaries) {
+    const cost = Number(summary.totalCost) || 0;
+    const input = summary.inputTokens || 0;
+    const output = summary.outputTokens || 0;
+    const tokens = summary.tokensUsed || (input + output);
+    const model = summary.model || 'unknown';
+
+    total += cost;
+    inputTokens += input;
+    outputTokens += output;
+    totalTokens += tokens;
+
+    if (!modelBreakdown[model]) {
+      modelBreakdown[model] = { cost: 0, inputTokens: 0, outputTokens: 0 };
+    }
+    modelBreakdown[model].cost += cost;
+    modelBreakdown[model].inputTokens += input;
+    modelBreakdown[model].outputTokens += output;
+  }
+
+  return { total, inputTokens, outputTokens, totalTokens, modelBreakdown };
+}
+
+/**
+ * Get cache health metrics
+ */
+async function getCacheHealthMetrics(
+  start: Date,
+  end: Date
+): Promise<CacheHealthMetrics> {
+  const prisma = getPrismaClient();
+
+  const cacheEntries = await prisma.$queryRaw<CacheStatsRow[]>`
+    SELECT status, "fetchDuration"
+    FROM public."FilingContentCache"
+    WHERE "fetchedAt" >= ${start} AND "fetchedAt" <= ${end}
+  `;
+
+  const successfulCaches = cacheEntries.filter(c => c.status === 'CACHED').length;
+  const errorCaches = cacheEntries.filter(c => c.status === 'ERROR').length;
+
+  const entriesWithDuration = cacheEntries.filter(c => c.fetchDuration > 0);
+  const avgFetchDurationMs = entriesWithDuration.length > 0
+    ? entriesWithDuration.reduce((sum, c) => sum + c.fetchDuration, 0) / entriesWithDuration.length
+    : 0;
+
+  return {
+    totalEntries: cacheEntries.length,
+    successfulCaches,
+    errorCaches,
+    avgFetchDurationMs: Math.round(avgFetchDurationMs),
+  };
+}
+
+/**
  * Get verification metrics for a date range
+ * Enhanced to include detailed filing-level data
  */
 async function getVerificationMetrics(
   start: Date,
   end: Date
 ): Promise<DailySummaryMetrics> {
+  const startTime = Date.now();
   const prisma = getPrismaClient();
 
-  // Parallel queries for efficiency
-  const [
-    discoveredFilings,
-    fetchAttempts,
-    summaries,
-    emailDeliveries,
-    cronExecutions,
-  ] = await Promise.all([
-    // 1. Discovered filings (RssFilingCheck)
-    prisma.rssFilingCheck.count({
-      where: {
-        createdAt: { gte: start, lte: end },
-      },
-    }),
+  // Get detailed filing-level data
+  const filings = await getDiscoveredFilingsWithStatus(start, end);
 
-    // 2. Fetch attempts (use attemptedAt, not createdAt)
-    prisma.secFetchAttempt.groupBy({
-      by: ['status'],
-      where: {
-        attemptedAt: { gte: start, lte: end },
-      },
-      _count: true,
-    }),
+  // Get AI cost breakdown
+  const aiCosts = await getAiCostBreakdown(start, end);
 
-    // 3. Summaries generated
-    prisma.summary.findMany({
-      where: {
-        createdAt: { gte: start, lte: end },
-      },
-      select: {
-        id: true,
-        isCacheHit: true,
-        totalCostUsd: true,
-        modelId: true,
-      },
-    }),
+  // Get cache health metrics
+  const cacheHealth = await getCacheHealthMetrics(start, end);
 
-    // 4. Email deliveries
-    prisma.summaryEmailDelivery.findMany({
-      where: {
-        createdAt: { gte: start, lte: end },
-      },
-      select: {
-        userId: true,
-      },
-    }),
+  // Get cron execution stats for tickers checked
+  const cronExecutions = await prisma.$queryRaw<CronExecRow[]>`
+    SELECT "tickersChecked"
+    FROM public."CronJobExecution"
+    WHERE "startedAt" >= ${start} AND "startedAt" <= ${end}
+      AND "jobName" = 'tier-aware'
+  `;
 
-    // 5. Cron executions (for tickers checked)
-    prisma.cronJobExecution.findMany({
-      where: {
-        startTime: { gte: start, lte: end },
-        jobType: 'TIER_AWARE',
-      },
-      select: {
-        tickersChecked: true,
-        newFilingsFound: true,
-      },
-    }),
-  ]);
-
-  // Process fetch attempts
-  const fetchSuccessful = fetchAttempts.find(f => f.status === 'success')?._count || 0;
-  const fetchFailed = fetchAttempts.filter(f => f.status !== 'success').reduce((sum, f) => sum + f._count, 0);
-
-  // Process summaries
-  const summariesCompleted = summaries.length;
-  const summariesCached = summaries.filter(s => s.isCacheHit).length;
-  const totalCost = summaries.reduce((sum, s) => sum + (s.totalCostUsd || 0), 0);
-  const models = new Set(summaries.map(s => s.modelId).filter(Boolean));
-  const modelStr = models.size > 0 ? Array.from(models).join(', ') : 'N/A';
-
-  // Process emails
-  const emailsSent = emailDeliveries.length;
-  const uniqueUsers = new Set(emailDeliveries.map(e => e.userId)).size;
-
-  // Process cron executions
   const tickersChecked = cronExecutions.reduce((sum, c) => sum + (c.tickersChecked || 0), 0);
   const avgTickersPerRun = cronExecutions.length > 0 ? Math.round(tickersChecked / cronExecutions.length) : 0;
 
+  // Calculate aggregates from filings
+  const totalCompleted = filings.filter(f => f.status === 'COMPLETE').length;
+  const totalPending = filings.filter(f => f.status === 'PENDING').length;
+  const fetchSuccess = filings.filter(f => f.fetched).length;
+  const fetchFailed = filings.filter(f => !f.fetched).length;
+  const summarizeSuccess = filings.filter(f => f.summarized).length;
+  const summarizeFailed = filings.filter(f => f.fetched && !f.summarized).length;
+  const emailsSent = filings.reduce((sum, f) => sum + f.emailCount, 0);
+  const uniqueUsers = new Set(filings.filter(f => f.emailed).map(f => f.ticker)).size; // Using ticker as proxy for unique emails
+
   // Calculate completion rate
-  // A filing is complete if it was discovered, fetched, summarized
-  // Using fetched as denominator since some discovered may not need processing
-  const completionRate = fetchSuccessful > 0
-    ? (summariesCompleted / fetchSuccessful) * 100
-    : discoveredFilings > 0 ? 0 : 100;
+  const completionRate = filings.length > 0
+    ? (totalCompleted / filings.length) * 100
+    : 100;
+
+  // Get models used
+  const models = Object.keys(aiCosts.modelBreakdown);
+  const modelStr = models.length > 0 ? models.join(', ') : 'N/A';
+
+  const durationMs = Date.now() - startTime;
 
   return {
     completionRate: Math.min(100, completionRate),
     discovery: {
-      filingsDiscovered: discoveredFilings,
+      filingsDiscovered: filings.length,
       tickersChecked: avgTickersPerRun,
     },
     fetch: {
-      completed: fetchSuccessful,
+      completed: fetchSuccess,
       failed: fetchFailed,
     },
     summarize: {
-      completed: summariesCompleted,
-      failed: fetchSuccessful - summariesCompleted,
-      cached: summariesCached,
+      completed: summarizeSuccess,
+      failed: summarizeFailed,
+      cached: 0, // TODO: Track cache hits separately
     },
     email: {
       sent: emailsSent,
       recipients: uniqueUsers,
     },
     costs: {
-      total: totalCost,
+      total: aiCosts.total,
       model: modelStr,
+      inputTokens: aiCosts.inputTokens,
+      outputTokens: aiCosts.outputTokens,
+      totalTokens: aiCosts.totalTokens,
+      modelBreakdown: aiCosts.modelBreakdown,
     },
+    filings,
+    cacheHealth,
+    durationMs,
   };
 }
 
@@ -175,23 +376,19 @@ async function getRemediationMetrics(
     const prisma = getPrismaClient();
 
     // Check if the table exists and has data
-    const verification = await prisma.dailyPipelineVerification.findFirst({
-      where: {
-        verificationDate: { gte: start, lte: end },
-      },
-      select: {
-        remediationAttempted: true,
-        remediationSucceeded: true,
-        remediationFailed: true,
-      },
-    });
+    const verification = await prisma.$queryRaw<RemediationRow[]>`
+      SELECT "remediationAttempted", "remediationSucceeded", "remediationFailed"
+      FROM public."DailyPipelineVerification"
+      WHERE "verificationDate" >= ${start} AND "verificationDate" <= ${end}
+      LIMIT 1
+    `;
 
-    if (!verification) return undefined;
+    if (verification.length === 0) return undefined;
 
     return {
-      attempted: verification.remediationAttempted,
-      succeeded: verification.remediationSucceeded,
-      failed: verification.remediationFailed,
+      attempted: verification[0].remediationAttempted,
+      succeeded: verification[0].remediationSucceeded,
+      failed: verification[0].remediationFailed,
     };
   } catch {
     // Table may not exist or query failed
@@ -266,34 +463,38 @@ export async function generateQuickMetrics(hoursBack: number = 24): Promise<{
   const prisma = getPrismaClient();
   const since = new Date(Date.now() - hoursBack * 60 * 60 * 1000);
 
-  const [queueStatus, emailCount] = await Promise.all([
+  interface QueueStatusRow {
+    status: string;
+    count: bigint;
+  }
+
+  interface EmailCountRow {
+    count: bigint;
+  }
+
+  const [queueStatus, emailCountResult] = await Promise.all([
     // Queue metrics
-    prisma.jobQueue.groupBy({
-      by: ['status'],
-      where: {
-        OR: [
-          { status: { in: ['PENDING', 'PROCESSING'] } },
-          {
-            status: { in: ['COMPLETED', 'FAILED'] },
-            updatedAt: { gte: since },
-          },
-        ],
-      },
-      _count: true,
-    }),
+    prisma.$queryRaw<QueueStatusRow[]>`
+      SELECT status, COUNT(*)::bigint as count
+      FROM public."JobQueue"
+      WHERE status IN ('PENDING', 'PROCESSING')
+         OR (status IN ('COMPLETED', 'FAILED') AND "updatedAt" >= ${since})
+      GROUP BY status
+    `,
 
     // Email count
-    prisma.summaryEmailDelivery.count({
-      where: {
-        createdAt: { gte: since },
-      },
-    }),
+    prisma.$queryRaw<EmailCountRow[]>`
+      SELECT COUNT(*)::bigint as count
+      FROM public."SummaryEmailDelivery"
+      WHERE "sentAt" >= ${since}
+    `,
   ]);
 
-  const pending = queueStatus.find(s => s.status === 'PENDING')?._count || 0;
-  const processing = queueStatus.find(s => s.status === 'PROCESSING')?._count || 0;
-  const completed = queueStatus.find(s => s.status === 'COMPLETED')?._count || 0;
-  const failed = queueStatus.find(s => s.status === 'FAILED')?._count || 0;
+  const pending = Number(queueStatus.find(s => s.status === 'PENDING')?.count || 0n);
+  const processing = Number(queueStatus.find(s => s.status === 'PROCESSING')?.count || 0n);
+  const completed = Number(queueStatus.find(s => s.status === 'COMPLETED')?.count || 0n);
+  const failed = Number(queueStatus.find(s => s.status === 'FAILED')?.count || 0n);
+  const emailCount = Number(emailCountResult[0]?.count || 0n);
 
   return {
     queueDepth: pending + processing,

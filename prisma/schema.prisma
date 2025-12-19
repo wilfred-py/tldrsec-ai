@@ -1,13 +1,20 @@
 generator client {
-  provider      = "prisma-client-js"
-  output        = "../node_modules/.prisma/client"
-  binaryTargets = ["native", "rhel-openssl-3.0.x"]
+  provider        = "prisma-client-js"
+  output          = "../node_modules/.prisma/client"
+  binaryTargets   = ["native", "rhel-openssl-3.0.x"]
+  previewFeatures = ["multiSchema"]
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+  schemas   = ["app", "pipeline"]
 }
+
+// =============================================================================
+// APP SCHEMA - Core application data
+// =============================================================================
 
 model User {
   id                    String                 @id @default(uuid())
@@ -40,6 +47,8 @@ model User {
   tickers               Ticker[]
   usagePeriods          UsagePeriod[]
   userSubscription      UserSubscription?
+
+  @@schema("app")
 }
 
 model Ticker {
@@ -53,6 +62,7 @@ model Ticker {
   user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, symbol])
+  @@schema("app")
 }
 
 model Summary {
@@ -109,6 +119,27 @@ model Summary {
   // A filing is uniquely identified by tickerId + filingUrl
   @@unique([tickerId, filingUrl])
   @@index([filingUrl])
+  @@schema("app")
+}
+
+model SecFiling {
+  id              String            @id @default(uuid())
+  tickerId        String
+  formType        String
+  filingDate      DateTime
+  secUrl          String
+  accessionNumber String
+  companyName     String?
+  cik             String
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+  fetchAttempts   SecFetchAttempt[]
+  ticker          Ticker            @relation(fields: [tickerId], references: [id], onDelete: Cascade)
+  summaries       Summary[]
+
+  @@index([tickerId, formType])
+  @@index([accessionNumber])
+  @@schema("app")
 }
 
 model CikMapping {
@@ -130,23 +161,115 @@ model CikMapping {
 
   @@index([ticker])
   @@index([companyName])
+  @@schema("app")
 }
 
-model TickerChange {
-  id            String   @id @default(uuid())
-  oldTicker     String
-  newTicker     String
-  oldCik        String?
-  newCik        String?
-  effectiveDate DateTime
-  changeType    String
-  description   String?
-  createdAt     DateTime @default(now())
+model TickerMonitoring {
+  id                String           @id @default(uuid())
+  cik               String           @unique
+  symbol            String
+  companyName       String
+  isActive          Boolean          @default(true)
+  rssUrl            String
+  lastChecked       DateTime?
+  lastAccessionSeen String?
+  subscriberCount   Int              @default(0)
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+  version           Int              @default(0)
+  filingChecks      RssFilingCheck[]
 
-  @@index([oldTicker])
-  @@index([newTicker])
-  @@index([effectiveDate])
+  @@index([isActive, lastChecked])
+  @@index([cik])
+  @@index([cik, version])
+  @@schema("app")
 }
+
+model RssFilingCheck {
+  id                 String           @id @default(uuid())
+  tickerMonitoringId String
+  accessionNumber    String           @unique
+  filingType         String
+  filingDate         DateTime
+  filingUrl          String
+  rssEntryDate       DateTime
+  processed          Boolean          @default(false)
+  createdAt          DateTime         @default(now())
+  tickerMonitoring   TickerMonitoring @relation(fields: [tickerMonitoringId], references: [id], onDelete: Cascade)
+
+  @@index([processed, createdAt])
+  @@index([tickerMonitoringId, processed])
+  @@schema("app")
+}
+
+model UserSubscription {
+  id                   String   @id @default(uuid())
+  userId               String   @unique
+  planType             PlanType @default(BASIC)
+  isActive             Boolean  @default(true)
+  currentPeriodStart   DateTime @default(now())
+  currentPeriodEnd     DateTime
+  cancelAtPeriodEnd    Boolean  @default(false)
+  stripeCustomerId     String?  @unique
+  stripeSubscriptionId String?  @unique
+  stripePriceId        String?
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+  user                 User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([planType, isActive])
+  @@schema("app")
+}
+
+model AuditLog {
+  id           String   @id @default(uuid())
+  userId       String
+  action       String
+  details      Json
+  ipAddress    String?
+  userAgent    String?
+  success      Boolean  @default(true)
+  errorMessage String?
+  createdAt    DateTime @default(now())
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@index([action, createdAt])
+  @@index([createdAt])
+  @@schema("app")
+}
+
+model NotificationSent {
+  id               String   @id @default(uuid())
+  userId           String
+  filingId         String?
+  summaryId        String?
+  notificationType String
+  emailId          String?
+  emailAddress     String
+  sentAt           DateTime @default(now())
+  deliveryStatus   String   @default("sent")
+  metadata         Json?
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, sentAt])
+  @@index([notificationType, sentAt])
+  @@index([emailId])
+  @@schema("app")
+}
+
+model SecCompanyCache {
+  id        Int      @id @default(1)
+  data      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@schema("app")
+}
+
+// =============================================================================
+// PIPELINE SCHEMA - Pipeline infrastructure
+// =============================================================================
 
 model JobQueue {
   id             String        @id @default(uuid())
@@ -180,6 +303,7 @@ model JobQueue {
   @@index([createdAt])
   @@index([timeoutFlagged, createdAt])
   @@index([userId])
+  @@schema("pipeline")
 }
 
 model JobProgress {
@@ -194,6 +318,7 @@ model JobProgress {
 
   @@index([jobId, updatedAt])
   @@index([phase, updatedAt])
+  @@schema("pipeline")
 }
 
 model JobLock {
@@ -206,32 +331,19 @@ model JobLock {
   released    Boolean   @default(false)
 
   @@index([lockName, released, expiresAt])
+  @@schema("pipeline")
 }
 
-model SecFiling {
-  id              String            @id @default(uuid())
-  tickerId        String
-  formType        String
-  filingDate      DateTime
-  secUrl          String
-  accessionNumber String
-  companyName     String?
-  cik             String
-  createdAt       DateTime          @default(now())
-  updatedAt       DateTime          @updatedAt
-  fetchAttempts   SecFetchAttempt[]
-  ticker          Ticker            @relation(fields: [tickerId], references: [id], onDelete: Cascade)
-  summaries       Summary[]
+model SecFetchAttempt {
+  id           String    @id @default(uuid())
+  filingId     String
+  attemptedAt  DateTime
+  errorMessage String?
+  status       String
+  filing       SecFiling @relation(fields: [filingId], references: [id], onDelete: Cascade)
 
-  @@index([tickerId, formType])
-  @@index([accessionNumber])
-}
-
-model SecCompanyCache {
-  id        Int      @id @default(1)
-  data      String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  @@index([filingId])
+  @@schema("pipeline")
 }
 
 model FilingContentCache {
@@ -251,89 +363,7 @@ model FilingContentCache {
   @@index([accessionNumber])
   @@index([expiresAt])
   @@index([status])
-}
-
-model SecFetchAttempt {
-  id           String    @id @default(uuid())
-  filingId     String
-  attemptedAt  DateTime
-  errorMessage String?
-  status       String
-  filing       SecFiling @relation(fields: [filingId], references: [id], onDelete: Cascade)
-
-  @@index([filingId])
-}
-
-model NotificationSent {
-  id               String   @id @default(uuid())
-  userId           String
-  filingId         String?
-  summaryId        String?
-  notificationType String
-  emailId          String?
-  emailAddress     String
-  sentAt           DateTime @default(now())
-  deliveryStatus   String   @default("sent")
-  metadata         Json?
-  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([userId, sentAt])
-  @@index([notificationType, sentAt])
-  @@index([emailId])
-}
-
-model TickerMonitoring {
-  id                String           @id @default(uuid())
-  cik               String           @unique
-  symbol            String
-  companyName       String
-  isActive          Boolean          @default(true)
-  rssUrl            String
-  lastChecked       DateTime?
-  lastAccessionSeen String?
-  subscriberCount   Int              @default(0)
-  createdAt         DateTime         @default(now())
-  updatedAt         DateTime         @updatedAt
-  version           Int              @default(0)
-  filingChecks      RssFilingCheck[]
-
-  @@index([isActive, lastChecked])
-  @@index([cik])
-  @@index([cik, version])
-}
-
-model RssFilingCheck {
-  id                 String           @id @default(uuid())
-  tickerMonitoringId String
-  accessionNumber    String           @unique
-  filingType         String
-  filingDate         DateTime
-  filingUrl          String
-  rssEntryDate       DateTime
-  processed          Boolean          @default(false)
-  createdAt          DateTime         @default(now())
-  tickerMonitoring   TickerMonitoring @relation(fields: [tickerMonitoringId], references: [id], onDelete: Cascade)
-
-  @@index([processed, createdAt])
-  @@index([tickerMonitoringId, processed])
-}
-
-model UserSubscription {
-  id                   String   @id @default(uuid())
-  userId               String   @unique
-  planType             PlanType @default(BASIC)
-  isActive             Boolean  @default(true)
-  currentPeriodStart   DateTime @default(now())
-  currentPeriodEnd     DateTime
-  cancelAtPeriodEnd    Boolean  @default(false)
-  stripeCustomerId     String?  @unique
-  stripeSubscriptionId String?  @unique
-  stripePriceId        String?
-  createdAt            DateTime @default(now())
-  updatedAt            DateTime @updatedAt
-  user                 User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([planType, isActive])
+  @@schema("pipeline")
 }
 
 model FilingUsage {
@@ -355,6 +385,7 @@ model FilingUsage {
   @@index([userId, createdAt])
   @@index([subscriptionTier, createdAt])
   @@index([filingType, createdAt])
+  @@schema("pipeline")
 }
 
 model UsagePeriod {
@@ -372,12 +403,13 @@ model UsagePeriod {
 
   @@unique([userId, periodStart])
   @@index([userId, periodEnd])
+  @@schema("pipeline")
 }
 
 model CronJobExecution {
-  id               String               @id @default(uuid())
+  id               String           @id @default(uuid())
   jobName          String
-  executionId      String               @unique
+  executionId      String           @unique
   status           CronJobStatus
   startedAt        DateTime
   completedAt      DateTime?
@@ -387,24 +419,24 @@ model CronJobExecution {
   batchSize        Int?
   maxConcurrent    Int?
   timeoutMs        Int?
-  tickersChecked   Int                  @default(0)
-  newFilingsFound  Int                  @default(0)
-  filingsProcessed Int                  @default(0)
-  emailsSent       Int                  @default(0)
-  errorsCount      Int                  @default(0)
+  tickersChecked   Int              @default(0)
+  newFilingsFound  Int              @default(0)
+  filingsProcessed Int              @default(0)
+  emailsSent       Int              @default(0)
+  errorsCount      Int              @default(0)
   memoryUsageMb    Float?
   cpuUsagePercent  Float?
   errorMessage     String?
   errorStack       String?
-  createdAt        DateTime             @default(now())
+  createdAt        DateTime         @default(now())
   alerts           CronJobAlert[]
   metrics          CronJobMetrics[]
-  performance      CronJobPerformance[]
 
   @@index([jobName, startedAt])
   @@index([status, startedAt])
   @@index([startedAt])
   @@index([executionId])
+  @@schema("pipeline")
 }
 
 model CronJobMetrics {
@@ -441,6 +473,7 @@ model CronJobMetrics {
   execution             CronJobExecution @relation(fields: [executionId], references: [id], onDelete: Cascade)
 
   @@index([executionId])
+  @@schema("pipeline")
 }
 
 model CronJobAlert {
@@ -467,80 +500,7 @@ model CronJobAlert {
   @@index([severity, triggeredAt])
   @@index([jobName, triggeredAt])
   @@index([resolvedAt])
-}
-
-model CronJobPerformance {
-  id                  String           @id @default(uuid())
-  executionId         String
-  timestamp           DateTime
-  phase               String
-  memoryUsageMb       Float
-  cpuUsagePercent     Float?
-  activeConnections   Int?
-  queueDepth          Int?
-  operationType       String?
-  operationDurationMs Int?
-  operationSuccess    Boolean?
-  operationError      String?
-  itemsProcessed      Int?
-  itemsRemaining      Int?
-  execution           CronJobExecution @relation(fields: [executionId], references: [id], onDelete: Cascade)
-
-  @@index([executionId, timestamp])
-  @@index([phase, timestamp])
-  @@index([operationType, timestamp])
-}
-
-model CronJobDailySummary {
-  id                    String   @id @default(uuid())
-  date                  DateTime @unique @db.Date
-  jobName               String
-  totalExecutions       Int      @default(0)
-  successfulExecutions  Int      @default(0)
-  failedExecutions      Int      @default(0)
-  avgDurationMs         Float?
-  totalDurationMs       Int      @default(0)
-  totalFilingsProcessed Int      @default(0)
-  totalEmailsSent       Int      @default(0)
-  totalUsersAffected    Int      @default(0)
-  totalAiCost           Float    @default(0)
-  totalEmailCost        Float    @default(0)
-  totalOperationalCost  Float    @default(0)
-  avgMemoryUsageMb      Float?
-  peakMemoryUsageMb     Float?
-  totalApiCalls         Int      @default(0)
-  totalAlerts           Int      @default(0)
-  criticalAlerts        Int      @default(0)
-  createdAt             DateTime @default(now())
-  updatedAt             DateTime @updatedAt
-
-  @@index([date, jobName])
-  @@index([jobName, date])
-}
-
-model TierProcessingMetrics {
-  id                String           @id @default(uuid())
-  date              DateTime         @default(now()) @db.Date
-  tier              SubscriptionTier
-  usersProcessed    Int              @default(0)
-  usersEligible     Int              @default(0)
-  usersSkipped      Int              @default(0)
-  avgProcessingTime Float?
-  filingsProcessed  Int              @default(0)
-  budgetUsed        Float            @default(0)
-  budgetLimit       Float            @default(0)
-  costPerUser       Float?
-  marketHoursRuns   Int              @default(0)
-  offHoursRuns      Int              @default(0)
-  priorityProcessed Int              @default(0)
-  errorCount        Int              @default(0)
-  timeoutCount      Int              @default(0)
-  createdAt         DateTime         @default(now())
-  updatedAt         DateTime         @updatedAt
-
-  @@unique([date, tier])
-  @@index([date, tier])
-  @@index([tier, createdAt])
+  @@schema("pipeline")
 }
 
 model TierProcessingExecution {
@@ -570,6 +530,7 @@ model TierProcessingExecution {
   @@index([executionId])
   @@index([tier, startedAt])
   @@index([isMarketHours, tier])
+  @@schema("pipeline")
 }
 
 model CronExecutionContext {
@@ -593,6 +554,7 @@ model CronExecutionContext {
 
   @@index([executionId])
   @@index([isMarketHours, createdAt])
+  @@schema("pipeline")
 }
 
 model SummaryCacheAccess {
@@ -606,6 +568,7 @@ model SummaryCacheAccess {
 
   @@index([summaryId, accessedAt])
   @@index([userId, accessedAt])
+  @@schema("pipeline")
 }
 
 model SummaryEmailDelivery {
@@ -625,23 +588,7 @@ model SummaryEmailDelivery {
   @@index([userId, sentAt])
   @@index([deliveryStatus, sentAt])
   @@index([userId, summaryId], map: "idx_email_deduplication_lookup")
-}
-
-model AuditLog {
-  id           String   @id @default(uuid())
-  userId       String
-  action       String
-  details      Json
-  ipAddress    String?
-  userAgent    String?
-  success      Boolean  @default(true)
-  errorMessage String?
-  createdAt    DateTime @default(now())
-  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([userId, createdAt])
-  @@index([action, createdAt])
-  @@index([createdAt])
+  @@schema("pipeline")
 }
 
 model CacheInvalidation {
@@ -663,24 +610,7 @@ model CacheInvalidation {
   @@index([requesterId, createdAt])
   @@index([correlationId])
   @@index([strategy, createdAt])
-}
-
-model PipelineHealthHistory {
-  id                String   @id @default(uuid())
-  timestamp         DateTime @default(now())
-  pipelineStatus    String
-  processingLatency Int
-  successRate       Float
-  errorCount        Int
-  activeJobs        Int
-  queueDepth        Int
-  memoryUsage       Float
-  cpuUsage          Float?
-  metadata          Json?
-  createdAt         DateTime @default(now())
-
-  @@index([timestamp])
-  @@index([pipelineStatus])
+  @@schema("pipeline")
 }
 
 model ErrorAlert {
@@ -704,6 +634,7 @@ model ErrorAlert {
   @@index([source])
   @@index([resolved])
   @@index([createdAt])
+  @@schema("pipeline")
 }
 
 model MonitoringThreshold {
@@ -721,67 +652,19 @@ model MonitoringThreshold {
 
   @@unique([metricName, thresholdType])
   @@index([metricName, enabled])
-}
-
-enum SubscriptionTier {
-  FREE
-  PROFESSIONAL
-  ENTERPRISE
-  INSTITUTION
-  HOBBY
-  PRO
-}
-
-enum PlanType {
-  BASIC
-  PROFESSIONAL
-  PREMIUM
-}
-
-enum CronJobStatus {
-  STARTED
-  SUCCESS
-  FAILED
-  TIMEOUT
-  CANCELLED
-}
-
-enum CronAlertType {
-  EXECUTION_FAILED
-  HIGH_ERROR_RATE
-  COST_THRESHOLD_EXCEEDED
-  PERFORMANCE_DEGRADED
-  NO_FILINGS_PROCESSED
-  EMAIL_DELIVERY_FAILED
-  TIMEOUT_EXCEEDED
-  MEMORY_LIMIT_EXCEEDED
-  API_RATE_LIMIT_HIT
-  DATABASE_CONNECTION_FAILED
-}
-
-enum AlertSeverity {
-  LOW
-  MEDIUM
-  HIGH
-  CRITICAL
-}
-
-enum ExecutionStatus {
-  RUNNING
-  COMPLETED
-  FAILED
-  SKIPPED
+  @@schema("pipeline")
 }
 
 model DailyWaitlistCache {
-  id                    String   @id @default(uuid())
-  date                  DateTime @unique @db.Date
-  baseCount             Int      // 147 + total subscribers at EOD (the starting display value for this day)
-  subscriberCountAtEOD  Int      @default(0) // Total subscribers when this cache was created (for delta calculation)
-  createdAt             DateTime @default(now())
-  updatedAt             DateTime @updatedAt
+  id                   String   @id @default(uuid())
+  date                 DateTime @unique @db.Date
+  baseCount            Int      // 147 + total subscribers at EOD (the starting display value for this day)
+  subscriberCountAtEOD Int      @default(0) // Total subscribers when this cache was created (for delta calculation)
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
 
   @@index([date])
+  @@schema("pipeline")
 }
 
 model DailyPipelineVerification {
@@ -825,4 +708,71 @@ model DailyPipelineVerification {
   @@unique([verificationDate])
   @@index([verificationDate])
   @@index([runAt])
+  @@schema("pipeline")
+}
+
+// =============================================================================
+// ENUMS
+// =============================================================================
+
+enum SubscriptionTier {
+  FREE
+  PROFESSIONAL
+  ENTERPRISE
+  INSTITUTION
+  HOBBY
+  PRO
+
+  @@schema("app")
+}
+
+enum PlanType {
+  BASIC
+  PROFESSIONAL
+  PREMIUM
+
+  @@schema("app")
+}
+
+enum CronJobStatus {
+  STARTED
+  SUCCESS
+  FAILED
+  TIMEOUT
+  CANCELLED
+
+  @@schema("pipeline")
+}
+
+enum CronAlertType {
+  EXECUTION_FAILED
+  HIGH_ERROR_RATE
+  COST_THRESHOLD_EXCEEDED
+  PERFORMANCE_DEGRADED
+  NO_FILINGS_PROCESSED
+  EMAIL_DELIVERY_FAILED
+  TIMEOUT_EXCEEDED
+  MEMORY_LIMIT_EXCEEDED
+  API_RATE_LIMIT_HIT
+  DATABASE_CONNECTION_FAILED
+
+  @@schema("pipeline")
+}
+
+enum AlertSeverity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+
+  @@schema("pipeline")
+}
+
+enum ExecutionStatus {
+  RUNNING
+  COMPLETED
+  FAILED
+  SKIPPED
+
+  @@schema("pipeline")
 }

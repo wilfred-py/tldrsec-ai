@@ -222,8 +222,44 @@ export function formatAlertMessage(
 }
 
 // =============================================================================
-// Daily Summary Message
+// Daily Summary Message - Enhanced to match verify-daily-pipeline.ts output
 // =============================================================================
+
+/**
+ * Format a number with commas for thousands
+ */
+function formatNumber(num: number): string {
+  return num.toLocaleString();
+}
+
+/**
+ * Format date for display
+ */
+function formatDate(date: Date): string {
+  return date.toLocaleDateString('en-US', {
+    month: '2-digit',
+    day: '2-digit',
+    year: 'numeric',
+  });
+}
+
+/**
+ * Get status emoji for filing status
+ */
+function getStatusEmoji(status: 'COMPLETE' | 'PENDING' | 'FAILED'): string {
+  switch (status) {
+    case 'COMPLETE': return ':white_check_mark:';
+    case 'PENDING': return ':hourglass_flowing_sand:';
+    case 'FAILED': return ':x:';
+  }
+}
+
+/**
+ * Get checkmark or X for boolean status
+ */
+function getBoolEmoji(value: boolean): string {
+  return value ? ':white_check_mark:' : ':x:';
+}
 
 export function formatDailySummaryMessage(
   date: string,
@@ -231,9 +267,75 @@ export function formatDailySummaryMessage(
 ): SlackWebhookPayload {
   const blocks: SlackBlock[] = [];
 
-  // Header
-  blocks.push(header(`:bar_chart: Daily Pipeline Report - ${date}`));
+  // ══════════════════════════════════════════════════════════════════════
+  // Header with double lines like the CLI output
+  // ══════════════════════════════════════════════════════════════════════
+  blocks.push(header(`:bar_chart: DAILY PIPELINE VERIFICATION REPORT`));
   blocks.push(divider());
+
+  // Generated timestamp and verification date
+  const generatedAt = formatTimestamp();
+  blocks.push(
+    context([
+      `*Generated:* ${generatedAt}`,
+      `*Verification Date:* ${date}`,
+      metrics.durationMs ? `*Duration:* ${metrics.durationMs}ms` : '',
+    ].filter(Boolean))
+  );
+
+  // ══════════════════════════════════════════════════════════════════════
+  // FILINGS DISCOVERED Section
+  // ══════════════════════════════════════════════════════════════════════
+  if (metrics.filings && metrics.filings.length > 0) {
+    blocks.push(divider());
+    blocks.push(section(`:inbox_tray: *FILINGS DISCOVERED (${metrics.filings.length} total)*`));
+
+    // Build filing table as code block for monospace alignment
+    const tableHeader = '```Ticker   Form    Filed        Status\n──────   ────    ─────        ──────';
+    const tableRows = metrics.filings.map(f => {
+      const ticker = f.ticker.padEnd(8);
+      const form = f.formType.padEnd(7);
+      const filed = formatDate(f.filingDate);
+      const statusIcon = f.status === 'COMPLETE' ? '✅' : f.status === 'PENDING' ? '⏳' : '❌';
+      const statusText = f.status;
+      return `${ticker} ${form} ${filed}   ${statusIcon} ${statusText}`;
+    }).join('\n');
+    const tableFooter = '```';
+
+    blocks.push(section(`${tableHeader}\n${tableRows}\n${tableFooter}`));
+
+    // ══════════════════════════════════════════════════════════════════════
+    // PIPELINE BREAKDOWN Section
+    // ══════════════════════════════════════════════════════════════════════
+    blocks.push(divider());
+    blocks.push(section(`:clipboard: *PIPELINE BREAKDOWN*`));
+
+    // Build pipeline breakdown as code block
+    const breakdownHeader = '```Filing           Discovered Fetched Summarized Emailed\n──────           ────────── ─────── ────────── ───────';
+    const breakdownRows = metrics.filings.map(f => {
+      const filing = `${f.ticker} ${f.formType}`.padEnd(16);
+      const discovered = f.discovered ? '✅' : '❌';
+      const fetched = f.fetched ? '✅' : '❌';
+      const summarized = f.summarized ? '✅' : '❌';
+      const emailed = f.emailed ? `✅ (${f.emailCount})` : '-';
+      return `${filing} ${discovered.padEnd(10)} ${fetched.padEnd(7)} ${summarized.padEnd(10)} ${emailed}`;
+    }).join('\n');
+    const breakdownFooter = '```';
+
+    blocks.push(section(`${breakdownHeader}\n${breakdownRows}\n${breakdownFooter}`));
+  }
+
+  // ══════════════════════════════════════════════════════════════════════
+  // SUMMARY Section
+  // ══════════════════════════════════════════════════════════════════════
+  blocks.push(divider());
+  blocks.push(section(`:bar_chart: *SUMMARY*`));
+
+  const totalFilings = metrics.discovery.filingsDiscovered;
+  const completed = metrics.filings?.filter(f => f.status === 'COMPLETE').length || 0;
+  const pending = metrics.filings?.filter(f => f.status === 'PENDING').length || 0;
+  const completedPct = totalFilings > 0 ? Math.round((completed / totalFilings) * 100) : 100;
+  const pendingPct = totalFilings > 0 ? Math.round((pending / totalFilings) * 100) : 0;
 
   // Completion rate with visual indicator
   const completionEmoji = metrics.completionRate >= 95
@@ -241,82 +343,82 @@ export function formatDailySummaryMessage(
     : metrics.completionRate >= 80
     ? ':warning:'
     : ':x:';
-  blocks.push(
-    section(`${completionEmoji} *Completion Rate: ${metrics.completionRate.toFixed(1)}%*`)
-  );
 
-  blocks.push(divider());
+  blocks.push(section(
+    `*Total Filings:* ${totalFilings}\n` +
+    `${completionEmoji} *Completed:* ${completed} (${completedPct}%)\n` +
+    `:hourglass_flowing_sand: *Pending:* ${pending} (${pendingPct}%)\n\n` +
+    `:email: *Emails Sent:* ${metrics.email.sent} to ${metrics.email.recipients} unique users`
+  ));
 
-  // Phase breakdown
-  blocks.push(section('*Phase Breakdown*'));
+  // ══════════════════════════════════════════════════════════════════════
+  // AI COSTS Section
+  // ══════════════════════════════════════════════════════════════════════
+  if (metrics.costs.total > 0 || (metrics.costs.totalTokens && metrics.costs.totalTokens > 0)) {
+    blocks.push(divider());
+    blocks.push(section(`:moneybag: *AI COSTS (OpenRouter)*`));
 
-  // Discovery
-  blocks.push(
-    section(
-      `:inbox_tray: *Discovery*: ${metrics.discovery.filingsDiscovered} filings (${metrics.discovery.tickersChecked} tickers checked)`
-    )
-  );
+    const costLines = [
+      `*Total Cost:* $${metrics.costs.total.toFixed(4)}`,
+    ];
 
-  // Fetch
-  const fetchTotal = metrics.fetch.completed + metrics.fetch.failed;
-  const fetchText = fetchTotal > 0
-    ? `:white_check_mark: ${metrics.fetch.completed} | :x: ${metrics.fetch.failed}`
-    : 'No fetch operations';
-  blocks.push(section(`:link: *Fetch*: ${fetchText}`));
+    if (metrics.costs.inputTokens !== undefined) {
+      costLines.push(`*Input Tokens:* ${formatNumber(metrics.costs.inputTokens)}`);
+    }
+    if (metrics.costs.outputTokens !== undefined) {
+      costLines.push(`*Output Tokens:* ${formatNumber(metrics.costs.outputTokens)}`);
+    }
+    if (metrics.costs.totalTokens !== undefined) {
+      costLines.push(`*Total Tokens:* ${formatNumber(metrics.costs.totalTokens)}`);
+    }
 
-  // Summarize
-  const summarizeTotal = metrics.summarize.completed + metrics.summarize.failed;
-  let summarizeText = summarizeTotal > 0
-    ? `:white_check_mark: ${metrics.summarize.completed} | :x: ${metrics.summarize.failed}`
-    : 'No summarizations';
-  if (metrics.summarize.cached > 0) {
-    summarizeText += ` | :floppy_disk: ${metrics.summarize.cached} cached`;
-  }
-  blocks.push(section(`:brain: *Summarize*: ${summarizeText}`));
+    blocks.push(section(costLines.join('\n')));
 
-  // Email
-  blocks.push(
-    section(
-      `:email: *Email*: ${metrics.email.sent} sent to ${metrics.email.recipients} users`
-    )
-  );
-
-  blocks.push(divider());
-
-  // Cache performance (if applicable)
-  if (metrics.summarize.cached > 0) {
-    const cacheRate = (metrics.summarize.cached / (metrics.summarize.completed + metrics.summarize.cached)) * 100;
-    blocks.push(
-      section(
-        `:floppy_disk: *Cache Performance*\n• Cache hits: ${metrics.summarize.cached} (${cacheRate.toFixed(0)}%)`
-      )
-    );
+    // Model breakdown
+    if (metrics.costs.modelBreakdown && Object.keys(metrics.costs.modelBreakdown).length > 0) {
+      const modelLines = ['*By Model:*'];
+      for (const [model, usage] of Object.entries(metrics.costs.modelBreakdown)) {
+        modelLines.push(
+          `  _${model}:_ Cost: $${usage.cost.toFixed(4)} | In: ${formatNumber(usage.inputTokens)} | Out: ${formatNumber(usage.outputTokens)}`
+        );
+      }
+      blocks.push(section(modelLines.join('\n')));
+    }
   }
 
-  // AI Costs
-  if (metrics.costs.total > 0) {
-    blocks.push(
-      section(
-        `:moneybag: *AI Costs*\n• Total: $${metrics.costs.total.toFixed(4)}\n• Model: ${metrics.costs.model}`
-      )
-    );
+  // ══════════════════════════════════════════════════════════════════════
+  // CACHE HEALTH Section
+  // ══════════════════════════════════════════════════════════════════════
+  if (metrics.cacheHealth) {
+    blocks.push(divider());
+    blocks.push(section(`:floppy_disk: *CACHE HEALTH REPORT*`));
+
+    const cacheSuccessPct = metrics.cacheHealth.totalEntries > 0
+      ? ((metrics.cacheHealth.successfulCaches / metrics.cacheHealth.totalEntries) * 100).toFixed(1)
+      : '100.0';
+
+    blocks.push(section(
+      `*Total cache entries:* ${metrics.cacheHealth.totalEntries}\n` +
+      `*Successful caches:* ${metrics.cacheHealth.successfulCaches} (${cacheSuccessPct}%)\n` +
+      `*Avg fetch duration:* ${metrics.cacheHealth.avgFetchDurationMs}ms`
+    ));
   }
 
-  // Remediation (if any)
+  // ══════════════════════════════════════════════════════════════════════
+  // REMEDIATION Section (if any)
+  // ══════════════════════════════════════════════════════════════════════
   if (metrics.remediation && metrics.remediation.attempted > 0) {
     blocks.push(divider());
-    blocks.push(
-      section(
-        `:hammer_and_wrench: *Remediation*\n• Attempted: ${metrics.remediation.attempted}\n• Succeeded: ${metrics.remediation.succeeded}\n• Failed: ${metrics.remediation.failed}`
-      )
-    );
+    blocks.push(section(`:hammer_and_wrench: *REMEDIATION RESULTS*`));
+    blocks.push(section(
+      `*Attempted:* ${metrics.remediation.attempted}\n` +
+      `*Succeeded:* ${metrics.remediation.succeeded}\n` +
+      `*Failed:* ${metrics.remediation.failed}`
+    ));
   }
 
-  // Timestamp
-  blocks.push(context([`:clock1: Generated at ${formatTimestamp()}`]));
-
-  // Fallback text
-  const fallbackText = `Daily Pipeline Report (${date}) - Completion: ${metrics.completionRate.toFixed(1)}%, Filings: ${metrics.discovery.filingsDiscovered}, Emails: ${metrics.email.sent}`;
+  // Fallback text for notifications
+  const fallbackText = `📊 Daily Pipeline Report (${date}) - ${completed}/${totalFilings} complete (${completedPct}%), ${metrics.email.sent} emails sent, $${metrics.costs.total.toFixed(4)} AI cost`;
 
   return {
     text: fallbackText,
