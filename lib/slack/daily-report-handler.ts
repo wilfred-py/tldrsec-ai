@@ -13,7 +13,6 @@
 
 import { logger } from '../logging';
 import { getPrismaClient } from '../db/prisma';
-import { Prisma } from '@prisma/client';
 import type {
   SlackWebhookPayload,
   SlackBlock,
@@ -314,7 +313,6 @@ async function getVerificationMetrics(
 
   // Calculate aggregates from filings
   const totalCompleted = filings.filter(f => f.status === 'COMPLETE').length;
-  const totalPending = filings.filter(f => f.status === 'PENDING').length;
   const fetchSuccess = filings.filter(f => f.fetched).length;
   const fetchFailed = filings.filter(f => !f.fetched).length;
   const summarizeSuccess = filings.filter(f => f.summarized).length;
