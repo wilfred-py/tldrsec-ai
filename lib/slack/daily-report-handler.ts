@@ -6,10 +6,14 @@
  *
  * Enhanced to provide detailed filing-level breakdown matching
  * the verify-daily-pipeline.ts output format.
+ *
+ * NOTE: Uses raw SQL queries to work with the actual database schema
+ * (tables are in 'public' schema, not 'app' schema as Prisma expects)
  */
 
 import { logger } from '../logging';
 import { getPrismaClient } from '../db/prisma';
+import { Prisma } from '@prisma/client';
 import type {
   SlackWebhookPayload,
   DailySummaryMetrics,
@@ -22,8 +26,56 @@ import { formatDailySummaryMessage } from './message-formatter';
 const dailyReportLogger = logger.child('slack-daily-report');
 
 // =============================================================================
-// Database Queries (based on verify-daily-pipeline.ts)
+// Database Queries using Raw SQL (to work with public schema)
 // =============================================================================
+
+interface RssFilingRow {
+  id: string;
+  accessionNumber: string;
+  filingType: string;
+  filingDate: Date;
+  createdAt: Date;
+  symbol: string;
+}
+
+interface FilingCacheRow {
+  accessionNumber: string;
+  status: string;
+}
+
+interface SummaryRow {
+  id: string;
+  summaryText: string | null;
+  processingStatus: string | null;
+}
+
+interface EmailDeliveryRow {
+  id: string;
+  deliveryStatus: string;
+}
+
+interface SummaryStatsRow {
+  totalCost: number | null;
+  inputTokens: number | null;
+  outputTokens: number | null;
+  tokensUsed: number | null;
+  model: string | null;
+}
+
+interface CacheStatsRow {
+  status: string;
+  fetchDuration: number;
+}
+
+interface CronExecRow {
+  tickersChecked: number | null;
+}
+
+interface RemediationRow {
+  remediationAttempted: number;
+  remediationSucceeded: number;
+  remediationFailed: number;
+}
 
 /**
  * Get date range for a specific date or yesterday
@@ -38,13 +90,13 @@ function getDateRange(targetDate?: string): { start: Date; end: Date; dateStr: s
     date.setDate(date.getDate() - 1); // Yesterday
   }
 
-  // Start of day (midnight)
+  // Start of day (midnight UTC)
   const start = new Date(date);
-  start.setHours(0, 0, 0, 0);
+  start.setUTCHours(0, 0, 0, 0);
 
-  // End of day (23:59:59.999)
+  // End of day (23:59:59.999 UTC)
   const end = new Date(date);
-  end.setHours(23, 59, 59, 999);
+  end.setUTCHours(23, 59, 59, 999);
 
   // Format date string
   const dateStr = date.toISOString().split('T')[0];
@@ -54,7 +106,7 @@ function getDateRange(targetDate?: string): { start: Date; end: Date; dateStr: s
 
 /**
  * Get all discovered filings in date range with their full verification status
- * Mirrors the verify-daily-pipeline.ts approach for consistency
+ * Uses raw SQL to query the public schema directly
  */
 async function getDiscoveredFilingsWithStatus(
   start: Date,
@@ -62,26 +114,26 @@ async function getDiscoveredFilingsWithStatus(
 ): Promise<FilingVerificationDetail[]> {
   const prisma = getPrismaClient();
 
-  // Get discovered filings from RssFilingCheck
-  const discoveredFilings = await prisma.rssFilingCheck.findMany({
-    where: {
-      createdAt: { gte: start, lte: end },
-    },
-    include: {
-      tickerMonitoring: {
-        select: {
-          symbol: true,
-        },
-      },
-    },
-    orderBy: { createdAt: 'desc' },
-  });
+  // Get discovered filings from RssFilingCheck joined with TickerMonitoring
+  const discoveredFilings = await prisma.$queryRaw<RssFilingRow[]>`
+    SELECT
+      r.id,
+      r."accessionNumber",
+      r."filingType",
+      r."filingDate",
+      r."createdAt",
+      t.symbol
+    FROM public."RssFilingCheck" r
+    JOIN public."TickerMonitoring" t ON r."tickerMonitoringId" = t.id
+    WHERE r."createdAt" >= ${start} AND r."createdAt" <= ${end}
+    ORDER BY r."createdAt" DESC
+  `;
 
   const filingDetails: FilingVerificationDetail[] = [];
 
   for (const filing of discoveredFilings) {
     const detail: FilingVerificationDetail = {
-      ticker: filing.tickerMonitoring.symbol,
+      ticker: filing.symbol,
       formType: filing.filingType,
       accessionNumber: filing.accessionNumber,
       filingDate: filing.filingDate,
@@ -94,40 +146,41 @@ async function getDiscoveredFilingsWithStatus(
     };
 
     // Check fetch status via FilingContentCache
-    const cachedContent = await prisma.filingContentCache.findUnique({
-      where: { accessionNumber: filing.accessionNumber },
-    });
-    detail.fetched = cachedContent?.status === 'CACHED';
+    const cacheResult = await prisma.$queryRaw<FilingCacheRow[]>`
+      SELECT "accessionNumber", status
+      FROM public."FilingContentCache"
+      WHERE "accessionNumber" = ${filing.accessionNumber}
+      LIMIT 1
+    `;
+    detail.fetched = cacheResult.length > 0 && cacheResult[0].status === 'CACHED';
 
     if (detail.fetched) {
       // Check summarization status
       const accessionNoDashes = filing.accessionNumber.replace(/-/g, '');
-      const summary = await prisma.summary.findFirst({
-        where: {
-          OR: [
-            { secFiling: { accessionNumber: filing.accessionNumber } },
-            { filingUrl: { contains: accessionNoDashes } },
-          ],
-        },
-        select: {
-          id: true,
-          summaryText: true,
-          processingStatus: true,
-        },
-      });
+      const summaryResult = await prisma.$queryRaw<SummaryRow[]>`
+        SELECT s.id, s."summaryText", s."processingStatus"
+        FROM public."Summary" s
+        LEFT JOIN public."SecFiling" sf ON s."secFilingId" = sf.id
+        WHERE sf."accessionNumber" = ${filing.accessionNumber}
+           OR s."filingUrl" LIKE ${'%' + accessionNoDashes + '%'}
+        LIMIT 1
+      `;
 
-      detail.summarized = !!(summary?.summaryText && summary.summaryText.trim().length > 0);
+      if (summaryResult.length > 0) {
+        const summary = summaryResult[0];
+        detail.summarized = !!(summary.summaryText && summary.summaryText.trim().length > 0);
 
-      if (detail.summarized && summary?.id) {
-        // Check email delivery status
-        const deliveries = await prisma.summaryEmailDelivery.findMany({
-          where: {
-            summaryId: summary.id,
-            deliveryStatus: { in: ['sent', 'delivered'] },
-          },
-        });
-        detail.emailed = deliveries.length > 0;
-        detail.emailCount = deliveries.length;
+        if (detail.summarized) {
+          // Check email delivery status
+          const deliveries = await prisma.$queryRaw<EmailDeliveryRow[]>`
+            SELECT id, "deliveryStatus"
+            FROM public."SummaryEmailDelivery"
+            WHERE "summaryId" = ${summary.id}
+              AND "deliveryStatus" IN ('sent', 'delivered')
+          `;
+          detail.emailed = deliveries.length > 0;
+          detail.emailCount = deliveries.length;
+        }
       }
     }
 
@@ -161,18 +214,11 @@ async function getAiCostBreakdown(
 }> {
   const prisma = getPrismaClient();
 
-  const summaries = await prisma.summary.findMany({
-    where: {
-      createdAt: { gte: start, lte: end },
-    },
-    select: {
-      totalCost: true,
-      inputTokens: true,
-      outputTokens: true,
-      tokensUsed: true,
-      model: true,
-    },
-  });
+  const summaries = await prisma.$queryRaw<SummaryStatsRow[]>`
+    SELECT "totalCost", "inputTokens", "outputTokens", "tokensUsed", model
+    FROM public."Summary"
+    WHERE "createdAt" >= ${start} AND "createdAt" <= ${end}
+  `;
 
   const modelBreakdown: Record<string, AiModelCost> = {};
   let total = 0;
@@ -181,7 +227,7 @@ async function getAiCostBreakdown(
   let totalTokens = 0;
 
   for (const summary of summaries) {
-    const cost = summary.totalCost || 0;
+    const cost = Number(summary.totalCost) || 0;
     const input = summary.inputTokens || 0;
     const output = summary.outputTokens || 0;
     const tokens = summary.tokensUsed || (input + output);
@@ -212,15 +258,11 @@ async function getCacheHealthMetrics(
 ): Promise<CacheHealthMetrics> {
   const prisma = getPrismaClient();
 
-  const cacheEntries = await prisma.filingContentCache.findMany({
-    where: {
-      fetchedAt: { gte: start, lte: end },
-    },
-    select: {
-      status: true,
-      fetchDuration: true,
-    },
-  });
+  const cacheEntries = await prisma.$queryRaw<CacheStatsRow[]>`
+    SELECT status, "fetchDuration"
+    FROM public."FilingContentCache"
+    WHERE "fetchedAt" >= ${start} AND "fetchedAt" <= ${end}
+  `;
 
   const successfulCaches = cacheEntries.filter(c => c.status === 'CACHED').length;
   const errorCaches = cacheEntries.filter(c => c.status === 'ERROR').length;
@@ -259,15 +301,12 @@ async function getVerificationMetrics(
   const cacheHealth = await getCacheHealthMetrics(start, end);
 
   // Get cron execution stats for tickers checked
-  const cronExecutions = await prisma.cronJobExecution.findMany({
-    where: {
-      startTime: { gte: start, lte: end },
-      jobType: 'TIER_AWARE',
-    },
-    select: {
-      tickersChecked: true,
-    },
-  });
+  const cronExecutions = await prisma.$queryRaw<CronExecRow[]>`
+    SELECT "tickersChecked"
+    FROM public."CronJobExecution"
+    WHERE "startedAt" >= ${start} AND "startedAt" <= ${end}
+      AND "jobName" = 'tier-aware'
+  `;
 
   const tickersChecked = cronExecutions.reduce((sum, c) => sum + (c.tickersChecked || 0), 0);
   const avgTickersPerRun = cronExecutions.length > 0 ? Math.round(tickersChecked / cronExecutions.length) : 0;
@@ -337,23 +376,19 @@ async function getRemediationMetrics(
     const prisma = getPrismaClient();
 
     // Check if the table exists and has data
-    const verification = await prisma.dailyPipelineVerification.findFirst({
-      where: {
-        verificationDate: { gte: start, lte: end },
-      },
-      select: {
-        remediationAttempted: true,
-        remediationSucceeded: true,
-        remediationFailed: true,
-      },
-    });
+    const verification = await prisma.$queryRaw<RemediationRow[]>`
+      SELECT "remediationAttempted", "remediationSucceeded", "remediationFailed"
+      FROM public."DailyPipelineVerification"
+      WHERE "verificationDate" >= ${start} AND "verificationDate" <= ${end}
+      LIMIT 1
+    `;
 
-    if (!verification) return undefined;
+    if (verification.length === 0) return undefined;
 
     return {
-      attempted: verification.remediationAttempted,
-      succeeded: verification.remediationSucceeded,
-      failed: verification.remediationFailed,
+      attempted: verification[0].remediationAttempted,
+      succeeded: verification[0].remediationSucceeded,
+      failed: verification[0].remediationFailed,
     };
   } catch {
     // Table may not exist or query failed
@@ -428,34 +463,38 @@ export async function generateQuickMetrics(hoursBack: number = 24): Promise<{
   const prisma = getPrismaClient();
   const since = new Date(Date.now() - hoursBack * 60 * 60 * 1000);
 
-  const [queueStatus, emailCount] = await Promise.all([
+  interface QueueStatusRow {
+    status: string;
+    count: bigint;
+  }
+
+  interface EmailCountRow {
+    count: bigint;
+  }
+
+  const [queueStatus, emailCountResult] = await Promise.all([
     // Queue metrics
-    prisma.jobQueue.groupBy({
-      by: ['status'],
-      where: {
-        OR: [
-          { status: { in: ['PENDING', 'PROCESSING'] } },
-          {
-            status: { in: ['COMPLETED', 'FAILED'] },
-            updatedAt: { gte: since },
-          },
-        ],
-      },
-      _count: true,
-    }),
+    prisma.$queryRaw<QueueStatusRow[]>`
+      SELECT status, COUNT(*)::bigint as count
+      FROM public."JobQueue"
+      WHERE status IN ('PENDING', 'PROCESSING')
+         OR (status IN ('COMPLETED', 'FAILED') AND "updatedAt" >= ${since})
+      GROUP BY status
+    `,
 
     // Email count
-    prisma.summaryEmailDelivery.count({
-      where: {
-        createdAt: { gte: since },
-      },
-    }),
+    prisma.$queryRaw<EmailCountRow[]>`
+      SELECT COUNT(*)::bigint as count
+      FROM public."SummaryEmailDelivery"
+      WHERE "sentAt" >= ${since}
+    `,
   ]);
 
-  const pending = queueStatus.find(s => s.status === 'PENDING')?._count || 0;
-  const processing = queueStatus.find(s => s.status === 'PROCESSING')?._count || 0;
-  const completed = queueStatus.find(s => s.status === 'COMPLETED')?._count || 0;
-  const failed = queueStatus.find(s => s.status === 'FAILED')?._count || 0;
+  const pending = Number(queueStatus.find(s => s.status === 'PENDING')?.count || 0n);
+  const processing = Number(queueStatus.find(s => s.status === 'PROCESSING')?.count || 0n);
+  const completed = Number(queueStatus.find(s => s.status === 'COMPLETED')?.count || 0n);
+  const failed = Number(queueStatus.find(s => s.status === 'FAILED')?.count || 0n);
+  const emailCount = Number(emailCountResult[0]?.count || 0n);
 
   return {
     queueDepth: pending + processing,
