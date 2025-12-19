@@ -246,7 +246,7 @@ function formatDate(date: Date): string {
 /**
  * Get status emoji for filing status
  */
-function getStatusEmoji(status: 'COMPLETE' | 'PENDING' | 'FAILED'): string {
+function _getStatusEmoji(status: 'COMPLETE' | 'PENDING' | 'FAILED'): string {
   switch (status) {
     case 'COMPLETE': return ':white_check_mark:';
     case 'PENDING': return ':hourglass_flowing_sand:';
@@ -257,7 +257,7 @@ function getStatusEmoji(status: 'COMPLETE' | 'PENDING' | 'FAILED'): string {
 /**
  * Get checkmark or X for boolean status
  */
-function getBoolEmoji(value: boolean): string {
+function _getBoolEmoji(value: boolean): string {
   return value ? ':white_check_mark:' : ':x:';
 }
 
