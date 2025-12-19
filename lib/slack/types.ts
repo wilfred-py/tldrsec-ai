@@ -190,6 +190,41 @@ export interface DailySummaryMessage {
   timestamp: Date;
 }
 
+/**
+ * Individual filing verification result for detailed pipeline breakdown
+ */
+export interface FilingVerificationDetail {
+  ticker: string;
+  formType: string;
+  accessionNumber: string;
+  filingDate: Date;
+  status: 'COMPLETE' | 'PENDING' | 'FAILED';
+  discovered: boolean;
+  fetched: boolean;
+  summarized: boolean;
+  emailed: boolean;
+  emailCount: number;
+}
+
+/**
+ * AI cost breakdown by model
+ */
+export interface AiModelCost {
+  cost: number;
+  inputTokens: number;
+  outputTokens: number;
+}
+
+/**
+ * Cache health metrics
+ */
+export interface CacheHealthMetrics {
+  totalEntries: number;
+  successfulCaches: number;
+  errorCaches: number;
+  avgFetchDurationMs: number;
+}
+
 export interface DailySummaryMetrics {
   completionRate: number;
   discovery: {
@@ -212,12 +247,22 @@ export interface DailySummaryMetrics {
   costs: {
     total: number;
     model: string;
+    inputTokens?: number;
+    outputTokens?: number;
+    totalTokens?: number;
+    modelBreakdown?: Record<string, AiModelCost>;
   };
   remediation?: {
     attempted: number;
     succeeded: number;
     failed: number;
   };
+  // Enhanced: Individual filing details for detailed breakdown
+  filings?: FilingVerificationDetail[];
+  // Enhanced: Cache health metrics
+  cacheHealth?: CacheHealthMetrics;
+  // Enhanced: Duration of verification
+  durationMs?: number;
 }
 
 // =============================================================================

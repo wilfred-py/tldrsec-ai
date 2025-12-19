@@ -3,11 +3,20 @@
  *
  * Generates daily pipeline verification reports for Slack.
  * Integrates with the verify-daily-pipeline script functionality.
+ *
+ * Enhanced to provide detailed filing-level breakdown matching
+ * the verify-daily-pipeline.ts output format.
  */
 
 import { logger } from '../logging';
 import { getPrismaClient } from '../db/prisma';
-import type { SlackWebhookPayload, DailySummaryMetrics } from './types';
+import type {
+  SlackWebhookPayload,
+  DailySummaryMetrics,
+  FilingVerificationDetail,
+  AiModelCost,
+  CacheHealthMetrics
+} from './types';
 import { formatDailySummaryMessage } from './message-formatter';
 
 const dailyReportLogger = logger.child('slack-daily-report');
@@ -44,123 +53,276 @@ function getDateRange(targetDate?: string): { start: Date; end: Date; dateStr: s
 }
 
 /**
+ * Get all discovered filings in date range with their full verification status
+ * Mirrors the verify-daily-pipeline.ts approach for consistency
+ */
+async function getDiscoveredFilingsWithStatus(
+  start: Date,
+  end: Date
+): Promise<FilingVerificationDetail[]> {
+  const prisma = getPrismaClient();
+
+  // Get discovered filings from RssFilingCheck
+  const discoveredFilings = await prisma.rssFilingCheck.findMany({
+    where: {
+      createdAt: { gte: start, lte: end },
+    },
+    include: {
+      tickerMonitoring: {
+        select: {
+          symbol: true,
+        },
+      },
+    },
+    orderBy: { createdAt: 'desc' },
+  });
+
+  const filingDetails: FilingVerificationDetail[] = [];
+
+  for (const filing of discoveredFilings) {
+    const detail: FilingVerificationDetail = {
+      ticker: filing.tickerMonitoring.symbol,
+      formType: filing.filingType,
+      accessionNumber: filing.accessionNumber,
+      filingDate: filing.filingDate,
+      status: 'PENDING',
+      discovered: true,
+      fetched: false,
+      summarized: false,
+      emailed: false,
+      emailCount: 0,
+    };
+
+    // Check fetch status via FilingContentCache
+    const cachedContent = await prisma.filingContentCache.findUnique({
+      where: { accessionNumber: filing.accessionNumber },
+    });
+    detail.fetched = cachedContent?.status === 'CACHED';
+
+    if (detail.fetched) {
+      // Check summarization status
+      const accessionNoDashes = filing.accessionNumber.replace(/-/g, '');
+      const summary = await prisma.summary.findFirst({
+        where: {
+          OR: [
+            { secFiling: { accessionNumber: filing.accessionNumber } },
+            { filingUrl: { contains: accessionNoDashes } },
+          ],
+        },
+        select: {
+          id: true,
+          summaryText: true,
+          processingStatus: true,
+        },
+      });
+
+      detail.summarized = !!(summary?.summaryText && summary.summaryText.trim().length > 0);
+
+      if (detail.summarized && summary?.id) {
+        // Check email delivery status
+        const deliveries = await prisma.summaryEmailDelivery.findMany({
+          where: {
+            summaryId: summary.id,
+            deliveryStatus: { in: ['sent', 'delivered'] },
+          },
+        });
+        detail.emailed = deliveries.length > 0;
+        detail.emailCount = deliveries.length;
+      }
+    }
+
+    // Determine overall status
+    if (detail.fetched && detail.summarized && detail.emailed) {
+      detail.status = 'COMPLETE';
+    } else if (!detail.fetched) {
+      detail.status = 'FAILED';
+    } else {
+      detail.status = 'PENDING';
+    }
+
+    filingDetails.push(detail);
+  }
+
+  return filingDetails;
+}
+
+/**
+ * Get AI cost breakdown by model
+ */
+async function getAiCostBreakdown(
+  start: Date,
+  end: Date
+): Promise<{
+  total: number;
+  inputTokens: number;
+  outputTokens: number;
+  totalTokens: number;
+  modelBreakdown: Record<string, AiModelCost>;
+}> {
+  const prisma = getPrismaClient();
+
+  const summaries = await prisma.summary.findMany({
+    where: {
+      createdAt: { gte: start, lte: end },
+    },
+    select: {
+      totalCost: true,
+      inputTokens: true,
+      outputTokens: true,
+      tokensUsed: true,
+      model: true,
+    },
+  });
+
+  const modelBreakdown: Record<string, AiModelCost> = {};
+  let total = 0;
+  let inputTokens = 0;
+  let outputTokens = 0;
+  let totalTokens = 0;
+
+  for (const summary of summaries) {
+    const cost = summary.totalCost || 0;
+    const input = summary.inputTokens || 0;
+    const output = summary.outputTokens || 0;
+    const tokens = summary.tokensUsed || (input + output);
+    const model = summary.model || 'unknown';
+
+    total += cost;
+    inputTokens += input;
+    outputTokens += output;
+    totalTokens += tokens;
+
+    if (!modelBreakdown[model]) {
+      modelBreakdown[model] = { cost: 0, inputTokens: 0, outputTokens: 0 };
+    }
+    modelBreakdown[model].cost += cost;
+    modelBreakdown[model].inputTokens += input;
+    modelBreakdown[model].outputTokens += output;
+  }
+
+  return { total, inputTokens, outputTokens, totalTokens, modelBreakdown };
+}
+
+/**
+ * Get cache health metrics
+ */
+async function getCacheHealthMetrics(
+  start: Date,
+  end: Date
+): Promise<CacheHealthMetrics> {
+  const prisma = getPrismaClient();
+
+  const cacheEntries = await prisma.filingContentCache.findMany({
+    where: {
+      fetchedAt: { gte: start, lte: end },
+    },
+    select: {
+      status: true,
+      fetchDuration: true,
+    },
+  });
+
+  const successfulCaches = cacheEntries.filter(c => c.status === 'CACHED').length;
+  const errorCaches = cacheEntries.filter(c => c.status === 'ERROR').length;
+
+  const entriesWithDuration = cacheEntries.filter(c => c.fetchDuration > 0);
+  const avgFetchDurationMs = entriesWithDuration.length > 0
+    ? entriesWithDuration.reduce((sum, c) => sum + c.fetchDuration, 0) / entriesWithDuration.length
+    : 0;
+
+  return {
+    totalEntries: cacheEntries.length,
+    successfulCaches,
+    errorCaches,
+    avgFetchDurationMs: Math.round(avgFetchDurationMs),
+  };
+}
+
+/**
  * Get verification metrics for a date range
+ * Enhanced to include detailed filing-level data
  */
 async function getVerificationMetrics(
   start: Date,
   end: Date
 ): Promise<DailySummaryMetrics> {
+  const startTime = Date.now();
   const prisma = getPrismaClient();
 
-  // Parallel queries for efficiency
-  const [
-    discoveredFilings,
-    fetchAttempts,
-    summaries,
-    emailDeliveries,
-    cronExecutions,
-  ] = await Promise.all([
-    // 1. Discovered filings (RssFilingCheck)
-    prisma.rssFilingCheck.count({
-      where: {
-        createdAt: { gte: start, lte: end },
-      },
-    }),
+  // Get detailed filing-level data
+  const filings = await getDiscoveredFilingsWithStatus(start, end);
 
-    // 2. Fetch attempts (use attemptedAt, not createdAt)
-    prisma.secFetchAttempt.groupBy({
-      by: ['status'],
-      where: {
-        attemptedAt: { gte: start, lte: end },
-      },
-      _count: true,
-    }),
+  // Get AI cost breakdown
+  const aiCosts = await getAiCostBreakdown(start, end);
 
-    // 3. Summaries generated
-    prisma.summary.findMany({
-      where: {
-        createdAt: { gte: start, lte: end },
-      },
-      select: {
-        id: true,
-        isCacheHit: true,
-        totalCostUsd: true,
-        modelId: true,
-      },
-    }),
+  // Get cache health metrics
+  const cacheHealth = await getCacheHealthMetrics(start, end);
 
-    // 4. Email deliveries
-    prisma.summaryEmailDelivery.findMany({
-      where: {
-        createdAt: { gte: start, lte: end },
-      },
-      select: {
-        userId: true,
-      },
-    }),
+  // Get cron execution stats for tickers checked
+  const cronExecutions = await prisma.cronJobExecution.findMany({
+    where: {
+      startTime: { gte: start, lte: end },
+      jobType: 'TIER_AWARE',
+    },
+    select: {
+      tickersChecked: true,
+    },
+  });
 
-    // 5. Cron executions (for tickers checked)
-    prisma.cronJobExecution.findMany({
-      where: {
-        startTime: { gte: start, lte: end },
-        jobType: 'TIER_AWARE',
-      },
-      select: {
-        tickersChecked: true,
-        newFilingsFound: true,
-      },
-    }),
-  ]);
-
-  // Process fetch attempts
-  const fetchSuccessful = fetchAttempts.find(f => f.status === 'success')?._count || 0;
-  const fetchFailed = fetchAttempts.filter(f => f.status !== 'success').reduce((sum, f) => sum + f._count, 0);
-
-  // Process summaries
-  const summariesCompleted = summaries.length;
-  const summariesCached = summaries.filter(s => s.isCacheHit).length;
-  const totalCost = summaries.reduce((sum, s) => sum + (s.totalCostUsd || 0), 0);
-  const models = new Set(summaries.map(s => s.modelId).filter(Boolean));
-  const modelStr = models.size > 0 ? Array.from(models).join(', ') : 'N/A';
-
-  // Process emails
-  const emailsSent = emailDeliveries.length;
-  const uniqueUsers = new Set(emailDeliveries.map(e => e.userId)).size;
-
-  // Process cron executions
   const tickersChecked = cronExecutions.reduce((sum, c) => sum + (c.tickersChecked || 0), 0);
   const avgTickersPerRun = cronExecutions.length > 0 ? Math.round(tickersChecked / cronExecutions.length) : 0;
 
+  // Calculate aggregates from filings
+  const totalCompleted = filings.filter(f => f.status === 'COMPLETE').length;
+  const totalPending = filings.filter(f => f.status === 'PENDING').length;
+  const fetchSuccess = filings.filter(f => f.fetched).length;
+  const fetchFailed = filings.filter(f => !f.fetched).length;
+  const summarizeSuccess = filings.filter(f => f.summarized).length;
+  const summarizeFailed = filings.filter(f => f.fetched && !f.summarized).length;
+  const emailsSent = filings.reduce((sum, f) => sum + f.emailCount, 0);
+  const uniqueUsers = new Set(filings.filter(f => f.emailed).map(f => f.ticker)).size; // Using ticker as proxy for unique emails
+
   // Calculate completion rate
-  // A filing is complete if it was discovered, fetched, summarized
-  // Using fetched as denominator since some discovered may not need processing
-  const completionRate = fetchSuccessful > 0
-    ? (summariesCompleted / fetchSuccessful) * 100
-    : discoveredFilings > 0 ? 0 : 100;
+  const completionRate = filings.length > 0
+    ? (totalCompleted / filings.length) * 100
+    : 100;
+
+  // Get models used
+  const models = Object.keys(aiCosts.modelBreakdown);
+  const modelStr = models.length > 0 ? models.join(', ') : 'N/A';
+
+  const durationMs = Date.now() - startTime;
 
   return {
     completionRate: Math.min(100, completionRate),
     discovery: {
-      filingsDiscovered: discoveredFilings,
+      filingsDiscovered: filings.length,
       tickersChecked: avgTickersPerRun,
     },
     fetch: {
-      completed: fetchSuccessful,
+      completed: fetchSuccess,
       failed: fetchFailed,
     },
     summarize: {
-      completed: summariesCompleted,
-      failed: fetchSuccessful - summariesCompleted,
-      cached: summariesCached,
+      completed: summarizeSuccess,
+      failed: summarizeFailed,
+      cached: 0, // TODO: Track cache hits separately
     },
     email: {
       sent: emailsSent,
       recipients: uniqueUsers,
     },
     costs: {
-      total: totalCost,
+      total: aiCosts.total,
       model: modelStr,
+      inputTokens: aiCosts.inputTokens,
+      outputTokens: aiCosts.outputTokens,
+      totalTokens: aiCosts.totalTokens,
+      modelBreakdown: aiCosts.modelBreakdown,
     },
+    filings,
+    cacheHealth,
+    durationMs,
   };
 }
 
