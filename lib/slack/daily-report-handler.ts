@@ -16,6 +16,7 @@ import { getPrismaClient } from '../db/prisma';
 import { Prisma } from '@prisma/client';
 import type {
   SlackWebhookPayload,
+  SlackBlock,
   DailySummaryMetrics,
   FilingVerificationDetail,
   AiModelCost,
@@ -478,7 +479,8 @@ export async function generateQuickMetrics(hoursBack: number = 24): Promise<{
       SELECT status, COUNT(*)::bigint as count
       FROM public."JobQueue"
       WHERE status IN ('PENDING', 'PROCESSING')
-         OR (status IN ('COMPLETED', 'FAILED') AND "updatedAt" >= ${since})
+         OR (status = 'COMPLETED' AND "completedAt" >= ${since})
+         OR (status = 'FAILED' AND "failedAt" >= ${since})
       GROUP BY status
     `,
 
@@ -501,5 +503,368 @@ export async function generateQuickMetrics(hoursBack: number = 24): Promise<{
     completedJobs: completed,
     failedJobs: failed,
     emailsSent: emailCount,
+  };
+}
+
+// =============================================================================
+// Hourly Summary Types and Functions
+// =============================================================================
+
+export interface HourlySummaryMetrics {
+  periodStart: Date;
+  periodEnd: Date;
+  queue: {
+    pending: number;
+    processing: number;
+    completedLastHour: number;
+    failedLastHour: number;
+  };
+  discovery: {
+    filingsDiscovered: number;
+    uniqueTickers: string[];
+  };
+  summarization: {
+    summariesGenerated: number;
+    totalCost: number;
+    totalInputTokens: number;
+    totalOutputTokens: number;
+  };
+  email: {
+    sent: number;
+    uniqueRecipients: number;
+  };
+  pipelineHealth: {
+    healthy: boolean;
+    issues: string[];
+    staleJobsCount: number;
+    oldestPendingMinutes: number | null;
+  };
+}
+
+/**
+ * Get hourly summary metrics for the past hour
+ */
+async function getHourlySummaryMetrics(): Promise<HourlySummaryMetrics> {
+  const prisma = getPrismaClient();
+  const now = new Date();
+  const oneHourAgo = new Date(now.getTime() - 60 * 60 * 1000);
+
+  // Queue status
+  interface QueueStatusRow {
+    status: string;
+    count: bigint;
+  }
+
+  const queueStatus = await prisma.$queryRaw<QueueStatusRow[]>`
+    SELECT status, COUNT(*)::bigint as count
+    FROM public."JobQueue"
+    WHERE status IN ('PENDING', 'PROCESSING')
+       OR (status = 'COMPLETED' AND "completedAt" >= ${oneHourAgo})
+       OR (status = 'FAILED' AND "failedAt" >= ${oneHourAgo})
+    GROUP BY status
+  `;
+
+  const pending = Number(queueStatus.find(s => s.status === 'PENDING')?.count || 0n);
+  const processing = Number(queueStatus.find(s => s.status === 'PROCESSING')?.count || 0n);
+  const completed = Number(queueStatus.find(s => s.status === 'COMPLETED')?.count || 0n);
+  const failed = Number(queueStatus.find(s => s.status === 'FAILED')?.count || 0n);
+
+  // Filings discovered in the last hour
+  interface DiscoveryRow {
+    symbol: string;
+  }
+
+  const discoveries = await prisma.$queryRaw<DiscoveryRow[]>`
+    SELECT DISTINCT t.symbol
+    FROM public."RssFilingCheck" r
+    JOIN public."TickerMonitoring" t ON r."tickerMonitoringId" = t.id
+    WHERE r."createdAt" >= ${oneHourAgo}
+  `;
+
+  interface FilingCountRow {
+    count: bigint;
+  }
+
+  const discoveryCount = await prisma.$queryRaw<FilingCountRow[]>`
+    SELECT COUNT(*)::bigint as count
+    FROM public."RssFilingCheck"
+    WHERE "createdAt" >= ${oneHourAgo}
+  `;
+
+  // Summaries generated in the last hour
+  interface SummaryStatsRow {
+    count: bigint;
+    totalCost: number | null;
+    inputTokens: bigint | null;
+    outputTokens: bigint | null;
+  }
+
+  const summaryStats = await prisma.$queryRaw<SummaryStatsRow[]>`
+    SELECT
+      COUNT(*)::bigint as count,
+      COALESCE(SUM("totalCost"), 0) as "totalCost",
+      COALESCE(SUM("inputTokens"), 0)::bigint as "inputTokens",
+      COALESCE(SUM("outputTokens"), 0)::bigint as "outputTokens"
+    FROM public."Summary"
+    WHERE "createdAt" >= ${oneHourAgo}
+      AND "summaryText" IS NOT NULL
+  `;
+
+  // Emails sent in the last hour
+  interface EmailStatsRow {
+    sent: bigint;
+    uniqueRecipients: bigint;
+  }
+
+  const emailStats = await prisma.$queryRaw<EmailStatsRow[]>`
+    SELECT
+      COUNT(*)::bigint as sent,
+      COUNT(DISTINCT "emailAddress")::bigint as "uniqueRecipients"
+    FROM public."SummaryEmailDelivery"
+    WHERE "sentAt" >= ${oneHourAgo}
+      AND "deliveryStatus" IN ('sent', 'delivered')
+  `;
+
+  // Pipeline health checks
+  interface StaleJobRow {
+    count: bigint;
+  }
+
+  const staleJobs = await prisma.$queryRaw<StaleJobRow[]>`
+    SELECT COUNT(*)::bigint as count
+    FROM public."JobQueue"
+    WHERE status = 'PROCESSING'
+      AND "startedAt" < ${new Date(now.getTime() - 15 * 60 * 1000)}
+  `;
+
+  interface OldestPendingRow {
+    createdAt: Date | null;
+  }
+
+  const oldestPending = await prisma.$queryRaw<OldestPendingRow[]>`
+    SELECT MIN("createdAt") as "createdAt"
+    FROM public."JobQueue"
+    WHERE status = 'PENDING'
+  `;
+
+  // Calculate health issues
+  const issues: string[] = [];
+  const staleCount = Number(staleJobs[0]?.count || 0n);
+  if (staleCount > 0) {
+    issues.push(`${staleCount} jobs stuck in PROCESSING for >15 minutes`);
+  }
+  if (pending > 100) {
+    issues.push(`High queue depth: ${pending} pending jobs`);
+  }
+  if (failed > 5) {
+    issues.push(`${failed} jobs failed in the last hour`);
+  }
+
+  const oldestPendingTime = oldestPending[0]?.createdAt;
+  const oldestPendingMinutes = oldestPendingTime
+    ? Math.round((now.getTime() - new Date(oldestPendingTime).getTime()) / 60000)
+    : null;
+
+  if (oldestPendingMinutes && oldestPendingMinutes > 30) {
+    issues.push(`Oldest pending job is ${oldestPendingMinutes} minutes old`);
+  }
+
+  return {
+    periodStart: oneHourAgo,
+    periodEnd: now,
+    queue: {
+      pending,
+      processing,
+      completedLastHour: completed,
+      failedLastHour: failed,
+    },
+    discovery: {
+      filingsDiscovered: Number(discoveryCount[0]?.count || 0n),
+      uniqueTickers: discoveries.map(d => d.symbol),
+    },
+    summarization: {
+      summariesGenerated: Number(summaryStats[0]?.count || 0n),
+      totalCost: Number(summaryStats[0]?.totalCost || 0),
+      totalInputTokens: Number(summaryStats[0]?.inputTokens || 0n),
+      totalOutputTokens: Number(summaryStats[0]?.outputTokens || 0n),
+    },
+    email: {
+      sent: Number(emailStats[0]?.sent || 0n),
+      uniqueRecipients: Number(emailStats[0]?.uniqueRecipients || 0n),
+    },
+    pipelineHealth: {
+      healthy: issues.length === 0,
+      issues,
+      staleJobsCount: staleCount,
+      oldestPendingMinutes,
+    },
+  };
+}
+
+/**
+ * Generate an hourly summary report for Slack
+ */
+export async function generateHourlySummary(): Promise<SlackWebhookPayload> {
+  dailyReportLogger.info('Generating hourly summary');
+
+  try {
+    const metrics = await getHourlySummaryMetrics();
+
+    dailyReportLogger.info('Hourly summary generated', {
+      filingsDiscovered: metrics.discovery.filingsDiscovered,
+      summariesGenerated: metrics.summarization.summariesGenerated,
+      emailsSent: metrics.email.sent,
+      healthy: metrics.pipelineHealth.healthy,
+    });
+
+    return formatHourlySummaryMessage(metrics);
+  } catch (error) {
+    dailyReportLogger.error('Error generating hourly summary', {
+      error: error instanceof Error ? error.message : 'Unknown error',
+    });
+
+    return {
+      text: 'Error generating hourly summary',
+      blocks: [
+        {
+          type: 'section',
+          text: {
+            type: 'mrkdwn',
+            text: `:x: *Error generating hourly summary*\n\n${error instanceof Error ? error.message : 'Unknown error'}`,
+          },
+        },
+      ],
+    };
+  }
+}
+
+/**
+ * Format hourly summary message for Slack
+ */
+function formatHourlySummaryMessage(metrics: HourlySummaryMetrics): SlackWebhookPayload {
+  const blocks: SlackBlock[] = [];
+
+  // Header with health indicator
+  const healthEmoji = metrics.pipelineHealth.healthy ? ':white_check_mark:' : ':warning:';
+  blocks.push({
+    type: 'header',
+    text: { type: 'plain_text', text: `${healthEmoji} Hourly Pipeline Summary`, emoji: true },
+  });
+
+  blocks.push({ type: 'divider' });
+
+  // Time range context
+  const formatTime = (date: Date) => date.toLocaleTimeString('en-AU', {
+    timeZone: 'Australia/Sydney',
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true,
+  });
+
+  blocks.push({
+    type: 'context',
+    elements: [
+      { type: 'mrkdwn', text: `:clock1: *Period:* ${formatTime(metrics.periodStart)} - ${formatTime(metrics.periodEnd)} AEDT` },
+    ],
+  });
+
+  // Queue Status
+  blocks.push({
+    type: 'section',
+    text: {
+      type: 'mrkdwn',
+      text: `:package: *Queue Status*\n` +
+        `• Pending: ${metrics.queue.pending}\n` +
+        `• Processing: ${metrics.queue.processing}\n` +
+        `• Completed: ${metrics.queue.completedLastHour}\n` +
+        `• Failed: ${metrics.queue.failedLastHour}`,
+    },
+  });
+
+  // Discovery (only show if there's activity)
+  if (metrics.discovery.filingsDiscovered > 0) {
+    const tickerList = metrics.discovery.uniqueTickers.length > 0
+      ? ` (${metrics.discovery.uniqueTickers.join(', ')})`
+      : '';
+    blocks.push({
+      type: 'section',
+      text: {
+        type: 'mrkdwn',
+        text: `:inbox_tray: *Discovery*\n` +
+          `• Filings discovered: ${metrics.discovery.filingsDiscovered}${tickerList}`,
+      },
+    });
+  }
+
+  // Summarization (only show if there's activity)
+  if (metrics.summarization.summariesGenerated > 0) {
+    const tokenInfo = metrics.summarization.totalInputTokens > 0
+      ? `\n• Tokens: ${(metrics.summarization.totalInputTokens / 1000).toFixed(1)}k in / ${(metrics.summarization.totalOutputTokens / 1000).toFixed(1)}k out`
+      : '';
+    blocks.push({
+      type: 'section',
+      text: {
+        type: 'mrkdwn',
+        text: `:brain: *Summarization*\n` +
+          `• Summaries generated: ${metrics.summarization.summariesGenerated}\n` +
+          `• Cost: $${metrics.summarization.totalCost.toFixed(4)}${tokenInfo}`,
+      },
+    });
+  }
+
+  // Email delivery (only show if there's activity)
+  if (metrics.email.sent > 0) {
+    blocks.push({
+      type: 'section',
+      text: {
+        type: 'mrkdwn',
+        text: `:email: *Email Delivery*\n` +
+          `• Emails sent: ${metrics.email.sent}\n` +
+          `• Unique recipients: ${metrics.email.uniqueRecipients}`,
+      },
+    });
+  }
+
+  // Show "No activity" if nothing happened
+  if (
+    metrics.discovery.filingsDiscovered === 0 &&
+    metrics.summarization.summariesGenerated === 0 &&
+    metrics.email.sent === 0 &&
+    metrics.queue.completedLastHour === 0
+  ) {
+    blocks.push({
+      type: 'section',
+      text: {
+        type: 'mrkdwn',
+        text: `:zzz: *No pipeline activity in the last hour*`,
+      },
+    });
+  }
+
+  // Health issues (if any)
+  if (!metrics.pipelineHealth.healthy) {
+    blocks.push({ type: 'divider' });
+    const issuesText = metrics.pipelineHealth.issues.map(i => `• ${i}`).join('\n');
+    blocks.push({
+      type: 'section',
+      text: {
+        type: 'mrkdwn',
+        text: `:warning: *Issues Detected*\n${issuesText}`,
+      },
+    });
+  }
+
+  // Fallback text
+  const activity = metrics.queue.completedLastHour > 0 || metrics.discovery.filingsDiscovered > 0
+    ? `${metrics.queue.completedLastHour} jobs, ${metrics.discovery.filingsDiscovered} filings, ${metrics.email.sent} emails`
+    : 'No activity';
+  const healthStatus = metrics.pipelineHealth.healthy ? 'Healthy' : `${metrics.pipelineHealth.issues.length} issues`;
+  const fallbackText = `Hourly Summary: ${activity} | ${healthStatus}`;
+
+  return {
+    text: fallbackText,
+    blocks,
+    unfurl_links: false,
+    unfurl_media: false,
   };
 }
