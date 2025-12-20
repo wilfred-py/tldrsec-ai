@@ -8,7 +8,7 @@
  * the verify-daily-pipeline.ts output format.
  *
  * NOTE: Uses raw SQL queries to work with the actual database schema
- * (tables are in 'public' schema, not 'app' schema as Prisma expects)
+ * (tables are in 'app' and 'pipeline' schemas after Supabase migration)
  */
 
 import { logger } from '../logging';
@@ -26,7 +26,7 @@ import { formatDailySummaryMessage } from './message-formatter';
 const dailyReportLogger = logger.child('slack-daily-report');
 
 // =============================================================================
-// Database Queries using Raw SQL (to work with public schema)
+// Database Queries using Raw SQL (app and pipeline schemas)
 // =============================================================================
 
 interface RssFilingRow {
@@ -123,8 +123,8 @@ async function getDiscoveredFilingsWithStatus(
       r."filingDate",
       r."createdAt",
       t.symbol
-    FROM public."RssFilingCheck" r
-    JOIN public."TickerMonitoring" t ON r."tickerMonitoringId" = t.id
+    FROM app."RssFilingCheck" r
+    JOIN app."TickerMonitoring" t ON r."tickerMonitoringId" = t.id
     WHERE r."createdAt" >= ${start} AND r."createdAt" <= ${end}
     ORDER BY r."createdAt" DESC
   `;
@@ -148,7 +148,7 @@ async function getDiscoveredFilingsWithStatus(
     // Check fetch status via FilingContentCache
     const cacheResult = await prisma.$queryRaw<FilingCacheRow[]>`
       SELECT "accessionNumber", status
-      FROM public."FilingContentCache"
+      FROM pipeline."FilingContentCache"
       WHERE "accessionNumber" = ${filing.accessionNumber}
       LIMIT 1
     `;
@@ -159,8 +159,8 @@ async function getDiscoveredFilingsWithStatus(
       const accessionNoDashes = filing.accessionNumber.replace(/-/g, '');
       const summaryResult = await prisma.$queryRaw<SummaryRow[]>`
         SELECT s.id, s."summaryText", s."processingStatus"
-        FROM public."Summary" s
-        LEFT JOIN public."SecFiling" sf ON s."secFilingId" = sf.id
+        FROM app."Summary" s
+        LEFT JOIN app."SecFiling" sf ON s."secFilingId" = sf.id
         WHERE sf."accessionNumber" = ${filing.accessionNumber}
            OR s."filingUrl" LIKE ${'%' + accessionNoDashes + '%'}
         LIMIT 1
@@ -174,7 +174,7 @@ async function getDiscoveredFilingsWithStatus(
           // Check email delivery status
           const deliveries = await prisma.$queryRaw<EmailDeliveryRow[]>`
             SELECT id, "deliveryStatus"
-            FROM public."SummaryEmailDelivery"
+            FROM pipeline."SummaryEmailDelivery"
             WHERE "summaryId" = ${summary.id}
               AND "deliveryStatus" IN ('sent', 'delivered')
           `;
@@ -216,7 +216,7 @@ async function getAiCostBreakdown(
 
   const summaries = await prisma.$queryRaw<SummaryStatsRow[]>`
     SELECT "totalCost", "inputTokens", "outputTokens", "tokensUsed", model
-    FROM public."Summary"
+    FROM app."Summary"
     WHERE "createdAt" >= ${start} AND "createdAt" <= ${end}
   `;
 
@@ -260,7 +260,7 @@ async function getCacheHealthMetrics(
 
   const cacheEntries = await prisma.$queryRaw<CacheStatsRow[]>`
     SELECT status, "fetchDuration"
-    FROM public."FilingContentCache"
+    FROM pipeline."FilingContentCache"
     WHERE "fetchedAt" >= ${start} AND "fetchedAt" <= ${end}
   `;
 
@@ -303,7 +303,7 @@ async function getVerificationMetrics(
   // Get cron execution stats for tickers checked
   const cronExecutions = await prisma.$queryRaw<CronExecRow[]>`
     SELECT "tickersChecked"
-    FROM public."CronJobExecution"
+    FROM pipeline."CronJobExecution"
     WHERE "startedAt" >= ${start} AND "startedAt" <= ${end}
       AND "jobName" = 'tier-aware'
   `;
@@ -377,7 +377,7 @@ async function getRemediationMetrics(
     // Check if the table exists and has data
     const verification = await prisma.$queryRaw<RemediationRow[]>`
       SELECT "remediationAttempted", "remediationSucceeded", "remediationFailed"
-      FROM public."DailyPipelineVerification"
+      FROM pipeline."DailyPipelineVerification"
       WHERE "verificationDate" >= ${start} AND "verificationDate" <= ${end}
       LIMIT 1
     `;
@@ -475,7 +475,7 @@ export async function generateQuickMetrics(hoursBack: number = 24): Promise<{
     // Queue metrics
     prisma.$queryRaw<QueueStatusRow[]>`
       SELECT status, COUNT(*)::bigint as count
-      FROM public."JobQueue"
+      FROM pipeline."JobQueue"
       WHERE status IN ('PENDING', 'PROCESSING')
          OR (status = 'COMPLETED' AND "completedAt" >= ${since})
          OR (status = 'FAILED' AND "failedAt" >= ${since})
@@ -485,7 +485,7 @@ export async function generateQuickMetrics(hoursBack: number = 24): Promise<{
     // Email count
     prisma.$queryRaw<EmailCountRow[]>`
       SELECT COUNT(*)::bigint as count
-      FROM public."SummaryEmailDelivery"
+      FROM pipeline."SummaryEmailDelivery"
       WHERE "sentAt" >= ${since}
     `,
   ]);
@@ -555,7 +555,7 @@ async function getHourlySummaryMetrics(): Promise<HourlySummaryMetrics> {
 
   const queueStatus = await prisma.$queryRaw<QueueStatusRow[]>`
     SELECT status, COUNT(*)::bigint as count
-    FROM public."JobQueue"
+    FROM pipeline."JobQueue"
     WHERE status IN ('PENDING', 'PROCESSING')
        OR (status = 'COMPLETED' AND "completedAt" >= ${oneHourAgo})
        OR (status = 'FAILED' AND "failedAt" >= ${oneHourAgo})
@@ -574,8 +574,8 @@ async function getHourlySummaryMetrics(): Promise<HourlySummaryMetrics> {
 
   const discoveries = await prisma.$queryRaw<DiscoveryRow[]>`
     SELECT DISTINCT t.symbol
-    FROM public."RssFilingCheck" r
-    JOIN public."TickerMonitoring" t ON r."tickerMonitoringId" = t.id
+    FROM app."RssFilingCheck" r
+    JOIN app."TickerMonitoring" t ON r."tickerMonitoringId" = t.id
     WHERE r."createdAt" >= ${oneHourAgo}
   `;
 
@@ -585,7 +585,7 @@ async function getHourlySummaryMetrics(): Promise<HourlySummaryMetrics> {
 
   const discoveryCount = await prisma.$queryRaw<FilingCountRow[]>`
     SELECT COUNT(*)::bigint as count
-    FROM public."RssFilingCheck"
+    FROM app."RssFilingCheck"
     WHERE "createdAt" >= ${oneHourAgo}
   `;
 
@@ -603,7 +603,7 @@ async function getHourlySummaryMetrics(): Promise<HourlySummaryMetrics> {
       COALESCE(SUM("totalCost"), 0) as "totalCost",
       COALESCE(SUM("inputTokens"), 0)::bigint as "inputTokens",
       COALESCE(SUM("outputTokens"), 0)::bigint as "outputTokens"
-    FROM public."Summary"
+    FROM app."Summary"
     WHERE "createdAt" >= ${oneHourAgo}
       AND "summaryText" IS NOT NULL
   `;
@@ -618,7 +618,7 @@ async function getHourlySummaryMetrics(): Promise<HourlySummaryMetrics> {
     SELECT
       COUNT(*)::bigint as sent,
       COUNT(DISTINCT "emailAddress")::bigint as "uniqueRecipients"
-    FROM public."SummaryEmailDelivery"
+    FROM pipeline."SummaryEmailDelivery"
     WHERE "sentAt" >= ${oneHourAgo}
       AND "deliveryStatus" IN ('sent', 'delivered')
   `;
@@ -630,7 +630,7 @@ async function getHourlySummaryMetrics(): Promise<HourlySummaryMetrics> {
 
   const staleJobs = await prisma.$queryRaw<StaleJobRow[]>`
     SELECT COUNT(*)::bigint as count
-    FROM public."JobQueue"
+    FROM pipeline."JobQueue"
     WHERE status = 'PROCESSING'
       AND "startedAt" < ${new Date(now.getTime() - 15 * 60 * 1000)}
   `;
@@ -641,7 +641,7 @@ async function getHourlySummaryMetrics(): Promise<HourlySummaryMetrics> {
 
   const oldestPending = await prisma.$queryRaw<OldestPendingRow[]>`
     SELECT MIN("createdAt") as "createdAt"
-    FROM public."JobQueue"
+    FROM pipeline."JobQueue"
     WHERE status = 'PENDING'
   `;
 
