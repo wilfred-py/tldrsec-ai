@@ -1,9 +1,98 @@
 # Current Progress: tldrsec-ai Pipeline Operations
 
 ## Current Status
-**Date**: 2025-12-19
-**Branch**: feat/supabase-migration
-**Status**: Pipeline Operational ✅ | Supabase Migration Phase 1 Complete
+**Date**: 2025-12-22
+**Branch**: fix/slack-hourly-database-connection
+**Status**: 🔧 Slack Hourly Fix - Improved Error Diagnostics
+
+---
+
+## Current Session: Slack Hourly Diagnostic Enhancement (2025-12-22)
+
+### Problem Analysis
+The Slack hourly summary continues to fail with `relation "pipeline.JobQueue" does not exist` error.
+
+**Root Cause Confirmed via Research**:
+- PR #274 code changes are **correct** - all schema references properly updated to `app.*` and `pipeline.*`
+- The **actual problem** is that Vercel's `DATABASE_URL` environment variable still points to **Neon** (set 32 days ago)
+- Neon database only has `public` schema - it does NOT have `app` or `pipeline` schemas
+- The dual-schema architecture only exists in **Supabase**
+
+### Fix Applied: Improved Error Diagnostics
+
+Added schema diagnostic functionality to provide clear error messages in Slack when the database is misconfigured.
+
+**New Function**: `checkDatabaseSchemas()` in `lib/db/supabase-config.ts`
+- Detects if connected to Neon vs Supabase
+- Queries `information_schema.schemata` to find available schemas
+- Returns diagnostic info: database type, found schemas, migration status, and actionable message
+
+**Enhanced Error Handling**: `generateHourlySummary()` in `lib/slack/daily-report-handler.ts`
+- Detects schema-related errors (e.g., `pipeline.* does not exist`)
+- Runs schema diagnostic to determine root cause
+- Sends clear Slack message with:
+  - Database type (neon/supabase/unknown)
+  - Found schemas vs expected schemas
+  - Root cause explanation
+  - Fix instructions
+
+**Files Modified**:
+- `lib/db/supabase-config.ts` - Added `checkDatabaseSchemas()` and `SchemaDiagnostic` interface
+- `lib/db/index.ts` - Exported new function and type
+- `lib/slack/daily-report-handler.ts` - Enhanced error handling with diagnostics
+
+**Branch**: `fix/slack-hourly-database-connection`
+
+### Previous Fix (Still Correct)
+
+**Slack Hourly Schema Fix ✅ COMPLETE** (PR #274)
+
+The schema reference updates in PR #274 were correct:
+- `public.RssFilingCheck` → `app.RssFilingCheck`
+- `public.TickerMonitoring` → `app.TickerMonitoring`
+- `public.Summary` → `app.Summary`
+- `public.SecFiling` → `app.SecFiling`
+- `public.JobQueue` → `pipeline.JobQueue`
+- `public.SummaryEmailDelivery` → `pipeline.SummaryEmailDelivery`
+- `public.FilingContentCache` → `pipeline.FilingContentCache`
+- `public.CronJobExecution` → `pipeline.CronJobExecution`
+- `public.DailyPipelineVerification` → `pipeline.DailyPipelineVerification`
+
+---
+
+## CRITICAL: Database Configuration Issue (2025-12-22)
+
+### Root Cause Identified
+The tier-aware cron job is failing with "Failed to initialize monitoring" because:
+- **Vercel's DATABASE_URL** (set 32 days ago) points to Neon: `ep-rapid-wildflower-291580-pooler.ap-southeast-1.aws.neon.tech`
+- **Prisma multi-schema** (`app` and `pipeline` schemas) only exist in Supabase
+- **Error**: `The table 'pipeline.CronJobExecution' does not exist in the current database`
+
+### Required Fix
+Update Vercel environment variables with Supabase connection strings:
+
+```bash
+# 1. Get Supabase connection strings from Dashboard → Settings → Database
+# Transaction mode (port 6543) for DATABASE_URL
+# Session mode (port 5432) for DIRECT_URL
+
+# 2. Update Vercel environment variables
+vercel env rm DATABASE_URL production
+vercel env add DATABASE_URL production
+# Paste: postgresql://postgres.[project-ref]:[password]@aws-0-ap-southeast-1.pooler.supabase.com:6543/postgres
+
+vercel env rm DIRECT_URL production
+vercel env add DIRECT_URL production
+# Paste: postgresql://postgres.[project-ref]:[password]@aws-0-ap-southeast-1.pooler.supabase.com:5432/postgres
+
+# 3. Redeploy
+vercel --prod
+```
+
+### Verification Steps
+1. After redeploy, check Cloudflare Worker logs: `cd cloudflare-cron && npx wrangler tail --format=pretty`
+2. Look for successful "Monitoring initialized" instead of 500 errors
+3. Verify CronJobExecution records appear in Supabase `pipeline` schema
 
 ---
 
@@ -350,7 +439,7 @@ npm run cloudflare:status                 # Check deployment status
 
 ---
 
-**Last Updated**: 2025-12-19
+**Last Updated**: 2025-12-22
 **Repository**: tldrsec-ai
 
 *Older completed projects archived to .claude/history/ - See TIMELINE.md for master timeline*

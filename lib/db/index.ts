@@ -13,8 +13,10 @@ export {
   getSupabaseDatabaseUrl,
   validateSupabaseConfig,
   canConnectToSupabase,
+  checkDatabaseSchemas,
   withRetry,
   DEFAULT_RETRY_CONFIG,
   type SupabaseConfig,
   type RetryConfig,
+  type SchemaDiagnostic,
 } from './supabase-config';

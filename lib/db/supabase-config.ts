@@ -244,3 +244,99 @@ export async function canConnectToSupabase(): Promise<boolean> {
     return false;
   }
 }
+
+/**
+ * Database schema diagnostic result
+ */
+export interface SchemaDiagnostic {
+  /** Whether the expected schemas exist */
+  hasExpectedSchemas: boolean;
+  /** List of schemas found in database */
+  foundSchemas: string[];
+  /** Whether we're connected to Neon (old) or Supabase (new) */
+  databaseType: 'neon' | 'supabase' | 'unknown';
+  /** Whether the multi-schema migration is complete */
+  migrationComplete: boolean;
+  /** Human-readable status message */
+  message: string;
+}
+
+/**
+ * Check database schema configuration
+ * Detects if we're connected to Neon (pre-migration) or Supabase (post-migration)
+ * and whether the expected schemas exist
+ */
+export async function checkDatabaseSchemas(): Promise<SchemaDiagnostic> {
+  // Dynamic import to avoid circular dependencies
+  const { getPrismaClient } = await import('./prisma');
+
+  const databaseUrl = process.env.DATABASE_URL || '';
+  const isNeon = databaseUrl.includes('neon.tech');
+  const isSupabase = databaseUrl.includes('supabase.com') || databaseUrl.includes('pooler.supabase.com');
+
+  const databaseType: 'neon' | 'supabase' | 'unknown' =
+    isNeon ? 'neon' : isSupabase ? 'supabase' : 'unknown';
+
+  try {
+    const prisma = getPrismaClient();
+
+    // Query existing schemas
+    interface SchemaRow {
+      schema_name: string;
+    }
+
+    const schemas = await prisma.$queryRaw<SchemaRow[]>`
+      SELECT schema_name
+      FROM information_schema.schemata
+      WHERE schema_name IN ('app', 'pipeline', 'public')
+    `;
+
+    const foundSchemas = schemas.map(s => s.schema_name);
+    const hasAppSchema = foundSchemas.includes('app');
+    const hasPipelineSchema = foundSchemas.includes('pipeline');
+    const hasExpectedSchemas = hasAppSchema && hasPipelineSchema;
+    const migrationComplete = hasExpectedSchemas && databaseType === 'supabase';
+
+    let message: string;
+    if (migrationComplete) {
+      message = 'Database configured correctly with app and pipeline schemas on Supabase.';
+    } else if (hasExpectedSchemas && databaseType === 'neon') {
+      message = 'WARNING: Schemas exist but connected to Neon. Update DATABASE_URL to point to Supabase.';
+    } else if (!hasExpectedSchemas && databaseType === 'neon') {
+      message = 'ERROR: Connected to Neon database which only has public schema. The codebase requires Supabase with app and pipeline schemas. Update DATABASE_URL in Vercel to point to Supabase.';
+    } else if (!hasExpectedSchemas) {
+      message = `ERROR: Missing required schemas. Found: [${foundSchemas.join(', ')}]. Expected: [app, pipeline].`;
+    } else {
+      message = `Database type: ${databaseType}, schemas: [${foundSchemas.join(', ')}]`;
+    }
+
+    return {
+      hasExpectedSchemas,
+      foundSchemas,
+      databaseType,
+      migrationComplete,
+      message,
+    };
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+
+    // Check for schema-related errors
+    if (errorMessage.includes('does not exist') && errorMessage.includes('pipeline')) {
+      return {
+        hasExpectedSchemas: false,
+        foundSchemas: ['public'],
+        databaseType,
+        migrationComplete: false,
+        message: `ERROR: DATABASE_URL points to ${databaseType} database without required schemas. The pipeline schema does not exist. Update DATABASE_URL to point to Supabase with app and pipeline schemas.`,
+      };
+    }
+
+    return {
+      hasExpectedSchemas: false,
+      foundSchemas: [],
+      databaseType,
+      migrationComplete: false,
+      message: `ERROR: Unable to check schemas: ${errorMessage}`,
+    };
+  }
+}
