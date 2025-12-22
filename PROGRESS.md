@@ -1,13 +1,175 @@
 # Current Progress: tldrsec-ai Pipeline Operations
 
 ## Current Status
-**Date**: 2025-12-19
-**Branch**: feat/supabase-migration
-**Status**: Pipeline Operational ✅ | Supabase Migration Phase 1 Complete
+**Date**: 2025-12-22
+**Branch**: fix/slack-hourly-database-connection
+**Status**: ✅ COMPLETE - Vercel DATABASE_URL Fixed, TDD Validation Guard Implemented
+
+### Implementation Summary (2025-12-22)
+All phases of the DATABASE_URL migration plan have been completed:
+
+**Phase 1**: Pre-Flight Verification ✅
+- Created database validation module with 13 tests
+- Verified local environment configuration
+
+**Phase 2**: Vercel Environment Update ✅
+- Updated all local .env files (removed old Neon URLs)
+- Updated Vercel Production, Preview, and Development environments
+- Fixed newline character issues in CLI-added variables (used printf instead of heredoc)
+- Updated .env.example with Supabase configuration documentation
+
+**Phase 3**: Deploy and Verify ✅
+- Deployed to production
+- Verified Supabase database has app/pipeline schemas
+- Confirmed pipeline.JobQueue and app.User tables exist
+
+**Phase 4**: TDD Startup Validation Guard ✅
+- Created startup-validation.ts module (10 tests)
+- Implements ValidationLevel enum (OK, WARNING, CRITICAL)
+- Validates DATABASE_URL and DIRECT_URL at startup
+- Detects Neon vs Supabase provider
+- Detects newline characters in URLs
+- Exits with error in production if misconfigured
+- Wired into lib/db/prisma.ts for automatic validation on import
+
+**Files Created/Modified**:
+- `lib/config/database-validation.ts` - Core validation functions
+- `lib/config/startup-validation.ts` - Startup validation guard
+- `lib/config/index.ts` - Export configuration modules
+- `lib/db/prisma.ts` - Wired up validation on module load
+- `__tests__/config/startup-validation.test.ts` - 10 test cases
+- `__tests__/config/database-url-validation.test.ts` - 13 test cases
+- `__tests__/integration/vercel-env-check.test.ts` - 12 test cases
+- `.env.example` - Updated with Supabase documentation
+
+---
+
+## Current Session: Slack Hourly Diagnostic Enhancement (2025-12-22)
+
+### Problem Analysis
+The Slack hourly summary continues to fail with `relation "pipeline.JobQueue" does not exist` error.
+
+**Root Cause Confirmed via Research**:
+- PR #274 code changes are **correct** - all schema references properly updated to `app.*` and `pipeline.*`
+- The **actual problem** is that Vercel's `DATABASE_URL` environment variable still points to **Neon** (set 32 days ago)
+- Neon database only has `public` schema - it does NOT have `app` or `pipeline` schemas
+- The dual-schema architecture only exists in **Supabase**
+
+### Fix Applied: Improved Error Diagnostics
+
+Added schema diagnostic functionality to provide clear error messages in Slack when the database is misconfigured.
+
+**New Function**: `checkDatabaseSchemas()` in `lib/db/supabase-config.ts`
+- Detects if connected to Neon vs Supabase
+- Queries `information_schema.schemata` to find available schemas
+- Returns diagnostic info: database type, found schemas, migration status, and actionable message
+
+**Enhanced Error Handling**: `generateHourlySummary()` in `lib/slack/daily-report-handler.ts`
+- Detects schema-related errors (e.g., `pipeline.* does not exist`)
+- Runs schema diagnostic to determine root cause
+- Sends clear Slack message with:
+  - Database type (neon/supabase/unknown)
+  - Found schemas vs expected schemas
+  - Root cause explanation
+  - Fix instructions
+
+**Files Modified**:
+- `lib/db/supabase-config.ts` - Added `checkDatabaseSchemas()` and `SchemaDiagnostic` interface
+- `lib/db/index.ts` - Exported new function and type
+- `lib/slack/daily-report-handler.ts` - Enhanced error handling with diagnostics
+
+**Branch**: `fix/slack-hourly-database-connection`
+
+### Previous Fix (Still Correct)
+
+**Slack Hourly Schema Fix ✅ COMPLETE** (PR #274)
+
+The schema reference updates in PR #274 were correct:
+- `public.RssFilingCheck` → `app.RssFilingCheck`
+- `public.TickerMonitoring` → `app.TickerMonitoring`
+- `public.Summary` → `app.Summary`
+- `public.SecFiling` → `app.SecFiling`
+- `public.JobQueue` → `pipeline.JobQueue`
+- `public.SummaryEmailDelivery` → `pipeline.SummaryEmailDelivery`
+- `public.FilingContentCache` → `pipeline.FilingContentCache`
+- `public.CronJobExecution` → `pipeline.CronJobExecution`
+- `public.DailyPipelineVerification` → `pipeline.DailyPipelineVerification`
+
+---
+
+## CRITICAL: Database Configuration Issue (2025-12-22)
+
+### Root Cause Identified
+The tier-aware cron job is failing with "Failed to initialize monitoring" because:
+- **Vercel's DATABASE_URL** (set 32 days ago) points to Neon: `ep-rapid-wildflower-291580-pooler.ap-southeast-1.aws.neon.tech`
+- **Prisma multi-schema** (`app` and `pipeline` schemas) only exist in Supabase
+- **Error**: `The table 'pipeline.CronJobExecution' does not exist in the current database`
+
+### Required Fix
+Update Vercel environment variables with Supabase connection strings:
+
+```bash
+# 1. Get Supabase connection strings from Dashboard → Settings → Database
+# Transaction mode (port 6543) for DATABASE_URL
+# Session mode (port 5432) for DIRECT_URL
+
+# 2. Update Vercel environment variables
+vercel env rm DATABASE_URL production
+vercel env add DATABASE_URL production
+# Paste: postgresql://postgres.[project-ref]:[password]@aws-0-ap-southeast-1.pooler.supabase.com:6543/postgres
+
+vercel env rm DIRECT_URL production
+vercel env add DIRECT_URL production
+# Paste: postgresql://postgres.[project-ref]:[password]@aws-0-ap-southeast-1.pooler.supabase.com:5432/postgres
+
+# 3. Redeploy
+vercel --prod
+```
+
+### Verification Steps
+1. After redeploy, check Cloudflare Worker logs: `cd cloudflare-cron && npx wrangler tail --format=pretty`
+2. Look for successful "Monitoring initialized" instead of 500 errors
+3. Verify CronJobExecution records appear in Supabase `pipeline` schema
 
 ---
 
 ## Current Session: Supabase Database Migration
+
+### Phase 2: Data Migration ✅ COMPLETE (2025-12-22)
+Successfully migrated all essential data from Neon to Supabase with dual-schema architecture.
+
+**Tables Migrated (12 total)**:
+
+| Schema | Table | Records | Notes |
+|--------|-------|---------|-------|
+| app | User | 2 | Core user accounts |
+| app | Ticker | 14 | User-tracked tickers |
+| app | CikMapping | 20 | Ticker → SEC CIK mappings |
+| app | TickerMonitoring | 13 | Active monitoring configs |
+| app | SecFiling | 1 | SEC filing metadata |
+| app | Summary | 68 | AI-generated summaries |
+| app | RssFilingCheck | 340 | RSS feed check history |
+| app | AuditLog | 151 | Audit trail records |
+| pipeline | DailyWaitlistCache | 14 | Waitlist metrics cache |
+| pipeline | MonitoringThreshold | 10 | Alert thresholds (5 warning + 5 critical) |
+| pipeline | SummaryEmailDelivery | 20 | Email delivery audit trail |
+| pipeline | DailyPipelineVerification | 20 | Daily verification records |
+
+**Tables NOT Migrated** (intentionally - historical/ephemeral data):
+- JobQueue (17,982 rows) - Historical job data, will start fresh
+- CronJobExecution (5,827 rows) - Historical cron logs
+- FilingContentCache (101 rows) - Will be re-fetched as needed
+
+**Schema Alignment Migrations Applied**:
+1. `align_pipeline_tables_with_neon_schema` - Added missing columns, dropped incompatible ones
+2. `fix_daily_pipeline_verification_remediation_v2` - Fixed column type (boolean → integer)
+3. `fix_monitoring_threshold_unique_constraint` - Changed to composite unique constraint
+
+**Verification**: All 12 tables pass count checks, all FK relationships verified (0 orphans)
+
+**Test File Updated**: `__tests__/db/data-migration.test.ts` with `EXPECTED_SUPABASE_COUNTS`
+
+---
 
 ### Phase 1: Supabase Schema & Config ✅ COMPLETE (2025-12-19)
 Migration from Neon → Supabase PostgreSQL with dual-schema architecture.
@@ -350,7 +512,7 @@ npm run cloudflare:status                 # Check deployment status
 
 ---
 
-**Last Updated**: 2025-12-19
+**Last Updated**: 2025-12-22
 **Repository**: tldrsec-ai
 
 *Older completed projects archived to .claude/history/ - See TIMELINE.md for master timeline*

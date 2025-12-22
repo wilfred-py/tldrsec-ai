@@ -1,15 +1,20 @@
 import { PrismaClient } from '@prisma/client'
+import { validateEnvironmentOnStartup } from '@/lib/config/startup-validation'
 
 // PrismaClient is attached to the `global` object in development to prevent
 // exhausting your database connection limit.
 //
-// Learn more: 
+// Learn more:
 // https://pris.ly/d/help/next-js-best-practices
 
 // Define the global variable properly
 declare global {
   let prisma: PrismaClient | undefined
 }
+
+// Run environment validation on module load (before database connection)
+// This will exit with error if DATABASE_URL points to wrong database
+validateEnvironmentOnStartup();
 
 /**
  * Configure Prisma client with improved connection handling

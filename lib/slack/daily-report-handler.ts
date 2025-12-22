@@ -717,9 +717,49 @@ export async function generateHourlySummary(): Promise<SlackWebhookPayload> {
 
     return formatHourlySummaryMessage(metrics);
   } catch (error) {
-    dailyReportLogger.error('Error generating hourly summary', {
-      error: error instanceof Error ? error.message : 'Unknown error',
-    });
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    dailyReportLogger.error('Error generating hourly summary', { error: errorMessage });
+
+    // Check for schema-related errors (indicates DATABASE_URL misconfiguration)
+    const isSchemaError =
+      errorMessage.includes('does not exist') &&
+      (errorMessage.includes('pipeline.') || errorMessage.includes('app.'));
+
+    if (isSchemaError) {
+      // Import schema diagnostic dynamically to avoid circular deps
+      const { checkDatabaseSchemas } = await import('@/lib/db/supabase-config');
+      const diagnostic = await checkDatabaseSchemas();
+
+      return {
+        text: 'Database Configuration Error - Hourly Summary Failed',
+        blocks: [
+          {
+            type: 'section',
+            text: {
+              type: 'mrkdwn',
+              text: `:rotating_light: *Database Configuration Error*\n\n` +
+                `The hourly summary failed because the database schemas are misconfigured.\n\n` +
+                `*Diagnostic:*\n` +
+                `• Database Type: \`${diagnostic.databaseType}\`\n` +
+                `• Found Schemas: \`[${diagnostic.foundSchemas.join(', ') || 'none'}]\`\n` +
+                `• Expected: \`[app, pipeline]\`\n` +
+                `• Migration Complete: ${diagnostic.migrationComplete ? ':white_check_mark:' : ':x:'}\n\n` +
+                `*Root Cause:* ${diagnostic.message}\n\n` +
+                `*Fix Required:* Update \`DATABASE_URL\` in Vercel to point to Supabase with \`app\` and \`pipeline\` schemas.`,
+            },
+          },
+          {
+            type: 'context',
+            elements: [
+              {
+                type: 'mrkdwn',
+                text: `Original error: \`${errorMessage.substring(0, 200)}\``,
+              },
+            ],
+          },
+        ],
+      };
+    }
 
     return {
       text: 'Error generating hourly summary',
@@ -728,7 +768,7 @@ export async function generateHourlySummary(): Promise<SlackWebhookPayload> {
           type: 'section',
           text: {
             type: 'mrkdwn',
-            text: `:x: *Error generating hourly summary*\n\n${error instanceof Error ? error.message : 'Unknown error'}`,
+            text: `:x: *Error generating hourly summary*\n\n${errorMessage}`,
           },
         },
       ],
