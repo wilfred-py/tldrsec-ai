@@ -39,6 +39,43 @@ export interface ValidationOptions {
   exitOnCriticalFailure?: boolean;
   /** Skip validation in test environment (default: false) */
   skipInTest?: boolean;
+  /** Skip validation during build phase (default: true) */
+  skipDuringBuild?: boolean;
+}
+
+/**
+ * Detect if we're in a build phase (Next.js build, Vercel build, etc.)
+ * During builds, environment variables may not be available
+ */
+function isBuildPhase(): boolean {
+  // Vercel build phase detection
+  if (process.env.VERCEL_ENV === undefined && process.env.VERCEL) {
+    // VERCEL is set but VERCEL_ENV is not - we're in build phase
+    return true;
+  }
+
+  // Next.js build detection via next build command
+  // During `next build`, the phase is 'phase-production-build'
+  if (process.env.NEXT_PHASE === 'phase-production-build') {
+    return true;
+  }
+
+  // Check if we're running next build directly
+  // process.argv might contain 'build' when running npm run build
+  const isNextBuild =
+    process.argv.some((arg) => arg.includes('next') || arg.includes('build')) &&
+    !process.env.DATABASE_URL;
+
+  if (isNextBuild) {
+    return true;
+  }
+
+  // Cloudflare Worker build phase - no DATABASE_URL needed
+  if (process.env.CF_PAGES || process.env.WORKERS_RS_VERSION) {
+    return true;
+  }
+
+  return false;
 }
 
 /**
@@ -48,10 +85,22 @@ export interface ValidationOptions {
 export function validateProductionEnvironment(
   options: ValidationOptions = {}
 ): EnvironmentValidationResult {
-  const { exitOnCriticalFailure = false, skipInTest = false } = options;
+  const { exitOnCriticalFailure = false, skipInTest = false, skipDuringBuild = true } = options;
 
   // Skip validation in test environment if requested
   if (skipInTest && process.env.NODE_ENV === 'test') {
+    return {
+      isValid: true,
+      level: ValidationLevel.OK,
+      errors: [],
+      warnings: [],
+      skipped: true,
+    };
+  }
+
+  // Skip validation during build phase (Next.js build, Vercel build, etc.)
+  // Environment variables are not available during build time
+  if (skipDuringBuild && isBuildPhase()) {
     return {
       isValid: true,
       level: ValidationLevel.OK,
