@@ -54,7 +54,9 @@ export class AsyncAlertQueue {
     circuitBreakerTimeoutMs: 30000 // 30 seconds
   };
 
-  private readonly prisma = getPrismaClient();
+  // IMPORTANT: Use lazy accessor to avoid calling getPrismaClient() at module load time
+  // The singleton is exported at module level, so the constructor runs during build/import
+  private getPrisma = () => getPrismaClient();
 
   private constructor() {
     this.startFlushTimer();
@@ -219,7 +221,8 @@ export class AsyncAlertQueue {
 
     try {
       // Use transaction for consistency
-      await this.prisma.$transaction(async (tx) => {
+      const prisma = this.getPrisma();
+      await prisma.$transaction(async (tx) => {
         // 1. Batch insert alerts
         if (batch.alerts.length > 0) {
           const alertInserts = batch.alerts.map(alert => ({
@@ -235,7 +238,7 @@ export class AsyncAlertQueue {
           }));
 
           // Check if CronJobAlert model exists
-          if (this.prisma.cronJobAlert) {
+          if (prisma.cronJobAlert) {
             await tx.cronJobAlert.createMany({
               data: alertInserts,
               skipDuplicates: true
