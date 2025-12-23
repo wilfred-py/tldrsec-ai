@@ -1,11 +1,34 @@
 # Current Progress: tldrsec-ai Pipeline Operations
 
 ## Current Status
-**Date**: 2025-12-22
-**Branch**: fix/slack-hourly-database-connection
-**Status**: ✅ COMPLETE - Vercel DATABASE_URL Fixed, TDD Validation Guard Implemented
+**Date**: 2025-12-24
+**Branch**: main
+**Status**: ✅ RESOLVED - Database Region Fix Applied
 
-### Implementation Summary (2025-12-22)
+### Latest Fix: Supabase Region Migration (2025-12-24)
+
+**Issue**: Cron jobs failing with "Failed to initialize monitoring" (HTTP 500)
+- Cloudflare Worker circuit breaker opened after 3 consecutive failures
+- Root cause: Supabase database migrated to new region
+
+**Root Cause**:
+- Old region: `aws-0-ap-southeast-1.pooler.supabase.com`
+- New region: `aws-1-ap-southeast-2.pooler.supabase.com`
+- Error: "FATAL: Tenant or user not found" (connecting to wrong regional pooler)
+
+**Fix Applied**:
+1. Updated `.env.local` with correct region
+2. Updated Vercel Production `DATABASE_URL` and `DIRECT_URL` via CLI
+3. Deployed to production with `vercel --prod`
+
+**Verification**:
+- Local Prisma connection test: `✅ Database connection successful`
+- Health endpoint returns data: `{"status":"degraded","processingBacklog":373,...}`
+- Step 0 (cleanup-locks) now completes successfully
+
+---
+
+### Previous: Vercel Build Failure Fixed (2025-12-22)
 All phases of the DATABASE_URL migration plan have been completed:
 
 **Phase 1**: Pre-Flight Verification ✅
@@ -512,7 +535,7 @@ npm run cloudflare:status                 # Check deployment status
 
 ---
 
-**Last Updated**: 2025-12-22
+**Last Updated**: 2025-12-24
 **Repository**: tldrsec-ai
 
 *Older completed projects archived to .claude/history/ - See TIMELINE.md for master timeline*
