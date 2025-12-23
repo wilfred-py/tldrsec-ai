@@ -131,17 +131,10 @@ export async function GET(request: NextRequest) {
     cronLogger.debug(`[${executionId}] Checkpoint 0.3: CronJobMonitor created successfully`);
   } catch (initError) {
     clearTimeout(timeoutId);
-    const errorMessage = initError instanceof Error ? initError.message : String(initError);
-    const errorStack = initError instanceof Error ? initError.stack : undefined;
-    cronLogger.error(`[${executionId}] Failed to initialize cron job monitor`, {
-      error: initError,
-      errorMessage,
-      errorStack
-    });
+    cronLogger.error(`[${executionId}] Failed to initialize cron job monitor`, { error: initError });
     return NextResponse.json({
       success: false,
       error: 'Failed to initialize monitoring',
-      errorDetails: errorMessage, // Include actual error for debugging
       executionId,
       duration: Date.now() - startTime
     }, { status: 500 });
