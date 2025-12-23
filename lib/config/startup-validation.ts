@@ -45,36 +45,53 @@ export interface ValidationOptions {
 
 /**
  * Detect if we're in a build phase (Next.js build, Vercel build, etc.)
- * During builds, environment variables may not be available
+ * During builds, environment variables may not be available.
+ *
+ * The key insight is: if DATABASE_URL is not set, we're likely in build phase.
+ * At runtime, DATABASE_URL should always be set (that's what we're validating).
+ * So we use the absence of DATABASE_URL combined with build indicators.
  */
 function isBuildPhase(): boolean {
-  // Vercel build phase detection
-  if (process.env.VERCEL_ENV === undefined && process.env.VERCEL) {
-    // VERCEL is set but VERCEL_ENV is not - we're in build phase
+  // If DATABASE_URL is set, we're definitely at runtime, not build time
+  if (process.env.DATABASE_URL) {
+    return false;
+  }
+
+  // DATABASE_URL is not set. Check if we're in a known build environment:
+
+  // 1. Vercel build: VERCEL is set (but DATABASE_URL is not available during build)
+  if (process.env.VERCEL === '1') {
     return true;
   }
 
-  // Next.js build detection via next build command
-  // During `next build`, the phase is 'phase-production-build'
+  // 2. CI environment (GitHub Actions, etc.)
+  if (process.env.CI === 'true') {
+    return true;
+  }
+
+  // 3. Next.js build phase
   if (process.env.NEXT_PHASE === 'phase-production-build') {
     return true;
   }
 
-  // Check if we're running next build directly
-  // process.argv might contain 'build' when running npm run build
-  const isNextBuild =
-    process.argv.some((arg) => arg.includes('next') || arg.includes('build')) &&
-    !process.env.DATABASE_URL;
-
-  if (isNextBuild) {
-    return true;
-  }
-
-  // Cloudflare Worker build phase - no DATABASE_URL needed
+  // 4. Cloudflare build
   if (process.env.CF_PAGES || process.env.WORKERS_RS_VERSION) {
     return true;
   }
 
+  // 5. Common build tool indicators
+  if (process.env.npm_lifecycle_event === 'build') {
+    return true;
+  }
+
+  // 6. If NODE_ENV is not 'production', we might be in build/dev mode
+  // and DATABASE_URL might legitimately not be set yet
+  if (process.env.NODE_ENV !== 'production') {
+    return true;
+  }
+
+  // At this point: DATABASE_URL is not set, NODE_ENV is production,
+  // and no build indicators are present. This is a real runtime issue.
   return false;
 }
 

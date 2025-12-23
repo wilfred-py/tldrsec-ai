@@ -83,8 +83,11 @@ describe('Startup Environment Validation', () => {
 
     it('should fail when DATABASE_URL is not set', () => {
       delete process.env.DATABASE_URL;
+      // Set NODE_ENV to production to simulate runtime environment
+      // (otherwise build phase detection skips validation)
+      process.env.NODE_ENV = 'production';
 
-      const result = validateProductionEnvironment();
+      const result = validateProductionEnvironment({ skipDuringBuild: false });
 
       expect(result.isValid).toBe(false);
       expect(result.errors).toContain('DATABASE_URL environment variable is not set');
@@ -125,6 +128,40 @@ describe('Startup Environment Validation', () => {
       expect(mockExit).not.toHaveBeenCalled();
 
       mockExit.mockRestore();
+    });
+  });
+
+  describe('skipDuringBuild option', () => {
+    it('should skip validation during Vercel build phase', () => {
+      delete process.env.DATABASE_URL;
+      process.env.VERCEL = '1';
+
+      const result = validateProductionEnvironment({ skipDuringBuild: true });
+
+      expect(result.isValid).toBe(true);
+      expect(result.skipped).toBe(true);
+    });
+
+    it('should skip validation during CI build', () => {
+      delete process.env.DATABASE_URL;
+      process.env.CI = 'true';
+
+      const result = validateProductionEnvironment({ skipDuringBuild: true });
+
+      expect(result.isValid).toBe(true);
+      expect(result.skipped).toBe(true);
+    });
+
+    it('should not skip when DATABASE_URL is set even during build', () => {
+      process.env.DATABASE_URL =
+        'postgres://user:pass@pooler.supabase.com:6543/db?pgbouncer=true';
+      process.env.DIRECT_URL = 'postgres://user:pass@pooler.supabase.com:5432/db';
+      process.env.VERCEL = '1';
+
+      const result = validateProductionEnvironment({ skipDuringBuild: true });
+
+      expect(result.isValid).toBe(true);
+      expect(result.skipped).toBeUndefined(); // Not skipped, actually validated
     });
   });
 
