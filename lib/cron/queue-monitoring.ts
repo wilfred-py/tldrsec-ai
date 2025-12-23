@@ -68,9 +68,10 @@ export class QueueMonitoringService {
       }),
 
       // Average processing time (last 24h)
+      // NOTE: Must use pipeline."JobQueue" for Supabase multi-schema setup
       getPrisma().$queryRaw<Array<{ avg_seconds: number | null }>>`
         SELECT AVG(EXTRACT(EPOCH FROM ("completedAt" - "startedAt"))) as avg_seconds
-        FROM "JobQueue"
+        FROM pipeline."JobQueue"
         WHERE "jobType" = ${jobType}
           AND status = 'COMPLETED'
           AND "completedAt" >= ${oneDayAgo}

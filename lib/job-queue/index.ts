@@ -292,10 +292,11 @@ export class JobQueueService {
       const now = new Date();
 
       // Use raw SQL to correctly compare retryCount < maxRetries
+      // NOTE: Must use pipeline."JobQueue" for Supabase multi-schema setup
       if (jobType) {
         const jobs = await prisma.$queryRaw<RawJobQueueRow[]>`
           SELECT *
-          FROM "JobQueue"
+          FROM pipeline."JobQueue"
           WHERE "status" IN ('PENDING', 'RETRYING')
             AND "scheduledFor" <= ${now}
             AND "jobType" = ${jobType}
@@ -307,7 +308,7 @@ export class JobQueueService {
       } else {
         const jobs = await prisma.$queryRaw<RawJobQueueRow[]>`
           SELECT *
-          FROM "JobQueue"
+          FROM pipeline."JobQueue"
           WHERE "status" IN ('PENDING', 'RETRYING')
             AND "scheduledFor" <= ${now}
             AND "retryCount" < "maxRetries"
@@ -365,9 +366,10 @@ export class JobQueueService {
 
       // Use raw SQL to correctly compare retryCount < maxRetries
       // This is necessary because Prisma's field reference pattern wasn't working
+      // NOTE: Must use pipeline."JobQueue" for Supabase multi-schema setup
       const jobs = await prisma.$queryRaw<RawJobQueueRow[]>`
         SELECT *
-        FROM "JobQueue"
+        FROM pipeline."JobQueue"
         WHERE "status" IN ('PENDING', 'RETRYING')
           AND "scheduledFor" <= ${now}
           AND "jobType" = ANY(${jobTypes})
@@ -400,10 +402,11 @@ export class JobQueueService {
       const now = new Date();
 
       // Use raw SQL to correctly compare retryCount < maxRetries
+      // NOTE: Must use pipeline."JobQueue" for Supabase multi-schema setup
       if (jobTypes && jobTypes.length > 0) {
         const jobs = await prisma.$queryRaw<RawJobQueueRow[]>`
           SELECT *
-          FROM "JobQueue"
+          FROM pipeline."JobQueue"
           WHERE "status" IN ('PENDING', 'RETRYING')
             AND "scheduledFor" <= ${now}
             AND "jobType" = ANY(${jobTypes})
@@ -415,7 +418,7 @@ export class JobQueueService {
       } else {
         const jobs = await prisma.$queryRaw<RawJobQueueRow[]>`
           SELECT *
-          FROM "JobQueue"
+          FROM pipeline."JobQueue"
           WHERE "status" IN ('PENDING', 'RETRYING')
             AND "scheduledFor" <= ${now}
             AND "retryCount" < "maxRetries"

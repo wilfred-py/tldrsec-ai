@@ -13,7 +13,11 @@ This file provides a chronological index of all completed projects. For detailed
 
 | Date | Project | Status |
 |------|---------|--------|
+| 2025-12-24 | Phase 3 Manual Verification (Playwright, Supabase, Vercel) | ✅ |
+| 2025-12-24 | Supabase Phase 3 Cutover Complete | ✅ |
 | 2025-12-24 | Supabase Region Migration Fix (aws-0 → aws-1) | ✅ |
+| 2025-12-24 | JobQueue Schema Fix (type column nullable) | ✅ |
+| 2025-12-24 | Lazy Singleton Import Fix (build-time instantiation) | ✅ |
 | 2025-12-22 | Vercel DATABASE_URL Fix + TDD Validation Guard | ✅ |
 | 2025-12-22 | Supabase Migration Phase 2 (Data Migration) | ✅ |
 | 2025-12-22 | Slack Hourly Diagnostic Enhancement | ✅ |
@@ -34,16 +38,14 @@ This file provides a chronological index of all completed projects. For detailed
 | 2025-12-09 | Fetch Job Race Condition Fix | ✅ |
 | 2025-12-08 | Live Counter SSR Animation Fix | ✅ |
 | 2025-12-06 | Development Environment API Fixes | ✅ |
-| 2025-12-06 | Verification Cache Health Metrics | ✅ |
 | 2025-12-05 | Remove Market Hours Functionality | ✅ |
-| 2025-12-05 | Verification Data Model Fix | ✅ |
 | 2025-12-04 | Digest Email Markdown Rendering Fix | ✅ |
 | 2025-12-02 | Email Summarization Phase 3 (Journalist Tone) | ✅ |
 | 2025-12-02 | Email Summarization Phase 2 (Templates) | ✅ |
 | 2025-12-01 | Email Summarization Phase 1 (summaryJSON) | ✅ |
 | 2025-11-30 | Daily Pipeline Verification Script | ✅ |
 
-*See PROGRESS.md for detailed implementation notes on each project*
+*See PROGRESS.md for detailed implementation notes on current work*
 
 ---
 
@@ -51,12 +53,18 @@ This file provides a chronological index of all completed projects. For detailed
 
 ### December 2025
 
-**Current Work**: Supabase Region Migration Fix (COMPLETE)
+**Current Status**: ✅ Supabase Migration Complete
 
 **Pipeline Status**:
-- Production: ✅ Supabase connection updated (aws-1-ap-southeast-2 region)
-- Database: ✅ Connected and responding
-- Cron: ⚠️ Some 524 timeouts due to processing backlog (373 items)
+- Production: ✅ All cron endpoints operational
+- Database: ✅ Supabase (aws-1-ap-southeast-2)
+- Schemas: ✅ app (11 tables) + pipeline (19 tables)
+- Cron: ✅ Running successfully (46+ SUCCESS records)
+
+**Weekly Archives**:
+- [15-Dec-2025.md](2025/Dec/15-Dec-2025.md) - Slack bot, lock cleanup, discovery fixes
+- [08-Dec-2025.md](2025/Dec/08-Dec-2025.md) - Prisma bug fix, orphaned jobs, cascade delete
+- [01-Dec-2025.md](2025/Dec/01-Dec-2025.md) - Email phases 1-3, daily verification
 
 ---
 
@@ -91,15 +99,18 @@ This file provides a chronological index of all completed projects. For detailed
 ---
 
 ## Archive Statistics
-- **Total Archived Projects**: 17 projects across 3 weekly archives
-- **Current PROGRESS.md Lines**: 541 (threshold: 500)
+- **Total Archived Projects**: 32 projects across 6 weekly archives
+- **Current PROGRESS.md Lines**: 130 (threshold: 500)
 - **Last Sync**: 2025-12-24
 - **Archive System**: ✅ ACTIVE
 
 **Archives**:
-- `27-Oct-2025.md` - Newsletter & Security (6 projects)
+- `01-Dec-2025.md` - Email & verification (8 projects)
+- `08-Dec-2025.md` - Pipeline recovery (5 projects)
+- `15-Dec-2025.md` - Pipeline maturity (7 projects)
+- `10-Nov-2025.md` - Landing page & UI (6 projects)
 - `03-Nov-2025.md` - Infrastructure fixes (4 projects)
-- `10-Nov-2025.md` - Landing page & UI (7 projects)
+- `27-Oct-2025.md` - Newsletter & Security (6 projects)
 
 ---
 
