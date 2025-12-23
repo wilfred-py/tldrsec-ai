@@ -23,8 +23,16 @@ export const dynamic = 'force-dynamic';
 
 const pipelineLogger = logger.child('pipeline-health');
 
+interface DatabaseInfo {
+  provider: 'supabase' | 'neon' | 'unknown';
+  hasAppSchema: boolean;
+  hasPipelineSchema: boolean;
+  migrationComplete: boolean;
+}
+
 interface PipelineHealthResponse {
   status: 'HEALTHY' | 'DEGRADED' | 'CRITICAL' | 'ERROR';
+  database: DatabaseInfo;
   locks: {
     healthStatus: string;
     staleCount: number;
@@ -86,7 +94,28 @@ export async function GET(request: NextRequest) {
     // Dynamic import to avoid build-time dependencies
     const { getPrismaClient } = await import('../../../../lib/db/prisma');
     const { LockService } = await import('../../../../lib/job-queue/lock-service');
+    const { checkDatabaseSchemas } = await import('../../../../lib/db/supabase-config');
     const prisma = getPrismaClient();
+
+    // Get database source information
+    const schemaDiagnostic = await checkDatabaseSchemas();
+    const databaseInfo: DatabaseInfo = {
+      provider: schemaDiagnostic.databaseType,
+      hasAppSchema: schemaDiagnostic.foundSchemas.includes('app'),
+      hasPipelineSchema: schemaDiagnostic.foundSchemas.includes('pipeline'),
+      migrationComplete: schemaDiagnostic.migrationComplete,
+    };
+
+    // Check for database configuration issues
+    if (!schemaDiagnostic.migrationComplete) {
+      if (schemaDiagnostic.databaseType === 'neon') {
+        issues.push('DATABASE_URL points to Neon instead of Supabase');
+        recommendations.push('Update DATABASE_URL in Vercel to point to Supabase');
+      } else if (!schemaDiagnostic.hasExpectedSchemas) {
+        issues.push(`Missing required schemas: ${schemaDiagnostic.message}`);
+        recommendations.push('Run Prisma migrations to create app and pipeline schemas');
+      }
+    }
 
     // Get lock health metrics
     const lockMetrics = await LockService.getLockHealthMetrics();
@@ -190,6 +219,7 @@ export async function GET(request: NextRequest) {
 
     const response: PipelineHealthResponse = {
       status,
+      database: databaseInfo,
       locks: {
         healthStatus: lockMetrics.healthStatus,
         staleCount: lockMetrics.staleLocksCount,
@@ -248,6 +278,12 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({
       status: 'ERROR',
+      database: {
+        provider: 'unknown',
+        hasAppSchema: false,
+        hasPipelineSchema: false,
+        migrationComplete: false,
+      },
       locks: {
         healthStatus: 'UNKNOWN',
         staleCount: 0,
