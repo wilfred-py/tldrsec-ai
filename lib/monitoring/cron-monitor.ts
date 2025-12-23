@@ -10,8 +10,21 @@ import {
   MonitoringConfig
 } from '../../types/cron';
 import { CronAlertType, AlertSeverity } from '@prisma/client';
-import { asyncAlertQueue } from './async-alert-queue';
-import { performanceMonitor } from './performance-monitor';
+// IMPORTANT: Use lazy imports to avoid singleton instantiation at module load time
+// These singletons set up timers and event handlers that can cause issues during build/import
+import type { AsyncAlertQueue } from './async-alert-queue';
+import type { PerformanceMonitor } from './performance-monitor';
+
+// Lazy accessors for singletons to defer instantiation until runtime
+const getAsyncAlertQueue = (): AsyncAlertQueue => {
+  const { asyncAlertQueue } = require('./async-alert-queue');
+  return asyncAlertQueue;
+};
+
+const getPerformanceMonitor = (): PerformanceMonitor => {
+  const { performanceMonitor } = require('./performance-monitor');
+  return performanceMonitor;
+};
 
 // SECURITY: Import security modules for GDPR compliance and access control
 import { dataSanitizer, sanitize } from '../security/data-sanitizer';
@@ -386,7 +399,7 @@ export class CronJobMonitor {
       });
       
       // OPTIMIZATION: Queue alert for async processing instead of blocking DB operations
-      await asyncAlertQueue.queueAlert({
+      await getAsyncAlertQueue().queueAlert({
         executionId: this.executionId,
         alertType,
         severity: alertData.severity,
@@ -402,7 +415,7 @@ export class CronJobMonitor {
       const processingTime = Date.now() - startTime;
       
       // PERFORMANCE MONITORING: Track alert processing times for regression detection
-      performanceMonitor.recordAlertProcessingTime(processingTime);
+      getPerformanceMonitor().recordAlertProcessingTime(processingTime);
       
       if (processingTime > 5) {
         cronLogger.warn('Alert creation took longer than expected', {
