@@ -15,7 +15,8 @@ import {
   type ConcurrencyOptions 
 } from './concurrency';
 
-const prisma = getPrismaClient();
+// Lazy accessor to avoid build-time initialization
+const getPrisma = () => getPrismaClient();
 const budgetLogger = logger.child('budget-operations');
 
 // Specialized options for budget operations to prevent deadlocks
@@ -181,7 +182,7 @@ export async function updateUserBudgetWithLock(
   
   return withOptimisticLocking(async () => {
     try {
-      return await prisma.$transaction(async (tx) => {
+      return await getPrisma().$transaction(async (tx) => {
         // Get current user state with row lock
         const currentUser = await tx.user.findUnique({
           where: { id: userId },

@@ -19,7 +19,10 @@ import { monitoring } from '../monitoring';
 import { recordLockOperation } from '../monitoring/pipeline-health-monitoring-system';
 import { v4 as uuidv4 } from 'uuid';
 
-const prisma = getPrismaClient();
+// IMPORTANT: Use lazy accessor to avoid calling getPrismaClient() at module load time
+// During Next.js build, the module is imported but DATABASE_URL is not available
+// Using a getter ensures the prisma client is only accessed at runtime
+const getPrisma = () => getPrismaClient();
 const lockLogger = logger.child('distributed-lock');
 
 export interface LockOptions {
@@ -214,7 +217,7 @@ export class DistributedLockManager {
       }
 
       // Release the lock in database with advisory lock cleanup
-      const released = await prisma.$transaction(async (tx) => {
+      const released = await getPrisma().$transaction(async (tx) => {
         const lockHash = this.hashLockKey(lockContext.lockName);
         
         // STEP 1: Mark lock as released in database
@@ -329,7 +332,7 @@ export class DistributedLockManager {
     // Generate deterministic lock key for PostgreSQL advisory lock
     const lockHash = this.hashLockKey(lockName);
     
-    return await prisma.$transaction(async (tx) => {
+    return await getPrisma().$transaction(async (tx) => {
       // STEP 1: Try to acquire PostgreSQL advisory lock first (atomic)
       const advisoryLockResult = await tx.$queryRaw<{acquired: boolean}[]>`
         SELECT pg_try_advisory_lock(${lockHash}) as acquired
@@ -454,7 +457,7 @@ export class DistributedLockManager {
   private async renewLock(lockContext: LockContext, ttl: number): Promise<void> {
     const newExpiresAt = new Date(Date.now() + ttl);
 
-    const renewed = await prisma.$transaction(async (tx) => {
+    const renewed = await getPrisma().$transaction(async (tx) => {
       // Verify we still hold the advisory lock before renewing
       const lockHash = this.hashLockKey(lockContext.lockName);
       
@@ -543,7 +546,7 @@ export class DistributedLockManager {
 
     // Release all locks in database and advisory locks
     try {
-      await prisma.$transaction(async (tx) => {
+      await getPrisma().$transaction(async (tx) => {
         // Get all locks we currently hold
         const ourLocks = await tx.jobLock.findMany({
           where: {
@@ -598,7 +601,7 @@ export class DistributedLockManager {
       
       // Fallback: try to release all advisory locks held by this session
       try {
-        await prisma.$queryRaw`SELECT pg_advisory_unlock_all()`;
+        await getPrisma().$queryRaw`SELECT pg_advisory_unlock_all()`;
         lockLogger.info('Released all advisory locks as fallback');
       } catch (fallbackError) {
         lockLogger.error('Fallback advisory lock cleanup failed', {
@@ -617,7 +620,7 @@ export class DistributedLockManager {
   static async cleanupExpiredLocks(): Promise<number> {
     try {
       // Find locks that are expired and don't have active advisory locks
-      const expiredLocks = await prisma.jobLock.findMany({
+      const expiredLocks = await getPrisma().jobLock.findMany({
         where: {
           OR: [
             { expiresAt: { lt: new Date() } },
@@ -639,7 +642,7 @@ export class DistributedLockManager {
           const lockHash = this.hashLockKey(lock.lockName);
           
           // Check if any process still holds the advisory lock
-          const advisoryLockCheck = await prisma.$queryRaw<{count: number}[]>`
+          const advisoryLockCheck = await getPrisma().$queryRaw<{count: number}[]>`
             SELECT count(*) as count FROM pg_locks 
             WHERE locktype = 'advisory' AND objid = ${lockHash}
           `;
@@ -648,7 +651,7 @@ export class DistributedLockManager {
           
           // Only delete if no advisory lock is held
           if (!advisoryLockHeld) {
-            await prisma.jobLock.delete({
+            await getPrisma().jobLock.delete({
               where: { id: lock.id }
             });
             cleanedCount++;
@@ -696,12 +699,12 @@ export class DistributedLockManager {
   }> {
     try {
       // Get active advisory locks
-      const advisoryLocks = await prisma.$queryRaw<{count: number}[]>`
+      const advisoryLocks = await getPrisma().$queryRaw<{count: number}[]>`
         SELECT count(*) as count FROM pg_locks WHERE locktype = 'advisory'
       `;
       
       // Get database lock statistics
-      const lockStats = await prisma.jobLock.groupBy({
+      const lockStats = await getPrisma().jobLock.groupBy({
         by: ['lockName'],
         _count: {
           lockName: true
@@ -752,7 +755,7 @@ export class DistributedLockManager {
    */
   static async emergencyReleaseAllAdvisoryLocks(): Promise<void> {
     try {
-      await prisma.$queryRaw`SELECT pg_advisory_unlock_all()`;
+      await getPrisma().$queryRaw`SELECT pg_advisory_unlock_all()`;
       
       lockLogger.warn('Emergency release of all advisory locks executed', {
         timestamp: new Date().toISOString(),
@@ -770,18 +773,31 @@ export class DistributedLockManager {
   }
 }
 
-// Singleton instance
-export const distributedLockManager = DistributedLockManager.getInstance();
+// Lazy singleton accessor - avoid instantiation at module load time (during build)
+// The singleton will be created on first access at runtime
+export const getDistributedLockManager = () => DistributedLockManager.getInstance();
 
-// Convenience functions
-export const acquireLock = (lockName: string, options?: LockOptions) => 
-  distributedLockManager.acquireLock(lockName, options);
+// Legacy export for backwards compatibility - callers should migrate to getDistributedLockManager()
+// This getter is evaluated lazily when accessed, not at module load time
+export const distributedLockManager = {
+  get instance() { return getDistributedLockManager(); },
+  acquireLock: (lockName: string, options?: LockOptions) =>
+    getDistributedLockManager().acquireLock(lockName, options),
+  releaseLock: (lockId: string) =>
+    getDistributedLockManager().releaseLock(lockId),
+  withLock: <T>(lockName: string, operation: () => Promise<T>, options?: LockOptions) =>
+    getDistributedLockManager().withLock(lockName, operation, options),
+};
 
-export const releaseLock = (lockId: string) => 
-  distributedLockManager.releaseLock(lockId);
+// Convenience functions - lazy evaluation
+export const acquireLock = (lockName: string, options?: LockOptions) =>
+  getDistributedLockManager().acquireLock(lockName, options);
 
-export const withLock = <T>(lockName: string, operation: () => Promise<T>, options?: LockOptions) => 
-  distributedLockManager.withLock(lockName, operation, options);
+export const releaseLock = (lockId: string) =>
+  getDistributedLockManager().releaseLock(lockId);
+
+export const withLock = <T>(lockName: string, operation: () => Promise<T>, options?: LockOptions) =>
+  getDistributedLockManager().withLock(lockName, operation, options);
 
 // Specialized lock utilities for specific use cases
 export class lockUtils {

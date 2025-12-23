@@ -11,7 +11,8 @@ import { getPrismaClient } from '../db/prisma';
 import { v4 as uuidv4 } from 'uuid';
 
 const checkpointLogger = logger.child('progress-checkpoint');
-const prisma = getPrismaClient();
+// Lazy accessor to avoid build-time initialization
+const getPrisma = () => getPrismaClient();
 
 export interface ProgressUpdate {
   jobId: string;
@@ -64,7 +65,7 @@ export class ProgressCheckpointService {
     try {
       const now = new Date();
       
-      await prisma.jobProgress.create({
+      await getPrisma().jobProgress.create({
         data: {
           id: uuidv4(),
           jobId: update.jobId,
@@ -112,7 +113,7 @@ export class ProgressCheckpointService {
    */
   static async getProgress(jobId: string): Promise<ProgressHistory[]> {
     try {
-      const progressRecords = await prisma.jobProgress.findMany({
+      const progressRecords = await getPrisma().jobProgress.findMany({
         where: { jobId },
         orderBy: { updatedAt: 'asc' }
       });
@@ -145,7 +146,7 @@ export class ProgressCheckpointService {
   ): Promise<TimeoutPattern[]> {
     try {
       // Get jobs that were flagged for timeout
-      const timeoutJobs = await prisma.jobQueue.findMany({
+      const timeoutJobs = await getPrisma().jobQueue.findMany({
         where: {
           timeoutFlagged: true,
           createdAt: {
@@ -162,7 +163,7 @@ export class ProgressCheckpointService {
       });
 
       // Get total jobs for comparison
-      const totalJobs = await prisma.jobQueue.count({
+      const totalJobs = await getPrisma().jobQueue.count({
         where: {
           createdAt: {
             gte: startDate,
@@ -252,7 +253,7 @@ export class ProgressCheckpointService {
       const tenMinutesAgo = new Date(Date.now() - this.TIMEOUT_THRESHOLD_MS);
       
       // Find jobs that started more than 10 minutes ago and are still running
-      const longRunningJobs = await prisma.jobQueue.findMany({
+      const longRunningJobs = await getPrisma().jobQueue.findMany({
         where: {
           status: {
             in: ['PENDING', 'PROCESSING']
@@ -268,7 +269,7 @@ export class ProgressCheckpointService {
 
       // Flag these jobs for timeout
       for (const job of longRunningJobs) {
-        await prisma.jobQueue.update({
+        await getPrisma().jobQueue.update({
           where: { id: job.id },
           data: { 
             timeoutFlagged: true,
@@ -307,7 +308,7 @@ export class ProgressCheckpointService {
    */
   private static async checkForTimeoutRisk(jobId: string): Promise<void> {
     try {
-      const job = await prisma.jobQueue.findUnique({
+      const job = await getPrisma().jobQueue.findUnique({
         where: { id: jobId },
         select: {
           id: true,
@@ -383,7 +384,7 @@ export class ProgressCheckpointService {
     try {
       const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
       
-      const deletedCount = await prisma.jobProgress.deleteMany({
+      const deletedCount = await getPrisma().jobProgress.deleteMany({
         where: {
           updatedAt: {
             lt: thirtyDaysAgo

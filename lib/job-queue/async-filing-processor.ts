@@ -15,7 +15,8 @@ import { getPrismaClient } from '../db/prisma';
 import { v4 as uuidv4 } from 'uuid';
 
 const asyncLogger = logger.child('async-filing-processor');
-const prisma = getPrismaClient();
+// Lazy accessor to avoid build-time initialization
+const getPrisma = () => getPrismaClient();
 
 export interface AsyncFilingJob {
   filingId: string;
@@ -326,7 +327,7 @@ export class AsyncFilingProcessor {
   private static async estimateCompletionTime(priority: string): Promise<Date> {
     try {
       // Get current queue depth for this priority and higher
-      const queueDepth = await prisma.jobQueue.count({
+      const queueDepth = await getPrisma().jobQueue.count({
         where: {
           jobType: 'ASYNC_SUMMARIZE_FILING',
           status: {
@@ -387,7 +388,7 @@ export class AsyncFilingProcessor {
   }> {
     try {
       // Check for existing summary
-      const summary = await prisma.summary.findFirst({
+      const summary = await getPrisma().summary.findFirst({
         where: {
           filingId,
           userId
@@ -402,7 +403,7 @@ export class AsyncFilingProcessor {
       }
       
       // Check for active job
-      const job = await prisma.jobQueue.findFirst({
+      const job = await getPrisma().jobQueue.findFirst({
         where: {
           jobType: 'ASYNC_SUMMARIZE_FILING',
           payload: {
@@ -427,7 +428,7 @@ export class AsyncFilingProcessor {
       }
       
       // Check for failed job
-      const failedJob = await prisma.jobQueue.findFirst({
+      const failedJob = await getPrisma().jobQueue.findFirst({
         where: {
           jobType: 'ASYNC_SUMMARIZE_FILING',
           payload: {

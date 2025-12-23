@@ -11,7 +11,8 @@ import { getPrismaClient } from '../db/prisma';
 import { v4 as uuidv4 } from 'uuid';
 
 const timeoutLogger = logger.child('timeout-monitor');
-const prisma = getPrismaClient();
+// Lazy accessor to avoid build-time initialization
+const getPrisma = () => getPrismaClient();
 
 export interface TimeoutJobInfo {
   jobId: string;
@@ -82,7 +83,7 @@ export class TimeoutMonitorService {
       const alerts: AdminAlert[] = [];
 
       // Find jobs running longer than threshold
-      const timeoutJobs = await prisma.jobQueue.findMany({
+      const timeoutJobs = await getPrisma().jobQueue.findMany({
         where: {
           status: {
             in: ['PENDING', 'PROCESSING']
@@ -112,7 +113,7 @@ export class TimeoutMonitorService {
         alerts.push(alert);
 
         // Flag the job to prevent duplicate alerts
-        await prisma.jobQueue.update({
+        await getPrisma().jobQueue.update({
           where: { id: job.id },
           data: { 
             timeoutFlagged: true,
@@ -174,14 +175,14 @@ export class TimeoutMonitorService {
       if (ticker) {
         try {
           // Get company name from CikMapping
-          const cikMapping = await prisma.cikMapping.findFirst({
+          const cikMapping = await getPrisma().cikMapping.findFirst({
             where: { ticker },
             select: { companyName: true }
           });
           companyName = cikMapping?.companyName;
 
           // Count users subscribed to this ticker
-          const tickerSubscribers = await prisma.ticker.count({
+          const tickerSubscribers = await getPrisma().ticker.count({
             where: { symbol: ticker }
           });
           subscribedUsers = tickerSubscribers;
@@ -290,7 +291,7 @@ export class TimeoutMonitorService {
 
       // Check for similar incidents in the last 24 hours
       const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
-      const similarIncidents = await prisma.jobQueue.count({
+      const similarIncidents = await getPrisma().jobQueue.count({
         where: {
           jobType: job.jobType,
           timeoutFlagged: true,
@@ -420,7 +421,7 @@ ${causeAnalysis.recommendedActions.map(action => `- ${action}`).join('\n')}
     const alertId = uuidv4();
     
     // Get job type breakdown
-    const jobTypeBreakdown = await prisma.jobQueue.groupBy({
+    const jobTypeBreakdown = await getPrisma().jobQueue.groupBy({
       by: ['jobType'],
       where: {
         status: {
@@ -526,7 +527,7 @@ Recommended Actions:
    */
   private static async getQueueDepth(): Promise<number> {
     try {
-      return await prisma.jobQueue.count({
+      return await getPrisma().jobQueue.count({
         where: {
           status: {
             in: ['PENDING', 'PROCESSING']
@@ -550,7 +551,7 @@ Recommended Actions:
       const alerts: AdminAlert[] = [];
 
       // Find high-cost jobs
-      const expensiveJobs = await prisma.jobQueue.findMany({
+      const expensiveJobs = await getPrisma().jobQueue.findMany({
         where: {
           costUSD: {
             gte: this.HIGH_COST_THRESHOLD

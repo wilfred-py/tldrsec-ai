@@ -11,7 +11,8 @@ import { getPrismaClient } from '../db/prisma';
 import { resolveTicker } from './cik-resolver';
 
 const envLogger = logger.child('environment-aware-fetcher');
-const prisma = getPrismaClient();
+// Lazy accessor to avoid build-time initialization
+const getPrisma = () => getPrismaClient();
 
 export interface UnifiedFilingResponse {
   success: boolean;
@@ -45,7 +46,7 @@ async function convertCIKToTicker(cik: string): Promise<string | null> {
     envLogger.debug('Converting CIK to ticker', { cik });
     
     // Search CikMapping database for ticker by CIK
-    const mapping = await prisma.cikMapping.findFirst({
+    const mapping = await getPrisma().cikMapping.findFirst({
       where: { 
         cik: cik.padStart(10, '0'), 
         isActive: true 

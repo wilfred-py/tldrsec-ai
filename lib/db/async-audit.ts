@@ -10,7 +10,8 @@ import { getPrismaClient } from './prisma';
 import { logger } from '../logging';
 import { generateSecureAuditId } from '../security/secure-random';
 
-const prisma = getPrismaClient();
+// Lazy accessor to avoid build-time initialization
+const getPrisma = () => getPrismaClient();
 const auditLogger = logger.child('async-audit');
 
 interface AuditLogData {
@@ -152,7 +153,7 @@ async function processAuditQueue(): Promise<void> {
     const results = await Promise.allSettled(
       batch.map(async (item) => {
         try {
-          await prisma.auditLog.create({
+          await getPrisma().auditLog.create({
             data: {
               userId: item.data.userId,
               action: item.data.action,

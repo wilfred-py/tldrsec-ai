@@ -12,7 +12,8 @@ import { getDefaultModel, getFallbackModel } from '../ai/config';
 import { v4 as uuidv4 } from 'uuid';
 
 const costLogger = logger.child('cost-monitor');
-const prisma = getPrismaClient();
+// Lazy accessor to avoid build-time initialization
+const getPrisma = () => getPrismaClient();
 
 export interface ApiCallCost {
   callId: string;
@@ -198,7 +199,7 @@ export class CostMonitorService {
    */
   private static async updateJobCost(jobId: string, apiCall: ApiCallCost): Promise<void> {
     try {
-      await prisma.jobQueue.update({
+      await getPrisma().jobQueue.update({
         where: { id: jobId },
         data: {
           costUSD: apiCall.totalCostUSD,
@@ -239,7 +240,7 @@ export class CostMonitorService {
       let businessContext: CostAlert['businessContext'] | undefined;
       
       if (apiCall.jobId) {
-        const job = await prisma.jobQueue.findUnique({
+        const job = await getPrisma().jobQueue.findUnique({
           where: { id: apiCall.jobId },
           select: { payload: true }
         });
@@ -438,7 +439,7 @@ This alert was generated automatically to help monitor and optimize API costs.
   ): Promise<CostAnalytics> {
     try {
       // Get jobs with cost data in the date range
-      const jobsWithCosts = await prisma.jobQueue.findMany({
+      const jobsWithCosts = await getPrisma().jobQueue.findMany({
         where: {
           costUSD: { not: null },
           completedAt: {

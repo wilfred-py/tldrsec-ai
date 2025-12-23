@@ -21,7 +21,8 @@ import type { JobQueue } from '@prisma/client';
 import { FILING_PROCESSING_TIMEOUT, getBatchSizeForJobType } from './types';
 
 const workerLogger = logger.child('background-filing-worker');
-const prisma = getPrismaClient();
+// Lazy accessor to avoid build-time initialization
+const getPrisma = () => getPrismaClient();
 
 /**
  * Result from processing a single job, used for Slack notifications
@@ -315,7 +316,7 @@ export class BackgroundFilingWorker {
     try {
       // Find stale PROCESSING jobs - ONLY 3-phase async jobs
       // IMPORTANT: Exclude ASYNC_SUMMARIZE_FILING (legacy sync jobs handled elsewhere)
-      const staleJobs = await prisma.jobQueue.findMany({
+      const staleJobs = await getPrisma().jobQueue.findMany({
         where: {
           status: 'PROCESSING',
           startedAt: { lt: staleThreshold },
@@ -341,7 +342,7 @@ export class BackgroundFilingWorker {
 
         if (shouldFail) {
           // Max retries exceeded - mark as FAILED
-          await prisma.jobQueue.update({
+          await getPrisma().jobQueue.update({
             where: { id: job.id },
             data: {
               status: 'FAILED',
@@ -351,7 +352,7 @@ export class BackgroundFilingWorker {
           });
         } else {
           // Reset to RETRYING for another attempt
-          await prisma.jobQueue.update({
+          await getPrisma().jobQueue.update({
             where: { id: job.id },
             data: {
               status: 'RETRYING',
@@ -622,7 +623,7 @@ export class BackgroundFilingWorker {
     }
 
     // Get user from database
-    const user = await prisma.user.findUnique({
+    const user = await getPrisma().user.findUnique({
       where: { id: payload.userId },
       include: {
         tickers: {

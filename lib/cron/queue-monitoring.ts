@@ -3,7 +3,8 @@ import { getPrismaClient } from '../db/prisma';
 import { type JobType } from '../job-queue';
 
 const monitorLogger = logger.child('queue-monitoring');
-const prisma = getPrismaClient();
+// Lazy accessor to avoid build-time initialization
+const getPrisma = () => getPrismaClient();
 
 export interface QueueMetrics {
   queueDepth: number;
@@ -33,7 +34,7 @@ export class QueueMonitoringService {
       oldestJob,
     ] = await Promise.all([
       // Pending jobs count
-      prisma.jobQueue.count({
+      getPrisma().jobQueue.count({
         where: {
           jobType,
           status: 'PENDING',
@@ -41,7 +42,7 @@ export class QueueMonitoringService {
       }),
 
       // Processing jobs count
-      prisma.jobQueue.count({
+      getPrisma().jobQueue.count({
         where: {
           jobType,
           status: 'PROCESSING',
@@ -49,7 +50,7 @@ export class QueueMonitoringService {
       }),
 
       // Completed jobs in last 24h
-      prisma.jobQueue.count({
+      getPrisma().jobQueue.count({
         where: {
           jobType,
           status: 'COMPLETED',
@@ -58,7 +59,7 @@ export class QueueMonitoringService {
       }),
 
       // Failed jobs in last 24h
-      prisma.jobQueue.count({
+      getPrisma().jobQueue.count({
         where: {
           jobType,
           status: 'FAILED',
@@ -67,7 +68,7 @@ export class QueueMonitoringService {
       }),
 
       // Average processing time (last 24h)
-      prisma.$queryRaw<Array<{ avg_seconds: number | null }>>`
+      getPrisma().$queryRaw<Array<{ avg_seconds: number | null }>>`
         SELECT AVG(EXTRACT(EPOCH FROM ("completedAt" - "startedAt"))) as avg_seconds
         FROM "JobQueue"
         WHERE "jobType" = ${jobType}
@@ -76,7 +77,7 @@ export class QueueMonitoringService {
       `,
 
       // Oldest pending job
-      prisma.jobQueue.findFirst({
+      getPrisma().jobQueue.findFirst({
         where: {
           jobType,
           status: 'PENDING',

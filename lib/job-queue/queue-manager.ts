@@ -11,7 +11,8 @@ import { getPrismaClient } from '../db/prisma';
 import { JobWorker, getJobWorker } from './worker';
 
 const queueLogger = logger.child('queue-manager');
-const prisma = getPrismaClient();
+// Lazy accessor to avoid calling getPrismaClient() at module load time (build time)
+const getPrisma = () => getPrismaClient();
 
 export interface QueueMetrics {
   totalJobs: number;
@@ -73,7 +74,7 @@ export class QueueManagerService {
       const oneHourAgo = new Date(now.getTime() - 60 * 60 * 1000);
 
       // Get job counts by status
-      const statusCounts = await prisma.jobQueue.groupBy({
+      const statusCounts = await getPrisma().jobQueue.groupBy({
         by: ['status'],
         _count: {
           id: true
@@ -86,7 +87,7 @@ export class QueueManagerService {
       const failedJobs = statusCounts.find(g => g.status === 'FAILED')?._count.id || 0;
 
       // Get average processing time from recent completed jobs
-      const recentCompletedJobs = await prisma.jobQueue.findMany({
+      const recentCompletedJobs = await getPrisma().jobQueue.findMany({
         where: {
           status: 'COMPLETED',
           completedAt: {
@@ -107,7 +108,7 @@ export class QueueManagerService {
         : 45000; // Default 45 seconds
 
       // Get oldest pending job age
-      const oldestPendingJob = await prisma.jobQueue.findFirst({
+      const oldestPendingJob = await getPrisma().jobQueue.findFirst({
         where: {
           status: 'PENDING'
         },
@@ -124,7 +125,7 @@ export class QueueManagerService {
         : 0;
 
       // Get priority distribution
-      const priorityGroups = await prisma.jobQueue.groupBy({
+      const priorityGroups = await getPrisma().jobQueue.groupBy({
         by: ['priority'],
         where: {
           status: {
@@ -142,7 +143,7 @@ export class QueueManagerService {
       }, {} as Record<string, number>);
 
       // Get job type distribution
-      const jobTypeGroups = await prisma.jobQueue.groupBy({
+      const jobTypeGroups = await getPrisma().jobQueue.groupBy({
         by: ['jobType'],
         where: {
           status: {

@@ -6,7 +6,8 @@
 import { getPrismaClient } from '../db/prisma';
 import { logger } from '../logging';
 
-const prisma = getPrismaClient();
+// Lazy accessor to avoid build-time initialization
+const getPrisma = () => getPrismaClient();
 const cikLogger = logger.child('cik-resolver');
 
 export interface CIKResolutionResult {
@@ -177,7 +178,7 @@ function addToCache(ticker: string, data: { cik: string; companyName: string }):
  */
 async function checkDatabase(ticker: string): Promise<{ cik: string; companyName: string } | null> {
   try {
-    const mapping = await prisma.cikMapping.findFirst({
+    const mapping = await getPrisma().cikMapping.findFirst({
       where: {
         OR: [
           { ticker: { equals: ticker, mode: 'insensitive' } },
@@ -277,7 +278,7 @@ async function fallbackSecLookup(ticker: string): Promise<{ cik: string; company
  */
 async function storeCikMapping(ticker: string, data: { cik: string; companyName: string }): Promise<void> {
   try {
-    await prisma.cikMapping.upsert({
+    await getPrisma().cikMapping.upsert({
       where: {
         cik: data.cik
       },

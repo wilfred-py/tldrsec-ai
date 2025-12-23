@@ -5,7 +5,8 @@ import { logger } from '../logging';
 import { upsertTickerMonitoringWithLock, updateTickerMonitoringWithLock, ConcurrencyOptions } from '../db/concurrency';
 import { SecApiCache, getSecApiCache, withSecApiCache } from '../cache/sec-api-cache';
 
-const prisma = getPrismaClient();
+// Lazy accessor to avoid build-time initialization
+const getPrisma = () => getPrismaClient();
 const monitoringLogger = logger.child('ticker-monitoring');
 
 export interface ActiveTicker {
@@ -30,7 +31,7 @@ export interface RSSFilingEntryWithId extends RSSFilingEntry {
 export async function getActiveTickersForMonitoring(): Promise<ActiveTicker[]> {
   try {
     // Get unique tickers with subscriber counts
-    const tickersWithSubscribers = await prisma.ticker.groupBy({
+    const tickersWithSubscribers = await getPrisma().ticker.groupBy({
       by: ['symbol'],
       _count: {
         id: true
@@ -65,13 +66,13 @@ export async function getActiveTickersForMonitoring(): Promise<ActiveTicker[]> {
             const subscriberCount = tickersWithSubscribers.find(t => t.symbol === symbol)?._count.id || 0;
             
             // Get CIK from CikMapping with better error handling
-            const cikMapping = await prisma.cikMapping.findFirst({
+            const cikMapping = await getPrisma().cikMapping.findFirst({
               where: { ticker: symbol }
             });
 
             if (!cikMapping) {
               monitoringLogger.warn(`No CIK mapping found for ticker ${symbol}`, {
-                availableTickers: await prisma.cikMapping.count()
+                availableTickers: await getPrisma().cikMapping.count()
               });
               return null;
             }
@@ -109,7 +110,7 @@ export async function getActiveTickersForMonitoring(): Promise<ActiveTicker[]> {
             );
             
             // Get the full monitoring record for return
-            const monitoring = await prisma.tickerMonitoring.findUnique({
+            const monitoring = await getPrisma().tickerMonitoring.findUnique({
               where: { id: monitoringResult.id },
               select: {
                 id: true,
@@ -217,7 +218,7 @@ export async function checkTickerForNewFilings(ticker: ActiveTicker): Promise<RS
     };
     
     // Get existing accession numbers from database
-    const existingChecks = await prisma.rssFilingCheck.findMany({
+    const existingChecks = await getPrisma().rssFilingCheck.findMany({
       where: {
         tickerMonitoringId: ticker.id
       },
@@ -274,7 +275,7 @@ export async function checkTickerForNewFilings(ticker: ActiveTicker): Promise<RS
     // Save new entries to database
     if (newEntries.length > 0) {
       await retryDatabaseOperation(async () => {
-        return await prisma.rssFilingCheck.createMany({
+        return await getPrisma().rssFilingCheck.createMany({
           data: newEntries.map(entry => ({
             tickerMonitoringId: ticker.id,
             accessionNumber: entry.accessionNumber,
@@ -353,7 +354,7 @@ export async function getUnprocessedFilings(limit: number = 10): Promise<Array<{
   };
 }>> {
   try {
-    const unprocessed = await prisma.rssFilingCheck.findMany({
+    const unprocessed = await getPrisma().rssFilingCheck.findMany({
       where: {
         processed: false
       },
@@ -421,7 +422,7 @@ export async function getUnprocessedFilingsForTicker(
     });
 
     // Find unprocessed filings for this specific ticker
-    const unprocessedFilings = await prisma.rssFilingCheck.findMany({
+    const unprocessedFilings = await getPrisma().rssFilingCheck.findMany({
       where: {
         processed: false,
         tickerMonitoring: {
@@ -480,7 +481,7 @@ export async function getUnprocessedFilingsForTicker(
 export async function markFilingAsProcessed(rssFilingCheckId: string, userId?: string): Promise<void> {
   try {
     await retryDatabaseOperation(async () => {
-      return await prisma.rssFilingCheck.update({
+      return await getPrisma().rssFilingCheck.update({
         where: { id: rssFilingCheckId },
         data: { 
           processed: true
@@ -512,7 +513,7 @@ export async function markFilingAsProcessedByAccession(
     });
 
     await retryDatabaseOperation(async () => {
-      return await prisma.rssFilingCheck.updateMany({
+      return await getPrisma().rssFilingCheck.updateMany({
         where: { 
           accessionNumber,
           tickerMonitoring: {
@@ -546,13 +547,13 @@ export async function markFilingAsProcessedByAccession(
 export async function getCikForTicker(ticker: string): Promise<string | null> {
   try {
     // First try exact match
-    let cikMapping = await prisma.cikMapping.findFirst({
+    let cikMapping = await getPrisma().cikMapping.findFirst({
       where: { ticker: ticker.toUpperCase() }
     });
 
     // If not found, try case-insensitive search
     if (!cikMapping) {
-      cikMapping = await prisma.cikMapping.findFirst({
+      cikMapping = await getPrisma().cikMapping.findFirst({
         where: { 
           ticker: {
             equals: ticker,
@@ -745,7 +746,7 @@ export async function cleanupOldMonitoringData(): Promise<void> {
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
-    const { count } = await prisma.rssFilingCheck.deleteMany({
+    const { count } = await getPrisma().rssFilingCheck.deleteMany({
       where: {
         processed: true,
         createdAt: {

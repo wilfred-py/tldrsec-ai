@@ -10,7 +10,8 @@ import { logger } from '../logging';
 import { RetryOptions } from './retry-wrapper';
 import type { PrismaClient } from '@prisma/client';
 
-const prisma = getPrismaClient();
+// Lazy accessor to avoid build-time initialization
+const getPrisma = () => getPrismaClient();
 const concurrencyLogger = logger.child('db-concurrency');
 
 export interface OptimisticLockError extends Error {
@@ -178,7 +179,7 @@ export async function updateTickerMonitoringWithLock(
   options: ConcurrencyOptions = {}
 ): Promise<{ id: string; version: number }> {
   return withOptimisticLocking(async () => {
-    return await prisma.$transaction(async (tx) => {
+    return await getPrisma().$transaction(async (tx) => {
       // First, get the current record with its version
       const currentRecord = await tx.tickerMonitoring.findUnique({
         where: { id },
@@ -240,7 +241,7 @@ export async function upsertTickerMonitoringWithLock(
   options: ConcurrencyOptions = {}
 ): Promise<{ id: string; version: number; wasCreated: boolean }> {
   return withOptimisticLocking(async () => {
-    return await prisma.$transaction(async (tx) => {
+    return await getPrisma().$transaction(async (tx) => {
       // Try to find existing record
       const existingRecord = await tx.tickerMonitoring.findUnique({
         where: { cik },
@@ -391,7 +392,7 @@ export async function createIsolatedTransaction<T>(
   } = options;
   
   const executeTransaction = async () => {
-    return await prisma.$transaction(operation, {
+    return await getPrisma().$transaction(operation, {
       isolationLevel,
       timeout
     });

@@ -14,7 +14,8 @@ import { NextRequest } from 'next/server';
 import { getPrismaClient } from '../db/prisma';
 
 const securityLogger = logger.child('secure-auth');
-const prisma = getPrismaClient();
+// Lazy accessor to avoid build-time initialization
+const getPrisma = () => getPrismaClient();
 
 export interface SecurityContext {
   userId: string;
@@ -233,7 +234,7 @@ export async function authorizeResourceAccess(
     switch (resourceType) {
       case 'summary':
         // Verify user owns or has access to the summary
-        const summary = await prisma.summary.findFirst({
+        const summary = await getPrisma().summary.findFirst({
           where: {
             id: resourceId,
             user: {
@@ -246,7 +247,7 @@ export async function authorizeResourceAccess(
 
       case 'user_data':
         // Verify user is accessing their own data
-        const user = await prisma.user.findUnique({
+        const user = await getPrisma().user.findUnique({
           where: {
             externalUserId: userId
           }

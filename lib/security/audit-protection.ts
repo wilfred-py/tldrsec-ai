@@ -9,7 +9,8 @@ import { logger } from '../logging';
 import { getPrismaClient } from '../db/prisma';
 
 const auditLogger = logger.child('audit-protection');
-const prisma = getPrismaClient();
+// Lazy accessor to avoid build-time initialization
+const getPrisma = () => getPrismaClient();
 
 export interface SecureAuditEntry {
   id: string;
@@ -58,7 +59,7 @@ export class AuditProtectionService {
   private async initializeChain(): Promise<void> {
     try {
       // Get the last audit entry to continue the chain
-      const lastEntry = await prisma.auditLog.findFirst({
+      const lastEntry = await getPrisma().auditLog.findFirst({
         orderBy: { sequenceNumber: 'desc' },
         select: { sequenceNumber: true, integrityHash: true }
       });
@@ -141,7 +142,7 @@ export class AuditProtectionService {
       const integrityHash = await this.createIntegrityHash(auditEntry, this.lastHash);
 
       // Store in database with integrity protection
-      await prisma.auditLog.create({
+      await getPrisma().auditLog.create({
         data: {
           id: auditEntry.id,
           timestamp: auditEntry.timestamp,
@@ -177,7 +178,7 @@ export class AuditProtectionService {
 
       // Log the failure itself (without incrementing sequence to avoid chain corruption)
       try {
-        await prisma.auditLog.create({
+        await getPrisma().auditLog.create({
           data: {
             id: `audit_error_${Date.now()}`,
             timestamp: new Date(),
@@ -206,7 +207,7 @@ export class AuditProtectionService {
    */
   async verifyAuditIntegrity(): Promise<AuditIntegrityReport> {
     try {
-      const auditEntries = await prisma.auditLog.findMany({
+      const auditEntries = await getPrisma().auditLog.findMany({
         where: { sequenceNumber: { gte: 0 } }, // Exclude error entries
         orderBy: { sequenceNumber: 'asc' },
         select: {
@@ -339,7 +340,7 @@ export class AuditProtectionService {
   private async verifyRecentIntegrity(): Promise<AuditIntegrityReport> {
     try {
       // Check last 100 entries for performance
-      const recentEntries = await prisma.auditLog.findMany({
+      const recentEntries = await getPrisma().auditLog.findMany({
         where: { sequenceNumber: { gte: 0 } },
         orderBy: { sequenceNumber: 'desc' },
         take: 100,

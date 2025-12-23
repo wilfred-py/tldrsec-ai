@@ -12,7 +12,8 @@ import { getPrismaClient } from '../db/prisma';
 import { v4 as uuidv4 } from 'uuid';
 
 const aiServiceLogger = logger.child('ai-processing-service');
-const _prisma = getPrismaClient();
+// Lazy accessor to avoid build-time initialization
+const getPrisma = () => getPrismaClient();
 
 interface ProcessingContext {
   requestId: string;

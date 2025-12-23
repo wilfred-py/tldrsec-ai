@@ -34,12 +34,30 @@ let prisma: PrismaClient | undefined
 
 // Detect if we're in a build environment or Next.js prerendering phase
 // During Next.js build, we should NOT attempt database connections
+// This constant is only used for the module-level initialization
 const isBuildTime = (
   // Standard build detection (no DATABASE_URL)
   (process.env.NODE_ENV === 'production' && !process.env.VERCEL && !process.env.DATABASE_URL) ||
   // Next.js static generation phase detection
   process.env.NEXT_PHASE === 'phase-production-build'
 )
+
+/**
+ * Runtime check if we're in a build environment.
+ * This function evaluates at runtime, not module load time.
+ * Used by getPrismaClient() to detect if called during build/prerendering.
+ */
+function isRuntimeBuildPhase(): boolean {
+  // Check if NEXT_PHASE indicates we're in build/prerendering
+  if (process.env.NEXT_PHASE === 'phase-production-build') {
+    return true;
+  }
+  // Check if DATABASE_URL is missing in production (shouldn't happen at runtime)
+  if (process.env.NODE_ENV === 'production' && !process.env.DATABASE_URL) {
+    return true;
+  }
+  return false;
+}
 
 // Only initialize if DATABASE_URL is available and not during build time
 if (process.env.DATABASE_URL && !isBuildTime) {
@@ -80,7 +98,9 @@ export { prisma }
 export function getPrismaClient(): PrismaClient {
   // During build time, return a stub client to allow module imports during static generation
   // The routes are marked with dynamic = 'force-dynamic' so they won't actually execute
-  if (isBuildTime) {
+  // IMPORTANT: Use runtime check function, not the module-level constant, to properly detect
+  // if we're being called during Next.js prerendering (which happens AFTER initial module load)
+  if (isRuntimeBuildPhase()) {
     console.warn('⚠️  getPrismaClient() called during build time - returning stub client');
     // Return a Proxy that will throw if any method is actually called
     return new Proxy({} as PrismaClient, {
@@ -98,24 +118,25 @@ export function getPrismaClient(): PrismaClient {
     
     try {
       if (process.env.NODE_ENV === 'production') {
-        // Optimize DATABASE_URL for aggressive connection pooling (Phase 1 - Increased limits)
-        const optimizedUrl = process.env.DATABASE_URL?.includes('connection_limit') 
-          ? process.env.DATABASE_URL 
-          : `${process.env.DATABASE_URL}${process.env.DATABASE_URL?.includes('?') ? '&' : '?'}connection_limit=30&pool_timeout=30&connect_timeout=60&idle_timeout=600&max_uses=7500`;
-        
+        // Check if using Supabase pooler (pgbouncer) - don't add extra connection params
+        // Supabase pooler handles connection pooling, and extra params can cause auth errors
+        // like "FATAL: Tenant or user not found"
+        const isSupabasePooler = process.env.DATABASE_URL?.includes('pooler.supabase.com') &&
+                                  process.env.DATABASE_URL?.includes('pgbouncer=true');
+
+        // Only add connection pool params for non-Supabase connections
+        // For Supabase pooler, let pgbouncer handle connection management
+        const connectionUrl = isSupabasePooler
+          ? process.env.DATABASE_URL
+          : (process.env.DATABASE_URL?.includes('connection_limit')
+              ? process.env.DATABASE_URL
+              : `${process.env.DATABASE_URL}${process.env.DATABASE_URL?.includes('?') ? '&' : '?'}connection_limit=30&pool_timeout=30&connect_timeout=60&idle_timeout=600&max_uses=7500`);
+
         prisma = new PrismaClient({
           log: ['error', 'warn'],
           datasources: {
             db: {
-              url: optimizedUrl
-            }
-          },
-          // Enable connection pooling optimizations for production
-          __internal: {
-            engine: {
-              config: {
-                engineType: 'binary'
-              }
+              url: connectionUrl
             }
           }
         })

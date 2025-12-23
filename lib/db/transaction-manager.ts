@@ -13,7 +13,8 @@ import { monitoring } from '../monitoring';
 import { createAsyncAuditLog } from './async-audit';
 import { v4 as uuidv4 } from 'uuid';
 
-const prisma = getPrismaClient();
+// Lazy accessor to avoid build-time initialization
+const getPrisma = () => getPrismaClient();
 const transactionLogger = logger.child('transaction-manager');
 
 export interface TransactionContext {
@@ -94,7 +95,7 @@ export class TransactionManager {
           metadata: config.metadata
         };
 
-        const result = await prisma.$transaction(
+        const result = await getPrisma().$transaction(
           async (tx) => {
             transactionLogger.debug('Transaction started', {
               transactionId,
