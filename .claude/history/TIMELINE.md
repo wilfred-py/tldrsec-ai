@@ -13,6 +13,8 @@ This file provides a chronological index of all completed projects. For detailed
 
 | Date | Project | Status |
 |------|---------|--------|
+| 2025-12-24 | Supabase RLS & Performance Remediation (Phase 1 complete) | 🔄 |
+| 2025-12-24 | Raw SQL Schema Prefix Fix (pipeline processing restored) | ✅ |
 | 2025-12-24 | Phase 3 Manual Verification (Playwright, Supabase, Vercel) | ✅ |
 | 2025-12-24 | Supabase Phase 3 Cutover Complete | ✅ |
 | 2025-12-24 | Supabase Region Migration Fix (aws-0 → aws-1) | ✅ |
@@ -53,13 +55,13 @@ This file provides a chronological index of all completed projects. For detailed
 
 ### December 2025
 
-**Current Status**: ✅ Supabase Migration Complete
+**Current Status**: ✅ Pipeline HEALTHY - Processing backlog
 
 **Pipeline Status**:
-- Production: ✅ All cron endpoints operational
+- Production: ✅ All cron endpoints operational, pipeline processing
 - Database: ✅ Supabase (aws-1-ap-southeast-2)
 - Schemas: ✅ app (11 tables) + pipeline (19 tables)
-- Cron: ✅ Running successfully (46+ SUCCESS records)
+- Jobs: 🔄 74 pending, 8 completed in last hour, actively processing
 
 **Weekly Archives**:
 - [15-Dec-2025.md](2025/Dec/15-Dec-2025.md) - Slack bot, lock cleanup, discovery fixes
@@ -100,8 +102,8 @@ This file provides a chronological index of all completed projects. For detailed
 
 ## Archive Statistics
 - **Total Archived Projects**: 32 projects across 6 weekly archives
-- **Current PROGRESS.md Lines**: 130 (threshold: 500)
-- **Last Sync**: 2025-12-24
+- **Current PROGRESS.md Lines**: 115 (threshold: 500)
+- **Last Sync**: 2025-12-24 11:45 AEDT
 - **Archive System**: ✅ ACTIVE
 
 **Archives**:
