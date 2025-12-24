@@ -1,68 +1,72 @@
 # Project Progress
 
 **Date**: 2025-12-24
-**Branch**: main
-**Status**: All cron endpoints operational
+**Branch**: fix/supabase-rls-performance-remediation
+**Status**: Supabase RLS & Performance Remediation COMPLETE - Ready for merge
 
 ---
 
-## Current Session: Cron Endpoint Fixes
+## Current Session: Supabase RLS & Performance Remediation ✅ COMPLETE
 
 ### Context
-Slack bot was showing errors for both hourly and tier-aware cron endpoints.
+Implemented approved plan from `docs/plans/2025-12-24-supabase-rls-performance-remediation.md` to fix critical RLS and performance issues identified in Supabase audit.
 
-### Completed Work
+### Migrations Applied
 
-#### 1. Lazy Singleton Import Fix (commit `741148b`)
+**1. `add_summary_rls_policy`** - Fix critical RLS gap
+- Added service_role full access policy to `app.Summary`
+- Used optimized subselect pattern `(select auth.role())`
 
-**Issue**: Module-level singleton instantiation was causing build-time database connection attempts.
+**2. `add_foreign_key_indexes`** - Add 11 missing FK indexes
+- `app.Summary.secFilingId`
+- `pipeline.CronExecutionContext.executionId`
+- `pipeline.JobProgress.jobId`
+- `pipeline.SecFetchAttempt.secFilingId`
+- `pipeline.SummaryCacheAccess.summaryId`, `userId`
+- `pipeline.SummaryEmailDelivery.summaryId`, `userId`
+- `pipeline.TierProcessingExecution.executionId`
+- `pipeline.UsagePeriod.userId`
+- `public.newsletter_deliveries.subscriber_id`
 
-**Root Cause**: Files like `performance-monitor.ts` and `cron-monitor.ts` directly imported singletons (`asyncAlertQueue`, `boundedContextManager`, `performanceMonitor`) at module load time, triggering their constructors during Vercel build.
+**3. `optimize_rls_policy_performance`** - Fix RLS subselect pattern
+- Updated 3 policies on `newsletter_subscribers`, `newsletter_deliveries`, `page_analytics`
 
-**Fix**: Converted direct imports to lazy accessors using dynamic `require()`:
+### Verification Results
+| Check | Before | After |
+|-------|--------|-------|
+| Security lints | 1 CRITICAL | **0** |
+| Unindexed FKs | 11 | **0** |
+| RLS initplan warnings | 3 | **0** |
+| Build | ✅ | ✅ |
 
-**Files Modified**:
-- `lib/monitoring/performance-monitor.ts`
-- `lib/monitoring/cron-monitor.ts`
-
-**Code Pattern**:
-```typescript
-// BEFORE (problematic):
-import { asyncAlertQueue } from './async-alert-queue';
-
-// AFTER (lazy):
-import type { AsyncAlertQueue } from './async-alert-queue';
-const getAsyncAlertQueue = (): AsyncAlertQueue => {
-  const { asyncAlertQueue } = require('./async-alert-queue');
-  return asyncAlertQueue;
-};
-```
-
-#### 2. JobQueue Schema Fix (migration `fix_jobqueue_type_nullable`)
-
-**Issue**: Every job insert was failing with:
-```
-null value in column "type" of relation "JobQueue" violates not-null constraint
-```
-
-**Root Cause**: Database `pipeline.JobQueue` table had two job type columns:
-- `type` - NOT NULL enum with values: `FETCH_FILING`, `SUMMARIZE_FILING`, `SEND_EMAIL`, `DISCOVERY`, `CLEANUP`
-- `jobType` - nullable text field
-
-The application code only writes to `jobType`, but database required `type` to be non-null.
-
-**Fix**: Applied Supabase migration to make `type` column nullable:
-```sql
-ALTER TABLE pipeline."JobQueue" ALTER COLUMN "type" DROP NOT NULL;
-```
-
-**Verification**:
-- Tier-aware endpoint: HTTP 202 - Discovery job queued successfully
-- Hourly endpoint: HTTP 200 - Summary sent to Slack
+### Tracking Document
+Created `docs/tracking/2025-12-24-unused-indexes-review.md` for 26 unused indexes (deferred).
 
 ---
 
 ## Recently Completed (Last 30 Days)
+
+### Raw SQL Schema Prefix Fix (2025-12-24) ✅
+
+**Issue**: Pipeline stopped processing after Supabase migration. Raw SQL queries used unqualified table names.
+
+**Fix** (commit `c8678b4`): Added `pipeline.` schema prefix to all raw SQL queries in:
+- `lib/job-queue/index.ts` - 5 queries
+- `lib/cron/queue-monitoring.ts` - 1 query
+
+**Verification**: Pipeline HEALTHY, jobs processing, 74 pending jobs being worked through.
+
+### Cron Endpoint Fixes (2025-12-24)
+
+**Lazy Singleton Import Fix** (commit `741148b`):
+- Issue: Module-level singleton instantiation causing build-time database connection attempts
+- Fix: Converted direct imports to lazy accessors using dynamic `require()`
+- Files: `lib/monitoring/performance-monitor.ts`, `lib/monitoring/cron-monitor.ts`
+
+**JobQueue Schema Fix** (migration `fix_jobqueue_type_nullable`):
+- Issue: Every job insert failing due to NOT NULL constraint on `type` column
+- Fix: Applied Supabase migration to make `type` column nullable
+- Verification: Both tier-aware (202) and hourly (200) endpoints working
 
 ### Supabase Region Migration Fix (2025-12-24)
 
