@@ -7,10 +7,10 @@ compatibility_date = "2024-10-01"
 
 # Cron schedules:
 # - Every 5 minutes: Main pipeline processing
-# - Every hour (on the hour): Hourly Slack summary
+# - Every 10 minutes: Interval Slack summary (detailed verification report)
 # - Daily at 22:00 UTC (9:00 AM AEST): Daily pipeline report
 [triggers]
-crons = ["*/5 * * * *", "0 * * * *", "0 22 * * *"]
+crons = ["*/5 * * * *", "*/10 * * * *", "0 22 * * *"]
 
 # Environment variables (non-sensitive)
 [vars]

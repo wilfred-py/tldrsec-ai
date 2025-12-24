@@ -428,6 +428,148 @@ export function formatDailySummaryMessage(
   };
 }
 
+/**
+ * Format interval-based verification report message for Slack
+ * Uses the same rich format as daily reports but with interval-specific header
+ */
+export function formatIntervalSummaryMessage(
+  minutesBack: number,
+  periodLabel: string,
+  metrics: DailySummaryMetrics
+): SlackWebhookPayload {
+  const blocks: SlackBlock[] = [];
+
+  // ══════════════════════════════════════════════════════════════════════
+  // Header with interval indicator
+  // ══════════════════════════════════════════════════════════════════════
+  blocks.push(header(`:bar_chart: ${minutesBack}-MINUTE PIPELINE VERIFICATION REPORT`));
+  blocks.push(divider());
+
+  // Generated timestamp and period
+  const generatedAt = formatTimestamp();
+  blocks.push(
+    context([
+      `*Generated:* ${generatedAt}`,
+      `*Period:* ${periodLabel}`,
+      metrics.durationMs ? `*Duration:* ${metrics.durationMs}ms` : '',
+    ].filter(Boolean))
+  );
+
+  // ══════════════════════════════════════════════════════════════════════
+  // FILINGS DISCOVERED Section
+  // ══════════════════════════════════════════════════════════════════════
+  if (metrics.filings && metrics.filings.length > 0) {
+    blocks.push(divider());
+    blocks.push(section(`:inbox_tray: *FILINGS DISCOVERED (${metrics.filings.length} total)*`));
+
+    // Build filing table as code block for monospace alignment
+    const tableHeader = '```Ticker   Form    Filed        Status\n──────   ────    ─────        ──────';
+    const tableRows = metrics.filings.map(f => {
+      const ticker = f.ticker.padEnd(8);
+      const form = f.formType.padEnd(7);
+      const filed = formatDate(f.filingDate);
+      const statusIcon = f.status === 'COMPLETE' ? '✅' : f.status === 'PENDING' ? '⏳' : '❌';
+      const statusText = f.status;
+      return `${ticker} ${form} ${filed}   ${statusIcon} ${statusText}`;
+    }).join('\n');
+    const tableFooter = '```';
+
+    blocks.push(section(`${tableHeader}\n${tableRows}\n${tableFooter}`));
+
+    // ══════════════════════════════════════════════════════════════════════
+    // PIPELINE BREAKDOWN Section
+    // ══════════════════════════════════════════════════════════════════════
+    blocks.push(divider());
+    blocks.push(section(`:clipboard: *PIPELINE BREAKDOWN*`));
+
+    const breakdownHeader = '```Filing           Discovered Fetched Summarized Emailed\n──────           ────────── ─────── ────────── ───────';
+    const breakdownRows = metrics.filings.map(f => {
+      const filing = `${f.ticker} ${f.formType}`.padEnd(16);
+      const discovered = f.discovered ? '✅' : '❌';
+      const fetched = f.fetched ? '✅' : '❌';
+      const summarized = f.summarized ? '✅' : '❌';
+      const emailed = f.emailed ? `✅ (${f.emailCount})` : '-';
+      return `${filing} ${discovered.padEnd(10)} ${fetched.padEnd(7)} ${summarized.padEnd(10)} ${emailed}`;
+    }).join('\n');
+    const breakdownFooter = '```';
+
+    blocks.push(section(`${breakdownHeader}\n${breakdownRows}\n${breakdownFooter}`));
+  } else {
+    // No filings in this interval
+    blocks.push(divider());
+    blocks.push(section(`:zzz: *No filings discovered in this interval*`));
+  }
+
+  // ══════════════════════════════════════════════════════════════════════
+  // SUMMARY Section
+  // ══════════════════════════════════════════════════════════════════════
+  blocks.push(divider());
+  blocks.push(section(`:bar_chart: *SUMMARY*`));
+
+  const totalFilings = metrics.discovery.filingsDiscovered;
+  const completed = metrics.filings?.filter(f => f.status === 'COMPLETE').length || 0;
+  const pending = metrics.filings?.filter(f => f.status === 'PENDING').length || 0;
+  const completedPct = totalFilings > 0 ? Math.round((completed / totalFilings) * 100) : 100;
+  const pendingPct = totalFilings > 0 ? Math.round((pending / totalFilings) * 100) : 0;
+
+  const completionEmoji = metrics.completionRate >= 95
+    ? ':white_check_mark:'
+    : metrics.completionRate >= 80
+    ? ':warning:'
+    : ':x:';
+
+  blocks.push(section(
+    `*Total Filings:* ${totalFilings}\n` +
+    `${completionEmoji} *Completed:* ${completed} (${completedPct}%)\n` +
+    `:hourglass_flowing_sand: *Pending:* ${pending} (${pendingPct}%)\n\n` +
+    `:email: *Emails Sent:* ${metrics.email.sent} to ${metrics.email.recipients} unique users`
+  ));
+
+  // ══════════════════════════════════════════════════════════════════════
+  // AI COSTS Section (only if there was activity)
+  // ══════════════════════════════════════════════════════════════════════
+  if (metrics.costs.total > 0 || (metrics.costs.totalTokens && metrics.costs.totalTokens > 0)) {
+    blocks.push(divider());
+    blocks.push(section(`:moneybag: *AI COSTS*`));
+
+    const costLines = [
+      `*Total Cost:* $${metrics.costs.total.toFixed(4)}`,
+    ];
+
+    if (metrics.costs.inputTokens !== undefined) {
+      costLines.push(`*Input Tokens:* ${formatNumber(metrics.costs.inputTokens)}`);
+    }
+    if (metrics.costs.outputTokens !== undefined) {
+      costLines.push(`*Output Tokens:* ${formatNumber(metrics.costs.outputTokens)}`);
+    }
+    if (metrics.costs.totalTokens !== undefined) {
+      costLines.push(`*Total Tokens:* ${formatNumber(metrics.costs.totalTokens)}`);
+    }
+
+    blocks.push(section(costLines.join('\n')));
+
+    if (metrics.costs.modelBreakdown && Object.keys(metrics.costs.modelBreakdown).length > 0) {
+      const modelLines = ['*By Model:*'];
+      for (const [model, usage] of Object.entries(metrics.costs.modelBreakdown)) {
+        modelLines.push(
+          `  _${model}:_ Cost: $${usage.cost.toFixed(4)} | In: ${formatNumber(usage.inputTokens)} | Out: ${formatNumber(usage.outputTokens)}`
+        );
+      }
+      blocks.push(section(modelLines.join('\n')));
+    }
+  }
+
+  // Fallback text for notifications
+  const fallbackText = `📊 ${minutesBack}-Min Report (${periodLabel}) - ${completed}/${totalFilings} complete (${completedPct}%), ${metrics.email.sent} emails sent`;
+
+  return {
+    text: fallbackText,
+    blocks,
+    unfurl_links: false,
+    unfurl_media: false,
+  };
+}
+
 // =============================================================================
 // Status Response (for @mention queries)
 // =============================================================================

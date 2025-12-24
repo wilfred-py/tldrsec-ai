@@ -21,7 +21,7 @@ import type {
   AiModelCost,
   CacheHealthMetrics
 } from './types';
-import { formatDailySummaryMessage } from './message-formatter';
+import { formatDailySummaryMessage, formatIntervalSummaryMessage } from './message-formatter';
 
 const dailyReportLogger = logger.child('slack-daily-report');
 
@@ -78,6 +78,14 @@ interface RemediationRow {
 }
 
 /**
+ * Options for interval-based report generation
+ */
+export interface IntervalReportOptions {
+  /** Skip posting if no filings discovered in interval (default: true) */
+  skipEmpty?: boolean;
+}
+
+/**
  * Get date range for a specific date or yesterday
  */
 function getDateRange(targetDate?: string): { start: Date; end: Date; dateStr: string } {
@@ -102,6 +110,27 @@ function getDateRange(targetDate?: string): { start: Date; end: Date; dateStr: s
   const dateStr = date.toISOString().split('T')[0];
 
   return { start, end, dateStr };
+}
+
+/**
+ * Get date range for a specific interval (in minutes)
+ * @param minutesBack - Number of minutes to look back from now
+ * @returns { start: Date, end: Date, label: string }
+ */
+function getIntervalDateRange(minutesBack: number): { start: Date; end: Date; label: string } {
+  const end = new Date();
+  const start = new Date(end.getTime() - minutesBack * 60 * 1000);
+
+  const formatTime = (date: Date) => date.toLocaleTimeString('en-AU', {
+    timeZone: 'Australia/Sydney',
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true,
+  });
+
+  const label = `${formatTime(start)} - ${formatTime(end)} AEDT`;
+
+  return { start, end, label };
 }
 
 /**
@@ -442,6 +471,67 @@ export async function generateDailyReport(targetDate?: string): Promise<SlackWeb
           text: {
             type: 'mrkdwn',
             text: `:x: *Error generating daily report for ${dateStr}*\n\n${error instanceof Error ? error.message : 'Unknown error'}`,
+          },
+        },
+      ],
+    };
+  }
+}
+
+/**
+ * Generate an interval-based verification report for Slack
+ * Uses the same rich format as daily reports but for shorter time windows
+ *
+ * @param minutesBack - Number of minutes to look back (default: 10)
+ * @param options - Report generation options
+ */
+export async function generateIntervalReport(
+  minutesBack: number = 10,
+  options: IntervalReportOptions = {}
+): Promise<SlackWebhookPayload> {
+  const { skipEmpty = true } = options;
+  const { start, end, label } = getIntervalDateRange(minutesBack);
+
+  dailyReportLogger.info('Generating interval report', { minutesBack, start, end });
+
+  try {
+    // Get metrics using the same function as daily reports
+    const metrics = await getVerificationMetrics(start, end);
+
+    // Skip if no activity and skipEmpty is true
+    if (skipEmpty && metrics.discovery.filingsDiscovered === 0) {
+      dailyReportLogger.info('No filings in interval, skipping report', { minutesBack, start, end });
+      return {
+        text: '',
+        blocks: [],
+        unfurl_links: false,
+        unfurl_media: false,
+      };
+    }
+
+    dailyReportLogger.info('Interval report generated', {
+      minutesBack,
+      completionRate: metrics.completionRate,
+      discovered: metrics.discovery.filingsDiscovered,
+      emailsSent: metrics.email.sent,
+    });
+
+    // Format using interval-specific formatter
+    return formatIntervalSummaryMessage(minutesBack, label, metrics);
+  } catch (error) {
+    dailyReportLogger.error('Error generating interval report', {
+      error: error instanceof Error ? error.message : 'Unknown error',
+      minutesBack,
+    });
+
+    return {
+      text: `Error generating ${minutesBack}-minute report`,
+      blocks: [
+        {
+          type: 'section',
+          text: {
+            type: 'mrkdwn',
+            text: `:x: *Error generating ${minutesBack}-minute report*\n\n${error instanceof Error ? error.message : 'Unknown error'}`,
           },
         },
       ],

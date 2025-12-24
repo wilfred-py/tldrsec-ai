@@ -19,12 +19,12 @@ export default {
 
     // Route based on cron expression
     // "*/5 * * * *" = Pipeline processing (every 5 minutes)
-    // "0 * * * *" = Hourly Slack summary (on the hour)
+    // "*/10 * * * *" = 10-minute interval Slack summary (detailed verification report)
     // "0 22 * * *" = Daily Slack report (9 AM AEST = 22:00 UTC)
 
-    if (cronExpression === '0 * * * *') {
-      // Hourly Slack summary
-      return await this.handleHourlySummary(event, env, ctx);
+    if (cronExpression === '*/10 * * * *') {
+      // 10-minute interval Slack summary (detailed verification report)
+      return await this.handleIntervalSummary(event, env, ctx);
     }
 
     if (cronExpression === '0 22 * * *') {
@@ -36,19 +36,19 @@ export default {
     return await this.handlePipelineProcessing(event, env, ctx);
   },
 
-  // Handle hourly Slack summary
-  async handleHourlySummary(event, env, ctx) {
-    const executionId = `hourly-summary-${Date.now()}`;
+  // Handle 10-minute interval Slack summary (replaces hourly)
+  async handleIntervalSummary(event, env, ctx) {
+    const executionId = `interval-summary-${Date.now()}`;
     const startTime = Date.now();
 
-    console.log(`[${executionId}] Starting hourly Slack summary`);
+    console.log(`[${executionId}] Starting 10-minute interval Slack summary`);
 
     try {
-      const url = `${env.PUBLIC_URL}/api/cron/slack-hourly-summary`;
+      const url = `${env.PUBLIC_URL}/api/cron/slack-interval-summary`;
 
       // Generate HMAC signature
       const timestamp = Date.now();
-      const payload = `${timestamp}:GET:/api/cron/slack-hourly-summary`;
+      const payload = `${timestamp}:GET:/api/cron/slack-interval-summary`;
       const encoder = new TextEncoder();
       const key = await crypto.subtle.importKey(
         'raw',
@@ -76,16 +76,19 @@ export default {
       const duration = Date.now() - startTime;
 
       if (response.ok) {
-        console.log(`[${executionId}] Hourly summary completed successfully in ${duration}ms`);
-        return { success: true, executionId, duration };
+        const result = await response.json();
+        console.log(`[${executionId}] Interval summary completed successfully in ${duration}ms`, {
+          skipped: result.skipped || false,
+        });
+        return { success: true, executionId, duration, skipped: result.skipped };
       } else {
         const errorText = await response.text();
-        console.error(`[${executionId}] Hourly summary failed: ${response.status} - ${errorText}`);
+        console.error(`[${executionId}] Interval summary failed: ${response.status} - ${errorText}`);
         return { success: false, executionId, duration, error: errorText };
       }
     } catch (error) {
       const duration = Date.now() - startTime;
-      console.error(`[${executionId}] Hourly summary error: ${error.message}`);
+      console.error(`[${executionId}] Interval summary error: ${error.message}`);
       return { success: false, executionId, duration, error: error.message };
     }
   },
