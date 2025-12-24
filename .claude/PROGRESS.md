@@ -1,17 +1,70 @@
 # Project Progress
 
 **Date**: 2025-12-24
-**Branch**: fix/supabase-rls-performance-remediation
-**Status**: Supabase RLS & Performance Remediation COMPLETE - Ready for merge
+**Branch**: main
+**Status**: Pipeline HEALTHY - Daily verification script fixed
 
 ---
 
-## Current Session: Supabase RLS & Performance Remediation ✅ COMPLETE
+## Current Session: Daily Verification Script Fix ✅ COMPLETE
 
-### Context
-Implemented approved plan from `docs/plans/2025-12-24-supabase-rls-performance-remediation.md` to fix critical RLS and performance issues identified in Supabase audit.
+Fixed `verify-daily-pipeline.ts` failing with Prisma serialization errors when saving results.
 
-### Migrations Applied
+**Root Causes** (2 issues):
+1. **Column Type Mismatch**: `errors` column in database was `jsonb` but Prisma schema expected `text[]`
+2. **Missing Unique Constraint**: `verificationDate` column missing unique constraint for upsert
+
+**Fixes Applied**:
+1. Migration `fix_daily_verification_errors_column` - Converted `errors` from `jsonb` to `text[]`
+2. Migration `add_daily_verification_unique_constraint` - Added unique constraint on `verificationDate`
+3. Code update in `scripts/verify-daily-pipeline.ts` - Handle empty JSON arrays with `Prisma.JsonNull`
+
+**Verification**: `npm run verify:daily` now runs successfully and saves results to database.
+
+---
+
+## Recently Completed (Last 30 Days)
+
+### Daily Verification Script Fix ✅ (2025-12-24)
+
+Fixed Prisma errors when saving verification results with empty arrays.
+- **Files**: `scripts/verify-daily-pipeline.ts`
+- **Migrations**: `fix_daily_verification_errors_column`, `add_daily_verification_unique_constraint`
+
+### 10-Minute Slack Verification Reports ✅ (2025-12-24)
+
+Replaced hourly Slack summaries with detailed 10-minute interval reports using TDD approach.
+
+**Issue**: Hourly reports were too infrequent for timely pipeline monitoring.
+
+**Solution**: Implemented 4-phase TDD plan:
+1. **Phase 1**: Created `generateIntervalReport()` and `formatIntervalSummaryMessage()` in `lib/slack/daily-report-handler.ts` and `lib/slack/message-formatter.ts`
+2. **Phase 2**: New API endpoint at `app/api/cron/slack-interval-summary/route.ts`
+3. **Phase 3**: Updated Cloudflare Worker cron from `0 * * * *` to `*/10 * * * *`
+4. **Phase 4**: All 26 tests passing
+
+**Files Modified**:
+- `lib/slack/daily-report-handler.ts` - Added `IntervalReportOptions`, `getIntervalDateRange()`, `generateIntervalReport()`
+- `lib/slack/message-formatter.ts` - Added `formatIntervalSummaryMessage()`
+- `app/api/cron/slack-interval-summary/route.ts` - New endpoint
+- `cloudflare-cron/index.js` - Replaced `handleHourlySummary` with `handleIntervalSummary`
+- `cloudflare-cron/wrangler.toml` - Updated cron schedule
+
+**Verification**: 26 tests pass, lint clean, Cloudflare dry-run successful
+
+### E2E Pipeline Verification ✅ (2025-12-24)
+
+Verified CRUD operations working after recent commits. Fixed stale `.env` database URLs.
+
+**Issue**: `.env` had old Supabase region (`aws-0-ap-southeast-1`) and password.
+**Fix**: Updated all DATABASE_URL entries to use `aws-1-ap-southeast-2` with correct password.
+**Verification**: E2E test passed - 5/5 tickers, 5 summaries stored, email delivered.
+
+### Supabase RLS & Performance Remediation ✅ (2025-12-24)
+
+Implemented approved plan from `docs/plans/2025-12-24-supabase-rls-performance-remediation.md` to fix critical RLS and performance issues identified in Supabase audit. Merged to main in commit `d1affae`.
+
+**Migrations Applied**:
 
 **1. `add_summary_rls_policy`** - Fix critical RLS gap
 - Added service_role full access policy to `app.Summary`
@@ -116,5 +169,5 @@ Completed full migration from Neon to Supabase.
 
 ---
 
-*Last Updated: 2025-12-24*
+*Last Updated: 2025-12-24 13:45 AEDT*
 *Older completed projects archived to .claude/history/ - See TIMELINE.md for full history*

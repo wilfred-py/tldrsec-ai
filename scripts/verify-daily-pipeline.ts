@@ -805,6 +805,16 @@ function displayReport(report: VerificationReport): void {
 // Save results to database
 async function saveVerificationResults(report: VerificationReport): Promise<void> {
   try {
+    // Handle JSON serialization for empty arrays/objects to avoid Prisma connector issues
+    // When arrays are empty, use null instead to prevent "Couldn't serialize value `Some([])` into a `jsonb`" errors
+    const filingDetails = report.filings.length > 0
+      ? (report.filings as unknown as Prisma.InputJsonValue)
+      : Prisma.JsonNull;
+
+    const aiModelBreakdown = Object.keys(report.aiModelBreakdown).length > 0
+      ? (report.aiModelBreakdown as unknown as Prisma.InputJsonValue)
+      : Prisma.JsonNull;
+
     await prisma.dailyPipelineVerification.upsert({
       where: {
         verificationDate: report.verificationDate,
@@ -825,11 +835,11 @@ async function saveVerificationResults(report: VerificationReport): Promise<void
         aiInputTokens: report.aiInputTokens,
         aiOutputTokens: report.aiOutputTokens,
         aiTotalTokens: report.aiTotalTokens,
-        aiModelBreakdown: report.aiModelBreakdown as unknown as Prisma.InputJsonValue,
+        aiModelBreakdown,
         remediationAttempted: report.remediationAttempted,
         remediationSucceeded: report.remediationSucceeded,
         remediationFailed: report.remediationFailed,
-        filingDetails: report.filings as unknown as Prisma.InputJsonValue,
+        filingDetails,
         durationMs: report.durationMs,
         errors: report.errors,
       },
@@ -850,11 +860,11 @@ async function saveVerificationResults(report: VerificationReport): Promise<void
         aiInputTokens: report.aiInputTokens,
         aiOutputTokens: report.aiOutputTokens,
         aiTotalTokens: report.aiTotalTokens,
-        aiModelBreakdown: report.aiModelBreakdown as unknown as Prisma.InputJsonValue,
+        aiModelBreakdown,
         remediationAttempted: report.remediationAttempted,
         remediationSucceeded: report.remediationSucceeded,
         remediationFailed: report.remediationFailed,
-        filingDetails: report.filings as unknown as Prisma.InputJsonValue,
+        filingDetails,
         durationMs: report.durationMs,
         errors: report.errors,
       },
