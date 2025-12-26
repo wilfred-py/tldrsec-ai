@@ -150,11 +150,12 @@ export async function GET(request: NextRequest) {
     cronLogger.debug(`[${executionId}] Checkpoint 1: Route function started with enhanced security features`);
 
     // FEATURE FLAG: 3-Phase Async Pipeline with 202 Pattern
-    // Set USE_3_PHASE_PIPELINE=true to enable simplified discovery-based processing
-    const use3PhasePipeline = process.env.USE_3_PHASE_PIPELINE === 'true';
+    // Defaults to true (enabled). Set USE_3_PHASE_PIPELINE=false to use legacy sync processing.
+    // Changed from opt-in to opt-out on 2025-12-24 to fix multi-user email delivery issues.
+    const use3PhasePipeline = process.env.USE_3_PHASE_PIPELINE !== 'false';
 
-    // DEBUG: Log environment variable value to diagnose why 3-phase pipeline isn't activating
-    cronLogger.info(`[${executionId}] Feature flag check: USE_3_PHASE_PIPELINE="${process.env.USE_3_PHASE_PIPELINE}" (type: ${typeof process.env.USE_3_PHASE_PIPELINE}, evaluated: ${use3PhasePipeline})`);
+    // Log feature flag status for debugging - now defaults to true
+    cronLogger.info(`[${executionId}] 3-phase pipeline: ${use3PhasePipeline ? 'ENABLED (default)' : 'DISABLED (explicit opt-out)'} [USE_3_PHASE_PIPELINE=${process.env.USE_3_PHASE_PIPELINE || 'not set'}]`);
 
     if (use3PhasePipeline) {
       cronLogger.info(`[${executionId}] Using 3-phase async pipeline mode`);

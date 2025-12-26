@@ -91,107 +91,163 @@ export async function findExistingSummary(ticker: string, formType: string, bypa
 }
 
 /**
+ * Result of storing a summary for multiple users
+ */
+export interface StoreSummaryResult {
+  /** Number of summaries successfully stored */
+  stored: number;
+  /** Total number of users tracking this ticker */
+  total: number;
+  /** Error messages for failed stores */
+  errors: string[];
+}
+
+/**
  * Stores a filing summary in the database with comprehensive analytics tracking
- * 
- * @param summary The filing summary to store
- * @returns Boolean indicating success or failure
+ *
+ * IMPORTANT: This function stores summaries for ALL users who track the given ticker.
+ * Prior to 2025-12-24, this used findFirst() which only stored for the first user found.
+ * The fix uses findMany() to ensure all users receive their summaries.
+ *
+ * @param ticker The ticker symbol (e.g., 'NVDA')
+ * @param formType The SEC form type (e.g., '10-K')
+ * @param filingDate The filing date
+ * @param filingUrl The SEC filing URL
+ * @param summaryText The generated summary text
+ * @param keyPoints Array of key points from the filing
+ * @param metadata Additional metadata including cost/token tracking
+ * @returns StoreSummaryResult with counts of stored/total and any errors
  */
 export async function storeSummary(
-  ticker: string, 
-  formType: string, 
-  filingDate: string, 
+  ticker: string,
+  formType: string,
+  filingDate: string,
   filingUrl: string,
   summaryText: string,
   keyPoints: string[],
   metadata: Record<string, any>
-): Promise<boolean> {
+): Promise<StoreSummaryResult> {
+  const result: StoreSummaryResult = { stored: 0, total: 0, errors: [] };
+
   try {
-    // Find or create the ticker record
-    const tickerRecord = await prisma.ticker.findFirst({
+    // FIX (2025-12-24): Use findMany() to get ALL users' ticker records, not just the first
+    // This ensures summaries are stored for every user tracking this symbol
+    const tickerRecords = await prisma.ticker.findMany({
       where: {
         symbol: ticker.toUpperCase()
       }
     });
-    
-    if (!tickerRecord) {
-      console.warn(`[WARN][FilingDatabase] Could not store summary in database - ticker record not found for ${ticker}`);
-      return false;
+
+    if (tickerRecords.length === 0) {
+      console.warn(`[WARN][FilingDatabase] Could not store summary in database - no ticker records found for ${ticker}`);
+      return result;
     }
-    
-    // Calculate cost per token from metadata if available
-    const inputTokens = metadata.inputTokens || 0;
-    const outputTokens = metadata.outputTokens || 0;
-    const totalCost = metadata.cost || 0;
-    
-    const inputCostPerToken = inputTokens > 0 && totalCost > 0 
-      ? (totalCost * 0.6) / inputTokens // Assume 60% of cost is input tokens (approximate)
-      : null;
-    const outputCostPerToken = outputTokens > 0 && totalCost > 0 
-      ? (totalCost * 0.4) / outputTokens // Assume 40% of cost is output tokens (approximate)
-      : null;
-    
-    // Create a new summary record with enhanced analytics
-    const summaryRecord = await prisma.summary.create({
-      data: {
-        tickerId: tickerRecord.id,
-        filingType: formType,
-        filingDate: new Date(filingDate),
-        filingUrl: filingUrl,
-        summaryText: summaryText,
-        summaryJSON: {
-          accessionNumber: metadata.accessionNumber || '',
-          keyPoints: keyPoints,
-          // Include detailed data for better caching
-          parsedContent: metadata.content && typeof metadata.content === 'string' 
-            ? metadata.content 
-            : null, // Store full parsed content
-          documentType: metadata.documentType || 'unknown',
-          documentDescription: metadata.documentDescription || 'unknown',
-          rawData: metadata.filingDetails 
-            ? JSON.stringify(metadata.filingDetails) 
-            : null,
-          generatedAt: new Date().toISOString(),
-          tokensUsed: metadata.tokensUsed,
-          inputTokens: metadata.inputTokens,
-          outputTokens: metadata.outputTokens,
-          cost: metadata.cost,
-          processingTimeMs: metadata.processingTimeMs,
-          ...(metadata.failureReason ? { failureReason: metadata.failureReason } : {})
-        },
-        sentToUser: false, // Will be marked as sent when included in an email
-        model: metadata.model || 'unknown',
-        processingStatus: metadata.failureReason ? 'FAILED' : 'COMPLETED',
-        
-        // Enhanced Cost and Token Tracking
-        inputTokens: inputTokens,
-        outputTokens: outputTokens,
-        inputCostPerToken: inputCostPerToken,
-        outputCostPerToken: outputCostPerToken,
-        totalCost: totalCost,
-        
-        // Cache and Reuse Analytics (new summary is not a cache hit)
-        isCacheHit: false,
-        cacheUsageCount: 0,
-        lastCacheUsed: null,
-        cacheVersion: metadata.cacheVersion || '1.0',
-        
-        // Performance and Quality Metrics
-        qualityScore: metadata.qualityScore || null,
-        confidenceLevel: metadata.confidenceLevel || null,
-        extractionSuccess: metadata.extractionSuccess || true,
-        parsingErrors: metadata.parsingErrors || 0,
-        
-        ...(metadata.failureReason ? { processingError: metadata.failureReason } : {})
+
+    result.total = tickerRecords.length;
+    console.log(`[INFO][FilingDatabase] Found ${tickerRecords.length} users tracking ${ticker} - storing summary for all`);
+
+    // Store summary for EACH user's ticker
+    for (const tickerRecord of tickerRecords) {
+      try {
+        await storeSummaryForTicker(tickerRecord, formType, filingDate, filingUrl, summaryText, keyPoints, metadata);
+        result.stored++;
+        console.log(`[INFO][FilingDatabase] Stored summary for ${ticker} - user ticker ID: ${tickerRecord.id}`);
+      } catch (userError) {
+        const errorMsg = `${tickerRecord.id}: ${userError instanceof Error ? userError.message : 'Unknown error'}`;
+        result.errors.push(errorMsg);
+        console.error(`[ERROR][FilingDatabase] Failed to store summary for ticker ${tickerRecord.id}: ${errorMsg}`);
       }
-    });
-    
-    console.log(`[INFO][FilingDatabase] Successfully stored summary with analytics for ${ticker} - ${formType} (ID: ${summaryRecord.id})`);
-    return true;
+    }
+
+    console.log(`[INFO][FilingDatabase] Summary storage complete for ${ticker}: ${result.stored}/${result.total} succeeded`);
+    return result;
   } catch (dbError: unknown) {
-    // Log the error but don't fail the operation if database storage fails
-    console.error(`[ERROR][FilingDatabase] Failed to store summary in database: ${dbError instanceof Error ? dbError.message : 'Unknown error'}`);
-    return false;
+    console.error(`[ERROR][FilingDatabase] Failed to query ticker records: ${dbError instanceof Error ? dbError.message : 'Unknown error'}`);
+    result.errors.push(dbError instanceof Error ? dbError.message : 'Unknown error');
+    return result;
   }
+}
+
+/**
+ * Stores a summary for a single ticker record (internal helper)
+ */
+async function storeSummaryForTicker(
+  tickerRecord: { id: string; companyName: string | null },
+  formType: string,
+  filingDate: string,
+  filingUrl: string,
+  summaryText: string,
+  keyPoints: string[],
+  metadata: Record<string, any>
+): Promise<void> {
+  // Calculate cost per token from metadata if available
+  const inputTokens = metadata.inputTokens || 0;
+  const outputTokens = metadata.outputTokens || 0;
+  const totalCost = metadata.cost || 0;
+
+  const inputCostPerToken = inputTokens > 0 && totalCost > 0
+    ? (totalCost * 0.6) / inputTokens // Assume 60% of cost is input tokens (approximate)
+    : null;
+  const outputCostPerToken = outputTokens > 0 && totalCost > 0
+    ? (totalCost * 0.4) / outputTokens // Assume 40% of cost is output tokens (approximate)
+    : null;
+
+  // Create a new summary record with enhanced analytics
+  const summaryRecord = await prisma.summary.create({
+    data: {
+      tickerId: tickerRecord.id,
+      filingType: formType,
+      filingDate: new Date(filingDate),
+      filingUrl: filingUrl,
+      summaryText: summaryText,
+      summaryJSON: {
+        accessionNumber: metadata.accessionNumber || '',
+        keyPoints: keyPoints,
+        // Include detailed data for better caching
+        parsedContent: metadata.content && typeof metadata.content === 'string'
+          ? metadata.content
+          : null, // Store full parsed content
+        documentType: metadata.documentType || 'unknown',
+        documentDescription: metadata.documentDescription || 'unknown',
+        rawData: metadata.filingDetails
+          ? JSON.stringify(metadata.filingDetails)
+          : null,
+        generatedAt: new Date().toISOString(),
+        tokensUsed: metadata.tokensUsed,
+        inputTokens: metadata.inputTokens,
+        outputTokens: metadata.outputTokens,
+        cost: metadata.cost,
+        processingTimeMs: metadata.processingTimeMs,
+        ...(metadata.failureReason ? { failureReason: metadata.failureReason } : {})
+      },
+      sentToUser: false, // Will be marked as sent when included in an email
+      model: metadata.model || 'unknown',
+      processingStatus: metadata.failureReason ? 'FAILED' : 'COMPLETED',
+
+      // Enhanced Cost and Token Tracking
+      inputTokens: inputTokens,
+      outputTokens: outputTokens,
+      inputCostPerToken: inputCostPerToken,
+      outputCostPerToken: outputCostPerToken,
+      totalCost: totalCost,
+
+      // Cache and Reuse Analytics (new summary is not a cache hit)
+      isCacheHit: false,
+      cacheUsageCount: 0,
+      lastCacheUsed: null,
+      cacheVersion: metadata.cacheVersion || '1.0',
+
+      // Performance and Quality Metrics
+      qualityScore: metadata.qualityScore || null,
+      confidenceLevel: metadata.confidenceLevel || null,
+      extractionSuccess: metadata.extractionSuccess || true,
+      parsingErrors: metadata.parsingErrors || 0,
+
+      ...(metadata.failureReason ? { processingError: metadata.failureReason } : {})
+    }
+  });
+
+  console.log(`[DEBUG][FilingDatabase] Created summary ${summaryRecord.id} for ticker ${tickerRecord.id}`);
 }
 
 /**
