@@ -146,7 +146,9 @@
     "test:e2e:all-tickers:skip-email": "npx tsx scripts/test-e2e-pipeline-all-tickers.ts --skip-email",
     "test:e2e:ticker": "npx tsx scripts/test-e2e-pipeline-all-tickers.ts --ticker",
     "verify:daily": "npx tsx scripts/verify-daily-pipeline.ts",
-    "verify:daily:no-remediation": "npx tsx scripts/verify-daily-pipeline.ts --no-remediation"
+    "verify:daily:no-remediation": "npx tsx scripts/verify-daily-pipeline.ts --no-remediation",
+    "migrate:legacy-jobs": "npx tsx scripts/migrate-legacy-jobs.ts",
+    "migrate:legacy-jobs:dry-run": "npx tsx scripts/migrate-legacy-jobs.ts --dry-run"
   },
   "dependencies": {
     "@anthropic-ai/claude-code": "2.0.37",
