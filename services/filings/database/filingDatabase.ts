@@ -76,6 +76,8 @@ export async function findExistingSummary(ticker: string, formType: string, bypa
       processingStatus: summaryRecord.processingStatus || undefined,
       processingTimeMs: summaryJSON?.processingTimeMs,
       failureReason: summaryJSON?.failureReason,
+      // Database ID for email delivery tracking - added 2025-12-26
+      databaseId: summaryRecord.id,
       // Cache analytics metadata
       isCacheHit: true,
       cacheUsageCount: summaryRecord.cacheUsageCount || 0,
@@ -100,6 +102,19 @@ export interface StoreSummaryResult {
   total: number;
   /** Error messages for failed stores */
   errors: string[];
+  /** IDs of created summary records - used for email delivery tracking */
+  summaryIds: string[];
+}
+
+/**
+ * Options for storing a summary
+ * Used to mark test data and track data provenance
+ */
+export interface StoreSummaryOptions {
+  /** If true, marks this summary as test data in metadata */
+  isTestData?: boolean;
+  /** Source identifier for test data (e.g., 'e2e-test', 'unit-test') */
+  testSource?: string;
 }
 
 /**
@@ -116,6 +131,7 @@ export interface StoreSummaryResult {
  * @param summaryText The generated summary text
  * @param keyPoints Array of key points from the filing
  * @param metadata Additional metadata including cost/token tracking
+ * @param options Optional settings for test data marking
  * @returns StoreSummaryResult with counts of stored/total and any errors
  */
 export async function storeSummary(
@@ -125,9 +141,10 @@ export async function storeSummary(
   filingUrl: string,
   summaryText: string,
   keyPoints: string[],
-  metadata: Record<string, any>
+  metadata: Record<string, any>,
+  options?: StoreSummaryOptions
 ): Promise<StoreSummaryResult> {
-  const result: StoreSummaryResult = { stored: 0, total: 0, errors: [] };
+  const result: StoreSummaryResult = { stored: 0, total: 0, errors: [], summaryIds: [] };
 
   try {
     // FIX (2025-12-24): Use findMany() to get ALL users' ticker records, not just the first
@@ -149,9 +166,10 @@ export async function storeSummary(
     // Store summary for EACH user's ticker
     for (const tickerRecord of tickerRecords) {
       try {
-        await storeSummaryForTicker(tickerRecord, formType, filingDate, filingUrl, summaryText, keyPoints, metadata);
+        const summaryId = await storeSummaryForTicker(tickerRecord, formType, filingDate, filingUrl, summaryText, keyPoints, metadata, options);
         result.stored++;
-        console.log(`[INFO][FilingDatabase] Stored summary for ${ticker} - user ticker ID: ${tickerRecord.id}`);
+        result.summaryIds.push(summaryId);
+        console.log(`[INFO][FilingDatabase] Stored summary for ${ticker} - user ticker ID: ${tickerRecord.id}, summary ID: ${summaryId}`);
       } catch (userError) {
         const errorMsg = `${tickerRecord.id}: ${userError instanceof Error ? userError.message : 'Unknown error'}`;
         result.errors.push(errorMsg);
@@ -170,6 +188,7 @@ export async function storeSummary(
 
 /**
  * Stores a summary for a single ticker record (internal helper)
+ * @returns The ID of the created summary record
  */
 async function storeSummaryForTicker(
   tickerRecord: { id: string; companyName: string | null },
@@ -178,8 +197,9 @@ async function storeSummaryForTicker(
   filingUrl: string,
   summaryText: string,
   keyPoints: string[],
-  metadata: Record<string, any>
-): Promise<void> {
+  metadata: Record<string, any>,
+  options?: StoreSummaryOptions
+): Promise<string> {
   // Calculate cost per token from metadata if available
   const inputTokens = metadata.inputTokens || 0;
   const outputTokens = metadata.outputTokens || 0;
@@ -199,6 +219,7 @@ async function storeSummaryForTicker(
       filingType: formType,
       filingDate: new Date(filingDate),
       filingUrl: filingUrl,
+      url: metadata.primaryDocUrl || null, // Store the actual document URL for direct links
       summaryText: summaryText,
       summaryJSON: {
         accessionNumber: metadata.accessionNumber || '',
@@ -243,11 +264,22 @@ async function storeSummaryForTicker(
       extractionSuccess: metadata.extractionSuccess || true,
       parsingErrors: metadata.parsingErrors || 0,
 
-      ...(metadata.failureReason ? { processingError: metadata.failureReason } : {})
+      ...(metadata.failureReason ? { processingError: metadata.failureReason } : {}),
+
+      // Test data markers - added 2025-12-26 for data integrity
+      // When isTestData is true, add metadata to distinguish test from production data
+      ...(options?.isTestData ? {
+        metadata: {
+          source: options.testSource || 'test',
+          isTestData: true,
+          createdAt: new Date().toISOString()
+        }
+      } : {})
     }
   });
 
   console.log(`[DEBUG][FilingDatabase] Created summary ${summaryRecord.id} for ticker ${tickerRecord.id}`);
+  return summaryRecord.id;
 }
 
 /**

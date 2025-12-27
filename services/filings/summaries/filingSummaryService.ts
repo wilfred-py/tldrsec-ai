@@ -2,7 +2,7 @@ import { FilingType } from '../../../types/sec/filing';
 import { FilingSummaryResult, SECFiling, Company } from '../../filing/types';
 import { summarizeFiling, SummarizationOptions } from '../../../lib/ai/summarize';
 import * as secService from '../../secService';
-import { findExistingSummary, storeSummary } from '../database/filingDatabase';
+import { findExistingSummary, storeSummary, StoreSummaryOptions } from '../database/filingDatabase';
 import { scrapeDocumentLinksFromFilingPage, fetchDocumentContent } from '../extractors/documentScraper';
 import { generateFallbackSummary, generateFallbackKeyPoints } from './fallbackSummaryGenerator';
 import { normalizeFormType } from '../utils/formTypeUtils';
@@ -198,16 +198,16 @@ function validateAISummary(summaryText: string, keyPoints: string[], ticker: str
 
 /**
  * Gets a filing summary for a ticker and form type
- * 
+ *
  * @param ticker The company ticker symbol
  * @param formType The SEC form type
- * @param options Options for summary generation
+ * @param fetchOptions Options for summary generation and storage
  * @returns Object containing the summary data or an error
  */
 export async function getFilingSummary(
-  ticker: string, 
+  ticker: string,
   formType: FilingType,
-  options: { bypassCache?: boolean; fromCron?: boolean } = {}
+  fetchOptions: { bypassCache?: boolean; fromCron?: boolean; storageOptions?: StoreSummaryOptions } = {}
 ): Promise<{ data: FilingSummaryResult | null, error?: string }> {
   // Feature flag for enhanced filing service (Unified Flow)
   const useEnhancedSummarization = process.env.ENABLE_ENHANCED_SUMMARIZATION === 'true';
@@ -257,7 +257,7 @@ export async function getFilingSummary(
     
     // Check if we already have a summary for this ticker and form type
     // Bypass cache if explicitly requested or when called from cron processing
-    const shouldBypassCache = options.bypassCache || options.fromCron || false;
+    const shouldBypassCache = fetchOptions.bypassCache || fetchOptions.fromCron || false;
     const existingSummary = await findExistingSummary(ticker, normalizedFormType, shouldBypassCache);
     if (existingSummary) {
       console.log(`[DEBUG][FilingSummaryService] ✅ Found existing summary for ${ticker} - ${normalizedFormType}`);
@@ -361,12 +361,13 @@ export async function getFilingSummary(
             model: 'fallback',
             failureReason: 'Document content could not be retrieved',
             filingDetails: filingDetails
-          }
+          },
+          fetchOptions.storageOptions
         );
-        
+
         return { data: summaryResult };
       }
-      
+
       // Validate content before AI processing
       const validation = validateContentForProcessing(content, ticker, normalizedFormType);
       if (!validation.isValid) {
@@ -405,9 +406,10 @@ export async function getFilingSummary(
             failureReason: `Content validation failed: ${validation.reason}`,
             contentLength: validation.contentLength,
             filingDetails: filingDetails
-          }
+          },
+          fetchOptions.storageOptions
         );
-        
+
         return { data: summaryResult };
       }
 
@@ -470,12 +472,13 @@ export async function getFilingSummary(
             model: 'fallback',
             failureReason: 'AI summarization failed',
             filingDetails: filingDetails
-          }
+          },
+          fetchOptions.storageOptions
         );
-        
+
         return { data: summaryResult };
       }
-      
+
       // Validate AI-generated summary for quality and completeness
       const summaryValidation = validateAISummary(summaryJSON.summary, summaryJSON.keyPoints || [], ticker, normalizedFormType);
       if (!summaryValidation.isValid) {
@@ -513,41 +516,20 @@ export async function getFilingSummary(
             model: 'fallback',
             failureReason: `AI summary validation failed: ${summaryValidation.reason}`,
             filingDetails: filingDetails
-          }
+          },
+          fetchOptions.storageOptions
         );
-        
+
         return { data: summaryResult };
       }
-      
+
       // Log any validation suggestions for monitoring
       if (summaryValidation.suggestions && summaryValidation.suggestions.length > 0) {
         console.log(`[DEBUG][FilingSummaryService] 💡 AI summary validation suggestions for ${ticker}-${normalizedFormType}:`, summaryValidation.suggestions);
       }
       
-      // Create the summary result
-      const summaryResult: FilingSummaryResult = {
-        ticker: ticker,
-        companyName: companyInfo.name || ticker,
-        filingType: normalizedFormType as FilingType,
-        filingDate: filing.filingDate || new Date().toISOString(),
-        accessionNumber: filing.accessionNumber || '',
-        summaryText: summaryJSON.summary,
-        keyPoints: summaryJSON.keyPoints || [],
-        url: htmlViewerUrl,
-        filingUrl: filing.filingUrl,
-        parsedContent: undefined,
-        rawData: undefined,
-        tokensUsed: summaryJSON.tokensUsed,
-        inputTokens: summaryJSON.inputTokens,
-        outputTokens: summaryJSON.outputTokens,
-        model: summaryJSON.model || options.model,
-        cost: summaryJSON.cost,
-        processingStatus: 'COMPLETED',
-        processingTimeMs: summaryJSON.processingTimeMs
-      };
-      
-      // Store the summary in the database
-      await storeSummary(
+      // Store the summary in the database first to get the database ID
+      const storeResult = await storeSummary(
         ticker,
         normalizedFormType,
         filing.filingDate || new Date().toISOString(),
@@ -566,10 +548,36 @@ export async function getFilingSummary(
           model: summaryJSON.model || options.model,
           cost: summaryJSON.cost,
           processingTimeMs: summaryJSON.processingTimeMs
-        }
+        },
+        fetchOptions.storageOptions
       );
-      
-      console.log(`[DEBUG][FilingSummaryService] ✅ Successfully created summary for ${ticker} - ${normalizedFormType}`);
+
+      // Create the summary result with database ID for email delivery tracking
+      const summaryResult: FilingSummaryResult = {
+        ticker: ticker,
+        companyName: companyInfo.name || ticker,
+        filingType: normalizedFormType as FilingType,
+        filingDate: filing.filingDate || new Date().toISOString(),
+        accessionNumber: filing.accessionNumber || '',
+        summaryText: summaryJSON.summary,
+        keyPoints: summaryJSON.keyPoints || [],
+        url: htmlViewerUrl,
+        filingUrl: filing.filingUrl,
+        parsedContent: undefined,
+        rawData: undefined,
+        tokensUsed: summaryJSON.tokensUsed,
+        inputTokens: summaryJSON.inputTokens,
+        outputTokens: summaryJSON.outputTokens,
+        model: summaryJSON.model || options.model,
+        cost: summaryJSON.cost,
+        processingStatus: 'COMPLETED',
+        processingTimeMs: summaryJSON.processingTimeMs,
+        // Include database ID for email delivery tracking (use first ID if multiple users)
+        databaseId: storeResult.summaryIds.length > 0 ? storeResult.summaryIds[0] : undefined,
+        isCacheHit: false
+      };
+
+      console.log(`[DEBUG][FilingSummaryService] ✅ Successfully created summary for ${ticker} - ${normalizedFormType} (stored for ${storeResult.stored}/${storeResult.total} users)`);
       return { data: summaryResult };
     } catch (summaryError: unknown) {
       console.error(`[DEBUG][FilingSummaryService] ❌ Error preparing summary result: ${summaryError instanceof Error ? summaryError.message : 'Unknown error'}`);

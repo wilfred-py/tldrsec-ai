@@ -297,6 +297,7 @@ export async function getDirectFilingSummary(
               processingTimeMs: Date.now() - startTime,
               fetchMethod,
               chunksProcessed: claudeResult.chunksProcessed,
+              primaryDocUrl: filing.primaryDocUrl, // Store actual document URL for email links
               ...contentMetadata
             }
           );
@@ -369,6 +370,7 @@ export async function getDirectFilingSummary(
               model: 'legacy-ai',
               processingTimeMs: Date.now() - startTime,
               fetchMethod,
+              primaryDocUrl: filing.primaryDocUrl, // Store actual document URL for email links
               ...contentMetadata
             }
           );
@@ -470,6 +472,7 @@ async function createFallbackSummary(
         model: 'fallback',
         failureReason: 'Content retrieval or AI summarization failed',
         fetchMethod,
+        primaryDocUrl: filing.primaryDocUrl, // Store actual document URL for email links
         processingTimeMs: Date.now() - startTime
       }
     );
