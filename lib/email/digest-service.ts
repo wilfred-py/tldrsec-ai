@@ -298,6 +298,7 @@ export class DigestService {
             filingType: string;
             filingDate: Date;
             filingUrl: string;
+            url?: string | null;
             summaryText: string;
             summaryJSON: Record<string, unknown>;
             createdAt: Date;
@@ -305,7 +306,7 @@ export class DigestService {
             id: summary.id,
             filingType: summary.filingType,
             filingDate: summary.filingDate,
-            filingUrl: summary.filingUrl,
+            filingUrl: summary.url || summary.filingUrl, // Prefer primaryDocUrl for direct document links
             summaryText: summary.summaryText,
             summaryJSON: summary.summaryJSON,
             createdAt: summary.createdAt

@@ -14,6 +14,7 @@
 // Import types
 import { FilingType } from '../types/sec/filing';
 import { FilingSummaryResult } from './filings/summaries/types';
+import { StoreSummaryOptions } from './filings/database/filingDatabase';
 
 // Import modular components
 import { getFilingSummary as getFilingSummaryFromService } from './filings/summaries/filingSummaryService';
@@ -25,8 +26,8 @@ import * as secService from './secService';
 interface FilingService {
   getFilingLogs(): Promise<{ data: any }>;
   getFilingById(accessionNumber: string): Promise<any>;
-  sendEmailSummary(email: string, tickers?: string[], debug?: boolean): Promise<any>;
-  getFilingSummary(ticker: string, formType: FilingType, options?: { bypassCache?: boolean; fromCron?: boolean }): Promise<{ data: FilingSummaryResult | null, error?: string }>;
+  sendEmailSummary(email: string, tickers?: string[], debug?: boolean, storageOptions?: StoreSummaryOptions): Promise<any>;
+  getFilingSummary(ticker: string, formType: FilingType, options?: { bypassCache?: boolean; fromCron?: boolean; storageOptions?: StoreSummaryOptions }): Promise<{ data: FilingSummaryResult | null, error?: string }>;
 }
 
 /**
@@ -91,8 +92,8 @@ const filingService: FilingService = {
   },
   
   // Send an email summary of the latest filings
-  sendEmailSummary: async (email: string, tickers: string[] = ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'META'], debug: boolean = false) => {
-    return sendEmailSummary(email, tickers, debug);
+  sendEmailSummary: async (email: string, tickers: string[] = ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'META'], debug: boolean = false, storageOptions?: StoreSummaryOptions) => {
+    return sendEmailSummary(email, tickers, debug, storageOptions);
   }
 };
 

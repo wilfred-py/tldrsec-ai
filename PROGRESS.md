@@ -1,11 +1,121 @@
 # Current Progress: tldrsec-ai Pipeline Operations
 
 ## Current Status
-**Date**: 2025-12-24
-**Branch**: phase3/supabase-cutover-verification
-**Status**: ✅ OPERATIONAL - Supabase Migration Complete, Manual Verification Done
+**Date**: 2025-12-27
+**Branch**: feature/test-data-integrity-improvements
+**Status**: ✅ OPERATIONAL - Email URL Verification Complete
 
-### Active: Phase 3 Supabase Cutover Complete (2025-12-24)
+### Active: Test Data Integrity Improvements ✅ COMPLETE (2025-12-27)
+
+**Purpose**: Improve test data tracking and email delivery consistency for multi-user scenarios.
+
+**Three-Phase Implementation**:
+
+1. **Phase 1: Test Data Markers** - Added `StoreSummaryOptions` interface to mark summaries with test metadata
+   - Files: `services/filings/database/filingDatabase.ts` (interface + metadata injection)
+   - Files: `services/filings/summaries/filingSummaryService.ts` (options threading)
+   - Files: `services/filings/email/sendEmailSummary.ts` (pass options downstream)
+
+2. **Phase 2: Email Delivery Tracking Gap** - Fixed missing database ID propagation
+   - Problem: `trackEmailDelivery()` couldn't work because `FilingSummaryResult` lacked `databaseId`
+   - Solution: Updated `storeSummary()` to return `summaryIds[]` and propagate through the pipeline
+   - Files: `services/filing/types.ts` (added `databaseId`, `isCacheHit` fields)
+   - Files: `services/filings/database/filingDatabase.ts` (return IDs from storage)
+   - Files: `services/filings/summaries/filingSummaryService.ts` (capture and return databaseId)
+
+3. **Phase 3: Audit Helpers** - CLI tools for detecting/fixing inconsistencies
+   - Created `lib/audit/summary-audit.ts` with audit functions
+   - Created `scripts/audit-test-data.ts` CLI tool (report, find-test, cleanup, fix-tracking)
+   - Added npm scripts: `npm run audit:test-data:*`
+
+**Key Commands**:
+```bash
+npm run audit:test-data:report        # Generate audit report
+npm run audit:test-data:find          # Find test-generated summaries
+npm run audit:test-data:cleanup       # Dry-run cleanup
+npm run audit:test-data:fix           # Fix delivery tracking inconsistencies
+```
+
+---
+
+### Previous: Email URL Verification for All Form Types ✅ COMPLETE (2025-12-27)
+
+**Purpose**: Verify email links work correctly for ALL SEC form types after the Email Filing Link Fix.
+
+**Tests Created**:
+1. `scripts/test-email-all-form-types.ts` - Verifies URLs from database summaries
+2. `scripts/test-url-extraction-form-types.ts` - Verifies URL extraction from live SEC API
+
+**Verification Results** (All 6 form types verified):
+| Form Type | URL Type | Status |
+|-----------|----------|--------|
+| 10-K | primary_doc | ✅ Direct document link |
+| 10-Q | primary_doc | ✅ Direct document link |
+| 8-K | primary_doc | ✅ Direct document link |
+| Form 4 | primary_doc | ✅ Direct document link |
+| Form 3 | primary_doc | ✅ Direct document link |
+| Form 144 | primary_doc | ✅ Direct document link |
+
+**Key Finding**: `getSecFilingViewerUrl()` correctly passes document URLs through unchanged.
+
+---
+
+### Previous: Email Filing Link Fix ✅ COMPLETE (2025-12-26)
+
+**Issue**: Email "View Full Filing on SEC.gov" links went to SEC archive directory listings instead of actual filing documents.
+
+**Root Cause**: Pipeline stored `filingUrl` (directory URL) but not `primaryDocUrl` (actual document URL).
+
+**Fix Applied**:
+1. Modified `storeSummaryForTicker()` to store `primaryDocUrl` in `Summary.url` field
+2. Updated `directFilingSummaryService.ts` to pass `primaryDocUrl` in metadata
+3. Updated `summary-service.ts` and `digest-service.ts` to prefer `url` over `filingUrl`
+4. Created `lib/email/url-utils.ts` with `getSecFilingViewerUrl()` for URL normalization
+
+**Files Modified**:
+- `services/filings/database/filingDatabase.ts:202` - Store `metadata.primaryDocUrl` in `url` field
+- `services/filings/summaries/directFilingSummaryService.ts:300,373,475` - Pass `filing.primaryDocUrl`
+- `lib/email/summary-service.ts:146` - Use `summary.url || summary.filingUrl`
+- `lib/email/digest-service.ts:309` - Use `summary.url || summary.filingUrl`
+- `lib/email/url-utils.ts` - New file with URL normalization logic
+- `components/ui/email/templates/sections/EmailFooter.tsx` - Use `getSecFilingViewerUrl()`
+
+**Verification**:
+- ✅ Build successful
+- ✅ E2E test passed, email delivered
+- ✅ Playwright verified link goes to actual Form 4 document (not directory)
+- ✅ Test email sent with direct document URL
+- ✅ All 6 form types verified with test emails (2025-12-27)
+
+---
+
+### Previous: Email Summary Discrepancies Fix ✅ COMPLETE (2025-12-26)
+
+**Issue**: Users not receiving email summaries despite SEC filings being published. Two root causes identified:
+
+1. **Job Type Mismatch**: 64 legacy `ASYNC_SUMMARIZE_FILING` jobs queued but never processed (only `ASYNC_FETCH_FILING` processed by pipeline)
+2. **findFirst() Bug**: Only the first user's ticker for a symbol received summaries (other users skipped)
+
+**Fix Applied**:
+- **Phase 1**: Feature flag default changed from opt-in (`=== 'true'`) to opt-out (`!== 'false'`)
+- **Phase 2**: Migration script created and executed - migrated 64 stuck jobs
+- **Phase 3**: `storeSummary()` changed from `findFirst()` to `findMany()` - now stores for ALL users tracking a ticker
+
+**Files Modified**:
+- `app/api/cron/tier-aware/route.ts` - Feature flag default
+- `services/filings/database/filingDatabase.ts` - Multi-user support with `StoreSummaryResult`
+- `scripts/migrate-legacy-jobs.ts` - Migration script (fixed `scheduledFor` field)
+- `package.json` - Added `migrate:legacy-jobs` npm scripts
+
+**Verification**:
+- ✅ 64 jobs migrated: `ASYNC_SUMMARIZE_FILING` → `ASYNC_FETCH_FILING`
+- ✅ 19 tests passing (including 9 new multi-user tests)
+- ✅ Build succeeds
+- ✅ Database shows 6 tickers with multiple users: KO, NVDA, VRT, CMG, TSLA, COIN
+
+---
+
+### Previous: Phase 3 Supabase Cutover Complete (2025-12-24)
 
 **Supabase Migration Status**: ✅ FULLY OPERATIONAL
 - Database: Supabase (aws-1-ap-southeast-2.pooler.supabase.com)
@@ -125,7 +235,7 @@ npm run cloudflare:status                 # Check deployment status
 
 ---
 
-**Last Updated**: 2025-12-24
+**Last Updated**: 2025-12-27
 **Repository**: tldrsec-ai
 
 *See TIMELINE.md for master timeline and quick navigation*
