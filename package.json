@@ -148,7 +148,14 @@
     "verify:daily": "npx tsx scripts/verify-daily-pipeline.ts",
     "verify:daily:no-remediation": "npx tsx scripts/verify-daily-pipeline.ts --no-remediation",
     "migrate:legacy-jobs": "npx tsx scripts/migrate-legacy-jobs.ts",
-    "migrate:legacy-jobs:dry-run": "npx tsx scripts/migrate-legacy-jobs.ts --dry-run"
+    "migrate:legacy-jobs:dry-run": "npx tsx scripts/migrate-legacy-jobs.ts --dry-run",
+    "audit:test-data": "npx tsx scripts/audit-test-data.ts",
+    "audit:test-data:report": "npx tsx scripts/audit-test-data.ts report",
+    "audit:test-data:find": "npx tsx scripts/audit-test-data.ts find-test",
+    "audit:test-data:cleanup": "npx tsx scripts/audit-test-data.ts cleanup",
+    "audit:test-data:cleanup:execute": "npx tsx scripts/audit-test-data.ts cleanup --execute",
+    "audit:test-data:fix": "npx tsx scripts/audit-test-data.ts fix-tracking",
+    "audit:test-data:fix:execute": "npx tsx scripts/audit-test-data.ts fix-tracking --execute"
   },
   "dependencies": {
     "@anthropic-ai/claude-code": "2.0.37",
