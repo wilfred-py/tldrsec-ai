@@ -1,5 +1,6 @@
 import * as React from 'react';
 import { EmailColors } from '../../design-system';
+import { getSecFilingViewerUrl } from '../../../../../lib/email/url-utils';
 
 interface EmailFooterProps {
   filingUrl: string;
@@ -10,7 +11,10 @@ interface EmailFooterProps {
  * Minimalist email footer component
  * Morning Brew style: clean CTA, simple footer links
  */
-export function EmailFooter({ filingUrl, unsubscribeUrl }: EmailFooterProps) {
+export function EmailFooter({ filingUrl }: EmailFooterProps) {
+  // Convert index URLs to EDGAR Filing Viewer URLs for better user experience
+  const viewerUrl = getSecFilingViewerUrl(filingUrl);
+
   return (
     <table width="100%" cellPadding="0" cellSpacing="0">
       <tbody>
@@ -22,7 +26,7 @@ export function EmailFooter({ filingUrl, unsubscribeUrl }: EmailFooterProps) {
             borderTop: `1px solid ${EmailColors.structure.border}`,
           }}>
             <a
-              href={filingUrl}
+              href={viewerUrl}
               style={{
                 display: 'inline-block',
                 padding: '12px 24px',
@@ -39,31 +43,19 @@ export function EmailFooter({ filingUrl, unsubscribeUrl }: EmailFooterProps) {
           </td>
         </tr>
 
-        {/* Footer links */}
+        {/* Footer */}
         <tr>
           <td style={{
             padding: '16px 15px 24px',
             textAlign: 'center',
           }}>
             <p style={{
-              margin: '0 0 8px 0',
+              margin: '0',
               fontSize: '12px',
               color: EmailColors.text.meta,
             }}>
               tldrSEC | AI-Powered SEC Filing Summaries
             </p>
-            {unsubscribeUrl && (
-              <a
-                href={unsubscribeUrl}
-                style={{
-                  fontSize: '12px',
-                  color: EmailColors.text.muted,
-                  textDecoration: 'underline',
-                }}
-              >
-                Manage notification preferences
-              </a>
-            )}
           </td>
         </tr>
       </tbody>

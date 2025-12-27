@@ -772,7 +772,9 @@ export async function getEmailTemplate(
         companyName: data.companyName as string,
         symbol: data.ticker as string,
         filingType: data.filingType as string,
-        filingDate: data.filingDate as string,
+        filingDate: data.filingDate instanceof Date
+          ? data.filingDate.toISOString()
+          : String(data.filingDate || ''),
         summaryText: data.summary as string,
         filingUrl: data.filingUrl as string,
         summaryData: data.summaryData as FilingTemplateData['summaryData']

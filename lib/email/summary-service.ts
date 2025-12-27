@@ -137,12 +137,13 @@ export async function sendLatestSummariesEmail(): Promise<{ success: boolean; er
       }
       
       // Add to filings for this ticker
+      // Use primaryDocUrl (stored in url field) when available for direct document links
       tickerMap.get(ticker.symbol).filings.push({
         symbol: ticker.symbol,
         companyName: ticker.companyName,
         filingType: summary.filingType,
         filingDate: summary.filingDate,
-        filingUrl: summary.filingUrl,
+        filingUrl: summary.url || summary.filingUrl, // Prefer primaryDocUrl for direct document links
         summaryId: summary.id,
         summaryUrl: `${process.env.NEXT_PUBLIC_APP_URL}/summary/${summary.id}`,
         summaryText: summary.summaryText,
