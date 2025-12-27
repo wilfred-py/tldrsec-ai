@@ -1,0 +1,2754 @@
+[
+  {
+    "id": "f596497c-a8fe-4610-9d6a-16c3722ce92d",
+    "jobType": "ASYNC_SUMMARIZE_FILING",
+    "status": "PENDING",
+    "priority": 7,
+    "payload": {
+      "filing": {
+        "filingId": "34abef2f-e6c1-4ef1-b385-cefc2dfa8033",
+        "formType": "4",
+        "filingUrl": "https://www.sec.gov/Archives/edgar/data/1045810/000158867025000017/0001588670-25-000017-index.htm",
+        "filingDate": {},
+        "accessionNumber": "0001588670-25-000017"
+      },
+      "ticker": {
+        "cik": "0001045810",
+        "symbol": "NVDA",
+        "companyName": "NVIDIA Corporation"
+      },
+      "userId": "2009de85-4eb6-4f18-9c01-ee212c5d43d4",
+      "userTier": "HOBBY",
+      "userEmail": "wilfredchen1@gmail.com",
+      "executionContext": {
+        "executionId": "cron-1766525408471-c278f4cb906d4127",
+        "sourceContext": "backlog",
+        "cronTriggerTime": "2025-12-23T21:30:47.036Z"
+      }
+    },
+    "idempotencyKey": "filing-2009de85-4eb6-4f18-9c01-ee212c5d43d4-0001588670-25-000017",
+    "createdAt": "2025-12-23T21:32:31.381Z",
+    "scheduledFor": "2025-12-23T21:32:29.774Z",
+    "startedAt": null,
+    "completedAt": null,
+    "failedAt": null,
+    "retryCount": 0,
+    "maxRetries": 3,
+    "lastError": null,
+    "executionTime": null,
+    "result": null,
+    "costUSD": null,
+    "timeoutFlagged": false,
+    "tokenUsage": null,
+    "userId": null
+  },
+  {
+    "id": "b4cf42ed-51e1-4b6f-8994-cb0aedba5458",
+    "jobType": "ASYNC_SUMMARIZE_FILING",
+    "status": "PENDING",
+    "priority": 5,
+    "payload": {
+      "filing": {
+        "filingId": "34abef2f-e6c1-4ef1-b385-cefc2dfa8033",
+        "formType": "4",
+        "filingUrl": "https://www.sec.gov/Archives/edgar/data/1045810/000158867025000017/0001588670-25-000017-index.htm",
+        "filingDate": {},
+        "accessionNumber": "0001588670-25-000017"
+      },
+      "ticker": {
+        "cik": "0001045810",
+        "symbol": "NVDA",
+        "companyName": "NVIDIA Corporation"
+      },
+      "userId": "user_2yAsw3Tz3NWUtedemupaXOhqo8L",
+      "userTier": "FREE",
+      "userEmail": "wilfred.chen.python@gmail.com",
+      "executionContext": {
+        "executionId": "cron-1766525408471-c278f4cb906d4127",
+        "sourceContext": "backlog",
+        "cronTriggerTime": "2025-12-23T21:30:47.036Z"
+      }
+    },
+    "idempotencyKey": "filing-user_2yAsw3Tz3NWUtedemupaXOhqo8L-0001588670-25-000017",
+    "createdAt": "2025-12-23T21:32:36.221Z",
+    "scheduledFor": "2025-12-23T21:32:34.610Z",
+    "startedAt": null,
+    "completedAt": null,
+    "failedAt": null,
+    "retryCount": 0,
+    "maxRetries": 3,
+    "lastError": null,
+    "executionTime": null,
+    "result": null,
+    "costUSD": null,
+    "timeoutFlagged": false,
+    "tokenUsage": null,
+    "userId": null
+  },
+  {
+    "id": "47b16db0-12d1-4dcd-a3d9-a6bd3172ddfa",
+    "jobType": "ASYNC_SUMMARIZE_FILING",
+    "status": "PENDING",
+    "priority": 7,
+    "payload": {
+      "filing": {
+        "filingId": "f4b67bbb-58f8-4529-912b-a90948d60e63",
+        "formType": "4",
+        "filingUrl": "https://www.sec.gov/Archives/edgar/data/1045810/000119764925000061/0001197649-25-000061-index.htm",
+        "filingDate": {},
+        "accessionNumber": "0001197649-25-000061"
+      },
+      "ticker": {
+        "cik": "0001045810",
+        "symbol": "NVDA",
+        "companyName": "NVIDIA Corporation"
+      },
+      "userId": "2009de85-4eb6-4f18-9c01-ee212c5d43d4",
+      "userTier": "HOBBY",
+      "userEmail": "wilfredchen1@gmail.com",
+      "executionContext": {
+        "executionId": "cron-1766525408471-c278f4cb906d4127",
+        "sourceContext": "backlog",
+        "cronTriggerTime": "2025-12-23T21:30:48.034Z"
+      }
+    },
+    "idempotencyKey": "filing-2009de85-4eb6-4f18-9c01-ee212c5d43d4-0001197649-25-000061",
+    "createdAt": "2025-12-23T21:32:42.247Z",
+    "scheduledFor": "2025-12-23T21:32:39.838Z",
+    "startedAt": null,
+    "completedAt": null,
+    "failedAt": null,
+    "retryCount": 0,
+    "maxRetries": 3,
+    "lastError": null,
+    "executionTime": null,
+    "result": null,
+    "costUSD": null,
+    "timeoutFlagged": false,
+    "tokenUsage": null,
+    "userId": null
+  },
+  {
+    "id": "b2fda15e-44a4-4fc3-9f26-d80929856a28",
+    "jobType": "ASYNC_SUMMARIZE_FILING",
+    "status": "PENDING",
+    "priority": 5,
+    "payload": {
+      "filing": {
+        "filingId": "f4b67bbb-58f8-4529-912b-a90948d60e63",
+        "formType": "4",
+        "filingUrl": "https://www.sec.gov/Archives/edgar/data/1045810/000119764925000061/0001197649-25-000061-index.htm",
+        "filingDate": {},
+        "accessionNumber": "0001197649-25-000061"
+      },
+      "ticker": {
+        "cik": "0001045810",
+        "symbol": "NVDA",
+        "companyName": "NVIDIA Corporation"
+      },
+      "userId": "user_2yAsw3Tz3NWUtedemupaXOhqo8L",
+      "userTier": "FREE",
+      "userEmail": "wilfred.chen.python@gmail.com",
+      "executionContext": {
+        "executionId": "cron-1766525408471-c278f4cb906d4127",
+        "sourceContext": "backlog",
+        "cronTriggerTime": "2025-12-23T21:30:48.034Z"
+      }
+    },
+    "idempotencyKey": "filing-user_2yAsw3Tz3NWUtedemupaXOhqo8L-0001197649-25-000061",
+    "createdAt": "2025-12-23T21:32:46.482Z",
+    "scheduledFor": "2025-12-23T21:32:44.877Z",
+    "startedAt": null,
+    "completedAt": null,
+    "failedAt": null,
+    "retryCount": 0,
+    "maxRetries": 3,
+    "lastError": null,
+    "executionTime": null,
+    "result": null,
+    "costUSD": null,
+    "timeoutFlagged": false,
+    "tokenUsage": null,
+    "userId": null
+  },
+  {
+    "id": "a8588a26-d9c2-48f8-8cd9-e9ed6e20783d",
+    "jobType": "ASYNC_SUMMARIZE_FILING",
+    "status": "PENDING",
+    "priority": 7,
+    "payload": {
+      "filing": {
+        "filingId": "afa78a3b-1501-474a-b3b8-50e1c90b32a1",
+        "formType": "144",
+        "filingUrl": "https://www.sec.gov/Archives/edgar/data/1045810/000195004725010558/0001950047-25-010558-index.htm",
+        "filingDate": {},
+        "accessionNumber": "0001950047-25-010558"
+      },
+      "ticker": {
+        "cik": "0001045810",
+        "symbol": "NVDA",
+        "companyName": "NVIDIA Corporation"
+      },
+      "userId": "2009de85-4eb6-4f18-9c01-ee212c5d43d4",
+      "userTier": "HOBBY",
+      "userEmail": "wilfredchen1@gmail.com",
+      "executionContext": {
+        "executionId": "cron-1766525408471-c278f4cb906d4127",
+        "sourceContext": "backlog",
+        "cronTriggerTime": "2025-12-23T21:30:49.060Z"
+      }
+    },
+    "idempotencyKey": "filing-2009de85-4eb6-4f18-9c01-ee212c5d43d4-0001950047-25-010558",
+    "createdAt": "2025-12-23T21:32:51.288Z",
+    "scheduledFor": "2025-12-23T21:32:49.686Z",
+    "startedAt": null,
+    "completedAt": null,
+    "failedAt": null,
+    "retryCount": 0,
+    "maxRetries": 3,
+    "lastError": null,
+    "executionTime": null,
+    "result": null,
+    "costUSD": null,
+    "timeoutFlagged": false,
+    "tokenUsage": null,
+    "userId": null
+  },
+  {
+    "id": "9a366c8e-f533-4226-85c0-15a12a030a93",
+    "jobType": "ASYNC_SUMMARIZE_FILING",
+    "status": "PENDING",
+    "priority": 5,
+    "payload": {
+      "filing": {
+        "filingId": "afa78a3b-1501-474a-b3b8-50e1c90b32a1",
+        "formType": "144",
+        "filingUrl": "https://www.sec.gov/Archives/edgar/data/1045810/000195004725010558/0001950047-25-010558-index.htm",
+        "filingDate": {},
+        "accessionNumber": "0001950047-25-010558"
+      },
+      "ticker": {
+        "cik": "0001045810",
+        "symbol": "NVDA",
+        "companyName": "NVIDIA Corporation"
+      },
+      "userId": "user_2yAsw3Tz3NWUtedemupaXOhqo8L",
+      "userTier": "FREE",
+      "userEmail": "wilfred.chen.python@gmail.com",
+      "executionContext": {
+        "executionId": "cron-1766525408471-c278f4cb906d4127",
+        "sourceContext": "backlog",
+        "cronTriggerTime": "2025-12-23T21:30:49.060Z"
+      }
+    },
+    "idempotencyKey": "filing-user_2yAsw3Tz3NWUtedemupaXOhqo8L-0001950047-25-010558",
+    "createdAt": "2025-12-23T21:32:56.093Z",
+    "scheduledFor": "2025-12-23T21:32:54.492Z",
+    "startedAt": null,
+    "completedAt": null,
+    "failedAt": null,
+    "retryCount": 0,
+    "maxRetries": 3,
+    "lastError": null,
+    "executionTime": null,
+    "result": null,
+    "costUSD": null,
+    "timeoutFlagged": false,
+    "tokenUsage": null,
+    "userId": null
+  },
+  {
+    "id": "b9b8f49e-7df2-4c64-a674-700b759c2b0e",
+    "jobType": "ASYNC_SUMMARIZE_FILING",
+    "status": "PENDING",
+    "priority": 7,
+    "payload": {
+      "filing": {
+        "filingId": "e46e4278-130f-4b43-bfe8-71753ac1db93",
+        "formType": "144",
+        "filingUrl": "https://www.sec.gov/Archives/edgar/data/1679788/000195824425004561/0001958244-25-004561-index.htm",
+        "filingDate": {},
+        "accessionNumber": "0001958244-25-004561"
+      },
+      "ticker": {
+        "cik": "0001679788",
+        "symbol": "COIN",
+        "companyName": "Coinbase Global, Inc."
+      },
+      "userId": "2009de85-4eb6-4f18-9c01-ee212c5d43d4",
+      "userTier": "HOBBY",
+      "userEmail": "wilfredchen1@gmail.com",
+      "executionContext": {
+        "executionId": "cron-1766525408471-c278f4cb906d4127",
+        "sourceContext": "backlog",
+        "cronTriggerTime": "2025-12-23T21:30:50.260Z"
+      }
+    },
+    "idempotencyKey": "filing-2009de85-4eb6-4f18-9c01-ee212c5d43d4-0001958244-25-004561",
+    "createdAt": "2025-12-23T21:33:01.098Z",
+    "scheduledFor": "2025-12-23T21:32:59.496Z",
+    "startedAt": null,
+    "completedAt": null,
+    "failedAt": null,
+    "retryCount": 0,
+    "maxRetries": 3,
+    "lastError": null,
+    "executionTime": null,
+    "result": null,
+    "costUSD": null,
+    "timeoutFlagged": false,
+    "tokenUsage": null,
+    "userId": null
+  },
+  {
+    "id": "205f8f0d-b2ea-4334-9f04-8f3b977d939b",
+    "jobType": "ASYNC_SUMMARIZE_FILING",
+    "status": "PENDING",
+    "priority": 5,
+    "payload": {
+      "filing": {
+        "filingId": "e46e4278-130f-4b43-bfe8-71753ac1db93",
+        "formType": "144",
+        "filingUrl": "https://www.sec.gov/Archives/edgar/data/1679788/000195824425004561/0001958244-25-004561-index.htm",
+        "filingDate": {},
+        "accessionNumber": "0001958244-25-004561"
+      },
+      "ticker": {
+        "cik": "0001679788",
+        "symbol": "COIN",
+        "companyName": "Coinbase Global, Inc."
+      },
+      "userId": "user_2yAsw3Tz3NWUtedemupaXOhqo8L",
+      "userTier": "FREE",
+      "userEmail": "wilfred.chen.python@gmail.com",
+      "executionContext": {
+        "executionId": "cron-1766525408471-c278f4cb906d4127",
+        "sourceContext": "backlog",
+        "cronTriggerTime": "2025-12-23T21:30:50.260Z"
+      }
+    },
+    "idempotencyKey": "filing-user_2yAsw3Tz3NWUtedemupaXOhqo8L-0001958244-25-004561",
+    "createdAt": "2025-12-23T21:33:05.301Z",
+    "scheduledFor": "2025-12-23T21:33:03.701Z",
+    "startedAt": null,
+    "completedAt": null,
+    "failedAt": null,
+    "retryCount": 0,
+    "maxRetries": 3,
+    "lastError": null,
+    "executionTime": null,
+    "result": null,
+    "costUSD": null,
+    "timeoutFlagged": false,
+    "tokenUsage": null,
+    "userId": null
+  },
+  {
+    "id": "a1b72485-8c99-48e2-a368-176a4ce7744c",
+    "jobType": "ASYNC_SUMMARIZE_FILING",
+    "status": "PENDING",
+    "priority": 5,
+    "payload": {
+      "filing": {
+        "filingId": "fbaf95e4-0cf6-4eb7-95c8-b9466c9e3dc0",
+        "formType": "4",
+        "filingUrl": "https://www.sec.gov/Archives/edgar/data/1652044/000119312525325129/0001193125-25-325129-index.htm",
+        "filingDate": {},
+        "accessionNumber": "0001193125-25-325129"
+      },
+      "ticker": {
+        "cik": "0001652044",
+        "symbol": "GOOGL",
+        "companyName": "Alphabet Inc."
+      },
+      "userId": "user_2yAsw3Tz3NWUtedemupaXOhqo8L",
+      "userTier": "FREE",
+      "userEmail": "wilfred.chen.python@gmail.com",
+      "executionContext": {
+        "executionId": "cron-1766525408471-c278f4cb906d4127",
+        "sourceContext": "backlog",
+        "cronTriggerTime": "2025-12-23T21:30:51.259Z"
+      }
+    },
+    "idempotencyKey": "filing-user_2yAsw3Tz3NWUtedemupaXOhqo8L-0001193125-25-325129",
+    "createdAt": "2025-12-23T21:33:12.498Z",
+    "scheduledFor": "2025-12-23T21:33:10.099Z",
+    "startedAt": null,
+    "completedAt": null,
+    "failedAt": null,
+    "retryCount": 0,
+    "maxRetries": 3,
+    "lastError": null,
+    "executionTime": null,
+    "result": null,
+    "costUSD": null,
+    "timeoutFlagged": false,
+    "tokenUsage": null,
+    "userId": null
+  },
+  {
+    "id": "f2d14579-055c-4bfa-ba4e-225da5251ab3",
+    "jobType": "ASYNC_SUMMARIZE_FILING",
+    "status": "PENDING",
+    "priority": 5,
+    "payload": {
+      "filing": {
+        "filingId": "64376d16-c306-4673-951f-842d3f5f35d5",
+        "formType": "4",
+        "filingUrl": "https://www.sec.gov/Archives/edgar/data/1652044/000119312525325123/0001193125-25-325123-index.htm",
+        "filingDate": {},
+        "accessionNumber": "0001193125-25-325123"
+      },
+      "ticker": {
+        "cik": "0001652044",
+        "symbol": "GOOGL",
+        "companyName": "Alphabet Inc."
+      },
+      "userId": "user_2yAsw3Tz3NWUtedemupaXOhqo8L",
+      "userTier": "FREE",
+      "userEmail": "wilfred.chen.python@gmail.com",
+      "executionContext": {
+        "executionId": "cron-1766525408471-c278f4cb906d4127",
+        "sourceContext": "backlog",
+        "cronTriggerTime": "2025-12-23T21:30:52.257Z"
+      }
+    },
+    "idempotencyKey": "filing-user_2yAsw3Tz3NWUtedemupaXOhqo8L-0001193125-25-325123",
+    "createdAt": "2025-12-23T21:33:17.506Z",
+    "scheduledFor": "2025-12-23T21:33:15.903Z",
+    "startedAt": null,
+    "completedAt": null,
+    "failedAt": null,
+    "retryCount": 0,
+    "maxRetries": 3,
+    "lastError": null,
+    "executionTime": null,
+    "result": null,
+    "costUSD": null,
+    "timeoutFlagged": false,
+    "tokenUsage": null,
+    "userId": null
+  },
+  {
+    "id": "fc74631f-f15b-4a77-8d57-18113990f53d",
+    "jobType": "ASYNC_SUMMARIZE_FILING",
+    "status": "PENDING",
+    "priority": 5,
+    "payload": {
+      "filing": {
+        "filingId": "61a5772e-7e5d-4ee0-975b-cad0db38bca5",
+        "formType": "4",
+        "filingUrl": "https://www.sec.gov/Archives/edgar/data/1652044/000119312525325094/0001193125-25-325094-index.htm",
+        "filingDate": {},
+        "accessionNumber": "0001193125-25-325094"
+      },
+      "ticker": {
+        "cik": "0001652044",
+        "symbol": "GOOGL",
+        "companyName": "Alphabet Inc."
+      },
+      "userId": "user_2yAsw3Tz3NWUtedemupaXOhqo8L",
+      "userTier": "FREE",
+      "userEmail": "wilfred.chen.python@gmail.com",
+      "executionContext": {
+        "executionId": "cron-1766525408471-c278f4cb906d4127",
+        "sourceContext": "backlog",
+        "cronTriggerTime": "2025-12-23T21:30:53.256Z"
+      }
+    },
+    "idempotencyKey": "filing-user_2yAsw3Tz3NWUtedemupaXOhqo8L-0001193125-25-325094",
+    "createdAt": "2025-12-23T21:33:21.710Z",
+    "scheduledFor": "2025-12-23T21:33:20.110Z",
+    "startedAt": null,
+    "completedAt": null,
+    "failedAt": null,
+    "retryCount": 0,
+    "maxRetries": 3,
+    "lastError": null,
+    "executionTime": null,
+    "result": null,
+    "costUSD": null,
+    "timeoutFlagged": false,
+    "tokenUsage": null,
+    "userId": null
+  },
+  {
+    "id": "bd3e55ac-4397-4ccc-8132-43c41890b4cc",
+    "jobType": "ASYNC_SUMMARIZE_FILING",
+    "status": "PENDING",
+    "priority": 5,
+    "payload": {
+      "filing": {
+        "filingId": "c2686b67-6701-4947-b415-370521d4ca37",
+        "formType": "4",
+        "filingUrl": "https://www.sec.gov/Archives/edgar/data/1652044/000119312525325075/0001193125-25-325075-index.htm",
+        "filingDate": {},
+        "accessionNumber": "0001193125-25-325075"
+      },
+      "ticker": {
+        "cik": "0001652044",
+        "symbol": "GOOGL",
+        "companyName": "Alphabet Inc."
+      },
+      "userId": "user_2yAsw3Tz3NWUtedemupaXOhqo8L",
+      "userTier": "FREE",
+      "userEmail": "wilfred.chen.python@gmail.com",
+      "executionContext": {
+        "executionId": "cron-1766525408471-c278f4cb906d4127",
+        "sourceContext": "backlog",
+        "cronTriggerTime": "2025-12-23T21:30:54.256Z"
+      }
+    },
+    "idempotencyKey": "filing-user_2yAsw3Tz3NWUtedemupaXOhqo8L-0001193125-25-325075",
+    "createdAt": "2025-12-23T21:33:26.515Z",
+    "scheduledFor": "2025-12-23T21:33:24.914Z",
+    "startedAt": null,
+    "completedAt": null,
+    "failedAt": null,
+    "retryCount": 0,
+    "maxRetries": 3,
+    "lastError": null,
+    "executionTime": null,
+    "result": null,
+    "costUSD": null,
+    "timeoutFlagged": false,
+    "tokenUsage": null,
+    "userId": null
+  },
+  {
+    "id": "33f22ba7-b7e4-457e-90eb-391c5a31a1d0",
+    "jobType": "ASYNC_SUMMARIZE_FILING",
+    "status": "PENDING",
+    "priority": 5,
+    "payload": {
+      "filing": {
+        "filingId": "113fc6e2-15aa-4099-a555-b2c8385202fa",
+        "formType": "4",
+        "filingUrl": "https://www.sec.gov/Archives/edgar/data/1652044/000119312525325042/0001193125-25-325042-index.htm",
+        "filingDate": {},
+        "accessionNumber": "0001193125-25-325042"
+      },
+      "ticker": {
+        "cik": "0001652044",
+        "symbol": "GOOGL",
+        "companyName": "Alphabet Inc."
+      },
+      "userId": "user_2yAsw3Tz3NWUtedemupaXOhqo8L",
+      "userTier": "FREE",
+      "userEmail": "wilfred.chen.python@gmail.com",
+      "executionContext": {
+        "executionId": "cron-1766525408471-c278f4cb906d4127",
+        "sourceContext": "backlog",
+        "cronTriggerTime": "2025-12-23T21:30:55.260Z"
+      }
+    },
+    "idempotencyKey": "filing-user_2yAsw3Tz3NWUtedemupaXOhqo8L-0001193125-25-325042",
+    "createdAt": "2025-12-23T21:33:31.325Z",
+    "scheduledFor": "2025-12-23T21:33:29.723Z",
+    "startedAt": null,
+    "completedAt": null,
+    "failedAt": null,
+    "retryCount": 0,
+    "maxRetries": 3,
+    "lastError": null,
+    "executionTime": null,
+    "result": null,
+    "costUSD": null,
+    "timeoutFlagged": false,
+    "tokenUsage": null,
+    "userId": null
+  },
+  {
+    "id": "3b6d3eae-d476-4cdf-8cca-a0b65672966e",
+    "jobType": "ASYNC_SUMMARIZE_FILING",
+    "status": "PENDING",
+    "priority": 5,
+    "payload": {
+      "filing": {
+        "filingId": "b6ab76c0-c302-4333-8c3a-e6405b31702a",
+        "formType": "4",
+        "filingUrl": "https://www.sec.gov/Archives/edgar/data/1652044/000119312525323453/0001193125-25-323453-index.htm",
+        "filingDate": {},
+        "accessionNumber": "0001193125-25-323453"
+      },
+      "ticker": {
+        "cik": "0001652044",
+        "symbol": "GOOGL",
+        "companyName": "Alphabet Inc."
+      },
+      "userId": "user_2yAsw3Tz3NWUtedemupaXOhqo8L",
+      "userTier": "FREE",
+      "userEmail": "wilfred.chen.python@gmail.com",
+      "executionContext": {
+        "executionId": "cron-1766525408471-c278f4cb906d4127",
+        "sourceContext": "backlog",
+        "cronTriggerTime": "2025-12-23T21:30:56.259Z"
+      }
+    },
+    "idempotencyKey": "filing-user_2yAsw3Tz3NWUtedemupaXOhqo8L-0001193125-25-323453",
+    "createdAt": "2025-12-23T21:33:35.729Z",
+    "scheduledFor": "2025-12-23T21:33:34.729Z",
+    "startedAt": null,
+    "completedAt": null,
+    "failedAt": null,
+    "retryCount": 0,
+    "maxRetries": 3,
+    "lastError": null,
+    "executionTime": null,
+    "result": null,
+    "costUSD": null,
+    "timeoutFlagged": false,
+    "tokenUsage": null,
+    "userId": null
+  },
+  {
+    "id": "850beee0-44e5-4028-9078-b4ef7075247d",
+    "jobType": "ASYNC_SUMMARIZE_FILING",
+    "status": "PENDING",
+    "priority": 5,
+    "payload": {
+      "filing": {
+        "filingId": "27a3a862-8252-43de-a5e0-8b9ca19c720d",
+        "formType": "4",
+        "filingUrl": "https://www.sec.gov/Archives/edgar/data/1652044/000119312525323423/0001193125-25-323423-index.htm",
+        "filingDate": {},
+        "accessionNumber": "0001193125-25-323423"
+      },
+      "ticker": {
+        "cik": "0001652044",
+        "symbol": "GOOGL",
+        "companyName": "Alphabet Inc."
+      },
+      "userId": "user_2yAsw3Tz3NWUtedemupaXOhqo8L",
+      "userTier": "FREE",
+      "userEmail": "wilfred.chen.python@gmail.com",
+      "executionContext": {
+        "executionId": "cron-1766525408471-c278f4cb906d4127",
+        "sourceContext": "backlog",
+        "cronTriggerTime": "2025-12-23T21:30:57.257Z"
+      }
+    },
+    "idempotencyKey": "filing-user_2yAsw3Tz3NWUtedemupaXOhqo8L-0001193125-25-323423",
+    "createdAt": "2025-12-23T21:33:40.536Z",
+    "scheduledFor": "2025-12-23T21:33:38.932Z",
+    "startedAt": null,
+    "completedAt": null,
+    "failedAt": null,
+    "retryCount": 0,
+    "maxRetries": 3,
+    "lastError": null,
+    "executionTime": null,
+    "result": null,
+    "costUSD": null,
+    "timeoutFlagged": false,
+    "tokenUsage": null,
+    "userId": null
+  },
+  {
+    "id": "89d73a5e-95fe-4077-a939-4aa7ecfc11b0",
+    "jobType": "ASYNC_SUMMARIZE_FILING",
+    "status": "PENDING",
+    "priority": 5,
+    "payload": {
+      "filing": {
+        "filingId": "6eb10388-4abe-4c4a-97be-e154cfe5b62d",
+        "formType": "4",
+        "filingUrl": "https://www.sec.gov/Archives/edgar/data/1652044/000119312525323408/0001193125-25-323408-index.htm",
+        "filingDate": {},
+        "accessionNumber": "0001193125-25-323408"
+      },
+      "ticker": {
+        "cik": "0001652044",
+        "symbol": "GOOGL",
+        "companyName": "Alphabet Inc."
+      },
+      "userId": "user_2yAsw3Tz3NWUtedemupaXOhqo8L",
+      "userTier": "FREE",
+      "userEmail": "wilfred.chen.python@gmail.com",
+      "executionContext": {
+        "executionId": "cron-1766525408471-c278f4cb906d4127",
+        "sourceContext": "backlog",
+        "cronTriggerTime": "2025-12-23T21:30:58.256Z"
+      }
+    },
+    "idempotencyKey": "filing-user_2yAsw3Tz3NWUtedemupaXOhqo8L-0001193125-25-323408",
+    "createdAt": "2025-12-23T21:33:45.346Z",
+    "scheduledFor": "2025-12-23T21:33:43.745Z",
+    "startedAt": null,
+    "completedAt": null,
+    "failedAt": null,
+    "retryCount": 0,
+    "maxRetries": 3,
+    "lastError": null,
+    "executionTime": null,
+    "result": null,
+    "costUSD": null,
+    "timeoutFlagged": false,
+    "tokenUsage": null,
+    "userId": null
+  },
+  {
+    "id": "5e39e342-fc20-4750-a2c8-1df25b1c42ab",
+    "jobType": "ASYNC_SUMMARIZE_FILING",
+    "status": "PENDING",
+    "priority": 5,
+    "payload": {
+      "filing": {
+        "filingId": "e96a7394-1f4c-466c-afb2-2e28abcf2dc8",
+        "formType": "4",
+        "filingUrl": "https://www.sec.gov/Archives/edgar/data/1652044/000119312525323394/0001193125-25-323394-index.htm",
+        "filingDate": {},
+        "accessionNumber": "0001193125-25-323394"
+      },
+      "ticker": {
+        "cik": "0001652044",
+        "symbol": "GOOGL",
+        "companyName": "Alphabet Inc."
+      },
+      "userId": "user_2yAsw3Tz3NWUtedemupaXOhqo8L",
+      "userTier": "FREE",
+      "userEmail": "wilfred.chen.python@gmail.com",
+      "executionContext": {
+        "executionId": "cron-1766525408471-c278f4cb906d4127",
+        "sourceContext": "backlog",
+        "cronTriggerTime": "2025-12-23T21:30:59.254Z"
+      }
+    },
+    "idempotencyKey": "filing-user_2yAsw3Tz3NWUtedemupaXOhqo8L-0001193125-25-323394",
+    "createdAt": "2025-12-23T21:33:50.354Z",
+    "scheduledFor": "2025-12-23T21:33:48.553Z",
+    "startedAt": null,
+    "completedAt": null,
+    "failedAt": null,
+    "retryCount": 0,
+    "maxRetries": 3,
+    "lastError": null,
+    "executionTime": null,
+    "result": null,
+    "costUSD": null,
+    "timeoutFlagged": false,
+    "tokenUsage": null,
+    "userId": null
+  },
+  {
+    "id": "04affa4b-2dde-41f6-89c1-1ff95dcf0f95",
+    "jobType": "ASYNC_SUMMARIZE_FILING",
+    "status": "PENDING",
+    "priority": 5,
+    "payload": {
+      "filing": {
+        "filingId": "b1c55b2e-c649-4b0a-8938-1715d4034767",
+        "formType": "4",
+        "filingUrl": "https://www.sec.gov/Archives/edgar/data/1652044/000119312525323357/0001193125-25-323357-index.htm",
+        "filingDate": {},
+        "accessionNumber": "0001193125-25-323357"
+      },
+      "ticker": {
+        "cik": "0001652044",
+        "symbol": "GOOGL",
+        "companyName": "Alphabet Inc."
+      },
+      "userId": "user_2yAsw3Tz3NWUtedemupaXOhqo8L",
+      "userTier": "FREE",
+      "userEmail": "wilfred.chen.python@gmail.com",
+      "executionContext": {
+        "executionId": "cron-1766525408471-c278f4cb906d4127",
+        "sourceContext": "backlog",
+        "cronTriggerTime": "2025-12-23T21:31:00.253Z"
+      }
+    },
+    "idempotencyKey": "filing-user_2yAsw3Tz3NWUtedemupaXOhqo8L-0001193125-25-323357",
+    "createdAt": "2025-12-23T21:33:54.557Z",
+    "scheduledFor": "2025-12-23T21:33:52.955Z",
+    "startedAt": null,
+    "completedAt": null,
+    "failedAt": null,
+    "retryCount": 0,
+    "maxRetries": 3,
+    "lastError": null,
+    "executionTime": null,
+    "result": null,
+    "costUSD": null,
+    "timeoutFlagged": false,
+    "tokenUsage": null,
+    "userId": null
+  },
+  {
+    "id": "4a9c3b7b-5544-4ea6-a241-85deaf16fbb7",
+    "jobType": "ASYNC_SUMMARIZE_FILING",
+    "status": "PENDING",
+    "priority": 5,
+    "payload": {
+      "filing": {
+        "filingId": "331f32ed-e691-4c38-aaf9-5f2ceb0c011b",
+        "formType": "4",
+        "filingUrl": "https://www.sec.gov/Archives/edgar/data/1652044/000119312525323246/0001193125-25-323246-index.htm",
+        "filingDate": {},
+        "accessionNumber": "0001193125-25-323246"
+      },
+      "ticker": {
+        "cik": "0001652044",
+        "symbol": "GOOGL",
+        "companyName": "Alphabet Inc."
+      },
+      "userId": "user_2yAsw3Tz3NWUtedemupaXOhqo8L",
+      "userTier": "FREE",
+      "userEmail": "wilfred.chen.python@gmail.com",
+      "executionContext": {
+        "executionId": "cron-1766525408471-c278f4cb906d4127",
+        "sourceContext": "backlog",
+        "cronTriggerTime": "2025-12-23T21:31:01.253Z"
+      }
+    },
+    "idempotencyKey": "filing-user_2yAsw3Tz3NWUtedemupaXOhqo8L-0001193125-25-323246",
+    "createdAt": "2025-12-23T21:33:59.360Z",
+    "scheduledFor": "2025-12-23T21:33:57.759Z",
+    "startedAt": null,
+    "completedAt": null,
+    "failedAt": null,
+    "retryCount": 0,
+    "maxRetries": 3,
+    "lastError": null,
+    "executionTime": null,
+    "result": null,
+    "costUSD": null,
+    "timeoutFlagged": false,
+    "tokenUsage": null,
+    "userId": null
+  },
+  {
+    "id": "faf97741-703a-4532-ab6b-c1d836a95cd9",
+    "jobType": "ASYNC_SUMMARIZE_FILING",
+    "status": "PENDING",
+    "priority": 7,
+    "payload": {
+      "filing": {
+        "filingId": "bbe68e81-f2bd-48a7-b65e-677643390acc",
+        "formType": "4",
+        "filingUrl": "https://www.sec.gov/Archives/edgar/data/1045810/000119765025000009/0001197650-25-000009-index.htm",
+        "filingDate": {},
+        "accessionNumber": "0001197650-25-000009"
+      },
+      "ticker": {
+        "cik": "0001045810",
+        "symbol": "NVDA",
+        "companyName": "NVIDIA Corporation"
+      },
+      "userId": "2009de85-4eb6-4f18-9c01-ee212c5d43d4",
+      "userTier": "HOBBY",
+      "userEmail": "wilfredchen1@gmail.com",
+      "executionContext": {
+        "executionId": "cron-1766525408471-c278f4cb906d4127",
+        "sourceContext": "backlog",
+        "cronTriggerTime": "2025-12-23T21:31:02.251Z"
+      }
+    },
+    "idempotencyKey": "filing-2009de85-4eb6-4f18-9c01-ee212c5d43d4-0001197650-25-000009",
+    "createdAt": "2025-12-23T21:34:04.167Z",
+    "scheduledFor": "2025-12-23T21:34:02.565Z",
+    "startedAt": null,
+    "completedAt": null,
+    "failedAt": null,
+    "retryCount": 0,
+    "maxRetries": 3,
+    "lastError": null,
+    "executionTime": null,
+    "result": null,
+    "costUSD": null,
+    "timeoutFlagged": false,
+    "tokenUsage": null,
+    "userId": null
+  },
+  {
+    "id": "a0377df8-fdf7-4705-bba0-db0b5431aaeb",
+    "jobType": "ASYNC_SUMMARIZE_FILING",
+    "status": "PENDING",
+    "priority": 5,
+    "payload": {
+      "filing": {
+        "filingId": "bbe68e81-f2bd-48a7-b65e-677643390acc",
+        "formType": "4",
+        "filingUrl": "https://www.sec.gov/Archives/edgar/data/1045810/000119765025000009/0001197650-25-000009-index.htm",
+        "filingDate": {},
+        "accessionNumber": "0001197650-25-000009"
+      },
+      "ticker": {
+        "cik": "0001045810",
+        "symbol": "NVDA",
+        "companyName": "NVIDIA Corporation"
+      },
+      "userId": "user_2yAsw3Tz3NWUtedemupaXOhqo8L",
+      "userTier": "FREE",
+      "userEmail": "wilfred.chen.python@gmail.com",
+      "executionContext": {
+        "executionId": "cron-1766525408471-c278f4cb906d4127",
+        "sourceContext": "backlog",
+        "cronTriggerTime": "2025-12-23T21:31:02.251Z"
+      }
+    },
+    "idempotencyKey": "filing-user_2yAsw3Tz3NWUtedemupaXOhqo8L-0001197650-25-000009",
+    "createdAt": "2025-12-23T21:34:11.592Z",
+    "scheduledFor": "2025-12-23T21:34:09.191Z",
+    "startedAt": null,
+    "completedAt": null,
+    "failedAt": null,
+    "retryCount": 0,
+    "maxRetries": 3,
+    "lastError": null,
+    "executionTime": null,
+    "result": null,
+    "costUSD": null,
+    "timeoutFlagged": false,
+    "tokenUsage": null,
+    "userId": null
+  },
+  {
+    "id": "a0fdce6c-5f65-46b0-9852-b2014f114420",
+    "jobType": "ASYNC_SUMMARIZE_FILING",
+    "status": "PENDING",
+    "priority": 7,
+    "payload": {
+      "filing": {
+        "filingId": "a60809ab-6df1-4598-9bb8-8ca8583c234e",
+        "formType": "4",
+        "filingUrl": "https://www.sec.gov/Archives/edgar/data/1679788/000167978825000249/0001679788-25-000249-index.htm",
+        "filingDate": {},
+        "accessionNumber": "0001679788-25-000249"
+      },
+      "ticker": {
+        "cik": "0001679788",
+        "symbol": "COIN",
+        "companyName": "Coinbase Global, Inc."
+      },
+      "userId": "2009de85-4eb6-4f18-9c01-ee212c5d43d4",
+      "userTier": "HOBBY",
+      "userEmail": "wilfredchen1@gmail.com",
+      "executionContext": {
+        "executionId": "cron-1766525408471-c278f4cb906d4127",
+        "sourceContext": "backlog",
+        "cronTriggerTime": "2025-12-23T21:32:43.071Z"
+      }
+    },
+    "idempotencyKey": "filing-2009de85-4eb6-4f18-9c01-ee212c5d43d4-0001679788-25-000249",
+    "createdAt": "2025-12-23T21:34:15.614Z",
+    "scheduledFor": "2025-12-23T21:34:13.206Z",
+    "startedAt": null,
+    "completedAt": null,
+    "failedAt": null,
+    "retryCount": 0,
+    "maxRetries": 3,
+    "lastError": null,
+    "executionTime": null,
+    "result": null,
+    "costUSD": null,
+    "timeoutFlagged": false,
+    "tokenUsage": null,
+    "userId": null
+  },
+  {
+    "id": "34fc576a-09a4-448d-a55d-fa8cc7666d77",
+    "jobType": "ASYNC_SUMMARIZE_FILING",
+    "status": "PENDING",
+    "priority": 7,
+    "payload": {
+      "filing": {
+        "filingId": "0b563753-d356-4fed-9042-6fabdce2e0ad",
+        "formType": "4",
+        "filingUrl": "https://www.sec.gov/Archives/edgar/data/1679788/000166871125000011/0001668711-25-000011-index.htm",
+        "filingDate": {},
+        "accessionNumber": "0001668711-25-000011"
+      },
+      "ticker": {
+        "cik": "0001679788",
+        "symbol": "COIN",
+        "companyName": "Coinbase Global, Inc."
+      },
+      "userId": "2009de85-4eb6-4f18-9c01-ee212c5d43d4",
+      "userTier": "HOBBY",
+      "userEmail": "wilfredchen1@gmail.com",
+      "executionContext": {
+        "executionId": "cron-1766525408471-c278f4cb906d4127",
+        "sourceContext": "backlog",
+        "cronTriggerTime": "2025-12-23T21:31:03.250Z"
+      }
+    },
+    "idempotencyKey": "filing-2009de85-4eb6-4f18-9c01-ee212c5d43d4-0001668711-25-000011",
+    "createdAt": "2025-12-23T21:34:18.819Z",
+    "scheduledFor": "2025-12-23T21:34:16.414Z",
+    "startedAt": null,
+    "completedAt": null,
+    "failedAt": null,
+    "retryCount": 0,
+    "maxRetries": 3,
+    "lastError": null,
+    "executionTime": null,
+    "result": null,
+    "costUSD": null,
+    "timeoutFlagged": false,
+    "tokenUsage": null,
+    "userId": null
+  },
+  {
+    "id": "8fcb71ab-dd5f-4204-a1e4-beddb1901eca",
+    "jobType": "ASYNC_SUMMARIZE_FILING",
+    "status": "PENDING",
+    "priority": 5,
+    "payload": {
+      "filing": {
+        "filingId": "a60809ab-6df1-4598-9bb8-8ca8583c234e",
+        "formType": "4",
+        "filingUrl": "https://www.sec.gov/Archives/edgar/data/1679788/000167978825000249/0001679788-25-000249-index.htm",
+        "filingDate": {},
+        "accessionNumber": "0001679788-25-000249"
+      },
+      "ticker": {
+        "cik": "0001679788",
+        "symbol": "COIN",
+        "companyName": "Coinbase Global, Inc."
+      },
+      "userId": "user_2yAsw3Tz3NWUtedemupaXOhqo8L",
+      "userTier": "FREE",
+      "userEmail": "wilfred.chen.python@gmail.com",
+      "executionContext": {
+        "executionId": "cron-1766525408471-c278f4cb906d4127",
+        "sourceContext": "backlog",
+        "cronTriggerTime": "2025-12-23T21:32:43.071Z"
+      }
+    },
+    "idempotencyKey": "filing-user_2yAsw3Tz3NWUtedemupaXOhqo8L-0001679788-25-000249",
+    "createdAt": "2025-12-23T21:34:22.025Z",
+    "scheduledFor": "2025-12-23T21:34:20.422Z",
+    "startedAt": null,
+    "completedAt": null,
+    "failedAt": null,
+    "retryCount": 0,
+    "maxRetries": 3,
+    "lastError": null,
+    "executionTime": null,
+    "result": null,
+    "costUSD": null,
+    "timeoutFlagged": false,
+    "tokenUsage": null,
+    "userId": null
+  },
+  {
+    "id": "e1f03792-dcfd-441c-a49b-7ed5016f5944",
+    "jobType": "ASYNC_SUMMARIZE_FILING",
+    "status": "PENDING",
+    "priority": 5,
+    "payload": {
+      "filing": {
+        "filingId": "0b563753-d356-4fed-9042-6fabdce2e0ad",
+        "formType": "4",
+        "filingUrl": "https://www.sec.gov/Archives/edgar/data/1679788/000166871125000011/0001668711-25-000011-index.htm",
+        "filingDate": {},
+        "accessionNumber": "0001668711-25-000011"
+      },
+      "ticker": {
+        "cik": "0001679788",
+        "symbol": "COIN",
+        "companyName": "Coinbase Global, Inc."
+      },
+      "userId": "user_2yAsw3Tz3NWUtedemupaXOhqo8L",
+      "userTier": "FREE",
+      "userEmail": "wilfred.chen.python@gmail.com",
+      "executionContext": {
+        "executionId": "cron-1766525408471-c278f4cb906d4127",
+        "sourceContext": "backlog",
+        "cronTriggerTime": "2025-12-23T21:31:03.250Z"
+      }
+    },
+    "idempotencyKey": "filing-user_2yAsw3Tz3NWUtedemupaXOhqo8L-0001668711-25-000011",
+    "createdAt": "2025-12-23T21:34:24.426Z",
+    "scheduledFor": "2025-12-23T21:34:22.825Z",
+    "startedAt": null,
+    "completedAt": null,
+    "failedAt": null,
+    "retryCount": 0,
+    "maxRetries": 3,
+    "lastError": null,
+    "executionTime": null,
+    "result": null,
+    "costUSD": null,
+    "timeoutFlagged": false,
+    "tokenUsage": null,
+    "userId": null
+  },
+  {
+    "id": "356cec42-cb57-4d08-a56b-ef08e1ccc9b7",
+    "jobType": "ASYNC_SUMMARIZE_FILING",
+    "status": "PENDING",
+    "priority": 7,
+    "payload": {
+      "filing": {
+        "filingId": "a38bc8be-a8bb-4640-a98c-9605d0e71fa6",
+        "formType": "4",
+        "filingUrl": "https://www.sec.gov/Archives/edgar/data/1674101/000095014225003260/0000950142-25-003260-index.htm",
+        "filingDate": {},
+        "accessionNumber": "0000950142-25-003260"
+      },
+      "ticker": {
+        "cik": "0001674101",
+        "symbol": "VRT",
+        "companyName": "Vertiv Holdings Co"
+      },
+      "userId": "2009de85-4eb6-4f18-9c01-ee212c5d43d4",
+      "userTier": "HOBBY",
+      "userEmail": "wilfredchen1@gmail.com",
+      "executionContext": {
+        "executionId": "cron-1766525408471-c278f4cb906d4127",
+        "sourceContext": "backlog",
+        "cronTriggerTime": "2025-12-23T21:32:45.678Z"
+      }
+    },
+    "idempotencyKey": "filing-2009de85-4eb6-4f18-9c01-ee212c5d43d4-0000950142-25-003260",
+    "createdAt": "2025-12-23T21:34:27.029Z",
+    "scheduledFor": "2025-12-23T21:34:25.428Z",
+    "startedAt": null,
+    "completedAt": null,
+    "failedAt": null,
+    "retryCount": 0,
+    "maxRetries": 3,
+    "lastError": null,
+    "executionTime": null,
+    "result": null,
+    "costUSD": null,
+    "timeoutFlagged": false,
+    "tokenUsage": null,
+    "userId": null
+  },
+  {
+    "id": "bd1e3741-4679-4f21-8171-3039e6b6bbc1",
+    "jobType": "ASYNC_SUMMARIZE_FILING",
+    "status": "PENDING",
+    "priority": 5,
+    "payload": {
+      "filing": {
+        "filingId": "89486564-533f-4554-b5e4-cccca24db122",
+        "formType": "144",
+        "filingUrl": "https://www.sec.gov/Archives/edgar/data/1652044/000195004725010456/0001950047-25-010456-index.htm",
+        "filingDate": {},
+        "accessionNumber": "0001950047-25-010456"
+      },
+      "ticker": {
+        "cik": "0001652044",
+        "symbol": "GOOGL",
+        "companyName": "Alphabet Inc."
+      },
+      "userId": "user_2yAsw3Tz3NWUtedemupaXOhqo8L",
+      "userTier": "FREE",
+      "userEmail": "wilfred.chen.python@gmail.com",
+      "executionContext": {
+        "executionId": "cron-1766525408471-c278f4cb906d4127",
+        "sourceContext": "backlog",
+        "cronTriggerTime": "2025-12-23T21:31:04.248Z"
+      }
+    },
+    "idempotencyKey": "filing-user_2yAsw3Tz3NWUtedemupaXOhqo8L-0001950047-25-010456",
+    "createdAt": "2025-12-23T21:34:29.430Z",
+    "scheduledFor": "2025-12-23T21:34:27.828Z",
+    "startedAt": null,
+    "completedAt": null,
+    "failedAt": null,
+    "retryCount": 0,
+    "maxRetries": 3,
+    "lastError": null,
+    "executionTime": null,
+    "result": null,
+    "costUSD": null,
+    "timeoutFlagged": false,
+    "tokenUsage": null,
+    "userId": null
+  },
+  {
+    "id": "e156e590-d4dd-41b5-994a-91110cdb66c7",
+    "jobType": "ASYNC_SUMMARIZE_FILING",
+    "status": "PENDING",
+    "priority": 5,
+    "payload": {
+      "filing": {
+        "filingId": "a38bc8be-a8bb-4640-a98c-9605d0e71fa6",
+        "formType": "4",
+        "filingUrl": "https://www.sec.gov/Archives/edgar/data/1674101/000095014225003260/0000950142-25-003260-index.htm",
+        "filingDate": {},
+        "accessionNumber": "0000950142-25-003260"
+      },
+      "ticker": {
+        "cik": "0001674101",
+        "symbol": "VRT",
+        "companyName": "Vertiv Holdings Co"
+      },
+      "userId": "user_2yAsw3Tz3NWUtedemupaXOhqo8L",
+      "userTier": "FREE",
+      "userEmail": "wilfred.chen.python@gmail.com",
+      "executionContext": {
+        "executionId": "cron-1766525408471-c278f4cb906d4127",
+        "sourceContext": "backlog",
+        "cronTriggerTime": "2025-12-23T21:32:45.678Z"
+      }
+    },
+    "idempotencyKey": "filing-user_2yAsw3Tz3NWUtedemupaXOhqo8L-0000950142-25-003260",
+    "createdAt": "2025-12-23T21:34:31.836Z",
+    "scheduledFor": "2025-12-23T21:34:30.234Z",
+    "startedAt": null,
+    "completedAt": null,
+    "failedAt": null,
+    "retryCount": 0,
+    "maxRetries": 3,
+    "lastError": null,
+    "executionTime": null,
+    "result": null,
+    "costUSD": null,
+    "timeoutFlagged": false,
+    "tokenUsage": null,
+    "userId": null
+  },
+  {
+    "id": "90e20bd1-8d94-45cd-bceb-aee683b863e3",
+    "jobType": "ASYNC_SUMMARIZE_FILING",
+    "status": "PENDING",
+    "priority": 5,
+    "payload": {
+      "filing": {
+        "filingId": "7ecfd834-e4f3-4848-ae09-b51dfa4a74c6",
+        "formType": "144",
+        "filingUrl": "https://www.sec.gov/Archives/edgar/data/1652044/000195004725010455/0001950047-25-010455-index.htm",
+        "filingDate": {},
+        "accessionNumber": "0001950047-25-010455"
+      },
+      "ticker": {
+        "cik": "0001652044",
+        "symbol": "GOOGL",
+        "companyName": "Alphabet Inc."
+      },
+      "userId": "user_2yAsw3Tz3NWUtedemupaXOhqo8L",
+      "userTier": "FREE",
+      "userEmail": "wilfred.chen.python@gmail.com",
+      "executionContext": {
+        "executionId": "cron-1766525408471-c278f4cb906d4127",
+        "sourceContext": "backlog",
+        "cronTriggerTime": "2025-12-23T21:31:05.247Z"
+      }
+    },
+    "idempotencyKey": "filing-user_2yAsw3Tz3NWUtedemupaXOhqo8L-0001950047-25-010455",
+    "createdAt": "2025-12-23T21:34:34.237Z",
+    "scheduledFor": "2025-12-23T21:34:32.636Z",
+    "startedAt": null,
+    "completedAt": null,
+    "failedAt": null,
+    "retryCount": 0,
+    "maxRetries": 3,
+    "lastError": null,
+    "executionTime": null,
+    "result": null,
+    "costUSD": null,
+    "timeoutFlagged": false,
+    "tokenUsage": null,
+    "userId": null
+  },
+  {
+    "id": "191c6a29-12b2-46ac-9ac6-279e1677c921",
+    "jobType": "ASYNC_SUMMARIZE_FILING",
+    "status": "PENDING",
+    "priority": 7,
+    "payload": {
+      "filing": {
+        "filingId": "fbdf6bd0-1604-4731-82de-23776321f5a8",
+        "formType": "4",
+        "filingUrl": "https://www.sec.gov/Archives/edgar/data/1045810/000119903925000015/0001199039-25-000015-index.htm",
+        "filingDate": {},
+        "accessionNumber": "0001199039-25-000015"
+      },
+      "ticker": {
+        "cik": "0001045810",
+        "symbol": "NVDA",
+        "companyName": "NVIDIA Corporation"
+      },
+      "userId": "2009de85-4eb6-4f18-9c01-ee212c5d43d4",
+      "userTier": "HOBBY",
+      "userEmail": "wilfredchen1@gmail.com",
+      "executionContext": {
+        "executionId": "cron-1766525408471-c278f4cb906d4127",
+        "sourceContext": "backlog",
+        "cronTriggerTime": "2025-12-23T21:32:47.284Z"
+      }
+    },
+    "idempotencyKey": "filing-2009de85-4eb6-4f18-9c01-ee212c5d43d4-0001199039-25-000015",
+    "createdAt": "2025-12-23T21:34:37.456Z",
+    "scheduledFor": "2025-12-23T21:34:35.040Z",
+    "startedAt": null,
+    "completedAt": null,
+    "failedAt": null,
+    "retryCount": 0,
+    "maxRetries": 3,
+    "lastError": null,
+    "executionTime": null,
+    "result": null,
+    "costUSD": null,
+    "timeoutFlagged": false,
+    "tokenUsage": null,
+    "userId": null
+  },
+  {
+    "id": "041c08d8-b8ae-420d-b2c6-2aa41f0a11da",
+    "jobType": "ASYNC_SUMMARIZE_FILING",
+    "status": "PENDING",
+    "priority": 5,
+    "payload": {
+      "filing": {
+        "filingId": "ce968dc9-ba0b-499c-9ea3-7823dab10db0",
+        "formType": "4",
+        "filingUrl": "",
+        "filingDate": {},
+        "accessionNumber": "0001193125-25-323314"
+      },
+      "ticker": {
+        "cik": "0001652044",
+        "symbol": "GOOGL",
+        "companyName": "Alphabet Inc."
+      },
+      "userId": "user_2yAsw3Tz3NWUtedemupaXOhqo8L",
+      "userTier": "FREE",
+      "userEmail": "wilfred.chen.python@gmail.com",
+      "executionContext": {
+        "executionId": "cron-1766525408471-c278f4cb906d4127",
+        "sourceContext": "backlog",
+        "cronTriggerTime": "2025-12-23T21:31:06.445Z"
+      }
+    },
+    "idempotencyKey": "filing-user_2yAsw3Tz3NWUtedemupaXOhqo8L-0001193125-25-323314",
+    "createdAt": "2025-12-23T21:34:41.477Z",
+    "scheduledFor": "2025-12-23T21:34:39.064Z",
+    "startedAt": null,
+    "completedAt": null,
+    "failedAt": null,
+    "retryCount": 0,
+    "maxRetries": 3,
+    "lastError": null,
+    "executionTime": null,
+    "result": null,
+    "costUSD": null,
+    "timeoutFlagged": false,
+    "tokenUsage": null,
+    "userId": null
+  },
+  {
+    "id": "3feebe88-4262-4830-9d7c-a528a8399183",
+    "jobType": "ASYNC_SUMMARIZE_FILING",
+    "status": "PENDING",
+    "priority": 5,
+    "payload": {
+      "filing": {
+        "filingId": "fbdf6bd0-1604-4731-82de-23776321f5a8",
+        "formType": "4",
+        "filingUrl": "https://www.sec.gov/Archives/edgar/data/1045810/000119903925000015/0001199039-25-000015-index.htm",
+        "filingDate": {},
+        "accessionNumber": "0001199039-25-000015"
+      },
+      "ticker": {
+        "cik": "0001045810",
+        "symbol": "NVDA",
+        "companyName": "NVIDIA Corporation"
+      },
+      "userId": "user_2yAsw3Tz3NWUtedemupaXOhqo8L",
+      "userTier": "FREE",
+      "userEmail": "wilfred.chen.python@gmail.com",
+      "executionContext": {
+        "executionId": "cron-1766525408471-c278f4cb906d4127",
+        "sourceContext": "backlog",
+        "cronTriggerTime": "2025-12-23T21:32:47.284Z"
+      }
+    },
+    "idempotencyKey": "filing-user_2yAsw3Tz3NWUtedemupaXOhqo8L-0001199039-25-000015",
+    "createdAt": "2025-12-23T21:34:45.360Z",
+    "scheduledFor": "2025-12-23T21:34:43.145Z",
+    "startedAt": null,
+    "completedAt": null,
+    "failedAt": null,
+    "retryCount": 0,
+    "maxRetries": 3,
+    "lastError": null,
+    "executionTime": null,
+    "result": null,
+    "costUSD": null,
+    "timeoutFlagged": false,
+    "tokenUsage": null,
+    "userId": null
+  },
+  {
+    "id": "09d9842a-8b0b-4ef7-a585-3fe48f132c9b",
+    "jobType": "ASYNC_SUMMARIZE_FILING",
+    "status": "PENDING",
+    "priority": 7,
+    "payload": {
+      "filing": {
+        "filingId": "e9d38099-3ff5-49a3-a7c3-ec017e63c5bb",
+        "formType": "8-K",
+        "filingUrl": "https://www.sec.gov/Archives/edgar/data/1679788/000167978825000247/0001679788-25-000247-index.htm",
+        "filingDate": {},
+        "accessionNumber": "0001679788-25-000247"
+      },
+      "ticker": {
+        "cik": "0001679788",
+        "symbol": "COIN",
+        "companyName": "Coinbase Global, Inc."
+      },
+      "userId": "2009de85-4eb6-4f18-9c01-ee212c5d43d4",
+      "userTier": "HOBBY",
+      "userEmail": "wilfredchen1@gmail.com",
+      "executionContext": {
+        "executionId": "cron-1766525408471-c278f4cb906d4127",
+        "sourceContext": "backlog",
+        "cronTriggerTime": "2025-12-23T21:31:07.444Z"
+      }
+    },
+    "idempotencyKey": "filing-2009de85-4eb6-4f18-9c01-ee212c5d43d4-0001679788-25-000247",
+    "createdAt": "2025-12-23T21:34:48.573Z",
+    "scheduledFor": "2025-12-23T21:34:46.164Z",
+    "startedAt": null,
+    "completedAt": null,
+    "failedAt": null,
+    "retryCount": 0,
+    "maxRetries": 3,
+    "lastError": null,
+    "executionTime": null,
+    "result": null,
+    "costUSD": null,
+    "timeoutFlagged": false,
+    "tokenUsage": null,
+    "userId": null
+  },
+  {
+    "id": "f3e160dd-e38d-4838-a05f-ff2c316d7542",
+    "jobType": "ASYNC_SUMMARIZE_FILING",
+    "status": "PENDING",
+    "priority": 7,
+    "payload": {
+      "filing": {
+        "filingId": "d5d43076-db27-4cc0-acec-71dd90583053",
+        "formType": "4",
+        "filingUrl": "https://www.sec.gov/Archives/edgar/data/1045810/000152611125000011/0001526111-25-000011-index.htm",
+        "filingDate": {},
+        "accessionNumber": "0001526111-25-000011"
+      },
+      "ticker": {
+        "cik": "0001045810",
+        "symbol": "NVDA",
+        "companyName": "NVIDIA Corporation"
+      },
+      "userId": "2009de85-4eb6-4f18-9c01-ee212c5d43d4",
+      "userTier": "HOBBY",
+      "userEmail": "wilfredchen1@gmail.com",
+      "executionContext": {
+        "executionId": "cron-1766525408471-c278f4cb906d4127",
+        "sourceContext": "backlog",
+        "cronTriggerTime": "2025-12-23T21:32:48.886Z"
+      }
+    },
+    "idempotencyKey": "filing-2009de85-4eb6-4f18-9c01-ee212c5d43d4-0001526111-25-000011",
+    "createdAt": "2025-12-23T21:34:51.581Z",
+    "scheduledFor": "2025-12-23T21:34:49.979Z",
+    "startedAt": null,
+    "completedAt": null,
+    "failedAt": null,
+    "retryCount": 0,
+    "maxRetries": 3,
+    "lastError": null,
+    "executionTime": null,
+    "result": null,
+    "costUSD": null,
+    "timeoutFlagged": false,
+    "tokenUsage": null,
+    "userId": null
+  },
+  {
+    "id": "5747582d-2a0a-4700-8e23-ce669923ed38",
+    "jobType": "ASYNC_SUMMARIZE_FILING",
+    "status": "PENDING",
+    "priority": 5,
+    "payload": {
+      "filing": {
+        "filingId": "e9d38099-3ff5-49a3-a7c3-ec017e63c5bb",
+        "formType": "8-K",
+        "filingUrl": "https://www.sec.gov/Archives/edgar/data/1679788/000167978825000247/0001679788-25-000247-index.htm",
+        "filingDate": {},
+        "accessionNumber": "0001679788-25-000247"
+      },
+      "ticker": {
+        "cik": "0001679788",
+        "symbol": "COIN",
+        "companyName": "Coinbase Global, Inc."
+      },
+      "userId": "user_2yAsw3Tz3NWUtedemupaXOhqo8L",
+      "userTier": "FREE",
+      "userEmail": "wilfred.chen.python@gmail.com",
+      "executionContext": {
+        "executionId": "cron-1766525408471-c278f4cb906d4127",
+        "sourceContext": "backlog",
+        "cronTriggerTime": "2025-12-23T21:31:07.444Z"
+      }
+    },
+    "idempotencyKey": "filing-user_2yAsw3Tz3NWUtedemupaXOhqo8L-0001679788-25-000247",
+    "createdAt": "2025-12-23T21:34:54.791Z",
+    "scheduledFor": "2025-12-23T21:34:52.383Z",
+    "startedAt": null,
+    "completedAt": null,
+    "failedAt": null,
+    "retryCount": 0,
+    "maxRetries": 3,
+    "lastError": null,
+    "executionTime": null,
+    "result": null,
+    "costUSD": null,
+    "timeoutFlagged": false,
+    "tokenUsage": null,
+    "userId": null
+  },
+  {
+    "id": "673a743a-6a81-4aef-bcf7-d2aad59370b5",
+    "jobType": "ASYNC_SUMMARIZE_FILING",
+    "status": "PENDING",
+    "priority": 5,
+    "payload": {
+      "filing": {
+        "filingId": "d5d43076-db27-4cc0-acec-71dd90583053",
+        "formType": "4",
+        "filingUrl": "https://www.sec.gov/Archives/edgar/data/1045810/000152611125000011/0001526111-25-000011-index.htm",
+        "filingDate": {},
+        "accessionNumber": "0001526111-25-000011"
+      },
+      "ticker": {
+        "cik": "0001045810",
+        "symbol": "NVDA",
+        "companyName": "NVIDIA Corporation"
+      },
+      "userId": "user_2yAsw3Tz3NWUtedemupaXOhqo8L",
+      "userTier": "FREE",
+      "userEmail": "wilfred.chen.python@gmail.com",
+      "executionContext": {
+        "executionId": "cron-1766525408471-c278f4cb906d4127",
+        "sourceContext": "backlog",
+        "cronTriggerTime": "2025-12-23T21:32:48.886Z"
+      }
+    },
+    "idempotencyKey": "filing-user_2yAsw3Tz3NWUtedemupaXOhqo8L-0001526111-25-000011",
+    "createdAt": "2025-12-23T21:34:57.800Z",
+    "scheduledFor": "2025-12-23T21:34:55.593Z",
+    "startedAt": null,
+    "completedAt": null,
+    "failedAt": null,
+    "retryCount": 0,
+    "maxRetries": 3,
+    "lastError": null,
+    "executionTime": null,
+    "result": null,
+    "costUSD": null,
+    "timeoutFlagged": false,
+    "tokenUsage": null,
+    "userId": null
+  },
+  {
+    "id": "4eecd80f-4aa4-4e48-98ce-fba989b7c8ca",
+    "jobType": "ASYNC_SUMMARIZE_FILING",
+    "status": "PENDING",
+    "priority": 7,
+    "payload": {
+      "filing": {
+        "filingId": "4cc423d3-29dc-46a9-a98e-0651176542fd",
+        "formType": "144",
+        "filingUrl": "https://www.sec.gov/Archives/edgar/data/1045810/000162828025057153/0001628280-25-057153-index.htm",
+        "filingDate": {},
+        "accessionNumber": "0001628280-25-057153"
+      },
+      "ticker": {
+        "cik": "0001045810",
+        "symbol": "NVDA",
+        "companyName": "NVIDIA Corporation"
+      },
+      "userId": "2009de85-4eb6-4f18-9c01-ee212c5d43d4",
+      "userTier": "HOBBY",
+      "userEmail": "wilfredchen1@gmail.com",
+      "executionContext": {
+        "executionId": "cron-1766525408471-c278f4cb906d4127",
+        "sourceContext": "backlog",
+        "cronTriggerTime": "2025-12-23T21:31:08.443Z"
+      }
+    },
+    "idempotencyKey": "filing-2009de85-4eb6-4f18-9c01-ee212c5d43d4-0001628280-25-057153",
+    "createdAt": "2025-12-23T21:35:01.399Z",
+    "scheduledFor": "2025-12-23T21:34:58.601Z",
+    "startedAt": null,
+    "completedAt": null,
+    "failedAt": null,
+    "retryCount": 0,
+    "maxRetries": 3,
+    "lastError": null,
+    "executionTime": null,
+    "result": null,
+    "costUSD": null,
+    "timeoutFlagged": false,
+    "tokenUsage": null,
+    "userId": null
+  },
+  {
+    "id": "70637f1f-a272-452a-837a-30a5e262aa04",
+    "jobType": "ASYNC_SUMMARIZE_FILING",
+    "status": "PENDING",
+    "priority": 7,
+    "payload": {
+      "filing": {
+        "filingId": "e1f91671-6d80-4a6a-b291-b79db854e07a",
+        "formType": "144",
+        "filingUrl": "https://www.sec.gov/Archives/edgar/data/1679788/000195824425004569/0001958244-25-004569-index.htm",
+        "filingDate": {},
+        "accessionNumber": "0001958244-25-004569"
+      },
+      "ticker": {
+        "cik": "0001679788",
+        "symbol": "COIN",
+        "companyName": "Coinbase Global, Inc."
+      },
+      "userId": "2009de85-4eb6-4f18-9c01-ee212c5d43d4",
+      "userTier": "HOBBY",
+      "userEmail": "wilfredchen1@gmail.com",
+      "executionContext": {
+        "executionId": "cron-1766525408471-c278f4cb906d4127",
+        "sourceContext": "backlog",
+        "cronTriggerTime": "2025-12-23T21:32:50.489Z"
+      }
+    },
+    "idempotencyKey": "filing-2009de85-4eb6-4f18-9c01-ee212c5d43d4-0001958244-25-004569",
+    "createdAt": "2025-12-23T21:35:04.610Z",
+    "scheduledFor": "2025-12-23T21:35:02.202Z",
+    "startedAt": null,
+    "completedAt": null,
+    "failedAt": null,
+    "retryCount": 0,
+    "maxRetries": 3,
+    "lastError": null,
+    "executionTime": null,
+    "result": null,
+    "costUSD": null,
+    "timeoutFlagged": false,
+    "tokenUsage": null,
+    "userId": null
+  },
+  {
+    "id": "233a5bb1-5609-4255-aa46-30ebd2ac864d",
+    "jobType": "ASYNC_SUMMARIZE_FILING",
+    "status": "PENDING",
+    "priority": 5,
+    "payload": {
+      "filing": {
+        "filingId": "4cc423d3-29dc-46a9-a98e-0651176542fd",
+        "formType": "144",
+        "filingUrl": "https://www.sec.gov/Archives/edgar/data/1045810/000162828025057153/0001628280-25-057153-index.htm",
+        "filingDate": {},
+        "accessionNumber": "0001628280-25-057153"
+      },
+      "ticker": {
+        "cik": "0001045810",
+        "symbol": "NVDA",
+        "companyName": "NVIDIA Corporation"
+      },
+      "userId": "user_2yAsw3Tz3NWUtedemupaXOhqo8L",
+      "userTier": "FREE",
+      "userEmail": "wilfred.chen.python@gmail.com",
+      "executionContext": {
+        "executionId": "cron-1766525408471-c278f4cb906d4127",
+        "sourceContext": "backlog",
+        "cronTriggerTime": "2025-12-23T21:31:08.443Z"
+      }
+    },
+    "idempotencyKey": "filing-user_2yAsw3Tz3NWUtedemupaXOhqo8L-0001628280-25-057153",
+    "createdAt": "2025-12-23T21:35:07.814Z",
+    "scheduledFor": "2025-12-23T21:35:05.410Z",
+    "startedAt": null,
+    "completedAt": null,
+    "failedAt": null,
+    "retryCount": 0,
+    "maxRetries": 3,
+    "lastError": null,
+    "executionTime": null,
+    "result": null,
+    "costUSD": null,
+    "timeoutFlagged": false,
+    "tokenUsage": null,
+    "userId": null
+  },
+  {
+    "id": "531e8b8c-0555-4c90-9330-dc29fc7ad43e",
+    "jobType": "ASYNC_SUMMARIZE_FILING",
+    "status": "PENDING",
+    "priority": 5,
+    "payload": {
+      "filing": {
+        "filingId": "e1f91671-6d80-4a6a-b291-b79db854e07a",
+        "formType": "144",
+        "filingUrl": "https://www.sec.gov/Archives/edgar/data/1679788/000195824425004569/0001958244-25-004569-index.htm",
+        "filingDate": {},
+        "accessionNumber": "0001958244-25-004569"
+      },
+      "ticker": {
+        "cik": "0001679788",
+        "symbol": "COIN",
+        "companyName": "Coinbase Global, Inc."
+      },
+      "userId": "user_2yAsw3Tz3NWUtedemupaXOhqo8L",
+      "userTier": "FREE",
+      "userEmail": "wilfred.chen.python@gmail.com",
+      "executionContext": {
+        "executionId": "cron-1766525408471-c278f4cb906d4127",
+        "sourceContext": "backlog",
+        "cronTriggerTime": "2025-12-23T21:32:50.489Z"
+      }
+    },
+    "idempotencyKey": "filing-user_2yAsw3Tz3NWUtedemupaXOhqo8L-0001958244-25-004569",
+    "createdAt": "2025-12-23T21:35:11.016Z",
+    "scheduledFor": "2025-12-23T21:35:08.616Z",
+    "startedAt": null,
+    "completedAt": null,
+    "failedAt": null,
+    "retryCount": 0,
+    "maxRetries": 3,
+    "lastError": null,
+    "executionTime": null,
+    "result": null,
+    "costUSD": null,
+    "timeoutFlagged": false,
+    "tokenUsage": null,
+    "userId": null
+  },
+  {
+    "id": "fe37e342-fa69-496b-8478-52539be6d9ce",
+    "jobType": "ASYNC_SUMMARIZE_FILING",
+    "status": "PENDING",
+    "priority": 7,
+    "payload": {
+      "filing": {
+        "filingId": "f562ecd0-dfe8-433b-b1e2-f6d88647c702",
+        "formType": "4",
+        "filingUrl": "https://www.sec.gov/Archives/edgar/data/1679788/000185144225000003/0001851442-25-000003-index.htm",
+        "filingDate": {},
+        "accessionNumber": "0001851442-25-000003"
+      },
+      "ticker": {
+        "cik": "0001679788",
+        "symbol": "COIN",
+        "companyName": "Coinbase Global, Inc."
+      },
+      "userId": "2009de85-4eb6-4f18-9c01-ee212c5d43d4",
+      "userTier": "HOBBY",
+      "userEmail": "wilfredchen1@gmail.com",
+      "executionContext": {
+        "executionId": "cron-1766525408471-c278f4cb906d4127",
+        "sourceContext": "backlog",
+        "cronTriggerTime": "2025-12-23T21:32:52.090Z"
+      }
+    },
+    "idempotencyKey": "filing-2009de85-4eb6-4f18-9c01-ee212c5d43d4-0001851442-25-000003",
+    "createdAt": "2025-12-23T21:35:21.407Z",
+    "scheduledFor": "2025-12-23T21:35:15.811Z",
+    "startedAt": null,
+    "completedAt": null,
+    "failedAt": null,
+    "retryCount": 0,
+    "maxRetries": 3,
+    "lastError": null,
+    "executionTime": null,
+    "result": null,
+    "costUSD": null,
+    "timeoutFlagged": false,
+    "tokenUsage": null,
+    "userId": null
+  },
+  {
+    "id": "73dccc6c-8ac9-4f74-ace1-9299ff46cc77",
+    "jobType": "ASYNC_SUMMARIZE_FILING",
+    "status": "PENDING",
+    "priority": 5,
+    "payload": {
+      "filing": {
+        "filingId": "f562ecd0-dfe8-433b-b1e2-f6d88647c702",
+        "formType": "4",
+        "filingUrl": "https://www.sec.gov/Archives/edgar/data/1679788/000185144225000003/0001851442-25-000003-index.htm",
+        "filingDate": {},
+        "accessionNumber": "0001851442-25-000003"
+      },
+      "ticker": {
+        "cik": "0001679788",
+        "symbol": "COIN",
+        "companyName": "Coinbase Global, Inc."
+      },
+      "userId": "user_2yAsw3Tz3NWUtedemupaXOhqo8L",
+      "userTier": "FREE",
+      "userEmail": "wilfred.chen.python@gmail.com",
+      "executionContext": {
+        "executionId": "cron-1766525408471-c278f4cb906d4127",
+        "sourceContext": "backlog",
+        "cronTriggerTime": "2025-12-23T21:32:52.090Z"
+      }
+    },
+    "idempotencyKey": "filing-user_2yAsw3Tz3NWUtedemupaXOhqo8L-0001851442-25-000003",
+    "createdAt": "2025-12-23T21:35:24.419Z",
+    "scheduledFor": "2025-12-23T21:35:23.415Z",
+    "startedAt": null,
+    "completedAt": null,
+    "failedAt": null,
+    "retryCount": 0,
+    "maxRetries": 3,
+    "lastError": null,
+    "executionTime": null,
+    "result": null,
+    "costUSD": null,
+    "timeoutFlagged": false,
+    "tokenUsage": null,
+    "userId": null
+  },
+  {
+    "id": "fe5f6d99-f545-4f60-8225-f5d4455a4f8b",
+    "jobType": "ASYNC_SUMMARIZE_FILING",
+    "status": "PENDING",
+    "priority": 7,
+    "payload": {
+      "filing": {
+        "filingId": "8abaeaef-f696-40d4-862a-b527e1005045",
+        "formType": "144",
+        "filingUrl": "https://www.sec.gov/Archives/edgar/data/1045810/000162828025058369/0001628280-25-058369-index.htm",
+        "filingDate": {},
+        "accessionNumber": "0001628280-25-058369"
+      },
+      "ticker": {
+        "cik": "0001045810",
+        "symbol": "NVDA",
+        "companyName": "NVIDIA Corporation"
+      },
+      "userId": "2009de85-4eb6-4f18-9c01-ee212c5d43d4",
+      "userTier": "HOBBY",
+      "userEmail": "wilfredchen1@gmail.com",
+      "executionContext": {
+        "executionId": "cron-1766525408471-c278f4cb906d4127",
+        "sourceContext": "backlog",
+        "cronTriggerTime": "2025-12-23T21:32:53.692Z"
+      }
+    },
+    "idempotencyKey": "filing-2009de85-4eb6-4f18-9c01-ee212c5d43d4-0001628280-25-058369",
+    "createdAt": "2025-12-23T21:35:27.429Z",
+    "scheduledFor": "2025-12-23T21:35:26.426Z",
+    "startedAt": null,
+    "completedAt": null,
+    "failedAt": null,
+    "retryCount": 0,
+    "maxRetries": 3,
+    "lastError": null,
+    "executionTime": null,
+    "result": null,
+    "costUSD": null,
+    "timeoutFlagged": false,
+    "tokenUsage": null,
+    "userId": null
+  },
+  {
+    "id": "6b040dc4-4ea8-4765-aacd-6f77798052c1",
+    "jobType": "ASYNC_SUMMARIZE_FILING",
+    "status": "PENDING",
+    "priority": 5,
+    "payload": {
+      "filing": {
+        "filingId": "8abaeaef-f696-40d4-862a-b527e1005045",
+        "formType": "144",
+        "filingUrl": "https://www.sec.gov/Archives/edgar/data/1045810/000162828025058369/0001628280-25-058369-index.htm",
+        "filingDate": {},
+        "accessionNumber": "0001628280-25-058369"
+      },
+      "ticker": {
+        "cik": "0001045810",
+        "symbol": "NVDA",
+        "companyName": "NVIDIA Corporation"
+      },
+      "userId": "user_2yAsw3Tz3NWUtedemupaXOhqo8L",
+      "userTier": "FREE",
+      "userEmail": "wilfred.chen.python@gmail.com",
+      "executionContext": {
+        "executionId": "cron-1766525408471-c278f4cb906d4127",
+        "sourceContext": "backlog",
+        "cronTriggerTime": "2025-12-23T21:32:53.692Z"
+      }
+    },
+    "idempotencyKey": "filing-user_2yAsw3Tz3NWUtedemupaXOhqo8L-0001628280-25-058369",
+    "createdAt": "2025-12-23T21:35:30.440Z",
+    "scheduledFor": "2025-12-23T21:35:29.437Z",
+    "startedAt": null,
+    "completedAt": null,
+    "failedAt": null,
+    "retryCount": 0,
+    "maxRetries": 3,
+    "lastError": null,
+    "executionTime": null,
+    "result": null,
+    "costUSD": null,
+    "timeoutFlagged": false,
+    "tokenUsage": null,
+    "userId": null
+  },
+  {
+    "id": "88d86721-33cc-4ac7-8017-733a3acf393d",
+    "jobType": "ASYNC_SUMMARIZE_FILING",
+    "status": "PENDING",
+    "priority": 7,
+    "payload": {
+      "filing": {
+        "filingId": "d35828d5-b550-46fa-8866-8204dc2555fe",
+        "formType": "4",
+        "filingUrl": "https://www.sec.gov/Archives/edgar/data/1674101/000204325125000005/0002043251-25-000005-index.htm",
+        "filingDate": {},
+        "accessionNumber": "0002043251-25-000005"
+      },
+      "ticker": {
+        "cik": "0001674101",
+        "symbol": "VRT",
+        "companyName": "Vertiv Holdings Co"
+      },
+      "userId": "2009de85-4eb6-4f18-9c01-ee212c5d43d4",
+      "userTier": "HOBBY",
+      "userEmail": "wilfredchen1@gmail.com",
+      "executionContext": {
+        "executionId": "cron-1766525408471-c278f4cb906d4127",
+        "sourceContext": "backlog",
+        "cronTriggerTime": "2025-12-23T21:32:55.294Z"
+      }
+    },
+    "idempotencyKey": "filing-2009de85-4eb6-4f18-9c01-ee212c5d43d4-0002043251-25-000005",
+    "createdAt": "2025-12-23T21:35:33.449Z",
+    "scheduledFor": "2025-12-23T21:35:32.447Z",
+    "startedAt": null,
+    "completedAt": null,
+    "failedAt": null,
+    "retryCount": 0,
+    "maxRetries": 3,
+    "lastError": null,
+    "executionTime": null,
+    "result": null,
+    "costUSD": null,
+    "timeoutFlagged": false,
+    "tokenUsage": null,
+    "userId": null
+  },
+  {
+    "id": "9deb535b-1828-48ef-904e-554f6cb53af4",
+    "jobType": "ASYNC_SUMMARIZE_FILING",
+    "status": "PENDING",
+    "priority": 5,
+    "payload": {
+      "filing": {
+        "filingId": "d35828d5-b550-46fa-8866-8204dc2555fe",
+        "formType": "4",
+        "filingUrl": "https://www.sec.gov/Archives/edgar/data/1674101/000204325125000005/0002043251-25-000005-index.htm",
+        "filingDate": {},
+        "accessionNumber": "0002043251-25-000005"
+      },
+      "ticker": {
+        "cik": "0001674101",
+        "symbol": "VRT",
+        "companyName": "Vertiv Holdings Co"
+      },
+      "userId": "user_2yAsw3Tz3NWUtedemupaXOhqo8L",
+      "userTier": "FREE",
+      "userEmail": "wilfred.chen.python@gmail.com",
+      "executionContext": {
+        "executionId": "cron-1766525408471-c278f4cb906d4127",
+        "sourceContext": "backlog",
+        "cronTriggerTime": "2025-12-23T21:32:55.294Z"
+      }
+    },
+    "idempotencyKey": "filing-user_2yAsw3Tz3NWUtedemupaXOhqo8L-0002043251-25-000005",
+    "createdAt": "2025-12-23T21:35:36.663Z",
+    "scheduledFor": "2025-12-23T21:35:35.456Z",
+    "startedAt": null,
+    "completedAt": null,
+    "failedAt": null,
+    "retryCount": 0,
+    "maxRetries": 3,
+    "lastError": null,
+    "executionTime": null,
+    "result": null,
+    "costUSD": null,
+    "timeoutFlagged": false,
+    "tokenUsage": null,
+    "userId": null
+  },
+  {
+    "id": "ab54d6b3-db7b-4a73-80c7-549d996f2cb1",
+    "jobType": "ASYNC_SUMMARIZE_FILING",
+    "status": "PENDING",
+    "priority": 7,
+    "payload": {
+      "filing": {
+        "filingId": "2cd72fcb-b0e3-4b98-a790-1c384c38d3d9",
+        "formType": "4",
+        "filingUrl": "https://www.sec.gov/Archives/edgar/data/1674101/000198416125000005/0001984161-25-000005-index.htm",
+        "filingDate": {},
+        "accessionNumber": "0001984161-25-000005"
+      },
+      "ticker": {
+        "cik": "0001674101",
+        "symbol": "VRT",
+        "companyName": "Vertiv Holdings Co"
+      },
+      "userId": "2009de85-4eb6-4f18-9c01-ee212c5d43d4",
+      "userTier": "HOBBY",
+      "userEmail": "wilfredchen1@gmail.com",
+      "executionContext": {
+        "executionId": "cron-1766525408471-c278f4cb906d4127",
+        "sourceContext": "backlog",
+        "cronTriggerTime": "2025-12-23T21:32:56.895Z"
+      }
+    },
+    "idempotencyKey": "filing-2009de85-4eb6-4f18-9c01-ee212c5d43d4-0001984161-25-000005",
+    "createdAt": "2025-12-23T21:35:39.677Z",
+    "scheduledFor": "2025-12-23T21:35:38.673Z",
+    "startedAt": null,
+    "completedAt": null,
+    "failedAt": null,
+    "retryCount": 0,
+    "maxRetries": 3,
+    "lastError": null,
+    "executionTime": null,
+    "result": null,
+    "costUSD": null,
+    "timeoutFlagged": false,
+    "tokenUsage": null,
+    "userId": null
+  },
+  {
+    "id": "c04a4156-91b6-464a-b7ac-c63a74b465d8",
+    "jobType": "ASYNC_SUMMARIZE_FILING",
+    "status": "PENDING",
+    "priority": 5,
+    "payload": {
+      "filing": {
+        "filingId": "2cd72fcb-b0e3-4b98-a790-1c384c38d3d9",
+        "formType": "4",
+        "filingUrl": "https://www.sec.gov/Archives/edgar/data/1674101/000198416125000005/0001984161-25-000005-index.htm",
+        "filingDate": {},
+        "accessionNumber": "0001984161-25-000005"
+      },
+      "ticker": {
+        "cik": "0001674101",
+        "symbol": "VRT",
+        "companyName": "Vertiv Holdings Co"
+      },
+      "userId": "user_2yAsw3Tz3NWUtedemupaXOhqo8L",
+      "userTier": "FREE",
+      "userEmail": "wilfred.chen.python@gmail.com",
+      "executionContext": {
+        "executionId": "cron-1766525408471-c278f4cb906d4127",
+        "sourceContext": "backlog",
+        "cronTriggerTime": "2025-12-23T21:32:56.895Z"
+      }
+    },
+    "idempotencyKey": "filing-user_2yAsw3Tz3NWUtedemupaXOhqo8L-0001984161-25-000005",
+    "createdAt": "2025-12-23T21:35:42.688Z",
+    "scheduledFor": "2025-12-23T21:35:41.685Z",
+    "startedAt": null,
+    "completedAt": null,
+    "failedAt": null,
+    "retryCount": 0,
+    "maxRetries": 3,
+    "lastError": null,
+    "executionTime": null,
+    "result": null,
+    "costUSD": null,
+    "timeoutFlagged": false,
+    "tokenUsage": null,
+    "userId": null
+  },
+  {
+    "id": "e2f95a3e-3485-484e-bedf-af1b498dc4e8",
+    "jobType": "ASYNC_SUMMARIZE_FILING",
+    "status": "PENDING",
+    "priority": 7,
+    "payload": {
+      "filing": {
+        "filingId": "71549033-8bb7-48f1-a660-d3ea000f1cde",
+        "formType": "4",
+        "filingUrl": "https://www.sec.gov/Archives/edgar/data/1674101/000181200025000006/0001812000-25-000006-index.htm",
+        "filingDate": {},
+        "accessionNumber": "0001812000-25-000006"
+      },
+      "ticker": {
+        "cik": "0001674101",
+        "symbol": "VRT",
+        "companyName": "Vertiv Holdings Co"
+      },
+      "userId": "2009de85-4eb6-4f18-9c01-ee212c5d43d4",
+      "userTier": "HOBBY",
+      "userEmail": "wilfredchen1@gmail.com",
+      "executionContext": {
+        "executionId": "cron-1766525408471-c278f4cb906d4127",
+        "sourceContext": "backlog",
+        "cronTriggerTime": "2025-12-23T21:32:58.497Z"
+      }
+    },
+    "idempotencyKey": "filing-2009de85-4eb6-4f18-9c01-ee212c5d43d4-0001812000-25-000006",
+    "createdAt": "2025-12-23T21:35:45.699Z",
+    "scheduledFor": "2025-12-23T21:35:44.695Z",
+    "startedAt": null,
+    "completedAt": null,
+    "failedAt": null,
+    "retryCount": 0,
+    "maxRetries": 3,
+    "lastError": null,
+    "executionTime": null,
+    "result": null,
+    "costUSD": null,
+    "timeoutFlagged": false,
+    "tokenUsage": null,
+    "userId": null
+  },
+  {
+    "id": "f7cc005f-c11f-49d6-993c-ddb0fcb0ce7b",
+    "jobType": "ASYNC_SUMMARIZE_FILING",
+    "status": "PENDING",
+    "priority": 5,
+    "payload": {
+      "filing": {
+        "filingId": "71549033-8bb7-48f1-a660-d3ea000f1cde",
+        "formType": "4",
+        "filingUrl": "https://www.sec.gov/Archives/edgar/data/1674101/000181200025000006/0001812000-25-000006-index.htm",
+        "filingDate": {},
+        "accessionNumber": "0001812000-25-000006"
+      },
+      "ticker": {
+        "cik": "0001674101",
+        "symbol": "VRT",
+        "companyName": "Vertiv Holdings Co"
+      },
+      "userId": "user_2yAsw3Tz3NWUtedemupaXOhqo8L",
+      "userTier": "FREE",
+      "userEmail": "wilfred.chen.python@gmail.com",
+      "executionContext": {
+        "executionId": "cron-1766525408471-c278f4cb906d4127",
+        "sourceContext": "backlog",
+        "cronTriggerTime": "2025-12-23T21:32:58.497Z"
+      }
+    },
+    "idempotencyKey": "filing-user_2yAsw3Tz3NWUtedemupaXOhqo8L-0001812000-25-000006",
+    "createdAt": "2025-12-23T21:35:48.708Z",
+    "scheduledFor": "2025-12-23T21:35:47.705Z",
+    "startedAt": null,
+    "completedAt": null,
+    "failedAt": null,
+    "retryCount": 0,
+    "maxRetries": 3,
+    "lastError": null,
+    "executionTime": null,
+    "result": null,
+    "costUSD": null,
+    "timeoutFlagged": false,
+    "tokenUsage": null,
+    "userId": null
+  },
+  {
+    "id": "8c2bc70d-1018-44cf-9da3-82beec7242ed",
+    "jobType": "ASYNC_SUMMARIZE_FILING",
+    "status": "PENDING",
+    "priority": 7,
+    "payload": {
+      "filing": {
+        "filingId": "a9ff2afe-e075-43f8-9560-09b26a482c81",
+        "formType": "4",
+        "filingUrl": "https://www.sec.gov/Archives/edgar/data/1674101/000191782025000005/0001917820-25-000005-index.htm",
+        "filingDate": {},
+        "accessionNumber": "0001917820-25-000005"
+      },
+      "ticker": {
+        "cik": "0001674101",
+        "symbol": "VRT",
+        "companyName": "Vertiv Holdings Co"
+      },
+      "userId": "2009de85-4eb6-4f18-9c01-ee212c5d43d4",
+      "userTier": "HOBBY",
+      "userEmail": "wilfredchen1@gmail.com",
+      "executionContext": {
+        "executionId": "cron-1766525408471-c278f4cb906d4127",
+        "sourceContext": "backlog",
+        "cronTriggerTime": "2025-12-23T21:33:00.298Z"
+      }
+    },
+    "idempotencyKey": "filing-2009de85-4eb6-4f18-9c01-ee212c5d43d4-0001917820-25-000005",
+    "createdAt": "2025-12-23T21:35:51.921Z",
+    "scheduledFor": "2025-12-23T21:35:50.716Z",
+    "startedAt": null,
+    "completedAt": null,
+    "failedAt": null,
+    "retryCount": 0,
+    "maxRetries": 3,
+    "lastError": null,
+    "executionTime": null,
+    "result": null,
+    "costUSD": null,
+    "timeoutFlagged": false,
+    "tokenUsage": null,
+    "userId": null
+  },
+  {
+    "id": "61bb9150-43cc-4c9d-bb0c-bb0c8b139263",
+    "jobType": "ASYNC_SUMMARIZE_FILING",
+    "status": "PENDING",
+    "priority": 5,
+    "payload": {
+      "filing": {
+        "filingId": "a9ff2afe-e075-43f8-9560-09b26a482c81",
+        "formType": "4",
+        "filingUrl": "https://www.sec.gov/Archives/edgar/data/1674101/000191782025000005/0001917820-25-000005-index.htm",
+        "filingDate": {},
+        "accessionNumber": "0001917820-25-000005"
+      },
+      "ticker": {
+        "cik": "0001674101",
+        "symbol": "VRT",
+        "companyName": "Vertiv Holdings Co"
+      },
+      "userId": "user_2yAsw3Tz3NWUtedemupaXOhqo8L",
+      "userTier": "FREE",
+      "userEmail": "wilfred.chen.python@gmail.com",
+      "executionContext": {
+        "executionId": "cron-1766525408471-c278f4cb906d4127",
+        "sourceContext": "backlog",
+        "cronTriggerTime": "2025-12-23T21:33:00.298Z"
+      }
+    },
+    "idempotencyKey": "filing-user_2yAsw3Tz3NWUtedemupaXOhqo8L-0001917820-25-000005",
+    "createdAt": "2025-12-23T21:35:54.932Z",
+    "scheduledFor": "2025-12-23T21:35:53.930Z",
+    "startedAt": null,
+    "completedAt": null,
+    "failedAt": null,
+    "retryCount": 0,
+    "maxRetries": 3,
+    "lastError": null,
+    "executionTime": null,
+    "result": null,
+    "costUSD": null,
+    "timeoutFlagged": false,
+    "tokenUsage": null,
+    "userId": null
+  },
+  {
+    "id": "caeaa6bd-1a29-4784-8f4a-451f647ed6d2",
+    "jobType": "ASYNC_SUMMARIZE_FILING",
+    "status": "PENDING",
+    "priority": 7,
+    "payload": {
+      "filing": {
+        "filingId": "0e37795e-a484-47e0-9d5f-f91544b6bbd7",
+        "formType": "4",
+        "filingUrl": "https://www.sec.gov/Archives/edgar/data/1674101/000207538225000004/0002075382-25-000004-index.htm",
+        "filingDate": {},
+        "accessionNumber": "0002075382-25-000004"
+      },
+      "ticker": {
+        "cik": "0001674101",
+        "symbol": "VRT",
+        "companyName": "Vertiv Holdings Co"
+      },
+      "userId": "2009de85-4eb6-4f18-9c01-ee212c5d43d4",
+      "userTier": "HOBBY",
+      "userEmail": "wilfredchen1@gmail.com",
+      "executionContext": {
+        "executionId": "cron-1766525408471-c278f4cb906d4127",
+        "sourceContext": "backlog",
+        "cronTriggerTime": "2025-12-23T21:33:02.901Z"
+      }
+    },
+    "idempotencyKey": "filing-2009de85-4eb6-4f18-9c01-ee212c5d43d4-0002075382-25-000004",
+    "createdAt": "2025-12-23T21:35:57.946Z",
+    "scheduledFor": "2025-12-23T21:35:56.944Z",
+    "startedAt": null,
+    "completedAt": null,
+    "failedAt": null,
+    "retryCount": 0,
+    "maxRetries": 3,
+    "lastError": null,
+    "executionTime": null,
+    "result": null,
+    "costUSD": null,
+    "timeoutFlagged": false,
+    "tokenUsage": null,
+    "userId": null
+  },
+  {
+    "id": "3a0bc53a-30c7-4e20-905c-bba73cdec416",
+    "jobType": "ASYNC_SUMMARIZE_FILING",
+    "status": "PENDING",
+    "priority": 5,
+    "payload": {
+      "filing": {
+        "filingId": "0e37795e-a484-47e0-9d5f-f91544b6bbd7",
+        "formType": "4",
+        "filingUrl": "https://www.sec.gov/Archives/edgar/data/1674101/000207538225000004/0002075382-25-000004-index.htm",
+        "filingDate": {},
+        "accessionNumber": "0002075382-25-000004"
+      },
+      "ticker": {
+        "cik": "0001674101",
+        "symbol": "VRT",
+        "companyName": "Vertiv Holdings Co"
+      },
+      "userId": "user_2yAsw3Tz3NWUtedemupaXOhqo8L",
+      "userTier": "FREE",
+      "userEmail": "wilfred.chen.python@gmail.com",
+      "executionContext": {
+        "executionId": "cron-1766525408471-c278f4cb906d4127",
+        "sourceContext": "backlog",
+        "cronTriggerTime": "2025-12-23T21:33:02.901Z"
+      }
+    },
+    "idempotencyKey": "filing-user_2yAsw3Tz3NWUtedemupaXOhqo8L-0002075382-25-000004",
+    "createdAt": "2025-12-23T21:36:00.957Z",
+    "scheduledFor": "2025-12-23T21:35:59.953Z",
+    "startedAt": null,
+    "completedAt": null,
+    "failedAt": null,
+    "retryCount": 0,
+    "maxRetries": 3,
+    "lastError": null,
+    "executionTime": null,
+    "result": null,
+    "costUSD": null,
+    "timeoutFlagged": false,
+    "tokenUsage": null,
+    "userId": null
+  },
+  {
+    "id": "daa59c65-ef8a-404d-9f43-9f9acfd8096a",
+    "jobType": "ASYNC_SUMMARIZE_FILING",
+    "status": "PENDING",
+    "priority": 7,
+    "payload": {
+      "filing": {
+        "filingId": "37833e1f-5837-43a3-ac82-efdd13ed8740",
+        "formType": "4",
+        "filingUrl": "https://www.sec.gov/Archives/edgar/data/1674101/000197666725000005/0001976667-25-000005-index.htm",
+        "filingDate": {},
+        "accessionNumber": "0001976667-25-000005"
+      },
+      "ticker": {
+        "cik": "0001674101",
+        "symbol": "VRT",
+        "companyName": "Vertiv Holdings Co"
+      },
+      "userId": "2009de85-4eb6-4f18-9c01-ee212c5d43d4",
+      "userTier": "HOBBY",
+      "userEmail": "wilfredchen1@gmail.com",
+      "executionContext": {
+        "executionId": "cron-1766525408471-c278f4cb906d4127",
+        "sourceContext": "backlog",
+        "cronTriggerTime": "2025-12-23T21:33:04.502Z"
+      }
+    },
+    "idempotencyKey": "filing-2009de85-4eb6-4f18-9c01-ee212c5d43d4-0001976667-25-000005",
+    "createdAt": "2025-12-23T21:36:03.966Z",
+    "scheduledFor": "2025-12-23T21:36:02.963Z",
+    "startedAt": null,
+    "completedAt": null,
+    "failedAt": null,
+    "retryCount": 0,
+    "maxRetries": 3,
+    "lastError": null,
+    "executionTime": null,
+    "result": null,
+    "costUSD": null,
+    "timeoutFlagged": false,
+    "tokenUsage": null,
+    "userId": null
+  },
+  {
+    "id": "7d28ae5b-4a10-4fe7-9a4c-fe70c4c88f11",
+    "jobType": "ASYNC_SUMMARIZE_FILING",
+    "status": "PENDING",
+    "priority": 5,
+    "payload": {
+      "filing": {
+        "filingId": "37833e1f-5837-43a3-ac82-efdd13ed8740",
+        "formType": "4",
+        "filingUrl": "https://www.sec.gov/Archives/edgar/data/1674101/000197666725000005/0001976667-25-000005-index.htm",
+        "filingDate": {},
+        "accessionNumber": "0001976667-25-000005"
+      },
+      "ticker": {
+        "cik": "0001674101",
+        "symbol": "VRT",
+        "companyName": "Vertiv Holdings Co"
+      },
+      "userId": "user_2yAsw3Tz3NWUtedemupaXOhqo8L",
+      "userTier": "FREE",
+      "userEmail": "wilfred.chen.python@gmail.com",
+      "executionContext": {
+        "executionId": "cron-1766525408471-c278f4cb906d4127",
+        "sourceContext": "backlog",
+        "cronTriggerTime": "2025-12-23T21:33:04.502Z"
+      }
+    },
+    "idempotencyKey": "filing-user_2yAsw3Tz3NWUtedemupaXOhqo8L-0001976667-25-000005",
+    "createdAt": "2025-12-23T21:36:07.178Z",
+    "scheduledFor": "2025-12-23T21:36:05.975Z",
+    "startedAt": null,
+    "completedAt": null,
+    "failedAt": null,
+    "retryCount": 0,
+    "maxRetries": 3,
+    "lastError": null,
+    "executionTime": null,
+    "result": null,
+    "costUSD": null,
+    "timeoutFlagged": false,
+    "tokenUsage": null,
+    "userId": null
+  },
+  {
+    "id": "d30ab2a1-c072-403f-a763-ff082f93402c",
+    "jobType": "ASYNC_SUMMARIZE_FILING",
+    "status": "PENDING",
+    "priority": 7,
+    "payload": {
+      "filing": {
+        "filingId": "6673ba69-9e9c-4394-9954-3e14d19dbaee",
+        "formType": "4",
+        "filingUrl": "https://www.sec.gov/Archives/edgar/data/1674101/000201798625000005/0002017986-25-000005-index.htm",
+        "filingDate": {},
+        "accessionNumber": "0002017986-25-000005"
+      },
+      "ticker": {
+        "cik": "0001674101",
+        "symbol": "VRT",
+        "companyName": "Vertiv Holdings Co"
+      },
+      "userId": "2009de85-4eb6-4f18-9c01-ee212c5d43d4",
+      "userTier": "HOBBY",
+      "userEmail": "wilfredchen1@gmail.com",
+      "executionContext": {
+        "executionId": "cron-1766525408471-c278f4cb906d4127",
+        "sourceContext": "backlog",
+        "cronTriggerTime": "2025-12-23T21:33:06.894Z"
+      }
+    },
+    "idempotencyKey": "filing-2009de85-4eb6-4f18-9c01-ee212c5d43d4-0002017986-25-000005",
+    "createdAt": "2025-12-23T21:36:10.188Z",
+    "scheduledFor": "2025-12-23T21:36:09.185Z",
+    "startedAt": null,
+    "completedAt": null,
+    "failedAt": null,
+    "retryCount": 0,
+    "maxRetries": 3,
+    "lastError": null,
+    "executionTime": null,
+    "result": null,
+    "costUSD": null,
+    "timeoutFlagged": false,
+    "tokenUsage": null,
+    "userId": null
+  },
+  {
+    "id": "cb778a8e-8079-4251-8b06-5f2389f8c5d1",
+    "jobType": "ASYNC_SUMMARIZE_FILING",
+    "status": "PENDING",
+    "priority": 5,
+    "payload": {
+      "filing": {
+        "filingId": "6673ba69-9e9c-4394-9954-3e14d19dbaee",
+        "formType": "4",
+        "filingUrl": "https://www.sec.gov/Archives/edgar/data/1674101/000201798625000005/0002017986-25-000005-index.htm",
+        "filingDate": {},
+        "accessionNumber": "0002017986-25-000005"
+      },
+      "ticker": {
+        "cik": "0001674101",
+        "symbol": "VRT",
+        "companyName": "Vertiv Holdings Co"
+      },
+      "userId": "user_2yAsw3Tz3NWUtedemupaXOhqo8L",
+      "userTier": "FREE",
+      "userEmail": "wilfred.chen.python@gmail.com",
+      "executionContext": {
+        "executionId": "cron-1766525408471-c278f4cb906d4127",
+        "sourceContext": "backlog",
+        "cronTriggerTime": "2025-12-23T21:33:06.894Z"
+      }
+    },
+    "idempotencyKey": "filing-user_2yAsw3Tz3NWUtedemupaXOhqo8L-0002017986-25-000005",
+    "createdAt": "2025-12-23T21:36:13.199Z",
+    "scheduledFor": "2025-12-23T21:36:12.195Z",
+    "startedAt": null,
+    "completedAt": null,
+    "failedAt": null,
+    "retryCount": 0,
+    "maxRetries": 3,
+    "lastError": null,
+    "executionTime": null,
+    "result": null,
+    "costUSD": null,
+    "timeoutFlagged": false,
+    "tokenUsage": null,
+    "userId": null
+  },
+  {
+    "id": "ae0d6afe-ce40-4d6a-a5e8-7e8b3cfaf3c2",
+    "jobType": "ASYNC_SUMMARIZE_FILING",
+    "status": "PENDING",
+    "priority": 7,
+    "payload": {
+      "filing": {
+        "filingId": "a8b2d4d5-80c1-4f51-b3ec-e945e14b3018",
+        "formType": "4",
+        "filingUrl": "https://www.sec.gov/Archives/edgar/data/1674101/000209138625000006/0002091386-25-000006-index.htm",
+        "filingDate": {},
+        "accessionNumber": "0002091386-25-000006"
+      },
+      "ticker": {
+        "cik": "0001674101",
+        "symbol": "VRT",
+        "companyName": "Vertiv Holdings Co"
+      },
+      "userId": "2009de85-4eb6-4f18-9c01-ee212c5d43d4",
+      "userTier": "HOBBY",
+      "userEmail": "wilfredchen1@gmail.com",
+      "executionContext": {
+        "executionId": "cron-1766525408471-c278f4cb906d4127",
+        "sourceContext": "backlog",
+        "cronTriggerTime": "2025-12-23T21:33:09.297Z"
+      }
+    },
+    "idempotencyKey": "filing-2009de85-4eb6-4f18-9c01-ee212c5d43d4-0002091386-25-000006",
+    "createdAt": "2025-12-23T21:36:16.211Z",
+    "scheduledFor": "2025-12-23T21:36:15.207Z",
+    "startedAt": null,
+    "completedAt": null,
+    "failedAt": null,
+    "retryCount": 0,
+    "maxRetries": 3,
+    "lastError": null,
+    "executionTime": null,
+    "result": null,
+    "costUSD": null,
+    "timeoutFlagged": false,
+    "tokenUsage": null,
+    "userId": null
+  },
+  {
+    "id": "d6c0bdc9-1275-4851-ba66-4f4a0de1b918",
+    "jobType": "ASYNC_SUMMARIZE_FILING",
+    "status": "PENDING",
+    "priority": 5,
+    "payload": {
+      "filing": {
+        "filingId": "a8b2d4d5-80c1-4f51-b3ec-e945e14b3018",
+        "formType": "4",
+        "filingUrl": "https://www.sec.gov/Archives/edgar/data/1674101/000209138625000006/0002091386-25-000006-index.htm",
+        "filingDate": {},
+        "accessionNumber": "0002091386-25-000006"
+      },
+      "ticker": {
+        "cik": "0001674101",
+        "symbol": "VRT",
+        "companyName": "Vertiv Holdings Co"
+      },
+      "userId": "user_2yAsw3Tz3NWUtedemupaXOhqo8L",
+      "userTier": "FREE",
+      "userEmail": "wilfred.chen.python@gmail.com",
+      "executionContext": {
+        "executionId": "cron-1766525408471-c278f4cb906d4127",
+        "sourceContext": "backlog",
+        "cronTriggerTime": "2025-12-23T21:33:09.297Z"
+      }
+    },
+    "idempotencyKey": "filing-user_2yAsw3Tz3NWUtedemupaXOhqo8L-0002091386-25-000006",
+    "createdAt": "2025-12-23T21:36:19.236Z",
+    "scheduledFor": "2025-12-23T21:36:18.233Z",
+    "startedAt": null,
+    "completedAt": null,
+    "failedAt": null,
+    "retryCount": 0,
+    "maxRetries": 3,
+    "lastError": null,
+    "executionTime": null,
+    "result": null,
+    "costUSD": null,
+    "timeoutFlagged": false,
+    "tokenUsage": null,
+    "userId": null
+  },
+  {
+    "id": "01226996-5796-4c3d-bef4-57c58162f679",
+    "jobType": "ASYNC_SUMMARIZE_FILING",
+    "status": "PENDING",
+    "priority": 7,
+    "payload": {
+      "filing": {
+        "filingId": "41dc69f5-f82a-48f4-98b3-d7b7ace4797e",
+        "formType": "4",
+        "filingUrl": "https://www.sec.gov/Archives/edgar/data/1674101/000203540825000007/0002035408-25-000007-index.htm",
+        "filingDate": {},
+        "accessionNumber": "0002035408-25-000007"
+      },
+      "ticker": {
+        "cik": "0001674101",
+        "symbol": "VRT",
+        "companyName": "Vertiv Holdings Co"
+      },
+      "userId": "2009de85-4eb6-4f18-9c01-ee212c5d43d4",
+      "userTier": "HOBBY",
+      "userEmail": "wilfredchen1@gmail.com",
+      "executionContext": {
+        "executionId": "cron-1766525408471-c278f4cb906d4127",
+        "sourceContext": "backlog",
+        "cronTriggerTime": "2025-12-23T21:33:11.697Z"
+      }
+    },
+    "idempotencyKey": "filing-2009de85-4eb6-4f18-9c01-ee212c5d43d4-0002035408-25-000007",
+    "createdAt": "2025-12-23T21:36:22.447Z",
+    "scheduledFor": "2025-12-23T21:36:21.243Z",
+    "startedAt": null,
+    "completedAt": null,
+    "failedAt": null,
+    "retryCount": 0,
+    "maxRetries": 3,
+    "lastError": null,
+    "executionTime": null,
+    "result": null,
+    "costUSD": null,
+    "timeoutFlagged": false,
+    "tokenUsage": null,
+    "userId": null
+  },
+  {
+    "id": "7227ece9-875f-4198-8b5c-829289246326",
+    "jobType": "ASYNC_SUMMARIZE_FILING",
+    "status": "PENDING",
+    "priority": 5,
+    "payload": {
+      "filing": {
+        "filingId": "41dc69f5-f82a-48f4-98b3-d7b7ace4797e",
+        "formType": "4",
+        "filingUrl": "https://www.sec.gov/Archives/edgar/data/1674101/000203540825000007/0002035408-25-000007-index.htm",
+        "filingDate": {},
+        "accessionNumber": "0002035408-25-000007"
+      },
+      "ticker": {
+        "cik": "0001674101",
+        "symbol": "VRT",
+        "companyName": "Vertiv Holdings Co"
+      },
+      "userId": "user_2yAsw3Tz3NWUtedemupaXOhqo8L",
+      "userTier": "FREE",
+      "userEmail": "wilfred.chen.python@gmail.com",
+      "executionContext": {
+        "executionId": "cron-1766525408471-c278f4cb906d4127",
+        "sourceContext": "backlog",
+        "cronTriggerTime": "2025-12-23T21:33:11.697Z"
+      }
+    },
+    "idempotencyKey": "filing-user_2yAsw3Tz3NWUtedemupaXOhqo8L-0002035408-25-000007",
+    "createdAt": "2025-12-23T21:36:25.460Z",
+    "scheduledFor": "2025-12-23T21:36:24.457Z",
+    "startedAt": null,
+    "completedAt": null,
+    "failedAt": null,
+    "retryCount": 0,
+    "maxRetries": 3,
+    "lastError": null,
+    "executionTime": null,
+    "result": null,
+    "costUSD": null,
+    "timeoutFlagged": false,
+    "tokenUsage": null,
+    "userId": null
+  },
+  {
+    "id": "cba70333-e676-475f-aa83-869dde682b1b",
+    "jobType": "ASYNC_SUMMARIZE_FILING",
+    "status": "PENDING",
+    "priority": 7,
+    "payload": {
+      "filing": {
+        "filingId": "03052526-dc7f-41fc-837d-41cb6714119f",
+        "formType": "4",
+        "filingUrl": "https://www.sec.gov/Archives/edgar/data/1674101/000207202125000004/0002072021-25-000004-index.htm",
+        "filingDate": {},
+        "accessionNumber": "0002072021-25-000004"
+      },
+      "ticker": {
+        "cik": "0001674101",
+        "symbol": "VRT",
+        "companyName": "Vertiv Holdings Co"
+      },
+      "userId": "2009de85-4eb6-4f18-9c01-ee212c5d43d4",
+      "userTier": "HOBBY",
+      "userEmail": "wilfredchen1@gmail.com",
+      "executionContext": {
+        "executionId": "cron-1766525408471-c278f4cb906d4127",
+        "sourceContext": "backlog",
+        "cronTriggerTime": "2025-12-23T21:33:13.300Z"
+      }
+    },
+    "idempotencyKey": "filing-2009de85-4eb6-4f18-9c01-ee212c5d43d4-0002072021-25-000004",
+    "createdAt": "2025-12-23T21:36:28.470Z",
+    "scheduledFor": "2025-12-23T21:36:27.467Z",
+    "startedAt": null,
+    "completedAt": null,
+    "failedAt": null,
+    "retryCount": 0,
+    "maxRetries": 3,
+    "lastError": null,
+    "executionTime": null,
+    "result": null,
+    "costUSD": null,
+    "timeoutFlagged": false,
+    "tokenUsage": null,
+    "userId": null
+  },
+  {
+    "id": "94cc57f8-3b22-4c8d-a8f8-fbae9dae6668",
+    "jobType": "ASYNC_SUMMARIZE_FILING",
+    "status": "PENDING",
+    "priority": 5,
+    "payload": {
+      "filing": {
+        "filingId": "03052526-dc7f-41fc-837d-41cb6714119f",
+        "formType": "4",
+        "filingUrl": "https://www.sec.gov/Archives/edgar/data/1674101/000207202125000004/0002072021-25-000004-index.htm",
+        "filingDate": {},
+        "accessionNumber": "0002072021-25-000004"
+      },
+      "ticker": {
+        "cik": "0001674101",
+        "symbol": "VRT",
+        "companyName": "Vertiv Holdings Co"
+      },
+      "userId": "user_2yAsw3Tz3NWUtedemupaXOhqo8L",
+      "userTier": "FREE",
+      "userEmail": "wilfred.chen.python@gmail.com",
+      "executionContext": {
+        "executionId": "cron-1766525408471-c278f4cb906d4127",
+        "sourceContext": "backlog",
+        "cronTriggerTime": "2025-12-23T21:33:13.300Z"
+      }
+    },
+    "idempotencyKey": "filing-user_2yAsw3Tz3NWUtedemupaXOhqo8L-0002072021-25-000004",
+    "createdAt": "2025-12-23T21:36:31.479Z",
+    "scheduledFor": "2025-12-23T21:36:30.476Z",
+    "startedAt": null,
+    "completedAt": null,
+    "failedAt": null,
+    "retryCount": 0,
+    "maxRetries": 3,
+    "lastError": null,
+    "executionTime": null,
+    "result": null,
+    "costUSD": null,
+    "timeoutFlagged": false,
+    "tokenUsage": null,
+    "userId": null
+  }
+]
