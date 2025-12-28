@@ -392,5 +392,6 @@ export * from './sec-api-monitor';
 export * from './user-processing-monitor';
 export * from './pipeline-error-detector';
 export * from './pipeline-health-monitor';
+export * from './json-parsing-monitor';
 
 export default monitoring;
