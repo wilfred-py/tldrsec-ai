@@ -1,11 +1,44 @@
 # Current Progress: tldrsec-ai Pipeline Operations
 
 ## Current Status
-**Date**: 2025-12-27
+**Date**: 2025-12-28
 **Branch**: feature/test-data-integrity-improvements
-**Status**: ✅ OPERATIONAL - Email URL Verification Complete
+**Status**: ✅ OPERATIONAL - Form 4 Email Improvements Complete
 
-### Active: Test Data Integrity Improvements ✅ COMPLETE (2025-12-27)
+### Active: Form 4 Email Improvements ✅ COMPLETE (2025-12-28)
+
+**Purpose**: Fix two Form 4 email issues: (1) XML links going to raw files, (2) Sparse/incomplete email content.
+
+**Two Fixes Implemented**:
+
+1. **XML URL Conversion** - Form 4 XML document URLs now convert to Filing Detail pages
+   - Problem: Email links went to raw XML files (not user-friendly)
+   - Solution: Added XML pattern detection in `getSecFilingViewerUrl()`
+   - File: `lib/email/url-utils.ts`
+
+2. **Form 4 Data Extraction** - Extract structured data from markdown summaries
+   - Problem: `summaryJSON` contained metadata, not transaction data
+   - Root cause: AI returns comprehensive markdown in `summaryText`, not JSON in `summaryJSON`
+   - Solution: New extractor parses markdown to populate email template
+   - Files:
+     - `lib/email/form4-data-extractor.ts` (NEW - markdown parser)
+     - `components/ui/email/templates/form4-minimalist-template.tsx` (uses extractor as fallback)
+
+**What the Extractor Captures**:
+- Filer name and role (e.g., "Mark A. Stevens", "Director")
+- Transaction details from markdown tables (type, shares, price, A/D)
+- Total value calculation (e.g., "$40.1M")
+- Signal strength determination (10b5-1, gift, large position change)
+- Stake information (previous, current, percent change)
+
+**Verification**:
+- ✅ Build passes
+- ✅ Lint passes
+- ✅ Extraction test passes with real NVDA Form 4 data
+
+---
+
+### Previous: Test Data Integrity Improvements ✅ COMPLETE (2025-12-27)
 
 **Purpose**: Improve test data tracking and email delivery consistency for multi-user scenarios.
 
