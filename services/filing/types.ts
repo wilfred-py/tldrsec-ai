@@ -29,6 +29,15 @@ export interface FilingSummaryResult {
    * If summarization failed or fallback was used, provides the error reason.
    */
   failureReason?: string;
+  // Database tracking fields - added 2025-12-26 for email delivery tracking
+  /** Database ID of the stored summary - used for email delivery tracking */
+  databaseId?: string;
+  /** Whether this result came from cache */
+  isCacheHit?: boolean;
+  /** Number of times this cached summary has been used */
+  cacheUsageCount?: number;
+  /** Quality score for the summary */
+  qualityScore?: number;
 }
 
 // Error type for email summaries

@@ -4,6 +4,7 @@ import { EmailHeader } from './sections/EmailHeader';
 import { EmailFooter } from './sections/EmailFooter';
 import { SectionCard } from './sections/SectionCard';
 import { FilingTemplateData } from '../../../../lib/email/types';
+import { extractForm4Data } from '../../../../lib/email/form4-data-extractor';
 
 interface Form4MinimalistTemplateProps {
   filing: FilingTemplateData;
@@ -113,21 +114,39 @@ export function Form4MinimalistTemplate({ filing }: Form4MinimalistTemplateProps
 
   const data = summaryData as Record<string, unknown> | undefined;
 
-  const filerName = (data?.filerName || data?.reportingPerson || 'Insider') as string;
-  const filerRole = (data?.relationship || data?.position || '') as string;
+  // Extract structured data from summaryText if summaryData is sparse
+  const extractedData = summaryText ? extractForm4Data(summaryText) : null;
+  const hasExtractedData = extractedData && (
+    extractedData.filerName ||
+    extractedData.transactions.length > 0 ||
+    extractedData.totalValue
+  );
 
-  const transactions = (data?.transactions || []) as TransactionData[];
+  // Use extracted data as fallback when summaryData is incomplete
+  const filerName = (data?.filerName || data?.reportingPerson || extractedData?.filerName || 'Insider') as string;
+  const filerRole = (data?.relationship || data?.position || extractedData?.relationship || '') as string;
+
+  // Merge transactions from both sources
+  const dataTransactions = (data?.transactions || []) as TransactionData[];
+  const extractedTransactions = hasExtractedData ? extractedData.transactions.map(t => ({
+    type: t.type,
+    shares: t.shares,
+    pricePerShare: t.pricePerShare,
+    totalValue: t.totalValue,
+    acquisitionDisposition: t.acquisitionDisposition,
+  })) : [];
+  const transactions = dataTransactions.length > 0 ? dataTransactions : extractedTransactions;
   const firstTx = transactions[0] || {};
 
-  const totalValue = (data?.totalValue || firstTx.totalValue || '') as string;
+  const totalValue = (data?.totalValue || firstTx.totalValue || extractedData?.totalValue || '') as string;
   const sharesAmount = (firstTx.shares || data?.shareAmount || data?.amount || '') as string;
   const pricePerShare = (firstTx.pricePerShare || data?.priceRange || data?.price || '') as string;
-  const percentChange = (data?.percentageChange || data?.changePercent || '') as string;
-  const newStake = (data?.newStake || data?.sharesRemaining || '') as string;
-  const previousStake = (data?.previousStake || data?.sharesOwned || '') as string;
-  const signalStrength = (data?.signalStrength || '') as string;
+  const percentChange = (data?.percentageChange || data?.changePercent || extractedData?.percentageChange || '') as string;
+  const newStake = (data?.newStake || data?.sharesRemaining || extractedData?.newStake || '') as string;
+  const previousStake = (data?.previousStake || data?.sharesOwned || extractedData?.previousStake || '') as string;
+  const signalStrength = (data?.signalStrength || extractedData?.signalStrength || '') as string;
 
-  const transactionType = (firstTx.type || data?.transactionType || '') as string;
+  const transactionType = (firstTx.type || data?.transactionType || extractedData?.transactionType || '') as string;
   const acquisitionDisposition = (firstTx.acquisitionDisposition || '') as string;
   const isSale = transactionType?.toLowerCase().includes('sale') ||
     transactionType?.toLowerCase().includes('sell') ||

@@ -13,6 +13,10 @@ This file provides a chronological index of all completed projects. For detailed
 
 | Date | Project | Status |
 |------|---------|--------|
+| 2025-12-27 | Test Data Integrity Improvements (3-phase: markers, tracking, audit CLI) | ✅ |
+| 2025-12-27 | Email URL Verification for All Form Types (10-K, 10-Q, 8-K, Form 4, Form 3, Form 144) | ✅ |
+| 2025-12-26 | Email Filing Link Fix (primaryDocUrl for direct document links) | ✅ |
+| 2025-12-26 | Email Summary Discrepancies Fix (multi-user + job migration) | ✅ |
 | 2025-12-24 | Daily Verification Script Fix (Prisma serialization) | ✅ |
 | 2025-12-24 | 10-Minute Slack Verification Reports (TDD implementation) | ✅ |
 | 2025-12-24 | E2E Pipeline Verification (.env URL fix) | ✅ |
@@ -105,9 +109,10 @@ This file provides a chronological index of all completed projects. For detailed
 
 ## Archive Statistics
 - **Total Archived Projects**: 32 projects across 6 weekly archives
-- **Current PROGRESS.md Lines**: 173 (threshold: 500)
-- **Last Sync**: 2025-12-24 12:40 AEDT
+- **Current PROGRESS.md Lines**: 241 (threshold: 500)
+- **Last Sync**: 2025-12-27
 - **Archive System**: ✅ ACTIVE
+- **Next Archive Check**: When PROGRESS.md > 500 lines AND projects > 30 days old
 
 **Archives**:
 - `01-Dec-2025.md` - Email & verification (8 projects)

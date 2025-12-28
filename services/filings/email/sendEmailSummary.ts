@@ -7,7 +7,7 @@ import { logger } from '../../../lib/logging';
 import { monitoring } from '@/lib/monitoring';
 import { RateLimitError } from '../enhanced/rateLimiter';
 import { checkIfFilingProcessed } from '../utils/filingProcessingStatus';
-import { trackEmailDelivery } from '../database/filingDatabase';
+import { trackEmailDelivery, StoreSummaryOptions } from '../database/filingDatabase';
 
 const emailSummaryLogger = logger.child('email-summary');
 
@@ -94,16 +94,18 @@ function classifyError(error: unknown): { category: ErrorCategory; details?: Rec
 
 /**
  * Sends an email summary of the latest filings for a list of tickers
- * 
+ *
  * @param email Email address to send the summary to
  * @param tickers List of ticker symbols to include in the summary
  * @param debug Whether to send debug information in the email
+ * @param storageOptions Options for marking summaries as test data
  * @returns Object containing success status and message
  */
 export async function sendEmailSummary(
-  email: string, 
-  tickers: string[] = ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'META'], 
-  debug: boolean = false
+  email: string,
+  tickers: string[] = ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'META'],
+  debug: boolean = false,
+  storageOptions?: StoreSummaryOptions
 ): Promise<{ success: boolean, message?: string, error?: string }> {
   try {
     const summaries: FilingSummaryResult[] = [];
@@ -166,9 +168,10 @@ export async function sendEmailSummary(
             shouldBypassCache
           });
           
-          const result = await getFilingSummary(ticker, formType, { 
-            bypassCache: shouldBypassCache, 
-            fromCron: false 
+          const result = await getFilingSummary(ticker, formType, {
+            bypassCache: shouldBypassCache,
+            fromCron: false,
+            storageOptions
           });
           const summaryDuration = Math.round((Date.now() - summaryStartTime) / 1000);
           
@@ -312,16 +315,21 @@ export async function sendEmailSummary(
       
       // Track email delivery analytics for each summary that was sent
       for (const summary of summaries) {
-        // Note: We need summary.id from the database, but FilingSummaryResult doesn't include it
-        // This is a limitation we'll address by finding the summary ID from the database
         try {
-          if ((summary as any).id) {
-            await trackEmailDelivery((summary as any).id, email, 'summary_digest');
-          } else {
-            // Fallback: Log that we couldn't track this specific summary
-            emailSummaryLogger.debug('Could not track email delivery - summary ID missing', {
+          if (summary.databaseId) {
+            await trackEmailDelivery(summary.databaseId, email, 'summary_digest');
+            emailSummaryLogger.debug('Email delivery tracked', {
               ticker: summary.ticker,
               filingType: summary.filingType,
+              databaseId: summary.databaseId,
+              email
+            });
+          } else {
+            // Cache hits may not have databaseId - this is expected for cached results
+            emailSummaryLogger.debug('Email delivery tracking skipped - no databaseId', {
+              ticker: summary.ticker,
+              filingType: summary.filingType,
+              isCacheHit: summary.isCacheHit,
               email
             });
           }
@@ -329,6 +337,7 @@ export async function sendEmailSummary(
           emailSummaryLogger.warn('Failed to track email delivery analytics', {
             error: trackingError,
             ticker: summary.ticker,
+            databaseId: summary.databaseId,
             email
           });
         }
