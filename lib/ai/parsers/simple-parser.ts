@@ -93,6 +93,20 @@ export function parseJSONResponse(response: string, formType: string): ParseResu
   const usedKnownSchema = formType in FORM_SCHEMAS && formType !== 'Generic';
   const schema = FORM_SCHEMAS[formType] || FORM_SCHEMAS['Generic'];
 
+  // Security: Input size limit to prevent DoS (10MB max)
+  const MAX_RESPONSE_SIZE = 10 * 1024 * 1024; // 10MB
+  if (response && response.length > MAX_RESPONSE_SIZE) {
+    return {
+      success: false,
+      method: 'direct',
+      attempts: 1,
+      error: `Response size exceeds maximum allowed (${(response.length / 1024 / 1024).toFixed(2)}MB > 10MB)`,
+      diagnostics: buildDiagnostics(response.slice(0, 1000), formType, usedKnownSchema, false),
+      rawResponse: response.slice(0, 1000) + '... [truncated]',
+      parseTimeMs: performance.now() - startTime
+    };
+  }
+
   // Handle empty/whitespace responses
   if (!response || !response.trim()) {
     return {
@@ -213,15 +227,27 @@ export function parseJSONResponse(response: string, formType: string): ParseResu
  * @returns Object with repaired flag and potentially fixed text
  */
 function attemptBracketRepair(text: string): { repaired: boolean; text: string } {
-  // Count brackets and braces
+  // Security: Limit repair attempts on excessively long strings
+  const MAX_REPAIR_LENGTH = 1024 * 1024; // 1MB
+  if (text.length > MAX_REPAIR_LENGTH) {
+    return { repaired: false, text }; // Don't attempt repair on huge inputs
+  }
+
+  // Count brackets and braces with depth limit to prevent stack issues
   let braceCount = 0;  // { }
   let bracketCount = 0; // [ ]
+  const MAX_NESTING_DEPTH = 100;
 
   for (const char of text) {
     if (char === '{') braceCount++;
     else if (char === '}') braceCount--;
     else if (char === '[') bracketCount++;
     else if (char === ']') bracketCount--;
+    
+    // Prevent excessive nesting that could cause performance issues
+    if (Math.abs(braceCount) > MAX_NESTING_DEPTH || Math.abs(bracketCount) > MAX_NESTING_DEPTH) {
+      return { repaired: false, text };
+    }
   }
 
   // If balanced, no repair needed

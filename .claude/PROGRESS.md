@@ -12,6 +12,37 @@ Implementing plan from `docs/plans/2025-12-28-simplify-json-parsing-pipeline.md`
 
 **Goal**: Replace 2,500 lines of complex parsing code with ~300 lines of bulletproof prompts.
 
+### Phase 5 Complete: Bracket Repair for AI Failure Modes ✅ (2025-12-29)
+
+**Branch**: `fix/json-bracket-repair` (ready for PR)
+
+Fixed intermittent JSON parsing failures caused by AI forgetting to close arrays.
+
+**Root Cause Investigation**:
+- Stress testing revealed Grok 4.1-fast has ~40% failure rate on complex JSON
+- All failures had `finish_reason: stop` (not truncation) with bracket imbalance of 1
+- AI completes normally but forgets `]` before final `}`
+- Example: `{"keyPoints":["point 1","point 2"}` (missing `]`)
+
+**Files MODIFIED**:
+- `lib/ai/parsers/simple-parser.ts`:
+  - Added `attemptBracketRepair()` function for known AI failure modes
+  - New method type: `'bracket-repaired'`
+  - New diagnostics: `bracketRepairAttempted`, `bracketRepairSucceeded`
+  - Repairs unclosed arrays before closing objects
+
+- `lib/ai/prompts/unified-prompts.ts`:
+  - Added Rule #8: "CRITICAL: Every [ MUST have a matching ]. Close all arrays BEFORE closing the object with }"
+  - Added STRUCTURE CHECK section with bracket verification instructions
+
+**Files CREATED**:
+- `__tests__/ai/parsers/simple-parser-bracket-repair.test.ts` (197 lines, 16 tests)
+
+**Test Results**:
+- ✅ All 16 bracket repair tests passing
+- ✅ All 60 AI parser tests passing
+- ✅ TypeScript compilation clean
+
 ### Phase 4 Complete: Update Summarization Entry Point ✅ (2025-12-28)
 
 Wired the unified-prompts system into the summarization entry point.
@@ -73,7 +104,7 @@ The Big Deletion - removed ~1,500+ lines of legacy parsing code.
 **Infrastructure Fix**:
 - `jest.setup.js` - Added Logger class mock to fix pre-existing test failures in SEC parser tests
 
-**Next Phase**: Phase 5 - Production Validation & Monitoring
+**Next Phase**: Merge bracket repair PR and continue production validation
 
 ### Known Pre-Existing Issues (Not Phase 3 Related)
 
@@ -201,5 +232,5 @@ Fixed critical RLS and performance issues from Supabase audit.
 
 ---
 
-*Last Updated: 2025-12-28 21:30 AEDT*
+*Last Updated: 2025-12-29 11:30 AEDT*
 *Older completed projects archived to .claude/history/ - See TIMELINE.md for full history*
