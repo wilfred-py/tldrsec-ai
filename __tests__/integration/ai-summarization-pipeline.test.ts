@@ -60,6 +60,18 @@ jest.mock('../../lib/monitoring', () => ({
   }
 }));
 
+// Mock circuit breaker to bypass state persistence between tests
+jest.mock('../../lib/error-handling/retry', () => ({
+  checkCircuitBreaker: jest.fn().mockReturnValue({ isOpen: false }),
+  getCircuitBreaker: jest.fn().mockReturnValue({
+    failures: 0,
+    lastFailure: 0,
+    isOpen: false
+  }),
+  resetCircuitBreaker: jest.fn(),
+  executeWithRetry: jest.fn().mockImplementation(async (fn) => fn())
+}));
+
 import { generateAISummaryWithRetry } from '../../services/filing/summaryGenerationService';
 import { parseFormContentEnhanced } from '../../lib/parsers/enhanced-form-parser';
 import { openRouterClient } from '../../lib/ai/openrouter-client';

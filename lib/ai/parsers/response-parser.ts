@@ -1,16 +1,15 @@
 /**
  * Response Parser for Claude API Responses
- * 
+ *
  * Provides a unified interface for extracting, validating, and
  * normalizing JSON data from Claude API responses.
+ *
+ * Phase 3: Simplified to use single-pass parsing without repair attempts.
+ * If the prompt is correct, the response is correct. We don't repair broken JSON.
  */
 
-import { 
-  ExtractionOptions, 
-  ParserMetrics
-} from './types';
-import { extractJSON, repairJSON } from './json-extractors';
-import { validateAgainstSchema, extractValidFields } from './schema-validators';
+import { ParserMetrics } from './types';
+import { parseJSONResponse, ParseResult as SimpleParseResult } from './simple-parser';
 import { normalizeDate, normalizeCurrency, normalizePercentage } from './normalizers';
 import { SECFilingType } from '../prompts/prompt-types';
 import { secLogger as logger } from '../../../utils/logger';
@@ -156,11 +155,17 @@ function normalizeFields(data: unknown, filingType: SECFilingType): unknown {
 
 /**
  * Options for parsing responses
+ *
+ * Note: maxAttempts is kept for backward compatibility but is ignored.
+ * We use single-pass parsing - no repair attempts.
  */
-export interface ParseOptions extends ExtractionOptions {
+export interface ParseOptions {
   normalize?: boolean;
   collectMetrics?: boolean;
+  /** @deprecated Single-pass parsing - no repair attempts */
   maxAttempts?: number;
+  /** Allow partial data extraction if validation fails */
+  allowPartial?: boolean;
 }
 
 /**
@@ -177,7 +182,10 @@ export interface ParseResult<T = unknown> {
 
 /**
  * Parse a Claude API response to extract structured data
- * 
+ *
+ * Phase 3: Uses single-pass parsing without repair attempts.
+ * If the prompt is correct, the response is correct.
+ *
  * @param response - Text response from Claude
  * @param filingType - Type of SEC filing for schema validation
  * @param options - Parsing options
@@ -197,119 +205,84 @@ export function parseResponse<T = unknown>(
     extractionMethod: 'none',
     documentType: filingType
   };
-  
+
   try {
-    // Try to extract JSON from the response
-    const extractionStartTime = Date.now();
-    let extracted = extractJSON(response, {
-      allowPartial: options.allowPartial ?? true,
-      strictValidation: options.strictValidation,
-      filingType,
-      ...options
-    });
-    
-    metrics.extractionTimeMs = Date.now() - extractionStartTime;
-    metrics.extractionMethod = extracted.extractionMethod;
-    metrics.extractionSuccess = extracted.success;
-    
-    // Try to repair if extraction failed
-    if (!extracted.success && (options.maxAttempts ?? 3) > 0) {
-      // Try to repair the JSON
-      const repairAttempts = options.maxAttempts ?? 3;
-      let repaired = false;
-      
-      for (let attempt = 0; attempt < repairAttempts && !repaired; attempt++) {
-        try {
-          // If repair becomes more advanced, we'd put each technique here
-          const repairedText = repairJSON(extracted.raw || response);
-          
-          // Try to parse the repaired JSON
-          const parsed = JSON.parse(repairedText);
-          
-          // Update the extraction result
-          extracted = {
-            raw: repairedText,
-            parsed,
-            extractionMethod: `${extracted.extractionMethod}-repaired`,
-            success: true
-          };
-          
-          repaired = true;
-          metrics.extractionSuccess = true;
-          metrics.extractionMethod = extracted.extractionMethod;
-        } catch {
-          // Continue to the next repair attempt
-        }
-      }
-    }
-    
-    // If extraction failed completely, return failure
-    if (!extracted.success) {
+    // Single-pass JSON extraction using the simple parser
+    const simpleResult: SimpleParseResult = parseJSONResponse(response, filingType);
+
+    metrics.extractionTimeMs = simpleResult.parseTimeMs;
+    metrics.extractionMethod = simpleResult.method;
+    metrics.extractionSuccess = simpleResult.success || !!simpleResult.data;
+
+    // If parsing failed completely, return failure
+    if (!simpleResult.success && !simpleResult.data) {
       return {
         success: false,
-        errors: [extracted.error?.message || 'Failed to extract JSON from response'],
+        errors: simpleResult.error
+          ? [simpleResult.error]
+          : simpleResult.validationErrors || ['Failed to parse JSON from response'],
         raw: response,
         metrics: options.collectMetrics ? metrics : undefined
       };
     }
-    
-    // Validate the extracted JSON against the schema
-    const validationStartTime = Date.now();
-    const validationResult = validateAgainstSchema(
-      extracted.parsed,
-      filingType,
-      options.strictValidation
-    );
-    
-    metrics.validationTimeMs = Date.now() - validationStartTime;
-    metrics.validationSuccess = validationResult.valid;
-    
-    // If validation failed but partial data is allowed, try to extract valid fields
-    let data: unknown = validationResult.valid 
-      ? validationResult.validatedData 
-      : (options.allowPartial ? extractValidFields(extracted.parsed, filingType) : undefined);
-    
-    // First, normalize and post-process the data to ensure required fields are present
-    // before validation occurs
+
+    // Track validation success
+    metrics.validationSuccess = simpleResult.success && !simpleResult.validationErrors;
+
+    // Get the parsed data
+    let data: Record<string, unknown> | undefined = simpleResult.data;
+
+    // Normalize and post-process the data
     if (data) {
-      // Always normalize fields regardless of options to ensure consistent validation
-      // Forward reference to normalizeFields function defined below
-      data = normalizeFields(data, filingType as SECFilingType);
-      
-      // Store the original response in the data object for potential summary recovery
-      data._originalResponse = response;
-      
-      // Post-process to handle missing required fields for all form types
-      data = postProcessFilingData(data, filingType as SECFilingType);
-      
-      // Remove the _originalResponse field after processing to avoid storing it in the database
-      if (data._originalResponse) {
-        delete data._originalResponse;
-      }
+      // Normalize fields (dates, currencies, etc.)
+      data = normalizeFields(data, filingType as SECFilingType) as Record<string, unknown>;
+
+      // Store the original response for potential summary recovery
+      const dataWithResponse = data as Record<string, unknown> & { _originalResponse?: string };
+      dataWithResponse._originalResponse = response;
+
+      // Post-process to handle missing required fields
+      data = postProcessFilingData(dataWithResponse, filingType as SECFilingType) as Record<string, unknown>;
+
+      // Remove the _originalResponse field to avoid storing in database
+      delete (data as Record<string, unknown> & { _originalResponse?: string })._originalResponse;
     }
-    
-    // Check if we have at least some usable data
+
+    // Determine if we have partial data
+    const hasValidationErrors = !!(simpleResult.validationErrors && simpleResult.validationErrors.length > 0);
     const hasPartialData = data && Object.keys(data).length > 0;
-    
-    // For successful validation, set partial to undefined explicitly (not just omitted)
-    if (validationResult.valid) {
+
+    // For fully successful validation
+    if (simpleResult.success && !hasValidationErrors) {
       return {
         success: true,
         data: data as T,
-        raw: extracted.raw,
+        raw: simpleResult.rawResponse,
         partial: undefined,
         errors: undefined,
         metrics: options.collectMetrics ? metrics : undefined
       };
     }
-    
-    // For partial data, make sure we properly indicate it's partial
+
+    // For partial data (validation errors but some data extracted)
+    if (hasPartialData && options.allowPartial !== false) {
+      return {
+        success: true,
+        data: data as T,
+        raw: simpleResult.rawResponse,
+        errors: simpleResult.validationErrors,
+        partial: true,
+        metrics: options.collectMetrics ? metrics : undefined
+      };
+    }
+
+    // Parsing or validation failed
     return {
-      success: validationResult.valid || hasPartialData,
+      success: false,
       data: data as T,
-      raw: extracted.raw,
-      errors: validationResult.valid ? undefined : validationResult.errors,
-      partial: !validationResult.valid && hasPartialData,
+      raw: simpleResult.rawResponse,
+      errors: simpleResult.validationErrors || [simpleResult.error || 'Unknown parsing error'],
+      partial: hasPartialData,
       metrics: options.collectMetrics ? metrics : undefined
     };
   } catch (error) {

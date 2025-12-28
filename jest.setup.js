@@ -101,20 +101,24 @@ jest.mock('@/lib/monitoring', () => ({
 }), { virtual: true });
 
 // Mock the logger
-jest.mock('@/lib/logging', () => ({
-  logger: {
+const mockLoggerMethods = {
+  error: jest.fn(),
+  info: jest.fn(),
+  debug: jest.fn(),
+  warn: jest.fn(),
+  child: jest.fn().mockReturnValue({
     error: jest.fn(),
     info: jest.fn(),
     debug: jest.fn(),
     warn: jest.fn(),
-    child: jest.fn().mockReturnValue({
-      error: jest.fn(),
-      info: jest.fn(),
-      debug: jest.fn(),
-      warn: jest.fn(),
-      child: jest.fn()
-    })
-  }
+    child: jest.fn()
+  })
+};
+
+jest.mock('@/lib/logging', () => ({
+  logger: mockLoggerMethods,
+  Logger: jest.fn().mockImplementation(() => mockLoggerMethods),
+  defaultLogger: mockLoggerMethods
 }), { virtual: true });
 
 // Mock notification service

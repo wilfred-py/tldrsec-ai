@@ -13,6 +13,10 @@ This file provides a chronological index of all completed projects. For detailed
 
 | Date | Project | Status |
 |------|---------|--------|
+| 2025-12-28 | JSON Parsing Pipeline Simplification - Phase 3 (Delete Legacy Code) | ✅ |
+| 2025-12-28 | JSON Parsing Pipeline Simplification - Phase 2 (Simple Parser) - Manual Verified | ✅ |
+| 2025-12-28 | JSON Parsing Pipeline Simplification - Phase 1 (Bulletproof Prompts) | ✅ |
+| 2025-12-28 | Form 4 Email Improvements (XML URL conversion + markdown data extractor) | ✅ |
 | 2025-12-27 | Test Data Integrity Improvements (3-phase: markers, tracking, audit CLI) | ✅ |
 | 2025-12-27 | Email URL Verification for All Form Types (10-K, 10-Q, 8-K, Form 4, Form 3, Form 144) | ✅ |
 | 2025-12-26 | Email Filing Link Fix (primaryDocUrl for direct document links) | ✅ |
@@ -109,8 +113,8 @@ This file provides a chronological index of all completed projects. For detailed
 
 ## Archive Statistics
 - **Total Archived Projects**: 32 projects across 6 weekly archives
-- **Current PROGRESS.md Lines**: 241 (threshold: 500)
-- **Last Sync**: 2025-12-27
+- **Current PROGRESS.md Lines**: 140 (threshold: 500)
+- **Last Sync**: 2025-12-28 17:15 AEDT
 - **Archive System**: ✅ ACTIVE
 - **Next Archive Check**: When PROGRESS.md > 500 lines AND projects > 30 days old
 
