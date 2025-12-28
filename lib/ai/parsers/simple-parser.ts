@@ -1,13 +1,16 @@
 /**
- * Simple JSON Parser - Single Pass, No Fallbacks
+ * Simple JSON Parser - Single Pass with Minimal Repair
  *
  * Design philosophy: If the prompt is correct, the response is correct.
- * We don't repair broken JSON - we report it for prompt improvement.
+ * However, AI models sometimes produce predictable, fixable errors
+ * (like forgetting to close an array before closing the object).
  *
- * This parser replaces the complex 5-strategy extraction pipeline with
- * a simple, fast, deterministic parser that validates against schema.
+ * This parser performs:
+ * 1. Direct JSON.parse attempt
+ * 2. If that fails, minimal bracket repair for known AI failure modes
+ * 3. Schema validation
  *
- * Performance target: < 5ms average parse time (vs ~70ms with old system)
+ * Performance target: < 5ms average parse time
  *
  * @module simple-parser
  */
@@ -23,7 +26,7 @@ export interface ParseResult {
   /** The parsed JSON data (if successful or partially successful) */
   data?: Record<string, unknown>;
   /** The extraction method used */
-  method: 'direct' | 'codeblock-stripped';
+  method: 'direct' | 'codeblock-stripped' | 'bracket-repaired';
   /** Number of parse attempts (always 1 - we don't retry) */
   attempts: number;
   /** Error message if parsing failed */
@@ -58,6 +61,10 @@ export interface ParseDiagnostics {
   usedKnownSchema: boolean;
   /** Position of error in response (if available) */
   errorPosition?: number;
+  /** Whether bracket repair was attempted */
+  bracketRepairAttempted?: boolean;
+  /** Whether bracket repair was successful */
+  bracketRepairSucceeded?: boolean;
 }
 
 /**
@@ -147,16 +154,102 @@ export function parseJSONResponse(response: string, formType: string): ParseResu
     const positionMatch = errorMessage.match(/position\s*(\d+)/i);
     const errorPosition = positionMatch ? parseInt(positionMatch[1], 10) : undefined;
 
+    // Attempt bracket repair for known AI failure modes
+    const repairResult = attemptBracketRepair(jsonText);
+
+    if (repairResult.repaired) {
+      try {
+        const data = JSON.parse(repairResult.text) as Record<string, unknown>;
+
+        // Validate against schema
+        const validationErrors = validateAgainstSchema(data, schema);
+
+        if (validationErrors.length > 0) {
+          return {
+            success: false,
+            data,
+            method: 'bracket-repaired',
+            attempts: 1,
+            validationErrors,
+            diagnostics: buildDiagnostics(response, formType, usedKnownSchema, hadCodeBlock, errorPosition, true, true),
+            rawResponse: response,
+            parseTimeMs: performance.now() - startTime
+          };
+        }
+
+        return {
+          success: true,
+          data,
+          method: 'bracket-repaired',
+          attempts: 1,
+          rawResponse: response,
+          diagnostics: buildDiagnostics(response, formType, usedKnownSchema, hadCodeBlock, errorPosition, true, true),
+          parseTimeMs: performance.now() - startTime
+        };
+      } catch {
+        // Bracket repair didn't help - fall through to error return
+      }
+    }
+
     return {
       success: false,
       method,
       attempts: 1,
       error: errorMessage,
-      diagnostics: buildDiagnostics(response, formType, usedKnownSchema, hadCodeBlock, errorPosition),
+      diagnostics: buildDiagnostics(response, formType, usedKnownSchema, hadCodeBlock, errorPosition, repairResult.repaired, false),
       rawResponse: response,
       parseTimeMs: performance.now() - startTime
     };
   }
+}
+
+/**
+ * Attempt to repair common bracket/brace imbalance issues
+ *
+ * AI models sometimes forget to close arrays before closing objects.
+ * This function detects and fixes that specific failure mode.
+ *
+ * @param text - The JSON text to attempt to repair
+ * @returns Object with repaired flag and potentially fixed text
+ */
+function attemptBracketRepair(text: string): { repaired: boolean; text: string } {
+  // Count brackets and braces
+  let braceCount = 0;  // { }
+  let bracketCount = 0; // [ ]
+
+  for (const char of text) {
+    if (char === '{') braceCount++;
+    else if (char === '}') braceCount--;
+    else if (char === '[') bracketCount++;
+    else if (char === ']') bracketCount--;
+  }
+
+  // If balanced, no repair needed
+  if (braceCount === 0 && bracketCount === 0) {
+    return { repaired: false, text };
+  }
+
+  // Common AI failure mode: forgot to close array(s) before closing object
+  // Response ends with "}" but should end with "]}}" or similar
+  if (bracketCount > 0 && braceCount === 0 && text.endsWith('}')) {
+    // Insert missing ] before the final }
+    // Handle multiple unclosed brackets
+    const closingBrackets = ']'.repeat(bracketCount);
+    const repairedText = text.slice(0, -1) + closingBrackets + '}';
+    return { repaired: true, text: repairedText };
+  }
+
+  // Another failure mode: multiple unclosed braces/brackets at end
+  if (bracketCount > 0 && braceCount > 0) {
+    // Try to close in the right order: ] first, then }
+    const closingBrackets = ']'.repeat(bracketCount);
+    const closingBraces = '}'.repeat(braceCount);
+    const repairedText = text + closingBrackets + closingBraces;
+    return { repaired: true, text: repairedText };
+  }
+
+  // Can't repair other cases
+  return { repaired: false, text };
 }
 
 /**
@@ -167,7 +260,9 @@ function buildDiagnostics(
   formType: string,
   usedKnownSchema: boolean,
   hadCodeBlock: boolean,
-  errorPosition?: number
+  errorPosition?: number,
+  bracketRepairAttempted?: boolean,
+  bracketRepairSucceeded?: boolean
 ): ParseDiagnostics {
   const trimmed = (response || '').trim();
   return {
@@ -178,7 +273,9 @@ function buildDiagnostics(
     hadCodeBlock,
     formType,
     usedKnownSchema,
-    errorPosition
+    errorPosition,
+    bracketRepairAttempted,
+    bracketRepairSucceeded
   };
 }
 

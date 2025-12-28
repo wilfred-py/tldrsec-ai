@@ -357,6 +357,12 @@ RULES:
 5. Numbers should include units ($, %, shares)
 6. Dates must be YYYY-MM-DD format
 7. Arrays must not be empty - include at least one item
+8. CRITICAL: Every [ MUST have a matching ]. Close all arrays BEFORE closing the object with }
+
+STRUCTURE CHECK - Before outputting, verify:
+- Count of { equals count of }
+- Count of [ equals count of ]
+- Response ends with ]} or }} (arrays closed before object)
 
 FORBIDDEN:
 - Do not wrap in \`\`\`json\`\`\`
