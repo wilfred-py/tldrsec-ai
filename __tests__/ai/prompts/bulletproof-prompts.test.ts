@@ -14,7 +14,8 @@ describe('Unified Filing Prompts', () => {
         formType: '10-K',
         company: 'Tesla, Inc.',
         ticker: 'TSLA',
-        filingDate: '2024-02-07'
+        filingDate: '2024-02-07',
+        filingContent: 'Tesla, Inc. Annual Report...'
       };
 
       const { systemPrompt, userPrompt } = generateFilingPrompt(config);
@@ -22,11 +23,12 @@ describe('Unified Filing Prompts', () => {
       // Prompt must start with JSON requirements
       expect(systemPrompt).toMatch(/^CRITICAL: You must respond with ONLY valid JSON/);
 
-      // Prompt must include schema before content
+      // Prompt must include schema before content (when content is provided)
       expect(userPrompt.indexOf('JSON Schema:')).toBeLessThan(userPrompt.indexOf('Filing Content:'));
 
-      // Prompt must forbid markdown
-      expect(systemPrompt).toContain('Do not wrap in markdown code blocks');
+      // Prompt must forbid markdown (uses backticks in actual text)
+      expect(systemPrompt).toContain('Do not wrap in');
+      expect(systemPrompt).toContain('json');
     });
 
     it('should include exact field names with no synonyms', () => {

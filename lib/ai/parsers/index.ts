@@ -1,12 +1,13 @@
 /**
  * Response Parsing and JSON Extraction Module
- * 
+ *
+ * Phase 3: Simplified to use single-pass parsing without repair attempts.
  * Provides utilities for extracting structured data from Claude's responses
  * and converting them into standardized JSON formats.
  */
 
 export * from './response-parser';
-export * from './json-extractors';
+export * from './simple-parser';
 export * from './schema-validators';
 export * from './normalizers';
 export * from './streaming';

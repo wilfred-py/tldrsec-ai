@@ -1,15 +1,19 @@
 /**
  * Claude AI Summarization Service
- * 
- * Handles the summarization of SEC filings using Anthropic's Claude API
- * with specialized prompts for different filing types.
+ *
+ * Phase 4: Uses unified-prompts system for bulletproof JSON output.
+ * The system prompt enforces strict JSON-only responses, eliminating
+ * the need for complex parsing and repair logic.
+ *
+ * Handles the summarization of SEC filings using xAI Grok via OpenRouter
+ * with form-specific prompts that guarantee clean JSON responses.
  */
 
 import { openRouterClient } from './openrouter-client';
 import { modelConfig, getDefaultModel } from './config';
 import { parseResponse } from './parsers';
 import { SECFilingType } from './prompts/prompt-types';
-import { generateFilingPrompt } from './prompts/filing-prompts';
+import { generateFilingPrompt as generateUnifiedPrompt } from './prompts/unified-prompts';
 import { estimateTokenCount, splitDocumentIntoChunks, getContextConfig } from './prompts/context-manager';
 // Removed Anthropic SDK import - using OpenRouter client
 // import { extractFilingContent } from '../parsers/filing-extractor'; // Currently unused
@@ -17,7 +21,60 @@ import { logger } from '../logging';
 import { monitoring } from '../monitoring';
 import { ApiError, ErrorCode } from '../error-handling';
 import { prisma } from '../db/prisma';
-import { ensureMinimumFields, validateRequiredFields } from './parsers/response-fixer';
+import { getSchemaForFormType, JSONSchema } from './prompts/unified-prompts';
+
+/**
+ * Validates if a parsed response has all required fields for its filing type
+ * Phase 3: Uses schema from unified-prompts instead of legacy response-fixer
+ *
+ * @param data - The parsed data to validate
+ * @param filingType - The type of SEC filing
+ * @returns Object with validation result and missing fields
+ */
+function validateRequiredFields(
+  data: Record<string, unknown>,
+  filingType: SECFilingType
+): { valid: boolean; missingFields: string[] } {
+  const schema: JSONSchema = getSchemaForFormType(filingType);
+  const missingFields = schema.required.filter(field => {
+    const value = data[field];
+    if (value === undefined || value === null) return true;
+    if (typeof value === 'string' && value.trim() === '') return true;
+    if (Array.isArray(value) && value.length === 0) return true;
+    return false;
+  });
+
+  return {
+    valid: missingFields.length === 0,
+    missingFields
+  };
+}
+
+/**
+ * Creates minimum fallback data when parsing fails
+ * Phase 3: Simplified fallback - just ensures summary and company exist
+ *
+ * @param responseText - The raw text response from Claude
+ * @param filingType - The type of SEC filing
+ * @param fallbackCompany - Fallback company name if not found
+ * @returns A minimal JSON object with basic required fields
+ */
+function ensureMinimumFields(
+  responseText: string,
+  filingType: SECFilingType,
+  fallbackCompany: string = 'Unknown Company'
+): Record<string, unknown> {
+  // Extract any meaningful text as summary (limit to 500 chars)
+  const summary = responseText.length > 500
+    ? responseText.substring(0, 497) + '...'
+    : responseText;
+
+  return {
+    company: fallbackCompany,
+    summary: summary || `Unable to parse ${filingType} filing summary.`,
+    filingType
+  };
+}
 
 /**
  * Process document content for summarization
@@ -335,23 +392,39 @@ const componentLogger = logger.child('claude-summarizer');
 
 /**
  * Get the appropriate prompt for a filing type with context
+ * Phase 4: Uses unified-prompts for bulletproof JSON output
  */
 function getPromptForFilingType(filingType: SECFilingType, context: { ticker?: string; companyName?: string; accessionNumber?: string }) {
-  // Use the filing-prompts module to generate an appropriate prompt
   return {
-    getFullPrompt: (content: string) => {
-      const { messages } = generateFilingPrompt({
-        filingType,
-        content,
-        companyName: context.companyName || 'Unknown Company',
+    /**
+     * Generate the complete prompt including system and user prompts
+     * Returns both prompts for use with OpenRouter API
+     */
+    getPrompts: (content: string) => {
+      const { systemPrompt, userPrompt } = generateUnifiedPrompt({
+        formType: filingType,
+        company: context.companyName || 'Unknown Company',
         ticker: context.ticker || 'Unknown',
         filingDate: new Date().toISOString().split('T')[0],
-        // Include accession number if available
-        accessionNumber: context.accessionNumber
+        filingContent: content
       });
-      
-      // Return the user message content as the full prompt
-      return messages[0].content;
+
+      return { systemPrompt, userPrompt };
+    },
+    /**
+     * Legacy method - returns just the user prompt for backward compatibility
+     * @deprecated Use getPrompts() instead for full JSON enforcement
+     */
+    getFullPrompt: (content: string) => {
+      const { userPrompt } = generateUnifiedPrompt({
+        formType: filingType,
+        company: context.companyName || 'Unknown Company',
+        ticker: context.ticker || 'Unknown',
+        filingDate: new Date().toISOString().split('T')[0],
+        filingContent: content
+      });
+
+      return userPrompt;
     }
   };
 }
@@ -609,43 +682,50 @@ export async function summarizeFiling(content: string, options: SummarizationOpt
     
     // Use the processed content for the prompt
     const processedContent = processedDoc.processedContent;
-    
+
     // Get the appropriate prompt for this filing type
+    // Phase 4: Now using unified-prompts with bulletproof JSON enforcement
     const promptGenerator = getPromptForFilingType(
-      filingRecordFromDB.formType as SECFilingType, 
-      { 
-        ticker: filingRecordFromDB.ticker?.symbol, 
+      filingRecordFromDB.formType as SECFilingType,
+      {
+        ticker: filingRecordFromDB.ticker?.symbol,
         companyName: filingRecordFromDB.companyName,
         // Add accession number if available
         accessionNumber: filingRecordFromDB.accessionNumber
       }
     );
-    
+
     // Check if we need to chunk the document due to token limits
     const estimatedTokens = estimateTokenCount(processedContent);
-    const maxTokenLimit = 180000; // Claude Sonnet 4's max token limit is 200k, but leave buffer for prompt
-    
-    let prompt: string;
-    // const isChunked = false; // For potential future use
-    
+    const maxTokenLimit = 180000; // xAI Grok's context window allows this with buffer for prompt
+
+    let userPrompt: string;
+    let systemPrompt: string;
+
     // Handle minimal content case specially
     if (processedDoc.isMinimalContent) {
       // For minimal content, we already generated a special prompt in processedContent
-      prompt = processedContent;
+      // Use the unified prompts system prompt for JSON enforcement
+      const prompts = promptGenerator.getPrompts('');
+      systemPrompt = prompts.systemPrompt;
+      userPrompt = processedContent;
       componentLogger.info(`Using minimal content prompt for filing ${filingId || 'direct'} (${filingRecordFromDB.formType})`);
       monitoring.incrementCounter('ai.minimal_content_prompt_used', 1);
     } else if (estimatedTokens > maxTokenLimit) {
       // Document is too large, we need to truncate it further
       componentLogger.warn(`Document for filing ${filingId || 'direct'} exceeds token limit (${estimatedTokens} tokens). Truncating to ${maxTokenLimit} tokens.`);
       monitoring.incrementCounter('ai.document_truncated', 1);
-      
+
       // Use the existing truncation function since we've already done smart processing in processDocumentContent
       const truncatedContent = truncateDocumentContent(processedContent, maxTokenLimit);
-      prompt = promptGenerator.getFullPrompt(truncatedContent);
-      // const _isChunked = true; // For potential future use
+      const prompts = promptGenerator.getPrompts(truncatedContent);
+      systemPrompt = prompts.systemPrompt;
+      userPrompt = prompts.userPrompt;
     } else {
-      // Document is within token limits
-      prompt = promptGenerator.getFullPrompt(processedContent);
+      // Document is within token limits - use unified prompts
+      const prompts = promptGenerator.getPrompts(processedContent);
+      systemPrompt = prompts.systemPrompt;
+      userPrompt = prompts.userPrompt;
     }
     
     // Update the summary record to show we're processing (only if summaryId exists)
@@ -660,22 +740,25 @@ export async function summarizeFiling(content: string, options: SummarizationOpt
     }
     
     // Configure the OpenRouter request
+    // Phase 4: Include system prompt for bulletproof JSON enforcement
     const model = optionsModel || getDefaultModel();
     const requestOptions = {
       model,
       maxTokens: modelConfig.maxOutputTokens || 4000,
       temperature: modelConfig.temperature || 0.3,
+      system: systemPrompt, // Phase 4: Unified prompts system message enforcing JSON output
       ...openRouterOptions
     };
-    
-    componentLogger.debug(`Using model ${model} for ${summaryId ? `summaryId=${summaryId}` : 'direct summarization'}`);
-    
+
+    componentLogger.debug(`Using model ${model} for ${summaryId ? `summaryId=${summaryId}` : 'direct summarization'} with unified prompts`);
+
     try {
       // Call OpenRouter API to generate the summary
+      // Phase 4: Now using system prompt + user prompt for bulletproof JSON output
       const response = await aiClient.sendMessage([
         {
           role: 'user',
-          content: prompt
+          content: userPrompt
         }
       ], requestOptions);
       

@@ -1,13 +1,14 @@
 /**
  * Streaming Support for Claude AI Client
- * 
+ *
+ * Phase 3: Simplified to use single-pass parsing without repair attempts.
  * Provides streaming capabilities for faster partial results from Claude API.
  */
 
 import { EventEmitter } from 'events';
 import { SummarizationResult } from '../summarize';
 import { logger } from '../../logging';
-import { extractJSON, repairJSON } from '../parsers/json-extractors';
+import { parseJSONResponse } from '../parsers/simple-parser';
 import { monitoring } from '../../monitoring';
 
 // Logger for this component
@@ -187,64 +188,43 @@ export class StreamHandler extends EventEmitter {
   
   /**
    * Extract JSON from the current buffer
+   * Phase 3: Uses single-pass parsing without repair attempts.
    * @param isFinal Whether this is the final extraction
    */
   private extractJSON(isFinal: boolean): void {
     try {
-      // Try to extract JSON from the buffer
-      const result = extractJSON(this.buffer);
-      
-      if (result.success && result.parsed) {
+      // Try to extract JSON from the buffer using simple parser
+      // Use 'Generic' form type since streaming doesn't have form context
+      const result = parseJSONResponse(this.buffer, 'Generic');
+
+      if (result.success && result.data) {
         // JSON successfully extracted
-        const json = result.parsed as Record<string, unknown>;
-        
+        const json = result.data as Record<string, unknown>;
+
         // Check if this JSON is different from the last one we emitted
         const jsonStr = JSON.stringify(json);
         const lastJsonStr = this.lastPartialJSON ? JSON.stringify(this.lastPartialJSON) : '';
-        
+
         if (jsonStr !== lastJsonStr) {
           // Emit JSON update
           this.lastPartialJSON = json;
-          
+
           this.emit(isFinal ? StreamEvent.COMPLETE_JSON : StreamEvent.PARTIAL_JSON, {
             summaryId: this.summaryId,
             json,
             isComplete: isFinal,
             timestamp: new Date()
           } as StreamJSONUpdate);
-          
+
           componentLogger.debug(`Extracted ${isFinal ? 'complete' : 'partial'} JSON for summary ${this.summaryId}`);
           monitoring.incrementCounter('ai.streaming.json_extractions', 1);
         }
-      } else if (isFinal) {
-        // If this is the final extraction and we couldn't extract JSON, try to repair it
-        componentLogger.debug(`Attempting to repair JSON for summary ${this.summaryId}`);
-        
-        // Look for JSON-like structures in the buffer
-        const jsonPattern = /\{[\s\S]*\}/g;
-        const matches = this.buffer.match(jsonPattern);
-        
-        if (matches && matches.length > 0) {
-          // Try to repair the first match
-          const potentialJson = matches[0];
-          const repairedJson = repairJSON(potentialJson);
-          
-          try {
-            const json = JSON.parse(repairedJson) as Record<string, unknown>;
-            
-            // Emit repaired JSON
-            this.emit(StreamEvent.COMPLETE_JSON, {
-              summaryId: this.summaryId,
-              json,
-              isComplete: true,
-              timestamp: new Date()
-            } as StreamJSONUpdate);
-            
-            componentLogger.debug(`Repaired and extracted JSON for summary ${this.summaryId}`);
-            monitoring.incrementCounter('ai.streaming.json_repairs', 1);
-          } catch (parseError) {
-            componentLogger.warn(`Failed to parse repaired JSON for summary ${this.summaryId}: ${parseError instanceof Error ? parseError.message : String(parseError)}`);
-          }
+      } else if (isFinal && !result.success) {
+        // If this is the final extraction and we couldn't extract JSON, log the failure
+        // No repair attempts - if the prompt is correct, the response is correct
+        componentLogger.warn(`Failed to extract JSON for summary ${this.summaryId}: ${result.error || 'Unknown error'}`);
+        if (result.diagnostics) {
+          componentLogger.debug(`Parse diagnostics: ${JSON.stringify(result.diagnostics)}`);
         }
       }
     } catch (error) {

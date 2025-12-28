@@ -1,141 +1,125 @@
+/**
+ * Response Parser Tests
+ *
+ * Phase 3: Tests for simplified response parser using single-pass parsing.
+ */
+
 import { parseResponse } from './response-parser';
-import { extractJSON } from './json-extractors';
-import { validateAgainstSchema } from './schema-validators';
 
-// Mock dependencies
-jest.mock('./json-extractors', () => ({
-  extractJSON: jest.fn(),
-  repairJSON: jest.fn((str) => str),
-}));
+describe('Response Parser - Phase 3', () => {
+  describe('parseResponse', () => {
+    test('successfully parses valid JSON response for 10-K', () => {
+      const jsonInput = JSON.stringify({
+        company: 'Test Corp',
+        summary: 'This is a complete test summary for the filing.',
+        fiscalYear: '2024',
+        keyHighlights: ['Revenue grew 15%', 'Expanded to 10 new markets']
+      });
 
-jest.mock('./schema-validators', () => ({
-  validateAgainstSchema: jest.fn(),
-  extractValidFields: jest.fn((data) => data),
-}));
+      const result = parseResponse(jsonInput, '10-K');
 
-describe('Response Parser', () => {
-  beforeEach(() => {
-    jest.clearAllMocks();
-  });
+      expect(result.success).toBe(true);
+      expect(result.data).toBeDefined();
+      expect(result.data?.company).toBe('Test Corp');
+      expect(result.data?.summary).toBe('This is a complete test summary for the filing.');
+      expect(result.partial).toBeUndefined();
+      expect(result.errors).toBeUndefined();
+    });
 
-  test('successfully parses valid JSON response', () => {
-    // Setup mocks
-    const mockData = {
-      company: 'Test Corp',
-      filingDate: '2023-01-15',
-      summary: 'This is a test summary'
-    };
-    
-    (extractJSON as jest.Mock).mockReturnValue({
-      raw: JSON.stringify(mockData),
-      parsed: mockData,
-      extractionMethod: 'codeBlock',
-      success: true
+    test('parses JSON wrapped in markdown code blocks', () => {
+      const jsonInput = '```json\n{"company":"Test Corp","summary":"A test summary.","eventType":"Earnings"}\n```';
+
+      const result = parseResponse(jsonInput, '8-K');
+
+      expect(result.success).toBe(true);
+      expect(result.data?.company).toBe('Test Corp');
+      expect(result.data?.eventType).toBe('Earnings');
     });
-    
-    (validateAgainstSchema as jest.Mock).mockReturnValue({
-      valid: true,
-      validatedData: mockData
+
+    test('handles parsing failure gracefully', () => {
+      const invalidJson = 'This is not JSON at all';
+
+      const result = parseResponse(invalidJson, '10-K');
+
+      expect(result.success).toBe(false);
+      expect(result.errors).toBeDefined();
+      expect(result.errors!.length).toBeGreaterThan(0);
     });
-    
-    // Execute
-    const result = parseResponse('```json\n{"company":"Test Corp","filingDate":"2023-01-15","summary":"This is a test summary"}\n```', '10-K');
-    
-    // Verify
-    expect(result.success).toBe(true);
-    expect(result.data).toEqual(mockData);
-    expect(result.partial).toBeUndefined();
-    expect(result.errors).toBeUndefined();
-    expect(extractJSON).toHaveBeenCalledTimes(1);
-    expect(validateAgainstSchema).toHaveBeenCalledTimes(1);
+
+    test('returns partial data when validation fails but data extracted', () => {
+      // Missing required fiscalYear and keyHighlights for 10-K
+      const partialJson = JSON.stringify({
+        company: 'Test Corp',
+        summary: 'A test summary.'
+      });
+
+      const result = parseResponse(partialJson, '10-K', { allowPartial: true });
+
+      expect(result.success).toBe(true); // Partial data allowed
+      expect(result.data?.company).toBe('Test Corp');
+      expect(result.partial).toBe(true);
+    });
+
+    test('collects metrics when requested', () => {
+      const jsonInput = JSON.stringify({
+        company: 'Test Corp',
+        summary: 'Test summary.',
+        eventType: 'Leadership Change'
+      });
+
+      const result = parseResponse(jsonInput, '8-K', { collectMetrics: true });
+
+      expect(result.success).toBe(true);
+      expect(result.metrics).toBeDefined();
+      expect(result.metrics?.extractionSuccess).toBe(true);
+      expect(result.metrics?.documentType).toBe('8-K');
+      expect(typeof result.metrics?.extractionTimeMs).toBe('number');
+    });
+
+    test('normalizes date fields', () => {
+      const jsonInput = JSON.stringify({
+        company: 'Test Corp',
+        summary: 'Test summary for the fiscal year.',
+        fiscalYear: '2024',
+        keyHighlights: ['Key point 1'],
+        filingDate: '2024-01-15'
+      });
+
+      const result = parseResponse(jsonInput, '10-K');
+
+      expect(result.success).toBe(true);
+      expect(result.data?.filingDate).toBe('2024-01-15');
+    });
+
+    test('generates fallback summary when missing', () => {
+      const jsonInput = JSON.stringify({
+        company: 'Test Corp',
+        fiscalYear: '2024',
+        keyHighlights: ['Key point 1']
+        // No summary field
+      });
+
+      const result = parseResponse(jsonInput, '10-K', { allowPartial: true });
+
+      // The post-processor should generate a fallback summary
+      expect(result.data?.summary).toBeDefined();
+    });
+
+    test('handles Form 4 insider trading data', () => {
+      const jsonInput = JSON.stringify({
+        company: 'Test Corp',
+        summary: 'Insider sold 10,000 shares.',
+        filerName: 'John Doe',
+        transactions: [
+          { type: 'Sell', shares: '10,000', price: '$50.00', date: '2024-01-15' }
+        ]
+      });
+
+      const result = parseResponse(jsonInput, '4');
+
+      expect(result.success).toBe(true);
+      expect(result.data?.filerName).toBe('John Doe');
+      expect(result.data?.transactions).toHaveLength(1);
+    });
   });
-  
-  test('handles extraction failure gracefully', () => {
-    // Setup mocks
-    const errorMessage = 'Failed to extract JSON';
-    
-    (extractJSON as jest.Mock).mockReturnValue({
-      raw: '',
-      error: new Error(errorMessage),
-      extractionMethod: 'none',
-      success: false
-    });
-    
-    // Execute
-    const result = parseResponse('This is not JSON', '10-K');
-    
-    // Verify
-    expect(result.success).toBe(false);
-    expect(result.data).toBeUndefined();
-    expect(result.errors).toEqual([errorMessage]);
-    expect(validateAgainstSchema).not.toHaveBeenCalled();
-  });
-  
-  test('supports partial data extraction when validation fails', () => {
-    // Setup mocks
-    const mockData = {
-      company: 'Test Corp',
-      summary: 'This is a test summary'
-    };
-    
-    (extractJSON as jest.Mock).mockReturnValue({
-      raw: JSON.stringify(mockData),
-      parsed: mockData,
-      extractionMethod: 'codeBlock',
-      success: true
-    });
-    
-    (validateAgainstSchema as jest.Mock).mockReturnValue({
-      valid: false,
-      errors: ['Missing required fields'],
-      partialData: mockData
-    });
-    
-    // Execute
-    const result = parseResponse('```json\n{"company":"Test Corp","summary":"This is a test summary"}\n```', '10-K', {
-      allowPartial: true
-    });
-    
-    // Verify
-    expect(result.success).toBe(true);
-    expect(result.data).toEqual(mockData);
-    expect(result.partial).toBe(true);
-    expect(result.errors).toEqual(['Missing required fields']);
-  });
-  
-  test('collects metrics when requested', () => {
-    // Setup mocks
-    const mockData = {
-      company: 'Test Corp',
-      filingDate: '2023-01-15',
-      summary: 'This is a test summary'
-    };
-    
-    (extractJSON as jest.Mock).mockReturnValue({
-      raw: JSON.stringify(mockData),
-      parsed: mockData,
-      extractionMethod: 'codeBlock',
-      success: true
-    });
-    
-    (validateAgainstSchema as jest.Mock).mockReturnValue({
-      valid: true,
-      validatedData: mockData
-    });
-    
-    // Execute
-    const result = parseResponse('```json\n{"company":"Test Corp","filingDate":"2023-01-15","summary":"This is a test summary"}\n```', '10-K', {
-      collectMetrics: true
-    });
-    
-    // Verify
-    expect(result.success).toBe(true);
-    expect(result.metrics).toBeDefined();
-    expect(result.metrics?.extractionSuccess).toBe(true);
-    expect(result.metrics?.validationSuccess).toBe(true);
-    expect(result.metrics?.extractionMethod).toBe('codeBlock');
-    expect(result.metrics?.documentType).toBe('10-K');
-    expect(typeof result.metrics?.extractionTimeMs).toBe('number');
-    expect(typeof result.metrics?.validationTimeMs).toBe('number');
-  });
-}); 
+});

@@ -4,7 +4,8 @@
  */
 
 import { openRouterClient } from './openrouter-client';
-import { getPromptForFilingType } from './sec-prompts';
+import { generateFilingPrompt } from './prompts/unified-prompts';
+import { parseJSONResponse } from './parsers/simple-parser';
 import { FilingType } from '../sec-edgar/types';
 
 // Simple in-memory cache for filing analyses
@@ -75,23 +76,20 @@ class FilingAnalyzerService {
     try {
       // Truncate content to avoid token limits
       const truncatedContent = documentContent.substring(0, maxContentLength);
-      
-      // Get the appropriate prompt for this filing type
-      const prompt = getPromptForFilingType(
-        filingType as FilingType, 
-        ticker, 
-        companyName,
-        truncatedContent
-      );
-      
+
+      // Generate prompt using the unified prompt system
+      const { systemPrompt, userPrompt } = generateFilingPrompt({
+        formType: filingType as string,
+        company: companyName,
+        ticker,
+        filingContent: truncatedContent
+      });
+
       // Call OpenRouter API
       console.log(`Calling OpenRouter API for ${ticker} ${filingType} analysis...`);
       const response = await openRouterClient.sendMessage([
-        { 
-          role: 'system', 
-          content: "You are an expert financial analyst specializing in SEC filings analysis. Provide concise, accurate analyses in valid JSON format." 
-        },
-        { role: 'user', content: prompt }
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userPrompt }
       ], {
         model,
         temperature,
@@ -99,34 +97,32 @@ class FilingAnalyzerService {
         timeout,
         requestType: 'premium' // Use premium request type for higher priority
       });
-      
-      // Parse the response
+
+      // Parse the response using the simple parser
       const responseText = response.content;
-      
+      const parseResult = parseJSONResponse(responseText, filingType as string);
+
       let analysis;
-      try {
-        // Try to extract JSON from the response if it's wrapped in text
-        const jsonMatch = responseText.match(/\{[\s\S]*\}/);
-        const jsonStr = jsonMatch ? jsonMatch[0] : responseText;
-        
-        // Try to parse as JSON
-        analysis = jsonStr ? JSON.parse(jsonStr) : null;
+      if (parseResult.success && parseResult.data) {
+        analysis = parseResult.data;
         console.log('Successfully parsed Claude response as JSON');
-      } catch (parseError) {
-        console.warn('Failed to parse Claude response as JSON:', parseError);
-        // If not valid JSON, use the raw text but truncate if too long
-        analysis = { 
+      } else {
+        console.warn('Failed to parse Claude response as JSON:', parseResult.error || parseResult.validationErrors);
+        // Return error info for debugging
+        analysis = {
           parseError: true,
           rawAnalysis: responseText.substring(0, 500),
-          fullTextLength: responseText.length
+          fullTextLength: responseText.length,
+          parserError: parseResult.error,
+          validationErrors: parseResult.validationErrors
         };
       }
-      
+
       // Cache the result if caching is enabled and we have a document hash
       if (cacheKey && analysis) {
         this.addToCache(cacheKey, analysis, documentHash || '');
       }
-      
+
       return analysis;
     } catch (error) {
       console.error(`Error analyzing ${ticker} ${filingType} with Claude:`, error);
@@ -159,17 +155,12 @@ class FilingAnalyzerService {
   }
   
   /**
-   * Get Claude API usage statistics
-   * 
-   * @returns The usage statistics
+   * Get API usage statistics
+   *
+   * @returns The usage statistics (placeholder - OpenRouter doesn't expose usage directly)
    */
   getUsageStats(): unknown {
-    try {
-      return claudeClient.getUsage();
-    } catch (error) {
-      console.warn('Could not retrieve Claude usage statistics:', error);
-      return { error: 'Usage statistics unavailable' };
-    }
+    return { message: 'Usage statistics available via OpenRouter dashboard' };
   }
   
   /**

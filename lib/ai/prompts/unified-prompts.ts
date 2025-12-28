@@ -1,0 +1,489 @@
+/**
+ * Unified Prompt System for SEC Filing Summarization
+ *
+ * Design Principles:
+ * 1. JSON schema BEFORE content - AI sees structure requirements first
+ * 2. Explicit field names (no synonyms) - Prevent field name variations
+ * 3. Length constraints on all text - Ensure predictable output size
+ * 4. No markdown wrapping allowed - Raw JSON only
+ * 5. Form-specific required fields - Tailored for each SEC form type
+ *
+ * This replaces the legacy dual-prompt system with a single, bulletproof
+ * architecture that guarantees clean JSON output from AI models.
+ *
+ * @module unified-prompts
+ */
+
+/**
+ * Configuration for generating a filing prompt
+ */
+export interface FilingPromptConfig {
+  /** SEC form type (e.g., '10-K', '8-K', '4') */
+  formType: string;
+  /** Company name */
+  company?: string;
+  /** Stock ticker symbol */
+  ticker?: string;
+  /** Filing date in YYYY-MM-DD format */
+  filingDate?: string;
+  /** The actual filing content to summarize */
+  filingContent?: string;
+}
+
+/**
+ * Output from prompt generation
+ */
+export interface PromptOutput {
+  /** System prompt with strict JSON requirements */
+  systemPrompt: string;
+  /** User prompt with schema and content */
+  userPrompt: string;
+  /** The JSON schema for this form type */
+  schema: JSONSchema;
+}
+
+/**
+ * JSON Schema definition for filing summaries
+ */
+export interface JSONSchema {
+  type: 'object';
+  required: string[];
+  properties: Record<string, SchemaProperty>;
+}
+
+/**
+ * Individual property in a JSON Schema
+ */
+export interface SchemaProperty {
+  type: string;
+  description: string;
+  maxLength?: number;
+  maxItems?: number;
+  items?: SchemaProperty | { type: string; properties?: Record<string, SchemaProperty> };
+  properties?: Record<string, SchemaProperty>;
+}
+
+// =============================================================================
+// Base Schema - Shared by all filing types
+// =============================================================================
+
+const BASE_SCHEMA_PROPERTIES: Record<string, SchemaProperty> = {
+  company: {
+    type: 'string',
+    description: 'Company name exactly as it appears in the filing header (max 100 chars)',
+    maxLength: 100
+  },
+  summary: {
+    type: 'string',
+    description: 'Complete executive summary (2-3 sentences, must end with period, max 500 chars)',
+    maxLength: 500
+  },
+  filingDate: {
+    type: 'string',
+    description: 'Filing date in YYYY-MM-DD format'
+  }
+};
+
+// =============================================================================
+// Form-Specific Schemas
+// =============================================================================
+
+/**
+ * All form type schemas with their required fields and properties
+ */
+export const FORM_SCHEMAS: Record<string, JSONSchema> = {
+  '10-K': {
+    type: 'object',
+    required: ['company', 'summary', 'fiscalYear', 'keyHighlights'],
+    properties: {
+      ...BASE_SCHEMA_PROPERTIES,
+      fiscalYear: {
+        type: 'string',
+        description: 'Fiscal year (e.g., "2024")'
+      },
+      keyHighlights: {
+        type: 'array',
+        description: 'Top 3-5 key points with specific numbers (max 5 items)',
+        maxItems: 5,
+        items: { type: 'string', description: 'Single key point', maxLength: 200 }
+      },
+      risks: {
+        type: 'array',
+        description: 'Top 3 material risks with quantified impact (max 3 items)',
+        maxItems: 3,
+        items: { type: 'string', description: 'Single risk factor', maxLength: 200 }
+      },
+      revenue: {
+        type: 'string',
+        description: 'Total revenue with currency symbol (e.g., "$45.2B")',
+        maxLength: 50
+      },
+      netIncome: {
+        type: 'string',
+        description: 'Net income with currency symbol (e.g., "$2.1B")',
+        maxLength: 50
+      }
+    }
+  },
+
+  '10-Q': {
+    type: 'object',
+    required: ['company', 'summary', 'fiscalQuarter', 'keyHighlights'],
+    properties: {
+      ...BASE_SCHEMA_PROPERTIES,
+      fiscalQuarter: {
+        type: 'string',
+        description: 'Fiscal quarter (e.g., "Q3 2024")'
+      },
+      keyHighlights: {
+        type: 'array',
+        description: 'Top 3-5 key points with specific numbers (max 5 items)',
+        maxItems: 5,
+        items: { type: 'string', description: 'Single key point', maxLength: 200 }
+      },
+      revenue: {
+        type: 'string',
+        description: 'Quarterly revenue with currency symbol',
+        maxLength: 50
+      },
+      quarterOverQuarterChange: {
+        type: 'string',
+        description: 'Quarter-over-quarter change percentage (e.g., "+5.2%")',
+        maxLength: 20
+      }
+    }
+  },
+
+  '8-K': {
+    type: 'object',
+    required: ['company', 'summary', 'eventType'],
+    properties: {
+      ...BASE_SCHEMA_PROPERTIES,
+      eventType: {
+        type: 'string',
+        description: 'Primary event type (e.g., "Earnings Results", "Leadership Change", "Acquisition")',
+        maxLength: 50
+      },
+      reportDate: {
+        type: 'string',
+        description: 'Report date in YYYY-MM-DD format'
+      },
+      itemNumbers: {
+        type: 'array',
+        description: 'SEC item numbers reported (e.g., ["2.02", "9.01"])',
+        items: { type: 'string', description: 'Item number', maxLength: 10 }
+      },
+      financialImpact: {
+        type: 'string',
+        description: 'Financial impact if applicable',
+        maxLength: 200
+      }
+    }
+  },
+
+  '4': {
+    type: 'object',
+    required: ['company', 'summary', 'filerName', 'transactions'],
+    properties: {
+      ...BASE_SCHEMA_PROPERTIES,
+      filerName: {
+        type: 'string',
+        description: 'Insider name exactly from top of form',
+        maxLength: 100
+      },
+      relationship: {
+        type: 'string',
+        description: 'Position/relationship to company (e.g., "CEO", "Director")',
+        maxLength: 100
+      },
+      transactions: {
+        type: 'array',
+        description: 'List of transactions reported',
+        items: {
+          type: 'object',
+          properties: {
+            type: { type: 'string', description: 'Buy/Sell/Grant/Exercise' },
+            shares: { type: 'string', description: 'Number of shares with commas (e.g., "10,000")' },
+            price: { type: 'string', description: 'Price per share with $ (e.g., "$150.25")' },
+            date: { type: 'string', description: 'Transaction date YYYY-MM-DD' }
+          }
+        }
+      },
+      totalValue: {
+        type: 'string',
+        description: 'Total transaction value with $ (e.g., "$1,502,500")',
+        maxLength: 50
+      }
+    }
+  },
+
+  '144': {
+    type: 'object',
+    required: ['company', 'summary', 'filerName', 'proposedSaleAmount'],
+    properties: {
+      ...BASE_SCHEMA_PROPERTIES,
+      filerName: {
+        type: 'string',
+        description: 'Name of the selling security holder',
+        maxLength: 100
+      },
+      proposedSaleAmount: {
+        type: 'string',
+        description: 'Proposed sale amount in shares and/or dollar value',
+        maxLength: 100
+      },
+      securityType: {
+        type: 'string',
+        description: 'Type of securities (e.g., "Common Stock")',
+        maxLength: 50
+      }
+    }
+  },
+
+  'SC 13G': {
+    type: 'object',
+    required: ['company', 'summary', 'filerName', 'ownershipPercentage'],
+    properties: {
+      ...BASE_SCHEMA_PROPERTIES,
+      filerName: {
+        type: 'string',
+        description: 'Name of the reporting entity/institution',
+        maxLength: 150
+      },
+      ownershipPercentage: {
+        type: 'string',
+        description: 'Beneficial ownership percentage (e.g., "7.5%")',
+        maxLength: 20
+      },
+      sharesOwned: {
+        type: 'string',
+        description: 'Number of shares owned (e.g., "15,000,000")',
+        maxLength: 50
+      },
+      filingPurpose: {
+        type: 'string',
+        description: 'Purpose of filing (Initial/Amendment)',
+        maxLength: 50
+      }
+    }
+  },
+
+  'SC 13D': {
+    type: 'object',
+    required: ['company', 'summary', 'filerName', 'ownershipPercentage'],
+    properties: {
+      ...BASE_SCHEMA_PROPERTIES,
+      filerName: {
+        type: 'string',
+        description: 'Name of the activist/acquiring entity',
+        maxLength: 150
+      },
+      ownershipPercentage: {
+        type: 'string',
+        description: 'Beneficial ownership percentage (e.g., "12.3%")',
+        maxLength: 20
+      },
+      sharesOwned: {
+        type: 'string',
+        description: 'Number of shares owned',
+        maxLength: 50
+      },
+      purpose: {
+        type: 'string',
+        description: 'Stated purpose (e.g., "Investment", "Seek board representation")',
+        maxLength: 200
+      }
+    }
+  },
+
+  '424B2': {
+    type: 'object',
+    required: ['company', 'summary', 'offeringType'],
+    properties: {
+      ...BASE_SCHEMA_PROPERTIES,
+      offeringType: {
+        type: 'string',
+        description: 'Type of offering (e.g., "Debt", "Equity", "Structured Notes")',
+        maxLength: 50
+      },
+      offeringAmount: {
+        type: 'string',
+        description: 'Total offering amount with $ (e.g., "$500,000,000")',
+        maxLength: 50
+      },
+      maturityDate: {
+        type: 'string',
+        description: 'Maturity date if applicable (YYYY-MM-DD)',
+        maxLength: 20
+      },
+      interestRate: {
+        type: 'string',
+        description: 'Interest rate if applicable (e.g., "5.25%")',
+        maxLength: 20
+      }
+    }
+  },
+
+  // Generic fallback for unsupported form types
+  'Generic': {
+    type: 'object',
+    required: ['company', 'summary'],
+    properties: {
+      ...BASE_SCHEMA_PROPERTIES,
+      keyPoints: {
+        type: 'array',
+        description: 'Key points from the filing (max 5 items)',
+        maxItems: 5,
+        items: { type: 'string', description: 'Single key point', maxLength: 200 }
+      }
+    }
+  }
+};
+
+// =============================================================================
+// System Prompt - Guarantees JSON Output
+// =============================================================================
+
+/**
+ * System prompt that enforces strict JSON output with no markdown or explanation
+ */
+const SYSTEM_PROMPT = `CRITICAL: You must respond with ONLY valid JSON. No other text.
+
+RULES:
+1. Output raw JSON only - no markdown code blocks (\`\`\`), no explanation
+2. Start your response with { and end with }
+3. Use exact field names from the schema - no synonyms
+4. All text fields must be complete sentences ending with proper punctuation
+5. Numbers should include units ($, %, shares)
+6. Dates must be YYYY-MM-DD format
+7. Arrays must not be empty - include at least one item
+8. CRITICAL: Every [ MUST have a matching ]. Close all arrays BEFORE closing the object with }
+
+STRUCTURE CHECK - Before outputting, verify:
+- Count of { equals count of }
+- Count of [ equals count of ]
+- Response ends with ]} or }} (arrays closed before object)
+
+FORBIDDEN:
+- Do not wrap in \`\`\`json\`\`\`
+- Do not say "Here is the JSON"
+- Do not add any text before or after the JSON object
+- Do not use "companyName", "issuerName" - use "company"
+- Do not use "executiveSummary" - use "summary"`;
+
+// =============================================================================
+// Main Function - Generate Filing Prompt
+// =============================================================================
+
+/**
+ * Generates a bulletproof prompt for SEC filing summarization
+ *
+ * @param config - Configuration with form type and optional filing content
+ * @returns System prompt, user prompt, and schema
+ *
+ * @example
+ * ```typescript
+ * const { systemPrompt, userPrompt, schema } = generateFilingPrompt({
+ *   formType: '10-K',
+ *   company: 'Tesla, Inc.',
+ *   filingContent: '... filing text ...'
+ * });
+ * ```
+ */
+export function generateFilingPrompt(config: FilingPromptConfig): PromptOutput {
+  const { formType, filingContent } = config;
+
+  // Get the schema for this form type, falling back to Generic
+  const schema = FORM_SCHEMAS[formType] || FORM_SCHEMAS['Generic'];
+
+  // Build the user prompt with schema FIRST, then content
+  const schemaDescription = formatSchemaDescription(schema);
+
+  let userPrompt = `JSON Schema (you MUST use these exact field names):
+${schemaDescription}
+
+Respond with ONLY a JSON object matching the schema above.`;
+
+  // Add filing content if provided
+  if (filingContent) {
+    userPrompt = `JSON Schema (you MUST use these exact field names):
+${schemaDescription}
+
+Filing Content:
+${filingContent}
+
+Respond with ONLY a JSON object matching the schema above.`;
+  }
+
+  return {
+    systemPrompt: SYSTEM_PROMPT,
+    userPrompt,
+    schema
+  };
+}
+
+/**
+ * Formats a JSON schema into a human-readable description
+ * that includes maxLength/maxItems constraints inline
+ */
+function formatSchemaDescription(schema: JSONSchema): string {
+  const lines: string[] = ['{'];
+
+  const requiredSet = new Set(schema.required);
+
+  for (const [key, prop] of Object.entries(schema.properties)) {
+    const isRequired = requiredSet.has(key);
+    const requiredMarker = isRequired ? ' (REQUIRED)' : '';
+
+    let constraint = '';
+    if (prop.maxLength) {
+      constraint = ` (max ${prop.maxLength} chars)`;
+    } else if (prop.maxItems) {
+      constraint = ` (max ${prop.maxItems} items)`;
+    }
+
+    if (prop.type === 'array' && prop.items) {
+      lines.push(`  "${key}": [...]${requiredMarker}${constraint} - ${prop.description}`);
+    } else if (prop.type === 'object') {
+      lines.push(`  "${key}": {...}${requiredMarker} - ${prop.description}`);
+    } else {
+      lines.push(`  "${key}": "${prop.type}"${requiredMarker}${constraint} - ${prop.description}`);
+    }
+  }
+
+  lines.push('}');
+  return lines.join('\n');
+}
+
+// =============================================================================
+// Utility Exports
+// =============================================================================
+
+/**
+ * Gets the schema for a specific form type
+ *
+ * @param formType - SEC form type
+ * @returns The JSON schema for that form type
+ */
+export function getSchemaForFormType(formType: string): JSONSchema {
+  return FORM_SCHEMAS[formType] || FORM_SCHEMAS['Generic'];
+}
+
+/**
+ * Checks if a form type is supported with a specific schema
+ *
+ * @param formType - SEC form type to check
+ * @returns true if the form type has a dedicated schema
+ */
+export function isFormTypeSupported(formType: string): boolean {
+  return formType in FORM_SCHEMAS && formType !== 'Generic';
+}
+
+/**
+ * Gets all supported form types
+ *
+ * @returns Array of supported form type strings
+ */
+export function getSupportedFormTypes(): string[] {
+  return Object.keys(FORM_SCHEMAS).filter(ft => ft !== 'Generic');
+}

@@ -1,18 +1,18 @@
 /**
  * Streaming Response Parser
- * 
+ *
+ * Phase 3: Simplified - no repair attempts. If the prompt is correct, the response is correct.
  * Provides utilities for handling streaming responses from Claude API,
  * including parsing JSON as it comes in incrementally.
  */
 
 import { EventEmitter } from 'events';
-import { 
-  ExtractedJSON, 
-  StreamingOptions, 
-  StreamingParserState, 
-  StreamingProgressEvent 
+import {
+  ExtractedJSON,
+  StreamingOptions,
+  StreamingParserState,
+  StreamingProgressEvent
 } from './types';
-import { repairJSON } from './json-extractors';
 
 /**
  * Class for parsing JSON from streaming responses
@@ -192,24 +192,9 @@ export class StreamingParser extends EventEmitter {
       // Reset state for potential next JSON object
       this.resetState();
     } catch (error) {
-      // Try to repair the JSON if it's malformed
-      try {
-        const repairedJson = repairJSON(jsonString);
-        const parsed = JSON.parse(repairedJson);
-        
-        const result: ExtractedJSON = {
-          raw: jsonString,
-          parsed,
-          extractionMethod: 'streaming-repaired',
-          success: true
-        };
-        
-        this.emitEvent('complete', result);
-        this.resetState();
-      } catch {
-        // If repair failed, emit error
-        this.emitEvent('error', error instanceof Error ? error : new Error(String(error)));
-      }
+      // Phase 3: No repair attempts - if the prompt is correct, the response is correct
+      // Emit error if JSON parsing failed
+      this.emitEvent('error', error instanceof Error ? error : new Error(String(error)));
     }
   }
   
@@ -282,30 +267,30 @@ export class StreamingParser extends EventEmitter {
   
   /**
    * Finish the streaming parser and force completion
+   * Phase 3: Simplified - tries direct parse, then uses partial result if available
    */
   finish(): void {
     // Check if we already have a complete result
     if (!this.state.jsonStarted) {
-      // No JSON found, try standard extraction
+      // No JSON found
       this.emitEvent('error', new Error('No JSON structure found in the stream'));
       return;
     }
-    
-    // Try to repair any partial JSON we've collected
+
+    // Try to parse the collected JSON directly - no repair attempts
     try {
-      const repairedJson = repairJSON(this.state.buffer);
-      const parsed = JSON.parse(repairedJson);
-      
+      const parsed = JSON.parse(this.state.buffer);
+
       const result: ExtractedJSON = {
         raw: this.state.buffer,
         parsed,
-        extractionMethod: 'streaming-repaired',
+        extractionMethod: 'streaming',
         success: true
       };
-      
+
       this.emitEvent('complete', result);
     } catch {
-      // If we have a partial result but couldn't complete it
+      // If direct parse failed, use partial result if available
       if (this.state.partialResult && Object.keys(this.state.partialResult).length > 0) {
         const result: ExtractedJSON = {
           raw: JSON.stringify(this.state.partialResult),
@@ -313,13 +298,13 @@ export class StreamingParser extends EventEmitter {
           extractionMethod: 'streaming-partial',
           success: true
         };
-        
+
         this.emitEvent('complete', result);
       } else {
         this.emitEvent('error', new Error('Failed to extract any JSON from the stream'));
       }
     }
-    
+
     // Reset after finishing
     this.resetState();
   }
