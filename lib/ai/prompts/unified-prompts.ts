@@ -59,6 +59,7 @@ export interface SchemaProperty {
   description: string;
   maxLength?: number;
   maxItems?: number;
+  enum?: string[];
   items?: SchemaProperty | { type: string; properties?: Record<string, SchemaProperty> };
   properties?: Record<string, SchemaProperty>;
 }
@@ -156,7 +157,7 @@ export const FORM_SCHEMAS: Record<string, JSONSchema> = {
 
   '8-K': {
     type: 'object',
-    required: ['company', 'summary', 'eventType'],
+    required: ['company', 'summary', 'eventType', 'keyHighlights', 'sentiment'],
     properties: {
       ...BASE_SCHEMA_PROPERTIES,
       eventType: {
@@ -168,15 +169,36 @@ export const FORM_SCHEMAS: Record<string, JSONSchema> = {
         type: 'string',
         description: 'Report date in YYYY-MM-DD format'
       },
+      sentiment: {
+        type: 'string',
+        enum: ['positive', 'negative', 'neutral', 'mixed'],
+        description: 'Overall market sentiment signal based on the news (positive=good for shareholders, negative=concerning, neutral=informational, mixed=both good and bad elements)'
+      },
       itemNumbers: {
         type: 'array',
         description: 'SEC item numbers reported (e.g., ["2.02", "9.01"])',
         items: { type: 'string', description: 'Item number', maxLength: 10 }
       },
+      keyHighlights: {
+        type: 'array',
+        description: 'Top 3-5 material facts with specific numbers. Lead with the most important.',
+        maxItems: 5,
+        items: { type: 'string', description: 'Single key fact with number', maxLength: 150 }
+      },
       financialImpact: {
         type: 'string',
-        description: 'Financial impact if applicable',
+        description: 'Specific financial impact with dollar amounts and percentages (e.g., "Revenue of $12.5B, up 15% YoY")',
+        maxLength: 250
+      },
+      managementCommentary: {
+        type: 'string',
+        description: 'Key quote or statement from management if available',
         maxLength: 200
+      },
+      forwardGuidance: {
+        type: 'string',
+        description: 'Any forward-looking guidance provided (e.g., "Q4 revenue expected $13-14B")',
+        maxLength: 150
       }
     }
   },
@@ -380,7 +402,19 @@ FORBIDDEN:
 - Do not say "Here is the JSON"
 - Do not add any text before or after the JSON object
 - Do not use "companyName", "issuerName" - use "company"
-- Do not use "executiveSummary" - use "summary"`;
+- Do not use "executiveSummary" - use "summary"
+- Do not use markdown headers (###, ####, ##, #) inside JSON string values
+- Do not use markdown lists (* or -) inside JSON string values
+- Do not use markdown bold (**text**) inside JSON string values
+- Write all text fields as plain prose sentences
+
+WRITING STYLE:
+- Write like a financial journalist at Morning Brew or Bloomberg
+- Lead with the most important number or fact
+- Be concise: prefer "Revenue hit $45B" over "The company reported total revenue of $45B"
+- Use active voice: "CEO Smith sold" not "Shares were sold by CEO Smith"
+- Include specific numbers with units ($, %, shares)
+- For complex filings, structure as: [Headline fact] + [Key context] + [Significance]`;
 
 // =============================================================================
 // Main Function - Generate Filing Prompt
@@ -414,9 +448,14 @@ const FORM_EXTRACTION_GUIDANCE: Record<string, string> = {
 - The summary MUST include: ticker, insider name, transaction type, dollar amount, and signal assessment`,
 
   '8-K': `8-K EXTRACTION RULES:
-- Item numbers determine the event type (e.g., Item 2.02 = Results of Operations)
-- Focus on material events that affect shareholders
-- Extract any financial figures or guidance mentioned`,
+- Item 2.02 (Results of Operations): Extract EXACT revenue, EPS, net income figures with YoY changes
+- Item 7.01 (Regulation FD): Look for guidance or investor presentation highlights
+- Item 8.01 (Other Events): Extract any material announcements, acquisitions, or strategic changes
+- Item 5.02 (Director/Officer Changes): Note names, titles, and effective dates
+- ALWAYS include: specific dollar amounts ($X.XB), percentage changes (+X% YoY), and key metrics
+- Lead keyHighlights with the most investor-relevant fact
+- If management provides a quote, include it in managementCommentary
+- Sentiment: Set to "positive" for beats/good news, "negative" for misses/concerns, "neutral" for informational filings, "mixed" if both`,
 };
 
 export function generateFilingPrompt(config: FilingPromptConfig): PromptOutput {

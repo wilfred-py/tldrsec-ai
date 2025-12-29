@@ -279,6 +279,7 @@ export function Form10QMinimalistTemplate({ filing }: Form10QMinimalistTemplateP
       {/* Footer with CTA */}
       <EmailFooter
         filingUrl={filingUrl}
+        formType={filingType || '10-Q'}
         unsubscribeUrl={`${process.env.NEXT_PUBLIC_APP_URL || ''}/settings/notifications`}
       />
     </div>

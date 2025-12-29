@@ -339,13 +339,49 @@ export function immediateNotificationTemplate(
       }
     } 
     else if (filing.filingType === '8-K') {
+      // Sentiment badge
+      const sentimentBadge = json.sentiment ? `
+        <span style="display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 12px; font-weight: 600; margin-left: 8px; ${
+          json.sentiment === 'positive' ? 'background-color: #ECFDF5; color: #059669;' :
+          json.sentiment === 'negative' ? 'background-color: #FEF2F2; color: #DC2626;' :
+          json.sentiment === 'mixed' ? 'background-color: #FFFBEB; color: #D97706;' :
+          'background-color: #F3F4F6; color: #6B7280;'
+        }">${json.sentiment.toUpperCase()}</span>
+      ` : '';
+
       specificContent = `
-        <p><strong>Event:</strong> ${json.eventType || 'N/A'}</p>
+        <p><strong>Event:</strong> ${json.eventType || 'N/A'}${sentimentBadge}</p>
         <p><strong>Summary:</strong> ${json.summary || ''}</p>
       `;
-      
-      if (json.positiveHighlights || json.negativeHighlights) {
+
+      // New keyHighlights section
+      if (json.keyHighlights && Array.isArray(json.keyHighlights) && json.keyHighlights.length > 0) {
         keyPoints = `
+          <h3>Key Highlights</h3>
+          <ul>
+            ${json.keyHighlights.map((h: string) => `<li>${h}</li>`).join('')}
+          </ul>
+        `;
+      }
+
+      // Add financial impact, management commentary, forward guidance if available
+      let additionalInfo = '';
+      if (json.financialImpact) {
+        additionalInfo += `<p><strong>Financial Impact:</strong> ${json.financialImpact}</p>`;
+      }
+      if (json.managementCommentary) {
+        additionalInfo += `<p><strong>Management:</strong> "${json.managementCommentary}"</p>`;
+      }
+      if (json.forwardGuidance) {
+        additionalInfo += `<p><strong>Guidance:</strong> ${json.forwardGuidance}</p>`;
+      }
+      if (additionalInfo) {
+        keyPoints += additionalInfo;
+      }
+
+      // Legacy support for positiveHighlights/negativeHighlights
+      if (json.positiveHighlights || json.negativeHighlights) {
+        keyPoints += `
           <h3>Analysis</h3>
           ${json.positiveHighlights ? `<p><strong>Positive:</strong> ${json.positiveHighlights}</p>` : ''}
           ${json.negativeHighlights ? `<p><strong>Potential concerns:</strong> ${json.negativeHighlights}</p>` : ''}

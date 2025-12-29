@@ -71,44 +71,6 @@ function isSaleTransaction(tx: TransactionData): boolean {
 }
 
 /**
- * Get transaction display config (label, colors)
- */
-function getTransactionConfig(tx: TransactionData): {
-  label: string;
-  icon: string;
-  bgColor: string;
-  textColor: string;
-  valueColor: string;
-} {
-  if (isGiftTransaction(tx)) {
-    return {
-      label: 'Gift',
-      icon: '🎁',
-      bgColor: '#F3E8FF', // Purple light
-      textColor: '#7C3AED', // Purple
-      valueColor: '#7C3AED',
-    };
-  } else if (isSaleTransaction(tx)) {
-    return {
-      label: 'Sold',
-      icon: '📉',
-      bgColor: '#FEF2F2', // Red light
-      textColor: '#991B1B', // Red dark
-      valueColor: '#DC2626', // Red
-    };
-  } else {
-    // Purchase/Acquisition
-    return {
-      label: 'Bought',
-      icon: '📈',
-      bgColor: '#F0FDF4', // Green light
-      textColor: '#166534', // Green dark
-      valueColor: '#16A34A', // Green
-    };
-  }
-}
-
-/**
  * Aggregate transactions by type for cleaner display
  * Groups similar transactions (all gifts together, all sales together)
  * Returns up to 3 aggregated transaction groups
@@ -460,157 +422,127 @@ export function Form4MinimalistTemplate({ filing }: Form4MinimalistTemplateProps
               {/* ═══════════════════════════════════════════════════════════
                   THE NUMBERS - Quick scan metrics (supports multiple transaction types)
                   Shows aggregated totals: Sale + Gift + Purchase (up to 3 types)
+                  Edge-to-edge colored blocks with gaps between transaction types
                   ═══════════════════════════════════════════════════════════ */}
               {hasTransactionData && (
-                <SectionCard>
-                  <tr>
-                    <td>
-                      <table width="100%" cellPadding="0" cellSpacing="0">
-                        <tbody>
-                          <tr>
-                            {/* Aggregated transaction types display - shows all transaction types (sale, gift, purchase) */}
-                            {aggregatedTransactions.length > 0 ? (
-                              <>
-                                {aggregatedTransactions.slice(0, 3).map((aggTx, idx) => {
-                                  const config = getAggregatedTransactionConfig(aggTx.type);
-                                  const totalCols = aggregatedTransactions.length + (percentChange ? 1 : 0);
-                                  const isLast = idx === aggregatedTransactions.length - 1 && !percentChange;
-                                  const isFirst = idx === 0;
-                                  const width = `${Math.floor(100 / totalCols)}%`;
+                <table width="100%" cellPadding="0" cellSpacing="0" style={{ marginBottom: '16px' }}>
+                  <tbody>
+                    <tr>
+                      <td>
+                        <table width="100%" cellPadding="0" cellSpacing="0">
+                          <tbody>
+                            <tr>
+                              {/* Aggregated transaction types display - shows all transaction types (sale, gift, purchase) */}
+                              {aggregatedTransactions.length > 0 ? (
+                                <>
+                                  {aggregatedTransactions.slice(0, 3).map((aggTx, idx) => {
+                                    const config = getAggregatedTransactionConfig(aggTx.type);
+                                    const totalCols = aggregatedTransactions.length;
+                                    const isLast = idx === aggregatedTransactions.length - 1;
+                                    // Calculate width accounting for gaps (8px gap between items)
+                                    const gapCount = totalCols - 1;
+                                    const totalGapWidth = gapCount * 8;
+                                    const availableWidth = 100; // percentage
+                                    const itemWidth = `calc(${availableWidth / totalCols}% - ${totalGapWidth / totalCols}px)`;
 
-                                  return (
-                                    <td key={idx} style={{
-                                      width,
-                                      padding: '16px',
-                                      paddingLeft: isFirst ? '16px' : '8px',
-                                      paddingRight: isLast ? '16px' : '8px',
-                                      backgroundColor: config.bgColor,
-                                      borderRadius: isFirst ? '8px 0 0 8px' : isLast ? '0 8px 8px 0' : '0',
-                                      verticalAlign: 'top',
-                                    }}>
+                                    return (
+                                      <React.Fragment key={idx}>
+                                        <td style={{
+                                          width: itemWidth,
+                                          padding: '20px',
+                                          backgroundColor: config.bgColor,
+                                          borderRadius: '8px',
+                                          verticalAlign: 'top',
+                                        }}>
+                                          <div style={{
+                                            fontSize: '11px',
+                                            fontWeight: 700,
+                                            color: config.textColor,
+                                            textTransform: 'uppercase' as const,
+                                            letterSpacing: '0.5px',
+                                            marginBottom: '4px',
+                                          }}>
+                                            {config.icon} {config.label}{aggTx.count > 1 ? ` (${aggTx.count})` : ''}
+                                          </div>
+                                          <div style={{
+                                            fontSize: '24px',
+                                            fontWeight: 800,
+                                            color: config.valueColor,
+                                            lineHeight: '1.1',
+                                          }}>
+                                            {aggTx.type === 'gift' ? `${aggTx.sharesDisplay} shares` : aggTx.valueDisplay || `${aggTx.sharesDisplay} shares`}
+                                          </div>
+                                          {aggTx.type !== 'gift' && aggTx.avgPrice > 0 && (
+                                            <div style={{
+                                              fontSize: '12px',
+                                              color: config.textColor,
+                                              opacity: 0.8,
+                                              marginTop: '4px',
+                                            }}>
+                                              {aggTx.sharesDisplay} shares @ {aggTx.priceDisplay}
+                                            </div>
+                                          )}
+                                        </td>
+                                        {/* Add gap spacer between items (not after last item) */}
+                                        {!isLast && (
+                                          <td style={{ width: '8px' }}></td>
+                                        )}
+                                      </React.Fragment>
+                                    );
+                                  })}
+                                </>
+                              ) : (
+                                /* Fallback: Just stake impact if no transaction details */
+                                <td style={{
+                                  width: '100%',
+                                  padding: '20px',
+                                  backgroundColor: EmailColors.structure.backgroundAlt,
+                                  borderRadius: '8px',
+                                  verticalAlign: 'top',
+                                }}>
+                                  {percentChange && (
+                                    <>
                                       <div style={{
                                         fontSize: '11px',
                                         fontWeight: 700,
-                                        color: config.textColor,
+                                        color: EmailColors.text.meta,
                                         textTransform: 'uppercase' as const,
                                         letterSpacing: '0.5px',
                                         marginBottom: '4px',
                                       }}>
-                                        {config.icon} {config.label}{aggTx.count > 1 ? ` (${aggTx.count})` : ''}
+                                        Stake Impact
                                       </div>
                                       <div style={{
-                                        fontSize: '24px',
+                                        fontSize: '28px',
                                         fontWeight: 800,
-                                        color: config.valueColor,
+                                        color: primaryIsSale ? '#DC2626' : '#16A34A',
                                         lineHeight: '1.1',
                                       }}>
-                                        {aggTx.type === 'gift' ? `${aggTx.sharesDisplay} shares` : aggTx.valueDisplay || `${aggTx.sharesDisplay} shares`}
+                                        {percentChange}
                                       </div>
-                                      {aggTx.type !== 'gift' && aggTx.avgPrice > 0 && (
-                                        <div style={{
-                                          fontSize: '12px',
-                                          color: config.textColor,
-                                          opacity: 0.8,
-                                          marginTop: '4px',
-                                        }}>
-                                          {aggTx.sharesDisplay} shares @ {aggTx.priceDisplay}
-                                        </div>
-                                      )}
-                                    </td>
-                                  );
-                                })}
-
-                                {/* Stake Impact column */}
-                                {percentChange && (
-                                  <td style={{
-                                    width: `${Math.floor(100 / (aggregatedTransactions.length + 1))}%`,
-                                    padding: '16px',
-                                    paddingLeft: '8px',
-                                    verticalAlign: 'top',
-                                    borderRadius: '0 8px 8px 0',
-                                  }}>
+                                    </>
+                                  )}
+                                  {(previousStake || newStake) && (
                                     <div style={{
-                                      fontSize: '11px',
-                                      fontWeight: 700,
+                                      fontSize: '13px',
                                       color: EmailColors.text.meta,
-                                      textTransform: 'uppercase' as const,
-                                      letterSpacing: '0.5px',
-                                      marginBottom: '4px',
+                                      marginTop: '6px',
                                     }}>
-                                      Stake Impact
+                                      {previousStake && newStake
+                                        ? `${previousStake} → ${newStake}`
+                                        : newStake || previousStake
+                                      }
                                     </div>
-                                    <div style={{
-                                      fontSize: '24px',
-                                      fontWeight: 800,
-                                      color: primaryIsSale ? '#DC2626' : '#16A34A',
-                                      lineHeight: '1.1',
-                                    }}>
-                                      {percentChange}
-                                    </div>
-                                    {(previousStake || newStake) && (
-                                      <div style={{
-                                        fontSize: '12px',
-                                        color: EmailColors.text.meta,
-                                        marginTop: '4px',
-                                      }}>
-                                        {previousStake && newStake
-                                          ? `${previousStake} → ${newStake}`
-                                          : newStake || previousStake
-                                        }
-                                      </div>
-                                    )}
-                                  </td>
-                                )}
-                              </>
-                            ) : (
-                              /* Fallback: Just stake impact if no transaction details */
-                              <td style={{
-                                width: '100%',
-                                padding: '16px',
-                                verticalAlign: 'top',
-                              }}>
-                                {percentChange && (
-                                  <>
-                                    <div style={{
-                                      fontSize: '11px',
-                                      fontWeight: 700,
-                                      color: EmailColors.text.meta,
-                                      textTransform: 'uppercase' as const,
-                                      letterSpacing: '0.5px',
-                                      marginBottom: '4px',
-                                    }}>
-                                      Stake Impact
-                                    </div>
-                                    <div style={{
-                                      fontSize: '28px',
-                                      fontWeight: 800,
-                                      color: primaryIsSale ? '#DC2626' : '#16A34A',
-                                      lineHeight: '1.1',
-                                    }}>
-                                      {percentChange}
-                                    </div>
-                                  </>
-                                )}
-                                {(previousStake || newStake) && (
-                                  <div style={{
-                                    fontSize: '13px',
-                                    color: EmailColors.text.meta,
-                                    marginTop: '6px',
-                                  }}>
-                                    {previousStake && newStake
-                                      ? `${previousStake} → ${newStake}`
-                                      : newStake || previousStake
-                                    }
-                                  </div>
-                                )}
-                              </td>
-                            )}
-                          </tr>
-                        </tbody>
-                      </table>
-                    </td>
-                  </tr>
-                </SectionCard>
+                                  )}
+                                </td>
+                              )}
+                            </tr>
+                          </tbody>
+                        </table>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
               )}
 
               {/* ═══════════════════════════════════════════════════════════
@@ -655,6 +587,7 @@ export function Form4MinimalistTemplate({ filing }: Form4MinimalistTemplateProps
       {/* Footer with CTA */}
       <EmailFooter
         filingUrl={filingUrl}
+        formType={filingType || 'Form 4'}
         unsubscribeUrl={`${process.env.NEXT_PUBLIC_APP_URL || ''}/settings/notifications`}
       />
     </div>

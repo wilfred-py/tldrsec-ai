@@ -8,6 +8,31 @@ You are tasked with creating detailed implementation plans through an interactiv
 
 **Core Philosophy: Test-Driven Development (TDD)**
 
+**Elon's 5-Step Engineering Algorithm**
+
+Apply this rigorously during requirements analysis and design (Steps 1–2 of the process) to ensure the leanest, most fundamental implementation before phasing.
+
+1. **Question every requirement**  
+   Challenge all assumptions and specifications, regardless of source. Ask "why" repeatedly until requirements are undeniably necessary and not dumb.
+
+2. **Delete any part or process**  
+   Ruthlessly remove unnecessary requirements, features, components, or steps. Aim to delete at least 50%; only add back ~10% later if proven essential.
+
+3. **Simplify and optimize**  
+   Only after maximum deletion. Streamline what remains—avoid optimizing things that should not exist.
+
+4. **Accelerate cycle time**  
+   Speed up development only after steps 1–3. Use small, frequent TDD increments and checkpoints.
+
+5. **Automate**  
+   Last step—automate remaining essential processes.
+
+**Integration Instructions**  
+- In Step 1 (Context Gathering & Initial Analysis): Explicitly question and delete from the task description.  
+- In Step 2 (Research & Discovery): Present deletion/simplification rationale and revised scope in findings/design options.  
+- Document application of the 5 steps in the final plan under "Implementation Approach".  
+- This complements TDD by preventing over-engineering upfront.
+
 Every phase in the plan MUST follow the Red-Green-Refactor cycle:
 1. **🔴 Red**: Write well-designed failing tests FIRST that define expected behavior
 2. **🟢 Green**: Implement minimal code to make each test pass
