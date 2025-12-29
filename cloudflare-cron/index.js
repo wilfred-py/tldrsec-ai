@@ -1,10 +1,70 @@
 // index.js - Cloudflare Worker for Cron Trigger
 // Enhanced with advanced rate limiting, circuit breaker patterns, and comprehensive monitoring
 // Features: Request tracking, adaptive backoff, circuit breaker state persistence, burst protection
+// Version: 2.5.0 - Added health endpoint and heartbeat monitoring
+
+// In-memory heartbeat tracking (reset on each worker instance)
+// For persistent tracking, enable KV storage in wrangler.toml
+let lastHeartbeat = null;
+let heartbeatCount = 0;
 
 export default {
-  // Handle HTTP requests (required by Cloudflare Workers)
+  // Handle HTTP requests - includes health monitoring endpoint
   async fetch(request, env, ctx) {
+    const url = new URL(request.url);
+
+    // Health endpoint for monitoring cron execution
+    if (url.pathname === '/health') {
+      // Try to get heartbeat from KV if available, fall back to in-memory
+      let heartbeatInfo = {
+        source: 'memory',
+        timestamp: lastHeartbeat,
+        count: heartbeatCount
+      };
+
+      if (env.METRICS_KV) {
+        try {
+          const kvHeartbeat = await env.METRICS_KV.get('last_cron_heartbeat');
+          if (kvHeartbeat) {
+            heartbeatInfo = {
+              source: 'kv',
+              timestamp: kvHeartbeat,
+              count: heartbeatCount
+            };
+          }
+        } catch (e) {
+          console.warn('[HEALTH] KV read failed:', e.message);
+        }
+      }
+
+      const status = {
+        worker: 'healthy',
+        version: env.WORKER_VERSION || '2.5.0',
+        lastHeartbeat: heartbeatInfo.timestamp || 'never',
+        heartbeatSource: heartbeatInfo.source,
+        heartbeatCount: heartbeatInfo.count,
+        currentTime: new Date().toISOString()
+      };
+
+      // Calculate staleness if we have a heartbeat
+      if (heartbeatInfo.timestamp) {
+        const age = Date.now() - new Date(heartbeatInfo.timestamp).getTime();
+        status.heartbeatAgeMs = age;
+        status.heartbeatAgeMinutes = Math.round(age / 60000);
+        // Stale if no heartbeat in last 15 minutes (should fire every 5 minutes)
+        status.stale = age > 15 * 60 * 1000;
+        status.status = status.stale ? 'STALE' : 'OK';
+      } else {
+        status.stale = true;
+        status.status = 'NO_HEARTBEAT';
+      }
+
+      return new Response(JSON.stringify(status, null, 2), {
+        status: status.stale ? 503 : 200,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
     return new Response('TLDRSEC Cron Worker - This endpoint is for scheduled execution only', {
       status: 200,
       headers: { 'Content-Type': 'text/plain' }
@@ -149,6 +209,23 @@ export default {
 
   // Handle main pipeline processing (every 5 minutes)
   async handlePipelineProcessing(event, env, ctx) {
+    // Record heartbeat for monitoring - this helps detect when cron stops firing
+    const heartbeatTime = new Date().toISOString();
+    lastHeartbeat = heartbeatTime;
+    heartbeatCount++;
+    console.log(`[HEARTBEAT] Cron executed at ${heartbeatTime} (count: ${heartbeatCount})`);
+
+    // Persist heartbeat to KV if available
+    if (env.METRICS_KV) {
+      try {
+        await env.METRICS_KV.put('last_cron_heartbeat', heartbeatTime, {
+          expirationTtl: 3600 // 1 hour TTL
+        });
+      } catch (e) {
+        console.warn('[HEARTBEAT] KV write failed:', e.message);
+      }
+    }
+
     // Initialize monitoring services (KV storage is optional)
     const rateLimiter = new AdvancedRateLimiter(null, null, null); // Use memory fallback
     const circuitBreaker = new CircuitBreaker(null, rateLimiter);
@@ -165,10 +242,10 @@ export default {
 
     const executionId = generateSecureExecutionId();
     const startTime = Date.now();
-    
+
     // Log initialization (KV storage not used in this build)
     console.log(`[${executionId}] Worker initialized with memory-only storage`);
-    
+
     console.log(`[${executionId}] Starting TLDRSEC scheduled cron job execution with enhanced rate limiting`);
     
     // Enhanced rate limiting configuration with global subrequest awareness
