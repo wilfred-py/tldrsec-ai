@@ -128,6 +128,7 @@ export function GenericMinimalistTemplate({ filing }: GenericMinimalistTemplateP
       {/* Footer with CTA */}
       <EmailFooter
         filingUrl={filingUrl}
+        formType={filingType}
         unsubscribeUrl={`${process.env.NEXT_PUBLIC_APP_URL || ''}/settings/notifications`}
       />
     </div>

@@ -4,6 +4,7 @@ import { getSecFilingViewerUrl } from '../../../../../lib/email/url-utils';
 
 interface EmailFooterProps {
   filingUrl: string;
+  formType?: string;
   unsubscribeUrl?: string;
 }
 
@@ -11,9 +12,10 @@ interface EmailFooterProps {
  * Minimalist email footer component
  * Morning Brew style: clean CTA, simple footer links
  */
-export function EmailFooter({ filingUrl }: EmailFooterProps) {
+export function EmailFooter({ filingUrl, formType }: EmailFooterProps) {
   // Convert index URLs to EDGAR Filing Viewer URLs for better user experience
-  const viewerUrl = getSecFilingViewerUrl(filingUrl);
+  // Pass formType for smart XML URL construction (stylesheet injection)
+  const viewerUrl = getSecFilingViewerUrl(filingUrl, formType);
 
   return (
     <table width="100%" cellPadding="0" cellSpacing="0">

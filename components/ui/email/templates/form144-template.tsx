@@ -1,4 +1,5 @@
 import { FilingTemplateData } from '../../../../lib/email/types';
+import { getSecFilingViewerUrl } from '../../../../lib/email/url-utils';
 
 interface Form144TemplateProps {
   filing: FilingTemplateData;
@@ -562,7 +563,7 @@ export default function Form144EmailTemplate({ filing }: Form144TemplateProps) {
           <tr>
             <td style={{ padding: "20px", textAlign: "center" }}>
               <a
-                href={filing.filingUrl || filing.url}
+                href={getSecFilingViewerUrl(filing.filingUrl || filing.url || '', 'Form 144')}
                 style={{
                   display: "inline-block",
                   padding: "12px 24px",
