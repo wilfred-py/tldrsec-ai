@@ -354,6 +354,7 @@ model FilingContentCache {
   content         String   @db.Text
   contentLength   Int
   contentHash     String
+  primaryDocUrl   String?  // Direct URL to the primary document (e.g., Form 4 XML, 10-K HTM)
   fetchedAt       DateTime @default(now())
   expiresAt       DateTime
   fetchDuration   Int

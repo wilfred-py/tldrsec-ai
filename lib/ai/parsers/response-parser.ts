@@ -13,6 +13,7 @@ import { parseJSONResponse, ParseResult as SimpleParseResult } from './simple-pa
 import { normalizeDate, normalizeCurrency, normalizePercentage } from './normalizers';
 import { SECFilingType } from '../prompts/prompt-types';
 import { secLogger as logger } from '../../../utils/logger';
+import { jsonParsingMonitor } from '../../monitoring/json-parsing-monitor';
 
 /**
  * Normalize fields based on filing type
@@ -209,6 +210,9 @@ export function parseResponse<T = unknown>(
   try {
     // Single-pass JSON extraction using the simple parser
     const simpleResult: SimpleParseResult = parseJSONResponse(response, filingType);
+
+    // Phase 5: Record parsing metrics for monitoring and prompt improvement
+    jsonParsingMonitor.recordParsingAttempt(simpleResult, filingType);
 
     metrics.extractionTimeMs = simpleResult.parseTimeMs;
     metrics.extractionMethod = simpleResult.method;

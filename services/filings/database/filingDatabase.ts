@@ -67,7 +67,7 @@ export async function findExistingSummary(ticker: string, formType: string, bypa
       accessionNumber: summaryJSON?.accessionNumber || '',
       summaryText: summaryRecord.summaryText || '',
       keyPoints: summaryJSON?.keyPoints || [],
-      url: summaryRecord.filingUrl,
+      url: summaryRecord.url || summaryRecord.filingUrl, // Prefer primaryDocUrl (stored in url) for direct document links
       model: summaryRecord.model || undefined,
       tokensUsed: summaryJSON?.tokensUsed,
       inputTokens: summaryRecord.inputTokens || summaryJSON?.inputTokens,

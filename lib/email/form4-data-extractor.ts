@@ -257,10 +257,16 @@ function extractTransactionsFromText(text: string): Form4Transaction[] {
     /([\d,]+)\s*shares?\s*(?:were\s+)?(?:bought|purchased|acquired)\s*(?:at|@|for)\s*\$?([\d,.]+)/gi,
   ];
 
-  // Pattern for gift transactions
+  // Pattern for gift transactions - expanded to catch more variations
+  // VRT example: "four gift transactions totaling 73,252 shares of Class A Common Stock at $0 per share"
   const giftPatterns = [
-    /(?:gifted|gift of)\s+([\d,]+)\s*shares?/gi,
-    /([\d,]+)\s*shares?\s*(?:were\s+)?gifted/gi,
+    /(?:gifted|gift of|donated)\s+([\d,]+)\s*shares?/gi,
+    /([\d,]+)\s*shares?\s*(?:were\s+)?(?:gifted|donated|given)/gi,
+    /gift\s+(?:transactions?\s+)?(?:totaling\s+)?([\d,]+)\s*shares?/gi,
+    /([\d,]+)\s*shares?\s*(?:as\s+)?(?:a\s+)?gift/gi,
+    /(?:disposed|transferred)\s+([\d,]+)\s*shares?\s*(?:at|for)\s*\$?0(?:\s|$)/gi,
+    /([\d,]+)\s*shares?\s*(?:of\s+)?(?:Class\s+[A-Z]\s+)?(?:Common\s+)?(?:Stock\s+)?at\s*\$0\s*per\s*share/gi,
+    /(?:reported|filed)\s+(?:\w+\s+)?gift\s+(?:transactions?\s+)?(?:totaling\s+)?([\d,]+)\s*shares?/gi,
   ];
 
   // Extract sales

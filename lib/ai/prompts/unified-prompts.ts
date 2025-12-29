@@ -75,7 +75,7 @@ const BASE_SCHEMA_PROPERTIES: Record<string, SchemaProperty> = {
   },
   summary: {
     type: 'string',
-    description: 'Complete executive summary (2-3 sentences, must end with period, max 500 chars)',
+    description: 'Complete executive summary. MUST mention the company ticker symbol (e.g., "NVDA reported..."). 2-3 sentences, must end with period. Include key numbers/amounts.',
     maxLength: 500
   },
   filingDate: {
@@ -188,31 +188,42 @@ export const FORM_SCHEMAS: Record<string, JSONSchema> = {
       ...BASE_SCHEMA_PROPERTIES,
       filerName: {
         type: 'string',
-        description: 'Insider name exactly from top of form',
+        description: 'Insider name exactly from "Name of Reporting Person" field',
         maxLength: 100
       },
       relationship: {
         type: 'string',
-        description: 'Position/relationship to company (e.g., "CEO", "Director")',
+        description: 'Title/role from "Relationship of Reporting Person" (e.g., "CEO", "10% Owner", "Director")',
         maxLength: 100
       },
       transactions: {
         type: 'array',
-        description: 'List of transactions reported',
+        description: 'List of ALL transactions from Table I and Table II - MUST include price',
         items: {
           type: 'object',
           properties: {
-            type: { type: 'string', description: 'Buy/Sell/Grant/Exercise' },
-            shares: { type: 'string', description: 'Number of shares with commas (e.g., "10,000")' },
-            price: { type: 'string', description: 'Price per share with $ (e.g., "$150.25")' },
-            date: { type: 'string', description: 'Transaction date YYYY-MM-DD' }
+            type: { type: 'string', description: 'Transaction type: A=Acquisition, D=Disposition, P=Purchase, S=Sale, G=Gift, M=Exercise' },
+            shares: { type: 'string', description: 'Number of shares with commas (from column 5)' },
+            price: { type: 'string', description: 'Price per share with $ from column 4 - if $0, check if this is a gift/grant. Never leave blank.' },
+            date: { type: 'string', description: 'Transaction date from column 2 (YYYY-MM-DD)' },
+            acquisitionDisposition: { type: 'string', description: 'A for acquired, D for disposed' }
           }
         }
       },
       totalValue: {
         type: 'string',
-        description: 'Total transaction value with $ (e.g., "$1,502,500")',
+        description: 'Calculate: sum of (shares × price) for each transaction. Format as "$X,XXX,XXX"',
         maxLength: 50
+      },
+      signalStrength: {
+        type: 'string',
+        description: 'Assess insider signal: "Strong Buy Signal", "Routine Sale", "10b5-1 Plan", "Option Exercise"',
+        maxLength: 50
+      },
+      percentageChange: {
+        type: 'string',
+        description: 'Percentage change in holdings (e.g., "+5.2%" or "-12.3%")',
+        maxLength: 20
       }
     }
   },
@@ -390,6 +401,24 @@ FORBIDDEN:
  * });
  * ```
  */
+/**
+ * Form-specific extraction guidance to improve AI accuracy
+ */
+const FORM_EXTRACTION_GUIDANCE: Record<string, string> = {
+  '4': `FORM 4 EXTRACTION RULES:
+- Look for "Table I - Non-Derivative Securities" and "Table II - Derivative Securities"
+- Column 4 has the transaction price - if blank or $0, note this is likely a gift or grant
+- Transaction code in column 3: P=Purchase, S=Sale, A=Award, G=Gift, M=Exercise
+- Column 8 (A or D) indicates Acquisition or Disposition
+- Calculate total value = shares × price for each transaction
+- The summary MUST include: ticker, insider name, transaction type, dollar amount, and signal assessment`,
+
+  '8-K': `8-K EXTRACTION RULES:
+- Item numbers determine the event type (e.g., Item 2.02 = Results of Operations)
+- Focus on material events that affect shareholders
+- Extract any financial figures or guidance mentioned`,
+};
+
 export function generateFilingPrompt(config: FilingPromptConfig): PromptOutput {
   const { formType, filingContent } = config;
 
@@ -398,6 +427,9 @@ export function generateFilingPrompt(config: FilingPromptConfig): PromptOutput {
 
   // Build the user prompt with schema FIRST, then content
   const schemaDescription = formatSchemaDescription(schema);
+
+  // Get form-specific extraction guidance
+  const extractionGuidance = FORM_EXTRACTION_GUIDANCE[formType] || '';
 
   let userPrompt = `JSON Schema (you MUST use these exact field names):
 ${schemaDescription}
@@ -408,7 +440,7 @@ Respond with ONLY a JSON object matching the schema above.`;
   if (filingContent) {
     userPrompt = `JSON Schema (you MUST use these exact field names):
 ${schemaDescription}
-
+${extractionGuidance ? `\n${extractionGuidance}\n` : ''}
 Filing Content:
 ${filingContent}
 

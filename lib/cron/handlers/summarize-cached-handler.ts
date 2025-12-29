@@ -75,14 +75,15 @@ export async function handleSummarizeCached(
     const { getPrismaClient } = await import('../../db/prisma');
     const prisma = getPrismaClient();
 
-    // Retrieve cached content
+    // Retrieve cached content including primaryDocUrl for email links
     const cachedContent = await prisma.filingContentCache.findUnique({
       where: { id: cacheId },
       select: {
         content: true,
         contentLength: true,
         status: true,
-        fetchError: true
+        fetchError: true,
+        primaryDocUrl: true  // Direct document URL for better email UX
       }
     });
 
@@ -187,7 +188,7 @@ export async function handleSummarizeCached(
           filingType: filing.formType,
           filingDate: new Date(filing.filingDate),
           summary: existingSummaryFull?.summaryText || 'Summary available in dashboard',
-          filingUrl: filing.filingUrl
+          filingUrl: cachedContent.primaryDocUrl || filing.filingUrl  // Prefer direct document URL
         });
 
         return {
@@ -300,7 +301,7 @@ export async function handleSummarizeCached(
           filingType: filing.formType,
           filingDate: new Date(filing.filingDate),
           summary: sharedSummary.summaryText,
-          filingUrl: filing.filingUrl,
+          filingUrl: cachedContent.primaryDocUrl || filing.filingUrl,  // Prefer direct document URL
           summaryData: sharedSummary.summaryJSON as Record<string, unknown> | undefined
         });
 
@@ -447,7 +448,7 @@ export async function handleSummarizeCached(
         filingType: filing.formType,
         filingDate: new Date(filing.filingDate),
         summary: summaryResult.summary,
-        filingUrl: filing.filingUrl,
+        filingUrl: cachedContent.primaryDocUrl || filing.filingUrl,  // Prefer direct document URL
         summaryData: summaryResult.data  // Pass structured AI data to email template
       });
 
