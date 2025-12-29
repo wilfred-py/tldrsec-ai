@@ -212,13 +212,17 @@ export function Form4MinimalistTemplate({ filing }: Form4MinimalistTemplateProps
   const primaryIsSale = transactions.length > 0 ? isSaleTransaction(firstTx) : percentChange?.startsWith('-');
 
   const displayTicker = symbol || ticker || 'N/A';
-  const hasTransactionData = totalValue || sharesAmount || percentChange;
+  const hasTransactionData = transactions.length > 0 || percentChange;
 
   // Get signal configuration
-  const signal = getSignalConfig(signalStrength, summaryText || '', isSale, percentChange);
+  const signal = getSignalConfig(signalStrength, summaryText || '', primaryIsSale, percentChange);
 
-  // Extract first sentence as the headline
-  const headline = summaryText?.split(/(?<=[.!?])\s+/)[0] || '';
+  // Extract first sentence as the headline, but ensure we have meaningful content
+  let headline = summaryText?.split(/(?<=[.!?])\s+/)[0] || '';
+  // If headline is too short or just a name fragment, use full summary
+  if (headline.length < 30 && summaryText && summaryText.length > headline.length) {
+    headline = summaryText;
+  }
 
   return (
     <div style={{
