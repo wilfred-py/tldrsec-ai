@@ -16,6 +16,65 @@ interface TransactionData {
   pricePerShare?: string;
   totalValue?: string;
   acquisitionDisposition?: string;
+  code?: string;
+}
+
+/**
+ * Check if a transaction is a gift
+ */
+function isGiftTransaction(tx: TransactionData): boolean {
+  const type = tx.type?.toLowerCase() || '';
+  const code = tx.code?.toUpperCase() || '';
+  return type === 'gift' || type.includes('gift') || code === 'G';
+}
+
+/**
+ * Check if a transaction is a sale (not gift)
+ */
+function isSaleTransaction(tx: TransactionData): boolean {
+  if (isGiftTransaction(tx)) return false;
+  const type = tx.type?.toLowerCase() || '';
+  const code = tx.code?.toUpperCase() || '';
+  return type.includes('sale') || type.includes('sell') ||
+         tx.acquisitionDisposition === 'D' || code === 'S';
+}
+
+/**
+ * Get transaction display config (label, colors)
+ */
+function getTransactionConfig(tx: TransactionData): {
+  label: string;
+  icon: string;
+  bgColor: string;
+  textColor: string;
+  valueColor: string;
+} {
+  if (isGiftTransaction(tx)) {
+    return {
+      label: 'Gift',
+      icon: '🎁',
+      bgColor: '#F3E8FF', // Purple light
+      textColor: '#7C3AED', // Purple
+      valueColor: '#7C3AED',
+    };
+  } else if (isSaleTransaction(tx)) {
+    return {
+      label: 'Sold',
+      icon: '📉',
+      bgColor: '#FEF2F2', // Red light
+      textColor: '#991B1B', // Red dark
+      valueColor: '#DC2626', // Red
+    };
+  } else {
+    // Purchase/Acquisition
+    return {
+      label: 'Bought',
+      icon: '📈',
+      bgColor: '#F0FDF4', // Green light
+      textColor: '#166534', // Green dark
+      valueColor: '#16A34A', // Green
+    };
+  }
 }
 
 /**
@@ -134,24 +193,23 @@ export function Form4MinimalistTemplate({ filing }: Form4MinimalistTemplateProps
     pricePerShare: t.pricePerShare,
     totalValue: t.totalValue,
     acquisitionDisposition: t.acquisitionDisposition,
+    code: t.code,
   })) : [];
   const transactions = dataTransactions.length > 0 ? dataTransactions : extractedTransactions;
   const firstTx = transactions[0] || {};
 
-  const totalValue = (data?.totalValue || firstTx.totalValue || extractedData?.totalValue || '') as string;
-  const sharesAmount = (firstTx.shares || data?.shareAmount || data?.amount || '') as string;
-  const pricePerShare = (firstTx.pricePerShare || data?.priceRange || data?.price || '') as string;
+  // Group transactions by type for display
+  const hasMixedTransactions = transactions.length > 1 &&
+    transactions.some(t => isGiftTransaction(t)) !==
+    transactions.every(t => isGiftTransaction(t));
+
   const percentChange = (data?.percentageChange || data?.changePercent || extractedData?.percentageChange || '') as string;
   const newStake = (data?.newStake || data?.sharesRemaining || extractedData?.newStake || '') as string;
   const previousStake = (data?.previousStake || data?.sharesOwned || extractedData?.previousStake || '') as string;
   const signalStrength = (data?.signalStrength || extractedData?.signalStrength || '') as string;
 
-  const transactionType = (firstTx.type || data?.transactionType || extractedData?.transactionType || '') as string;
-  const acquisitionDisposition = (firstTx.acquisitionDisposition || '') as string;
-  const isSale = transactionType?.toLowerCase().includes('sale') ||
-    transactionType?.toLowerCase().includes('sell') ||
-    acquisitionDisposition === 'D' ||
-    percentChange?.startsWith('-');
+  // For signal config, check if primary transaction is a sale (not gift)
+  const primaryIsSale = transactions.length > 0 ? isSaleTransaction(firstTx) : percentChange?.startsWith('-');
 
   const displayTicker = symbol || ticker || 'N/A';
   const hasTransactionData = totalValue || sharesAmount || percentChange;

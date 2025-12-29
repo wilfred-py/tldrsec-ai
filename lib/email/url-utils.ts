@@ -1,5 +1,10 @@
 /**
  * Email URL utilities for SEC filing links
+ *
+ * Design principle: Always link directly to the actual document when available.
+ * The SEC renders Form 4/3/144 XML files with stylesheets (xslF345X05), providing
+ * a clean, readable view. Users get a better experience seeing the actual filing
+ * rather than an index page.
  */
 
 /**
@@ -29,36 +34,26 @@ function formatAccessionNumber(accessionNoDashes: string): string {
 /**
  * Validates and normalizes an SEC filing URL for use in email links.
  *
- * The SEC filing index page (-index.html) provides a clean Filing Detail view
- * that shows the filing metadata and links to all associated documents.
- * This is a good user experience as it lets users navigate to the specific
- * document they want.
- *
- * For XML files (common in Form 4, Form 3, Form 144), we convert to the Filing
- * Detail page since raw XML is not user-friendly.
- *
- * For HTML/HTM files (common in 10-K, 10-Q, 8-K), we keep the direct document
- * link since these are human-readable.
+ * Design: Link directly to the actual document whenever possible.
+ * - XML files with xslF345X05 stylesheet (Form 4, 3, 144) render beautifully on SEC.gov
+ * - HTML/HTM files are human-readable
+ * - Directory URLs get converted to index page as fallback
  *
  * @param filingUrl - The SEC filing URL (directory URL, document URL, or -index.htm URL)
  * @returns A valid SEC filing URL for email display, or the EDGAR search page for empty URLs
  *
  * @example
- * // Directory URL - converts to index URL
- * getSecFilingViewerUrl('https://www.sec.gov/Archives/edgar/data/0001679788/000167978825000249')
- * // Returns: 'https://www.sec.gov/Archives/edgar/data/0001679788/000167978825000249/0001679788-25-000249-index.html'
- *
- * // XML document (Form 4) - converts to index URL for better UX
+ * // XML document (Form 4) - passes through for direct viewing (SEC renders with stylesheet)
  * getSecFilingViewerUrl('https://www.sec.gov/Archives/edgar/data/0001045810/000119903925000015/xslF345X05/wk-form4_1766450107.xml')
- * // Returns: 'https://www.sec.gov/Archives/edgar/data/0001045810/000119903925000015/0001199039-25-000015-index.html'
+ * // Returns: 'https://www.sec.gov/Archives/edgar/data/0001045810/000119903925000015/xslF345X05/wk-form4_1766450107.xml'
  *
  * // HTML document (8-K, 10-K) - passes through for direct viewing
  * getSecFilingViewerUrl('https://www.sec.gov/Archives/edgar/data/0000021344/000155278125000454/e25454_ko-8k.htm')
  * // Returns: 'https://www.sec.gov/Archives/edgar/data/0000021344/000155278125000454/e25454_ko-8k.htm'
  *
- * // Already an index URL - passes through
- * getSecFilingViewerUrl('https://www.sec.gov/Archives/edgar/data/1652044/000119312525323453/0001193125-25-323453-index.htm')
- * // Returns: 'https://www.sec.gov/Archives/edgar/data/1652044/000119312525323453/0001193125-25-323453-index.htm'
+ * // Directory URL - converts to index URL (fallback)
+ * getSecFilingViewerUrl('https://www.sec.gov/Archives/edgar/data/0001679788/000167978825000249')
+ * // Returns: 'https://www.sec.gov/Archives/edgar/data/0001679788/000167978825000249/0001679788-25-000249-index.html'
  *
  * // Empty URL - returns search fallback
  * getSecFilingViewerUrl('')
@@ -75,30 +70,24 @@ export function getSecFilingViewerUrl(filingUrl: string): string {
     return filingUrl;
   }
 
-  // Check if this is an XML document URL (Form 4, Form 3, Form 144, etc.)
-  // These should be converted to the Filing Detail page for better UX
-  // Pattern: https://www.sec.gov/Archives/edgar/data/{CIK}/{ACCESSION_NO_DASHES}/.../*.xml
-  const xmlDocPattern = /^https:\/\/www\.sec\.gov\/Archives\/edgar\/data\/(\d+)\/(\d{18})\/.*\.xml$/i;
-  const xmlMatch = filingUrl.match(xmlDocPattern);
-
-  if (xmlMatch) {
-    const [, cik, accessionNoDashes] = xmlMatch;
-    const accessionWithDashes = formatAccessionNumber(accessionNoDashes);
-    return `https://www.sec.gov/Archives/edgar/data/${cik}/${accessionNoDashes}/${accessionWithDashes}-index.html`;
+  // Direct document URLs (XML, HTML, HTM) - pass through for direct viewing
+  // SEC renders XML files with stylesheets, providing good UX
+  if (filingUrl.match(/\.(xml|html?|htm)$/i)) {
+    return filingUrl;
   }
 
-  // Check if this is a directory URL pattern:
+  // Check if this is a directory URL pattern (no file extension):
   // https://www.sec.gov/Archives/edgar/data/{CIK}/{ACCESSION_NO_DASHES}
   const directoryPattern = /^https:\/\/www\.sec\.gov\/Archives\/edgar\/data\/(\d+)\/(\d{18})\/?$/;
   const match = filingUrl.match(directoryPattern);
 
   if (match) {
+    // Convert directory URL to index page as fallback
     const [, cik, accessionNoDashes] = match;
     const accessionWithDashes = formatAccessionNumber(accessionNoDashes);
     return `https://www.sec.gov/Archives/edgar/data/${cik}/${accessionNoDashes}/${accessionWithDashes}-index.html`;
   }
 
-  // For HTML/HTM documents (10-K, 10-Q, 8-K), return as-is for direct viewing
-  // These are human-readable and provide good UX
+  // Return as-is for any other URL format
   return filingUrl;
 }
