@@ -380,7 +380,19 @@ FORBIDDEN:
 - Do not say "Here is the JSON"
 - Do not add any text before or after the JSON object
 - Do not use "companyName", "issuerName" - use "company"
-- Do not use "executiveSummary" - use "summary"`;
+- Do not use "executiveSummary" - use "summary"
+- Do not use markdown headers (###, ####, ##, #) inside JSON string values
+- Do not use markdown lists (* or -) inside JSON string values
+- Do not use markdown bold (**text**) inside JSON string values
+- Write all text fields as plain prose sentences
+
+WRITING STYLE:
+- Write like a financial journalist at Morning Brew or Bloomberg
+- Lead with the most important number or fact
+- Be concise: prefer "Revenue hit $45B" over "The company reported total revenue of $45B"
+- Use active voice: "CEO Smith sold" not "Shares were sold by CEO Smith"
+- Include specific numbers with units ($, %, shares)
+- For complex filings, structure as: [Headline fact] + [Key context] + [Significance]`;
 
 // =============================================================================
 // Main Function - Generate Filing Prompt
