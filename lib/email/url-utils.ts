@@ -5,6 +5,9 @@
  * The SEC renders Form 4/3/144 XML files with stylesheets (xslF345X05), providing
  * a clean, readable view. Users get a better experience seeing the actual filing
  * rather than an index page.
+ *
+ * For XML files without stylesheets in the URL path, we construct the proper
+ * XSLT stylesheet viewer URL to ensure users see formatted content.
  */
 
 /**
@@ -29,6 +32,41 @@ function formatAccessionNumber(accessionNoDashes: string): string {
   const sequence = accessionNoDashes.slice(12, 18);
 
   return `${filerId}-${year}-${sequence}`;
+}
+
+/**
+ * Check if XML file already has an XSLT stylesheet path in the URL
+ * Examples:
+ * - /xslF345X05/form4.xml (Form 4 with stylesheet)
+ * - /xsl144X01/primary_doc.xml (Form 144 with stylesheet)
+ */
+function hasXsltStylesheet(url: string): boolean {
+  return /\/xsl[A-Z0-9]+\//i.test(url);
+}
+
+/**
+ * Get the appropriate XSLT stylesheet directory for a form type
+ * - Form 3/4/5 (ownership forms): xslF345X05
+ * - Form 144: xsl144X01
+ *
+ * @returns The stylesheet directory name, or null if unknown form type
+ */
+function getXsltStylesheetDir(formType?: string): string | null {
+  if (!formType) return null;
+
+  const normalizedType = formType.toLowerCase().replace(/\s+/g, '').replace('form', '');
+
+  // Form 3, 4, 5 (ownership forms)
+  if (['3', '4', '5'].includes(normalizedType)) {
+    return 'xslF345X05';
+  }
+
+  // Form 144
+  if (normalizedType === '144') {
+    return 'xsl144X01';
+  }
+
+  return null; // Unknown form type - will fallback to index
 }
 
 /**
