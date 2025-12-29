@@ -266,7 +266,7 @@ export async function getDirectFilingSummary(
           accessionNumber: filing.accessionNumber || '',
           summaryText: typeof claudeResult.summary === 'string' ? claudeResult.summary : JSON.stringify(claudeResult.summary),
           keyPoints: extractKeyPointsFromSummary(claudeResult.summary),
-          url: htmlViewerUrl,
+          url: filing.primaryDocUrl || htmlViewerUrl, // Prefer direct document URL for email links
           filingUrl: filing.filingUrl,
           tokensUsed: claudeResult.inputTokens + claudeResult.outputTokens,
           inputTokens: claudeResult.inputTokens,

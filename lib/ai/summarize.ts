@@ -64,10 +64,35 @@ function ensureMinimumFields(
   filingType: SECFilingType,
   fallbackCompany: string = 'Unknown Company'
 ): Record<string, unknown> {
-  // Extract any meaningful text as summary (limit to 500 chars)
-  const summary = responseText.length > 500
-    ? responseText.substring(0, 497) + '...'
-    : responseText;
+  // Check if responseText looks like JSON (starts with { or [)
+  const looksLikeJson = responseText.trim().startsWith('{') || responseText.trim().startsWith('[');
+
+  let summary: string;
+
+  if (looksLikeJson) {
+    // Try to extract the summary field from malformed JSON
+    // Common patterns: {"company":"...", "summary":"<actual summary text>"...
+    const summaryMatch = responseText.match(/"summary"\s*:\s*"([^"]*(?:\\.[^"]*)*)"/);
+    if (summaryMatch && summaryMatch[1]) {
+      // Unescape any escaped characters and use extracted summary
+      summary = summaryMatch[1]
+        .replace(/\\n/g, ' ')
+        .replace(/\\"/g, '"')
+        .replace(/\\\\/g, '\\');
+      // Limit to 500 chars
+      if (summary.length > 500) {
+        summary = summary.substring(0, 497) + '...';
+      }
+    } else {
+      // Could not extract summary from JSON - use a descriptive fallback
+      summary = `This ${filingType} filing from ${fallbackCompany} could not be fully summarized due to a processing error. Please view the original filing on SEC.gov for complete details.`;
+    }
+  } else {
+    // Non-JSON response - use as-is but limit length
+    summary = responseText.length > 500
+      ? responseText.substring(0, 497) + '...'
+      : responseText;
+  }
 
   return {
     company: fallbackCompany,
