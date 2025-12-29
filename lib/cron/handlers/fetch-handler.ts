@@ -146,21 +146,25 @@ export async function handleFetch(
     });
 
     let content: string;
+    let primaryDocUrl: string | null = null;
     let fetchError: string | undefined;
     let verificationResult: ContentVerificationResult | undefined;
 
     try {
       // OPTIMIZED: Fast direct fetch instead of slow multi-retry approach
-      content = await fetchFilingContentOptimized(
+      const fetchResult = await fetchFilingContentOptimized(
         filing.accessionNumber,
         filing.filingUrl,
         ticker.cik || undefined,
         executionId
       );
+      content = fetchResult.content;
+      primaryDocUrl = fetchResult.primaryDocUrl;
 
       fetchLogger.info(`[${executionId}] Content fetched successfully`, {
         accessionNumber: filing.accessionNumber,
         contentLength: content.length,
+        primaryDocUrl,
         fetchDuration: Date.now() - startTime
       });
 
@@ -256,6 +260,7 @@ export async function handleFetch(
         content,
         contentLength: content.length,
         contentHash,
+        primaryDocUrl,  // Store direct document URL for better email UX
         expiresAt,
         fetchDuration,
         status: 'CACHED'
@@ -264,6 +269,7 @@ export async function handleFetch(
         content,
         contentLength: content.length,
         contentHash,
+        primaryDocUrl,  // Update document URL on refresh
         expiresAt,
         fetchDuration,
         fetchError: null,
@@ -339,6 +345,14 @@ export async function handleFetch(
 }
 
 /**
+ * Result of fetching filing content with document URL
+ */
+interface FetchContentResult {
+  content: string;
+  primaryDocUrl: string | null;
+}
+
+/**
  * Optimized filing content fetch that uses direct index parsing
  *
  * Strategy:
@@ -355,14 +369,14 @@ export async function handleFetch(
  * @param filingUrl URL to the filing (usually index page)
  * @param cik Company CIK number
  * @param executionId Execution ID for logging
- * @returns Filing content as string
+ * @returns Filing content and primary document URL
  */
 async function fetchFilingContentOptimized(
   accessionNumber: string,
   filingUrl: string,
   cik: string | undefined,
   executionId: string
-): Promise<string> {
+): Promise<FetchContentResult> {
   const secClient = new SECEdgarClient();
 
   // Parse accession number without dashes for URL construction
@@ -425,7 +439,7 @@ async function fetchFilingContentOptimized(
           url: textFileUrl,
           contentLength: textContent.length
         });
-        return textContent;
+        return { content: textContent, primaryDocUrl: textFileUrl };
       }
     } catch {
       // Continue to error
@@ -462,7 +476,7 @@ async function fetchFilingContentOptimized(
     contentLength: content.length
   });
 
-  return content;
+  return { content, primaryDocUrl: documentUrl };
 }
 
 /**

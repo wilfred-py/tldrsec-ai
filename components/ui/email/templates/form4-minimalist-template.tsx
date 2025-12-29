@@ -21,22 +21,53 @@ interface TransactionData {
 
 /**
  * Check if a transaction is a gift
+ * Handles multiple representations:
+ * - type: 'Gift', 'gift', 'G', 'g'
+ * - type containing 'gift' (e.g., 'Gift Transaction')
+ * - code: 'G'
+ * - price: '$0' or '0' with disposition 'D' (gifts are typically $0 dispositions)
  */
 function isGiftTransaction(tx: TransactionData): boolean {
   const type = tx.type?.toLowerCase() || '';
   const code = tx.code?.toUpperCase() || '';
-  return type === 'gift' || type.includes('gift') || code === 'G';
+  const price = tx.pricePerShare?.replace(/[$,]/g, '') || '';
+  const priceNum = parseFloat(price) || 0;
+
+  // Explicit gift indicators
+  if (type === 'gift' || type === 'g' || type.includes('gift') || code === 'G') {
+    return true;
+  }
+
+  // $0 disposition is likely a gift (not a sale)
+  if (priceNum === 0 && tx.acquisitionDisposition === 'D' && tx.shares) {
+    return true;
+  }
+
+  return false;
 }
 
 /**
  * Check if a transaction is a sale (not gift)
+ * A sale is a disposition with non-zero price
  */
 function isSaleTransaction(tx: TransactionData): boolean {
   if (isGiftTransaction(tx)) return false;
   const type = tx.type?.toLowerCase() || '';
   const code = tx.code?.toUpperCase() || '';
-  return type.includes('sale') || type.includes('sell') ||
-         tx.acquisitionDisposition === 'D' || code === 'S';
+
+  // Explicit sale indicators
+  if (type.includes('sale') || type.includes('sell') || type === 's' || code === 'S') {
+    return true;
+  }
+
+  // Disposition with a price is a sale (gifts are $0)
+  if (tx.acquisitionDisposition === 'D') {
+    const price = tx.pricePerShare?.replace(/[$,]/g, '') || '';
+    const priceNum = parseFloat(price) || 0;
+    return priceNum > 0;
+  }
+
+  return false;
 }
 
 /**
@@ -74,6 +105,118 @@ function getTransactionConfig(tx: TransactionData): {
       textColor: '#166534', // Green dark
       valueColor: '#16A34A', // Green
     };
+  }
+}
+
+/**
+ * Aggregate transactions by type for cleaner display
+ * Groups similar transactions (all gifts together, all sales together)
+ * Returns up to 3 aggregated transaction groups
+ */
+interface AggregatedTransaction {
+  type: 'gift' | 'sale' | 'purchase';
+  totalShares: number;
+  totalValue: number;
+  avgPrice: number;
+  count: number;
+  // For display
+  sharesDisplay: string;
+  valueDisplay: string;
+  priceDisplay: string;
+}
+
+function aggregateTransactionsByType(transactions: TransactionData[]): AggregatedTransaction[] {
+  const groups: Record<string, { shares: number; value: number; count: number; prices: number[] }> = {
+    gift: { shares: 0, value: 0, count: 0, prices: [] },
+    sale: { shares: 0, value: 0, count: 0, prices: [] },
+    purchase: { shares: 0, value: 0, count: 0, prices: [] },
+  };
+
+  for (const tx of transactions) {
+    let groupKey: 'gift' | 'sale' | 'purchase';
+    if (isGiftTransaction(tx)) {
+      groupKey = 'gift';
+    } else if (isSaleTransaction(tx)) {
+      groupKey = 'sale';
+    } else {
+      groupKey = 'purchase';
+    }
+
+    const shares = parseInt(tx.shares?.replace(/,/g, '') || '0', 10);
+    const price = parseFloat(tx.pricePerShare?.replace(/[$,]/g, '') || '0');
+    const value = tx.totalValue
+      ? parseFloat(tx.totalValue.replace(/[$,KMB]/gi, '')) *
+        (tx.totalValue.includes('M') ? 1000000 : tx.totalValue.includes('K') ? 1000 : tx.totalValue.includes('B') ? 1000000000 : 1)
+      : shares * price;
+
+    groups[groupKey].shares += shares;
+    groups[groupKey].value += value;
+    groups[groupKey].count += 1;
+    if (price > 0) groups[groupKey].prices.push(price);
+  }
+
+  // Format and return non-empty groups
+  const result: AggregatedTransaction[] = [];
+  for (const [type, data] of Object.entries(groups)) {
+    if (data.count > 0) {
+      const avgPrice = data.prices.length > 0
+        ? data.prices.reduce((a, b) => a + b, 0) / data.prices.length
+        : 0;
+
+      result.push({
+        type: type as 'gift' | 'sale' | 'purchase',
+        totalShares: data.shares,
+        totalValue: data.value,
+        avgPrice,
+        count: data.count,
+        sharesDisplay: data.shares.toLocaleString(),
+        valueDisplay: formatAggregatedValue(data.value),
+        priceDisplay: avgPrice > 0 ? `$${avgPrice.toFixed(2)}` : '$0',
+      });
+    }
+  }
+
+  // Sort: sales first, then gifts, then purchases
+  return result.sort((a, b) => {
+    const order = { sale: 0, gift: 1, purchase: 2 };
+    return order[a.type] - order[b.type];
+  });
+}
+
+function formatAggregatedValue(value: number): string {
+  if (value >= 1000000000) return `$${(value / 1000000000).toFixed(1)}B`;
+  if (value >= 1000000) return `$${(value / 1000000).toFixed(1)}M`;
+  if (value >= 1000) return `$${(value / 1000).toFixed(0)}K`;
+  if (value > 0) return `$${value.toFixed(0)}`;
+  return '$0';
+}
+
+function getAggregatedTransactionConfig(type: 'gift' | 'sale' | 'purchase') {
+  switch (type) {
+    case 'gift':
+      return {
+        label: 'Gift',
+        icon: '🎁',
+        bgColor: '#F3E8FF',
+        textColor: '#7C3AED',
+        valueColor: '#7C3AED',
+      };
+    case 'sale':
+      return {
+        label: 'Sold',
+        icon: '📉',
+        bgColor: '#FEF2F2',
+        textColor: '#991B1B',
+        valueColor: '#DC2626',
+      };
+    case 'purchase':
+      return {
+        label: 'Bought',
+        icon: '📈',
+        bgColor: '#F0FDF4',
+        textColor: '#166534',
+        valueColor: '#16A34A',
+      };
   }
 }
 
@@ -198,11 +341,6 @@ export function Form4MinimalistTemplate({ filing }: Form4MinimalistTemplateProps
   const transactions = dataTransactions.length > 0 ? dataTransactions : extractedTransactions;
   const firstTx = transactions[0] || {};
 
-  // Group transactions by type for display
-  const hasMixedTransactions = transactions.length > 1 &&
-    transactions.some(t => isGiftTransaction(t)) !==
-    transactions.every(t => isGiftTransaction(t));
-
   const percentChange = (data?.percentageChange || data?.changePercent || extractedData?.percentageChange || '') as string;
   const newStake = (data?.newStake || data?.sharesRemaining || extractedData?.newStake || '') as string;
   const previousStake = (data?.previousStake || data?.sharesOwned || extractedData?.previousStake || '') as string;
@@ -210,6 +348,9 @@ export function Form4MinimalistTemplate({ filing }: Form4MinimalistTemplateProps
 
   // For signal config, check if primary transaction is a sale (not gift)
   const primaryIsSale = transactions.length > 0 ? isSaleTransaction(firstTx) : percentChange?.startsWith('-');
+
+  // Aggregate transactions by type for cleaner multi-transaction display
+  const aggregatedTransactions = aggregateTransactionsByType(transactions);
 
   const displayTicker = symbol || ticker || 'N/A';
   const hasTransactionData = transactions.length > 0 || percentChange;
@@ -317,7 +458,8 @@ export function Form4MinimalistTemplate({ filing }: Form4MinimalistTemplateProps
               </table>
 
               {/* ═══════════════════════════════════════════════════════════
-                  THE NUMBERS - Quick scan metrics
+                  THE NUMBERS - Quick scan metrics (supports multiple transaction types)
+                  Shows aggregated totals: Sale + Gift + Purchase (up to 3 types)
                   ═══════════════════════════════════════════════════════════ */}
               {hasTransactionData && (
                 <SectionCard>
@@ -326,87 +468,143 @@ export function Form4MinimalistTemplate({ filing }: Form4MinimalistTemplateProps
                       <table width="100%" cellPadding="0" cellSpacing="0">
                         <tbody>
                           <tr>
-                            {/* Left: Transaction Amount */}
-                            {totalValue && (
+                            {/* Aggregated transaction types display - shows all transaction types (sale, gift, purchase) */}
+                            {aggregatedTransactions.length > 0 ? (
+                              <>
+                                {aggregatedTransactions.slice(0, 3).map((aggTx, idx) => {
+                                  const config = getAggregatedTransactionConfig(aggTx.type);
+                                  const totalCols = aggregatedTransactions.length + (percentChange ? 1 : 0);
+                                  const isLast = idx === aggregatedTransactions.length - 1 && !percentChange;
+                                  const isFirst = idx === 0;
+                                  const width = `${Math.floor(100 / totalCols)}%`;
+
+                                  return (
+                                    <td key={idx} style={{
+                                      width,
+                                      padding: '16px',
+                                      paddingLeft: isFirst ? '16px' : '8px',
+                                      paddingRight: isLast ? '16px' : '8px',
+                                      backgroundColor: config.bgColor,
+                                      borderRadius: isFirst ? '8px 0 0 8px' : isLast ? '0 8px 8px 0' : '0',
+                                      verticalAlign: 'top',
+                                    }}>
+                                      <div style={{
+                                        fontSize: '11px',
+                                        fontWeight: 700,
+                                        color: config.textColor,
+                                        textTransform: 'uppercase' as const,
+                                        letterSpacing: '0.5px',
+                                        marginBottom: '4px',
+                                      }}>
+                                        {config.icon} {config.label}{aggTx.count > 1 ? ` (${aggTx.count})` : ''}
+                                      </div>
+                                      <div style={{
+                                        fontSize: '24px',
+                                        fontWeight: 800,
+                                        color: config.valueColor,
+                                        lineHeight: '1.1',
+                                      }}>
+                                        {aggTx.type === 'gift' ? `${aggTx.sharesDisplay} shares` : aggTx.valueDisplay || `${aggTx.sharesDisplay} shares`}
+                                      </div>
+                                      {aggTx.type !== 'gift' && aggTx.avgPrice > 0 && (
+                                        <div style={{
+                                          fontSize: '12px',
+                                          color: config.textColor,
+                                          opacity: 0.8,
+                                          marginTop: '4px',
+                                        }}>
+                                          {aggTx.sharesDisplay} shares @ {aggTx.priceDisplay}
+                                        </div>
+                                      )}
+                                    </td>
+                                  );
+                                })}
+
+                                {/* Stake Impact column */}
+                                {percentChange && (
+                                  <td style={{
+                                    width: `${Math.floor(100 / (aggregatedTransactions.length + 1))}%`,
+                                    padding: '16px',
+                                    paddingLeft: '8px',
+                                    verticalAlign: 'top',
+                                    borderRadius: '0 8px 8px 0',
+                                  }}>
+                                    <div style={{
+                                      fontSize: '11px',
+                                      fontWeight: 700,
+                                      color: EmailColors.text.meta,
+                                      textTransform: 'uppercase' as const,
+                                      letterSpacing: '0.5px',
+                                      marginBottom: '4px',
+                                    }}>
+                                      Stake Impact
+                                    </div>
+                                    <div style={{
+                                      fontSize: '24px',
+                                      fontWeight: 800,
+                                      color: primaryIsSale ? '#DC2626' : '#16A34A',
+                                      lineHeight: '1.1',
+                                    }}>
+                                      {percentChange}
+                                    </div>
+                                    {(previousStake || newStake) && (
+                                      <div style={{
+                                        fontSize: '12px',
+                                        color: EmailColors.text.meta,
+                                        marginTop: '4px',
+                                      }}>
+                                        {previousStake && newStake
+                                          ? `${previousStake} → ${newStake}`
+                                          : newStake || previousStake
+                                        }
+                                      </div>
+                                    )}
+                                  </td>
+                                )}
+                              </>
+                            ) : (
+                              /* Fallback: Just stake impact if no transaction details */
                               <td style={{
-                                width: '50%',
+                                width: '100%',
                                 padding: '16px',
-                                backgroundColor: isSale ? '#FEF2F2' : '#F0FDF4',
-                                borderRadius: '8px',
                                 verticalAlign: 'top',
                               }}>
-                                <div style={{
-                                  fontSize: '11px',
-                                  fontWeight: 700,
-                                  color: isSale ? '#991B1B' : '#166534',
-                                  textTransform: 'uppercase' as const,
-                                  letterSpacing: '0.5px',
-                                  marginBottom: '4px',
-                                }}>
-                                  {isSale ? '📉 Sold' : '📈 Bought'}
-                                </div>
-                                <div style={{
-                                  fontSize: '28px',
-                                  fontWeight: 800,
-                                  color: isSale ? '#DC2626' : '#16A34A',
-                                  lineHeight: '1.1',
-                                }}>
-                                  {totalValue}
-                                </div>
-                                {sharesAmount && (
+                                {percentChange && (
+                                  <>
+                                    <div style={{
+                                      fontSize: '11px',
+                                      fontWeight: 700,
+                                      color: EmailColors.text.meta,
+                                      textTransform: 'uppercase' as const,
+                                      letterSpacing: '0.5px',
+                                      marginBottom: '4px',
+                                    }}>
+                                      Stake Impact
+                                    </div>
+                                    <div style={{
+                                      fontSize: '28px',
+                                      fontWeight: 800,
+                                      color: primaryIsSale ? '#DC2626' : '#16A34A',
+                                      lineHeight: '1.1',
+                                    }}>
+                                      {percentChange}
+                                    </div>
+                                  </>
+                                )}
+                                {(previousStake || newStake) && (
                                   <div style={{
                                     fontSize: '13px',
                                     color: EmailColors.text.meta,
                                     marginTop: '6px',
                                   }}>
-                                    {sharesAmount} shares @ {pricePerShare || 'avg'}
+                                    {previousStake && newStake
+                                      ? `${previousStake} → ${newStake}`
+                                      : newStake || previousStake
+                                    }
                                   </div>
                                 )}
                               </td>
                             )}
-
-                            {/* Right: Stake Impact */}
-                            <td style={{
-                              width: totalValue ? '50%' : '100%',
-                              padding: '16px',
-                              paddingLeft: totalValue ? '12px' : '16px',
-                              verticalAlign: 'top',
-                            }}>
-                              {percentChange && (
-                                <>
-                                  <div style={{
-                                    fontSize: '11px',
-                                    fontWeight: 700,
-                                    color: EmailColors.text.meta,
-                                    textTransform: 'uppercase' as const,
-                                    letterSpacing: '0.5px',
-                                    marginBottom: '4px',
-                                  }}>
-                                    Stake Impact
-                                  </div>
-                                  <div style={{
-                                    fontSize: '28px',
-                                    fontWeight: 800,
-                                    color: isSale ? '#DC2626' : '#16A34A',
-                                    lineHeight: '1.1',
-                                  }}>
-                                    {percentChange}
-                                  </div>
-                                </>
-                              )}
-                              {(previousStake || newStake) && (
-                                <div style={{
-                                  fontSize: '13px',
-                                  color: EmailColors.text.meta,
-                                  marginTop: '6px',
-                                }}>
-                                  {previousStake && newStake
-                                    ? `${previousStake} → ${newStake}`
-                                    : newStake || previousStake
-                                  }
-                                </div>
-                              )}
-                            </td>
                           </tr>
                         </tbody>
                       </table>

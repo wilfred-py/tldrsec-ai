@@ -2,16 +2,51 @@
 
 ## Current Status
 **Date**: 2025-12-29
-**Branch**: feature/json-parsing-phase3
-**Status**: ✅ OPERATIONAL - JSON Parsing Phase 5 Complete (Bracket Repair)
+**Branch**: feature/json-parsing-phase5-monitoring
+**Status**: ✅ OPERATIONAL - Form 4 Email Template Fixes Complete
 
-### Active: JSON Bracket Repair ✅ COMPLETE (2025-12-29)
+### Active: Form 4 Email Template Fixes ✅ COMPLETE (2025-12-29)
 
-**Branch**: `fix/json-bracket-repair` (ready for PR)
+**Branch**: `feature/json-parsing-phase5-monitoring`
+
+Fixed 5 issues with Form 4 email templates identified during E2E testing:
+
+1. **Filing URLs - Direct Document Links**
+   - Problem: "View Full Filing" links went to `-index.html` instead of actual documents
+   - Solution: Updated `getSecFilingViewerUrl()` to pass through XML/HTML URLs directly
+   - File: `lib/email/url-utils.ts`
+
+2. **NVDA Summary Truncation Fix**
+   - Problem: Headline showed only "NVDA Director Mark A." (truncated)
+   - Solution: Use full summary when headline is < 30 chars
+   - File: `components/ui/email/templates/form4-minimalist-template.tsx`
+
+3. **VRT Raw JSON in Summary** (Prior session fix)
+   - Problem: Fallback displayed raw JSON instead of formatted text
+   - Solution: Extract summary field from malformed JSON using regex
+   - File: `lib/ai/summarize.ts`
+
+4. **Gift Transaction Display - Purple Styling**
+   - Problem: Gifts showed as "SOLD" with red background
+   - Solution: Added `isGiftTransaction()` helper and purple color scheme (🎁 #7C3AED)
+   - File: `components/ui/email/templates/form4-minimalist-template.tsx`
+
+5. **Multi-Transaction Display (Sale + Gift)**
+   - Problem: Only first transaction shown in graphic div
+   - Solution: Redesigned to show up to 2 transactions side-by-side
+   - File: `components/ui/email/templates/form4-minimalist-template.tsx`
+
+**Verification**: ✅ Lint passes, ✅ E2E test passes (5/5 tickers, email sent)
+
+---
+
+### Previous: JSON Bracket Repair ✅ COMPLETE (2025-12-29)
+
+**Branch**: `fix/json-bracket-repair` (merged)
 
 Fixed intermittent JSON parsing failures caused by AI models forgetting to close arrays before closing objects.
 
-**Root Cause**: Stress testing revealed Grok 4.1-fast has ~40% failure rate producing malformed JSON where it forgets `]` before final `}`.
+**Root Cause**: Grok 4.1-fast has ~40% failure rate producing malformed JSON where it forgets `]` before final `}`.
 
 **Solution**:
 - Added `attemptBracketRepair()` function in `lib/ai/parsers/simple-parser.ts`
