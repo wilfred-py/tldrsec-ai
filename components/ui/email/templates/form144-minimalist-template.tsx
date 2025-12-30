@@ -177,6 +177,7 @@ export function Form144MinimalistTemplate({ filing }: Form144MinimalistTemplateP
   const tradingPlan = (data?.tradingPlan || extractedData?.tradingPlan || '') as string;
   const signalStrength = (data?.signalStrength || extractedData?.signalStrength || '') as string;
   const recentActivity = (data?.recentActivity || extractedData?.recentActivity || '') as string;
+  const remainingHoldings = (data?.remainingHoldings || extractedData?.remainingHoldings || '') as string;
 
   const displayTicker = symbol || ticker || 'N/A';
 
@@ -291,63 +292,115 @@ export function Form144MinimalistTemplate({ filing }: Form144MinimalistTemplateP
               </table>
 
               {/* ═══════════════════════════════════════════════════════════
-                  KEY METRICS - Quick scan cards
+                  KEY METRICS - Quick scan cards (Shares + Value)
                   ═══════════════════════════════════════════════════════════ */}
               {hasTransactionData && (
                 <table width="100%" cellPadding="0" cellSpacing="0" style={{ marginBottom: '16px' }}>
                   <tbody>
+                    {/* Row 1: Shares to Sell + Estimated Value */}
                     <tr>
                       <td>
                         <table width="100%" cellPadding="0" cellSpacing="0">
                           <tbody>
                             <tr>
-                              {/* Proposed Sale Card */}
-                              <td style={{
-                                width: percentOfHoldings ? '48%' : '100%',
-                                padding: '16px',
-                                backgroundColor: '#FEF2F2',
-                                borderRadius: '8px',
-                                verticalAlign: 'top',
-                              }}>
-                                <div style={{
-                                  fontSize: '11px',
-                                  fontWeight: 700,
-                                  color: '#991B1B',
-                                  textTransform: 'uppercase' as const,
-                                  letterSpacing: '0.5px',
-                                  marginBottom: '4px',
+                              {/* Shares to Sell Card */}
+                              {shares && (
+                                <td style={{
+                                  width: estimatedValue ? '48%' : '100%',
+                                  padding: '16px',
+                                  backgroundColor: '#FEF2F2',
+                                  borderRadius: '8px',
+                                  verticalAlign: 'top',
                                 }}>
-                                  Proposed Sale
-                                </div>
-                                <div style={{
-                                  fontSize: '22px',
-                                  fontWeight: 800,
-                                  color: '#DC2626',
-                                  lineHeight: '1.2',
-                                }}>
-                                  {estimatedValue || formatCompactValue(estimatedValueNum) || 'TBD'}
-                                </div>
-                                {shares && (
                                   <div style={{
-                                    fontSize: '12px',
+                                    fontSize: '11px',
+                                    fontWeight: 700,
                                     color: '#991B1B',
-                                    opacity: 0.8,
-                                    marginTop: '4px',
+                                    textTransform: 'uppercase' as const,
+                                    letterSpacing: '0.5px',
+                                    marginBottom: '4px',
                                   }}>
-                                    {shares} shares{pricePerShare ? ` @ ${pricePerShare}` : ''}
+                                    Shares to Sell
                                   </div>
-                                )}
-                              </td>
+                                  <div style={{
+                                    fontSize: '22px',
+                                    fontWeight: 800,
+                                    color: '#DC2626',
+                                    lineHeight: '1.2',
+                                  }}>
+                                    {shares}
+                                  </div>
+                                  {pricePerShare && (
+                                    <div style={{
+                                      fontSize: '12px',
+                                      color: '#991B1B',
+                                      opacity: 0.8,
+                                      marginTop: '4px',
+                                    }}>
+                                      @ {pricePerShare}/share
+                                    </div>
+                                  )}
+                                </td>
+                              )}
 
                               {/* Gap spacer */}
-                              {percentOfHoldings && (
+                              {shares && estimatedValue && (
                                 <td style={{ width: '4%' }}></td>
                               )}
 
-                              {/* Holdings Impact Card (if available) */}
-                              {percentOfHoldings && (
+                              {/* Estimated Value Card */}
+                              {estimatedValue && (
                                 <td style={{
-                                  width: '48%',
+                                  width: shares ? '48%' : '100%',
+                                  padding: '16px',
+                                  backgroundColor: '#FEF2F2',
+                                  borderRadius: '8px',
+                                  verticalAlign: 'top',
+                                }}>
+                                  <div style={{
+                                    fontSize: '11px',
+                                    fontWeight: 700,
+                                    color: '#991B1B',
+                                    textTransform: 'uppercase' as const,
+                                    letterSpacing: '0.5px',
+                                    marginBottom: '4px',
+                                  }}>
+                                    Estimated Value
+                                  </div>
+                                  <div style={{
+                                    fontSize: '22px',
+                                    fontWeight: 800,
+                                    color: '#DC2626',
+                                    lineHeight: '1.2',
+                                  }}>
+                                    {estimatedValue || formatCompactValue(estimatedValueNum)}
+                                  </div>
+                                  {percentOfHoldings && (
+                                    <div style={{
+                                      fontSize: '12px',
+                                      color: '#991B1B',
+                                      opacity: 0.8,
+                                      marginTop: '4px',
+                                    }}>
+                                      {percentOfHoldings} of holdings
+                                    </div>
+                                  )}
+                                </td>
+                              )}
+                            </tr>
+                          </tbody>
+                        </table>
+                      </td>
+                    </tr>
+
+                    {/* Row 2: Remaining Holdings (if available) */}
+                    {remainingHoldings && (
+                      <tr>
+                        <td style={{ paddingTop: '8px' }}>
+                          <table width="100%" cellPadding="0" cellSpacing="0">
+                            <tbody>
+                              <tr>
+                                <td style={{
                                   padding: '16px',
                                   backgroundColor: EmailColors.structure.backgroundAlt,
                                   borderRadius: '8px',
@@ -361,7 +414,7 @@ export function Form144MinimalistTemplate({ filing }: Form144MinimalistTemplateP
                                     letterSpacing: '0.5px',
                                     marginBottom: '4px',
                                   }}>
-                                    % of Holdings
+                                    Shares Remaining After Sale
                                   </div>
                                   <div style={{
                                     fontSize: '22px',
@@ -369,22 +422,22 @@ export function Form144MinimalistTemplate({ filing }: Form144MinimalistTemplateP
                                     color: EmailColors.text.headline,
                                     lineHeight: '1.2',
                                   }}>
-                                    {percentOfHoldings}
+                                    {remainingHoldings}
                                   </div>
                                   <div style={{
                                     fontSize: '12px',
                                     color: EmailColors.text.meta,
                                     marginTop: '4px',
                                   }}>
-                                    of insider&apos;s position
+                                    Amount of Securities Beneficially Owned Following Transaction
                                   </div>
                                 </td>
-                              )}
-                            </tr>
-                          </tbody>
-                        </table>
-                      </td>
-                    </tr>
+                              </tr>
+                            </tbody>
+                          </table>
+                        </td>
+                      </tr>
+                    )}
                   </tbody>
                 </table>
               )}

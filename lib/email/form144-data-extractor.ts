@@ -17,6 +17,7 @@ export interface Form144ExtractedData {
   broker: string;
   tradingPlan: string;
   recentActivity: string;
+  remainingHoldings: string;
   signalStrength: string;
 }
 
@@ -34,6 +35,7 @@ export function extractForm144Data(summaryText: string): Form144ExtractedData {
     broker: '',
     tradingPlan: '',
     recentActivity: '',
+    remainingHoldings: '',
     signalStrength: '',
   };
 
@@ -67,6 +69,9 @@ export function extractForm144Data(summaryText: string): Form144ExtractedData {
 
   // Extract recent activity context
   result.recentActivity = extractRecentActivity(summaryText);
+
+  // Extract remaining holdings (securities beneficially owned after transaction)
+  result.remainingHoldings = extractRemainingHoldings(summaryText);
 
   // Determine signal strength (2-level)
   result.signalStrength = determineSignalStrength(result, summaryText);
@@ -323,6 +328,38 @@ function extractRecentActivity(text: string): string {
       }
 
       return context;
+    }
+  }
+
+  return '';
+}
+
+/**
+ * Extract remaining holdings (Amount of Securities Beneficially Owned Following Transaction)
+ */
+function extractRemainingHoldings(text: string): string {
+  const patterns = [
+    // "will still hold X shares"
+    /(?:will\s+)?(?:still\s+)?(?:hold|retain|own)\s*([\d,]+)\s*shares?/i,
+    // "X shares remaining"
+    /([\d,]+)\s*shares?\s*(?:remaining|left|after)/i,
+    // "beneficially own X shares after"
+    /beneficially\s+own\s*([\d,]+)\s*shares?\s*(?:after|following)/i,
+    // "following the transaction, X shares"
+    /following\s+(?:the\s+)?(?:transaction|sale),?\s*([\d,]+)\s*shares?/i,
+    // "after the sale, X shares"
+    /after\s+(?:the\s+)?(?:sale|transaction),?\s*([\d,]+)\s*shares?/i,
+    // "leaving X shares"
+    /leaving\s*([\d,]+)\s*shares?/i,
+    // "retaining X shares"
+    /retain(?:ing)?\s*([\d,]+)\s*shares?/i,
+  ];
+
+  for (const pattern of patterns) {
+    const match = text.match(pattern);
+    if (match?.[1]) {
+      // Format with commas
+      return match[1].replace(/,/g, '').replace(/\B(?=(\d{3})+(?!\d))/g, ',');
     }
   }
 

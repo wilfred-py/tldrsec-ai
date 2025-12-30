@@ -300,6 +300,11 @@ export const FORM_SCHEMAS: Record<string, JSONSchema> = {
         description: 'Brief context on recent related insider sales if mentioned',
         maxLength: 200
       },
+      remainingHoldings: {
+        type: 'string',
+        description: 'Amount of Securities Beneficially Owned Following Reported Transaction(s) - total shares still held after sale (e.g., "1,500,000")',
+        maxLength: 50
+      },
       signalStrength: {
         type: 'string',
         description: 'Signal assessment: "Notable Sale" (large/unusual), "Routine 10b5-1" (pre-planned), "Significant Divestiture" (pattern of sales)',
@@ -501,6 +506,7 @@ const FORM_EXTRACTION_GUIDANCE: Record<string, string> = {
 - Form 144 is a NOTICE OF PROPOSED SALE - shares haven't been sold yet, this is intent to sell
 - Extract filer name exactly as shown, and their title/role (CEO, Director, CFO, etc.)
 - Find the number of shares proposed for sale and calculate estimated value (shares × approx price)
+- IMPORTANT: Extract "Amount of Securities Beneficially Owned Following Reported Transaction(s)" as remainingHoldings - this is how many shares the filer will still own after the proposed sale
 - Look for 10b5-1 trading plan references - if mentioned, note plan adoption date
 - Check if filing mentions recent related sales by same insider for context
 - The summary MUST lead with: ticker, insider name, shares count, and dollar value
