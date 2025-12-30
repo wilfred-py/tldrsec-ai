@@ -1,7 +1,7 @@
 // index.js - Cloudflare Worker for Cron Trigger
 // Enhanced with advanced rate limiting, circuit breaker patterns, and comprehensive monitoring
 // Features: Request tracking, adaptive backoff, circuit breaker state persistence, burst protection
-// Version: 2.5.0 - Added health endpoint and heartbeat monitoring
+// Version: 2.6.0 - Added circuit breaker status to health endpoint, enabled KV persistence
 
 // In-memory heartbeat tracking (reset on each worker instance)
 // For persistent tracking, enable KV storage in wrangler.toml
@@ -22,6 +22,15 @@ export default {
         count: heartbeatCount
       };
 
+      // Try to get circuit breaker state from KV
+      let circuitBreakerInfo = {
+        source: 'unavailable',
+        state: 'UNKNOWN',
+        failureCount: 0,
+        lastFailureTime: null,
+        nextRetryTime: null
+      };
+
       if (env.METRICS_KV) {
         try {
           const kvHeartbeat = await env.METRICS_KV.get('last_cron_heartbeat');
@@ -32,6 +41,26 @@ export default {
               count: heartbeatCount
             };
           }
+
+          // Read circuit breaker state from KV
+          const cbState = await env.METRICS_KV.get('circuit_breaker_state', { type: 'json' });
+          if (cbState) {
+            circuitBreakerInfo = {
+              source: 'kv',
+              state: cbState.state || 'CLOSED',
+              failureCount: cbState.failureCount || 0,
+              lastFailureTime: cbState.lastFailureTime || null,
+              nextRetryTime: cbState.nextRetryTime || null
+            };
+          } else {
+            circuitBreakerInfo = {
+              source: 'kv',
+              state: 'CLOSED',
+              failureCount: 0,
+              lastFailureTime: null,
+              nextRetryTime: null
+            };
+          }
         } catch (e) {
           console.warn('[HEALTH] KV read failed:', e.message);
         }
@@ -39,11 +68,12 @@ export default {
 
       const status = {
         worker: 'healthy',
-        version: env.WORKER_VERSION || '2.5.0',
+        version: env.WORKER_VERSION || '2.6.0',
         lastHeartbeat: heartbeatInfo.timestamp || 'never',
         heartbeatSource: heartbeatInfo.source,
         heartbeatCount: heartbeatInfo.count,
-        currentTime: new Date().toISOString()
+        currentTime: new Date().toISOString(),
+        circuitBreaker: circuitBreakerInfo
       };
 
       // Calculate staleness if we have a heartbeat
@@ -59,8 +89,17 @@ export default {
         status.status = 'NO_HEARTBEAT';
       }
 
+      // Add circuit breaker warning if OPEN
+      if (circuitBreakerInfo.state === 'OPEN') {
+        status.status = 'CIRCUIT_BREAKER_OPEN';
+        status.warning = 'Circuit breaker is OPEN - pipeline requests are being blocked';
+      } else if (circuitBreakerInfo.state === 'HALF_OPEN') {
+        status.status = status.stale ? 'STALE' : 'RECOVERING';
+        status.warning = 'Circuit breaker is HALF_OPEN - testing recovery';
+      }
+
       return new Response(JSON.stringify(status, null, 2), {
-        status: status.stale ? 503 : 200,
+        status: status.stale || circuitBreakerInfo.state === 'OPEN' ? 503 : 200,
         headers: { 'Content-Type': 'application/json' }
       });
     }
@@ -249,10 +288,11 @@ export default {
       }
     }
 
-    // Initialize monitoring services (KV storage is optional)
-    const rateLimiter = new AdvancedRateLimiter(null, null, null); // Use memory fallback
-    const circuitBreaker = new CircuitBreaker(null, rateLimiter);
-    const monitor = new WorkerMonitor(null); // Use memory fallback
+    // Initialize monitoring services (use KV storage if available for persistence)
+    const kvStorage = env.METRICS_KV || null;
+    const rateLimiter = new AdvancedRateLimiter(kvStorage, null, null);
+    const circuitBreaker = new CircuitBreaker(kvStorage, rateLimiter);
+    const monitor = new WorkerMonitor(kvStorage);
 
     // Generate secure execution ID using crypto API
     const generateSecureExecutionId = () => {
