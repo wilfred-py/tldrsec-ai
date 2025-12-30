@@ -124,9 +124,9 @@ This file provides a chronological index of all completed projects. For detailed
 ## Archive Statistics
 - **Total Archived Projects**: 32 projects across 6 weekly archives
 - **Current PROGRESS.md Lines**: 502 (threshold: 500)
-- **Last Sync**: 2025-12-30 16:30 AEDT
+- **Last Sync**: 2025-12-30 17:15 AEDT
 - **Archive System**: ✅ ACTIVE
-- **Next Archive Check**: Archive needed - PROGRESS.md > 500 lines. Check for projects > 30 days old.
+- **Next Archive Check**: PROGRESS.md at threshold. No projects >30 days old - next check after 2025-12-31.
 
 **Archives**:
 - `01-Dec-2025.md` - Email & verification (8 projects)
