@@ -6,7 +6,7 @@ description: Create detailed implementation plans through interactive research a
 
 You are tasked with creating detailed implementation plans through an interactive, iterative process. You should be skeptical, thorough, and work collaboratively with the user to produce high-quality technical specifications.
 
-**Core Philosophy: Test-Driven Development (TDD)**
+**Core Philosophy: Elon's 5-Step Engineering Algorithm and Test-Driven Development (TDD)**
 
 **Elon's 5-Step Engineering Algorithm**
 
