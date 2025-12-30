@@ -245,9 +245,36 @@ function parseMarkdownTable(text: string): Form4Transaction[] {
 function extractTransactionsFromText(text: string): Form4Transaction[] {
   const transactions: Form4Transaction[] = [];
 
-  // Pattern for sale transactions
+  // Pattern for sale transactions with total value (e.g., "sold 56,820 shares at $450.66 weighted average, fetching $25.6 million")
+  const saleWithTotalPatterns = [
+    /(?:sold|sale of)\s+([\d,]+)\s*shares?\s*(?:at|@|for)\s*\$?([\d,.]+)(?:\s*weighted\s+average)?,?\s*(?:fetching|for|totaling|worth)\s*\$?([\d,.]+)\s*(?:M|million|B|billion)/gi,
+  ];
+
+  // Extract sales with total value first (more specific pattern)
+  for (const pattern of saleWithTotalPatterns) {
+    let match;
+    while ((match = pattern.exec(text)) !== null) {
+      const shares = cleanNumber(match[1]);
+      const price = cleanPrice(match[2]);
+      const totalValueRaw = match[3];
+      const totalValueNum = parseFloat(totalValueRaw.replace(/,/g, ''));
+      // Determine multiplier from the suffix
+      const suffixMatch = text.substring(match.index, match.index + match[0].length + 10).match(/(M|million|B|billion)/i);
+      const multiplier = suffixMatch && (suffixMatch[1].toLowerCase() === 'b' || suffixMatch[1].toLowerCase() === 'billion') ? 1000000000 : 1000000;
+
+      transactions.push({
+        type: 'Sale',
+        shares,
+        pricePerShare: `$${price}`,
+        totalValue: formatCurrency(totalValueNum * multiplier),
+        acquisitionDisposition: 'D',
+      });
+    }
+  }
+
+  // Pattern for sale transactions (without total value)
   const salePatterns = [
-    /(?:sold|sale of)\s+([\d,]+)\s*shares?\s*(?:at|@|for)\s*\$?([\d,.]+)/gi,
+    /(?:sold|sale of)\s+([\d,]+)\s*shares?\s*(?:at|@|for)\s*\$?([\d,.]+)(?!\s*(?:weighted|,\s*fetching))/gi,
     /([\d,]+)\s*shares?\s*(?:were\s+)?sold\s*(?:at|@|for)\s*\$?([\d,.]+)/gi,
   ];
 
