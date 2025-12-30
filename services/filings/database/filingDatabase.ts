@@ -55,27 +55,31 @@ export async function findExistingSummary(ticker: string, formType: string, bypa
       await trackCacheAccess(summaryRecord.id, 'database_query');
     }
     
-    // Parse the summary JSON
-    const summaryJSON = summaryRecord.summaryJSON as any;
-    
+    // Parse the summary JSON - contains transactions, filerName, relationship, etc.
+    const summaryJSON = summaryRecord.summaryJSON as Record<string, unknown> | null;
+
     // Convert to FilingSummaryResult format with enhanced data
+    // IMPORTANT: Pass summaryJSON through rawData for email templates
+    // This enables Form 4 multi-transaction display, filer info, and other structured data
     const result: FilingSummaryResult = {
       ticker: ticker,
       companyName: tickerRecord.companyName || ticker,
       filingType: formType as FilingType,
       filingDate: summaryRecord.filingDate.toISOString(),
-      accessionNumber: summaryJSON?.accessionNumber || '',
+      accessionNumber: summaryJSON?.accessionNumber as string || '',
       summaryText: summaryRecord.summaryText || '',
-      keyPoints: summaryJSON?.keyPoints || [],
+      keyPoints: (summaryJSON?.keyPoints as string[]) || [],
       url: summaryRecord.url || summaryRecord.filingUrl, // Prefer primaryDocUrl (stored in url) for direct document links
+      filingUrl: summaryRecord.filingUrl || undefined, // Include filingUrl for proper email link handling
+      rawData: summaryJSON ? { summaryJSON } : undefined, // Pass full AI-parsed data for email templates
       model: summaryRecord.model || undefined,
-      tokensUsed: summaryJSON?.tokensUsed,
-      inputTokens: summaryRecord.inputTokens || summaryJSON?.inputTokens,
-      outputTokens: summaryRecord.outputTokens || summaryJSON?.outputTokens,
-      cost: summaryRecord.totalCost || summaryJSON?.cost,
+      tokensUsed: summaryJSON?.tokensUsed as number | undefined,
+      inputTokens: summaryRecord.inputTokens || (summaryJSON?.inputTokens as number | undefined),
+      outputTokens: summaryRecord.outputTokens || (summaryJSON?.outputTokens as number | undefined),
+      cost: summaryRecord.totalCost || (summaryJSON?.cost as number | undefined),
       processingStatus: summaryRecord.processingStatus || undefined,
-      processingTimeMs: summaryJSON?.processingTimeMs,
-      failureReason: summaryJSON?.failureReason,
+      processingTimeMs: summaryJSON?.processingTimeMs as number | undefined,
+      failureReason: summaryJSON?.failureReason as string | undefined,
       // Database ID for email delivery tracking - added 2025-12-26
       databaseId: summaryRecord.id,
       // Cache analytics metadata

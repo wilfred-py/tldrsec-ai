@@ -252,18 +252,63 @@ export const FORM_SCHEMAS: Record<string, JSONSchema> = {
 
   '144': {
     type: 'object',
-    required: ['company', 'summary', 'filerName', 'proposedSaleAmount'],
+    required: ['company', 'summary', 'filerName', 'shares', 'estimatedValue', 'signalStrength'],
     properties: {
       ...BASE_SCHEMA_PROPERTIES,
       filerName: {
         type: 'string',
-        description: 'Name of the selling security holder',
+        description: 'Name of the selling security holder exactly as shown',
         maxLength: 100
       },
-      proposedSaleAmount: {
+      filerRole: {
         type: 'string',
-        description: 'Proposed sale amount in shares and/or dollar value',
+        description: 'Title/role (e.g., "CEO", "Director", "CFO", "10% Owner")',
         maxLength: 100
+      },
+      shares: {
+        type: 'string',
+        description: 'Number of shares to be sold with commas (e.g., "40,000")',
+        maxLength: 50
+      },
+      estimatedValue: {
+        type: 'string',
+        description: 'Estimated sale value with $ (e.g., "$9.9M" or "$9,916,000")',
+        maxLength: 50
+      },
+      pricePerShare: {
+        type: 'string',
+        description: 'Approximate price per share with $ (e.g., "$248")',
+        maxLength: 30
+      },
+      percentOfHoldings: {
+        type: 'string',
+        description: 'Percentage of insider total holdings if calculable (e.g., "15%")',
+        maxLength: 20
+      },
+      broker: {
+        type: 'string',
+        description: 'Broker/dealer handling the sale if mentioned',
+        maxLength: 100
+      },
+      tradingPlan: {
+        type: 'string',
+        description: '10b5-1 plan details if applicable (e.g., "10b5-1 plan adopted 8/15/2025")',
+        maxLength: 100
+      },
+      recentActivity: {
+        type: 'string',
+        description: 'Brief context on recent related insider sales if mentioned',
+        maxLength: 200
+      },
+      remainingHoldings: {
+        type: 'string',
+        description: 'Amount of Securities Beneficially Owned Following Reported Transaction(s) - total shares still held after sale (e.g., "1,500,000")',
+        maxLength: 50
+      },
+      signalStrength: {
+        type: 'string',
+        description: 'Signal assessment: "Notable Sale" (large/unusual), "Routine 10b5-1" (pre-planned), "Significant Divestiture" (pattern of sales)',
+        maxLength: 50
       },
       securityType: {
         type: 'string',
@@ -456,6 +501,19 @@ const FORM_EXTRACTION_GUIDANCE: Record<string, string> = {
 - Lead keyHighlights with the most investor-relevant fact
 - If management provides a quote, include it in managementCommentary
 - Sentiment: Set to "positive" for beats/good news, "negative" for misses/concerns, "neutral" for informational filings, "mixed" if both`,
+
+  '144': `FORM 144 EXTRACTION RULES:
+- Form 144 is a NOTICE OF PROPOSED SALE - shares haven't been sold yet, this is intent to sell
+- Extract filer name exactly as shown, and their title/role (CEO, Director, CFO, etc.)
+- Find the number of shares proposed for sale and calculate estimated value (shares × approx price)
+- IMPORTANT: Extract "Amount of Securities Beneficially Owned Following Reported Transaction(s)" as remainingHoldings - this is how many shares the filer will still own after the proposed sale
+- Look for 10b5-1 trading plan references - if mentioned, note plan adoption date
+- Check if filing mentions recent related sales by same insider for context
+- The summary MUST lead with: ticker, insider name, shares count, and dollar value
+- Signal assessment (2-level system):
+  * "Notable Sale" - Use when: >$10M value, >5% of holdings, unusual timing, or part of large divestiture pattern
+  * "Routine 10b5-1" - Use when: pre-planned under 10b5-1 trading plan, regular/scheduled sale, or small relative to holdings
+- Write summary as: "[Name] ([Role]) plans to sell [shares] [TICKER] shares worth [value]..."`,
 };
 
 export function generateFilingPrompt(config: FilingPromptConfig): PromptOutput {

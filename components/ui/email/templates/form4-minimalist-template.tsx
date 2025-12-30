@@ -12,11 +12,34 @@ interface Form4MinimalistTemplateProps {
 
 interface TransactionData {
   type?: string;
-  shares?: string;
-  pricePerShare?: string;
-  totalValue?: string;
+  shares?: string | number;
+  pricePerShare?: string | number;
+  totalValue?: string | number;
   acquisitionDisposition?: string;
   code?: string;
+}
+
+/**
+ * Safely parse a value that could be string or number to a number
+ * Handles: "1,234", "$1,234.56", "1.5M", "2K", 1234, etc.
+ */
+function parseNumericValue(value: string | number | undefined | null): number {
+  if (value === undefined || value === null) return 0;
+  if (typeof value === 'number') return value;
+
+  // Remove currency symbols and commas
+  const cleaned = String(value).replace(/[$,]/g, '');
+
+  // Handle suffixes like K, M, B
+  const suffixMatch = cleaned.match(/^([\d.]+)\s*([KMB])$/i);
+  if (suffixMatch) {
+    const num = parseFloat(suffixMatch[1]);
+    const suffix = suffixMatch[2].toUpperCase();
+    const multiplier = suffix === 'B' ? 1000000000 : suffix === 'M' ? 1000000 : suffix === 'K' ? 1000 : 1;
+    return num * multiplier;
+  }
+
+  return parseFloat(cleaned) || 0;
 }
 
 /**
@@ -30,8 +53,7 @@ interface TransactionData {
 function isGiftTransaction(tx: TransactionData): boolean {
   const type = tx.type?.toLowerCase() || '';
   const code = tx.code?.toUpperCase() || '';
-  const price = tx.pricePerShare?.replace(/[$,]/g, '') || '';
-  const priceNum = parseFloat(price) || 0;
+  const priceNum = parseNumericValue(tx.pricePerShare);
 
   // Explicit gift indicators
   if (type === 'gift' || type === 'g' || type.includes('gift') || code === 'G') {
@@ -104,12 +126,23 @@ function aggregateTransactionsByType(transactions: TransactionData[]): Aggregate
       groupKey = 'purchase';
     }
 
-    const shares = parseInt(tx.shares?.replace(/,/g, '') || '0', 10);
-    const price = parseFloat(tx.pricePerShare?.replace(/[$,]/g, '') || '0');
-    const value = tx.totalValue
-      ? parseFloat(tx.totalValue.replace(/[$,KMB]/gi, '')) *
-        (tx.totalValue.includes('M') ? 1000000 : tx.totalValue.includes('K') ? 1000 : tx.totalValue.includes('B') ? 1000000000 : 1)
-      : shares * price;
+    const shares = Math.round(parseNumericValue(tx.shares));
+    const price = parseNumericValue(tx.pricePerShare);
+
+    // Calculate value: prefer totalValue if it's meaningful (> 0), otherwise calculate from shares * price
+    let value = 0;
+    if (tx.totalValue) {
+      const parsedTotalValue = parseNumericValue(tx.totalValue);
+      // Only use totalValue if it's actually meaningful (not $0 for sales/purchases)
+      if (parsedTotalValue > 0 || groupKey === 'gift') {
+        value = parsedTotalValue;
+      } else {
+        // totalValue was $0 but this isn't a gift - calculate from shares * price
+        value = shares * price;
+      }
+    } else {
+      value = shares * price;
+    }
 
     groups[groupKey].shares += shares;
     groups[groupKey].value += value;
@@ -422,13 +455,15 @@ export function Form4MinimalistTemplate({ filing }: Form4MinimalistTemplateProps
               {/* ═══════════════════════════════════════════════════════════
                   THE NUMBERS - Quick scan metrics (supports multiple transaction types)
                   Shows aggregated totals: Sale + Gift + Purchase (up to 3 types)
-                  Edge-to-edge colored blocks with gaps between transaction types
+                  Mobile-first: Stacks on small screens, side-by-side on desktop
                   ═══════════════════════════════════════════════════════════ */}
               {hasTransactionData && (
                 <table width="100%" cellPadding="0" cellSpacing="0" style={{ marginBottom: '16px' }}>
                   <tbody>
                     <tr>
                       <td>
+                        {/* Mobile-first responsive layout using stacked tables */}
+                        {/* Each transaction type is a separate table that can stack */}
                         <table width="100%" cellPadding="0" cellSpacing="0">
                           <tbody>
                             <tr>
@@ -437,19 +472,20 @@ export function Form4MinimalistTemplate({ filing }: Form4MinimalistTemplateProps
                                 <>
                                   {aggregatedTransactions.slice(0, 3).map((aggTx, idx) => {
                                     const config = getAggregatedTransactionConfig(aggTx.type);
-                                    const totalCols = aggregatedTransactions.length;
-                                    const isLast = idx === aggregatedTransactions.length - 1;
-                                    // Calculate width accounting for gaps (8px gap between items)
-                                    const gapCount = totalCols - 1;
-                                    const totalGapWidth = gapCount * 8;
-                                    const availableWidth = 100; // percentage
-                                    const itemWidth = `calc(${availableWidth / totalCols}% - ${totalGapWidth / totalCols}px)`;
+                                    const totalCols = Math.min(aggregatedTransactions.length, 3);
+                                    const isLast = idx === Math.min(aggregatedTransactions.length, 3) - 1;
+
+                                    // For mobile: use percentage width that works well on small screens
+                                    // For 2 items: 48% each (with 4% gap)
+                                    // For 1 item: 100%
+                                    // For 3 items: 31% each (with gaps)
+                                    const widthPercent = totalCols === 1 ? 100 : totalCols === 2 ? 48 : 31;
 
                                     return (
                                       <React.Fragment key={idx}>
                                         <td style={{
-                                          width: itemWidth,
-                                          padding: '20px',
+                                          width: `${widthPercent}%`,
+                                          padding: '16px',
                                           backgroundColor: config.bgColor,
                                           borderRadius: '8px',
                                           verticalAlign: 'top',
@@ -465,27 +501,27 @@ export function Form4MinimalistTemplate({ filing }: Form4MinimalistTemplateProps
                                             {config.icon} {config.label}{aggTx.count > 1 ? ` (${aggTx.count})` : ''}
                                           </div>
                                           <div style={{
-                                            fontSize: '24px',
+                                            fontSize: '22px',
                                             fontWeight: 800,
                                             color: config.valueColor,
-                                            lineHeight: '1.1',
+                                            lineHeight: '1.2',
                                           }}>
-                                            {aggTx.type === 'gift' ? `${aggTx.sharesDisplay} shares` : aggTx.valueDisplay || `${aggTx.sharesDisplay} shares`}
+                                            {/* All transaction types show $ value as primary */}
+                                            {aggTx.valueDisplay || '$0'}
                                           </div>
-                                          {aggTx.type !== 'gift' && aggTx.avgPrice > 0 && (
-                                            <div style={{
-                                              fontSize: '12px',
-                                              color: config.textColor,
-                                              opacity: 0.8,
-                                              marginTop: '4px',
-                                            }}>
-                                              {aggTx.sharesDisplay} shares @ {aggTx.priceDisplay}
-                                            </div>
-                                          )}
+                                          {/* Secondary info: shares count */}
+                                          <div style={{
+                                            fontSize: '12px',
+                                            color: config.textColor,
+                                            opacity: 0.8,
+                                            marginTop: '4px',
+                                          }}>
+                                            {aggTx.sharesDisplay} shares{aggTx.avgPrice > 0 ? ` @ ${aggTx.priceDisplay}` : ''}
+                                          </div>
                                         </td>
                                         {/* Add gap spacer between items (not after last item) */}
                                         {!isLast && (
-                                          <td style={{ width: '8px' }}></td>
+                                          <td style={{ width: totalCols === 2 ? '4%' : '3.5%' }}></td>
                                         )}
                                       </React.Fragment>
                                     );
@@ -549,18 +585,22 @@ export function Form4MinimalistTemplate({ filing }: Form4MinimalistTemplateProps
                   THE STORY - One-liner summary
                   ═══════════════════════════════════════════════════════════ */}
               {headline && (
-                <SectionCard>
-                  <tr>
-                    <td
-                      style={{
-                        fontSize: '15px',
-                        lineHeight: '1.6',
-                        color: EmailColors.text.body,
-                      }}
-                      dangerouslySetInnerHTML={{ __html: formatText(headline) }}
-                    />
-                  </tr>
-                </SectionCard>
+                <table width="100%" cellPadding="0" cellSpacing="0" style={{ marginBottom: '16px' }}>
+                  <tbody>
+                    <tr>
+                      <td
+                        style={{
+                          fontSize: '15px',
+                          lineHeight: '1.6',
+                          color: EmailColors.text.body,
+                          padding: '16px',
+                          backgroundColor: 'transparent',
+                        }}
+                        dangerouslySetInnerHTML={{ __html: formatText(headline) }}
+                      />
+                    </tr>
+                  </tbody>
+                </table>
               )}
 
               {/* No data fallback */}

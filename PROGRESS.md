@@ -1,11 +1,126 @@
 # Current Progress: tldrsec-ai Pipeline Operations
 
 ## Current Status
-**Date**: 2025-12-29
-**Branch**: fix/cloudflare-cron-trigger-restoration
-**Status**: ✅ OPERATIONAL - Cloudflare Cron Trigger Fix Complete
+**Date**: 2025-12-30
+**Branch**: main
+**Status**: ✅ OPERATIONAL - Pipeline Running, Backlog Processing
 
-### Active: Cloudflare Cron Trigger Fix ✅ COMPLETE (2025-12-29)
+### Active: Email Filing URL Exhibit Exclusion Fix ✅ COMPLETE (2025-12-30)
+
+**Issue**: Email filing links pointing to wrong documents:
+1. 10-K redirected to exhibit file (`d13958dex21.htm`) instead of main document
+2. Form 4 redirected to filing detail page (index) instead of XML document
+
+**Root Cause**: `extractPrimaryDocumentUrl()` in fetch-handler.ts was selecting exhibit files alphabetically before main documents. It simply picked the first HTM file that wasn't an index.
+
+**Fix Applied**:
+1. Added `isExhibitFile()` helper - Detects exhibit patterns via regex (`ex21`, `exh31`, `dex21`, `-ex31`, `exhibit`)
+2. Added `isMainDocument()` helper - Identifies main documents (ticker-YYYYMMDD.htm pattern)
+3. Implemented priority-based selection:
+   - Priority 1: Main document pattern (non-exhibit)
+   - Priority 2: Any non-exhibit HTM file
+   - Priority 3: Fallback to first HTM (may be exhibit)
+
+**Files Modified**:
+- `lib/cron/handlers/fetch-handler.ts:556-605` - New extraction logic with exhibit exclusion
+
+**Verification**:
+- ✅ Tested extraction with real SEC 8-K filing - correctly selected `d13958d8k.htm` over `d13958dex21.htm`
+- ✅ 6 test emails sent for all form types
+- ✅ Fix applies to NEW filings (existing incorrect URLs remain until cache expires)
+
+---
+
+### Previous: Cloudflare Cron Trigger Restoration & Backfill ✅ COMPLETE (2025-12-30)
+
+**Issue**: SEC filing pipeline was not discovering new filings - 0 filings discovered in last 24 hours vs 35 on SEC EDGAR.
+
+**Root Cause**: Cloudflare Worker cron triggers stopped firing after Dec 27 deployment. TickerMonitoring `lastChecked` timestamps showed most tickers hadn't been checked since Dec 4 (26 days stale).
+
+**Fix Applied**:
+1. **Redeployed Cloudflare Worker** with `npx wrangler deploy`
+2. **Deployed cron triggers explicitly** with `npx wrangler triggers deploy` (15-min propagation)
+3. **Verified via wrangler tail** - cron firing at 01:55 UTC, full 5-step pipeline executing
+4. **Created backfill script** for 379 unprocessed RssFilingCheck records
+5. **Fixed schema error** in backfill script (`maxAttempts` → `maxRetries`)
+6. **Ran backfill** - created 413 fetch jobs for tracked tickers (VRT, COIN, TSLA, etc.)
+
+**Files Created/Modified**:
+- `scripts/backfill-unprocessed-filings.ts` - NEW: Backfill script for missed filings
+- `cloudflare-cron/wrangler.toml` - Verified cron config (*/5, */10, 0 22 * * *)
+
+**Pipeline Status After Fix**:
+- 408 pending fetch jobs (down from 413)
+- 4 new summaries created today (VRT, COIN)
+- Emails sent for new summaries
+- Est. backlog clearance: ~68 hours at current rate
+
+**Verification**:
+- ✅ Cron triggers firing (confirmed via wrangler tail)
+- ✅ Jobs processing (completed count increasing)
+- ✅ Summaries being created (4 new today)
+- ✅ Emails being sent
+
+---
+
+### Previous: Form 4 Email Value Display & Mobile-First Fix ✅ COMPLETE (2025-12-30)
+
+**Issue**: TSLA Form 4 email showing:
+1. SOLD transaction showing $0 instead of $25.6M
+2. Gift container too large relative to sale container
+3. Gift showing "15,242 shares" instead of dollar value ($0)
+
+**Root Causes**:
+- `aggregateTransactionsByType()` was using `totalValue` even when it was $0 (missing value from AI)
+- Gift transactions displayed shares instead of dollar value
+- Containers used fixed widths that didn't scale well on mobile
+
+**Fixes Applied**:
+1. **Improved value calculation** - When `totalValue` is $0 for non-gift transactions, calculate from `shares * price` instead
+2. **Unified value display** - All transaction types (sale, gift, purchase) now show dollar value as primary, shares as secondary
+3. **Mobile-first responsive design** - Percentage-based widths (48% for 2 items, 31% for 3 items), reduced padding (16px)
+4. **Enhanced data extraction** - New pattern to extract "fetching $X million" from AI summaries
+
+**Files Modified**:
+- `components/ui/email/templates/form4-minimalist-template.tsx` - Value calculation fix, display unification, responsive layout
+- `lib/email/form4-data-extractor.ts` - Added `saleWithTotalPatterns` for explicit total value extraction
+
+**Verification**:
+- ✅ Build compiles successfully
+- ✅ All 6 form type test emails sent (10-K, 10-Q, 144, Form 3, Form 4, 8-K)
+- ✅ URL verification passed for all form types
+
+---
+
+### Previous: Form 4 Multi-Transaction Cards & Links Fix ✅ COMPLETE (2025-12-30)
+
+**Issue**: Two Form 4 email issues reported:
+1. Multi-transaction cards not showing for Form 4s with multiple transactions
+2. Filing links not redirecting to actual filing documents
+
+**Root Cause 1 (Multi-Transaction)**: `summaryJSON` data containing transactions array was being discarded by setting `rawData: undefined` in FilingSummaryResult. The email template expected `data?.transactions` but received empty object.
+
+**Root Cause 2 (Template Type Error)**: Form 4 template assumed `tx.shares` was always a string (for `.replace()`), but AI models sometimes return numbers.
+
+**Fixes Applied**:
+1. **Pass summaryJSON through rawData** - Modified `filingSummaryService.ts` line 567 to pass `rawData: { summaryJSON: summaryJSON.summaryJSON }` instead of `undefined`
+2. **Include rawData in cached summaries** - Modified `filingDatabase.ts` to include `rawData: summaryJSON ? { summaryJSON } : undefined` when retrieving cached summaries
+3. **Add parseNumericValue() helper** - New robust parser handles both string ("1,234", "$1.5M") and number types
+4. **Update TransactionData interface** - Changed `shares`, `pricePerShare`, `totalValue` from `string` to `string | number`
+
+**Files Modified**:
+- `services/filings/summaries/filingSummaryService.ts` - Pass rawData with summaryJSON
+- `services/filings/database/filingDatabase.ts` - Include rawData and filingUrl in cached results
+- `components/ui/email/templates/form4-minimalist-template.tsx` - Type-safe numeric parsing
+
+**Verification**:
+- ✅ Build passes
+- ✅ URL utils tests pass (16/16)
+- ✅ E2E test passes - 5/5 summaries generated, email sent successfully
+
+---
+
+### Previous: Cloudflare Cron Trigger Fix ✅ COMPLETE (2025-12-29)
 
 **Branch**: `fix/cloudflare-cron-trigger-restoration`
 
@@ -381,7 +496,7 @@ npm run cloudflare:status                 # Check deployment status
 
 ---
 
-**Last Updated**: 2025-12-29 20:50 AEDT
+**Last Updated**: 2025-12-30 17:15 AEDT
 **Repository**: tldrsec-ai
 
 *See TIMELINE.md for master timeline and quick navigation*

@@ -546,17 +546,61 @@ function extractPrimaryDocumentUrl(
   }
 
   // Look for primary HTM document (usually the main filing)
-  const primaryHtm = hrefs.find(h =>
+  // Filter HTM files and apply priority logic
+  const htmFiles = hrefs.filter(h =>
     (h.type === 'htm' || h.type === 'html') &&
     !h.href.includes('index') &&
     !h.href.includes('FilingSummary')
   );
 
-  if (primaryHtm) {
-    const fullUrl = primaryHtm.href.startsWith('/')
-      ? `https://www.sec.gov${primaryHtm.href}`
-      : `${baseUrl}/${primaryHtm.href.split('/').pop()}`;
-    fetchLogger.debug(`[${executionId}] Selected HTM document: ${fullUrl}`);
+  if (htmFiles.length > 0) {
+    // Helper to check if a href is an exhibit file
+    const isExhibitFile = (href: string): boolean => {
+      const filename = href.split('/').pop()?.toLowerCase() || '';
+      // Match exhibit patterns: ex21, ex31, exh21, exhibit, dex21, etc.
+      // Common patterns: d13958dex21.htm, exh31-restatedcertificate.htm, tsla-ex31.htm
+      return /(?:^ex\d|^exh\d|dex\d|[-_]ex\d|exhibit)/i.test(filename);
+    };
+
+    // Helper to check if href looks like a main filing document
+    // Main documents typically have patterns like: ticker-YYYYMMDD.htm, company-8k.htm
+    const isMainDocument = (href: string): boolean => {
+      const filename = href.split('/').pop()?.toLowerCase() || '';
+      // Match common main document patterns:
+      // - ticker-YYYYMMDD.htm (e.g., nvda-20250126.htm, tsla-20241231.htm)
+      // - ticker-10k.htm, ticker-10q.htm, ticker-8k.htm
+      // - company-8k.htm, ko-8k.htm
+      return /^[a-z]{2,6}-\d{8}\.htm/.test(filename) || // ticker-YYYYMMDD pattern
+             /^[a-z]{2,6}-(?:10k|10q|8k)\.htm/i.test(filename) || // ticker-formtype pattern
+             /^[a-z]+[_-](?:10k|10q|8k)/i.test(filename); // flexible ticker-form pattern
+    };
+
+    // Priority 1: Main document (ticker-date pattern) that's not an exhibit
+    const mainDoc = htmFiles.find(h => isMainDocument(h.href) && !isExhibitFile(h.href));
+    if (mainDoc) {
+      const fullUrl = mainDoc.href.startsWith('/')
+        ? `https://www.sec.gov${mainDoc.href}`
+        : `${baseUrl}/${mainDoc.href.split('/').pop()}`;
+      fetchLogger.debug(`[${executionId}] Selected main HTM document: ${fullUrl}`);
+      return fullUrl;
+    }
+
+    // Priority 2: Any non-exhibit HTM file
+    const nonExhibitHtm = htmFiles.find(h => !isExhibitFile(h.href));
+    if (nonExhibitHtm) {
+      const fullUrl = nonExhibitHtm.href.startsWith('/')
+        ? `https://www.sec.gov${nonExhibitHtm.href}`
+        : `${baseUrl}/${nonExhibitHtm.href.split('/').pop()}`;
+      fetchLogger.debug(`[${executionId}] Selected non-exhibit HTM document: ${fullUrl}`);
+      return fullUrl;
+    }
+
+    // Priority 3: First HTM file (fallback, may be an exhibit)
+    const firstHtm = htmFiles[0];
+    const fullUrl = firstHtm.href.startsWith('/')
+      ? `https://www.sec.gov${firstHtm.href}`
+      : `${baseUrl}/${firstHtm.href.split('/').pop()}`;
+    fetchLogger.debug(`[${executionId}] Selected first HTM document (fallback): ${fullUrl}`);
     return fullUrl;
   }
 
