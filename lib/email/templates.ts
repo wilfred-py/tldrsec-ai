@@ -771,6 +771,161 @@ Manage preferences: ${data.preferencesUrl}
 }
 
 /**
+ * Template for quarterly earnings confirmation email
+ * Sent when user confirms their portfolio
+ */
+export function quarterlyEarningsTemplate(
+  data: BaseTemplateData & {
+    summaries: Array<{
+      ticker: string;
+      companyName: string;
+      filingType: string;
+      filingDate: Date;
+      filingUrl?: string;
+      summaryText?: string;
+      summaryJSON?: Record<string, unknown>;
+    }>;
+    tickerCount: number;
+  }
+): { html: string; text: string } {
+  const { summaries, recipientName, tickerCount } = data;
+  const name = recipientName || 'Investor';
+
+  // HTML version
+  let htmlContent = `
+    <h1>Your Portfolio Quarterly Earnings</h1>
+    <p>Hello ${name},</p>
+    <p>Thank you for confirming your portfolio! Here are the latest quarterly earnings summaries for your ${tickerCount} tracked ${tickerCount === 1 ? 'company' : 'companies'}:</p>
+  `;
+
+  if (summaries.length === 0) {
+    htmlContent += `
+      <div class="card" style="background-color: #f8f9fa; border-left: 4px solid ${COLORS.primary};">
+        <p>No quarterly earnings summaries are available yet for your tracked companies.</p>
+        <p>We'll email you as soon as new 10-K or 10-Q filings are processed for your portfolio.</p>
+      </div>
+    `;
+  } else {
+    for (const summary of summaries) {
+      const formattedDate = new Date(summary.filingDate).toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+      });
+
+      htmlContent += `
+        <div class="card">
+          <div class="card-header">
+            <span class="filing-type">${summary.ticker} - ${summary.filingType}</span>
+            <span class="filing-date">${formattedDate}</span>
+          </div>
+          <h3 style="margin: 10px 0 5px 0; color: ${COLORS.secondary};">${summary.companyName}</h3>
+      `;
+
+      // Add summary content
+      if (summary.summaryJSON) {
+        const json = summary.summaryJSON as Record<string, unknown>;
+        if (json.period) {
+          htmlContent += `<p><strong>Period:</strong> ${json.period}</p>`;
+        }
+        if (json.insights && Array.isArray(json.insights) && json.insights.length > 0) {
+          htmlContent += `
+            <h4 style="margin: 15px 0 10px 0;">Key Insights</h4>
+            <ul style="margin: 0; padding-left: 20px;">
+              ${(json.insights as string[]).slice(0, 3).map((insight: string) => `<li>${insight}</li>`).join('')}
+            </ul>
+          `;
+        }
+        if (json.financials && Array.isArray(json.financials) && json.financials.length > 0) {
+          htmlContent += `
+            <h4 style="margin: 15px 0 10px 0;">Key Financials</h4>
+            <ul style="margin: 0; padding-left: 20px;">
+              ${(json.financials as Array<{label: string; value: string; growth?: string}>).slice(0, 3).map((f) =>
+                `<li><strong>${f.label}:</strong> ${f.value}${f.growth ? ` (${f.growth})` : ''}</li>`
+              ).join('')}
+            </ul>
+          `;
+        }
+      } else if (summary.summaryText) {
+        // Truncate long summaries
+        const text = summary.summaryText.length > 400
+          ? summary.summaryText.substring(0, 400) + '...'
+          : summary.summaryText;
+        htmlContent += `<p>${text}</p>`;
+      }
+
+      if (summary.filingUrl) {
+        htmlContent += `
+          <p style="margin-top: 15px;">
+            <a href="${summary.filingUrl}">View Original SEC Filing →</a>
+          </p>
+        `;
+      }
+
+      htmlContent += `</div>`;
+    }
+  }
+
+  htmlContent += `
+    <div style="margin-top: 30px; padding: 20px; background-color: #f0f9ff; border-radius: 8px;">
+      <h3 style="margin-top: 0; color: ${COLORS.primary};">What's Next?</h3>
+      <p style="margin-bottom: 0;">We'll continue monitoring SEC filings for your portfolio and send you real-time alerts when new filings are submitted.</p>
+    </div>
+  `;
+
+  // Text version
+  let textContent = `
+YOUR PORTFOLIO QUARTERLY EARNINGS
+
+Hello ${name},
+
+Thank you for confirming your portfolio! Here are the latest quarterly earnings summaries for your ${tickerCount} tracked ${tickerCount === 1 ? 'company' : 'companies'}:
+
+`;
+
+  if (summaries.length === 0) {
+    textContent += `No quarterly earnings summaries are available yet for your tracked companies.
+
+We'll email you as soon as new 10-K or 10-Q filings are processed for your portfolio.
+`;
+  } else {
+    for (const summary of summaries) {
+      const formattedDate = new Date(summary.filingDate).toLocaleDateString();
+      textContent += `
+${summary.ticker} - ${summary.companyName}
+${summary.filingType} | ${formattedDate}
+----------------------------------------
+`;
+      if (summary.summaryText) {
+        const text = summary.summaryText.length > 300
+          ? summary.summaryText.substring(0, 300) + '...'
+          : summary.summaryText;
+        textContent += `${text}\n`;
+      }
+      if (summary.filingUrl) {
+        textContent += `View Filing: ${summary.filingUrl}\n`;
+      }
+      textContent += '\n';
+    }
+  }
+
+  textContent += `
+WHAT'S NEXT?
+We'll continue monitoring SEC filings for your portfolio and send you real-time alerts when new filings are submitted.
+
+--
+You received this email because you confirmed your portfolio on tldrSEC.
+Manage preferences: ${data.preferencesUrl}
+Unsubscribe: ${data.unsubscribeUrl}
+`;
+
+  return {
+    html: baseTemplate(htmlContent, data),
+    text: textContent.trim(),
+  };
+}
+
+/**
  * Generate an HTML version of a template
  * Updated to use minimalist Morning Brew-style templates for SEC filings
  */
@@ -793,6 +948,8 @@ export async function getEmailTemplate(
       return digestTemplate(data);
     case EmailType.WELCOME:
       return welcomeTemplate(data);
+    case EmailType.QUARTERLY_EARNINGS:
+      return quarterlyEarningsTemplate(data as Parameters<typeof quarterlyEarningsTemplate>[0]);
     case EmailType.FORM4: {
       // Use Form 4 minimalist template
       const filing = data.filing as FilingTemplateData;

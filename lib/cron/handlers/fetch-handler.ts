@@ -124,7 +124,7 @@ export async function handleFetch(
             cacheHit: true
           }
         },
-        priority: userTier === 'PREMIUM' ? 9 :
+        priority: userTier === 'MAX' ? 9 :
                  userTier === 'PLUS' ? 7 : 5,
         maxAttempts: 3
       });
@@ -299,7 +299,7 @@ export async function handleFetch(
           cacheHit: false
         }
       },
-      priority: userTier === 'PREMIUM' ? 9 :
+      priority: userTier === 'MAX' ? 9 :
                userTier === 'PLUS' ? 7 : 5,
       maxAttempts: 3
     });

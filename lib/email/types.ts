@@ -27,6 +27,7 @@ export enum EmailType {
   PASSWORD_RESET = 'password-reset',
   VERIFICATION = 'verification',
   FILING_NOTIFICATION = 'filing-notification',
+  QUARTERLY_EARNINGS = 'quarterly-earnings',
 }
 
 /**
