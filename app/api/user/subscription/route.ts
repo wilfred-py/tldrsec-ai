@@ -1,12 +1,23 @@
 /**
  * User Subscription API Routes
  * Fresh implementation for Stripe subscription management
+ *
+ * Updated to support new pricing tiers ($99 Pro / $139 Premium)
+ * with monthly and annual billing intervals
  */
 
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { getPrismaClient } from '../../../../lib/db/prisma';
-import { isStripeEnabled, handleStripeError, getCustomer } from '../../../../lib/stripe';
+import {
+  isStripeEnabled,
+  handleStripeError,
+  getCustomer,
+  SUBSCRIPTION_PLANS,
+} from '../../../../lib/stripe';
+
+type BillingInterval = 'monthly' | 'annual';
+type NewPlanKey = 'FREE' | 'PRO' | 'MAX';
 
 const prisma = getPrismaClient();
 
@@ -102,6 +113,8 @@ export async function GET() {
 /**
  * POST /api/user/subscription/create-checkout
  * Create Stripe checkout session for subscription
+ *
+ * Supports both legacy (priceId) and new (planType + billingInterval) modes
  */
 export async function POST(request: NextRequest) {
   try {
@@ -121,11 +134,53 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { planType, priceId } = body;
+    const {
+      planType,
+      priceId: legacyPriceId,
+      billingInterval = 'monthly',
+    } = body as {
+      planType?: NewPlanKey;
+      priceId?: string;
+      billingInterval?: BillingInterval;
+    };
+
+    // Determine price ID - support both legacy and new modes
+    let priceId: string | null = legacyPriceId || null;
+
+    if (!priceId && planType) {
+      // Use new SUBSCRIPTION_PLANS to get price ID
+      const plan = SUBSCRIPTION_PLANS[planType as keyof typeof SUBSCRIPTION_PLANS];
+      if (!plan) {
+        return NextResponse.json(
+          { error: 'Invalid plan type' },
+          { status: 400 }
+        );
+      }
+
+      // FREE tier doesn't need checkout
+      if (planType === 'FREE') {
+        return NextResponse.json(
+          { error: 'Free tier does not require checkout' },
+          { status: 400 }
+        );
+      }
+
+      priceId =
+        billingInterval === 'annual' ? plan.annualPriceId : plan.monthlyPriceId;
+
+      if (!priceId) {
+        return NextResponse.json(
+          {
+            error: `Stripe price ID not configured for ${planType} ${billingInterval}`,
+          },
+          { status: 503 }
+        );
+      }
+    }
 
     if (!planType || !priceId) {
       return NextResponse.json(
-        { error: 'Plan type and price ID are required' },
+        { error: 'Plan type and price ID (or billing interval) are required' },
         { status: 400 }
       );
     }
@@ -200,6 +255,7 @@ export async function POST(request: NextRequest) {
       metadata: {
         userId,
         planType,
+        billingInterval, // Track whether monthly or annual
       },
     });
 
@@ -212,7 +268,7 @@ export async function POST(request: NextRequest) {
       },
       create: {
         userId,
-        planType: planType as 'BASIC' | 'PROFESSIONAL' | 'PREMIUM',
+        planType: planType as 'BASIC' | 'PROFESSIONAL' | 'MAX',
         isActive: false, // Will be activated by webhook
         currentPeriodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days from now
         stripeCustomerId,

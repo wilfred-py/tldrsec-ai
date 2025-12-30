@@ -16,7 +16,7 @@ const rbacLogger = logger.child('rbac');
 export enum UserRole {
   GUEST = 'guest',
   USER = 'user',
-  PREMIUM_USER = 'premium_user',
+  MAX_USER = 'max_user',
   ADMIN = 'admin',
   SYSTEM = 'system'
 }
@@ -117,33 +117,33 @@ const PERMISSION_MATRIX: Permission[] = [
     conditions: [{ field: 'userId', operator: 'owns', value: true }]
   },
 
-  // PREMIUM_USER permissions - enhanced functionality
+  // MAX_USER permissions - enhanced functionality
   {
-    role: UserRole.PREMIUM_USER,
+    role: UserRole.MAX_USER,
     resource: ResourceType.FILING,
     operations: [Operation.READ, Operation.CREATE],
     conditions: [{ field: 'userId', operator: 'owns', value: true }]
   },
   {
-    role: UserRole.PREMIUM_USER,
+    role: UserRole.MAX_USER,
     resource: ResourceType.SUMMARY,
     operations: [Operation.READ, Operation.CREATE],
     conditions: [{ field: 'userId', operator: 'owns', value: true }]
   },
   {
-    role: UserRole.PREMIUM_USER,
+    role: UserRole.MAX_USER,
     resource: ResourceType.USER_DATA,
     operations: [Operation.READ, Operation.UPDATE],
     conditions: [{ field: 'userId', operator: 'owns', value: true }]
   },
   {
-    role: UserRole.PREMIUM_USER,
+    role: UserRole.MAX_USER,
     resource: ResourceType.ALERT,
     operations: [Operation.READ, Operation.CREATE],
     conditions: [{ field: 'userId', operator: 'owns', value: true }]
   },
   {
-    role: UserRole.PREMIUM_USER,
+    role: UserRole.MAX_USER,
     resource: ResourceType.METRICS,
     operations: [Operation.READ],
     conditions: [{ field: 'userId', operator: 'owns', value: true }]
@@ -327,9 +327,10 @@ export class RBACAuthorizer {
     }
 
     switch (subscriptionTier?.toUpperCase()) {
+      case 'MAX':
       case 'PRO':
       case 'ENTERPRISE':
-        return UserRole.PREMIUM_USER;
+        return UserRole.MAX_USER;
       case 'HOBBY':
         return UserRole.USER;
       default:

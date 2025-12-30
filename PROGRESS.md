@@ -2,10 +2,38 @@
 
 ## Current Status
 **Date**: 2025-12-30
-**Branch**: feat/form144-remaining-holdings-enhancement
-**Status**: ✅ OPERATIONAL - Pipeline Running, Form 144 Email Improvements Active
+**Branch**: feature/landing-page-stripe-redesign
+**Status**: ✅ OPERATIONAL - Pipeline Running, Stripe Integration Active
 
-### Active: Form 144 Email Metrics Enhancement ✅ COMPLETE (2025-12-30)
+### Active: PREMIUM → MAX Tier Rename ✅ COMPLETE (2025-12-30)
+
+**Issue**: Rename "Premium" tier to "Max" tier across the codebase for consistency with new pricing structure ($0 Free / $99 Pro / $139 Max).
+
+**Fixes Applied**:
+1. **Updated pricing-section.tsx** - Changed PlanKey type, planIcons, planGradients, planBorders mappings from PREMIUM to MAX
+2. **Updated upgrade-cta-section.tsx** - Changed currentPlan type and UI text ("Go Max", "Start Max - $139/mo")
+3. **Updated subscription-plans.tsx** - Updated getPlanPrice mapping (MAX: '$139')
+4. **Updated rbac.ts** - Renamed UserRole.PREMIUM_USER to UserRole.MAX_USER, updated permission matrix
+5. **Updated subscription-validation.ts** - Added MAX to Zod enums for backwards compatibility
+6. **Updated subscriptionService.ts** - Added MAX mapping to tier mappings
+7. **Updated stripe-pricing.test.ts** - Renamed test suite from "Premium Tier" to "Max Tier"
+8. **Updated secure-test-utils.ts** - Updated mock UserRole
+
+**Files Modified**:
+- `components/landing/sections/pricing-section.tsx`
+- `components/dashboard/upgrade-cta-section.tsx`
+- `components/billing/subscription-plans.tsx`
+- `lib/security/rbac.ts`
+- `lib/validation/subscription-validation.ts`
+- `services/filings/enhanced/subscriptionService.ts`
+- `__tests__/config/stripe-pricing.test.ts`
+- `__tests__/utils/secure-test-utils.ts`
+
+**Verification**: ✅ Build passes, ✅ 16 Stripe pricing tests pass
+
+---
+
+### Previous: Form 144 Email Metrics Enhancement ✅ COMPLETE (2025-12-30)
 
 **Issue**: Form 144 email metrics cards showing only estimated value, not shares. Also missing "Amount of Securities Beneficially Owned Following Reported Transaction(s)" field.
 
@@ -450,34 +478,6 @@ npm run audit:test-data:fix           # Fix delivery tracking inconsistencies
 
 ---
 
-## Recently Completed (Last 7 Days)
-
-### Vercel Build Failure Fixed (2025-12-22)
-All phases of the DATABASE_URL migration plan completed:
-- Phase 1: Pre-Flight Verification ✅
-- Phase 2: Vercel Environment Update ✅
-- Phase 3: Deploy and Verify ✅
-- Phase 4: TDD Startup Validation Guard ✅
-
-**Key Files**:
-- `lib/config/startup-validation.ts` - Startup validation guard
-- `lib/config/database-validation.ts` - Core validation functions
-- `__tests__/config/startup-validation.test.ts` - 10 test cases
-
-### Supabase Migration Phase 2 (2025-12-22)
-Successfully migrated 12 tables from Neon to Supabase. See [15-Dec-2025.md](.claude/history/2025/Dec/15-Dec-2025.md) for data migration details.
-
-### Discovery Scalability Optimization (2025-12-19)
-4-phase optimization to scale from 2 users/8 tickers to 100K users/1500 tickers:
-- Phase 1: Increased `MAX_CONCURRENT_RSS_CHECKS` 3→5
-- Phase 2: Bulk CIK enrichment (N+1 → 2 queries)
-- Phase 3: Bulk job creation with `createMany`
-- Phase 4: RSS response caching (1-min TTL)
-
-**Performance**: ~33 min → ~5 min for 1500 tickers
-
----
-
 ## Quick Reference
 
 ### User-Tracked Tickers (13 total)
@@ -531,7 +531,7 @@ npm run cloudflare:status                 # Check deployment status
 
 ---
 
-**Last Updated**: 2025-12-30 14:45 AEDT
+**Last Updated**: 2025-12-30 21:30 AEDT
 **Repository**: tldrsec-ai
 
 *See TIMELINE.md for master timeline and quick navigation*

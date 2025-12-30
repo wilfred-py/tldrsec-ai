@@ -48,11 +48,11 @@ describe('TickerSubscriptionInfo', () => {
         ticker: 'EMPTYTICKER',
         totalSubscribers: 0,
         hasProUsers: false,
-        hasPremiumUsers: false,
+        hasMaxUsers: false,
         tierMix: {
           basic: 0,
           professional: 0,
-          premium: 0
+          max: 0
         },
         estimatedTokenMultiplier: 0.6, // TOKEN_MULTIPLIERS.basic
         priority: 1
@@ -79,11 +79,11 @@ describe('TickerSubscriptionInfo', () => {
         ticker: 'BASICTICKER',
         totalSubscribers: 5,
         hasProUsers: false,
-        hasPremiumUsers: false,
+        hasMaxUsers: false,
         tierMix: {
           basic: 5,
           professional: 0,
-          premium: 0
+          max: 0
         },
         estimatedTokenMultiplier: 0.6, // All basic users = 0.6
         priority: 1 // (5 * 1) / 5 * 2 = 2, Math.min(10, Math.ceil(2)) = 2, but our algorithm gives 1
@@ -114,12 +114,12 @@ describe('TickerSubscriptionInfo', () => {
             }
           }
         })),
-        // 1 premium user
+        // 1 max user
         {
-          userId: 'premium-user',
+          userId: 'max-user',
           user: {
             userSubscription: {
-              planType: 'PREMIUM' as const,
+              planType: 'MAX' as const,
               isActive: true,
               currentPeriodEnd: new Date('2025-02-01')
             }
@@ -134,11 +134,11 @@ describe('TickerSubscriptionInfo', () => {
       expect(result.ticker).toBe('MIXEDTICKER');
       expect(result.totalSubscribers).toBe(6);
       expect(result.hasProUsers).toBe(true);
-      expect(result.hasPremiumUsers).toBe(true);
+      expect(result.hasMaxUsers).toBe(true);
       expect(result.tierMix).toEqual({
         basic: 3,
         professional: 2,
-        premium: 1
+        max: 1
       });
 
       // Expected calculation: (3*0.6 + 2*0.8 + 1*1.0) / 6 = (1.8 + 1.6 + 1.0) / 6 = 4.4 / 6 = 0.73
@@ -159,7 +159,7 @@ describe('TickerSubscriptionInfo', () => {
           userId: 'expired-user',
           user: {
             userSubscription: {
-              planType: 'PREMIUM' as const,
+              planType: 'MAX' as const,
               isActive: false,
               currentPeriodEnd: new Date('2024-01-01') // Expired
             }
@@ -186,7 +186,7 @@ describe('TickerSubscriptionInfo', () => {
       expect(result.tierMix).toEqual({
         basic: 3, // No-sub and expired users counted as basic
         professional: 0,
-        premium: 0
+        max: 0
       });
       expect(result.estimatedTokenMultiplier).toBe(0.6);
     });
@@ -197,7 +197,7 @@ describe('TickerSubscriptionInfo', () => {
         userId: `user-${i}`,
         user: {
           userSubscription: {
-            planType: 'PREMIUM' as const,
+            planType: 'MAX' as const,
             isActive: true,
             currentPeriodEnd: new Date('2025-02-01')
           }
@@ -209,7 +209,7 @@ describe('TickerSubscriptionInfo', () => {
       const result = await getTickerSubscriptionInfo('LARGETICKER');
 
       expect(result.totalSubscribers).toBe(1000);
-      expect(result.estimatedTokenMultiplier).toBe(1.0); // Should be bounded to premium multiplier
+      expect(result.estimatedTokenMultiplier).toBe(1.0); // Should be bounded to max multiplier
       expect(result.priority).toBe(10); // Should be bounded to max priority
     });
   });
@@ -301,7 +301,7 @@ describe('TickerSubscriptionInfo', () => {
       // Should default to basic tier
       expect(result.tierMix.basic).toBe(1);
       expect(result.tierMix.professional).toBe(0);
-      expect(result.tierMix.premium).toBe(0);
+      expect(result.tierMix.max).toBe(0);
     });
   });
 
@@ -312,8 +312,8 @@ describe('TickerSubscriptionInfo', () => {
           ticker: 'TEST',
           totalSubscribers: 5,
           hasProUsers: true,
-          hasPremiumUsers: false,
-          tierMix: { basic: 3, professional: 2, premium: 0 },
+          hasMaxUsers: false,
+          tierMix: { basic: 3, professional: 2, max: 0 },
           estimatedTokenMultiplier: 0.7,
           priority: 5
         };
@@ -327,8 +327,8 @@ describe('TickerSubscriptionInfo', () => {
           ticker: 'TEST',
           totalSubscribers: 3,
           hasProUsers: false,
-          hasPremiumUsers: false,
-          tierMix: { basic: 3, professional: 0, premium: 0 },
+          hasMaxUsers: false,
+          tierMix: { basic: 3, professional: 0, max: 0 },
           estimatedTokenMultiplier: 0.73,
           priority: 1
         };
@@ -344,8 +344,8 @@ describe('TickerSubscriptionInfo', () => {
           ticker: 'EMPTY',
           totalSubscribers: 0,
           hasProUsers: false,
-          hasPremiumUsers: false,
-          tierMix: { basic: 0, professional: 0, premium: 0 },
+          hasMaxUsers: false,
+          tierMix: { basic: 0, professional: 0, max: 0 },
           estimatedTokenMultiplier: 0.6,
           priority: 5
         };
@@ -359,8 +359,8 @@ describe('TickerSubscriptionInfo', () => {
           ticker: 'ACTIVE',
           totalSubscribers: 10,
           hasProUsers: true,
-          hasPremiumUsers: true,
-          tierMix: { basic: 3, professional: 4, premium: 3 },
+          hasMaxUsers: true,
+          tierMix: { basic: 3, professional: 4, max: 3 },
           estimatedTokenMultiplier: 0.8,
           priority: 7
         };

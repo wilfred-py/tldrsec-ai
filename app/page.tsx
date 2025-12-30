@@ -1,49 +1,18 @@
 import type { Metadata } from 'next';
-import { FocusedInvestorHero } from '@/components/landing/focused-investor-hero';
-import { createSupabaseServiceClient } from '@/lib/supabase/server-client';
+import { redirect } from 'next/navigation';
+import { Suspense } from 'react';
+import { LandingPage } from '@/components/landing/new-landing-page';
+import { getCuratedFilings } from '@/lib/data/curated-filings';
 
-// Initial seed value - must match the API endpoint
-const INITIAL_SEED = 147;
-// Synthetic gap for animation effect - always animate up by this amount
-const ANIMATION_GAP = 20;
+/**
+ * Landing Page with Feature Flag
+ *
+ * When NEXT_PUBLIC_LANDING_PAGE_ENABLED is not 'true', redirects to /waitlist
+ * This allows gradual rollout of the new landing page with Stripe integration
+ */
 
-interface CounterData {
-  baseCount: number;  // Starting point for animation (synthetic, 20 less than real)
-  realCount: number;  // Current real count (target for animation)
-}
-
-// Fetch counter data for SSR - provides both starting point and target
-async function getCounterData(): Promise<CounterData> {
-  try {
-    const supabase = createSupabaseServiceClient();
-
-    // Get current subscriber count
-    const { count: currentSubscriberCount } = await supabase
-      .from('newsletter_subscribers')
-      .select('*', { count: 'exact', head: true });
-
-    const subscriberCount = currentSubscriberCount || 0;
-
-    // Real count = seed + actual subscribers
-    const realCount = INITIAL_SEED + subscriberCount;
-
-    // Synthetic base count = real count - 20 (creates animation effect)
-    // Minimum base is INITIAL_SEED to never show below seed value
-    const baseCount = Math.max(INITIAL_SEED, realCount - ANIMATION_GAP);
-
-    return {
-      baseCount,
-      realCount
-    };
-
-  } catch (error) {
-    console.error('[Landing Page] Error fetching counter data:', error);
-    return {
-      baseCount: INITIAL_SEED,
-      realCount: INITIAL_SEED
-    };
-  }
-}
+// Feature flag check - defaults to showing waitlist (old behavior)
+const isLandingPageEnabled = process.env.NEXT_PUBLIC_LANDING_PAGE_ENABLED === 'true';
 
 export async function generateMetadata(): Promise<Metadata> {
   return {
@@ -74,7 +43,23 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 export default async function Home() {
-  const { baseCount, realCount } = await getCounterData();
+  // Redirect to waitlist if new landing page is not enabled
+  if (!isLandingPageEnabled) {
+    redirect('/waitlist');
+  }
 
-  return <FocusedInvestorHero baseCount={baseCount} realCount={realCount} />;
+  // Get curated filings for the landing page
+  const curatedFilings = await getCuratedFilings();
+
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-slate-900 flex items-center justify-center">
+          <div className="animate-pulse text-slate-400">Loading...</div>
+        </div>
+      }
+    >
+      <LandingPage filingPreviews={curatedFilings} />
+    </Suspense>
+  );
 }

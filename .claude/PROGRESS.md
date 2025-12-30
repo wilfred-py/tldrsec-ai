@@ -1,12 +1,72 @@
 # Project Progress
 
-**Date**: 2025-12-29
-**Branch**: feature/json-parsing-phase5-monitoring
-**Status**: Pipeline HEALTHY - JSON Parsing Pipeline Simplification Phase 5 COMPLETE
+**Date**: 2025-12-30
+**Branch**: investigation/cloudflare-event-drop-2025-12-30
+**Status**: Pipeline HEALTHY - Cloudflare Event Drop Investigation COMPLETE
 
 ---
 
-## Current Session: JSON Parsing Pipeline Simplification - Phase 5 ✅ COMPLETE
+## Current Session: Cloudflare Event Drop Investigation ✅ RESOLVED (2025-12-30)
+
+**Branch**: `investigation/cloudflare-event-drop-2025-12-30`
+
+Investigated and resolved a Cloudflare Worker cron schedule failure that caused ~4 hour pipeline outage.
+
+### Issue Timeline
+- **15:10:25 AEST**: Pipeline stopped (last ASYNC_DISCOVER_FILINGS job)
+- **15:07:27 & 15:33:00 AEST**: Vercel deployments during window
+- **19:15:14 AEST**: Pipeline restored after redeployment
+
+### Root Cause
+**Cloudflare `*/5 * * * *` cron schedule stopped triggering** while `*/10 * * * *` continued working.
+
+**Evidence**:
+1. `*/10 * * * *` interval summary cron triggered successfully
+2. `*/5 * * * *` pipeline processing cron NOT triggering
+3. No heartbeat messages since 15:10 AEST
+4. Worker script healthy (responded to other cron schedules)
+5. No circuit breaker or HMAC auth failures (red herrings)
+
+### Resolution
+Redeployed Cloudflare Worker with `npx wrangler deploy`:
+```
+✨ Successfully published your script
+  Scheduled: */5 * * * *
+  Scheduled: */10 * * * *
+  Scheduled: 0 22 * * *
+```
+
+### Verification
+- ✅ `*/5 * * * *` cron triggered at 19:15:14 AEST
+- ✅ All 5 pipeline steps executed successfully
+- ✅ Database confirmed new ASYNC_DISCOVER_FILINGS jobs created
+- ✅ ~4 hour 5 minute downtime resolved
+
+### Documentation Created
+- `thoughts/shared/research/2025-12-30-e2e-pipeline-cloudflare-event-drop.md` - Comprehensive architecture docs
+- `docs/plans/2025-12-30-investigate-cloudflare-event-drop.md` - Investigation plan with findings
+- `docs/incidents/2025-12-30-cloudflare-cron-schedule-failure.md` - Incident report
+- `docs/runbooks/cloudflare-worker-monitoring.md` - Monitoring runbook with queries and thresholds
+
+### Preventive Measures (Implemented)
+1. ✅ **Deployment health check endpoint** - `app/api/health/deployment/route.ts`
+   - Verifies database connection, environment config, and warmup status
+   - Returns 503 if not ready for Cloudflare Worker to detect
+2. ✅ **Circuit breaker visibility** - Updated `cloudflare-cron/index.js` v2.6.0
+   - Health endpoint now shows circuit breaker state from KV storage
+   - Returns 503 if circuit breaker is OPEN
+3. ✅ **Slack deployment notifications** - `app/api/webhooks/vercel-deployment/route.ts`
+   - Webhook endpoint for Vercel deployment events
+   - Posts to Slack when production deploys complete/fail
+4. ✅ **Monitoring runbook** - `docs/runbooks/cloudflare-worker-monitoring.md`
+   - Alert thresholds for event drop detection
+   - Troubleshooting procedures
+   - Cloudflare Analytics queries
+5. ⏭️ **HMAC tolerance** - Evaluated and SKIPPED (not root cause)
+
+---
+
+## Previous Session: JSON Parsing Pipeline Simplification - Phase 5 ✅ COMPLETE
 
 Implementing plan from `docs/plans/2025-12-28-simplify-json-parsing-pipeline.md` - applying Elon Musk's 5-step engineering algorithm to achieve 100% parsing accuracy.
 
@@ -282,5 +342,5 @@ Fixed critical RLS and performance issues from Supabase audit.
 
 ---
 
-*Last Updated: 2025-12-29 19:40 AEDT*
-*Older completed projects archived to .claude/history/ - See TIMELINE.md for full history*
+*Last Updated: 2025-12-30 19:55 AEDT*
+*Older completed projects archived to .claude/history/*

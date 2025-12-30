@@ -114,7 +114,7 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
     const planLimits = {
       BASIC: 50,
       PROFESSIONAL: 200,
-      PREMIUM: 1000,
+      MAX: 1000,
     };
 
     const filingLimit = planLimits[planType as keyof typeof planLimits] || 50;
@@ -128,13 +128,13 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
       },
       update: {
         filingLimit,
-        planType: planType as 'BASIC' | 'PROFESSIONAL' | 'PREMIUM',
+        planType: planType as 'BASIC' | 'PROFESSIONAL' | 'MAX',
       },
       create: {
         userId,
         periodStart,
         periodEnd,
-        planType: planType as 'BASIC' | 'PROFESSIONAL' | 'PREMIUM',
+        planType: planType as 'BASIC' | 'PROFESSIONAL' | 'MAX',
         filingLimit,
         resetAt,
       },

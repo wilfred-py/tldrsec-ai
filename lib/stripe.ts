@@ -35,8 +35,67 @@ export const stripe = requiredEnvVars.STRIPE_SECRET_KEY
 // Webhook configuration
 export const webhookSecret = requiredEnvVars.STRIPE_WEBHOOK_SECRET || '';
 
-// Subscription plan configuration
+// =============================================================================
+// NEW PRICING TIERS (2025) - $0 Free / $99 Pro / $139 Max
+// =============================================================================
 export const SUBSCRIPTION_PLANS = {
+  FREE: {
+    name: 'Free',
+    monthlyPriceId: null,
+    annualPriceId: null,
+    monthlyPrice: 0,
+    annualPrice: 0,
+    tickerLimit: 3,
+    filingTypes: ['10-K', '10-Q'] as const, // Only annual/quarterly reports
+    emailFrequency: 'weekly' as const,
+    features: [
+      '3 companies to track',
+      'Weekly digest emails',
+      '10-K and 10-Q summaries only',
+      'Basic filing alerts',
+    ],
+  },
+  PRO: {
+    name: 'Pro',
+    monthlyPriceId: process.env.STRIPE_PRO_MONTHLY_PRICE_ID || '',
+    annualPriceId: process.env.STRIPE_PRO_ANNUAL_PRICE_ID || '',
+    monthlyPrice: 99,
+    annualPrice: 990, // 2 months free (10 months × $99)
+    tickerLimit: 10,
+    filingTypes: ['10-K', '10-Q', '8-K', 'FORM4', 'DEF14A'] as const,
+    emailFrequency: 'realtime' as const,
+    features: [
+      '10 companies to track',
+      'Real-time email alerts',
+      'All filing types (8-K, Form 4, etc.)',
+      'Priority processing',
+      'Email support',
+    ],
+  },
+  MAX: {
+    name: 'Max',
+    monthlyPriceId: process.env.STRIPE_MAX_MONTHLY_PRICE_ID || '',
+    annualPriceId: process.env.STRIPE_MAX_ANNUAL_PRICE_ID || '',
+    monthlyPrice: 139,
+    annualPrice: 1390, // 2 months free (10 months × $139)
+    tickerLimit: -1, // unlimited
+    filingTypes: ['ALL'] as const,
+    emailFrequency: 'realtime' as const,
+    features: [
+      'Unlimited companies',
+      'Real-time email alerts',
+      'All filing types',
+      'API access for developers',
+      'Priority processing queue',
+      'Dedicated support',
+    ],
+  },
+} as const;
+
+// =============================================================================
+// LEGACY PRICING TIERS - Kept for existing subscribers
+// =============================================================================
+export const LEGACY_SUBSCRIPTION_PLANS = {
   BASIC: {
     name: 'Basic',
     priceId: process.env.STRIPE_BASIC_PRICE_ID || '',
@@ -63,13 +122,13 @@ export const SUBSCRIPTION_PLANS = {
       'Comprehensive risk analysis',
     ],
   },
-  PREMIUM: {
-    name: 'Premium',
-    priceId: process.env.STRIPE_PREMIUM_PRICE_ID || '',
+  MAX_LEGACY: {
+    name: 'Max (Legacy)',
+    priceId: process.env.STRIPE_MAX_PRICE_ID || '',
     monthlyFilings: 1000,
     optimizationLevel: 'minimal',
     features: [
-      'Premium filing summaries',
+      'Max filing summaries',
       'Maximum context preservation',
       'Real-time notifications',
       'Minimal token optimization (55% reduction)',
@@ -82,13 +141,27 @@ export const SUBSCRIPTION_PLANS = {
 
 // Type definitions
 export type PlanType = keyof typeof SUBSCRIPTION_PLANS;
+export type LegacyPlanType = keyof typeof LEGACY_SUBSCRIPTION_PLANS;
+export type BillingInterval = 'monthly' | 'annual';
 
-export interface SubscriptionPlan {
+export interface NewSubscriptionPlan {
+  name: string;
+  monthlyPriceId: string | null;
+  annualPriceId: string | null;
+  monthlyPrice: number;
+  annualPrice: number;
+  tickerLimit: number;
+  filingTypes: readonly string[];
+  emailFrequency: 'weekly' | 'realtime';
+  features: readonly string[];
+}
+
+export interface LegacySubscriptionPlan {
   name: string;
   priceId: string;
   monthlyFilings: number;
   optimizationLevel: string;
-  features: string[];
+  features: readonly string[];
 }
 
 // Utility functions
@@ -96,12 +169,34 @@ export function isStripeEnabled(): boolean {
   return stripe !== null && webhookSecret !== '';
 }
 
-export function getPlanConfig(planType: PlanType): SubscriptionPlan {
+export function getPlanConfig(planType: PlanType): NewSubscriptionPlan {
   return SUBSCRIPTION_PLANS[planType];
 }
 
-export function getAllPlans(): Record<PlanType, SubscriptionPlan> {
+export function getLegacyPlanConfig(planType: LegacyPlanType): LegacySubscriptionPlan {
+  return LEGACY_SUBSCRIPTION_PLANS[planType];
+}
+
+export function getAllPlans(): typeof SUBSCRIPTION_PLANS {
   return SUBSCRIPTION_PLANS;
+}
+
+export function getPriceIdForPlan(planType: PlanType, billingInterval: BillingInterval): string | null {
+  const plan = SUBSCRIPTION_PLANS[planType];
+  return billingInterval === 'annual' ? plan.annualPriceId : plan.monthlyPriceId;
+}
+
+export function calculateAnnualSavings(planType: PlanType): number {
+  const plan = SUBSCRIPTION_PLANS[planType];
+  const monthlyTotal = plan.monthlyPrice * 12;
+  return monthlyTotal - plan.annualPrice;
+}
+
+export function calculateSavingsPercentage(planType: PlanType): number {
+  const plan = SUBSCRIPTION_PLANS[planType];
+  if (plan.monthlyPrice === 0) return 0;
+  const monthlyTotal = plan.monthlyPrice * 12;
+  return Math.round(((monthlyTotal - plan.annualPrice) / monthlyTotal) * 100);
 }
 
 // Stripe error handling
