@@ -284,7 +284,7 @@ function formatText(text: string): string {
     `<strong style="color:${EmailColors.text.headline};font-weight:700;">$1</strong>`
   );
   html = html.replace(
-    /([\d,]+)\s+(shares?)/gi,
+    /([\d,]+(?:\.\d+)?)\s+(shares?)/gi,
     `<strong style="color:${EmailColors.text.headline};font-weight:700;">$1</strong> $2`
   );
   html = html.replace(/—/g, '&mdash;');

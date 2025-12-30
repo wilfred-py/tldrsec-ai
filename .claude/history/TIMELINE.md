@@ -13,6 +13,8 @@ This file provides a chronological index of all completed projects. For detailed
 
 | Date | Project | Status |
 |------|---------|--------|
+| 2025-12-30 | Form 144 Email Metrics Enhancement (shares, remaining holdings) | ✅ |
+| 2025-12-30 | Form 144 Minimalist Template (signal-first design, 2-level signals) | ✅ |
 | 2025-12-30 | Email Filing URL Exhibit Exclusion Fix (priority-based document selection) | ✅ |
 | 2025-12-30 | Cloudflare Cron Trigger Restoration & Backfill (413 jobs queued) | ✅ |
 | 2025-12-30 | Form 4 Email Value Display & Mobile-First Fix | ✅ |
@@ -123,10 +125,10 @@ This file provides a chronological index of all completed projects. For detailed
 
 ## Archive Statistics
 - **Total Archived Projects**: 32 projects across 6 weekly archives
-- **Current PROGRESS.md Lines**: 502 (threshold: 500)
-- **Last Sync**: 2025-12-30 17:15 AEDT
+- **Current PROGRESS.md Lines**: 537 (threshold: 500)
+- **Last Sync**: 2025-12-30 14:45 AEDT
 - **Archive System**: ✅ ACTIVE
-- **Next Archive Check**: PROGRESS.md at threshold. No projects >30 days old - next check after 2025-12-31.
+- **Next Archive Check**: PROGRESS.md above threshold but no projects >30 days old. Next archival opportunity: 2025-12-31 (when Nov 30 projects become eligible).
 
 **Archives**:
 - `01-Dec-2025.md` - Email & verification (8 projects)

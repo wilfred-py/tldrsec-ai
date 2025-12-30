@@ -133,9 +133,9 @@ function formatText(text: string): string {
     /(-?\d+(?:\.\d+)?%)/g,
     `<strong style="color:${EmailColors.text.headline};font-weight:700;">$1</strong>`
   );
-  // Bold share counts
+  // Bold share counts (including decimal values for fractional shares like RSUs/DSUs)
   html = html.replace(
-    /([\d,]+)\s+(shares?)/gi,
+    /([\d,]+(?:\.\d+)?)\s+(shares?)/gi,
     `<strong style="color:${EmailColors.text.headline};font-weight:700;">$1</strong> $2`
   );
   html = html.replace(/—/g, '&mdash;');

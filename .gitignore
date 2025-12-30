@@ -110,3 +110,6 @@ test-tesla-filing-extraction.js
 
 # MCP server configuration (contains sensitive tokens)
 .mcp.json
+
+# MCP servers (cloned repos)
+/mcp-send-email/

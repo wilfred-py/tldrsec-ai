@@ -2,10 +2,45 @@
 
 ## Current Status
 **Date**: 2025-12-30
-**Branch**: main
-**Status**: ✅ OPERATIONAL - Pipeline Running, Backlog Processing
+**Branch**: feat/form144-remaining-holdings-enhancement
+**Status**: ✅ OPERATIONAL - Pipeline Running, Form 144 Email Improvements Active
 
-### Active: Email Filing URL Exhibit Exclusion Fix ✅ COMPLETE (2025-12-30)
+### Active: Form 144 Email Metrics Enhancement ✅ COMPLETE (2025-12-30)
+
+**Issue**: Form 144 email metrics cards showing only estimated value, not shares. Also missing "Amount of Securities Beneficially Owned Following Reported Transaction(s)" field.
+
+**Fixes Applied**:
+1. **Redesigned metrics cards** - Now shows 2 side-by-side cards: "Shares to Sell" and "Estimated Value" (both equally prominent)
+2. **Added remaining holdings display** - New card showing "Shares Remaining After Sale" when available
+3. **Enhanced AI schema** - Added `remainingHoldings` field to Form 144 extraction schema
+4. **Updated extraction guidance** - AI now explicitly extracts "Amount of Securities Beneficially Owned Following Transaction"
+5. **Added data extractor patterns** - New `extractRemainingHoldings()` function with 7 regex patterns
+
+**Files Modified**:
+- `lib/ai/prompts/unified-prompts.ts:303-306` - Added `remainingHoldings` schema field + extraction guidance
+- `lib/email/form144-data-extractor.ts:20,38,74,340-367` - Added interface field + extraction function
+- `components/ui/email/templates/form144-minimalist-template.tsx:180,294-443` - Redesigned metrics cards layout
+
+**New Layout**:
+```
+┌─────────────────────┐  ┌─────────────────────┐
+│ SHARES TO SELL      │  │ ESTIMATED VALUE     │
+│ 40,000              │  │ $9.9M               │
+│ @ $248/share        │  │ 15% of holdings     │
+└─────────────────────┘  └─────────────────────┘
+
+┌─────────────────────────────────────────────┐
+│ SHARES REMAINING AFTER SALE                 │
+│ 1,500,000                                   │
+│ Amount of Securities Beneficially Owned...  │
+└─────────────────────────────────────────────┘
+```
+
+**Verification**: ✅ Lint passes, code compiles
+
+---
+
+### Previous: Email Filing URL Exhibit Exclusion Fix ✅ COMPLETE (2025-12-30)
 
 **Issue**: Email filing links pointing to wrong documents:
 1. 10-K redirected to exhibit file (`d13958dex21.htm`) instead of main document
@@ -496,7 +531,7 @@ npm run cloudflare:status                 # Check deployment status
 
 ---
 
-**Last Updated**: 2025-12-30 17:15 AEDT
+**Last Updated**: 2025-12-30 14:45 AEDT
 **Repository**: tldrsec-ai
 
 *See TIMELINE.md for master timeline and quick navigation*
