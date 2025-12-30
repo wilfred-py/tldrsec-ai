@@ -553,6 +553,8 @@ export async function getFilingSummary(
       );
 
       // Create the summary result with database ID for email delivery tracking
+      // IMPORTANT: Pass full summaryJSON through rawData for email templates
+      // This enables Form 4 multi-transaction display, filer info, and other structured data
       const summaryResult: FilingSummaryResult = {
         ticker: ticker,
         companyName: companyInfo.name || ticker,
@@ -561,10 +563,10 @@ export async function getFilingSummary(
         accessionNumber: filing.accessionNumber || '',
         summaryText: summaryJSON.summary,
         keyPoints: summaryJSON.keyPoints || [],
-        url: htmlViewerUrl,
+        url: filing.primaryDocUrl || htmlViewerUrl, // Prefer primaryDocUrl for direct document links
         filingUrl: filing.filingUrl,
         parsedContent: undefined,
-        rawData: undefined,
+        rawData: { summaryJSON: summaryJSON.summaryJSON }, // Pass full AI-parsed data for email templates
         tokensUsed: summaryJSON.tokensUsed,
         inputTokens: summaryJSON.inputTokens,
         outputTokens: summaryJSON.outputTokens,
