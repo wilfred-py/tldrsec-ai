@@ -73,27 +73,50 @@ export default {
 
   // Handle scheduled cron events with basic rate limiting
   async scheduled(event, env, ctx) {
-    // Determine which cron schedule triggered this execution
-    // event.cron contains the cron expression that triggered this event
-    const cronExpression = event.cron;
+    const executionId = `scheduled-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+    
+    try {
+      // Determine which cron schedule triggered this execution
+      // event.cron contains the cron expression that triggered this event
+      const cronExpression = event.cron;
+      
+      console.log(`[${executionId}] Scheduled event triggered with cron expression: ${cronExpression}`);
 
-    // Route based on cron expression
-    // "*/5 * * * *" = Pipeline processing (every 5 minutes)
-    // "*/10 * * * *" = 10-minute interval Slack summary (detailed verification report)
-    // "0 22 * * *" = Daily Slack report (9 AM AEST = 22:00 UTC)
+      // Route based on cron expression
+      // "*/5 * * * *" = Pipeline processing (every 5 minutes)
+      // "*/10 * * * *" = 10-minute interval Slack summary (detailed verification report)
+      // "0 22 * * *" = Daily Slack report (9 AM AEST = 22:00 UTC)
 
-    if (cronExpression === '*/10 * * * *') {
-      // 10-minute interval Slack summary (detailed verification report)
-      return await this.handleIntervalSummary(event, env, ctx);
+      if (cronExpression === '*/10 * * * *') {
+        // 10-minute interval Slack summary (detailed verification report)
+        return await this.handleIntervalSummary(event, env, ctx);
+      }
+
+      if (cronExpression === '0 22 * * *') {
+        // Daily Slack report (9 AM AEST)
+        return await this.handleDailyReport(event, env, ctx);
+      }
+
+      // Default: Pipeline processing (*/5 * * * *)
+      return await this.handlePipelineProcessing(event, env, ctx);
+      
+    } catch (error) {
+      // Log error details for debugging
+      console.error(`[${executionId}] Fatal error in scheduled handler:`, {
+        error: error.message,
+        stack: error.stack,
+        cron: event.cron,
+        timestamp: new Date().toISOString()
+      });
+      
+      // Return error response (won't stop future scheduled executions)
+      return {
+        success: false,
+        executionId,
+        error: error.message,
+        timestamp: new Date().toISOString()
+      };
     }
-
-    if (cronExpression === '0 22 * * *') {
-      // Daily Slack report (9 AM AEST)
-      return await this.handleDailyReport(event, env, ctx);
-    }
-
-    // Default: Pipeline processing (*/5 * * * *)
-    return await this.handlePipelineProcessing(event, env, ctx);
   },
 
   // Handle 10-minute interval Slack summary (replaces hourly)
