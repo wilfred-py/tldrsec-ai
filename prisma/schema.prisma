@@ -38,6 +38,12 @@ model User {
   dailyBudgetResetAt    DateTime?
   tierProcessingCount   Int                    @default(0)
   lastTierUpgrade       DateTime?
+
+  // Ticker confirmation tracking (Phase 2: Quarterly Earnings Email)
+  tickersConfirmedAt          DateTime?
+  lastConfirmationEmailSentAt DateTime?
+  tickersAtLastConfirmation   String[]          @default([])
+
   auditLogs             AuditLog[]
   filingUsage           FilingUsage[]
   jobs                  JobQueue[]
@@ -730,7 +736,7 @@ enum SubscriptionTier {
 enum PlanType {
   BASIC
   PROFESSIONAL
-  PREMIUM
+  MAX
 
   @@schema("app")
 }

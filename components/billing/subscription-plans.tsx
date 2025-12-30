@@ -45,7 +45,7 @@ export function SubscriptionPlans({
     const prices = {
       BASIC: '$9',
       PROFESSIONAL: '$29',
-      PREMIUM: '$99',
+      MAX: '$139',
     };
     return prices[planType];
   };

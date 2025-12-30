@@ -63,17 +63,17 @@ const AVAILABLE_PLANS: Record<string, PlanFeatures> = {
     ],
     recommended: true
   },
-  premium: {
-    name: 'Premium',
-    price: '$99/month',
-    monthlyFilings: 1000, 
+  max: {
+    name: 'Max',
+    price: '$139/month',
+    monthlyFilings: 1000,
     optimizationLevel: 'Minimal (55% token reduction)',
     features: [
-      'Premium filing summaries',
+      'Max filing summaries',
       'Maximum context preservation',
       'Real-time notifications',
       'Minimal token optimization',
-      'Complete financial statements', 
+      'Complete financial statements',
       'Full business narratives',
       'Dedicated support',
       'Custom integrations'
@@ -82,7 +82,7 @@ const AVAILABLE_PLANS: Record<string, PlanFeatures> = {
 };
 
 interface UserSubscription {
-  planType: 'BASIC' | 'PROFESSIONAL' | 'PREMIUM';
+  planType: 'BASIC' | 'PROFESSIONAL' | 'MAX';
   isActive: boolean;
   currentPeriodEnd: string;
   cancelAtPeriodEnd: boolean;
