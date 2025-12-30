@@ -1,13 +1,37 @@
 # Landing Page Redesign with Stripe Integration - Implementation Plan
 
-**Date**: 2025-12-30 15:00:11 AEDT
+**Date**: 2025-12-30 15:00:11 AEDT (Updated: 2025-12-30 16:30 AEDT)
 **Git Commit**: a1a6529a49b51ab27c55f71a4b4013889b63eb81
 **Branch**: main
 **Repository**: tldrsec-ai
 
 ## Overview
 
-Implement a new landing page based on the Replit prototype with 3-tier pricing ($0 Free, $15 Pro, $40 Premium), real filing preview data from the database, animated dialogs for full summary viewing, and Stripe checkout integration. The implementation ensures zero downtime by using feature flags and preserving the existing waitlist at `/waitlist`.
+Implement a new landing page with 3-tier pricing ($0 Free, $99 Pro, $139 Premium), manually curated filing previews, animated dialogs for full summary viewing, Stripe checkout with annual billing support, and a new ticker confirmation flow that triggers quarterly earnings emails. The implementation ensures zero downtime by using feature flags and preserving the existing waitlist at `/waitlist`.
+
+## User Requirements (Clarified)
+
+### Pricing Structure
+| Tier | Monthly | Annual (2 months free) |
+|------|---------|------------------------|
+| Free | $0 | $0 |
+| Pro | $99/month | $990/year |
+| Premium | $139/month | $1,390/year |
+
+### Tier Features
+- **Free Tier**: 3 tickers, weekly digest, 10-K/10-Q summaries only
+- **Pro Tier**: 10 tickers, real-time alerts, all filing types
+- **Premium Tier**: Unlimited tickers, API access, priority support
+
+### Key Business Requirements
+1. **Premium → Direct to Onboarding**: NO contact sales - straight to onboarding as trial user
+2. **Ticker Confirmation Flow**: Users confirm portfolio and receive quarterly earnings emails
+3. **Filing Previews**: Manually curated impressive filings (NOT algorithmic database queries)
+4. **Dialog Content**: Show FULL summary (NOT truncated/teaser)
+5. **Dashboard Upgrades**: Show "Upgrade" / "Start Premium" CTAs for free tier users
+6. **1-Minute Grace Period**: If user re-confirms within 1 minute, only email for new tickers
+
+---
 
 ## Current State Analysis
 
@@ -21,98 +45,89 @@ Implement a new landing page based on the Replit prototype with 3-tier pricing (
 - **Webhook Handler**: `/app/api/webhook/stripe/route.ts` - Handles 6 event types
 - **Checkout Flow**: `/app/api/user/subscription/route.ts:106-235` - Creates checkout sessions
 - **Billing Portal**: `/app/api/billing/portal/route.ts:17-68`
-- **Current Price IDs**: `STRIPE_BASIC_PRICE_ID`, `STRIPE_PROFESSIONAL_PRICE_ID`, `STRIPE_PREMIUM_PRICE_ID`
 - **Current Pricing**: $9 BASIC, $29 PROFESSIONAL, $99 PREMIUM (in `lib/stripe.ts:38-81`)
 
-### Database Schema for Filing Previews
-- **Summary Table**: Contains `summaryText` (plain text) and `summaryJSON` (structured data with keyPoints)
-- **Company Names**: Stored in `Ticker.companyName` field (line 57 of schema)
-- **No `enhanced_summary` field** - the term refers to processing strategy, not a DB field
-- **Query Pattern**: Join `Summary` with `Ticker` to get `companyName`
+### Existing Onboarding
+- **Location**: `/app/(auth)/onboarding/page.tsx`
+- **Flow**: 2-step (sectors → equities), max 5 companies
+- **Post-Onboarding**: Redirects to dashboard
 
-### Replit Prototype Analysis
-From the Playwright inspection of the Replit prototype:
+### Existing Dashboard
+- **Ticker Management**: Add/remove tickers
+- **No Confirmation Button**: Users can modify tickers but no explicit "confirm" action
+- **No Upgrade CTAs**: Missing conversion prompts for free users
 
-**Pricing Structure (DIFFERENT from original task file):**
-- Free: $0/forever, 3 tickers, weekly digest emails
-- Pro: $15/month, 10 tickers, real-time alerts, all filing types
-- Premium: $40/month, unlimited tickers, API access, team features
+### Existing Email Services
+- **Summary Emails**: `sendFilingSummaryEmail()` in `/lib/email/summary-service.ts`
+- **Latest Summaries**: `sendLatestSummariesEmail()` function exists
+- **Async Queue**: Rate-limited email processing
 
-**Key UI Elements:**
-1. Hero section with "SEC Filings, Simplified" headline + filing preview card
-2. Trust indicators: "2,500+ investors", "99.9% uptime", "<5 min delivery"
-3. Features grid: 6 feature cards in 3x2 layout
-4. Pricing section: 3-tier cards with "Most Popular" badge on Pro
-5. CTA section: Email waitlist form with "Join Waitlist" button
-6. Footer: Simple copyright
-
-**Filing Preview Card Structure:**
-- Badge (10-K), timestamp (2 min ago)
-- Company name (Apple Inc.)
-- Ticker + filing date (AAPL • Filed: Nov 24, 2025)
-- Key Highlights (3 bullet points)
-- "Read Full Summary" button
+---
 
 ## Desired End State
 
 After implementation:
-1. New landing page at `/` with Replit prototype design
-2. Existing waitlist preserved at `/waitlist` route
-3. Feature flag `NEXT_PUBLIC_LANDING_PAGE_ENABLED` controls rollout
-4. Real filing data from database displayed in preview cards
-5. Animated dialog opens on "Read Full Summary" click
-6. Stripe checkout integration for Pro ($15) and Premium ($40) tiers
-7. Free tier redirects to Clerk signup
+1. New landing page at `/` with 3-tier pricing ($0/$99/$139)
+2. Annual billing option with 2 months free discount
+3. Ticker confirmation flow triggers quarterly earnings emails
+4. Manually curated filing previews with full summary dialogs
+5. Dashboard shows upgrade CTAs for free tier users
+6. 1-minute grace period prevents duplicate emails on quick edits
+7. Existing waitlist preserved at `/waitlist` route
+8. Feature flag controls rollout
 
 ### Verification:
 - `npm run build` succeeds without errors
 - `npm run test` passes all tests
 - Landing page loads in <2 seconds
-- Filing preview dialog animates at 60fps
-- Stripe test checkout completes successfully
-- Waitlist form at `/waitlist` functions identically to current `/`
+- Filing preview dialog shows full summary with smooth 60fps animations
+- Stripe test checkout completes for both monthly and annual billing
+- Ticker confirmation triggers email within 30 seconds
+- Dashboard upgrade CTAs visible for free tier users
+
+---
 
 ## What We're NOT Doing
 
-- **NOT changing existing Stripe webhook logic** - only adding new price IDs
-- **NOT modifying the dashboard or authenticated user flows**
-- **NOT implementing API access for Premium tier** (future work)
-- **NOT adding team collaboration features** (future work)
-- **NOT creating annual billing options** (unless explicitly requested)
-- **NOT touching the newsletter subscription flow** - it stays as-is
+- **NOT changing existing webhook logic** - only adding new price IDs
+- **NOT implementing full API access** - Premium tier gets API but implementation is future work
+- **NOT touching newsletter subscription flow** - stays as-is
+- **NOT modifying the 2-step onboarding flow** - only adding post-onboarding ticker confirmation
+
+---
 
 ## Implementation Approach
 
 ### Elon's 5-Step Engineering Algorithm Applied
 
 1. **Question Requirements**:
-   - Do we need framer-motion? YES - already installed (v12.23.24), used in landing page
-   - Do we need new database tables? NO - existing Summary + Ticker tables sufficient
-   - Do we need new Stripe products? YES - new price IDs for $15/$40 tiers
+   - Do we need new database fields? YES - for ticker confirmation tracking
+   - Do we need new Stripe products? YES - $99/$139 with annual billing
+   - Do we need new API endpoints? YES - ticker confirmation endpoint
 
 2. **Delete/Simplify**:
-   - Reuse existing `SUBSCRIPTION_PLANS` structure in `lib/stripe.ts`
+   - Reuse existing email service infrastructure
    - Reuse existing Dialog component from shadcn/ui
-   - Reuse existing framer-motion patterns from `hero-section.tsx`
+   - Reuse existing framer-motion patterns
 
 3. **Optimize**:
-   - Cache filing preview queries with React Query or SWR
-   - Use static fallback data if database query fails
+   - Use Server Components for static content
+   - Implement 1-minute grace period with simple timestamp check
 
 4. **Accelerate**:
    - TDD approach with failing tests first
    - Feature flag allows parallel development
 
 5. **Automate**:
-   - Automated tests validate feature flag behavior
+   - Automated tests validate ticker confirmation flow
    - CI/CD validates Stripe integration
 
 ---
 
-## Phase 1: Environment & Stripe Configuration
+## Phase 1: Stripe Configuration ($99/$139 with Annual Billing)
 
 ### Overview
-Set up new Stripe price IDs and feature flag infrastructure.
+Set up new Stripe price IDs for $99 Pro and $139 Premium with annual billing options.
 
 ### Step 1.1: 🔴 Write Failing Tests
 
@@ -122,33 +137,63 @@ Set up new Stripe price IDs and feature flag infrastructure.
 import { SUBSCRIPTION_PLANS, getPlanConfig } from '@/lib/stripe';
 
 describe('Stripe Pricing Configuration', () => {
-  it('should have FREE tier with $0 price', () => {
-    const plan = getPlanConfig('FREE');
-    expect(plan).toBeDefined();
-    expect(plan?.monthlyPrice).toBe(0);
-    expect(plan?.tickerLimit).toBe(3);
+  describe('Free Tier', () => {
+    it('should have $0 price and 3 ticker limit', () => {
+      const plan = getPlanConfig('FREE');
+      expect(plan).toBeDefined();
+      expect(plan?.monthlyPrice).toBe(0);
+      expect(plan?.tickerLimit).toBe(3);
+    });
   });
 
-  it('should have PRO tier with $15 price', () => {
-    const plan = getPlanConfig('PRO');
-    expect(plan).toBeDefined();
-    expect(plan?.monthlyPrice).toBe(15);
-    expect(plan?.tickerLimit).toBe(10);
+  describe('Pro Tier', () => {
+    it('should have $99/month price', () => {
+      const plan = getPlanConfig('PRO');
+      expect(plan?.monthlyPrice).toBe(99);
+    });
+
+    it('should have $990/year annual price (2 months free)', () => {
+      const plan = getPlanConfig('PRO');
+      expect(plan?.annualPrice).toBe(990);
+    });
+
+    it('should have 10 ticker limit', () => {
+      const plan = getPlanConfig('PRO');
+      expect(plan?.tickerLimit).toBe(10);
+    });
   });
 
-  it('should have PREMIUM tier with $40 price', () => {
-    const plan = getPlanConfig('PREMIUM');
-    expect(plan).toBeDefined();
-    expect(plan?.monthlyPrice).toBe(40);
-    expect(plan?.tickerLimit).toBe(-1); // unlimited
+  describe('Premium Tier', () => {
+    it('should have $139/month price', () => {
+      const plan = getPlanConfig('PREMIUM');
+      expect(plan?.monthlyPrice).toBe(139);
+    });
+
+    it('should have $1390/year annual price (2 months free)', () => {
+      const plan = getPlanConfig('PREMIUM');
+      expect(plan?.annualPrice).toBe(1390);
+    });
+
+    it('should have unlimited tickers', () => {
+      const plan = getPlanConfig('PREMIUM');
+      expect(plan?.tickerLimit).toBe(-1);
+    });
   });
 
-  it('should have valid Stripe price IDs for paid tiers', () => {
-    const pro = getPlanConfig('PRO');
-    const premium = getPlanConfig('PREMIUM');
+  describe('Valid Stripe Price IDs', () => {
+    it('should have valid monthly price IDs for paid tiers', () => {
+      const pro = getPlanConfig('PRO');
+      const premium = getPlanConfig('PREMIUM');
+      expect(pro?.monthlyPriceId).toMatch(/^price_/);
+      expect(premium?.monthlyPriceId).toMatch(/^price_/);
+    });
 
-    expect(pro?.priceId).toMatch(/^price_/);
-    expect(premium?.priceId).toMatch(/^price_/);
+    it('should have valid annual price IDs for paid tiers', () => {
+      const pro = getPlanConfig('PRO');
+      const premium = getPlanConfig('PREMIUM');
+      expect(pro?.annualPriceId).toMatch(/^price_/);
+      expect(premium?.annualPriceId).toMatch(/^price_/);
+    });
   });
 });
 ```
@@ -156,7 +201,7 @@ describe('Stripe Pricing Configuration', () => {
 **Checkpoint 1.1**: Run tests and verify they FAIL:
 ```bash
 npm run test -- --testPathPattern="stripe-pricing"
-# Expected: 4 failing tests (FREE tier doesn't exist, prices wrong)
+# Expected: 9 failing tests
 ```
 
 ### Step 1.2: 🟢 Implement to Pass Tests
@@ -164,65 +209,77 @@ npm run test -- --testPathPattern="stripe-pricing"
 #### 1.2.1 Update Stripe Configuration
 **File**: `lib/stripe.ts`
 
-Add new plan structure (update existing `SUBSCRIPTION_PLANS`):
-
 ```typescript
 export const SUBSCRIPTION_PLANS = {
   FREE: {
     name: 'Free',
-    priceId: null, // No Stripe checkout for free tier
+    monthlyPriceId: null,
+    annualPriceId: null,
     monthlyPrice: 0,
+    annualPrice: 0,
     tickerLimit: 3,
-    monthlyFilings: 15, // 3 tickers × ~5 filings/month
+    filingTypes: ['10-K', '10-Q'], // Only annual/quarterly reports
+    emailFrequency: 'weekly',
     features: [
+      '3 companies to track',
       'Weekly digest emails',
-      '10-K and 10-Q summaries',
+      '10-K and 10-Q summaries only',
       'Basic filing alerts',
-      'Community support',
     ],
   },
   PRO: {
     name: 'Pro',
-    priceId: process.env.STRIPE_PRO_PRICE_ID || '',
-    monthlyPrice: 15,
+    monthlyPriceId: process.env.STRIPE_PRO_MONTHLY_PRICE_ID || '',
+    annualPriceId: process.env.STRIPE_PRO_ANNUAL_PRICE_ID || '',
+    monthlyPrice: 99,
+    annualPrice: 990, // 2 months free (10 months × $99)
     tickerLimit: 10,
-    monthlyFilings: 100,
+    filingTypes: ['10-K', '10-Q', '8-K', 'FORM4', 'DEF14A'],
+    emailFrequency: 'realtime',
     features: [
+      '10 companies to track',
       'Real-time email alerts',
-      'All filing types (8-K, Form 4)',
+      'All filing types (8-K, Form 4, etc.)',
       'Priority processing',
       'Email support',
     ],
   },
   PREMIUM: {
     name: 'Premium',
-    priceId: process.env.STRIPE_PREMIUM_PRICE_ID || '',
-    monthlyPrice: 40,
+    monthlyPriceId: process.env.STRIPE_PREMIUM_MONTHLY_PRICE_ID || '',
+    annualPriceId: process.env.STRIPE_PREMIUM_ANNUAL_PRICE_ID || '',
+    monthlyPrice: 139,
+    annualPrice: 1390, // 2 months free (10 months × $139)
     tickerLimit: -1, // unlimited
-    monthlyFilings: 1000,
+    filingTypes: ['ALL'],
+    emailFrequency: 'realtime',
     features: [
+      'Unlimited companies',
+      'Real-time email alerts',
+      'All filing types',
       'API access for developers',
       'Priority processing queue',
-      'Team collaboration features',
       'Dedicated support',
     ],
   },
 } as const;
-```
 
-**Checkpoint 1.2.1**: First tests pass:
-```bash
-npm run test -- --testPathPattern="stripe-pricing" --testNamePattern="FREE tier"
-# Expected: 1 passing
+export function getPlanConfig(planType: keyof typeof SUBSCRIPTION_PLANS) {
+  return SUBSCRIPTION_PLANS[planType];
+}
 ```
 
 #### 1.2.2 Add Environment Variables
 **File**: `.env.local` (and Vercel)
 
 ```bash
-# New Stripe Price IDs (create in Stripe Dashboard)
-STRIPE_PRO_PRICE_ID=price_xxx15monthly
-STRIPE_PREMIUM_PRICE_ID=price_xxx40monthly
+# Stripe Price IDs - Monthly
+STRIPE_PRO_MONTHLY_PRICE_ID=price_xxx_pro_monthly
+STRIPE_PREMIUM_MONTHLY_PRICE_ID=price_xxx_premium_monthly
+
+# Stripe Price IDs - Annual (2 months free)
+STRIPE_PRO_ANNUAL_PRICE_ID=price_xxx_pro_annual
+STRIPE_PREMIUM_ANNUAL_PRICE_ID=price_xxx_premium_annual
 
 # Feature Flag
 NEXT_PUBLIC_LANDING_PAGE_ENABLED=false
@@ -231,49 +288,532 @@ NEXT_PUBLIC_LANDING_PAGE_ENABLED=false
 **Checkpoint 1.2.2**: All pricing tests pass:
 ```bash
 npm run test -- --testPathPattern="stripe-pricing"
-# Expected: 4 passing
+# Expected: 9 passing
 ```
 
 ### Step 1.3: 🔵 Refactor
 
-- [ ] Remove deprecated BASIC/PROFESSIONAL/PREMIUM naming if no longer used
-- [ ] Add TypeScript types for new plan structure
-- [ ] Update Prisma `PlanType` enum if needed
+- [ ] Deprecate old BASIC/PROFESSIONAL naming
+- [ ] Update TypeScript types for billing interval
+- [ ] Add helper function for calculating savings percentage
 
-**Checkpoint 1.3**: Tests still pass:
-```bash
-npm run test -- --testPathPattern="stripe-pricing"
-# Expected: 4 passing
-```
+### Step 1.4: Stripe Dashboard Setup
 
-### Step 1.4: Final Phase Verification
-
-#### Automated Verification:
-- [ ] All phase tests pass: `npm run test -- --testPathPattern="stripe-pricing"`
-- [ ] Type checking passes: `npm run build`
-- [ ] Linting passes: `npm run lint`
-
-#### Manual Verification:
-- [ ] Stripe Dashboard has new $15 and $40 price configurations
-- [ ] Environment variables set in Vercel for production
+**Manual Actions Required:**
+1. Create Pro Monthly: $99/month recurring
+2. Create Pro Annual: $990/year recurring
+3. Create Premium Monthly: $139/month recurring
+4. Create Premium Annual: $1,390/year recurring
+5. Copy price IDs to environment variables
 
 **STOP**: Await manual confirmation before Phase 2.
 
 ---
 
-## Phase 2: Waitlist Migration & Feature Flag
+## Phase 2: Ticker Confirmation & Quarterly Earnings Email (NEW)
+
+### Overview
+Build the ticker confirmation flow where users confirm their portfolio and receive quarterly earnings emails immediately.
+
+### Database Schema Changes
+
+**Add to Prisma schema:**
+```prisma
+model User {
+  // ... existing fields
+
+  // Ticker confirmation tracking
+  tickersConfirmedAt          DateTime?
+  lastConfirmationEmailSentAt DateTime?
+  tickersAtLastConfirmation   String[]    // Array of ticker symbols at last confirmation
+}
+```
+
+### Step 2.1: 🔴 Write Failing Tests
+
+**Test File**: `__tests__/api/user/tickers/confirm.test.ts`
+
+```typescript
+import { POST } from '@/app/api/user/tickers/confirm/route';
+
+describe('Ticker Confirmation API', () => {
+  it('should confirm tickers and trigger email for new user', async () => {
+    // Mock: User with tickers, never confirmed before
+    const request = new Request('http://localhost/api/user/tickers/confirm', {
+      method: 'POST',
+    });
+
+    const response = await POST(request);
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(data.tickersConfirmed).toBe(true);
+    expect(data.emailSent).toBe(true);
+    expect(data.tickerCount).toBeGreaterThan(0);
+  });
+
+  it('should skip email for tickers confirmed within 1 minute', async () => {
+    // Mock: User confirmed 30 seconds ago, same tickers
+    const request = new Request('http://localhost/api/user/tickers/confirm', {
+      method: 'POST',
+    });
+
+    const response = await POST(request);
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(data.emailSent).toBe(false);
+    expect(data.reason).toBe('within_grace_period');
+  });
+
+  it('should only email new tickers when re-confirmed within grace period', async () => {
+    // Mock: User confirmed 30 seconds ago, added 1 new ticker
+    const request = new Request('http://localhost/api/user/tickers/confirm', {
+      method: 'POST',
+    });
+
+    const response = await POST(request);
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(data.emailSent).toBe(true);
+    expect(data.newTickersEmailed).toEqual(['NVDA']); // Only the new one
+  });
+
+  it('should require authentication', async () => {
+    // No auth header
+    const request = new Request('http://localhost/api/user/tickers/confirm', {
+      method: 'POST',
+    });
+
+    const response = await POST(request);
+    expect(response.status).toBe(401);
+  });
+});
+```
+
+**Test File**: `__tests__/services/quarterly-earnings-email.test.ts`
+
+```typescript
+import { sendQuarterlyEarningsEmail } from '@/lib/email/quarterly-earnings-service';
+
+describe('Quarterly Earnings Email Service', () => {
+  it('should send email with latest summaries for user tickers', async () => {
+    const result = await sendQuarterlyEarningsEmail({
+      userId: 'test-user-id',
+      tickerSymbols: ['AAPL', 'MSFT', 'GOOGL'],
+      email: 'test@example.com',
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.summariesIncluded).toBeGreaterThan(0);
+  });
+
+  it('should handle case where no summaries exist for tickers', async () => {
+    const result = await sendQuarterlyEarningsEmail({
+      userId: 'test-user-id',
+      tickerSymbols: ['UNKNOWNTICKER'],
+      email: 'test@example.com',
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.summariesIncluded).toBe(0);
+    expect(result.message).toContain('no summaries available');
+  });
+});
+```
+
+**Checkpoint 2.1**: Tests fail:
+```bash
+npm run test -- --testPathPattern="confirm|quarterly-earnings"
+# Expected: 6+ failing tests
+```
+
+### Step 2.2: 🟢 Implement to Pass Tests
+
+#### 2.2.1 Database Migration
+**File**: `prisma/migrations/XXXXXX_add_ticker_confirmation/migration.sql`
+
+```sql
+-- Add ticker confirmation tracking fields
+ALTER TABLE "User" ADD COLUMN "tickersConfirmedAt" TIMESTAMP(3);
+ALTER TABLE "User" ADD COLUMN "lastConfirmationEmailSentAt" TIMESTAMP(3);
+ALTER TABLE "User" ADD COLUMN "tickersAtLastConfirmation" TEXT[];
+```
+
+#### 2.2.2 Create Confirmation API
+**File**: `app/api/user/tickers/confirm/route.ts`
+
+```typescript
+import { NextResponse } from 'next/server';
+import { auth } from '@clerk/nextjs/server';
+import { getPrismaClient } from '@/lib/db/prisma';
+import { sendQuarterlyEarningsEmail } from '@/lib/email/quarterly-earnings-service';
+
+const GRACE_PERIOD_MS = 60 * 1000; // 1 minute
+
+export async function POST() {
+  const { userId } = auth();
+
+  if (!userId) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  const prisma = getPrismaClient();
+
+  // Get user with their tickers
+  const user = await prisma.user.findUnique({
+    where: { clerkId: userId },
+    include: {
+      tickers: {
+        select: { symbol: true },
+      },
+    },
+  });
+
+  if (!user) {
+    return NextResponse.json({ error: 'User not found' }, { status: 404 });
+  }
+
+  const currentTickers = user.tickers.map(t => t.symbol);
+  const previousTickers = user.tickersAtLastConfirmation || [];
+  const now = new Date();
+
+  // Check if within grace period
+  const lastConfirmation = user.tickersConfirmedAt;
+  const isWithinGracePeriod = lastConfirmation &&
+    (now.getTime() - lastConfirmation.getTime()) < GRACE_PERIOD_MS;
+
+  let emailSent = false;
+  let newTickersEmailed: string[] = [];
+  let reason = '';
+
+  if (isWithinGracePeriod) {
+    // Find newly added tickers
+    const newTickers = currentTickers.filter(t => !previousTickers.includes(t));
+
+    if (newTickers.length === 0) {
+      reason = 'within_grace_period';
+    } else {
+      // Only email for new tickers
+      await sendQuarterlyEarningsEmail({
+        userId: user.id,
+        tickerSymbols: newTickers,
+        email: user.email,
+      });
+      emailSent = true;
+      newTickersEmailed = newTickers;
+    }
+  } else {
+    // Full email for all tickers
+    await sendQuarterlyEarningsEmail({
+      userId: user.id,
+      tickerSymbols: currentTickers,
+      email: user.email,
+    });
+    emailSent = true;
+    newTickersEmailed = currentTickers;
+  }
+
+  // Update confirmation tracking
+  await prisma.user.update({
+    where: { id: user.id },
+    data: {
+      tickersConfirmedAt: now,
+      lastConfirmationEmailSentAt: emailSent ? now : user.lastConfirmationEmailSentAt,
+      tickersAtLastConfirmation: currentTickers,
+    },
+  });
+
+  return NextResponse.json({
+    tickersConfirmed: true,
+    tickerCount: currentTickers.length,
+    emailSent,
+    newTickersEmailed,
+    reason,
+  });
+}
+```
+
+#### 2.2.3 Create Quarterly Earnings Email Service
+**File**: `lib/email/quarterly-earnings-service.ts`
+
+```typescript
+import { getPrismaClient } from '@/lib/db/prisma';
+import { sendFilingSummaryEmail } from './summary-service';
+
+interface QuarterlyEarningsEmailParams {
+  userId: string;
+  tickerSymbols: string[];
+  email: string;
+}
+
+export async function sendQuarterlyEarningsEmail(params: QuarterlyEarningsEmailParams) {
+  const { userId, tickerSymbols, email } = params;
+
+  if (tickerSymbols.length === 0) {
+    return {
+      success: true,
+      summariesIncluded: 0,
+      message: 'No tickers to send summaries for',
+    };
+  }
+
+  const prisma = getPrismaClient();
+
+  // Get latest quarterly summaries (10-Q, 10-K) for each ticker
+  const summaries = await prisma.summary.findMany({
+    where: {
+      ticker: {
+        symbol: { in: tickerSymbols },
+      },
+      filingType: { in: ['10-K', '10-Q'] },
+    },
+    include: {
+      ticker: true,
+    },
+    orderBy: { filingDate: 'desc' },
+    distinct: ['tickerId'], // One per company
+  });
+
+  if (summaries.length === 0) {
+    return {
+      success: true,
+      summariesIncluded: 0,
+      message: 'No quarterly earnings summaries available for these tickers yet. We will email you when new filings are processed.',
+    };
+  }
+
+  // Send combined email with all summaries
+  await sendFilingSummaryEmail({
+    to: email,
+    subject: `Your Investment Portfolio: ${summaries.length} Quarterly Earnings Summaries`,
+    summaries: summaries.map(s => ({
+      ticker: s.ticker.symbol,
+      companyName: s.ticker.companyName,
+      filingType: s.filingType,
+      filingDate: s.filingDate,
+      summaryText: s.summaryText || '',
+      summaryJSON: s.summaryJSON,
+    })),
+    isConfirmation: true,
+  });
+
+  return {
+    success: true,
+    summariesIncluded: summaries.length,
+    message: `Sent ${summaries.length} quarterly earnings summaries`,
+  };
+}
+```
+
+#### 2.2.4 Add Dashboard Confirmation Button
+**File**: `components/dashboard/ticker-confirmation-section.tsx`
+
+```typescript
+'use client';
+
+import { useState } from 'react';
+import { Button } from '@/components/ui/button';
+import { CheckCircle, Loader2 } from 'lucide-react';
+import { toast } from 'sonner';
+
+interface TickerConfirmationSectionProps {
+  tickerCount: number;
+}
+
+export function TickerConfirmationSection({ tickerCount }: TickerConfirmationSectionProps) {
+  const [isConfirming, setIsConfirming] = useState(false);
+  const [confirmed, setConfirmed] = useState(false);
+
+  const handleConfirm = async () => {
+    setIsConfirming(true);
+
+    try {
+      const response = await fetch('/api/user/tickers/confirm', {
+        method: 'POST',
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        setConfirmed(true);
+
+        if (data.emailSent) {
+          toast.success(
+            `Portfolio confirmed! We've emailed you quarterly earnings summaries for ${data.newTickersEmailed.length} companies.`
+          );
+        } else {
+          toast.success('Portfolio confirmed! No new summaries to send.');
+        }
+      } else {
+        toast.error(data.error || 'Failed to confirm portfolio');
+      }
+    } catch (error) {
+      toast.error('Something went wrong. Please try again.');
+    } finally {
+      setIsConfirming(false);
+    }
+  };
+
+  if (tickerCount === 0) {
+    return (
+      <div className="text-center py-8 text-slate-500">
+        Add companies to your portfolio to receive quarterly earnings summaries.
+      </div>
+    );
+  }
+
+  return (
+    <div className="bg-blue-50 border border-blue-200 rounded-lg p-6 mt-6">
+      <h3 className="font-semibold text-blue-900 mb-2">
+        Confirm Your Portfolio
+      </h3>
+      <p className="text-blue-700 text-sm mb-4">
+        Ready to receive quarterly earnings summaries for {tickerCount} companies?
+        Click confirm and we'll email you the latest reports.
+      </p>
+
+      <Button
+        onClick={handleConfirm}
+        disabled={isConfirming || confirmed}
+        className="bg-blue-600 hover:bg-blue-700"
+      >
+        {isConfirming ? (
+          <>
+            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+            Confirming...
+          </>
+        ) : confirmed ? (
+          <>
+            <CheckCircle className="w-4 h-4 mr-2" />
+            Portfolio Confirmed
+          </>
+        ) : (
+          'Confirm & Email Me Summaries'
+        )}
+      </Button>
+    </div>
+  );
+}
+```
+
+#### 2.2.5 Add Dashboard Upgrade CTAs
+**File**: `components/dashboard/upgrade-cta-section.tsx`
+
+```typescript
+'use client';
+
+import { Button } from '@/components/ui/button';
+import { Crown, Zap } from 'lucide-react';
+import Link from 'next/link';
+
+interface UpgradeCTASectionProps {
+  currentPlan: 'FREE' | 'PRO' | 'PREMIUM';
+  tickerCount: number;
+  tickerLimit: number;
+}
+
+export function UpgradeCTASection({ currentPlan, tickerCount, tickerLimit }: UpgradeCTASectionProps) {
+  if (currentPlan === 'PREMIUM') return null;
+
+  const isNearLimit = tickerCount >= tickerLimit * 0.8;
+  const isAtLimit = tickerCount >= tickerLimit;
+
+  if (currentPlan === 'FREE') {
+    return (
+      <div className="bg-gradient-to-r from-blue-600 to-indigo-600 rounded-lg p-6 text-white mt-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="font-semibold text-lg flex items-center gap-2">
+              <Zap className="w-5 h-5" />
+              Upgrade to Pro
+            </h3>
+            <p className="text-blue-100 text-sm mt-1">
+              {isAtLimit
+                ? `You've reached your ${tickerLimit} company limit.`
+                : isNearLimit
+                  ? `You're using ${tickerCount} of ${tickerLimit} companies.`
+                  : 'Get real-time alerts and all filing types.'
+              }
+            </p>
+          </div>
+          <Link href="/dashboard/billing">
+            <Button variant="secondary" className="bg-white text-blue-600 hover:bg-blue-50">
+              Upgrade to Pro - $99/mo
+            </Button>
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
+  // PRO tier - upsell to Premium
+  return (
+    <div className="bg-gradient-to-r from-amber-500 to-orange-500 rounded-lg p-6 text-white mt-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h3 className="font-semibold text-lg flex items-center gap-2">
+            <Crown className="w-5 h-5" />
+            Go Premium
+          </h3>
+          <p className="text-amber-100 text-sm mt-1">
+            Unlimited companies, API access, and dedicated support.
+          </p>
+        </div>
+        <Link href="/dashboard/billing">
+          <Button variant="secondary" className="bg-white text-amber-600 hover:bg-amber-50">
+            Start Premium - $139/mo
+          </Button>
+        </Link>
+      </div>
+    </div>
+  );
+}
+```
+
+**Checkpoint 2.2.5**: All ticker confirmation tests pass:
+```bash
+npm run test -- --testPathPattern="confirm|quarterly-earnings"
+# Expected: 6+ passing
+```
+
+### Step 2.3: 🔵 Refactor
+
+- [ ] Add email tracking to prevent duplicates
+- [ ] Add rate limiting to confirmation endpoint
+- [ ] Add analytics tracking for confirmation events
+
+### Step 2.4: Final Phase Verification
+
+#### Automated Verification:
+- [ ] All confirmation tests pass
+- [ ] Database migration applies cleanly
+- [ ] Build succeeds
+
+#### Manual Verification:
+- [ ] Add tickers in dashboard
+- [ ] Click "Confirm & Email Me Summaries"
+- [ ] Receive email with quarterly earnings
+- [ ] Re-confirm within 1 minute - no duplicate email
+- [ ] Add new ticker, re-confirm - only new ticker emailed
+
+**STOP**: Await manual confirmation before Phase 3.
+
+---
+
+## Phase 3: Waitlist Migration & Feature Flag
 
 ### Overview
 Move existing waitlist to `/waitlist` route and implement feature flag for landing page rollout.
 
-### Step 2.1: 🔴 Write Failing Tests
+### Step 3.1: 🔴 Write Failing Tests
 
 **Test File**: `__tests__/routes/waitlist-migration.test.ts`
 
 ```typescript
 describe('Waitlist Migration', () => {
   it('should render waitlist page at /waitlist route', async () => {
-    // Test that /waitlist renders the waitlist form
     const response = await fetch('/waitlist');
     expect(response.status).toBe(200);
     const html = await response.text();
@@ -292,15 +832,9 @@ describe('Waitlist Migration', () => {
 });
 ```
 
-**Checkpoint 2.1**: Tests fail (route doesn't exist):
-```bash
-npm run test -- --testPathPattern="waitlist-migration"
-# Expected: 3 failing tests
-```
+### Step 3.2: 🟢 Implement to Pass Tests
 
-### Step 2.2: 🟢 Implement to Pass Tests
-
-#### 2.2.1 Create Waitlist Route
+#### 3.2.1 Create Waitlist Route
 **File**: `app/waitlist/page.tsx`
 
 ```typescript
@@ -324,21 +858,14 @@ export default async function WaitlistPage() {
 }
 ```
 
-**Checkpoint 2.2.1**: Waitlist route test passes:
-```bash
-npm run test -- --testPathPattern="waitlist-migration" --testNamePattern="waitlist page"
-# Expected: 1 passing
-```
-
-#### 2.2.2 Update Root Page with Feature Flag
+#### 3.2.2 Update Root Page with Feature Flag
 **File**: `app/page.tsx`
 
 ```typescript
 import { redirect } from 'next/navigation';
 import { Suspense } from 'react';
-
-// Import landing page components (to be created in Phase 3)
 import { LandingPage } from '@/components/landing/new-landing-page';
+import { getCuratedFilings } from '@/lib/data/curated-filings';
 
 export default async function HomePage() {
   // Feature flag check
@@ -346,1121 +873,205 @@ export default async function HomePage() {
     redirect('/waitlist');
   }
 
+  const curatedFilings = await getCuratedFilings();
+
   return (
-    <Suspense fallback={<div>Loading...</div>}>
-      <LandingPage />
+    <Suspense fallback={<div className="min-h-screen bg-slate-50" />}>
+      <LandingPage filingPreviews={curatedFilings} />
     </Suspense>
   );
 }
 ```
-
-**Checkpoint 2.2.2**: Redirect test passes:
-```bash
-npm run test -- --testPathPattern="waitlist-migration" --testNamePattern="redirect"
-# Expected: 2 passing
-```
-
-### Step 2.3: 🔵 Refactor
-
-- [ ] Extract counter data fetching to shared utility
-- [ ] Add loading skeleton component for Suspense fallback
-- [ ] Ensure SEO metadata is appropriate for each route
-
-**Checkpoint 2.3**: Tests still pass:
-```bash
-npm run test -- --testPathPattern="waitlist-migration"
-# Expected: 3 passing
-```
-
-### Step 2.4: Final Phase Verification
-
-#### Automated Verification:
-- [ ] All phase tests pass
-- [ ] Build succeeds: `npm run build`
-- [ ] No broken links: `npm run lint`
-
-#### Manual Verification:
-- [ ] Navigate to `/waitlist` - shows existing waitlist form
-- [ ] Navigate to `/` with flag=false - redirects to `/waitlist`
-- [ ] Waitlist form submission works correctly
-- [ ] Counter animation works on waitlist page
-
-**STOP**: Await manual confirmation before Phase 3.
-
----
-
-## Phase 3: Landing Page Components
-
-### Overview
-Build the new landing page components matching the Replit prototype design.
-
-### Step 3.1: 🔴 Write Failing Tests
-
-**Test File**: `__tests__/components/landing/new-landing-page.test.tsx`
-
-```typescript
-import { render, screen } from '@testing-library/react';
-import { LandingPage } from '@/components/landing/new-landing-page';
-
-describe('LandingPage', () => {
-  it('should render hero section with headline', () => {
-    render(<LandingPage filingPreviews={[]} />);
-    expect(screen.getByText(/SEC Filings/i)).toBeInTheDocument();
-    expect(screen.getByText(/Simplified/i)).toBeInTheDocument();
-  });
-
-  it('should render trust indicators', () => {
-    render(<LandingPage filingPreviews={[]} />);
-    expect(screen.getByText(/2,500\+ investors/i)).toBeInTheDocument();
-    expect(screen.getByText(/99\.9% uptime/i)).toBeInTheDocument();
-  });
-
-  it('should render features section', () => {
-    render(<LandingPage filingPreviews={[]} />);
-    expect(screen.getByText(/Built for Modern Investors/i)).toBeInTheDocument();
-    expect(screen.getByText(/300\+ Pages → 2 Minutes/i)).toBeInTheDocument();
-  });
-
-  it('should render pricing section with 3 tiers', () => {
-    render(<LandingPage filingPreviews={[]} />);
-    expect(screen.getByText(/Simple, Transparent Pricing/i)).toBeInTheDocument();
-    expect(screen.getByText(/\$0/)).toBeInTheDocument();
-    expect(screen.getByText(/\$15/)).toBeInTheDocument();
-    expect(screen.getByText(/\$40/)).toBeInTheDocument();
-  });
-
-  it('should render filing preview card when data provided', () => {
-    const mockFiling = {
-      id: '1',
-      ticker: 'AAPL',
-      companyName: 'Apple Inc.',
-      filingType: '10-K',
-      filedAt: new Date().toISOString(),
-      keyHighlights: ['Revenue increased 8% YoY'],
-    };
-
-    render(<LandingPage filingPreviews={[mockFiling]} />);
-    expect(screen.getByText('Apple Inc.')).toBeInTheDocument();
-    expect(screen.getByText(/AAPL/)).toBeInTheDocument();
-  });
-});
-```
-
-**Checkpoint 3.1**: Tests fail (components don't exist):
-```bash
-npm run test -- --testPathPattern="new-landing-page"
-# Expected: 5 failing tests
-```
-
-### Step 3.2: 🟢 Implement to Pass Tests
-
-#### 3.2.1 Create Main Landing Page Component
-**File**: `components/landing/new-landing-page.tsx`
-
-```typescript
-'use client';
-
-import { motion } from 'framer-motion';
-import { HeroSection } from './sections/hero-section';
-import { FeaturesSection } from './sections/features-section';
-import { PricingSection } from './sections/pricing-section';
-import { CTASection } from './sections/cta-section';
-import { FilingPreviewCard } from './filing-preview-card';
-
-interface FilingPreview {
-  id: string;
-  ticker: string;
-  companyName: string;
-  filingType: string;
-  filedAt: string;
-  keyHighlights: string[];
-}
-
-interface LandingPageProps {
-  filingPreviews: FilingPreview[];
-}
-
-export function LandingPage({ filingPreviews }: LandingPageProps) {
-  return (
-    <div className="min-h-screen bg-gradient-to-b from-slate-50 to-white">
-      <HeroSection filingPreview={filingPreviews[0]} />
-      <FeaturesSection />
-      <PricingSection />
-      <CTASection />
-    </div>
-  );
-}
-```
-
-#### 3.2.2 Create Hero Section
-**File**: `components/landing/sections/hero-section.tsx`
-
-```typescript
-'use client';
-
-import { motion } from 'framer-motion';
-import { Button } from '@/components/ui/button';
-import { Check } from 'lucide-react';
-import { FilingPreviewCard } from '../filing-preview-card';
-
-const container = {
-  hidden: { opacity: 0 },
-  show: {
-    opacity: 1,
-    transition: { staggerChildren: 0.15 }
-  }
-};
-
-const item = {
-  hidden: { opacity: 0, y: 20 },
-  show: { opacity: 1, y: 0, transition: { duration: 0.5 } }
-};
-
-interface HeroSectionProps {
-  filingPreview?: {
-    id: string;
-    ticker: string;
-    companyName: string;
-    filingType: string;
-    filedAt: string;
-    keyHighlights: string[];
-  };
-}
-
-export function HeroSection({ filingPreview }: HeroSectionProps) {
-  return (
-    <section className="relative px-6 py-24 lg:py-32">
-      <div className="mx-auto max-w-7xl">
-        <motion.div
-          variants={container}
-          initial="hidden"
-          animate="show"
-          className="grid gap-12 lg:grid-cols-2 lg:gap-16 items-center"
-        >
-          {/* Left Column - Copy */}
-          <div className="space-y-8">
-            <motion.div variants={item}>
-              <span className="inline-block rounded-full bg-slate-100 px-4 py-1.5 text-sm font-medium text-slate-600">
-                AI-Powered SEC Intelligence
-              </span>
-            </motion.div>
-
-            <motion.h1
-              variants={item}
-              className="text-5xl font-bold tracking-tight text-slate-900 lg:text-6xl"
-            >
-              SEC Filings,{' '}
-              <span className="text-blue-600">Simplified</span>
-            </motion.h1>
-
-            <motion.p
-              variants={item}
-              className="text-xl text-slate-600 max-w-lg"
-            >
-              Transform 300+ page regulatory documents into actionable 2-minute
-              summaries. Delivered to your inbox within minutes of SEC publication.
-            </motion.p>
-
-            <motion.div variants={item} className="flex gap-4">
-              <Button size="lg" className="bg-blue-600 hover:bg-blue-700">
-                Start Free Trial
-              </Button>
-              <Button size="lg" variant="outline">
-                View Pricing
-              </Button>
-            </motion.div>
-
-            <motion.div variants={item} className="flex gap-6 text-sm text-slate-500">
-              <span className="flex items-center gap-2">
-                <Check className="h-4 w-4 text-green-500" />
-                2,500+ investors
-              </span>
-              <span className="flex items-center gap-2">
-                <Check className="h-4 w-4 text-green-500" />
-                99.9% uptime
-              </span>
-              <span className="flex items-center gap-2">
-                <Check className="h-4 w-4 text-green-500" />
-                &lt;5 min delivery
-              </span>
-            </motion.div>
-          </div>
-
-          {/* Right Column - Filing Preview */}
-          <motion.div variants={item}>
-            {filingPreview && <FilingPreviewCard filing={filingPreview} />}
-          </motion.div>
-        </motion.div>
-      </div>
-    </section>
-  );
-}
-```
-
-#### 3.2.3 Create Features Section
-**File**: `components/landing/sections/features-section.tsx`
-
-```typescript
-'use client';
-
-import { motion } from 'framer-motion';
-import {
-  FileText,
-  Zap,
-  Bell,
-  BarChart3,
-  Shield,
-  Clock
-} from 'lucide-react';
-
-const features = [
-  {
-    icon: FileText,
-    title: '300+ Pages → 2 Minutes',
-    description: 'Transform lengthy SEC filings into concise, actionable summaries that save you hours of reading.',
-  },
-  {
-    icon: Zap,
-    title: 'Real-Time Monitoring',
-    description: 'Automated tracking of SEC EDGAR with <5 minute delivery from publication to your inbox.',
-  },
-  {
-    icon: Bell,
-    title: 'Smart Notifications',
-    description: 'Email alerts for every filing from your watchlist companies, never miss critical updates.',
-  },
-  {
-    icon: BarChart3,
-    title: 'Filing-Type Analysis',
-    description: 'Specialized summaries for 10-K, 10-Q, 8-K, Form 4, and more with context-aware insights.',
-  },
-  {
-    icon: Shield,
-    title: 'Investment-Grade Quality',
-    description: 'AI-powered analysis that highlights risks, opportunities, and material changes instantly.',
-  },
-  {
-    icon: Clock,
-    title: 'Save 10+ Hours Weekly',
-    description: 'Spend less time reading filings, more time making informed investment decisions.',
-  },
-];
-
-export function FeaturesSection() {
-  return (
-    <section className="px-6 py-24 bg-white">
-      <div className="mx-auto max-w-7xl">
-        <div className="text-center mb-16">
-          <h2 className="text-3xl font-bold text-slate-900 mb-4">
-            Built for Modern Investors
-          </h2>
-          <p className="text-lg text-slate-600 max-w-2xl mx-auto">
-            Everything you need to stay ahead of the market with instant SEC filing insights
-          </p>
-        </div>
-
-        <div className="grid gap-8 md:grid-cols-2 lg:grid-cols-3">
-          {features.map((feature, index) => (
-            <motion.div
-              key={feature.title}
-              initial={{ opacity: 0, y: 20 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              transition={{ delay: index * 0.1 }}
-              className="p-6 rounded-xl border border-slate-200 bg-slate-50/50"
-            >
-              <feature.icon className="h-8 w-8 text-blue-600 mb-4" />
-              <h3 className="font-semibold text-slate-900 mb-2">{feature.title}</h3>
-              <p className="text-slate-600 text-sm">{feature.description}</p>
-            </motion.div>
-          ))}
-        </div>
-      </div>
-    </section>
-  );
-}
-```
-
-#### 3.2.4 Create Pricing Section
-**File**: `components/landing/sections/pricing-section.tsx`
-
-```typescript
-'use client';
-
-import { motion } from 'framer-motion';
-import { Button } from '@/components/ui/button';
-import { Check } from 'lucide-react';
-import { SUBSCRIPTION_PLANS } from '@/lib/stripe';
-import { useRouter } from 'next/navigation';
-
-export function PricingSection() {
-  const router = useRouter();
-
-  const handlePlanSelect = (planKey: string) => {
-    if (planKey === 'FREE') {
-      router.push('/sign-up');
-    } else if (planKey === 'PREMIUM') {
-      // Contact sales for premium
-      window.location.href = 'mailto:sales@tldrsec.app?subject=Premium Plan Inquiry';
-    } else {
-      // Redirect to checkout (requires auth)
-      router.push(`/sign-up?plan=${planKey.toLowerCase()}`);
-    }
-  };
-
-  return (
-    <section className="px-6 py-24 bg-slate-50">
-      <div className="mx-auto max-w-7xl">
-        <div className="text-center mb-16">
-          <h2 className="text-3xl font-bold text-slate-900 mb-4">
-            Simple, Transparent Pricing
-          </h2>
-          <p className="text-lg text-slate-600">
-            Start free, upgrade as you grow
-          </p>
-        </div>
-
-        <div className="grid gap-8 lg:grid-cols-3 max-w-5xl mx-auto">
-          {Object.entries(SUBSCRIPTION_PLANS).map(([key, plan], index) => (
-            <motion.div
-              key={key}
-              initial={{ opacity: 0, y: 20 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              transition={{ delay: index * 0.1 }}
-              className={`relative p-8 rounded-2xl bg-white border-2 ${
-                key === 'PRO'
-                  ? 'border-blue-600 shadow-xl'
-                  : 'border-slate-200'
-              }`}
-            >
-              {key === 'PRO' && (
-                <div className="absolute -top-4 left-1/2 -translate-x-1/2">
-                  <span className="bg-blue-600 text-white text-sm font-medium px-4 py-1 rounded-full">
-                    Most Popular
-                  </span>
-                </div>
-              )}
-
-              <div className="mb-6">
-                <h3 className="text-xl font-semibold text-slate-900">{plan.name}</h3>
-                <div className="mt-2">
-                  <span className="text-4xl font-bold text-slate-900">
-                    ${plan.monthlyPrice}
-                  </span>
-                  <span className="text-slate-500">
-                    {plan.monthlyPrice === 0 ? '/forever' : '/per month'}
-                  </span>
-                </div>
-                <p className="text-sm text-slate-500 mt-1">
-                  {plan.tickerLimit === -1 ? 'Unlimited' : plan.tickerLimit} tickers
-                </p>
-              </div>
-
-              <ul className="space-y-3 mb-8">
-                {plan.features.map((feature) => (
-                  <li key={feature} className="flex items-start gap-3">
-                    <Check className="h-5 w-5 text-green-500 shrink-0 mt-0.5" />
-                    <span className="text-sm text-slate-600">{feature}</span>
-                  </li>
-                ))}
-              </ul>
-
-              <Button
-                onClick={() => handlePlanSelect(key)}
-                className={`w-full ${
-                  key === 'PRO'
-                    ? 'bg-blue-600 hover:bg-blue-700'
-                    : 'bg-slate-900 hover:bg-slate-800'
-                }`}
-                variant={key === 'PREMIUM' ? 'outline' : 'default'}
-              >
-                {key === 'FREE' && 'Start Free'}
-                {key === 'PRO' && 'Start Pro Trial'}
-                {key === 'PREMIUM' && 'Contact Sales'}
-              </Button>
-            </motion.div>
-          ))}
-        </div>
-      </div>
-    </section>
-  );
-}
-```
-
-#### 3.2.5 Create CTA Section
-**File**: `components/landing/sections/cta-section.tsx`
-
-```typescript
-'use client';
-
-import { useState } from 'react';
-import { motion } from 'framer-motion';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-
-export function CTASection() {
-  const [email, setEmail] = useState('');
-  const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setStatus('loading');
-
-    try {
-      const response = await fetch('/api/newsletter/subscribe', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email }),
-      });
-
-      if (response.ok) {
-        setStatus('success');
-        setEmail('');
-      } else {
-        setStatus('error');
-      }
-    } catch {
-      setStatus('error');
-    }
-  };
-
-  return (
-    <section className="px-6 py-24 bg-slate-900">
-      <div className="mx-auto max-w-3xl text-center">
-        <motion.h2
-          initial={{ opacity: 0, y: 20 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          className="text-3xl font-bold text-white mb-4"
-        >
-          Start Monitoring SEC Filings Today
-        </motion.h2>
-
-        <motion.p
-          initial={{ opacity: 0, y: 20 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          transition={{ delay: 0.1 }}
-          className="text-lg text-slate-300 mb-8"
-        >
-          Join thousands of investors who trust tldrsec.app for real-time SEC intelligence
-        </motion.p>
-
-        <motion.form
-          initial={{ opacity: 0, y: 20 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          transition={{ delay: 0.2 }}
-          onSubmit={handleSubmit}
-          className="flex gap-3 max-w-md mx-auto"
-        >
-          <Input
-            type="email"
-            placeholder="Enter your email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            required
-            className="bg-white/10 border-white/20 text-white placeholder:text-slate-400"
-          />
-          <Button
-            type="submit"
-            disabled={status === 'loading'}
-            className="bg-blue-600 hover:bg-blue-700 whitespace-nowrap"
-          >
-            {status === 'loading' ? 'Joining...' : 'Join Waitlist'}
-          </Button>
-        </motion.form>
-
-        {status === 'success' && (
-          <p className="text-green-400 mt-4">Welcome! Check your email for confirmation.</p>
-        )}
-
-        <motion.p
-          initial={{ opacity: 0 }}
-          whileInView={{ opacity: 1 }}
-          viewport={{ once: true }}
-          transition={{ delay: 0.3 }}
-          className="text-sm text-slate-400 mt-4"
-        >
-          No credit card required • Start with 3 free tickers
-        </motion.p>
-      </div>
-    </section>
-  );
-}
-```
-
-**Checkpoint 3.2.5**: All landing page tests pass:
-```bash
-npm run test -- --testPathPattern="new-landing-page"
-# Expected: 5 passing
-```
-
-### Step 3.3: 🔵 Refactor
-
-- [ ] Extract animation variants to shared constants
-- [ ] Add proper TypeScript types for all props
-- [ ] Ensure consistent spacing and color usage
-- [ ] Add aria labels for accessibility
-
-**Checkpoint 3.3**: Tests still pass:
-```bash
-npm run test -- --testPathPattern="new-landing-page"
-# Expected: 5 passing
-```
-
-### Step 3.4: Final Phase Verification
-
-#### Automated Verification:
-- [ ] All phase tests pass
-- [ ] Build succeeds: `npm run build`
-- [ ] Linting passes: `npm run lint`
-
-#### Manual Verification:
-- [ ] Set `NEXT_PUBLIC_LANDING_PAGE_ENABLED=true` locally
-- [ ] Navigate to `/` - new landing page renders
-- [ ] All sections visible and properly styled
-- [ ] Animations are smooth (60fps)
-- [ ] Mobile responsive design works
 
 **STOP**: Await manual confirmation before Phase 4.
 
 ---
 
-## Phase 4: Filing Preview Dialog & Data Integration
+## Phase 4: Landing Page Components with Curated Filings
 
 ### Overview
-Implement the animated dialog for viewing full filing summaries and connect to real database data.
+Build landing page components with manually curated filing previews and full summary dialogs.
 
-### Step 4.1: 🔴 Write Failing Tests
+### Step 4.1: Curated Filings Data Source
 
-**Test File**: `__tests__/components/landing/filing-preview-dialog.test.tsx`
+Instead of querying the database, we'll use a manually curated JSON file for impressive filings.
 
-```typescript
-import { render, screen, fireEvent } from '@testing-library/react';
-import { FilingPreviewCard } from '@/components/landing/filing-preview-card';
-
-const mockFiling = {
-  id: '1',
-  ticker: 'AAPL',
-  companyName: 'Apple Inc.',
-  filingType: '10-K',
-  filedAt: new Date().toISOString(),
-  keyHighlights: ['Revenue increased 8% YoY to $394.3B'],
-  fullSummary: 'Full summary text here...',
-};
-
-describe('FilingPreviewCard', () => {
-  it('should render filing card with company info', () => {
-    render(<FilingPreviewCard filing={mockFiling} />);
-    expect(screen.getByText('Apple Inc.')).toBeInTheDocument();
-    expect(screen.getByText(/AAPL/)).toBeInTheDocument();
-    expect(screen.getByText('10-K')).toBeInTheDocument();
-  });
-
-  it('should render key highlights', () => {
-    render(<FilingPreviewCard filing={mockFiling} />);
-    expect(screen.getByText(/Revenue increased 8%/)).toBeInTheDocument();
-  });
-
-  it('should open dialog when Read Full Summary clicked', async () => {
-    render(<FilingPreviewCard filing={mockFiling} />);
-
-    const button = screen.getByRole('button', { name: /Read Full Summary/i });
-    fireEvent.click(button);
-
-    // Dialog should appear
-    expect(await screen.findByRole('dialog')).toBeInTheDocument();
-  });
-
-  it('should close dialog on backdrop click', async () => {
-    render(<FilingPreviewCard filing={mockFiling} />);
-
-    fireEvent.click(screen.getByRole('button', { name: /Read Full Summary/i }));
-    expect(await screen.findByRole('dialog')).toBeInTheDocument();
-
-    // Click backdrop
-    fireEvent.click(screen.getByRole('dialog').parentElement!);
-
-    // Dialog should close
-    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
-  });
-});
-```
-
-**Test File**: `__tests__/services/landing-page-service.test.ts`
+**File**: `lib/data/curated-filings.ts`
 
 ```typescript
-import { getLandingPageFilings } from '@/lib/data/landing-page-service';
+// Manually curated impressive filings for landing page
+export const CURATED_FILINGS = [
+  {
+    id: 'curated-aapl-10k',
+    ticker: 'AAPL',
+    companyName: 'Apple Inc.',
+    filingType: '10-K',
+    filedAt: '2024-10-31',
+    keyHighlights: [
+      'Revenue increased 8% YoY to $394.3 billion',
+      'Services segment grew 16% to record $85.2 billion',
+      'Operating margin improved to 30.1% from 28.5%',
+      'Repurchased $90 billion in stock during fiscal year',
+    ],
+    fullSummary: `Apple Inc. reported strong fiscal 2024 results with total revenue of $394.3 billion, an 8% increase year-over-year. The company's Services segment was a standout performer, growing 16% to reach a record $85.2 billion...`,
+  },
+  {
+    id: 'curated-msft-10q',
+    ticker: 'MSFT',
+    companyName: 'Microsoft Corporation',
+    filingType: '10-Q',
+    filedAt: '2024-10-23',
+    keyHighlights: [
+      'Revenue up 16% YoY to $65.6 billion',
+      'Azure and cloud services grew 29%',
+      'AI services revenue doubled from prior year',
+      'Operating income increased 14% to $30.6 billion',
+    ],
+    fullSummary: `Microsoft delivered exceptional Q1 FY2025 results with revenue of $65.6 billion, up 16% year-over-year. Azure and cloud services remained the growth engine, expanding 29%...`,
+  },
+  // Add 4-6 more impressive filings
+];
 
-describe('getLandingPageFilings', () => {
-  it('should return array of filing previews', async () => {
-    const filings = await getLandingPageFilings();
-    expect(Array.isArray(filings)).toBe(true);
-  });
-
-  it('should include required fields in each filing', async () => {
-    const filings = await getLandingPageFilings();
-
-    if (filings.length > 0) {
-      const filing = filings[0];
-      expect(filing).toHaveProperty('id');
-      expect(filing).toHaveProperty('ticker');
-      expect(filing).toHaveProperty('companyName');
-      expect(filing).toHaveProperty('filingType');
-      expect(filing).toHaveProperty('keyHighlights');
-    }
-  });
-
-  it('should return diverse filing types', async () => {
-    const filings = await getLandingPageFilings();
-    const types = new Set(filings.map(f => f.filingType));
-    // Should have at least 2 different filing types if data exists
-    expect(types.size).toBeGreaterThanOrEqual(1);
-  });
-});
+export async function getCuratedFilings() {
+  return CURATED_FILINGS;
+}
 ```
 
-**Checkpoint 4.1**: Tests fail:
-```bash
-npm run test -- --testPathPattern="filing-preview"
-# Expected: 6+ failing tests
-```
+### Step 4.2: Landing Page with Full Summary Dialog
 
-### Step 4.2: 🟢 Implement to Pass Tests
-
-#### 4.2.1 Create Filing Preview Card with Dialog
 **File**: `components/landing/filing-preview-card.tsx`
+
+Key updates:
+- Show FULL summary in dialog (not truncated)
+- Smooth animation with framer-motion
+- Mobile-optimized scrolling
+
+```typescript
+// Dialog shows full summary
+<Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+  <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
+    {/* ... header ... */}
+
+    {/* Full Summary - NOT truncated */}
+    <div className="prose prose-slate max-w-none">
+      <h4 className="font-semibold mb-3">Complete Analysis</h4>
+      <p className="whitespace-pre-wrap text-slate-600 leading-relaxed">
+        {filing.fullSummary}
+      </p>
+    </div>
+  </DialogContent>
+</Dialog>
+```
+
+### Step 4.3: Pricing Section with Annual Toggle
+
+**File**: `components/landing/sections/pricing-section.tsx`
 
 ```typescript
 'use client';
 
 import { useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { formatDistanceToNow } from 'date-fns';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
+import { Switch } from '@/components/ui/switch';
+import { SUBSCRIPTION_PLANS } from '@/lib/stripe';
 
-interface FilingPreviewCardProps {
-  filing: {
-    id: string;
-    ticker: string;
-    companyName: string;
-    filingType: string;
-    filedAt: string;
-    keyHighlights: string[];
-    fullSummary?: string;
-  };
-}
-
-export function FilingPreviewCard({ filing }: FilingPreviewCardProps) {
-  const [dialogOpen, setDialogOpen] = useState(false);
-
-  const filedDate = new Date(filing.filedAt);
-  const timeAgo = formatDistanceToNow(filedDate, { addSuffix: false });
+export function PricingSection() {
+  const [billingInterval, setBillingInterval] = useState<'monthly' | 'annual'>('monthly');
 
   return (
-    <>
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="bg-white rounded-2xl shadow-xl border border-slate-200 p-6 max-w-md"
-      >
-        {/* Header */}
-        <div className="flex items-center justify-between mb-4">
-          <Badge variant="secondary" className="bg-slate-100">
-            {filing.filingType}
-          </Badge>
-          <span className="text-sm text-slate-500">{timeAgo} ago</span>
-        </div>
+    <section className="px-6 py-24 bg-slate-50">
+      {/* Billing Toggle */}
+      <div className="flex items-center justify-center gap-4 mb-12">
+        <span className={billingInterval === 'monthly' ? 'font-semibold' : 'text-slate-500'}>
+          Monthly
+        </span>
+        <Switch
+          checked={billingInterval === 'annual'}
+          onCheckedChange={(checked) => setBillingInterval(checked ? 'annual' : 'monthly')}
+        />
+        <span className={billingInterval === 'annual' ? 'font-semibold' : 'text-slate-500'}>
+          Annual
+          <span className="ml-2 text-sm text-green-600 font-medium">
+            Save 2 months
+          </span>
+        </span>
+      </div>
 
-        {/* Company Info */}
-        <h3 className="text-xl font-semibold text-slate-900 mb-1">
-          {filing.companyName}
-        </h3>
-        <p className="text-sm text-slate-500 mb-4">
-          {filing.ticker} • Filed: {filedDate.toLocaleDateString('en-US', {
-            month: 'short',
-            day: 'numeric',
-            year: 'numeric',
-          })}
-        </p>
-
-        {/* Key Highlights */}
-        <div className="mb-4">
-          <h4 className="font-semibold text-slate-900 mb-2">Key Highlights</h4>
-          <ul className="space-y-1">
-            {filing.keyHighlights.slice(0, 3).map((highlight, i) => (
-              <li key={i} className="text-sm text-slate-600">
-                • {highlight}
-              </li>
-            ))}
-          </ul>
-        </div>
-
-        {/* CTA Button */}
-        <Button
-          onClick={() => setDialogOpen(true)}
-          variant="outline"
-          className="w-full"
-        >
-          Read Full Summary
-        </Button>
-      </motion.div>
-
-      {/* Full Summary Dialog */}
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
-          <DialogHeader>
-            <div className="flex items-center gap-3 mb-2">
-              <Badge variant="secondary">{filing.filingType}</Badge>
-              <span className="text-sm text-slate-500">{timeAgo} ago</span>
-            </div>
-            <DialogTitle className="text-2xl">
-              {filing.companyName} ({filing.ticker})
-            </DialogTitle>
-            <p className="text-sm text-slate-500">
-              Filed: {filedDate.toLocaleDateString('en-US', {
-                weekday: 'long',
-                month: 'long',
-                day: 'numeric',
-                year: 'numeric',
-              })}
-            </p>
-          </DialogHeader>
-
-          <div className="mt-6 space-y-6">
-            {/* Key Highlights */}
-            <div>
-              <h4 className="font-semibold text-slate-900 mb-3">Key Highlights</h4>
-              <ul className="space-y-2">
-                {filing.keyHighlights.map((highlight, i) => (
-                  <li key={i} className="flex items-start gap-2 text-slate-600">
-                    <span className="text-blue-600 mt-1">•</span>
-                    {highlight}
-                  </li>
-                ))}
-              </ul>
-            </div>
-
-            {/* Full Summary */}
-            {filing.fullSummary && (
-              <div>
-                <h4 className="font-semibold text-slate-900 mb-3">Full Summary</h4>
-                <div className="prose prose-slate prose-sm max-w-none">
-                  <p className="text-slate-600 leading-relaxed">
-                    {filing.fullSummary}
-                  </p>
-                </div>
-              </div>
-            )}
-
-            {/* CTA */}
-            <div className="pt-4 border-t">
-              <p className="text-sm text-slate-500 mb-3">
-                Get summaries like this delivered to your inbox within minutes of SEC publication.
-              </p>
-              <Button className="bg-blue-600 hover:bg-blue-700">
-                Start Free Trial
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
-    </>
+      {/* Pricing Cards */}
+      <div className="grid gap-8 lg:grid-cols-3 max-w-5xl mx-auto">
+        {Object.entries(SUBSCRIPTION_PLANS).map(([key, plan]) => (
+          <PricingCard
+            key={key}
+            plan={plan}
+            planKey={key}
+            billingInterval={billingInterval}
+          />
+        ))}
+      </div>
+    </section>
   );
 }
 ```
-
-#### 4.2.2 Create Landing Page Data Service
-**File**: `lib/data/landing-page-service.ts`
-
-```typescript
-import { getPrismaClient } from '@/lib/db/prisma';
-
-export interface FilingPreviewData {
-  id: string;
-  ticker: string;
-  companyName: string;
-  filingType: string;
-  filedAt: string;
-  keyHighlights: string[];
-  fullSummary?: string;
-}
-
-// Fallback data if database is unavailable
-const FALLBACK_FILINGS: FilingPreviewData[] = [
-  {
-    id: 'fallback-1',
-    ticker: 'AAPL',
-    companyName: 'Apple Inc.',
-    filingType: '10-K',
-    filedAt: new Date().toISOString(),
-    keyHighlights: [
-      'Revenue increased 8% YoY to $394.3B',
-      'Services segment grew 16% to record $85.2B',
-      'Operating margin improved to 30.1%',
-    ],
-    fullSummary: 'Apple reported strong fiscal year results with total revenue of $394.3 billion, representing an 8% increase year-over-year...',
-  },
-];
-
-export async function getLandingPageFilings(): Promise<FilingPreviewData[]> {
-  try {
-    const prisma = getPrismaClient();
-
-    // Query recent summaries with diverse filing types
-    const summaries = await prisma.summary.findMany({
-      where: {
-        summaryText: { not: null },
-        createdAt: { gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) }, // Last 30 days
-      },
-      include: {
-        ticker: {
-          select: {
-            symbol: true,
-            companyName: true,
-          },
-        },
-      },
-      orderBy: { createdAt: 'desc' },
-      take: 6,
-      distinct: ['filingType'], // Get diverse filing types
-    });
-
-    if (summaries.length === 0) {
-      return FALLBACK_FILINGS;
-    }
-
-    return summaries.map((summary) => {
-      // Extract key points from summaryJSON
-      const summaryJSON = summary.summaryJSON as Record<string, unknown> | null;
-      const keyPoints = (summaryJSON?.keyPoints as string[]) || [];
-
-      return {
-        id: summary.id,
-        ticker: summary.ticker.symbol,
-        companyName: summary.ticker.companyName,
-        filingType: summary.filingType,
-        filedAt: summary.filingDate.toISOString(),
-        keyHighlights: keyPoints.slice(0, 5),
-        fullSummary: summary.summaryText || undefined,
-      };
-    });
-  } catch (error) {
-    console.error('Error fetching landing page filings:', error);
-    return FALLBACK_FILINGS;
-  }
-}
-```
-
-#### 4.2.3 Update Landing Page to Fetch Data
-**File**: `app/page.tsx`
-
-```typescript
-import { redirect } from 'next/navigation';
-import { Suspense } from 'react';
-import { LandingPage } from '@/components/landing/new-landing-page';
-import { getLandingPageFilings } from '@/lib/data/landing-page-service';
-
-export default async function HomePage() {
-  // Feature flag check
-  if (process.env.NEXT_PUBLIC_LANDING_PAGE_ENABLED !== 'true') {
-    redirect('/waitlist');
-  }
-
-  const filingPreviews = await getLandingPageFilings();
-
-  return (
-    <Suspense fallback={<div className="min-h-screen bg-slate-50" />}>
-      <LandingPage filingPreviews={filingPreviews} />
-    </Suspense>
-  );
-}
-```
-
-**Checkpoint 4.2.3**: All tests pass:
-```bash
-npm run test -- --testPathPattern="filing-preview"
-# Expected: 6+ passing
-```
-
-### Step 4.3: 🔵 Refactor
-
-- [ ] Add loading skeleton for dialog content
-- [ ] Implement error boundary for filing card
-- [ ] Add keyboard navigation for dialog (ESC to close)
-- [ ] Optimize database query with proper indexes
-
-**Checkpoint 4.3**: Tests still pass:
-```bash
-npm run test -- --testPathPattern="filing-preview"
-# Expected: All passing
-```
-
-### Step 4.4: Final Phase Verification
-
-#### Automated Verification:
-- [ ] All phase tests pass
-- [ ] Build succeeds: `npm run build`
-- [ ] Database query performance <500ms
-
-#### Manual Verification:
-- [ ] Filing preview card displays real data from database
-- [ ] Dialog opens smoothly with animation
-- [ ] Dialog closes on backdrop click and ESC key
-- [ ] Fallback data displays if database unavailable
-- [ ] Dialog content scrolls properly on mobile
 
 **STOP**: Await manual confirmation before Phase 5.
 
 ---
 
-## Phase 5: Stripe Checkout Integration
+## Phase 5: Stripe Checkout with Annual Billing
 
 ### Overview
-Connect pricing buttons to Stripe checkout for Pro and Premium tiers.
+Connect pricing buttons to Stripe checkout supporting both monthly and annual billing.
 
-### Step 5.1: 🔴 Write Failing Tests
+### Step 5.1: Update Checkout Flow
 
-**Test File**: `__tests__/api/checkout.test.ts`
+**File**: `app/api/user/subscription/route.ts`
 
 ```typescript
-describe('Checkout API', () => {
-  it('should create checkout session for PRO plan', async () => {
-    // Mock authenticated user
-    const response = await fetch('/api/user/subscription', {
-      method: 'POST',
-      body: JSON.stringify({ planType: 'PRO' }),
-    });
+// Support billing interval
+const { planType, billingInterval = 'monthly' } = await request.json();
 
-    expect(response.status).toBe(200);
-    const data = await response.json();
-    expect(data.url).toContain('checkout.stripe.com');
-  });
+const plan = SUBSCRIPTION_PLANS[planType as keyof typeof SUBSCRIPTION_PLANS];
+const priceId = billingInterval === 'annual'
+  ? plan.annualPriceId
+  : plan.monthlyPriceId;
 
-  it('should reject checkout for FREE plan', async () => {
-    const response = await fetch('/api/user/subscription', {
-      method: 'POST',
-      body: JSON.stringify({ planType: 'FREE' }),
-    });
-
-    expect(response.status).toBe(400);
-  });
+// Create checkout session with selected price
+const session = await stripe.checkout.sessions.create({
+  mode: 'subscription',
+  line_items: [{ price: priceId, quantity: 1 }],
+  // ... rest of config
 });
 ```
 
-**Checkpoint 5.1**: Tests fail:
-```bash
-npm run test -- --testPathPattern="checkout"
-# Expected: Failing tests
-```
+### Step 5.2: Premium Tier → Direct to Onboarding
 
-### Step 5.2: 🟢 Implement to Pass Tests
-
-#### 5.2.1 Update Subscription API for New Plans
-**File**: `app/api/user/subscription/route.ts`
-
-Update the POST handler to support new plan types:
-
-```typescript
-// Add validation for new plan types
-const validPlans = ['PRO', 'PREMIUM'];
-if (!validPlans.includes(planType)) {
-  return NextResponse.json(
-    { error: 'Invalid plan type. Use PRO or PREMIUM.' },
-    { status: 400 }
-  );
-}
-
-// Get price ID from new SUBSCRIPTION_PLANS
-const plan = SUBSCRIPTION_PLANS[planType as keyof typeof SUBSCRIPTION_PLANS];
-if (!plan?.priceId) {
-  return NextResponse.json(
-    { error: 'Price ID not configured for this plan.' },
-    { status: 500 }
-  );
-}
-```
-
-#### 5.2.2 Update Pricing Section Click Handlers
 **File**: `components/landing/sections/pricing-section.tsx`
 
-Update to handle authenticated vs unauthenticated users:
-
 ```typescript
-import { useAuth } from '@clerk/nextjs';
-import { useSubscription } from '@/hooks/use-subscription';
+const handlePlanSelect = async (planKey: string, billingInterval: 'monthly' | 'annual') => {
+  if (planKey === 'FREE') {
+    router.push('/sign-up');
+    return;
+  }
 
-export function PricingSection() {
-  const { isSignedIn } = useAuth();
-  const { createCheckout } = useSubscription();
-  const router = useRouter();
+  // Premium goes straight to onboarding (NOT contact sales)
+  if (planKey === 'PREMIUM') {
+    router.push('/sign-up?plan=premium&trial=true');
+    return;
+  }
 
-  const handlePlanSelect = async (planKey: string) => {
-    if (planKey === 'FREE') {
-      router.push('/sign-up');
-      return;
-    }
+  // PRO plan
+  if (!isSignedIn) {
+    router.push(`/sign-up?plan=${planKey.toLowerCase()}&interval=${billingInterval}`);
+    return;
+  }
 
-    if (planKey === 'PREMIUM') {
-      window.location.href = 'mailto:sales@tldrsec.app?subject=Premium Plan Inquiry';
-      return;
-    }
-
-    // PRO plan
-    if (!isSignedIn) {
-      // Redirect to sign up with plan intent
-      router.push(`/sign-up?redirect=/dashboard/billing&plan=${planKey.toLowerCase()}`);
-      return;
-    }
-
-    // Authenticated user - create checkout
-    const plan = SUBSCRIPTION_PLANS[planKey as keyof typeof SUBSCRIPTION_PLANS];
-    if (plan?.priceId) {
-      const url = await createCheckout(planKey, plan.priceId);
-      if (url) {
-        window.location.href = url;
-      }
-    }
-  };
-
-  // ... rest of component
-}
+  // Authenticated user - create checkout
+  const url = await createCheckout(planKey, billingInterval);
+  if (url) {
+    window.location.href = url;
+  }
+};
 ```
-
-**Checkpoint 5.2.2**: Checkout tests pass:
-```bash
-npm run test -- --testPathPattern="checkout"
-# Expected: All passing
-```
-
-### Step 5.3: 🔵 Refactor
-
-- [ ] Add loading states during checkout creation
-- [ ] Handle Stripe errors gracefully with user-friendly messages
-- [ ] Add analytics tracking for checkout attempts
-
-### Step 5.4: Final Phase Verification
-
-#### Automated Verification:
-- [ ] All checkout tests pass
-- [ ] Build succeeds
-- [ ] No TypeScript errors
-
-#### Manual Verification:
-- [ ] Click "Start Pro Trial" as unauthenticated user → redirects to sign-up
-- [ ] Click "Start Pro Trial" as authenticated user → opens Stripe checkout
-- [ ] Complete test checkout with Stripe test card (4242 4242 4242 4242)
-- [ ] Verify webhook updates subscription status
-- [ ] "Contact Sales" opens email client
 
 **STOP**: Await manual confirmation before Phase 6.
 
@@ -1468,174 +1079,81 @@ npm run test -- --testPathPattern="checkout"
 
 ## Phase 6: Final Integration & Testing
 
-### Overview
-Comprehensive testing, performance optimization, and deployment preparation.
-
-### Step 6.1: End-to-End Testing
-
-**Test File**: `__tests__/e2e/landing-page.test.ts`
+### Step 6.1: End-to-End Test Suite
 
 ```typescript
 describe('Landing Page E2E', () => {
-  beforeAll(async () => {
-    // Set feature flag
-    process.env.NEXT_PUBLIC_LANDING_PAGE_ENABLED = 'true';
+  it('should complete signup flow with ticker confirmation', async () => {
+    // 1. Navigate to landing page
+    // 2. Click "Start Free"
+    // 3. Complete signup
+    // 4. Complete onboarding
+    // 5. Add tickers in dashboard
+    // 6. Click "Confirm & Email Me Summaries"
+    // 7. Verify email received
   });
 
-  it('should complete full user journey from landing to signup', async () => {
-    // Navigate to landing page
-    // Click "Start Free Trial"
-    // Verify redirect to sign-up
-  });
-
-  it('should complete checkout flow for Pro plan', async () => {
-    // Login as test user
-    // Click "Start Pro Trial"
-    // Verify Stripe checkout opens
-  });
-
-  it('should display filing preview dialog', async () => {
-    // Click "Read Full Summary"
-    // Verify dialog opens with content
-    // Close dialog
+  it('should complete Pro checkout with annual billing', async () => {
+    // 1. Click "Start Pro Trial" with annual toggle ON
+    // 2. Complete Stripe checkout with test card
+    // 3. Verify subscription created with annual interval
   });
 });
 ```
 
-### Step 6.2: Performance Testing
-
-```bash
-# Run Lighthouse audit
-npm run build && npm run start
-# Open Chrome DevTools → Lighthouse → Run audit
-
-# Target metrics:
-# - Performance: >90
-# - Accessibility: >95
-# - Best Practices: >95
-# - SEO: >90
-```
-
-### Step 6.3: Mobile Testing
-
-Verify on:
-- [ ] iPhone SE (375px width)
-- [ ] iPhone 14 Pro (390px width)
-- [ ] iPad (768px width)
-- [ ] Desktop (1440px width)
-
-### Step 6.4: Production Readiness Checklist
+### Step 6.2: Production Readiness Checklist
 
 #### Environment Variables:
-- [ ] `STRIPE_PRO_PRICE_ID` set in Vercel
-- [ ] `STRIPE_PREMIUM_PRICE_ID` set in Vercel
+- [ ] `STRIPE_PRO_MONTHLY_PRICE_ID` set in Vercel
+- [ ] `STRIPE_PRO_ANNUAL_PRICE_ID` set in Vercel
+- [ ] `STRIPE_PREMIUM_MONTHLY_PRICE_ID` set in Vercel
+- [ ] `STRIPE_PREMIUM_ANNUAL_PRICE_ID` set in Vercel
 - [ ] `NEXT_PUBLIC_LANDING_PAGE_ENABLED=false` initially
 
+#### Database:
+- [ ] Migration applied for ticker confirmation fields
+- [ ] User model updated with new fields
+
 #### Stripe Dashboard:
-- [ ] Products created: Pro ($15/mo), Premium ($40/mo)
-- [ ] Webhook endpoint updated for new events
-- [ ] Test mode verified, ready for live mode
+- [ ] 4 new prices created (Pro/Premium × Monthly/Annual)
+- [ ] Webhook endpoint updated
 
-#### Monitoring:
-- [ ] Error tracking configured for landing page components
-- [ ] Analytics tracking for conversion events
-- [ ] Performance monitoring for database queries
-
-### Step 6.5: Staged Rollout
-
-1. **Deploy with flag=false**: `NEXT_PUBLIC_LANDING_PAGE_ENABLED=false`
-2. **Verify `/waitlist`** works correctly in production
-3. **Test landing page** in preview deployment with flag=true
-4. **Enable for 10% of traffic** using Vercel edge config (optional)
-5. **Monitor for 24 hours**
-6. **Full rollout**: Set `NEXT_PUBLIC_LANDING_PAGE_ENABLED=true`
-
----
-
-## Testing Strategy
-
-### TDD Test Design Principles
-
-1. **One Assertion Per Test**: Each test validates one behavior
-2. **Descriptive Names**: "should [verb] when [condition]" pattern
-3. **Arrange-Act-Assert**: Clear structure
-4. **Test Behavior, Not Implementation**: Focus on user-facing outcomes
-
-### Test Categories
-
-#### 1. Unit Tests
-- Pricing configuration validation
-- Data service functions
-- Component rendering
-
-#### 2. Integration Tests
-- API route behavior
-- Stripe checkout flow
-- Database queries
-
-#### 3. E2E Tests
-- Complete user journeys
-- Cross-component interactions
-
-### Manual Testing Steps
-
-1. Navigate to landing page with feature flag enabled
-2. Verify all sections render correctly
-3. Click "Read Full Summary" → dialog opens
-4. Close dialog via X, backdrop, or ESC
-5. Click "Start Free" → redirects to sign-up
-6. Click "Start Pro Trial" (logged out) → redirects to sign-up with plan
-7. Click "Start Pro Trial" (logged in) → opens Stripe checkout
-8. Submit waitlist email → success message appears
-9. Test on mobile viewport sizes
-
----
-
-## Performance Considerations
-
-### Database Query Optimization
-- Use `distinct` to get diverse filing types
-- Limit to 6 results for landing page
-- Add index on `Summary.createdAt` if not present
-- Cache results for 5 minutes using React Query or SWR
-
-### Animation Performance
-- Use `transform` and `opacity` only (GPU-accelerated)
-- Add `will-change` hint for animated elements
-- Use `AnimatePresence` mode="wait" for smoother transitions
-- Test on low-end devices
-
-### Bundle Size
-- Import framer-motion components selectively
-- Use dynamic imports for dialog content
-- Verify no duplicate dependencies
+#### Features Verified:
+- [ ] Ticker confirmation flow works
+- [ ] Quarterly earnings email sends correctly
+- [ ] 1-minute grace period prevents duplicates
+- [ ] Dashboard upgrade CTAs visible for free users
+- [ ] Annual billing toggle works
+- [ ] Full summary shows in dialog
 
 ---
 
 ## Migration Notes
 
-### Preserving Waitlist Functionality
-- All waitlist code moves to `/app/waitlist/page.tsx`
-- Counter data fetching shared between routes
-- Newsletter subscribe API unchanged
-- Analytics tracking preserved
-
 ### Database Changes
-- No schema changes required
-- Existing Summary and Ticker tables sufficient
-- May add index for performance if needed
+- Add `tickersConfirmedAt`, `lastConfirmationEmailSentAt`, `tickersAtLastConfirmation` to User model
+- Run migration: `npm run db:migrate`
 
-### Environment Variable Updates
-- Add `STRIPE_PRO_PRICE_ID` and `STRIPE_PREMIUM_PRICE_ID`
-- Add `NEXT_PUBLIC_LANDING_PAGE_ENABLED`
-- Deprecate old BASIC/PROFESSIONAL/PREMIUM naming gradually
+### Stripe Product Updates
+1. Deprecate old $9/$29 prices (but keep for existing subscribers)
+2. Create new $99/$139 monthly prices
+3. Create new $990/$1390 annual prices
+
+### Gradual Rollout
+1. Deploy with `NEXT_PUBLIC_LANDING_PAGE_ENABLED=false`
+2. Test in staging with flag enabled
+3. Enable for 10% of traffic via edge config
+4. Monitor for 24 hours
+5. Full rollout
 
 ---
 
 ## References
 
 - Original task: `.claude/tasks/landing-page-stripe-redesign.md`
-- Replit prototype: Screenshots saved to `.playwright-mcp/`
-- Existing Stripe integration: `lib/stripe.ts`, `app/api/webhook/stripe/route.ts`
-- Current landing page: `app/page.tsx`, `components/landing/focused-investor-hero.tsx`
-- Database schema: `prisma/schema.prisma:68-123` (Summary model)
+- Replit prototype: Screenshots in `.playwright-mcp/`
+- Existing Stripe: `lib/stripe.ts`, `app/api/webhook/stripe/route.ts`
+- Current landing: `app/page.tsx`, `components/landing/focused-investor-hero.tsx`
+- Onboarding: `app/(auth)/onboarding/page.tsx`
+- Dashboard: `components/dashboard/dashboard-client.tsx`
+- Email service: `lib/email/summary-service.ts`
