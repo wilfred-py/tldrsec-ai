@@ -585,18 +585,22 @@ export function Form4MinimalistTemplate({ filing }: Form4MinimalistTemplateProps
                   THE STORY - One-liner summary
                   ═══════════════════════════════════════════════════════════ */}
               {headline && (
-                <SectionCard>
-                  <tr>
-                    <td
-                      style={{
-                        fontSize: '15px',
-                        lineHeight: '1.6',
-                        color: EmailColors.text.body,
-                      }}
-                      dangerouslySetInnerHTML={{ __html: formatText(headline) }}
-                    />
-                  </tr>
-                </SectionCard>
+                <table width="100%" cellPadding="0" cellSpacing="0" style={{ marginBottom: '16px' }}>
+                  <tbody>
+                    <tr>
+                      <td
+                        style={{
+                          fontSize: '15px',
+                          lineHeight: '1.6',
+                          color: EmailColors.text.body,
+                          padding: '16px',
+                          backgroundColor: 'transparent',
+                        }}
+                        dangerouslySetInnerHTML={{ __html: formatText(headline) }}
+                      />
+                    </tr>
+                  </tbody>
+                </table>
               )}
 
               {/* No data fallback */}
