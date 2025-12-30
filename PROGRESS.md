@@ -5,7 +5,33 @@
 **Branch**: main
 **Status**: ✅ OPERATIONAL - Pipeline Running, Backlog Processing
 
-### Active: Cloudflare Cron Trigger Restoration & Backfill ✅ COMPLETE (2025-12-30)
+### Active: Email Filing URL Exhibit Exclusion Fix ✅ COMPLETE (2025-12-30)
+
+**Issue**: Email filing links pointing to wrong documents:
+1. 10-K redirected to exhibit file (`d13958dex21.htm`) instead of main document
+2. Form 4 redirected to filing detail page (index) instead of XML document
+
+**Root Cause**: `extractPrimaryDocumentUrl()` in fetch-handler.ts was selecting exhibit files alphabetically before main documents. It simply picked the first HTM file that wasn't an index.
+
+**Fix Applied**:
+1. Added `isExhibitFile()` helper - Detects exhibit patterns via regex (`ex21`, `exh31`, `dex21`, `-ex31`, `exhibit`)
+2. Added `isMainDocument()` helper - Identifies main documents (ticker-YYYYMMDD.htm pattern)
+3. Implemented priority-based selection:
+   - Priority 1: Main document pattern (non-exhibit)
+   - Priority 2: Any non-exhibit HTM file
+   - Priority 3: Fallback to first HTM (may be exhibit)
+
+**Files Modified**:
+- `lib/cron/handlers/fetch-handler.ts:556-605` - New extraction logic with exhibit exclusion
+
+**Verification**:
+- ✅ Tested extraction with real SEC 8-K filing - correctly selected `d13958d8k.htm` over `d13958dex21.htm`
+- ✅ 6 test emails sent for all form types
+- ✅ Fix applies to NEW filings (existing incorrect URLs remain until cache expires)
+
+---
+
+### Previous: Cloudflare Cron Trigger Restoration & Backfill ✅ COMPLETE (2025-12-30)
 
 **Issue**: SEC filing pipeline was not discovering new filings - 0 filings discovered in last 24 hours vs 35 on SEC EDGAR.
 
@@ -470,7 +496,7 @@ npm run cloudflare:status                 # Check deployment status
 
 ---
 
-**Last Updated**: 2025-12-30 14:00 AEDT
+**Last Updated**: 2025-12-30 16:30 AEDT
 **Repository**: tldrsec-ai
 
 *See TIMELINE.md for master timeline and quick navigation*
