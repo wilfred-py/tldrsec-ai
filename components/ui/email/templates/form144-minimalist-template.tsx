@@ -1,0 +1,525 @@
+import * as React from 'react';
+import { EmailColors } from '../design-system';
+import { EmailHeader } from './sections/EmailHeader';
+import { EmailFooter } from './sections/EmailFooter';
+import { SectionCard } from './sections/SectionCard';
+import { FilingTemplateData } from '../../../../lib/email/types';
+import { extractForm144Data } from '../../../../lib/email/form144-data-extractor';
+
+interface Form144MinimalistTemplateProps {
+  filing: FilingTemplateData;
+}
+
+/**
+ * Parse a value that could be string or number to a number
+ * Handles: "1,234", "$1,234.56", "1.5M", "2K", 1234, etc.
+ */
+function parseNumericValue(value: string | number | undefined | null): number {
+  if (value === undefined || value === null) return 0;
+  if (typeof value === 'number') return value;
+
+  // Remove currency symbols and commas
+  const cleaned = String(value).replace(/[$,]/g, '');
+
+  // Handle suffixes like K, M, B
+  const suffixMatch = cleaned.match(/^([\d.]+)\s*([KMB])$/i);
+  if (suffixMatch) {
+    const num = parseFloat(suffixMatch[1]);
+    const suffix = suffixMatch[2].toUpperCase();
+    const multiplier = suffix === 'B' ? 1000000000 : suffix === 'M' ? 1000000 : suffix === 'K' ? 1000 : 1;
+    return num * multiplier;
+  }
+
+  return parseFloat(cleaned) || 0;
+}
+
+/**
+ * Format a value as compact currency display
+ */
+function formatCompactValue(value: number): string {
+  if (value >= 1000000000) return `$${(value / 1000000000).toFixed(1)}B`;
+  if (value >= 1000000) return `$${(value / 1000000).toFixed(1)}M`;
+  if (value >= 1000) return `$${(value / 1000).toFixed(0)}K`;
+  if (value > 0) return `$${value.toFixed(0)}`;
+  return '$0';
+}
+
+/**
+ * Determine if this is a notable sale (2-level signal system)
+ * Notable: >$10M value, mentioned as significant, or part of pattern
+ * Routine: Pre-planned 10b5-1, small relative amount, scheduled
+ */
+function isNotableSale(
+  signalStrength: string,
+  summaryText: string,
+  estimatedValue: number
+): boolean {
+  const signalLower = signalStrength.toLowerCase();
+  const summaryLower = summaryText?.toLowerCase() || '';
+
+  // Check for explicit notable indicators
+  if (signalLower.includes('notable') || signalLower.includes('significant') || signalLower.includes('large')) {
+    return true;
+  }
+
+  // Check for routine indicators
+  if (signalLower.includes('routine') || signalLower.includes('10b5-1') || signalLower.includes('scheduled')) {
+    return false;
+  }
+
+  // Value-based determination: >$10M is notable
+  if (estimatedValue >= 10000000) {
+    return true;
+  }
+
+  // Check summary text for indicators
+  if (summaryLower.includes('significant') || summaryLower.includes('large divestiture') || summaryLower.includes('pattern')) {
+    return true;
+  }
+
+  if (summaryLower.includes('10b5-1') || summaryLower.includes('routine') || summaryLower.includes('scheduled')) {
+    return false;
+  }
+
+  // Default to notable for moderate-sized sales
+  return estimatedValue >= 1000000;
+}
+
+/**
+ * Get signal configuration (2-level: Notable vs Routine)
+ */
+function getSignalConfig(isNotable: boolean, has10b51: boolean) {
+  if (isNotable) {
+    return {
+      level: 'NOTABLE SALE',
+      verdict: 'Worth Attention',
+      description: has10b51
+        ? 'Large planned sale under 10b5-1 - significant size warrants review.'
+        : 'This transaction size may be relevant to your investment thesis.',
+      bgColor: '#FEF3C7',      // Amber 100
+      borderColor: '#F59E0B',  // Amber 500
+      textColor: '#92400E',    // Amber 800
+      icon: '!',
+    };
+  } else {
+    return {
+      level: 'ROUTINE FILING',
+      verdict: 'Pre-planned Sale',
+      description: has10b51
+        ? 'Scheduled 10b5-1 trade - no discretionary decision by insider.'
+        : 'Likely routine diversification, not a signal about company outlook.',
+      bgColor: '#F1F5F9',      // Slate 100
+      borderColor: '#94A3B8',  // Slate 400
+      textColor: '#475569',    // Slate 600
+      icon: '\u2713',
+    };
+  }
+}
+
+/**
+ * Format text with bold styling for key values
+ */
+function formatText(text: string): string {
+  if (!text) return '';
+  let html = text;
+  html = html.replace(/&(?!amp;|lt;|gt;|quot;|#)/g, '&amp;');
+  // Bold dollar amounts
+  html = html.replace(
+    /(\$[\d,]+(?:\.\d+)?[KMB]?)/g,
+    `<strong style="color:${EmailColors.text.headline};font-weight:700;">$1</strong>`
+  );
+  // Bold percentages
+  html = html.replace(
+    /(-?\d+(?:\.\d+)?%)/g,
+    `<strong style="color:${EmailColors.text.headline};font-weight:700;">$1</strong>`
+  );
+  // Bold share counts
+  html = html.replace(
+    /([\d,]+)\s+(shares?)/gi,
+    `<strong style="color:${EmailColors.text.headline};font-weight:700;">$1</strong> $2`
+  );
+  html = html.replace(/—/g, '&mdash;');
+  return html;
+}
+
+/**
+ * Form 144 Email Template - Minimalist Signal-First Design
+ *
+ * 2-level signal system:
+ * - NOTABLE SALE (amber): Large/significant sales worth attention
+ * - ROUTINE FILING (gray): Pre-planned 10b5-1 or small regular sales
+ */
+export function Form144MinimalistTemplate({ filing }: Form144MinimalistTemplateProps) {
+  const {
+    companyName,
+    symbol,
+    ticker,
+    filingType,
+    filingDate,
+    filingUrl,
+    summaryText,
+    summaryData,
+  } = filing;
+
+  const data = summaryData as Record<string, unknown> | undefined;
+
+  // Extract structured data from summaryText if summaryData is sparse
+  const extractedData = summaryText ? extractForm144Data(summaryText) : null;
+
+  // Merge data sources - prefer summaryData, fall back to extracted
+  const filerName = (data?.filerName || extractedData?.filerName || 'Insider') as string;
+  const filerRole = (data?.filerRole || data?.position || extractedData?.filerRole || '') as string;
+  const shares = (data?.shares || extractedData?.shares || '') as string;
+  const estimatedValue = (data?.estimatedValue || extractedData?.estimatedValue || '') as string;
+  const pricePerShare = (data?.pricePerShare || extractedData?.pricePerShare || '') as string;
+  const percentOfHoldings = (data?.percentOfHoldings || extractedData?.percentOfHoldings || '') as string;
+  const broker = (data?.broker || extractedData?.broker || '') as string;
+  const tradingPlan = (data?.tradingPlan || extractedData?.tradingPlan || '') as string;
+  const signalStrength = (data?.signalStrength || extractedData?.signalStrength || '') as string;
+  const recentActivity = (data?.recentActivity || extractedData?.recentActivity || '') as string;
+
+  const displayTicker = symbol || ticker || 'N/A';
+
+  // Parse values for signal determination
+  const estimatedValueNum = parseNumericValue(estimatedValue);
+  const has10b51 = tradingPlan.toLowerCase().includes('10b5-1') ||
+    signalStrength.toLowerCase().includes('10b5-1') ||
+    (summaryText?.toLowerCase() || '').includes('10b5-1');
+
+  // Determine signal level (2-level system)
+  const isNotable = isNotableSale(signalStrength, summaryText || '', estimatedValueNum);
+  const signal = getSignalConfig(isNotable, has10b51);
+
+  // Extract first sentence as the headline
+  let headline = summaryText?.split(/(?<=[.!?])\s+/)[0] || '';
+  if (headline.length < 30 && summaryText && summaryText.length > headline.length) {
+    headline = summaryText;
+  }
+
+  // Determine if we have meaningful transaction data
+  const hasTransactionData = shares || estimatedValue || percentOfHoldings;
+
+  return (
+    <div style={{
+      maxWidth: '600px',
+      margin: '0 auto',
+      fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
+      backgroundColor: EmailColors.structure.background,
+      color: EmailColors.text.body,
+    }}>
+      {/* Header */}
+      <EmailHeader
+        ticker={displayTicker}
+        companyName={companyName}
+        filingType={filingType || 'Form 144'}
+        filingDate={filingDate}
+        filerName={filerName}
+        filerRole={filerRole}
+      />
+
+      {/* Main content */}
+      <table width="100%" cellPadding="0" cellSpacing="0">
+        <tbody>
+          <tr>
+            <td style={{ padding: '0 15px 20px' }}>
+
+              {/* ═══════════════════════════════════════════════════════════
+                  THE VERDICT - 2-Level Signal (Notable vs Routine)
+                  ═══════════════════════════════════════════════════════════ */}
+              <table width="100%" cellPadding="0" cellSpacing="0" style={{
+                backgroundColor: signal.bgColor,
+                borderRadius: '12px',
+                marginBottom: '16px',
+                border: `2px solid ${signal.borderColor}`,
+              }}>
+                <tbody>
+                  <tr>
+                    <td style={{ padding: '20px' }}>
+                      {/* Signal Level Badge */}
+                      <table width="100%" cellPadding="0" cellSpacing="0">
+                        <tbody>
+                          <tr>
+                            <td>
+                              <span style={{
+                                display: 'inline-block',
+                                padding: '4px 12px',
+                                backgroundColor: signal.borderColor,
+                                color: '#FFFFFF',
+                                borderRadius: '20px',
+                                fontSize: '11px',
+                                fontWeight: 700,
+                                letterSpacing: '1px',
+                                textTransform: 'uppercase' as const,
+                              }}>
+                                {signal.icon} {signal.level}
+                              </span>
+                            </td>
+                          </tr>
+
+                          {/* The Verdict */}
+                          <tr>
+                            <td style={{ paddingTop: '12px' }}>
+                              <div style={{
+                                fontSize: '24px',
+                                fontWeight: 700,
+                                color: signal.textColor,
+                                lineHeight: '1.2',
+                              }}>
+                                {signal.verdict}
+                              </div>
+                            </td>
+                          </tr>
+
+                          {/* Quick explanation */}
+                          <tr>
+                            <td style={{ paddingTop: '8px' }}>
+                              <div style={{
+                                fontSize: '14px',
+                                lineHeight: '1.5',
+                                color: signal.textColor,
+                                opacity: 0.9,
+                              }}>
+                                {signal.description}
+                              </div>
+                            </td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+
+              {/* ═══════════════════════════════════════════════════════════
+                  KEY METRICS - Quick scan cards
+                  ═══════════════════════════════════════════════════════════ */}
+              {hasTransactionData && (
+                <table width="100%" cellPadding="0" cellSpacing="0" style={{ marginBottom: '16px' }}>
+                  <tbody>
+                    <tr>
+                      <td>
+                        <table width="100%" cellPadding="0" cellSpacing="0">
+                          <tbody>
+                            <tr>
+                              {/* Proposed Sale Card */}
+                              <td style={{
+                                width: percentOfHoldings ? '48%' : '100%',
+                                padding: '16px',
+                                backgroundColor: '#FEF2F2',
+                                borderRadius: '8px',
+                                verticalAlign: 'top',
+                              }}>
+                                <div style={{
+                                  fontSize: '11px',
+                                  fontWeight: 700,
+                                  color: '#991B1B',
+                                  textTransform: 'uppercase' as const,
+                                  letterSpacing: '0.5px',
+                                  marginBottom: '4px',
+                                }}>
+                                  Proposed Sale
+                                </div>
+                                <div style={{
+                                  fontSize: '22px',
+                                  fontWeight: 800,
+                                  color: '#DC2626',
+                                  lineHeight: '1.2',
+                                }}>
+                                  {estimatedValue || formatCompactValue(estimatedValueNum) || 'TBD'}
+                                </div>
+                                {shares && (
+                                  <div style={{
+                                    fontSize: '12px',
+                                    color: '#991B1B',
+                                    opacity: 0.8,
+                                    marginTop: '4px',
+                                  }}>
+                                    {shares} shares{pricePerShare ? ` @ ${pricePerShare}` : ''}
+                                  </div>
+                                )}
+                              </td>
+
+                              {/* Gap spacer */}
+                              {percentOfHoldings && (
+                                <td style={{ width: '4%' }}></td>
+                              )}
+
+                              {/* Holdings Impact Card (if available) */}
+                              {percentOfHoldings && (
+                                <td style={{
+                                  width: '48%',
+                                  padding: '16px',
+                                  backgroundColor: EmailColors.structure.backgroundAlt,
+                                  borderRadius: '8px',
+                                  verticalAlign: 'top',
+                                }}>
+                                  <div style={{
+                                    fontSize: '11px',
+                                    fontWeight: 700,
+                                    color: EmailColors.text.meta,
+                                    textTransform: 'uppercase' as const,
+                                    letterSpacing: '0.5px',
+                                    marginBottom: '4px',
+                                  }}>
+                                    % of Holdings
+                                  </div>
+                                  <div style={{
+                                    fontSize: '22px',
+                                    fontWeight: 800,
+                                    color: EmailColors.text.headline,
+                                    lineHeight: '1.2',
+                                  }}>
+                                    {percentOfHoldings}
+                                  </div>
+                                  <div style={{
+                                    fontSize: '12px',
+                                    color: EmailColors.text.meta,
+                                    marginTop: '4px',
+                                  }}>
+                                    of insider&apos;s position
+                                  </div>
+                                </td>
+                              )}
+                            </tr>
+                          </tbody>
+                        </table>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              )}
+
+              {/* ═══════════════════════════════════════════════════════════
+                  THE STORY - Summary with key values highlighted
+                  ═══════════════════════════════════════════════════════════ */}
+              {headline && (
+                <SectionCard>
+                  <tr>
+                    <td
+                      style={{
+                        fontSize: '15px',
+                        lineHeight: '1.6',
+                        color: EmailColors.text.body,
+                      }}
+                      dangerouslySetInnerHTML={{ __html: formatText(headline) }}
+                    />
+                  </tr>
+                </SectionCard>
+              )}
+
+              {/* ═══════════════════════════════════════════════════════════
+                  CONTEXT DETAILS - Broker, Trading Plan, Recent Activity
+                  ═══════════════════════════════════════════════════════════ */}
+              {(broker || tradingPlan || recentActivity) && (
+                <SectionCard>
+                  <tr>
+                    <td>
+                      <div style={{
+                        fontSize: '12px',
+                        fontWeight: 600,
+                        color: EmailColors.text.meta,
+                        textTransform: 'uppercase' as const,
+                        letterSpacing: '0.5px',
+                        marginBottom: '12px',
+                      }}>
+                        Filing Details
+                      </div>
+
+                      <table width="100%" cellPadding="0" cellSpacing="0">
+                        <tbody>
+                          {broker && (
+                            <tr>
+                              <td style={{
+                                padding: '6px 0',
+                                fontSize: '13px',
+                                color: EmailColors.text.meta,
+                                width: '100px',
+                              }}>
+                                Broker:
+                              </td>
+                              <td style={{
+                                padding: '6px 0',
+                                fontSize: '13px',
+                                color: EmailColors.text.body,
+                              }}>
+                                {broker}
+                              </td>
+                            </tr>
+                          )}
+                          {tradingPlan && (
+                            <tr>
+                              <td style={{
+                                padding: '6px 0',
+                                fontSize: '13px',
+                                color: EmailColors.text.meta,
+                                width: '100px',
+                              }}>
+                                Trading Plan:
+                              </td>
+                              <td style={{
+                                padding: '6px 0',
+                                fontSize: '13px',
+                                color: EmailColors.text.body,
+                              }}>
+                                {tradingPlan}
+                              </td>
+                            </tr>
+                          )}
+                          {recentActivity && (
+                            <tr>
+                              <td style={{
+                                padding: '6px 0',
+                                fontSize: '13px',
+                                color: EmailColors.text.meta,
+                                width: '100px',
+                                verticalAlign: 'top',
+                              }}>
+                                Context:
+                              </td>
+                              <td style={{
+                                padding: '6px 0',
+                                fontSize: '13px',
+                                color: EmailColors.text.body,
+                              }}>
+                                {recentActivity}
+                              </td>
+                            </tr>
+                          )}
+                        </tbody>
+                      </table>
+                    </td>
+                  </tr>
+                </SectionCard>
+              )}
+
+              {/* No data fallback */}
+              {!hasTransactionData && !summaryText && (
+                <SectionCard>
+                  <tr>
+                    <td style={{
+                      fontSize: '14px',
+                      lineHeight: '1.6',
+                      color: EmailColors.text.meta,
+                      textAlign: 'center',
+                      padding: '20px',
+                    }}>
+                      View the full Form 144 filing for transaction details.
+                    </td>
+                  </tr>
+                </SectionCard>
+              )}
+            </td>
+          </tr>
+        </tbody>
+      </table>
+
+      {/* Footer with CTA */}
+      <EmailFooter
+        filingUrl={filingUrl}
+        formType={filingType || 'Form 144'}
+      />
+    </div>
+  );
+}
+
+export default Form144MinimalistTemplate;
