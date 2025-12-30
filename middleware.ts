@@ -250,7 +250,12 @@ const securityMiddleware = async (request: NextRequest): Promise<NextResponse | 
     requiresSecurityValidation = true;
   } else if (pathname.startsWith('/api/health')) {
     endpointType = 'HEALTH';
-    requiresSecurityValidation = true;
+    // Health endpoints are public for monitoring - they don't expose sensitive data
+    requiresSecurityValidation = false;
+  } else if (pathname.startsWith('/api/webhooks/')) {
+    endpointType = 'PUBLIC';
+    // Webhooks verify their own signatures in the handler
+    requiresSecurityValidation = false;
   } else if (pathname.startsWith('/api/')) {
     endpointType = 'PUBLIC';
     requiresSecurityValidation = false; // Let Clerk handle authentication for other APIs
@@ -1173,7 +1178,11 @@ export default async function middleware(request: NextRequest) {
         '/api/health/readiness',
         '/api/health/optimized',
         '/api/health/cloudflare-worker',
+        '/api/health/deployment',
         '/api/debug/sec-connectivity',
+
+        // Webhooks (signature-verified in handler)
+        '/api/webhooks/vercel-deployment',
         
         // Cron endpoints (we handle auth ourselves)
         '/api/cron/tier-aware',

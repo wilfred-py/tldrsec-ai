@@ -43,7 +43,7 @@ export async function GET() {
     if (!warmupComplete) {
       warmupComplete = true;
     }
-  } catch (error) {
+  } catch {
     checks.database = {
       connected: false,
       latencyMs: Date.now() - startTime
