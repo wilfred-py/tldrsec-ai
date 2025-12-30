@@ -266,7 +266,7 @@ export class SecurityModuleMockFactory {
       UserRole: {
         GUEST: 'guest',
         USER: 'user',
-        PREMIUM_USER: 'premium_user',
+        MAX_USER: 'max_user',
         ADMIN: 'admin',
         SYSTEM: 'system'
       },

@@ -55,14 +55,14 @@ export interface TickerSubscriptionInfo {
   ticker: string;
   totalSubscribers: number;
   hasProUsers: boolean;
-  hasPremiumUsers: boolean;
+  hasMaxUsers: boolean;
   tierMix: {
     basic: number;
     professional: number;
-    premium: number;
+    max: number;
   };
   estimatedTokenMultiplier: number; // Weighted average based on tier optimization levels
-  priority: number; // 1-10 scale, higher = more important (based on pro/premium users)
+  priority: number; // 1-10 scale, higher = more important (based on pro/max users)
 }
 
 /**
@@ -71,8 +71,8 @@ export interface TickerSubscriptionInfo {
  */
 const TOKEN_MULTIPLIERS = {
   basic: 0.6,        // Balanced optimization (85% reduction) = uses 60% of original tokens
-  professional: 0.8, // Conservative optimization (67% reduction) = uses 80% of original tokens  
-  premium: 1.0       // Minimal optimization (55% reduction) = uses 100% of original tokens
+  professional: 0.8, // Conservative optimization (67% reduction) = uses 80% of original tokens
+  max: 1.0           // Minimal optimization (55% reduction) = uses 100% of original tokens
 } as const;
 
 /**
@@ -81,7 +81,7 @@ const TOKEN_MULTIPLIERS = {
 const PRIORITY_WEIGHTS = {
   basic: 1,
   professional: 3,
-  premium: 5
+  max: 5
 } as const;
 
 /**
@@ -90,7 +90,7 @@ const PRIORITY_WEIGHTS = {
 interface TierCounts {
   basic: number;
   professional: number;
-  premium: number;
+  max: number;
 }
 
 /**
@@ -100,9 +100,9 @@ function calculateWeightedMultiplier(tierCounts: TierCounts): number {
   // Validate inputs
   const basic = Math.max(0, Math.floor(tierCounts.basic || 0));
   const professional = Math.max(0, Math.floor(tierCounts.professional || 0));
-  const premium = Math.max(0, Math.floor(tierCounts.premium || 0));
-  
-  const totalWeight = basic + professional + premium;
+  const max = Math.max(0, Math.floor(tierCounts.max || 0));
+
+  const totalWeight = basic + professional + max;
   
   if (totalWeight === 0) {
     return TOKEN_MULTIPLIERS.basic;
@@ -111,11 +111,11 @@ function calculateWeightedMultiplier(tierCounts: TierCounts): number {
   const weightedMultiplier = (
     (basic * TOKEN_MULTIPLIERS.basic) +
     (professional * TOKEN_MULTIPLIERS.professional) +
-    (premium * TOKEN_MULTIPLIERS.premium)
+    (max * TOKEN_MULTIPLIERS.max)
   ) / totalWeight;
   
   // Bounds checking
-  const result = Math.max(TOKEN_MULTIPLIERS.basic, Math.min(TOKEN_MULTIPLIERS.premium, weightedMultiplier));
+  const result = Math.max(TOKEN_MULTIPLIERS.basic, Math.min(TOKEN_MULTIPLIERS.max, weightedMultiplier));
   
   if (!Number.isFinite(result) || result < 0) {
     subscriptionLogger.error('Invalid weighted multiplier calculation', { tierCounts, result });
@@ -169,7 +169,7 @@ export async function getTickerSubscriptionInfo(
     const tierCounts: TierCounts = {
       basic: 0,
       professional: 0,
-      premium: 0
+      max: 0
     };
 
     let totalValidSubscribers = 0;
@@ -197,8 +197,8 @@ export async function getTickerSubscriptionInfo(
           case 'PROFESSIONAL':
             tierCounts.professional++;
             break;
-          case 'PREMIUM':
-            tierCounts.premium++;
+          case 'MAX':
+            tierCounts.max++;
             break;
           default:
             subscriptionLogger.warn(`Unknown plan type: ${userSub.planType} for user ${subscription.userId}`);
@@ -213,28 +213,28 @@ export async function getTickerSubscriptionInfo(
     }
 
     // Calculate weighted token multiplier with bounds checking
-    const totalWeight = tierCounts.basic + tierCounts.professional + tierCounts.premium;
+    const totalWeight = tierCounts.basic + tierCounts.professional + tierCounts.max;
     const weightedMultiplier = calculateWeightedMultiplier(tierCounts);
 
     // Calculate priority score (1-10 scale)
     const priorityScore = totalWeight > 0 ? Math.min(10, Math.ceil(
       ((tierCounts.basic * PRIORITY_WEIGHTS.basic) +
        (tierCounts.professional * PRIORITY_WEIGHTS.professional) +
-       (tierCounts.premium * PRIORITY_WEIGHTS.premium)) / totalWeight * 2
+       (tierCounts.max * PRIORITY_WEIGHTS.max)) / totalWeight * 2
     )) : 1;
 
     const result: TickerSubscriptionInfo = {
       ticker: ticker.toUpperCase(),
       totalSubscribers: totalValidSubscribers,
       hasProUsers: tierCounts.professional > 0,
-      hasPremiumUsers: tierCounts.premium > 0,
+      hasMaxUsers: tierCounts.max > 0,
       tierMix: tierCounts,
       estimatedTokenMultiplier: parseFloat(weightedMultiplier.toFixed(2)),
       priority: priorityScore
     };
 
     subscriptionLogger.info(`Retrieved subscription info for ${ticker}`, {
-      processingTier: result.hasPremiumUsers ? 'premium' : 
+      processingTier: result.hasMaxUsers ? 'max' :
                       result.hasProUsers ? 'professional' : 'basic',
       priority: result.priority,
       // Sensitive subscription counts and business metrics removed from logs
@@ -297,11 +297,11 @@ function createEmptySubscriptionInfo(ticker: string): TickerSubscriptionInfo {
     ticker: ticker.toUpperCase(),
     totalSubscribers: 0,
     hasProUsers: false,
-    hasPremiumUsers: false,
+    hasMaxUsers: false,
     tierMix: {
       basic: 0,
       professional: 0,
-      premium: 0
+      max: 0
     },
     estimatedTokenMultiplier: TOKEN_MULTIPLIERS.basic, // Default to basic optimization
     priority: 1 // Lowest priority
@@ -321,29 +321,29 @@ function getMockTickerSubscriptionInfo(ticker: string): TickerSubscriptionInfo {
   const mockData = isPopular ? {
     totalSubscribers: Math.floor(Math.random() * 20) + 15, // 15-35 subscribers
     basic: Math.floor(Math.random() * 8) + 5,              // 5-13 basic users
-    professional: Math.floor(Math.random() * 8) + 4,       // 4-12 pro users  
-    premium: Math.floor(Math.random() * 6) + 2             // 2-8 premium users
+    professional: Math.floor(Math.random() * 8) + 4,       // 4-12 pro users
+    max: Math.floor(Math.random() * 6) + 2                 // 2-8 max users
   } : {
     totalSubscribers: Math.floor(Math.random() * 8) + 3,   // 3-11 subscribers
     basic: Math.floor(Math.random() * 6) + 2,              // 2-8 basic users
     professional: Math.floor(Math.random() * 3) + 1,       // 1-4 pro users
-    premium: Math.floor(Math.random() * 2)                 // 0-2 premium users  
+    max: Math.floor(Math.random() * 2)                     // 0-2 max users
   };
 
   // Calculate weighted token multiplier with bounds checking
   const tierCounts: TierCounts = {
     basic: mockData.basic,
     professional: mockData.professional,
-    premium: mockData.premium
+    max: mockData.max
   };
   const weightedMultiplier = calculateWeightedMultiplier(tierCounts);
 
   // Calculate priority score
-  const totalWeight = mockData.basic + mockData.professional + mockData.premium;
+  const totalWeight = mockData.basic + mockData.professional + mockData.max;
   const priorityScore = totalWeight > 0 ? Math.min(10, Math.ceil(
     ((mockData.basic * PRIORITY_WEIGHTS.basic) +
      (mockData.professional * PRIORITY_WEIGHTS.professional) +
-     (mockData.premium * PRIORITY_WEIGHTS.premium)) / totalWeight * 2
+     (mockData.max * PRIORITY_WEIGHTS.max)) / totalWeight * 2
   )) : 1;
 
   subscriptionLogger.debug(`Generated mock data for ${ticker}`, mockData);
@@ -352,11 +352,11 @@ function getMockTickerSubscriptionInfo(ticker: string): TickerSubscriptionInfo {
     ticker: ticker.toUpperCase(),
     totalSubscribers: mockData.totalSubscribers,
     hasProUsers: mockData.professional > 0,
-    hasPremiumUsers: mockData.premium > 0,
+    hasMaxUsers: mockData.max > 0,
     tierMix: {
       basic: mockData.basic,
       professional: mockData.professional,
-      premium: mockData.premium
+      max: mockData.max
     },
     estimatedTokenMultiplier: parseFloat(weightedMultiplier.toFixed(2)),
     priority: priorityScore

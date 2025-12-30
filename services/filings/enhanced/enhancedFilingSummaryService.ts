@@ -371,9 +371,9 @@ export async function getEnhancedFilingSummary(
     
     // Use subscription-aware token thresholds
     let maxTokensForSingle: number;
-    if (subscriptionInfo?.hasPremiumUsers) {
-      // Premium users can handle larger single requests
-      maxTokensForSingle = parseInt(process.env.ENHANCED_SINGLE_LIMIT_PREMIUM || '100000');
+    if (subscriptionInfo?.hasMaxUsers) {
+      // Max users can handle larger single requests
+      maxTokensForSingle = parseInt(process.env.ENHANCED_SINGLE_LIMIT_MAX || '100000');
     } else if (subscriptionInfo?.hasProUsers) {
       // Professional users get moderate limits
       maxTokensForSingle = parseInt(process.env.ENHANCED_SINGLE_LIMIT_PRO || '85000');  

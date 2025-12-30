@@ -26,23 +26,24 @@ const subscriptionLogger = logger.child('subscription-service');
 /**
  * Map Prisma PlanType to our internal SubscriptionTier
  */
-function mapPlanTypeToSubscriptionTier(planType: PlanType): SubscriptionTier {
-  const mapping: Record<PlanType, SubscriptionTier> = {
+function mapPlanTypeToSubscriptionTier(planType: PlanType | string): SubscriptionTier {
+  const mapping: Record<string, SubscriptionTier> = {
     'BASIC': 'balanced',
-    'PROFESSIONAL': 'conservative', 
-    'PREMIUM': 'minimal'
+    'PROFESSIONAL': 'conservative',
+    'MAX': 'minimal'  // MAX tier uses minimal optimization (preserves most content)
   };
-  return mapping[planType];
+  return mapping[planType] || 'balanced';
 }
 
 /**
  * Map internal SubscriptionTier to Prisma PlanType
+ * Returns MAX for minimal tier (new naming)
  */
 function mapSubscriptionTierToPlanType(tier: string): PlanType {
   const mapping: Record<string, PlanType> = {
     'balanced': 'BASIC',
     'conservative': 'PROFESSIONAL',
-    'minimal': 'PREMIUM'
+    'minimal': 'MAX'  // MAX tier uses minimal optimization
   };
   return mapping[tier] || 'BASIC';
 }
@@ -90,11 +91,11 @@ export const SUBSCRIPTION_FEATURES = {
     ],
     description: 'Ideal for investment professionals and analysts'
   },
-  premium: {
+  max: {
     optimizationLevel: 'minimal' as OptimizationLevel,
     monthlyFilings: 1000,
     features: [
-      'Premium filing summaries',
+      'Max filing summaries',
       'Maximum context preservation',
       'Real-time notifications',
       'Minimal token optimization (55% reduction)',
@@ -399,11 +400,11 @@ export async function hasFeatureAccess(userId: string, feature: string): Promise
 /**
  * Helper function to get plan key for SUBSCRIPTION_FEATURES
  */
-function getPlanKey(planType: PlanType): 'basic' | 'professional' | 'premium' {
-  const mapping: Record<PlanType, 'basic' | 'professional' | 'premium'> = {
+function getPlanKey(planType: PlanType): 'basic' | 'professional' | 'max' {
+  const mapping: Record<PlanType, 'basic' | 'professional' | 'max'> = {
     'BASIC': 'basic',
     'PROFESSIONAL': 'professional',
-    'PREMIUM': 'premium'
+    'MAX': 'max'
   };
   return mapping[planType];
 }
@@ -496,10 +497,10 @@ export function formatSubscriptionInfo(subscription: UserSubscription): {
   features: string[];
 } {
   // Map internal tier to display key
-  const tierDisplayMap: Record<string, 'basic' | 'professional' | 'premium'> = {
+  const tierDisplayMap: Record<string, 'basic' | 'professional' | 'max'> = {
     'balanced': 'basic',
     'conservative': 'professional',
-    'minimal': 'premium'
+    'minimal': 'max'
   };
   
   const displayKey = tierDisplayMap[subscription.tier] || 'basic';

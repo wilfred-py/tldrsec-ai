@@ -437,7 +437,7 @@ describe('SubscriptionService', () => {
       // Arrange
       const userId = 'user-123';
       const updateData = {
-        planType: 'PREMIUM' as const,
+        planType: 'MAX' as const,
         isActive: true,
         stripeCustomerId: 'cus_123',
         stripeSubscriptionId: 'sub_123'

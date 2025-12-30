@@ -13,6 +13,9 @@ This file provides a chronological index of all completed projects. For detailed
 
 | Date | Project | Status |
 |------|---------|--------|
+| 2025-12-30 | Cloudflare Event Drop Investigation (4hr outage, preventive measures) | ✅ |
+| 2025-12-30 | PREMIUM → MAX Tier Rename (8 files updated, pricing consistency) | ✅ |
+| 2025-12-30 | Landing Page Stripe Redesign Phase 1 (new pricing tiers) | ✅ |
 | 2025-12-30 | Form 144 Email Metrics Enhancement (shares, remaining holdings) | ✅ |
 | 2025-12-30 | Form 144 Minimalist Template (signal-first design, 2-level signals) | ✅ |
 | 2025-12-30 | Email Filing URL Exhibit Exclusion Fix (priority-based document selection) | ✅ |
@@ -125,10 +128,10 @@ This file provides a chronological index of all completed projects. For detailed
 
 ## Archive Statistics
 - **Total Archived Projects**: 32 projects across 6 weekly archives
-- **Current PROGRESS.md Lines**: 537 (threshold: 500)
-- **Last Sync**: 2025-12-30 14:45 AEDT
+- **Current PROGRESS.md Lines**: 346 (threshold: 500)
+- **Last Sync**: 2025-12-30 19:55 AEDT
 - **Archive System**: ✅ ACTIVE
-- **Next Archive Check**: PROGRESS.md above threshold but no projects >30 days old. Next archival opportunity: 2025-12-31 (when Nov 30 projects become eligible).
+- **Next Archive Check**: PROGRESS.md under threshold (346 < 500). Nov 30 projects become archive-eligible on 2025-12-30 (today) when >30 days old.
 
 **Archives**:
 - `01-Dec-2025.md` - Email & verification (8 projects)

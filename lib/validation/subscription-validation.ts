@@ -6,8 +6,9 @@
 import { z } from 'zod';
 
 // Subscription update validation schema
+// Supports legacy (PREMIUM) for backwards compatibility during transition to MAX
 export const subscriptionUpdateSchema = z.object({
-  planType: z.enum(['BASIC', 'PROFESSIONAL', 'PREMIUM']),
+  planType: z.enum(['BASIC', 'PROFESSIONAL', 'MAX', 'PREMIUM']),
   isActive: z.boolean().optional(),
   cancelAtPeriodEnd: z.boolean().optional(),
   stripeCustomerId: z.string().optional(),
@@ -29,10 +30,11 @@ export const filingUsageSchema = z.object({
 });
 
 // Usage period validation schema
+// Supports legacy (PREMIUM) for backwards compatibility during transition to MAX
 export const usagePeriodSchema = z.object({
   periodStart: z.date(),
   periodEnd: z.date(),
-  planType: z.enum(['BASIC', 'PROFESSIONAL', 'PREMIUM']),
+  planType: z.enum(['BASIC', 'PROFESSIONAL', 'MAX', 'PREMIUM']),
   filingLimit: z.number().int().min(1).max(10000),
   filingsUsed: z.number().int().min(0).optional(),
   resetAt: z.date()
