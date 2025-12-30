@@ -13,6 +13,8 @@ This file provides a chronological index of all completed projects. For detailed
 
 | Date | Project | Status |
 |------|---------|--------|
+| 2025-12-29 | Cloudflare Cron Trigger Fix + Health Monitoring (version 2.5.0) | ✅ |
+| 2025-12-29 | Email Summary Quality Improvements (markdown, XML URLs, 8-K schema) | ✅ |
 | 2025-12-29 | Form 4 Email Template Fixes (5 issues: URLs, truncation, gifts, multi-tx) | ✅ |
 | 2025-12-29 | JSON Parsing - Phase 5 Production Validation & Monitoring | ✅ |
 | 2025-12-29 | JSON Parsing - Bracket Repair for AI Failure Modes | ✅ |
@@ -117,8 +119,8 @@ This file provides a chronological index of all completed projects. For detailed
 
 ## Archive Statistics
 - **Total Archived Projects**: 32 projects across 6 weekly archives
-- **Current PROGRESS.md Lines**: 326 (threshold: 500)
-- **Last Sync**: 2025-12-30 00:15 AEDT
+- **Current PROGRESS.md Lines**: 387 (threshold: 500)
+- **Last Sync**: 2025-12-29 20:50 AEDT
 - **Archive System**: ✅ ACTIVE
 - **Next Archive Check**: When PROGRESS.md > 500 lines AND projects > 30 days old
 

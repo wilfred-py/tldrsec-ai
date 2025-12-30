@@ -17,7 +17,7 @@ crons = ["*/5 * * * *", "*/10 * * * *", "0 22 * * *"]
 PUBLIC_URL = "https://tldrsec.app"
 USE_ASYNC_PROCESSING = "false"
 DEBUG_MODE = "true"
-WORKER_VERSION = "2.4.0-stable"
+WORKER_VERSION = "2.5.0-stable"
 RATE_LIMIT_STRATEGY = "adaptive-global-aware"
 
 # IMPORTANT: Sensitive secrets must be added via Cloudflare Dashboard or wrangler CLI:

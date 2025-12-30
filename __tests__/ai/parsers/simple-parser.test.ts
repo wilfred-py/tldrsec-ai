@@ -118,7 +118,9 @@ describe('Simple JSON Parser', () => {
       const response = JSON.stringify({
         company: 'Tesla',
         summary: 'Strong Q4 with record deliveries.',
-        eventType: 'Earnings Results'
+        eventType: 'Earnings Results',
+        keyHighlights: ['Record 1.8M vehicle deliveries', 'Revenue of $25.2B'],
+        sentiment: 'positive'
       });
 
       const result = parseJSONResponse(response, '8-K');
