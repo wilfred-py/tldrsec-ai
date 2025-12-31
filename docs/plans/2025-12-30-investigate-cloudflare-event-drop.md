@@ -407,7 +407,8 @@ Second `*/5` cron executed at 19:20 AEST confirming sustained recovery.
 
 ### Phase 4 Success Criteria
 
-- [x] Slack deployment notifications configured - **[app/api/webhooks/vercel-deployment/route.ts](../../app/api/webhooks/vercel-deployment/route.ts)**
+- [ ] ~~Slack deployment notifications configured~~ - **SKIPPED: Vercel webhooks require Pro plan**
+  - Webhook endpoint created at [app/api/webhooks/vercel-deployment/route.ts](../../app/api/webhooks/vercel-deployment/route.ts) but cannot be used on Hobby plan
 - [x] Monitoring dashboard created or documented - **[docs/runbooks/cloudflare-worker-monitoring.md](../runbooks/cloudflare-worker-monitoring.md)**
 - [x] Alert thresholds defined for event drop detection - **See runbook**
 
