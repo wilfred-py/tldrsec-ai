@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef, memo } from 'react';
+import { useState, useEffect, useRef, memo, useCallback } from 'react';
 import { motion, AnimatePresence, useInView } from 'framer-motion';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -24,6 +24,8 @@ import {
   BarChart3,
   Zap,
   Clock,
+  Maximize2,
+  Minimize2,
 } from 'lucide-react';
 import Link from 'next/link';
 import {
@@ -31,6 +33,13 @@ import {
   staggerItem,
   meshGradientStyle,
 } from '@/lib/animations/landing-animations';
+
+// Constants for animation and layout
+const INITIAL_EMAIL_COUNT = 3;
+const MAX_EMAIL_COUNT = 10;
+const MIN_DELIVERY_INTERVAL = 1000; // 1 second
+const MAX_DELIVERY_INTERVAL = 8000; // 8 seconds (faster delivery for better UX)
+const EMAIL_ROW_HEIGHT = 56; // Fixed height for email rows in pixels
 
 // TypeScript interfaces for component props and data structures
 interface EmailSummary {
@@ -445,13 +454,21 @@ function EmailRow({
   email,
   index,
   isSelected,
+  isChecked,
+  isRead,
+  isNewlyDelivered,
   onSelect,
+  onToggleCheck,
   isInView,
 }: {
   email: typeof curatedSummaries[0];
   index: number;
   isSelected: boolean;
+  isChecked: boolean;
+  isRead: boolean;
+  isNewlyDelivered: boolean;
   onSelect: () => void;
+  onToggleCheck: (e: React.MouseEvent) => void;
   isInView: boolean;
 }) {
   const [isVisible, setIsVisible] = useState(false);
@@ -459,31 +476,44 @@ function EmailRow({
 
   useEffect(() => {
     if (isInView) {
+      // For newly delivered emails, show immediately with drop animation
+      // For initial emails, use staggered reveal
+      const delay = isNewlyDelivered ? 0 : index * 200;
       const timer = setTimeout(() => {
         setIsVisible(true);
-      }, index * 150);
+      }, delay);
       return () => clearTimeout(timer);
     }
-  }, [isInView, index]);
+  }, [isInView, index, isNewlyDelivered]);
 
-  const isNew = index < 3;
+  const isUnread = !isRead;
+
+  // Determine animation based on whether this is a newly delivered email
+  const initialAnimation = isNewlyDelivered
+    ? { opacity: 0, y: -100, scale: 0.95 } // Drop from above for new emails
+    : { opacity: 0, x: -120, y: 80 }; // Slide in from distance for initial emails
+
+  const visibleAnimation = { opacity: 1, x: 0, y: 0, scale: 1 };
 
   return (
     <motion.div
-      initial={{ opacity: 0, x: -30, y: 10 }}
-      animate={isVisible ? { opacity: 1, x: 0, y: 0 } : { opacity: 0, x: -30, y: 10 }}
+      initial={initialAnimation}
+      animate={isVisible ? visibleAnimation : initialAnimation}
       transition={{
-        duration: 0.4,
-        ease: 'easeOut',
+        duration: 0.8,
+        type: 'spring',
+        stiffness: 100,
+        damping: 15,
       }}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
       onClick={onSelect}
-      className={`flex items-center gap-3 px-4 py-3 border-b border-gray-100 cursor-pointer transition-all duration-150 ${
+      style={{ height: `${EMAIL_ROW_HEIGHT}px`, minHeight: `${EMAIL_ROW_HEIGHT}px` }}
+      className={`flex items-center gap-3 px-4 border-b border-gray-100 cursor-pointer transition-colors duration-150 flex-shrink-0 ${
         isSelected
-          ? 'bg-blue-50 border-l-4 border-l-blue-500'
-          : isNew
-          ? 'bg-blue-50/30'
+          ? 'bg-blue-100 border-l-4 border-l-blue-500'
+          : isUnread
+          ? 'bg-blue-50/40'
           : 'bg-white hover:bg-gray-50'
       }`}
     >
@@ -491,11 +521,12 @@ function EmailRow({
       <div className="flex items-center gap-2 flex-shrink-0">
         <motion.div
           animate={{ scale: isHovered ? 1.1 : 1 }}
-          className={`w-4 h-4 rounded border-2 flex items-center justify-center ${
-            isSelected ? 'bg-blue-500 border-blue-500' : 'border-gray-300'
+          onClick={onToggleCheck}
+          className={`w-4 h-4 rounded border-2 flex items-center justify-center cursor-pointer ${
+            isChecked ? 'bg-blue-500 border-blue-500' : 'border-gray-300 hover:border-gray-400'
           }`}
         >
-          {isSelected && (
+          {isChecked && (
             <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
             </svg>
@@ -513,12 +544,12 @@ function EmailRow({
 
       {/* Unread indicator */}
       <div className="w-2 flex-shrink-0">
-        {isNew && <div className="w-2 h-2 rounded-full bg-blue-500" />}
+        {isUnread && <div className="w-2 h-2 rounded-full bg-blue-500" />}
       </div>
 
       {/* Ticker */}
       <div className="w-16 flex-shrink-0">
-        <span className={`font-semibold text-sm ${isNew ? 'text-gray-900' : 'text-gray-700'}`}>
+        <span className={`font-semibold text-sm ${isUnread ? 'text-gray-900' : 'text-gray-600'}`}>
           {email.ticker}
         </span>
       </div>
@@ -528,12 +559,12 @@ function EmailRow({
         {email.filingType}
       </Badge>
 
-      {/* Subject & Preview */}
+      {/* Subject & Preview - expanded for better visibility */}
       <div className="flex-grow min-w-0 flex items-center gap-2">
-        <span className={`text-sm truncate ${isNew ? 'font-semibold text-gray-900' : 'text-gray-700'}`}>
+        <span className={`text-sm ${isUnread ? 'font-semibold text-gray-900' : 'text-gray-600'}`}>
           {email.headline}
         </span>
-        <span className="text-sm text-gray-400 truncate hidden sm:inline">
+        <span className="text-sm text-gray-400 truncate hidden lg:inline">
           — {email.preview}
         </span>
       </div>
@@ -646,7 +677,7 @@ function EmailDetailPanel({
         <p className="text-xs text-gray-500 mb-3 text-center">
           This is a real AI-generated summary. Sign up to receive summaries for your portfolio.
         </p>
-        <Link href="/onboarding">
+        <Link href="/sign-in">
           <Button className="w-full landing-button-gradient">
             Get Summaries Like This
             <ArrowRight className="w-4 h-4 ml-2" />
@@ -655,6 +686,31 @@ function EmailDetailPanel({
       </div>
     </motion.div>
   );
+}
+
+/**
+ * Parse date string like "Oct 28, 2025" or "Nov 4, 2025" to Date object
+ */
+function parseFiledAt(dateStr: string): Date {
+  return new Date(dateStr);
+}
+
+/**
+ * Sort emails by date descending (newest first)
+ */
+function sortByDateDescending(emails: EmailSummary[]): EmailSummary[] {
+  return [...emails].sort((a, b) => {
+    const dateA = parseFiledAt(a.filedAt);
+    const dateB = parseFiledAt(b.filedAt);
+    return dateB.getTime() - dateA.getTime();
+  });
+}
+
+/**
+ * Get random interval between min and max (in milliseconds)
+ */
+function getRandomDeliveryInterval(): number {
+  return Math.floor(Math.random() * (MAX_DELIVERY_INTERVAL - MIN_DELIVERY_INTERVAL + 1)) + MIN_DELIVERY_INTERVAL;
 }
 
 /**
@@ -670,22 +726,148 @@ export const GmailInboxHero = memo<GmailInboxHeroProps>(({ className = '' }) => 
   const [displayedEmails, setDisplayedEmails] = useState<EmailSummary[]>([]);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
-  // Shuffle and pick random 6 emails on mount
-  useEffect(() => {
-    const shuffled = [...curatedSummaries].sort(() => Math.random() - 0.5);
-    setDisplayedEmails(shuffled.slice(0, 6));
+  // Expanded state for fullscreen-like view
+  const [isExpanded, setIsExpanded] = useState(false);
+
+  // Track read and checked (selected) emails
+  const [readEmails, setReadEmails] = useState<Set<number>>(new Set());
+  const [checkedEmails, setCheckedEmails] = useState<Set<number>>(new Set());
+
+  // Track which emails were delivered dynamically (for animation)
+  const [deliveredEmailIds, setDeliveredEmailIds] = useState<Set<number>>(new Set());
+
+  // Pool of remaining emails to deliver
+  const [emailPool, setEmailPool] = useState<EmailSummary[]>([]);
+
+  // Delivery timer ref
+  const deliveryTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Toggle expanded state
+  const handleToggleExpand = useCallback(() => {
+    setIsExpanded(prev => !prev);
   }, []);
 
+  // Calculate unread count for badge
+  const unreadCount = displayedEmails.filter(e => !readEmails.has(e.id)).length;
+
+  // Initialize with sorted emails, start with INITIAL_EMAIL_COUNT
+  useEffect(() => {
+    const sorted = sortByDateDescending(curatedSummaries);
+    const initial = sorted.slice(0, INITIAL_EMAIL_COUNT);
+    const remaining = sorted.slice(INITIAL_EMAIL_COUNT);
+
+    setDisplayedEmails(initial);
+    setEmailPool(remaining);
+  }, []);
+
+  // Schedule next email delivery
+  const scheduleNextDelivery = useCallback(() => {
+    if (deliveryTimerRef.current) {
+      clearTimeout(deliveryTimerRef.current);
+    }
+
+    const interval = getRandomDeliveryInterval();
+
+    deliveryTimerRef.current = setTimeout(() => {
+      setEmailPool(prevPool => {
+        if (prevPool.length === 0) return prevPool;
+
+        setDisplayedEmails(prevDisplayed => {
+          if (prevDisplayed.length >= MAX_EMAIL_COUNT) {
+            return prevDisplayed;
+          }
+
+          const nextEmail = prevPool[0];
+          // Mark this email as newly delivered for animation
+          setDeliveredEmailIds(prev => new Set([...prev, nextEmail.id]));
+
+          // Insert at beginning (newest first) and re-sort
+          const newDisplayed = sortByDateDescending([nextEmail, ...prevDisplayed]);
+          return newDisplayed;
+        });
+
+        return prevPool.slice(1);
+      });
+
+      // Schedule next delivery if there are more emails and we haven't reached max
+      scheduleNextDelivery();
+    }, interval);
+  }, []);
+
+  // Start delivery when component is in view
+  useEffect(() => {
+    if (isInView && emailPool.length > 0) {
+      scheduleNextDelivery();
+    }
+
+    return () => {
+      if (deliveryTimerRef.current) {
+        clearTimeout(deliveryTimerRef.current);
+      }
+    };
+  }, [isInView, emailPool.length, scheduleNextDelivery]);
+
+  // Handle email click - mark as read and select
+  const handleEmailClick = useCallback((email: EmailSummary) => {
+    setSelectedEmail(email);
+    setReadEmails(prev => new Set([...prev, email.id]));
+  }, []);
+
+  // Handle individual email checkbox toggle
+  const handleToggleCheck = useCallback((emailId: number, e: React.MouseEvent) => {
+    e.stopPropagation(); // Prevent email selection
+    setCheckedEmails(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(emailId)) {
+        newSet.delete(emailId);
+      } else {
+        newSet.add(emailId);
+      }
+      return newSet;
+    });
+  }, []);
+
+  // Handle select all checkbox
+  const handleSelectAll = useCallback(() => {
+    if (checkedEmails.size === displayedEmails.length) {
+      // All selected, deselect all
+      setCheckedEmails(new Set());
+    } else {
+      // Select all
+      setCheckedEmails(new Set(displayedEmails.map(e => e.id)));
+    }
+  }, [checkedEmails.size, displayedEmails]);
+
+  // Check if all emails are selected
+  const allChecked = displayedEmails.length > 0 && checkedEmails.size === displayedEmails.length;
+  const someChecked = checkedEmails.size > 0 && checkedEmails.size < displayedEmails.length;
+
   // Simulate refresh with new random emails
-  const handleRefresh = () => {
+  const handleRefresh = useCallback(() => {
     setIsRefreshing(true);
     setSelectedEmail(null);
+    setReadEmails(new Set());
+    setCheckedEmails(new Set());
+    setDeliveredEmailIds(new Set());
+
+    // Clear delivery timer
+    if (deliveryTimerRef.current) {
+      clearTimeout(deliveryTimerRef.current);
+    }
+
     setTimeout(() => {
-      const shuffled = [...curatedSummaries].sort(() => Math.random() - 0.5);
-      setDisplayedEmails(shuffled.slice(0, 6));
+      const sorted = sortByDateDescending(curatedSummaries);
+      const initial = sorted.slice(0, INITIAL_EMAIL_COUNT);
+      const remaining = sorted.slice(INITIAL_EMAIL_COUNT);
+
+      setDisplayedEmails(initial);
+      setEmailPool(remaining);
       setIsRefreshing(false);
+
+      // Restart delivery
+      scheduleNextDelivery();
     }, 800);
-  };
+  }, [scheduleNextDelivery]);
 
   return (
     <section
@@ -791,15 +973,37 @@ export const GmailInboxHero = memo<GmailInboxHeroProps>(({ className = '' }) => 
                   <Mail className="w-4 h-4 text-red-500" />
                   <span className="text-sm font-medium text-gray-700">SEC Filing Summaries</span>
                 </div>
-                <Badge className="bg-red-500 text-white text-xs px-2">
-                  {displayedEmails.filter((_, i) => i < 3).length} new
-                </Badge>
+                {unreadCount > 0 && (
+                  <Badge className="bg-red-500 text-white text-xs px-2">
+                    {unreadCount} new
+                  </Badge>
+                )}
               </div>
 
               {/* Toolbar */}
               <div className="flex items-center gap-2 px-4 py-2 bg-gray-50 border-b border-gray-100">
-                <button className="p-1.5 rounded hover:bg-gray-200 transition-colors">
-                  <input type="checkbox" className="w-4 h-4 rounded" />
+                <button
+                  onClick={handleSelectAll}
+                  className="p-1.5 rounded hover:bg-gray-200 transition-colors flex items-center justify-center"
+                >
+                  <div
+                    className={`w-4 h-4 rounded border-2 flex items-center justify-center cursor-pointer ${
+                      allChecked
+                        ? 'bg-blue-500 border-blue-500'
+                        : someChecked
+                        ? 'bg-blue-200 border-blue-500'
+                        : 'border-gray-300 hover:border-gray-400'
+                    }`}
+                  >
+                    {allChecked && (
+                      <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                      </svg>
+                    )}
+                    {someChecked && !allChecked && (
+                      <div className="w-2 h-0.5 bg-blue-500 rounded" />
+                    )}
+                  </div>
                 </button>
                 <motion.button
                   onClick={handleRefresh}
@@ -824,7 +1028,7 @@ export const GmailInboxHero = memo<GmailInboxHeroProps>(({ className = '' }) => 
               </div>
 
               {/* Email List & Detail Split View */}
-              <div className="flex" style={{ height: '420px' }}>
+              <div className="flex" style={{ height: `${CONTAINER_HEIGHT}px` }}>
                 {/* Email List */}
                 <div
                   className={`overflow-y-auto transition-all duration-300 ${
@@ -848,7 +1052,11 @@ export const GmailInboxHero = memo<GmailInboxHeroProps>(({ className = '' }) => 
                           email={email}
                           index={index}
                           isSelected={selectedEmail?.id === email.id}
-                          onSelect={() => setSelectedEmail(email)}
+                          isChecked={checkedEmails.has(email.id)}
+                          isRead={readEmails.has(email.id)}
+                          isNewlyDelivered={deliveredEmailIds.has(email.id)}
+                          onSelect={() => handleEmailClick(email)}
+                          onToggleCheck={(e) => handleToggleCheck(email.id, e)}
                           isInView={isInView}
                         />
                       ))
