@@ -37,11 +37,16 @@ import {
 // Constants for animation and layout
 const INITIAL_EMAIL_COUNT = 3;
 const MAX_EMAIL_COUNT = 10;
-const MIN_DELIVERY_INTERVAL = 1000; // 1 second
-const MAX_DELIVERY_INTERVAL = 8000; // 8 seconds (faster delivery for better UX)
-const EMAIL_ROW_HEIGHT = 56; // Fixed height for email rows in pixels
+const DELIVERY_INTERVAL = 5000; // Fixed 5 second delivery when not interacting
+const EMAIL_ROW_HEIGHT = 52; // Fixed height for email rows in pixels
 
 // TypeScript interfaces for component props and data structures
+interface FinancialHighlight {
+  metric: string;
+  value: string;
+  change: string;
+}
+
 interface EmailSummary {
   id: number;
   ticker: string;
@@ -52,11 +57,13 @@ interface EmailSummary {
   headline: string;
   preview: string;
   summaryText: string;
-  insights: string[];
-  impactScore: number;
-  risk: string;
-  priority: 'high' | 'medium' | 'low';
-  isRead: boolean;
+  keyTakeaway: string;
+  investorImpact: string;
+  sentiment: 'bullish' | 'bearish' | 'neutral';
+  importance: 'critical' | 'high' | 'medium' | 'low';
+  icon: React.ComponentType<{ className?: string }>;
+  isStarred: boolean;
+  financialHighlights: FinancialHighlight[];
 }
 
 interface GmailInboxHeroProps {
@@ -517,8 +524,8 @@ function EmailRow({
           : 'bg-white hover:bg-gray-50'
       }`}
     >
-      {/* Checkbox area */}
-      <div className="flex items-center gap-2 flex-shrink-0">
+      {/* Checkbox area - fixed width for alignment */}
+      <div className="flex items-center gap-2 flex-shrink-0 w-14">
         <motion.div
           animate={{ scale: isHovered ? 1.1 : 1 }}
           onClick={onToggleCheck}
@@ -542,34 +549,36 @@ function EmailRow({
         </motion.button>
       </div>
 
-      {/* Unread indicator */}
-      <div className="w-2 flex-shrink-0">
+      {/* Unread indicator - fixed width for alignment */}
+      <div className="w-3 flex-shrink-0 flex items-center justify-center">
         {isUnread && <div className="w-2 h-2 rounded-full bg-blue-500" />}
       </div>
 
-      {/* Ticker */}
-      <div className="w-16 flex-shrink-0">
+      {/* Ticker - fixed width for alignment */}
+      <div className="w-14 flex-shrink-0">
         <span className={`font-semibold text-sm ${isUnread ? 'text-gray-900' : 'text-gray-600'}`}>
           {email.ticker}
         </span>
       </div>
 
-      {/* Filing Type Badge */}
-      <Badge className={`text-[10px] px-1.5 py-0 flex-shrink-0 ${getFilingBadgeColor(email.filingType)}`}>
-        {email.filingType}
-      </Badge>
+      {/* Filing Type Badge - fixed width for alignment */}
+      <div className="w-16 flex-shrink-0">
+        <Badge className={`text-[10px] px-1.5 py-0 ${getFilingBadgeColor(email.filingType)}`}>
+          {email.filingType}
+        </Badge>
+      </div>
 
-      {/* Subject & Preview - expanded for better visibility */}
-      <div className="flex-grow min-w-0 flex items-center gap-2">
-        <span className={`text-sm ${isUnread ? 'font-semibold text-gray-900' : 'text-gray-600'}`}>
+      {/* Subject & Preview - flex grow takes remaining space */}
+      <div className="flex-grow min-w-0 flex items-center gap-2 overflow-hidden">
+        <span className={`text-sm truncate ${isUnread ? 'font-semibold text-gray-900' : 'text-gray-600'}`}>
           {email.headline}
         </span>
-        <span className="text-sm text-gray-400 truncate hidden lg:inline">
+        <span className="text-sm text-gray-400 truncate hidden lg:inline flex-shrink">
           — {email.preview}
         </span>
       </div>
 
-      {/* Time */}
+      {/* Time - fixed width for alignment */}
       <div className="flex-shrink-0 text-xs text-gray-400 w-20 text-right hidden md:block">
         {email.timeAgo}
       </div>
@@ -707,10 +716,10 @@ function sortByDateDescending(emails: EmailSummary[]): EmailSummary[] {
 }
 
 /**
- * Get random interval between min and max (in milliseconds)
+ * Get fixed delivery interval (5 seconds)
  */
-function getRandomDeliveryInterval(): number {
-  return Math.floor(Math.random() * (MAX_DELIVERY_INTERVAL - MIN_DELIVERY_INTERVAL + 1)) + MIN_DELIVERY_INTERVAL;
+function getDeliveryInterval(): number {
+  return DELIVERY_INTERVAL;
 }
 
 /**
@@ -760,13 +769,13 @@ export const GmailInboxHero = memo<GmailInboxHeroProps>(({ className = '' }) => 
     setEmailPool(remaining);
   }, []);
 
-  // Schedule next email delivery
+  // Schedule next email delivery - only delivers when summary panel is closed
   const scheduleNextDelivery = useCallback(() => {
     if (deliveryTimerRef.current) {
       clearTimeout(deliveryTimerRef.current);
     }
 
-    const interval = getRandomDeliveryInterval();
+    const interval = getDeliveryInterval();
 
     deliveryTimerRef.current = setTimeout(() => {
       setEmailPool(prevPool => {
@@ -781,7 +790,7 @@ export const GmailInboxHero = memo<GmailInboxHeroProps>(({ className = '' }) => 
           // Mark this email as newly delivered for animation
           setDeliveredEmailIds(prev => new Set([...prev, nextEmail.id]));
 
-          // Insert at beginning (newest first) and re-sort
+          // Add new email to top and re-sort by date descending
           const newDisplayed = sortByDateDescending([nextEmail, ...prevDisplayed]);
           return newDisplayed;
         });
@@ -789,23 +798,34 @@ export const GmailInboxHero = memo<GmailInboxHeroProps>(({ className = '' }) => 
         return prevPool.slice(1);
       });
 
-      // Schedule next delivery if there are more emails and we haven't reached max
+      // Schedule next delivery
       scheduleNextDelivery();
     }, interval);
   }, []);
 
-  // Start delivery when component is in view
+  // Stop delivery timer
+  const stopDelivery = useCallback(() => {
+    if (deliveryTimerRef.current) {
+      clearTimeout(deliveryTimerRef.current);
+      deliveryTimerRef.current = null;
+    }
+  }, []);
+
+  // Control delivery based on summary panel state and view
+  // Pause delivery when summary is open, resume when closed
   useEffect(() => {
-    if (isInView && emailPool.length > 0) {
+    if (selectedEmail) {
+      // Summary is open - stop delivery
+      stopDelivery();
+    } else if (isInView && emailPool.length > 0 && displayedEmails.length < MAX_EMAIL_COUNT) {
+      // Summary closed, in view, emails remaining - start/resume delivery
       scheduleNextDelivery();
     }
 
     return () => {
-      if (deliveryTimerRef.current) {
-        clearTimeout(deliveryTimerRef.current);
-      }
+      stopDelivery();
     };
-  }, [isInView, emailPool.length, scheduleNextDelivery]);
+  }, [selectedEmail, isInView, emailPool.length, displayedEmails.length, scheduleNextDelivery, stopDelivery]);
 
   // Handle email click - mark as read and select
   const handleEmailClick = useCallback((email: EmailSummary) => {
@@ -838,9 +858,15 @@ export const GmailInboxHero = memo<GmailInboxHeroProps>(({ className = '' }) => 
     }
   }, [checkedEmails.size, displayedEmails]);
 
+  // Clear all checked emails (X button)
+  const handleClearSelection = useCallback(() => {
+    setCheckedEmails(new Set());
+  }, []);
+
   // Check if all emails are selected
   const allChecked = displayedEmails.length > 0 && checkedEmails.size === displayedEmails.length;
   const someChecked = checkedEmails.size > 0 && checkedEmails.size < displayedEmails.length;
+  const hasSelection = checkedEmails.size > 0;
 
   // Simulate refresh with new random emails
   const handleRefresh = useCallback(() => {
@@ -959,9 +985,33 @@ export const GmailInboxHero = memo<GmailInboxHeroProps>(({ className = '' }) => 
             initial={{ opacity: 0, y: 30 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6, delay: 0.3 }}
-            className="relative"
+            className={`relative ${isExpanded ? 'fixed inset-4 z-50' : ''}`}
+            layout
           >
-            <div className="bg-white rounded-2xl shadow-2xl overflow-hidden border border-gray-200">
+            {/* Backdrop for expanded view */}
+            <AnimatePresence>
+              {isExpanded && (
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  className="fixed inset-0 bg-black/50 z-40"
+                  onClick={handleToggleExpand}
+                />
+              )}
+            </AnimatePresence>
+
+            <motion.div
+              layout
+              className={`bg-white rounded-2xl shadow-2xl overflow-hidden border border-gray-200 relative ${
+                isExpanded ? 'z-50 h-full' : ''
+              }`}
+              style={!isExpanded ? {
+                // Viewport-responsive sizing: 90vw on mobile, 50vw on desktop, max 800px
+                width: 'min(90vw, max(400px, 50vw))',
+                maxWidth: '800px',
+              } : undefined}
+            >
               {/* Gmail Header */}
               <div className="flex items-center gap-3 px-4 py-3 bg-gray-50 border-b border-gray-200">
                 <div className="flex gap-1.5">
@@ -978,13 +1028,27 @@ export const GmailInboxHero = memo<GmailInboxHeroProps>(({ className = '' }) => 
                     {unreadCount} new
                   </Badge>
                 )}
+                {/* Expand/Collapse Button */}
+                <button
+                  onClick={handleToggleExpand}
+                  className="p-1.5 rounded hover:bg-gray-200 transition-colors"
+                  title={isExpanded ? 'Minimize' : 'Expand'}
+                >
+                  {isExpanded ? (
+                    <Minimize2 className="w-4 h-4 text-gray-500" />
+                  ) : (
+                    <Maximize2 className="w-4 h-4 text-gray-500" />
+                  )}
+                </button>
               </div>
 
               {/* Toolbar */}
               <div className="flex items-center gap-2 px-4 py-2 bg-gray-50 border-b border-gray-100">
+                {/* Master checkbox for select all/deselect all */}
                 <button
                   onClick={handleSelectAll}
                   className="p-1.5 rounded hover:bg-gray-200 transition-colors flex items-center justify-center"
+                  title={allChecked ? 'Deselect all' : 'Select all'}
                 >
                   <div
                     className={`w-4 h-4 rounded border-2 flex items-center justify-center cursor-pointer ${
@@ -1005,36 +1069,59 @@ export const GmailInboxHero = memo<GmailInboxHeroProps>(({ className = '' }) => 
                     )}
                   </div>
                 </button>
+
+                {/* X button to clear selection - only shows when emails are selected */}
+                <AnimatePresence>
+                  {hasSelection && (
+                    <motion.button
+                      initial={{ opacity: 0, scale: 0.8 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      exit={{ opacity: 0, scale: 0.8 }}
+                      transition={{ duration: 0.15 }}
+                      onClick={handleClearSelection}
+                      className="p-1.5 rounded hover:bg-red-100 transition-colors flex items-center gap-1"
+                      title="Clear selection"
+                    >
+                      <X className="w-4 h-4 text-red-500" />
+                      <span className="text-xs text-red-500 font-medium">{checkedEmails.size}</span>
+                    </motion.button>
+                  )}
+                </AnimatePresence>
+
                 <motion.button
                   onClick={handleRefresh}
                   animate={{ rotate: isRefreshing ? 360 : 0 }}
                   transition={{ duration: 0.8 }}
                   className="p-1.5 rounded hover:bg-gray-200 transition-colors"
+                  title="Refresh"
                 >
                   <RefreshCw className="w-4 h-4 text-gray-500" />
                 </motion.button>
-                <button className="p-1.5 rounded hover:bg-gray-200 transition-colors">
+                <button className="p-1.5 rounded hover:bg-gray-200 transition-colors" title="Archive">
                   <Archive className="w-4 h-4 text-gray-500" />
                 </button>
-                <button className="p-1.5 rounded hover:bg-gray-200 transition-colors">
+                <button className="p-1.5 rounded hover:bg-gray-200 transition-colors" title="Delete">
                   <Trash2 className="w-4 h-4 text-gray-500" />
                 </button>
                 <div className="h-5 w-px bg-gray-300 mx-1" />
-                <button className="p-1.5 rounded hover:bg-gray-200 transition-colors">
+                <button className="p-1.5 rounded hover:bg-gray-200 transition-colors" title="More options">
                   <MoreVertical className="w-4 h-4 text-gray-500" />
                 </button>
                 <div className="flex-grow" />
                 <span className="text-xs text-gray-400">1-{displayedEmails.length} of {curatedSummaries.length}</span>
               </div>
 
-              {/* Email List & Detail Split View */}
-              <div className="flex" style={{ height: `${CONTAINER_HEIGHT}px` }}>
-                {/* Email List */}
-                <div
-                  className={`overflow-y-auto transition-all duration-300 ${
-                    selectedEmail ? 'w-2/5 border-r border-gray-100' : 'w-full'
-                  }`}
-                >
+              {/* Email List & Detail Overlay */}
+              <div
+                className="relative flex"
+                style={{
+                  // Viewport-responsive height: 60vh on mobile, 70vh on desktop when expanded
+                  // Default: 50vh on mobile, 560px capped on desktop
+                  height: isExpanded ? 'calc(100% - 110px)' : 'clamp(300px, 50vh, 560px)',
+                }}
+              >
+                {/* Email List - Always full width, never shrinks */}
+                <div className="w-full overflow-y-auto">
                   <AnimatePresence mode="wait">
                     {isRefreshing ? (
                       <motion.div
@@ -1064,15 +1151,15 @@ export const GmailInboxHero = memo<GmailInboxHeroProps>(({ className = '' }) => 
                   </AnimatePresence>
                 </div>
 
-                {/* Detail Panel */}
+                {/* Detail Panel - Overlays from right, doesn't push inbox */}
                 <AnimatePresence>
                   {selectedEmail && (
                     <motion.div
-                      initial={{ width: 0, opacity: 0 }}
-                      animate={{ width: '60%', opacity: 1 }}
-                      exit={{ width: 0, opacity: 0 }}
-                      transition={{ duration: 0.2 }}
-                      className="overflow-hidden"
+                      initial={{ x: '100%', opacity: 0 }}
+                      animate={{ x: 0, opacity: 1 }}
+                      exit={{ x: '100%', opacity: 0 }}
+                      transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+                      className="absolute inset-0 bg-white z-10 md:left-auto md:w-[65%] lg:w-[60%] shadow-xl border-l border-gray-200"
                     >
                       <EmailDetailPanel
                         email={selectedEmail}
@@ -1093,15 +1180,17 @@ export const GmailInboxHero = memo<GmailInboxHeroProps>(({ className = '' }) => 
                   Updated in real-time
                 </div>
               </div>
-            </div>
+            </motion.div>
 
-            {/* Decorative elements */}
-            <div
-              className="absolute -top-8 -right-8 w-32 h-32 rounded-full opacity-30 pointer-events-none"
-              style={{
-                background: 'radial-gradient(circle, rgba(0, 121, 242, 0.2) 0%, transparent 70%)',
-              }}
-            />
+            {/* Decorative elements - hidden when expanded */}
+            {!isExpanded && (
+              <div
+                className="absolute -top-8 -right-8 w-32 h-32 rounded-full opacity-30 pointer-events-none"
+                style={{
+                  background: 'radial-gradient(circle, rgba(0, 121, 242, 0.2) 0%, transparent 70%)',
+                }}
+              />
+            )}
           </motion.div>
         </div>
       </div>
