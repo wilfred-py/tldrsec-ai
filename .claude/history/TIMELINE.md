@@ -13,6 +13,14 @@ This file provides a chronological index of all completed projects. For detailed
 
 | Date | Project | Status |
 |------|---------|--------|
+| 2025-12-31 | Privacy Policy & Terms of Service Pages (legal compliance) | ✅ |
+| 2025-12-31 | Onboarding Page UI Fixes (nav hidden, lighter card borders) | ✅ |
+| 2025-12-31 | Landing Page V2 Redesign (8-phase TDD, light theme, A/B testing) | ✅ |
+| 2025-12-31 | Onboarding Page jsdom Fix (server-only library bundling) | ✅ |
+| 2025-12-31 | Email URL Fix - Revert XSLT Transformation (index URLs reliable) | ✅ |
+| 2025-12-31 | Form 4 Email Data Corruption Fix (COIN transaction type, deduplication) | ✅ |
+| 2025-12-31 | Form 4 Multi-Transaction Extraction Fix (Sale+Gift, journalist-style) | ✅ |
+| 2025-12-31 | 8-K and Form 144 Email Template Fixes (signal badges, share extraction) | ✅ |
 | 2025-12-31 | Landing Page Playwright Feature Testing (billing toggle, CTAs, dialogs) | ✅ |
 | 2025-12-31 | Dev Env Fix (COOKIE_SECRET + tickersConfirmedAt migration) | ✅ |
 | 2025-12-31 | Landing Page Stripe Redesign - Implementation Verified (all 6 phases) | ✅ |
@@ -132,10 +140,10 @@ This file provides a chronological index of all completed projects. For detailed
 
 ## Archive Statistics
 - **Total Archived Projects**: 32 projects across 6 weekly archives
-- **Current PROGRESS.md Lines**: 376 (threshold: 500)
-- **Last Sync**: 2025-12-31 (Playwright feature testing session)
+- **Current PROGRESS.md Lines**: 668 (threshold: 500)
+- **Last Sync**: 2025-12-31 (Privacy Policy & Terms of Service session)
 - **Archive System**: ✅ ACTIVE
-- **Next Archive Check**: PROGRESS.md under threshold (376 < 500). No archival needed.
+- **Next Archive Check**: Above threshold - will archive projects >30 days old when available
 
 **Archives**:
 - `01-Dec-2025.md` - Email & verification (8 projects)
