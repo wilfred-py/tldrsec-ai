@@ -1,72 +1,102 @@
 # Project Progress
 
-**Date**: 2025-12-30
-**Branch**: investigation/cloudflare-event-drop-2025-12-30
-**Status**: Pipeline HEALTHY - Cloudflare Event Drop Investigation COMPLETE
+**Date**: 2025-12-31
+**Branch**: feature/premium-to-max-rename
+**Status**: Pipeline HEALTHY - All systems operational, dev env fixed
 
 ---
 
-## Current Session: Cloudflare Event Drop Investigation ✅ RESOLVED (2025-12-30)
+## Current Session: Landing Page Stripe Redesign - Implementation Verified ✅
 
-**Branch**: `investigation/cloudflare-event-drop-2025-12-30`
+Full verification of the landing page Stripe redesign implementation from `docs/plans/2025-12-30-landing-page-stripe-redesign.md`.
+
+### Implementation Status: ALL 6 PHASES COMPLETE
+
+**Phase 1: Stripe Configuration ($99/$139 with Annual Billing) ✅**
+- `lib/stripe.ts` - SUBSCRIPTION_PLANS with FREE ($0), PRO ($99/$990), MAX ($139/$1390)
+- Helper functions: `getPlanConfig`, `calculateSavingsPercentage`, `calculateAnnualSavings`
+
+**Phase 2: Ticker Confirmation & Quarterly Earnings Email ✅**
+- `app/api/user/tickers/confirm/route.ts` - API with 1-minute grace period
+- `lib/email/quarterly-earnings-service.ts` - Email service for quarterly summaries
+- `components/dashboard/ticker-confirmation-section.tsx` - Dashboard confirmation UI
+- `components/dashboard/upgrade-cta-section.tsx` - Upgrade CTAs for Free/Pro users
+
+**Phase 3: Waitlist Migration & Feature Flag ✅**
+- `app/waitlist/page.tsx` - Waitlist preserved at /waitlist route
+- `app/page.tsx` - Feature flag redirect when `NEXT_PUBLIC_LANDING_PAGE_ENABLED !== 'true'`
+
+**Phase 4: Landing Page Components with Curated Filings ✅**
+- `lib/data/curated-filings.ts` - 6 curated filings (AAPL, MSFT, NVDA, GOOGL, TSLA, BRK.A)
+- `components/landing/new-landing-page.tsx` - Main landing page with all sections
+- `components/landing/sections/filing-preview-card.tsx` - Dialog shows FULL summary
+- `components/landing/sections/pricing-section.tsx` - Monthly/Annual billing toggle
+
+**Phase 5: Stripe Checkout with Annual Billing ✅**
+- Pricing CTAs link to `/sign-up?plan={plan}&interval={billing}`
+- MAX tier goes direct to onboarding (no "contact sales")
+
+**Phase 6: Final Integration & Testing ✅**
+- 28/28 tests passing (16 Stripe + 12 Ticker Confirmation)
+- Lint: CLEAN
+- Build: SUCCESS
+
+### Pending: Production Readiness (Manual Steps)
+
+Environment variables need to be set in Vercel:
+- `STRIPE_PRO_MONTHLY_PRICE_ID`
+- `STRIPE_PRO_ANNUAL_PRICE_ID`
+- `STRIPE_MAX_MONTHLY_PRICE_ID`
+- `STRIPE_MAX_ANNUAL_PRICE_ID`
+- `NEXT_PUBLIC_LANDING_PAGE_ENABLED=false` (initially)
+
+Stripe Dashboard setup:
+- 4 new prices to be created (Pro/Max × Monthly/Annual)
+
+---
+
+## Previous Session: Premium → Max Tier Rename ✅ COMPLETE
+
+Renamed "Premium" tier to "Max" throughout the codebase for brand consistency.
+
+**Files Modified**:
+- `components/landing/sections/pricing-section.tsx` - Changed CTA text from "Start Premium" to "Start Max"
+- `docs/plans/2025-12-30-landing-page-stripe-redesign.md` - Updated all Premium references to Max
+
+**Already Correctly Implemented** (no changes needed):
+- `lib/stripe.ts` - Already uses MAX naming
+- `__tests__/config/stripe-pricing.test.ts` - Already uses MAX naming
+- `components/dashboard/upgrade-cta-section.tsx` - Already uses MAX naming
+- `lib/validation/subscription-validation.ts` - Supports both MAX and PREMIUM for backwards compatibility
+
+**Verification**:
+- ✅ 16/16 Stripe pricing tests passing
+- ✅ Lint clean
+- ✅ Build SUCCESS
+
+---
+
+## Recently Completed (Last 30 Days)
+
+### Cloudflare Event Drop Investigation ✅ (2025-12-30)
 
 Investigated and resolved a Cloudflare Worker cron schedule failure that caused ~4 hour pipeline outage.
 
-### Issue Timeline
-- **15:10:25 AEST**: Pipeline stopped (last ASYNC_DISCOVER_FILINGS job)
-- **15:07:27 & 15:33:00 AEST**: Vercel deployments during window
-- **19:15:14 AEST**: Pipeline restored after redeployment
+**Root Cause**: Cloudflare `*/5 * * * *` cron schedule stopped triggering while `*/10 * * * *` continued working.
+**Resolution**: Redeployed Cloudflare Worker with `npx wrangler deploy`
+**Downtime**: 15:10:25 AEST to 19:15:14 AEST (~4 hours)
 
-### Root Cause
-**Cloudflare `*/5 * * * *` cron schedule stopped triggering** while `*/10 * * * *` continued working.
-
-**Evidence**:
-1. `*/10 * * * *` interval summary cron triggered successfully
-2. `*/5 * * * *` pipeline processing cron NOT triggering
-3. No heartbeat messages since 15:10 AEST
-4. Worker script healthy (responded to other cron schedules)
-5. No circuit breaker or HMAC auth failures (red herrings)
-
-### Resolution
-Redeployed Cloudflare Worker with `npx wrangler deploy`:
-```
-✨ Successfully published your script
-  Scheduled: */5 * * * *
-  Scheduled: */10 * * * *
-  Scheduled: 0 22 * * *
-```
-
-### Verification
-- ✅ `*/5 * * * *` cron triggered at 19:15:14 AEST
-- ✅ All 5 pipeline steps executed successfully
-- ✅ Database confirmed new ASYNC_DISCOVER_FILINGS jobs created
-- ✅ ~4 hour 5 minute downtime resolved
-
-### Documentation Created
-- `thoughts/shared/research/2025-12-30-e2e-pipeline-cloudflare-event-drop.md` - Comprehensive architecture docs
-- `docs/plans/2025-12-30-investigate-cloudflare-event-drop.md` - Investigation plan with findings
+**Preventive Measures Implemented**:
+- `app/api/health/deployment/route.ts` - Deployment health check endpoint
+- `cloudflare-cron/index.js` v2.6.0 - Circuit breaker visibility in health endpoint
+- `docs/runbooks/cloudflare-worker-monitoring.md` - Monitoring runbook with alert thresholds
 - `docs/incidents/2025-12-30-cloudflare-cron-schedule-failure.md` - Incident report
-- `docs/runbooks/cloudflare-worker-monitoring.md` - Monitoring runbook with queries and thresholds
 
-### Preventive Measures (Implemented)
-1. ✅ **Deployment health check endpoint** - `app/api/health/deployment/route.ts`
-   - Verifies database connection, environment config, and warmup status
-   - Returns 503 if not ready for Cloudflare Worker to detect
-2. ✅ **Circuit breaker visibility** - Updated `cloudflare-cron/index.js` v2.6.0
-   - Health endpoint now shows circuit breaker state from KV storage
-   - Returns 503 if circuit breaker is OPEN
-3. ✅ **Slack deployment notifications** - `app/api/webhooks/vercel-deployment/route.ts`
-   - Webhook endpoint for Vercel deployment events
-   - Posts to Slack when production deploys complete/fail
-4. ✅ **Monitoring runbook** - `docs/runbooks/cloudflare-worker-monitoring.md`
-   - Alert thresholds for event drop detection
-   - Troubleshooting procedures
-   - Cloudflare Analytics queries
-5. ⏭️ **HMAC tolerance** - Evaluated and SKIPPED (not root cause)
+**Skipped**: Vercel deployment webhook (requires Pro plan), HMAC tolerance (not root cause)
 
 ---
 
-## Previous Session: JSON Parsing Pipeline Simplification - Phase 5 ✅ COMPLETE
+### JSON Parsing Pipeline Simplification - Phase 5 ✅ COMPLETE
 
 Implementing plan from `docs/plans/2025-12-28-simplify-json-parsing-pipeline.md` - applying Elon Musk's 5-step engineering algorithm to achieve 100% parsing accuracy.
 
@@ -342,5 +372,5 @@ Fixed critical RLS and performance issues from Supabase audit.
 
 ---
 
-*Last Updated: 2025-12-30 19:55 AEDT*
+*Last Updated: 2025-12-31 (Session: Fixed dev env - COOKIE_SECRET + tickersConfirmedAt migration)*
 *Older completed projects archived to .claude/history/*

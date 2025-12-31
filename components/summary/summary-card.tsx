@@ -43,8 +43,10 @@ export function SummaryCard({
 }: SummaryCardProps) {
   // Format the filing type for display
   const formatFilingType = (type: string) => {
+    const upperType = type.toUpperCase();
+
     // Common filing types with special formatting
-    switch (type.toUpperCase()) {
+    switch (upperType) {
       case '10-K':
       case '10K':
         return '10-K';
@@ -54,6 +56,23 @@ export function SummaryCard({
       case '8-K':
       case '8K':
         return '8-K';
+      case 'SCHEDULE':
+      case 'SC 13G':
+      case 'SC13G':
+      case 'SCHEDULE 13G':
+        return 'Schedule 13G';
+      case 'SC 13G-A':
+      case 'SC13G-A':
+      case 'SCHEDULE 13G/A':
+        return 'Schedule 13G/A';
+      case 'SC 13D':
+      case 'SC13D':
+      case 'SCHEDULE 13D':
+        return 'Schedule 13D';
+      case 'SC 13D-A':
+      case 'SC13D-A':
+      case 'SCHEDULE 13D/A':
+        return 'Schedule 13D/A';
       default:
         return type;
     }
