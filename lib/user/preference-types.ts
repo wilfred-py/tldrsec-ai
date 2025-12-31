@@ -1,4 +1,4 @@
-import { NotificationPreference } from '@/lib/email/notification-service';
+import { NotificationPreference } from '@/lib/email/notification-types';
 
 /**
  * Notification preferences for annual report filings

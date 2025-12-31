@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { CheckCircle, ArrowRight, Building2, Cpu, Heart, Car, ShoppingCart, Zap, Home, Banknote, Search, Loader2 } from "lucide-react";
 import { toast } from "sonner";
-import { NotificationPreference } from "@/lib/email/notification-service";
+import { NotificationPreference } from "@/lib/email/notification-types";
 import { 
   FilingTypePreferences, 
   NotificationContentPreferences,
@@ -420,7 +420,7 @@ export default function OnboardingPage() {
                             className={`cursor-pointer rounded-lg border-2 p-4 transition-all hover:shadow-md ${
                               isSelected
                                 ? "border-primary bg-primary/10 shadow-md"
-                                : "border-border hover:border-primary/50"
+                                : "border-gray-200 hover:border-primary/50 dark:border-gray-700"
                             }`}
                             onClick={() => handleSectorToggle(sector.id)}
                           >
@@ -515,8 +515,8 @@ export default function OnboardingPage() {
                               isSelected
                                 ? "border-primary bg-primary/10 shadow-sm"
                                 : isDisabled
-                                  ? "border-border bg-muted/50 opacity-50"
-                                  : "border-border hover:border-primary/50 hover:shadow-sm"
+                                  ? "border-gray-200 bg-muted/50 opacity-50 dark:border-gray-700"
+                                  : "border-gray-200 hover:border-primary/50 hover:shadow-sm dark:border-gray-700"
                             }`}
                             onClick={() => !isDisabled && handleEquityToggle(equity.symbol)}
                           >
