@@ -44,6 +44,21 @@
   --fintech-bg-subtle: oklch(0.99 0.002 232); /* Ultra-light blue bg */
   --fintech-text-primary: oklch(0.15 0.01 232); /* Near black with blue hint */
   --fintech-text-secondary: oklch(0.45 0.05 232); /* Professional gray-blue */
+
+  /* Landing Page V2 - Light Theme */
+  --landing-primary: #0079F2;           /* Stripe-inspired blue */
+  --landing-primary-hover: #0066CC;     /* Darker on hover */
+  --landing-primary-light: #E8F4FD;     /* Light blue backgrounds */
+  --landing-secondary: #1A1A2E;         /* Dark text */
+  --landing-text: #374151;              /* Body text gray */
+  --landing-text-muted: #6B7280;        /* Muted text */
+  --landing-bg: #FFFFFF;                /* White background */
+  --landing-bg-subtle: #F9FAFB;         /* Subtle gray background */
+  --landing-border: #E5E7EB;            /* Light borders */
+  --landing-success: #10B981;           /* Green for positive metrics */
+  --landing-accent: #8B5CF6;            /* Purple accent */
+  --landing-gradient-start: #0079F2;    /* Gradient start */
+  --landing-gradient-end: #8B5CF6;      /* Gradient end */
 }
 
 .dark {
@@ -95,6 +110,150 @@
   }
   body {
     @apply bg-background text-foreground;
+  }
+}
+
+/* Landing Page V2 - Typography & Component Styles */
+@layer components {
+  .landing-display {
+    @apply text-5xl md:text-6xl lg:text-7xl font-bold tracking-tight leading-[1.1];
+    color: var(--landing-secondary);
+  }
+
+  .landing-heading {
+    @apply text-3xl md:text-4xl lg:text-5xl font-bold tracking-tight;
+    color: var(--landing-secondary);
+  }
+
+  .landing-subheading {
+    @apply text-xl md:text-2xl font-medium;
+    color: var(--landing-text);
+  }
+
+  .landing-body {
+    @apply text-base md:text-lg;
+    color: var(--landing-text);
+    line-height: 1.7;
+  }
+
+  .landing-body-large {
+    @apply text-lg md:text-xl;
+    color: var(--landing-text);
+    line-height: 1.6;
+  }
+
+  .landing-caption {
+    @apply text-sm;
+    color: var(--landing-text-muted);
+  }
+
+  /* Gradient text effect */
+  .landing-gradient-text {
+    @apply bg-clip-text text-transparent;
+    background-image: linear-gradient(
+      135deg,
+      var(--landing-primary) 0%,
+      var(--landing-accent) 100%
+    );
+  }
+
+  /* Primary button style */
+  .landing-button-primary {
+    @apply h-12 px-8 text-base font-semibold rounded-lg;
+    background-color: var(--landing-primary);
+    color: white;
+    box-shadow: 0 4px 14px 0 rgba(0, 121, 242, 0.39);
+    transition: all 0.2s ease;
+  }
+
+  .landing-button-primary:hover {
+    background-color: var(--landing-primary-hover);
+    box-shadow: 0 6px 20px 0 rgba(0, 121, 242, 0.5);
+    transform: translateY(-1px);
+  }
+
+  /* Secondary button style */
+  .landing-button-secondary {
+    @apply h-12 px-8 text-base font-semibold rounded-lg;
+    background-color: transparent;
+    color: var(--landing-secondary);
+    border: 1px solid var(--landing-border);
+    transition: all 0.2s ease;
+  }
+
+  .landing-button-secondary:hover {
+    background-color: var(--landing-bg-subtle);
+    border-color: var(--landing-text-muted);
+  }
+
+  /* Gradient button style - matches landing-gradient-text colors */
+  .landing-button-gradient {
+    @apply h-12 px-8 text-base font-semibold rounded-lg text-white;
+    background: linear-gradient(
+      135deg,
+      var(--landing-primary) 0%,
+      var(--landing-accent) 100%
+    ) !important;
+    color: white !important;
+    box-shadow: 0 4px 14px 0 rgba(0, 121, 242, 0.39);
+    transition: all 0.2s ease;
+  }
+
+  .landing-button-gradient:hover {
+    box-shadow: 0 6px 20px 0 rgba(139, 92, 246, 0.5);
+    transform: translateY(-1px);
+    filter: brightness(1.05);
+  }
+
+  /* Outline button style - more visible than secondary */
+  .landing-button-outline {
+    @apply h-12 px-8 text-base font-semibold rounded-lg;
+    background-color: transparent;
+    color: var(--landing-text);
+    border: 2px solid var(--landing-text-muted);
+    transition: all 0.2s ease;
+  }
+
+  .landing-button-outline:hover {
+    background-color: var(--landing-bg-subtle);
+    border-color: var(--landing-secondary);
+    color: var(--landing-secondary);
+  }
+
+  /* Card styles */
+  .landing-card {
+    @apply rounded-2xl p-6 md:p-8;
+    background-color: var(--landing-bg);
+    border: 1px solid var(--landing-border);
+    box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1);
+    transition: all 0.3s ease;
+  }
+
+  .landing-card:hover {
+    box-shadow: 0 10px 40px -10px rgba(0, 0, 0, 0.1);
+    border-color: var(--landing-primary-light);
+  }
+
+  /* Badge styles */
+  .landing-badge {
+    @apply inline-flex items-center px-3 py-1 rounded-full text-sm font-medium;
+    background-color: var(--landing-primary-light);
+    color: var(--landing-primary);
+  }
+
+  /* Trust metric styles */
+  .landing-metric {
+    @apply flex items-center gap-2;
+  }
+
+  .landing-metric-value {
+    @apply text-lg font-bold;
+    color: var(--landing-secondary);
+  }
+
+  .landing-metric-label {
+    @apply text-sm;
+    color: var(--landing-text-muted);
   }
 }
 

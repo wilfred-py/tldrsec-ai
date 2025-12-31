@@ -1,3 +1,6 @@
+"use client";
+
+import { usePathname } from "next/navigation";
 import { Navigation } from "@/components/navigation";
 
 export default function AuthLayout({
@@ -5,9 +8,12 @@ export default function AuthLayout({
 }: {
   children: React.ReactNode;
 }) {
+  const pathname = usePathname();
+  const isOnboarding = pathname === "/onboarding";
+
   return (
     <>
-      <Navigation />
+      {!isOnboarding && <Navigation />}
       <div className="min-h-screen">
         {children}
       </div>

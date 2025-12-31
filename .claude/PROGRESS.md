@@ -1,12 +1,280 @@
 # Project Progress
 
 **Date**: 2025-12-31
-**Branch**: feature/premium-to-max-rename
-**Status**: Pipeline HEALTHY - All systems operational, dev env fixed
+**Branch**: feature/landing-page-v2-redesign
+**Status**: Pipeline HEALTHY - Legal pages created
 
 ---
 
-## Current Session: Landing Page Playwright Feature Testing ✅
+## Current Session: Privacy Policy & Terms of Service Pages
+
+Created comprehensive legal pages for the application.
+
+### Files Created
+- [app/privacy/page.tsx](app/privacy/page.tsx) - Privacy Policy page
+- [app/terms/page.tsx](app/terms/page.tsx) - Terms of Service page
+
+### Privacy Policy Covers
+- Information collected (account, preferences, usage data)
+- Third-party services (Clerk, Stripe, Resend, Supabase, Vercel, OpenRouter)
+- Data sharing and security practices
+- User rights (access, correction, deletion)
+- Cookies and tracking
+- International data transfers
+- Contact information
+
+### Terms of Service Covers
+- Service description (AI-powered SEC filing analysis)
+- Account registration requirements
+- Subscription tiers (Free, Pro, Max) and payment terms
+- Acceptable use policy
+- Intellectual property rights
+- Investment advice disclaimer (prominently displayed)
+- Limitation of liability
+- Indemnification
+- Service modifications
+- Termination policy
+- Governing law (Australia)
+
+### Files Modified
+- [components/landing/sections-v2/footer-section-v2.tsx](components/landing/sections-v2/footer-section-v2.tsx) - Updated legal links from `/legal/privacy` to `/privacy` and `/legal/terms` to `/terms`
+
+### Route Configuration
+Routes already configured in middleware.ts as public routes:
+- `/privacy` - Privacy Policy
+- `/terms` - Terms of Service
+
+Already in sitemap.ts for SEO.
+
+### Verification
+- ESLint passes
+- Footer tests pass (6/6)
+
+---
+
+## Previous Session: Onboarding Page UI Fixes ✅
+
+Fixed two UI issues on the `/onboarding` page:
+
+### Issue 1: Navigation bar showing on onboarding
+**Problem**: The sticky nav bar from "/" was visible on `/onboarding` before redirect, creating visual inconsistency.
+
+**Fix**: Modified auth layout to conditionally render Navigation based on pathname.
+
+**File Modified**: [app/(auth)/layout.tsx](app/(auth)/layout.tsx)
+```tsx
+"use client";
+import { usePathname } from "next/navigation";
+
+export default function AuthLayout({ children }) {
+  const pathname = usePathname();
+  const isOnboarding = pathname === "/onboarding";
+
+  return (
+    <>
+      {!isOnboarding && <Navigation />}
+      <div className="min-h-screen">{children}</div>
+    </>
+  );
+}
+```
+
+### Issue 2: Black borders on sector cards
+**Problem**: Sector and equity selection cards had black borders (`border-border`) - should be lighter, more inviting.
+
+**Fix**: Changed to `border-gray-200` (matches design system's `--landing-border: #E5E7EB`) with dark mode support.
+
+**File Modified**: [app/(auth)/onboarding/page.tsx](app/(auth)/onboarding/page.tsx)
+- Sector cards (line 423): `border-gray-200 dark:border-gray-700`
+- Equity cards (line 518-519): `border-gray-200 dark:border-gray-700`
+
+### Verification
+- ✅ ESLint passes
+- ✅ Navigation hidden on `/onboarding`, visible on other auth routes
+- ✅ Card borders now light gray (#E5E7EB)
+
+---
+
+## Previous Session: Landing Page V2 Redesign ✅
+
+Implemented complete landing page redesign with light theme, Stripe-inspired design, and A/B testing infrastructure.
+
+### Overview
+Complete TDD implementation of 8-phase landing page redesign following plan at `docs/plans/2025-12-31-landing-page-high-converting-redesign.md`.
+
+### Key Features Implemented
+- **Light theme** with Stripe-inspired primary blue (#0079F2)
+- **Mesh gradient background** using CSS radial-gradients (not WebGL)
+- **Z-pattern hero layout** with filing card on the right (Apple 10-K preview)
+- **Trust metrics** (2,500+ investors, 99.9% uptime, <5 min delivery)
+- **Billing toggle** for monthly/annual pricing with savings highlight
+- **Feature flag** (`NEXT_PUBLIC_LANDING_V2_ENABLED`) for A/B testing
+
+### Files Created
+
+**Design System**:
+- `lib/animations/landing-animations.ts` - Animation primitives (fadeUp, stagger, mesh gradient)
+- `lib/animations/index.ts` - Barrel export
+
+**V2 Sections** (`components/landing/sections-v2/`):
+- `hero-section-v2.tsx` - Two-column hero with Z-pattern layout
+- `hero-filing-card.tsx` - Apple 10-K filing preview card
+- `features-section-v2.tsx` - 6 feature cards in 3-column grid
+- `pricing-section-v2.tsx` - 3-tier pricing with monthly/annual toggle
+- `cta-section-v2.tsx` - Email capture with light blue gradient
+- `footer-section-v2.tsx` - Light theme footer with SEC disclaimer
+- `index.ts` - Barrel exports
+
+**Page Composition**:
+- `components/landing/landing-page-v2.tsx` - Main V2 composition
+
+**Tests** (`__tests__/components/landing/`):
+- `design-system.test.tsx` - 13 tests
+- `hero-section-v2.test.tsx` - 10 tests
+- `features-section-v2.test.tsx` - 6 tests
+- `pricing-section-v2.test.tsx` - 8 tests
+- `cta-section-v2.test.tsx` - 6 tests
+- `footer-section-v2.test.tsx` - 6 tests
+- `landing-page-v2.test.tsx` - 3 tests
+
+### Files Modified
+- `app/globals.css` - Added landing V2 color tokens and typography classes
+- `app/page.tsx` - Added V2 feature flag support
+- `.env.example` - Added `NEXT_PUBLIC_LANDING_V2_ENABLED` documentation
+
+### Verification
+- ✅ 52/52 landing component tests passing
+- ✅ Build succeeds
+- ✅ Feature flag works (set `NEXT_PUBLIC_LANDING_V2_ENABLED=true` to enable)
+
+---
+
+## Previous Session: Onboarding Page jsdom Fix ✅
+
+Fixed client-side crash on `/onboarding` page caused by server-only library bundling.
+
+### Issue
+Onboarding page crashed with `SharedArrayBuffer is not defined` error, showing "Application error: a client-side exception has occurred".
+
+### Root Cause
+Import chain pulled `jsdom` (server-only) into client bundle:
+1. `onboarding/page.tsx` → `NotificationPreference` from `notification-service.ts`
+2. `preference-types.ts` → `NotificationPreference` from `notification-service.ts`
+3. `notification-service.ts` → `job-queue/index.ts`
+4. `job-queue/index.ts` → `validation/sanitizers/index.ts`
+5. `sanitizers/index.ts` → **`jsdom`** (server-only, uses `SharedArrayBuffer`)
+
+### Fix Applied
+Changed imports to use `notification-types.ts` (types-only, no server deps) instead of `notification-service.ts`:
+
+**Files Modified**:
+- `app/(auth)/onboarding/page.tsx` - Import from `notification-types`
+- `lib/user/preference-types.ts` - Import from `notification-types`
+- `components/settings/SettingsForm.tsx` - Import from `notification-types`
+
+### Verification
+- ✅ Page loads without error (redirects to sign-in for unauthenticated users as expected)
+- ✅ No `SharedArrayBuffer` console errors
+- ✅ Fast Refresh works without full reload
+
+---
+
+## Previous Session: Email URL Fix - Revert XSLT Transformation ✅
+
+Fixed broken email links caused by SEC XSLT stylesheet URL variability.
+
+### Issue
+Email "View Full Filing" buttons returned 404 errors:
+- VRT Form 3 → 404
+- GOOGL Form 4, Form 4/A → 404
+- Other forms redirecting to wrong documents
+
+### Root Cause Investigation (Playwright)
+SEC XSLT stylesheets and filenames vary unpredictably:
+- **Stylesheet versions**: xslF345X02, xslF345X05, etc.
+- **Filenames**: form4.xml, ownership.xml, wk-form3_*.xml (NOT always primary_doc.xml)
+- **CIK paths**: May use filer CIK instead of company CIK
+
+Examples discovered:
+- VRT Form 3: `xslF345X02/wk-form3_*.xml`
+- GOOGL Form 4: `xslF345X05/ownership.xml`
+- CMG Form 4: `xslF345X05/form4.xml`
+
+### Fix Applied
+Reverted XSLT URL transformation - Filing Detail page (`-index.htm`) is always reliable.
+
+**Commit**: `9cbd75f` - "Revert XSLT URL transformation - keep index URLs for reliability"
+
+**File Modified**: [lib/email/url-utils.ts](lib/email/url-utils.ts)
+- Index URLs (`-index.htm`) now pass through unchanged
+- XML files with existing XSLT pass through
+- XML files without XSLT convert to index page
+- Directory URLs convert to index page
+
+### Verification
+```
+✅ 12/12 form types have valid email URLs
+All test emails sent successfully with index URLs
+```
+
+---
+
+## Previous Session: Form 4 Email Data Corruption Fix ✅
+
+Fixed Form 4 email showing incorrect transaction data for COIN (Coinbase) insider filing.
+
+### Issue
+COIN Form 4 email displayed:
+- "BOUGHT $2.0M, 0 shares" when it should show "sold 7,375 Class A shares for $1.97M"
+- Transaction type wrong (BOUGHT vs sold)
+- Dollar amount rounded incorrectly ($2.0M vs $1.97M)
+- Share count missing (0 vs 7,375)
+
+### Root Cause
+1. Multiple regex patterns in `extractTransactionsFromText()` matched the same text, causing 3 duplicate transactions
+2. Template `isSaleTransaction()` defaulted to "purchase" when transaction type was ambiguous
+3. No text-based fallback when structured data was incomplete
+
+### Fixes Applied
+
+**1. Transaction Deduplication** ([form4-data-extractor.ts:415-465](lib/email/form4-data-extractor.ts#L415-L465))
+- Added `deduplicateTransactions()` function using shares+type+disposition as unique key
+- Added `parseValueToNumber()` helper to compare transaction values
+- Prefers transactions with more complete data when duplicates found
+
+**2. Text-Based Sale Detection** ([form4-minimalist-template.tsx:108-137](components/ui/email/templates/form4-minimalist-template.tsx#L108-L137))
+- Added `textIndicatesSale()` function detecting "sold", "sale", "disposed", "dumped", "unloaded", "offloaded"
+- Used as fallback when structured transaction data is ambiguous
+- `aggregateTransactionsByType()` now accepts `summaryText` parameter for fallback
+
+**3. Improved Sale Detection** ([form4-minimalist-template.tsx:75-106](components/ui/email/templates/form4-minimalist-template.tsx#L75-L106))
+- `isSaleTransaction()` expanded to detect "sold", "disposition" in type field
+- Handles `pricePerShare` being either string or number type
+- Added code "D" (disposition) as sale indicator
+
+### Verification
+```
+Input: "CFO Alesia Haas sold 7,375 Class A shares for $1.97M on Dec."
+Transaction count: 1 (was 3 with duplicates)
+Transaction type: Sale (was "BOUGHT")
+Shares: 7,375 (was "0")
+Total value: $1.97M (was "$2.0M")
+AcquisitionDisposition: D
+```
+
+- ✅ All verification checks pass
+- ✅ ESLint passes
+- ✅ TypeScript compiles
+
+---
+
+## Previous Session: 8-K and Form 144 Email Template Fixes ✅
+
+Fixed signal badges and share extraction for 8-K and Form 144 templates.
+
+---
+
+## Previous Session: Landing Page Playwright Feature Testing ✅
 
 Completed Playwright MCP browser testing for the landing page Stripe redesign.
 
@@ -396,5 +664,5 @@ Fixed critical RLS and performance issues from Supabase audit.
 
 ---
 
-*Last Updated: 2025-12-31 (Session: Playwright feature testing - landing page)*
+*Last Updated: 2025-12-31 (Session: Privacy Policy & Terms of Service Pages)*
 *Older completed projects archived to .claude/history/*
