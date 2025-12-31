@@ -13,6 +13,7 @@ This file provides a chronological index of all completed projects. For detailed
 
 | Date | Project | Status |
 |------|---------|--------|
+| 2025-12-31 | Landing Page Playwright Feature Testing (billing toggle, CTAs, dialogs) | ✅ |
 | 2025-12-31 | Dev Env Fix (COOKIE_SECRET + tickersConfirmedAt migration) | ✅ |
 | 2025-12-31 | Landing Page Stripe Redesign - Implementation Verified (all 6 phases) | ✅ |
 | 2025-12-31 | Premium → Max Tier Rename Completion (CTA text, plan doc updates) | ✅ |
@@ -132,7 +133,7 @@ This file provides a chronological index of all completed projects. For detailed
 ## Archive Statistics
 - **Total Archived Projects**: 32 projects across 6 weekly archives
 - **Current PROGRESS.md Lines**: 376 (threshold: 500)
-- **Last Sync**: 2025-12-31 (Dev Env Fix session)
+- **Last Sync**: 2025-12-31 (Playwright feature testing session)
 - **Archive System**: ✅ ACTIVE
 - **Next Archive Check**: PROGRESS.md under threshold (376 < 500). No archival needed.
 
