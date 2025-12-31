@@ -12,59 +12,49 @@ import {
   staggerItem,
   viewportOnce,
 } from '@/lib/animations/landing-animations';
-
-type BillingInterval = 'monthly' | 'annual';
+import {
+  SUBSCRIPTION_PLANS,
+  calculateSavingsPercentage,
+  type BillingInterval,
+} from '@/lib/stripe';
 
 /**
  * Pricing plans configuration
- * Each plan has monthly and annual prices, features, and CTA
+ * Sourced from centralized Stripe config in lib/stripe.ts
  */
 const plans = [
   {
-    name: 'Free',
+    key: 'FREE' as const,
+    name: SUBSCRIPTION_PLANS.FREE.name,
     icon: Zap,
-    monthlyPrice: 0,
-    annualPrice: 0,
+    monthlyPrice: SUBSCRIPTION_PLANS.FREE.monthlyPrice,
+    annualPrice: SUBSCRIPTION_PLANS.FREE.annualPrice,
     description: 'Perfect for getting started',
-    features: [
-      '3 companies',
-      '10-K and 10-Q filings',
-      'Email summaries',
-      'Basic support',
-    ],
+    features: SUBSCRIPTION_PLANS.FREE.features,
     cta: 'Start Free',
     href: '/onboarding',
     popular: false,
   },
   {
-    name: 'Pro',
+    key: 'PRO' as const,
+    name: SUBSCRIPTION_PLANS.PRO.name,
     icon: Sparkles,
-    monthlyPrice: 15,
-    annualPrice: 150, // 2 months free
+    monthlyPrice: SUBSCRIPTION_PLANS.PRO.monthlyPrice,
+    annualPrice: SUBSCRIPTION_PLANS.PRO.annualPrice,
     description: 'For serious investors',
-    features: [
-      '10 companies',
-      'All filing types',
-      'Real-time alerts',
-      'Priority support',
-      'Custom notifications',
-    ],
+    features: SUBSCRIPTION_PLANS.PRO.features,
     cta: 'Start Free Trial',
     href: '/onboarding?plan=pro',
     popular: true,
   },
   {
-    name: 'Max',
+    key: 'MAX' as const,
+    name: SUBSCRIPTION_PLANS.MAX.name,
     icon: Crown,
-    monthlyPrice: 40,
-    annualPrice: 400, // 2 months free
+    monthlyPrice: SUBSCRIPTION_PLANS.MAX.monthlyPrice,
+    annualPrice: SUBSCRIPTION_PLANS.MAX.annualPrice,
     description: 'For power users',
-    features: [
-      'Unlimited companies',
-      'All filing types',
-      'Real-time alerts',
-      'Priority support',
-    ],
+    features: SUBSCRIPTION_PLANS.MAX.features,
     cta: 'Start Free Trial',
     href: '/onboarding?plan=max',
     popular: false,
@@ -92,10 +82,7 @@ export function PricingSectionV2() {
 
   const getSavings = (plan: typeof plans[0]) => {
     if (plan.monthlyPrice === 0) return null;
-    const monthlyTotal = plan.monthlyPrice * 12;
-    const savings = monthlyTotal - plan.annualPrice;
-    const percentage = Math.round((savings / monthlyTotal) * 100);
-    return percentage;
+    return calculateSavingsPercentage(plan.key);
   };
 
   return (
@@ -173,10 +160,10 @@ export function PricingSectionV2() {
                   : ''
               }`}
             >
-              {/* Popular Badge */}
+              {/* Popular Badge - positioned above and outside the card */}
               {plan.popular && (
-                <div className="absolute -top-3 left-1/2 -translate-x-1/2">
-                  <Badge className="landing-badge">
+                <div className="absolute -top-4 left-1/2 -translate-x-1/2">
+                  <Badge className="landing-badge whitespace-nowrap">
                     Most Popular
                   </Badge>
                 </div>
