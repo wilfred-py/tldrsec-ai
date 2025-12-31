@@ -34,7 +34,7 @@ export class ErrorBoundary extends Component<Props, State> {
             <AlertTriangle className="w-12 h-12 text-red-500 mb-4" />
             <h3 className="text-lg font-semibold mb-2">Something went wrong</h3>
             <p className="text-gray-600 mb-4">
-              We're having trouble loading this component. Please refresh the page.
+              We&apos;re having trouble loading this component. Please refresh the page.
             </p>
             <button
               onClick={() => this.setState({ hasError: false, error: undefined })}
