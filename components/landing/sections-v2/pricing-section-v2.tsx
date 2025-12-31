@@ -191,30 +191,34 @@ export function PricingSectionV2() {
                 </div>
 
                 {/* Price Display - Grok Style with Animation */}
-                <div className="mb-6 min-h-[72px]">
+                {/* Fixed height container prevents layout shift */}
+                <div className="mb-6 h-[88px]">
                   {plan.monthlyPrice === 0 ? (
                     <StaticPrice label="Free" />
                   ) : (
                     <>
                       <AnimatedPrice
                         value={getPrice(plan)}
-                        suffix={billingInterval === 'annual' ? 'USD/year' : 'USD/month'}
+                        suffix={billingInterval === 'annual' ? '/year' : '/month'}
                         savings={billingInterval === 'annual' ? savings : null}
                       />
-                      <AnimatePresence mode="wait">
-                        {monthlyEquiv && (
-                          <motion.p
-                            key="monthly-equiv"
-                            initial={{ opacity: 0, height: 0 }}
-                            animate={{ opacity: 1, height: 'auto' }}
-                            exit={{ opacity: 0, height: 0 }}
-                            transition={{ duration: 0.2 }}
-                            className="text-xs text-[var(--landing-text-muted)] mt-1"
-                          >
-                            ${monthlyEquiv}/month when billed annually
-                          </motion.p>
-                        )}
-                      </AnimatePresence>
+                      {/* Fixed height container for monthly equivalent text */}
+                      <div className="h-4 mt-1">
+                        <AnimatePresence mode="wait">
+                          {monthlyEquiv && (
+                            <motion.p
+                              key="monthly-equiv"
+                              initial={{ opacity: 0 }}
+                              animate={{ opacity: 1 }}
+                              exit={{ opacity: 0 }}
+                              transition={{ duration: 0.2 }}
+                              className="text-xs text-[var(--landing-text-muted)]"
+                            >
+                              ${monthlyEquiv}/mo billed annually
+                            </motion.p>
+                          )}
+                        </AnimatePresence>
+                      </div>
                     </>
                   )}
                 </div>

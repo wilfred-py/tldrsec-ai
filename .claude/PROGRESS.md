@@ -2,27 +2,43 @@
 
 **Date**: 2025-12-31
 **Branch**: feature/gmail-inbox-hero-improvements
-**Status**: Pipeline HEALTHY - Gmail Inbox Hero Phase 3 Complete
+**Status**: Pipeline HEALTHY - Gmail Inbox Hero Phase 4 Complete
 
 ---
 
-## Current Session: Gmail Inbox Hero - Phase 3 ✅ (2025-12-31)
+## Current Session: Gmail Inbox Hero - Phase 4 ✅ (2025-12-31)
 
-Final UX refinements for the interactive Gmail-style inbox hero section.
+Continued UX refinements for the interactive Gmail-style inbox hero section.
 
-### Phase 3 Changes
-1. **Fixed 5-second delivery interval** - Changed from random 1-30s to fixed 5s when not interacting
-2. **Pause delivery when summary open** - No new emails while user reads; resumes on close
-3. **Column alignment fixes** - Fixed widths for checkbox (w-14), unread indicator (w-3), ticker (w-14), badge (w-16), time (w-20)
-4. **X button to clear selection** - Animated button appears when emails selected, shows count, clears all
-5. **TypeScript interface fix** - Updated `EmailSummary` interface with proper types for `sentiment`, `importance`, `icon`, `financialHighlights`
+### Phase 4 Changes
+1. **Dynamic "just now" timestamps** - Newly delivered emails show "just now", then "1 min ago", "2 min ago" etc.
+2. **Timer optimization** - Changed from 1-second updates to 60-second updates to prevent re-render interference
+3. **Max email limit reduced** - Capped inbox at 8 emails (from 10) for cleaner display
+4. **Increased inbox width** - Expanded to max 1000px (from 800px) for ~80% subject line visibility
+5. **Click-to-close summary** - Clicking empty whitespace below emails closes the summary panel
+6. **Skeleton loading on refresh** - Replaced spinning icon with skeleton loader matching email row structure
 
 ### Files Modified
-- `components/landing/sections-v2/gmail-inbox-hero.tsx` - All Phase 3 improvements
+- `components/landing/sections-v2/gmail-inbox-hero.tsx` - All Phase 4 improvements
+
+### Technical Details
+- `deliveryTimestamps` Map tracks when each email was delivered
+- `currentTime` state updates every 60 seconds (not every second)
+- `formatSecondsAgo()` helper formats timestamps: "just now" → "1 min ago" → "X min ago"
+- Skeleton loader uses `INITIAL_EMAIL_COUNT` and `EMAIL_ROW_HEIGHT` constants for consistency
 
 ### Verification
 - ✅ TypeScript compiles cleanly
-- ✅ ESLint passes for our file
+- ✅ Email delivery works without interference from timer updates
+
+---
+
+## Previous Session: Gmail Inbox Hero - Phase 3 ✅ (2025-12-31)
+
+Final UX refinements for the interactive Gmail-style inbox hero section.
+
+**Changes**: Fixed 5-second delivery interval, pause delivery when summary open, column alignment fixes, X button to clear selection, TypeScript interface fix
+**File**: `components/landing/sections-v2/gmail-inbox-hero.tsx`
 
 ---
 
@@ -152,5 +168,5 @@ Replaced hourly Slack summaries with 10-minute intervals.
 
 ---
 
-*Last Updated: 2025-12-31 (Session: Gmail Inbox Hero Phase 3 Complete)*
+*Last Updated: 2025-12-31 (Session: Gmail Inbox Hero Phase 4 Complete)*
 *Older completed projects archived to .claude/history/ - See TIMELINE.md for full history*
