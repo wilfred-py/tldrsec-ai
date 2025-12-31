@@ -85,7 +85,6 @@ export const SUBSCRIPTION_PLANS = {
       'Unlimited companies',
       'Real-time email alerts',
       'All filing types',
-      'API access for developers',
       'Priority processing queue',
       'Dedicated support',
     ],
