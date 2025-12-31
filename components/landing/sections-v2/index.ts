@@ -6,6 +6,7 @@
 
 export { HeroSectionV2 } from './hero-section-v2';
 export { HeroFilingCard } from './hero-filing-card';
+export { GmailInboxHero } from './gmail-inbox-hero';
 export { FeaturesSectionV2 } from './features-section-v2';
 export { SummariesShowcaseV2 } from './summaries-showcase-v2';
 export { PricingSectionV2 } from './pricing-section-v2';

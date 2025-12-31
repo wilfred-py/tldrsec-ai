@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useRef, memo } from 'react';
 import { motion, AnimatePresence, useInView } from 'framer-motion';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -13,12 +13,8 @@ import {
   Archive,
   Trash2,
   MoreVertical,
-  Search,
-  Menu,
   RefreshCw,
-  ChevronDown,
   X,
-  Building2,
   TrendingUp,
   TrendingDown,
   AlertTriangle,
@@ -28,7 +24,6 @@ import {
   BarChart3,
   Zap,
   Clock,
-  ExternalLink,
 } from 'lucide-react';
 import Link from 'next/link';
 import {
@@ -37,12 +32,34 @@ import {
   meshGradientStyle,
 } from '@/lib/animations/landing-animations';
 
+// TypeScript interfaces for component props and data structures
+interface EmailSummary {
+  id: number;
+  ticker: string;
+  companyName: string;
+  filingType: string;
+  filedAt: string;
+  timeAgo: string;
+  headline: string;
+  preview: string;
+  summaryText: string;
+  insights: string[];
+  impactScore: number;
+  risk: string;
+  priority: 'high' | 'medium' | 'low';
+  isRead: boolean;
+}
+
+interface GmailInboxHeroProps {
+  className?: string;
+}
+
 /**
  * Curated real summaries from the database
  * Ranked by significance and impact to investor sentiment
  * Verified against news sources for quality
  */
-const curatedSummaries = [
+const curatedSummaries: EmailSummary[] = [
   {
     id: 1,
     ticker: 'TSLA',
@@ -646,11 +663,11 @@ function EmailDetailPanel({
  * Combines hero messaging with an interactive Gmail-style inbox
  * showing real curated summaries that users can click to preview.
  */
-export function GmailInboxHero() {
+export const GmailInboxHero = memo<GmailInboxHeroProps>(({ className = '' }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const isInView = useInView(containerRef, { once: true, amount: 0.2 });
-  const [selectedEmail, setSelectedEmail] = useState<typeof curatedSummaries[0] | null>(null);
-  const [displayedEmails, setDisplayedEmails] = useState<typeof curatedSummaries>([]);
+  const [selectedEmail, setSelectedEmail] = useState<EmailSummary | null>(null);
+  const [displayedEmails, setDisplayedEmails] = useState<EmailSummary[]>([]);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
   // Shuffle and pick random 6 emails on mount
@@ -672,7 +689,7 @@ export function GmailInboxHero() {
 
   return (
     <section
-      className="relative min-h-[100vh] flex items-center overflow-hidden py-12 lg:py-0"
+      className={`relative min-h-[100vh] flex items-center overflow-hidden py-12 lg:py-0 ${className}`}
       style={meshGradientStyle}
     >
       {/* Background orbs */}
@@ -882,4 +899,6 @@ export function GmailInboxHero() {
       </div>
     </section>
   );
-}
+});
+
+GmailInboxHero.displayName = 'GmailInboxHero';
