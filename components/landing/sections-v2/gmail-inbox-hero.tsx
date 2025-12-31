@@ -36,7 +36,7 @@ import {
 
 // Constants for animation and layout
 const INITIAL_EMAIL_COUNT = 3;
-const MAX_EMAIL_COUNT = 10;
+const MAX_EMAIL_COUNT = 8;
 const DELIVERY_INTERVAL = 5000; // Fixed 5 second delivery when not interacting
 const EMAIL_ROW_HEIGHT = 52; // Fixed height for email rows in pixels
 
@@ -467,6 +467,8 @@ function EmailRow({
   onSelect,
   onToggleCheck,
   isInView,
+  deliveryTimestamp,
+  currentTime,
 }: {
   email: typeof curatedSummaries[0];
   index: number;
@@ -477,6 +479,8 @@ function EmailRow({
   onSelect: () => void;
   onToggleCheck: (e: React.MouseEvent) => void;
   isInView: boolean;
+  deliveryTimestamp: number | undefined;
+  currentTime: number;
 }) {
   const [isVisible, setIsVisible] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
@@ -580,7 +584,9 @@ function EmailRow({
 
       {/* Time - fixed width for alignment */}
       <div className="flex-shrink-0 text-xs text-gray-400 w-20 text-right hidden md:block">
-        {email.timeAgo}
+        {deliveryTimestamp
+          ? formatSecondsAgo(Math.floor((currentTime - deliveryTimestamp) / 1000))
+          : email.timeAgo}
       </div>
     </motion.div>
   );
@@ -723,6 +729,20 @@ function getDeliveryInterval(): number {
 }
 
 /**
+ * Format seconds ago into human-readable string
+ * Only updates every minute, so shows "just now" for <1 min
+ */
+function formatSecondsAgo(seconds: number): string {
+  if (seconds < 60) return 'just now';
+  const minutes = Math.floor(seconds / 60);
+  if (minutes === 1) return '1 min ago';
+  if (minutes < 60) return `${minutes} min ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours === 1) return '1 hour ago';
+  return `${hours} hours ago`;
+}
+
+/**
  * Gmail Inbox Hero Section
  *
  * Combines hero messaging with an interactive Gmail-style inbox
@@ -744,6 +764,12 @@ export const GmailInboxHero = memo<GmailInboxHeroProps>(({ className = '' }) => 
 
   // Track which emails were delivered dynamically (for animation)
   const [deliveredEmailIds, setDeliveredEmailIds] = useState<Set<number>>(new Set());
+
+  // Track delivery timestamps for dynamic "x seconds ago" display
+  const [deliveryTimestamps, setDeliveryTimestamps] = useState<Map<number, number>>(new Map());
+
+  // Current time for dynamic time calculations (updates every second)
+  const [currentTime, setCurrentTime] = useState(Date.now());
 
   // Pool of remaining emails to deliver
   const [emailPool, setEmailPool] = useState<EmailSummary[]>([]);
@@ -769,6 +795,54 @@ export const GmailInboxHero = memo<GmailInboxHeroProps>(({ className = '' }) => 
     setEmailPool(remaining);
   }, []);
 
+  // Update current time every minute for dynamic "x minutes ago" display
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentTime(Date.now());
+    }, 60000); // Update every 60 seconds
+
+    return () => clearInterval(timer);
+  }, []);
+
+  // Track delivered email IDs to prevent duplicates (ref for synchronous access)
+  const deliveredIdsRef = useRef<Set<number>>(new Set());
+
+  // Deliver next email from pool
+  const deliverNextEmail = useCallback(() => {
+    setEmailPool(prevPool => {
+      if (prevPool.length === 0) return prevPool;
+
+      const nextEmail = prevPool[0];
+
+      // Check if already delivered (prevents duplicates from React Strict Mode)
+      if (deliveredIdsRef.current.has(nextEmail.id)) {
+        return prevPool;
+      }
+
+      // Mark as delivered synchronously
+      deliveredIdsRef.current.add(nextEmail.id);
+
+      // Update displayed emails - add new email to top, pushing others down
+      setDisplayedEmails(prevDisplayed => {
+        if (prevDisplayed.length >= MAX_EMAIL_COUNT) {
+          return prevDisplayed;
+        }
+        // Double-check for duplicates in displayed list
+        if (prevDisplayed.some(e => e.id === nextEmail.id)) {
+          return prevDisplayed;
+        }
+        // Add to top of list (newest first)
+        return [nextEmail, ...prevDisplayed];
+      });
+
+      // Mark for animation and record delivery timestamp
+      setDeliveredEmailIds(prev => new Set([...prev, nextEmail.id]));
+      setDeliveryTimestamps(prev => new Map(prev).set(nextEmail.id, Date.now()));
+
+      return prevPool.slice(1);
+    });
+  }, []);
+
   // Schedule next email delivery - only delivers when summary panel is closed
   const scheduleNextDelivery = useCallback(() => {
     if (deliveryTimerRef.current) {
@@ -778,30 +852,11 @@ export const GmailInboxHero = memo<GmailInboxHeroProps>(({ className = '' }) => 
     const interval = getDeliveryInterval();
 
     deliveryTimerRef.current = setTimeout(() => {
-      setEmailPool(prevPool => {
-        if (prevPool.length === 0) return prevPool;
-
-        setDisplayedEmails(prevDisplayed => {
-          if (prevDisplayed.length >= MAX_EMAIL_COUNT) {
-            return prevDisplayed;
-          }
-
-          const nextEmail = prevPool[0];
-          // Mark this email as newly delivered for animation
-          setDeliveredEmailIds(prev => new Set([...prev, nextEmail.id]));
-
-          // Add new email to top and re-sort by date descending
-          const newDisplayed = sortByDateDescending([nextEmail, ...prevDisplayed]);
-          return newDisplayed;
-        });
-
-        return prevPool.slice(1);
-      });
-
+      deliverNextEmail();
       // Schedule next delivery
       scheduleNextDelivery();
     }, interval);
-  }, []);
+  }, [deliverNextEmail]);
 
   // Stop delivery timer
   const stopDelivery = useCallback(() => {
@@ -858,15 +913,9 @@ export const GmailInboxHero = memo<GmailInboxHeroProps>(({ className = '' }) => 
     }
   }, [checkedEmails.size, displayedEmails]);
 
-  // Clear all checked emails (X button)
-  const handleClearSelection = useCallback(() => {
-    setCheckedEmails(new Set());
-  }, []);
-
   // Check if all emails are selected
   const allChecked = displayedEmails.length > 0 && checkedEmails.size === displayedEmails.length;
   const someChecked = checkedEmails.size > 0 && checkedEmails.size < displayedEmails.length;
-  const hasSelection = checkedEmails.size > 0;
 
   // Simulate refresh with new random emails
   const handleRefresh = useCallback(() => {
@@ -875,6 +924,10 @@ export const GmailInboxHero = memo<GmailInboxHeroProps>(({ className = '' }) => 
     setReadEmails(new Set());
     setCheckedEmails(new Set());
     setDeliveredEmailIds(new Set());
+    setDeliveryTimestamps(new Map());
+
+    // Reset the delivered IDs ref to allow re-delivery
+    deliveredIdsRef.current = new Set();
 
     // Clear delivery timer
     if (deliveryTimerRef.current) {
@@ -1007,9 +1060,9 @@ export const GmailInboxHero = memo<GmailInboxHeroProps>(({ className = '' }) => 
                 isExpanded ? 'z-50 h-full' : ''
               }`}
               style={!isExpanded ? {
-                // Viewport-responsive sizing: 90vw on mobile, 50vw on desktop, max 800px
-                width: 'min(90vw, max(400px, 50vw))',
-                maxWidth: '800px',
+                // Viewport-responsive sizing: 95vw on mobile, 60vw on desktop, max 1000px
+                width: 'min(95vw, max(500px, 60vw))',
+                maxWidth: '1000px',
               } : undefined}
             >
               {/* Gmail Header */}
@@ -1070,24 +1123,6 @@ export const GmailInboxHero = memo<GmailInboxHeroProps>(({ className = '' }) => 
                   </div>
                 </button>
 
-                {/* X button to clear selection - only shows when emails are selected */}
-                <AnimatePresence>
-                  {hasSelection && (
-                    <motion.button
-                      initial={{ opacity: 0, scale: 0.8 }}
-                      animate={{ opacity: 1, scale: 1 }}
-                      exit={{ opacity: 0, scale: 0.8 }}
-                      transition={{ duration: 0.15 }}
-                      onClick={handleClearSelection}
-                      className="p-1.5 rounded hover:bg-red-100 transition-colors flex items-center gap-1"
-                      title="Clear selection"
-                    >
-                      <X className="w-4 h-4 text-red-500" />
-                      <span className="text-xs text-red-500 font-medium">{checkedEmails.size}</span>
-                    </motion.button>
-                  )}
-                </AnimatePresence>
-
                 <motion.button
                   onClick={handleRefresh}
                   animate={{ rotate: isRefreshing ? 360 : 0 }}
@@ -1121,16 +1156,55 @@ export const GmailInboxHero = memo<GmailInboxHeroProps>(({ className = '' }) => 
                 }}
               >
                 {/* Email List - Always full width, never shrinks */}
-                <div className="w-full overflow-y-auto">
+                <div
+                  className="w-full overflow-y-auto"
+                  onClick={(e) => {
+                    // Close summary pane if clicking on empty area (not on an email row)
+                    if (e.target === e.currentTarget) {
+                      setSelectedEmail(null);
+                    }
+                  }}
+                >
                   <AnimatePresence mode="wait">
                     {isRefreshing ? (
                       <motion.div
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
                         exit={{ opacity: 0 }}
-                        className="flex items-center justify-center h-full"
+                        className="w-full"
                       >
-                        <RefreshCw className="w-6 h-6 text-gray-400 animate-spin" />
+                        {/* Skeleton loading rows */}
+                        {Array.from({ length: INITIAL_EMAIL_COUNT }).map((_, index) => (
+                          <div
+                            key={index}
+                            style={{ height: `${EMAIL_ROW_HEIGHT}px` }}
+                            className="flex items-center gap-3 px-4 border-b border-gray-100 animate-pulse"
+                          >
+                            {/* Checkbox skeleton */}
+                            <div className="flex items-center gap-2 flex-shrink-0 w-14">
+                              <div className="w-4 h-4 rounded bg-gray-200" />
+                              <div className="w-4 h-4 rounded bg-gray-200" />
+                            </div>
+                            {/* Unread dot skeleton */}
+                            <div className="w-3 flex-shrink-0" />
+                            {/* Ticker skeleton */}
+                            <div className="w-14 flex-shrink-0">
+                              <div className="w-10 h-4 rounded bg-gray-200" />
+                            </div>
+                            {/* Badge skeleton */}
+                            <div className="w-16 flex-shrink-0">
+                              <div className="w-12 h-5 rounded-full bg-gray-200" />
+                            </div>
+                            {/* Subject skeleton */}
+                            <div className="flex-grow min-w-0 flex items-center gap-2">
+                              <div className="h-4 rounded bg-gray-200" style={{ width: `${60 + index * 10}%` }} />
+                            </div>
+                            {/* Time skeleton */}
+                            <div className="flex-shrink-0 w-20 hidden md:block">
+                              <div className="w-16 h-3 rounded bg-gray-200 ml-auto" />
+                            </div>
+                          </div>
+                        ))}
                       </motion.div>
                     ) : (
                       displayedEmails.map((email, index) => (
@@ -1145,6 +1219,8 @@ export const GmailInboxHero = memo<GmailInboxHeroProps>(({ className = '' }) => 
                           onSelect={() => handleEmailClick(email)}
                           onToggleCheck={(e) => handleToggleCheck(email.id, e)}
                           isInView={isInView}
+                          deliveryTimestamp={deliveryTimestamps.get(email.id)}
+                          currentTime={currentTime}
                         />
                       ))
                     )}
