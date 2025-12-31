@@ -1,23 +1,52 @@
 # Current Progress: tldrsec-ai Pipeline Operations
 
 ## Current Status
-**Date**: 2025-12-31
+**Date**: 2026-01-01
 **Branch**: feature/gmail-inbox-hero-improvements
 **Status**: ✅ OPERATIONAL - Pipeline Running, Stripe Integration Active
 
-### Active: Pricing Section Grok-Style Redesign ✅ COMPLETE (2025-12-31)
+### Active: Pricing Section Layout Shift Fix ✅ COMPLETE (2026-01-01)
+
+**Issue**: Pricing section toggle causing layout shifts when switching between monthly/annual billing. Toggle slider also appearing on wrong side (right instead of left) on initial load.
+
+**Root Cause**:
+- Price container width changed with different digit counts ($99 vs $990 vs $1,390)
+- Savings badge appearing/disappearing caused horizontal shift
+- Toggle knob using `translate-x-8` which exceeded container bounds
+- Monthly equivalent text height animation caused vertical shift
+
+**Fixes Applied**:
+1. **Fixed-width digits container** - Added `minWidth: '5.5ch'` to accommodate up to "1,390" (5 characters)
+2. **Fixed-width individual digits** - Each digit has `width: 0.6em` (or `0.35em` for comma)
+3. **Fixed-width suffix** - Added `minWidth: '4.5rem'` for "/year" or "/month"
+4. **Savings badge on separate line** - Moved to own row with fixed `h-5` height
+5. **Toggle positioning fix** - Changed from `w-14 h-7` to `w-12 h-6`, knob from `translate-x-8`/`translate-x-1` to `translate-x-6`/`translate-x-0`
+6. **Fixed height price container** - Changed from `min-h-[72px]` to fixed `h-[88px]`
+7. **Opacity-only animations** - Monthly equivalent text uses opacity-only, no height animation
+
+**Files Modified**:
+- `components/landing/sections-v2/animated-price.tsx` - Fixed-width containers, savings badge on separate line
+- `components/landing/sections-v2/pricing-section-v2.tsx` - Toggle sizing fix, fixed height containers
+
+**Verification**: ✅ Lint passes, toggle starts on LEFT (monthly), no layout shifts
+
+---
+
+### Previous: Pricing Section Grok-Style Redesign ✅ COMPLETE (2025-12-31)
 
 **Issue**: Pricing section toggle and display needed modernization inspired by Grok's subscription page.
 
 **Changes**:
 1. **Grok-style toggle** - Custom toggle button with "Save with yearly billing" label
-2. **Annual pricing display** - Shows full annual price ($990.00 USD/year) with "saving X%" badge in orange
-3. **Monthly equivalent** - Helper text showing "$83/month when billed annually"
+2. **Annual pricing display** - Shows full annual price ($990 USD/year) with "Save X%" badge in orange
+3. **Monthly equivalent** - Helper text showing "$83/mo billed annually"
 4. **Updated card layout** - Popular badge inline, CTA after price, "Everything in Free/Pro" footer
 5. **Copy updates** - "Current Plan" (disabled), "Upgrade to Pro", "Upgrade to Max"
+6. **AnimatedPrice component** - Grok-inspired individual digit animation with direction awareness
 
 **Files Modified**:
 - `components/landing/sections-v2/pricing-section-v2.tsx` - Complete Grok-inspired redesign
+- `components/landing/sections-v2/animated-price.tsx` - New animated price component
 
 **Verification**: ✅ Lint passes, no errors
 
