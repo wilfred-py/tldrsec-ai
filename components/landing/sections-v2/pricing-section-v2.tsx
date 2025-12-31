@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Check, Zap, Sparkles, Crown } from 'lucide-react';
@@ -16,6 +16,7 @@ import {
   calculateSavingsPercentage,
   type BillingInterval,
 } from '@/lib/stripe';
+import { AnimatedPrice, StaticPrice } from './animated-price';
 
 /**
  * Pricing plans configuration
@@ -189,33 +190,32 @@ export function PricingSectionV2() {
                   )}
                 </div>
 
-                {/* Price Display - Grok Style */}
-                <div className="mb-6">
-                  <div className="flex items-baseline gap-1">
-                    <span
-                      className="text-4xl font-bold tracking-tight"
-                      style={{ color: 'var(--landing-secondary)' }}
-                    >
-                      ${getPrice(plan).toLocaleString()}{plan.monthlyPrice === 0 ? '' : '.00'}
-                    </span>
-                    <span className="text-sm text-[var(--landing-text-muted)]">
-                      {plan.monthlyPrice === 0
-                        ? ''
-                        : billingInterval === 'annual'
-                          ? 'USD/year'
-                          : 'USD/month'
-                      }
-                    </span>
-                    {billingInterval === 'annual' && savings && savings > 0 && (
-                      <span className="text-sm font-medium text-orange-500 ml-1">
-                        saving {savings}%
-                      </span>
-                    )}
-                  </div>
-                  {monthlyEquiv && (
-                    <p className="text-xs text-[var(--landing-text-muted)] mt-1">
-                      ${monthlyEquiv}/month when billed annually
-                    </p>
+                {/* Price Display - Grok Style with Animation */}
+                <div className="mb-6 min-h-[72px]">
+                  {plan.monthlyPrice === 0 ? (
+                    <StaticPrice label="Free" />
+                  ) : (
+                    <>
+                      <AnimatedPrice
+                        value={getPrice(plan)}
+                        suffix={billingInterval === 'annual' ? 'USD/year' : 'USD/month'}
+                        savings={billingInterval === 'annual' ? savings : null}
+                      />
+                      <AnimatePresence mode="wait">
+                        {monthlyEquiv && (
+                          <motion.p
+                            key="monthly-equiv"
+                            initial={{ opacity: 0, height: 0 }}
+                            animate={{ opacity: 1, height: 'auto' }}
+                            exit={{ opacity: 0, height: 0 }}
+                            transition={{ duration: 0.2 }}
+                            className="text-xs text-[var(--landing-text-muted)] mt-1"
+                          >
+                            ${monthlyEquiv}/month when billed annually
+                          </motion.p>
+                        )}
+                      </AnimatePresence>
+                    </>
                   )}
                 </div>
 
