@@ -13,7 +13,9 @@ This file provides a chronological index of all completed projects. For detailed
 
 | Date | Project | Status |
 |------|---------|--------|
-| 2025-12-31 | Gmail Inbox Hero Improvements (animation, dynamic delivery, read/unread) | ✅ |
+| 2025-12-31 | Gmail Inbox Hero Phase 3 (fixed delivery, pause on read, column align, X clear) | ✅ |
+| 2025-12-31 | Gmail Inbox Hero Phase 2 (responsive sizing, expand/collapse, overlay panel) | ✅ |
+| 2025-12-31 | Gmail Inbox Hero Phase 1 (animation, dynamic delivery, read/unread) | ✅ |
 | 2025-12-31 | Gmail Inbox Hero (interactive landing page, 15 curated summaries) | ✅ |
 | 2025-12-31 | Privacy Policy & Terms of Service Pages (legal compliance) | ✅ |
 | 2025-12-31 | Onboarding Page UI Fixes (nav hidden, lighter card borders) | ✅ |
@@ -142,8 +144,8 @@ This file provides a chronological index of all completed projects. For detailed
 
 ## Archive Statistics
 - **Total Archived Projects**: 32 projects across 6 weekly archives
-- **Current PROGRESS.md Lines**: 161 (threshold: 500)
-- **Last Sync**: 2025-12-31 (Context compaction complete)
+- **Current PROGRESS.md Lines**: 156 (threshold: 500)
+- **Last Sync**: 2025-12-31 (Gmail Inbox Hero Phase 3 complete)
 - **Archive System**: ✅ ACTIVE
 - **Next Archive Check**: Below threshold - no archival needed
 
