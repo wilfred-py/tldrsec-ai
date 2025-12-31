@@ -13,6 +13,13 @@ This file provides a chronological index of all completed projects. For detailed
 
 | Date | Project | Status |
 |------|---------|--------|
+| 2025-12-31 | Pricing Section Layout Shift Fix (fixed-width containers, toggle positioning) | ✅ |
+| 2025-12-31 | Gmail Inbox Hero Phase 4 (timestamps, width, skeleton loader, click-to-close) | ✅ |
+| 2025-12-31 | Pricing Section Grok-Style Redesign (toggle, annual pricing, savings badge) | ✅ |
+| 2025-12-31 | Gmail Inbox Hero Phase 3 (fixed delivery, pause on read, column align, X clear) | ✅ |
+| 2025-12-31 | Gmail Inbox Hero Phase 2 (responsive sizing, expand/collapse, overlay panel) | ✅ |
+| 2025-12-31 | Gmail Inbox Hero Phase 1 (animation, dynamic delivery, read/unread) | ✅ |
+| 2025-12-31 | Gmail Inbox Hero (interactive landing page, 15 curated summaries) | ✅ |
 | 2025-12-31 | Privacy Policy & Terms of Service Pages (legal compliance) | ✅ |
 | 2025-12-31 | Onboarding Page UI Fixes (nav hidden, lighter card borders) | ✅ |
 | 2025-12-31 | Landing Page V2 Redesign (8-phase TDD, light theme, A/B testing) | ✅ |
@@ -140,10 +147,10 @@ This file provides a chronological index of all completed projects. For detailed
 
 ## Archive Statistics
 - **Total Archived Projects**: 32 projects across 6 weekly archives
-- **Current PROGRESS.md Lines**: 668 (threshold: 500)
-- **Last Sync**: 2025-12-31 (Privacy Policy & Terms of Service session)
+- **Current PROGRESS.md Lines**: 406 (threshold: 500)
+- **Last Sync**: 2026-01-01 (Pricing Section Layout Shift Fix complete)
 - **Archive System**: ✅ ACTIVE
-- **Next Archive Check**: Above threshold - will archive projects >30 days old when available
+- **Next Archive Check**: Below threshold - no archival needed
 
 **Archives**:
 - `01-Dec-2025.md` - Email & verification (8 projects)

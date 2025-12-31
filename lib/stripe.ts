@@ -65,7 +65,7 @@ export const SUBSCRIPTION_PLANS = {
     filingTypes: ['10-K', '10-Q', '8-K', 'FORM4', 'DEF14A'] as const,
     emailFrequency: 'realtime' as const,
     features: [
-      '10 companies to track',
+      '**10** companies to track',
       'Real-time email alerts',
       'All filing types (8-K, Form 4, etc.)',
       'Priority processing',
@@ -82,10 +82,9 @@ export const SUBSCRIPTION_PLANS = {
     filingTypes: ['ALL'] as const,
     emailFrequency: 'realtime' as const,
     features: [
-      'Unlimited companies',
+      '**Unlimited** companies',
       'Real-time email alerts',
       'All filing types',
-      'API access for developers',
       'Priority processing queue',
       'Dedicated support',
     ],
