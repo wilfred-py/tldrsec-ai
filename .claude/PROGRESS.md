@@ -6,7 +6,31 @@
 
 ---
 
-## Current Session: Landing Page Stripe Redesign - Implementation Verified ✅
+## Current Session: Landing Page Playwright Feature Testing ✅
+
+Completed Playwright MCP browser testing for the landing page Stripe redesign.
+
+### Test Results: ALL 5 TESTS PASSED
+
+| Test | Status | Details |
+|------|--------|---------|
+| Feature flag redirect | ✅ | `NEXT_PUBLIC_LANDING_PAGE_ENABLED="true"` verified |
+| Landing page renders | ✅ | All sections: Hero, Filings, Features, Pricing, CTA, Footer |
+| Filing preview dialog | ✅ | AAPL 10-K dialog shows FULL summary (not truncated) |
+| Annual billing toggle | ✅ | Prices update ($99→$83/mo, $139→$116/mo), "Save 17%" badges |
+| Pricing CTAs | ✅ | All 3 plans navigate with correct URL params |
+
+### Pricing CTA Navigation Verified
+
+| Plan | Monthly URL | Annual URL |
+|------|------------|------------|
+| Free | `/sign-up` | `/sign-up` |
+| Pro | `/sign-up?plan=pro&interval=monthly` | `/sign-up?plan=pro&interval=annual` |
+| Max | `/sign-up?plan=max&interval=monthly` | `/sign-up?plan=max&interval=annual` |
+
+---
+
+## Previous Session: Landing Page Stripe Redesign - Implementation Verified ✅
 
 Full verification of the landing page Stripe redesign implementation from `docs/plans/2025-12-30-landing-page-stripe-redesign.md`.
 
@@ -372,5 +396,5 @@ Fixed critical RLS and performance issues from Supabase audit.
 
 ---
 
-*Last Updated: 2025-12-31 (Session: Fixed dev env - COOKIE_SECRET + tickersConfirmedAt migration)*
+*Last Updated: 2025-12-31 (Session: Playwright feature testing - landing page)*
 *Older completed projects archived to .claude/history/*

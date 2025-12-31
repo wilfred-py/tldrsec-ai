@@ -142,20 +142,35 @@ function extractFilerRole(text: string): string {
  */
 function extractShares(text: string): string {
   const patterns = [
+    // "proposes to sell 56,820 shares"
+    /(?:proposes?\s+to\s+sell|intends?\s+to\s+(?:sell|dispose))\s*([\d,]+)\s*(?:\w+\s+)?shares?/i,
+    // "filing covers 56,820 shares"
+    /(?:filing|notice)\s+(?:covers?|for)\s*([\d,]+)\s*(?:\w+\s+)?shares?/i,
+    // "sale of 56,820 shares"
+    /(?:sale|disposition)\s+of\s*([\d,]+)\s*(?:\w+\s+)?shares?/i,
     // "40,000 COIN shares" or "40,000 shares"
     /([\d,]+)\s*(?:\w+\s+)?shares?\s*(?:worth|valued)/i,
     // "sell 40,000 shares"
-    /(?:sell|selling|sale\s+of)\s*([\d,]+)\s*(?:\w+\s+)?shares?/i,
+    /(?:sell|selling)\s*([\d,]+)\s*(?:\w+\s+)?shares?/i,
     // "40,000 shares of"
     /([\d,]+)\s*shares?\s*(?:of|for)/i,
-    // Generic share count
+    // "Shares: 56,820" or "Number of Shares: 56,820" (table format)
+    /(?:shares?|amount)[:\s]+([\d,]+)/i,
+    // "56,820 common shares" or "56,820 ordinary shares"
+    /([\d,]+)\s*(?:common|ordinary|class\s+\w+)\s*shares?/i,
+    // Generic share count as last resort
     /([\d,]+)\s*shares?/i,
   ];
 
   for (const pattern of patterns) {
     const match = text.match(pattern);
     if (match?.[1]) {
-      return match[1].replace(/,/g, '').replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+      const numStr = match[1].replace(/,/g, '');
+      const num = parseInt(numStr, 10);
+      // Only accept if it's a reasonable share count (> 0 and not absurdly large like a phone number)
+      if (num > 0 && num < 100000000) {
+        return numStr.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+      }
     }
   }
 
@@ -339,12 +354,18 @@ function extractRecentActivity(text: string): string {
  */
 function extractRemainingHoldings(text: string): string {
   const patterns = [
+    // "Securities Beneficially Owned: X" or "Amount of Securities Beneficially Owned: X"
+    /(?:amount\s+of\s+)?securities\s+beneficially\s+owned[:\s]*([\d,]+)/i,
+    // "beneficial ownership of X shares"
+    /beneficial\s+ownership\s+(?:of\s+)?([\d,]+)\s*shares?/i,
+    // "holdings after sale: X" or "post-transaction ownership: X"
+    /(?:holdings?\s+after|post-transaction\s+ownership)[:\s]*([\d,]+)/i,
     // "will still hold X shares"
     /(?:will\s+)?(?:still\s+)?(?:hold|retain|own)\s*([\d,]+)\s*shares?/i,
     // "X shares remaining"
     /([\d,]+)\s*shares?\s*(?:remaining|left|after)/i,
     // "beneficially own X shares after"
-    /beneficially\s+own\s*([\d,]+)\s*shares?\s*(?:after|following)/i,
+    /beneficially\s+own[s]?\s*([\d,]+)\s*shares?\s*(?:after|following)/i,
     // "following the transaction, X shares"
     /following\s+(?:the\s+)?(?:transaction|sale),?\s*([\d,]+)\s*shares?/i,
     // "after the sale, X shares"
@@ -352,14 +373,24 @@ function extractRemainingHoldings(text: string): string {
     // "leaving X shares"
     /leaving\s*([\d,]+)\s*shares?/i,
     // "retaining X shares"
-    /retain(?:ing)?\s*([\d,]+)\s*shares?/i,
+    /retain(?:ing|s)?\s*([\d,]+)\s*shares?/i,
+    // "continues to hold X shares" or "will continue to own X shares"
+    /continue[s]?\s+to\s+(?:hold|own)\s*([\d,]+)\s*shares?/i,
+    // "remaining position of X shares"
+    /remaining\s+(?:position|stake)\s+(?:of\s+)?([\d,]+)\s*shares?/i,
+    // "Ownership Following Transaction: X" (SEC form field name)
+    /(?:ownership|holdings?)\s+(?:following|after)\s+(?:the\s+)?(?:transaction|reported|sale)[:\s]*([\d,]+)/i,
   ];
 
   for (const pattern of patterns) {
     const match = text.match(pattern);
     if (match?.[1]) {
-      // Format with commas
-      return match[1].replace(/,/g, '').replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+      const numStr = match[1].replace(/,/g, '');
+      const num = parseInt(numStr, 10);
+      // Sanity check - remaining holdings should be a reasonable number
+      if (num > 0 && num < 1000000000) {
+        return numStr.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+      }
     }
   }
 

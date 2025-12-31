@@ -252,7 +252,7 @@ export const FORM_SCHEMAS: Record<string, JSONSchema> = {
 
   '144': {
     type: 'object',
-    required: ['company', 'summary', 'filerName', 'shares', 'estimatedValue', 'signalStrength'],
+    required: ['company', 'summary', 'filerName', 'shares', 'estimatedValue', 'remainingHoldings', 'signalStrength'],
     properties: {
       ...BASE_SCHEMA_PROPERTIES,
       filerName: {
@@ -505,15 +505,16 @@ const FORM_EXTRACTION_GUIDANCE: Record<string, string> = {
   '144': `FORM 144 EXTRACTION RULES:
 - Form 144 is a NOTICE OF PROPOSED SALE - shares haven't been sold yet, this is intent to sell
 - Extract filer name exactly as shown, and their title/role (CEO, Director, CFO, etc.)
-- Find the number of shares proposed for sale and calculate estimated value (shares × approx price)
-- IMPORTANT: Extract "Amount of Securities Beneficially Owned Following Reported Transaction(s)" as remainingHoldings - this is how many shares the filer will still own after the proposed sale
+- CRITICAL: Find the EXACT number of shares proposed for sale - look for "Amount of Securities to be Sold" or similar. Format with commas (e.g., "56,820")
+- Calculate estimated value (shares × approx price per share) and format as "$X.XM" or "$X,XXX,XXX"
+- REQUIRED: Extract "Amount of Securities Beneficially Owned Following Reported Transaction(s)" as remainingHoldings - this is the total shares the filer will STILL OWN after the proposed sale
 - Look for 10b5-1 trading plan references - if mentioned, note plan adoption date
 - Check if filing mentions recent related sales by same insider for context
 - The summary MUST lead with: ticker, insider name, shares count, and dollar value
 - Signal assessment (2-level system):
   * "Notable Sale" - Use when: >$10M value, >5% of holdings, unusual timing, or part of large divestiture pattern
   * "Routine 10b5-1" - Use when: pre-planned under 10b5-1 trading plan, regular/scheduled sale, or small relative to holdings
-- Write summary as: "[Name] ([Role]) plans to sell [shares] [TICKER] shares worth [value]..."`,
+- Write summary as: "[Name] ([Role]) proposes to sell [shares] [TICKER] shares worth [value]. Following this transaction, they will still hold [remainingHoldings] shares."`,
 };
 
 export function generateFilingPrompt(config: FilingPromptConfig): PromptOutput {

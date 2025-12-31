@@ -1,11 +1,43 @@
 # Current Progress: tldrsec-ai Pipeline Operations
 
 ## Current Status
-**Date**: 2025-12-30
-**Branch**: feature/landing-page-stripe-redesign
+**Date**: 2025-12-31
+**Branch**: feature/premium-to-max-rename
 **Status**: ✅ OPERATIONAL - Pipeline Running, Stripe Integration Active
 
-### Active: PREMIUM → MAX Tier Rename ✅ COMPLETE (2025-12-30)
+### Active: Schedule 13G/D Email Link Fix ✅ COMPLETE (2025-12-31)
+
+**Issue**: Four UI/UX issues with SEC filing summary pages:
+1. 13G filing shows "SCHEDULE" instead of "SCHEDULE 13G" - poor UX
+2. Border around summary div too prominent
+3. Text misaligned with header text
+4. Filing link redirects to index page instead of actual filing document
+
+**Root Cause**:
+- `formatFilingType()` function didn't handle Schedule 13G/D variants
+- Database stores filings as "SCHEDULE" without the "13G" suffix
+- Email URLs for Schedule 13G/D pointed to `-index.htm` (filing detail pages) instead of XSLT-rendered documents
+- SEC Schedule 13G/D filings use specific stylesheets at `xslSCHEDULE_13G_X01/primary_doc.xml`
+
+**Fixes Applied**:
+1. **Added Schedule 13G/D to formatFilingType()** - Both `summary-card.tsx` and `app/summary/[id]/page.tsx` now handle Schedule 13G/D variants
+2. **Removed summary div border** - Changed from `bg-white rounded-lg shadow p-6` to `rounded-lg p-6`
+3. **Added text alignment padding** - Added `pl-10` to align text with header
+4. **Smart URL conversion for Schedule 13 filings** - Updated `getSecFilingViewerUrl()` to:
+   - Detect Schedule 13G/D filings via `isSchedule13Type()` helper
+   - Convert `-index.htm` URLs to `xslSCHEDULE_13G_X01/primary_doc.xml` format
+   - Added stylesheet directory mapping in `getXsltStylesheetDir()`
+
+**Files Modified**:
+- `lib/email/url-utils.ts` - Added Schedule 13G/D stylesheet support, `isSchedule13Type()` helper, index-to-document URL conversion
+- `app/summary/[id]/page.tsx` - Added `formatFilingType()`, imported `getSecFilingViewerUrl`, removed border, added alignment
+- `components/summary/summary-card.tsx` - Added Schedule 13G/D cases to `formatFilingType()`
+
+**Verification**: ✅ Test emails sent, ✅ URLs return 200 status, ✅ User confirmed "working now"
+
+---
+
+### Previous: PREMIUM → MAX Tier Rename ✅ COMPLETE (2025-12-30)
 
 **Issue**: Rename "Premium" tier to "Max" tier across the codebase for consistency with new pricing structure ($0 Free / $99 Pro / $139 Max).
 
@@ -296,188 +328,6 @@ Fixed intermittent JSON parsing failures caused by AI models forgetting to close
 
 ---
 
-### Previous: Form 4 Email Improvements ✅ COMPLETE (2025-12-28)
-
-**Purpose**: Fix two Form 4 email issues: (1) XML links going to raw files, (2) Sparse/incomplete email content.
-
-**Two Fixes Implemented**:
-
-1. **XML URL Conversion** - Form 4 XML document URLs now convert to Filing Detail pages
-   - Problem: Email links went to raw XML files (not user-friendly)
-   - Solution: Added XML pattern detection in `getSecFilingViewerUrl()`
-   - File: `lib/email/url-utils.ts`
-
-2. **Form 4 Data Extraction** - Extract structured data from markdown summaries
-   - Problem: `summaryJSON` contained metadata, not transaction data
-   - Root cause: AI returns comprehensive markdown in `summaryText`, not JSON in `summaryJSON`
-   - Solution: New extractor parses markdown to populate email template
-   - Files:
-     - `lib/email/form4-data-extractor.ts` (NEW - markdown parser)
-     - `components/ui/email/templates/form4-minimalist-template.tsx` (uses extractor as fallback)
-
-**What the Extractor Captures**:
-- Filer name and role (e.g., "Mark A. Stevens", "Director")
-- Transaction details from markdown tables (type, shares, price, A/D)
-- Total value calculation (e.g., "$40.1M")
-- Signal strength determination (10b5-1, gift, large position change)
-- Stake information (previous, current, percent change)
-
-**Verification**:
-- ✅ Build passes
-- ✅ Lint passes
-- ✅ Extraction test passes with real NVDA Form 4 data
-
----
-
-### Previous: Test Data Integrity Improvements ✅ COMPLETE (2025-12-27)
-
-**Purpose**: Improve test data tracking and email delivery consistency for multi-user scenarios.
-
-**Three-Phase Implementation**:
-
-1. **Phase 1: Test Data Markers** - Added `StoreSummaryOptions` interface to mark summaries with test metadata
-   - Files: `services/filings/database/filingDatabase.ts` (interface + metadata injection)
-   - Files: `services/filings/summaries/filingSummaryService.ts` (options threading)
-   - Files: `services/filings/email/sendEmailSummary.ts` (pass options downstream)
-
-2. **Phase 2: Email Delivery Tracking Gap** - Fixed missing database ID propagation
-   - Problem: `trackEmailDelivery()` couldn't work because `FilingSummaryResult` lacked `databaseId`
-   - Solution: Updated `storeSummary()` to return `summaryIds[]` and propagate through the pipeline
-   - Files: `services/filing/types.ts` (added `databaseId`, `isCacheHit` fields)
-   - Files: `services/filings/database/filingDatabase.ts` (return IDs from storage)
-   - Files: `services/filings/summaries/filingSummaryService.ts` (capture and return databaseId)
-
-3. **Phase 3: Audit Helpers** - CLI tools for detecting/fixing inconsistencies
-   - Created `lib/audit/summary-audit.ts` with audit functions
-   - Created `scripts/audit-test-data.ts` CLI tool (report, find-test, cleanup, fix-tracking)
-   - Added npm scripts: `npm run audit:test-data:*`
-
-**Key Commands**:
-```bash
-npm run audit:test-data:report        # Generate audit report
-npm run audit:test-data:find          # Find test-generated summaries
-npm run audit:test-data:cleanup       # Dry-run cleanup
-npm run audit:test-data:fix           # Fix delivery tracking inconsistencies
-```
-
----
-
-### Previous: Email URL Verification for All Form Types ✅ COMPLETE (2025-12-27)
-
-**Purpose**: Verify email links work correctly for ALL SEC form types after the Email Filing Link Fix.
-
-**Tests Created**:
-1. `scripts/test-email-all-form-types.ts` - Verifies URLs from database summaries
-2. `scripts/test-url-extraction-form-types.ts` - Verifies URL extraction from live SEC API
-
-**Verification Results** (All 6 form types verified):
-| Form Type | URL Type | Status |
-|-----------|----------|--------|
-| 10-K | primary_doc | ✅ Direct document link |
-| 10-Q | primary_doc | ✅ Direct document link |
-| 8-K | primary_doc | ✅ Direct document link |
-| Form 4 | primary_doc | ✅ Direct document link |
-| Form 3 | primary_doc | ✅ Direct document link |
-| Form 144 | primary_doc | ✅ Direct document link |
-
-**Key Finding**: `getSecFilingViewerUrl()` correctly passes document URLs through unchanged.
-
----
-
-### Previous: Email Filing Link Fix ✅ COMPLETE (2025-12-26)
-
-**Issue**: Email "View Full Filing on SEC.gov" links went to SEC archive directory listings instead of actual filing documents.
-
-**Root Cause**: Pipeline stored `filingUrl` (directory URL) but not `primaryDocUrl` (actual document URL).
-
-**Fix Applied**:
-1. Modified `storeSummaryForTicker()` to store `primaryDocUrl` in `Summary.url` field
-2. Updated `directFilingSummaryService.ts` to pass `primaryDocUrl` in metadata
-3. Updated `summary-service.ts` and `digest-service.ts` to prefer `url` over `filingUrl`
-4. Created `lib/email/url-utils.ts` with `getSecFilingViewerUrl()` for URL normalization
-
-**Files Modified**:
-- `services/filings/database/filingDatabase.ts:202` - Store `metadata.primaryDocUrl` in `url` field
-- `services/filings/summaries/directFilingSummaryService.ts:300,373,475` - Pass `filing.primaryDocUrl`
-- `lib/email/summary-service.ts:146` - Use `summary.url || summary.filingUrl`
-- `lib/email/digest-service.ts:309` - Use `summary.url || summary.filingUrl`
-- `lib/email/url-utils.ts` - New file with URL normalization logic
-- `components/ui/email/templates/sections/EmailFooter.tsx` - Use `getSecFilingViewerUrl()`
-
-**Verification**:
-- ✅ Build successful
-- ✅ E2E test passed, email delivered
-- ✅ Playwright verified link goes to actual Form 4 document (not directory)
-- ✅ Test email sent with direct document URL
-- ✅ All 6 form types verified with test emails (2025-12-27)
-
----
-
-### Previous: Email Summary Discrepancies Fix ✅ COMPLETE (2025-12-26)
-
-**Issue**: Users not receiving email summaries despite SEC filings being published. Two root causes identified:
-
-1. **Job Type Mismatch**: 64 legacy `ASYNC_SUMMARIZE_FILING` jobs queued but never processed (only `ASYNC_FETCH_FILING` processed by pipeline)
-2. **findFirst() Bug**: Only the first user's ticker for a symbol received summaries (other users skipped)
-
-**Fix Applied**:
-- **Phase 1**: Feature flag default changed from opt-in (`=== 'true'`) to opt-out (`!== 'false'`)
-- **Phase 2**: Migration script created and executed - migrated 64 stuck jobs
-- **Phase 3**: `storeSummary()` changed from `findFirst()` to `findMany()` - now stores for ALL users tracking a ticker
-
-**Files Modified**:
-- `app/api/cron/tier-aware/route.ts` - Feature flag default
-- `services/filings/database/filingDatabase.ts` - Multi-user support with `StoreSummaryResult`
-- `scripts/migrate-legacy-jobs.ts` - Migration script (fixed `scheduledFor` field)
-- `package.json` - Added `migrate:legacy-jobs` npm scripts
-
-**Verification**:
-- ✅ 64 jobs migrated: `ASYNC_SUMMARIZE_FILING` → `ASYNC_FETCH_FILING`
-- ✅ 19 tests passing (including 9 new multi-user tests)
-- ✅ Build succeeds
-- ✅ Database shows 6 tickers with multiple users: KO, NVDA, VRT, CMG, TSLA, COIN
-
----
-
-### Previous: Phase 3 Supabase Cutover Complete (2025-12-24)
-
-**Supabase Migration Status**: ✅ FULLY OPERATIONAL
-- Database: Supabase (aws-1-ap-southeast-2.pooler.supabase.com)
-- Schemas: app (11 tables) + pipeline (19 tables)
-- Cron jobs: Running successfully (46+ SUCCESS records in last 24h)
-- Vercel: DATABASE_URL and DIRECT_URL updated
-
-**Verification Tests Created**:
-- `__tests__/integration/supabase-cutover.test.ts` - 10 tests verifying cutover
-- `app/api/health/pipeline/route.ts` - Added database source indicator
-
-**Phase 3 Checklist**:
-- [x] Update Vercel DATABASE_URL to Supabase pooler URL
-- [x] Update Vercel DIRECT_URL to Supabase session URL
-- [x] Deploy and verify cron jobs execute
-- [x] Create cutover verification tests
-- [x] Add database source indicator to health endpoint
-- [x] Manual verification complete (2025-12-24):
-  - Dashboard health API: ✅ Returning healthy status
-  - Pipeline health: ✅ DEGRADED (expected - holiday period, no new filings)
-  - Database: ✅ 2 users, 14 tickers, 68 summaries confirmed
-  - Cron jobs: ✅ 16 SUCCESS records, running every 10 minutes
-  - Email delivery: ✅ 10 sent deliveries tracked (last Dec 18)
-  - Supabase logs: ✅ No critical errors
-
----
-
-### Previous: Region Migration Fix (2025-12-24)
-
-**Issue**: Cron jobs failing with "Failed to initialize monitoring" (HTTP 500)
-- Root cause: Supabase migrated to new region
-- Old: `aws-0-ap-southeast-1.pooler.supabase.com`
-- New: `aws-1-ap-southeast-2.pooler.supabase.com`
-
-**Fix Applied**: Updated DATABASE_URL and DIRECT_URL in Vercel with new region endpoints.
-
----
-
 ## Quick Reference
 
 ### User-Tracked Tickers (13 total)
@@ -522,6 +372,7 @@ npm run cloudflare:status                 # Check deployment status
 
 | Week | Archive | Highlights |
 |------|---------|------------|
+| Dec 22-31 | [22-Dec-2025.md](.claude/history/2025/Dec/22-Dec-2025.md) | Supabase cutover, email link fixes, test data integrity |
 | Dec 15-18 | [15-Dec-2025.md](.claude/history/2025/Dec/15-Dec-2025.md) | Slack bot, lock cleanup, discovery fixes |
 | Dec 9-14 | [08-Dec-2025.md](.claude/history/2025/Dec/08-Dec-2025.md) | Prisma bug fix, orphaned jobs, cascade delete |
 | Dec 1-8 | [01-Dec-2025.md](.claude/history/2025/Dec/01-Dec-2025.md) | Email phases 1-3, daily verification |
@@ -531,7 +382,7 @@ npm run cloudflare:status                 # Check deployment status
 
 ---
 
-**Last Updated**: 2025-12-30 21:30 AEDT
+**Last Updated**: 2025-12-31 14:56 AEDT
 **Repository**: tldrsec-ai
 
 *See TIMELINE.md for master timeline and quick navigation*
