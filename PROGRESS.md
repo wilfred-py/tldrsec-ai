@@ -2,10 +2,28 @@
 
 ## Current Status
 **Date**: 2025-12-31
-**Branch**: feature/premium-to-max-rename
+**Branch**: feature/gmail-inbox-hero-improvements
 **Status**: ✅ OPERATIONAL - Pipeline Running, Stripe Integration Active
 
-### Active: Schedule 13G/D Email Link Fix ✅ COMPLETE (2025-12-31)
+### Active: Pricing Section Grok-Style Redesign ✅ COMPLETE (2025-12-31)
+
+**Issue**: Pricing section toggle and display needed modernization inspired by Grok's subscription page.
+
+**Changes**:
+1. **Grok-style toggle** - Custom toggle button with "Save with yearly billing" label
+2. **Annual pricing display** - Shows full annual price ($990.00 USD/year) with "saving X%" badge in orange
+3. **Monthly equivalent** - Helper text showing "$83/month when billed annually"
+4. **Updated card layout** - Popular badge inline, CTA after price, "Everything in Free/Pro" footer
+5. **Copy updates** - "Current Plan" (disabled), "Upgrade to Pro", "Upgrade to Max"
+
+**Files Modified**:
+- `components/landing/sections-v2/pricing-section-v2.tsx` - Complete Grok-inspired redesign
+
+**Verification**: ✅ Lint passes, no errors
+
+---
+
+### Previous: Schedule 13G/D Email Link Fix ✅ COMPLETE (2025-12-31)
 
 **Issue**: Four UI/UX issues with SEC filing summary pages:
 1. 13G filing shows "SCHEDULE" instead of "SCHEDULE 13G" - poor UX
@@ -382,7 +400,7 @@ npm run cloudflare:status                 # Check deployment status
 
 ---
 
-**Last Updated**: 2025-12-31 14:56 AEDT
+**Last Updated**: 2025-12-31 20:15 AEDT
 **Repository**: tldrsec-ai
 
 *See TIMELINE.md for master timeline and quick navigation*

@@ -4,7 +4,6 @@ import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Switch } from '@/components/ui/switch';
 import { Check, Zap, Sparkles, Crown } from 'lucide-react';
 import Link from 'next/link';
 import {
@@ -29,11 +28,12 @@ const plans = [
     icon: Zap,
     monthlyPrice: SUBSCRIPTION_PLANS.FREE.monthlyPrice,
     annualPrice: SUBSCRIPTION_PLANS.FREE.annualPrice,
-    description: 'Perfect for getting started',
+    description: 'Get started with SEC filings',
     features: SUBSCRIPTION_PLANS.FREE.features,
-    cta: 'Start Free',
+    cta: 'Current Plan',
     href: '/onboarding',
     popular: false,
+    disabled: true,
   },
   {
     key: 'PRO' as const,
@@ -41,11 +41,12 @@ const plans = [
     icon: Sparkles,
     monthlyPrice: SUBSCRIPTION_PLANS.PRO.monthlyPrice,
     annualPrice: SUBSCRIPTION_PLANS.PRO.annualPrice,
-    description: 'For serious investors',
+    description: 'Everything you need for serious investing',
     features: SUBSCRIPTION_PLANS.PRO.features,
-    cta: 'Start Free Trial',
+    cta: 'Upgrade to Pro',
     href: '/onboarding?plan=pro',
     popular: true,
+    disabled: false,
   },
   {
     key: 'MAX' as const,
@@ -53,20 +54,22 @@ const plans = [
     icon: Crown,
     monthlyPrice: SUBSCRIPTION_PLANS.MAX.monthlyPrice,
     annualPrice: SUBSCRIPTION_PLANS.MAX.annualPrice,
-    description: 'For power users',
+    description: 'For professional traders & analysts',
     features: SUBSCRIPTION_PLANS.MAX.features,
-    cta: 'Start Free Trial',
+    cta: 'Upgrade to Max',
     href: '/onboarding?plan=max',
     popular: false,
+    disabled: false,
   },
 ];
 
 /**
  * Pricing Section V2 Component
  *
- * Clean white cards with:
- * - Monthly/annual toggle with savings badge
- * - "Most Popular" badge on Pro plan
+ * Grok-inspired design with:
+ * - Clean toggle with "Save with yearly billing" label
+ * - Savings percentage badges on annual pricing
+ * - "Popular" badge on Pro plan
  * - Feature lists with checkmarks
  * - Clear CTA hierarchy
  */
@@ -75,9 +78,16 @@ export function PricingSectionV2() {
 
   const getPrice = (plan: typeof plans[0]) => {
     if (billingInterval === 'annual') {
-      return Math.round(plan.annualPrice / 12);
+      return plan.annualPrice;
     }
     return plan.monthlyPrice;
+  };
+
+  const getMonthlyEquivalent = (plan: typeof plans[0]) => {
+    if (billingInterval === 'annual' && plan.annualPrice > 0) {
+      return Math.round(plan.annualPrice / 12);
+    }
+    return null;
   };
 
   const getSavings = (plan: typeof plans[0]) => {
@@ -102,39 +112,34 @@ export function PricingSectionV2() {
           <p className="landing-body max-w-2xl mx-auto mb-8">
             Start free, upgrade when you&apos;re ready. No hidden fees.
           </p>
+        </motion.div>
 
-          {/* Billing Toggle */}
-          <div className="flex items-center justify-center gap-4">
+        {/* Billing Toggle - Grok Style */}
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={viewportOnce}
+          transition={{ duration: 0.4, delay: 0.1 }}
+          className="flex items-center justify-center gap-3 mb-12"
+        >
+          <span className="text-sm text-[var(--landing-text-muted)]">
+            Save with yearly billing
+          </span>
+          <button
+            onClick={() => setBillingInterval(billingInterval === 'monthly' ? 'annual' : 'monthly')}
+            className={`relative w-14 h-7 rounded-full transition-colors duration-200 ${
+              billingInterval === 'annual'
+                ? 'bg-[var(--landing-primary)]'
+                : 'bg-gray-300'
+            }`}
+            aria-label={`Switch to ${billingInterval === 'monthly' ? 'annual' : 'monthly'} billing`}
+          >
             <span
-              className={`text-sm font-medium ${
-                billingInterval === 'monthly'
-                  ? 'text-[var(--landing-secondary)]'
-                  : 'text-[var(--landing-text-muted)]'
+              className={`absolute top-1 w-5 h-5 bg-white rounded-full shadow-md transition-transform duration-200 ${
+                billingInterval === 'annual' ? 'translate-x-8' : 'translate-x-1'
               }`}
-            >
-              Monthly
-            </span>
-            <Switch
-              checked={billingInterval === 'annual'}
-              onCheckedChange={(checked) =>
-                setBillingInterval(checked ? 'annual' : 'monthly')
-              }
             />
-            <span
-              className={`text-sm font-medium ${
-                billingInterval === 'annual'
-                  ? 'text-[var(--landing-secondary)]'
-                  : 'text-[var(--landing-text-muted)]'
-              }`}
-            >
-              Annual
-            </span>
-            {billingInterval === 'annual' && (
-              <Badge className="bg-green-100 text-green-700 border-green-200">
-                2 months free
-              </Badge>
-            )}
-          </div>
+          </button>
         </motion.div>
 
         {/* Pricing Cards */}
@@ -143,96 +148,143 @@ export function PricingSectionV2() {
           initial="initial"
           whileInView="animate"
           viewport={viewportOnce}
-          className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-5xl mx-auto"
+          className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-5xl mx-auto"
         >
-          {plans.map((plan) => (
-            <motion.div
-              key={plan.name}
-              variants={staggerItem}
-              whileHover={{
-                y: -4,
-                boxShadow: '0 20px 40px -10px rgba(0, 0, 0, 0.15)',
-              }}
-              transition={{ duration: 0.2 }}
-              className={`landing-card relative flex flex-col ${
-                plan.popular
-                  ? 'ring-2 ring-[var(--landing-primary)] shadow-lg'
-                  : ''
-              }`}
-            >
-              {/* Popular Badge - positioned above and outside the card */}
-              {plan.popular && (
-                <div className="absolute -top-8 left-1/2 -translate-x-1/2">
-                  <Badge className="landing-badge whitespace-nowrap">
-                    Most Popular
-                  </Badge>
+          {plans.map((plan) => {
+            const savings = getSavings(plan);
+            const monthlyEquiv = getMonthlyEquivalent(plan);
+
+            return (
+              <motion.div
+                key={plan.name}
+                variants={staggerItem}
+                whileHover={{
+                  y: -4,
+                  boxShadow: '0 20px 40px -10px rgba(0, 0, 0, 0.15)',
+                }}
+                transition={{ duration: 0.2 }}
+                className={`landing-card relative flex flex-col ${
+                  plan.popular
+                    ? 'ring-2 ring-[var(--landing-primary)] shadow-lg'
+                    : ''
+                }`}
+              >
+                {/* Plan Header with Popular Badge inline */}
+                <div className="flex items-center justify-between mb-4">
+                  <div>
+                    <p className="text-xs text-[var(--landing-text-muted)] uppercase tracking-wide mb-1">
+                      {plan.key === 'FREE' ? 'Basic' : plan.name}
+                    </p>
+                    <h3
+                      className="text-2xl font-bold"
+                      style={{ color: 'var(--landing-secondary)' }}
+                    >
+                      {plan.monthlyPrice === 0 ? 'Free' : plan.name}
+                    </h3>
+                  </div>
+                  {plan.popular && (
+                    <Badge className="bg-[var(--landing-primary)] text-white text-xs px-2 py-0.5">
+                      Popular
+                    </Badge>
+                  )}
                 </div>
-              )}
 
-              {/* Plan Header */}
-              <div className="text-center mb-6 pt-4">
-                <div
-                  className="w-12 h-12 rounded-xl flex items-center justify-center mx-auto mb-4"
-                  style={{ backgroundColor: 'var(--landing-primary-light)' }}
-                >
-                  <plan.icon className="w-6 h-6 text-[var(--landing-primary)]" />
-                </div>
-                <h3
-                  className="text-xl font-bold mb-1"
-                  style={{ color: 'var(--landing-secondary)' }}
-                >
-                  {plan.name}
-                </h3>
-                <p className="landing-caption">{plan.description}</p>
-              </div>
-
-              {/* Price */}
-              <div className="text-center mb-6">
-                <span
-                  className="text-4xl font-bold"
-                  style={{ color: 'var(--landing-secondary)' }}
-                >
-                  ${getPrice(plan)}
-                </span>
-                <span className="text-[var(--landing-text-muted)]">/month</span>
-                {billingInterval === 'annual' && getSavings(plan) && (
-                  <p className="text-sm text-green-600 mt-1">
-                    Save {getSavings(plan)}%
-                  </p>
-                )}
-              </div>
-
-              {/* Features - grows to fill available space */}
-              <ul className="space-y-3 flex-grow">
-                {plan.features.map((feature) => (
-                  <li key={feature} className="flex items-center gap-3">
-                    <Check className="w-5 h-5 text-[var(--landing-success)] flex-shrink-0" />
-                    <span className="text-sm" style={{ color: 'var(--landing-text)' }}>
-                      {feature}
+                {/* Price Display - Grok Style */}
+                <div className="mb-6">
+                  <div className="flex items-baseline gap-1">
+                    <span
+                      className="text-4xl font-bold tracking-tight"
+                      style={{ color: 'var(--landing-secondary)' }}
+                    >
+                      ${getPrice(plan).toLocaleString()}{plan.monthlyPrice === 0 ? '' : '.00'}
                     </span>
-                  </li>
-                ))}
-              </ul>
+                    <span className="text-sm text-[var(--landing-text-muted)]">
+                      {plan.monthlyPrice === 0
+                        ? ''
+                        : billingInterval === 'annual'
+                          ? 'USD/year'
+                          : 'USD/month'
+                      }
+                    </span>
+                    {billingInterval === 'annual' && savings && savings > 0 && (
+                      <span className="text-sm font-medium text-orange-500 ml-1">
+                        saving {savings}%
+                      </span>
+                    )}
+                  </div>
+                  {monthlyEquiv && (
+                    <p className="text-xs text-[var(--landing-text-muted)] mt-1">
+                      ${monthlyEquiv}/month when billed annually
+                    </p>
+                  )}
+                </div>
 
-              {/* CTA - always at bottom */}
-              <div className="mt-8">
-                <Link
-                  href={`${plan.href}${billingInterval === 'annual' ? '&interval=annual' : ''}`}
-                  className="block"
-                >
-                  <Button
-                    className={`w-full ${
-                      plan.popular
-                        ? 'landing-button-primary'
-                        : 'landing-button-secondary'
-                    }`}
-                  >
-                    {plan.cta}
-                  </Button>
-                </Link>
-              </div>
-            </motion.div>
-          ))}
+                {/* CTA Button - Positioned after price like Grok */}
+                <div className="mb-6">
+                  {plan.disabled ? (
+                    <Button
+                      className="w-full bg-gray-100 text-gray-500 border border-gray-200 cursor-default hover:bg-gray-100"
+                      disabled
+                    >
+                      {plan.cta}
+                    </Button>
+                  ) : (
+                    <Link
+                      href={`${plan.href}${billingInterval === 'annual' ? '&interval=annual' : ''}`}
+                      className="block"
+                    >
+                      <Button
+                        className={`w-full ${
+                          plan.popular
+                            ? 'landing-button-primary'
+                            : 'landing-button-secondary'
+                        }`}
+                      >
+                        {plan.cta}
+                      </Button>
+                    </Link>
+                  )}
+                </div>
+
+                {/* Features */}
+                <ul className="space-y-3 flex-grow">
+                  {plan.features.map((feature, idx) => {
+                    // Parse **text** markdown bold syntax
+                    const parts = feature.split(/(\*\*[^*]+\*\*)/);
+                    return (
+                      <li key={idx} className="flex items-start gap-3">
+                        <Check className="w-4 h-4 text-[var(--landing-success)] flex-shrink-0 mt-0.5" />
+                        <span className="text-sm" style={{ color: 'var(--landing-text)' }}>
+                          {parts.map((part, i) => {
+                            if (part.startsWith('**') && part.endsWith('**')) {
+                              return (
+                                <strong key={i} className="font-semibold">
+                                  {part.slice(2, -2)}
+                                </strong>
+                              );
+                            }
+                            return part;
+                          })}
+                        </span>
+                      </li>
+                    );
+                  })}
+                </ul>
+
+                {/* "Everything in X" footer for higher tiers */}
+                {plan.key !== 'FREE' && (
+                  <div className="mt-4 pt-4 border-t border-gray-100">
+                    <div className="flex items-center gap-2 text-sm text-[var(--landing-text-muted)]">
+                      <span className="text-[var(--landing-primary)]">+</span>
+                      <span>
+                        Everything in {plan.key === 'PRO' ? 'Free' : 'Pro'}
+                      </span>
+                    </div>
+                  </div>
+                )}
+              </motion.div>
+            );
+          })}
         </motion.div>
       </div>
     </section>
