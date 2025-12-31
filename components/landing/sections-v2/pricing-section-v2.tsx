@@ -162,7 +162,7 @@ export function PricingSectionV2() {
             >
               {/* Popular Badge - positioned above and outside the card */}
               {plan.popular && (
-                <div className="absolute -top-4 left-1/2 -translate-x-1/2">
+                <div className="absolute -top-8 left-1/2 -translate-x-1/2">
                   <Badge className="landing-badge whitespace-nowrap">
                     Most Popular
                   </Badge>
