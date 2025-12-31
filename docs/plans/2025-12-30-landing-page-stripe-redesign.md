@@ -1,8 +1,8 @@
 # Landing Page Redesign with Stripe Integration - Implementation Plan
 
-**Date**: 2025-12-30 15:00:11 AEDT (Updated: 2025-12-30 16:30 AEDT)
+**Date**: 2025-12-30 15:00:11 AEDT (Updated: 2025-12-31 - Premium renamed to Max)
 **Git Commit**: a1a6529a49b51ab27c55f71a4b4013889b63eb81
-**Branch**: main
+**Branch**: feature/premium-to-max-rename
 **Repository**: tldrsec-ai
 
 ## Implementation Status: COMPLETE
@@ -15,13 +15,15 @@ All 6 phases have been implemented and verified:
 - Phase 5: Stripe Checkout with Annual Billing
 - Phase 6: Final Integration & Testing
 
+**Naming Update (2025-12-31)**: "Premium" tier renamed to "Max" throughout the codebase for brand consistency.
+
 **Tests Passing**: 28/28 (16 Stripe + 12 Ticker Confirmation)
 **Build Status**: SUCCESS
 **Lint Status**: CLEAN
 
 ## Overview
 
-Implement a new landing page with 3-tier pricing ($0 Free, $99 Pro, $139 Premium), manually curated filing previews, animated dialogs for full summary viewing, Stripe checkout with annual billing support, and a new ticker confirmation flow that triggers quarterly earnings emails. The implementation ensures zero downtime by using feature flags and preserving the existing waitlist at `/waitlist`.
+Implement a new landing page with 3-tier pricing ($0 Free, $99 Pro, $139 Max), manually curated filing previews, animated dialogs for full summary viewing, Stripe checkout with annual billing support, and a new ticker confirmation flow that triggers quarterly earnings emails. The implementation ensures zero downtime by using feature flags and preserving the existing waitlist at `/waitlist`.
 
 ## User Requirements (Clarified)
 
@@ -30,19 +32,19 @@ Implement a new landing page with 3-tier pricing ($0 Free, $99 Pro, $139 Premium
 |------|---------|------------------------|
 | Free | $0 | $0 |
 | Pro | $99/month | $990/year |
-| Premium | $139/month | $1,390/year |
+| Max | $139/month | $1,390/year |
 
 ### Tier Features
 - **Free Tier**: 3 tickers, weekly digest, 10-K/10-Q summaries only
 - **Pro Tier**: 10 tickers, real-time alerts, all filing types
-- **Premium Tier**: Unlimited tickers, API access, priority support
+- **Max Tier**: Unlimited tickers, API access, priority support
 
 ### Key Business Requirements
-1. **Premium → Direct to Onboarding**: NO contact sales - straight to onboarding as trial user
+1. **Max → Direct to Onboarding**: NO contact sales - straight to onboarding as trial user
 2. **Ticker Confirmation Flow**: Users confirm portfolio and receive quarterly earnings emails
 3. **Filing Previews**: Manually curated impressive filings (NOT algorithmic database queries)
 4. **Dialog Content**: Show FULL summary (NOT truncated/teaser)
-5. **Dashboard Upgrades**: Show "Upgrade" / "Start Premium" CTAs for free tier users
+5. **Dashboard Upgrades**: Show "Upgrade" / "Start Max" CTAs for free tier users
 6. **1-Minute Grace Period**: If user re-confirms within 1 minute, only email for new tickers
 
 ---
@@ -59,7 +61,7 @@ Implement a new landing page with 3-tier pricing ($0 Free, $99 Pro, $139 Premium
 - **Webhook Handler**: `/app/api/webhook/stripe/route.ts` - Handles 6 event types
 - **Checkout Flow**: `/app/api/user/subscription/route.ts:106-235` - Creates checkout sessions
 - **Billing Portal**: `/app/api/billing/portal/route.ts:17-68`
-- **Current Pricing**: $9 BASIC, $29 PROFESSIONAL, $99 PREMIUM (in `lib/stripe.ts:38-81`)
+- **Current Pricing**: $0 FREE, $99 PRO, $139 MAX (in `lib/stripe.ts:38-93`)
 
 ### Existing Onboarding
 - **Location**: `/app/(auth)/onboarding/page.tsx`
@@ -141,7 +143,7 @@ After implementation:
 ## Phase 1: Stripe Configuration ($99/$139 with Annual Billing) ✅ COMPLETED
 
 ### Overview
-Set up new Stripe price IDs for $99 Pro and $139 Premium with annual billing options.
+Set up new Stripe price IDs for $99 Pro and $139 Max with annual billing options.
 
 ### Step 1.1: ✅ Write Failing Tests (COMPLETED)
 
@@ -177,19 +179,19 @@ describe('Stripe Pricing Configuration', () => {
     });
   });
 
-  describe('Premium Tier', () => {
+  describe('Max Tier', () => {
     it('should have $139/month price', () => {
-      const plan = getPlanConfig('PREMIUM');
+      const plan = getPlanConfig('MAX');
       expect(plan?.monthlyPrice).toBe(139);
     });
 
     it('should have $1390/year annual price (2 months free)', () => {
-      const plan = getPlanConfig('PREMIUM');
+      const plan = getPlanConfig('MAX');
       expect(plan?.annualPrice).toBe(1390);
     });
 
     it('should have unlimited tickers', () => {
-      const plan = getPlanConfig('PREMIUM');
+      const plan = getPlanConfig('MAX');
       expect(plan?.tickerLimit).toBe(-1);
     });
   });
@@ -197,16 +199,16 @@ describe('Stripe Pricing Configuration', () => {
   describe('Valid Stripe Price IDs', () => {
     it('should have valid monthly price IDs for paid tiers', () => {
       const pro = getPlanConfig('PRO');
-      const premium = getPlanConfig('PREMIUM');
+      const max = getPlanConfig('MAX');
       expect(pro?.monthlyPriceId).toMatch(/^price_/);
-      expect(premium?.monthlyPriceId).toMatch(/^price_/);
+      expect(max?.monthlyPriceId).toMatch(/^price_/);
     });
 
     it('should have valid annual price IDs for paid tiers', () => {
       const pro = getPlanConfig('PRO');
-      const premium = getPlanConfig('PREMIUM');
+      const max = getPlanConfig('MAX');
       expect(pro?.annualPriceId).toMatch(/^price_/);
-      expect(premium?.annualPriceId).toMatch(/^price_/);
+      expect(max?.annualPriceId).toMatch(/^price_/);
     });
   });
 });
@@ -258,10 +260,10 @@ export const SUBSCRIPTION_PLANS = {
       'Email support',
     ],
   },
-  PREMIUM: {
-    name: 'Premium',
-    monthlyPriceId: process.env.STRIPE_PREMIUM_MONTHLY_PRICE_ID || '',
-    annualPriceId: process.env.STRIPE_PREMIUM_ANNUAL_PRICE_ID || '',
+  MAX: {
+    name: 'Max',
+    monthlyPriceId: process.env.STRIPE_MAX_MONTHLY_PRICE_ID || '',
+    annualPriceId: process.env.STRIPE_MAX_ANNUAL_PRICE_ID || '',
     monthlyPrice: 139,
     annualPrice: 1390, // 2 months free (10 months × $139)
     tickerLimit: -1, // unlimited
@@ -289,11 +291,11 @@ export function getPlanConfig(planType: keyof typeof SUBSCRIPTION_PLANS) {
 ```bash
 # Stripe Price IDs - Monthly
 STRIPE_PRO_MONTHLY_PRICE_ID=price_xxx_pro_monthly
-STRIPE_PREMIUM_MONTHLY_PRICE_ID=price_xxx_premium_monthly
+STRIPE_MAX_MONTHLY_PRICE_ID=price_xxx_max_monthly
 
 # Stripe Price IDs - Annual (2 months free)
 STRIPE_PRO_ANNUAL_PRICE_ID=price_xxx_pro_annual
-STRIPE_PREMIUM_ANNUAL_PRICE_ID=price_xxx_premium_annual
+STRIPE_MAX_ANNUAL_PRICE_ID=price_xxx_max_annual
 
 # Feature Flag
 NEXT_PUBLIC_LANDING_PAGE_ENABLED=false
@@ -316,8 +318,8 @@ npm run test -- --testPathPattern="stripe-pricing"
 **Manual Actions Required:**
 1. Create Pro Monthly: $99/month recurring
 2. Create Pro Annual: $990/year recurring
-3. Create Premium Monthly: $139/month recurring
-4. Create Premium Annual: $1,390/year recurring
+3. Create Max Monthly: $139/month recurring
+4. Create Max Annual: $1,390/year recurring
 5. Copy price IDs to environment variables
 
 **STOP**: Await manual confirmation before Phase 2.
@@ -738,13 +740,13 @@ import { Crown, Zap } from 'lucide-react';
 import Link from 'next/link';
 
 interface UpgradeCTASectionProps {
-  currentPlan: 'FREE' | 'PRO' | 'PREMIUM';
+  currentPlan: 'FREE' | 'PRO' | 'MAX';
   tickerCount: number;
   tickerLimit: number;
 }
 
 export function UpgradeCTASection({ currentPlan, tickerCount, tickerLimit }: UpgradeCTASectionProps) {
-  if (currentPlan === 'PREMIUM') return null;
+  if (currentPlan === 'MAX') return null;
 
   const isNearLimit = tickerCount >= tickerLimit * 0.8;
   const isAtLimit = tickerCount >= tickerLimit;
@@ -777,14 +779,14 @@ export function UpgradeCTASection({ currentPlan, tickerCount, tickerLimit }: Upg
     );
   }
 
-  // PRO tier - upsell to Premium
+  // PRO tier - upsell to Max
   return (
     <div className="bg-gradient-to-r from-amber-500 to-orange-500 rounded-lg p-6 text-white mt-6">
       <div className="flex items-center justify-between">
         <div>
           <h3 className="font-semibold text-lg flex items-center gap-2">
             <Crown className="w-5 h-5" />
-            Go Premium
+            Go Max
           </h3>
           <p className="text-amber-100 text-sm mt-1">
             Unlimited companies, API access, and dedicated support.
@@ -792,7 +794,7 @@ export function UpgradeCTASection({ currentPlan, tickerCount, tickerLimit }: Upg
         </div>
         <Link href="/dashboard/billing">
           <Button variant="secondary" className="bg-white text-amber-600 hover:bg-amber-50">
-            Start Premium - $139/mo
+            Start Max - $139/mo
           </Button>
         </Link>
       </div>
@@ -1071,7 +1073,7 @@ const session = await stripe.checkout.sessions.create({
 });
 ```
 
-### Step 5.2: Premium Tier → Direct to Onboarding
+### Step 5.2: Max Tier → Direct to Onboarding
 
 **File**: `components/landing/sections/pricing-section.tsx`
 
@@ -1082,9 +1084,9 @@ const handlePlanSelect = async (planKey: string, billingInterval: 'monthly' | 'a
     return;
   }
 
-  // Premium goes straight to onboarding (NOT contact sales)
-  if (planKey === 'PREMIUM') {
-    router.push('/sign-up?plan=premium&trial=true');
+  // Max goes straight to onboarding (NOT contact sales)
+  if (planKey === 'MAX') {
+    router.push('/sign-up?plan=max&trial=true');
     return;
   }
 
@@ -1135,8 +1137,8 @@ describe('Landing Page E2E', () => {
 #### Environment Variables:
 - [ ] `STRIPE_PRO_MONTHLY_PRICE_ID` set in Vercel
 - [ ] `STRIPE_PRO_ANNUAL_PRICE_ID` set in Vercel
-- [ ] `STRIPE_PREMIUM_MONTHLY_PRICE_ID` set in Vercel
-- [ ] `STRIPE_PREMIUM_ANNUAL_PRICE_ID` set in Vercel
+- [ ] `STRIPE_MAX_MONTHLY_PRICE_ID` set in Vercel
+- [ ] `STRIPE_MAX_ANNUAL_PRICE_ID` set in Vercel
 - [ ] `NEXT_PUBLIC_LANDING_PAGE_ENABLED=false` initially
 
 #### Database:
@@ -1144,7 +1146,7 @@ describe('Landing Page E2E', () => {
 - [ ] User model updated with new fields
 
 #### Stripe Dashboard:
-- [ ] 4 new prices created (Pro/Premium × Monthly/Annual)
+- [ ] 4 new prices created (Pro/Max × Monthly/Annual)
 - [ ] Webhook endpoint updated
 
 #### Features Verified:
@@ -1165,8 +1167,8 @@ describe('Landing Page E2E', () => {
 
 ### Stripe Product Updates
 1. Deprecate old $9/$29 prices (but keep for existing subscribers)
-2. Create new $99/$139 monthly prices
-3. Create new $990/$1390 annual prices
+2. Create new $99 Pro / $139 Max monthly prices
+3. Create new $990 Pro / $1390 Max annual prices
 
 ### Gradual Rollout
 1. Deploy with `NEXT_PUBLIC_LANDING_PAGE_ENABLED=false`

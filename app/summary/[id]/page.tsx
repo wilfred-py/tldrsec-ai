@@ -10,6 +10,7 @@ import { checkSummaryAccess, AccessDeniedError, ResourceNotFoundError } from '@/
 import { SummaryContent } from '@/components/summary/summary-content';
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
 import { AlertCircle } from 'lucide-react';
+import { getSecFilingViewerUrl } from '@/lib/email/url-utils';
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -18,6 +19,41 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
+
+// Format filing type for better display
+function formatFilingType(type: string): string {
+  const upperType = type.toUpperCase();
+  switch (upperType) {
+    case '10-K':
+    case '10K':
+      return '10-K';
+    case '10-Q':
+    case '10Q':
+      return '10-Q';
+    case '8-K':
+    case '8K':
+      return '8-K';
+    case 'SCHEDULE':
+    case 'SC 13G':
+    case 'SC13G':
+    case 'SCHEDULE 13G':
+      return 'Schedule 13G';
+    case 'SC 13G-A':
+    case 'SC13G-A':
+    case 'SCHEDULE 13G/A':
+      return 'Schedule 13G/A';
+    case 'SC 13D':
+    case 'SC13D':
+    case 'SCHEDULE 13D':
+      return 'Schedule 13D';
+    case 'SC 13D-A':
+    case 'SC13D-A':
+    case 'SCHEDULE 13D/A':
+      return 'Schedule 13D/A';
+    default:
+      return type;
+  }
+}
 
 interface SummaryPageProps {
   params: Promise<{
@@ -72,16 +108,16 @@ export default async function SummaryPage({ params }: SummaryPageProps) {
                     <ChevronRight className="h-4 w-4" />
                   </BreadcrumbSeparator>
                   <BreadcrumbItem>
-                    <BreadcrumbPage>{summary.ticker.symbol}: {summary.filingType}</BreadcrumbPage>
+                    <BreadcrumbPage>{summary.ticker.symbol}: {formatFilingType(summary.filingType)}</BreadcrumbPage>
                   </BreadcrumbItem>
                 </BreadcrumbList>
               </Breadcrumb>
-              
+
               <div className="flex flex-col space-y-2">
                 <div className="flex items-center space-x-2">
                   <Link href="/dashboard">
-                    <Button 
-                      variant="ghost" 
+                    <Button
+                      variant="ghost"
                       size="icon"
                       aria-label="Back to dashboard"
                     >
@@ -90,16 +126,16 @@ export default async function SummaryPage({ params }: SummaryPageProps) {
                     </Button>
                   </Link>
                   <h1 className="text-2xl font-bold">
-                    {summary.ticker.symbol}: {summary.filingType} Summary
+                    {summary.ticker.symbol}: {formatFilingType(summary.filingType)} Summary
                   </h1>
                 </div>
-                <div className="text-muted-foreground text-sm">
+                <div className="text-muted-foreground text-sm pl-10">
                   Filed {format(new Date(summary.filingDate), 'PPP')}
                   {' '}({formatDistanceToNow(new Date(summary.filingDate), { addSuffix: true })})
                 </div>
-                <div className="mt-2">
+                <div className="pl-10">
                   <a
-                    href={summary.filingUrl}
+                    href={getSecFilingViewerUrl(summary.filingUrl, summary.filingType)}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="text-blue-600 hover:underline text-sm focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 rounded"
@@ -109,8 +145,8 @@ export default async function SummaryPage({ params }: SummaryPageProps) {
                   </a>
                 </div>
               </div>
-              
-              <div className="bg-white rounded-lg shadow p-6">
+
+              <div className="rounded-lg p-6">
                 <SummaryContent summary={summary} />
               </div>
             </div>

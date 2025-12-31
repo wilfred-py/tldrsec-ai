@@ -54,7 +54,7 @@ function PricingCard({
       ? 'Start Free'
       : planKey === 'PRO'
         ? 'Start Pro Trial'
-        : 'Start Premium';
+        : 'Start Max';
 
   const ctaHref =
     planKey === 'FREE'
