@@ -48,25 +48,47 @@ function hasXsltStylesheet(url: string): boolean {
  * Get the appropriate XSLT stylesheet directory for a form type
  * - Form 3/4/5 (ownership forms): xslF345X05
  * - Form 144: xsl144X01
+ * - Schedule 13G: xslSCHEDULE_13G_X01
+ * - Schedule 13D: xslSCHEDULE_13D_X01
  *
  * @returns The stylesheet directory name, or null if unknown form type
  */
 function getXsltStylesheetDir(formType?: string): string | null {
   if (!formType) return null;
 
-  const normalizedType = formType.toLowerCase().replace(/\s+/g, '').replace('form', '');
+  const upperType = formType.toUpperCase().replace(/\s+/g, '');
 
   // Form 3, 4, 5 (ownership forms)
-  if (['3', '4', '5'].includes(normalizedType)) {
+  if (['3', '4', '5', 'FORM3', 'FORM4', 'FORM5'].includes(upperType)) {
     return 'xslF345X05';
   }
 
   // Form 144
-  if (normalizedType === '144') {
+  if (['144', 'FORM144'].includes(upperType)) {
     return 'xsl144X01';
   }
 
+  // Schedule 13G (including amendments and variations)
+  if (upperType.includes('13G') || upperType === 'SCHEDULE' || upperType === 'SC13G') {
+    return 'xslSCHEDULE_13G_X01';
+  }
+
+  // Schedule 13D (including amendments)
+  if (upperType.includes('13D') || upperType === 'SC13D') {
+    return 'xslSCHEDULE_13D_X01';
+  }
+
   return null; // Unknown form type - will fallback to index
+}
+
+/**
+ * Check if a form type is a Schedule 13G or 13D type
+ */
+function isSchedule13Type(formType?: string): boolean {
+  if (!formType) return false;
+  const upperType = formType.toUpperCase();
+  return upperType.includes('13G') || upperType.includes('13D') ||
+         upperType === 'SCHEDULE' || upperType.includes('SC 13') || upperType.includes('SC13');
 }
 
 /**
@@ -109,7 +131,23 @@ export function getSecFilingViewerUrl(filingUrl: string, formType?: string): str
     return 'https://www.sec.gov/edgar/searchedgar/companysearch.html';
   }
 
-  // If already an index URL, return as-is
+  // For Schedule 13G/13D filings with -index.htm URLs, construct the actual document URL
+  // SEC stores these as XML files rendered with XSLT stylesheets
+  if (filingUrl.includes('-index.htm') && isSchedule13Type(formType)) {
+    // Pattern: https://www.sec.gov/Archives/edgar/data/{CIK}/{ACCESSION}/{accession}-index.htm
+    const indexPattern = /^(https:\/\/www\.sec\.gov\/Archives\/edgar\/data\/\d+\/\d+\/)/;
+    const match = filingUrl.match(indexPattern);
+    if (match) {
+      const basePath = match[1];
+      const stylesheetDir = getXsltStylesheetDir(formType);
+      if (stylesheetDir) {
+        // Construct URL to the XSLT-rendered primary document
+        return `${basePath}${stylesheetDir}/primary_doc.xml`;
+      }
+    }
+  }
+
+  // If already an index URL (non-Schedule 13 types), return as-is
   if (filingUrl.includes('-index.htm')) {
     return filingUrl;
   }

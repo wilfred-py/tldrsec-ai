@@ -8,6 +8,8 @@ import * as React from 'react';
 import { Form4MinimalistTemplate } from '../../../components/ui/email/templates/form4-minimalist-template';
 import { Form10KMinimalistTemplate } from '../../../components/ui/email/templates/10k-minimalist-template';
 import { Form10QMinimalistTemplate } from '../../../components/ui/email/templates/10q-minimalist-template';
+import { Form8KMinimalistTemplate } from '../../../components/ui/email/templates/8k-minimalist-template';
+import { Form144MinimalistTemplate } from '../../../components/ui/email/templates/form144-minimalist-template';
 import { GenericMinimalistTemplate } from '../../../components/ui/email/templates/generic-minimalist-template';
 import { FilingTemplateData } from '../../../lib/email/types';
 import { EmailColors } from '../../../components/ui/email/design-system';
@@ -34,6 +36,13 @@ const MINIMALIST_TEMPLATE_REGISTRY: Record<string, React.ComponentType<{ filing:
   '10K': Form10KMinimalistTemplate,
   '10-Q': Form10QMinimalistTemplate,
   '10Q': Form10QMinimalistTemplate,
+  '8-K': Form8KMinimalistTemplate,
+  '8K': Form8KMinimalistTemplate,
+  'FORM 8-K': Form8KMinimalistTemplate,
+  'FORM8-K': Form8KMinimalistTemplate,
+  '144': Form144MinimalistTemplate,
+  'FORM 144': Form144MinimalistTemplate,
+  'FORM144': Form144MinimalistTemplate,
 };
 
 /**
