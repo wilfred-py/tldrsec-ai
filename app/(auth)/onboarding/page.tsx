@@ -8,7 +8,8 @@ import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { CheckCircle, ArrowRight, Building2, Cpu, Heart, Car, ShoppingCart, Zap, Home, Banknote, Search, Loader2 } from "lucide-react";
+import { CheckCircle, ArrowRight, Building2, Cpu, Heart, Car, ShoppingCart, Zap, Home, Banknote, Search, Loader2, ArrowLeft } from "lucide-react";
+import { EmailStep } from "@/components/onboarding/email-step";
 import { toast } from "sonner";
 import { NotificationPreference } from "@/lib/email/notification-types";
 import { 
@@ -189,14 +190,17 @@ export default function OnboardingPage() {
     }
   }, [isAuthenticated, isLoading, router]);
 
-  // Calculate progress based on current step and selections
+  // Calculate progress based on current step and selections (3-step flow)
   const calculateProgress = () => {
     if (currentStep === 1) {
-      // Step 1: 0% if no sectors selected, 50% if at least one sector is selected
-      return selectedSectors.length > 0 ? 50 : 0;
+      // Step 1: 0% if no sectors selected, 33% if at least one sector is selected
+      return selectedSectors.length > 0 ? 33 : 0;
+    } else if (currentStep === 2) {
+      // Step 2: 33% base + 33% if at least one company is selected
+      return 33 + (selectedEquities.length > 0 ? 33 : 0);
     } else {
-      // Step 2: 50% if no companies selected, 100% if at least one company is selected
-      return 50 + (selectedEquities.length > 0 ? 50 : 0);
+      // Step 3: 66% base, 100% when email submitted
+      return 66 + (isSubmitting ? 34 : 0);
     }
   };
 
@@ -250,9 +254,14 @@ export default function OnboardingPage() {
         setCurrentStep(2);
         setIsTransitioning(false);
       }, 300);
-    } else {
-      handleCompleteOnboarding();
+    } else if (currentStep === 2) {
+      setIsTransitioning(true);
+      setTimeout(() => {
+        setCurrentStep(3);
+        setIsTransitioning(false);
+      }, 300);
     }
+    // Step 3 completion is handled by handleEmailSubmit
   };
 
   // Handle skip button click
@@ -264,9 +273,18 @@ export default function OnboardingPage() {
   const handleBack = () => {
     setIsTransitioning(true);
     setTimeout(() => {
-      setCurrentStep(1);
+      setCurrentStep(currentStep - 1);
       setIsTransitioning(false);
     }, 300);
+  };
+
+  // Handle email submission from Step 3
+  // For now (Phase 2), this just completes the onboarding since user is authenticated
+  // In Phase 4, this will save to PendingOnboarding and redirect to Clerk
+  const handleEmailSubmit = async (_email: string) => {
+    // For authenticated flow, just complete the onboarding
+    // Email parameter will be used in Phase 4 when saving to PendingOnboarding
+    await handleCompleteOnboarding();
   };
 
   // Handle onboarding completion
@@ -378,15 +396,15 @@ export default function OnboardingPage() {
         <div className="mx-auto max-w-4xl">
           {/* Header */}
           <div className="mb-8 text-center">
-           
+
             <h1 className="mt-10 mb-2 text-2xl font-bold">Welcome to tldrSEC!</h1>
-            <p className="text-muted-foreground">Let&apos;s personalize your experience in just 2 quick steps.</p>
+            <p className="text-muted-foreground">Let&apos;s personalize your experience in just 3 quick steps.</p>
           </div>
 
           {/* Progress */}
           <div className="mb-8">
             <div className="mb-2 flex items-center justify-between text-sm">
-              <span className="font-medium">Step {currentStep} of 2</span>
+              <span className="font-medium">Step {currentStep} of 3</span>
               <span className="text-muted-foreground">{Math.round(progress)}% complete</span>
             </div>
             <Progress value={progress} className="h-2" />
@@ -544,7 +562,7 @@ export default function OnboardingPage() {
 
                     <div className="mt-8 flex items-center justify-between">
                       <Button variant="outline" onClick={handleBack}>
-                        <ArrowRight className="mr-2 h-4 w-4 rotate-180" />
+                        <ArrowLeft className="mr-2 h-4 w-4" />
                         Back
                       </Button>
                       <div className="flex items-center gap-4">
@@ -552,7 +570,7 @@ export default function OnboardingPage() {
                           {selectedEquities.length} of 5 companies selected
                         </span>
                         <Button onClick={handleNext} disabled={selectedEquities.length === 0}>
-                          Get Started
+                          Continue
                           <ArrowRight className="ml-2 h-4 w-4" />
                         </Button>
                       </div>
@@ -563,6 +581,27 @@ export default function OnboardingPage() {
 
               {/* Skip setup button below equities card */}
               {currentStep === 2 && (
+                <div className="mt-4 text-center">
+                  <Button variant="ghost" onClick={handleSkip} className="text-muted-foreground">
+                    Skip setup and go to dashboard
+                  </Button>
+                </div>
+              )}
+
+              {/* Step 3: Email Input */}
+              {currentStep === 3 && (
+                <div className="mx-auto max-w-md">
+                  <EmailStep
+                    onEmailSubmit={handleEmailSubmit}
+                    onBack={handleBack}
+                    selectedTickers={selectedEquities}
+                    isLoading={isSubmitting}
+                  />
+                </div>
+              )}
+
+              {/* Skip setup button below email card */}
+              {currentStep === 3 && (
                 <div className="mt-4 text-center">
                   <Button variant="ghost" onClick={handleSkip} className="text-muted-foreground">
                     Skip setup and go to dashboard

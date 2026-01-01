@@ -1199,7 +1199,12 @@ export default async function middleware(request: NextRequest) {
         '/pricing',
         '/about',
         '/privacy',
-        '/terms'
+        '/terms',
+
+        // Passwordless onboarding (public - no auth required)
+        '/onboarding',
+        '/api/onboarding/check-email',
+        '/api/onboarding/save-pending'
       ]
     }
   )(request);
