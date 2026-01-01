@@ -13,6 +13,9 @@ This file provides a chronological index of all completed projects. For detailed
 
 | Date | Project | Status |
 |------|---------|--------|
+| 2026-01-01 | Passwordless Onboarding Phase 5 (Clerk webhook pending merge) | ✅ |
+| 2026-01-01 | Passwordless Onboarding Phase 4 (save-pending API + Clerk redirect) | ✅ |
+| 2026-01-01 | Auto-Recovery Infrastructure (force-cleanup, trigger-redeploy, auto-recover) | ✅ |
 | 2026-01-01 | Gmail Inbox Hero Responsive Fix (landscape ratio, mobile-first) | ✅ |
 | 2026-01-01 | Dashboard Landing V2 Redesign (sidebar, cards, billing styling) | ⏳ |
 | 2026-01-01 | Admin Status API Route Fix (re-enabled disabled route) | ✅ |
@@ -107,11 +110,11 @@ This file provides a chronological index of all completed projects. For detailed
 ---
 
 ## Archive Statistics
-- **Total Archived Projects**: 6 weekly archives (Oct-Dec 2025)
-- **Current PROGRESS.md Lines**: 552 (threshold: 500)
+- **Total Archived Projects**: 7 weekly archives (Oct 2025 - Jan 2026)
+- **Current PROGRESS.md Lines**: 98 (threshold: 500)
 - **Last Sync**: 2026-01-01
 - **Archive System**: ✅ ACTIVE
-- **Next Archive Check**: When projects >30 days old exist (all current content <30 days old)
+- **Latest Archive**: Dec 29-Jan 4 (JSON parsing phases, bracket repair, cron trigger fix)
 
 **Archives**:
 - Weekly archives in `.claude/history/2025/` (Oct-Dec)

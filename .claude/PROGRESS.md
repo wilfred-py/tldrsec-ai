@@ -1,76 +1,73 @@
 # Project Progress
 
 **Date**: 2026-01-01
-**Branch**: feature/passwordless-onboarding
-**Status**: Auto-Recovery Infrastructure COMPLETE
+**Branch**: fix/database-upsert-and-imports
+**Status**: Passwordless Onboarding Phase 5 COMPLETE
 
 ---
 
-## Current Session: Auto-Recovery Infrastructure Implementation ✅ (2026-01-01)
+## Current Session: Passwordless Onboarding Implementation (2026-01-01)
 
-Implemented comprehensive auto-recovery infrastructure to eliminate manual redeployments when pipeline stalls occur.
+Implementing passwordless onboarding flow per plan `docs/plans/2026-01-01-passwordless-onboarding-implementation.md`.
 
-**Context**: Previous session required manual redeploy to fix cron system. This implementation adds automatic detection and remediation of pipeline stalls.
+**Progress**:
+- ✅ **Phase 1**: PendingOnboarding DB model (completed prior session)
+- ✅ **Phase 2**: EmailStep component (completed prior session)
+- ✅ **Phase 3**: Public onboarding route + check-email API (completed prior session)
+- ✅ **Phase 4**: Save-pending API + Clerk redirect (completed prior session)
+- ✅ **Phase 5**: Clerk Webhook Integration & Pending Data Merge (THIS SESSION)
 
-**Implemented Phases**:
-1. ✅ **Force Cleanup API** (`/api/admin/force-cleanup`) - Clears stale locks with rate limiting
-2. ✅ **Vercel Deploy Hook Integration** (`/api/admin/trigger-redeploy`) - Automated redeploy with cooldown
-3. ✅ **Auto-Recovery Orchestrator** (`/api/cron/auto-recover`) - Decision logic for cleanup vs redeploy
-4. ✅ **Cloudflare Worker Integration** - New `*/15 * * * *` cron schedule for health checks
-5. ✅ **Simulate Stall Test Endpoint** (`/api/admin/simulate-stall`) - For testing recovery in dev/test
+**Phase 5 Implementation Details**:
 
 **Files Created**:
-- `app/api/admin/force-cleanup/route.ts` - Force cleanup endpoint
-- `app/api/admin/trigger-redeploy/route.ts` - Deploy hook trigger
-- `app/api/cron/auto-recover/route.ts` - Recovery orchestrator
-- `app/api/admin/simulate-stall/route.ts` - Test simulation endpoint
-- `__tests__/api/admin/force-cleanup.test.ts` - 7 tests
-- `__tests__/api/admin/trigger-redeploy.test.ts` - 7 tests
-- `__tests__/api/cron/auto-recover.test.ts` - 6 tests
-- `__tests__/api/admin/simulate-stall.test.ts` - 10 tests
+- `__tests__/api/webhook-clerk-pending.test.ts` - 7 unit tests for webhook pending merge
 
 **Files Modified**:
-- `cloudflare-cron/wrangler.toml` - Added `*/15 * * * *` cron schedule
-- `cloudflare-cron/index.js` - Added `handleAutoRecovery` handler
+- `app/api/webhook/clerk/route.ts` - Added pending onboarding data merge logic
+
+**Key Logic**:
+When `user.created` webhook fires:
+1. Normalize email to lowercase
+2. Check `PendingOnboarding` table for matching email
+3. If found:
+   - Create user with `onboardingCompleted: true`
+   - Create tickers from pending data
+   - Delete pending record after successful merge
+4. If not found:
+   - Create user normally with `onboardingCompleted: false`
+
+**Error Handling**:
+- Ticker creation errors don't block user creation
+- Pending lookup errors don't block user creation
+- Logging for all operations
 
 **Verification**:
-- ✅ All 30 tests pass
-- ✅ No TypeScript errors in auto-recovery files
-- ✅ Rate limiting implemented (10/hour for cleanup, 1/hour cooldown for redeploy)
-- ✅ Production safety (simulate-stall disabled in production)
+- ✅ 7/7 webhook-clerk-pending unit tests pass
+- ✅ Build succeeds
+- ✅ Playwright E2E: Full 3-step flow → pending record created → redirect to Clerk
 
-**Next Steps**:
-- Deploy Cloudflare Worker with new cron schedule
-- Set `VERCEL_DEPLOY_HOOK_URL` environment variable in Vercel
-- Monitor auto-recovery in production
-
----
-
-## Previous Session: Cloudflare Worker Cron Pipeline Recovery ✅ (2026-01-01)
-
-Fixed the stopped email processing pipeline that had been down since 8 AM this morning.
-
-**Root Cause/Issue**: The Cloudflare Worker cron job stopped triggering properly after the last deployment at 4:00 AM. The worker was deployed but not executing scheduled tasks.
-
-**Fix**: Redeployed the Cloudflare Worker with proper configuration and verified all secrets were correctly set.
-
-**Files**:
-- `cloudflare-cron/index.js` - Main worker script
-- `cloudflare-cron/wrangler.toml` - Worker configuration
-
-**Verification**:
-- ✅ Worker redeployed successfully
-- ✅ All secrets configured (CRON_SECRET, ANTHROPIC_API_KEY, etc.)
-- ✅ Cron executing every 5 minutes for pipeline processing
-- ✅ Pipeline health status: HEALTHY
-- ✅ Successfully processed 1 discovery job
-- ✅ 12 jobs completed in last hour
+**Remaining Phases**:
+- Phase 6: Welcome Summary Delivery
+- Phase 7: Existing User Merge Modal
+- Phase 8: Cleanup Cron Job
 
 ---
 
 ## Recently Completed (Last 30 Days)
 
-*Recent completions are tracked in TIMELINE.md*
+### Auto-Recovery Infrastructure Implementation ✅ (2026-01-01)
+Implemented auto-recovery to eliminate manual redeployments for pipeline stalls.
+
+**Files Created**: `app/api/admin/force-cleanup/route.ts`, `app/api/admin/trigger-redeploy/route.ts`, `app/api/cron/auto-recover/route.ts`, `app/api/admin/simulate-stall/route.ts` + tests
+**Files Modified**: `cloudflare-cron/wrangler.toml`, `cloudflare-cron/index.js`
+**Verification**: 30 tests pass, rate limiting, production safety
+
+### Cloudflare Worker Cron Pipeline Recovery ✅ (2026-01-01)
+Fixed stopped email processing pipeline (8 AM outage).
+**Root Cause**: Worker stopped triggering after 4 AM deployment.
+**Fix**: Redeployed Cloudflare Worker with proper config.
+
+*See TIMELINE.md for older completions*
 
 ---
 
