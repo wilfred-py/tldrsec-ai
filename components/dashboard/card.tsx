@@ -21,8 +21,8 @@ export function DashboardCard({
   return (
     <div
       className={cn(
-        "rounded-lg border bg-card text-card-foreground",
-        active && "border-primary",
+        "landing-card",
+        active && "border-[var(--landing-primary)]",
         className
       )}
       {...props}

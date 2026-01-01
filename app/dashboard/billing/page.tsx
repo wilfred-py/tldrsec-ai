@@ -201,11 +201,11 @@ export default function BillingPage() {
     return (
       <div className="container mx-auto py-8 space-y-6">
         <div className="animate-pulse space-y-4">
-          <div className="h-8 bg-gray-200 rounded w-64"></div>
-          <div className="h-4 bg-gray-200 rounded w-96"></div>
+          <div className="h-8 bg-[var(--landing-border)] rounded w-64"></div>
+          <div className="h-4 bg-[var(--landing-border)] rounded w-96"></div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             {[1, 2, 3].map(i => (
-              <div key={i} className="h-96 bg-gray-200 rounded-lg"></div>
+              <div key={i} className="h-96 bg-[var(--landing-border)] rounded-lg"></div>
             ))}
           </div>
         </div>
@@ -315,13 +315,13 @@ export default function BillingPage() {
         <h2 className="text-2xl font-semibold mb-6">Available Plans</h2>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           {Object.entries(AVAILABLE_PLANS).map(([planKey, plan]) => (
-            <Card 
-              key={planKey} 
-              className={`relative ${plan.recommended ? 'border-purple-200 shadow-lg' : ''}`}
+            <Card
+              key={planKey}
+              className={`relative landing-card ${plan.recommended ? 'ring-2 ring-[var(--landing-primary)] shadow-lg' : ''}`}
             >
               {plan.recommended && (
                 <div className="absolute -top-3 left-1/2 transform -translate-x-1/2">
-                  <Badge className="bg-purple-500 hover:bg-purple-600">
+                  <Badge className="bg-[var(--landing-primary)] hover:bg-[var(--landing-primary-hover)]">
                     Recommended
                   </Badge>
                 </div>

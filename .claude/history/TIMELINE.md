@@ -13,7 +13,11 @@ This file provides a chronological index of all completed projects. For detailed
 
 | Date | Project | Status |
 |------|---------|--------|
-| 2025-12-31 | Pricing Section Layout Shift Fix (fixed-width containers, toggle positioning) | ✅ |
+| 2026-01-01 | Gmail Inbox Hero Responsive Fix (landscape ratio, mobile-first) | ✅ |
+| 2026-01-01 | Dashboard Landing V2 Redesign (sidebar, cards, billing styling) | ⏳ |
+| 2026-01-01 | Admin Status API Route Fix (re-enabled disabled route) | ✅ |
+| 2026-01-01 | Pricing Section Layout Shift Fix (fixed-width, toggle position) | ✅ |
+| 2026-01-01 | Cloudflare Worker Cron Pipeline Recovery (8AM outage fix) | ✅ |
 | 2025-12-31 | Gmail Inbox Hero Phase 4 (timestamps, width, skeleton loader, click-to-close) | ✅ |
 | 2025-12-31 | Pricing Section Grok-Style Redesign (toggle, annual pricing, savings badge) | ✅ |
 | 2025-12-31 | Gmail Inbox Hero Phase 3 (fixed delivery, pause on read, column align, X clear) | ✅ |
@@ -96,69 +100,22 @@ This file provides a chronological index of all completed projects. For detailed
 
 ---
 
-## 2025
+## Historical Archive Placeholders
 
-### December 2025
-
-**Current Status**: ✅ Pipeline HEALTHY - E2E verified
-
-**Pipeline Status**:
-- Production: ✅ All cron endpoints operational
-- Database: ✅ Supabase (aws-1-ap-southeast-2)
-- Schemas: ✅ app (11 tables) + pipeline (19 tables)
-- E2E Test: ✅ 5/5 tickers, summaries stored, email delivered
-
-**Weekly Archives**:
-- [15-Dec-2025.md](2025/Dec/15-Dec-2025.md) - Slack bot, lock cleanup, discovery fixes
-- [08-Dec-2025.md](2025/Dec/08-Dec-2025.md) - Prisma bug fix, orphaned jobs, cascade delete
-- [01-Dec-2025.md](2025/Dec/01-Dec-2025.md) - Email phases 1-3, daily verification
-
----
-
-### November 2025
-
-**Week of 10-Nov-2025** → [10-Nov-2025.md](2025/Nov/10-Nov-2025.md)
-- Landing Page Copy Optimization ✅
-- Waitlist Button Transparency Fix ✅
-- Branch Conflicts Resolution ✅
-- Debug PR Command System Development ✅
-- Newsletter Subscription Database Fix ✅
-- Test Infrastructure Fixes ✅
-
-**Week of 03-Nov-2025** → [03-Nov-2025.md](2025/Nov/03-Nov-2025.md)
-- Critical Security & Performance Fixes ✅
-- Testing & Parallel Processing Framework ✅
-- Prevention & Governance Framework ✅
-- CI/CD Issues Resolution ✅
-
----
-
-### October 2025
-
-**Week of 27-Oct-2025** → [27-Oct-2025.md](2025/Oct/27-Oct-2025.md)
-- Newsletter Landing Page PMF Validation ✅
-- PR #225 CI/CD Fixes & Merge Analysis ✅
-- CI/CD Pipeline TypeScript/ESLint Fixes ✅
-- Database Migration Fix - User Table Reference ✅
-- Security Vulnerability Fix - npm audit ✅
-- GitHub MCP Server Installation ✅
+*Archive files will be created when PROGRESS.md exceeds 500 lines and contains projects older than 30 days*
 
 ---
 
 ## Archive Statistics
-- **Total Archived Projects**: 32 projects across 6 weekly archives
-- **Current PROGRESS.md Lines**: 406 (threshold: 500)
-- **Last Sync**: 2026-01-01 (Pricing Section Layout Shift Fix complete)
+- **Total Archived Projects**: 6 weekly archives (Oct-Dec 2025)
+- **Current PROGRESS.md Lines**: 552 (threshold: 500)
+- **Last Sync**: 2026-01-01
 - **Archive System**: ✅ ACTIVE
-- **Next Archive Check**: Below threshold - no archival needed
+- **Next Archive Check**: When projects >30 days old exist (all current content <30 days old)
 
 **Archives**:
-- `01-Dec-2025.md` - Email & verification (8 projects)
-- `08-Dec-2025.md` - Pipeline recovery (5 projects)
-- `15-Dec-2025.md` - Pipeline maturity (7 projects)
-- `10-Nov-2025.md` - Landing page & UI (6 projects)
-- `03-Nov-2025.md` - Infrastructure fixes (4 projects)
-- `27-Oct-2025.md` - Newsletter & Security (6 projects)
+- Weekly archives in `.claude/history/2025/` (Oct-Dec)
+- See Archive Index in PROGRESS.md for full listing
 
 ---
 
