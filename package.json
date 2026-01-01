@@ -74,6 +74,8 @@
     "test:samples": "node scripts/parsers/sample-content-reader.js",
     "test:extract-xbrl": "node scripts/parsers/extract-xbrl.js",
     "test:watch": "jest --watch --config=jest.config.mjs",
+    "test:db": "node -r dotenv/config ./node_modules/.bin/jest --config=jest.config.mjs --testPathPattern=__tests__/db --runInBand",
+    "test:db:pending": "node -r dotenv/config ./node_modules/.bin/jest --config=jest.config.mjs --testPathPattern=pending-onboarding --runInBand",
     "security:generate-keys": "npx tsx scripts/security/generate-api-keys.ts generate-keys",
     "security:generate-config": "npx tsx scripts/security/generate-api-keys.ts generate-config",
     "security:validate-env": "npx tsx scripts/security/generate-api-keys.ts validate-env",

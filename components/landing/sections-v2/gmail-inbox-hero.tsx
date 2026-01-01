@@ -520,7 +520,7 @@ function EmailRow({
       onMouseLeave={() => setIsHovered(false)}
       onClick={onSelect}
       style={{ height: `${EMAIL_ROW_HEIGHT}px`, minHeight: `${EMAIL_ROW_HEIGHT}px` }}
-      className={`flex items-center gap-3 px-4 border-b border-gray-100 cursor-pointer transition-colors duration-150 flex-shrink-0 ${
+      className={`flex items-center gap-2 sm:gap-3 px-2 sm:px-4 border-b border-gray-100 cursor-pointer transition-colors duration-150 flex-shrink-0 overflow-hidden ${
         isSelected
           ? 'bg-blue-100 border-l-4 border-l-blue-500'
           : isUnread
@@ -528,8 +528,8 @@ function EmailRow({
           : 'bg-white hover:bg-gray-50'
       }`}
     >
-      {/* Checkbox area - fixed width for alignment */}
-      <div className="flex items-center gap-2 flex-shrink-0 w-14">
+      {/* Checkbox area - responsive width */}
+      <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0 w-10 sm:w-14">
         <motion.div
           animate={{ scale: isHovered ? 1.1 : 1 }}
           onClick={onToggleCheck}
@@ -553,37 +553,34 @@ function EmailRow({
         </motion.button>
       </div>
 
-      {/* Unread indicator - fixed width for alignment */}
-      <div className="w-3 flex-shrink-0 flex items-center justify-center">
+      {/* Unread indicator - hidden on mobile to save space */}
+      <div className="hidden sm:flex w-3 flex-shrink-0 items-center justify-center">
         {isUnread && <div className="w-2 h-2 rounded-full bg-blue-500" />}
       </div>
 
-      {/* Ticker - fixed width for alignment */}
-      <div className="w-14 flex-shrink-0">
-        <span className={`font-semibold text-sm ${isUnread ? 'text-gray-900' : 'text-gray-600'}`}>
+      {/* Ticker - responsive width */}
+      <div className="w-12 sm:w-14 flex-shrink-0">
+        <span className={`font-semibold text-xs sm:text-sm ${isUnread ? 'text-gray-900' : 'text-gray-600'}`}>
           {email.ticker}
         </span>
       </div>
 
-      {/* Filing Type Badge - fixed width for alignment */}
-      <div className="w-16 flex-shrink-0">
-        <Badge className={`text-[10px] px-1.5 py-0 ${getFilingBadgeColor(email.filingType)}`}>
+      {/* Filing Type Badge - responsive, hidden on very small screens */}
+      <div className="hidden xs:block w-14 sm:w-16 flex-shrink-0">
+        <Badge className={`text-[9px] sm:text-[10px] px-1 sm:px-1.5 py-0 ${getFilingBadgeColor(email.filingType)}`}>
           {email.filingType}
         </Badge>
       </div>
 
       {/* Subject & Preview - flex grow takes remaining space */}
-      <div className="flex-grow min-w-0 flex items-center gap-2 overflow-hidden">
-        <span className={`text-sm truncate ${isUnread ? 'font-semibold text-gray-900' : 'text-gray-600'}`}>
+      <div className="flex-1 min-w-0 overflow-hidden">
+        <span className={`text-xs sm:text-sm truncate block ${isUnread ? 'font-semibold text-gray-900' : 'text-gray-600'}`}>
           {email.headline}
-        </span>
-        <span className="text-sm text-gray-400 truncate hidden lg:inline flex-shrink">
-          — {email.preview}
         </span>
       </div>
 
-      {/* Time - fixed width for alignment */}
-      <div className="flex-shrink-0 text-xs text-gray-400 w-20 text-right hidden md:block">
+      {/* Time - hidden on mobile */}
+      <div className="flex-shrink-0 text-[10px] sm:text-xs text-gray-400 w-16 sm:w-20 text-right hidden sm:block">
         {deliveryTimestamp
           ? formatSecondsAgo(Math.floor((currentTime - deliveryTimestamp) / 1000))
           : email.timeAgo}
@@ -608,10 +605,10 @@ function EmailDetailPanel({
       animate={{ opacity: 1, x: 0 }}
       exit={{ opacity: 0, x: 20 }}
       transition={{ duration: 0.2 }}
-      className="bg-white rounded-r-2xl overflow-hidden flex flex-col h-full"
+      className="bg-white rounded-r-2xl flex flex-col h-full max-h-full overflow-hidden"
     >
       {/* Header */}
-      <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+      <div className="flex-shrink-0 flex items-center justify-between px-5 py-4 border-b border-gray-100">
         <div className="flex items-center gap-3">
           <div
             className="w-10 h-10 rounded-lg flex items-center justify-center"
@@ -641,7 +638,7 @@ function EmailDetailPanel({
       </div>
 
       {/* Content */}
-      <div className="flex-grow overflow-y-auto px-5 py-4">
+      <div className="flex-1 min-h-0 overflow-y-auto px-5 py-4">
         {/* Headline */}
         <h3 className="text-lg font-semibold text-gray-900 mb-3">{email.headline}</h3>
 
@@ -688,7 +685,7 @@ function EmailDetailPanel({
       </div>
 
       {/* Footer CTA */}
-      <div className="px-5 py-4 bg-gray-50 border-t border-gray-100">
+      <div className="flex-shrink-0 px-5 py-4 bg-gray-50 border-t border-gray-100">
         <p className="text-xs text-gray-500 mb-3 text-center">
           This is a real AI-generated summary. Sign up to receive summaries for your portfolio.
         </p>
@@ -1060,47 +1057,47 @@ export const GmailInboxHero = memo<GmailInboxHeroProps>(({ className = '' }) => 
                 isExpanded ? 'z-50 h-full' : ''
               }`}
               style={!isExpanded ? {
-                // Viewport-responsive sizing: 95vw on mobile, 60vw on desktop, max 1000px
-                width: 'min(95vw, max(500px, 60vw))',
-                maxWidth: '1000px',
+                // Mobile-first: full width on small screens, wider on larger for landscape ratio
+                width: '100%',
+                maxWidth: 'min(95vw, 900px)',
               } : undefined}
             >
-              {/* Gmail Header */}
-              <div className="flex items-center gap-3 px-4 py-3 bg-gray-50 border-b border-gray-200">
-                <div className="flex gap-1.5">
-                  <div className="w-3 h-3 rounded-full bg-red-400" />
-                  <div className="w-3 h-3 rounded-full bg-yellow-400" />
-                  <div className="w-3 h-3 rounded-full bg-green-400" />
+              {/* Gmail Header - compact on mobile */}
+              <div className="flex items-center gap-2 sm:gap-3 px-2 sm:px-4 py-2 sm:py-3 bg-gray-50 border-b border-gray-200">
+                <div className="flex gap-1 sm:gap-1.5">
+                  <div className="w-2 h-2 sm:w-3 sm:h-3 rounded-full bg-red-400" />
+                  <div className="w-2 h-2 sm:w-3 sm:h-3 rounded-full bg-yellow-400" />
+                  <div className="w-2 h-2 sm:w-3 sm:h-3 rounded-full bg-green-400" />
                 </div>
-                <div className="flex-grow flex items-center justify-center gap-2">
-                  <Mail className="w-4 h-4 text-red-500" />
-                  <span className="text-sm font-medium text-gray-700">SEC Filing Summaries</span>
+                <div className="flex-grow flex items-center justify-center gap-1 sm:gap-2 min-w-0">
+                  <Mail className="w-3 h-3 sm:w-4 sm:h-4 text-red-500 flex-shrink-0" />
+                  <span className="text-xs sm:text-sm font-medium text-gray-700 truncate">SEC Filing Summaries</span>
                 </div>
                 {unreadCount > 0 && (
-                  <Badge className="bg-red-500 text-white text-xs px-2">
+                  <Badge className="bg-red-500 text-white text-[10px] sm:text-xs px-1.5 sm:px-2 flex-shrink-0">
                     {unreadCount} new
                   </Badge>
                 )}
                 {/* Expand/Collapse Button */}
                 <button
                   onClick={handleToggleExpand}
-                  className="p-1.5 rounded hover:bg-gray-200 transition-colors"
+                  className="p-1 sm:p-1.5 rounded hover:bg-gray-200 transition-colors flex-shrink-0"
                   title={isExpanded ? 'Minimize' : 'Expand'}
                 >
                   {isExpanded ? (
-                    <Minimize2 className="w-4 h-4 text-gray-500" />
+                    <Minimize2 className="w-3 h-3 sm:w-4 sm:h-4 text-gray-500" />
                   ) : (
-                    <Maximize2 className="w-4 h-4 text-gray-500" />
+                    <Maximize2 className="w-3 h-3 sm:w-4 sm:h-4 text-gray-500" />
                   )}
                 </button>
               </div>
 
-              {/* Toolbar */}
-              <div className="flex items-center gap-2 px-4 py-2 bg-gray-50 border-b border-gray-100">
+              {/* Toolbar - compact on mobile */}
+              <div className="flex items-center gap-1 sm:gap-2 px-2 sm:px-4 py-2 bg-gray-50 border-b border-gray-100">
                 {/* Master checkbox for select all/deselect all */}
                 <button
                   onClick={handleSelectAll}
-                  className="p-1.5 rounded hover:bg-gray-200 transition-colors flex items-center justify-center"
+                  className="p-1 sm:p-1.5 rounded hover:bg-gray-200 transition-colors flex items-center justify-center"
                   title={allChecked ? 'Deselect all' : 'Select all'}
                 >
                   <div
@@ -1127,32 +1124,32 @@ export const GmailInboxHero = memo<GmailInboxHeroProps>(({ className = '' }) => 
                   onClick={handleRefresh}
                   animate={{ rotate: isRefreshing ? 360 : 0 }}
                   transition={{ duration: 0.8 }}
-                  className="p-1.5 rounded hover:bg-gray-200 transition-colors"
+                  className="p-1 sm:p-1.5 rounded hover:bg-gray-200 transition-colors"
                   title="Refresh"
                 >
                   <RefreshCw className="w-4 h-4 text-gray-500" />
                 </motion.button>
-                <button className="p-1.5 rounded hover:bg-gray-200 transition-colors" title="Archive">
+                <button className="hidden sm:block p-1.5 rounded hover:bg-gray-200 transition-colors" title="Archive">
                   <Archive className="w-4 h-4 text-gray-500" />
                 </button>
-                <button className="p-1.5 rounded hover:bg-gray-200 transition-colors" title="Delete">
+                <button className="hidden sm:block p-1.5 rounded hover:bg-gray-200 transition-colors" title="Delete">
                   <Trash2 className="w-4 h-4 text-gray-500" />
                 </button>
-                <div className="h-5 w-px bg-gray-300 mx-1" />
-                <button className="p-1.5 rounded hover:bg-gray-200 transition-colors" title="More options">
+                <div className="hidden sm:block h-5 w-px bg-gray-300 mx-1" />
+                <button className="p-1 sm:p-1.5 rounded hover:bg-gray-200 transition-colors" title="More options">
                   <MoreVertical className="w-4 h-4 text-gray-500" />
                 </button>
                 <div className="flex-grow" />
-                <span className="text-xs text-gray-400">1-{displayedEmails.length} of {curatedSummaries.length}</span>
+                <span className="text-[10px] sm:text-xs text-gray-400">1-{displayedEmails.length} of {curatedSummaries.length}</span>
               </div>
 
               {/* Email List & Detail Overlay */}
               <div
-                className="relative flex"
+                className="relative flex overflow-hidden"
                 style={{
-                  // Viewport-responsive height: 60vh on mobile, 70vh on desktop when expanded
-                  // Default: 50vh on mobile, 560px capped on desktop
-                  height: isExpanded ? 'calc(100% - 110px)' : 'clamp(300px, 50vh, 560px)',
+                  // Landscape ratio: shorter height for wider appearance
+                  // Mobile: 250px min, Desktop: max 340px for clear landscape ratio
+                  height: isExpanded ? 'calc(100% - 110px)' : 'clamp(220px, 35vh, 340px)',
                 }}
               >
                 {/* Email List - Always full width, never shrinks */}
@@ -1173,35 +1170,35 @@ export const GmailInboxHero = memo<GmailInboxHeroProps>(({ className = '' }) => 
                         exit={{ opacity: 0 }}
                         className="w-full"
                       >
-                        {/* Skeleton loading rows */}
+                        {/* Skeleton loading rows - responsive */}
                         {Array.from({ length: INITIAL_EMAIL_COUNT }).map((_, index) => (
                           <div
                             key={index}
                             style={{ height: `${EMAIL_ROW_HEIGHT}px` }}
-                            className="flex items-center gap-3 px-4 border-b border-gray-100 animate-pulse"
+                            className="flex items-center gap-2 sm:gap-3 px-2 sm:px-4 border-b border-gray-100 animate-pulse"
                           >
                             {/* Checkbox skeleton */}
-                            <div className="flex items-center gap-2 flex-shrink-0 w-14">
+                            <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0 w-10 sm:w-14">
                               <div className="w-4 h-4 rounded bg-gray-200" />
                               <div className="w-4 h-4 rounded bg-gray-200" />
                             </div>
-                            {/* Unread dot skeleton */}
-                            <div className="w-3 flex-shrink-0" />
+                            {/* Unread dot skeleton - hidden on mobile */}
+                            <div className="hidden sm:block w-3 flex-shrink-0" />
                             {/* Ticker skeleton */}
-                            <div className="w-14 flex-shrink-0">
+                            <div className="w-12 sm:w-14 flex-shrink-0">
                               <div className="w-10 h-4 rounded bg-gray-200" />
                             </div>
-                            {/* Badge skeleton */}
-                            <div className="w-16 flex-shrink-0">
+                            {/* Badge skeleton - hidden on very small screens */}
+                            <div className="hidden xs:block w-14 sm:w-16 flex-shrink-0">
                               <div className="w-12 h-5 rounded-full bg-gray-200" />
                             </div>
                             {/* Subject skeleton */}
-                            <div className="flex-grow min-w-0 flex items-center gap-2">
+                            <div className="flex-1 min-w-0">
                               <div className="h-4 rounded bg-gray-200" style={{ width: `${60 + index * 10}%` }} />
                             </div>
-                            {/* Time skeleton */}
-                            <div className="flex-shrink-0 w-20 hidden md:block">
-                              <div className="w-16 h-3 rounded bg-gray-200 ml-auto" />
+                            {/* Time skeleton - hidden on mobile */}
+                            <div className="flex-shrink-0 w-16 sm:w-20 hidden sm:block">
+                              <div className="w-14 sm:w-16 h-3 rounded bg-gray-200 ml-auto" />
                             </div>
                           </div>
                         ))}
@@ -1235,7 +1232,7 @@ export const GmailInboxHero = memo<GmailInboxHeroProps>(({ className = '' }) => 
                       animate={{ x: 0, opacity: 1 }}
                       exit={{ x: '100%', opacity: 0 }}
                       transition={{ type: 'spring', stiffness: 300, damping: 30 }}
-                      className="absolute inset-0 bg-white z-10 md:left-auto md:w-[65%] lg:w-[60%] shadow-xl border-l border-gray-200"
+                      className="absolute inset-0 bg-white z-10 md:left-auto md:w-[65%] lg:w-[60%] shadow-xl border-l border-gray-200 overflow-hidden"
                     >
                       <EmailDetailPanel
                         email={selectedEmail}
@@ -1246,14 +1243,15 @@ export const GmailInboxHero = memo<GmailInboxHeroProps>(({ className = '' }) => 
                 </AnimatePresence>
               </div>
 
-              {/* Footer */}
-              <div className="px-4 py-3 bg-gray-50 border-t border-gray-100 flex items-center justify-between">
-                <span className="text-xs text-gray-500">
-                  Click any email to preview the AI summary
+              {/* Footer - compact on mobile */}
+              <div className="px-2 sm:px-4 py-2 sm:py-3 bg-gray-50 border-t border-gray-100 flex items-center justify-between gap-2">
+                <span className="text-[10px] sm:text-xs text-gray-500 truncate">
+                  Click any email to preview
                 </span>
-                <div className="flex items-center gap-1 text-xs text-gray-400">
+                <div className="flex items-center gap-1 text-[10px] sm:text-xs text-gray-400 flex-shrink-0">
                   <Clock className="w-3 h-3" />
-                  Updated in real-time
+                  <span className="hidden sm:inline">Updated in real-time</span>
+                  <span className="sm:hidden">Live</span>
                 </div>
               </div>
             </motion.div>

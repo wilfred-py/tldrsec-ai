@@ -19,11 +19,7 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { ShieldIcon } from "lucide-react";
 
-interface SidebarProps extends React.HTMLAttributes<HTMLDivElement> {
-  className?: string;
-}
-
-export function Sidebar({ className }: SidebarProps) {
+export function Sidebar() {
   const pathname = usePathname();
   const { user } = useUser();
   const { isAdmin, loading: adminLoading } = useAdminStatus();
@@ -59,15 +55,15 @@ export function Sidebar({ className }: SidebarProps) {
         </SheetContent>
       </Sheet>
 
-      {/* Desktop Sidebar */}
-      <div className={cn("hidden md:flex", className)}>
-        <div className="flex h-full w-full flex-col space-y-2 bg-background">
+      {/* Desktop Sidebar - hidden on mobile, visible on md+ */}
+      <aside className="hidden md:fixed md:inset-y-0 md:z-30 md:flex md:w-64 md:flex-col border-r border-[var(--landing-border)] bg-background">
+        <div className="flex h-full w-full flex-col space-y-2">
           <div className="flex h-14 items-center border-b px-4">
             <Link
               href="/dashboard"
               className="flex items-center font-semibold"
             >
-              <span className="text-blue-600 font-bold">tldr</span>
+              <span className="text-[var(--landing-primary)] font-bold">tldr</span>
               <span className="font-bold">SEC</span>
             </Link>
           </div>
@@ -82,7 +78,7 @@ export function Sidebar({ className }: SidebarProps) {
                     "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium hover:bg-accent hover:text-accent-foreground",
                     (pathname === item.href || 
                      (item.href !== "/dashboard" && pathname.startsWith(item.href)))
-                      ? "bg-blue-100 text-blue-800"
+                      ? "bg-[var(--landing-primary-light)] text-[var(--landing-primary)]"
                       : "transparent"
                   )}
                 >
@@ -106,7 +102,7 @@ export function Sidebar({ className }: SidebarProps) {
                     className={cn(
                       "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium hover:bg-accent hover:text-accent-foreground",
                       (pathname === "/dashboard/monitoring" || pathname.startsWith("/dashboard/monitoring"))
-                        ? "bg-blue-100 text-blue-800"
+                        ? "bg-[var(--landing-primary-light)] text-[var(--landing-primary)]"
                         : "transparent"
                     )}
                   >
@@ -127,14 +123,14 @@ export function Sidebar({ className }: SidebarProps) {
                 <span className="font-medium">{user?.fullName || "User"}</span>
                 <div className="flex items-center text-xs text-muted-foreground">
                   {isProPlan && <CrownIcon className="h-3 w-3 mr-1 text-yellow-500" />}
-                  {!adminLoading && isAdmin && <ShieldIcon className="h-3 w-3 mr-1 text-blue-500" />}
+                  {!adminLoading && isAdmin && <ShieldIcon className="h-3 w-3 mr-1 text-[var(--landing-primary)]" />}
                   {userPlan} {!adminLoading && isAdmin && "• Admin"}
                 </div>
               </div>
             </div>
           </div>
         </div>
-      </div>
+      </aside>
     </>
   );
 }
@@ -157,7 +153,7 @@ function MobileSidebar({
     <div className="flex h-full flex-col gap-2">
       <div className="flex h-14 items-center border-b px-4">
         <Link href="/dashboard" className="flex items-center font-semibold">
-          <span className="text-blue-600 font-bold">tldr</span>
+          <span className="text-[var(--landing-primary)] font-bold">tldr</span>
           <span className="font-bold">SEC</span>
         </Link>
       </div>
@@ -172,7 +168,7 @@ function MobileSidebar({
                 "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium hover:bg-accent hover:text-accent-foreground",
                 (pathname === item.href || 
                  (item.href !== "/dashboard" && pathname.startsWith(item.href)))
-                  ? "bg-blue-100 text-blue-800"
+                  ? "bg-[var(--landing-primary-light)] text-[var(--landing-primary)]"
                   : "transparent"
               )}
             >
@@ -196,7 +192,7 @@ function MobileSidebar({
                 className={cn(
                   "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium hover:bg-accent hover:text-accent-foreground",
                   (pathname === "/dashboard/monitoring" || pathname.startsWith("/dashboard/monitoring"))
-                    ? "bg-blue-100 text-blue-800"
+                    ? "bg-[var(--landing-primary-light)] text-[var(--landing-primary)]"
                     : "transparent"
                 )}
               >
@@ -217,7 +213,7 @@ function MobileSidebar({
             <span className="font-medium">{user?.fullName || "User"}</span>
             <div className="flex items-center text-xs text-muted-foreground">
               {isProPlan && <CrownIcon className="h-3 w-3 mr-1 text-yellow-500" />}
-              {!adminLoading && isAdmin && <ShieldIcon className="h-3 w-3 mr-1 text-blue-500" />}
+              {!adminLoading && isAdmin && <ShieldIcon className="h-3 w-3 mr-1 text-[var(--landing-primary)]" />}
               {userPlan} {!adminLoading && isAdmin && "• Admin"}
             </div>
           </div>
