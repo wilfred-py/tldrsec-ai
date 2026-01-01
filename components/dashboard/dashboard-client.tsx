@@ -2,7 +2,6 @@
 
 import { useState, useMemo, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
 import { DashboardHeader } from "@/components/dashboard";
 import { CompanySearch } from "@/components/dashboard/company-search";
 import { SettingsIcon, Trash2Icon, PlusIcon, ArrowUpDown, Loader2 } from "lucide-react";
@@ -318,7 +317,7 @@ export function DashboardClient() {
       <ProcessingStatus />
       
       {/* Tracked Tickers - Removed border */}
-      <Card className="p-6">
+      <div className="landing-card">
         <div className="mb-6 text-center">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div className="mx-auto sm:mx-0">
@@ -500,8 +499,8 @@ export function DashboardClient() {
             </div>
           </>
         )}
-      </Card>
-      
+      </div>
+
       {/* Delete Confirmation Dialog */}
       <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
         <DialogContent className="max-w-[95vw] sm:max-w-md">

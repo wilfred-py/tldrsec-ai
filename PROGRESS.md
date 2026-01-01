@@ -2,10 +2,127 @@
 
 ## Current Status
 **Date**: 2026-01-01
-**Branch**: feature/gmail-inbox-hero-improvements
-**Status**: ✅ OPERATIONAL - Pipeline Running, Stripe Integration Active
+**Branch**: feature/passwordless-onboarding
+**Status**: ✅ OPERATIONAL - Passwordless Onboarding Implementation In Progress
 
-### Active: Pricing Section Layout Shift Fix ✅ COMPLETE (2026-01-01)
+---
+
+## Current Session: Passwordless Onboarding Implementation
+
+### Active: Phase 2 Complete - EmailStep Component & 3-Step Flow ⏳ IN PROGRESS
+
+**Plan**: [2026-01-01-passwordless-onboarding-implementation.md](docs/plans/2026-01-01-passwordless-onboarding-implementation.md)
+
+**Overview**: Implementing passwordless onboarding flow where users complete sector/ticker selection BEFORE authentication. Users input email as final step, then redirect to Clerk for sign-up.
+
+**Completed Phases**:
+- ✅ **Phase 1**: PendingOnboarding database model created and tested (5/5 tests pass)
+- ✅ **Phase 2**: EmailStep component created, onboarding page updated to 3-step flow
+
+**Phase 1 - Database Model**:
+- Created `PendingOnboarding` model in Prisma schema
+- Fields: `id`, `email` (unique), `sectors[]`, `tickers` (JSON), `createdAt`, `expiresAt`
+- Migration applied to production database
+- Tests: `npm run test:db:pending` (5/5 passing)
+
+**Phase 2 - EmailStep Component & UI**:
+- Created `components/onboarding/email-step.tsx` - Standalone email input component
+- Created `__tests__/components/onboarding-email-step.test.tsx` - 9 tests (all passing)
+- Updated `app/(auth)/onboarding/page.tsx`:
+  - Changed from 2-step to 3-step flow
+  - Progress calculation: 0% → 33% → 66% → 100%
+  - Step 2 button: "Get Started" → "Continue"
+  - Added Step 3 with EmailStep component
+
+**Files Modified**:
+- `prisma/schema.prisma` - Added PendingOnboarding model
+- `components/onboarding/email-step.tsx` - New EmailStep component
+- `__tests__/components/onboarding-email-step.test.tsx` - 9 component tests
+- `__tests__/db/pending-onboarding.test.ts` - 5 database integration tests
+- `app/(auth)/onboarding/page.tsx` - Updated to 3-step flow
+- `jest.config.mjs` - Added setupFiles for dotenv loading
+- `__tests__/setup-integration.js` - New setup file for env loading
+- `package.json` - Added `test:db` and `test:db:pending` scripts
+
+**Pending Phases**:
+- [ ] Phase 3: Make onboarding public, add check-email API
+- [ ] Phase 4: Save pending onboarding API, Clerk redirect
+- [ ] Phase 5: Clerk webhook integration for pending data merge
+- [ ] Phase 6: Welcome summary delivery
+- [ ] Phase 7: Existing user merge modal
+- [ ] Phase 8: Cleanup cron job
+
+**Verification**:
+- ✅ EmailStep tests: 9/9 passing
+- ✅ PendingOnboarding DB tests: 5/5 passing
+- ✅ Build passes
+- ✅ Lint passes
+
+---
+
+## Recently Completed
+
+### Gmail Inbox Hero Responsive Fix ✅ COMPLETE (2026-01-01)
+
+**Issue**: Gmail inbox hero component overflowing viewport on mobile, appearing as square instead of landscape rectangle.
+
+**Root Cause**: Fixed width calculation (`min(95vw, max(500px, 60vw))`) and tall height constraints (`clamp(300px, 50vh, 560px)`) caused overflow and square appearance.
+
+**Fixes Applied**:
+1. **Container sizing** - Changed to `width: 100%` with `maxWidth: min(95vw, 900px)`
+2. **Landscape ratio** - Reduced height to `clamp(220px, 35vh, 340px)` for wide-than-tall appearance
+3. **Mobile-first email rows** - Responsive padding (`px-2 sm:px-4`), gaps (`gap-2 sm:gap-3`)
+4. **Hidden elements on mobile** - Unread indicator, filing badge, time column hidden on small screens
+5. **Compact header/toolbar/footer** - Smaller fonts, padding, hidden archive/delete buttons on mobile
+6. **Responsive skeleton loader** - Matching responsive widths for loading state
+
+**Files Modified**:
+- `components/landing/sections-v2/gmail-inbox-hero.tsx` - All responsive changes
+
+**Verification**: ✅ Lint passes, no errors
+
+---
+
+### Active: Dashboard Landing V2 Redesign ⏳ IN PROGRESS (2026-01-01)
+
+**Issue**: Dashboard UI needs to visually align with Landing Page V2 design system.
+
+**Implementation Progress**:
+- ✅ Phase 1: Sidebar Navigation Styling - Already complete (uses `--landing-primary` CSS variables)
+- ✅ Phase 2: Dashboard Layout Background - Applied `--landing-bg` to main content area, `--landing-border` to sidebar
+- ✅ Phase 3: Dashboard Card Components - Updated `DashboardCard` and `dashboard-client.tsx` to use `landing-card` class
+- ✅ Phase 4: Billing Page Styling - Updated skeleton colors, recommended plan border (blue ring), badge colors
+
+**Files Modified**:
+- `app/dashboard/layout.tsx` - Added Landing V2 background colors
+- `components/layout/sidebar.tsx` - Added Landing V2 border color
+- `components/dashboard/card.tsx` - Changed to use `landing-card` class
+- `components/dashboard/dashboard-client.tsx` - Replaced Card with `landing-card` div
+- `app/dashboard/billing/page.tsx` - Updated skeleton/plan colors to Landing V2
+
+**Verification**: ✅ Build passes, ✅ Lint passes, awaiting manual verification
+
+---
+
+### Previous: Admin Status API Route Fix ✅ COMPLETE (2026-01-01)
+
+**Issue**: Console error on `/dashboard` - 404 on `/api/user/admin-status` endpoint.
+
+**Root Cause**: The route file was disabled (`route.ts.disabled`) but the `useAdminStatus` hook was still trying to fetch it.
+
+**Fix Applied**:
+- Renamed `app/api/user/admin-status/route.ts.disabled` to `route.ts` to re-enable the endpoint
+- Verified dependencies exist: `validateAdminAccess` from `@/lib/auth/admin-security`, `logger` from `@/lib/logging`
+- Lint passes with no errors
+
+**Files Modified**:
+- `app/api/user/admin-status/route.ts` - Re-enabled (renamed from `.disabled`)
+
+**Verification**: ✅ Lint passes, route enabled
+
+---
+
+### Previous: Pricing Section Layout Shift Fix ✅ COMPLETE (2026-01-01)
 
 **Issue**: Pricing section toggle causing layout shifts when switching between monthly/annual billing. Toggle slider also appearing on wrong side (right instead of left) on initial load.
 
@@ -429,7 +546,7 @@ npm run cloudflare:status                 # Check deployment status
 
 ---
 
-**Last Updated**: 2025-12-31 20:15 AEDT
+**Last Updated**: 2026-01-01 (context compaction performed)
 **Repository**: tldrsec-ai
 
 *See TIMELINE.md for master timeline and quick navigation*

@@ -180,7 +180,7 @@ export function PricingSectionV2() {
                       className="text-2xl font-bold"
                       style={{ color: 'var(--landing-secondary)' }}
                     >
-                      {plan.monthlyPrice === 0 ? 'Free' : plan.name}
+                      {plan.name}
                     </h3>
                   </div>
                   {plan.popular && (
@@ -194,7 +194,7 @@ export function PricingSectionV2() {
                 {/* Fixed height container prevents layout shift */}
                 <div className="mb-6 h-[88px]">
                   {plan.monthlyPrice === 0 ? (
-                    <StaticPrice label="Free" />
+                    <div className="h-full" />
                   ) : (
                     <>
                       <AnimatedPrice

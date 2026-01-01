@@ -9,8 +9,10 @@ const createJestConfig = nextJest({
 const config = {
   testEnvironment: 'jsdom',
   testTimeout: 60000, // 60 seconds for async operations (increased for CI)
+  // Load dotenv before any test setup to ensure DATABASE_URL is available for integration tests
+  setupFiles: ['<rootDir>/__tests__/setup-integration.js'],
   setupFilesAfterEnv: [
-    '<rootDir>/jest.setup.js', 
+    '<rootDir>/jest.setup.js',
     '<rootDir>/__tests__/setup.js'
   ],
   // Override timeout for real pipeline tests

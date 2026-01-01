@@ -67,8 +67,8 @@ export const SUBSCRIPTION_PLANS = {
     features: [
       '**10** companies to track',
       'Real-time email alerts',
-      'All filing types (8-K, Form 4, etc.)',
-      'Priority processing',
+      'Priority processing queue',
+      'All filing types',
       'Email support',
     ],
   },
@@ -84,8 +84,8 @@ export const SUBSCRIPTION_PLANS = {
     features: [
       '**Unlimited** companies',
       'Real-time email alerts',
+      '**First** priority processing queue',
       'All filing types',
-      'Priority processing queue',
       'Dedicated support',
     ],
   },

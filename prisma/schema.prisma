@@ -57,6 +57,28 @@ model User {
   @@schema("app")
 }
 
+/**
+ * PendingOnboarding - Stores onboarding selections before Clerk authentication
+ *
+ * Used for passwordless onboarding flow where users complete sector/ticker
+ * selection BEFORE authentication. Data is merged with User after Clerk
+ * email verification completes.
+ *
+ * Records auto-expire after 24 hours via the cleanup cron job.
+ */
+model PendingOnboarding {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  sectors   String[]
+  tickers   Json     // Array of {symbol, companyName}
+  createdAt DateTime @default(now())
+  expiresAt DateTime // Auto-cleanup after 24 hours
+
+  @@index([email])
+  @@index([expiresAt])
+  @@schema("app")
+}
+
 model Ticker {
   id          String      @id @default(uuid())
   symbol      String

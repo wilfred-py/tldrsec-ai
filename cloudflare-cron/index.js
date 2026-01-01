@@ -124,11 +124,17 @@ export default {
       // Route based on cron expression
       // "*/5 * * * *" = Pipeline processing (every 5 minutes)
       // "*/10 * * * *" = 10-minute interval Slack summary (detailed verification report)
+      // "*/15 * * * *" = Auto-recovery health check and remediation
       // "0 22 * * *" = Daily Slack report (9 AM AEST = 22:00 UTC)
 
       if (cronExpression === '*/10 * * * *') {
         // 10-minute interval Slack summary (detailed verification report)
         return await this.handleIntervalSummary(event, env, ctx);
+      }
+
+      if (cronExpression === '*/15 * * * *') {
+        // Auto-recovery health check and remediation
+        return await this.handleAutoRecovery(event, env, ctx);
       }
 
       if (cronExpression === '0 22 * * *') {
@@ -265,6 +271,57 @@ export default {
     } catch (error) {
       const duration = Date.now() - startTime;
       console.error(`[${executionId}] Daily report error: ${error.message}`);
+      return { success: false, executionId, duration, error: error.message };
+    }
+  },
+
+  // Handle auto-recovery health check and remediation (every 15 minutes)
+  async handleAutoRecovery(event, env, ctx) {
+    const executionId = `auto-recover-${Date.now()}`;
+    const startTime = Date.now();
+
+    console.log(`[${executionId}] ====== AUTO-RECOVERY CHECK ======`);
+
+    try {
+      const url = `${env.PUBLIC_URL}/api/cron/auto-recover`;
+
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Execution-Id': executionId,
+          'X-Cloudflare-Worker': 'tldrsec-cron',
+          'User-Agent': 'Cloudflare-Worker/1.0 AutoRecover',
+          'x-cron-secret': env.CRON_SECRET,
+        },
+      });
+
+      const duration = Date.now() - startTime;
+
+      if (response.ok) {
+        const result = await response.json();
+        console.log(`[${executionId}] Auto-recovery check completed in ${duration}ms`, {
+          action: result.action,
+          reason: result.reason,
+          status: result.status,
+        });
+
+        // Log significant actions for visibility
+        if (result.action === 'cleanup') {
+          console.log(`[${executionId}] 🧹 CLEANUP TRIGGERED: ${result.locksCleared || 0} locks cleared`);
+        } else if (result.action === 'redeploy') {
+          console.log(`[${executionId}] 🚀 REDEPLOY TRIGGERED: ${result.deploymentId || 'unknown'}`);
+        }
+
+        return { success: true, executionId, duration, ...result };
+      } else {
+        const errorText = await response.text();
+        console.error(`[${executionId}] Auto-recovery check failed: ${response.status} - ${errorText}`);
+        return { success: false, executionId, duration, error: errorText };
+      }
+    } catch (error) {
+      const duration = Date.now() - startTime;
+      console.error(`[${executionId}] Auto-recovery error: ${error.message}`);
       return { success: false, executionId, duration, error: error.message };
     }
   },
