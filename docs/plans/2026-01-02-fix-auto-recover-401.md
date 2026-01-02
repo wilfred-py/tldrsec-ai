@@ -291,10 +291,12 @@ npm run test
 - [x] No regressions: `npm run test:cron-comprehensive` (pre-existing failures unrelated to this fix)
 
 #### Manual Verification:
-- [ ] Deploy Cloudflare Worker: `npm run cloudflare:deploy`
+- [x] Deploy Cloudflare Worker: `npm run cloudflare:deploy`
+- [x] Deploy Vercel application: Merged PR #297
+- [x] Verify HMAC authentication works: Response changed from 401 to 500 (auth passed, separate VERCEL_URL bug)
+- [ ] Fix VERCEL_URL protocol bug (discovered during testing - separate issue)
 - [ ] Wait 15 minutes for auto-recovery cron to execute
 - [ ] Check Cloudflare Worker logs for successful auto-recover calls: `npm run cloudflare:logs`
-- [ ] Verify no 401 errors in logs
 
 **STOP**: After completing this phase and all automated verification passes, pause here for manual confirmation that the Cloudflare Worker logs show successful auto-recover calls before considering this task complete.
 

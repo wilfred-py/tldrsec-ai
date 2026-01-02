@@ -68,7 +68,10 @@ interface PipelineHealth {
 }
 
 async function getPipelineHealth(): Promise<PipelineHealth> {
-  const baseUrl = process.env.VERCEL_URL || 'http://localhost:3000';
+  const vercelUrl = process.env.VERCEL_URL;
+  const baseUrl = vercelUrl
+    ? (vercelUrl.startsWith('http') ? vercelUrl : `https://${vercelUrl}`)
+    : 'http://localhost:3000';
   const response = await fetch(`${baseUrl}/api/health/pipeline`, {
     headers: { 'Cache-Control': 'no-cache' },
   });
@@ -81,7 +84,10 @@ async function getPipelineHealth(): Promise<PipelineHealth> {
 }
 
 async function triggerForceCleanup(): Promise<{ success: boolean; locksCleared: number }> {
-  const baseUrl = process.env.VERCEL_URL || 'http://localhost:3000';
+  const vercelUrl = process.env.VERCEL_URL;
+  const baseUrl = vercelUrl
+    ? (vercelUrl.startsWith('http') ? vercelUrl : `https://${vercelUrl}`)
+    : 'http://localhost:3000';
   const adminSecret = process.env.ADMIN_API_SECRET;
 
   const response = await fetch(`${baseUrl}/api/admin/force-cleanup?source=auto-recover`, {
@@ -98,7 +104,10 @@ async function triggerForceCleanup(): Promise<{ success: boolean; locksCleared: 
 }
 
 async function triggerRedeploy(reason: string): Promise<{ success: boolean; deploymentId: string }> {
-  const baseUrl = process.env.VERCEL_URL || 'http://localhost:3000';
+  const vercelUrl = process.env.VERCEL_URL;
+  const baseUrl = vercelUrl
+    ? (vercelUrl.startsWith('http') ? vercelUrl : `https://${vercelUrl}`)
+    : 'http://localhost:3000';
   const adminSecret = process.env.ADMIN_API_SECRET;
 
   const response = await fetch(`${baseUrl}/api/admin/trigger-redeploy`, {
