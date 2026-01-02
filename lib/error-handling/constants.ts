@@ -34,6 +34,7 @@ export enum ErrorCode {
   
   // AI specific errors
   AI_QUOTA_EXCEEDED = 'AI_QUOTA_EXCEEDED',
+  AI_INSUFFICIENT_CREDITS = 'AI_INSUFFICIENT_CREDITS',  // OpenRouter credit limit reached (402)
   AI_CONTEXT_WINDOW_EXCEEDED = 'AI_CONTEXT_WINDOW_EXCEEDED',
   AI_CONTENT_FILTERED = 'AI_CONTENT_FILTERED',
   AI_UNAVAILABLE = 'AI_UNAVAILABLE',
@@ -70,6 +71,7 @@ export const errorStatusCodes: Record<ErrorCode, number> = {
   [ErrorCode.DATABASE_ERROR]: 500,
   [ErrorCode.TIMEOUT_ERROR]: 504,
   [ErrorCode.AI_QUOTA_EXCEEDED]: 429,
+  [ErrorCode.AI_INSUFFICIENT_CREDITS]: 402,
   [ErrorCode.AI_CONTEXT_WINDOW_EXCEEDED]: 413,
   [ErrorCode.AI_CONTENT_FILTERED]: 422,
   [ErrorCode.AI_UNAVAILABLE]: 503,
@@ -94,6 +96,7 @@ export const errorCategories: Record<ErrorCode, ErrorCategory> = {
   [ErrorCode.DATABASE_ERROR]: ErrorCategory.DB_ERROR,
   [ErrorCode.TIMEOUT_ERROR]: ErrorCategory.TIMEOUT_ERROR,
   [ErrorCode.AI_QUOTA_EXCEEDED]: ErrorCategory.AI_ERROR,
+  [ErrorCode.AI_INSUFFICIENT_CREDITS]: ErrorCategory.AI_ERROR,
   [ErrorCode.AI_CONTEXT_WINDOW_EXCEEDED]: ErrorCategory.AI_ERROR,
   [ErrorCode.AI_CONTENT_FILTERED]: ErrorCategory.AI_ERROR,
   [ErrorCode.AI_UNAVAILABLE]: ErrorCategory.AI_ERROR,
@@ -118,6 +121,7 @@ export const errorSeverityLevels: Record<ErrorCode, ErrorSeverity> = {
   [ErrorCode.DATABASE_ERROR]: ErrorSeverity.HIGH,
   [ErrorCode.TIMEOUT_ERROR]: ErrorSeverity.MEDIUM,
   [ErrorCode.AI_QUOTA_EXCEEDED]: ErrorSeverity.HIGH,
+  [ErrorCode.AI_INSUFFICIENT_CREDITS]: ErrorSeverity.CRITICAL,  // Critical - stops all AI processing
   [ErrorCode.AI_CONTEXT_WINDOW_EXCEEDED]: ErrorSeverity.MEDIUM,
   [ErrorCode.AI_CONTENT_FILTERED]: ErrorSeverity.MEDIUM,
   [ErrorCode.AI_UNAVAILABLE]: ErrorSeverity.HIGH,
@@ -142,6 +146,7 @@ export const isRetriableError: Record<ErrorCode, boolean> = {
   [ErrorCode.DATABASE_ERROR]: true,
   [ErrorCode.TIMEOUT_ERROR]: true,
   [ErrorCode.AI_QUOTA_EXCEEDED]: true,
+  [ErrorCode.AI_INSUFFICIENT_CREDITS]: false,  // Not retriable - requires adding credits
   [ErrorCode.AI_CONTEXT_WINDOW_EXCEEDED]: false,
   [ErrorCode.AI_CONTENT_FILTERED]: false,
   [ErrorCode.AI_UNAVAILABLE]: true,

@@ -98,7 +98,10 @@ export const createAiQuotaExceededError = (message: string, details?: unknown, r
   return error;
 };
 
-export const createAiContextWindowExceededError = (message: string, details?: unknown, requestId?: string) => 
+export const createAiInsufficientCreditsError = (message: string, details?: unknown, requestId?: string) =>
+  new ApiError(ErrorCode.AI_INSUFFICIENT_CREDITS, message, details, true, requestId);
+
+export const createAiContextWindowExceededError = (message: string, details?: unknown, requestId?: string) =>
   new ApiError(ErrorCode.AI_CONTEXT_WINDOW_EXCEEDED, message, details, true, requestId);
 
 export const createAiContentFilteredError = (message: string, details?: unknown, requestId?: string) => 
