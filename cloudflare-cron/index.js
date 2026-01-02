@@ -285,6 +285,22 @@ export default {
     try {
       const url = `${env.PUBLIC_URL}/api/cron/auto-recover`;
 
+      // Generate HMAC signature (consistent with other cron handlers)
+      const timestamp = Date.now();
+      const payload = `${timestamp}:GET:/api/cron/auto-recover`;
+      const encoder = new TextEncoder();
+      const key = await crypto.subtle.importKey(
+        'raw',
+        encoder.encode(env.CRON_SECRET),
+        { name: 'HMAC', hash: 'SHA-256' },
+        false,
+        ['sign']
+      );
+      const signature = await crypto.subtle.sign('HMAC', key, encoder.encode(payload));
+      const signatureHex = Array.from(new Uint8Array(signature))
+        .map(byte => byte.toString(16).padStart(2, '0'))
+        .join('');
+
       const response = await fetch(url, {
         method: 'GET',
         headers: {
@@ -292,7 +308,8 @@ export default {
           'X-Execution-Id': executionId,
           'X-Cloudflare-Worker': 'tldrsec-cron',
           'User-Agent': 'Cloudflare-Worker/1.0 AutoRecover',
-          'x-cron-secret': env.CRON_SECRET,
+          'x-hmac-signature': signatureHex,
+          'x-hmac-timestamp': timestamp.toString(),
         },
       });
 
