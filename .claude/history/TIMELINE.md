@@ -13,6 +13,9 @@ This file provides a chronological index of all completed projects. For detailed
 
 | Date | Project | Status |
 |------|---------|--------|
+| 2026-01-02 | Auto-Recover 401 Authentication Fix (HMAC auth, PUBLIC_URL, interface fix) | ✅ |
+| 2026-01-02 | Remove Budget System & Add OpenRouter Credit Monitoring | ✅ |
+| 2026-01-01 | Auto-Recovery Infrastructure Implementation (force-cleanup, redeploy, orchestrator) | ✅ |
 | 2026-01-01 | Gmail Inbox Hero Responsive Fix (landscape ratio, mobile-first) | ✅ |
 | 2026-01-01 | Dashboard Landing V2 Redesign (sidebar, cards, billing styling) | ⏳ |
 | 2026-01-01 | Admin Status API Route Fix (re-enabled disabled route) | ✅ |
@@ -108,8 +111,8 @@ This file provides a chronological index of all completed projects. For detailed
 
 ## Archive Statistics
 - **Total Archived Projects**: 6 weekly archives (Oct-Dec 2025)
-- **Current PROGRESS.md Lines**: 552 (threshold: 500)
-- **Last Sync**: 2026-01-01
+- **Current PROGRESS.md Lines**: 175 (threshold: 500)
+- **Last Sync**: 2026-01-02
 - **Archive System**: ✅ ACTIVE
 - **Next Archive Check**: When projects >30 days old exist (all current content <30 days old)
 
