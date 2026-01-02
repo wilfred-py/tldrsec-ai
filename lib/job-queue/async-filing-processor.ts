@@ -192,6 +192,7 @@ export class AsyncFilingProcessor {
               summary: summaryResult.summary,
               keyPoints: summaryResult.keyPoints,
               processingStatus: 'COMPLETED',
+              processingCompletedAt: new Date(), // Fix: Add missing completion timestamp
               tokensUsed: summaryResult.tokensUsed || 0,
               cost: summaryResult.cost || 0,
               model: summaryResult.model || 'unknown',
