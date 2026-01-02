@@ -68,10 +68,8 @@ interface PipelineHealth {
 }
 
 async function getPipelineHealth(): Promise<PipelineHealth> {
-  const vercelUrl = process.env.VERCEL_URL;
-  const baseUrl = vercelUrl
-    ? (vercelUrl.startsWith('http') ? vercelUrl : `https://${vercelUrl}`)
-    : 'http://localhost:3000';
+  // Use production URL for public health endpoint to avoid deployment protection
+  const baseUrl = process.env.PUBLIC_URL || 'https://tldrsec.app';
   const response = await fetch(`${baseUrl}/api/health/pipeline`, {
     headers: { 'Cache-Control': 'no-cache' },
   });
@@ -84,10 +82,8 @@ async function getPipelineHealth(): Promise<PipelineHealth> {
 }
 
 async function triggerForceCleanup(): Promise<{ success: boolean; locksCleared: number }> {
-  const vercelUrl = process.env.VERCEL_URL;
-  const baseUrl = vercelUrl
-    ? (vercelUrl.startsWith('http') ? vercelUrl : `https://${vercelUrl}`)
-    : 'http://localhost:3000';
+  // Use production URL for admin endpoints to avoid deployment protection
+  const baseUrl = process.env.PUBLIC_URL || 'https://tldrsec.app';
   const adminSecret = process.env.ADMIN_API_SECRET;
 
   const response = await fetch(`${baseUrl}/api/admin/force-cleanup?source=auto-recover`, {
@@ -104,10 +100,8 @@ async function triggerForceCleanup(): Promise<{ success: boolean; locksCleared: 
 }
 
 async function triggerRedeploy(reason: string): Promise<{ success: boolean; deploymentId: string }> {
-  const vercelUrl = process.env.VERCEL_URL;
-  const baseUrl = vercelUrl
-    ? (vercelUrl.startsWith('http') ? vercelUrl : `https://${vercelUrl}`)
-    : 'http://localhost:3000';
+  // Use production URL for admin endpoints to avoid deployment protection
+  const baseUrl = process.env.PUBLIC_URL || 'https://tldrsec.app';
   const adminSecret = process.env.ADMIN_API_SECRET;
 
   const response = await fetch(`${baseUrl}/api/admin/trigger-redeploy`, {
