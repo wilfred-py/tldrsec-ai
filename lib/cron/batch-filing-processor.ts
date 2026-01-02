@@ -42,8 +42,6 @@ export interface UserTickerMapping {
   userId: string;
   email: string;
   subscriptionTier: string;
-  processingBudget: number;
-  budgetUsed: number;
   tickers: {
     symbol: string;
     companyName: string;
@@ -174,8 +172,6 @@ export class BatchFilingProcessor {
         id: true,
         email: true,
         subscriptionTier: true,
-        processingBudget: true,
-        budgetUsed: true,
         tickers: {
           where: {
             symbol: {
@@ -194,8 +190,6 @@ export class BatchFilingProcessor {
       userId: user.id,
       email: user.email,
       subscriptionTier: user.subscriptionTier,
-      processingBudget: user.processingBudget || 0,
-      budgetUsed: user.budgetUsed || 0,
       tickers: user.tickers
     }));
   }
@@ -302,14 +296,12 @@ export class BatchFilingProcessor {
             {
               id: user.userId,
               email: user.email,
-              subscriptionTier: user.subscriptionTier,
-              processingBudget: user.processingBudget,
-              budgetUsed: user.budgetUsed
+              subscriptionTier: user.subscriptionTier
             },
             user.subscriptionTier,
-            { 
-              symbol: batchFiling.filing.ticker.symbol, 
-              cik: batchFiling.filing.ticker.cik 
+            {
+              symbol: batchFiling.filing.ticker.symbol,
+              cik: batchFiling.filing.ticker.cik
             },
             { companyName: tickerInfo.companyName }
           );
@@ -364,8 +356,6 @@ export class BatchFilingProcessor {
             id: user.userId,
             email: user.email,
             subscriptionTier: user.subscriptionTier,
-            processingBudget: user.processingBudget,
-            budgetUsed: user.budgetUsed,
             tickers: user.tickers
           },
           tier: user.subscriptionTier,

@@ -77,7 +77,7 @@ describe('PipelineHealthMonitor', () => {
     mockPrisma.$connect.mockResolvedValue(undefined);
     mockPrisma.$queryRaw.mockResolvedValue([{ test: 1 }]);
     mockPrisma.user.count.mockResolvedValue(5);
-    mockPrisma.user.aggregate.mockResolvedValue({ _sum: { budgetUsed: 100, processingBudget: 1000 } });
+    mockPrisma.user.aggregate.mockResolvedValue({ _sum: { } });
     mockPrisma.auditLog.count.mockResolvedValue(2);
     mockPrisma.summary.findMany.mockResolvedValue([]);
     
@@ -243,36 +243,15 @@ describe('PipelineHealthMonitor', () => {
     });
 
     describe('Cost Management Health Checks', () => {
-      it('should detect healthy cost management', async () => {
+      // Note: Budget tracking has been removed. OpenRouter now handles credit limits.
+      // These tests verify the cost management component works with empty budget data.
+      it('should detect healthy cost management with no budget data', async () => {
         const health = await getCurrentSystemHealth();
-        
+
         expect(health.components.costManagement.status).toBe('healthy');
         expect(health.components.costManagement.message).toBe('Cost management is healthy');
-        expect(health.components.costManagement.details?.budgetUtilization).toBe(10); // 100/1000 * 100
-      });
-
-      it('should detect high budget utilization', async () => {
-        mockPrisma.user.aggregate.mockResolvedValue({ 
-          _sum: { budgetUsed: 850, processingBudget: 1000 } 
-        });
-        
-        const health = await getCurrentSystemHealth();
-        
-        expect(health.components.costManagement.status).toBe('warning');
-        expect(health.components.costManagement.message).toBe('Budget utilization is high');
-        expect(health.components.costManagement.recommendations).toContain('Monitor cost usage closely');
-      });
-
-      it('should detect critical budget utilization', async () => {
-        mockPrisma.user.aggregate.mockResolvedValue({ 
-          _sum: { budgetUsed: 960, processingBudget: 1000 } 
-        });
-        
-        const health = await getCurrentSystemHealth();
-        
-        expect(health.components.costManagement.status).toBe('critical');
-        expect(health.components.costManagement.message).toBe('Budget utilization is critical');
-        expect(health.components.costManagement.recommendations).toContain('Immediate cost review required');
+        // Budget utilization is 0 when no budget data exists
+        expect(health.components.costManagement.details?.budgetUtilization).toBe(0);
       });
     });
 

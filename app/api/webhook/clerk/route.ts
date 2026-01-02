@@ -60,11 +60,26 @@ export async function POST(req: Request) {
   switch (eventType) {
     case 'user.created':
       // Handle user creation event - sync Clerk user to database
+      // Also merges pending onboarding data if exists (passwordless flow)
       try {
         const userData = evt.data;
         const primaryEmail = userData.email_addresses?.[0]?.email_address;
-        
+
         if (primaryEmail && userData.id) {
+          const normalizedEmail = primaryEmail.toLowerCase().trim();
+
+          // Check for pending onboarding data (passwordless flow)
+          let pendingOnboarding = null;
+          try {
+            pendingOnboarding = await prisma.pendingOnboarding.findUnique({
+              where: { email: normalizedEmail }
+            });
+          } catch (pendingError) {
+            console.error('Failed to check pending onboarding:', pendingError);
+            // Continue without pending data if lookup fails
+          }
+
+          // Create user with onboardingCompleted=true if came through passwordless flow
           const newUser = await prisma.user.create({
             data: {
               id: userData.id, // Use Clerk user ID as primary key
@@ -73,11 +88,47 @@ export async function POST(req: Request) {
               authProviderId: userData.id,
               name: userData.first_name ? `${userData.first_name} ${userData.last_name || ''}`.trim() : undefined,
               subscriptionTier: 'FREE', // Default tier for new users
-              budgetUsed: 0,
-              processingBudget: 0.20, // Default FREE tier budget
+              onboardingCompleted: !!pendingOnboarding, // Mark complete if came through passwordless flow
             }
           });
           console.log('User created in database:', newUser.id);
+
+          // Merge pending tickers if exists
+          if (pendingOnboarding) {
+            console.log(`Merging pending onboarding for ${normalizedEmail}`);
+
+            // Parse tickers from pending data
+            const tickers = Array.isArray(pendingOnboarding.tickers)
+              ? pendingOnboarding.tickers as Array<{ symbol: string; companyName: string }>
+              : [];
+
+            // Create tickers for the user
+            for (const ticker of tickers) {
+              try {
+                await prisma.ticker.create({
+                  data: {
+                    symbol: ticker.symbol,
+                    companyName: ticker.companyName,
+                    userId: newUser.id
+                  }
+                });
+                console.log(`Created ticker ${ticker.symbol} for user ${newUser.id}`);
+              } catch (tickerError) {
+                console.error(`Failed to create ticker ${ticker.symbol}:`, tickerError);
+                // Continue with other tickers if one fails
+              }
+            }
+
+            // Delete the pending onboarding record
+            try {
+              await prisma.pendingOnboarding.delete({
+                where: { email: normalizedEmail }
+              });
+              console.log(`Deleted pending onboarding for ${normalizedEmail}`);
+            } catch (deleteError) {
+              console.error('Failed to delete pending onboarding:', deleteError);
+            }
+          }
         } else {
           console.error('Missing required user data in webhook:', { id: userData.id, email: primaryEmail });
         }

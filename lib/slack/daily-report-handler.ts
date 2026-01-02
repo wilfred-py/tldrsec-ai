@@ -22,6 +22,11 @@ import type {
   CacheHealthMetrics
 } from './types';
 import { formatDailySummaryMessage, formatIntervalSummaryMessage } from './message-formatter';
+import {
+  getOpenRouterCreditStatus,
+  formatCreditStatusForSlack,
+  type CreditStatus
+} from '../ai/openrouter-credit-monitor';
 
 const dailyReportLogger = logger.child('slack-daily-report');
 
@@ -627,6 +632,8 @@ export interface HourlySummaryMetrics {
     staleJobsCount: number;
     oldestPendingMinutes: number | null;
   };
+  /** OpenRouter credit status for monitoring */
+  creditStatus?: CreditStatus;
 }
 
 /**
@@ -798,6 +805,30 @@ export async function generateHourlySummary(): Promise<SlackWebhookPayload> {
   try {
     const metrics = await getHourlySummaryMetrics();
 
+    // Fetch OpenRouter credit status
+    try {
+      metrics.creditStatus = await getOpenRouterCreditStatus();
+      dailyReportLogger.info('Credit status fetched', {
+        credits: metrics.creditStatus.credits,
+        isLow: metrics.creditStatus.isLow,
+        limitReached: metrics.creditStatus.limitReached
+      });
+
+      // Add credit warning to issues if low
+      if (metrics.creditStatus.isLow || metrics.creditStatus.limitReached) {
+        metrics.pipelineHealth.issues.push(
+          metrics.creditStatus.limitReached
+            ? `OpenRouter credit limit reached! Usage: $${metrics.creditStatus.usage.toFixed(2)}`
+            : `OpenRouter credits low: $${metrics.creditStatus.credits.toFixed(2)} remaining`
+        );
+        metrics.pipelineHealth.healthy = false;
+      }
+    } catch (creditError) {
+      dailyReportLogger.warn('Failed to fetch credit status', {
+        error: creditError instanceof Error ? creditError.message : 'Unknown error'
+      });
+    }
+
     dailyReportLogger.info('Hourly summary generated', {
       filingsDiscovered: metrics.discovery.filingsDiscovered,
       summariesGenerated: metrics.summarization.summariesGenerated,
@@ -965,6 +996,18 @@ function formatHourlySummaryMessage(metrics: HourlySummaryMetrics): SlackWebhook
       text: {
         type: 'mrkdwn',
         text: `:zzz: *No pipeline activity in the last hour*`,
+      },
+    });
+  }
+
+  // OpenRouter Credit Status
+  if (metrics.creditStatus) {
+    const creditInfo = formatCreditStatusForSlack(metrics.creditStatus);
+    blocks.push({
+      type: 'section',
+      text: {
+        type: 'mrkdwn',
+        text: `:dollar: *OpenRouter Credits*\n${creditInfo.text}`,
       },
     });
   }

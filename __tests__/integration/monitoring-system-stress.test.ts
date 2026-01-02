@@ -68,8 +68,8 @@ describe('Monitoring System Stress Tests', () => {
     mockPrisma.user.count.mockImplementation(() => 
       new Promise(resolve => setTimeout(() => resolve(Math.floor(Math.random() * 1000)), Math.random() * 50))
     );
-    mockPrisma.user.aggregate.mockResolvedValue({ 
-      _sum: { budgetUsed: 500, processingBudget: 1000 } 
+    mockPrisma.user.aggregate.mockResolvedValue({
+      _sum: { }
     });
     mockPrisma.auditLog.count.mockResolvedValue(10);
     mockPrisma.summary.findMany.mockResolvedValue([

@@ -5,9 +5,10 @@
  * This module provides tier-based eligibility calculation without market hours
  * complexity, since the cron system always processes at market-hours frequency
  * regardless of actual market status.
+ *
+ * Note: Budget tracking has been removed. OpenRouter handles credit limits.
+ * See: docs/plans/2026-01-02-remove-budget-system-add-credit-monitoring.md
  */
-
-import { CronBudgetService } from './budget-service';
 
 // Tier processing frequencies (in milliseconds) - 24/7 continuous processing
 const TIER_FREQUENCIES = {
@@ -29,8 +30,6 @@ export interface ProcessingEligibility {
   frequencyMs: number;
   timeSinceLastProcess: number | null;
   nextEligibleTime: Date | null;
-  budgetPercentUsed: number;
-  isWithinBudget: boolean;
 }
 
 export interface UserProcessingStatus extends ProcessingEligibility {
@@ -42,7 +41,17 @@ interface UserForEligibility {
   id: string;
   subscriptionTier: string;
   lastProcessedAt: Date | null;
-  budgetUsed: number;
+}
+
+/**
+ * Normalize subscription tier to PRO or HOBBY
+ */
+function normalizeTier(tier: string): NormalizedTier {
+  const upperTier = tier?.toUpperCase() || '';
+  if (upperTier === 'PRO' || upperTier === 'PROFESSIONAL' || upperTier === 'ENTERPRISE' || upperTier === 'INSTITUTION') {
+    return 'PRO';
+  }
+  return 'HOBBY';
 }
 
 /**
@@ -52,7 +61,7 @@ export function calculateProcessingEligibility(
   tier: string,
   lastProcessedAt: Date | null
 ): ProcessingEligibility {
-  const normalizedTier = CronBudgetService.normalizeTier(tier);
+  const normalizedTier = normalizeTier(tier);
   const frequencyMs = TIER_FREQUENCIES[normalizedTier];
   const now = Date.now();
 
@@ -64,8 +73,6 @@ export function calculateProcessingEligibility(
       frequencyMs,
       timeSinceLastProcess: null,
       nextEligibleTime: null,
-      budgetPercentUsed: 0,
-      isWithinBudget: true
     };
   }
 
@@ -79,8 +86,6 @@ export function calculateProcessingEligibility(
     frequencyMs,
     timeSinceLastProcess,
     nextEligibleTime: isEligible ? null : new Date(lastProcessedTime + frequencyMs),
-    budgetPercentUsed: 0, // Will be calculated by caller with budget info
-    isWithinBudget: true  // Will be calculated by caller with budget info
   };
 }
 
@@ -96,14 +101,9 @@ export function getUserProcessingStatuses(
       user.lastProcessedAt
     );
 
-    const dailyLimit = CronBudgetService.getDailyCostLimit(eligibility.tier);
-    const budgetPercentUsed = dailyLimit > 0 ? (user.budgetUsed / dailyLimit) * 100 : 0;
-
     return {
       userId: user.id,
       ...eligibility,
-      budgetPercentUsed,
-      isWithinBudget: budgetPercentUsed < 95,
       priority: TIER_PRIORITIES[eligibility.tier]
     };
   });
@@ -121,28 +121,16 @@ export function getUserProcessingStatuses(
 }
 
 /**
- * Filter users who are eligible for processing within budget constraints
+ * Filter users who are eligible for processing
  */
 export function getEligibleUsers(
   userStatuses: UserProcessingStatus[],
-  options: {
-    maxUsersPerCycle?: number;
-    respectBudgetLimits?: boolean;
-    budgetThreshold?: number;
-  } = {}
+  options: { maxUsersPerCycle?: number } = {}
 ): UserProcessingStatus[] {
-  const {
-    maxUsersPerCycle = 500,
-    respectBudgetLimits = true,
-    budgetThreshold = 95
-  } = options;
+  const { maxUsersPerCycle = 500 } = options;
 
-  const eligibleUsers = userStatuses.filter(user => {
-    if (!user.isEligible) return false;
-    if (respectBudgetLimits && user.budgetPercentUsed >= budgetThreshold) return false;
-    return true;
-  });
-
+  // Simply filter by eligibility - no budget checks needed
+  const eligibleUsers = userStatuses.filter(user => user.isEligible);
   return eligibleUsers.slice(0, maxUsersPerCycle);
 }
 
@@ -151,16 +139,15 @@ export function getEligibleUsers(
  */
 export function getTierDistribution(
   userStatuses: UserProcessingStatus[]
-): Record<NormalizedTier, { total: number; eligible: number; withinBudget: number }> {
-  const distribution: Record<NormalizedTier, { total: number; eligible: number; withinBudget: number }> = {
-    PRO: { total: 0, eligible: 0, withinBudget: 0 },
-    HOBBY: { total: 0, eligible: 0, withinBudget: 0 }
+): Record<NormalizedTier, { total: number; eligible: number }> {
+  const distribution: Record<NormalizedTier, { total: number; eligible: number }> = {
+    PRO: { total: 0, eligible: 0 },
+    HOBBY: { total: 0, eligible: 0 }
   };
 
   for (const user of userStatuses) {
     distribution[user.tier].total++;
     if (user.isEligible) distribution[user.tier].eligible++;
-    if (user.isWithinBudget) distribution[user.tier].withinBudget++;
   }
 
   return distribution;

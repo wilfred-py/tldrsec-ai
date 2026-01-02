@@ -19,7 +19,6 @@ import { getUserProcessingStatuses, getEligibleUsers } from './tier-eligibility'
 import { optimizeCronProcessing } from './ticker-deduplication';
 import { isConcurrencyError } from '../db/concurrency';
 import { CronJobMonitor } from '../monitoring/cron-monitor';
-import { CronBudgetService } from './budget-service';
 import { lockUtils } from '../db/distributed-lock';
 import type {
   DatabaseUser,
@@ -53,9 +52,7 @@ export class CronUserProcessingService {
    */
   static async getEligibleUsersForProcessing(
     options: EligibilityOptions = {
-      maxUsersPerCycle: 100,
-      respectBudgetLimits: true,
-      budgetThreshold: 90
+      maxUsersPerCycle: 100
     }
   ): Promise<{ allUsers: DatabaseUser[]; eligibleUsers: EligibleUser[] }> {
     try {
@@ -73,8 +70,6 @@ export class CronUserProcessingService {
           email: true,
           subscriptionTier: true,
           lastCronProcessed: true,
-          processingBudget: true,
-          budgetUsed: true,
           tickers: {
             select: {
               id: true,
@@ -89,20 +84,20 @@ export class CronUserProcessingService {
 
       // Get processing statuses with eligibility (with null safety)
       // Note: No market context needed - using tier-eligibility with 24/7 processing
+      // Note: Budget tracking removed - OpenRouter handles credit limits
       const userStatuses = getUserProcessingStatuses(
         allUsers
           .filter(u => u && u.id && u.subscriptionTier) // Filter out invalid users
           .map(u => ({
             id: u.id,
-            subscriptionTier: CronBudgetService.normalizeTier(u.subscriptionTier), // Normalize tier to HOBBY/PRO
-            lastProcessedAt: u.lastCronProcessed,
-            budgetUsed: u.budgetUsed || 0
+            subscriptionTier: u.subscriptionTier,
+            lastProcessedAt: u.lastCronProcessed
           }))
       );
 
       processingLogger.debug('User processing statuses calculated', { statusCount: userStatuses.length });
 
-      // Get eligible users based on processing frequency and budget limits
+      // Get eligible users based on processing frequency
       const eligibleUsers = getEligibleUsers(userStatuses, options);
 
       processingLogger.info(`Found ${eligibleUsers.length} eligible users for processing`, {
@@ -624,47 +619,21 @@ export class CronUserProcessingService {
   }
 
   /**
-   * Validate cost and update user budget with comprehensive error handling
+   * Validate tier compatibility for user processing
+   * Note: Budget tracking removed. OpenRouter handles credit limits.
+   * See: docs/plans/2026-01-02-remove-budget-system-add-credit-monitoring.md
    */
   private static async validateAndUpdateUserBudget(
     userId: string,
     cost: number,
     tier: string,
-    context?: ProcessingContext
+    _context?: ProcessingContext
   ): Promise<{ success: boolean; error?: string; errorType?: string; budgetUpdate?: unknown }> {
     try {
-      // Comprehensive cost validation with proper context
-      const validationContext = context || {
-        userId,
-        tier,
-        operation: 'tier-aware-cron-processing',
-        operationType: cost === 0 ? 'cached_summary' : 'ai_generation',
-        isCached: cost === 0
-      };
-
-      processingLogger.debug('Budget validation context', {
-        userId,
-        tier,
-        cost,
-        contextProvided: !!context,
-        validationContext
-      });
-
-      const costValidation = CronBudgetService.validateProcessingCost(cost, tier, validationContext);
-
-      if (!costValidation.valid) {
-        return {
-          success: false,
-          error: costValidation.error,
-          errorType: ERROR_TYPES.COST_VALIDATION_FAILED
-        };
-      }
-
-      // Get current user budget
+      // Get current user to verify tier
       const currentUser = await getPrisma().user.findUnique({
         where: { id: userId },
         select: {
-          budgetUsed: true,
           subscriptionTier: true
         }
       });
@@ -683,36 +652,19 @@ export class CronUserProcessingService {
         };
       }
 
-      const currentBudgetUsed = currentUser.budgetUsed || 0;
-
-      // Update budget atomically
-      const budgetUpdate = await CronBudgetService.updateUserBudget(
+      // Budget tracking removed - always return success
+      // Cost is still logged in Summary.totalCost for analytics
+      processingLogger.debug('Processing validated (budget tracking disabled)', {
         userId,
-        costValidation.sanitizedCost,
-        currentBudgetUsed,
-        tier
-      );
+        tier,
+        cost
+      });
 
       return {
-        success: true,
-        budgetUpdate: {
-          previousBudget: budgetUpdate.previousBudget,
-          newBudget: budgetUpdate.newBudget,
-          costAdded: costValidation.sanitizedCost
-        }
+        success: true
       };
 
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      
-      if (errorMessage.includes('Budget limit exceeded')) {
-        return {
-          success: false,
-          error: errorMessage,
-          errorType: ERROR_TYPES.BUDGET_EXCEEDED
-        };
-      }
-
       throw error; // Re-throw for higher level error categorization
     }
   }
@@ -736,9 +688,9 @@ export class CronUserProcessingService {
         tier,
         userStatus: userStatus.userId
       });
-    } else if (errorMessage.includes('Budget limit exceeded')) {
-      errorType = ERROR_TYPES.BUDGET_EXCEEDED;
-      processingLogger.info(`User ${userStatus.userId} budget limit reached`, {
+    } else if (errorMessage.includes('insufficient credits') || errorMessage.includes('402')) {
+      errorType = ERROR_TYPES.INSUFFICIENT_CREDITS;
+      processingLogger.error(`Insufficient OpenRouter credits for user ${userStatus.userId}`, {
         tier,
         error: errorMessage
       });
@@ -814,8 +766,9 @@ export class CronUserProcessingService {
               case ERROR_TYPES.CONCURRENCY_CONFLICT:
                 results.errorBreakdown!.concurrencyConflicts++;
                 break;
-              case ERROR_TYPES.BUDGET_EXCEEDED:
-                results.errorBreakdown!.budgetExceeded++;
+              case ERROR_TYPES.INSUFFICIENT_CREDITS:
+                // OpenRouter credit limit - counts as cost validation failure
+                results.errorBreakdown!.costValidationFailed++;
                 break;
               case ERROR_TYPES.COST_VALIDATION_FAILED:
                 results.errorBreakdown!.costValidationFailed++;

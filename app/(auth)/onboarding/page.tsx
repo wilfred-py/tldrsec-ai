@@ -175,20 +175,21 @@ export default function OnboardingPage() {
     }
   }, [userName]);
 
-  // Protect this route
+  // Initialize page state once auth context is loaded
+  // Note: Onboarding is now PUBLIC - no authentication required
+  // Unauthenticated users will save to PendingOnboarding table
+  // Authenticated users will complete onboarding directly
   useEffect(() => {
     try {
-      if (!isLoading && !isAuthenticated) {
-        router.replace("/sign-in");
-      } else if (!isLoading) {
+      if (!isLoading) {
         setInitializing(false);
       }
     } catch (err) {
-      console.error("Error during authentication check:", err);
-      setError("An error occurred while checking authentication status. Please try refreshing the page.");
+      console.error("Error during initialization:", err);
+      setError("An error occurred while loading. Please try refreshing the page.");
       setInitializing(false);
     }
-  }, [isAuthenticated, isLoading, router]);
+  }, [isLoading]);
 
   // Calculate progress based on current step and selections (3-step flow)
   const calculateProgress = () => {
@@ -279,12 +280,90 @@ export default function OnboardingPage() {
   };
 
   // Handle email submission from Step 3
-  // For now (Phase 2), this just completes the onboarding since user is authenticated
-  // In Phase 4, this will save to PendingOnboarding and redirect to Clerk
-  const handleEmailSubmit = async (_email: string) => {
-    // For authenticated flow, just complete the onboarding
-    // Email parameter will be used in Phase 4 when saving to PendingOnboarding
-    await handleCompleteOnboarding();
+  // For authenticated users: complete onboarding directly
+  // For unauthenticated users: save to PendingOnboarding and redirect to Clerk
+  const handleEmailSubmit = async (email: string) => {
+    if (isAuthenticated) {
+      // Authenticated user: complete onboarding directly
+      await handleCompleteOnboarding();
+    } else {
+      // Unauthenticated user: save pending data and redirect to Clerk
+      try {
+        setIsSubmitting(true);
+        setError(null);
+
+        // Get formatted tickers for saving
+        const formattedTickers = getAvailableEquities()
+          .filter(equity => selectedEquities.includes(equity.symbol))
+          .map(equity => ({
+            symbol: equity.symbol,
+            companyName: equity.name
+          }));
+
+        // First check if email already exists
+        const checkResponse = await fetch('/api/onboarding/check-email', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email })
+        });
+
+        if (!checkResponse.ok) {
+          const checkData = await checkResponse.json();
+          throw new Error(checkData.error || 'Failed to check email');
+        }
+
+        const checkResult = await checkResponse.json();
+
+        // Handle existing user scenario - redirect to sign-in
+        if (checkResult.status === 'EXISTING_USER' || checkResult.status === 'INCOMPLETE_USER') {
+          toast.info(checkResult.message || 'You already have an account. Redirecting to sign in...');
+          // Save pending data for merge after sign-in
+          await fetch('/api/onboarding/save-pending', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              email,
+              sectors: selectedSectors,
+              tickers: formattedTickers
+            })
+          });
+          router.push(`/sign-in?email=${encodeURIComponent(email)}&returnTo=/dashboard?merge=pending`);
+          return;
+        }
+
+        // Save pending onboarding data
+        const saveResponse = await fetch('/api/onboarding/save-pending', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email,
+            sectors: selectedSectors,
+            tickers: formattedTickers
+          })
+        });
+
+        if (!saveResponse.ok) {
+          const saveData = await saveResponse.json();
+          throw new Error(saveData.error || 'Failed to save onboarding data');
+        }
+
+        const saveResult = await saveResponse.json();
+
+        if (saveResult.success) {
+          toast.success('Preferences saved! Redirecting to create your account...');
+          // Redirect to Clerk sign-up with pre-filled email
+          router.push(saveResult.redirectUrl);
+        } else {
+          throw new Error('Failed to save onboarding data');
+        }
+      } catch (err) {
+        console.error('Error in handleEmailSubmit:', err);
+        const errorMessage = err instanceof Error ? err.message : 'An unexpected error occurred';
+        setError(errorMessage);
+        toast.error(errorMessage);
+        setIsSubmitting(false);
+      }
+    }
   };
 
   // Handle onboarding completion

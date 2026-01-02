@@ -216,9 +216,15 @@ async function storeSummaryForTicker(
     ? (totalCost * 0.4) / outputTokens // Assume 40% of cost is output tokens (approximate)
     : null;
 
-  // Create a new summary record with enhanced analytics
-  const summaryRecord = await prisma.summary.create({
-    data: {
+  // Create or update summary record with enhanced analytics
+  const summaryRecord = await prisma.summary.upsert({
+    where: {
+      tickerId_filingUrl: {
+        tickerId: tickerRecord.id,
+        filingUrl: filingUrl,
+      },
+    },
+    create: {
       tickerId: tickerRecord.id,
       filingType: formType,
       filingDate: new Date(filingDate),
@@ -279,6 +285,40 @@ async function storeSummaryForTicker(
           createdAt: new Date().toISOString()
         }
       } : {})
+    },
+    update: {
+      summaryText: summaryText,
+      summaryJSON: {
+        accessionNumber: metadata.accessionNumber || '',
+        keyPoints: keyPoints,
+        parsedContent: metadata.content && typeof metadata.content === 'string'
+          ? metadata.content
+          : null,
+        documentType: metadata.documentType || 'unknown',
+        documentDescription: metadata.documentDescription || 'unknown',
+        rawData: metadata.filingDetails
+          ? JSON.stringify(metadata.filingDetails)
+          : null,
+        generatedAt: new Date().toISOString(),
+        tokensUsed: metadata.tokensUsed,
+        inputTokens: metadata.inputTokens,
+        outputTokens: metadata.outputTokens,
+        totalCost: metadata.totalCost,
+        filingType: formType,
+        model: metadata.model || 'unknown',
+        modelConfig: metadata.modelConfig || null,
+      },
+      tokensUsed: tokensUsed,
+      inputTokens: inputTokens,
+      outputTokens: outputTokens,
+      inputCostPerToken: inputCostPerToken,
+      outputCostPerToken: outputCostPerToken,
+      totalCost: totalCost,
+      qualityScore: metadata.qualityScore || null,
+      confidenceLevel: metadata.confidenceLevel || null,
+      extractionSuccess: metadata.extractionSuccess || true,
+      parsingErrors: metadata.parsingErrors || 0,
+      ...(metadata.failureReason ? { processingError: metadata.failureReason } : {}),
     }
   });
 
@@ -477,14 +517,24 @@ export async function trackCacheAccess(summaryId: string, accessType: string, us
  */
 export async function trackEmailDelivery(summaryId: string, userEmail: string, deliveryType: string = 'individual'): Promise<boolean> {
   try {
+    // Get user by email to get userId
+    const user = await prisma.user.findUnique({
+      where: { email: userEmail }
+    });
+    
+    if (!user) {
+      console.warn(`[trackEmailDelivery] User not found for email: ${userEmail}`);
+      return false;
+    }
+
     // Create an email delivery record
     await prisma.summaryEmailDelivery.create({
       data: {
         summaryId: summaryId,
-        userEmail: userEmail,
-        deliveryType: deliveryType,
-        deliveredAt: new Date(),
-        deliverySuccess: true
+        userId: user.id,
+        emailAddress: userEmail,
+        deliveryStatus: deliveryType,
+        sentAt: new Date()
       }
     });
     

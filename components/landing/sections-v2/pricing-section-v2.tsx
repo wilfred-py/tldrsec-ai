@@ -16,7 +16,7 @@ import {
   calculateSavingsPercentage,
   type BillingInterval,
 } from '@/lib/stripe';
-import { AnimatedPrice, StaticPrice } from './animated-price';
+import { AnimatedPrice } from './animated-price';
 
 /**
  * Pricing plans configuration
