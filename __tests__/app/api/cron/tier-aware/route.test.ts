@@ -45,8 +45,7 @@ jest.mock('../../../../../lib/security/rate-limiter', () => ({
 jest.mock('../../../../../lib/cron/tier-eligibility', () => ({
   getUserProcessingStatuses: jest.fn(),
   getEligibleUsers: jest.fn(),
-  TIER_FREQUENCIES: {},
-  TIER_BUDGETS: {}
+  TIER_FREQUENCIES: {}
 }));
 
 jest.mock('../../../../../lib/monitoring/cron-monitor', () => ({
@@ -103,9 +102,7 @@ describe('/api/cron/tier-aware', () => {
       // Default successful responses
       mockTx.user.findUnique.mockResolvedValue({
         id: 'test-user',
-        budgetUsed: 0,
         subscriptionTier: 'FREE',
-        budgetResetAt: new Date(),
         lastCronProcessed: null
       });
       
@@ -225,18 +222,12 @@ describe('/api/cron/tier-aware', () => {
           id: 'user1',
           subscriptionTier: 'ENTERPRISE',
           lastCronProcessed: null,
-          processingBudget: 1.25,
-          budgetUsed: 0,
-          budgetResetAt: new Date(),
           tickers: [{ id: 'ticker1', symbol: 'AAPL', companyName: 'Apple Inc.' }]
         },
         {
           id: 'user2',
           subscriptionTier: 'FREE',
           lastCronProcessed: null,
-          processingBudget: 0.20,
-          budgetUsed: 0,
-          budgetResetAt: new Date(),
           tickers: [{ id: 'ticker2', symbol: 'MSFT', companyName: 'Microsoft Corp.' }]
         }
       ];
@@ -258,18 +249,16 @@ describe('/api/cron/tier-aware', () => {
       // Mock transaction behavior
       mockPrisma.$transaction.mockImplementation(async (callback) => {
         const mockTx = createMockTxClient();
-        
+
         mockTx.user.findUnique.mockResolvedValue({
           id: 'user1',
-          budgetUsed: 0,
           subscriptionTier: 'ENTERPRISE',
-          budgetResetAt: new Date(),
           lastCronProcessed: null
         });
-        
+
         mockTx.user.updateMany.mockResolvedValue({ count: 1 });
         mockTx.auditLog.create.mockResolvedValue({ id: 'audit-1' });
-        
+
         return await callback(mockTx);
       });
 
@@ -278,10 +267,10 @@ describe('/api/cron/tier-aware', () => {
           'authorization': `Bearer ${validSecret}`
         }
       });
-      
+
       const response = await GET(request);
       const data = await response.json();
-      
+
       expect(response.status).toBe(200);
       expect(data.success).toBe(true);
       expect(data.results).toBeDefined();
@@ -292,9 +281,6 @@ describe('/api/cron/tier-aware', () => {
         id: `enterprise-user-${i}`,
         subscriptionTier: 'ENTERPRISE',
         lastCronProcessed: null,
-        processingBudget: 1.25,
-        budgetUsed: 0,
-        budgetResetAt: new Date(),
         tickers: [{ id: `ticker-${i}`, symbol: 'AAPL', companyName: 'Apple Inc.' }]
       }));
 
@@ -314,18 +300,16 @@ describe('/api/cron/tier-aware', () => {
 
       mockPrisma.$transaction.mockImplementation(async (callback) => {
         const mockTx = createMockTxClient();
-        
+
         mockTx.user.findUnique.mockResolvedValue({
           id: 'enterprise-user-0',
-          budgetUsed: 0,
           subscriptionTier: 'ENTERPRISE',
-          budgetResetAt: new Date(),
           lastCronProcessed: null
         });
-        
+
         mockTx.user.updateMany.mockResolvedValue({ count: 1 });
         mockTx.auditLog.create.mockResolvedValue({ id: 'audit-1' });
-        
+
         return await callback(mockTx);
       });
 
@@ -346,15 +330,12 @@ describe('/api/cron/tier-aware', () => {
     });
   });
 
-  describe('Budget Validation', () => {
+  describe('Error Handling', () => {
     it('should handle processing errors gracefully', async () => {
       const mockUser = {
         id: 'user1',
         subscriptionTier: 'FREE',
         lastCronProcessed: null,
-        processingBudget: 0.20,
-        budgetUsed: 0.15,
-        budgetResetAt: new Date(),
         tickers: [{ id: 'ticker1', symbol: 'AAPL', companyName: 'Apple Inc.' }]
       };
 
@@ -405,62 +386,6 @@ describe('/api/cron/tier-aware', () => {
       // Should have errors due to processing failure
       expect(data.results.errors).toBeGreaterThan(0);
     });
-
-    it('should prevent budget overflow', async () => {
-      const mockUser = {
-        id: 'user1',
-        subscriptionTier: 'FREE',
-        lastCronProcessed: null,
-        processingBudget: 0.20,
-        budgetUsed: 0.19, // Near limit of 0.20
-        budgetResetAt: new Date(),
-        tickers: [{ id: 'ticker1', symbol: 'AAPL', companyName: 'Apple Inc.' }]
-      };
-
-      const { getUserProcessingStatuses, getEligibleUsers } = require('../../../../../lib/cron/tier-eligibility');
-      
-      mockPrisma.user.findMany.mockResolvedValue([mockUser]);
-      
-      getUserProcessingStatuses.mockReturnValue([
-        { userId: 'user1', tier: 'FREE', eligible: true, reason: 'eligible' }
-      ]);
-      
-      getEligibleUsers.mockReturnValue([
-        { userId: 'user1', tier: 'FREE' }
-      ]);
-
-      // Mock transaction to simulate budget overflow protection
-      mockPrisma.$transaction.mockImplementation(async (callback) => {
-        const mockTx = createMockTxClient();
-        
-        mockTx.user.findUnique.mockResolvedValue({
-          id: 'user1',
-          budgetUsed: 0.19,
-          subscriptionTier: 'FREE',
-          budgetResetAt: new Date(),
-          lastCronProcessed: null
-        });
-        
-        mockTx.user.updateMany.mockRejectedValue(new Error('Budget limit would be exceeded: 0.21 > 0.20'));
-        mockTx.auditLog.create.mockResolvedValue({ id: 'audit-1' });
-        
-        // Should throw when budget would be exceeded
-        throw new Error('Budget limit would be exceeded: 0.21 > 0.20');
-      });
-
-      const request = new NextRequest('http://localhost:3000/api/cron/tier-aware', {
-        headers: {
-          'authorization': `Bearer ${validSecret}`
-        }
-      });
-      
-      const response = await GET(request);
-      const data = await response.json();
-      
-      expect(response.status).toBe(200);
-      expect(data.success).toBe(true);
-      expect(data.results.errors).toBeGreaterThan(0);
-    });
   });
 
   describe('Subscription Tier Validation', () => {
@@ -469,9 +394,6 @@ describe('/api/cron/tier-aware', () => {
         id: 'user1',
         subscriptionTier: 'FREE',
         lastCronProcessed: null,
-        processingBudget: 0.20,
-        budgetUsed: 0,
-        budgetResetAt: new Date(),
         tickers: [{ id: 'ticker1', symbol: 'AAPL', companyName: 'Apple Inc.' }]
       };
 
@@ -491,18 +413,16 @@ describe('/api/cron/tier-aware', () => {
       // Mock transaction to simulate tier mismatch detection
       mockPrisma.$transaction.mockImplementation(async (callback) => {
         const mockTx = createMockTxClient();
-        
+
         mockTx.user.findUnique.mockResolvedValue({
           id: 'user1',
-          budgetUsed: 0,
           subscriptionTier: 'FREE', // Actual tier is FREE
-          budgetResetAt: new Date(),
           lastCronProcessed: null
         });
-        
+
         mockTx.user.updateMany.mockRejectedValue(new Error('Subscription tier mismatch: expected ENTERPRISE, got FREE'));
         mockTx.auditLog.create.mockResolvedValue({ id: 'audit-1' });
-        
+
         // Should throw when tier mismatch is detected
         throw new Error('Subscription tier mismatch: expected ENTERPRISE, got FREE');
       });
@@ -587,9 +507,6 @@ describe('/api/cron/tier-aware', () => {
         id: `user-${i}`,
         subscriptionTier: 'PROFESSIONAL',
         lastCronProcessed: null,
-        processingBudget: 0.60,
-        budgetUsed: 0,
-        budgetResetAt: new Date(),
         tickers: [{ id: `ticker-${i}`, symbol: 'AAPL', companyName: 'Apple Inc.' }]
       }));
 
@@ -615,18 +532,16 @@ describe('/api/cron/tier-aware', () => {
 
       mockPrisma.$transaction.mockImplementation(async (callback) => {
         const mockTx = createMockTxClient();
-        
+
         mockTx.user.findUnique.mockResolvedValue({
           id: 'user-0',
-          budgetUsed: 0,
           subscriptionTier: 'PROFESSIONAL',
-          budgetResetAt: new Date(),
           lastCronProcessed: null
         });
-        
+
         mockTx.user.updateMany.mockResolvedValue({ count: 1 });
         mockTx.auditLog.create.mockResolvedValue({ id: 'audit-1' });
-        
+
         return await callback(mockTx);
       });
 
@@ -635,11 +550,10 @@ describe('/api/cron/tier-aware', () => {
           'authorization': `Bearer ${validSecret}`
         }
       });
-      
+
       const response = await GET(request);
       const data = await response.json();
-      
-      
+
       expect(response.status).toBe(200);
       expect(data.success).toBe(true);
       expect(data.results.usersProcessed).toBeLessThanOrEqual(5);
