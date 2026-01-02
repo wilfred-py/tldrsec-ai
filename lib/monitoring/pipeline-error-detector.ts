@@ -791,15 +791,14 @@ class PipelineErrorDetector {
     return 'stable';
   }
 
+  /**
+   * @deprecated Budget tracking removed. OpenRouter handles credit limits.
+   * Returns a placeholder value for backwards compatibility.
+   */
   private async getTotalUserBudgets(): Promise<number> {
-    try {
-      const users = await prisma.user.findMany({
-        select: { processingBudget: true }
-      });
-      return users.reduce((sum, u) => sum + (u.processingBudget || 0), 0);
-    } catch (error) {
-      return 1000; // Default fallback
-    }
+    // Budget tracking has been removed - OpenRouter handles credit limits
+    // Return a placeholder value for any code still calling this method
+    return 1000;
   }
 
   private extractRelevantMetrics(metrics: PipelineMetrics, type: ErrorPattern['type']): Record<string, any> {
