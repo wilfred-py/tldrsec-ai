@@ -1,12 +1,46 @@
 # Project Progress
 
 **Date**: 2026-01-02
-**Branch**: feature/inline-ticker-search-keyboard-nav
-**Status**: Budget System Removal COMPLETE
+**Branch**: fix/auto-recover-401-auth
+**Status**: Auto-Recover 401 Authentication Fix COMPLETE
 
 ---
 
-## Current Session: Remove Budget System & Add OpenRouter Credit Monitoring ✅ (2026-01-02)
+## Current Session: Auto-Recover 401 Authentication Fix ✅ (2026-01-02)
+
+Fixed the 401 Unauthorized error on `/api/cron/auto-recover` endpoint when called by the Cloudflare Worker.
+
+**Root Cause**: Authentication pattern mismatch - Cloudflare Worker's `handleAutoRecovery` was already using HMAC auth (added in previous session), but the route's `authenticateRequest` function wasn't checking for middleware-validated HMAC requests.
+
+**Additional Issues Discovered During Testing**:
+1. `VERCEL_URL` doesn't include `https://` protocol → Fixed with protocol detection
+2. `VERCEL_URL` points to deployment-specific URLs with protection → Changed to use `PUBLIC_URL`
+3. `PipelineHealth` interface didn't match actual API response → Fixed interface structure
+
+**Files Modified**:
+- `app/api/cron/auto-recover/route.ts` - Multiple fixes:
+  - Added HMAC middleware bypass check in `authenticateRequest`
+  - Changed from `VERCEL_URL` to `PUBLIC_URL` for internal API calls
+  - Fixed `PipelineHealth` interface to match actual response structure
+- `__tests__/cloudflare-cron/auto-recover-auth.test.ts` - NEW: HMAC signature generation tests
+- `scripts/test-auto-recover.js` - NEW: Manual test script for endpoint verification
+
+**PRs Merged**:
+- PR #297: Initial route authentication update
+- PR #298: VERCEL_URL protocol fix
+- PR #299: PUBLIC_URL for internal calls
+- PR #300: PipelineHealth interface fix
+
+**Verification**:
+- ✅ HMAC authentication passes (200 OK)
+- ✅ Pipeline health check works: `{"action":"none","reason":"Pipeline is healthy","status":"HEALTHY"}`
+- ✅ All tests pass
+
+**Documentation**: See [docs/plans/2026-01-02-fix-auto-recover-401.md](../docs/plans/2026-01-02-fix-auto-recover-401.md)
+
+---
+
+## Previous Session: Remove Budget System & Add OpenRouter Credit Monitoring ✅ (2026-01-02)
 
 Removed the broken internal budget tracking system and replaced it with OpenRouter credit monitoring. The budget system had a 1,000,000× scale mismatch (storing micro-dollars, comparing as dollars) that blocked users after their first summary.
 
