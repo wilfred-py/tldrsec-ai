@@ -13,8 +13,6 @@ export interface User {
   email?: string;
   subscriptionTier?: string;
   lastCronProcessed?: Date | null;
-  processingBudget?: number;
-  budgetUsed?: number;
   [key: string]: unknown;
 }
 
@@ -29,8 +27,6 @@ export interface DatabaseUser {
   email: string | null;
   subscriptionTier: string;
   lastCronProcessed: Date | null;
-  processingBudget: number | null;
-  budgetUsed: number | null;
   tickers: Array<{
     id: string;
     symbol: string;
@@ -43,11 +39,6 @@ export interface ProcessUserResult {
   userId: string;
   filingsProcessed?: number;
   cost?: number;
-  budgetUpdate?: {
-    previousBudget: number;
-    newBudget: number;
-    costAdded: number;
-  };
   error?: string;
   errorType?: string;
 }
@@ -59,7 +50,6 @@ export interface TierStatus {
   errors: number;
   errorBreakdown?: {
     concurrencyConflicts: number;
-    budgetExceeded: number;
     costValidationFailed: number;
     tierMismatch: number;
     unknownErrors: number;
@@ -74,7 +64,6 @@ export interface CronResults {
   errors: number;
   errorBreakdown: {
     concurrencyConflicts: number;
-    budgetExceeded: number;
     costValidationFailed: number;
     tierMismatch: number;
     unknownErrors: number;
@@ -123,23 +112,9 @@ export interface ProcessingContext {
   processingEndTime?: number;
 }
 
-// ===== BUDGET & COST INTERFACES =====
-
-export interface BudgetUpdateOptions {
-  maxRetries: number;
-  baseDelay: number;
-  maxDelay: number;
-  isolationLevel: 'ReadCommitted' | 'Serializable';
-  tier: string;
-  originalCost: number;
-  enableAuditLogging: boolean;
-}
-
-export interface BudgetUpdateResult {
-  previousBudget: number;
-  newBudget: number;
-  success: boolean;
-}
+// ===== COST INTERFACES =====
+// Note: Budget tracking has been removed. OpenRouter handles credit limits.
+// See: docs/plans/2026-01-02-remove-budget-system-add-credit-monitoring.md
 
 // ===== AUTHENTICATION INTERFACES =====
 
@@ -223,9 +198,9 @@ export type CronPlatform = 'RAILWAY_CRON' | 'VERCEL_CRON' | 'MANUAL_TRIGGER';
 // Error type categories
 export const ERROR_TYPES = {
   CONCURRENCY_CONFLICT: 'CONCURRENCY_CONFLICT',
-  BUDGET_EXCEEDED: 'BUDGET_EXCEEDED',
   COST_VALIDATION_FAILED: 'COST_VALIDATION_FAILED',
   TIER_MISMATCH: 'TIER_MISMATCH',
+  INSUFFICIENT_CREDITS: 'INSUFFICIENT_CREDITS',  // OpenRouter credit limit exceeded
   UNKNOWN_ERROR: 'UNKNOWN_ERROR'
 } as const;
 
@@ -244,8 +219,6 @@ export interface MarketContext {
 
 export interface EligibilityOptions {
   maxUsersPerCycle: number;
-  respectBudgetLimits: boolean;
-  budgetThreshold: number;
 }
 
 export interface TransactionOptions {
