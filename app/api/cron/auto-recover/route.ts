@@ -55,15 +55,19 @@ async function authenticateRequest(request: NextRequest): Promise<boolean> {
 
 interface PipelineHealth {
   status: 'HEALTHY' | 'DEGRADED' | 'CRITICAL' | 'ERROR';
-  jobQueue: {
-    minutesSinceLastCompletion: number | null;
-    pendingCount: number;
-    processingCount: number;
+  minutesSinceLastCompletion: number | null;
+  jobs: {
+    pending: number;
+    processing: number;
+    completedLast1h: number;
+    completedLast24h: number;
+    deadLetter: number;
+    retrying: number;
   };
-  lockHealth: {
-    staleLocksCount: number;
-    activeLocksCount: number;
+  locks: {
     healthStatus: string;
+    staleCount: number;
+    activeCount: number;
   };
 }
 
@@ -148,15 +152,15 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         action: 'none',
         reason: 'Pipeline is healthy',
         status: health.status,
-        minutesSinceLastCompletion: health.jobQueue.minutesSinceLastCompletion,
+        minutesSinceLastCompletion: health.minutesSinceLastCompletion,
         timestamp: new Date().toISOString(),
       });
     }
 
     // Check if stale locks need cleanup
-    if (health.lockHealth.staleLocksCount > 0) {
+    if (health.locks.staleCount > 0) {
       action = 'cleanup';
-      reason = `${health.lockHealth.staleLocksCount} stale locks detected`;
+      reason = `${health.locks.staleCount} stale locks detected`;
 
       const cleanupResult = await triggerForceCleanup();
       result = cleanupResult;
@@ -175,8 +179,8 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     // Check if redeploy is needed (critical stall, no stale locks, cooldown passed)
     else if (
       health.status === 'CRITICAL' &&
-      health.jobQueue.minutesSinceLastCompletion !== null &&
-      health.jobQueue.minutesSinceLastCompletion >= STALL_CRITICAL_MINUTES
+      health.minutesSinceLastCompletion !== null &&
+      health.minutesSinceLastCompletion >= STALL_CRITICAL_MINUTES
     ) {
       // Check if we should wait after cleanup
       if (
@@ -214,7 +218,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
       // Trigger redeploy
       action = 'redeploy';
-      reason = `Pipeline stalled for ${health.jobQueue.minutesSinceLastCompletion} minutes`;
+      reason = `Pipeline stalled for ${health.minutesSinceLastCompletion} minutes`;
 
       const redeployResult = await triggerRedeploy(reason);
       result = redeployResult;
@@ -235,7 +239,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         action: 'monitoring',
         reason: 'Pipeline degraded, monitoring for recovery',
         status: health.status,
-        minutesSinceLastCompletion: health.jobQueue.minutesSinceLastCompletion,
+        minutesSinceLastCompletion: health.minutesSinceLastCompletion,
         timestamp: new Date().toISOString(),
       });
     }
