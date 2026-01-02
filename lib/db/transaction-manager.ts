@@ -357,23 +357,24 @@ export class FilingTransactionManager {
   }
 
   /**
-   * Update user budget with transaction safety
+   * @deprecated Budget tracking removed. OpenRouter handles credit limits.
+   * This function is a no-op for backwards compatibility.
    */
   static async updateUserBudgetWithTransaction(
     userId: string,
-    costToAdd: number,
+    _costToAdd: number,
     operation: (tx: Prisma.TransactionClient, currentUser: Record<string, unknown>) => Promise<void>,
     options: TransactionOptions = {}
   ): Promise<TransactionResult<{ previousBudget: number; newBudget: number }>> {
+    transactionLogger.warn('updateUserBudgetWithTransaction is deprecated - OpenRouter handles credit limits');
+
     return TransactionManager.executeTransaction(
       async (tx, context) => {
-        // Step 1: Get current user with row lock
+        // Get current user for the operation callback
         const currentUser = await tx.user.findUnique({
           where: { id: userId },
           select: {
-            budgetUsed: true,
-            subscriptionTier: true,
-            budgetResetAt: true
+            subscriptionTier: true
           }
         });
 
@@ -381,59 +382,31 @@ export class FilingTransactionManager {
           throw new Error(`User ${userId} not found`);
         }
 
-        const currentBudgetUsed = currentUser.budgetUsed || 0;
-        const newBudgetUsed = currentBudgetUsed + costToAdd;
-
-        transactionLogger.info('Updating user budget in transaction', {
-          transactionId: context.id,
-          userId,
-          currentBudget: currentBudgetUsed,
-          costToAdd,
-          newBudget: newBudgetUsed,
-          tier: currentUser.subscriptionTier
-        });
-
-        // Step 2: Execute custom operation (e.g., create summary, send email)
+        // Execute custom operation (e.g., create summary, send email)
         await operation(tx, currentUser);
 
-        // Step 3: Update user budget atomically
+        // Update lastCronProcessed only
         await tx.user.update({
           where: { id: userId },
           data: {
-            budgetUsed: newBudgetUsed,
             lastCronProcessed: new Date()
           }
         });
 
-        // Step 4: Queue audit log asynchronously to avoid extending transaction
-        setImmediate(() => {
-          createAsyncAuditLog({
-            userId,
-            action: 'BUDGET_UPDATE',
-            details: {
-              transactionId: context.id,
-              previousBudget: currentBudgetUsed,
-              newBudget: newBudgetUsed,
-              costAdded: costToAdd,
-              tier: currentUser.subscriptionTier,
-              timestamp: new Date().toISOString()
-            },
-            success: true,
-            correlationId: context.id
-          }).catch(err => {
-            transactionLogger.error('Failed to create async audit log', { userId, error: err });
-          });
+        transactionLogger.debug('User processing timestamp updated', {
+          transactionId: context.id,
+          userId
         });
 
         return {
-          previousBudget: currentBudgetUsed,
-          newBudget: newBudgetUsed
+          previousBudget: 0,
+          newBudget: 0
         };
       },
       {
-        isolationLevel: 'ReadCommitted', // Use lighter isolation to prevent deadlocks
-        description: `Update budget for user ${userId}`,
-        metadata: { userId, costToAdd },
+        isolationLevel: 'ReadCommitted',
+        description: `Update processing timestamp for user ${userId}`,
+        metadata: { userId },
         ...options
       }
     );

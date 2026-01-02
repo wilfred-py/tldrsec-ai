@@ -35,8 +35,8 @@ import {
 } from '@/lib/animations/landing-animations';
 
 // Constants for animation and layout
-const INITIAL_EMAIL_COUNT = 3;
-const MAX_EMAIL_COUNT = 8;
+const INITIAL_EMAIL_COUNT = 6;
+const MAX_EMAIL_COUNT = 12;
 const DELIVERY_INTERVAL = 5000; // Fixed 5 second delivery when not interacting
 const EMAIL_ROW_HEIGHT = 52; // Fixed height for email rows in pixels
 
@@ -863,21 +863,18 @@ export const GmailInboxHero = memo<GmailInboxHeroProps>(({ className = '' }) => 
     }
   }, []);
 
-  // Control delivery based on summary panel state and view
-  // Pause delivery when summary is open, resume when closed
+  // Control delivery based on view state
+  // Continue delivery even when summary pane is open for dynamic feel
   useEffect(() => {
-    if (selectedEmail) {
-      // Summary is open - stop delivery
-      stopDelivery();
-    } else if (isInView && emailPool.length > 0 && displayedEmails.length < MAX_EMAIL_COUNT) {
-      // Summary closed, in view, emails remaining - start/resume delivery
+    if (isInView && emailPool.length > 0 && displayedEmails.length < MAX_EMAIL_COUNT) {
+      // In view, emails remaining - start/continue delivery
       scheduleNextDelivery();
     }
 
     return () => {
       stopDelivery();
     };
-  }, [selectedEmail, isInView, emailPool.length, displayedEmails.length, scheduleNextDelivery, stopDelivery]);
+  }, [isInView, emailPool.length, displayedEmails.length, scheduleNextDelivery, stopDelivery]);
 
   // Handle email click - mark as read and select
   const handleEmailClick = useCallback((email: EmailSummary) => {
@@ -1053,13 +1050,13 @@ export const GmailInboxHero = memo<GmailInboxHeroProps>(({ className = '' }) => 
 
             <motion.div
               layout
-              className={`bg-white rounded-2xl shadow-2xl overflow-hidden border border-gray-200 relative ${
+              className={`bg-white rounded-xl shadow-2xl overflow-hidden border border-gray-200 relative ${
                 isExpanded ? 'z-50 h-full' : ''
               }`}
               style={!isExpanded ? {
-                // Mobile-first: full width on small screens, wider on larger for landscape ratio
+                // Mobile-first: full width on small screens, 2.25x wider (1.5 x 1.5)
                 width: '100%',
-                maxWidth: 'min(95vw, 900px)',
+                maxWidth: 'min(98vw, 2000px)',
               } : undefined}
             >
               {/* Gmail Header - compact on mobile */}
@@ -1147,9 +1144,9 @@ export const GmailInboxHero = memo<GmailInboxHeroProps>(({ className = '' }) => 
               <div
                 className="relative flex overflow-hidden"
                 style={{
-                  // Landscape ratio: shorter height for wider appearance
-                  // Mobile: 250px min, Desktop: max 340px for clear landscape ratio
-                  height: isExpanded ? 'calc(100% - 110px)' : 'clamp(220px, 35vh, 340px)',
+                  // Wide landscape ratio: 1.5x taller for larger display
+                  // Mobile: 300px min, Desktop: max 450px
+                  height: isExpanded ? 'calc(100% - 110px)' : 'clamp(300px, 42vh, 450px)',
                 }}
               >
                 {/* Email List - Always full width, never shrinks */}

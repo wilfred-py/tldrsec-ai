@@ -31,11 +31,6 @@ model User {
   subscriptionTier      SubscriptionTier       @default(FREE)
   lastProcessedAt       DateTime?
   lastCronProcessed     DateTime?
-  processingBudget      Int                    @default(0)
-  budgetUsed            Int                    @default(0)
-  budgetResetAt         DateTime?
-  dailyProcessingBudget Int                    @default(0)
-  dailyBudgetResetAt    DateTime?
   tierProcessingCount   Int                    @default(0)
   lastTierUpgrade       DateTime?
 

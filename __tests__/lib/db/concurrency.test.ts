@@ -178,8 +178,7 @@ describe('Database Integration Tests', () => {
           email: `test-concurrency-${Date.now()}@example.com`,
           authProvider: 'test',
           authProviderId: 'test-id',
-          subscriptionTier: 'FREE',
-          budgetUsed: 0
+          subscriptionTier: 'FREE'
         }
       });
       testUserId = testUser.id;
@@ -217,19 +216,14 @@ describe('Database Integration Tests', () => {
     }
   });
 
-  it('should handle concurrent budget updates safely', async () => {
+  it('should handle concurrent budget updates safely (deprecated - now no-op)', async () => {
     if (!testUserId) {
       console.log('Skipping test - no test user available');
       return;
     }
 
-    // Reset user budget
-    await prisma.user.update({
-      where: { id: testUserId },
-      data: { budgetUsed: 0 }
-    });
-
-    const concurrentUpdates = Array.from({ length: 5 }, (_, i) => 
+    // Budget operations are now deprecated no-ops
+    const concurrentUpdates = Array.from({ length: 5 }, () =>
       updateUserBudgetWithLock(
         testUserId,
         0.1, // Small cost
@@ -240,13 +234,10 @@ describe('Database Integration Tests', () => {
     );
 
     const results = await Promise.allSettled(concurrentUpdates);
-    
-    // Only one should succeed due to optimistic locking
+
+    // All should succeed since budget operations are now no-ops
     const successful = results.filter(r => r.status === 'fulfilled').length;
-    const failed = results.filter(r => r.status === 'rejected').length;
-    
-    expect(successful).toBe(1);
-    expect(failed).toBe(4);
+    expect(successful).toBe(5);
   });
 
   it('should handle concurrent ticker monitoring updates', async () => {

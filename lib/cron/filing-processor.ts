@@ -715,9 +715,7 @@ export class CronFilingProcessor {
         email: user.email || undefined,
         tickers: user.tickers || [],
         subscriptionTier: user.subscriptionTier,
-        lastCronProcessed: user.lastCronProcessed,
-        processingBudget: user.processingBudget || 0,
-        budgetUsed: user.budgetUsed || 0
+        lastCronProcessed: user.lastCronProcessed
       };
 
       // Process filing with transaction

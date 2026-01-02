@@ -22,13 +22,12 @@ export interface QueryOptions {
 
 /**
  * User with related data interface
+ * Note: Budget fields removed - OpenRouter handles credit limits
  */
 export interface UserWithRelatedData {
   id: string;
   email: string;
   subscriptionTier: string;
-  processingBudget: number;
-  budgetUsed: number;
   preferences?: unknown;
   tickers: Array<{
     symbol: string;
@@ -80,8 +79,6 @@ export class OptimizedConnectionManager {
           id: true,
           email: true,
           subscriptionTier: true,
-          processingBudget: true,
-          budgetUsed: true,
           preferences: true,
           tickers: true
         } : undefined
@@ -153,47 +150,31 @@ export class OptimizedConnectionManager {
   
   /**
    * Get all eligible users for processing with optimized queries
+   * Note: Budget filtering removed - OpenRouter handles credit limits
    */
   async getEligibleUsersForProcessing(
-    budgetThreshold: number = 90,
+    _budgetThreshold: number = 90,
     subscriptionTiers?: string[]
   ): Promise<UserWithRelatedData[]> {
     const startTime = Date.now();
-    
+
     try {
       const whereClause: {
         tickers: { some: Record<string, unknown> };
         subscriptionTier?: { in: string[] };
-        OR?: Array<{ processingBudget: { lte: number } } | { budgetUsed: { lt: unknown } }>;
       } = {
         tickers: {
           some: {} // Has at least one ticker
         }
       };
-      
+
       // Add subscription tier filter if specified
       if (subscriptionTiers && subscriptionTiers.length > 0) {
         whereClause.subscriptionTier = {
           in: subscriptionTiers
         };
       }
-      
-      // Add budget filter to exclude users near their limit
-      if (budgetThreshold > 0) {
-        whereClause.OR = [
-          {
-            processingBudget: {
-              lte: 0 // Unlimited budget (0 or negative)
-            }
-          },
-          {
-            budgetUsed: {
-              lt: this.prisma.$queryRaw`CAST("processingBudget" * ${budgetThreshold / 100} AS DECIMAL)`
-            }
-          }
-        ];
-      }
-      
+
       const users = await this.prisma.user.findMany({
         where: whereClause,
         include: {
@@ -207,27 +188,22 @@ export class OptimizedConnectionManager {
         orderBy: [
           {
             subscriptionTier: 'desc' // Premium users first
-          },
-          {
-            budgetUsed: 'asc' // Users with lower budget usage first
           }
         ]
       });
-      
+
       const duration = Date.now() - startTime;
       dbLogger.info(`Retrieved ${users.length} eligible users for processing`, {
-        budgetThreshold,
         subscriptionTiers,
         duration,
         queryType: 'eligible_users_fetch'
       });
-      
+
       return users as UserWithRelatedData[];
-      
+
     } catch (error) {
       const duration = Date.now() - startTime;
       dbLogger.error(`Failed to retrieve eligible users`, {
-        budgetThreshold,
         subscriptionTiers,
         duration,
         error: error instanceof Error ? error.message : String(error)
@@ -237,7 +213,8 @@ export class OptimizedConnectionManager {
   }
   
   /**
-   * Batch update user budgets with optimized query
+   * @deprecated Budget tracking removed. OpenRouter handles credit limits.
+   * This function is a no-op for backwards compatibility.
    */
   async batchUpdateUserBudgets(
     updates: Array<{
@@ -245,68 +222,8 @@ export class OptimizedConnectionManager {
       budgetIncrement: number;
     }>
   ): Promise<{ success: boolean; updatedCount: number; errors: Array<{ userId?: string; budgetIncrement?: number; error: string; type?: string }> }> {
-    if (updates.length === 0) {
-      return { success: true, updatedCount: 0, errors: [] };
-    }
-    
-    const startTime = Date.now();
-    const errors: Array<{ userId?: string; budgetIncrement?: number; error: string; type?: string }> = [];
-    let updatedCount = 0;
-    
-    try {
-      // Use transaction for atomic updates
-      await this.prisma.$transaction(async (prisma) => {
-        for (const { userId, budgetIncrement } of updates) {
-          try {
-            await prisma.user.update({
-              where: { id: userId },
-              data: {
-                budgetUsed: {
-                  increment: budgetIncrement
-                }
-              }
-            });
-            updatedCount++;
-          } catch (error) {
-            errors.push({
-              userId,
-              budgetIncrement,
-              error: error instanceof Error ? error.message : String(error)
-            });
-          }
-        }
-      });
-      
-      const duration = Date.now() - startTime;
-      const success = errors.length === 0;
-      
-      dbLogger.info(`Batch budget update completed`, {
-        totalUpdates: updates.length,
-        successful: updatedCount,
-        errors: errors.length,
-        duration,
-        success
-      });
-      
-      return { success, updatedCount, errors };
-      
-    } catch (error) {
-      const duration = Date.now() - startTime;
-      dbLogger.error(`Batch budget update failed`, {
-        totalUpdates: updates.length,
-        duration,
-        error: error instanceof Error ? error.message : String(error)
-      });
-      
-      return {
-        success: false,
-        updatedCount,
-        errors: [...errors, {
-          type: 'transaction_error',
-          error: error instanceof Error ? error.message : String(error)
-        }]
-      };
-    }
+    dbLogger.warn('batchUpdateUserBudgets is deprecated - OpenRouter handles credit limits');
+    return { success: true, updatedCount: updates.length, errors: [] };
   }
   
   /**

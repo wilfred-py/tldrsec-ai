@@ -88,8 +88,6 @@ export async function POST(req: Request) {
               authProviderId: userData.id,
               name: userData.first_name ? `${userData.first_name} ${userData.last_name || ''}`.trim() : undefined,
               subscriptionTier: 'FREE', // Default tier for new users
-              budgetUsed: 0,
-              processingBudget: 0.20, // Default FREE tier budget
               onboardingCompleted: !!pendingOnboarding, // Mark complete if came through passwordless flow
             }
           });
