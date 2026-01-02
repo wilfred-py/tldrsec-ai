@@ -1,12 +1,52 @@
 # Project Progress
 
-**Date**: 2026-01-01
-**Branch**: feature/passwordless-onboarding
-**Status**: Auto-Recovery Infrastructure COMPLETE
+**Date**: 2026-01-02
+**Branch**: feature/inline-ticker-search-keyboard-nav
+**Status**: Budget System Removal COMPLETE
 
 ---
 
-## Current Session: Auto-Recovery Infrastructure Implementation ✅ (2026-01-01)
+## Current Session: Remove Budget System & Add OpenRouter Credit Monitoring ✅ (2026-01-02)
+
+Removed the broken internal budget tracking system and replaced it with OpenRouter credit monitoring. The budget system had a 1,000,000× scale mismatch (storing micro-dollars, comparing as dollars) that blocked users after their first summary.
+
+**Context**: User showed $988,316 budget used, but actual OpenRouter spend was only $35.69. OpenRouter already tracks credits accurately - we just needed to monitor them and alert when low.
+
+**Implemented Phases**:
+1. ✅ **Database Migration** - Removed `budgetUsed`, `processingBudget`, `budgetResetAt`, `dailyProcessingBudget`, `dailyBudgetResetAt` from User model
+2. ✅ **Budget Logic Removal** - Cleaned up cron system, user processing, tier eligibility
+3. ✅ **OpenRouter Credit Check** - Added credit status to Slack reports with $50 warning threshold
+4. ✅ **Insufficient Credits Detection** - Added `AI_INSUFFICIENT_CREDITS` error code, HTTP 402 detection, Slack alerts
+5. ✅ **Test File Cleanup** - Updated critical test files, deprecated budget manipulation tests
+
+**Key Files Modified**:
+- `prisma/schema.prisma` - Removed budget fields from User model
+- `lib/ai/openrouter-credit-monitor.ts` - NEW: Credit status checking and alerts
+- `lib/ai/openrouter-client.ts` - 402 error detection for insufficient credits
+- `lib/error-handling/constants.ts` - Added AI_INSUFFICIENT_CREDITS error code
+- `lib/cron/user-processing-service.ts` - Removed budget logic
+- `lib/cron/tier-eligibility.ts` - Removed budget checks
+- `lib/db/budget-operations.ts` - Deprecated to no-ops
+- `app/api/cron/tier-aware/route.ts` - Removed budget reset logic
+- `components/dashboard/tier-status-widget.tsx` - Removed budget display
+
+**Test Files Updated**:
+- `__tests__/security/budget-manipulation.test.ts` - Replaced with deprecation notice
+- `__tests__/app/api/cron/tier-aware/route.test.ts` - Cleaned up mock data
+- `__tests__/lib/monitoring/pipeline-health-monitor.test.ts` - Updated cost management tests
+- `__tests__/cron/comprehensive-cron-integration.test.ts` - Replaced budget tests
+- `__tests__/lib/db/concurrency.test.ts` - Updated budget test expectations
+
+**Verification**:
+- ✅ Build passes successfully
+- ✅ Budget manipulation tests pass with deprecation notices
+- ✅ Database schema updated (migration pending apply)
+
+**Documentation**: See [docs/plans/2026-01-02-remove-budget-system-add-credit-monitoring.md](../docs/plans/2026-01-02-remove-budget-system-add-credit-monitoring.md)
+
+---
+
+## Previous Session: Auto-Recovery Infrastructure Implementation ✅ (2026-01-01)
 
 Implemented comprehensive auto-recovery infrastructure to eliminate manual redeployments when pipeline stalls occur.
 
@@ -98,5 +138,5 @@ Fixed the stopped email processing pipeline that had been down since 8 AM this m
 
 ---
 
-*Last Updated: 2026-01-01*
+*Last Updated: 2026-01-02*
 *Older completed projects archived to .claude/history/ - See TIMELINE.md for full history*
