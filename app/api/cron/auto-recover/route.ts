@@ -31,10 +31,17 @@ const CLEANUP_TO_REDEPLOY_WAIT_MS = 10 * 60 * 1000; // 10 minutes
 const REDEPLOY_COOLDOWN_MS = 60 * 60 * 1000; // 1 hour
 
 async function authenticateRequest(request: NextRequest): Promise<boolean> {
+  // Check if middleware already validated the request (HMAC auth)
+  const securityValidated = request.headers.get('x-security-validated');
+  const authMethod = request.headers.get('x-auth-method');
+  if (securityValidated === 'true' && authMethod === 'hmac') {
+    return true;
+  }
+
   const cronSecret = process.env.CRON_SECRET;
   if (!cronSecret) return false;
 
-  // Check header
+  // Check header (legacy support for direct calls)
   const headerSecret = request.headers.get('x-cron-secret');
   if (headerSecret === cronSecret) return true;
 
