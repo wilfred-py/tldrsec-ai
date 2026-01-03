@@ -115,19 +115,11 @@ This file provides a chronological index of all completed projects. For detailed
 ---
 
 ## Archive Statistics
-<<<<<<< HEAD
-- **Total Archived Projects**: 7 weekly archives (Oct 2025 - Jan 2026)
-- **Current PROGRESS.md Lines**: 98 (threshold: 500)
-- **Last Sync**: 2026-01-01
-- **Archive System**: ✅ ACTIVE
-- **Latest Archive**: Dec 29-Jan 4 (JSON parsing phases, bracket repair, cron trigger fix)
-=======
 - **Total Archived Projects**: 6 weekly archives (Oct-Dec 2025)
 - **Current PROGRESS.md Lines**: 583 (threshold: 500)
 - **Last Sync**: 2026-01-03 08:15 AEDT
 - **Archive System**: ✅ ACTIVE
 - **Next Archive Check**: Dec 29 entries archivable after 2026-01-28
->>>>>>> main
 
 **Archives**:
 - Weekly archives in `.claude/history/2025/` (Oct-Dec)
