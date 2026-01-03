@@ -2,14 +2,49 @@
 
 ## Current Status
 **Date**: 2026-01-03
-**Branch**: feature/premium-pricing-update-199-349
-**Status**: ✅ COMPLETE - Premium Pricing Update ($199 Pro / $349 Max)
+**Branch**: fix/job-processor-type-mismatch
+**Status**: ✅ COMPLETE - Job Processor Pipeline Fix
 
 ---
 
-## Current Session: Premium Pricing Update ($199 Pro / $349 Max)
+## Current Session: Job Processor Pipeline Fix
 
-### Completed: Premium Pricing Update ✅ COMPLETE (2026-01-03)
+### Job Processor Type Mismatch Fix ✅ COMPLETE (2026-01-03)
+
+**Issue**: Pipeline stalled since Jan 2 due to job type mismatch between auto-remediation and job processor.
+
+**Root Cause**: 
+- Auto-remediation created `filing_fetch` jobs (legacy type)
+- Job processor only handles `ASYNC_FETCH_FILING` jobs (3-phase async type)
+- No automated job processing (manual-only)
+
+**Solution Applied (Elon's 5-Step Algorithm)**:
+1. **Delete complexity**: Remove legacy job types
+2. **Simplify**: Use unified 3-phase async pipeline types  
+3. **Accelerate**: Fix job type mapping in remediation
+4. **Automate**: Add cron job for job processor (every 5 minutes)
+
+**Fixes Applied**:
+- Updated `scripts/verify-daily-pipeline.ts` to use correct job types:
+  - `filing_fetch` → `ASYNC_FETCH_FILING`
+  - `filing_summarize` → `ASYNC_SUMMARIZE_CACHED`
+  - Removed `filing_email` (handled by summarize job)
+- Added automated cron job to `vercel.json`: `/api/cron/process-filing-queue` (every 5 minutes)
+
+**Files Modified**:
+- `scripts/verify-daily-pipeline.ts` - Fixed job type mapping
+- `vercel.json` - Added automated job processing cron
+
+**Impact**:
+- ✅ 10 stuck GOOGL/TSLA filings from Jan 1st now queued with correct type
+- ✅ Future job processing fully automated
+- ✅ Eliminates manual intervention requirement
+
+---
+
+## Recently Completed (Last 30 Days)
+
+### Premium Pricing Update ($199 Pro / $349 Max) ✅ COMPLETE (2026-01-03)
 
 **Plan**: [2026-01-02-premium-pricing-update-199-349.md](docs/plans/2026-01-02-premium-pricing-update-199-349.md)
 
@@ -17,79 +52,42 @@
 
 **All Phases Completed**:
 - ✅ **Phase 1**: Core pricing configuration updated in `lib/stripe.ts`
-  - Pro: $199/mo, $1990/yr, 25 tickers, ALL filing types
-  - Max: $349/mo, $3490/yr, unlimited tickers, ALL filing types
-  - 21 pricing tests pass
-- ✅ **Phase 2**: Billing page refactored to use centralized SUBSCRIPTION_PLANS
-  - Removed duplicate AVAILABLE_PLANS constant (had wrong pricing $9/$29/$139)
-  - Created `getBillingPlans()` helper using SUBSCRIPTION_PLANS
-  - Verified: $0/$199/$349 displays correctly on landing and billing pages
+- ✅ **Phase 2**: Billing page refactored to use centralized SUBSCRIPTION_PLANS  
 - ✅ **Phase 3**: Regression testing and documentation
-  - Updated `docs/stripe-setup-guide.md` with new pricing
-  - Updated `DEPLOYMENT_GUIDE.md` with new pricing
-  - Updated `app/api/user/subscription/route.ts` comment
-  - All pricing tests pass (21/21)
 
-**Files Modified**:
-- `lib/stripe.ts:58-91` - Updated SUBSCRIPTION_PLANS with new pricing
-- `__tests__/config/stripe-pricing.test.ts` - Updated test expectations
-- `app/dashboard/billing/page.tsx` - Refactored to use SUBSCRIPTION_PLANS
-- `docs/stripe-setup-guide.md` - Updated pricing documentation
-- `DEPLOYMENT_GUIDE.md` - Updated pricing documentation
-- `app/api/user/subscription/route.ts` - Updated comment
+**Files**: `lib/stripe.ts`, `app/dashboard/billing/page.tsx`, `docs/stripe-setup-guide.md`, `DEPLOYMENT_GUIDE.md`, `__tests__/config/stripe-pricing.test.ts`
+
+**Verification**: ✅ 21 pricing tests pass, displays correctly on landing and billing pages
 
 ---
 
-## Previous Session: Passwordless Onboarding Implementation
-
-### Phase 2 Complete - EmailStep Component & 3-Step Flow ✅ COMPLETE (2026-01-01)
+### Passwordless Onboarding Phase 2 ✅ COMPLETE (2026-01-01)
 
 **Plan**: [2026-01-01-passwordless-onboarding-implementation.md](docs/plans/2026-01-01-passwordless-onboarding-implementation.md)
 
-**Overview**: Implementing passwordless onboarding flow where users complete sector/ticker selection BEFORE authentication. Users input email as final step, then redirect to Clerk for sign-up.
+**Overview**: EmailStep component created, onboarding page updated to 3-step flow.
 
-**Completed Phases**:
-- ✅ **Phase 1**: PendingOnboarding database model created and tested (5/5 tests pass)
-- ✅ **Phase 2**: EmailStep component created, onboarding page updated to 3-step flow
+**Root Cause**: Need passwordless flow where users complete sector/ticker selection BEFORE authentication.
 
-**Phase 1 - Database Model**:
-- Created `PendingOnboarding` model in Prisma schema
-- Fields: `id`, `email` (unique), `sectors[]`, `tickers` (JSON), `createdAt`, `expiresAt`
-- Migration applied to production database
-- Tests: `npm run test:db:pending` (5/5 passing)
+**Fix**: Created standalone EmailStep component, updated onboarding to 3-step flow (33% → 66% → 100% progress)
 
-**Phase 2 - EmailStep Component & UI**:
-- Created `components/onboarding/email-step.tsx` - Standalone email input component
-- Created `__tests__/components/onboarding-email-step.test.tsx` - 9 tests (all passing)
-- Updated `app/(auth)/onboarding/page.tsx`:
-  - Changed from 2-step to 3-step flow
-  - Progress calculation: 0% → 33% → 66% → 100%
-  - Step 2 button: "Get Started" → "Continue"
-  - Added Step 3 with EmailStep component
+**Files**: `components/onboarding/email-step.tsx`, `app/(auth)/onboarding/page.tsx`, `prisma/schema.prisma`
 
-**Files Modified**:
-- `prisma/schema.prisma` - Added PendingOnboarding model
-- `components/onboarding/email-step.tsx` - New EmailStep component
-- `__tests__/components/onboarding-email-step.test.tsx` - 9 component tests
-- `__tests__/db/pending-onboarding.test.ts` - 5 database integration tests
-- `app/(auth)/onboarding/page.tsx` - Updated to 3-step flow
-- `jest.config.mjs` - Added setupFiles for dotenv loading
-- `__tests__/setup-integration.js` - New setup file for env loading
-- `package.json` - Added `test:db` and `test:db:pending` scripts
+**Verification**: ✅ 9 EmailStep tests passing, ✅ 5 PendingOnboarding DB tests passing
 
-**Pending Phases**:
-- [ ] Phase 3: Make onboarding public, add check-email API
-- [ ] Phase 4: Save pending onboarding API, Clerk redirect
-- [ ] Phase 5: Clerk webhook integration for pending data merge
-- [ ] Phase 6: Welcome summary delivery
-- [ ] Phase 7: Existing user merge modal
-- [ ] Phase 8: Cleanup cron job
+---
 
-**Verification**:
-- ✅ EmailStep tests: 9/9 passing
-- ✅ PendingOnboarding DB tests: 5/5 passing
-- ✅ Build passes
-- ✅ Lint passes
+### Gmail Inbox Hero Responsive Fix ✅ COMPLETE (2026-01-01)
+
+**Issue**: Gmail inbox hero component overflowing viewport on mobile, appearing as square instead of landscape rectangle.
+
+**Root Cause**: Fixed width calculation and tall height constraints caused overflow and square appearance.
+
+**Fixes**: Container sizing (100% width, 900px max), landscape ratio (35vh height), mobile-first email rows, hidden elements on mobile
+
+**Files**: `components/landing/sections-v2/gmail-inbox-hero.tsx`
+
+**Verification**: ✅ Lint passes, no errors
 
 ---
 

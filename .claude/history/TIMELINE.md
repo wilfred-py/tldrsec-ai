@@ -105,22 +105,35 @@ This file provides a chronological index of all completed projects. For detailed
 
 ---
 
-## Historical Archive Placeholders
+## 2025
 
-*Archive files will be created when PROGRESS.md exceeds 500 lines and contains projects older than 30 days*
+### December 2025
+
+**Week of 29-Dec-2025** → [29-Dec-2025.md](2025/Dec/29-Dec-2025.md)
+- Cloudflare Cron Trigger Fix + Health Monitoring (2025-12-29) ✅
+- Email Summary Quality Improvements (2025-12-29) ✅
+- Form 4 Email Template Fixes (2025-12-29) ✅
+- JSON Parsing Phase 5 - Production Validation & Monitoring (2025-12-29) ✅
+- JSON Parsing - Bracket Repair for AI Failure Modes (2025-12-29) ✅
+- PREMIUM → MAX Tier Rename (2025-12-30) ✅
+- Form 144 Email Metrics Enhancement (2025-12-30) ✅
+- Email Filing URL Exhibit Exclusion Fix (2025-12-30) ✅
+- Cloudflare Cron Trigger Restoration & Backfill (2025-12-30) ✅
+- Form 4 Email Value Display & Mobile-First Fix (2025-12-30) ✅
+- Form 4 Multi-Transaction Cards & Links Fix (2025-12-30) ✅
 
 ---
 
 ## Archive Statistics
-- **Total Archived Projects**: 6 weekly archives (Oct-Dec 2025)
-- **Current PROGRESS.md Lines**: 583 (threshold: 500)
-- **Last Sync**: 2026-01-03 08:15 AEDT
+- **Total Archived Projects**: 7 weekly archives (Oct-Dec 2025)
+- **Current PROGRESS.md Lines**: 585 (threshold: 500)
+- **Last Sync**: 2026-01-03
 - **Archive System**: ✅ ACTIVE
-- **Next Archive Check**: Dec 29 entries archivable after 2026-01-28
+- **Next Archive Check**: Jan 1 entries archivable after 2026-01-31
 
 **Archives**:
 - Weekly archives in `.claude/history/2025/` (Oct-Dec)
-- See Archive Index in PROGRESS.md for full listing
+- See Archive Index in PROGRESS.md for historical links
 
 ---
 
