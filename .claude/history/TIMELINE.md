@@ -13,9 +13,12 @@ This file provides a chronological index of all completed projects. For detailed
 
 | Date | Project | Status |
 |------|---------|--------|
+| 2026-01-03 | Database Upsert Logic Fixes (enhanced reliability, transaction safety) | ✅ |
 | 2026-01-03 | Premium Pricing Update ($199 Pro / $349 Max) | ✅ |
 | 2026-01-02 | Auto-Recover 401 Authentication Fix (HMAC auth, PUBLIC_URL, interface fix) | ✅ |
 | 2026-01-02 | Remove Budget System & Add OpenRouter Credit Monitoring | ✅ |
+| 2026-01-01 | Passwordless Onboarding Phase 5 (Clerk webhook pending merge) | ✅ |
+| 2026-01-01 | Passwordless Onboarding Phase 4 (save-pending API + Clerk redirect) | ✅ |
 | 2026-01-01 | Auto-Recovery Infrastructure Implementation (force-cleanup, redeploy, orchestrator) | ✅ |
 | 2026-01-01 | Passwordless Onboarding Phase 2 (EmailStep, 3-step flow) | ✅ |
 | 2026-01-01 | Gmail Inbox Hero Responsive Fix (landscape ratio, mobile-first) | ✅ |
@@ -112,11 +115,19 @@ This file provides a chronological index of all completed projects. For detailed
 ---
 
 ## Archive Statistics
+<<<<<<< HEAD
+- **Total Archived Projects**: 7 weekly archives (Oct 2025 - Jan 2026)
+- **Current PROGRESS.md Lines**: 98 (threshold: 500)
+- **Last Sync**: 2026-01-01
+- **Archive System**: ✅ ACTIVE
+- **Latest Archive**: Dec 29-Jan 4 (JSON parsing phases, bracket repair, cron trigger fix)
+=======
 - **Total Archived Projects**: 6 weekly archives (Oct-Dec 2025)
 - **Current PROGRESS.md Lines**: 583 (threshold: 500)
 - **Last Sync**: 2026-01-03 08:15 AEDT
 - **Archive System**: ✅ ACTIVE
 - **Next Archive Check**: Dec 29 entries archivable after 2026-01-28
+>>>>>>> main
 
 **Archives**:
 - Weekly archives in `.claude/history/2025/` (Oct-Dec)

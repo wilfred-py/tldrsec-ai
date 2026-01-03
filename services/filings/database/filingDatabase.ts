@@ -216,111 +216,87 @@ async function storeSummaryForTicker(
     ? (totalCost * 0.4) / outputTokens // Assume 40% of cost is output tokens (approximate)
     : null;
 
-  // Create or update summary record with enhanced analytics
-  const summaryRecord = await prisma.summary.upsert({
-    where: {
-      tickerId_filingUrl: {
-        tickerId: tickerRecord.id,
-        filingUrl: filingUrl,
-      },
-    },
-    create: {
-      tickerId: tickerRecord.id,
+  // Shared data object to reduce duplication between create and update
+  const summaryData = {
+    summaryText: summaryText,
+    summaryJSON: {
+      accessionNumber: metadata.accessionNumber || '',
+      keyPoints: keyPoints,
+      parsedContent: metadata.content && typeof metadata.content === 'string'
+        ? metadata.content
+        : null,
+      documentType: metadata.documentType || 'unknown',
+      documentDescription: metadata.documentDescription || 'unknown',
+      rawData: metadata.filingDetails
+        ? JSON.stringify(metadata.filingDetails)
+        : null,
+      generatedAt: new Date().toISOString(),
+      tokensUsed: metadata.tokensUsed,
+      inputTokens: metadata.inputTokens,
+      outputTokens: metadata.outputTokens,
+      cost: metadata.cost,
+      processingTimeMs: metadata.processingTimeMs,
+      totalCost: metadata.totalCost,
       filingType: formType,
-      filingDate: new Date(filingDate),
-      filingUrl: filingUrl,
-      url: metadata.primaryDocUrl || null, // Store the actual document URL for direct links
-      summaryText: summaryText,
-      summaryJSON: {
-        accessionNumber: metadata.accessionNumber || '',
-        keyPoints: keyPoints,
-        // Include detailed data for better caching
-        parsedContent: metadata.content && typeof metadata.content === 'string'
-          ? metadata.content
-          : null, // Store full parsed content
-        documentType: metadata.documentType || 'unknown',
-        documentDescription: metadata.documentDescription || 'unknown',
-        rawData: metadata.filingDetails
-          ? JSON.stringify(metadata.filingDetails)
-          : null,
-        generatedAt: new Date().toISOString(),
-        tokensUsed: metadata.tokensUsed,
-        inputTokens: metadata.inputTokens,
-        outputTokens: metadata.outputTokens,
-        cost: metadata.cost,
-        processingTimeMs: metadata.processingTimeMs,
-        ...(metadata.failureReason ? { failureReason: metadata.failureReason } : {})
-      },
-      sentToUser: false, // Will be marked as sent when included in an email
       model: metadata.model || 'unknown',
-      processingStatus: metadata.failureReason ? 'FAILED' : 'COMPLETED',
-
-      // Enhanced Cost and Token Tracking
-      inputTokens: inputTokens,
-      outputTokens: outputTokens,
-      inputCostPerToken: inputCostPerToken,
-      outputCostPerToken: outputCostPerToken,
-      totalCost: totalCost,
-
-      // Cache and Reuse Analytics (new summary is not a cache hit)
-      isCacheHit: false,
-      cacheUsageCount: 0,
-      lastCacheUsed: null,
-      cacheVersion: metadata.cacheVersion || '1.0',
-
-      // Performance and Quality Metrics
-      qualityScore: metadata.qualityScore || null,
-      confidenceLevel: metadata.confidenceLevel || null,
-      extractionSuccess: metadata.extractionSuccess || true,
-      parsingErrors: metadata.parsingErrors || 0,
-
-      ...(metadata.failureReason ? { processingError: metadata.failureReason } : {}),
-
-      // Test data markers - added 2025-12-26 for data integrity
-      // When isTestData is true, add metadata to distinguish test from production data
-      ...(options?.isTestData ? {
-        metadata: {
-          source: options.testSource || 'test',
-          isTestData: true,
-          createdAt: new Date().toISOString()
-        }
-      } : {})
+      modelConfig: metadata.modelConfig || null,
+      ...(metadata.failureReason ? { failureReason: metadata.failureReason } : {})
     },
-    update: {
-      summaryText: summaryText,
-      summaryJSON: {
-        accessionNumber: metadata.accessionNumber || '',
-        keyPoints: keyPoints,
-        parsedContent: metadata.content && typeof metadata.content === 'string'
-          ? metadata.content
-          : null,
-        documentType: metadata.documentType || 'unknown',
-        documentDescription: metadata.documentDescription || 'unknown',
-        rawData: metadata.filingDetails
-          ? JSON.stringify(metadata.filingDetails)
-          : null,
-        generatedAt: new Date().toISOString(),
-        tokensUsed: metadata.tokensUsed,
-        inputTokens: metadata.inputTokens,
-        outputTokens: metadata.outputTokens,
-        totalCost: metadata.totalCost,
-        filingType: formType,
-        model: metadata.model || 'unknown',
-        modelConfig: metadata.modelConfig || null,
-      },
-      tokensUsed: tokensUsed,
-      inputTokens: inputTokens,
-      outputTokens: outputTokens,
-      inputCostPerToken: inputCostPerToken,
-      outputCostPerToken: outputCostPerToken,
-      totalCost: totalCost,
-      qualityScore: metadata.qualityScore || null,
-      confidenceLevel: metadata.confidenceLevel || null,
-      extractionSuccess: metadata.extractionSuccess || true,
-      parsingErrors: metadata.parsingErrors || 0,
-      ...(metadata.failureReason ? { processingError: metadata.failureReason } : {}),
-    }
-  });
+    tokensUsed: tokensUsed,
+    inputTokens: inputTokens,
+    outputTokens: outputTokens,
+    inputCostPerToken: inputCostPerToken,
+    outputCostPerToken: outputCostPerToken,
+    totalCost: totalCost,
+    qualityScore: metadata.qualityScore || null,
+    confidenceLevel: metadata.confidenceLevel || null,
+    extractionSuccess: metadata.extractionSuccess || true,
+    parsingErrors: metadata.parsingErrors || 0,
+    processingStatus: metadata.failureReason ? 'FAILED' : 'COMPLETED',
+    ...(metadata.failureReason ? { processingError: metadata.failureReason } : {}),
+  };
+
+  // Create or update summary record with enhanced analytics (wrapped in transaction)
+  let summaryRecord;
+  try {
+    summaryRecord = await prisma.$transaction(async (tx) => {
+      return await tx.summary.upsert({
+        where: {
+          tickerId_filingUrl: {
+            tickerId: tickerRecord.id,
+            filingUrl: filingUrl,
+          },
+        },
+        create: {
+          tickerId: tickerRecord.id,
+          filingType: formType,
+          filingDate: new Date(filingDate),
+          filingUrl: filingUrl,
+          url: metadata.primaryDocUrl || null,
+          ...summaryData,
+          sentToUser: false,
+          model: metadata.model || 'unknown',
+          // Cache and Reuse Analytics (new summary is not a cache hit)
+          isCacheHit: false,
+          cacheUsageCount: 0,
+          lastCacheUsed: null,
+          cacheVersion: metadata.cacheVersion || '1.0',
+          // Test data markers - added 2025-12-26 for data integrity
+          ...(options?.isTestData ? {
+            metadata: {
+              source: options.testSource || 'test',
+              isTestData: true,
+              createdAt: new Date().toISOString()
+            }
+          } : {})
+        },
+        update: summaryData
+      });
+    });
+  } catch (error) {
+    console.error(`[ERROR][FilingDatabase] Failed to upsert summary for ticker ${tickerRecord.id}:`, error);
+    throw new Error(`Failed to store summary: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  }
 
   console.log(`[DEBUG][FilingDatabase] Created summary ${summaryRecord.id} for ticker ${tickerRecord.id}`);
   return summaryRecord.id;
@@ -517,35 +493,38 @@ export async function trackCacheAccess(summaryId: string, accessType: string, us
  */
 export async function trackEmailDelivery(summaryId: string, userEmail: string, deliveryType: string = 'individual'): Promise<boolean> {
   try {
-    // Get user by email to get userId
-    const user = await prisma.user.findUnique({
-      where: { email: userEmail }
-    });
-    
-    if (!user) {
-      console.warn(`[trackEmailDelivery] User not found for email: ${userEmail}`);
-      return false;
-    }
+    // Wrap both operations in a transaction for atomicity
+    await prisma.$transaction(async (tx) => {
+      // Get user by email to get userId
+      const user = await tx.user.findUnique({
+        where: { email: userEmail }
+      });
+      
+      if (!user) {
+        console.warn(`[trackEmailDelivery] User not found for email: ${userEmail}`);
+        throw new Error(`User not found for email: ${userEmail}`);
+      }
 
-    // Create an email delivery record
-    await prisma.summaryEmailDelivery.create({
-      data: {
-        summaryId: summaryId,
-        userId: user.id,
-        emailAddress: userEmail,
-        deliveryStatus: deliveryType,
-        sentAt: new Date()
-      }
-    });
-    
-    // Update the summary to mark it as sent to user if not already
-    await prisma.summary.update({
-      where: { id: summaryId },
-      data: {
-        sentToUser: true,
-        emailDeliveryCount: { increment: 1 },
-        lastEmailDelivered: new Date()
-      }
+      // Create an email delivery record
+      await tx.summaryEmailDelivery.create({
+        data: {
+          summaryId: summaryId,
+          userId: user.id,
+          emailAddress: userEmail,
+          deliveryStatus: deliveryType,
+          sentAt: new Date()
+        }
+      });
+      
+      // Update the summary to mark it as sent to user if not already
+      await tx.summary.update({
+        where: { id: summaryId },
+        data: {
+          sentToUser: true,
+          emailDeliveryCount: { increment: 1 },
+          lastEmailDelivered: new Date()
+        }
+      });
     });
     
     console.log(`[DEBUG][FilingDatabase] Email delivery tracked for summary ${summaryId} to ${userEmail}`);
