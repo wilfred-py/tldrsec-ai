@@ -10,7 +10,7 @@ import { Prisma } from '@prisma/client';
 import { getPrismaClient } from './prisma';
 import { logger } from '../logging';
 import { monitoring } from '../monitoring';
-import { createAsyncAuditLog } from './async-audit';
+import { createAsyncAuditLog as _createAsyncAuditLog } from './async-audit';
 import { v4 as uuidv4 } from 'uuid';
 
 // Lazy accessor to avoid build-time initialization

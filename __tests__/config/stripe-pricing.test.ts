@@ -1,4 +1,4 @@
-import { SUBSCRIPTION_PLANS, getPlanConfig } from '@/lib/stripe';
+import { SUBSCRIPTION_PLANS, getPlanConfig, calculateSavingsPercentage } from '@/lib/stripe';
 
 describe('Stripe Pricing Configuration', () => {
   describe('Free Tier', () => {
@@ -11,36 +11,55 @@ describe('Stripe Pricing Configuration', () => {
   });
 
   describe('Pro Tier', () => {
-    it('should have $99/month price', () => {
+    it('should have $199/month price', () => {
       const plan = getPlanConfig('PRO');
-      expect(plan?.monthlyPrice).toBe(99);
+      expect(plan?.monthlyPrice).toBe(199);
     });
 
-    it('should have $990/year annual price (2 months free)', () => {
+    it('should have $1990/year annual price (~17% savings)', () => {
       const plan = getPlanConfig('PRO');
-      expect(plan?.annualPrice).toBe(990);
+      expect(plan?.annualPrice).toBe(1990);
     });
 
-    it('should have 10 ticker limit', () => {
+    it('should have 25 ticker limit', () => {
       const plan = getPlanConfig('PRO');
-      expect(plan?.tickerLimit).toBe(10);
+      expect(plan?.tickerLimit).toBe(25);
     });
   });
 
   describe('Max Tier', () => {
-    it('should have $139/month price', () => {
+    it('should have $349/month price', () => {
       const plan = getPlanConfig('MAX');
-      expect(plan?.monthlyPrice).toBe(139);
+      expect(plan?.monthlyPrice).toBe(349);
     });
 
-    it('should have $1390/year annual price (2 months free)', () => {
+    it('should have $3490/year annual price (~17% savings)', () => {
       const plan = getPlanConfig('MAX');
-      expect(plan?.annualPrice).toBe(1390);
+      expect(plan?.annualPrice).toBe(3490);
     });
 
     it('should have unlimited tickers', () => {
       const plan = getPlanConfig('MAX');
       expect(plan?.tickerLimit).toBe(-1);
+    });
+  });
+
+  describe('calculateSavingsPercentage', () => {
+    it('should calculate ~17% savings for Pro annual', () => {
+      const savings = calculateSavingsPercentage('PRO');
+      // $199 * 12 = $2388, annual = $1990, savings = $398 = 17%
+      expect(savings).toBe(17);
+    });
+
+    it('should calculate ~17% savings for Max annual', () => {
+      const savings = calculateSavingsPercentage('MAX');
+      // $349 * 12 = $4188, annual = $3490, savings = $698 = 17%
+      expect(savings).toBe(17);
+    });
+
+    it('should return 0 for Free tier', () => {
+      const savings = calculateSavingsPercentage('FREE');
+      expect(savings).toBe(0);
     });
   });
 
@@ -94,17 +113,24 @@ describe('Stripe Pricing Configuration', () => {
       expect(plan?.filingTypes).toEqual(['10-K', '10-Q']);
     });
 
-    it('Pro tier should have all filing types', () => {
+    it('Pro tier should have ALL filing types at $199 tier', () => {
       const plan = getPlanConfig('PRO');
-      expect(plan?.filingTypes).toContain('10-K');
-      expect(plan?.filingTypes).toContain('10-Q');
-      expect(plan?.filingTypes).toContain('8-K');
-      expect(plan?.filingTypes).toContain('FORM4');
+      expect(plan?.filingTypes).toEqual(['ALL']);
     });
 
-    it('Max tier should have all filing types', () => {
+    it('Max tier should have ALL filing types', () => {
       const plan = getPlanConfig('MAX');
       expect(plan?.filingTypes).toEqual(['ALL']);
+    });
+
+    it('Pro tier features should mention 25 companies', () => {
+      const plan = getPlanConfig('PRO');
+      expect(plan?.features.some(f => f.includes('25'))).toBe(true);
+    });
+
+    it('Max tier features should mention unlimited companies', () => {
+      const plan = getPlanConfig('MAX');
+      expect(plan?.features.some(f => f.toLowerCase().includes('unlimited'))).toBe(true);
     });
   });
 

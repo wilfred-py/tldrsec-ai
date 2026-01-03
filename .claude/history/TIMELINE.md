@@ -13,8 +13,13 @@ This file provides a chronological index of all completed projects. For detailed
 
 | Date | Project | Status |
 |------|---------|--------|
+| 2026-01-03 | Premium Pricing Update ($199 Pro / $349 Max) | ✅ |
+| 2026-01-02 | Auto-Recover 401 Authentication Fix (HMAC auth, PUBLIC_URL, interface fix) | ✅ |
+| 2026-01-02 | Remove Budget System & Add OpenRouter Credit Monitoring | ✅ |
+| 2026-01-01 | Auto-Recovery Infrastructure Implementation (force-cleanup, redeploy, orchestrator) | ✅ |
+| 2026-01-01 | Passwordless Onboarding Phase 2 (EmailStep, 3-step flow) | ✅ |
 | 2026-01-01 | Gmail Inbox Hero Responsive Fix (landscape ratio, mobile-first) | ✅ |
-| 2026-01-01 | Dashboard Landing V2 Redesign (sidebar, cards, billing styling) | ⏳ |
+| 2026-01-01 | Dashboard Landing V2 Redesign (sidebar, cards, billing styling) | ✅ |
 | 2026-01-01 | Admin Status API Route Fix (re-enabled disabled route) | ✅ |
 | 2026-01-01 | Pricing Section Layout Shift Fix (fixed-width, toggle position) | ✅ |
 | 2026-01-01 | Cloudflare Worker Cron Pipeline Recovery (8AM outage fix) | ✅ |
@@ -108,10 +113,10 @@ This file provides a chronological index of all completed projects. For detailed
 
 ## Archive Statistics
 - **Total Archived Projects**: 6 weekly archives (Oct-Dec 2025)
-- **Current PROGRESS.md Lines**: 552 (threshold: 500)
-- **Last Sync**: 2026-01-01
+- **Current PROGRESS.md Lines**: 583 (threshold: 500)
+- **Last Sync**: 2026-01-03 08:15 AEDT
 - **Archive System**: ✅ ACTIVE
-- **Next Archive Check**: When projects >30 days old exist (all current content <30 days old)
+- **Next Archive Check**: Dec 29 entries archivable after 2026-01-28
 
 **Archives**:
 - Weekly archives in `.claude/history/2025/` (Oct-Dec)

@@ -33,43 +33,30 @@ This guide walks you through setting up Stripe for the tldrsec-ai subscription s
    - Go to "Products" in the Stripe dashboard
    - Click "Add product"
 
-2. **Create Basic Plan**
-   - Name: "Basic Plan"
-   - Description: "Basic filing summaries with standard AI analysis"
+2. **Create Pro Plan**
+   - Name: "Pro Plan"
+   - Description: "25 companies, real-time alerts, all SEC filing types"
    - Unit label: "subscription"
    - Image: (optional)
 
-3. **Create Professional Plan**
-   - Name: "Professional Plan"
-   - Description: "Enhanced filing summaries with advanced AI analysis"
-   - Unit label: "subscription"
-
-4. **Create Premium Plan**
-   - Name: "Premium Plan"
-   - Description: "Premium filing summaries with maximum context preservation"
+3. **Create Max Plan**
+   - Name: "Max Plan"
+   - Description: "Unlimited companies, real-time alerts, all SEC filing types, priority processing"
    - Unit label: "subscription"
 
 ### Set Up Pricing
 
-For each product, create monthly recurring pricing:
+For each product, create monthly and annual recurring pricing:
 
-1. **Basic Plan Pricing**
-   - Pricing model: "Standard pricing"
-   - Price: $9.00 USD
-   - Billing period: Monthly
-   - Copy the Price ID (price_...)
+1. **Pro Plan Pricing**
+   - Monthly: $199.00 USD/month
+   - Annual: $1,990.00 USD/year (~17% savings)
+   - Copy the Price IDs (price_...)
 
-2. **Professional Plan Pricing**
-   - Pricing model: "Standard pricing"
-   - Price: $29.00 USD
-   - Billing period: Monthly
-   - Copy the Price ID (price_...)
-
-3. **Premium Plan Pricing**
-   - Pricing model: "Standard pricing"
-   - Price: $99.00 USD
-   - Billing period: Monthly
-   - Copy the Price ID (price_...)
+2. **Max Plan Pricing**
+   - Monthly: $349.00 USD/month
+   - Annual: $3,490.00 USD/year (~17% savings)
+   - Copy the Price IDs (price_...)
 
 ## Step 3: Configure Webhooks
 
@@ -126,18 +113,88 @@ Add these environment variables to your deployment:
 STRIPE_SECRET_KEY=sk_test_... # (or sk_live_... for production)
 STRIPE_WEBHOOK_SECRET=whsec_...
 
-# Price IDs
-STRIPE_BASIC_PRICE_ID=price_...
-STRIPE_PROFESSIONAL_PRICE_ID=price_...
-STRIPE_PREMIUM_PRICE_ID=price_...
+# Pro Plan Price IDs
+STRIPE_PRO_MONTHLY_PRICE_ID=price_...
+STRIPE_PRO_ANNUAL_PRICE_ID=price_...
+
+# Max Plan Price IDs
+STRIPE_MAX_MONTHLY_PRICE_ID=price_...
+STRIPE_MAX_ANNUAL_PRICE_ID=price_...
 
 # App URL (for redirects)
 NEXT_PUBLIC_APP_URL=https://your-domain.com
 ```
 
-### For Vercel
+### For Vercel (Dashboard)
 1. Go to Vercel dashboard > Your project > Settings > Environment Variables
 2. Add each variable for Production, Preview, and Development environments
+
+### For Vercel (CLI) - Recommended
+
+Use the Vercel CLI to configure Stripe environment variables directly from your terminal:
+
+```bash
+# 1. Install Vercel CLI (if not already installed)
+npm install -g vercel
+
+# 2. Login to Vercel
+vercel login
+
+# 3. Link your project (if not already linked)
+vercel link
+
+# 4. Add Stripe Secret Key (for all environments)
+vercel env add STRIPE_SECRET_KEY production
+vercel env add STRIPE_SECRET_KEY preview
+vercel env add STRIPE_SECRET_KEY development
+# Paste your sk_live_... or sk_test_... key when prompted
+
+# 5. Add Stripe Webhook Secret
+vercel env add STRIPE_WEBHOOK_SECRET production
+vercel env add STRIPE_WEBHOOK_SECRET preview
+vercel env add STRIPE_WEBHOOK_SECRET development
+# Paste your whsec_... secret when prompted
+
+# 6. Add Pro Plan Price IDs
+vercel env add STRIPE_PRO_MONTHLY_PRICE_ID production preview development
+# Paste your price_... ID for Pro monthly when prompted
+
+vercel env add STRIPE_PRO_ANNUAL_PRICE_ID production preview development
+# Paste your price_... ID for Pro annual when prompted
+
+# 7. Add Max Plan Price IDs
+vercel env add STRIPE_MAX_MONTHLY_PRICE_ID production preview development
+# Paste your price_... ID for Max monthly when prompted
+
+vercel env add STRIPE_MAX_ANNUAL_PRICE_ID production preview development
+# Paste your price_... ID for Max annual when prompted
+
+# 8. Verify all variables are set
+vercel env ls
+
+# 9. Redeploy to apply changes
+vercel --prod
+```
+
+**Quick Reference - All Variables:**
+```bash
+# Copy these Price IDs from Stripe Dashboard > Products > [Plan] > Pricing
+STRIPE_SECRET_KEY=sk_live_xxxxx          # Developers > API keys
+STRIPE_WEBHOOK_SECRET=whsec_xxxxx        # Developers > Webhooks > Signing secret
+STRIPE_PRO_MONTHLY_PRICE_ID=price_xxxxx  # Pro Plan > $199/month price ID
+STRIPE_PRO_ANNUAL_PRICE_ID=price_xxxxx   # Pro Plan > $1,990/year price ID
+STRIPE_MAX_MONTHLY_PRICE_ID=price_xxxxx  # Max Plan > $349/month price ID
+STRIPE_MAX_ANNUAL_PRICE_ID=price_xxxxx   # Max Plan > $3,490/year price ID
+```
+
+**Bulk Add (Alternative):**
+```bash
+# Add all variables at once using a .env file
+# Create .env.stripe with your values, then:
+cat .env.stripe | while IFS='=' read -r key value; do
+  vercel env add "$key" production preview development <<< "$value"
+done
+```
 
 ### For Railway
 1. Go to Railway dashboard > Your project > Variables
