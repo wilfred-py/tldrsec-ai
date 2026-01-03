@@ -1,15 +1,48 @@
 # Current Progress: tldrsec-ai Pipeline Operations
 
 ## Current Status
-**Date**: 2026-01-01
-**Branch**: feature/passwordless-onboarding
-**Status**: ✅ OPERATIONAL - Passwordless Onboarding Implementation In Progress
+**Date**: 2026-01-03
+**Branch**: feature/premium-pricing-update-199-349
+**Status**: ✅ COMPLETE - Premium Pricing Update ($199 Pro / $349 Max)
 
 ---
 
-## Current Session: Passwordless Onboarding Implementation
+## Current Session: Premium Pricing Update ($199 Pro / $349 Max)
 
-### Active: Phase 2 Complete - EmailStep Component & 3-Step Flow ⏳ IN PROGRESS
+### Completed: Premium Pricing Update ✅ COMPLETE (2026-01-03)
+
+**Plan**: [2026-01-02-premium-pricing-update-199-349.md](docs/plans/2026-01-02-premium-pricing-update-199-349.md)
+
+**Overview**: Updated pricing tiers from $99/$139 to $199/$349 with enhanced value proposition (25 tickers for Pro, ALL filing types).
+
+**All Phases Completed**:
+- ✅ **Phase 1**: Core pricing configuration updated in `lib/stripe.ts`
+  - Pro: $199/mo, $1990/yr, 25 tickers, ALL filing types
+  - Max: $349/mo, $3490/yr, unlimited tickers, ALL filing types
+  - 21 pricing tests pass
+- ✅ **Phase 2**: Billing page refactored to use centralized SUBSCRIPTION_PLANS
+  - Removed duplicate AVAILABLE_PLANS constant (had wrong pricing $9/$29/$139)
+  - Created `getBillingPlans()` helper using SUBSCRIPTION_PLANS
+  - Verified: $0/$199/$349 displays correctly on landing and billing pages
+- ✅ **Phase 3**: Regression testing and documentation
+  - Updated `docs/stripe-setup-guide.md` with new pricing
+  - Updated `DEPLOYMENT_GUIDE.md` with new pricing
+  - Updated `app/api/user/subscription/route.ts` comment
+  - All pricing tests pass (21/21)
+
+**Files Modified**:
+- `lib/stripe.ts:58-91` - Updated SUBSCRIPTION_PLANS with new pricing
+- `__tests__/config/stripe-pricing.test.ts` - Updated test expectations
+- `app/dashboard/billing/page.tsx` - Refactored to use SUBSCRIPTION_PLANS
+- `docs/stripe-setup-guide.md` - Updated pricing documentation
+- `DEPLOYMENT_GUIDE.md` - Updated pricing documentation
+- `app/api/user/subscription/route.ts` - Updated comment
+
+---
+
+## Previous Session: Passwordless Onboarding Implementation
+
+### Phase 2 Complete - EmailStep Component & 3-Step Flow ✅ COMPLETE (2026-01-01)
 
 **Plan**: [2026-01-01-passwordless-onboarding-implementation.md](docs/plans/2026-01-01-passwordless-onboarding-implementation.md)
 
@@ -530,7 +563,7 @@ npm run cloudflare:status                 # Check deployment status
 
 ---
 
-**Last Updated**: 2026-01-01 (context compaction - archived JSON parsing phases to Dec 29 archive)
+**Last Updated**: 2026-01-03 08:15 AEDT (context compaction performed)
 **Repository**: tldrsec-ai
 
 *See TIMELINE.md for master timeline and quick navigation*

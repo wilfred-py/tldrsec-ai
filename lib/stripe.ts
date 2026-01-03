@@ -36,7 +36,7 @@ export const stripe = requiredEnvVars.STRIPE_SECRET_KEY
 export const webhookSecret = requiredEnvVars.STRIPE_WEBHOOK_SECRET || '';
 
 // =============================================================================
-// NEW PRICING TIERS (2025) - $0 Free / $99 Pro / $139 Max
+// PREMIUM PRICING TIERS (2026) - $0 Free / $199 Pro / $349 Max
 // =============================================================================
 export const SUBSCRIPTION_PLANS = {
   FREE: {
@@ -59,16 +59,16 @@ export const SUBSCRIPTION_PLANS = {
     name: 'Pro',
     monthlyPriceId: process.env.STRIPE_PRO_MONTHLY_PRICE_ID || '',
     annualPriceId: process.env.STRIPE_PRO_ANNUAL_PRICE_ID || '',
-    monthlyPrice: 99,
-    annualPrice: 990, // 2 months free (10 months × $99)
-    tickerLimit: 10,
-    filingTypes: ['10-K', '10-Q', '8-K', 'FORM4', 'DEF14A'] as const,
+    monthlyPrice: 199,
+    annualPrice: 1990, // 17% savings (approximately 2 months free)
+    tickerLimit: 25,
+    filingTypes: ['ALL'] as const, // Upgraded to ALL filing types at $199
     emailFrequency: 'realtime' as const,
     features: [
-      '**10** companies to track',
+      '**25** companies to track',
       'Real-time email alerts',
       'Priority processing queue',
-      'All filing types',
+      'All SEC filing types',
       'Email support',
     ],
   },
@@ -76,8 +76,8 @@ export const SUBSCRIPTION_PLANS = {
     name: 'Max',
     monthlyPriceId: process.env.STRIPE_MAX_MONTHLY_PRICE_ID || '',
     annualPriceId: process.env.STRIPE_MAX_ANNUAL_PRICE_ID || '',
-    monthlyPrice: 139,
-    annualPrice: 1390, // 2 months free (10 months × $139)
+    monthlyPrice: 349,
+    annualPrice: 3490, // 17% savings (approximately 2 months free)
     tickerLimit: -1, // unlimited
     filingTypes: ['ALL'] as const,
     emailFrequency: 'realtime' as const,
@@ -85,11 +85,31 @@ export const SUBSCRIPTION_PLANS = {
       '**Unlimited** companies',
       'Real-time email alerts',
       '**First** priority processing queue',
-      'All filing types',
+      'All SEC filing types',
       'Dedicated support',
     ],
   },
 } as const;
+
+// =============================================================================
+// HELPER FUNCTIONS
+// =============================================================================
+
+/**
+ * Calculate annual savings percentage for a given plan
+ * @param planType - The subscription plan type
+ * @returns Savings percentage (e.g., 17 for 17% savings)
+ */
+export function calculateSavingsPercentage(planType: PlanType): number {
+  const plan = SUBSCRIPTION_PLANS[planType];
+  if (!plan || plan.monthlyPrice === 0) return 0;
+  
+  const monthlyTotal = plan.monthlyPrice * 12;
+  const annualPrice = plan.annualPrice;
+  const savings = monthlyTotal - annualPrice;
+  
+  return Math.round((savings / monthlyTotal) * 100);
+}
 
 // =============================================================================
 // LEGACY PRICING TIERS - Kept for existing subscribers

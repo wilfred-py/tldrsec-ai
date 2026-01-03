@@ -53,8 +53,6 @@ export async function GET() {
               authProviderId: userId,
               name: user.firstName ? `${user.firstName} ${user.lastName || ''}`.trim() : undefined,
               subscriptionTier: 'FREE', // Default tier
-              budgetUsed: 0,
-              processingBudget: 0.20, // Default FREE tier budget
             },
             include: {
               tickers: true
@@ -145,8 +143,6 @@ export async function POST(request: Request) {
           authProviderId: userId,
           name: user.firstName ? `${user.firstName} ${user.lastName || ''}`.trim() : undefined,
           subscriptionTier: 'FREE', // Default tier
-          budgetUsed: 0,
-          processingBudget: 0.20, // Default FREE tier budget
         }
       });
       

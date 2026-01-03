@@ -1,6 +1,8 @@
 /**
  * Billing Management Page
  * Addresses UX issue: missing billing and subscription management interface
+ *
+ * Uses centralized SUBSCRIPTION_PLANS from lib/stripe.ts for pricing consistency
  */
 
 'use client';
@@ -11,78 +13,65 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Switch } from '@/components/ui/switch';
-import { 
-  CreditCard, 
-  CheckCircle, 
+import {
+  CreditCard,
+  CheckCircle,
   ArrowRight,
   AlertTriangle,
   Zap,
   Shield,
   Clock,
-  FileText
+  Users
 } from 'lucide-react';
 import { formatDistanceToNow, format } from 'date-fns';
 import { useUser } from '@clerk/nextjs';
+import { SUBSCRIPTION_PLANS, type PlanType } from '@/lib/stripe';
 
-interface PlanFeatures {
+// Transform SUBSCRIPTION_PLANS for billing page UI
+interface BillingPlan {
   name: string;
   price: string;
-  monthlyFilings: number;
-  optimizationLevel: string;
-  features: string[];
-  recommended?: boolean;
+  tickerLimit: number;
+  tickerDisplay: string;
+  features: readonly string[];
+  recommended: boolean;
+  planKey: PlanType;
 }
 
-const AVAILABLE_PLANS: Record<string, PlanFeatures> = {
-  basic: {
-    name: 'Basic',
-    price: '$9/month',
-    monthlyFilings: 50,
-    optimizationLevel: 'Balanced (85% token reduction)',
-    features: [
-      'Basic filing summaries',
-      'Standard AI analysis', 
-      'Email notifications',
-      'Balanced token optimization',
-      'Community support'
-    ]
-  },
-  professional: {
-    name: 'Professional',
-    price: '$29/month', 
-    monthlyFilings: 200,
-    optimizationLevel: 'Conservative (67% token reduction)',
-    features: [
-      'Enhanced filing summaries',
-      'Advanced AI analysis',
-      'Priority email notifications', 
-      'Conservative token optimization',
-      'Detailed business context',
-      'Comprehensive risk analysis',
-      'Priority support'
-    ],
-    recommended: true
-  },
-  max: {
-    name: 'Max',
-    price: '$139/month',
-    monthlyFilings: 1000,
-    optimizationLevel: 'Minimal (55% token reduction)',
-    features: [
-      'Max filing summaries',
-      'Maximum context preservation',
-      'Real-time notifications',
-      'Minimal token optimization',
-      'Complete financial statements',
-      'Full business narratives',
-      'Dedicated support',
-      'Custom integrations'
-    ]
-  }
-};
+function getBillingPlans(): BillingPlan[] {
+  return [
+    {
+      name: SUBSCRIPTION_PLANS.FREE.name,
+      price: '$0/month',
+      tickerLimit: SUBSCRIPTION_PLANS.FREE.tickerLimit,
+      tickerDisplay: `${SUBSCRIPTION_PLANS.FREE.tickerLimit} companies`,
+      features: SUBSCRIPTION_PLANS.FREE.features,
+      recommended: false,
+      planKey: 'FREE',
+    },
+    {
+      name: SUBSCRIPTION_PLANS.PRO.name,
+      price: `$${SUBSCRIPTION_PLANS.PRO.monthlyPrice}/month`,
+      tickerLimit: SUBSCRIPTION_PLANS.PRO.tickerLimit,
+      tickerDisplay: `${SUBSCRIPTION_PLANS.PRO.tickerLimit} companies`,
+      features: SUBSCRIPTION_PLANS.PRO.features,
+      recommended: true,
+      planKey: 'PRO',
+    },
+    {
+      name: SUBSCRIPTION_PLANS.MAX.name,
+      price: `$${SUBSCRIPTION_PLANS.MAX.monthlyPrice}/month`,
+      tickerLimit: SUBSCRIPTION_PLANS.MAX.tickerLimit,
+      tickerDisplay: 'Unlimited companies',
+      features: SUBSCRIPTION_PLANS.MAX.features,
+      recommended: false,
+      planKey: 'MAX',
+    },
+  ];
+}
 
 interface UserSubscription {
-  planType: 'BASIC' | 'PROFESSIONAL' | 'MAX';
+  planType: PlanType;
   isActive: boolean;
   currentPeriodEnd: string;
   cancelAtPeriodEnd: boolean;
@@ -213,7 +202,10 @@ export default function BillingPage() {
     );
   }
 
-  const currentPlan = subscription?.planType.toLowerCase() as keyof typeof AVAILABLE_PLANS;
+  const billingPlans = getBillingPlans();
+  const currentPlanKey = subscription?.planType;
+  const currentPlanConfig = currentPlanKey ? SUBSCRIPTION_PLANS[currentPlanKey] : null;
+  const currentBillingPlan = billingPlans.find(p => p.planKey === currentPlanKey);
 
   return (
     <div className="container mx-auto py-8 space-y-8">
@@ -250,10 +242,10 @@ export default function BillingPage() {
             <div className="flex items-center justify-between">
               <div>
                 <h3 className="font-semibold text-lg">
-                  {AVAILABLE_PLANS[currentPlan]?.name || 'Unknown Plan'}
+                  {currentPlanConfig?.name || 'Unknown Plan'}
                 </h3>
                 <p className="text-gray-600">
-                  {AVAILABLE_PLANS[currentPlan]?.price || 'Price unavailable'}
+                  {currentBillingPlan?.price || 'Price unavailable'}
                 </p>
               </div>
               <Badge variant={subscription.isActive ? 'default' : 'destructive'}>
@@ -269,9 +261,9 @@ export default function BillingPage() {
                 </p>
               </div>
               <div>
-                <p className="text-gray-500">Monthly Filings</p>
+                <p className="text-gray-500">Companies Tracked</p>
                 <p className="font-medium">
-                  {AVAILABLE_PLANS[currentPlan]?.monthlyFilings || 'Unknown'} filings
+                  {currentBillingPlan?.tickerDisplay || 'Unknown'}
                 </p>
               </div>
             </div>
@@ -314,9 +306,9 @@ export default function BillingPage() {
       <div>
         <h2 className="text-2xl font-semibold mb-6">Available Plans</h2>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {Object.entries(AVAILABLE_PLANS).map(([planKey, plan]) => (
+          {billingPlans.map((plan) => (
             <Card
-              key={planKey}
+              key={plan.planKey}
               className={`relative landing-card ${plan.recommended ? 'ring-2 ring-[var(--landing-primary)] shadow-lg' : ''}`}
             >
               {plan.recommended && (
@@ -326,11 +318,11 @@ export default function BillingPage() {
                   </Badge>
                 </div>
               )}
-              
+
               <CardHeader>
                 <CardTitle className="flex items-center justify-between">
                   {plan.name}
-                  {currentPlan === planKey && (
+                  {currentPlanKey === plan.planKey && (
                     <Badge variant="outline">Current</Badge>
                   )}
                 </CardTitle>
@@ -342,34 +334,46 @@ export default function BillingPage() {
               <CardContent className="space-y-4">
                 <div className="space-y-2">
                   <div className="flex items-center gap-2 text-sm">
-                    <FileText className="h-4 w-4 text-gray-500" />
-                    <span>{plan.monthlyFilings} filings/month</span>
+                    <Users className="h-4 w-4 text-gray-500" />
+                    <span>{plan.tickerDisplay}</span>
                   </div>
                   <div className="flex items-center gap-2 text-sm">
                     <Zap className="h-4 w-4 text-gray-500" />
-                    <span>{plan.optimizationLevel}</span>
+                    <span>{SUBSCRIPTION_PLANS[plan.planKey].emailFrequency === 'realtime' ? 'Real-time alerts' : 'Weekly digest'}</span>
                   </div>
                 </div>
 
                 <Separator />
 
                 <ul className="space-y-2">
-                  {plan.features.map((feature, index) => (
-                    <li key={index} className="flex items-center gap-2 text-sm">
-                      <CheckCircle className="h-3 w-3 text-green-500 flex-shrink-0" />
-                      <span>{feature}</span>
-                    </li>
-                  ))}
+                  {plan.features.map((feature, index) => {
+                    // Convert markdown-style bold (**text**) to proper semantic HTML
+                    const parts = feature.split(/\*\*([^*]+)\*\*/g);
+                    return (
+                      <li key={index} className="flex items-center gap-2 text-sm">
+                        <CheckCircle className="h-3 w-3 text-green-500 flex-shrink-0" />
+                        <span>
+                          {parts.map((part, partIndex) => 
+                            partIndex % 2 === 1 ? (
+                              <strong key={partIndex}>{part}</strong>
+                            ) : (
+                              part
+                            )
+                          )}
+                        </span>
+                      </li>
+                    );
+                  })}
                 </ul>
 
-                <Button 
+                <Button
                   className="w-full"
-                  variant={currentPlan === planKey ? 'outline' : 'default'}
-                  disabled={currentPlan === planKey || updating}
-                  onClick={() => handlePlanChange(planKey)}
+                  variant={currentPlanKey === plan.planKey ? 'outline' : 'default'}
+                  disabled={currentPlanKey === plan.planKey || updating}
+                  onClick={() => handlePlanChange(plan.planKey)}
                 >
-                  {currentPlan === planKey ? 'Current Plan' : 'Upgrade'}
-                  {currentPlan !== planKey && <ArrowRight className="h-4 w-4 ml-2" />}
+                  {currentPlanKey === plan.planKey ? 'Current Plan' : (plan.planKey === 'FREE' ? 'Downgrade' : 'Upgrade')}
+                  {currentPlanKey !== plan.planKey && <ArrowRight className="h-4 w-4 ml-2" />}
                 </Button>
               </CardContent>
             </Card>

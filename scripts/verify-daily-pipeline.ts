@@ -560,11 +560,12 @@ async function attemptRemediation(
   // Determine which phase to restart from
   let jobType: string;
   if (!filing.fetched) {
-    jobType = 'filing_fetch';
+    jobType = 'ASYNC_FETCH_FILING';
   } else if (!filing.summarized) {
-    jobType = 'filing_summarize';
+    jobType = 'ASYNC_SUMMARIZE_CACHED';
   } else {
-    jobType = 'filing_email';
+    // Skip email jobs - handled by summarization step
+    continue;
   }
 
   try {

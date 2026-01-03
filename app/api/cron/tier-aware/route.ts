@@ -5,7 +5,9 @@
  * 1. Monitor SEC RSS feeds for new filings (24/7 - filings can be published anytime)
  * 2. Process users based on subscription tiers and frequency eligibility
  * 3. Apply priority-based resource allocation
- * 4. Respect monthly cost budget limits
+ *
+ * Note: Budget tracking removed - OpenRouter handles credit limits via API.
+ * See: docs/plans/2026-01-02-remove-budget-system-add-credit-monitoring.md
  *
  * Runs every 10 minutes continuously since SEC filings can be published 24/7
  * Processing frequency is tier-based only (PRO: 5 min, HOBBY: 120 min)
@@ -378,27 +380,8 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    // STEP 1.6: Reset Daily Budgets for Eligible Users
-    cronLogger.debug(`[${executionId}] Checking for users needing daily budget reset`);
-    try {
-      const { CronBudgetService } = await import('../../../../lib/cron/budget-service');
-      const budgetResetResults = await CronBudgetService.resetAllEligibleDailyBudgets();
-      
-      if (budgetResetResults.length > 0) {
-        const successCount = budgetResetResults.filter(r => r.success).length;
-        cronLogger.info(`[${executionId}] Daily budget reset completed`, {
-          totalUsers: budgetResetResults.length,
-          successful: successCount,
-          errors: budgetResetResults.length - successCount
-        });
-      }
-    } catch (budgetError) {
-      cronLogger.warn(`[${executionId}] Budget reset failed but continuing processing`, {
-        error: budgetError instanceof Error ? budgetError.message : 'Unknown error'
-      });
-    }
-
     // STEP 2: Get User Eligibility (tier-based, 24/7 processing)
+    // Note: Budget tracking removed - OpenRouter handles credit limits
     cronLogger.debug(`[${executionId}] Checkpoint 2: Starting user eligibility check`);
 
     // Check timeout before expensive operations
@@ -412,9 +395,7 @@ export async function GET(request: NextRequest) {
     const maxUsersForTimeRemaining = Math.min(100, Math.floor(timeCheck.remaining / 60000) * 10); // ~10 users per minute
 
     const { allUsers: _allUsers, eligibleUsers } = await CronUserProcessingService.getEligibleUsersForProcessing({
-      maxUsersPerCycle: maxUsersForTimeRemaining,
-      respectBudgetLimits: true,
-      budgetThreshold: 90
+      maxUsersPerCycle: maxUsersForTimeRemaining
     });
     cronLogger.debug(`[${executionId}] Checkpoint 4: User eligibility check completed`, {
       maxUsersForTimeRemaining,
@@ -671,21 +652,20 @@ export async function GET(request: NextRequest) {
     });
 
     // Build processing results from queue operation
-    const processingResults = {
+    const processingResults: CronResults = {
       usersProcessed: eligibleUsers.length,
       filingsProcessed: 0, // Filings will be processed async
-      emailsSent: 0, // Emails will be sent async
-      totalCostUSD: 0, // Cost will be tracked async
+      totalCost: 0, // Cost will be tracked async
       tierBreakdown: eligibleUsers.reduce((acc, user) => {
         acc[user.tier] = (acc[user.tier] || 0) + 1;
         return acc;
       }, {} as Record<string, number>),
+      errors: 0, // Errors tracked async
       errorBreakdown: {
-        budgetExceeded: 0,
         concurrencyConflicts: 0,
         costValidationFailed: 0,
         tierMismatch: 0,
-        unknownErrors: 0, // No placeholder jobs queued anymore
+        unknownErrors: 0,
       },
       cacheMetrics: {
         hits: 0,
@@ -897,26 +877,5 @@ export async function GET(request: NextRequest) {
   }
 }
 
-/**
- * Reset monthly budgets (called from separate cron or admin endpoint)
- * Extracted utility function - kept in route file for backward compatibility
- */
-async function _resetMonthlyBudgets() {
-  try {
-    const { getPrismaClient } = await import('../../../../lib/db/prisma');
-    const prisma = getPrismaClient();
-    
-    const resetCount = await prisma.user.updateMany({
-      data: {
-        budgetUsed: 0,
-        budgetResetAt: new Date()
-      }
-    });
-    
-    cronLogger.info(`Monthly processing budgets reset for ${resetCount.count} users`);
-    return resetCount.count;
-  } catch (error) {
-    cronLogger.error('Failed to reset monthly budgets', { error });
-    throw error;
-  }
-}
+// Note: Budget reset functionality removed - OpenRouter handles credit limits
+// See: docs/plans/2026-01-02-remove-budget-system-add-credit-monitoring.md

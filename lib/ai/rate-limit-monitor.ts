@@ -392,12 +392,13 @@ export class RateLimitMonitor {
     limit: number;
   }): Promise<void> {
     try {
-      // Check for critical violations (budget exceeded)
-      if (violationData.violationType === ViolationType.BUDGET_EXCEEDED) {
+      // Check for critical violations (rate limit exceeded or quota issues)
+      // Note: BUDGET_EXCEEDED replaced with CREDITS_EXHAUSTED - OpenRouter handles credit limits
+      if (violationData.violationType === ViolationType.CREDITS_EXHAUSTED) {
         await alertService.createAlert({
-          type: 'AI_BUDGET_EXCEEDED',
+          type: 'AI_CREDITS_EXHAUSTED',
           level: 'critical',
-          message: `AI budget exceeded for ${violationData.attemptedOperation}`,
+          message: `AI credits exhausted for ${violationData.attemptedOperation}`,
           details: {
             userId: violationData.userId,
             limitType: violationData.limitType,

@@ -8,9 +8,10 @@
 import { logger } from '../logging';
 import { monitoring } from '../monitoring';
 import { getDefaultModel, getFallbackModel } from './config';
-import { 
-  ApiError, 
+import {
+  ApiError,
   createAiQuotaExceededError,
+  createAiInsufficientCreditsError,
   createAiContextWindowExceededError,
   createAiContentFilteredError,
   createAiUnavailableError,
@@ -819,7 +820,7 @@ export class OpenRouterClient {
     if (error instanceof ApiError) {
       return error;
     }
-    
+
     // Check for abort errors
     const errorObj = error as { name?: string; message?: string };
     if (errorObj?.name === 'AbortError' || errorObj?.message?.includes('aborted')) {
@@ -829,10 +830,26 @@ export class OpenRouterClient {
         requestId
       );
     }
-    
+
     // Parse OpenRouter API error responses
     const message = errorObj?.message || String(error);
-    
+
+    // Check for insufficient credits (402 Payment Required)
+    if (message.includes('402') || message.includes('payment required') ||
+        message.includes('insufficient credits') || message.includes('credit limit') ||
+        message.includes('out of credits') || message.includes('no credits')) {
+      logger.error('🚨 OPENROUTER INSUFFICIENT CREDITS DETECTED', {
+        requestId,
+        message,
+        recommendation: 'Add credits to OpenRouter account immediately'
+      });
+      return createAiInsufficientCreditsError(
+        `OpenRouter API credit limit reached: ${message}`,
+        { originalError: message, requiresAction: 'Add credits to OpenRouter account' },
+        requestId
+      );
+    }
+
     if (message.includes('rate limit') || message.includes('429')) {
       return createAiQuotaExceededError(
         `OpenRouter API rate limit exceeded: ${message}`,
@@ -841,7 +858,7 @@ export class OpenRouterClient {
         requestId
       );
     }
-    
+
     if (message.includes('context window') || message.includes('token limit')) {
       return createAiContextWindowExceededError(
         `OpenRouter API context window exceeded: ${message}`,
@@ -849,7 +866,7 @@ export class OpenRouterClient {
         requestId
       );
     }
-    
+
     if (message.includes('content policy') || message.includes('filtered')) {
       return createAiContentFilteredError(
         `OpenRouter API content filtered: ${message}`,
@@ -857,7 +874,7 @@ export class OpenRouterClient {
         requestId
       );
     }
-    
+
     if (message.includes('503') || message.includes('502') || message.includes('unavailable')) {
       return createAiUnavailableError(
         `OpenRouter API service unavailable: ${message}`,
@@ -865,7 +882,7 @@ export class OpenRouterClient {
         requestId
       );
     }
-    
+
     if (message.includes('401') || message.includes('unauthorized')) {
       return createAiModelError(
         `OpenRouter API authentication error: ${message}`,
@@ -873,7 +890,7 @@ export class OpenRouterClient {
         requestId
       );
     }
-    
+
     // Default to generic model error
     return createAiModelError(
       `OpenRouter API error: ${message}`,

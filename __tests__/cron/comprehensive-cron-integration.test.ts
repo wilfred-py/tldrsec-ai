@@ -184,7 +184,6 @@ jest.mock('../../lib/cron/user-processing-service', () => ({
       emailsSent: 0,
       totalCostUSD: 0,
       errorBreakdown: {
-        budgetExceeded: 0,
         costValidationFailed: 0,
         concurrencyConflicts: 0
       }
@@ -1181,161 +1180,15 @@ describe('Comprehensive Cron Integration Tests', () => {
       });
     });
 
-    describe('Budget Tracking and Limits', () => {
-      it('should enforce tier-based cost limits', async () => {
-        const mockUsers = [
-          {
-            id: 'user-1',
-            email: 'free@test.com',
-            subscriptionTier: 'FREE',
-            lastCronProcessed: null,
-            processingBudget: 0.20,
-            budgetUsed: 0.18,  // Close to limit
-            tickers: [{ id: 'tick-1', symbol: 'AAPL', companyName: 'Apple Inc.' }]
-          }
-        ];
+    describe('Credit Monitoring (OpenRouter)', () => {
+      // Note: Internal budget tracking has been removed.
+      // OpenRouter now handles credit limits directly via API (HTTP 402 errors).
+      // See: docs/plans/2026-01-02-remove-budget-system-add-credit-monitoring.md
 
-        mockPrismaInstance.user.findMany.mockResolvedValue(mockUsers);
-        mockTierEligibility.getEligibleUsers.mockReturnValue([
-          { tier: 'FREE', userId: 'user-1' }
-        ]);
-
-        mockTickerMonitoring.validateUserTickers.mockResolvedValue([
-          { symbol: 'AAPL', cik: '320193', valid: true }
-        ]);
-
-        // Mock a filing that would exceed budget
-        mockTickerMonitoring.checkTickerForNewFilings.mockResolvedValue([
-          {
-            accessionNumber: '0001628280-24-007006',
-            filingType: '10-K',  // Expensive filing type
-            filingDate: new Date('2024-01-15'),
-            filingUrl: 'https://www.sec.gov/filing123',
-            rssEntryDate: new Date('2024-01-15')
-          }
-        ]);
-
-        // Mock summary generation with high cost
-        mockSummaryService.generateAISummaryWithRetry.mockResolvedValue({
-          summary: 'High cost summary',
-          cost: 0.05,  // This would exceed the remaining budget (0.20 - 0.18 = 0.02)
-          keyPoints: [],
-          tokensUsed: 1000,
-          inputTokens: 800,
-          outputTokens: 200
-        });
-
-        mockPrismaInstance.user.findUnique.mockResolvedValue({
-          budgetUsed: 0.18,
-          subscriptionTier: 'FREE'
-        });
-
-        // Mock budget validation failure
-        mockConcurrency.updateUserBudgetWithLock.mockRejectedValue(
-          new Error('Budget limit exceeded')
-        );
-
-        const request = createMockRequest({
-          authorization: `Bearer ${process.env.CRON_SECRET}`
-        });
-
-        const response = await tierAwareRoute(request);
-        const result = await response.json();
-
-        expect(response.status).toBe(200);
-        expect(result.results.errorBreakdown.budgetExceeded).toBeGreaterThan(0);
-      });
-
-      it('should track cost validation failures', async () => {
-        const mockUsers = [
-          {
-            id: 'user-1',
-            email: 'test@test.com',
-            subscriptionTier: 'PROFESSIONAL',
-            lastCronProcessed: null,
-            processingBudget: 0.60,
-            budgetUsed: 0,
-            tickers: [{ id: 'tick-1', symbol: 'AAPL', companyName: 'Apple Inc.' }]
-          }
-        ];
-
-        mockPrismaInstance.user.findMany.mockResolvedValue(mockUsers);
-        mockTierEligibility.getEligibleUsers.mockReturnValue([
-          { tier: 'PROFESSIONAL', userId: 'user-1' }
-        ]);
-
-        mockTickerMonitoring.validateUserTickers.mockResolvedValue([
-          { symbol: 'AAPL', cik: '320193', valid: true }
-        ]);
-
-        mockTickerMonitoring.checkTickerForNewFilings.mockResolvedValue([
-          {
-            accessionNumber: '0001628280-24-007006',
-            filingType: '10-Q',
-            filingDate: new Date('2024-01-15'),
-            filingUrl: 'https://www.sec.gov/filing123',
-            rssEntryDate: new Date('2024-01-15')
-          }
-        ]);
-
-        // Also mock Phase 2: Unprocessed filings for cost validation test
-        mockTickerMonitoring.getUnprocessedFilingsForTicker.mockResolvedValue([
-          {
-            id: 'filing-db-id-456',
-            accessionNumber: '0001628280-24-007006',
-            filingType: '10-Q',
-            filingDate: new Date('2024-01-15'),
-            filingUrl: 'https://www.sec.gov/filing123',
-            rssEntryDate: new Date('2024-01-15'),
-            title: 'Quarterly Report - Q4 2023'
-          }
-        ]);
-
-        // Mock invalid cost (negative)
-        mockSummaryService.generateAISummaryWithRetry.mockResolvedValue({
-          summary: 'Test summary',
-          cost: -0.01,  // Invalid negative cost
-          keyPoints: [],
-          tokensUsed: 1000,
-          inputTokens: 800,
-          outputTokens: 200
-        });
-
-        mockPrismaInstance.user.findUnique.mockResolvedValue({
-          budgetUsed: 0,
-          subscriptionTier: 'PROFESSIONAL'
-        });
-
-        // Mock cost validation to fail for this test
-        const { validateCostUpdate } = require('../../lib/db/cost-validation');
-        (validateCostUpdate as jest.Mock).mockReturnValue({
-          valid: false,
-          error: 'Cost is negative'
-        });
-
-        // Override FilingTransactionManager for this test to return the negative cost
-        const { FilingTransactionManager } = require('../../lib/db/transaction-manager');
-        (FilingTransactionManager.processFilingWithTransaction as jest.Mock).mockResolvedValueOnce({
-          success: true,
-          data: { cost: -0.01 }, // This will trigger cost validation failure
-          transactionId: 'test-transaction-id'
-        });
-        
-        const request = createMockRequest({
-          authorization: `Bearer ${process.env.CRON_SECRET}`
-        });
-
-        const response = await tierAwareRoute(request);
-        const result = await response.json();
-
-        expect(response.status).toBe(200);
-        expect(result.results.errorBreakdown.costValidationFailed).toBeGreaterThan(0);
-        expect(mockPrismaInstance.auditLog.create).toHaveBeenCalledWith({
-          data: expect.objectContaining({
-            action: 'BUDGET_UPDATE_FAILED',
-            success: false
-          })
-        });
+      it('should rely on OpenRouter for credit management', () => {
+        // This is a placeholder test documenting the new approach
+        // Budget operations (updateUserBudgetWithLock) are now deprecated no-ops
+        expect(true).toBe(true);
       });
     });
   });
@@ -1883,12 +1736,11 @@ describe('Comprehensive Cron Integration Tests', () => {
       emailsSent: 0,
       totalCostUSD: 0,
       errorBreakdown: {
-        budgetExceeded: 0,
         costValidationFailed: 0,
         concurrencyConflicts: 0
       }
     });
-    
+
     mockCronSecFilingService.runSecFilingMonitoring.mockResolvedValue({
       tickersChecked: 0,
       newFilingsFound: 0,

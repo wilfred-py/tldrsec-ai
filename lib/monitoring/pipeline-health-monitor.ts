@@ -679,56 +679,31 @@ class PipelineHealthMonitor extends EventEmitter {
     }
   }
 
+  /**
+   * Check cost management health
+   * Note: Budget tracking has been removed - OpenRouter handles credit limits.
+   * This method now just returns healthy status as a placeholder.
+   */
   private async checkCostManagementHealth(): Promise<HealthCheckResult> {
     const startTime = performance.now();
-    
+
     try {
-      // Check cost tracking and budget management
-      const totalBudgetUsed = await prisma.user.aggregate({
-        _sum: {
-          budgetUsed: true
-        }
-      });
-      
-      const totalBudgetAvailable = await prisma.user.aggregate({
-        _sum: {
-          processingBudget: true
-        }
-      });
-      
       const duration = performance.now() - startTime;
-      
-      const budgetUtilization = totalBudgetAvailable._sum.processingBudget 
-        ? ((totalBudgetUsed._sum.budgetUsed || 0) / totalBudgetAvailable._sum.processingBudget) * 100
-        : 0;
 
-      let status: HealthCheckResult['status'] = 'healthy';
-      let message = 'Cost management is healthy';
-      const recommendations: string[] = [];
-      
-      if (budgetUtilization > this.config.thresholds.cost.warning) {
-        status = 'warning';
-        message = 'Budget utilization is high';
-        recommendations.push('Monitor cost usage closely');
-      }
-      
-      if (budgetUtilization > this.config.thresholds.cost.critical) {
-        status = 'critical';
-        message = 'Budget utilization is critical';
-        recommendations.push('Immediate cost review required');
-      }
-
+      // Budget tracking removed - OpenRouter handles credit limits
+      // Return healthy status as cost management is now handled externally
       return {
         name: 'Cost Management',
-        status,
-        message,
+        status: 'healthy',
+        message: 'Cost management delegated to OpenRouter credit system',
         duration,
         details: {
-          budgetUtilization,
-          totalBudgetUsed: totalBudgetUsed._sum.budgetUsed || 0,
-          totalBudgetAvailable: totalBudgetAvailable._sum.processingBudget || 0
+          note: 'Budget tracking removed - OpenRouter handles credit limits',
+          budgetUtilization: 0,
+          totalBudgetUsed: 0,
+          totalBudgetAvailable: 0
         },
-        recommendations: recommendations.length > 0 ? recommendations : undefined
+        recommendations: undefined
       };
 
     } catch (error) {

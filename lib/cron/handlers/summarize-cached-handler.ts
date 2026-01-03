@@ -261,6 +261,7 @@ export async function handleSummarizeCached(
           inputTokens: 0,
           outputTokens: 0,
           isCacheHit: true,  // Mark as cache hit
+          processingCompletedAt: new Date(), // Fix: Add missing completion timestamp
           metadata: {
             executionId,
             cacheId,
@@ -413,6 +414,7 @@ export async function handleSummarizeCached(
         inputTokens: summaryResult.inputTokens || 0,
         outputTokens: summaryResult.outputTokens || 0,
         isCacheHit: executionContext.cacheHit || false,
+        processingCompletedAt: new Date(), // Fix: Add missing completion timestamp
         metadata: {
           executionId,
           cacheId,
@@ -497,24 +499,16 @@ export async function handleSummarizeCached(
       });
     }
 
-    // Update user's budget usage
-    // Note: budgetUsed is stored as Int (in micro-dollars, multiply cost by 1,000,000)
+    // Update lastProcessedAt timestamp
     try {
-      const costInMicroDollars = Math.round((summaryResult.cost || 0) * 1000000);
       await prisma.user.update({
         where: { id: userId },
-        data: {
-          budgetUsed: {
-            increment: costInMicroDollars
-          },
-          lastProcessedAt: new Date()
-        }
+        data: { lastProcessedAt: new Date() }
       });
-    } catch (budgetError) {
-      summarizeLogger.error(`[${executionId}] Failed to update user budget`, {
+    } catch (updateError) {
+      summarizeLogger.error(`[${executionId}] Failed to update lastProcessedAt`, {
         userId,
-        cost: summaryResult.cost,
-        error: budgetError instanceof Error ? budgetError.message : 'Unknown error'
+        error: updateError instanceof Error ? updateError.message : 'Unknown error'
       });
     }
 
