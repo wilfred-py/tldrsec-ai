@@ -565,7 +565,7 @@ async function attemptRemediation(
     jobType = 'ASYNC_SUMMARIZE_CACHED';
   } else {
     // Skip email jobs - handled by summarization step
-    continue;
+    return { success: true };
   }
 
   try {
