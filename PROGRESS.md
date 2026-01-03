@@ -508,23 +508,6 @@ Fixed 5 issues with Form 4 email templates identified during E2E testing:
 
 ---
 
-### Previous: JSON Bracket Repair ✅ COMPLETE (2025-12-29)
-
-**Branch**: `fix/json-bracket-repair` (merged)
-
-Fixed intermittent JSON parsing failures caused by AI models forgetting to close arrays before closing objects.
-
-**Root Cause**: Grok 4.1-fast has ~40% failure rate producing malformed JSON where it forgets `]` before final `}`.
-
-**Solution**:
-- Added `attemptBracketRepair()` function in `lib/ai/parsers/simple-parser.ts`
-- Enhanced system prompt with explicit bracket closing instructions
-- 16 comprehensive tests covering repair scenarios
-
-**Test Results**: All 60 AI parser tests passing.
-
----
-
 ## Quick Reference
 
 ### User-Tracked Tickers (13 total)
@@ -569,7 +552,8 @@ npm run cloudflare:status                 # Check deployment status
 
 | Week | Archive | Highlights |
 |------|---------|------------|
-| Dec 22-31 | [22-Dec-2025.md](.claude/history/2025/Dec/22-Dec-2025.md) | Supabase cutover, email link fixes, test data integrity |
+| Dec 29-Jan 4 | [29-Dec-2025.md](.claude/history/2025/Dec/29-Dec-2025.md) | JSON parsing phases 1-5, bracket repair, cron trigger fix |
+| Dec 22-28 | [22-Dec-2025.md](.claude/history/2025/Dec/22-Dec-2025.md) | Supabase cutover, email link fixes, test data integrity |
 | Dec 15-18 | [15-Dec-2025.md](.claude/history/2025/Dec/15-Dec-2025.md) | Slack bot, lock cleanup, discovery fixes |
 | Dec 9-14 | [08-Dec-2025.md](.claude/history/2025/Dec/08-Dec-2025.md) | Prisma bug fix, orphaned jobs, cascade delete |
 | Dec 1-8 | [01-Dec-2025.md](.claude/history/2025/Dec/01-Dec-2025.md) | Email phases 1-3, daily verification |
