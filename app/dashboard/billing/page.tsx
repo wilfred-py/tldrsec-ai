@@ -346,12 +346,24 @@ export default function BillingPage() {
                 <Separator />
 
                 <ul className="space-y-2">
-                  {plan.features.map((feature, index) => (
-                    <li key={index} className="flex items-center gap-2 text-sm">
-                      <CheckCircle className="h-3 w-3 text-green-500 flex-shrink-0" />
-                      <span dangerouslySetInnerHTML={{ __html: feature.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>') }} />
-                    </li>
-                  ))}
+                  {plan.features.map((feature, index) => {
+                    // Convert markdown-style bold (**text**) to proper semantic HTML
+                    const parts = feature.split(/\*\*([^*]+)\*\*/g);
+                    return (
+                      <li key={index} className="flex items-center gap-2 text-sm">
+                        <CheckCircle className="h-3 w-3 text-green-500 flex-shrink-0" />
+                        <span>
+                          {parts.map((part, partIndex) => 
+                            partIndex % 2 === 1 ? (
+                              <strong key={partIndex}>{part}</strong>
+                            ) : (
+                              part
+                            )
+                          )}
+                        </span>
+                      </li>
+                    );
+                  })}
                 </ul>
 
                 <Button

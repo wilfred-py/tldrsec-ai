@@ -92,6 +92,26 @@ export const SUBSCRIPTION_PLANS = {
 } as const;
 
 // =============================================================================
+// HELPER FUNCTIONS
+// =============================================================================
+
+/**
+ * Calculate annual savings percentage for a given plan
+ * @param planType - The subscription plan type
+ * @returns Savings percentage (e.g., 17 for 17% savings)
+ */
+export function calculateSavingsPercentage(planType: PlanType): number {
+  const plan = SUBSCRIPTION_PLANS[planType];
+  if (!plan || plan.monthlyPrice === 0) return 0;
+  
+  const monthlyTotal = plan.monthlyPrice * 12;
+  const annualPrice = plan.annualPrice;
+  const savings = monthlyTotal - annualPrice;
+  
+  return Math.round((savings / monthlyTotal) * 100);
+}
+
+// =============================================================================
 // LEGACY PRICING TIERS - Kept for existing subscribers
 // =============================================================================
 export const LEGACY_SUBSCRIPTION_PLANS = {
