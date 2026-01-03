@@ -211,12 +211,6 @@ export function calculateAnnualSavings(planType: PlanType): number {
   return monthlyTotal - plan.annualPrice;
 }
 
-export function calculateSavingsPercentage(planType: PlanType): number {
-  const plan = SUBSCRIPTION_PLANS[planType];
-  if (plan.monthlyPrice === 0) return 0;
-  const monthlyTotal = plan.monthlyPrice * 12;
-  return Math.round(((monthlyTotal - plan.annualPrice) / monthlyTotal) * 100);
-}
 
 // Stripe error handling
 export function handleStripeError(error: unknown): {

@@ -2,8 +2,8 @@
 
 ## Current Status
 **Date**: 2026-01-03
-**Branch**: feature/premium-pricing-update-199-349
-**Status**: ✅ COMPLETE - Premium Pricing Update ($199 Pro / $349 Max)
+**Branch**: main
+**Status**: ✅ OPERATIONAL - All systems running, context management complete
 
 ---
 
@@ -37,6 +37,25 @@
 - `docs/stripe-setup-guide.md` - Updated pricing documentation
 - `DEPLOYMENT_GUIDE.md` - Updated pricing documentation
 - `app/api/user/subscription/route.ts` - Updated comment
+
+### Stripe Deployment Completed ✅ (2026-01-03)
+
+**Task**: Deploy Stripe environment variables to Vercel production.
+
+**Completed**:
+- ✅ Added `STRIPE_SECRET_KEY` to Vercel (production, preview, development)
+- ✅ Added `STRIPE_WEBHOOK_SECRET` to Vercel (production, preview, development)
+- ✅ Webhook endpoint configured: `/api/webhook/stripe`
+- ✅ Deployed to production with `vercel --prod`
+- ✅ Verified subscription API returns 401 for unauthenticated requests (expected)
+
+**Stripe Events Configured**:
+- `checkout.session.completed`
+- `customer.subscription.created`
+- `customer.subscription.updated`
+- `customer.subscription.deleted`
+- `invoice.payment_succeeded`
+- `invoice.payment_failed`
 
 ---
 
@@ -94,6 +113,34 @@
 ---
 
 ## Recently Completed
+
+### Pipeline Stalling Fix ✅ COMPLETE (2026-01-03)
+
+**Issue**: Pipeline auto-remediation creating legacy job types (`filing_fetch`) that weren't processed by the modern job processor expecting async format (`ASYNC_FETCH_FILING`).
+
+**Root Cause**: 
+- `verify-daily-pipeline.ts` was creating jobs with legacy format
+- Job processor only accepts modern async job types
+- 28 jobs stuck in PENDING status since January 1st
+- 10 exhausted retry jobs stuck in PENDING instead of being marked FAILED
+
+**Fixes Applied**:
+1. **Fixed job type mapping** in `scripts/verify-daily-pipeline.ts`:
+   - `filing_fetch` → `ASYNC_FETCH_FILING`
+   - `filing_summarize` → `ASYNC_SUMMARIZE_CACHED`
+   - Removed `filing_email` handling (handled by summarization step)
+2. **Cleaned up exhausted retry jobs** - Marked 10 jobs as FAILED that had reached max retries
+3. **Verified auto-remediation** - Successfully re-queued 3 AMZN filings with correct job types
+
+**Files Modified**:
+- `scripts/verify-daily-pipeline.ts:563,565,568` - Updated job type mapping and syntax fix
+
+**Verification**:
+- ✅ Auto-remediation succeeded (3/3 jobs re-queued)
+- ✅ New jobs created with correct ASYNC_FETCH_FILING format
+- ✅ Pipeline can now process jobs when cron runs
+
+---
 
 ### Gmail Inbox Hero Responsive Fix ✅ COMPLETE (2026-01-01)
 
@@ -563,7 +610,7 @@ npm run cloudflare:status                 # Check deployment status
 
 ---
 
-**Last Updated**: 2026-01-03 08:15 AEDT (context compaction performed)
+**Last Updated**: 2026-01-03 15:30 AEDT (Context management complete)
 **Repository**: tldrsec-ai
 
 *See TIMELINE.md for master timeline and quick navigation*
