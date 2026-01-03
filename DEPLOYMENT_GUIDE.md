@@ -33,11 +33,11 @@ Copy `.env.enhanced.example` to `.env.local` and configure:
 
 ### 3. Stripe Configuration
 1. Create products and prices in Stripe Dashboard:
-   - **Basic**: $9/month, 50 filings
-   - **Professional**: $29/month, 200 filings  
-   - **Premium**: $99/month, 1000 filings
+   - **Free**: $0/month, 3 companies, 10-K/10-Q only
+   - **Pro**: $199/month ($1,990/year), 25 companies, all filing types
+   - **Max**: $349/month ($3,490/year), unlimited companies, all filing types
 
-2. Configure webhook endpoint: `/api/webhooks/stripe`
+2. Configure webhook endpoint: `/api/webhook/stripe`
    - Events: `customer.subscription.*`, `invoice.*`
 
 3. Update price IDs in environment variables

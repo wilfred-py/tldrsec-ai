@@ -2,7 +2,7 @@
  * User Subscription API Routes
  * Fresh implementation for Stripe subscription management
  *
- * Updated to support new pricing tiers ($99 Pro / $139 Premium)
+ * Pricing tiers: Free ($0) / Pro ($199) / Max ($349)
  * with monthly and annual billing intervals
  */
 
@@ -35,11 +35,23 @@ export async function GET() {
       );
     }
 
+    // When Stripe is not configured, return mock Free tier subscription
+    // This allows the billing page to render properly in development
     if (!isStripeEnabled()) {
-      return NextResponse.json(
-        { error: 'Stripe not configured' },
-        { status: 503 }
-      );
+      return NextResponse.json({
+        planType: 'FREE',
+        isActive: true,
+        currentPeriodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+        cancelAtPeriodEnd: false,
+        stripeCustomerId: null,
+        stripeSubscriptionId: null,
+        limits: {
+          monthlyFilings: SUBSCRIPTION_PLANS.FREE.tickerLimit,
+          usedFilings: 0,
+          remainingFilings: SUBSCRIPTION_PLANS.FREE.tickerLimit,
+        },
+        _stripeDisabled: true, // Indicates Stripe is not configured
+      });
     }
 
     // Get user's subscription from database
@@ -58,16 +70,16 @@ export async function GET() {
     if (!userSubscription) {
       // Return default free tier info if no subscription exists
       return NextResponse.json({
-        planType: 'BASIC',
-        isActive: false,
-        currentPeriodEnd: null,
+        planType: 'FREE',
+        isActive: true,
+        currentPeriodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
         cancelAtPeriodEnd: false,
         stripeCustomerId: null,
         stripeSubscriptionId: null,
         limits: {
-          monthlyFilings: 0,
+          monthlyFilings: SUBSCRIPTION_PLANS.FREE.tickerLimit,
           usedFilings: 0,
-          remainingFilings: 0,
+          remainingFilings: SUBSCRIPTION_PLANS.FREE.tickerLimit,
         },
       });
     }
