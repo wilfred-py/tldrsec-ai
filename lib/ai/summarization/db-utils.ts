@@ -7,7 +7,7 @@
 import { prisma } from '../../db/prisma';
 import { logger } from '../../logging';
 import { monitoring } from '../../monitoring';
-// import { SummarizationResult } from '../summarize'; // Currently unused
+import { SummarizationResult } from '../summarize';
 // import { EnhancedSummarizationResult } from './types'; // Currently unused
 
 // Component logger

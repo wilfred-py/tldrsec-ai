@@ -261,6 +261,7 @@ export async function handleSummarizeCached(
           inputTokens: 0,
           outputTokens: 0,
           isCacheHit: true,  // Mark as cache hit
+          processingCompletedAt: new Date(), // Fix: Add missing completion timestamp
           metadata: {
             executionId,
             cacheId,
@@ -413,6 +414,7 @@ export async function handleSummarizeCached(
         inputTokens: summaryResult.inputTokens || 0,
         outputTokens: summaryResult.outputTokens || 0,
         isCacheHit: executionContext.cacheHit || false,
+        processingCompletedAt: new Date(), // Fix: Add missing completion timestamp
         metadata: {
           executionId,
           cacheId,
