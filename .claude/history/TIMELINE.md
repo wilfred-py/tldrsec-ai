@@ -13,6 +13,7 @@ This file provides a chronological index of all completed projects. For detailed
 
 | Date | Project | Status |
 |------|---------|--------|
+| 2026-01-03 | Pipeline Resilience Improvements (markForRetry validation + exhausted retry cleanup) | ✅ |
 | 2026-01-03 | Pipeline Stalling Fix (job type mismatch + exhausted retry cleanup) | ✅ |
 | 2026-01-03 | Stripe Deployment (env vars + webhook config on Vercel) | ✅ |
 | 2026-01-03 | Database Upsert Logic Fixes (enhanced reliability, transaction safety) | ✅ |
@@ -118,8 +119,8 @@ This file provides a chronological index of all completed projects. For detailed
 
 ## Archive Statistics
 - **Total Archived Projects**: 6 weekly archives (Oct-Dec 2025)
-- **Current PROGRESS.md Lines**: 616 (threshold: 500)
-- **Last Sync**: 2026-01-03 15:30 AEDT
+- **Current PROGRESS.md Lines**: 645 (threshold: 500)
+- **Last Sync**: 2026-01-03 16:00 AEDT
 - **Archive System**: ✅ ACTIVE
 - **Next Archive Check**: Dec 29 entries archivable after 2026-01-28
 
