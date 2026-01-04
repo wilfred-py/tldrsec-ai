@@ -1,13 +1,42 @@
 # Current Progress: tldrsec-ai Pipeline Operations
 
 ## Current Status
-**Date**: 2026-01-03
-**Branch**: main
-**Status**: ✅ OPERATIONAL - All systems running, context management complete
+**Date**: 2026-01-04
+**Branch**: feature/pipeline-resilience-improvements
+**Status**: ✅ OPERATIONAL - Pipeline resilience improvements complete, ready for merge
 
 ---
 
-## Current Session: Premium Pricing Update ($199 Pro / $349 Max)
+## Current Session: Pipeline Resilience Improvements
+
+### Pipeline Resilience Improvements ✅ COMPLETE (2026-01-03)
+
+**Plan**: [2026-01-03-pipeline-resilience-improvements.md](docs/plans/2026-01-03-pipeline-resilience-improvements.md)
+
+**Overview**: Implemented defensive coding and proactive cleanup to prevent jobs from getting stuck in RETRYING status when they've exhausted their retry attempts.
+
+**Phase 1 - markForRetry() Validation**:
+- Added retry count validation to `markForRetry()` in `lib/job-queue/index.ts:513-519`
+- Throws error if `retryCount >= maxRetries` to prevent stuck RETRYING jobs
+- 4 unit tests in `__tests__/lib/job-queue/mark-for-retry-validation.test.ts`
+
+**Phase 2 - Exhausted-Retry Job Cleanup**:
+- Added `recoverExhaustedRetryJobs()` method in `lib/cron/background-filing-worker.ts:395-447`
+- Finds RETRYING jobs where `retryCount >= maxRetries` and marks them as FAILED
+- Integrated into `processBatch()` lifecycle, called after `recoverStaleJobs()`
+- 10 unit tests in `__tests__/lib/cron/recover-exhausted-retry-jobs.test.ts`
+
+**Files Modified**:
+- `lib/job-queue/index.ts:495-525` - Validation + enhanced JSDoc
+- `lib/cron/background-filing-worker.ts:221-228,395-447` - Cleanup method + integration
+- `__tests__/lib/job-queue/mark-for-retry-validation.test.ts` - New (4 tests)
+- `__tests__/lib/cron/recover-exhausted-retry-jobs.test.ts` - New (10 tests)
+
+**Verification**: ✅ 14/14 tests pass, ✅ Lint clean, ✅ Build passes
+
+---
+
+## Previous Session: Premium Pricing Update ($199 Pro / $349 Max)
 
 ### Completed: Premium Pricing Update ✅ COMPLETE (2026-01-03)
 
@@ -610,7 +639,7 @@ npm run cloudflare:status                 # Check deployment status
 
 ---
 
-**Last Updated**: 2026-01-03 15:30 AEDT (Context management complete)
+**Last Updated**: 2026-01-04 (Pipeline resilience improvements complete, ready for merge)
 **Repository**: tldrsec-ai
 
 *See TIMELINE.md for master timeline and quick navigation*
