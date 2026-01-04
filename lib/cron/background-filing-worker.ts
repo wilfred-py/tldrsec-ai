@@ -218,6 +218,15 @@ export class BackgroundFilingWorker {
       });
     }
 
+    // Second, clean up any RETRYING jobs that have exhausted their retries
+    const exhaustedCleanedCount = await this.recoverExhaustedRetryJobs();
+    if (exhaustedCleanedCount > 0) {
+      workerLogger.info('Cleaned up exhausted retry jobs', {
+        processId: this.processId,
+        cleanedUp: exhaustedCleanedCount,
+      });
+    }
+
     // Get jobs to process - ONLY 3-phase async jobs
     // IMPORTANT: Exclude ASYNC_SUMMARIZE_FILING (legacy sync jobs that timeout)
     // Legacy jobs are still handled by tier-aware endpoint's sync processing path
@@ -375,6 +384,70 @@ export class BackgroundFilingWorker {
       return recoveredCount;
     } catch (error) {
       workerLogger.error('Failed to recover stale jobs', {
+        processId: this.processId,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
+      return 0;
+    }
+  }
+
+  /**
+   * Recover jobs stuck in RETRYING status that have exhausted their retries.
+   *
+   * This is a defensive cleanup mechanism to handle jobs where the retry count
+   * was already at or above maxRetries when markForRetry was called. These jobs
+   * would otherwise be stuck in RETRYING status indefinitely since the worker
+   * won't pick them up for processing (they'd fail the retry check).
+   *
+   * @returns Number of jobs that were marked as FAILED
+   */
+  private async recoverExhaustedRetryJobs(): Promise<number> {
+    try {
+      // Find RETRYING jobs where retryCount >= maxRetries
+      // These jobs are stuck because they can't be retried
+      const exhaustedJobs = await getPrisma().jobQueue.findMany({
+        where: {
+          status: 'RETRYING',
+          jobType: {
+            in: ['ASYNC_DISCOVER_FILINGS', 'ASYNC_FETCH_FILING', 'ASYNC_SUMMARIZE_CACHED'],
+          },
+        },
+        select: {
+          id: true,
+          retryCount: true,
+          maxRetries: true,
+          lastError: true,
+        },
+      });
+
+      // Filter to only jobs where retryCount >= maxRetries
+      const jobsToFail = exhaustedJobs.filter(job => job.retryCount >= job.maxRetries);
+
+      if (jobsToFail.length === 0) {
+        return 0;
+      }
+
+      // Mark each exhausted job as FAILED
+      for (const job of jobsToFail) {
+        await getPrisma().jobQueue.update({
+          where: { id: job.id },
+          data: {
+            status: 'FAILED',
+            failedAt: new Date(),
+            lastError: `Exhausted retry cleanup: retryCount (${job.retryCount}) >= maxRetries (${job.maxRetries}). Previous error: ${job.lastError || 'unknown'}`,
+          },
+        });
+      }
+
+      workerLogger.warn('Cleaned up exhausted RETRYING jobs', {
+        processId: this.processId,
+        cleanedUp: jobsToFail.length,
+        jobIds: jobsToFail.map(j => j.id),
+      });
+
+      return jobsToFail.length;
+    } catch (error) {
+      workerLogger.error('Failed to recover exhausted retry jobs', {
         processId: this.processId,
         error: error instanceof Error ? error.message : 'Unknown error',
       });
