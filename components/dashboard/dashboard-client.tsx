@@ -4,7 +4,7 @@ import { useState, useMemo, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { DashboardHeader } from "@/components/dashboard";
 import { CompanySearch } from "@/components/dashboard/company-search";
-import { SettingsIcon, Trash2Icon, PlusIcon, ArrowUpDown, Loader2 } from "lucide-react";
+import { Trash2Icon, PlusIcon, ArrowUpDown, Loader2 } from "lucide-react";
 
 import {
   Table,
@@ -24,7 +24,6 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Switch } from "@/components/ui/switch";
-import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import {
   createColumnHelper,
@@ -38,8 +37,6 @@ import { Company } from "@/lib/api/types";
 import { getTrackedCompanies, addTrackedCompany, deleteTrackedCompany, updateCompanyPreferences } from "@/lib/api/ticker-service";
 import { useAsync } from "@/lib/hooks/use-async";
 import { TutorialGuide } from "@/components/onboarding/tutorial-guide";
-import { SystemHealthBanner } from "@/components/dashboard/system-health-banner";
-import { ProcessingStatus } from "@/components/dashboard/processing-status";
 
 // Column helper for the table
 const columnHelper = createColumnHelper<Company>();
@@ -51,7 +48,6 @@ export function DashboardClient() {
   const [currentCompany, setCurrentCompany] = useState<Company | null>(null);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [isAddTickerOpen, setIsAddTickerOpen] = useState(false);
-  const [isPreferencesOpen, setIsPreferencesOpen] = useState(false);
 
   const [showTutorial, setShowTutorial] = useState(false);
   const [tutorialProgress, setTutorialProgress] = useState(0);
@@ -191,38 +187,40 @@ export function DashboardClient() {
     }
   };
   
-  // Handle updating company preferences
-  const handleUpdatePreferences = async () => {
-    if (!currentCompany) return;
-    
+  // Handle inline preference toggle changes with optimistic update
+  const handleInlinePreferenceChange = useCallback(async (
+    company: Company,
+    preferenceKey: keyof Company['preferences'],
+    value: boolean
+  ) => {
+    // Optimistic update
+    setCompanies(prev => prev.map(c =>
+      c.id === company.id
+        ? { ...c, preferences: { ...c.preferences, [preferenceKey]: value } }
+        : c
+    ));
+
     try {
-      await executeUpdatePreferences(() => updateCompanyPreferences(currentCompany.symbol, currentCompany.preferences));
-      toast.success(`Updated preferences for ${currentCompany.symbol}`);
-      
-      // Update in local state
-      setCompanies(prev => prev.map(c => 
-        c.symbol === currentCompany.symbol ? currentCompany : c
-      ));
-      
-      setIsPreferencesOpen(false);
+      const updatedPreferences = {
+        ...company.preferences,
+        [preferenceKey]: value
+      };
+
+      await executeUpdatePreferences(() =>
+        updateCompanyPreferences(company.symbol, updatedPreferences)
+      );
+      // Subtle success - no toast for inline toggles to reduce noise
     } catch (error) {
+      // Revert on error
+      setCompanies(prev => prev.map(c =>
+        c.id === company.id
+          ? { ...c, preferences: { ...c.preferences, [preferenceKey]: !value } }
+          : c
+      ));
       console.error("Error updating preferences:", error);
-      toast.error(`Failed to update preferences for ${currentCompany.symbol}`);
+      toast.error(`Failed to update preference`);
     }
-  };
-  
-  // Handle preference toggle changes
-  const handlePreferenceChange = (key: keyof Company['preferences'], value: boolean) => {
-    if (!currentCompany) return;
-    
-    setCurrentCompany({
-      ...currentCompany,
-      preferences: {
-        ...currentCompany.preferences,
-        [key]: value
-      }
-    });
-  };
+  }, [executeUpdatePreferences]);
   
   
   // Table columns definition
@@ -312,9 +310,6 @@ export function DashboardClient() {
         description="Welcome to tldrSEC."
       />
       
-      {/* System Health & Status */}
-      <SystemHealthBanner />
-      <ProcessingStatus />
       
       {/* Tracked Tickers - Removed border */}
       <div className="landing-card">
