@@ -223,7 +223,7 @@ export function DashboardClient() {
   }, [executeUpdatePreferences]);
   
   
-  // Table columns definition
+  // Table columns definition with inline filing toggles
   const columns = useMemo(() => [
     columnHelper.accessor('symbol', {
       header: ({ column }) => (
@@ -236,7 +236,8 @@ export function DashboardClient() {
           <ArrowUpDown className="ml-2 h-4 w-4" />
         </Button>
       ),
-      cell: info => <div className="font-medium">{info.getValue()}</div>,
+      cell: info => <div className="font-semibold">{info.getValue()}</div>,
+      size: 80,
     }),
     columnHelper.accessor('name', {
       header: ({ column }) => (
@@ -249,45 +250,93 @@ export function DashboardClient() {
           <ArrowUpDown className="ml-2 h-4 w-4" />
         </Button>
       ),
-      cell: info => <div>{info.getValue()}</div>,
+      cell: info => (
+        <div className="text-sm text-muted-foreground truncate max-w-[200px]">
+          {info.getValue()}
+        </div>
+      ),
     }),
+    // Filing type toggle columns
+    columnHelper.accessor(row => row.preferences?.tenK, {
+      id: 'tenK',
+      header: () => <span className="text-xs font-medium text-center block">10-K</span>,
+      cell: info => (
+        <div className="flex justify-center">
+          <Switch
+            checked={info.getValue() ?? true}
+            onCheckedChange={(checked) => handleInlinePreferenceChange(info.row.original, 'tenK', checked)}
+            aria-label={`Toggle 10-K for ${info.row.original.symbol}`}
+          />
+        </div>
+      ),
+      size: 60,
+    }),
+    columnHelper.accessor(row => row.preferences?.tenQ, {
+      id: 'tenQ',
+      header: () => <span className="text-xs font-medium text-center block">10-Q</span>,
+      cell: info => (
+        <div className="flex justify-center">
+          <Switch
+            checked={info.getValue() ?? true}
+            onCheckedChange={(checked) => handleInlinePreferenceChange(info.row.original, 'tenQ', checked)}
+            aria-label={`Toggle 10-Q for ${info.row.original.symbol}`}
+          />
+        </div>
+      ),
+      size: 60,
+    }),
+    columnHelper.accessor(row => row.preferences?.eightK, {
+      id: 'eightK',
+      header: () => <span className="text-xs font-medium text-center block">8-K</span>,
+      cell: info => (
+        <div className="flex justify-center">
+          <Switch
+            checked={info.getValue() ?? true}
+            onCheckedChange={(checked) => handleInlinePreferenceChange(info.row.original, 'eightK', checked)}
+            aria-label={`Toggle 8-K for ${info.row.original.symbol}`}
+          />
+        </div>
+      ),
+      size: 60,
+    }),
+    columnHelper.accessor(row => row.preferences?.form4, {
+      id: 'form4',
+      header: () => <span className="text-xs font-medium text-center block">Form 4</span>,
+      cell: info => (
+        <div className="flex justify-center">
+          <Switch
+            checked={info.getValue() ?? false}
+            onCheckedChange={(checked) => handleInlinePreferenceChange(info.row.original, 'form4', checked)}
+            aria-label={`Toggle Form 4 for ${info.row.original.symbol}`}
+          />
+        </div>
+      ),
+      size: 70,
+    }),
+    // Delete action column
     columnHelper.accessor(row => row, {
       id: 'actions',
-      header: () => <div className="text-right">Actions</div>,
+      header: () => null,
       cell: info => {
         const company = info.getValue();
         return (
-          <div className="flex justify-end gap-2">
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => {
-                setCurrentCompany(company);
-                setIsPreferencesOpen(true);
-              }}
-              className="h-8 w-8"
-              data-tutorial="preferences"
-            >
-              <SettingsIcon className="h-4 w-4" />
-              <span className="sr-only">Preferences</span>
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => {
-                setCurrentCompany(company);
-                setIsDeleteDialogOpen(true);
-              }}
-              className="h-8 w-8"
-            >
-              <Trash2Icon className="h-4 w-4" />
-              <span className="sr-only">Delete</span>
-            </Button>
-          </div>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => {
+              setCurrentCompany(company);
+              setIsDeleteDialogOpen(true);
+            }}
+            className="h-8 w-8 text-muted-foreground hover:text-destructive"
+            aria-label={`Delete ${company.symbol}`}
+          >
+            <Trash2Icon className="h-4 w-4" />
+          </Button>
         );
       },
+      size: 40,
     }),
-  ], []);
+  ], [handleInlinePreferenceChange]);
   
   // Initialize table
   const table = useReactTable({
@@ -516,98 +565,6 @@ export function DashboardClient() {
         </DialogContent>
       </Dialog>
       
-      {/* Preferences Dialog */}
-      <Dialog open={isPreferencesOpen} onOpenChange={setIsPreferencesOpen}>
-        <DialogContent className="max-w-[95vw] sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Company Preferences</DialogTitle>
-            <DialogDescription>
-              Customize your preferences for {currentCompany?.symbol}.
-            </DialogDescription>
-          </DialogHeader>
-          
-          <div className="space-y-4 py-2">
-            <div className="flex items-center justify-between">
-              <div className="space-y-0.5">
-                <Label htmlFor="tenK">10-K Filings</Label>
-                <p className="text-sm text-muted-foreground">
-                  Annual reports
-                </p>
-              </div>
-              <Switch
-                id="tenK"
-                checked={currentCompany?.preferences?.tenK}
-                onCheckedChange={(checked) => handlePreferenceChange('tenK', checked)}
-              />
-            </div>
-            
-            <div className="flex items-center justify-between">
-              <div className="space-y-0.5">
-                <Label htmlFor="tenQ">10-Q Filings</Label>
-                <p className="text-sm text-muted-foreground">
-                  Quarterly reports
-                </p>
-              </div>
-              <Switch
-                id="tenQ"
-                checked={currentCompany?.preferences?.tenQ}
-                onCheckedChange={(checked) => handlePreferenceChange('tenQ', checked)}
-              />
-            </div>
-
-            <div className="flex items-center justify-between">
-              <div className="space-y-0.5">
-                <Label htmlFor="eightK">8-K Filings</Label>
-                <p className="text-sm text-muted-foreground">
-                  Current reports
-                </p>
-              </div>
-              <Switch
-                id="eightK"
-                checked={currentCompany?.preferences?.eightK}
-                onCheckedChange={(checked) => handlePreferenceChange('eightK', checked)}
-              />
-            </div>
-
-            <div className="flex items-center justify-between">
-              <div className="space-y-0.5">
-                <Label htmlFor="form4">Form 4 Filings</Label>
-                <p className="text-sm text-muted-foreground">
-                  Insider trading reports
-                </p>
-              </div>
-              <Switch
-                id="form4"
-                checked={currentCompany?.preferences?.form4}
-                onCheckedChange={(checked) => handlePreferenceChange('form4', checked)}
-              />
-            </div>
-
-            <div className="flex items-center justify-between">
-              <div className="space-y-0.5">
-                <Label htmlFor="other">Other Filings</Label>
-                <p className="text-sm text-muted-foreground">
-                  All other SEC filings
-                </p>
-              </div>
-              <Switch
-                id="other"
-                checked={currentCompany?.preferences?.other}
-                onCheckedChange={(checked) => handlePreferenceChange('other', checked)}
-              />
-            </div>
-          </div>
-          
-          <DialogFooter className="flex-col sm:flex-row gap-2 sm:gap-0">
-            <Button variant="outline" onClick={() => setIsPreferencesOpen(false)}>
-              Cancel
-            </Button>
-            <Button onClick={handleUpdatePreferences} disabled={isUpdatingPreferences}>
-              {isUpdatingPreferences ? "Saving..." : "Save Changes"}
-            </Button>
-          </DialogFooter>  
-        </DialogContent>
-      </Dialog>
 
       {/* Tutorial Guide */}
       <TutorialGuide
