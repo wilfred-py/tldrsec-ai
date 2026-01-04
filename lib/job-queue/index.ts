@@ -493,12 +493,18 @@ export class JobQueueService {
   }
 
   /**
-   * Mark a job for retry at a specific time
-   * 
+   * Mark a job for retry at a specific time.
+   *
+   * This method validates that the job has retries remaining before marking it
+   * for retry. This prevents jobs from being stuck in RETRYING status when they've
+   * already exhausted their retry attempts.
+   *
    * @param id - Job ID to retry
    * @param retryAt - Date/time when the job should be retried
-   * @param resultData - Optional data to store with the job
-   * @returns The updated job record
+   * @param resultData - Optional data to store with the job (error info, etc.)
+   * @returns The updated job record with status set to RETRYING
+   * @throws {Error} If job is not found
+   * @throws {Error} If job has exhausted retries (retryCount >= maxRetries)
    */
   static async markForRetry(id: string, retryAt: Date, resultData: JobResultData = {}) {
     try {
@@ -509,7 +515,15 @@ export class JobQueueService {
       if (!job) {
         throw new Error(`Job with ID ${id} not found`);
       }
-      
+
+      // Validate retry count before marking for retry
+      // This prevents jobs from being stuck in RETRYING status when they've exhausted retries
+      if (job.retryCount >= job.maxRetries) {
+        throw new Error(
+          `Cannot retry job ${id}: retry count (${job.retryCount}) >= max retries (${job.maxRetries})`
+        );
+      }
+
       const now = new Date();
       const updateData: any = {
         status: 'RETRYING',
