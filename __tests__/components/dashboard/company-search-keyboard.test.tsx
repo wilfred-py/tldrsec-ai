@@ -34,7 +34,9 @@ async function typeAndWaitForResults(input: HTMLElement, text: string) {
   });
 }
 
-describe('CompanySearch Keyboard Navigation', () => {
+// TODO: CompanySearch component has been replaced by InlineAddRow for dashboard ticker addition
+// These tests are preserved for reference but skipped as the component is no longer used
+describe.skip('CompanySearch Keyboard Navigation', () => {
   const mockOnSelect = jest.fn();
   const mockOnCancel = jest.fn();
 

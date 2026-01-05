@@ -551,9 +551,11 @@ async function attemptRemediation(
   const currentRetries = existingJob?.retryCount || 0;
 
   if (currentRetries >= maxRetries) {
+    const error = `Max retries (${maxRetries}) exceeded. Manual intervention required.`;
+    console.log(chalk.red(`    ✗ ${error}`));
     return {
       success: false,
-      error: `Max retries (${maxRetries}) exceeded. Manual intervention required.`
+      error
     };
   }
 
@@ -569,16 +571,60 @@ async function attemptRemediation(
   }
 
   try {
-    // Create a new job in the queue
+    // Get user and ticker information for the filing
+    const ticker = await prisma.ticker.findFirst({
+      where: { symbol: filing.ticker },
+      include: { 
+        users: {
+          select: {
+            id: true,
+            email: true,
+            subscriptionTier: true,
+          },
+          take: 1 // Get at least one user for remediation
+        }
+      }
+    });
+
+    if (!ticker || ticker.users.length === 0) {
+      return {
+        success: false,
+        error: `No users found tracking ticker ${filing.ticker}`
+      };
+    }
+
+    const user = ticker.users[0];
+
+    // Create a new job in the queue with proper payload structure
     await prisma.jobQueue.create({
       data: {
         jobType: jobType,
         status: 'PENDING',
         priority: 10, // High priority for remediation
         payload: {
-          accessionNumber: filing.accessionNumber,
-          ticker: filing.ticker,
-          formType: filing.formType,
+          // Required fields for ASYNC_FETCH_FILING
+          userId: user.id,
+          userEmail: user.email,
+          userTier: user.subscriptionTier || 'FREE',
+          ticker: {
+            symbol: filing.ticker,
+            companyName: ticker.companyName || undefined,
+            cik: ticker.cik || undefined
+          },
+          filing: {
+            filingId: filing.accessionNumber, // Use accessionNumber as filing ID
+            formType: filing.formType,
+            filingDate: filing.filingDate,
+            filingUrl: `https://www.sec.gov/Archives/edgar/data/${filing.accessionNumber}`, // Construct URL from accession
+            accessionNumber: filing.accessionNumber
+          },
+          executionContext: {
+            executionId: `remediation-${Date.now()}`,
+            cronTriggerTime: new Date().toISOString(),
+            sourceContext: 'daily-verification-remediation',
+            discoveryPhaseCompletedAt: new Date().toISOString()
+          },
+          // Remediation metadata
           isRemediation: true,
           previousFailurePhase: filing.failurePhase,
         } as Prisma.InputJsonValue,
@@ -594,6 +640,9 @@ async function attemptRemediation(
   } catch (err) {
     const error = `Failed to create remediation job: ${err instanceof Error ? err.message : String(err)}`;
     console.log(chalk.red(`    ✗ ${error}`));
+    if (err instanceof Error && err.stack) {
+      console.log(chalk.gray(`      Stack: ${err.stack.split('\n')[0]}`));
+    }
     return { success: false, error };
   }
 }
