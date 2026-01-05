@@ -15,7 +15,9 @@ const mockCompaniesData = [
   { symbol: 'AMZN', name: 'Amazon.com, Inc.' }
 ] as TickerSearchResult[];
 
-describe('Company Search Integration', () => {
+// TODO: CompanySearch component has been replaced by InlineAddRow for dashboard ticker addition
+// These tests are preserved for reference but skipped as the component is no longer used
+describe.skip('Company Search Integration', () => {
   const mockOnSelect = jest.fn();
   const mockOnCancel = jest.fn();
   
