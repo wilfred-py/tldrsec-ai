@@ -443,7 +443,6 @@ export function DashboardClient() {
     <div className="space-y-6">
       <DashboardHeader
         heading="Dashboard"
-        description="Welcome to tldrSEC."
       />
 
       {/* Tracked Tickers */}
@@ -702,9 +701,13 @@ export function DashboardClient() {
                         ) : (
                           <Button
                             key={page}
-                            variant={currentPage === page ? "default" : "outline"}
+                            variant={currentPage === page ? "default" : "ghost"}
                             size="icon"
-                            className="h-8 w-8"
+                            className={`h-8 w-8 rounded-full transition-colors ${
+                              currentPage === page
+                                ? "bg-black text-white hover:bg-black"
+                                : "hover:bg-black hover:text-white"
+                            }`}
                             onClick={() => table.setPageIndex(page)}
                           >
                             {page + 1}
@@ -888,9 +891,13 @@ export function DashboardClient() {
                       ) : (
                         <Button
                           key={page}
-                          variant={currentPage === page ? "default" : "outline"}
+                          variant={currentPage === page ? "default" : "ghost"}
                           size="icon"
-                          className="h-8 w-8 text-sm"
+                          className={`h-8 w-8 text-sm rounded-full transition-colors ${
+                            currentPage === page
+                              ? "bg-black text-white hover:bg-black"
+                              : "hover:bg-black hover:text-white"
+                          }`}
                           onClick={() => table.setPageIndex(page)}
                         >
                           {page + 1}
@@ -916,7 +923,7 @@ export function DashboardClient() {
 
       {/* Delete Confirmation Dialog */}
       <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
-        <DialogContent className="max-w-[95vw] sm:max-w-md border-2 border-border shadow-2xl bg-background">
+        <DialogContent className="max-w-[95vw] sm:max-w-md border border-gray-200 dark:border-zinc-700 shadow-2xl bg-white dark:bg-zinc-900">
           <DialogHeader>
             <DialogTitle className="text-lg font-semibold">
               Remove Ticker
