@@ -50,15 +50,20 @@ export async function getTrackedCompanies(): Promise<ApiResponse<Company[]>> {
         }
         
         // Convert API tickers to Company format
-        const userCompanies: Company[] = userData.tickers.map((ticker: Record<string, unknown>) => ({
-          id: ticker.id,
-          symbol: ticker.symbol,
-          companyName: ticker.companyName,
-          name: ticker.companyName,
-          lastFiling: "—", // No filing data in local DB
-          lastFilingDate: ticker.lastFilingDate || null,
-          preferences: { tenK: true, tenQ: true, eightK: true, form4: false, other: false }
-        }));
+        const userCompanies: Company[] = userData.tickers.map((ticker: Record<string, unknown>) => {
+          // Use stored preferences or default values
+          const storedPrefs = ticker.preferences as Record<string, boolean> | null;
+          return {
+            id: ticker.id,
+            symbol: ticker.symbol,
+            companyName: ticker.companyName,
+            name: ticker.companyName,
+            lastFiling: "—", // No filing data in local DB
+            lastFilingDate: ticker.lastFilingDate || null,
+            summaryCount: ticker.summaryCount || 0,
+            preferences: storedPrefs || { tenK: true, tenQ: true, eightK: true, form4: false, other: false }
+          };
+        });
         
         console.log(`Found ${userCompanies.length} tickers for user`);
         
@@ -282,8 +287,8 @@ export async function deleteTrackedCompany(companyId: string): Promise<ApiRespon
  * Update filing preferences for a tracked company
  */
 export async function updateCompanyPreferences(
-  companyId: string, 
-  preferences: FilingPreferences
+  companyId: string,
+  preferences: Partial<FilingPreferences>
 ): Promise<ApiResponse<Company>> {
   try {
     if (API_ENABLED) {
@@ -294,46 +299,51 @@ export async function updateCompanyPreferences(
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(preferences),
+        body: JSON.stringify({ preferences }),
       });
-      
+
       if (!response.ok) {
         throw new Error(`API error: ${response.status}`);
       }
-      
+
       const data = await response.json();
       return { data };
     } else {
-      // Mock update
-      await delay(700);
-      
-      // Find the company in the mock data
-      const company = MOCK_COMPANIES.find(c => c.id === companyId);
-      if (!company) {
-        return { 
-          error: { 
-            status: 404, 
-            message: `Company with ID ${companyId} not found` 
-          } 
+      // Use our internal API to persist preferences
+      try {
+        const response = await fetch(`/api/user/tickers/${companyId}`, {
+          method: 'PATCH',
+          credentials: 'include',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ preferences }),
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.error || `API error: ${response.status}`);
+        }
+
+        const data = await response.json();
+        return { data: data.ticker };
+      } catch (apiError) {
+        console.error('Error updating preferences:', apiError);
+        return {
+          error: {
+            status: 500,
+            message: apiError instanceof Error ? apiError.message : 'Unknown error updating preferences'
+          }
         };
       }
-      
-      // Create an updated company object
-      const updatedCompany: Company = {
-        ...company,
-        preferences,
-      };
-      
-      // In a real app, we would update the database
-      return { data: updatedCompany };
     }
   } catch (error) {
     console.error('Error updating company preferences:', error);
-    return { 
-      error: { 
-        status: 500, 
-        message: error instanceof Error ? error.message : 'Unknown error updating preferences' 
-      } 
+    return {
+      error: {
+        status: 500,
+        message: error instanceof Error ? error.message : 'Unknown error updating preferences'
+      }
     };
   }
 } 

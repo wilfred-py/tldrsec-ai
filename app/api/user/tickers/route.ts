@@ -7,6 +7,28 @@ import { revalidatePath } from 'next/cache';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
+// Default filing preferences
+const DEFAULT_PREFERENCES = {
+  tenK: true,
+  tenQ: true,
+  eightK: true,
+  form4: false,
+  form3: false,
+  form5: false,
+  form144: false,
+  twentyF: false,
+  fortyF: false,
+  sixK: false,
+  sc13D: false,
+  sc13G: false,
+  thirteenF: false,
+  def14A: false,
+  pre14A: false,
+  sOne: false,
+  sThree: false,
+  other: false,
+};
+
 /**
  * GET /api/user/tickers
  * Retrieves the current user's tracked tickers
@@ -30,19 +52,25 @@ export async function GET() {
     const primaryEmail = user.emailAddresses[0].emailAddress;
 
     // Find user in database with retry logic for cold start issues
-    const dbUser = await dbRetry.query(() => 
+    const dbUser = await dbRetry.query(() =>
       prisma.user.findUnique({
         where: { email: primaryEmail },
         include: {
-          tickers: true
-        }
+          tickers: {
+            include: {
+              summaries: {
+                select: { id: true },
+              },
+            },
+          },
+        },
       })
     );
 
     if (!dbUser) {
       // Auto-create user if they don't exist in database
       console.log(`User not found. Creating new user for ${primaryEmail} with auth ID ${userId}`);
-      
+
       try {
         const newUser = await dbRetry.mutation(() =>
           prisma.user.create({
@@ -55,14 +83,24 @@ export async function GET() {
               subscriptionTier: 'FREE', // Default tier
             },
             include: {
-              tickers: true
-            }
+              tickers: {
+                include: {
+                  summaries: {
+                    select: { id: true },
+                  },
+                },
+              },
+            },
           })
         );
-        
+
         console.log('User created successfully:', newUser.id);
-        return NextResponse.json({ 
-          tickers: newUser.tickers,
+        return NextResponse.json({
+          tickers: newUser.tickers.map(ticker => ({
+            ...ticker,
+            summaryCount: ticker.summaries?.length || 0,
+            preferences: ticker.preferences || DEFAULT_PREFERENCES,
+          })),
           message: 'User created and initialized'
         });
       } catch (createError) {
@@ -71,9 +109,13 @@ export async function GET() {
       }
     }
 
-    // Return user tickers
-    return NextResponse.json({ 
-      tickers: dbUser.tickers 
+    // Return user tickers with summary count and preferences
+    return NextResponse.json({
+      tickers: dbUser.tickers.map(ticker => ({
+        ...ticker,
+        summaryCount: ticker.summaries?.length || 0,
+        preferences: ticker.preferences || DEFAULT_PREFERENCES,
+      })),
     });
   } catch (error) {
     console.error('Error fetching user tickers:', error);
@@ -146,17 +188,18 @@ export async function POST(request: Request) {
         }
       });
       
-      // Create the ticker for the new user
+      // Create the ticker for the new user with default preferences
       const newTicker = await prisma.ticker.create({
         data: {
           symbol,
           companyName,
-          userId: newUser.id
+          userId: newUser.id,
+          preferences: DEFAULT_PREFERENCES,
         }
       });
-      
+
       // Return the new ticker
-      return NextResponse.json({ 
+      return NextResponse.json({
         id: newTicker.id,
         symbol: newTicker.symbol,
         companyName: newTicker.companyName,
@@ -164,7 +207,8 @@ export async function POST(request: Request) {
         userId: newTicker.userId,
         addedAt: newTicker.addedAt,
         lastFiling: "—",
-        preferences: { tenK: true, tenQ: true, eightK: true, form4: false, other: false }
+        summaryCount: 0,
+        preferences: DEFAULT_PREFERENCES,
       });
     }
 
@@ -175,7 +219,7 @@ export async function POST(request: Request) {
 
     if (existingTicker) {
       console.log(`Ticker ${symbol} is already being tracked by user ${dbUser.id}`);
-      return NextResponse.json({ 
+      return NextResponse.json({
         id: existingTicker.id,
         symbol: existingTicker.symbol,
         companyName: existingTicker.companyName,
@@ -183,25 +227,27 @@ export async function POST(request: Request) {
         userId: existingTicker.userId,
         addedAt: existingTicker.addedAt,
         lastFiling: "—",
-        preferences: { tenK: true, tenQ: true, eightK: true, form4: false, other: false }
+        summaryCount: 0,
+        preferences: existingTicker.preferences || DEFAULT_PREFERENCES,
       });
     }
 
-    // Add ticker to user's tracked list
+    // Add ticker to user's tracked list with default preferences
     console.log(`Adding ticker ${symbol} for user ${dbUser.id}`);
     const newTicker = await prisma.ticker.create({
       data: {
         symbol,
         companyName,
-        userId: dbUser.id
+        userId: dbUser.id,
+        preferences: DEFAULT_PREFERENCES,
       }
     });
 
     // Make sure cache is refreshed
     revalidatePath('/dashboard');
-    
+
     // Return the new ticker
-    return NextResponse.json({ 
+    return NextResponse.json({
       id: newTicker.id,
       symbol: newTicker.symbol,
       companyName: newTicker.companyName,
@@ -209,7 +255,8 @@ export async function POST(request: Request) {
       userId: newTicker.userId,
       addedAt: newTicker.addedAt,
       lastFiling: "—",
-      preferences: { tenK: true, tenQ: true, eightK: true, form4: false, other: false }
+      summaryCount: 0,
+      preferences: DEFAULT_PREFERENCES,
     });
   } catch (error) {
     console.error('Error adding ticker:', error);

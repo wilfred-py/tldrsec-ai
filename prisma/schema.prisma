@@ -80,6 +80,7 @@ model Ticker {
   companyName String
   userId      String
   addedAt     DateTime    @default(now())
+  preferences Json?       // Filing type preferences (tenK, tenQ, eightK, form4, etc.)
   secFilings  SecFiling[]
   summaries   Summary[]
   user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
