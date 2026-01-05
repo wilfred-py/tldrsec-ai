@@ -13,6 +13,7 @@ This file provides a chronological index of all completed projects. For detailed
 
 | Date | Project | Status |
 |------|---------|--------|
+| 2026-01-05 | Dashboard UI Improvements (dialogs, pagination, filing prefs, skeletons) | 🔄 In Progress |
 | 2026-01-05 | Dashboard Redesign - Inline Ticker Addition (5-phase, minimalist Apple/Stripe/Cursor UI) | ✅ |
 | 2026-01-03 | Pipeline Resilience Improvements (markForRetry validation + exhausted retry cleanup) | ✅ |
 | 2026-01-03 | Pipeline Stalling Fix (job type mismatch + exhausted retry cleanup) | ✅ |
@@ -120,10 +121,10 @@ This file provides a chronological index of all completed projects. For detailed
 
 ## Archive Statistics
 - **Total Archived Projects**: 7 weekly archives (Oct-Dec 2025)
-- **Current PROGRESS.md Lines**: 605 (threshold: 500)
+- **Current PROGRESS.md Lines**: 125 (threshold: 500)
 - **Last Sync**: 2026-01-05
 - **Archive System**: ✅ ACTIVE
-- **Next Archive Check**: Dec 30 entries archivable after 2026-01-29
+- **Next Archive Check**: No archival needed (under threshold)
 
 **Archives**:
 - `29-Dec-2025.md` - Cloudflare Cron Fix, Email Quality, Form 4 Templates, JSON Parsing Phase 5
