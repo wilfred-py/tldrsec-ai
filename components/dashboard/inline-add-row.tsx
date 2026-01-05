@@ -102,7 +102,7 @@ export function InlineAddRow({
               ref={inputRef}
               type="search"
               placeholder="Type to search ticker or company..."
-              className="pl-8 h-9 bg-background"
+              className="pl-8 h-9 bg-background border-gray-200 dark:border-zinc-700"
               value={searchQuery}
               onChange={(e) => handleSearchChange(e.target.value)}
               disabled={isLoading}

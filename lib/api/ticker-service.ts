@@ -1,5 +1,5 @@
 import { Company, TickerSearchResult, ApiResponse, FilingPreferences } from './types';
-import { MOCK_COMPANIES, AVAILABLE_TICKERS } from './mock-data';
+import { AVAILABLE_TICKERS } from './mock-data';
 // import { prisma } from '@/lib/db/prisma'; // Currently unused
 
 // Environment check for API vs mock mode

@@ -13,6 +13,7 @@ This file provides a chronological index of all completed projects. For detailed
 
 | Date | Project | Status |
 |------|---------|--------|
+| 2026-01-05 | Dashboard UI Improvements (dialogs, pagination, filing prefs, skeletons) | 🔄 In Progress |
 | 2026-01-05 | Dashboard Redesign - Inline Ticker Addition (5-phase, minimalist Apple/Stripe/Cursor UI) | ✅ |
 | 2026-01-03 | Pipeline Resilience Improvements (markForRetry validation + exhausted retry cleanup) | ✅ |
 | 2026-01-03 | Pipeline Stalling Fix (job type mismatch + exhausted retry cleanup) | ✅ |
@@ -119,13 +120,15 @@ This file provides a chronological index of all completed projects. For detailed
 ---
 
 ## Archive Statistics
-- **Total Archived Projects**: 6 weekly archives (Oct-Dec 2025)
-- **Current PROGRESS.md Lines**: 645 (threshold: 500)
-- **Last Sync**: 2026-01-04
+- **Total Archived Projects**: 7 weekly archives (Oct-Dec 2025)
+- **Current PROGRESS.md Lines**: 125 (threshold: 500)
+- **Last Sync**: 2026-01-05
 - **Archive System**: ✅ ACTIVE
-- **Next Archive Check**: Dec 29 entries archivable after 2026-01-28 (25 days)
+- **Next Archive Check**: No archival needed (under threshold)
 
 **Archives**:
+- `29-Dec-2025.md` - Cloudflare Cron Fix, Email Quality, Form 4 Templates, JSON Parsing Phase 5
+- `22-Dec-2025.md` - Supabase cutover, Email link fixes, Test data integrity
 - Weekly archives in `.claude/history/2025/` (Oct-Dec)
 - See Archive Index in PROGRESS.md for full listing
 
