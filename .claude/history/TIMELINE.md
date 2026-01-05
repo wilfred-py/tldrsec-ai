@@ -13,6 +13,7 @@ This file provides a chronological index of all completed projects. For detailed
 
 | Date | Project | Status |
 |------|---------|--------|
+| 2026-01-05 | Dashboard Redesign - Inline Ticker Addition (5-phase, minimalist Apple/Stripe/Cursor UI) | ✅ |
 | 2026-01-03 | Pipeline Resilience Improvements (markForRetry validation + exhausted retry cleanup) | ✅ |
 | 2026-01-03 | Pipeline Stalling Fix (job type mismatch + exhausted retry cleanup) | ✅ |
 | 2026-01-03 | Stripe Deployment (env vars + webhook config on Vercel) | ✅ |
