@@ -33,11 +33,20 @@ This plan addresses all identified vulnerabilities preventing 100% pipeline upti
 
 After implementation, the pipeline will:
 
-1. **Detect within 5 minutes** any condition that could stall the pipeline
+1. **Detect within 15 minutes** any condition that could stall the pipeline (via Cloudflare's `/15 auto-recover`)
 2. **Auto-remediate within 15 minutes** without human intervention
 3. **Never accumulate backlog** - jobs either complete or fail, never stuck indefinitely
-4. **Have redundant triggers** - Vercel cron backs up Cloudflare Worker
+4. **Self-heal completely** - Auto-recovery fixes ALL stuck job states, not just locks
 5. **Alert immediately** on any anomaly via Slack
+
+### Constraint: Vercel Hobby Plan
+
+**Important**: This project uses Vercel's free Hobby plan which has severe cron limitations:
+- Only **2 cron jobs** allowed (1 already used by `/api/cron/tier-aware`)
+- **Daily frequency only** (not every 10-15 minutes)
+- **10-second function timeout** (vs 300s on Pro)
+
+Therefore, **Cloudflare Worker remains the sole cron trigger**. The strategy is to make auto-recovery comprehensive enough that the 15-minute Cloudflare cycle can fix everything.
 
 ### Success Metrics
 
@@ -78,169 +87,17 @@ Applying Elon's 5-Step Engineering Algorithm:
 1. **Question requirements** - Do we need 100% uptime? Yes - 41-hour stall lost user trust
 2. **Delete unnecessary complexity** - Remove unused legacy job types, simplify health checks
 3. **Simplify** - Single source of truth for job validity, one health endpoint that checks everything
-4. **Accelerate** - Add Vercel cron backup first (immediate protection)
+4. **Accelerate** - Make auto-recovery comprehensive so Cloudflare's 15-min cycle fixes everything
 5. **Automate** - Proactive cleanup runs automatically, not just on request
 
 ---
 
-## Phase 1: Add Vercel Cron Redundancy (Immediate Protection)
-
-### Overview
-Add Vercel-native cron triggers for critical queue processing endpoints to eliminate Cloudflare Worker as single point of failure.
-
-### Step 1.1: Write Failing Tests
-
-**Test File**: `__tests__/api/cron/vercel-cron-redundancy.test.ts`
-
-```typescript
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-
-describe('Vercel Cron Redundancy', () => {
-  describe('vercel.json configuration', () => {
-    it('should have process-filing-queue cron for queue processing', async () => {
-      const vercelConfig = await import('../../../vercel.json');
-      const cronPaths = vercelConfig.crons.map((c: any) => c.path);
-      expect(cronPaths).toContain('/api/cron/process-filing-queue');
-    });
-
-    it('should have auto-recover cron as backup', async () => {
-      const vercelConfig = await import('../../../vercel.json');
-      const cronPaths = vercelConfig.crons.map((c: any) => c.path);
-      expect(cronPaths).toContain('/api/cron/auto-recover');
-    });
-
-    it('should run process-filing-queue every 10 minutes', async () => {
-      const vercelConfig = await import('../../../vercel.json');
-      const queueCron = vercelConfig.crons.find((c: any) =>
-        c.path === '/api/cron/process-filing-queue'
-      );
-      expect(queueCron.schedule).toBe('*/10 * * * *');
-    });
-  });
-
-  describe('process-filing-queue endpoint', () => {
-    it('should accept Vercel cron header as valid auth', async () => {
-      // Test that x-vercel-cron-signature header is accepted
-    });
-
-    it('should process all job types when no jobTypes param', async () => {
-      // Test default behavior processes discovery, fetch, summarize
-    });
-  });
-});
-```
-
-**Checkpoint 1.1**: Run tests and verify they FAIL:
-```bash
-npm run test -- --testPathPattern="vercel-cron-redundancy"
-# Expected: 4 failing tests (config not updated, auth not implemented)
-```
-
-### Step 1.2: Implement Vercel Cron Configuration
-
-#### 1.2.1 Update vercel.json
-**File**: `vercel.json`
-**Changes**: Add redundant cron entries
-
-```json
-{
-  "crons": [
-    {
-      "path": "/api/cron/tier-aware",
-      "schedule": "0 9 * * 1,2,3,4,5"
-    },
-    {
-      "path": "/api/cron/process-filing-queue",
-      "schedule": "*/10 * * * *"
-    },
-    {
-      "path": "/api/cron/auto-recover",
-      "schedule": "*/15 * * * *"
-    }
-  ]
-}
-```
-
-**Checkpoint 1.2.1**: Verify config is valid JSON:
-```bash
-cat vercel.json | jq .crons
-# Expected: Array with 3 cron entries
-```
-
-#### 1.2.2 Update Auth Service for Vercel Cron
-**File**: `lib/cron/auth-service.ts`
-**Changes**: Accept Vercel-native cron header
-
-```typescript
-// Add to validateCronRequest():
-// Check for Vercel's internal cron header (set automatically by Vercel)
-const vercelCronHeader = request.headers.get('x-vercel-cron');
-if (vercelCronHeader === '1') {
-  // Vercel cron trigger - trusted source
-  return { isValid: true, source: 'vercel-cron' };
-}
-```
-
-**Checkpoint 1.2.2**: Auth service accepts Vercel header:
-```bash
-npm run test -- --testPathPattern="auth-service" --testNamePattern="vercel"
-# Expected: 1 passing
-```
-
-#### 1.2.3 Update process-filing-queue for Default Job Types
-**File**: `app/api/cron/process-filing-queue/route.ts`
-**Changes**: Process all job types when called without parameters
-
-```typescript
-// At line ~170, change validation to:
-const jobTypesParam = searchParams.get('jobTypes');
-const jobTypes = jobTypesParam
-  ? jobTypesParam.split(',').map(t => t.trim().toUpperCase())
-  : ['ASYNC_DISCOVER_FILINGS', 'ASYNC_FETCH_FILING', 'ASYNC_SUMMARIZE_CACHED'];
-```
-
-**Checkpoint 1.2.3**: All tests pass:
-```bash
-npm run test -- --testPathPattern="vercel-cron-redundancy"
-# Expected: 4 passing
-```
-
-### Step 1.3: Refactor
-
-- [ ] Add JSDoc explaining Vercel cron backup purpose
-- [ ] Add logging to distinguish Vercel vs Cloudflare triggers
-- [ ] Update CLAUDE.md with new cron configuration
-
-**Checkpoint 1.3**: All tests still pass:
-```bash
-npm run test -- --testPathPattern="vercel-cron-redundancy"
-# Expected: 4 passing
-```
-
-### Step 1.4: Final Phase Verification
-
-#### Automated Verification:
-- [ ] All phase tests pass: `npm run test -- --testPathPattern="vercel-cron-redundancy"`
-- [ ] Type checking passes: `npm run build`
-- [ ] Linting passes: `npm run lint`
-- [ ] vercel.json is valid: `cat vercel.json | jq .`
-
-#### Manual Verification:
-- [ ] Deploy to Vercel preview
-- [ ] Check Vercel dashboard shows new cron schedules
-- [ ] Verify first Vercel cron execution in logs
-- [ ] Confirm Cloudflare Worker still works alongside Vercel crons
-
-**STOP**: After completing this phase and all verification passes, pause for manual confirmation before Phase 2.
-
----
-
-## Phase 2: Enhanced Health Check - Detect All Stuck Job States
+## Phase 1: Enhanced Health Check - Detect All Stuck Job States
 
 ### Overview
 Upgrade `/api/health/pipeline` to detect ALL conditions that can stall the pipeline, including the RETRYING jobs with exhausted retries that caused the 41-hour stall.
 
-### Step 2.1: Write Failing Tests
+### Step 1.1: Write Failing Tests
 
 **Test File**: `__tests__/api/health/pipeline-exhaustive-detection.test.ts`
 
@@ -351,15 +208,15 @@ describe('Pipeline Health - Exhaustive Detection', () => {
 });
 ```
 
-**Checkpoint 2.1**: Run tests and verify they FAIL:
+**Checkpoint 1.1**: Run tests and verify they FAIL:
 ```bash
 npm run test -- --testPathPattern="pipeline-exhaustive-detection"
 # Expected: 5 failing tests (health check doesn't detect these conditions)
 ```
 
-### Step 2.2: Implement Enhanced Health Detection
+### Step 1.2: Implement Enhanced Health Detection
 
-#### 2.2.1 Add Exhausted Retry Detection
+#### 1.2.1 Add Exhausted Retry Detection
 **File**: `app/api/health/pipeline/route.ts`
 **Changes**: Add query for exhausted RETRYING jobs after line ~160
 
@@ -379,13 +236,13 @@ if (exhaustedRetrying > 0) {
 }
 ```
 
-**Checkpoint 2.2.1**: First test passes:
+**Checkpoint 1.2.1**: First test passes:
 ```bash
 npm run test -- --testPathPattern="pipeline-exhaustive-detection" --testNamePattern="exhausted"
 # Expected: 2 passing
 ```
 
-#### 2.2.2 Add Stale PROCESSING Detection
+#### 1.2.2 Add Stale PROCESSING Detection
 **File**: `app/api/health/pipeline/route.ts`
 **Changes**: Add query for old PROCESSING jobs
 
@@ -404,13 +261,13 @@ if (staleProcessingCount > 0) {
 }
 ```
 
-**Checkpoint 2.2.2**: Third test passes:
+**Checkpoint 1.2.2**: Third test passes:
 ```bash
 npm run test -- --testPathPattern="pipeline-exhaustive-detection" --testNamePattern="PROCESSING"
 # Expected: 1 passing
 ```
 
-#### 2.2.3 Add Invalid Job Type Detection
+#### 1.2.3 Add Invalid Job Type Detection
 **File**: `app/api/health/pipeline/route.ts`
 **Changes**: Add query for invalid job types
 
@@ -434,13 +291,13 @@ if (invalidTypeCount > 0) {
 }
 ```
 
-**Checkpoint 2.2.3**: Fourth test passes:
+**Checkpoint 1.2.3**: Fourth test passes:
 ```bash
 npm run test -- --testPathPattern="pipeline-exhaustive-detection" --testNamePattern="invalid"
 # Expected: 1 passing
 ```
 
-#### 2.2.4 Update Status Determination Logic
+#### 1.2.4 Update Status Determination Logic
 **File**: `app/api/health/pipeline/route.ts`
 **Changes**: Update status logic to include new conditions
 
@@ -468,25 +325,25 @@ else if (
 }
 ```
 
-**Checkpoint 2.2.4**: All tests pass:
+**Checkpoint 1.2.4**: All tests pass:
 ```bash
 npm run test -- --testPathPattern="pipeline-exhaustive-detection"
 # Expected: 5 passing
 ```
 
-### Step 2.3: Refactor
+### Step 1.3: Refactor
 
 - [ ] Extract magic numbers to named constants at top of file
 - [ ] Add JSDoc for each new detection type
 - [ ] Add metrics to response for dashboard visualization
 
-**Checkpoint 2.3**: Tests still pass:
+**Checkpoint 1.3**: Tests still pass:
 ```bash
 npm run test -- --testPathPattern="pipeline-exhaustive-detection"
 # Expected: 5 passing
 ```
 
-### Step 2.4: Final Phase Verification
+### Step 1.4: Final Phase Verification
 
 #### Automated Verification:
 - [ ] All phase tests pass: `npm run test -- --testPathPattern="pipeline-exhaustive-detection"`
@@ -499,65 +356,140 @@ npm run test -- --testPathPattern="pipeline-exhaustive-detection"
 - [ ] Hit `/api/health/pipeline` and verify CRITICAL status
 - [ ] Delete test job and verify HEALTHY status returns
 
-**STOP**: After completing this phase and all verification passes, pause for manual confirmation before Phase 3.
+**STOP**: After completing this phase and all verification passes, pause for manual confirmation before Phase 2.
 
 ---
 
-## Phase 3: Proactive Auto-Recovery - Act on DEGRADED, Not Just CRITICAL
+## Phase 2: Comprehensive Self-Healing Auto-Recovery
 
 ### Overview
-Upgrade `/api/cron/auto-recover` to take action on DEGRADED status (not just CRITICAL) and add proactive cleanup of stuck jobs.
+Upgrade `/api/cron/auto-recover` to be **fully self-healing** - detecting AND fixing ALL pipeline stall conditions in a single 15-minute Cloudflare cycle. This is critical since Cloudflare Worker is the sole trigger (Vercel Hobby plan cannot provide cron redundancy).
 
-### Step 3.1: Write Failing Tests
+**Key Design Principle**: Every auto-recovery execution should:
+1. Check for ALL stuck job conditions (not just locks)
+2. Immediately clean up ANY stuck jobs found (no waiting for DEGRADED threshold for CRITICAL issues)
+3. Report all actions taken via Slack
+
+### Step 2.1: Write Failing Tests
 
 **Test File**: `__tests__/api/cron/auto-recover-proactive.test.ts`
 
 ```typescript
-describe('Proactive Auto-Recovery', () => {
-  describe('DEGRADED status handling', () => {
-    it('should trigger cleanup on DEGRADED after 30 minutes', async () => {
+describe('Comprehensive Self-Healing Auto-Recovery', () => {
+  describe('CRITICAL conditions - immediate cleanup', () => {
+    it('should IMMEDIATELY clean exhausted RETRYING jobs on first detection', async () => {
+      // Create exhausted jobs
+      await createExhaustedRetryingJobs(5);
+
+      // Trigger single auto-recovery
+      const result = await triggerAutoRecovery();
+
+      // Verify immediate cleanup (no waiting for DEGRADED threshold)
+      expect(result.action).toBe('immediate-cleanup');
+      expect(result.cleanedJobs).toBe(5);
+
+      // Verify all cleaned
+      const remaining = await getExhaustedRetryingJobs();
+      expect(remaining.length).toBe(0);
+    });
+
+    it('should IMMEDIATELY clean invalid job types on first detection', async () => {
+      // Create invalid type job, trigger recovery, verify FAILED immediately
+    });
+
+    it('should clean stale PROCESSING jobs (>15 min) on first detection', async () => {
+      // Create stale processing job, trigger recovery, verify reset
+    });
+  });
+
+  describe('DEGRADED status handling - delayed action', () => {
+    it('should trigger general cleanup on DEGRADED after 30 minutes', async () => {
       // Mock health returning DEGRADED for 30+ minutes
-      // Expect cleanup action
+      // Expect cleanup action for non-critical issues
     });
 
-    it('should NOT trigger cleanup on first DEGRADED detection', async () => {
-      // First detection should be monitoring only
-    });
-
-    it('should track consecutive DEGRADED count', async () => {
+    it('should track consecutive DEGRADED count in state', async () => {
       // State should persist degraded counter
     });
   });
 
-  describe('Exhausted retry job cleanup', () => {
-    it('should clean exhausted RETRYING jobs as part of recovery', async () => {
-      // Create exhausted jobs, trigger recovery, verify cleanup
+  describe('Cleanup reporting', () => {
+    it('should log count of all cleaned jobs by type', async () => {
+      // Verify logging includes breakdown: exhausted, invalid, stale
     });
 
-    it('should log count of cleaned exhausted jobs', async () => {
-      // Verify logging for visibility
-    });
-  });
-
-  describe('Invalid job type cleanup', () => {
-    it('should mark invalid job type jobs as FAILED', async () => {
-      // Create invalid type job, trigger recovery, verify FAILED
+    it('should send Slack notification with cleanup summary', async () => {
+      // Verify Slack message includes all cleanup actions
     });
   });
 });
 ```
 
-**Checkpoint 3.1**: Tests fail as expected:
+**Checkpoint 2.1**: Tests fail as expected:
 ```bash
 npm run test -- --testPathPattern="auto-recover-proactive"
-# Expected: 6 failing tests
+# Expected: 7 failing tests (3 immediate cleanup, 2 DEGRADED, 2 reporting)
 ```
 
-### Step 3.2: Implement Proactive Recovery
+### Step 2.2: Implement Comprehensive Self-Healing
 
-#### 3.2.1 Add DEGRADED Counter and Threshold
+#### 2.2.1 Add Immediate Cleanup for CRITICAL Conditions
 **File**: `app/api/cron/auto-recover/route.ts`
-**Changes**: Track consecutive DEGRADED states
+**Changes**: Run cleanup checks EVERY execution, not just on CRITICAL status
+
+```typescript
+// At the START of auto-recovery (before checking health status):
+// Always check for and clean stuck jobs immediately
+const cleanupResults = await runImmediateCleanup();
+
+interface CleanupResults {
+  exhaustedRetrying: number;
+  invalidJobTypes: number;
+  staleProcessing: number;
+  staleLocks: number;
+}
+
+async function runImmediateCleanup(): Promise<CleanupResults> {
+  const results: CleanupResults = {
+    exhaustedRetrying: 0,
+    invalidJobTypes: 0,
+    staleProcessing: 0,
+    staleLocks: 0,
+  };
+
+  // 1. Clean exhausted RETRYING jobs (CRITICAL - clean immediately)
+  results.exhaustedRetrying = await cleanupExhaustedRetryJobs();
+
+  // 2. Clean invalid job types (CRITICAL - clean immediately)
+  results.invalidJobTypes = await cleanupInvalidJobTypes();
+
+  // 3. Reset stale PROCESSING jobs (>15 min) back to PENDING
+  results.staleProcessing = await resetStaleProcessingJobs();
+
+  // 4. Clean stale locks (existing functionality)
+  results.staleLocks = await cleanupStaleLocks();
+
+  return results;
+}
+
+// Then determine status for Slack reporting:
+const totalCleaned = Object.values(cleanupResults).reduce((a, b) => a + b, 0);
+if (totalCleaned > 0) {
+  action = 'immediate-cleanup';
+  reason = `Cleaned ${totalCleaned} stuck jobs`;
+  await sendSlackCleanupNotification(cleanupResults);
+}
+```
+
+**Checkpoint 2.2.1**: First 3 tests pass (immediate cleanup):
+```bash
+npm run test -- --testPathPattern="auto-recover-proactive" --testNamePattern="CRITICAL"
+# Expected: 3 passing
+```
+
+#### 2.2.2 Add DEGRADED Counter for Non-Critical Issues
+**File**: `app/api/cron/auto-recover/route.ts`
+**Changes**: Track consecutive DEGRADED states for slower-moving issues
 
 ```typescript
 // Add to recoveryState interface:
@@ -570,34 +502,36 @@ interface RecoveryState {
 // Add constant:
 const DEGRADED_ACTION_THRESHOLD = 6; // 6 checks * 5 min = 30 min of degraded
 
-// In decision logic, add handling for DEGRADED:
-else if (health.status === 'DEGRADED') {
+// AFTER immediate cleanup, check remaining health status:
+const health = await getHealthStatus();
+
+if (health.status === 'DEGRADED') {
   recoveryState.consecutiveDegraded++;
 
   if (recoveryState.consecutiveDegraded >= DEGRADED_ACTION_THRESHOLD) {
-    // Trigger proactive cleanup after 30 min of degraded
-    action = 'proactive-cleanup';
+    // Trigger deeper investigation after 30 min
+    action = 'proactive-investigation';
     reason = `Pipeline degraded for ${recoveryState.consecutiveDegraded * 5} minutes`;
-    await triggerProactiveCleanup();
     recoveryState.consecutiveDegraded = 0;
-  } else {
-    action = 'monitoring';
-    reason = `Pipeline degraded (${recoveryState.consecutiveDegraded}/${DEGRADED_ACTION_THRESHOLD} checks)`;
   }
+} else {
+  // Reset counter on healthy status
+  recoveryState.consecutiveDegraded = 0;
 }
 ```
 
-**Checkpoint 3.2.1**: First 3 tests pass:
+**Checkpoint 2.2.2**: DEGRADED tests pass:
 ```bash
 npm run test -- --testPathPattern="auto-recover-proactive" --testNamePattern="DEGRADED"
-# Expected: 3 passing
+# Expected: 2 passing
 ```
 
-#### 3.2.2 Add Exhausted Job Cleanup Function
+#### 2.2.3 Add Cleanup Helper Functions
 **File**: `app/api/cron/auto-recover/route.ts`
-**Changes**: Add cleanup function
+**Changes**: Add cleanup functions for each stuck job type
 
 ```typescript
+// Cleanup exhausted RETRYING jobs
 async function cleanupExhaustedRetryJobs(): Promise<number> {
   const result = await prisma.$executeRaw`
     UPDATE pipeline."JobQueue"
@@ -610,15 +544,30 @@ async function cleanupExhaustedRetryJobs(): Promise<number> {
   `;
   return result;
 }
+
+// Reset stale PROCESSING jobs back to PENDING for retry
+async function resetStaleProcessingJobs(): Promise<number> {
+  const STALE_PROCESSING_MINUTES = 15;
+  const result = await prisma.$executeRaw`
+    UPDATE pipeline."JobQueue"
+    SET
+      status = 'PENDING',
+      "startedAt" = NULL,
+      "lastError" = 'Auto-recovery: Reset stale PROCESSING job'
+    WHERE status = 'PROCESSING'
+      AND "startedAt" < NOW() - INTERVAL '${STALE_PROCESSING_MINUTES} minutes'
+  `;
+  return result;
+}
 ```
 
-**Checkpoint 3.2.2**: Next 2 tests pass:
+**Checkpoint 2.2.3**: Cleanup function tests pass:
 ```bash
-npm run test -- --testPathPattern="auto-recover-proactive" --testNamePattern="exhausted"
-# Expected: 2 passing
+npm run test -- --testPathPattern="auto-recover-proactive" --testNamePattern="cleanup"
+# Expected: 3 passing
 ```
 
-#### 3.2.3 Add Invalid Job Type Cleanup
+#### 2.2.4 Add Invalid Job Type Cleanup
 **File**: `app/api/cron/auto-recover/route.ts`
 **Changes**: Add invalid type cleanup
 
@@ -643,21 +592,53 @@ async function cleanupInvalidJobTypes(): Promise<number> {
 }
 ```
 
-**Checkpoint 3.2.3**: All tests pass:
+**Checkpoint 2.2.4**: All tests pass:
 ```bash
 npm run test -- --testPathPattern="auto-recover-proactive"
-# Expected: 6 passing
+# Expected: 7 passing
 ```
 
-### Step 3.3: Refactor
+#### 2.2.5 Add Slack Cleanup Notification
+**File**: `app/api/cron/auto-recover/route.ts`
+**Changes**: Send detailed Slack notification for any cleanup actions
 
-- [ ] Extract cleanup functions to shared utility
-- [ ] Add Slack notification for proactive cleanup actions
-- [ ] Add metrics for cleanup counts
+```typescript
+async function sendSlackCleanupNotification(results: CleanupResults): Promise<void> {
+  const totalCleaned = Object.values(results).reduce((a, b) => a + b, 0);
+  if (totalCleaned === 0) return;
 
-**Checkpoint 3.3**: Tests still pass after refactoring.
+  const blocks = [
+    {
+      type: 'section',
+      text: {
+        type: 'mrkdwn',
+        text: `⚠️ *Auto-Recovery Cleaned ${totalCleaned} Stuck Jobs*`,
+      },
+    },
+    {
+      type: 'section',
+      fields: [
+        { type: 'mrkdwn', text: `*Exhausted Retrying:* ${results.exhaustedRetrying}` },
+        { type: 'mrkdwn', text: `*Invalid Job Types:* ${results.invalidJobTypes}` },
+        { type: 'mrkdwn', text: `*Stale Processing:* ${results.staleProcessing}` },
+        { type: 'mrkdwn', text: `*Stale Locks:* ${results.staleLocks}` },
+      ],
+    },
+  ];
 
-### Step 3.4: Final Phase Verification
+  await sendSlackMessage(blocks);
+}
+```
+
+### Step 2.3: Refactor
+
+- [ ] Extract cleanup functions to `lib/jobs/stuck-job-cleaner.ts` for reuse
+- [ ] Add structured logging with cleanup breakdown
+- [ ] Add metrics for cleanup counts per type
+
+**Checkpoint 2.3**: Tests still pass after refactoring.
+
+### Step 2.4: Final Phase Verification
 
 #### Automated Verification:
 - [ ] All phase tests pass
@@ -666,21 +647,24 @@ npm run test -- --testPathPattern="auto-recover-proactive"
 - [ ] No regressions
 
 #### Manual Verification:
-- [ ] Create degraded condition (e.g., old pending jobs)
-- [ ] Wait for 6 auto-recovery cycles (30 min simulated or real)
-- [ ] Verify proactive cleanup triggers
-- [ ] Check Slack notification received
+- [ ] Create exhausted RETRYING job via Prisma Studio
+- [ ] Trigger single auto-recovery call
+- [ ] Verify job is cleaned up IMMEDIATELY (no waiting)
+- [ ] Check Slack notification received with cleanup details
+- [ ] Verify health endpoint now shows HEALTHY
 
-**STOP**: Pause for manual confirmation before Phase 4.
+**Key Validation**: A single auto-recovery execution should fix ALL stuck job conditions. This is critical since Cloudflare Worker is the sole trigger.
+
+**STOP**: Pause for manual confirmation before Phase 3.
 
 ---
 
-## Phase 4: Maximum Lock Hold Time Enforcement
+## Phase 3: Maximum Lock Hold Time Enforcement
 
 ### Overview
 Add absolute maximum lock hold time to prevent hung processes from blocking the pipeline indefinitely.
 
-### Step 4.1: Write Failing Tests
+### Step 3.1: Write Failing Tests
 
 **Test File**: `__tests__/lib/db/distributed-lock-max-hold.test.ts`
 
@@ -709,15 +693,15 @@ describe('Distributed Lock Maximum Hold Time', () => {
 });
 ```
 
-**Checkpoint 4.1**: Tests fail (max hold time not implemented):
+**Checkpoint 3.1**: Tests fail (max hold time not implemented):
 ```bash
 npm run test -- --testPathPattern="distributed-lock-max-hold"
 # Expected: 3 failing tests
 ```
 
-### Step 4.2: Implement Maximum Hold Time
+### Step 3.2: Implement Maximum Hold Time
 
-#### 4.2.1 Add Max Hold Time Constant
+#### 3.2.1 Add Max Hold Time Constant
 **File**: `lib/db/distributed-lock.ts`
 **Changes**: Add constant and validation
 
@@ -729,7 +713,7 @@ const effectiveTtl = Math.min(options.ttl || this.defaultTtl, MAX_ABSOLUTE_HOLD_
 const absoluteExpiresAt = new Date(Date.now() + MAX_ABSOLUTE_HOLD_TIME_MS);
 ```
 
-#### 4.2.2 Stop Renewal at Absolute Expiry
+#### 3.2.2 Stop Renewal at Absolute Expiry
 **File**: `lib/db/distributed-lock.ts`
 **Changes**: Check absolute expiry in renewal
 
@@ -742,18 +726,18 @@ if (Date.now() >= lockContext.absoluteExpiresAt.getTime()) {
 }
 ```
 
-**Checkpoint 4.2.2**: All tests pass:
+**Checkpoint 3.2.2**: All tests pass:
 ```bash
 npm run test -- --testPathPattern="distributed-lock-max-hold"
 # Expected: 3 passing
 ```
 
-### Step 4.3: Refactor
+### Step 3.3: Refactor
 
 - [ ] Add logging when lock TTL is capped
 - [ ] Add metric for locks approaching max hold time
 
-### Step 4.4: Final Phase Verification
+### Step 3.4: Final Phase Verification
 
 #### Automated Verification:
 - [ ] All phase tests pass
@@ -765,16 +749,16 @@ npm run test -- --testPathPattern="distributed-lock-max-hold"
 - [ ] Verify renewal stops at 30 minutes
 - [ ] Verify lock released automatically
 
-**STOP**: Pause for manual confirmation before Phase 5.
+**STOP**: Pause for manual confirmation before Phase 4.
 
 ---
 
-## Phase 5: Comprehensive E2E Pipeline Health Test
+## Phase 4: Comprehensive E2E Pipeline Health Test
 
 ### Overview
 Create an E2E test that validates the entire pipeline can recover from any stuck state automatically.
 
-### Step 5.1: Write E2E Test Suite
+### Step 4.1: Write E2E Test Suite
 
 **Test File**: `__tests__/e2e/pipeline-auto-recovery.test.ts`
 
@@ -827,9 +811,9 @@ describe('E2E Pipeline Auto-Recovery', () => {
 });
 ```
 
-**Checkpoint 5.1**: Create test file and verify structure.
+**Checkpoint 4.1**: Create test file and verify structure.
 
-### Step 5.2: Implement Test Utilities
+### Step 4.2: Implement Test Utilities
 
 **File**: `__tests__/e2e/utils/pipeline-test-helpers.ts`
 
@@ -862,7 +846,7 @@ export async function triggerAutoRecovery(): Promise<void> {
 }
 ```
 
-### Step 5.3: Final Phase Verification
+### Step 4.3: Final Phase Verification
 
 #### Automated Verification:
 - [ ] E2E tests pass: `npm run test:e2e:pipeline-recovery`
@@ -872,16 +856,16 @@ export async function triggerAutoRecovery(): Promise<void> {
 - [ ] Verify all scenarios complete successfully
 - [ ] Check Slack alerts were sent for detected issues
 
-**STOP**: Pause for manual confirmation before Phase 6.
+**STOP**: Pause for manual confirmation before Phase 5.
 
 ---
 
-## Phase 6: Documentation and Runbook
+## Phase 5: Documentation and Runbook
 
 ### Overview
 Document all recovery procedures and update monitoring dashboards.
 
-### Step 6.1: Create Operations Runbook
+### Step 5.1: Create Operations Runbook
 
 **File**: `docs/operations/pipeline-recovery-runbook.md`
 
@@ -891,7 +875,7 @@ Contents:
 3. Escalation paths
 4. Common failure patterns and solutions
 
-### Step 6.2: Update Monitoring Dashboard
+### Step 5.2: Update Monitoring Dashboard
 
 **File**: `components/dashboard/pipeline-health-panel.tsx`
 
@@ -901,7 +885,7 @@ Add visualization for:
 - Stale PROCESSING job count
 - Time since last successful completion
 
-### Step 6.3: Final Phase Verification
+### Step 5.3: Final Phase Verification
 
 #### Automated Verification:
 - [ ] Documentation renders correctly
@@ -1002,9 +986,8 @@ If issues arise:
 
 | Phase | Change | Files Modified |
 |-------|--------|----------------|
-| 1 | Vercel cron redundancy | `vercel.json`, `lib/cron/auth-service.ts`, `app/api/cron/process-filing-queue/route.ts` |
-| 2 | Enhanced health detection | `app/api/health/pipeline/route.ts` |
-| 3 | Proactive auto-recovery | `app/api/cron/auto-recover/route.ts` |
-| 4 | Max lock hold time | `lib/db/distributed-lock.ts` |
-| 5 | E2E recovery test | `__tests__/e2e/pipeline-auto-recovery.test.ts` |
-| 6 | Documentation | `docs/operations/pipeline-recovery-runbook.md` |
+| 1 | Enhanced health detection | `app/api/health/pipeline/route.ts` |
+| 2 | Comprehensive self-healing auto-recovery | `app/api/cron/auto-recover/route.ts` |
+| 3 | Max lock hold time | `lib/db/distributed-lock.ts` |
+| 4 | E2E recovery test | `__tests__/e2e/pipeline-auto-recovery.test.ts` |
+| 5 | Documentation | `docs/operations/pipeline-recovery-runbook.md` |
