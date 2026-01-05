@@ -24,6 +24,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   Dialog,
   DialogContent,
@@ -122,28 +123,35 @@ export function DashboardClient() {
     }
   }, [loadCompanies]);
 
-  // Prefetch all companies for search
-  useEffect(() => {
-    const prefetchCompanies = async () => {
-      try {
-        const response = await fetch("/api/companies/list");
-        if (response.ok) {
-          const data = (await response.json()) as { companies?: Array<{ symbol: string; name: string }> };
-          if (data.companies && Array.isArray(data.companies)) {
-            setAllCompanies(data.companies);
-            setCompaniesLoaded(true);
-          }
+  // Lazy-load companies for search - only fetch when user clicks Add Ticker
+  const loadCompaniesForSearch = useCallback(async () => {
+    if (companiesLoaded) return; // Already loaded
+    try {
+      const response = await fetch("/api/companies/list");
+      if (response.ok) {
+        const data = (await response.json()) as { companies?: Array<{ symbol: string; name: string }> };
+        if (data.companies && Array.isArray(data.companies)) {
+          setAllCompanies(data.companies);
+          setCompaniesLoaded(true);
         }
-      } catch (error) {
-        console.error("Error prefetching companies:", error);
       }
-    };
-    prefetchCompanies();
-  }, []);
+    } catch (error) {
+      console.error("Error loading companies for search:", error);
+    }
+  }, [companiesLoaded]);
 
   // Handle adding a ticker
   const handleAddTicker = async (symbol: string, name: string) => {
     setShowInlineAdd(false); // Close inline row
+
+    // Check if this ticker already exists to prevent duplicates
+    const alreadyTracked = companies.some(
+      (company) => company.symbol.toUpperCase() === symbol.toUpperCase()
+    );
+    if (alreadyTracked) {
+      toast.info(`${symbol} is already in your tracked companies`);
+      return;
+    }
 
     // Create a new company object for optimistic update
     const newCompany: Company = {
@@ -163,18 +171,7 @@ export function DashboardClient() {
     };
 
     // Optimistically add the company to the list to reduce perceived latency
-    setCompanies((prevCompanies) => {
-      // Check if this ticker already exists to prevent duplicates
-      const exists = prevCompanies.some(
-        (company) => company.symbol === symbol
-      );
-      if (exists) {
-        // If it exists, don't add it again
-        return prevCompanies;
-      }
-      // Add the new company to the beginning of the list
-      return [newCompany, ...prevCompanies];
-    });
+    setCompanies((prevCompanies) => [newCompany, ...prevCompanies]);
 
     try {
       // Add the ticker to the database
@@ -462,17 +459,16 @@ export function DashboardClient() {
 
             <div className="flex gap-2">
               <Button
-                onClick={() => setShowInlineAdd(true)}
+                onClick={() => {
+                  loadCompaniesForSearch(); // Lazy load companies on first click
+                  setShowInlineAdd(true);
+                }}
                 className="gap-1 bg-primary hover:bg-primary/90 text-primary-foreground font-medium shadow-sm"
                 data-tutorial="add-ticker"
-                disabled={showInlineAdd || !companiesLoaded}
+                disabled={showInlineAdd}
                 size="lg"
               >
-                {!companiesLoaded ? (
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                ) : (
-                  <PlusIcon className="h-5 w-5 mr-1" />
-                )}
+                <PlusIcon className="h-5 w-5 mr-1" />
                 <span className="hidden sm:inline">Add Ticker</span>
                 <span className="inline sm:hidden">Add</span>
               </Button>
@@ -481,11 +477,30 @@ export function DashboardClient() {
         </div>
 
         {isLoadingCompanies ? (
-          <div className="flex min-h-[200px] flex-col items-center justify-center rounded-md border border-dashed p-4 sm:p-8 text-center space-y-3">
-            <Loader2 className="h-6 w-6 text-muted-foreground animate-spin" />
-            <p className="text-sm text-muted-foreground">
-              Loading tracked companies...
-            </p>
+          <div className="space-y-2">
+            {/* Skeleton table header */}
+            <div className="hidden sm:flex items-center gap-4 px-4 py-3 border-b">
+              <Skeleton className="h-4 w-16" />
+              <Skeleton className="h-4 w-32" />
+              <Skeleton className="h-4 w-24" />
+              <Skeleton className="h-4 w-20" />
+              <Skeleton className="h-4 w-8" />
+              <Skeleton className="h-4 w-8" />
+            </div>
+            {/* Skeleton rows */}
+            {[...Array(5)].map((_, i) => (
+              <div
+                key={i}
+                className="flex items-center gap-4 px-4 py-3 border-b animate-pulse"
+              >
+                <Skeleton className="h-5 w-14" />
+                <Skeleton className="h-4 w-40" />
+                <Skeleton className="h-4 w-20" />
+                <Skeleton className="h-4 w-8" />
+                <Skeleton className="h-8 w-8 rounded" />
+                <Skeleton className="h-8 w-8 rounded" />
+              </div>
+            ))}
           </div>
         ) : showEmptyState ? (
           <div className="flex min-h-[200px] flex-col items-center justify-center rounded-md border border-dashed p-4 sm:p-8 text-center space-y-4">
@@ -496,20 +511,13 @@ export function DashboardClient() {
             <Button
               className="mt-2 bg-primary hover:bg-primary/90"
               size="lg"
-              onClick={() => setShowInlineAdd(true)}
-              disabled={!companiesLoaded}
+              onClick={() => {
+                loadCompaniesForSearch(); // Lazy load companies on first click
+                setShowInlineAdd(true);
+              }}
             >
-              {!companiesLoaded ? (
-                <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Loading...
-                </>
-              ) : (
-                <>
-                  <PlusIcon className="h-5 w-5 mr-1" />
-                  Add Your First Company
-                </>
-              )}
+              <PlusIcon className="h-5 w-5 mr-1" />
+              Add Your First Company
             </Button>
             {/* Show inline search in empty state */}
             {showInlineAdd && (
@@ -637,24 +645,81 @@ export function DashboardClient() {
                     Page {table.getState().pagination.pageIndex + 1} of{" "}
                     {table.getPageCount()}
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1">
                     <Button
                       variant="outline"
-                      size="sm"
+                      size="icon"
+                      className="h-8 w-8"
                       onClick={() => table.previousPage()}
                       disabled={!table.getCanPreviousPage()}
                     >
-                      <ChevronLeft className="h-4 w-4 mr-1" />
-                      Previous
+                      <ChevronLeft className="h-4 w-4" />
                     </Button>
+                    {/* Page number buttons */}
+                    {(() => {
+                      const pageCount = table.getPageCount();
+                      const currentPage = table.getState().pagination.pageIndex;
+                      const pages: (number | "ellipsis")[] = [];
+
+                      // Always show first page
+                      pages.push(0);
+
+                      // Calculate visible page range
+                      if (pageCount <= 7) {
+                        // Show all pages if 7 or fewer
+                        for (let i = 1; i < pageCount - 1; i++) {
+                          pages.push(i);
+                        }
+                      } else {
+                        // Show ellipsis for many pages
+                        if (currentPage > 2) {
+                          pages.push("ellipsis");
+                        }
+                        // Show pages around current
+                        const start = Math.max(1, currentPage - 1);
+                        const end = Math.min(pageCount - 2, currentPage + 1);
+                        for (let i = start; i <= end; i++) {
+                          if (!pages.includes(i)) pages.push(i);
+                        }
+                        if (currentPage < pageCount - 3) {
+                          pages.push("ellipsis");
+                        }
+                      }
+
+                      // Always show last page if more than 1 page
+                      if (pageCount > 1 && !pages.includes(pageCount - 1)) {
+                        pages.push(pageCount - 1);
+                      }
+
+                      return pages.map((page, idx) =>
+                        page === "ellipsis" ? (
+                          <span
+                            key={`ellipsis-${idx}`}
+                            className="px-2 text-muted-foreground"
+                          >
+                            ...
+                          </span>
+                        ) : (
+                          <Button
+                            key={page}
+                            variant={currentPage === page ? "default" : "outline"}
+                            size="icon"
+                            className="h-8 w-8"
+                            onClick={() => table.setPageIndex(page)}
+                          >
+                            {page + 1}
+                          </Button>
+                        )
+                      );
+                    })()}
                     <Button
                       variant="outline"
-                      size="sm"
+                      size="icon"
+                      className="h-8 w-8"
                       onClick={() => table.nextPage()}
                       disabled={!table.getCanNextPage()}
                     >
-                      Next
-                      <ChevronRight className="h-4 w-4 ml-1" />
+                      <ChevronRight className="h-4 w-4" />
                     </Button>
                   </div>
                 </div>
@@ -781,22 +846,62 @@ export function DashboardClient() {
 
               {/* Mobile Pagination Controls */}
               {companies.length > ITEMS_PER_PAGE && (
-                <div className="flex items-center justify-between px-2 py-4">
+                <div className="flex items-center justify-center gap-1 px-2 py-4">
                   <Button
                     variant="outline"
-                    size="sm"
+                    size="icon"
+                    className="h-8 w-8"
                     onClick={() => table.previousPage()}
                     disabled={!table.getCanPreviousPage()}
                   >
                     <ChevronLeft className="h-4 w-4" />
                   </Button>
-                  <span className="text-sm text-muted-foreground">
-                    {table.getState().pagination.pageIndex + 1} /{" "}
-                    {table.getPageCount()}
-                  </span>
+                  {/* Mobile page numbers (simplified) */}
+                  {(() => {
+                    const pageCount = table.getPageCount();
+                    const currentPage = table.getState().pagination.pageIndex;
+                    const pages: (number | "ellipsis")[] = [];
+
+                    // Simplified for mobile: show current page and neighbors
+                    if (pageCount <= 5) {
+                      for (let i = 0; i < pageCount; i++) {
+                        pages.push(i);
+                      }
+                    } else {
+                      pages.push(0);
+                      if (currentPage > 1) pages.push("ellipsis");
+                      if (currentPage > 0 && currentPage < pageCount - 1) {
+                        pages.push(currentPage);
+                      }
+                      if (currentPage < pageCount - 2) pages.push("ellipsis");
+                      pages.push(pageCount - 1);
+                    }
+
+                    return pages.map((page, idx) =>
+                      page === "ellipsis" ? (
+                        <span
+                          key={`m-ellipsis-${idx}`}
+                          className="px-1 text-muted-foreground text-sm"
+                        >
+                          ...
+                        </span>
+                      ) : (
+                        <Button
+                          key={page}
+                          variant={currentPage === page ? "default" : "outline"}
+                          size="icon"
+                          className="h-8 w-8 text-sm"
+                          onClick={() => table.setPageIndex(page)}
+                        >
+                          {page + 1}
+                        </Button>
+                      )
+                    );
+                  })()}
                   <Button
                     variant="outline"
-                    size="sm"
+                    size="icon"
+                    className="h-8 w-8"
                     onClick={() => table.nextPage()}
                     disabled={!table.getCanNextPage()}
                   >

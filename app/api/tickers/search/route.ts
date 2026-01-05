@@ -3,6 +3,13 @@ import { currentUser } from '@clerk/nextjs/server';
 import { PrismaClient } from '@prisma/client';
 import { TickerResolver } from '@/lib/sec-edgar/ticker-service';
 import { logger } from '@/lib/logging';
+import { z } from 'zod';
+
+// Input validation schema
+const searchQuerySchema = z.object({
+  q: z.string().min(2).max(100).regex(/^[a-zA-Z0-9\s\-&.]+$/, 'Invalid characters in search query'),
+  limit: z.coerce.number().min(1).max(50).default(10)
+});
 
 const prisma = new PrismaClient();
 const tickerResolver = new TickerResolver({ prisma });
@@ -39,37 +46,52 @@ export async function GET(request: NextRequest) {
       }, { status: 401 });
     }
     
-    // Get search query from URL
+    // Get search query from URL and validate
     const { searchParams } = new URL(request.url);
-    const query = searchParams.get('q');
-    const limit = parseInt(searchParams.get('limit') || '10', 10);
+    const rawParams = {
+      q: searchParams.get('q'),
+      limit: searchParams.get('limit')
+    };
     
-    // If no query, return error
-    if (!query || query.length < 2) {
+    // Validate input parameters
+    const validationResult = searchQuerySchema.safeParse(rawParams);
+    if (!validationResult.success) {
       return NextResponse.json({
         success: false,
-        message: 'Search query must be at least 2 characters'
+        message: 'Invalid search parameters',
+        errors: validationResult.error.issues.map(issue => issue.message)
       }, { status: 400 });
     }
     
-    // Search for tickers in database
+    const { q: query, limit } = validationResult.data;
+    
+    // Sanitize input to prevent injection
+    const sanitizedQuery = query.trim().replace(/[%_\\]/g, '\\$&');
+    const normalizedSymbol = sanitizedQuery.toUpperCase().replace(/[^A-Z0-9]/g, '');
+    
+    // Search for tickers in database with parameterized queries
     const tickers = await prisma.ticker.findMany({
       where: {
         OR: [
-          // Search by ticker symbol
-          { symbol: { contains: query.toUpperCase(), mode: 'insensitive' } },
-          // Search by company name
-          { companyName: { contains: query, mode: 'insensitive' } },
-          // Search by aliases
-          { aliases: { has: query.toUpperCase() } }
+          // Search by ticker symbol - only alphanumeric
+          { 
+            symbol: { 
+              contains: normalizedSymbol.length > 0 ? normalizedSymbol : sanitizedQuery, 
+              mode: 'insensitive' 
+            } 
+          },
+          // Search by company name - sanitized input
+          { companyName: { contains: sanitizedQuery, mode: 'insensitive' } },
+          // Search by aliases - normalized
+          { aliases: { has: normalizedSymbol.length > 0 ? normalizedSymbol : sanitizedQuery.toUpperCase() } }
         ]
       },
-      take: limit,
+      take: Math.min(limit, 50), // Cap limit to prevent DoS
       orderBy: [
         // Exact matches first
-        { symbol: { sort: 'asc', mode: 'insensitive' } },
+        { symbol: 'asc' },
         // Then by company name
-        { companyName: { sort: 'asc', mode: 'insensitive' } }
+        { companyName: 'asc' }
       ]
     });
     

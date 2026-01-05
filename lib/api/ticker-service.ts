@@ -50,6 +50,7 @@ export async function getTrackedCompanies(): Promise<ApiResponse<Company[]>> {
         }
         
         // Convert API tickers to Company format
+        // The API now includes lastFilingDate directly from summaries
         const userCompanies: Company[] = userData.tickers.map((ticker: Record<string, unknown>) => {
           // Use stored preferences or default values
           const storedPrefs = ticker.preferences as Record<string, boolean> | null;
@@ -58,46 +59,15 @@ export async function getTrackedCompanies(): Promise<ApiResponse<Company[]>> {
             symbol: ticker.symbol,
             companyName: ticker.companyName,
             name: ticker.companyName,
-            lastFiling: "—", // No filing data in local DB
-            lastFilingDate: ticker.lastFilingDate || null,
-            summaryCount: ticker.summaryCount || 0,
+            lastFiling: "—",
+            lastFilingDate: ticker.lastFilingDate as string | null,
+            summaryCount: (ticker.summaryCount as number) || 0,
             preferences: storedPrefs || { tenK: true, tenQ: true, eightK: true, form4: false, other: false }
           };
         });
-        
+
         console.log(`Found ${userCompanies.length} tickers for user`);
-        
-        // Fetch the last filing date for each ticker
-        try {
-          const filingsResponse = await fetch('/api/filings/latest', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-              tickers: userCompanies.map(company => company.symbol)
-            })
-          });
-          
-          if (filingsResponse.ok) {
-            const filingsData = await filingsResponse.json();
-            
-            // Update companies with last filing dates
-            if (filingsData.filings) {
-              userCompanies.forEach(company => {
-                const filingInfo = filingsData.filings.find((f: Record<string, unknown>) => f.ticker === company.symbol);
-                if (filingInfo) {
-                  company.lastFilingDate = filingInfo.filingDate;
-                  company.lastFiling = filingInfo.formType || "—";
-                }
-              });
-            }
-          }
-        } catch (filingError) {
-          console.error('Error fetching latest filings:', filingError);
-          // Continue without filing dates if there's an error
-        }
-        
+
         return { data: userCompanies };
       } catch (apiError) {
         console.error('Could not fetch from API, returning empty array:', apiError);

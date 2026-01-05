@@ -167,11 +167,6 @@ export function TickerSettingsDropdown({
     return preferences[prefKey as keyof ExtendedFilingPreferences] ?? false;
   };
 
-  // Count enabled preferences
-  const enabledCount = Object.entries(preferences).filter(
-    ([key, value]) => key !== "other" && value === true
-  ).length;
-
   return (
     <DropdownMenu open={open} onOpenChange={setOpen}>
       <DropdownMenuTrigger asChild>
@@ -179,15 +174,10 @@ export function TickerSettingsDropdown({
           variant="ghost"
           size="icon"
           disabled={disabled}
-          className="h-8 w-8 text-muted-foreground hover:text-foreground relative"
+          className="h-8 w-8 text-muted-foreground hover:text-foreground"
           aria-label={`Settings for ${tickerSymbol}`}
         >
           <Settings className="h-4 w-4" />
-          {enabledCount > 0 && (
-            <span className="absolute -top-1 -right-1 h-4 w-4 rounded-full bg-primary text-[10px] font-medium text-primary-foreground flex items-center justify-center">
-              {enabledCount}
-            </span>
-          )}
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent

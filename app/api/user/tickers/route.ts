@@ -3,6 +3,13 @@ import { auth, currentUser } from '@clerk/nextjs/server';
 import { getPrismaClient } from '@/lib/db/prisma';
 import { dbRetry } from '@/lib/db/retry-wrapper';
 import { revalidatePath } from 'next/cache';
+import { z } from 'zod';
+
+// Input validation schema for ticker creation
+const createTickerSchema = z.object({
+  symbol: z.string().min(1).max(10).regex(/^[A-Z0-9.-]+$/i, 'Invalid ticker symbol format'),
+  companyName: z.string().min(1).max(200).trim()
+});
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -59,7 +66,13 @@ export async function GET() {
           tickers: {
             include: {
               summaries: {
-                select: { id: true },
+                select: {
+                  id: true,
+                  filingDate: true,
+                },
+                orderBy: {
+                  filingDate: 'desc',
+                },
               },
             },
           },
@@ -86,7 +99,13 @@ export async function GET() {
               tickers: {
                 include: {
                   summaries: {
-                    select: { id: true },
+                    select: {
+                      id: true,
+                      filingDate: true,
+                    },
+                    orderBy: {
+                      filingDate: 'desc',
+                    },
                   },
                 },
               },
@@ -96,11 +115,15 @@ export async function GET() {
 
         console.log('User created successfully:', newUser.id);
         return NextResponse.json({
-          tickers: newUser.tickers.map(ticker => ({
-            ...ticker,
-            summaryCount: ticker.summaries?.length || 0,
-            preferences: ticker.preferences || DEFAULT_PREFERENCES,
-          })),
+          tickers: newUser.tickers.map(ticker => {
+            const latestSummary = ticker.summaries?.[0];
+            return {
+              ...ticker,
+              summaryCount: ticker.summaries?.length || 0,
+              lastFilingDate: latestSummary?.filingDate?.toISOString() || null,
+              preferences: ticker.preferences || DEFAULT_PREFERENCES,
+            };
+          }),
           message: 'User created and initialized'
         });
       } catch (createError) {
@@ -109,13 +132,18 @@ export async function GET() {
       }
     }
 
-    // Return user tickers with summary count and preferences
+    // Return user tickers with summary count, latest filing date, and preferences
     return NextResponse.json({
-      tickers: dbUser.tickers.map(ticker => ({
-        ...ticker,
-        summaryCount: ticker.summaries?.length || 0,
-        preferences: ticker.preferences || DEFAULT_PREFERENCES,
-      })),
+      tickers: dbUser.tickers.map(ticker => {
+        // Get the latest filing date from summaries (already sorted desc)
+        const latestSummary = ticker.summaries?.[0];
+        return {
+          ...ticker,
+          summaryCount: ticker.summaries?.length || 0,
+          lastFilingDate: latestSummary?.filingDate?.toISOString() || null,
+          preferences: ticker.preferences || DEFAULT_PREFERENCES,
+        };
+      }),
     });
   } catch (error) {
     console.error('Error fetching user tickers:', error);
@@ -134,16 +162,22 @@ export async function POST(request: Request) {
   try {
     const prisma = getPrismaClient();
     
-    // Parse request body
+    // Parse and validate request body
     const body = await request.json();
-    const { symbol, companyName } = body;
     
-    if (!symbol || !companyName) {
-      return NextResponse.json(
-        { error: 'Symbol and company name are required' }, 
-        { status: 400 }
-      );
+    // Validate input data
+    const validationResult = createTickerSchema.safeParse(body);
+    if (!validationResult.success) {
+      return NextResponse.json({
+        error: 'Invalid ticker data',
+        details: validationResult.error.issues.map(issue => ({
+          field: issue.path.join('.'),
+          message: issue.message
+        }))
+      }, { status: 400 });
     }
+    
+    const { symbol, companyName } = validationResult.data;
     
     // Check authentication
     const { userId } = await auth();
