@@ -1,7 +1,6 @@
 import { currentUser } from '@clerk/nextjs/server';
 import { redirect, notFound } from 'next/navigation';
 import { prisma } from '@/lib/db';
-import { Sidebar } from '@/components/layout/sidebar';
 import { formatDistanceToNow, format } from 'date-fns';
 import { ArrowLeft, ChevronRight } from 'lucide-react';
 import Link from 'next/link';
@@ -88,11 +87,9 @@ export default async function SummaryPage({ params }: SummaryPageProps) {
     }
   
     return (
-      <div className="flex min-h-screen flex-col">
-        <div className="flex flex-1">
-          <Sidebar className="fixed inset-y-0 z-30 w-64 border-r" />
-          <main className="flex-1 md:pl-64">
-            <div className="container py-8 md:py-10 px-6 md:px-8 space-y-6">
+      <div className="min-h-screen flex flex-col" style={{ backgroundColor: 'var(--landing-bg)' }}>
+        <main className="flex-1" style={{ backgroundColor: 'var(--landing-bg)' }}>
+          <div className="container max-w-7xl mx-auto py-8 md:py-10 px-6 md:px-8 space-y-6">
               <Breadcrumb className="mb-4">
                 <BreadcrumbList>
                   <BreadcrumbItem>
@@ -146,12 +143,11 @@ export default async function SummaryPage({ params }: SummaryPageProps) {
                 </div>
               </div>
 
-              <div className="rounded-lg p-6">
-                <SummaryContent summary={summary} />
-              </div>
+            <div className="rounded-lg p-6">
+              <SummaryContent summary={summary} />
             </div>
-          </main>
-        </div>
+          </div>
+        </main>
       </div>
     );
   } catch (error) {
@@ -162,64 +158,61 @@ export default async function SummaryPage({ params }: SummaryPageProps) {
     if (error instanceof AccessDeniedError) {
       // Render access denied view
       return (
-        <div className="flex min-h-screen flex-col">
-          <div className="flex flex-1">
-            <Sidebar className="fixed inset-y-0 z-30 w-64 border-r" />
-            <main className="flex-1 md:pl-64">
-              <div className="container py-8 md:py-10 px-6 md:px-8">
-                <Breadcrumb className="mb-4">
-                  <BreadcrumbList>
-                    <BreadcrumbItem>
-                      <BreadcrumbLink href="/dashboard">Dashboard</BreadcrumbLink>
-                    </BreadcrumbItem>
-                    <BreadcrumbSeparator>
-                      <ChevronRight className="h-4 w-4" />
-                    </BreadcrumbSeparator>
-                    <BreadcrumbItem>
-                      <BreadcrumbPage>Access Denied</BreadcrumbPage>
-                    </BreadcrumbItem>
-                  </BreadcrumbList>
-                </Breadcrumb>
-                
-                <div className="flex items-center space-x-2 mb-6">
-                  <Link href="/dashboard/summaries">
-                    <Button 
-                      variant="ghost" 
-                      size="icon"
-                      aria-label="Back to summaries list"
+        <div className="min-h-screen flex flex-col" style={{ backgroundColor: 'var(--landing-bg)' }}>
+          <main className="flex-1" style={{ backgroundColor: 'var(--landing-bg)' }}>
+            <div className="container max-w-7xl mx-auto py-8 md:py-10 px-6 md:px-8 space-y-6">
+              <Breadcrumb className="mb-4">
+                <BreadcrumbList>
+                  <BreadcrumbItem>
+                    <BreadcrumbLink href="/dashboard">Dashboard</BreadcrumbLink>
+                  </BreadcrumbItem>
+                  <BreadcrumbSeparator>
+                    <ChevronRight className="h-4 w-4" />
+                  </BreadcrumbSeparator>
+                  <BreadcrumbItem>
+                    <BreadcrumbPage>Access Denied</BreadcrumbPage>
+                  </BreadcrumbItem>
+                </BreadcrumbList>
+              </Breadcrumb>
+
+              <div className="flex items-center space-x-2 mb-6">
+                <Link href="/dashboard">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    aria-label="Back to dashboard"
+                  >
+                    <ArrowLeft className="h-4 w-4" aria-hidden="true" />
+                    <span className="sr-only">Back to dashboard</span>
+                  </Button>
+                </Link>
+                <h1 className="text-2xl font-bold">Summary Access Denied</h1>
+              </div>
+
+              <Alert variant="destructive" className="mb-6" role="alert">
+                <AlertCircle className="h-4 w-4" aria-label="Access denied indicator" />
+                <AlertTitle>Access Denied</AlertTitle>
+                <AlertDescription>
+                  You don&apos;t have permission to view this summary. To view summaries for a company, you must add its ticker to your watchlist.
+                </AlertDescription>
+              </Alert>
+
+              <div className="landing-card p-6">
+                <div className="text-center">
+                  <h2 className="text-xl font-semibold mb-4">Want to see this summary?</h2>
+                  <p className="mb-6">Add this company&apos;s ticker to your watchlist to gain access to all of its summaries.</p>
+                  <Link href="/dashboard">
+                    <Button
+                      className="focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                      aria-label="Go to dashboard to add this company"
                     >
-                      <ArrowLeft className="h-4 w-4" aria-hidden="true" />
-                      <span className="sr-only">Back to summaries</span>
+                      Go to Dashboard
                     </Button>
                   </Link>
-                  <h1 className="text-2xl font-bold">Summary Access Denied</h1>
-                </div>
-                
-                <Alert variant="destructive" className="mb-6" role="alert">
-                  <AlertCircle className="h-4 w-4" aria-label="Access denied indicator" />
-                  <AlertTitle>Access Denied</AlertTitle>
-                  <AlertDescription>
-                    You don&apos;t have permission to view this summary. To view summaries for a company, you must add its ticker to your watchlist.
-                  </AlertDescription>
-                </Alert>
-                
-                <div className="bg-white rounded-lg shadow p-6">
-                  <div className="text-center">
-                    <h2 className="text-xl font-semibold mb-4">Want to see this summary?</h2>
-                    <p className="mb-6">Add this company&apos;s ticker to your watchlist to gain access to all of its summaries.</p>
-                    <Link href="/dashboard/settings">
-                      <Button 
-                        className="focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-                        aria-label="Go to watchlist settings to add this company"
-                      >
-                        Go to Watchlist Settings
-                      </Button>
-                    </Link>
-                  </div>
                 </div>
               </div>
-            </main>
-          </div>
+            </div>
+          </main>
         </div>
       );
     }

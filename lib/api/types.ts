@@ -4,6 +4,19 @@ export interface FilingPreferences {
   tenQ: boolean;
   eightK: boolean;
   form4: boolean;
+  form3?: boolean;
+  form5?: boolean;
+  form144?: boolean;
+  twentyF?: boolean;
+  fortyF?: boolean;
+  sixK?: boolean;
+  sc13D?: boolean;
+  sc13G?: boolean;
+  thirteenF?: boolean;
+  def14A?: boolean;
+  pre14A?: boolean;
+  sOne?: boolean;
+  sThree?: boolean;
   other: boolean;
 }
 
@@ -14,6 +27,7 @@ export interface Company {
   name: string;
   lastFiling: string;
   lastFilingDate?: string; // ISO date string of the last filing
+  summaryCount?: number; // Number of summaries linked to this ticker
   preferences: FilingPreferences;
 }
 
