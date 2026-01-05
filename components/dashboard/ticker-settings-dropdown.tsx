@@ -1,17 +1,15 @@
 "use client";
 
-import { useState, useCallback } from "react";
-import { Settings, Check } from "lucide-react";
+import { useState, useCallback, useEffect } from "react";
+import { Settings, Check, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuGroup,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 
 // Form type categories with their display info
@@ -146,87 +144,175 @@ export function TickerSettingsDropdown({
   disabled = false,
 }: TickerSettingsDropdownProps) {
   const [open, setOpen] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
 
   // Use default preferences if input is undefined
-  const preferences = inputPreferences || DEFAULT_PREFERENCES;
+  const originalPreferences = inputPreferences || DEFAULT_PREFERENCES;
 
-  const handleToggle = useCallback(
-    (formTypeId: string) => {
-      const prefKey = FORM_TYPE_TO_PREFERENCE[formTypeId];
-      if (prefKey) {
-        const currentValue = preferences[prefKey as keyof ExtendedFilingPreferences] ?? false;
-        onPreferenceChange(prefKey, !currentValue);
-      }
-    },
-    [preferences, onPreferenceChange]
-  );
+  // Local state to track pending changes before save
+  const [pendingPreferences, setPendingPreferences] =
+    useState<ExtendedFilingPreferences>(originalPreferences);
+
+  // Reset pending preferences when dialog opens or original preferences change
+  useEffect(() => {
+    if (open) {
+      setPendingPreferences(originalPreferences);
+    }
+  }, [open, originalPreferences]);
+
+  const handleToggle = useCallback((formTypeId: string) => {
+    const prefKey = FORM_TYPE_TO_PREFERENCE[formTypeId];
+    if (prefKey) {
+      setPendingPreferences((prev) => ({
+        ...prev,
+        [prefKey]: !prev[prefKey as keyof ExtendedFilingPreferences],
+      }));
+    }
+  }, []);
 
   const isEnabled = (formTypeId: string): boolean => {
     const prefKey = FORM_TYPE_TO_PREFERENCE[formTypeId];
     if (!prefKey) return false;
-    return preferences[prefKey as keyof ExtendedFilingPreferences] ?? false;
+    return pendingPreferences[prefKey as keyof ExtendedFilingPreferences] ?? false;
   };
 
-  return (
-    <DropdownMenu open={open} onOpenChange={setOpen}>
-      <DropdownMenuTrigger asChild>
-        <Button
-          variant="ghost"
-          size="icon"
-          disabled={disabled}
-          className="h-8 w-8 text-muted-foreground hover:text-foreground"
-          aria-label={`Settings for ${tickerSymbol}`}
-        >
-          <Settings className="h-4 w-4" />
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent
-        align="end"
-        className="w-64 max-h-[400px] overflow-y-auto"
-      >
-        <DropdownMenuLabel className="font-semibold">
-          Filing Preferences for {tickerSymbol}
-        </DropdownMenuLabel>
-        <DropdownMenuSeparator />
+  const handleCancel = useCallback(() => {
+    setPendingPreferences(originalPreferences);
+    setOpen(false);
+  }, [originalPreferences]);
 
-        {Object.entries(FORM_TYPE_CATEGORIES).map(([categoryKey, category]) => (
-          <DropdownMenuGroup key={categoryKey}>
-            <DropdownMenuLabel className="text-xs text-muted-foreground font-normal">
-              {category.label}
-            </DropdownMenuLabel>
-            {category.types.map((formType) => (
-              <DropdownMenuItem
-                key={formType.id}
-                className="cursor-pointer"
-                onSelect={(e: Event) => {
-                  e.preventDefault(); // Prevent closing on click
-                  handleToggle(formType.id);
-                }}
-              >
-                <div className="flex items-center justify-between w-full">
-                  <div className="flex flex-col">
-                    <span className="font-medium">{formType.label}</span>
-                    <span className="text-xs text-muted-foreground">
-                      {formType.description}
-                    </span>
-                  </div>
-                  <div
-                    className={cn(
-                      "h-5 w-5 rounded-sm border flex items-center justify-center transition-colors",
-                      isEnabled(formType.id)
-                        ? "bg-primary border-primary text-primary-foreground"
-                        : "border-input bg-background"
-                    )}
-                  >
-                    {isEnabled(formType.id) && <Check className="h-3 w-3" />}
+  const handleSave = useCallback(async () => {
+    setIsSaving(true);
+
+    // Find all changed preferences and apply them
+    const changedKeys: string[] = [];
+    Object.keys(FORM_TYPE_TO_PREFERENCE).forEach((formTypeId) => {
+      const prefKey = FORM_TYPE_TO_PREFERENCE[formTypeId];
+      const originalValue =
+        originalPreferences[prefKey as keyof ExtendedFilingPreferences] ?? false;
+      const newValue =
+        pendingPreferences[prefKey as keyof ExtendedFilingPreferences] ?? false;
+      if (originalValue !== newValue) {
+        changedKeys.push(prefKey);
+      }
+    });
+
+    // Apply all changes
+    for (const prefKey of changedKeys) {
+      const newValue =
+        pendingPreferences[prefKey as keyof ExtendedFilingPreferences] ?? false;
+      await onPreferenceChange(prefKey, newValue);
+    }
+
+    setIsSaving(false);
+    setOpen(false);
+  }, [originalPreferences, pendingPreferences, onPreferenceChange]);
+
+  // Check if there are any pending changes
+  const hasChanges = Object.keys(FORM_TYPE_TO_PREFERENCE).some((formTypeId) => {
+    const prefKey = FORM_TYPE_TO_PREFERENCE[formTypeId];
+    const originalValue =
+      originalPreferences[prefKey as keyof ExtendedFilingPreferences] ?? false;
+    const newValue =
+      pendingPreferences[prefKey as keyof ExtendedFilingPreferences] ?? false;
+    return originalValue !== newValue;
+  });
+
+  return (
+    <>
+      <Button
+        variant="ghost"
+        size="icon"
+        disabled={disabled}
+        onClick={() => setOpen(true)}
+        className="h-8 w-8 text-muted-foreground hover:text-foreground"
+        aria-label={`Settings for ${tickerSymbol}`}
+      >
+        <Settings className="h-4 w-4" />
+      </Button>
+
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="max-w-md bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-700">
+          <DialogHeader>
+            <DialogTitle className="text-lg font-semibold">
+              Filing Preferences for {tickerSymbol}
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="max-h-[60vh] overflow-y-auto pr-2 -mr-2">
+            {Object.entries(FORM_TYPE_CATEGORIES).map(
+              ([categoryKey, category], categoryIndex) => (
+                <div
+                  key={categoryKey}
+                  className={cn(
+                    categoryIndex > 0 && "mt-6 pt-4 border-t border-gray-100 dark:border-zinc-800"
+                  )}
+                >
+                  <h4 className="font-semibold text-sm text-foreground mb-3">
+                    {category.label}
+                  </h4>
+                  <div className="space-y-1">
+                    {category.types.map((formType) => (
+                      <button
+                        key={formType.id}
+                        type="button"
+                        onClick={() => handleToggle(formType.id)}
+                        className="flex items-center justify-between w-full px-3 py-2.5 rounded-lg hover:bg-gray-50 dark:hover:bg-zinc-800 transition-colors text-left"
+                      >
+                        <div className="flex flex-col">
+                          <span className="font-medium text-sm">
+                            {formType.label}
+                          </span>
+                          <span className="text-xs text-muted-foreground">
+                            {formType.description}
+                          </span>
+                        </div>
+                        <div
+                          className={cn(
+                            "h-5 w-5 rounded-sm border flex items-center justify-center transition-colors flex-shrink-0 ml-3",
+                            isEnabled(formType.id)
+                              ? "bg-black border-black text-white dark:bg-white dark:border-white dark:text-black"
+                              : "border-gray-300 dark:border-zinc-600 bg-white dark:bg-zinc-800"
+                          )}
+                        >
+                          {isEnabled(formType.id) && (
+                            <Check className="h-3 w-3" />
+                          )}
+                        </div>
+                      </button>
+                    ))}
                   </div>
                 </div>
-              </DropdownMenuItem>
-            ))}
-            <DropdownMenuSeparator />
-          </DropdownMenuGroup>
-        ))}
-      </DropdownMenuContent>
-    </DropdownMenu>
+              )
+            )}
+          </div>
+
+          <DialogFooter className="flex-col sm:flex-row gap-2 sm:gap-2 mt-4 pt-4 border-t border-gray-100 dark:border-zinc-800">
+            <Button
+              variant="outline"
+              onClick={handleCancel}
+              disabled={isSaving}
+              className="sm:order-1"
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleSave}
+              disabled={isSaving || !hasChanges}
+              className="bg-black hover:bg-gray-800 text-white sm:order-2"
+            >
+              {isSaving ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                "Save Preferences"
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }

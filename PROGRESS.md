@@ -536,99 +536,11 @@
 
 ---
 
-### Previous: Cloudflare Cron Trigger Fix ✅ COMPLETE (2025-12-29)
+### Dec 29, 2025 Fixes (See Archive for Details)
 
-**Branch**: `fix/cloudflare-cron-trigger-restoration`
-
-Fixed Cloudflare Worker cron triggers that stopped executing after Dec 27 deployment. Added monitoring to detect future failures.
-
-**Root Cause**: Cron triggers became detached from Worker after deployment - required explicit `wrangler triggers deploy`.
-
-**Fix Applied (Phase 2)**:
-- Redeployed worker with `npx wrangler deploy` (version 2fe93112)
-- Explicitly deployed triggers with `npx wrangler triggers deploy`
-- Verified 64+ jobs created post-deployment
-
-**Monitoring Added (Phase 5)**:
-- Added `/health` endpoint at `https://cloudflare-cron.wilfred-chen-python.workers.dev/health`
-- Returns JSON with heartbeat status, staleness detection, worker version
-- Added `[HEARTBEAT]` logging for diagnostics via `wrangler tail`
-- Version bump to `2.5.0-stable`
-
-**Files Modified**:
-- `cloudflare-cron/index.js` - Health endpoint + heartbeat logging
-- `cloudflare-cron/wrangler.toml` - Version bump to 2.5.0-stable
-- `docs/plans/2025-12-29-cloudflare-cron-trigger-fix.md` - Implementation complete
-
-**Verification**:
-- ✅ 65+ jobs created since initial deployment (04:23 UTC)
-- ✅ Health endpoint responding with monitoring data
-- ✅ All cron schedules active: `*/5`, `*/10`, `0 22 * * *`
-
----
-
-### Previous: Email Summary Quality Improvements ✅ COMPLETE (2025-12-29)
-
-**Branch**: `fix/email-summary-quality-improvements`
-
-Addressed 4 email quality issues with SEC filing summaries:
-
-1. **Markdown Prevention in AI Output**
-   - Problem: AI summaries contained `####` and `###` markdown that appeared as artifacts in emails
-   - Solution: Added explicit markdown prohibition rules to SYSTEM_PROMPT in unified-prompts.ts
-   - Added newsletter-style writing guidance (Morning Brew/Bloomberg tone)
-   - File: `lib/ai/prompts/unified-prompts.ts`
-
-2. **Smart XML URL Construction**
-   - Problem: Form 3/144 XML filing links led to raw XML files without styling
-   - Solution: Detect XML files without XSLT stylesheets and inject proper stylesheet paths
-   - Form 3/4/5: Use `xslF345X05` stylesheet
-   - Form 144: Use `xsl144X01` stylesheet
-   - Files: `lib/email/url-utils.ts`, 6 email templates updated
-
-3. **8-K Schema Enhancement**
-   - Problem: 8-K summaries missing sentiment analysis and key highlights
-   - Solution: Added `sentiment` (enum), `keyHighlights` (array), `managementCommentary`, `forwardGuidance` fields
-   - Enhanced extraction guidance for specific Item numbers (2.02, 7.01, 8.01, 5.02)
-   - Files: `lib/ai/prompts/unified-prompts.ts`, `lib/email/templates.ts`
-
-**Tests Added**: 28 new tests (unified-prompts-formatting, url-utils, 8k-schema)
-**Verification**: ✅ 64 tests passing, ✅ Build compiles, ✅ Lint passes
-
----
-
-### Previous: Form 4 Email Template Fixes ✅ COMPLETE (2025-12-29)
-
-**Branch**: `feature/json-parsing-phase5-monitoring`
-
-Fixed 5 issues with Form 4 email templates identified during E2E testing:
-
-1. **Filing URLs - Direct Document Links**
-   - Problem: "View Full Filing" links went to `-index.html` instead of actual documents
-   - Solution: Updated `getSecFilingViewerUrl()` to pass through XML/HTML URLs directly
-   - File: `lib/email/url-utils.ts`
-
-2. **NVDA Summary Truncation Fix**
-   - Problem: Headline showed only "NVDA Director Mark A." (truncated)
-   - Solution: Use full summary when headline is < 30 chars
-   - File: `components/ui/email/templates/form4-minimalist-template.tsx`
-
-3. **VRT Raw JSON in Summary** (Prior session fix)
-   - Problem: Fallback displayed raw JSON instead of formatted text
-   - Solution: Extract summary field from malformed JSON using regex
-   - File: `lib/ai/summarize.ts`
-
-4. **Gift Transaction Display - Purple Styling**
-   - Problem: Gifts showed as "SOLD" with red background
-   - Solution: Added `isGiftTransaction()` helper and purple color scheme (🎁 #7C3AED)
-   - File: `components/ui/email/templates/form4-minimalist-template.tsx`
-
-5. **Multi-Transaction Display (Sale + Gift)**
-   - Problem: Only first transaction shown in graphic div
-   - Solution: Redesigned to show up to 2 transactions side-by-side
-   - File: `components/ui/email/templates/form4-minimalist-template.tsx`
-
-**Verification**: ✅ Lint passes, ✅ E2E test passes (5/5 tickers, email sent)
+- **Cloudflare Cron Trigger Fix** - Triggers detached after deployment, redeployed with `wrangler triggers deploy`, added `/health` endpoint
+- **Email Summary Quality** - Markdown prevention, XML URL construction, 8-K schema enhancement (28 tests added)
+- **Form 4 Email Template Fixes** - 5 issues fixed: URLs, truncation, gifts, multi-transaction display
 
 ---
 
@@ -687,7 +599,7 @@ npm run cloudflare:status                 # Check deployment status
 
 ---
 
-**Last Updated**: 2026-01-04 (Pipeline resilience improvements merged to main)
+**Last Updated**: 2026-01-05 (Dashboard redesign + context compact)
 **Repository**: tldrsec-ai
 
 *See TIMELINE.md for master timeline and quick navigation*

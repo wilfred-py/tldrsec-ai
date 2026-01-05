@@ -443,7 +443,6 @@ export function DashboardClient() {
     <div className="space-y-6">
       <DashboardHeader
         heading="Dashboard"
-        description="Welcome to tldrSEC."
       />
 
       {/* Tracked Tickers */}
@@ -477,30 +476,81 @@ export function DashboardClient() {
         </div>
 
         {isLoadingCompanies ? (
-          <div className="space-y-2">
-            {/* Skeleton table header */}
-            <div className="hidden sm:flex items-center gap-4 px-4 py-3 border-b">
-              <Skeleton className="h-4 w-16" />
-              <Skeleton className="h-4 w-32" />
-              <Skeleton className="h-4 w-24" />
-              <Skeleton className="h-4 w-20" />
-              <Skeleton className="h-4 w-8" />
-              <Skeleton className="h-4 w-8" />
+          <div className="overflow-hidden">
+            {/* Desktop skeleton */}
+            <div className="hidden sm:block">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-[100px]">
+                      <Skeleton className="h-4 w-14" />
+                    </TableHead>
+                    <TableHead>
+                      <Skeleton className="h-4 w-20" />
+                    </TableHead>
+                    <TableHead>
+                      <Skeleton className="h-4 w-24" />
+                    </TableHead>
+                    <TableHead className="text-center w-[100px]">
+                      <Skeleton className="h-4 w-16 mx-auto" />
+                    </TableHead>
+                    <TableHead className="w-[40px]" />
+                    <TableHead className="w-[40px]" />
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {[...Array(5)].map((_, i) => (
+                    <TableRow key={i}>
+                      <TableCell>
+                        <Skeleton className="h-5 w-12" />
+                      </TableCell>
+                      <TableCell>
+                        <Skeleton className="h-4 w-32" />
+                      </TableCell>
+                      <TableCell>
+                        <Skeleton className="h-4 w-24" />
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <Skeleton className="h-4 w-8 mx-auto" />
+                      </TableCell>
+                      <TableCell>
+                        <Skeleton className="h-8 w-8 rounded-md" />
+                      </TableCell>
+                      <TableCell>
+                        <Skeleton className="h-8 w-8 rounded-md" />
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
             </div>
-            {/* Skeleton rows */}
-            {[...Array(5)].map((_, i) => (
-              <div
-                key={i}
-                className="flex items-center gap-4 px-4 py-3 border-b animate-pulse"
-              >
-                <Skeleton className="h-5 w-14" />
-                <Skeleton className="h-4 w-40" />
-                <Skeleton className="h-4 w-20" />
-                <Skeleton className="h-4 w-8" />
-                <Skeleton className="h-8 w-8 rounded" />
-                <Skeleton className="h-8 w-8 rounded" />
-              </div>
-            ))}
+            {/* Mobile skeleton */}
+            <div className="sm:hidden space-y-3">
+              {[...Array(3)].map((_, i) => (
+                <div key={i} className="landing-card p-4">
+                  <div className="flex justify-between items-start mb-3">
+                    <div className="space-y-2">
+                      <Skeleton className="h-5 w-14" />
+                      <Skeleton className="h-4 w-32" />
+                    </div>
+                    <div className="flex gap-1">
+                      <Skeleton className="h-8 w-8 rounded-md" />
+                      <Skeleton className="h-8 w-8 rounded-md" />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 pt-3 border-t">
+                    <div className="space-y-1">
+                      <Skeleton className="h-3 w-20" />
+                      <Skeleton className="h-4 w-24" />
+                    </div>
+                    <div className="space-y-1">
+                      <Skeleton className="h-3 w-16" />
+                      <Skeleton className="h-4 w-8" />
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         ) : showEmptyState ? (
           <div className="flex min-h-[200px] flex-col items-center justify-center rounded-md border border-dashed p-4 sm:p-8 text-center space-y-4">
@@ -702,9 +752,13 @@ export function DashboardClient() {
                         ) : (
                           <Button
                             key={page}
-                            variant={currentPage === page ? "default" : "outline"}
+                            variant={currentPage === page ? "default" : "ghost"}
                             size="icon"
-                            className="h-8 w-8"
+                            className={`h-8 w-8 rounded-full transition-colors ${
+                              currentPage === page
+                                ? "bg-black text-white hover:bg-black"
+                                : "hover:bg-black hover:text-white"
+                            }`}
                             onClick={() => table.setPageIndex(page)}
                           >
                             {page + 1}
@@ -888,9 +942,13 @@ export function DashboardClient() {
                       ) : (
                         <Button
                           key={page}
-                          variant={currentPage === page ? "default" : "outline"}
+                          variant={currentPage === page ? "default" : "ghost"}
                           size="icon"
-                          className="h-8 w-8 text-sm"
+                          className={`h-8 w-8 text-sm rounded-full transition-colors ${
+                            currentPage === page
+                              ? "bg-black text-white hover:bg-black"
+                              : "hover:bg-black hover:text-white"
+                          }`}
                           onClick={() => table.setPageIndex(page)}
                         >
                           {page + 1}
@@ -916,7 +974,7 @@ export function DashboardClient() {
 
       {/* Delete Confirmation Dialog */}
       <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
-        <DialogContent className="max-w-[95vw] sm:max-w-md border-2 border-border shadow-2xl bg-background">
+        <DialogContent className="max-w-[95vw] sm:max-w-md border border-gray-200 dark:border-zinc-700 shadow-2xl bg-white dark:bg-zinc-900">
           <DialogHeader>
             <DialogTitle className="text-lg font-semibold">
               Remove Ticker
