@@ -5,10 +5,11 @@ git_commit: ca47a425e00407698936e274e48ca10fab0515be
 branch: main
 repository: tldrsec-ai
 topic: "Database Connection Handling and Pipeline Uptime Infrastructure"
-tags: [research, codebase, database, resilience, uptime, auto-recovery, circuit-breaker, retry]
+tags: [research, codebase, database, resilience, uptime, auto-recovery, circuit-breaker, retry, incident-analysis]
 status: complete
 last_updated: 2026-01-05
 last_updated_by: Claude
+last_updated_note: "Added 41-hour pipeline stall incident analysis (Jan 3-5, 2026)"
 ---
 
 # Research: Database Connection Handling and Pipeline Uptime Infrastructure
@@ -387,6 +388,120 @@ Uses version fields for concurrent updates:
 ### Job Queue
 - [lib/job-queue/index.ts](lib/job-queue/index.ts) - Queue operations
 - [lib/job-queue/dead-letter-queue.ts](lib/job-queue/dead-letter-queue.ts) - Failed job handling
+
+## Incident Analysis: 41-Hour Pipeline Stall (January 3-5, 2026)
+
+### Timeline
+
+| Time | Event |
+|------|-------|
+| **Jan 3, 15:41 AEDT** | Last successful OpenRouter API call (AI summarization) |
+| **Jan 3, ~15:45** | Pipeline stalls - jobs stop being processed |
+| **Jan 4, 15:25** | PR #304 merged: Pipeline resilience improvements |
+| **Jan 5, 08:42 AEDT** | Pipeline resumes processing |
+| **Total Downtime** | ~41 hours |
+
+### Root Cause Analysis
+
+The pipeline stall was caused by **multiple compounding issues** that the existing auto-recovery system was not designed to detect:
+
+#### Issue 1: Jobs Stuck in RETRYING with Exhausted Retries
+
+**What happened**: 10+ jobs were in `RETRYING` status with `retryCount >= maxRetries`. These jobs:
+- Were NOT selected by the job selection query (correctly filtered by `retryCount < maxRetries`)
+- Were NOT detected as unhealthy by the pipeline health check (only checks lock health and completion time)
+- Did NOT trigger auto-recovery (no stale locks, no CRITICAL status)
+
+**Why auto-recovery didn't help**:
+```
+Pipeline Health Check → Status: HEALTHY or DEGRADED
+                      ↓
+Auto-Recovery Decision → No stale locks detected
+                      → Not CRITICAL (requires 180+ min stall)
+                      → Action: "none" or "monitoring"
+                      ↓
+Jobs remain stuck indefinitely
+```
+
+**The gap**: Pipeline health check (`app/api/health/pipeline/route.ts:160`) counts RETRYING jobs but does NOT validate if `retryCount >= maxRetries`. Health status determination (lines 209-218) only considers:
+- Lock health (stale locks)
+- Time since last completion
+- NOT the validity of RETRYING jobs
+
+#### Issue 2: Job Type Mismatch in Auto-Remediation
+
+**What happened**: The daily verification script (`scripts/verify-daily-pipeline.ts:560-569`) was creating remediation jobs with legacy type names:
+- `filing_fetch` (should be `ASYNC_FETCH_FILING`)
+- `filing_summarize` (should be `ASYNC_SUMMARIZE_CACHED`)
+- `filing_email` (no handler exists)
+
+These jobs had no handlers in the current 3-phase pipeline, so they were created but never processed.
+
+#### Issue 3: Scheduling Gap
+
+The `/api/cron/process-filing-queue` endpoint (which runs `recoverExhaustedRetryJobs()`) is NOT in vercel.json crons. It relies entirely on Cloudflare Worker triggering. If the Cloudflare Worker doesn't call it, stuck RETRYING jobs accumulate without cleanup.
+
+### Why the Pipeline Resumed (January 5)
+
+The pipeline resumed after **PR #304** was deployed (merged Jan 4, 15:25 AEDT):
+
+**Fix 1: `markForRetry()` Validation** (`lib/job-queue/index.ts:519-525`)
+```typescript
+// Prevents new jobs from entering stuck RETRYING state
+if (job.retryCount >= job.maxRetries) {
+  throw new Error(`Cannot retry job: retry count >= max retries`);
+}
+```
+
+**Fix 2: `recoverExhaustedRetryJobs()` Cleanup** (`lib/cron/background-filing-worker.ts:404-449`)
+```typescript
+// Finds and fails stuck RETRYING jobs on every batch
+const exhaustedJobs = await prisma.jobQueue.findMany({
+  where: { status: 'RETRYING' }
+});
+const jobsToFail = exhaustedJobs.filter(j => j.retryCount >= j.maxRetries);
+// Mark as FAILED instead of leaving stuck
+```
+
+**Fix 3: Job Type Mapping** (`scripts/verify-daily-pipeline.ts:560-569`)
+```typescript
+// Use correct async job types
+if (!filing.fetched) {
+  jobType = 'ASYNC_FETCH_FILING';  // Was: 'filing_fetch'
+} else if (!filing.summarized) {
+  jobType = 'ASYNC_SUMMARIZE_CACHED';  // Was: 'filing_summarize'
+}
+```
+
+### Detection Gaps That Allowed 41-Hour Stall
+
+| Gap | Current Behavior | Why It Failed |
+|-----|-----------------|---------------|
+| **RETRYING job validation** | Health check counts RETRYING jobs but doesn't validate retry count | Stuck jobs blend in with valid RETRYING jobs |
+| **Auto-recovery scope** | Only handles stale locks and CRITICAL stalls | RETRYING jobs with exhausted retries aren't locks |
+| **Process filing queue** | Only called by Cloudflare Worker | `recoverExhaustedRetryJobs()` not part of auto-recovery |
+| **Health status thresholds** | CRITICAL requires 180+ minutes OR lock issues | Can be DEGRADED indefinitely without action |
+
+### Resilience Improvements Added (PR #304)
+
+| Improvement | Location | Purpose |
+|-------------|----------|---------|
+| `markForRetry()` validation | `lib/job-queue/index.ts:519-525` | Prevents new stuck jobs |
+| `recoverExhaustedRetryJobs()` | `lib/cron/background-filing-worker.ts:404-449` | Cleans up existing stuck jobs |
+| Job type mapping fix | `scripts/verify-daily-pipeline.ts:560-569` | Correct remediation job types |
+| Test coverage | `__tests__/lib/cron/recover-exhausted-retry-jobs.test.ts` | 10 tests for cleanup logic |
+| Test coverage | `__tests__/lib/job-queue/mark-for-retry-validation.test.ts` | 4 tests for validation |
+
+### Remaining Vulnerability
+
+The `recoverExhaustedRetryJobs()` cleanup only runs when `/api/cron/process-filing-queue` is called by the Cloudflare Worker. If the Cloudflare Worker fails or is disabled:
+- Stuck RETRYING jobs will still accumulate
+- Auto-recovery won't detect them (not part of auto-recovery flow)
+- Pipeline will stall again
+
+**Mitigation needed**: Either add RETRYING validation to auto-recovery, or add `/api/cron/process-filing-queue` as a Vercel cron backup.
+
+---
 
 ## Historical Context (from thoughts/)
 
