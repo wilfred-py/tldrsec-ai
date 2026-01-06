@@ -7,12 +7,24 @@
  * - Job queue status (pending, processing, completed jobs)
  * - Processing latency (time since last completion)
  * - Pipeline throughput (jobs completed in last hour)
+ * - Exhausted RETRYING jobs (retryCount >= maxRetries, CRITICAL condition)
+ * - Stale PROCESSING jobs (stuck for >15 minutes)
+ * - Invalid job types (jobs with no handler)
+ * - Jobs approaching max retries (early warning)
  *
  * Health Statuses:
  * - HEALTHY: All systems operating normally
  * - DEGRADED: Some issues detected but pipeline is functional
+ *   - Stale PROCESSING jobs detected
+ *   - No completions in >60 minutes
+ *   - General issues present
  * - CRITICAL: Pipeline may be stalled or severely impacted
+ *   - Exhausted RETRYING jobs (caused 41-hour stall in Jan 2026)
+ *   - Invalid job types (can never complete)
+ *   - No completions in >180 minutes
  * - ERROR: Unable to determine pipeline status
+ *
+ * @see docs/plans/2026-01-05-100-percent-pipeline-uptime.md
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -45,13 +57,34 @@ interface PipelineHealthResponse {
     completedLast24h: number;
     deadLetter: number;
     retrying: number;
+    exhaustedRetrying: number;
+    staleProcessing: number;
+    invalidJobTypes: number;
+    highRetryCount: number;
   };
   lastCompletion: string | null;
   minutesSinceLastCompletion: number | null;
   issues: string[];
+  warnings?: string[];
   recommendations: string[];
   timestamp: string;
 }
+
+/**
+ * Valid job types that have handlers in the system.
+ * Jobs with types not in this list are considered invalid and will be cleaned up.
+ */
+const VALID_JOB_TYPES = [
+  'ASYNC_DISCOVER_FILINGS',
+  'ASYNC_FETCH_FILING',
+  'ASYNC_SUMMARIZE_CACHED'
+];
+
+/**
+ * Time thresholds for detecting stale jobs
+ */
+const STALE_PROCESSING_MINUTES = 15;
+const HIGH_RETRY_THRESHOLD = 2; // Jobs with retryCount >= this are "approaching" max
 
 export async function GET(request: NextRequest) {
   const startTime = Date.now();
@@ -125,7 +158,9 @@ export async function GET(request: NextRequest) {
     const oneHourAgo = new Date(now.getTime() - 60 * 60 * 1000);
     const oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
 
-    // Count jobs by status
+    // Count jobs by status - including new stuck job detection
+    const staleProcessingCutoff = new Date(now.getTime() - STALE_PROCESSING_MINUTES * 60 * 1000);
+
     const [
       pendingCount,
       processingCount,
@@ -133,7 +168,12 @@ export async function GET(request: NextRequest) {
       completedLast24h,
       deadLetterCount,
       retryingCount,
-      lastCompletedJob
+      lastCompletedJob,
+      // New metrics for stuck job detection
+      staleProcessingCount,
+      invalidJobTypeCount,
+      highRetryCount,
+      exhaustedRetryingResult
     ] = await Promise.all([
       prisma.jobQueue.count({
         where: { status: 'PENDING' }
@@ -163,8 +203,40 @@ export async function GET(request: NextRequest) {
         where: { status: 'COMPLETED' },
         orderBy: { completedAt: 'desc' },
         select: { completedAt: true }
-      })
+      }),
+      // Stale PROCESSING jobs (stuck for > 15 minutes)
+      prisma.jobQueue.count({
+        where: {
+          status: 'PROCESSING',
+          startedAt: { lt: staleProcessingCutoff }
+        }
+      }),
+      // Invalid job types (no handler exists)
+      prisma.jobQueue.count({
+        where: {
+          status: { in: ['PENDING', 'RETRYING', 'PROCESSING'] },
+          jobType: { notIn: VALID_JOB_TYPES }
+        }
+      }),
+      // Jobs approaching max retries (high retry count)
+      prisma.jobQueue.count({
+        where: {
+          status: { in: ['PENDING', 'RETRYING'] },
+          retryCount: { gte: HIGH_RETRY_THRESHOLD }
+        }
+      }),
+      // RETRYING jobs with exhausted retries (retryCount >= maxRetries)
+      // Using raw query for the comparison between two columns
+      prisma.$queryRaw<{count: bigint}[]>`
+        SELECT COUNT(*) as count
+        FROM pipeline."JobQueue"
+        WHERE "status" = 'RETRYING'
+          AND "retryCount" >= "maxRetries"
+      `
     ]);
+
+    // Extract exhausted retrying count from raw query result
+    const exhaustedRetryingCount = Number(exhaustedRetryingResult[0]?.count || 0);
 
     // Calculate time since last completion
     const lastCompletionTime = lastCompletedJob?.completedAt || null;
@@ -205,15 +277,52 @@ export async function GET(request: NextRequest) {
       recommendations.push('Review dead letter jobs for patterns');
     }
 
+    // NEW: Detect exhausted RETRYING jobs (CRITICAL - caused 41-hour stall)
+    if (exhaustedRetryingCount > 0) {
+      issues.push(`RETRYING jobs with exhausted retries detected: ${exhaustedRetryingCount}`);
+      recommendations.push('Run: npm run verify:daily -- --force-cleanup');
+    }
+
+    // NEW: Detect stale PROCESSING jobs
+    if (staleProcessingCount > 0) {
+      issues.push(`PROCESSING jobs stuck for >${STALE_PROCESSING_MINUTES} minutes: ${staleProcessingCount}`);
+      recommendations.push('Check for crashed workers or hung processes');
+    }
+
+    // NEW: Detect invalid job types
+    if (invalidJobTypeCount > 0) {
+      issues.push(`Jobs with invalid/unknown job types detected: ${invalidJobTypeCount}`);
+      recommendations.push('Clean up legacy job types with invalid type names');
+    }
+
+    // Track warnings separately from critical issues
+    const warnings: string[] = [];
+
+    // NEW: Warn about jobs approaching max retries
+    if (highRetryCount > 0) {
+      warnings.push(`Jobs approaching max retry limit: ${highRetryCount}`);
+      recommendations.push('Monitor these jobs for potential failures');
+    }
+
     // Determine overall health status
     let status: 'HEALTHY' | 'DEGRADED' | 'CRITICAL' | 'ERROR' = 'HEALTHY';
 
-    if (lockMetrics.healthStatus === 'CRITICAL' ||
-        (minutesSinceLastCompletion !== null && minutesSinceLastCompletion > 180)) {
+    // CRITICAL conditions - pipeline is stalled or severely impacted
+    if (
+      lockMetrics.healthStatus === 'CRITICAL' ||
+      (minutesSinceLastCompletion !== null && minutesSinceLastCompletion > 180) ||
+      exhaustedRetryingCount > 0 ||  // NEW: Jobs stuck forever without intervention
+      invalidJobTypeCount > 0        // NEW: Jobs that can never complete
+    ) {
       status = 'CRITICAL';
-    } else if (lockMetrics.healthStatus === 'WARNING' ||
-               issues.length > 0 ||
-               (minutesSinceLastCompletion !== null && minutesSinceLastCompletion > 60)) {
+    }
+    // DEGRADED conditions - issues detected but pipeline may recover
+    else if (
+      lockMetrics.healthStatus === 'WARNING' ||
+      issues.length > 0 ||
+      (minutesSinceLastCompletion !== null && minutesSinceLastCompletion > 60) ||
+      staleProcessingCount > 0  // NEW: Jobs might be hung
+    ) {
       status = 'DEGRADED';
     }
 
@@ -231,11 +340,17 @@ export async function GET(request: NextRequest) {
         completedLast1h,
         completedLast24h,
         deadLetter: deadLetterCount,
-        retrying: retryingCount
+        retrying: retryingCount,
+        // NEW: Stuck job detection metrics
+        exhaustedRetrying: exhaustedRetryingCount,
+        staleProcessing: staleProcessingCount,
+        invalidJobTypes: invalidJobTypeCount,
+        highRetryCount: highRetryCount
       },
       lastCompletion: lastCompletionTime?.toISOString() || null,
       minutesSinceLastCompletion,
       issues,
+      warnings: warnings.length > 0 ? warnings : undefined,
       recommendations,
       timestamp: now.toISOString()
     };
@@ -295,7 +410,11 @@ export async function GET(request: NextRequest) {
         completedLast1h: 0,
         completedLast24h: 0,
         deadLetter: 0,
-        retrying: 0
+        retrying: 0,
+        exhaustedRetrying: 0,
+        staleProcessing: 0,
+        invalidJobTypes: 0,
+        highRetryCount: 0
       },
       lastCompletion: null,
       minutesSinceLastCompletion: null,
