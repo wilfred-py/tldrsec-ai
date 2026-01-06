@@ -333,9 +333,9 @@ npm run test -- --testPathPattern="pipeline-exhaustive-detection"
 
 ### Step 1.3: Refactor
 
-- [ ] Extract magic numbers to named constants at top of file
-- [ ] Add JSDoc for each new detection type
-- [ ] Add metrics to response for dashboard visualization
+- [x] Extract magic numbers to named constants at top of file
+- [x] Add JSDoc for each new detection type
+- [x] Add metrics to response for dashboard visualization
 
 **Checkpoint 1.3**: Tests still pass:
 ```bash
@@ -346,9 +346,9 @@ npm run test -- --testPathPattern="pipeline-exhaustive-detection"
 ### Step 1.4: Final Phase Verification
 
 #### Automated Verification:
-- [ ] All phase tests pass: `npm run test -- --testPathPattern="pipeline-exhaustive-detection"`
-- [ ] Type checking passes: `npm run build`
-- [ ] Linting passes: `npm run lint`
+- [x] All phase tests pass: `npm run test -- --testPathPattern="pipeline-exhaustive-detection"`
+- [x] Type checking passes: `npm run build`
+- [x] Linting passes: `npm run lint`
 - [ ] No regressions: `npm run test`
 
 #### Manual Verification:
