@@ -1,13 +1,41 @@
 # Current Progress: tldrsec-ai Pipeline Operations
 
 ## Current Status
-**Date**: 2026-01-05
-**Branch**: main
-**Status**: ✅ OPERATIONAL - Dashboard redesign completed
+**Date**: 2026-01-06
+**Branch**: cron-pipeline-maintenance
+**Status**: ⏳ IN PROGRESS - 100% Pipeline Uptime Implementation (Phase 1 Complete)
 
 ---
 
-## Current Session: Dashboard Redesign - Inline Ticker Addition
+## Current Session: 100% Pipeline Uptime Implementation
+
+### 100% Pipeline Uptime ⏳ IN PROGRESS (2026-01-06)
+
+**Plan**: [2026-01-05-100-percent-pipeline-uptime.md](docs/plans/2026-01-05-100-percent-pipeline-uptime.md)
+
+**Overview**: Addressing 14 critical gaps across 6 system components that allowed a 41-hour pipeline stall (Jan 3-5, 2026) to go undetected.
+
+**Phase 1 - Enhanced Health Check ✅ COMPLETE**:
+- Added detection for exhausted RETRYING jobs (CRITICAL status)
+- Added detection for stale PROCESSING jobs >15 min (DEGRADED status)
+- Added detection for invalid job types (CRITICAL status)
+- Added warning for jobs approaching max retries
+- New response fields: `exhaustedRetrying`, `staleProcessing`, `invalidJobTypes`, `highRetryCount`
+- 6 tests pass in `__tests__/api/health/pipeline-exhaustive-detection.test.ts`
+
+**Files Modified**:
+- `app/api/health/pipeline/route.ts` - Enhanced with 4 new detection types + constants
+- `__tests__/api/health/pipeline-exhaustive-detection.test.ts` - New test file (6 tests)
+
+**Remaining Phases**:
+- [ ] Phase 2: Comprehensive Self-Healing Auto-Recovery
+- [ ] Phase 3: Maximum Lock Hold Time Enforcement
+- [ ] Phase 4: Comprehensive E2E Pipeline Health Test
+- [ ] Phase 5: Documentation and Runbook
+
+---
+
+## Previous Session: Dashboard Redesign - Inline Ticker Addition
 
 ### Dashboard Redesign ✅ COMPLETE (2026-01-05)
 
@@ -306,241 +334,20 @@
 
 ---
 
-### Previous: Pricing Section Grok-Style Redesign ✅ COMPLETE (2025-12-31)
+### Dec 29-31, 2025 Fixes (See Archive for Details)
 
-**Issue**: Pricing section toggle and display needed modernization inspired by Grok's subscription page.
-
-**Changes**:
-1. **Grok-style toggle** - Custom toggle button with "Save with yearly billing" label
-2. **Annual pricing display** - Shows full annual price ($990 USD/year) with "Save X%" badge in orange
-3. **Monthly equivalent** - Helper text showing "$83/mo billed annually"
-4. **Updated card layout** - Popular badge inline, CTA after price, "Everything in Free/Pro" footer
-5. **Copy updates** - "Current Plan" (disabled), "Upgrade to Pro", "Upgrade to Max"
-6. **AnimatedPrice component** - Grok-inspired individual digit animation with direction awareness
-
-**Files Modified**:
-- `components/landing/sections-v2/pricing-section-v2.tsx` - Complete Grok-inspired redesign
-- `components/landing/sections-v2/animated-price.tsx` - New animated price component
-
-**Verification**: ✅ Lint passes, no errors
-
----
-
-### Previous: Schedule 13G/D Email Link Fix ✅ COMPLETE (2025-12-31)
-
-**Issue**: Four UI/UX issues with SEC filing summary pages:
-1. 13G filing shows "SCHEDULE" instead of "SCHEDULE 13G" - poor UX
-2. Border around summary div too prominent
-3. Text misaligned with header text
-4. Filing link redirects to index page instead of actual filing document
-
-**Root Cause**:
-- `formatFilingType()` function didn't handle Schedule 13G/D variants
-- Database stores filings as "SCHEDULE" without the "13G" suffix
-- Email URLs for Schedule 13G/D pointed to `-index.htm` (filing detail pages) instead of XSLT-rendered documents
-- SEC Schedule 13G/D filings use specific stylesheets at `xslSCHEDULE_13G_X01/primary_doc.xml`
-
-**Fixes Applied**:
-1. **Added Schedule 13G/D to formatFilingType()** - Both `summary-card.tsx` and `app/summary/[id]/page.tsx` now handle Schedule 13G/D variants
-2. **Removed summary div border** - Changed from `bg-white rounded-lg shadow p-6` to `rounded-lg p-6`
-3. **Added text alignment padding** - Added `pl-10` to align text with header
-4. **Smart URL conversion for Schedule 13 filings** - Updated `getSecFilingViewerUrl()` to:
-   - Detect Schedule 13G/D filings via `isSchedule13Type()` helper
-   - Convert `-index.htm` URLs to `xslSCHEDULE_13G_X01/primary_doc.xml` format
-   - Added stylesheet directory mapping in `getXsltStylesheetDir()`
-
-**Files Modified**:
-- `lib/email/url-utils.ts` - Added Schedule 13G/D stylesheet support, `isSchedule13Type()` helper, index-to-document URL conversion
-- `app/summary/[id]/page.tsx` - Added `formatFilingType()`, imported `getSecFilingViewerUrl`, removed border, added alignment
-- `components/summary/summary-card.tsx` - Added Schedule 13G/D cases to `formatFilingType()`
-
-**Verification**: ✅ Test emails sent, ✅ URLs return 200 status, ✅ User confirmed "working now"
-
----
-
-### Previous: PREMIUM → MAX Tier Rename ✅ COMPLETE (2025-12-30)
-
-**Issue**: Rename "Premium" tier to "Max" tier across the codebase for consistency with new pricing structure ($0 Free / $99 Pro / $139 Max).
-
-**Fixes Applied**:
-1. **Updated pricing-section.tsx** - Changed PlanKey type, planIcons, planGradients, planBorders mappings from PREMIUM to MAX
-2. **Updated upgrade-cta-section.tsx** - Changed currentPlan type and UI text ("Go Max", "Start Max - $139/mo")
-3. **Updated subscription-plans.tsx** - Updated getPlanPrice mapping (MAX: '$139')
-4. **Updated rbac.ts** - Renamed UserRole.PREMIUM_USER to UserRole.MAX_USER, updated permission matrix
-5. **Updated subscription-validation.ts** - Added MAX to Zod enums for backwards compatibility
-6. **Updated subscriptionService.ts** - Added MAX mapping to tier mappings
-7. **Updated stripe-pricing.test.ts** - Renamed test suite from "Premium Tier" to "Max Tier"
-8. **Updated secure-test-utils.ts** - Updated mock UserRole
-
-**Files Modified**:
-- `components/landing/sections/pricing-section.tsx`
-- `components/dashboard/upgrade-cta-section.tsx`
-- `components/billing/subscription-plans.tsx`
-- `lib/security/rbac.ts`
-- `lib/validation/subscription-validation.ts`
-- `services/filings/enhanced/subscriptionService.ts`
-- `__tests__/config/stripe-pricing.test.ts`
-- `__tests__/utils/secure-test-utils.ts`
-
-**Verification**: ✅ Build passes, ✅ 16 Stripe pricing tests pass
-
----
-
-### Previous: Form 144 Email Metrics Enhancement ✅ COMPLETE (2025-12-30)
-
-**Issue**: Form 144 email metrics cards showing only estimated value, not shares. Also missing "Amount of Securities Beneficially Owned Following Reported Transaction(s)" field.
-
-**Fixes Applied**:
-1. **Redesigned metrics cards** - Now shows 2 side-by-side cards: "Shares to Sell" and "Estimated Value" (both equally prominent)
-2. **Added remaining holdings display** - New card showing "Shares Remaining After Sale" when available
-3. **Enhanced AI schema** - Added `remainingHoldings` field to Form 144 extraction schema
-4. **Updated extraction guidance** - AI now explicitly extracts "Amount of Securities Beneficially Owned Following Transaction"
-5. **Added data extractor patterns** - New `extractRemainingHoldings()` function with 7 regex patterns
-
-**Files Modified**:
-- `lib/ai/prompts/unified-prompts.ts:303-306` - Added `remainingHoldings` schema field + extraction guidance
-- `lib/email/form144-data-extractor.ts:20,38,74,340-367` - Added interface field + extraction function
-- `components/ui/email/templates/form144-minimalist-template.tsx:180,294-443` - Redesigned metrics cards layout
-
-**New Layout**:
-```
-┌─────────────────────┐  ┌─────────────────────┐
-│ SHARES TO SELL      │  │ ESTIMATED VALUE     │
-│ 40,000              │  │ $9.9M               │
-│ @ $248/share        │  │ 15% of holdings     │
-└─────────────────────┘  └─────────────────────┘
-
-┌─────────────────────────────────────────────┐
-│ SHARES REMAINING AFTER SALE                 │
-│ 1,500,000                                   │
-│ Amount of Securities Beneficially Owned...  │
-└─────────────────────────────────────────────┘
-```
-
-**Verification**: ✅ Lint passes, code compiles
-
----
-
-### Previous: Email Filing URL Exhibit Exclusion Fix ✅ COMPLETE (2025-12-30)
-
-**Issue**: Email filing links pointing to wrong documents:
-1. 10-K redirected to exhibit file (`d13958dex21.htm`) instead of main document
-2. Form 4 redirected to filing detail page (index) instead of XML document
-
-**Root Cause**: `extractPrimaryDocumentUrl()` in fetch-handler.ts was selecting exhibit files alphabetically before main documents. It simply picked the first HTM file that wasn't an index.
-
-**Fix Applied**:
-1. Added `isExhibitFile()` helper - Detects exhibit patterns via regex (`ex21`, `exh31`, `dex21`, `-ex31`, `exhibit`)
-2. Added `isMainDocument()` helper - Identifies main documents (ticker-YYYYMMDD.htm pattern)
-3. Implemented priority-based selection:
-   - Priority 1: Main document pattern (non-exhibit)
-   - Priority 2: Any non-exhibit HTM file
-   - Priority 3: Fallback to first HTM (may be exhibit)
-
-**Files Modified**:
-- `lib/cron/handlers/fetch-handler.ts:556-605` - New extraction logic with exhibit exclusion
-
-**Verification**:
-- ✅ Tested extraction with real SEC 8-K filing - correctly selected `d13958d8k.htm` over `d13958dex21.htm`
-- ✅ 6 test emails sent for all form types
-- ✅ Fix applies to NEW filings (existing incorrect URLs remain until cache expires)
-
----
-
-### Previous: Cloudflare Cron Trigger Restoration & Backfill ✅ COMPLETE (2025-12-30)
-
-**Issue**: SEC filing pipeline was not discovering new filings - 0 filings discovered in last 24 hours vs 35 on SEC EDGAR.
-
-**Root Cause**: Cloudflare Worker cron triggers stopped firing after Dec 27 deployment. TickerMonitoring `lastChecked` timestamps showed most tickers hadn't been checked since Dec 4 (26 days stale).
-
-**Fix Applied**:
-1. **Redeployed Cloudflare Worker** with `npx wrangler deploy`
-2. **Deployed cron triggers explicitly** with `npx wrangler triggers deploy` (15-min propagation)
-3. **Verified via wrangler tail** - cron firing at 01:55 UTC, full 5-step pipeline executing
-4. **Created backfill script** for 379 unprocessed RssFilingCheck records
-5. **Fixed schema error** in backfill script (`maxAttempts` → `maxRetries`)
-6. **Ran backfill** - created 413 fetch jobs for tracked tickers (VRT, COIN, TSLA, etc.)
-
-**Files Created/Modified**:
-- `scripts/backfill-unprocessed-filings.ts` - NEW: Backfill script for missed filings
-- `cloudflare-cron/wrangler.toml` - Verified cron config (*/5, */10, 0 22 * * *)
-
-**Pipeline Status After Fix**:
-- 408 pending fetch jobs (down from 413)
-- 4 new summaries created today (VRT, COIN)
-- Emails sent for new summaries
-- Est. backlog clearance: ~68 hours at current rate
-
-**Verification**:
-- ✅ Cron triggers firing (confirmed via wrangler tail)
-- ✅ Jobs processing (completed count increasing)
-- ✅ Summaries being created (4 new today)
-- ✅ Emails being sent
-
----
-
-### Previous: Form 4 Email Value Display & Mobile-First Fix ✅ COMPLETE (2025-12-30)
-
-**Issue**: TSLA Form 4 email showing:
-1. SOLD transaction showing $0 instead of $25.6M
-2. Gift container too large relative to sale container
-3. Gift showing "15,242 shares" instead of dollar value ($0)
-
-**Root Causes**:
-- `aggregateTransactionsByType()` was using `totalValue` even when it was $0 (missing value from AI)
-- Gift transactions displayed shares instead of dollar value
-- Containers used fixed widths that didn't scale well on mobile
-
-**Fixes Applied**:
-1. **Improved value calculation** - When `totalValue` is $0 for non-gift transactions, calculate from `shares * price` instead
-2. **Unified value display** - All transaction types (sale, gift, purchase) now show dollar value as primary, shares as secondary
-3. **Mobile-first responsive design** - Percentage-based widths (48% for 2 items, 31% for 3 items), reduced padding (16px)
-4. **Enhanced data extraction** - New pattern to extract "fetching $X million" from AI summaries
-
-**Files Modified**:
-- `components/ui/email/templates/form4-minimalist-template.tsx` - Value calculation fix, display unification, responsive layout
-- `lib/email/form4-data-extractor.ts` - Added `saleWithTotalPatterns` for explicit total value extraction
-
-**Verification**:
-- ✅ Build compiles successfully
-- ✅ All 6 form type test emails sent (10-K, 10-Q, 144, Form 3, Form 4, 8-K)
-- ✅ URL verification passed for all form types
-
----
-
-### Previous: Form 4 Multi-Transaction Cards & Links Fix ✅ COMPLETE (2025-12-30)
-
-**Issue**: Two Form 4 email issues reported:
-1. Multi-transaction cards not showing for Form 4s with multiple transactions
-2. Filing links not redirecting to actual filing documents
-
-**Root Cause 1 (Multi-Transaction)**: `summaryJSON` data containing transactions array was being discarded by setting `rawData: undefined` in FilingSummaryResult. The email template expected `data?.transactions` but received empty object.
-
-**Root Cause 2 (Template Type Error)**: Form 4 template assumed `tx.shares` was always a string (for `.replace()`), but AI models sometimes return numbers.
-
-**Fixes Applied**:
-1. **Pass summaryJSON through rawData** - Modified `filingSummaryService.ts` line 567 to pass `rawData: { summaryJSON: summaryJSON.summaryJSON }` instead of `undefined`
-2. **Include rawData in cached summaries** - Modified `filingDatabase.ts` to include `rawData: summaryJSON ? { summaryJSON } : undefined` when retrieving cached summaries
-3. **Add parseNumericValue() helper** - New robust parser handles both string ("1,234", "$1.5M") and number types
-4. **Update TransactionData interface** - Changed `shares`, `pricePerShare`, `totalValue` from `string` to `string | number`
-
-**Files Modified**:
-- `services/filings/summaries/filingSummaryService.ts` - Pass rawData with summaryJSON
-- `services/filings/database/filingDatabase.ts` - Include rawData and filingUrl in cached results
-- `components/ui/email/templates/form4-minimalist-template.tsx` - Type-safe numeric parsing
-
-**Verification**:
-- ✅ Build passes
-- ✅ URL utils tests pass (16/16)
-- ✅ E2E test passes - 5/5 summaries generated, email sent successfully
-
----
-
-### Dec 29, 2025 Fixes (See Archive for Details)
-
-- **Cloudflare Cron Trigger Fix** - Triggers detached after deployment, redeployed with `wrangler triggers deploy`, added `/health` endpoint
-- **Email Summary Quality** - Markdown prevention, XML URL construction, 8-K schema enhancement (28 tests added)
-- **Form 4 Email Template Fixes** - 5 issues fixed: URLs, truncation, gifts, multi-transaction display
+Detailed implementation in [29-Dec-2025.md](.claude/history/2025/Dec/29-Dec-2025.md):
+- Pricing Section Grok-Style Redesign (animated toggle, annual pricing)
+- Schedule 13G/D Email Link Fix (XSLT stylesheet URL conversion)
+- PREMIUM → MAX Tier Rename (8 files updated)
+- Form 144 Email Metrics Enhancement (shares + remaining holdings display)
+- Email Filing URL Exhibit Exclusion Fix (priority-based document selection)
+- Cloudflare Cron Trigger Restoration & Backfill (413 jobs queued)
+- Form 4 Email Value Display & Mobile-First Fix
+- Form 4 Multi-Transaction Cards & Links Fix
+- Cloudflare Cron Trigger Fix + Health Monitoring
+- Email Summary Quality Improvements
+- Form 4 Email Template Fixes
 
 ---
 
@@ -599,7 +406,8 @@ npm run cloudflare:status                 # Check deployment status
 
 ---
 
-**Last Updated**: 2026-01-05 (Dashboard redesign + context compact)
+**Last Updated**: 2026-01-06 (100% Pipeline Uptime Phase 1 + context compact)
 **Repository**: tldrsec-ai
 
 *See TIMELINE.md for master timeline and quick navigation*
+*Older completed projects archived to .claude/history/ - See TIMELINE.md for full history*
