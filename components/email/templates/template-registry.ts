@@ -5,6 +5,7 @@ import { FilingTemplateData } from '../../../lib/email/types';
 import Form4MinimalistTemplate from '../../ui/email/templates/form4-minimalist-template';
 import Form10KMinimalistTemplate from '../../ui/email/templates/10k-minimalist-template';
 import Form10QMinimalistTemplate from '../../ui/email/templates/10q-minimalist-template';
+import Form8KMinimalistTemplate from '../../ui/email/templates/8k-minimalist-template';
 import GenericMinimalistTemplate from '../../ui/email/templates/generic-minimalist-template';
 import Form11KEmailTemplate from '../../ui/email/templates/11k-template';
 import Form144MinimalistTemplate from '../../ui/email/templates/form144-minimalist-template';
@@ -26,15 +27,21 @@ const templateRegistry = new Map<string, TemplateComponent>([
   ['3', Form4MinimalistTemplate],
   ['4', Form4MinimalistTemplate],
   ['5', Form4MinimalistTemplate],
-  
+
   // Annual reports
   ['10-K', Form10KMinimalistTemplate],
   ['Form 10-K', Form10KMinimalistTemplate],
-  
+
   // Quarterly reports
   ['10-Q', Form10QMinimalistTemplate],
   ['Form 10-Q', Form10QMinimalistTemplate],
-  
+
+  // Current reports (8-K - material events)
+  ['8-K', Form8KMinimalistTemplate],
+  ['8K', Form8KMinimalistTemplate],
+  ['Form 8-K', Form8KMinimalistTemplate],
+  ['FORM 8-K', Form8KMinimalistTemplate],
+
   // Specialized templates
   ['Form 11-K', Form11KEmailTemplate],
   ['144', Form144MinimalistTemplate],
