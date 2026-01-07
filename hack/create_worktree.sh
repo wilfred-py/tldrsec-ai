@@ -87,6 +87,12 @@ if [ -d ".claude" ]; then
     cp -r .claude "$WORKTREE_PATH/"
 fi
 
+# Copy .env file from main branch if it exists
+if [ -f ".env" ]; then
+    echo "🔧 Copying .env file from main..."
+    cp .env "$WORKTREE_PATH/"
+fi
+
 # Change to worktree directory
 cd "$WORKTREE_PATH"
 
