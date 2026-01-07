@@ -2,18 +2,37 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { clerkClient } from '@clerk/nextjs/server';
 import { stripe, SUBSCRIPTION_PLANS } from '@/lib/stripe';
+import { rateLimit, rateLimitConfigs } from '@/lib/middleware/rate-limit';
+import { PaymentLogger } from '@/lib/audit/payment-logger';
 
 const DirectCheckoutSchema = z.object({
   email: z.string().email(),
   planType: z.enum(['FREE', 'PRO', 'MAX']), // 3-tier system restored
 });
 
+// Apply rate limiting wrapper
+const checkoutRateLimit = rateLimit(rateLimitConfigs.checkout);
+
 export async function POST(request: NextRequest) {
+  return checkoutRateLimit(request, async (req) => {
   try {
     const body = await request.json();
     
     // Parse and validate - this will throw for invalid emails/plan types
     const { email, planType } = DirectCheckoutSchema.parse(body);
+    
+    // Extract request metadata for audit logging
+    const ipAddress = req.headers.get('x-forwarded-for') || req.headers.get('x-real-ip') || 'unknown';
+    const userAgent = req.headers.get('user-agent') || 'unknown';
+    
+    // Log checkout attempt
+    await PaymentLogger.checkoutStarted({
+      email,
+      planType,
+      amount: SUBSCRIPTION_PLANS[planType].monthlyPrice,
+      ipAddress,
+      userAgent,
+    });
     
     // Handle FREE plan - create account immediately
     if (planType === 'FREE') {
@@ -63,4 +82,5 @@ export async function POST(request: NextRequest) {
       message: error.message || 'Unknown error'
     }, { status: 500 });
   }
+  });
 }
