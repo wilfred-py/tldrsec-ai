@@ -7,7 +7,6 @@ import {
   getSortedRowModel,
   getPaginationRowModel,
   SortingState,
-  PaginationState,
   useReactTable,
   Table as TanStackTable,
 } from "@tanstack/react-table";
