@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { LRUCache } from 'lru-cache';
 
 interface RateLimitConfig {
   interval: number; // Time window in milliseconds
@@ -7,11 +6,20 @@ interface RateLimitConfig {
   max: number; // Max requests per interval
 }
 
-// Create cache for rate limiting
-const rateLimitCache = new LRUCache<string, number[]>({
-  max: 500, // Max 500 unique users
-  ttl: 60 * 1000, // 1 minute TTL
-});
+// Simple Map-based cache for rate limiting (with manual cleanup)
+const rateLimitCache = new Map<string, { requests: number[]; lastCleanup: number }>();
+
+// Cleanup old entries periodically
+function cleanupCache() {
+  const now = Date.now();
+  const maxAge = 5 * 60 * 1000; // 5 minutes
+  
+  for (const [key, data] of rateLimitCache.entries()) {
+    if (now - data.lastCleanup > maxAge) {
+      rateLimitCache.delete(key);
+    }
+  }
+}
 
 export function rateLimit(config: RateLimitConfig) {
   return async function rateLimitMiddleware(
@@ -26,8 +34,14 @@ export function rateLimit(config: RateLimitConfig) {
     const now = Date.now();
     const windowStart = now - config.interval;
     
+    // Cleanup old entries occasionally
+    if (Math.random() < 0.1) { // 10% chance
+      cleanupCache();
+    }
+    
     // Get existing requests for this identifier
-    const requests = rateLimitCache.get(identifier) || [];
+    const cachedData = rateLimitCache.get(identifier);
+    const requests = cachedData?.requests || [];
     
     // Filter requests within current window
     const recentRequests = requests.filter(timestamp => timestamp > windowStart);
@@ -52,7 +66,10 @@ export function rateLimit(config: RateLimitConfig) {
     
     // Add current request timestamp
     recentRequests.push(now);
-    rateLimitCache.set(identifier, recentRequests);
+    rateLimitCache.set(identifier, { 
+      requests: recentRequests, 
+      lastCleanup: now 
+    });
     
     // Add rate limit headers
     const response = await handler(request);
