@@ -13,6 +13,7 @@ import { Form144MinimalistTemplate } from '../../../components/ui/email/template
 import { GenericMinimalistTemplate } from '../../../components/ui/email/templates/generic-minimalist-template';
 import { FilingTemplateData } from '../../../lib/email/types';
 import { EmailColors } from '../../../components/ui/email/design-system';
+import { EmailSubjectService } from '../../../lib/email/subject-service';
 
 // Define a safe version of recordEmailSent that handles missing function
 const safeRecordEmailSent = (emailType: string, recipient: string, success: boolean, tags: Record<string, string> = {}): void => {
@@ -277,10 +278,16 @@ export async function sendSummaryEmail(email: string, summaries: FilingSummaryRe
     
     const startTime = Date.now();
     
+    // Generate subject line using centralized service
+    const subject = EmailSubjectService.generateDigestSubject({
+      date: new Date().toISOString().split('T')[0],
+      filingCount: summaries.length
+    });
+
     // Send the email
     const result = await emailClient.sendEmail({
       to: email,
-      subject: `SEC Filing Summaries - ${new Date().toLocaleDateString()}`,
+      subject,
       html: emailHtml,
       text: plainText,
       tags: [

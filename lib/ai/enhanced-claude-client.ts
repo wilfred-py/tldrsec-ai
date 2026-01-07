@@ -153,7 +153,7 @@ export class EnhancedClaudeClient extends EventEmitter {
     const mergedOptions = {
       model: getClaudeModel(),
       maxTokens: 4000,
-      temperature: 0.3,
+      temperature: 0.2, // Standardized for SEC filing summarization consistency
       useCache: true,
       useRetry: true,
       useAdaptiveRetry: true,

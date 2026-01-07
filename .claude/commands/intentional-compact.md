@@ -8,6 +8,42 @@ You are tasked with compacting the context window by managing PROGRESS.md size a
 
 ## Process
 
+### Step 0: Worktree Progress Sync (if in worktree)
+
+**ALWAYS perform this step first to ensure progress files are current.**
+
+1. **Detect if in worktree**:
+   - Check if current directory path contains `/wt/` pattern
+   - Run: `git worktree list | grep -q "$(pwd)"` to confirm worktree status
+
+2. **If in worktree, sync progress files from main**:
+   ```bash
+   echo "📋 Syncing latest progress files from main branch..."
+   
+   # Fetch latest from remote to ensure main is current
+   git fetch origin
+   
+   # Get latest PROGRESS.md from main branch
+   if git show main:PROGRESS.md > /dev/null 2>&1; then
+       git show main:PROGRESS.md > PROGRESS.md
+       echo "   ✓ Updated PROGRESS.md from main"
+   else
+       echo "   ⚠️  PROGRESS.md not found in main branch"
+   fi
+   
+   # Get latest TIMELINE.md from main branch  
+   if git show main:TIMELINE.md > /dev/null 2>&1; then
+       git show main:TIMELINE.md > TIMELINE.md
+       echo "   ✓ Updated TIMELINE.md from main"
+   else
+       echo "   ⚠️  TIMELINE.md not found in main branch"
+   fi
+   ```
+
+3. **If NOT in worktree**:
+   - Report: "Running in main repository - no worktree sync needed"
+   - Proceed to Step 1
+
 ### Step 1: Analyze Current State
 
 1. **Read PROGRESS.md completely**:

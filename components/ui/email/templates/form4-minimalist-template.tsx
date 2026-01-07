@@ -43,25 +43,20 @@ function parseNumericValue(value: string | number | undefined | null): number {
 }
 
 /**
- * Check if a transaction is a gift
- * Handles multiple representations:
- * - type: 'Gift', 'gift', 'G', 'g'
- * - type containing 'gift' (e.g., 'Gift Transaction')
- * - code: 'G'
- * - price: '$0' or '0' with disposition 'D' (gifts are typically $0 dispositions)
+ * Check if a transaction is a trust/family transfer
+ * Transfers represent changes in beneficial ownership form, NOT market transactions
  */
-function isGiftTransaction(tx: TransactionData): boolean {
+export function isTransferTransaction(tx: TransactionData): boolean {
   const type = tx.type?.toLowerCase() || '';
   const code = tx.code?.toUpperCase() || '';
-  const priceNum = parseNumericValue(tx.pricePerShare);
 
-  // Explicit gift indicators
-  if (type === 'gift' || type === 'g' || type.includes('gift') || code === 'G') {
+  // Explicit transfer indicators
+  if (type.includes('transfer') || type.includes('trust')) {
     return true;
   }
 
-  // $0 disposition is likely a gift (not a sale)
-  if (priceNum === 0 && tx.acquisitionDisposition === 'D' && tx.shares) {
+  // J and K codes typically represent trust/family transfers
+  if (code === 'J' || code === 'K') {
     return true;
   }
 
@@ -69,11 +64,38 @@ function isGiftTransaction(tx: TransactionData): boolean {
 }
 
 /**
- * Check if a transaction is a sale (not gift)
+ * Check if a transaction is a gift
+ * Handles multiple representations:
+ * - type: 'Gift', 'gift', 'G', 'g'
+ * - type containing 'gift' (e.g., 'Gift Transaction')
+ * - code: 'G'
+ * Note: $0 dispositions are NOT automatically gifts - they could be transfers
+ */
+export function isGiftTransaction(tx: TransactionData): boolean {
+  // Transfers are not gifts, even if at $0
+  if (isTransferTransaction(tx)) {
+    return false;
+  }
+
+  const type = tx.type?.toLowerCase() || '';
+  const code = tx.code?.toUpperCase() || '';
+
+  // Explicit gift indicators
+  if (type === 'gift' || type === 'g' || type.includes('gift') || code === 'G') {
+    return true;
+  }
+
+  return false;
+}
+
+/**
+ * Check if a transaction is a sale (not gift or transfer)
  * A sale is a disposition with non-zero price
  */
 function isSaleTransaction(tx: TransactionData): boolean {
-  if (isGiftTransaction(tx)) return false;
+  // Transfers and gifts are not sales
+  if (isTransferTransaction(tx) || isGiftTransaction(tx)) return false;
+
   const type = tx.type?.toLowerCase() || '';
   const code = tx.code?.toUpperCase() || '';
 
@@ -82,9 +104,11 @@ function isSaleTransaction(tx: TransactionData): boolean {
     return true;
   }
 
-  // Disposition with a price is a sale (gifts are $0)
+  // Disposition with a price is a sale (gifts/transfers are $0)
   if (tx.acquisitionDisposition === 'D') {
-    const price = tx.pricePerShare?.replace(/[$,]/g, '') || '';
+    const price = typeof tx.pricePerShare === 'string'
+      ? tx.pricePerShare.replace(/[$,]/g, '')
+      : String(tx.pricePerShare || '');
     const priceNum = parseFloat(price) || 0;
     return priceNum > 0;
   }
@@ -93,12 +117,37 @@ function isSaleTransaction(tx: TransactionData): boolean {
 }
 
 /**
+ * Check if a transaction is a purchase (not transfer)
+ */
+export function isPurchaseTransaction(tx: TransactionData): boolean {
+  // Transfers are not purchases
+  if (isTransferTransaction(tx)) return false;
+
+  const type = tx.type?.toLowerCase() || '';
+  const code = tx.code?.toUpperCase() || '';
+
+  // Explicit purchase indicators
+  if (type.includes('purchase') || type.includes('bought') || type === 'p' || code === 'P') {
+    return true;
+  }
+
+  // Acquisition with a price is a purchase
+  if (tx.acquisitionDisposition === 'A') {
+    // Award codes (A) at $0 are not purchases - they're awards
+    if (code === 'A') return false;
+    return true;
+  }
+
+  return false;
+}
+
+/**
  * Aggregate transactions by type for cleaner display
- * Groups similar transactions (all gifts together, all sales together)
- * Returns up to 3 aggregated transaction groups
+ * Groups similar transactions (all gifts together, all sales together, all transfers together)
+ * Returns up to 4 aggregated transaction groups
  */
 interface AggregatedTransaction {
-  type: 'gift' | 'sale' | 'purchase';
+  type: 'gift' | 'sale' | 'purchase' | 'transfer';
   totalShares: number;
   totalValue: number;
   avgPrice: number;
@@ -114,11 +163,14 @@ function aggregateTransactionsByType(transactions: TransactionData[]): Aggregate
     gift: { shares: 0, value: 0, count: 0, prices: [] },
     sale: { shares: 0, value: 0, count: 0, prices: [] },
     purchase: { shares: 0, value: 0, count: 0, prices: [] },
+    transfer: { shares: 0, value: 0, count: 0, prices: [] },
   };
 
   for (const tx of transactions) {
-    let groupKey: 'gift' | 'sale' | 'purchase';
-    if (isGiftTransaction(tx)) {
+    let groupKey: 'gift' | 'sale' | 'purchase' | 'transfer';
+    if (isTransferTransaction(tx)) {
+      groupKey = 'transfer';
+    } else if (isGiftTransaction(tx)) {
       groupKey = 'gift';
     } else if (isSaleTransaction(tx)) {
       groupKey = 'sale';
@@ -134,10 +186,10 @@ function aggregateTransactionsByType(transactions: TransactionData[]): Aggregate
     if (tx.totalValue) {
       const parsedTotalValue = parseNumericValue(tx.totalValue);
       // Only use totalValue if it's actually meaningful (not $0 for sales/purchases)
-      if (parsedTotalValue > 0 || groupKey === 'gift') {
+      if (parsedTotalValue > 0 || groupKey === 'gift' || groupKey === 'transfer') {
         value = parsedTotalValue;
       } else {
-        // totalValue was $0 but this isn't a gift - calculate from shares * price
+        // totalValue was $0 but this isn't a gift/transfer - calculate from shares * price
         value = shares * price;
       }
     } else {
@@ -159,7 +211,7 @@ function aggregateTransactionsByType(transactions: TransactionData[]): Aggregate
         : 0;
 
       result.push({
-        type: type as 'gift' | 'sale' | 'purchase',
+        type: type as 'gift' | 'sale' | 'purchase' | 'transfer',
         totalShares: data.shares,
         totalValue: data.value,
         avgPrice,
@@ -171,9 +223,9 @@ function aggregateTransactionsByType(transactions: TransactionData[]): Aggregate
     }
   }
 
-  // Sort: sales first, then gifts, then purchases
+  // Sort: sales first, then transfers, then gifts, then purchases
   return result.sort((a, b) => {
-    const order = { sale: 0, gift: 1, purchase: 2 };
+    const order = { sale: 0, transfer: 1, gift: 2, purchase: 3 };
     return order[a.type] - order[b.type];
   });
 }
@@ -186,8 +238,83 @@ function formatAggregatedValue(value: number): string {
   return '$0';
 }
 
-function getAggregatedTransactionConfig(type: 'gift' | 'sale' | 'purchase') {
+/**
+ * Transaction type configuration for color coding and display
+ * Used by email templates to style different transaction types
+ */
+interface TransactionTypeConfig {
+  label: string;
+  icon: string;
+  bgColor: string;
+  textColor: string;
+  color: string; // Alias for primary color (used by tests)
+  valueColor: string;
+}
+
+/**
+ * Get configuration for a transaction type string
+ * Exported for testing and external use
+ */
+export function getTransactionTypeConfig(type: string): TransactionTypeConfig {
+  const typeLower = type.toLowerCase();
+
+  // Check for transfer types first
+  if (typeLower.includes('transfer') || typeLower.includes('trust')) {
+    return {
+      label: 'Transfer',
+      icon: '🔄',
+      bgColor: '#EBF8FF',
+      textColor: '#1E40AF',
+      color: '#3B82F6', // Blue
+      valueColor: '#3B82F6',
+    };
+  }
+
+  // Gift type
+  if (typeLower.includes('gift') || typeLower === 'g') {
+    return {
+      label: 'Gift',
+      icon: '🎁',
+      bgColor: '#F3E8FF',
+      textColor: '#7C3AED',
+      color: '#7C3AED', // Purple
+      valueColor: '#7C3AED',
+    };
+  }
+
+  // Sale type
+  if (typeLower.includes('sale') || typeLower.includes('sell') || typeLower === 's' || typeLower === 'sold') {
+    return {
+      label: 'Sold',
+      icon: '📉',
+      bgColor: '#FEF2F2',
+      textColor: '#991B1B',
+      color: '#DC2626', // Red
+      valueColor: '#DC2626',
+    };
+  }
+
+  // Default to purchase
+  return {
+    label: 'Bought',
+    icon: '📈',
+    bgColor: '#F0FDF4',
+    textColor: '#166534',
+    color: '#16A34A', // Green
+    valueColor: '#16A34A',
+  };
+}
+
+function getAggregatedTransactionConfig(type: 'gift' | 'sale' | 'purchase' | 'transfer') {
   switch (type) {
+    case 'transfer':
+      return {
+        label: 'Transfer',
+        icon: '🔄',
+        bgColor: '#EBF8FF',
+        textColor: '#1E40AF',
+        valueColor: '#3B82F6',
+      };
     case 'gift':
       return {
         label: 'Gift',
@@ -221,6 +348,23 @@ function getAggregatedTransactionConfig(type: 'gift' | 'sale' | 'purchase') {
 function getSignalConfig(signalStrength: string, summaryText: string, isSale: boolean, percentChange: string) {
   const signalLower = signalStrength.toLowerCase();
   const summaryLower = summaryText?.toLowerCase() || '';
+
+  // Check for trust/family transfers FIRST - these are neutral, not buy/sell signals
+  const isTransfer = signalLower.includes('transfer') || signalLower.includes('trust') ||
+    summaryLower.includes('trust transfer') || summaryLower.includes('family trust') ||
+    summaryLower.includes('revocable trust') || summaryLower.includes('change in beneficial ownership');
+
+  if (isTransfer) {
+    return {
+      level: 'NEUTRAL',
+      verdict: 'Trust/Family Transfer',
+      description: 'Change in ownership form — not a market transaction or investment signal.',
+      bgColor: '#EBF8FF',
+      borderColor: '#3B82F6',
+      textColor: '#1E40AF',
+      icon: '🔄',
+    };
+  }
 
   // Check for 10b5-1 plan (reduces signal significance)
   const has10b51 = signalLower.includes('10b5-1') || summaryLower.includes('10b5-1');

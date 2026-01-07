@@ -770,7 +770,7 @@ export async function summarizeFiling(content: string, options: SummarizationOpt
     const requestOptions = {
       model,
       maxTokens: modelConfig.maxOutputTokens || 4000,
-      temperature: modelConfig.temperature || 0.3,
+      temperature: modelConfig.temperature || 0.2, // Consistent 0.2 temperature for reliable output
       system: systemPrompt, // Phase 4: Unified prompts system message enforcing JSON output
       ...openRouterOptions
     };
