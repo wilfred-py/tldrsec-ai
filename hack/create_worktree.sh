@@ -93,6 +93,28 @@ if [ -f ".env" ]; then
     cp .env "$WORKTREE_PATH/"
 fi
 
+# Sync latest progress files from main branch
+echo "📋 Syncing latest progress files from main..."
+cd "$WORKTREE_PATH"
+
+# Get latest PROGRESS.md from main branch
+if git show main:PROGRESS.md > /dev/null 2>&1; then
+    git show main:PROGRESS.md > PROGRESS.md
+    echo "   ✓ Updated PROGRESS.md"
+else
+    echo "   ⚠️  PROGRESS.md not found in main branch"
+fi
+
+# Get latest TIMELINE.md from main branch  
+if git show main:TIMELINE.md > /dev/null 2>&1; then
+    git show main:TIMELINE.md > TIMELINE.md
+    echo "   ✓ Updated TIMELINE.md"
+else
+    echo "   ⚠️  TIMELINE.md not found in main branch"
+fi
+
+cd - > /dev/null
+
 # Change to worktree directory
 cd "$WORKTREE_PATH"
 
