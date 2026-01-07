@@ -6,7 +6,52 @@
  *
  * The AI generates comprehensive markdown summaries with all the data,
  * but the email template needs structured objects. This module bridges that gap.
+ *
+ * ## Transaction Types
+ * The SEC uses specific transaction codes in Form 4 filings:
+ * - **S**: Sale - Open market sale of securities
+ * - **P**: Purchase - Open market purchase of securities
+ * - **A**: Award - Grant of awards (RSUs, options)
+ * - **G**: Gift - Bona fide gift transaction
+ * - **M**: Exercise - Exercise of derivative securities
+ * - **F**: Tax Withholding - Payment of exercise price or tax liability
+ * - **C**: Conversion - Conversion of derivative security
+ * - **D**: Disposition - Disposition to the issuer
+ * - **J**: Trust Transfer - Other acquisition/disposition (commonly trust transfers)
+ * - **K**: Family Transfer - Equity swap or similar (commonly family trust restructuring)
+ *
+ * ## Transfer vs Gift Detection
+ * Trust transfers (J/K codes) are NOT gifts. They represent changes in beneficial
+ * ownership form (e.g., direct to indirect via trust) rather than actual transfers
+ * of economic value. This distinction is important for investment signal analysis.
  */
+
+/**
+ * SEC Form 4 transaction codes and their human-readable types
+ * @see https://www.sec.gov/about/forms/form4data.pdf
+ */
+export const TRANSACTION_CODE_MAP: Record<string, string> = {
+  'S': 'Sale',
+  'P': 'Purchase',
+  'A': 'Award',
+  'G': 'Gift',
+  'M': 'Exercise',
+  'F': 'Tax Withholding',
+  'C': 'Conversion',
+  'D': 'Disposition',
+  'J': 'Trust Transfer',   // Other acquisition/disposition - commonly trust transfers
+  'K': 'Family Transfer',  // Equity swap or similar - commonly family trust restructuring
+} as const;
+
+/**
+ * Transaction types that represent trust/family transfers
+ * These are NOT market transactions and have neutral investment signal
+ */
+export const TRANSFER_TRANSACTION_TYPES = [
+  'Trust Transfer',
+  'Family Transfer',
+  'Transfer',
+] as const;
 
 export interface Form4Transaction {
   type: string;
@@ -291,9 +336,20 @@ function extractTransactionsFromText(text: string): Form4Transaction[] {
     /([\d,]+)\s*shares?\s*(?:were\s+)?(?:gifted|donated|given)/gi,
     /gift\s+(?:transactions?\s+)?(?:totaling\s+)?([\d,]+)\s*shares?/gi,
     /([\d,]+)\s*shares?\s*(?:as\s+)?(?:a\s+)?gift/gi,
-    /(?:disposed|transferred)\s+([\d,]+)\s*shares?\s*(?:at|for)\s*\$?0(?:\s|$)/gi,
-    /([\d,]+)\s*shares?\s*(?:of\s+)?(?:Class\s+[A-Z]\s+)?(?:Common\s+)?(?:Stock\s+)?at\s*\$0\s*per\s*share/gi,
     /(?:reported|filed)\s+(?:\w+\s+)?gift\s+(?:transactions?\s+)?(?:totaling\s+)?([\d,]+)\s*shares?/gi,
+  ];
+
+  // Pattern for trust/family transfer transactions
+  // Trust transfers are NOT gifts - they represent changes in beneficial ownership form
+  const transferPatterns = [
+    /transfer(?:red)?\s+(?:to|from)\s+(?:.*?\s+)?trust\s*[,.]?\s*([\d,]+)\s*shares?/gi,
+    /transfer(?:red)?\s+([\d,]+)\s*shares?\s+(?:to|from)\s+(?:.*?\s+)?trust/gi,
+    /([\d,]+)\s*shares?\s*transfer(?:red)?\s+(?:to|from)\s+(?:.*?\s+)?trust/gi,
+    /trust\s+transfer\s*[:]?\s*([\d,]+)\s*shares?/gi,
+    /(?:direct|indirect)\s+(?:to|from)\s+(?:indirect|direct)\s*[,.]?\s*([\d,]+)\s*shares?/gi,
+    /(?:moved?|shift(?:ed)?)\s+([\d,]+)\s*shares?\s+(?:to|from|into)\s+(?:.*?\s+)?trust/gi,
+    /(?:revocable|irrevocable|family)\s+trust\s*[,.]?\s*([\d,]+)\s*shares?/gi,
+    /change\s+in\s+(?:beneficial\s+)?ownership\s+(?:form\s+)?.*?([\d,]+)\s*shares?/gi,
   ];
 
   // Extract sales
@@ -334,17 +390,39 @@ function extractTransactionsFromText(text: string): Form4Transaction[] {
     }
   }
 
-  // Extract gifts
-  for (const pattern of giftPatterns) {
+  // Extract trust/family transfers FIRST - before gifts
+  // This ensures $0 transfers to trusts aren't miscategorized as gifts
+  for (const pattern of transferPatterns) {
     let match;
     while ((match = pattern.exec(text)) !== null) {
       transactions.push({
-        type: 'Gift',
+        type: 'Trust Transfer',
         shares: cleanNumber(match[1]),
         pricePerShare: '$0',
         totalValue: '$0',
-        acquisitionDisposition: 'D',
+        acquisitionDisposition: 'D', // Typically dispositions to trust
       });
+    }
+  }
+
+  // Extract gifts (only if not already categorized as transfers)
+  for (const pattern of giftPatterns) {
+    let match;
+    while ((match = pattern.exec(text)) !== null) {
+      const shares = cleanNumber(match[1]);
+      // Don't add gift if we already have a transfer with same share count
+      const alreadyTransfer = transactions.some(
+        t => t.type.includes('Transfer') && t.shares === shares
+      );
+      if (!alreadyTransfer) {
+        transactions.push({
+          type: 'Gift',
+          shares,
+          pricePerShare: '$0',
+          totalValue: '$0',
+          acquisitionDisposition: 'D',
+        });
+      }
     }
   }
 
@@ -412,10 +490,45 @@ function extractStakeInfo(text: string): { previous: string; current: string; pe
 }
 
 /**
+ * Check if a transaction type represents a trust/family transfer
+ *
+ * Trust transfers are changes in beneficial ownership form (e.g., direct to
+ * indirect via trust) rather than market transactions. They should NOT be
+ * treated as purchases, sales, or gifts for investment signal analysis.
+ *
+ * @param type - The transaction type string
+ * @returns true if the transaction is a trust/family transfer
+ *
+ * @example
+ * isTransferTransaction('Trust Transfer') // true
+ * isTransferTransaction('Family Transfer') // true
+ * isTransferTransaction('Sale') // false
+ */
+function isTransferTransaction(type: string): boolean {
+  const typeLower = type.toLowerCase();
+  return typeLower.includes('transfer') || typeLower.includes('trust');
+}
+
+/**
  * Determine signal strength based on transaction characteristics
  */
 function determineSignalStrength(data: Form4ExtractedData, text: string): string {
   const textLower = text.toLowerCase();
+
+  // Check for trust/family transfers FIRST
+  // Transfers represent changes in ownership form, not buying/selling conviction
+  const hasTransfer = data.transactions.some(t => isTransferTransaction(t.type));
+  const hasTransferText = textLower.includes('trust transfer') ||
+                          textLower.includes('family trust') ||
+                          textLower.includes('revocable trust') ||
+                          textLower.includes('irrevocable trust') ||
+                          textLower.includes('change in beneficial ownership') ||
+                          textLower.includes('change in form of') ||
+                          (textLower.includes('transfer') && textLower.includes('trust'));
+
+  if (hasTransfer || hasTransferText) {
+    return 'Neutral - Trust/Family Transfer';
+  }
 
   // Check for 10b5-1 plan (routine, pre-planned)
   // But NOT if it says "no 10b5-1" or "unchecked"
@@ -434,14 +547,16 @@ function determineSignalStrength(data: Form4ExtractedData, text: string): string
     return 'Weak - Gift Transaction';
   }
 
-  // Check for large percentage change
+  // Check for large percentage change (but not for transfers)
   const percentNum = parseFloat(data.percentageChange.replace(/[^0-9.-]/g, ''));
   if (!isNaN(percentNum) && Math.abs(percentNum) > 25) {
     return 'Strong - Large Position Change';
   }
 
-  // Check for large dollar value
+  // Check for large dollar value (but not for $0 transfers)
   const totalValue = data.transactions.reduce((sum, t) => {
+    // Skip transfer transactions when calculating value-based signal strength
+    if (isTransferTransaction(t.type)) return sum;
     const val = parseFloat(t.totalValue.replace(/[$,KMB]/gi, ''));
     const multiplier = t.totalValue.includes('M') ? 1000000 :
                        t.totalValue.includes('K') ? 1000 : 1;
@@ -485,23 +600,19 @@ function calculateTotalValue(transactions: Form4Transaction[]): string {
 }
 
 /**
- * Parse transaction code to human-readable type
+ * Parse SEC transaction code to human-readable type
+ *
+ * @param codeStr - The transaction code string from SEC filing
+ * @returns Human-readable transaction type
+ *
+ * @example
+ * parseTransactionCode('S') // 'Sale'
+ * parseTransactionCode('J') // 'Trust Transfer'
+ * parseTransactionCode('K') // 'Family Transfer'
  */
 function parseTransactionCode(codeStr: string): string {
   const code = codeStr.charAt(0).toUpperCase();
-  const codeMap: Record<string, string> = {
-    'S': 'Sale',
-    'P': 'Purchase',
-    'A': 'Award',
-    'G': 'Gift',
-    'M': 'Exercise',
-    'F': 'Tax Withholding',
-    'C': 'Conversion',
-    'D': 'Disposition',
-    'J': 'Other Acquisition',
-    'K': 'Equity Swap',
-  };
-  return codeMap[code] || codeStr;
+  return TRANSACTION_CODE_MAP[code] || codeStr;
 }
 
 /**

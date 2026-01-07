@@ -354,7 +354,7 @@ async function processChunk(
   ticker?: string,
   options: SummarizationOptions = {}
 ): Promise<{ summary: ChunkSummary; inputTokens: number; outputTokens: number }> {
-  const { model = getClaudeModel(), maxTokens = 2000, temperature = 0.3 } = options;
+  const { model = getClaudeModel(), maxTokens = 2000, temperature = 0.2 } = options;
   
   const anthropic = createAnthropicClient();
   
@@ -621,7 +621,7 @@ export async function summarizeSingle(
   options: SummarizationOptions = {}
 ): Promise<SummarizationResult> {
   const startTime = Date.now();
-  const { model = getClaudeModel(), maxTokens = 4000, temperature = 0.3 } = options;
+  const { model = getClaudeModel(), maxTokens = 4000, temperature = 0.2 } = options;
   
   aiLogger.info(`Starting subscription-aware single summarization`, {
     contentLength: content.length,
