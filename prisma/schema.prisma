@@ -229,7 +229,7 @@ model RssFilingCheck {
 model UserSubscription {
   id                   String   @id @default(uuid())
   userId               String   @unique
-  planType             PlanType @default(BASIC)
+  planType             PlanType @default(FREE)
   isActive             Boolean  @default(true)
   currentPeriodStart   DateTime @default(now())
   currentPeriodEnd     DateTime
@@ -752,8 +752,8 @@ enum SubscriptionTier {
 }
 
 enum PlanType {
-  BASIC
-  PROFESSIONAL
+  FREE
+  PRO
   MAX
 
   @@schema("app")
