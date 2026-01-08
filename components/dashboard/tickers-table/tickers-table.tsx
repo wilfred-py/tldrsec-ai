@@ -94,44 +94,43 @@ export function TickersTable({
     },
   });
 
-  // Check if pagination is needed
-  const hasPagination = data.length > ITEMS_PER_PAGE;
+  const pageCount = table.getPageCount();
+  const rowsOnCurrentPage = table.getRowModel().rows.length;
+  const emptyRowCount = ITEMS_PER_PAGE - rowsOnCurrentPage;
 
   return (
     <>
       {/* Desktop Table View */}
-      {/* Use flex column with fixed height when paginated to prevent layout shift */}
-      <div className={`hidden sm:block ${hasPagination ? "h-[530px] flex flex-col" : ""}`}>
-        <div className={hasPagination ? "flex-1" : ""}>
-          <Table>
-            <TableHeader>
-              {table.getHeaderGroups().map((headerGroup) => (
-                <TableRow key={headerGroup.id}>
-                  {headerGroup.headers.map((header) => (
-                    <TableHead key={header.id} className="group">
-                      {header.isPlaceholder
-                        ? null
-                        : flexRender(
-                            header.column.columnDef.header,
-                            header.getContext()
-                          )}
-                    </TableHead>
-                  ))}
-                </TableRow>
-              ))}
-            </TableHeader>
-            <TableBody>
-              {/* Inline Add Row at the top */}
-              {showInlineAdd && (
-                <InlineAddRow
-                  companies={allCompanies}
-                  onSelect={onAddTicker}
-                  onCancel={onCancelAdd}
-                  columnCount={columns.length}
-                />
-              )}
-              {table.getRowModel().rows.length ? (
-                table.getRowModel().rows.map((row) => (
+      <div className="hidden sm:block">
+        <Table>
+          <TableHeader>
+            {table.getHeaderGroups().map((headerGroup) => (
+              <TableRow key={headerGroup.id}>
+                {headerGroup.headers.map((header) => (
+                  <TableHead key={header.id} className="group">
+                    {header.isPlaceholder
+                      ? null
+                      : flexRender(
+                          header.column.columnDef.header,
+                          header.getContext()
+                        )}
+                  </TableHead>
+                ))}
+              </TableRow>
+            ))}
+          </TableHeader>
+          <TableBody>
+            {showInlineAdd && (
+              <InlineAddRow
+                companies={allCompanies}
+                onSelect={onAddTicker}
+                onCancel={onCancelAdd}
+                columnCount={columns.length}
+              />
+            )}
+            {rowsOnCurrentPage > 0 ? (
+              <>
+                {table.getRowModel().rows.map((row) => (
                   <TableRow
                     key={row.id}
                     data-state={row.getIsSelected() && "selected"}
@@ -145,27 +144,52 @@ export function TickersTable({
                       </TableCell>
                     ))}
                   </TableRow>
-                ))
-              ) : (
+                ))}
+                {/* Empty rows to maintain consistent height */}
+                {emptyRowCount > 0 &&
+                  Array.from({ length: emptyRowCount }).map((_, i) => (
+                    <TableRow key={`empty-${i}`} className="pointer-events-none">
+                      <TableCell colSpan={columns.length} className="py-4">
+                        &nbsp;
+                      </TableCell>
+                    </TableRow>
+                  ))}
+              </>
+            ) : (
+              <>
                 <TableRow>
                   <TableCell
                     colSpan={columns.length}
-                    className="h-24 text-center"
+                    className="py-4 text-center text-muted-foreground"
                   >
                     No companies found.
                   </TableCell>
                 </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </div>
+                {/* Fill remaining space when empty */}
+                {Array.from({ length: ITEMS_PER_PAGE - 1 }).map((_, i) => (
+                  <TableRow key={`empty-${i}`} className="pointer-events-none">
+                    <TableCell colSpan={columns.length} className="py-4">
+                      &nbsp;
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </>
+            )}
+          </TableBody>
+        </Table>
 
-        {/* Desktop Pagination - always at bottom when paginated */}
-        {hasPagination && (
-          <div className="mt-auto pt-4">
+        {/* Pagination - always visible */}
+        <div className="border-t">
+          {pageCount > 1 ? (
             <DataTablePagination table={table} showPageNumbers={true} />
-          </div>
-        )}
+          ) : (
+            <div className="flex items-center justify-between px-2 py-4">
+              <div className="text-sm text-muted-foreground">
+                {data.length > 0 ? "Page 1 of 1" : "0 results"}
+              </div>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Mobile Card View */}
@@ -181,7 +205,7 @@ export function TickersTable({
           formatDate={formatDate}
           totalCount={data.length}
           pageSize={ITEMS_PER_PAGE}
-          hasPagination={hasPagination}
+          hasPagination={pageCount > 1}
         />
       </div>
     </>
