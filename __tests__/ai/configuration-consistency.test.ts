@@ -10,7 +10,7 @@
 
 import fs from 'fs';
 import path from 'path';
-import glob from 'glob';
+import { glob } from 'glob';
 
 describe('AI Configuration Consistency', () => {
   describe('Deprecated Files Removal', () => {
