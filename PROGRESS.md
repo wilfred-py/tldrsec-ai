@@ -1,12 +1,73 @@
 # Project Progress
 
-**Date**: 2026-01-07
-**Branch**: review-generated-summaries
-**Status**: Summary Generation Accuracy Improvements - ALL PHASES COMPLETE ✅
+**Date**: 2026-01-08
+**Branch**: fix/dashboard-table-height
+**Status**: Dashboard Table Height Stability Fix ✅
 
 ---
 
-## Current Session: Summary Generation Accuracy Improvements (2026-01-07)
+## Current Session: 100% Cron Uptime Zero Silent Failures (2026-01-08)
+
+### 100% Cron Pipeline Uptime - Zero Silent Failures ✅ COMPLETE (2026-01-08)
+
+**Plan**: [2026-01-08-100-percent-cron-uptime-zero-silent-failures.md](docs/plans/2026-01-08-100-percent-cron-uptime-zero-silent-failures.md)
+
+**Root Cause**: Cloudflare Worker not deployed after 2026-01-07 code changes - worker was 2 days behind codebase causing the 7-8PM AEST event drop.
+
+**Phase 1: Deploy Latest Worker & Fix Immediate Gap** ✅
+- Deployed CF Worker (Version 7302c85a) with latest code
+- Removed path filter from GitHub workflow - now deploys on every main push
+- Added daily safety net deploy at 6 AM UTC (5 PM AEST)
+
+**Phase 2: Handler-Level Failure Alerting** ✅
+- Added `handlerHealth` tracking structure for all 4 handlers (pipelineProcessing, autoRecovery, intervalSummary, dailyReport)
+- Implemented `recordHandlerExecution()` and `getHandlerStatus()` functions
+- Added `alertOnHandlerFailure()` - Slack alerts on first failure and every 3rd consecutive failure
+- Health endpoint exposes per-handler status (OK/DEGRADED/UNHEALTHY/STALE)
+
+**Phase 3: Fix Silent Failures in Auto-Recovery** ✅
+- Added `errors: string[]` array to `CleanupResults` interface
+- Updated all 4 cleanup operations to capture and track errors
+- Enhanced `sendSlackCleanupNotification()` to report partial failures
+- Added `sendSlackCriticalAlert()` for auto-recovery system failures (health endpoint down, etc.)
+
+**Files Modified**:
+- `cloudflare-cron/index.js` - Handler health tracking, failure alerting
+- `.github/workflows/cloudflare-worker-deploy.yml` - Removed path filter, added daily cron
+- `app/api/cron/auto-recover/route.ts` - Error tracking array, critical failure alerts
+
+**Verification**:
+- ✅ CF Worker deployed with handler monitoring
+- ✅ Pipeline health: HEALTHY (0 pending, 0 processing)
+- ✅ GitHub workflow updated for reliable deployments
+- ✅ Build passes with all changes
+
+---
+
+## Previous Session: Dashboard Table Height Stability (2026-01-08)
+
+### Dashboard Table Pagination Height Fix ✅ COMPLETE
+
+**Issue**: Table layout shifting when paginating through tracked tickers - height changes between pages.
+
+**Solution**: Fixed skeleton loading states and table structure for consistent height:
+- Changed skeleton backgrounds from `bg-accent` to `bg-muted` to avoid purple color bleeding
+- Updated `SKELETON_ROW_COUNT` from 5 to 10 to match table's `ITEMS_PER_PAGE`
+- Added pagination skeleton footer with border-top
+- Changed mobile skeleton cards from nested `landing-card` to `rounded-2xl p-4 border bg-card`
+- Added proper cell padding (`py-4`) and header heights (`h-9`) to match actual table
+
+**Files Modified**:
+- `components/dashboard/tickers-table/tickers-table-skeleton.tsx` - Skeleton bg color, row count, mobile cards
+- `app/dashboard/loading.tsx` - Row count, bg colors, pagination skeleton, mobile cards
+
+**Verification**:
+- ✅ Build passes successfully
+- ✅ Skeleton matches final table render size
+
+---
+
+## Previous Session: Summary Generation Accuracy Improvements (2026-01-07)
 
 ### Improve Summary Generation Accuracy ✅ COMPLETE (2026-01-07)
 
@@ -33,15 +94,15 @@
 
 **Manual Verification**: ✅ Test emails confirmed - Trust transfers show blue color and NEUTRAL signal badge
 
-**Remaining Phases**:
-- [ ] Phase 2: Code Cleanup and Consolidation
-- [ ] Phase 3: Template and Email Consistency
-- [ ] Phase 4: Quality Assurance and Testing
+**All Phases Complete**:
+- ✅ Phase 1: Critical Bug Fixes (Form 4 trust transfer)
+- ✅ Phase 2: Code Cleanup and Consolidation
+- ✅ Phase 3: Template and Email Consistency
+- ✅ Phase 4: Quality Assurance and Testing
 
 ---
 
 ## Previous Session: 100% Pipeline Uptime Implementation
->>>>>>> 3d6425d (Fix Form 4 trust transfer detection and email template rendering)
 
 | Phase | Description | Status |
 |-------|-------------|--------|
@@ -214,12 +275,7 @@ npm run test:e2e:pipeline-recovery
 
 ---
 
-<<<<<<< HEAD
 ## Previous Session: 100% Pipeline Uptime - Phase 3 Complete (2026-01-06)
-=======
-**Last Updated**: 2026-01-07 (Summary Generation Accuracy Phase 1 Complete)
-**Repository**: tldrsec-ai
->>>>>>> 3d6425d (Fix Form 4 trust transfer detection and email template rendering)
 
 Implemented Phase 3 of the 100% Pipeline Uptime plan - Maximum Lock Hold Time Enforcement.
 
@@ -358,5 +414,5 @@ Fixed 8 AM outage - worker stopped triggering after 4 AM deployment.
 
 ---
 
-*Last Updated: 2026-01-07*
+*Last Updated: 2026-01-08*
 *Older completed projects archived to .claude/history/ - See TIMELINE.md for full history*
