@@ -13,8 +13,9 @@ You are tasked with compacting the context window by managing PROGRESS.md size a
 **ALWAYS perform this step first to ensure progress files are current.**
 
 1. **Detect if in worktree**:
-   - Check if current directory path contains `/wt/` pattern
-   - Run: `git worktree list | grep -q "$(pwd)"` to confirm worktree status
+   - Check if current directory path contains `/wt/` pattern: `pwd | grep -q '/wt/'`
+   - Alternative: Check if not on main worktree: `git rev-parse --show-toplevel` differs from main repo root
+   - Note: `git worktree list | grep "$(pwd)"` may have shell quoting issues; prefer the `/wt/` check
 
 2. **If in worktree, sync progress files from main**:
    ```bash

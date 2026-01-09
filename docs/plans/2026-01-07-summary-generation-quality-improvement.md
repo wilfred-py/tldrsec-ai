@@ -856,25 +856,73 @@ Add extractors for SC 13G, SC 13D, and 424B2 which have prompts but no extractor
 ### Step 5.1: 🔴 Write Failing Tests
 
 **Test Files**:
-- `__tests__/email/extractors/sc13g-data-extractor.test.ts`
-- `__tests__/email/extractors/sc13d-data-extractor.test.ts`
-- `__tests__/email/extractors/424b2-data-extractor.test.ts`
+- [x] `__tests__/email/extractors/sc13g-data-extractor.test.ts` - 15 tests
+- [x] `__tests__/email/extractors/sc13d-data-extractor.test.ts` - 17 tests
+- [x] `__tests__/email/extractors/424b2-data-extractor.test.ts` - 16 tests
 
 ### Step 5.2: 🟢 Implement SC 13G Extractor
 
 Focus on ownership percentage, filer name, shares owned.
 
+**File**: `lib/email/sc13g-data-extractor.ts`
+**Key features**:
+- Extracts filerName from markdown and prose formats
+- Extracts ownershipPercentage (e.g., "8.5%")
+- Extracts sharesOwned with million formatting support
+- Extracts filingPurpose (Initial/Amendment)
+- Extracts voting power details (sole/shared)
+
 ### Step 5.3: 🟢 Implement SC 13D Extractor
 
 Focus on activist intent, purpose statement, ownership changes.
+
+**File**: `lib/email/sc13d-data-extractor.ts`
+**Key features**:
+- Extracts filerName (activist investor)
+- Extracts ownershipPercentage and sharesOwned
+- Extracts purpose and intentions array
+- Detects isActivist flag based on language patterns
+- Detects isGroupFiling for coordinated filings
+- Extracts sourceOfFunds
 
 ### Step 5.4: 🟢 Implement 424B2 Extractor
 
 Focus on offering terms, interest rates, maturity dates.
 
+**File**: `lib/email/424b2-data-extractor.ts`
+**Key features**:
+- Extracts offeringType (Debt/Equity/Structured Notes)
+- Extracts offeringAmount in various formats ($2B, $2,000,000,000)
+- Extracts interestRate for debt offerings
+- Extracts maturityDate with multiple date formats
+- Extracts sharesOffered and pricePerShare for equity
+- Extracts linkedTo for structured notes
+- Extracts underwriters and useOfProceeds
+
 ### Step 5.5: 🔵 Refactor and Update Registry
 
+**File**: `lib/email/extractor-registry.ts`
+**Changes**:
+- Added imports for 3 new extractors
+- Added type union for SC13GExtractedData, SC13DExtractedData, Form424B2ExtractedData
+- Added registry entries with aliases:
+  - 'SC 13G', 'SC13G' -> extractSC13GData
+  - 'SC 13D', 'SC13D' -> extractSC13DData
+  - '424B2' -> extract424B2Data
+
 ### Step 5.6: Final Phase Verification
+
+#### Automated Verification:
+- [x] SC 13G extractor tests pass: 15 tests
+- [x] SC 13D extractor tests pass: 17 tests
+- [x] 424B2 extractor tests pass: 16 tests
+- [x] Total: 48 new tests passing
+- [x] Type checking passes for new files
+
+**Phase 5 Implementation Complete** (2026-01-09):
+- Created 3 new extractors with comprehensive test coverage
+- Total of 48 new tests covering markdown and prose extraction
+- Updated extractor registry with new form types and aliases
 
 **STOP**: Await manual confirmation before Phase 6.
 
