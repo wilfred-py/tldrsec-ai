@@ -25,6 +25,9 @@ import { extractS1Data, FormS1ExtractedData } from './s1-data-extractor';
 import { extractS3Data, FormS3ExtractedData } from './s3-data-extractor';
 import { extractDEF14AData, FormDEF14AExtractedData } from './def14a-data-extractor';
 import { extractForm11KData, Form11KExtractedData } from './form11k-data-extractor';
+import { extractSC13GData, SC13GExtractedData } from './sc13g-data-extractor';
+import { extractSC13DData, SC13DExtractedData } from './sc13d-data-extractor';
+import { extract424B2Data, Form424B2ExtractedData } from './424b2-data-extractor';
 
 /**
  * Union type of all extracted data types
@@ -38,7 +41,10 @@ export type ExtractedData =
   | FormS1ExtractedData
   | FormS3ExtractedData
   | FormDEF14AExtractedData
-  | Form11KExtractedData;
+  | Form11KExtractedData
+  | SC13GExtractedData
+  | SC13DExtractedData
+  | Form424B2ExtractedData;
 
 /**
  * Type for extractor functions
@@ -58,6 +64,9 @@ export type ExtractorFunction = (summaryText: string) => ExtractedData;
  * - S-3: Secondary Offering Registration (extractS3Data)
  * - DEF 14A: Proxy Statement (extractDEF14AData)
  * - 11-K: Employee Stock Plan Annual Report (extract11KData)
+ * - SC 13G: Passive Beneficial Ownership Report (extractSC13GData)
+ * - SC 13D: Activist Beneficial Ownership Report (extractSC13DData)
+ * - 424B2: Prospectus Supplement (extract424B2Data)
  */
 export const EXTRACTOR_REGISTRY: Record<string, ExtractorFunction> = {
   // Annual and Quarterly Reports
@@ -86,6 +95,15 @@ export const EXTRACTOR_REGISTRY: Record<string, ExtractorFunction> = {
   // Employee Stock Plan - multiple aliases for flexibility
   '11-K': extractForm11KData,
   '11K': extractForm11KData,
+
+  // Beneficial Ownership Reports
+  'SC 13G': extractSC13GData,
+  'SC13G': extractSC13GData,
+  'SC 13D': extractSC13DData,
+  'SC13D': extractSC13DData,
+
+  // Prospectus Supplement
+  '424B2': extract424B2Data,
 };
 
 /**
