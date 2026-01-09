@@ -44,7 +44,7 @@ describe('Unified Filing Prompts', () => {
       const { userPrompt } = generateFilingPrompt({ formType: '10-K' });
 
       expect(userPrompt).toMatch(/summary.*max.*\d+/i);
-      expect(userPrompt).toMatch(/keyHighlights.*max.*\d+/i);
+      expect(userPrompt).toMatch(/financialHighlights.*max.*\d+/i);
     });
 
     it('should produce identical prompt for same inputs (deterministic)', () => {
@@ -110,14 +110,14 @@ describe('Unified Filing Prompts', () => {
       const { schema } = generateFilingPrompt({ formType: '10-K' });
 
       expect(schema.required).toContain('fiscalYear');
-      expect(schema.required).toContain('keyHighlights');
+      expect(schema.required).toContain('financialHighlights');
     });
 
     it('should have form-specific required fields for 10-Q', () => {
       const { schema } = generateFilingPrompt({ formType: '10-Q' });
 
       expect(schema.required).toContain('fiscalQuarter');
-      expect(schema.required).toContain('keyHighlights');
+      expect(schema.required).toContain('financialHighlights');
     });
 
     it('should have form-specific required fields for 8-K', () => {
