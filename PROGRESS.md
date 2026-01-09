@@ -1,12 +1,41 @@
 # Project Progress
 
-**Date**: 2026-01-08
-**Branch**: fix/dashboard-table-height
-**Status**: Dashboard Table Height Stability Fix ✅
+**Date**: 2026-01-09
+**Branch**: fix/orphaned-filings-recovery
+**Status**: Orphaned Filings Recovery - ✅ VERIFIED AND WORKING
 
 ---
 
-## Current Session: 100% Cron Uptime Zero Silent Failures (2026-01-08)
+## Current Session: Fix Orphaned Filings Pipeline (2026-01-09)
+
+### Fix Orphaned Filings Pipeline ✅ VERIFIED AND WORKING (2026-01-09)
+
+**Plan**: [2026-01-08-fix-orphaned-filings-pipeline.md](docs/plans/2026-01-08-fix-orphaned-filings-pipeline.md)
+
+**Root Cause**: Discovery handler only checked RSS feeds, not `processed=false` entries in RssFilingCheck table. When 3-phase pipeline is enabled, legacy backlog processing code is never reached.
+
+**Fix**: Added STEP 3.5 to discovery-handler.ts - calls `getUnprocessedFilings(50)` after RSS check, merges with RSS results (deduplicating by accessionNumber), and marks filings as processed after job creation.
+
+**Schema Fixes Applied During Verification**:
+- Added `scheduledFor: new Date()` - Required field in JobQueue schema
+- Changed `maxAttempts` → `maxRetries` - Correct field name per schema
+- Changed `attemptCount` → `retryCount` - Correct field name per schema
+
+**Files Modified**:
+- `lib/cron/handlers/discovery-handler.ts` - Unprocessed filing recovery + schema field fixes
+- `__tests__/cron/handlers/discovery-unprocessed.test.ts` - NEW: 4 test cases
+
+**Verification**:
+- ✅ All 22 discovery tests pass
+- ✅ Build passes (no type errors)
+- ✅ Manual verification complete:
+  - BEFORE: 427 unprocessed filings, 0 pending fetch jobs
+  - AFTER: 329 unprocessed filings (-98), 192 pending fetch jobs (+192)
+  - 99 filings marked as processed
+
+---
+
+## Previous Session: 100% Cron Uptime Zero Silent Failures (2026-01-08)
 
 ### 100% Cron Pipeline Uptime - Zero Silent Failures ✅ COMPLETE (2026-01-08)
 
@@ -401,7 +430,7 @@ Fixed 8 AM outage - worker stopped triggering after 4 AM deployment.
 ### Cloudflare Worker
 - **URL**: https://cloudflare-cron.wilfred-chen-python.workers.dev
 - **Version**: 2.5.0-stable
-- **Deployment**: Version ID 8befec93-98ab-4c2b-ae15-75deb6f8b26b
+- **Deployment**: Version ID 43f7da6e-fe8b-4bde-884c-0a64f6bfe616
 
 ### Database
 - **Provider**: Neon (PostgreSQL)
@@ -414,5 +443,5 @@ Fixed 8 AM outage - worker stopped triggering after 4 AM deployment.
 
 ---
 
-*Last Updated: 2026-01-08*
+*Last Updated: 2026-01-09*
 *Older completed projects archived to .claude/history/ - See TIMELINE.md for full history*
