@@ -1,12 +1,46 @@
 # Project Progress
 
-**Date**: 2026-01-07
-**Branch**: review-generated-summaries
-**Status**: Summary Generation Accuracy Improvements - ALL PHASES COMPLETE ✅
+**Date**: 2026-01-09
+**Branch**: main
+**Status**: Pipeline Incident Resolved - Cloudflare Worker Cron Gap Fixed
 
 ---
 
-## Current Session: Summary Generation Accuracy Improvements (2026-01-07)
+## Current Session: Pipeline Incident Investigation & Resolution (2026-01-09)
+
+### Incident Summary
+
+**Issue**: Pipeline job processing dropped significantly after 12:30 PM AEST (01:30 UTC).
+
+**Root Cause**: Cloudflare Worker stopped triggering cron executions for ~3 hours (01:45 UTC to 04:57 UTC).
+
+**Investigation**:
+1. Checked Cloudflare Worker logs - initially appeared to be running
+2. Analyzed JobQueue - found 231+ pending jobs stuck (ASYNC_FETCH_FILING + ASYNC_SUMMARIZE_CACHED)
+3. Queried CronJobExecution table - revealed 3+ hour gap in executions
+4. Confirmed no locks or database issues blocking processing
+
+**Resolution**:
+1. Redeployed Cloudflare Worker: `cd cloudflare-cron && npx wrangler deploy`
+2. Deployed version: `05254473-0bb6-4059-ad36-07fd0e500c54`
+3. Manually triggered job processing to help clear backlog
+4. Verified pipeline returned to HEALTHY status
+
+**Post-Resolution Status**:
+- Cron executing every 5 minutes (3m ago, 8m ago timestamps confirmed)
+- 71 jobs completed in last hour
+- 309 pending jobs (110 fetch + 199 summarize) being processed
+- Pipeline healthy and clearing backlog
+
+**Key Files Referenced**:
+- `/cloudflare-cron/index.js` - 5-step pipeline (cleanup → tier-aware → discovery → fetch → summarize)
+- `/cloudflare-cron/wrangler.toml` - Cron schedule configuration
+- `/app/api/cron/process-filing-queue/route.ts` - Job processing endpoint
+- `/lib/cron/handlers/discovery-handler.ts` - Discovery phase handler
+
+---
+
+## Previous Session: Summary Generation Accuracy Improvements (2026-01-07)
 
 Implemented improvements to summary generation workflow accuracy and consistency per plan at `docs/plans/2026-01-06-improve-summary-generation-accuracy.md`. **All 4 phases complete with 101 tests passing.**
 
@@ -102,5 +136,5 @@ Implemented UI improvements to dashboard: dialog backgrounds, pagination styling
 
 ---
 
-*Last Updated: 2026-01-07*
+*Last Updated: 2026-01-09*
 *Older completed projects archived to .claude/history/ - See TIMELINE.md for full history*
