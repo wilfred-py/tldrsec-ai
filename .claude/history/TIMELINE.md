@@ -14,6 +14,7 @@ This file provides a chronological index of all completed projects. For detailed
 | Date | Project | Status |
 |------|---------|--------|
 | 2026-01-09 | Summary Generation Quality - Phase 5: SC 13G/SC 13D/424B2 Extractors | ✅ |
+| 2026-01-09 | Fix Orphaned Filings Pipeline (discovery backlog recovery + schema fixes) | ✅ Verified |
 | 2026-01-08 | Summary Generation Quality - Phase 4: Reddit Filing Types (S-1, S-3, DEF 14A, 11-K) | ✅ |
 | 2026-01-08 | Summary Generation Quality - Phase 3: Extractor Integration + Email Verification | ✅ |
 | 2026-01-08 | Summary Generation Quality - Phase 2: 10-K/10-Q Data Extractors | ✅ |
@@ -136,7 +137,7 @@ This file provides a chronological index of all completed projects. For detailed
 
 ## Archive Statistics
 - **Total Archived Projects**: 7 weekly archives (Oct-Dec 2025)
-- **Current PROGRESS.md Lines**: 187 (threshold: 500)
+- **Current PROGRESS.md Lines**: 447 (threshold: 500)
 - **Last Sync**: 2026-01-09
 - **Archive System**: ✅ ACTIVE
 - **Last Compaction**: 2026-01-09 (Summary Generation Quality Phase 5 complete)
