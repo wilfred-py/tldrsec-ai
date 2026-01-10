@@ -14,9 +14,14 @@ This file provides a chronological index of all completed projects. For detailed
 | Date | Project | Status |
 |------|---------|--------|
 | 2026-01-10 | Eliminate Manual Pipeline Intervention - Phase 1: Persistent Recovery State | ✅ |
+| 2026-01-09 | Summary Generation Quality - Phase 5: SC 13G/SC 13D/424B2 Extractors | ✅ |
 | 2026-01-09 | Fix Orphaned Filings Pipeline (discovery backlog recovery + schema fixes) | ✅ Verified |
+| 2026-01-08 | Summary Generation Quality - Phase 4: Reddit Filing Types (S-1, S-3, DEF 14A, 11-K) | ✅ |
+| 2026-01-08 | Summary Generation Quality - Phase 3: Extractor Integration + Email Verification | ✅ |
+| 2026-01-08 | Summary Generation Quality - Phase 2: 10-K/10-Q Data Extractors | ✅ |
 | 2026-01-08 | 100% Cron Pipeline Uptime - Zero Silent Failures (3-phase: deploy, handler alerts, error tracking) | ✅ |
 | 2026-01-08 | Dashboard Table Height Stability Fix (skeleton rows, bg-muted) | ✅ |
+| 2026-01-07 | Summary Generation Quality - Phase 1: Schema Alignment Foundation | ✅ |
 | 2026-01-07 | Summary Generation Accuracy (Phase 4: Quality Assurance & Testing) | ✅ |
 | 2026-01-07 | Summary Generation Accuracy (Phase 3: Template & Email Consistency) | ✅ |
 | 2026-01-07 | Summary Generation Accuracy (Phase 2: Code Cleanup & Consolidation) | ✅ |

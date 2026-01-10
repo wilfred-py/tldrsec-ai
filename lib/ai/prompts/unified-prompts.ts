@@ -60,8 +60,9 @@ export interface SchemaProperty {
   maxLength?: number;
   maxItems?: number;
   enum?: string[];
-  items?: SchemaProperty | { type: string; properties?: Record<string, SchemaProperty> };
+  items?: SchemaProperty | { type: string; properties?: Record<string, SchemaProperty>; required?: string[] };
   properties?: Record<string, SchemaProperty>;
+  required?: string[];
 }
 
 // =============================================================================
@@ -86,71 +87,165 @@ const BASE_SCHEMA_PROPERTIES: Record<string, SchemaProperty> = {
 };
 
 // =============================================================================
+// Common Sub-Schemas - Reusable across form types
+// =============================================================================
+
+/**
+ * Financial highlight item schema with label, value, and optional change fields.
+ * Used in 10-K and 10-Q schemas for consistent financial metric representation.
+ */
+const FINANCIAL_HIGHLIGHT_ITEM: SchemaProperty = {
+  type: 'object',
+  description: 'Financial metric with value and change',
+  properties: {
+    label: { type: 'string', description: 'Metric name (e.g., "Revenue", "Net Income")', maxLength: 50 },
+    value: { type: 'string', description: 'Value with units (e.g., "$50.5B")', maxLength: 30 },
+    change: { type: 'string', description: 'YoY change (e.g., "+15%", "-3%")', maxLength: 20 }
+  },
+  required: ['label', 'value']
+};
+
+/**
+ * Business segment performance item schema.
+ * Used in 10-K schemas for segment-level revenue breakdowns.
+ */
+const SEGMENT_ITEM: SchemaProperty = {
+  type: 'object',
+  description: 'Business segment with revenue and growth',
+  properties: {
+    name: { type: 'string', description: 'Segment name', maxLength: 50 },
+    revenue: { type: 'string', description: 'Segment revenue', maxLength: 30 },
+    growth: { type: 'string', description: 'Growth rate', maxLength: 20 }
+  },
+  required: ['name', 'revenue']
+};
+
+/**
+ * Risk factor item - simple string array for material risks.
+ * Used across 10-K, 10-Q, and other filing types.
+ */
+const RISK_FACTOR_ITEM: SchemaProperty = {
+  type: 'string',
+  description: 'Single risk factor',
+  maxLength: 200
+};
+
+/**
+ * Key point item - simple string array for general takeaways.
+ * Used as fallback when structured financial data is sparse.
+ */
+const KEY_POINT_ITEM: SchemaProperty = {
+  type: 'string',
+  description: 'Single key point',
+  maxLength: 200
+};
+
+// =============================================================================
 // Form-Specific Schemas
 // =============================================================================
 
 /**
- * All form type schemas with their required fields and properties
+ * All form type schemas with their required fields and properties.
+ * Each schema defines the JSON structure that AI must generate for that filing type.
+ *
+ * Key design principles:
+ * - Field names match email template expectations exactly
+ * - All arrays have maxItems to prevent oversized output
+ * - All strings have maxLength to ensure consistent sizing
+ * - Required fields are explicitly listed
  */
 export const FORM_SCHEMAS: Record<string, JSONSchema> = {
   '10-K': {
     type: 'object',
-    required: ['company', 'summary', 'fiscalYear', 'keyHighlights'],
+    required: ['company', 'summary', 'fiscalYear', 'financialHighlights'],
     properties: {
       ...BASE_SCHEMA_PROPERTIES,
       fiscalYear: {
         type: 'string',
         description: 'Fiscal year (e.g., "2024")'
       },
-      keyHighlights: {
+      financialHighlights: {
         type: 'array',
-        description: 'Top 3-5 key points with specific numbers (max 5 items)',
+        maxItems: 6,
+        description: 'Key financial metrics with YoY changes',
+        items: FINANCIAL_HIGHLIGHT_ITEM
+      },
+      segments: {
+        type: 'array',
         maxItems: 5,
-        items: { type: 'string', description: 'Single key point', maxLength: 200 }
+        description: 'Business segment performance',
+        items: SEGMENT_ITEM
       },
-      risks: {
+      riskFactors: {
         type: 'array',
-        description: 'Top 3 material risks with quantified impact (max 3 items)',
         maxItems: 3,
-        items: { type: 'string', description: 'Single risk factor', maxLength: 200 }
+        description: 'Top 3 material risks with quantified impact',
+        items: RISK_FACTOR_ITEM
       },
-      revenue: {
-        type: 'string',
-        description: 'Total revenue with currency symbol (e.g., "$45.2B")',
-        maxLength: 50
-      },
-      netIncome: {
-        type: 'string',
-        description: 'Net income with currency symbol (e.g., "$2.1B")',
-        maxLength: 50
+      keyPoints: {
+        type: 'array',
+        maxItems: 5,
+        description: 'Additional key takeaways (fallback if financialHighlights sparse)',
+        items: KEY_POINT_ITEM
       }
     }
   },
 
   '10-Q': {
     type: 'object',
-    required: ['company', 'summary', 'fiscalQuarter', 'keyHighlights'],
+    required: ['company', 'summary', 'fiscalQuarter', 'financialHighlights'],
     properties: {
       ...BASE_SCHEMA_PROPERTIES,
       fiscalQuarter: {
         type: 'string',
         description: 'Fiscal quarter (e.g., "Q3 2024")'
       },
-      keyHighlights: {
+      financialHighlights: {
         type: 'array',
-        description: 'Top 3-5 key points with specific numbers (max 5 items)',
+        maxItems: 6,
+        description: 'Key quarterly financial metrics with YoY and QoQ changes',
+        items: {
+          type: 'object',
+          properties: {
+            label: { type: 'string', description: 'Metric name (e.g., "Revenue", "EPS")', maxLength: 50 },
+            value: { type: 'string', description: 'Value with units (e.g., "$12.5B")', maxLength: 30 },
+            change: { type: 'string', description: 'YoY change (e.g., "+15%", "-3%")', maxLength: 20 },
+            qoqChange: { type: 'string', description: 'QoQ change (e.g., "+5%", "-2%")', maxLength: 20 }
+          },
+          required: ['label', 'value']
+        }
+      },
+      quarterlyTrends: {
+        type: 'array',
+        maxItems: 4,
+        description: 'Quarter-over-quarter trend indicators',
+        items: {
+          type: 'object',
+          properties: {
+            metric: { type: 'string', description: 'Metric name', maxLength: 50 },
+            current: { type: 'string', description: 'Current quarter value', maxLength: 30 },
+            trend: { type: 'string', description: 'Trend direction: up, down, or flat', enum: ['up', 'down', 'flat'] }
+          },
+          required: ['metric', 'current', 'trend']
+        }
+      },
+      guidanceUpdates: {
+        type: 'array',
+        maxItems: 3,
+        description: 'Forward-looking guidance updates from management',
+        items: { type: 'string', description: 'Single guidance update', maxLength: 200 }
+      },
+      riskFactors: {
+        type: 'array',
+        maxItems: 3,
+        description: 'Key risks or concerns highlighted this quarter',
+        items: RISK_FACTOR_ITEM
+      },
+      keyPoints: {
+        type: 'array',
         maxItems: 5,
-        items: { type: 'string', description: 'Single key point', maxLength: 200 }
-      },
-      revenue: {
-        type: 'string',
-        description: 'Quarterly revenue with currency symbol',
-        maxLength: 50
-      },
-      quarterOverQuarterChange: {
-        type: 'string',
-        description: 'Quarter-over-quarter change percentage (e.g., "+5.2%")',
-        maxLength: 20
+        description: 'Additional key takeaways (fallback if financialHighlights sparse)',
+        items: KEY_POINT_ITEM
       }
     }
   },
@@ -213,7 +308,7 @@ export const FORM_SCHEMAS: Record<string, JSONSchema> = {
         description: 'Insider name exactly from "Name of Reporting Person" field',
         maxLength: 100
       },
-      relationship: {
+      filerRole: {
         type: 'string',
         description: 'Title/role from "Relationship of Reporting Person" (e.g., "CEO", "10% Owner", "Director")',
         maxLength: 100
@@ -402,6 +497,326 @@ export const FORM_SCHEMAS: Record<string, JSONSchema> = {
     }
   },
 
+  // =============================================================================
+  // Reddit Filing Types - Phase 4 Addition
+  // =============================================================================
+
+  /**
+   * Form S-1: IPO Registration Statement
+   * Filed when a company is going public for the first time.
+   * Contains business description, financial data, use of proceeds, and risk factors.
+   */
+  'S-1': {
+    type: 'object',
+    required: ['company', 'summary', 'offeringSize'],
+    properties: {
+      ...BASE_SCHEMA_PROPERTIES,
+      offeringSize: {
+        type: 'string',
+        description: 'Total offering size with $ (e.g., "$500M", "$1.2B")',
+        maxLength: 30
+      },
+      priceRange: {
+        type: 'string',
+        description: 'Expected price range (e.g., "$18-$21 per share")',
+        maxLength: 50
+      },
+      sharesOffered: {
+        type: 'string',
+        description: 'Number of shares being offered (e.g., "25,000,000")',
+        maxLength: 30
+      },
+      useOfProceeds: {
+        type: 'array',
+        maxItems: 4,
+        description: 'How IPO proceeds will be used',
+        items: { type: 'string', description: 'Single use of proceeds', maxLength: 150 }
+      },
+      businessDescription: {
+        type: 'string',
+        description: 'One-line business description',
+        maxLength: 200
+      },
+      financialHighlights: {
+        type: 'array',
+        maxItems: 4,
+        description: 'Key pre-IPO financial metrics',
+        items: FINANCIAL_HIGHLIGHT_ITEM
+      },
+      riskFactors: {
+        type: 'array',
+        maxItems: 3,
+        description: 'Top IPO risks for investors',
+        items: RISK_FACTOR_ITEM
+      },
+      underwriters: {
+        type: 'array',
+        maxItems: 5,
+        description: 'Lead underwriters for the IPO',
+        items: { type: 'string', description: 'Underwriter name', maxLength: 100 }
+      },
+      expectedTradingDate: {
+        type: 'string',
+        description: 'Expected trading start date if disclosed',
+        maxLength: 30
+      },
+      exchangeListing: {
+        type: 'string',
+        description: 'Exchange where shares will be listed (e.g., "NYSE", "NASDAQ")',
+        maxLength: 30
+      }
+    }
+  },
+
+  /**
+   * Form S-3: Secondary Offering Registration Statement
+   * Filed for secondary offerings by companies already public.
+   * Can be shelf registration for future offerings or specific secondary offerings.
+   */
+  'S-3': {
+    type: 'object',
+    required: ['company', 'summary', 'offeringType'],
+    properties: {
+      ...BASE_SCHEMA_PROPERTIES,
+      offeringType: {
+        type: 'string',
+        description: 'Type of offering (e.g., "Primary", "Secondary", "Shelf Registration", "ATM Program")',
+        maxLength: 50
+      },
+      offeringAmount: {
+        type: 'string',
+        description: 'Total offering amount with $ (e.g., "$500M")',
+        maxLength: 50
+      },
+      sharesOffered: {
+        type: 'string',
+        description: 'Number of shares being registered (e.g., "10,000,000")',
+        maxLength: 30
+      },
+      dilutionImpact: {
+        type: 'string',
+        description: 'Estimated dilution impact on existing shareholders (e.g., "5% dilution")',
+        maxLength: 50
+      },
+      sellingShareholders: {
+        type: 'array',
+        maxItems: 5,
+        description: 'Selling shareholders if secondary sale',
+        items: {
+          type: 'object',
+          properties: {
+            name: { type: 'string', description: 'Shareholder name', maxLength: 100 },
+            shares: { type: 'string', description: 'Shares being sold', maxLength: 30 }
+          },
+          required: ['name', 'shares']
+        }
+      },
+      shelfRegistration: {
+        type: 'object',
+        description: 'Shelf registration details if applicable',
+        properties: {
+          totalAuthorized: { type: 'string', description: 'Total amount authorized', maxLength: 50 },
+          remainingCapacity: { type: 'string', description: 'Remaining capacity', maxLength: 50 },
+          expirationDate: { type: 'string', description: 'Shelf expiration date', maxLength: 20 }
+        }
+      },
+      useOfProceeds: {
+        type: 'array',
+        maxItems: 3,
+        description: 'Intended use of proceeds',
+        items: { type: 'string', description: 'Use of proceeds', maxLength: 150 }
+      },
+      pricePerShare: {
+        type: 'string',
+        description: 'Price per share if fixed (e.g., "$45.00")',
+        maxLength: 30
+      }
+    }
+  },
+
+  /**
+   * DEF 14A: Definitive Proxy Statement
+   * Filed before shareholder meetings with voting matters.
+   * Contains executive compensation, board proposals, and shareholder proposals.
+   */
+  'DEF 14A': {
+    type: 'object',
+    required: ['company', 'summary', 'meetingDate'],
+    properties: {
+      ...BASE_SCHEMA_PROPERTIES,
+      meetingDate: {
+        type: 'string',
+        description: 'Annual/special meeting date (YYYY-MM-DD)',
+        maxLength: 20
+      },
+      meetingType: {
+        type: 'string',
+        description: 'Type of meeting (e.g., "Annual Meeting", "Special Meeting")',
+        maxLength: 50
+      },
+      recordDate: {
+        type: 'string',
+        description: 'Record date for voting eligibility (YYYY-MM-DD)',
+        maxLength: 20
+      },
+      executiveCompensation: {
+        type: 'array',
+        maxItems: 5,
+        description: 'Top executive compensation packages',
+        items: {
+          type: 'object',
+          properties: {
+            name: { type: 'string', description: 'Executive name', maxLength: 100 },
+            title: { type: 'string', description: 'Executive title', maxLength: 50 },
+            totalCompensation: { type: 'string', description: 'Total compensation (e.g., "$15.2M")', maxLength: 30 }
+          },
+          required: ['name', 'totalCompensation']
+        }
+      },
+      ceoPayRatio: {
+        type: 'string',
+        description: 'CEO to median employee pay ratio (e.g., "287:1")',
+        maxLength: 30
+      },
+      boardProposals: {
+        type: 'array',
+        maxItems: 6,
+        description: 'Management/board proposals for shareholder vote',
+        items: {
+          type: 'object',
+          properties: {
+            number: { type: 'string', description: 'Proposal number', maxLength: 10 },
+            description: { type: 'string', description: 'Proposal description', maxLength: 200 },
+            recommendation: { type: 'string', description: 'Board recommendation (FOR/AGAINST)', maxLength: 20 }
+          },
+          required: ['description', 'recommendation']
+        }
+      },
+      shareholderProposals: {
+        type: 'array',
+        maxItems: 4,
+        description: 'Shareholder-submitted proposals',
+        items: {
+          type: 'object',
+          properties: {
+            number: { type: 'string', description: 'Proposal number', maxLength: 10 },
+            description: { type: 'string', description: 'Proposal description', maxLength: 200 },
+            recommendation: { type: 'string', description: 'Board recommendation (usually AGAINST)', maxLength: 20 }
+          },
+          required: ['description', 'recommendation']
+        }
+      },
+      directorNominees: {
+        type: 'array',
+        maxItems: 15,
+        description: 'Director nominees for election',
+        items: {
+          type: 'object',
+          properties: {
+            name: { type: 'string', description: 'Nominee name', maxLength: 100 },
+            independent: { type: 'string', description: 'Independence status', maxLength: 20 },
+            tenure: { type: 'string', description: 'Years on board', maxLength: 20 }
+          },
+          required: ['name']
+        }
+      },
+      sayOnPay: {
+        type: 'object',
+        description: 'Say-on-pay advisory vote details',
+        properties: {
+          included: { type: 'string', description: 'Whether included (Yes/No)', maxLength: 10 },
+          recommendation: { type: 'string', description: 'Board recommendation', maxLength: 20 },
+          frequency: { type: 'string', description: 'Vote frequency (Annual/Biennial/Triennial)', maxLength: 20 }
+        }
+      },
+      auditorRatification: {
+        type: 'object',
+        description: 'Auditor ratification proposal',
+        properties: {
+          firm: { type: 'string', description: 'Audit firm name', maxLength: 100 },
+          fees: { type: 'string', description: 'Audit fees paid', maxLength: 30 }
+        }
+      }
+    }
+  },
+
+  /**
+   * Form 11-K: Employee Stock Purchase/Savings Plan Annual Report
+   * Annual report for employee benefit plans.
+   * Contains plan assets, contributions, and financial statements.
+   */
+  '11-K': {
+    type: 'object',
+    required: ['company', 'summary', 'planAssets'],
+    properties: {
+      ...BASE_SCHEMA_PROPERTIES,
+      planName: {
+        type: 'string',
+        description: 'Full name of the employee benefit plan',
+        maxLength: 200
+      },
+      planFiscalYear: {
+        type: 'string',
+        description: 'Plan fiscal year end (e.g., "December 31, 2024")',
+        maxLength: 30
+      },
+      planAssets: {
+        type: 'string',
+        description: 'Total plan assets (e.g., "$2.5B")',
+        maxLength: 30
+      },
+      netAssetsChange: {
+        type: 'string',
+        description: 'Change in net assets during year (e.g., "+$150M", "-5%")',
+        maxLength: 30
+      },
+      participantCount: {
+        type: 'string',
+        description: 'Number of plan participants (e.g., "45,000")',
+        maxLength: 30
+      },
+      contributionsReceived: {
+        type: 'string',
+        description: 'Total contributions received during year (e.g., "$350M")',
+        maxLength: 30
+      },
+      employerContributions: {
+        type: 'string',
+        description: 'Employer matching contributions (e.g., "$125M")',
+        maxLength: 30
+      },
+      benefitsDistributed: {
+        type: 'string',
+        description: 'Benefits paid to participants (e.g., "$200M")',
+        maxLength: 30
+      },
+      investmentOptions: {
+        type: 'array',
+        maxItems: 10,
+        description: 'Available investment options in the plan',
+        items: {
+          type: 'object',
+          properties: {
+            name: { type: 'string', description: 'Fund/option name', maxLength: 100 },
+            allocation: { type: 'string', description: 'Percentage of assets', maxLength: 20 },
+            return: { type: 'string', description: 'Annual return', maxLength: 20 }
+          },
+          required: ['name']
+        }
+      },
+      companyStockHoldings: {
+        type: 'string',
+        description: 'Amount held in company stock if ESOP (e.g., "$500M", "25% of assets")',
+        maxLength: 50
+      },
+      planType: {
+        type: 'string',
+        description: 'Type of plan (e.g., "401(k)", "ESOP", "Profit Sharing")',
+        maxLength: 50
+      }
+    }
+  },
+
   // Generic fallback for unsupported form types
   'Generic': {
     type: 'object',
@@ -484,6 +899,34 @@ WRITING STYLE:
  * Form-specific extraction guidance to improve AI accuracy
  */
 const FORM_EXTRACTION_GUIDANCE: Record<string, string> = {
+  '10-K': `10-K ANNUAL REPORT EXTRACTION RULES:
+- REQUIRED FINANCIAL METRICS (must include ALL of these in financialHighlights):
+  1. Revenue - Total annual revenue with YoY change (e.g., "$130.5B (+114%)")
+  2. Net Income - Annual net income with YoY change
+  3. Gross Margin - ALWAYS calculate and include (Revenue - COGS) / Revenue as percentage (e.g., "75.0%")
+  4. EPS - Earnings per share (diluted) with YoY change
+  5. Operating Income - If materially different from net income
+  6. Free Cash Flow - If disclosed
+- Gross margin is a KEY METRIC for investors - if not explicitly stated, calculate it from revenue and cost of revenue/COGS
+- Include segment breakdown if the company has multiple business units
+- For fiscal year, extract the EXACT year (e.g., "2024" or "FY2025")
+- Risk factors should be specific and quantified where possible (e.g., "Tariff exposure could reduce margins by 5%")
+- The summary MUST lead with: company name, total revenue, and profitability highlight`,
+
+  '10-Q': `10-Q QUARTERLY REPORT EXTRACTION RULES:
+- REQUIRED FINANCIAL METRICS (must include ALL of these in financialHighlights):
+  1. Revenue - Quarterly revenue with YoY AND QoQ changes (e.g., "$28.1B (+12% YoY, +3% QoQ)")
+  2. Net Income - Quarterly net income with YoY change
+  3. Gross Margin - ALWAYS calculate and include as percentage (e.g., "18%") - this is MANDATORY
+  4. EPS - Earnings per share (diluted) with YoY change
+  5. Operating Margin or Operating Income - If disclosed
+  6. Cash Flow from Operations - If materially significant
+- Gross margin is CRITICAL for quarterly comparisons - if not explicitly stated, derive from (Revenue - Cost of Revenue) / Revenue
+- Include quarterly trends (up/down/flat) for key metrics
+- Extract guidance updates if management provides forward-looking statements
+- For fiscal quarter, format as "Q3 2024" or "Q1 FY2025"
+- The summary MUST lead with: company name, quarterly revenue, and margin performance`,
+
   '4': `FORM 4 EXTRACTION RULES:
 - Look for "Table I - Non-Derivative Securities" and "Table II - Derivative Securities"
 - Column 4 has the transaction price - if blank or $0, note this is likely a gift or grant
@@ -515,6 +958,63 @@ const FORM_EXTRACTION_GUIDANCE: Record<string, string> = {
   * "Notable Sale" - Use when: >$10M value, >5% of holdings, unusual timing, or part of large divestiture pattern
   * "Routine 10b5-1" - Use when: pre-planned under 10b5-1 trading plan, regular/scheduled sale, or small relative to holdings
 - Write summary as: "[Name] ([Role]) proposes to sell [shares] [TICKER] shares worth [value]. Following this transaction, they will still hold [remainingHoldings] shares."`,
+
+  'S-1': `FORM S-1 IPO REGISTRATION EXTRACTION RULES:
+- This is an IPO REGISTRATION - company is going public for the first time
+- REQUIRED FIELDS:
+  1. offeringSize - Total dollar amount being raised (e.g., "$500M")
+  2. priceRange - IPO price range (e.g., "$18-$21 per share")
+  3. sharesOffered - Number of shares being offered
+  4. businessDescription - One-line company description
+- Extract underwriters (lead left, joint bookrunners) - usually Goldman, Morgan Stanley, JPMorgan, etc.
+- Extract use of proceeds - typically: general corporate purposes, R&D, sales/marketing, debt repayment
+- Extract key financial highlights: Revenue, Net Income (or Net Loss), Gross Margin
+- For loss-making companies (common in IPOs), note the net loss and path to profitability if mentioned
+- Extract risk factors - focus on company-specific risks, not boilerplate
+- Note the exchange listing (NYSE/NASDAQ) and proposed ticker symbol
+- The summary MUST lead with: company name, what they do, offering size, and notable metrics`,
+
+  'S-3': `FORM S-3 SECONDARY OFFERING EXTRACTION RULES:
+- S-3 is used by ALREADY PUBLIC companies for secondary offerings
+- Determine the type: Primary (company selling new shares), Secondary (existing shareholders selling), or Shelf Registration (registering for future use)
+- REQUIRED FIELDS:
+  1. offeringType - Primary, Secondary, Shelf, or ATM (at-the-market) program
+  2. offeringAmount - Total dollar amount or number of shares
+  3. dilutionImpact - Calculate approximate dilution to existing shareholders
+- For shelf registrations: Note total capacity, remaining capacity, and expiration date
+- For ATM programs: Note the agent/dealer and any daily/weekly limits
+- Extract selling shareholders if this is a secondary sale (insiders, VCs, PE firms)
+- Note use of proceeds if primary offering
+- The summary MUST lead with: type of offering, amount, and dilution impact`,
+
+  'DEF 14A': `DEF 14A PROXY STATEMENT EXTRACTION RULES:
+- Proxy statements precede shareholder meetings for voting
+- REQUIRED FIELDS:
+  1. meetingDate - When is the annual/special meeting
+  2. executiveCompensation - CEO and NEO (named executive officer) total compensation
+  3. ceoPayRatio - CEO to median employee pay ratio (e.g., "287:1")
+  4. boardProposals - Management proposals requiring vote (director election, say-on-pay, auditor ratification)
+  5. shareholderProposals - Any shareholder-submitted proposals
+- For executive compensation: Extract total compensation for top 5 executives (salary + bonus + stock + options + other)
+- Note say-on-pay vote recommendation and any concerns raised
+- For director nominees: Note any contested elections or activist board candidates
+- Extract any related party transactions or conflicts of interest
+- The summary MUST lead with: meeting date, key proposals, and notable compensation figures`,
+
+  '11-K': `FORM 11-K EMPLOYEE PLAN EXTRACTION RULES:
+- Form 11-K is the annual report for employee benefit plans (401(k), ESOP, etc.)
+- REQUIRED FIELDS:
+  1. planName - Full name of the benefit plan
+  2. planAssets - Total plan assets (net assets available for benefits)
+  3. participantCount - Number of active participants
+  4. contributionsReceived - Employee contributions during the year
+  5. benefitsDistributed - Benefits/withdrawals paid out
+- Extract employer matching contribution amount
+- Note investment returns and any significant losses
+- For ESOPs: Extract company stock holdings as percentage of total assets
+- Look for any audit findings or compliance issues
+- Note the plan type: 401(k), profit sharing, ESOP, pension, etc.
+- The summary MUST lead with: plan name, total assets, and net change in assets`,
 };
 
 export function generateFilingPrompt(config: FilingPromptConfig): PromptOutput {
