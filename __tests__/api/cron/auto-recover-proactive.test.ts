@@ -20,9 +20,69 @@ const mockPrismaJobQueue = {
   update: jest.fn(),
 };
 
+// Simulated database state for RecoveryState (tracks changes across calls)
+let mockRecoveryDbState = {
+  id: 'singleton',
+  consecutiveDegraded: 0,
+  consecutiveCleanups: 0,
+  consecutiveRedeploys: 0,
+  lastCleanupTime: null as Date | null,
+  lastRedeployTime: null as Date | null,
+  lastHealthyTime: null as Date | null,
+  lastDegradedTime: null as Date | null,
+};
+
+// Helper to reset mock DB state
+function resetMockRecoveryDbState() {
+  mockRecoveryDbState = {
+    id: 'singleton',
+    consecutiveDegraded: 0,
+    consecutiveCleanups: 0,
+    consecutiveRedeploys: 0,
+    lastCleanupTime: null,
+    lastRedeployTime: null,
+    lastHealthyTime: null,
+    lastDegradedTime: null,
+  };
+}
+
 const mockPrisma = {
   jobQueue: mockPrismaJobQueue,
   $executeRaw: jest.fn(),
+  recoveryState: {
+    findUnique: jest.fn().mockImplementation(() => Promise.resolve({ ...mockRecoveryDbState })),
+    create: jest.fn().mockImplementation(() => Promise.resolve({ ...mockRecoveryDbState })),
+    upsert: jest.fn().mockImplementation((args: { update: Record<string, unknown> }) => {
+      // Simulate upsert behavior - apply updates to mock state
+      const update = args.update;
+      if (update.consecutiveDegraded !== undefined) {
+        if (typeof update.consecutiveDegraded === 'object' && 'increment' in update.consecutiveDegraded) {
+          mockRecoveryDbState.consecutiveDegraded += (update.consecutiveDegraded as { increment: number }).increment;
+        } else {
+          mockRecoveryDbState.consecutiveDegraded = update.consecutiveDegraded as number;
+        }
+      }
+      if (update.consecutiveCleanups !== undefined) {
+        if (typeof update.consecutiveCleanups === 'object' && 'increment' in update.consecutiveCleanups) {
+          mockRecoveryDbState.consecutiveCleanups += (update.consecutiveCleanups as { increment: number }).increment;
+        } else {
+          mockRecoveryDbState.consecutiveCleanups = update.consecutiveCleanups as number;
+        }
+      }
+      if (update.consecutiveRedeploys !== undefined) {
+        if (typeof update.consecutiveRedeploys === 'object' && 'increment' in update.consecutiveRedeploys) {
+          mockRecoveryDbState.consecutiveRedeploys += (update.consecutiveRedeploys as { increment: number }).increment;
+        } else {
+          mockRecoveryDbState.consecutiveRedeploys = update.consecutiveRedeploys as number;
+        }
+      }
+      if (update.lastCleanupTime !== undefined) mockRecoveryDbState.lastCleanupTime = update.lastCleanupTime as Date | null;
+      if (update.lastRedeployTime !== undefined) mockRecoveryDbState.lastRedeployTime = update.lastRedeployTime as Date | null;
+      if (update.lastHealthyTime !== undefined) mockRecoveryDbState.lastHealthyTime = update.lastHealthyTime as Date | null;
+      if (update.lastDegradedTime !== undefined) mockRecoveryDbState.lastDegradedTime = update.lastDegradedTime as Date | null;
+      return Promise.resolve({ ...mockRecoveryDbState });
+    }),
+  },
 };
 
 jest.mock('@/lib/db/prisma', () => ({
@@ -44,7 +104,7 @@ import { GET, _resetRecoveryStateForTesting } from '@/app/api/cron/auto-recover/
 describe('Comprehensive Self-Healing Auto-Recovery', () => {
   const cronSecret = 'test-cron-secret';
 
-  beforeEach(() => {
+  beforeEach(async () => {
     process.env.CRON_SECRET = cronSecret;
     process.env.ADMIN_API_SECRET = 'admin-secret';
     process.env.PUBLIC_URL = 'https://tldrsec.app';
@@ -53,7 +113,8 @@ describe('Comprehensive Self-Healing Auto-Recovery', () => {
     mockPrisma.$executeRaw.mockReset();
     mockPrismaJobQueue.findMany.mockReset();
     mockPrismaJobQueue.updateMany.mockReset();
-    _resetRecoveryStateForTesting();
+    resetMockRecoveryDbState();
+    await _resetRecoveryStateForTesting();
   });
 
   afterEach(() => {

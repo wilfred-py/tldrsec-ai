@@ -1,14 +1,8 @@
 # Project Progress
 
-**Date**: 2026-01-09
-**Branch**: review-generated-summaries
-**Status**: Summary Generation Quality Improvement - Phase 5 Complete
-
----
-
-## Current Session: Summary Generation Quality Improvement (2026-01-08)
-
-Implementing schema alignment between AI prompts and email templates per plan at `docs/plans/2026-01-07-summary-generation-quality-improvement.md`.
+**Date**: 2026-01-10
+**Branch**: feature/eliminate-manual-pipeline-intervention
+**Status**: Phase 1 Complete - Persistent Recovery State Implemented
 
 ### Phase 5: Missing Extractors (SC 13G, SC 13D, 424B2) ✅ (2026-01-09)
 
@@ -142,14 +136,78 @@ Implementing schema alignment between AI prompts and email templates per plan at
 - `__tests__/email/extractors/10q-data-extractor.test.ts` - 27 tests
 
 **Verification**: ✅ 53 extractor tests passing, 61 prompt tests passing, build passes
-=======
-**Date**: 2026-01-07
-**Branch**: review-generated-summaries
-**Status**: Summary Generation Accuracy Improvements - ALL PHASES COMPLETE ✅
 
 ---
 
-## Current Session: Summary Generation Accuracy Improvements (2026-01-07)
+## Current Session: Eliminate Manual Pipeline Intervention - Phase 1 (2026-01-09 - 2026-01-10)
+
+### Phase 1: Persistent Recovery State - COMPLETE
+
+**Goal**: Store auto-recovery state in database to survive Vercel deployments.
+
+**Problem Solved**: Previously, in-memory recovery state would reset on every Vercel deployment, causing:
+- False healthy signals after deploys during ongoing incidents
+- Reset of consecutiveDegraded counters before action thresholds reached
+- Loss of cleanup/redeploy history
+
+**Implementation**:
+
+1. **Database Schema** (`prisma/schema.prisma`):
+   - Added `RecoveryState` model in `pipeline` schema
+   - Singleton pattern with `id='singleton'` default
+   - Fields: `consecutiveDegraded`, `consecutiveCleanups`, `consecutiveRedeploys`
+   - Timestamps: `lastCleanupTime`, `lastRedeployTime`, `lastHealthyTime`, `lastDegradedTime`
+
+2. **RecoveryStateService** (`lib/cron/recovery-state-service.ts`):
+   - Singleton pattern in database with in-memory caching
+   - Methods: `getState()`, `incrementConsecutiveDegraded()`, `recordCleanup()`, `recordRedeploy()`, `resetOnHealthy()`, `reset()`, `clearCache()`
+   - Uses upsert for all operations to handle missing row gracefully
+
+3. **Auto-Recover Route** (`app/api/cron/auto-recover/route.ts`):
+   - Replaced in-memory `recoveryState` object with `RecoveryStateService`
+   - Changed `_resetRecoveryStateForTesting` from sync to async
+   - All state operations now persist to database
+
+4. **Test Updates**:
+   - `__tests__/cron/persistent-recovery-state.test.ts` - 8 unit tests for RecoveryStateService
+   - `__tests__/api/cron/auto-recover-proactive.test.ts` - Dynamic mock simulating DB state changes
+   - `__tests__/api/cron/auto-recover.test.ts` - Added recoveryState mock
+   - `__tests__/setup.js` - Shared mock Prisma client with recoveryState model
+
+**Verification**:
+- 32 auto-recover tests passing
+- 8 RecoveryStateService tests passing
+- Build compiles successfully
+- Lint passes with no warnings
+- Database migration applied (RecoveryState table created in pipeline schema)
+
+**Commit**: `7db077d` on `feature/eliminate-manual-pipeline-intervention`
+
+**Plan Reference**: `docs/plans/2026-01-09-eliminate-manual-pipeline-intervention.md`
+
+---
+
+## Recently Completed
+
+### Fix Orphaned Filings Pipeline (2026-01-09)
+
+**Issue**: Pipeline stalled after discovering filings but before creating jobs.
+
+**Root Cause**: Discovery backlog recovery was re-queuing filings that had been processed in previous cycles.
+
+**Fix**: Added `unprocessedOnly` flag to discovery handler that filters out filings with existing summaries.
+
+**Files**: `lib/cron/handlers/discovery-handler.ts`, schema updates for backlog tracking
+
+### Pipeline Incident - Cloudflare Worker Cron Gap (2026-01-09)
+
+**Issue**: Pipeline job processing dropped for ~3 hours (01:45 UTC to 04:57 UTC).
+
+**Root Cause**: Cloudflare Worker stopped triggering cron executions.
+
+**Resolution**: Redeployed Cloudflare Worker (`cd cloudflare-cron && npx wrangler deploy`)
+
+### Summary Generation Accuracy Improvements (2026-01-07)
 
 Implemented improvements to summary generation workflow accuracy and consistency per plan at `docs/plans/2026-01-06-improve-summary-generation-accuracy.md`. **All 4 phases complete with 101 tests passing.**
 
@@ -234,7 +292,6 @@ Implemented improvements to summary generation workflow accuracy and consistency
 - NEW: `__tests__/regression/summary-quality-regression.test.ts` - 9 regression tests
 
 **Verification**: ✅ 101 total tests passing across all phases, build passes, lint passes
->>>>>>> origin/main
 
 ### Phase 1: Schema Alignment Foundation ✅ (2026-01-07)
 
@@ -308,5 +365,5 @@ Implemented UI improvements to dashboard: dialog backgrounds, pagination styling
 
 ---
 
-*Last Updated: 2026-01-09 (Phase 5 Complete)*
+*Last Updated: 2026-01-10*
 *Older completed projects archived to .claude/history/ - See TIMELINE.md for full history*
