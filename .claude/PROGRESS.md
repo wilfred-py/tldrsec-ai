@@ -2,144 +2,11 @@
 
 **Date**: 2026-01-10
 **Branch**: feature/eliminate-manual-pipeline-intervention
-**Status**: Phase 1 Complete - Persistent Recovery State Implemented
-
-### Phase 5: Missing Extractors (SC 13G, SC 13D, 424B2) ✅ (2026-01-09)
-
-**Goal**: Add data extractors for SC 13G (passive ownership), SC 13D (activist ownership), and 424B2 (prospectus supplement).
-
-**Changes Made**:
-1. Created 3 new data extractors:
-   - `lib/email/sc13g-data-extractor.ts` - Passive beneficial ownership (>5%) extraction
-   - `lib/email/sc13d-data-extractor.ts` - Activist beneficial ownership extraction with activist intent detection
-   - `lib/email/424b2-data-extractor.ts` - Prospectus supplement (debt/equity/structured notes)
-
-2. Key extraction features:
-   - **SC 13G**: filerName, ownershipPercentage, sharesOwned, filingPurpose, isAmendment
-   - **SC 13D**: filerName, ownershipPercentage, purpose, intentions[], isActivist, isGroupFiling
-   - **424B2**: offeringType, offeringAmount, interestRate, maturityDate, linkedTo, underwriters[]
-
-3. Updated `lib/email/extractor-registry.ts` (now supports 16 form types with aliases)
-
-**Files Added**:
-- `lib/email/sc13g-data-extractor.ts` (~240 lines)
-- `lib/email/sc13d-data-extractor.ts` (~360 lines)
-- `lib/email/424b2-data-extractor.ts` (~425 lines)
-- `__tests__/email/extractors/sc13g-data-extractor.test.ts` (15 tests)
-- `__tests__/email/extractors/sc13d-data-extractor.test.ts` (17 tests)
-- `__tests__/email/extractors/424b2-data-extractor.test.ts` (16 tests)
-
-**Verification**: ✅ 48 Phase 5 tests passing, 149 total extractor tests
-
-**Next Step**: Plan complete - all phases implemented
-
-### Phase 4: Reddit Filing Types Coverage ✅ (2026-01-08)
-
-**Goal**: Add dedicated prompt schemas, templates, and extractors for S-1, S-3, DEF 14A, and Form 11-K.
-
-**Changes Made**:
-1. Created 4 new schemas in `lib/ai/prompts/unified-prompts.ts`:
-   - **S-1** (IPO): offeringSize, priceRange, sharesOffered, useOfProceeds, businessDescription, financialHighlights, riskFactors, underwriters
-   - **S-3** (Secondary Offering): offeringType, offeringAmount, dilutionImpact, sellingShareholders, shelfRegistration, useOfProceeds
-   - **DEF 14A** (Proxy): meetingDate, meetingType, executiveCompensation, ceoPayRatio, boardProposals, shareholderProposals, directorNominees, sayOnPay
-   - **11-K** (Employee Plan): planName, planAssets, participantCount, contributionsReceived, benefitsDistributed, investmentOptions
-
-2. Created 4 new data extractors:
-   - `lib/email/s1-data-extractor.ts` - IPO data extraction (markdown + prose)
-   - `lib/email/s3-data-extractor.ts` - Secondary offering with shelf registration
-   - `lib/email/def14a-data-extractor.ts` - Proxy statement with table parsing
-   - `lib/email/form11k-data-extractor.ts` - Employee stock plan extraction
-
-3. Updated `lib/email/extractor-registry.ts` with new extractors (now supports 13 form types)
-
-**Files Added**:
-- `lib/email/s1-data-extractor.ts` (~330 lines)
-- `lib/email/s3-data-extractor.ts` (~330 lines)
-- `lib/email/def14a-data-extractor.ts` (~540 lines)
-- `lib/email/form11k-data-extractor.ts` (~350 lines)
-- `__tests__/ai/prompts/reddit-filing-schemas.test.ts` (43 tests)
-- `__tests__/email/extractors/s1-data-extractor.test.ts` (14 tests)
-- `__tests__/email/extractors/s3-data-extractor.test.ts` (12 tests)
-- `__tests__/email/extractors/def14a-data-extractor.test.ts` (18 tests)
-- `__tests__/email/extractors/form11k-data-extractor.test.ts` (14 tests)
-
-**Verification**: ✅ 101 Phase 4 tests passing, 136 total prompt tests passing
-
-**Next Step**: Phase 5 (Missing Extractors for SC 13G, SC 13D, 424B2) or Manual Verification
-
-### Phase 3: Extractor Integration at Generation Time ✅ (2026-01-08)
-
-**Goal**: Integrate extractors into the AI summary generation pipeline for validation and gap-filling.
-
-**Changes Made**:
-1. Created `lib/email/extractor-registry.ts` - Central registry mapping form types to extractors
-   - Supports 10-K, 10-Q, 8-K, Form 4, Form 144 with aliases
-   - `getExtractor(formType)` returns appropriate extractor function
-   - `hasExtractor(formType)` checks if extractor exists
-2. Created `lib/email/extractor-merge-utils.ts` - Merge and logging utilities
-   - `mergeWithFallback(aiData, extractedData)` - AI wins conflicts, extractor fills gaps
-   - `logDataDiscrepancies(formType, aiData, extractedData)` - Monitors AI quality
-   - `calculateFillRate(mergeResult)` - Tracks extractor fill rate
-3. Created `lib/ai/summarize-with-validation.ts` - Optional validation wrapper
-   - `summarizeFilingWithValidation()` - Wraps core summarize with extraction
-   - Returns `ValidatedSummarizationResult` with fill rate metrics
-   - Does NOT modify core `summarizeFiling()` - backward compatible
-
-**Files Added**:
-- `lib/email/extractor-registry.ts` - Extractor registry (~100 lines)
-- `lib/email/extractor-merge-utils.ts` - Merge utilities (~240 lines)
-- `lib/ai/summarize-with-validation.ts` - Validation wrapper (~200 lines)
-- `__tests__/ai/summarize-with-extraction.test.ts` - 27 integration tests
-- `scripts/test-extractor-integration-email.ts` - Email verification script
-
-**Verification**:
-- ✅ 173 tests passing (prompts + extractors + integration)
-- ✅ Manual email verification sent to wilfredchen1@gmail.com
-
-**Email Verification Results** (2026-01-08):
-| Form Type | Company | Fill Rate | Extractor-Filled Fields |
-|-----------|---------|-----------|------------------------|
-| 10-K | NVIDIA | 25% | `financialHighlights` |
-| 10-Q | Tesla | 25% | `guidanceUpdates` |
-| 8-K | Apple | 71% | `eventType`, `itemNumbers`, `keyHighlights`, `sentiment`, `isMaterial` |
-
-**Next Step**: Proceed to Phase 4 (Reddit Filing Types: S-1, S-3, DEF 14A, Form 11-K)
-
-### Phase 2: 10-K/10-Q Data Extractors ✅ (2026-01-08)
-
-**Goal**: Create data extractors for 10-K and 10-Q filings to validate and enrich AI output.
-
-**Changes Made**:
-1. Created 10-K data extractor with support for:
-   - Financial highlights parsing (markdown bold, plain text, table, **prose** formats)
-   - Business segments extraction
-   - Risk factors extraction from section headers
-   - Key points extraction
-   - Fiscal year detection
-2. Created 10-Q data extractor with additional support for:
-   - QoQ (quarter-over-quarter) change parsing alongside YoY
-   - Quarterly trends with direction indicators (up/down/flat)
-   - Forward-looking guidance updates
-   - Fiscal quarter detection (Q1-Q4 format)
-   - **Prose format extraction** for narrative summaries
-3. Created shared extractor utilities for:
-   - Section extraction patterns
-   - Bullet point parsing
-   - Financial highlight extraction
-   - Change value normalization
-
-**Files Added**:
-- `lib/email/10k-data-extractor.ts` - 10-K extractor (~420 lines)
-- `lib/email/10q-data-extractor.ts` - 10-Q extractor (~450 lines)
-- `lib/email/extractor-utils.ts` - Shared utilities (300 lines)
-- `__tests__/email/extractors/10k-data-extractor.test.ts` - 26 tests
-- `__tests__/email/extractors/10q-data-extractor.test.ts` - 27 tests
-
-**Verification**: ✅ 53 extractor tests passing, 61 prompt tests passing, build passes
+**Status**: Phase 4 Complete - External Watchdog Worker Implemented
 
 ---
 
-## Current Session: Eliminate Manual Pipeline Intervention - Phase 1 (2026-01-09 - 2026-01-10)
+## Current Session: Eliminate Manual Pipeline Intervention (2026-01-09 - 2026-01-10)
 
 ### Phase 1: Persistent Recovery State - COMPLETE
 
@@ -184,6 +51,119 @@
 **Commit**: `7db077d` on `feature/eliminate-manual-pipeline-intervention`
 
 **Plan Reference**: `docs/plans/2026-01-09-eliminate-manual-pipeline-intervention.md`
+
+### Phase 2: Cron Execution Gap Detection - COMPLETE
+
+**Goal**: Detect and alert when cron executions have unexpected gaps (>15 minutes).
+
+**Problem Solved**: Previously, Cloudflare Worker failures went unnoticed for hours:
+- No monitoring of cron execution history
+- Silent failures of the primary worker
+- Manual discovery of pipeline stalls
+
+**Implementation**:
+
+1. **CronExecutionGapDetector** (`lib/cron/execution-gap-detector.ts`):
+   - Detects gaps between cron executions
+   - Detects when no recent executions exist
+   - Rate-limited alerting (30-minute cooldown)
+   - Configurable thresholds via environment variables
+
+2. **Gap Types**:
+   - `gap-between-executions`: Gap detected between two recorded executions
+   - `no-recent-executions`: Gap from last execution to now
+
+3. **Environment Variables**:
+   - `GAP_LOOKBACK_MINUTES`: How far back to look (default: 60)
+   - `GAP_THRESHOLD_MINUTES`: Minimum gap to detect (default: 15)
+   - `GAP_ALERT_COOLDOWN_MINUTES`: Cooldown between alerts (default: 30)
+
+**Files Added**:
+- `lib/cron/execution-gap-detector.ts` - CronExecutionGapDetector class
+- `__tests__/cron/execution-gap-detector.test.ts` - 14 tests
+
+**Verification**: ✅ 14 tests passing, build passes, lint passes
+
+### Phase 3: Orphaned Filing Detection - COMPLETE
+
+**Goal**: Detect and recover filings with `processed=false` but no corresponding JobQueue entries.
+
+**Problem Solved**: Previously, orphaned filings were never recovered:
+- Discovery creates filing but pipeline stalls before creating job
+- Jobs deleted or failed without being recreated
+- Database inconsistency between SecFiling and JobQueue tables
+
+**Implementation**:
+
+1. **OrphanedFilingDetector** (`lib/cron/orphaned-filing-detector.ts`):
+   - Detects unprocessed filings older than threshold without jobs
+   - Creates ASYNC_FETCH_FILING jobs for orphaned filings
+   - Rate-limited alerting (30-minute cooldown)
+   - Configurable thresholds via environment variables
+
+2. **Key Features**:
+   - Age threshold: Only considers filings older than 10 minutes (configurable)
+   - Recovery limit: Max 50 filings per cycle (configurable)
+   - Higher priority (5) for recovery jobs
+   - Source tracking: `orphaned-filing-recovery`
+
+3. **Environment Variables**:
+   - `ORPHAN_AGE_THRESHOLD_MINUTES`: How old filing must be (default: 10)
+   - `ORPHAN_RECOVERY_LIMIT`: Max filings per cycle (default: 50)
+   - `ORPHAN_ALERT_COOLDOWN_MINUTES`: Cooldown between alerts (default: 30)
+
+**Files Added**:
+- `lib/cron/orphaned-filing-detector.ts` - OrphanedFilingDetector class
+- `__tests__/cron/orphaned-filing-detector.test.ts` - 17 tests
+
+**Verification**: ✅ 17 tests passing, 39 total Phase 1-3 tests passing, build passes, lint passes
+
+### Phase 4: External Watchdog Worker - COMPLETE
+
+**Goal**: Create independent external monitoring and backup triggering.
+
+**Problem Solved**: Previously, when primary Cloudflare Worker failed, there was no automatic detection or backup:
+- No external health monitoring
+- No backup triggering mechanism
+- Single point of failure in cron execution
+
+**Implementation**:
+
+1. **WatchdogLogic** (`lib/cloudflare-watchdog/watchdog-logic.ts`):
+   - Health check against pipeline health endpoint
+   - Consecutive failure tracking with configurable thresholds
+   - Backup trigger decision logic (3 failures OR 20+ min without success)
+   - Slack alert formatting for different scenarios
+
+2. **Cloudflare Watchdog Worker** (`cloudflare-watchdog/`):
+   - Independent worker for separate Cloudflare account
+   - Runs every 10 minutes (offset from primary by 5 min)
+   - KV storage for state persistence
+   - HTTP endpoints: `/status`, `/trigger`, `/check`
+
+3. **Backup Trigger Endpoint** (`app/api/cron/backup-trigger/route.ts`):
+   - Authorization via `BACKUP_TRIGGER_SECRET`
+   - Mutual exclusion: skips if primary ran within 10 minutes
+   - Queues discovery job same as primary tier-aware route
+   - Logs execution for monitoring
+
+4. **Key Features**:
+   - 3 consecutive failures triggers backup
+   - 20+ minutes without success + 2 failures triggers backup
+   - Mutual exclusion prevents duplicate pipeline runs
+   - Slack alerts for warnings, failures, and recovery
+
+**Files Added**:
+- `lib/cloudflare-watchdog/watchdog-logic.ts` - Core watchdog logic
+- `cloudflare-watchdog/index.js` - Cloudflare Worker
+- `cloudflare-watchdog/wrangler.toml` - Worker configuration
+- `app/api/cron/backup-trigger/route.ts` - Backup trigger endpoint
+- `__tests__/cloudflare-watchdog/watchdog-logic.test.ts` - 27 tests
+
+**Environment Variables Required**:
+- `BACKUP_TRIGGER_SECRET`: Auth token for watchdog to trigger backup
+
+**Verification**: ✅ 27 tests passing, 66 total Phase 1-4 tests passing, build passes, lint passes
 
 ---
 

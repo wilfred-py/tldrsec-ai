@@ -1,14 +1,27 @@
 # Project Progress
 
-**Date**: 2026-01-09
-**Branch**: review-generated-summaries
-**Status**: Summary Generation Quality Improvement - Phase 5 Complete
+**Date**: 2026-01-10
+**Branch**: main
+**Status**: Pipeline Successfully Redeployed - Backlog Processing Restored
 
 ---
 
-## Current Session: Summary Generation Quality Improvement (2026-01-08)
+## Current Session: Pipeline Redeployment & Backlog Recovery (2026-01-10)
 
-Implementing schema alignment between AI prompts and email templates per plan at `docs/plans/2026-01-07-summary-generation-quality-improvement.md`.
+Successfully resolved critical pipeline stall affecting 400+ pending jobs. Both Vercel and Cloudflare Worker redeployed to restore processing.
+
+**Root Cause**: Pipeline processing endpoints weren't picking up pending jobs, causing 12:30 PM AEST event drop with 231+ stuck jobs.
+
+**Solution**: 
+- ✅ Vercel redeployment with latest code
+- ✅ Cloudflare Worker redeployment (version c177792f)
+- ✅ Pipeline restoration - jobs actively processing
+
+**Current Status**: 1 job processing, fresh completion at 03:21:47 UTC, 402 pending jobs being processed systematically.
+
+---
+
+## Recently Completed: Summary Generation Quality Improvement
 
 ### Phase 5: Missing Extractors (SC 13G, SC 13D, 424B2) ✅ (2026-01-09)
 
@@ -39,7 +52,7 @@ Implementing schema alignment between AI prompts and email templates per plan at
 
 **Next Step**: Plan complete - all phases implemented
 
-## Previous Session: Fix Orphaned Filings Pipeline ✅ VERIFIED AND WORKING (2026-01-09)
+### Fix Orphaned Filings Pipeline ✅ VERIFIED AND WORKING (2026-01-09)
 
 **Plan**: [2026-01-08-fix-orphaned-filings-pipeline.md](docs/plans/2026-01-08-fix-orphaned-filings-pipeline.md)
 
@@ -56,5 +69,5 @@ Implementing schema alignment between AI prompts and email templates per plan at
 
 ---
 
-*Last Updated: 2026-01-09 (Phase 5 Complete)*
+*Last Updated: 2026-01-10 (Pipeline Redeployment Complete)*
 *Older completed projects archived to .claude/history/ - See TIMELINE.md for full history*
