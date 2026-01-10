@@ -169,15 +169,15 @@ export function Form144MinimalistTemplate({ filing }: Form144MinimalistTemplateP
   // Merge data sources - prefer summaryData, fall back to extracted
   const filerName = (data?.filerName || extractedData?.filerName || 'Insider') as string;
   const filerRole = (data?.filerRole || data?.position || extractedData?.filerRole || '') as string;
-  const shares = (data?.shares || extractedData?.shares || '') as string;
+  const shares = (data?.shares || data?.sharesSold || extractedData?.shares || '') as string;
   const estimatedValue = (data?.estimatedValue || extractedData?.estimatedValue || '') as string;
   const pricePerShare = (data?.pricePerShare || extractedData?.pricePerShare || '') as string;
-  const percentOfHoldings = (data?.percentOfHoldings || extractedData?.percentOfHoldings || '') as string;
+  const percentOfHoldings = (data?.percentOfHoldings || data?.percentOwnership || extractedData?.percentOfHoldings || '') as string;
   const broker = (data?.broker || extractedData?.broker || '') as string;
   const tradingPlan = (data?.tradingPlan || extractedData?.tradingPlan || '') as string;
   const signalStrength = (data?.signalStrength || extractedData?.signalStrength || '') as string;
   const recentActivity = (data?.recentActivity || extractedData?.recentActivity || '') as string;
-  const remainingHoldings = (data?.remainingHoldings || extractedData?.remainingHoldings || '') as string;
+  const remainingHoldings = (data?.remainingHoldings || data?.sharesRemaining || extractedData?.remainingHoldings || '') as string;
 
   const displayTicker = symbol || ticker || 'N/A';
 
