@@ -1192,7 +1192,9 @@ export default async function middleware(request: NextRequest) {
         '/api/cron/process-jobs',
         '/api/cron/unified',
         '/api/cron/queue-status', // Public monitoring endpoint
-        
+        '/api/cron/backup-trigger', // External watchdog backup trigger (handles its own auth)
+        '/api/cron/auto-recover', // Auto-recovery endpoint (handles its own auth)
+
         // Marketing pages
         '/',
         '/newsletter',
