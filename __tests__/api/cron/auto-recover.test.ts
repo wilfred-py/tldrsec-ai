@@ -16,6 +16,20 @@ global.fetch = mockFetch;
 // Mock Prisma for direct database operations
 const mockPrisma = {
   $executeRaw: jest.fn(),
+  recoveryState: {
+    findUnique: jest.fn().mockResolvedValue(null),
+    create: jest.fn().mockResolvedValue({ id: 'singleton' }),
+    upsert: jest.fn().mockResolvedValue({
+      id: 'singleton',
+      consecutiveDegraded: 0,
+      consecutiveCleanups: 0,
+      consecutiveRedeploys: 0,
+      lastCleanupTime: null,
+      lastRedeployTime: null,
+      lastHealthyTime: null,
+      lastDegradedTime: null,
+    }),
+  },
 };
 
 jest.mock('@/lib/db/prisma', () => ({

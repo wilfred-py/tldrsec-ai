@@ -94,6 +94,10 @@ export function TickersTable({
     },
   });
 
+  const pageCount = table.getPageCount();
+  const rowsOnCurrentPage = table.getRowModel().rows.length;
+  const emptyRowCount = ITEMS_PER_PAGE - rowsOnCurrentPage;
+
   return (
     <>
       {/* Desktop Table View */}
@@ -116,7 +120,6 @@ export function TickersTable({
             ))}
           </TableHeader>
           <TableBody>
-            {/* Inline Add Row at the top */}
             {showInlineAdd && (
               <InlineAddRow
                 companies={allCompanies}
@@ -125,39 +128,68 @@ export function TickersTable({
                 columnCount={columns.length}
               />
             )}
-            {table.getRowModel().rows.length ? (
-              table.getRowModel().rows.map((row) => (
-                <TableRow
-                  key={row.id}
-                  data-state={row.getIsSelected() && "selected"}
-                >
-                  {row.getVisibleCells().map((cell) => (
-                    <TableCell key={cell.id}>
-                      {flexRender(
-                        cell.column.columnDef.cell,
-                        cell.getContext()
-                      )}
-                    </TableCell>
+            {rowsOnCurrentPage > 0 ? (
+              <>
+                {table.getRowModel().rows.map((row) => (
+                  <TableRow
+                    key={row.id}
+                    data-state={row.getIsSelected() && "selected"}
+                  >
+                    {row.getVisibleCells().map((cell) => (
+                      <TableCell key={cell.id}>
+                        {flexRender(
+                          cell.column.columnDef.cell,
+                          cell.getContext()
+                        )}
+                      </TableCell>
+                    ))}
+                  </TableRow>
+                ))}
+                {/* Empty rows to maintain consistent height */}
+                {emptyRowCount > 0 &&
+                  Array.from({ length: emptyRowCount }).map((_, i) => (
+                    <TableRow key={`empty-${i}`} className="pointer-events-none">
+                      <TableCell colSpan={columns.length} className="py-4">
+                        &nbsp;
+                      </TableCell>
+                    </TableRow>
                   ))}
-                </TableRow>
-              ))
+              </>
             ) : (
-              <TableRow>
-                <TableCell
-                  colSpan={columns.length}
-                  className="h-24 text-center"
-                >
-                  No companies found.
-                </TableCell>
-              </TableRow>
+              <>
+                <TableRow>
+                  <TableCell
+                    colSpan={columns.length}
+                    className="py-4 text-center text-muted-foreground"
+                  >
+                    No companies found.
+                  </TableCell>
+                </TableRow>
+                {/* Fill remaining space when empty */}
+                {Array.from({ length: ITEMS_PER_PAGE - 1 }).map((_, i) => (
+                  <TableRow key={`empty-${i}`} className="pointer-events-none">
+                    <TableCell colSpan={columns.length} className="py-4">
+                      &nbsp;
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </>
             )}
           </TableBody>
         </Table>
 
-        {/* Desktop Pagination */}
-        {data.length > ITEMS_PER_PAGE && (
-          <DataTablePagination table={table} showPageNumbers={true} />
-        )}
+        {/* Pagination - always visible */}
+        <div className="border-t">
+          {pageCount > 1 ? (
+            <DataTablePagination table={table} showPageNumbers={true} />
+          ) : (
+            <div className="flex items-center justify-between px-2 py-4">
+              <div className="text-sm text-muted-foreground">
+                {data.length > 0 ? "Page 1 of 1" : "0 results"}
+              </div>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Mobile Card View */}
@@ -173,6 +205,7 @@ export function TickersTable({
           formatDate={formatDate}
           totalCount={data.length}
           pageSize={ITEMS_PER_PAGE}
+          hasPagination={pageCount > 1}
         />
       </div>
     </>

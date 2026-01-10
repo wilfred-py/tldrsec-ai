@@ -17,7 +17,10 @@ import { Form10QMinimalistTemplate } from '@/components/ui/email/templates/10q-m
 import { Form8KMinimalistTemplate } from '@/components/ui/email/templates/8k-minimalist-template';
 import { GenericMinimalistTemplate } from '@/components/ui/email/templates/generic-minimalist-template';
 import { Form144MinimalistTemplate } from '@/components/ui/email/templates/form144-minimalist-template';
-import FormDEF14AEmailTemplate from '@/components/ui/email/templates/def14a-template';
+import { FormS1MinimalistTemplate } from '@/components/ui/email/templates/s1-minimalist-template';
+import { FormS3MinimalistTemplate } from '@/components/ui/email/templates/s3-minimalist-template';
+import { FormDEF14AMinimalistTemplate } from '@/components/ui/email/templates/def14a-minimalist-template';
+import { Form11KMinimalistTemplate } from '@/components/ui/email/templates/11k-minimalist-template';
 import Schedule13DEmailTemplate from '@/components/ui/email/templates/13d-template';
 
 /**
@@ -98,13 +101,33 @@ const templateMap = new Map<string, TemplateComponent>([
   ['FORM144', wrapTemplate(Form144MinimalistTemplate, 'Form144MinimalistTemplate')],
 
   // DEF 14A Proxy Statements
-  ['DEF 14A', wrapTemplate(FormDEF14AEmailTemplate, 'FormDEF14AEmailTemplate')],
-  ['Form DEF 14A', wrapTemplate(FormDEF14AEmailTemplate, 'FormDEF14AEmailTemplate')],
-  ['DEF14A', wrapTemplate(FormDEF14AEmailTemplate, 'FormDEF14AEmailTemplate')],
+  ['DEF 14A', wrapTemplate(FormDEF14AMinimalistTemplate, 'FormDEF14AMinimalistTemplate')],
+  ['Form DEF 14A', wrapTemplate(FormDEF14AMinimalistTemplate, 'FormDEF14AMinimalistTemplate')],
+  ['DEF14A', wrapTemplate(FormDEF14AMinimalistTemplate, 'FormDEF14AMinimalistTemplate')],
+  ['DEFA14A', wrapTemplate(FormDEF14AMinimalistTemplate, 'FormDEF14AMinimalistTemplate')],
 
   // Schedule 13D Ownership Reports
   ['Schedule 13D', wrapTemplate(Schedule13DEmailTemplate, 'Schedule13DEmailTemplate')],
   ['13D', wrapTemplate(Schedule13DEmailTemplate, 'Schedule13DEmailTemplate')],
+  ['SC 13D', wrapTemplate(Schedule13DEmailTemplate, 'Schedule13DEmailTemplate')],
+
+  // Form S-1 IPO Registration
+  ['S-1', wrapTemplate(FormS1MinimalistTemplate, 'FormS1MinimalistTemplate')],
+  ['S1', wrapTemplate(FormS1MinimalistTemplate, 'FormS1MinimalistTemplate')],
+  ['Form S-1', wrapTemplate(FormS1MinimalistTemplate, 'FormS1MinimalistTemplate')],
+  ['FORM S-1', wrapTemplate(FormS1MinimalistTemplate, 'FormS1MinimalistTemplate')],
+
+  // Form S-3 Secondary Offering
+  ['S-3', wrapTemplate(FormS3MinimalistTemplate, 'FormS3MinimalistTemplate')],
+  ['S3', wrapTemplate(FormS3MinimalistTemplate, 'FormS3MinimalistTemplate')],
+  ['Form S-3', wrapTemplate(FormS3MinimalistTemplate, 'FormS3MinimalistTemplate')],
+  ['FORM S-3', wrapTemplate(FormS3MinimalistTemplate, 'FormS3MinimalistTemplate')],
+
+  // Form 11-K Employee Benefit Plan
+  ['11-K', wrapTemplate(Form11KMinimalistTemplate, 'Form11KMinimalistTemplate')],
+  ['11K', wrapTemplate(Form11KMinimalistTemplate, 'Form11KMinimalistTemplate')],
+  ['Form 11-K', wrapTemplate(Form11KMinimalistTemplate, 'Form11KMinimalistTemplate')],
+  ['FORM 11-K', wrapTemplate(Form11KMinimalistTemplate, 'Form11KMinimalistTemplate')],
 ]);
 
 // Wrap GenericMinimalistTemplate for fallback

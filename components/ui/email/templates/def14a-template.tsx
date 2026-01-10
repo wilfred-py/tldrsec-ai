@@ -1,3 +1,4 @@
+import * as React from 'react';
 import { FilingTemplateData } from '../../../../lib/email/types';
 
 interface FormDEF14ATemplateProps {

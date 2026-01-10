@@ -736,6 +736,24 @@ model DailyPipelineVerification {
   @@schema("pipeline")
 }
 
+/// RecoveryState - Singleton table for persistent auto-recovery state
+/// Stores state that survives Vercel deployments (unlike in-memory variables)
+/// @see docs/plans/2026-01-09-eliminate-manual-pipeline-intervention.md
+model RecoveryState {
+  id                   String    @id @default("singleton")
+  consecutiveDegraded  Int       @default(0)
+  consecutiveCleanups  Int       @default(0)
+  consecutiveRedeploys Int       @default(0)
+  lastCleanupTime      DateTime?
+  lastRedeployTime     DateTime?
+  lastHealthyTime      DateTime?
+  lastDegradedTime     DateTime?
+  updatedAt            DateTime  @updatedAt
+
+  @@map("RecoveryState")
+  @@schema("pipeline")
+}
+
 // =============================================================================
 // ENUMS
 // =============================================================================

@@ -8,6 +8,122 @@
 let lastHeartbeat = null;
 let heartbeatCount = 0;
 
+// Per-handler health tracking for detecting silent failures
+// Each handler tracks its own heartbeat and failure count
+const handlerHealth = {
+  pipelineProcessing: { lastHeartbeat: null, lastSuccess: null, consecutiveFailures: 0, totalExecutions: 0 },
+  autoRecovery: { lastHeartbeat: null, lastSuccess: null, consecutiveFailures: 0, totalExecutions: 0 },
+  intervalSummary: { lastHeartbeat: null, lastSuccess: null, consecutiveFailures: 0, totalExecutions: 0 },
+  dailyReport: { lastHeartbeat: null, lastSuccess: null, consecutiveFailures: 0, totalExecutions: 0 },
+};
+
+/**
+ * Record handler execution and track success/failure
+ * @param {string} handlerName - Name of the handler
+ * @param {boolean|null} success - true=success, false=failure, null=started
+ */
+function recordHandlerExecution(handlerName, success) {
+  const handler = handlerHealth[handlerName];
+  if (!handler) return;
+
+  handler.lastHeartbeat = new Date().toISOString();
+  handler.totalExecutions++;
+
+  if (success === true) {
+    handler.lastSuccess = handler.lastHeartbeat;
+    handler.consecutiveFailures = 0;
+  } else if (success === false) {
+    handler.consecutiveFailures++;
+  }
+  // null means "started" - we don't update success/failure yet
+}
+
+/**
+ * Get handler health status string
+ * @param {object} handler - Handler health object
+ * @returns {string} Status: OK, DEGRADED, UNHEALTHY, or STALE
+ */
+function getHandlerStatus(handler) {
+  if (handler.consecutiveFailures >= 3) return 'UNHEALTHY';
+  if (handler.consecutiveFailures >= 1) return 'DEGRADED';
+  if (handler.lastHeartbeat) {
+    const ageMs = Date.now() - new Date(handler.lastHeartbeat).getTime();
+    if (ageMs > 30 * 60 * 1000) return 'STALE'; // >30 min for any handler
+  }
+  return 'OK';
+}
+
+/**
+ * Alert on handler failure via Slack webhook
+ * @param {string} handlerName - Name of the handler
+ * @param {Error} error - The error that occurred
+ * @param {object} env - Worker environment
+ */
+async function alertOnHandlerFailure(handlerName, error, env) {
+  const handler = handlerHealth[handlerName];
+  if (!handler) return;
+
+  // Alert on first failure OR every 3rd consecutive failure
+  // This balances noise reduction with visibility
+  if (handler.consecutiveFailures !== 1 && handler.consecutiveFailures % 3 !== 0) {
+    return;
+  }
+
+  const webhookUrl = env.SLACK_ALERTS_WEBHOOK_URL || env.SLACK_WEBHOOK_URL;
+  if (!webhookUrl) {
+    console.warn(`[ALERT] Slack not configured, cannot alert on ${handlerName} failure`);
+    return;
+  }
+
+  const payload = {
+    text: `:rotating_light: Cron Handler Failure: ${handlerName}`,
+    blocks: [
+      {
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text: `:rotating_light: *Cron Handler Failed: ${handlerName}*`,
+        },
+      },
+      {
+        type: 'section',
+        fields: [
+          { type: 'mrkdwn', text: `*Handler:* ${handlerName}` },
+          { type: 'mrkdwn', text: `*Consecutive Failures:* ${handler.consecutiveFailures}` },
+          { type: 'mrkdwn', text: `*Error:* ${error?.message || 'Unknown'}` },
+          { type: 'mrkdwn', text: `*Time:* ${new Date().toISOString()}` },
+        ],
+      },
+      {
+        type: 'context',
+        elements: [
+          {
+            type: 'mrkdwn',
+            text: handler.consecutiveFailures >= 3
+              ? ':warning: Handler is now UNHEALTHY - investigate immediately'
+              : ':eyes: First failure - monitoring for recovery',
+          },
+        ],
+      },
+    ],
+  };
+
+  try {
+    const response = await fetch(webhookUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (!response.ok) {
+      console.error(`[ALERT] Slack webhook failed: ${response.status}`);
+    } else {
+      console.log(`[ALERT] Sent failure alert for ${handlerName}`);
+    }
+  } catch (alertError) {
+    console.error(`[ALERT] Failed to send Slack alert for ${handlerName}:`, alertError.message);
+  }
+}
+
 export default {
   // Handle HTTP requests - includes health monitoring endpoint
   async fetch(request, env, ctx) {
@@ -98,8 +214,33 @@ export default {
         status.warning = 'Circuit breaker is HALF_OPEN - testing recovery';
       }
 
+      // Add per-handler health status
+      status.handlers = {};
+      for (const [name, handler] of Object.entries(handlerHealth)) {
+        const ageMs = handler.lastHeartbeat
+          ? Date.now() - new Date(handler.lastHeartbeat).getTime()
+          : null;
+        status.handlers[name] = {
+          lastHeartbeat: handler.lastHeartbeat,
+          lastSuccess: handler.lastSuccess,
+          consecutiveFailures: handler.consecutiveFailures,
+          totalExecutions: handler.totalExecutions,
+          ageMinutes: ageMs ? Math.round(ageMs / 60000) : null,
+          status: getHandlerStatus(handler),
+        };
+      }
+
+      // Check if any handler is unhealthy
+      const unhealthyHandlers = Object.entries(status.handlers)
+        .filter(([_, h]) => h.status === 'UNHEALTHY')
+        .map(([name]) => name);
+      if (unhealthyHandlers.length > 0) {
+        status.status = 'HANDLER_UNHEALTHY';
+        status.warning = `Unhealthy handlers: ${unhealthyHandlers.join(', ')}`;
+      }
+
       return new Response(JSON.stringify(status, null, 2), {
-        status: status.stale || circuitBreakerInfo.state === 'OPEN' ? 503 : 200,
+        status: status.stale || circuitBreakerInfo.state === 'OPEN' || unhealthyHandlers.length > 0 ? 503 : 200,
         headers: { 'Content-Type': 'application/json' }
       });
     }
@@ -169,6 +310,8 @@ export default {
     const executionId = `interval-summary-${Date.now()}`;
     const startTime = Date.now();
 
+    // Record handler execution start
+    recordHandlerExecution('intervalSummary', null);
     console.log(`[${executionId}] Starting 10-minute interval Slack summary`);
 
     try {
@@ -208,15 +351,20 @@ export default {
         console.log(`[${executionId}] Interval summary completed successfully in ${duration}ms`, {
           skipped: result.skipped || false,
         });
+        recordHandlerExecution('intervalSummary', true);
         return { success: true, executionId, duration, skipped: result.skipped };
       } else {
         const errorText = await response.text();
         console.error(`[${executionId}] Interval summary failed: ${response.status} - ${errorText}`);
+        recordHandlerExecution('intervalSummary', false);
+        await alertOnHandlerFailure('intervalSummary', new Error(errorText), env);
         return { success: false, executionId, duration, error: errorText };
       }
     } catch (error) {
       const duration = Date.now() - startTime;
       console.error(`[${executionId}] Interval summary error: ${error.message}`);
+      recordHandlerExecution('intervalSummary', false);
+      await alertOnHandlerFailure('intervalSummary', error, env);
       return { success: false, executionId, duration, error: error.message };
     }
   },
@@ -226,6 +374,8 @@ export default {
     const executionId = `daily-report-${Date.now()}`;
     const startTime = Date.now();
 
+    // Record handler execution start
+    recordHandlerExecution('dailyReport', null);
     console.log(`[${executionId}] Starting daily Slack report (9 AM AEST)`);
 
     try {
@@ -262,15 +412,20 @@ export default {
 
       if (response.ok) {
         console.log(`[${executionId}] Daily report completed successfully in ${duration}ms`);
+        recordHandlerExecution('dailyReport', true);
         return { success: true, executionId, duration };
       } else {
         const errorText = await response.text();
         console.error(`[${executionId}] Daily report failed: ${response.status} - ${errorText}`);
+        recordHandlerExecution('dailyReport', false);
+        await alertOnHandlerFailure('dailyReport', new Error(errorText), env);
         return { success: false, executionId, duration, error: errorText };
       }
     } catch (error) {
       const duration = Date.now() - startTime;
       console.error(`[${executionId}] Daily report error: ${error.message}`);
+      recordHandlerExecution('dailyReport', false);
+      await alertOnHandlerFailure('dailyReport', error, env);
       return { success: false, executionId, duration, error: error.message };
     }
   },
@@ -280,6 +435,8 @@ export default {
     const executionId = `auto-recover-${Date.now()}`;
     const startTime = Date.now();
 
+    // Record handler execution start
+    recordHandlerExecution('autoRecovery', null);
     console.log(`[${executionId}] ====== AUTO-RECOVERY CHECK ======`);
 
     try {
@@ -330,21 +487,29 @@ export default {
           console.log(`[${executionId}] 🚀 REDEPLOY TRIGGERED: ${result.deploymentId || 'unknown'}`);
         }
 
+        recordHandlerExecution('autoRecovery', true);
         return { success: true, executionId, duration, ...result };
       } else {
         const errorText = await response.text();
         console.error(`[${executionId}] Auto-recovery check failed: ${response.status} - ${errorText}`);
+        recordHandlerExecution('autoRecovery', false);
+        await alertOnHandlerFailure('autoRecovery', new Error(errorText), env);
         return { success: false, executionId, duration, error: errorText };
       }
     } catch (error) {
       const duration = Date.now() - startTime;
       console.error(`[${executionId}] Auto-recovery error: ${error.message}`);
+      recordHandlerExecution('autoRecovery', false);
+      await alertOnHandlerFailure('autoRecovery', error, env);
       return { success: false, executionId, duration, error: error.message };
     }
   },
 
   // Handle main pipeline processing (every 5 minutes)
   async handlePipelineProcessing(event, env, ctx) {
+    // Record handler execution start
+    recordHandlerExecution('pipelineProcessing', null);
+
     // Record heartbeat for monitoring - this helps detect when cron stops firing
     const heartbeatTime = new Date().toISOString();
     lastHeartbeat = heartbeatTime;
@@ -933,6 +1098,8 @@ export default {
         await circuitBreaker.recordSuccess();
         await rateLimiter.recordSuccess(executionId);
 
+        // Record handler success
+        recordHandlerExecution('pipelineProcessing', true);
         console.log(`[${executionId}] All processing endpoints succeeded - circuit breaker updated`);
       } else {
         // Partial failure - at least one endpoint failed
@@ -958,6 +1125,9 @@ export default {
         const error = new Error(`Pipeline execution failed: ${failureReason}`);
         await circuitBreaker.recordFailure(error);
         await rateLimiter.recordFailure(executionId, 'PARTIAL_FAILURE');
+
+        // Record handler partial failure (don't alert for partial failures, only full failures)
+        recordHandlerExecution('pipelineProcessing', false);
       }
 
       return result;
@@ -997,6 +1167,10 @@ export default {
         console.error(`[${executionId}] Failed to record failure metrics:`, recordingError);
       }
       
+      // Record handler failure and alert
+      recordHandlerExecution('pipelineProcessing', false);
+      await alertOnHandlerFailure('pipelineProcessing', error, env);
+
       // Don't throw - let Cloudflare handle gracefully
       return {
         success: false,
