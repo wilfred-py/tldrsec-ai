@@ -16,7 +16,7 @@
  * @module form11k-data-extractor
  */
 
-import { extractBulletPoints } from './extractor-utils';
+// import { extractBulletPoints } from './extractor-utils'; // TODO: Use in future implementation
 
 /**
  * Investment option in the plan

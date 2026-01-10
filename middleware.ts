@@ -18,6 +18,21 @@ const cronAuthMiddleware = async (request: NextRequest): Promise<NextResponse | 
   if (!pathname.startsWith('/api/cron/')) {
     return undefined; // Pass to next middleware (Clerk)
   }
+
+  // Routes that handle their own authentication (bypass middleware cron auth)
+  const selfAuthenticatingRoutes = [
+    '/api/cron/backup-trigger', // Uses BACKUP_TRIGGER_SECRET
+    '/api/cron/auto-recover',   // Uses its own auth logic
+  ];
+
+  if (selfAuthenticatingRoutes.includes(pathname)) {
+    middlewareLogger.info('Passing self-authenticating cron route to handler', {
+      pathname,
+      method: request.method,
+      timestamp: new Date().toISOString()
+    });
+    return undefined; // Let the route handler manage auth
+  }
   
   // Allow HEAD requests for health checks without authentication
   if (request.method === 'HEAD') {

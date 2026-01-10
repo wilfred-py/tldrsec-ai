@@ -16,7 +16,7 @@
  * @module def14a-data-extractor
  */
 
-import { extractBulletPoints } from './extractor-utils';
+// import { extractBulletPoints } from './extractor-utils'; // TODO: Use in future implementation
 
 /**
  * Executive compensation entry
@@ -256,7 +256,7 @@ function extractCompensationFromTable(text: string): ExecutiveCompensation[] {
   // Find column indices
   let nameIdx = headers.findIndex(h => h.includes('name'));
   const titleIdx = headers.findIndex(h => h.includes('title') || h.includes('position'));
-  let compIdx = headers.findIndex(h =>
+  const compIdx = headers.findIndex(h =>
     h.includes('compensation') || h.includes('total')
   );
 
