@@ -17,6 +17,69 @@ interface TransactionData {
   totalValue?: string | number;
   acquisitionDisposition?: string;
   code?: string;
+  date?: string;
+}
+
+/**
+ * Get SEC transaction code description
+ * Maps SEC Form 4 transaction codes to human-readable descriptions
+ */
+export function getTransactionCodeDescription(code: string): string {
+  const descriptions: Record<string, string> = {
+    'P': 'Open Market Purchase',
+    'S': 'Open Market Sale',
+    'A': 'Grant/Award',
+    'G': 'Gift',
+    'M': 'Option Exercise',
+    'F': 'Tax Withholding',
+    'C': 'Conversion',
+    'J': 'Trust Transfer',
+    'K': 'Trust Disposition',
+    'D': 'Disposition to Issuer',
+    'E': 'Exercise of Derivative',
+    'H': 'Discretionary Transaction',
+    'I': 'Exercise of In-Kind Right',
+    'L': 'Small Acquisition',
+    'O': 'Exercise of Out-of-Money',
+    'U': 'Tender of Shares',
+    'W': 'Acquisition Pursuant to Will',
+    'X': 'Exercise of Expiring Derivative',
+    'Z': 'Deposit into Trust',
+  };
+  return descriptions[code.toUpperCase()] || 'Other Transaction';
+}
+
+/**
+ * Format transaction date for display
+ */
+function formatTransactionDate(date: string): string {
+  try {
+    const d = new Date(date);
+    if (isNaN(d.getTime())) return date;
+    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  } catch {
+    return date;
+  }
+}
+
+/**
+ * Get color for percentage change
+ */
+function getChangeColor(percentChange: string | undefined): string {
+  if (!percentChange) return EmailColors.text.meta;
+  const num = parseFloat(percentChange.replace(/[%+]/g, ''));
+  if (isNaN(num) || num === 0) return EmailColors.text.meta;
+  return num > 0 ? '#16A34A' : '#DC2626'; // Green for increase, red for decrease
+}
+
+/**
+ * Get arrow indicator for percentage change
+ */
+export function getStakeChangeArrow(percentChange: string | undefined): string {
+  if (!percentChange) return '';
+  const num = parseFloat(percentChange.replace(/[%+]/g, ''));
+  if (isNaN(num) || num === 0) return '→';
+  return num > 0 ? '↑' : '↓';
 }
 
 /**
@@ -156,14 +219,17 @@ interface AggregatedTransaction {
   sharesDisplay: string;
   valueDisplay: string;
   priceDisplay: string;
+  // SEC transaction code (only populated for single transactions)
+  code?: string;
+  codeDescription?: string;
 }
 
 function aggregateTransactionsByType(transactions: TransactionData[]): AggregatedTransaction[] {
-  const groups: Record<string, { shares: number; value: number; count: number; prices: number[] }> = {
-    gift: { shares: 0, value: 0, count: 0, prices: [] },
-    sale: { shares: 0, value: 0, count: 0, prices: [] },
-    purchase: { shares: 0, value: 0, count: 0, prices: [] },
-    transfer: { shares: 0, value: 0, count: 0, prices: [] },
+  const groups: Record<string, { shares: number; value: number; count: number; prices: number[]; codes: string[] }> = {
+    gift: { shares: 0, value: 0, count: 0, prices: [], codes: [] },
+    sale: { shares: 0, value: 0, count: 0, prices: [], codes: [] },
+    purchase: { shares: 0, value: 0, count: 0, prices: [], codes: [] },
+    transfer: { shares: 0, value: 0, count: 0, prices: [], codes: [] },
   };
 
   for (const tx of transactions) {
