@@ -792,7 +792,7 @@ export function Form4MinimalistTemplate({ filing }: Form4MinimalistTemplateProps
                                       marginTop: '6px',
                                     }}>
                                       {previousStake && newStake
-                                        ? `${previousStake} → ${newStake}`
+                                        ? `${previousStake} ${getStakeChangeArrow(percentChange)} ${newStake}`
                                         : newStake || previousStake
                                       }
                                     </div>
