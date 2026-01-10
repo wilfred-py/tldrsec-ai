@@ -147,13 +147,14 @@ Implementing authentication-first onboarding per plan at `docs/plans/2026-01-10-
 
 ### Implementation Summary
 
-**All 5 phases complete.** The auth-first onboarding flow is now fully implemented:
+**All 6 phases complete.** The auth-first onboarding flow is now fully implemented:
 - Users must authenticate before accessing onboarding
 - Onboarding is a 2-step flow (sectors → companies)
 - No "Skip Setup" buttons - users must complete onboarding
 - CTAs on landing page use 3-state logic based on auth + onboarding status
 - Middleware enforces proper redirects for all user states
 - Deprecated passwordless flow endpoints return 410 Gone
+- **Performance optimized**: ~30 sequential API calls → 2 blocking + async (Phase 6)
 
 ---
 
