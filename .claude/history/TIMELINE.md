@@ -13,6 +13,7 @@ This file provides a chronological index of all completed projects. For detailed
 
 | Date | Project | Status |
 |------|---------|--------|
+| 2026-01-10 | Auth-First Onboarding Flow (All 6 phases: skip buttons removed, 3-state CTAs, middleware redirects, webhook simplified, E2E tests, **performance optimization**) | ✅ Complete |
 | 2026-01-10 | Pipeline Redeployment & Backlog Recovery (pipeline stall fix, 400+ jobs restored) | ✅ |
 | 2026-01-10 | Eliminate Manual Pipeline Intervention - Phase 4: External Watchdog Worker | ✅ |
 | 2026-01-10 | Eliminate Manual Pipeline Intervention - Phase 3: Orphaned Filing Detection | ✅ |
@@ -142,10 +143,10 @@ This file provides a chronological index of all completed projects. For detailed
 
 ## Archive Statistics
 - **Total Archived Projects**: 7 weekly archives (Oct-Dec 2025)
-- **Current PROGRESS.md Lines**: 72 (threshold: 500)
+- **Current PROGRESS.md Lines**: 513 (threshold: 500)
 - **Last Sync**: 2026-01-10
 - **Archive System**: ✅ ACTIVE
-- **Last Compaction**: 2026-01-10 (Pipeline Redeployment & Backlog Recovery complete)
+- **Last Compaction**: 2026-01-10 (Auth-First Onboarding all 6 phases complete + performance optimization)
 
 **Archives**:
 - `29-Dec-2025.md` - Cloudflare Cron Fix, Email Quality, Form 4 Templates, JSON Parsing Phase 5

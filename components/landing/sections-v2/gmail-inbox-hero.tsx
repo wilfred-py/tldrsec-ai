@@ -2,8 +2,10 @@
 
 import { useState, useEffect, useRef, memo, useCallback } from 'react';
 import { motion, AnimatePresence, useInView } from 'framer-motion';
+import { useUser } from '@clerk/nextjs';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Skeleton } from '@/components/ui/skeleton';
 import {
   ArrowRight,
   Sparkles,
@@ -68,6 +70,7 @@ interface EmailSummary {
 
 interface GmailInboxHeroProps {
   className?: string;
+  heroRef?: React.RefObject<HTMLElement>;
 }
 
 /**
@@ -595,9 +598,11 @@ function EmailRow({
 function EmailDetailPanel({
   email,
   onClose,
+  isOnboarded,
 }: {
   email: typeof curatedSummaries[0];
   onClose: () => void;
+  isOnboarded: boolean;
 }) {
   return (
     <motion.div
@@ -687,11 +692,13 @@ function EmailDetailPanel({
       {/* Footer CTA */}
       <div className="flex-shrink-0 px-5 py-4 bg-gray-50 border-t border-gray-100">
         <p className="text-xs text-gray-500 mb-3 text-center">
-          This is a real AI-generated summary. Sign up to receive summaries for your portfolio.
+          {isOnboarded
+            ? 'This is a real AI-generated summary from your dashboard.'
+            : 'This is a real AI-generated summary. Sign up to receive summaries for your portfolio.'}
         </p>
-        <Link href="/sign-in">
+        <Link href={isOnboarded ? '/dashboard' : '/sign-up'}>
           <Button className="w-full landing-button-gradient">
-            Get Summaries Like This
+            {isOnboarded ? 'Go to Dashboard' : 'Get Summaries Like This'}
             <ArrowRight className="w-4 h-4 ml-2" />
           </Button>
         </Link>
@@ -745,12 +752,17 @@ function formatSecondsAgo(seconds: number): string {
  * Combines hero messaging with an interactive Gmail-style inbox
  * showing real curated summaries that users can click to preview.
  */
-export const GmailInboxHero = memo<GmailInboxHeroProps>(({ className = '' }) => {
+export const GmailInboxHero = memo<GmailInboxHeroProps>(({ className = '', heroRef }) => {
   const containerRef = useRef<HTMLDivElement>(null);
+  const sectionRef = useRef<HTMLElement>(null);
   const isInView = useInView(containerRef, { once: true, amount: 0.2 });
   const [selectedEmail, setSelectedEmail] = useState<EmailSummary | null>(null);
   const [displayedEmails, setDisplayedEmails] = useState<EmailSummary[]>([]);
   const [isRefreshing, setIsRefreshing] = useState(false);
+
+  // User authentication state from Clerk
+  const { isSignedIn, isLoaded, user } = useUser();
+  const isOnboarded = Boolean(user?.publicMetadata?.onboardingCompleted);
 
   // Expanded state for fullscreen-like view
   const [isExpanded, setIsExpanded] = useState(false);
@@ -942,8 +954,20 @@ export const GmailInboxHero = memo<GmailInboxHeroProps>(({ className = '' }) => 
     }, 800);
   }, [scheduleNextDelivery]);
 
+  // Combine the heroRef with our local sectionRef
+  const combinedRef = useCallback((node: HTMLElement | null) => {
+    // Set our local ref
+    (sectionRef as React.MutableRefObject<HTMLElement | null>).current = node;
+    // Also set the parent's heroRef if provided
+    if (heroRef && 'current' in heroRef) {
+      (heroRef as React.MutableRefObject<HTMLElement | null>).current = node;
+    }
+  }, [heroRef]);
+
   return (
     <section
+      ref={combinedRef}
+      id="hero"
       className={`relative min-h-[100vh] flex items-center overflow-hidden py-12 lg:py-0 ${className}`}
       style={meshGradientStyle}
     >
@@ -1010,19 +1034,38 @@ export const GmailInboxHero = memo<GmailInboxHeroProps>(({ className = '' }) => 
               variants={staggerItem}
               className="flex flex-col sm:flex-row items-center justify-center lg:justify-start gap-4 mb-6"
             >
-              <Link href="/onboarding">
-                <Button className="landing-button-gradient">
-                  Start Free Trial
-                  <ArrowRight className="w-5 h-5 ml-2" />
-                </Button>
-              </Link>
-              <Link href="#pricing">
-                <Button className="landing-button-outline">View Pricing</Button>
-              </Link>
+              {!isLoaded ? (
+                // Loading state - show skeleton button
+                <Skeleton className="h-11 w-48 rounded-lg" />
+              ) : isOnboarded ? (
+                // State 3: Authenticated AND onboarded → Dashboard
+                <Link href="/dashboard">
+                  <Button className="landing-button-gradient">
+                    Go to Dashboard
+                    <ArrowRight className="w-5 h-5 ml-2" />
+                  </Button>
+                </Link>
+              ) : isSignedIn ? (
+                // State 2: Authenticated but NOT onboarded → Onboarding
+                <Link href="/onboarding">
+                  <Button className="landing-button-gradient">
+                    Complete Setup
+                    <ArrowRight className="w-5 h-5 ml-2" />
+                  </Button>
+                </Link>
+              ) : (
+                // State 1: Unauthenticated → Sign Up
+                <Link href="/sign-up">
+                  <Button className="landing-button-gradient">
+                    Get Summaries Like This
+                    <ArrowRight className="w-5 h-5 ml-2" />
+                  </Button>
+                </Link>
+              )}
             </motion.div>
 
             <motion.p variants={staggerItem} className="landing-caption">
-              No credit card required. Cancel anytime.
+              {isOnboarded ? 'Welcome back!' : isSignedIn ? 'Just one more step!' : 'No credit card required. Cancel anytime.'}
             </motion.p>
           </motion.div>
 
@@ -1234,6 +1277,7 @@ export const GmailInboxHero = memo<GmailInboxHeroProps>(({ className = '' }) => 
                       <EmailDetailPanel
                         email={selectedEmail}
                         onClose={() => setSelectedEmail(null)}
+                        isOnboarded={isOnboarded}
                       />
                     </motion.div>
                   )}

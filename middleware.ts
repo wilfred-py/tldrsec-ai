@@ -1175,12 +1175,49 @@ export default async function middleware(request: NextRequest) {
   // For all other requests: Use Clerk middleware with security middleware
   return clerkMiddleware(
     async (auth, request: NextRequest) => {
+      const { userId, sessionClaims } = await auth();
+      const pathname = request.nextUrl.pathname;
+
+      // === Auth-First Onboarding Redirects ===
+
+      // Handle /onboarding route
+      if (pathname === '/onboarding' || pathname.startsWith('/onboarding/')) {
+        if (!userId) {
+          // Unauthenticated user trying to access onboarding → Sign Up
+          const signUpUrl = new URL('/sign-up', request.url);
+          return NextResponse.redirect(signUpUrl);
+        }
+
+        // Check onboarding status from Clerk publicMetadata
+        const isOnboarded = (sessionClaims?.publicMetadata as { onboardingCompleted?: boolean })?.onboardingCompleted === true;
+
+        if (isOnboarded) {
+          // Already onboarded → Dashboard
+          const dashboardUrl = new URL('/dashboard', request.url);
+          return NextResponse.redirect(dashboardUrl);
+        }
+        // Allow through to onboarding page
+      }
+
+      // Protect /dashboard from non-onboarded users
+      if (pathname.startsWith('/dashboard') && userId) {
+        const isOnboarded = (sessionClaims?.publicMetadata as { onboardingCompleted?: boolean })?.onboardingCompleted === true;
+
+        if (!isOnboarded) {
+          // Not onboarded → Onboarding
+          const onboardingUrl = new URL('/onboarding', request.url);
+          return NextResponse.redirect(onboardingUrl);
+        }
+      }
+
+      // === End Auth-First Onboarding Redirects ===
+
       // Apply our security middleware for non-cron endpoints
       const securityResponse = await securityMiddleware(request);
       if (securityResponse) {
         return securityResponse;
       }
-      
+
       // Continue with default Clerk processing
       return;
     },
@@ -1216,12 +1253,10 @@ export default async function middleware(request: NextRequest) {
         '/pricing',
         '/about',
         '/privacy',
-        '/terms',
+        '/terms'
 
-        // Passwordless onboarding (public - no auth required)
-        '/onboarding',
-        '/api/onboarding/check-email',
-        '/api/onboarding/save-pending'
+        // Note: /onboarding is now PROTECTED (auth-first flow)
+        // Unauthenticated users are redirected to /sign-up
       ]
     }
   )(request);

@@ -1,12 +1,175 @@
 # Project Progress
 
 **Date**: 2026-01-10
-**Branch**: feature/eliminate-manual-pipeline-intervention
-**Status**: Phase 4 Complete - External Watchdog Worker Implemented
+**Branch**: onboarding
+**Status**: Auth-First Onboarding Flow Implementation - ALL PHASES COMPLETE ✅
 
 ---
 
-## Current Session: Eliminate Manual Pipeline Intervention (2026-01-09 - 2026-01-10)
+## Current Session: Auth-First Onboarding Flow (2026-01-10)
+
+Implementing authentication-first onboarding per plan at `docs/plans/2026-01-10-auth-first-onboarding.md`. Transforming from "passwordless-first" to "auth-first" approach.
+
+### Phase 6: Onboarding Performance Optimization ✅ (2026-01-10)
+
+**Problem Identified**: User reported onboarding taking too long with "Setting up your account..." spinner showing many Clerk API requests in Network tab. User never reached /dashboard.
+
+**Root Cause Analysis**:
+- `handleCompleteOnboarding()` made sequential server action calls:
+  - `saveUserPreferences()` - 2 Clerk + 2 DB calls
+  - `addTickerSubscription()` x N - 2 Clerk + 3 DB calls EACH
+  - `completeOnboarding()` - 2 Clerk + 2 DB + Clerk Admin API
+  - `sendWelcomeEmail()` - DUPLICATE: 2 Clerk + 2 DB + Clerk Admin API
+- Total for 5 tickers: ~15 Clerk API calls, ~15 DB queries, 2x Clerk Admin API
+
+**Solution Implemented**:
+1. Created `completeOnboardingBatched()` server action in `app/(auth)/onboarding/actions.ts`:
+   - Single `auth()` call
+   - Single `currentUser()` call
+   - Prisma `$transaction` for all DB operations
+   - `createMany` for batched ticker creation
+   - Fire-and-forget Clerk metadata update (non-blocking)
+   - Async welcome email via `queueWelcomeEmail()` (non-blocking)
+
+2. Created `queueWelcomeEmail()` in `lib/email/welcome-service.ts`:
+   - Takes pre-fetched user data (no redundant auth/DB calls)
+   - Uses `setImmediate()` for true async execution
+   - Doesn't block the user from reaching dashboard
+
+3. Updated `app/(auth)/onboarding/page.tsx`:
+   - Replaced 3+ sequential server action calls with single `completeOnboardingBatched()`
+   - Reduced from ~15 Clerk + ~15 DB calls to 2 Clerk + 1 DB transaction
+
+**Performance Improvement**:
+- Before: ~30+ sequential API calls (blocking)
+- After: 2 Clerk + 1 DB transaction (blocking), rest async
+
+**Files Modified**:
+- `app/(auth)/onboarding/actions.ts` - Added `completeOnboardingBatched()`
+- `lib/email/welcome-service.ts` - Added `queueWelcomeEmail()`
+- `app/(auth)/onboarding/page.tsx` - Use batched function
+
+**Verification**: ✅ Build passes, lint passes
+
+### Phase 1: Remove Skip Setup Buttons and Step 3 ✅ (2026-01-10)
+
+**Changes Made**:
+1. Removed all 3 "Skip Setup" buttons from onboarding steps
+2. Removed Step 3 (EmailStep) - Clerk handles email collection at sign-up
+3. Updated to 2-step flow (sectors → companies → complete)
+4. Updated `completeOnboarding()` to set `onboardingCompleted: true` in DB and Clerk metadata
+5. Changed button text on Step 2 from "Continue" to "Complete Setup"
+
+**Files Modified**:
+- `app/(auth)/onboarding/page.tsx` - Removed skip buttons, EmailStep, updated to 2-step flow
+- `app/(auth)/onboarding/actions.ts` - Added onboardingCompleted flag setting and Clerk metadata sync
+
+**Verification**: ✅ Build passes, lint passes
+
+### Phase 2: Update Landing Page CTAs ✅ (2026-01-10)
+
+**Changes Made**:
+1. Implemented 3-state CTA logic across all landing page components:
+   - State 1: Unauthenticated → `/sign-up`
+   - State 2: Authenticated but not onboarded → `/onboarding`
+   - State 3: Authenticated and onboarded → `/dashboard`
+
+2. Updated hero section CTAs with dynamic text:
+   - Unauthenticated: "Get Summaries Like This"
+   - Authenticated not onboarded: "Complete Setup"
+   - Onboarded: "Go to Dashboard"
+
+3. Updated pricing section with 3-state checkout logic:
+   - Passes plan & interval params to sign-up/onboarding
+   - Only triggers Stripe checkout for onboarded users
+
+4. Updated navbar CTA button with consistent 3-state logic
+
+**Files Modified**:
+- `components/landing/sections-v2/gmail-inbox-hero.tsx` - Hero CTA, EmailDetailPanel footer
+- `components/landing/sections-v2/pricing-section-v2.tsx` - handleCheckout, getCtaText functions
+- `components/landing/landing-navbar.tsx` - ctaButton logic
+
+**Verification**: ✅ Build passes, lint passes, Playwright E2E tests pass
+
+### Phase 3: Implement Middleware Redirects ✅ (2026-01-10)
+
+**Changes Made**:
+1. Removed `/onboarding`, `/api/onboarding/check-email`, `/api/onboarding/save-pending` from public routes
+2. Added middleware logic in Clerk callback to handle 3 redirect scenarios:
+   - Unauthenticated user at `/onboarding` → `/sign-up`
+   - Authenticated non-onboarded user at `/dashboard` → `/onboarding`
+   - Authenticated onboarded user at `/onboarding` → `/dashboard`
+3. Uses `sessionClaims.publicMetadata.onboardingCompleted` for status check
+
+**Files Modified**:
+- `middleware.ts` - Removed public routes, added onboarding redirect logic in Clerk callback
+
+**Verification**: ✅ Build passes, lint passes
+
+### Phase 4: Simplify Clerk Webhook ✅ (2026-01-10)
+
+**Changes Made**:
+1. Simplified `user.created` handler to always set `onboardingCompleted: false`
+2. Removed all PendingOnboarding lookup and merge logic
+3. Removed clerkClient import (no longer needed for metadata sync in webhook)
+4. Deprecated 3 pending onboarding API routes with 410 Gone responses:
+   - `/api/onboarding/save-pending`
+   - `/api/onboarding/check-email`
+   - `/api/onboarding/merge-pending`
+
+**Files Modified**:
+- `app/api/webhook/clerk/route.ts` - Simplified user.created handler
+- `app/api/onboarding/save-pending/route.ts` - Deprecated
+- `app/api/onboarding/check-email/route.ts` - Deprecated
+- `app/api/onboarding/merge-pending/route.ts` - Deprecated
+
+**Verification**: ✅ Build passes, lint passes
+
+### Phase 5: End-to-End Testing ✅ (2026-01-10)
+
+**Changes Made**:
+1. Created comprehensive E2E test file `__tests__/e2e/auth-first-onboarding.test.ts`
+2. Tests cover 21 scenarios across:
+   - Unauthenticated user protection (redirects from /onboarding → /sign-up)
+   - Dashboard protection (Clerk middleware)
+   - Landing page CTA states (3-state logic verification)
+   - Onboarding page structure (2-step flow, no skip buttons)
+   - Navigation and public page access
+   - Deprecated API endpoints returning 410 Gone
+   - Mobile responsiveness
+   - Edge cases (trailing slashes, nested routes)
+
+**Files Added**:
+- `__tests__/e2e/auth-first-onboarding.test.ts` - 21 E2E tests using Playwright
+
+**Verification**: ✅ All 21 tests passing, build passes, lint passes
+
+### Implementation Summary
+
+**All 6 phases complete.** The auth-first onboarding flow is now fully implemented:
+- Users must authenticate before accessing onboarding
+- Onboarding is a 2-step flow (sectors → companies)
+- No "Skip Setup" buttons - users must complete onboarding
+- CTAs on landing page use 3-state logic based on auth + onboarding status
+- Middleware enforces proper redirects for all user states
+- Deprecated passwordless flow endpoints return 410 Gone
+- **Performance optimized**: ~30 sequential API calls → 2 blocking + async (Phase 6)
+
+---
+
+## Previous Session: Pipeline Redeployment & Backlog Recovery ✅ (2026-01-10)
+
+Successfully resolved critical pipeline stall affecting 400+ pending jobs. Both Vercel and Cloudflare Worker redeployed to restore processing.
+
+**Root Cause**: Pipeline processing endpoints weren't picking up pending jobs, causing 12:30 PM AEST event drop with 231+ stuck jobs.
+
+**Solution**: 
+- ✅ Vercel redeployment with latest code
+- ✅ Cloudflare Worker redeployment (version c177792f)
+- ✅ Pipeline restoration - jobs actively processing
+
+## Previous Session: Eliminate Manual Pipeline Intervention ✅ (2026-01-09 - 2026-01-10)
 
 ### Phase 1: Persistent Recovery State - COMPLETE
 

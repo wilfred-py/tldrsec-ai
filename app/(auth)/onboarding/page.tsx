@@ -9,7 +9,6 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { CheckCircle, ArrowRight, Building2, Cpu, Heart, Car, ShoppingCart, Zap, Home, Banknote, Search, Loader2, ArrowLeft } from "lucide-react";
-import { EmailStep } from "@/components/onboarding/email-step";
 import { toast } from "sonner";
 import { NotificationPreference } from "@/lib/email/notification-types";
 import { 
@@ -19,7 +18,7 @@ import {
   DEFAULT_NOTIFICATION_PREFERENCES,
   DEFAULT_UI_PREFERENCES
 } from "@/lib/user/preference-types";
-import { saveUserPreferences, addTickerSubscription, completeOnboarding } from "./actions";
+import { completeOnboardingBatched } from "./actions";
 
 // Define sectors with their icons and descriptions
 const sectors = [
@@ -143,7 +142,7 @@ const equitiesBySector = {
 };
 
 export default function OnboardingPage() {
-  const { isAuthenticated, isLoading, userName } = useAuthContext();
+  const { isLoading, userName } = useAuthContext();
   const router = useRouter();
   const [initializing, setInitializing] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -176,9 +175,7 @@ export default function OnboardingPage() {
   }, [userName]);
 
   // Initialize page state once auth context is loaded
-  // Note: Onboarding is now PUBLIC - no authentication required
-  // Unauthenticated users will save to PendingOnboarding table
-  // Authenticated users will complete onboarding directly
+  // Note: Onboarding now requires authentication (auth-first flow)
   useEffect(() => {
     try {
       if (!isLoading) {
@@ -191,17 +188,14 @@ export default function OnboardingPage() {
     }
   }, [isLoading]);
 
-  // Calculate progress based on current step and selections (3-step flow)
+  // Calculate progress based on current step and selections (2-step flow)
   const calculateProgress = () => {
     if (currentStep === 1) {
-      // Step 1: 0% if no sectors selected, 33% if at least one sector is selected
-      return selectedSectors.length > 0 ? 33 : 0;
-    } else if (currentStep === 2) {
-      // Step 2: 33% base + 33% if at least one company is selected
-      return 33 + (selectedEquities.length > 0 ? 33 : 0);
+      // Step 1: 0% if no sectors selected, 50% if at least one sector is selected
+      return selectedSectors.length > 0 ? 50 : 0;
     } else {
-      // Step 3: 66% base, 100% when email submitted
-      return 66 + (isSubmitting ? 34 : 0);
+      // Step 2: 50% base + 50% if at least one company is selected = 100%
+      return 50 + (selectedEquities.length > 0 ? 50 : 0);
     }
   };
 
@@ -256,18 +250,9 @@ export default function OnboardingPage() {
         setIsTransitioning(false);
       }, 300);
     } else if (currentStep === 2) {
-      setIsTransitioning(true);
-      setTimeout(() => {
-        setCurrentStep(3);
-        setIsTransitioning(false);
-      }, 300);
+      // Step 2 is now the final step - complete onboarding
+      handleCompleteOnboarding();
     }
-    // Step 3 completion is handled by handleEmailSubmit
-  };
-
-  // Handle skip button click
-  const handleSkip = () => {
-    router.push("/dashboard");
   };
 
   // Handle back button click
@@ -279,94 +264,7 @@ export default function OnboardingPage() {
     }, 300);
   };
 
-  // Handle email submission from Step 3
-  // For authenticated users: complete onboarding directly
-  // For unauthenticated users: save to PendingOnboarding and redirect to Clerk
-  const handleEmailSubmit = async (email: string) => {
-    if (isAuthenticated) {
-      // Authenticated user: complete onboarding directly
-      await handleCompleteOnboarding();
-    } else {
-      // Unauthenticated user: save pending data and redirect to Clerk
-      try {
-        setIsSubmitting(true);
-        setError(null);
-
-        // Get formatted tickers for saving
-        const formattedTickers = getAvailableEquities()
-          .filter(equity => selectedEquities.includes(equity.symbol))
-          .map(equity => ({
-            symbol: equity.symbol,
-            companyName: equity.name
-          }));
-
-        // First check if email already exists
-        const checkResponse = await fetch('/api/onboarding/check-email', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email })
-        });
-
-        if (!checkResponse.ok) {
-          const checkData = await checkResponse.json();
-          throw new Error(checkData.error || 'Failed to check email');
-        }
-
-        const checkResult = await checkResponse.json();
-
-        // Handle existing user scenario - redirect to sign-in
-        if (checkResult.status === 'EXISTING_USER' || checkResult.status === 'INCOMPLETE_USER') {
-          toast.info(checkResult.message || 'You already have an account. Redirecting to sign in...');
-          // Save pending data for merge after sign-in
-          await fetch('/api/onboarding/save-pending', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              email,
-              sectors: selectedSectors,
-              tickers: formattedTickers
-            })
-          });
-          router.push(`/sign-in?email=${encodeURIComponent(email)}&returnTo=/dashboard?merge=pending`);
-          return;
-        }
-
-        // Save pending onboarding data
-        const saveResponse = await fetch('/api/onboarding/save-pending', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            email,
-            sectors: selectedSectors,
-            tickers: formattedTickers
-          })
-        });
-
-        if (!saveResponse.ok) {
-          const saveData = await saveResponse.json();
-          throw new Error(saveData.error || 'Failed to save onboarding data');
-        }
-
-        const saveResult = await saveResponse.json();
-
-        if (saveResult.success) {
-          toast.success('Preferences saved! Redirecting to create your account...');
-          // Redirect to Clerk sign-up with pre-filled email
-          router.push(saveResult.redirectUrl);
-        } else {
-          throw new Error('Failed to save onboarding data');
-        }
-      } catch (err) {
-        console.error('Error in handleEmailSubmit:', err);
-        const errorMessage = err instanceof Error ? err.message : 'An unexpected error occurred';
-        setError(errorMessage);
-        toast.error(errorMessage);
-        setIsSubmitting(false);
-      }
-    }
-  };
-
-  // Handle onboarding completion
+  // Handle onboarding completion - OPTIMIZED with single batched server action
   const handleCompleteOnboarding = async () => {
     try {
       setIsSubmitting(true);
@@ -380,38 +278,26 @@ export default function OnboardingPage() {
           companyName: equity.name
         }));
 
-      // Save user preferences using server action
-      const result = await saveUserPreferences({
-        notifications: {
-          emailFrequency,
-          filingTypes,
-          contentPreferences
+      // Single batched server action replaces 3+ sequential calls
+      // This reduces: ~15 Clerk API calls + ~15 DB queries → 2 Clerk + 1 DB transaction
+      const result = await completeOnboardingBatched({
+        preferences: {
+          notifications: {
+            emailFrequency,
+            filingTypes,
+            contentPreferences
+          },
+          ui: uiPreferences
         },
-        ui: uiPreferences
+        tickers: formattedTickers
       });
 
       if (!result.success) {
-        throw new Error(result.error || 'Failed to save preferences');
+        throw new Error(result.error || 'Failed to complete onboarding');
       }
-
-      // Add ticker subscriptions using server action
-      for (const ticker of formattedTickers) {
-        const subResult = await addTickerSubscription({
-          symbol: ticker.symbol,
-          companyName: ticker.companyName,
-          overridePreferences: false
-        });
-
-        if (!subResult.success) {
-          console.error(`Failed to subscribe to ${ticker.symbol}: ${subResult.error}`);
-        }
-      }
-
-      // Complete onboarding and send welcome email
-      await completeOnboarding();
 
       toast.success('Onboarding completed successfully!');
-      
+
       // Keep loading state active during navigation
       // Don't reset isSubmitting
       router.push('/dashboard');
@@ -477,13 +363,13 @@ export default function OnboardingPage() {
           <div className="mb-8 text-center">
 
             <h1 className="mt-10 mb-2 text-2xl font-bold">Welcome to tldrSEC!</h1>
-            <p className="text-muted-foreground">Let&apos;s personalize your experience in just 3 quick steps.</p>
+            <p className="text-muted-foreground">Let&apos;s personalize your experience in just 2 quick steps.</p>
           </div>
 
           {/* Progress */}
           <div className="mb-8">
             <div className="mb-2 flex items-center justify-between text-sm">
-              <span className="font-medium">Step {currentStep} of 3</span>
+              <span className="font-medium">Step {currentStep} of 2</span>
               <span className="text-muted-foreground">{Math.round(progress)}% complete</span>
             </div>
             <Progress value={progress} className="h-2" />
@@ -554,14 +440,6 @@ export default function OnboardingPage() {
                 </Card>
               )}
 
-              {/* Skip setup button below sectors card */}
-              {currentStep === 1 && (
-                <div className="mt-4 text-center">
-                  <Button variant="ghost" onClick={handleSkip} className="text-muted-foreground">
-                    Skip setup and go to dashboard
-                  </Button>
-                </div>
-              )}
 
               {/* Step 2: Equity Selection */}
               {currentStep === 2 && (
@@ -649,7 +527,7 @@ export default function OnboardingPage() {
                           {selectedEquities.length} of 5 companies selected
                         </span>
                         <Button onClick={handleNext} disabled={selectedEquities.length === 0}>
-                          Continue
+                          Complete Setup
                           <ArrowRight className="ml-2 h-4 w-4" />
                         </Button>
                       </div>
@@ -658,35 +536,7 @@ export default function OnboardingPage() {
                 </Card>
               )}
 
-              {/* Skip setup button below equities card */}
-              {currentStep === 2 && (
-                <div className="mt-4 text-center">
-                  <Button variant="ghost" onClick={handleSkip} className="text-muted-foreground">
-                    Skip setup and go to dashboard
-                  </Button>
-                </div>
-              )}
 
-              {/* Step 3: Email Input */}
-              {currentStep === 3 && (
-                <div className="mx-auto max-w-md">
-                  <EmailStep
-                    onEmailSubmit={handleEmailSubmit}
-                    onBack={handleBack}
-                    selectedTickers={selectedEquities}
-                    isLoading={isSubmitting}
-                  />
-                </div>
-              )}
-
-              {/* Skip setup button below email card */}
-              {currentStep === 3 && (
-                <div className="mt-4 text-center">
-                  <Button variant="ghost" onClick={handleSkip} className="text-muted-foreground">
-                    Skip setup and go to dashboard
-                  </Button>
-                </div>
-              )}
             </div>
           </div>
         </div>
