@@ -2,22 +2,34 @@
 
 **Date**: 2026-01-10
 **Branch**: main
-**Status**: Pipeline Successfully Redeployed - Backlog Processing Restored
+**Status**: Critical Job Queue Bug Fixed - Prisma Client Resolution
 
 ---
 
-## Current Session: Pipeline Redeployment & Backlog Recovery (2026-01-10)
+## Current Session: Critical Job Queue Database Bug Fix (2026-01-10)
 
-Successfully resolved critical pipeline stall affecting 400+ pending jobs. Both Vercel and Cloudflare Worker redeployed to restore processing.
+Identified and resolved critical bug causing 394+ pending jobs to remain stuck despite multiple redeployments.
 
-**Root Cause**: Pipeline processing endpoints weren't picking up pending jobs, causing 12:30 PM AEST event drop with 231+ stuck jobs.
+**Root Cause**: Job queue system was importing `prisma` directly instead of using `getPrismaClient()` function, resulting in undefined Prisma client during runtime. This caused all job creation and processing operations to fail silently.
+
+**Error Evidence**:
+```
+Error adding job to queue: TypeError: Cannot read properties of undefined (reading 'create')
+at Function.create (/lib/job-queue/index.ts:220:36)
+```
 
 **Solution**: 
-- ✅ Vercel redeployment with latest code
-- ✅ Cloudflare Worker redeployment (version c177792f)
-- ✅ Pipeline restoration - jobs actively processing
+- ✅ Updated `lib/job-queue/index.ts` to use `getPrismaClient()` instead of direct `prisma` import
+- ✅ Replaced all 10+ `prisma.` calls with `getPrismaClient().` calls
+- ✅ Vercel production deployment with fix completed
+- ✅ E2E pipeline test successful - job creation now working
 
-**Current Status**: 1 job processing, fresh completion at 03:21:47 UTC, 402 pending jobs being processed systematically.
+**Impact**: 
+- 394 pending jobs (323 ASYNC_SUMMARIZE_CACHED + 71 ASYNC_DISCOVER_FILINGS)
+- Jobs stuck for 44+ hours (oldest from 2026-01-09T01:16:47.107Z)
+- Pipeline was accepting cron triggers but unable to create/process jobs
+
+**Current Status**: Fix deployed to production, job creation restored, pending backlog ready for processing.
 
 ---
 
