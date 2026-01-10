@@ -287,6 +287,31 @@ export function Form8KMinimalistTemplate({ filing }: Form8KMinimalistTemplatePro
               </table>
 
               {/* ═══════════════════════════════════════════════════════════
+                  SENTIMENT INDICATOR - Shows market sentiment when available
+                  ═══════════════════════════════════════════════════════════ */}
+              {sentiment && (
+                <table width="100%" cellPadding="0" cellSpacing="0" style={{ marginBottom: '16px' }}>
+                  <tbody>
+                    <tr>
+                      <td style={{ textAlign: 'center' }}>
+                        <span style={{
+                          display: 'inline-block',
+                          padding: '6px 16px',
+                          borderRadius: '20px',
+                          fontSize: '13px',
+                          fontWeight: 600,
+                          backgroundColor: getSentimentColor(sentiment).bg,
+                          color: getSentimentColor(sentiment).text,
+                        }}>
+                          {getSentimentEmoji(sentiment)} {sentiment.charAt(0).toUpperCase() + sentiment.slice(1)} Sentiment
+                        </span>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              )}
+
+              {/* ═══════════════════════════════════════════════════════════
                   FILING DETAILS - Item numbers and event type
                   ═══════════════════════════════════════════════════════════ */}
               {(itemsDisplay || financialImpact) && (
