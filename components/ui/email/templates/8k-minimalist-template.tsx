@@ -105,6 +105,30 @@ function getSignalConfig(isMaterial: boolean) {
 }
 
 /**
+ * Get sentiment color styling for 8-K filings
+ */
+function getSentimentColor(sentiment: string): { bg: string; text: string } {
+  switch (sentiment.toLowerCase()) {
+    case 'positive': return { bg: '#DCFCE7', text: '#166534' }; // Green
+    case 'negative': return { bg: '#FEE2E2', text: '#991B1B' }; // Red
+    case 'mixed': return { bg: '#FEF3C7', text: '#92400E' }; // Amber
+    default: return { bg: '#F3F4F6', text: '#4B5563' }; // Gray (neutral)
+  }
+}
+
+/**
+ * Get sentiment emoji indicator
+ */
+function getSentimentEmoji(sentiment: string): string {
+  switch (sentiment.toLowerCase()) {
+    case 'positive': return '📈';
+    case 'negative': return '📉';
+    case 'mixed': return '↔️';
+    default: return '➖';
+  }
+}
+
+/**
  * Format text with bold styling for key values
  */
 function formatText(text: string): string {
@@ -154,7 +178,7 @@ export function Form8KMinimalistTemplate({ filing }: Form8KMinimalistTemplatePro
   const itemNumbers = (data?.itemNumbers || extractedData?.itemNumbers || []) as string[];
   const keyHighlights = (data?.keyHighlights || extractedData?.keyHighlights || []) as string[];
   const financialImpact = (data?.financialImpact || extractedData?.financialImpact || '') as string;
-  const _sentiment = (data?.sentiment || extractedData?.sentiment || '') as string;
+  const sentiment = (data?.sentiment || extractedData?.sentiment || '') as string;
 
   const displayTicker = symbol || ticker || 'N/A';
 
