@@ -13,6 +13,10 @@ This file provides a chronological index of all completed projects. For detailed
 
 | Date | Project | Status |
 |------|---------|--------|
+| 2026-01-10 | Pipeline Redeployment & Backlog Recovery (pipeline stall fix, 400+ jobs restored) | ✅ |
+| 2026-01-10 | Eliminate Manual Pipeline Intervention - Phase 4: External Watchdog Worker | ✅ |
+| 2026-01-10 | Eliminate Manual Pipeline Intervention - Phase 3: Orphaned Filing Detection | ✅ |
+| 2026-01-10 | Eliminate Manual Pipeline Intervention - Phase 2: Cron Execution Gap Detection | ✅ |
 | 2026-01-10 | Eliminate Manual Pipeline Intervention - Phase 1: Persistent Recovery State | ✅ |
 | 2026-01-09 | Summary Generation Quality - Phase 5: SC 13G/SC 13D/424B2 Extractors | ✅ |
 | 2026-01-09 | Fix Orphaned Filings Pipeline (discovery backlog recovery + schema fixes) | ✅ Verified |
@@ -138,10 +142,10 @@ This file provides a chronological index of all completed projects. For detailed
 
 ## Archive Statistics
 - **Total Archived Projects**: 7 weekly archives (Oct-Dec 2025)
-- **Current PROGRESS.md Lines**: 174 (threshold: 500)
+- **Current PROGRESS.md Lines**: 72 (threshold: 500)
 - **Last Sync**: 2026-01-10
 - **Archive System**: ✅ ACTIVE
-- **Last Compaction**: 2026-01-10 (Phase 1: Persistent Recovery State complete)
+- **Last Compaction**: 2026-01-10 (Pipeline Redeployment & Backlog Recovery complete)
 
 **Archives**:
 - `29-Dec-2025.md` - Cloudflare Cron Fix, Email Quality, Form 4 Templates, JSON Parsing Phase 5
