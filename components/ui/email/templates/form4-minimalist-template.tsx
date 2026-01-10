@@ -266,6 +266,7 @@ function aggregateTransactionsByType(transactions: TransactionData[]): Aggregate
     groups[groupKey].value += value;
     groups[groupKey].count += 1;
     if (price > 0) groups[groupKey].prices.push(price);
+    if (tx.code) groups[groupKey].codes.push(tx.code);
   }
 
   // Format and return non-empty groups
@@ -276,6 +277,9 @@ function aggregateTransactionsByType(transactions: TransactionData[]): Aggregate
         ? data.prices.reduce((a, b) => a + b, 0) / data.prices.length
         : 0;
 
+      // Get the primary code for single transactions
+      const primaryCode = data.codes.length === 1 ? data.codes[0] : undefined;
+
       result.push({
         type: type as 'gift' | 'sale' | 'purchase' | 'transfer',
         totalShares: data.shares,
@@ -285,6 +289,8 @@ function aggregateTransactionsByType(transactions: TransactionData[]): Aggregate
         sharesDisplay: data.shares.toLocaleString(),
         valueDisplay: formatAggregatedValue(data.value),
         priceDisplay: avgPrice > 0 ? `$${avgPrice.toFixed(2)}` : '$0',
+        code: primaryCode,
+        codeDescription: primaryCode ? getTransactionCodeDescription(primaryCode) : undefined,
       });
     }
   }
@@ -728,6 +734,17 @@ export function Form4MinimalistTemplate({ filing }: Form4MinimalistTemplateProps
                                           }}>
                                             {aggTx.sharesDisplay} shares{aggTx.avgPrice > 0 ? ` @ ${aggTx.priceDisplay}` : ''}
                                           </div>
+                                          {/* SEC transaction code description for single transactions */}
+                                          {aggTx.codeDescription && (
+                                            <div style={{
+                                              fontSize: '11px',
+                                              color: config.textColor,
+                                              opacity: 0.7,
+                                              marginTop: '4px',
+                                            }}>
+                                              {aggTx.codeDescription}
+                                            </div>
+                                          )}
                                         </td>
                                         {/* Add gap spacer between items (not after last item) */}
                                         {!isLast && (
