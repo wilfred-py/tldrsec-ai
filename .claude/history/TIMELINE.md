@@ -13,6 +13,10 @@ This file provides a chronological index of all completed projects. For detailed
 
 | Date | Project | Status |
 |------|---------|--------|
+| 2026-01-10 | Auth-First Onboarding Flow (All 5 phases: skip buttons removed, 3-state CTAs, middleware redirects, webhook simplified, E2E tests) | ✅ Complete |
+| 2026-01-09 | Fix Orphaned Filings Pipeline (discovery backlog recovery + schema fixes) | ✅ Verified |
+| 2026-01-08 | 100% Cron Pipeline Uptime - Zero Silent Failures (3-phase: deploy, handler alerts, error tracking) | ✅ |
+| 2026-01-08 | Dashboard Table Height Stability Fix (skeleton rows, bg-muted) | ✅ |
 | 2026-01-07 | Summary Generation Accuracy (Phase 4: Quality Assurance & Testing) | ✅ |
 | 2026-01-07 | Summary Generation Accuracy (Phase 3: Template & Email Consistency) | ✅ |
 | 2026-01-07 | Summary Generation Accuracy (Phase 2: Code Cleanup & Consolidation) | ✅ |
@@ -129,10 +133,10 @@ This file provides a chronological index of all completed projects. For detailed
 
 ## Archive Statistics
 - **Total Archived Projects**: 7 weekly archives (Oct-Dec 2025)
-- **Current PROGRESS.md Lines**: 194 (threshold: 500)
-- **Last Sync**: 2026-01-07
+- **Current PROGRESS.md Lines**: 189 (threshold: 500)
+- **Last Sync**: 2026-01-10
 - **Archive System**: ✅ ACTIVE
-- **Last Compaction**: 2026-01-07 (sync with Phase 4 completion - all phases done)
+- **Last Compaction**: 2026-01-10 (Auth-First Onboarding Phases 1-4 complete)
 
 **Archives**:
 - `29-Dec-2025.md` - Cloudflare Cron Fix, Email Quality, Form 4 Templates, JSON Parsing Phase 5
