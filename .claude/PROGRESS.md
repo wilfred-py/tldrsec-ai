@@ -1,46 +1,80 @@
 # Project Progress
 
-**Date**: 2026-01-09
-**Branch**: main
-**Status**: Pipeline Incident Resolved - Cloudflare Worker Cron Gap Fixed
+**Date**: 2026-01-10
+**Branch**: feature/eliminate-manual-pipeline-intervention
+**Status**: Phase 1 Complete - Persistent Recovery State Implemented
 
 ---
 
-## Current Session: Pipeline Incident Investigation & Resolution (2026-01-09)
+## Current Session: Eliminate Manual Pipeline Intervention - Phase 1 (2026-01-09 - 2026-01-10)
 
-### Incident Summary
+### Phase 1: Persistent Recovery State - COMPLETE
 
-**Issue**: Pipeline job processing dropped significantly after 12:30 PM AEST (01:30 UTC).
+**Goal**: Store auto-recovery state in database to survive Vercel deployments.
 
-**Root Cause**: Cloudflare Worker stopped triggering cron executions for ~3 hours (01:45 UTC to 04:57 UTC).
+**Problem Solved**: Previously, in-memory recovery state would reset on every Vercel deployment, causing:
+- False healthy signals after deploys during ongoing incidents
+- Reset of consecutiveDegraded counters before action thresholds reached
+- Loss of cleanup/redeploy history
 
-**Investigation**:
-1. Checked Cloudflare Worker logs - initially appeared to be running
-2. Analyzed JobQueue - found 231+ pending jobs stuck (ASYNC_FETCH_FILING + ASYNC_SUMMARIZE_CACHED)
-3. Queried CronJobExecution table - revealed 3+ hour gap in executions
-4. Confirmed no locks or database issues blocking processing
+**Implementation**:
 
-**Resolution**:
-1. Redeployed Cloudflare Worker: `cd cloudflare-cron && npx wrangler deploy`
-2. Deployed version: `05254473-0bb6-4059-ad36-07fd0e500c54`
-3. Manually triggered job processing to help clear backlog
-4. Verified pipeline returned to HEALTHY status
+1. **Database Schema** (`prisma/schema.prisma`):
+   - Added `RecoveryState` model in `pipeline` schema
+   - Singleton pattern with `id='singleton'` default
+   - Fields: `consecutiveDegraded`, `consecutiveCleanups`, `consecutiveRedeploys`
+   - Timestamps: `lastCleanupTime`, `lastRedeployTime`, `lastHealthyTime`, `lastDegradedTime`
 
-**Post-Resolution Status**:
-- Cron executing every 5 minutes (3m ago, 8m ago timestamps confirmed)
-- 71 jobs completed in last hour
-- 309 pending jobs (110 fetch + 199 summarize) being processed
-- Pipeline healthy and clearing backlog
+2. **RecoveryStateService** (`lib/cron/recovery-state-service.ts`):
+   - Singleton pattern in database with in-memory caching
+   - Methods: `getState()`, `incrementConsecutiveDegraded()`, `recordCleanup()`, `recordRedeploy()`, `resetOnHealthy()`, `reset()`, `clearCache()`
+   - Uses upsert for all operations to handle missing row gracefully
 
-**Key Files Referenced**:
-- `/cloudflare-cron/index.js` - 5-step pipeline (cleanup → tier-aware → discovery → fetch → summarize)
-- `/cloudflare-cron/wrangler.toml` - Cron schedule configuration
-- `/app/api/cron/process-filing-queue/route.ts` - Job processing endpoint
-- `/lib/cron/handlers/discovery-handler.ts` - Discovery phase handler
+3. **Auto-Recover Route** (`app/api/cron/auto-recover/route.ts`):
+   - Replaced in-memory `recoveryState` object with `RecoveryStateService`
+   - Changed `_resetRecoveryStateForTesting` from sync to async
+   - All state operations now persist to database
+
+4. **Test Updates**:
+   - `__tests__/cron/persistent-recovery-state.test.ts` - 8 unit tests for RecoveryStateService
+   - `__tests__/api/cron/auto-recover-proactive.test.ts` - Dynamic mock simulating DB state changes
+   - `__tests__/api/cron/auto-recover.test.ts` - Added recoveryState mock
+   - `__tests__/setup.js` - Shared mock Prisma client with recoveryState model
+
+**Verification**:
+- 32 auto-recover tests passing
+- 8 RecoveryStateService tests passing
+- Build compiles successfully
+- Lint passes with no warnings
+- Database migration applied (RecoveryState table created in pipeline schema)
+
+**Commit**: `7db077d` on `feature/eliminate-manual-pipeline-intervention`
+
+**Plan Reference**: `docs/plans/2026-01-09-eliminate-manual-pipeline-intervention.md`
 
 ---
 
-## Previous Session: Summary Generation Accuracy Improvements (2026-01-07)
+## Recently Completed
+
+### Fix Orphaned Filings Pipeline (2026-01-09)
+
+**Issue**: Pipeline stalled after discovering filings but before creating jobs.
+
+**Root Cause**: Discovery backlog recovery was re-queuing filings that had been processed in previous cycles.
+
+**Fix**: Added `unprocessedOnly` flag to discovery handler that filters out filings with existing summaries.
+
+**Files**: `lib/cron/handlers/discovery-handler.ts`, schema updates for backlog tracking
+
+### Pipeline Incident - Cloudflare Worker Cron Gap (2026-01-09)
+
+**Issue**: Pipeline job processing dropped for ~3 hours (01:45 UTC to 04:57 UTC).
+
+**Root Cause**: Cloudflare Worker stopped triggering cron executions.
+
+**Resolution**: Redeployed Cloudflare Worker (`cd cloudflare-cron && npx wrangler deploy`)
+
+### Summary Generation Accuracy Improvements (2026-01-07)
 
 Implemented improvements to summary generation workflow accuracy and consistency per plan at `docs/plans/2026-01-06-improve-summary-generation-accuracy.md`. **All 4 phases complete with 101 tests passing.**
 
