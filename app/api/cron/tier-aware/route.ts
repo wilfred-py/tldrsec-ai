@@ -180,6 +180,28 @@ export async function GET(request: NextRequest) {
           throw new Error('Failed to queue discovery job');
         }
 
+        // CRITICAL FIX: Process pending jobs after queuing discovery job
+        // Without this, jobs remain PENDING indefinitely since Cloudflare Worker
+        // authentication to process-filing-queue endpoints fails
+        cronLogger.info(`[${executionId}] Processing pending jobs after discovery job creation`);
+        
+        try {
+          const { BackgroundFilingWorker } = await import('../../../../lib/cron/background-filing-worker');
+          const worker = new BackgroundFilingWorker();
+          
+          // Process jobs in priority order: discovery → fetch → summarize
+          await worker.processBatch(['ASYNC_DISCOVER_FILINGS'], 10);
+          await worker.processBatch(['ASYNC_FETCH_FILING'], 2);
+          await worker.processBatch(['ASYNC_SUMMARIZE_CACHED'], 3);
+          
+          cronLogger.info(`[${executionId}] Completed processing pending jobs in 3-phase pipeline`);
+        } catch (processingError) {
+          cronLogger.error(`[${executionId}] Failed to process pending jobs, but discovery job queued successfully`, {
+            processingError: processingError instanceof Error ? processingError.message : 'Unknown error'
+          });
+          // Don't fail the request - discovery job was still queued successfully
+        }
+
         const duration = Date.now() - startTime;
 
         cronLogger.info(`[${executionId}] Discovery job queued successfully (3-phase pipeline)`, {
