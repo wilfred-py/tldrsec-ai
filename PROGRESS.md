@@ -2,28 +2,73 @@
 
 **Date**: 2026-01-11
 **Branch**: main
-**Status**: clerkMiddleware API Fix - Updated to @clerk/nextjs v6 Pattern
+**Status**: Eliminate Manual Pipeline Intervention - All 8 Phases Complete
 
 ---
 
-## Current Session: clerkMiddleware API Fix (2026-01-11)
+## Current Session: Eliminate Manual Pipeline Intervention - Phases 5-8 (2026-01-11)
 
-Fixed TypeScript error in `middleware.ts` where `clerkMiddleware` was using deprecated API pattern.
+Completed final phases of the "Eliminate Manual Pipeline Intervention" plan implementing three-layer pipeline redundancy.
 
-**Problem**: The middleware was passing `publicRoutes` as an options property to `clerkMiddleware`, which no longer exists in `@clerk/nextjs` v6. The correct API uses `createRouteMatcher()`.
+### Phase 5: Health Endpoint Enhancement ✅
+Enhanced `/api/health/pipeline` with cron execution gap and orphaned filing detection.
 
-**Solution**:
-1. Added `createRouteMatcher` import from `@clerk/nextjs/server`
-2. Added `NextFetchEvent` import from `next/server`
-3. Created `isPublicRoute` matcher using `createRouteMatcher()` with all public routes
-4. Updated main `middleware` function signature to include `event` parameter
-5. Updated `clerkMiddleware` call to use new API pattern: `clerkMiddleware((auth, req, event) => {...}, options)(request, event)`
-6. Inside handler, use `isPublicRoute(req)` to check if route is public
+**Changes**:
+- Added `cronExecution` field: `lastExecution`, `minutesSinceLastCron`, `gapsDetected`
+- Added `filings` field: `orphanedCount`, `unprocessedTotal`
+- Status thresholds: DEGRADED at 15+ min gap, CRITICAL at 20+ min gap
+- Orphaned filings (processed=false, no jobs, >10 min old) trigger DEGRADED
+
+**Files Modified**: `app/api/health/pipeline/route.ts`
+**Tests**: 14 passing in `__tests__/api/health/enhanced-pipeline-health.test.ts`
+
+### Phase 6: Auto-Recovery Integration ✅
+Enhanced `/api/cron/auto-recover` with orphaned filing recovery.
+
+**Changes**:
+- Added `OrphanedFilingDetector.checkAndRecover()` call in cleanup flow
+- Recovers filings with `processed=false` and no associated jobs
+- Creates ASYNC_SUMMARIZE_CACHED jobs for orphaned filings
+- Fixed test mock to avoid triggering cleanup path before DEGRADED branch
+
+**Files Modified**: `app/api/cron/auto-recover/route.ts`
+**Tests**: 12 passing in `__tests__/cron/comprehensive-auto-recover.test.ts`
+
+### Phase 7: Vercel Cron Final Backup ✅
+Created `/api/cron/final-backup` as last-resort emergency trigger.
+
+**Implementation**:
+- Runs every 30 minutes via Vercel cron
+- Checks for any pipeline execution in last 25 minutes
+- If none found: sends emergency Slack alert + triggers tier-aware pipeline
+- Logs execution with source `"final-backup"`
+
+**Files Created**:
+- `app/api/cron/final-backup/route.ts`
+- `__tests__/cron/final-backup.test.ts` (16 tests)
+
+**Files Modified**: `vercel.json` (added cron + function config)
+
+### Phase 8: Documentation & Runbooks ✅
+Created comprehensive operations documentation.
+
+**Files Created**:
+- `docs/runbooks/pipeline-stall-recovery.md` - Full operations runbook
 
 **Files Modified**:
-- `middleware.ts` - Updated clerkMiddleware usage to v6 API pattern
+- `CLAUDE.md` - Added redundancy architecture, health/recovery commands
+- `.claude/history/TIMELINE.md` - Added Phases 5-8 entries
 
-**Verification**: ✅ TypeScript errors resolved, middleware compiles successfully
+**Total Tests**: 42 passing across all phases
+
+---
+
+## Recently Completed: clerkMiddleware API Fix (2026-01-11)
+
+Fixed TypeScript error in `middleware.ts` using deprecated API pattern. Updated to v6 API pattern using `createRouteMatcher()`.
+
+**Files Modified**: `middleware.ts`
+**Verification**: ✅ TypeScript errors resolved
 
 ---
 
@@ -102,5 +147,5 @@ at Function.create (/lib/job-queue/index.ts:220:36)
 
 ---
 
-*Last Updated: 2026-01-11 (clerkMiddleware API Fix)*
+*Last Updated: 2026-01-11 (Eliminate Manual Pipeline Intervention - All 8 Phases Complete)*
 *Older completed projects archived to .claude/history/ - See TIMELINE.md for full history*
