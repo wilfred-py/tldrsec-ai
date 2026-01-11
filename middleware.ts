@@ -259,10 +259,17 @@ const securityMiddleware = async (request: NextRequest): Promise<NextResponse | 
   let endpointType: 'CRON' | 'HEALTH' | 'PUBLIC' = 'PUBLIC';
   let requiresSecurityValidation = false;
 
+  // Routes that handle their own authentication completely
+  const selfAuthenticatingCronRoutes = [
+    '/api/cron/backup-trigger', // Uses BACKUP_TRIGGER_SECRET
+    '/api/cron/auto-recover',   // Uses its own auth logic
+  ];
+
   // Classify endpoint types for appropriate security controls
   if (pathname.startsWith('/api/cron/')) {
     endpointType = 'CRON';
-    requiresSecurityValidation = true;
+    // Self-authenticating routes bypass middleware security - they handle auth themselves
+    requiresSecurityValidation = !selfAuthenticatingCronRoutes.includes(pathname);
   } else if (pathname.startsWith('/api/health')) {
     endpointType = 'HEALTH';
     // Health endpoints are public for monitoring - they don't expose sensitive data
