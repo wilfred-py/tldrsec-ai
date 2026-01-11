@@ -29,7 +29,12 @@ import {
   TickersLoadingSkeleton,
 } from "@/components/dashboard/tickers-table";
 
-export function DashboardClient() {
+interface DashboardClientProps {
+  showWelcome?: boolean;
+  shouldMergePending?: boolean;
+}
+
+export function DashboardClient({ showWelcome = false, shouldMergePending = false }: DashboardClientProps) {
   // State for tracked companies
   const [companies, setCompanies] = useState<Company[]>([]);
   const [currentCompany, setCurrentCompany] = useState<Company | null>(null);
@@ -45,6 +50,7 @@ export function DashboardClient() {
 
   const [showTutorial, setShowTutorial] = useState(false);
   const [tutorialProgress, setTutorialProgress] = useState(0);
+  const [hasMergedPending, setHasMergedPending] = useState(false);
 
   // Async hooks for API calls
   const {
@@ -72,13 +78,41 @@ export function DashboardClient() {
     }
   }, [executeGetCompanies, setCompanies]);
 
+  // Merge pending onboarding tickers for existing users
+  useEffect(() => {
+    if (!shouldMergePending || hasMergedPending) return;
+
+    const mergePending = async () => {
+      try {
+        const response = await fetch('/api/onboarding/merge-pending', {
+          method: 'POST',
+        });
+
+        if (response.ok) {
+          const result = await response.json();
+          if (result.merged && result.tickersCreated?.length > 0) {
+            toast.success(`Added ${result.tickersCreated.length} ticker(s) from onboarding`);
+            // Reload companies to show the merged tickers
+            loadCompanies();
+          }
+        }
+      } catch (error) {
+        console.error('Error merging pending tickers:', error);
+      } finally {
+        setHasMergedPending(true);
+      }
+    };
+
+    mergePending();
+  }, [shouldMergePending, hasMergedPending, loadCompanies]);
+
   // Load tracked companies on component mount
   useEffect(() => {
     loadCompanies();
 
-    // Check if user is new and should see tutorial
+    // Check if user is new and should see tutorial (from URL param or localStorage)
     const hasSeenTutorial = localStorage.getItem("hasSeenTutorial");
-    if (!hasSeenTutorial) {
+    if (showWelcome || !hasSeenTutorial) {
       setShowTutorial(true);
       localStorage.setItem("hasSeenTutorial", "true");
     }
@@ -88,7 +122,7 @@ export function DashboardClient() {
     if (savedProgress) {
       setTutorialProgress(parseInt(savedProgress, 10));
     }
-  }, [loadCompanies]);
+  }, [loadCompanies, showWelcome]);
 
   // Lazy-load companies for search - only fetch when user clicks Add Ticker
   const loadCompaniesForSearch = useCallback(async () => {

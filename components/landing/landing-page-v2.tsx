@@ -1,3 +1,6 @@
+'use client';
+
+import { useRef } from 'react';
 import {
   GmailInboxHero,
   FeaturesSectionV2,
@@ -5,6 +8,7 @@ import {
   CTASectionV2,
   FooterSectionV2
 } from './sections-v2';
+import { LandingNavbar } from './landing-navbar';
 
 /**
  * Landing Page V2 Component
@@ -16,6 +20,7 @@ import {
  * - Real curated SEC filing summaries
  * - Click-to-preview email functionality
  * - Mobile-first responsive design
+ * - Scroll-aware sticky navbar (appears after scrolling past hero)
  *
  * The hero section now combines:
  * - Marketing messaging ("Summaries That Actually Matter")
@@ -26,9 +31,17 @@ import {
  * Controlled by NEXT_PUBLIC_LANDING_V2_ENABLED feature flag
  */
 export function LandingPageV2() {
+  // Ref for hero section - used by navbar's Intersection Observer
+  const heroRef = useRef<HTMLElement>(null);
+
   return (
     <main className="min-h-screen">
-      <GmailInboxHero />
+      {/* Scroll-aware navbar - appears when hero exits viewport */}
+      <LandingNavbar heroRef={heroRef} />
+
+      {/* Hero section with ref for navbar visibility tracking */}
+      <GmailInboxHero heroRef={heroRef} />
+
       <FeaturesSectionV2 />
       <PricingSectionV2 />
       <CTASectionV2 />

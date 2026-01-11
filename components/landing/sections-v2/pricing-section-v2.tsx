@@ -2,10 +2,12 @@
 
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useUser } from '@clerk/nextjs';
+import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Check, Zap, Sparkles, Crown } from 'lucide-react';
-import Link from 'next/link';
+import { Skeleton } from '@/components/ui/skeleton';
+import { Check, Zap, Sparkles, Crown, Loader2 } from 'lucide-react';
 import {
   staggerContainer,
   staggerItem,
@@ -76,6 +78,12 @@ const plans = [
  */
 export function PricingSectionV2() {
   const [billingInterval, setBillingInterval] = useState<BillingInterval>('monthly');
+  const [loadingPlan, setLoadingPlan] = useState<string | null>(null);
+  const router = useRouter();
+
+  // User authentication state from Clerk
+  const { isSignedIn, isLoaded, user } = useUser();
+  const isOnboarded = Boolean(user?.publicMetadata?.onboardingCompleted);
 
   const getPrice = (plan: typeof plans[0]) => {
     if (billingInterval === 'annual') {
@@ -94,6 +102,54 @@ export function PricingSectionV2() {
   const getSavings = (plan: typeof plans[0]) => {
     if (plan.monthlyPrice === 0) return null;
     return calculateSavingsPercentage(plan.key);
+  };
+
+  // Handle checkout - routes based on 3 auth states
+  const handleCheckout = async (planKey: string) => {
+    if (!isSignedIn) {
+      // State 1: Unauthenticated → Sign Up with plan params
+      router.push(`/sign-up?plan=${planKey.toLowerCase()}${billingInterval === 'annual' ? '&interval=annual' : ''}`);
+      return;
+    }
+
+    if (!isOnboarded) {
+      // State 2: Authenticated but NOT onboarded → Onboarding with plan params
+      router.push(`/onboarding?plan=${planKey.toLowerCase()}${billingInterval === 'annual' ? '&interval=annual' : ''}`);
+      return;
+    }
+
+    // State 3: Authenticated AND onboarded → Stripe checkout
+    setLoadingPlan(planKey);
+    try {
+      const response = await fetch('/api/user/subscription', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          planType: planKey,
+          billingInterval,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (data.checkoutUrl) {
+        window.location.href = data.checkoutUrl;
+      } else {
+        console.error('No checkout URL returned:', data);
+        setLoadingPlan(null);
+      }
+    } catch (error) {
+      console.error('Error creating checkout session:', error);
+      setLoadingPlan(null);
+    }
+  };
+
+  // Get CTA text based on user state and plan
+  const getCtaText = (plan: typeof plans[0]) => {
+    if (plan.disabled) return plan.cta;
+    if (!isSignedIn) return 'Get Started';
+    if (!isOnboarded) return 'Complete Setup';
+    return plan.cta; // "Upgrade to Pro" or "Upgrade to Max"
   };
 
   return (
@@ -225,7 +281,10 @@ export function PricingSectionV2() {
 
                 {/* CTA Button - Positioned after price like Grok */}
                 <div className="mb-6">
-                  {plan.disabled ? (
+                  {!isLoaded ? (
+                    // Loading state - show skeleton button
+                    <Skeleton className="h-10 w-full rounded-lg" />
+                  ) : plan.disabled ? (
                     <Button
                       className="w-full bg-gray-100 text-gray-500 border border-gray-200 cursor-default hover:bg-gray-100"
                       disabled
@@ -233,20 +292,24 @@ export function PricingSectionV2() {
                       {plan.cta}
                     </Button>
                   ) : (
-                    <Link
-                      href={`${plan.href}${billingInterval === 'annual' ? '&interval=annual' : ''}`}
-                      className="block"
+                    <Button
+                      onClick={() => handleCheckout(plan.key)}
+                      disabled={loadingPlan === plan.key}
+                      className={`w-full ${
+                        plan.popular
+                          ? 'landing-button-primary'
+                          : 'landing-button-secondary'
+                      }`}
                     >
-                      <Button
-                        className={`w-full ${
-                          plan.popular
-                            ? 'landing-button-primary'
-                            : 'landing-button-secondary'
-                        }`}
-                      >
-                        {plan.cta}
-                      </Button>
-                    </Link>
+                      {loadingPlan === plan.key ? (
+                        <>
+                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                          Loading...
+                        </>
+                      ) : (
+                        getCtaText(plan)
+                      )}
+                    </Button>
                   )}
                 </div>
 

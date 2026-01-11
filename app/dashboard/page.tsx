@@ -2,12 +2,20 @@ import { currentUser } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
 import { DashboardClient } from "@/components/dashboard/dashboard-client";
 
-export default async function DashboardPage() {
+interface DashboardPageProps {
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
+}
+
+export default async function DashboardPage({ searchParams }: DashboardPageProps) {
   const user = await currentUser();
-  
+
   if (!user) {
     redirect("/sign-in");
   }
 
-  return <DashboardClient />;
+  const params = await searchParams;
+  const showWelcome = params.welcome === 'true';
+  const shouldMergePending = params.merge === 'pending' || showWelcome;
+
+  return <DashboardClient showWelcome={showWelcome} shouldMergePending={shouldMergePending} />;
 }
