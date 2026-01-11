@@ -3,12 +3,20 @@
     {
       "path": "/api/cron/tier-aware",
       "schedule": "0 9 * * 1,2,3,4,5"
+    },
+    {
+      "path": "/api/cron/final-backup",
+      "schedule": "*/30 * * * *"
     }
   ],
   "functions": {
     "app/api/cron/tier-aware/route.ts": {
       "maxDuration": 300,
       "memory": 1024
+    },
+    "app/api/cron/final-backup/route.ts": {
+      "maxDuration": 300,
+      "memory": 512
     },
     "app/api/cron/process-filing-queue/route.ts": {
       "maxDuration": 300,
