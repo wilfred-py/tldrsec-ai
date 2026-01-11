@@ -1,12 +1,33 @@
 # Project Progress
 
-**Date**: 2026-01-10
+**Date**: 2026-01-11
 **Branch**: main
-**Status**: Critical Job Queue Bug Fixed - Prisma Client Resolution
+**Status**: clerkMiddleware API Fix - Updated to @clerk/nextjs v6 Pattern
 
 ---
 
-## Current Session: Critical Job Queue Database Bug Fix (2026-01-10)
+## Current Session: clerkMiddleware API Fix (2026-01-11)
+
+Fixed TypeScript error in `middleware.ts` where `clerkMiddleware` was using deprecated API pattern.
+
+**Problem**: The middleware was passing `publicRoutes` as an options property to `clerkMiddleware`, which no longer exists in `@clerk/nextjs` v6. The correct API uses `createRouteMatcher()`.
+
+**Solution**:
+1. Added `createRouteMatcher` import from `@clerk/nextjs/server`
+2. Added `NextFetchEvent` import from `next/server`
+3. Created `isPublicRoute` matcher using `createRouteMatcher()` with all public routes
+4. Updated main `middleware` function signature to include `event` parameter
+5. Updated `clerkMiddleware` call to use new API pattern: `clerkMiddleware((auth, req, event) => {...}, options)(request, event)`
+6. Inside handler, use `isPublicRoute(req)` to check if route is public
+
+**Files Modified**:
+- `middleware.ts` - Updated clerkMiddleware usage to v6 API pattern
+
+**Verification**: ✅ TypeScript errors resolved, middleware compiles successfully
+
+---
+
+## Recently Completed: Critical Job Queue Database Bug Fix (2026-01-10)
 
 Identified and resolved critical bug causing 394+ pending jobs to remain stuck despite multiple redeployments.
 
@@ -81,5 +102,5 @@ at Function.create (/lib/job-queue/index.ts:220:36)
 
 ---
 
-*Last Updated: 2026-01-10 (Pipeline Redeployment Complete)*
+*Last Updated: 2026-01-11 (clerkMiddleware API Fix)*
 *Older completed projects archived to .claude/history/ - See TIMELINE.md for full history*
