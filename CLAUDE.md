@@ -129,8 +129,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - `vercel env` - Manage environment variables
 
 ### Health Check Commands
-- `curl https://tldrsec.app/api/health/environment` - **NEW** Check environment variable configuration
+- `curl https://tldrsec.app/api/health/environment` - Check environment variable configuration
+- `curl https://tldrsec.app/api/health/pipeline` - **ENHANCED** Check pipeline health with cron gaps, orphaned filings, and recovery state
 - `npm run test:e2e` - Verify end-to-end functionality including external services
+
+### Pipeline Recovery Commands
+- `curl -H "Authorization: Bearer $CRON_SECRET" https://tldrsec.app/api/cron/auto-recover` - Trigger self-healing auto-recovery
+- `curl -H "Authorization: Bearer $CRON_SECRET" https://tldrsec.app/api/cron/tier-aware` - Manually trigger SEC filing pipeline
+- See `docs/runbooks/pipeline-stall-recovery.md` for complete recovery procedures
 
 ### Context & Workflow Testing
 - `npm run test:context-workflow` - **NEW** Test processing context tracking and workflow
@@ -154,6 +160,26 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ### Deployment Architecture
 
+#### Three-Layer Redundancy Architecture
+
+The pipeline uses a three-layer redundancy system to ensure 100% uptime:
+
+```
+Layer 1: Primary Cloudflare Worker (Every 10 min)
+    └── Triggers /api/cron/tier-aware
+    └── Source: "cloudflare-cron"
+
+Layer 2: Auto-Recovery Endpoint (Every 5 min via CF Worker)
+    └── Self-healing: cleanup, orphan recovery, health monitoring
+    └── Source: "auto-recover"
+
+Layer 3: Vercel Final Backup (Every 30 min)
+    └── Emergency trigger if no executions in 25 minutes
+    └── Source: "final-backup"
+```
+
+**See**: `docs/runbooks/pipeline-stall-recovery.md` for complete operations guide.
+
 #### Dual-Service Deployment Model
 - **Vercel** (Primary): Hosts the web application for users
   - Domain: `https://tldrsec.app`
@@ -174,6 +200,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **Cost Optimization**: Cloudflare Workers minimal cost for cron execution
 - **Global Distribution**: Cloudflare's edge network provides worldwide reliability
 - **Performance**: Zero cold starts and millisecond execution times
+- **Redundancy**: Three independent trigger mechanisms ensure uptime
 
 ### Key Directory Structure
 

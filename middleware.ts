@@ -1,4 +1,4 @@
-import { clerkMiddleware } from '@clerk/nextjs/server'
+import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server'
 import { NextRequest, NextResponse } from 'next/server'
 import { MiddlewareSecurity, SecurityAuditor } from './lib/security/middleware-security'
 import { logger } from './lib/logging'
@@ -1162,6 +1162,38 @@ async function trackPageView(req: NextRequest, variant: string) {
 }
 
 /**
+ * Public routes matcher for Clerk middleware
+ * These routes do not require authentication
+ */
+const isPublicRoute = createRouteMatcher([
+  // Health endpoints (rate-limited by our middleware)
+  '/api/health',
+  '/api/health/(.*)',
+  '/api/debug/sec-connectivity',
+
+  // Webhooks (signature-verified in handler)
+  '/api/webhooks/(.*)',
+
+  // Cron endpoints (we handle auth ourselves)
+  '/api/cron/(.*)',
+
+  // Marketing pages
+  '/',
+  '/newsletter',
+  '/pricing',
+  '/about',
+  '/privacy',
+  '/terms',
+
+  // Auth pages
+  '/sign-in(.*)',
+  '/sign-up(.*)',
+
+  // Note: /onboarding is now PROTECTED (auth-first flow)
+  // Unauthenticated users are redirected to /sign-up
+]);
+
+/**
  * Conditional middleware architecture
  * Processes cron requests independently before Clerk middleware
  */
@@ -1180,93 +1212,66 @@ export default async function middleware(request: NextRequest) {
   }
   
   // For all other requests: Use Clerk middleware with security middleware
-  return clerkMiddleware(
-    async (auth, request: NextRequest) => {
-      const { userId, sessionClaims } = await auth();
-      const pathname = request.nextUrl.pathname;
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  return clerkMiddleware(async (auth, req, event) => {
+    const pathname = req.nextUrl.pathname;
 
-      // === Auth-First Onboarding Redirects ===
-
-      // Handle /onboarding route
-      if (pathname === '/onboarding' || pathname.startsWith('/onboarding/')) {
-        if (!userId) {
-          // Unauthenticated user trying to access onboarding → Sign Up
-          const signUpUrl = new URL('/sign-up', request.url);
-          return NextResponse.redirect(signUpUrl);
-        }
-
-        // Check onboarding status from Clerk publicMetadata
-        const isOnboarded = (sessionClaims?.publicMetadata as { onboardingCompleted?: boolean })?.onboardingCompleted === true;
-
-        if (isOnboarded) {
-          // Already onboarded → Dashboard
-          const dashboardUrl = new URL('/dashboard', request.url);
-          return NextResponse.redirect(dashboardUrl);
-        }
-        // Allow through to onboarding page
-      }
-
-      // Protect /dashboard from non-onboarded users
-      if (pathname.startsWith('/dashboard') && userId) {
-        const isOnboarded = (sessionClaims?.publicMetadata as { onboardingCompleted?: boolean })?.onboardingCompleted === true;
-
-        if (!isOnboarded) {
-          // Not onboarded → Onboarding
-          const onboardingUrl = new URL('/onboarding', request.url);
-          return NextResponse.redirect(onboardingUrl);
-        }
-      }
-
-      // === End Auth-First Onboarding Redirects ===
-
+    // Skip auth checks for public routes
+    if (isPublicRoute(req)) {
       // Apply our security middleware for non-cron endpoints
-      const securityResponse = await securityMiddleware(request);
+      const securityResponse = await securityMiddleware(req);
       if (securityResponse) {
         return securityResponse;
       }
-
-      // Continue with default Clerk processing
       return;
-    },
-    {
-      publicRoutes: [
-        // Health endpoints (rate-limited by our middleware)
-        '/api/health',
-        '/api/health/database',
-        '/api/health/liveness',
-        '/api/health/readiness',
-        '/api/health/optimized',
-        '/api/health/cloudflare-worker',
-        '/api/health/deployment',
-        '/api/debug/sec-connectivity',
-
-        // Webhooks (signature-verified in handler)
-        '/api/webhooks/vercel-deployment',
-        
-        // Cron endpoints (we handle auth ourselves)
-        '/api/cron/tier-aware',
-        '/api/cron/tier-aware-optimized',
-        '/api/cron/tier-aware-async',
-        '/api/cron/microservices',
-        '/api/cron/process-jobs',
-        '/api/cron/unified',
-        '/api/cron/queue-status', // Public monitoring endpoint
-        '/api/cron/backup-trigger', // External watchdog backup trigger (handles its own auth)
-        '/api/cron/auto-recover', // Auto-recovery endpoint (handles its own auth)
-
-        // Marketing pages
-        '/',
-        '/newsletter',
-        '/pricing',
-        '/about',
-        '/privacy',
-        '/terms'
-
-        // Note: /onboarding is now PROTECTED (auth-first flow)
-        // Unauthenticated users are redirected to /sign-up
-      ]
     }
-  )(request);
+
+    // For protected routes, require authentication
+    const { userId, sessionClaims } = await auth();
+
+    // === Auth-First Onboarding Redirects ===
+
+    // Handle /onboarding route
+    if (pathname === '/onboarding' || pathname.startsWith('/onboarding/')) {
+      if (!userId) {
+        // Unauthenticated user trying to access onboarding → Sign Up
+        const signUpUrl = new URL('/sign-up', req.url);
+        return NextResponse.redirect(signUpUrl);
+      }
+
+      // Check onboarding status from Clerk publicMetadata
+      const isOnboarded = (sessionClaims?.publicMetadata as { onboardingCompleted?: boolean })?.onboardingCompleted === true;
+
+      if (isOnboarded) {
+        // Already onboarded → Dashboard
+        const dashboardUrl = new URL('/dashboard', req.url);
+        return NextResponse.redirect(dashboardUrl);
+      }
+      // Allow through to onboarding page
+    }
+
+    // Protect /dashboard from non-onboarded users
+    if (pathname.startsWith('/dashboard') && userId) {
+      const isOnboarded = (sessionClaims?.publicMetadata as { onboardingCompleted?: boolean })?.onboardingCompleted === true;
+
+      if (!isOnboarded) {
+        // Not onboarded → Onboarding
+        const onboardingUrl = new URL('/onboarding', req.url);
+        return NextResponse.redirect(onboardingUrl);
+      }
+    }
+
+    // === End Auth-First Onboarding Redirects ===
+
+    // Apply our security middleware for non-cron endpoints
+    const securityResponse = await securityMiddleware(req);
+    if (securityResponse) {
+      return securityResponse;
+    }
+
+    // Continue with default Clerk processing
+    return;
+  }, { debug: false })(request);
 }
 
 export const config = {

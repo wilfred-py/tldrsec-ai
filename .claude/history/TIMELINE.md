@@ -13,6 +13,10 @@ This file provides a chronological index of all completed projects. For detailed
 
 | Date | Project | Status |
 |------|---------|--------|
+| 2026-01-11 | Eliminate Manual Pipeline Intervention - Phase 8: Documentation & Runbooks | ✅ |
+| 2026-01-11 | Eliminate Manual Pipeline Intervention - Phase 7: Vercel Cron Final Backup | ✅ |
+| 2026-01-11 | Eliminate Manual Pipeline Intervention - Phase 6: Auto-Recovery Integration | ✅ |
+| 2026-01-11 | Eliminate Manual Pipeline Intervention - Phase 5: Health Endpoint Enhancement | ✅ |
 | 2026-01-10 | Auth-First Onboarding Flow (All 6 phases: skip buttons removed, 3-state CTAs, middleware redirects, webhook simplified, E2E tests, **performance optimization**) | ✅ Complete |
 | 2026-01-10 | Pipeline Redeployment & Backlog Recovery (pipeline stall fix, 400+ jobs restored) | ✅ |
 | 2026-01-10 | Eliminate Manual Pipeline Intervention - Phase 4: External Watchdog Worker | ✅ |
