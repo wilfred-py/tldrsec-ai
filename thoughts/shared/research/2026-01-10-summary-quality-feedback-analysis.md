@@ -7,9 +7,9 @@ repository: review-generated-summaries
 topic: "SEC Filing Summary Quality - User Feedback Analysis"
 tags: [research, codebase, form4, form144, 8k, templates, extractors, xai, grok, per-ticker-agent, supabase, pgvector]
 status: complete
-last_updated: 2026-01-10
+last_updated: 2026-01-12
 last_updated_by: Claude
-last_updated_note: "Corrected cost estimates: xAI Grok 4.1-fast via OpenRouter costs ~$0.024/summary (previously estimated $0.36). Monthly costs revised from $1,080 to $72."
+last_updated_note: "Updated to reflect Phase 1 implementation completed 2026-01-12: 8-K sentiment now displayed, Form 4 stake arrows added, Form 144 remaining holdings display, design system sentiment utilities."
 ---
 
 # Research: SEC Filing Summary Quality - User Feedback Analysis
@@ -36,13 +36,13 @@ Analysis of 8 user feedback items regarding SEC filing summary quality:
 
 This research documents the current state of SEC filing summary generation to address 8 specific user feedback items. The codebase has comprehensive infrastructure for Form 4, Form 144, and 8-K filings with data extractors, AI prompts, and email templates. Key findings:
 
-1. **Form 4 shares display**: Transaction shares ARE extracted (13+ regex patterns + AI schema) but display prioritizes value over shares. Zero shares with $15.2M suggests edge case in gift/transfer handling.
+1. **Form 4 shares display**: Transaction shares ARE extracted (13+ regex patterns + AI schema) but display prioritizes value over shares. Zero shares with $15.2M suggests edge case in gift/transfer handling. ✅ **[UPDATED 2026-01-12]** Ownership stake changes now display with directional arrows (↑/↓/→) color-coded by direction.
 
-2. **8-K/A sentiment**: The `sentiment` field is REQUIRED in the AI schema and extracted, but NOT displayed in email templates (assigned to unused `_sentiment` variable). Materiality IS displayed as 2-level signal.
+2. **8-K/A sentiment**: ✅ **[RESOLVED 2026-01-12]** The `sentiment` field is now actively displayed in email templates. Variable renamed from `_sentiment` to `sentiment` at line 157, with inline badge display at lines 229-242. Uses WCAG AA-compliant colors from design system.
 
 3. **10b5-1 handling**: Text-based detection exists using pattern matching ("10b5-1", "10b-5", "rule 10b"). No structured XML checkbox parsing. Signal strength downgraded to "Weak - 10b5-1 Plan" when detected.
 
-4. **Beneficial ownership**: Form 144 has dedicated `remainingHoldings` field (REQUIRED in schema). Form 4 has minimal support - no AI schema field, only 4 regex patterns in fallback extraction.
+4. **Beneficial ownership**: Form 144 has dedicated `remainingHoldings` field (REQUIRED in schema). ✅ **[UPDATED 2026-01-12]** Form 144 now displays remaining holdings with arrow notation (`→ X remaining`). Form 4 has enhanced stake change display showing `previousStake → newStake (percentChange)`.
 
 5. **Template formatting**: All templates use "Summary" as main heading. Minimalist templates use signal-first design. Form 3 uses standard template only.
 
