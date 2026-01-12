@@ -189,10 +189,27 @@ export async function GET(request: NextRequest) {
           const { BackgroundFilingWorker } = await import('../../../../lib/cron/background-filing-worker');
           const worker = new BackgroundFilingWorker();
           
-          // Process jobs in priority order: discovery → fetch → summarize
-          await worker.processBatch(['ASYNC_DISCOVER_FILINGS'], 10);
-          await worker.processBatch(['ASYNC_FETCH_FILING'], 2);
-          await worker.processBatch(['ASYNC_SUMMARIZE_CACHED'], 3);
+          // AGGRESSIVE BACKLOG CLEARING: Increase batch sizes for stuck jobs
+          // Check pending job counts to determine if we're in backlog mode
+          const discoveryPending = await JobQueueService.getQueueDepth('ASYNC_DISCOVER_FILINGS');
+          const fetchPending = await JobQueueService.getQueueDepth('ASYNC_FETCH_FILING'); 
+          const summarizePending = await JobQueueService.getQueueDepth('ASYNC_SUMMARIZE_CACHED');
+          const totalPending = discoveryPending + fetchPending + summarizePending;
+          const isBacklogMode = totalPending > 100; // High backlog threshold
+          
+          if (isBacklogMode) {
+            cronLogger.warn(`[${executionId}] BACKLOG MODE: ${totalPending} pending jobs detected - using aggressive batch sizes`);
+            // Aggressive batch sizes for backlog clearing
+            await worker.processBatch(['ASYNC_DISCOVER_FILINGS'], 50);
+            await worker.processBatch(['ASYNC_FETCH_FILING'], 20);
+            await worker.processBatch(['ASYNC_SUMMARIZE_CACHED'], 30);
+          } else {
+            cronLogger.info(`[${executionId}] Normal mode: ${totalPending} pending jobs - using standard batch sizes`);
+            // Normal batch sizes for regular operation
+            await worker.processBatch(['ASYNC_DISCOVER_FILINGS'], 10);
+            await worker.processBatch(['ASYNC_FETCH_FILING'], 2);
+            await worker.processBatch(['ASYNC_SUMMARIZE_CACHED'], 3);
+          }
           
           cronLogger.info(`[${executionId}] Completed processing pending jobs in 3-phase pipeline`);
         } catch (processingError) {
