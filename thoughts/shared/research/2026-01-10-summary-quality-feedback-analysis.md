@@ -266,12 +266,24 @@ REQUIRED: Extract 'Amount of Securities Beneficially Owned Following Reported Tr
 - "X shares remaining"
 - etc.
 
-**Template Display (`form144-minimalist-template.tsx:396-440`)**:
-- Dedicated "Shares Remaining After Sale" card
-- Large display of share count
-- Official SEC field name in subtitle
+**Template Display (`form144-minimalist-template.tsx:376-385`) [UPDATED 2026-01-12]**:
+```typescript
+{remainingHoldings && (
+  <div style={{
+    fontSize: '12px',
+    color: '#991B1B',
+    opacity: 0.8,
+    marginTop: '4px',
+  }}>
+    → {remainingHoldings} remaining
+  </div>
+)}
+```
+- Arrow notation (`→`) prefix shows post-sale position
+- Displayed as secondary info below "Shares to Sell" card
+- Red-brown color (#991B1B) matches card theme
 
-#### Form 4 - Minimal Support
+#### Form 4 - Enhanced Support [UPDATED 2026-01-12]
 
 **AI Schema**: NO dedicated `remainingHoldings` field exists.
 
@@ -285,9 +297,38 @@ const postPatterns = [
 ];
 ```
 
-**Template Display (`form4-minimalist-template.tsx:711-715`)**:
-- Inline stake change: `"previousStake → newStake"`
-- No dedicated section
+**Template Display - Ownership Impact Section (`form4-minimalist-template.tsx:803-858`)**:
+
+✅ **Enhanced stake change display with directional arrows**:
+```typescript
+// Lines 828-853 - Stake change with arrow and percentage
+{previousStake && newStake ? (
+  <>
+    <span style={{ color: EmailColors.text.meta }}>{previousStake}</span>
+    <span style={{ color: percentChange?.startsWith('-') ? '#DC2626' : '#16A34A' }}>
+      {getStakeChangeArrow(percentChange)}  // ↑ or ↓ or →
+    </span>
+    <span style={{ fontWeight: 700 }}>{newStake}</span>
+    {percentChange && <span>({percentChange})</span>}
+  </>
+) : (
+  <span>{newStake || previousStake}</span>
+)}
+```
+
+**Arrow Function (`form4-minimalist-template.tsx:66-71`)**:
+```typescript
+export function getStakeChangeArrow(percentChange: string | undefined): string {
+  if (!percentChange) return '';
+  const num = parseFloat(percentChange.replace(/[%+]/g, ''));
+  if (isNaN(num) || num === 0) return '→';
+  return num > 0 ? '↑' : '↓';
+}
+```
+
+- ↑ Green (#16A34A) for increases
+- ↓ Red (#DC2626) for decreases
+- → Gray for neutral/zero change
 
 ---
 
@@ -548,7 +589,7 @@ No prior research documents found on these specific topics.
 
 1. **Form 4 zero shares**: Need to investigate the specific filing XML structure for the URL mentioned (https://www.sec.gov/Archives/edgar/data/1045810/000152611126000002/xslF345X05/wk-form4_1767737078.xml) to understand why shares show 0 with $15.2M value.
 
-2. **8-K sentiment display**: The `_sentiment` variable is extracted but not rendered. Was this intentional design or oversight?
+2. ~~**8-K sentiment display**: The `_sentiment` variable is extracted but not rendered. Was this intentional design or oversight?~~ ✅ **RESOLVED 2026-01-12**: Sentiment is now displayed inline with materiality badge using WCAG AA-compliant colors.
 
 3. **10b5-1 SEC rule link**: User requests linking to SEC 10b5-1 documentation. Where should this link appear (prompt guidance, template, or both)?
 
