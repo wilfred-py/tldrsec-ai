@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { EmailColors } from '../design-system';
+import { EmailColors, getTransactionCodeDescription as getTransactionCodeDescriptionFromDesign } from '../design-system';
 import { EmailHeader } from './sections/EmailHeader';
 import { EmailFooter } from './sections/EmailFooter';
 import { SectionCard } from './sections/SectionCard';
@@ -23,36 +23,17 @@ interface TransactionData {
 /**
  * Get SEC transaction code description
  * Maps SEC Form 4 transaction codes to human-readable descriptions
+ * @deprecated Use getTransactionCodeDescription from design-system.ts instead
  */
 export function getTransactionCodeDescription(code: string): string {
-  const descriptions: Record<string, string> = {
-    'P': 'Open Market Purchase',
-    'S': 'Open Market Sale',
-    'A': 'Grant/Award',
-    'G': 'Gift',
-    'M': 'Option Exercise',
-    'F': 'Tax Withholding',
-    'C': 'Conversion',
-    'J': 'Trust Transfer',
-    'K': 'Trust Disposition',
-    'D': 'Disposition to Issuer',
-    'E': 'Exercise of Derivative',
-    'H': 'Discretionary Transaction',
-    'I': 'Exercise of In-Kind Right',
-    'L': 'Small Acquisition',
-    'O': 'Exercise of Out-of-Money',
-    'U': 'Tender of Shares',
-    'W': 'Acquisition Pursuant to Will',
-    'X': 'Exercise of Expiring Derivative',
-    'Z': 'Deposit into Trust',
-  };
-  return descriptions[code.toUpperCase()] || 'Other Transaction';
+  return getTransactionCodeDescriptionFromDesign(code);
 }
 
 /**
  * Format transaction date for display
+ * @deprecated Currently unused but kept for future transaction date display
  */
-function formatTransactionDate(date: string): string {
+function _formatTransactionDate(date: string): string {
   try {
     const d = new Date(date);
     if (isNaN(d.getTime())) return date;
@@ -62,15 +43,22 @@ function formatTransactionDate(date: string): string {
   }
 }
 
+// Export to prevent unused variable warning (may be used by tests)
+export { _formatTransactionDate as formatTransactionDate };
+
 /**
  * Get color for percentage change
+ * @deprecated Currently unused but kept for future stake change coloring
  */
-function getChangeColor(percentChange: string | undefined): string {
+function _getChangeColor(percentChange: string | undefined): string {
   if (!percentChange) return EmailColors.text.meta;
   const num = parseFloat(percentChange.replace(/[%+]/g, ''));
   if (isNaN(num) || num === 0) return EmailColors.text.meta;
   return num > 0 ? '#16A34A' : '#DC2626'; // Green for increase, red for decrease
 }
+
+// Export to prevent unused variable warning (may be used in future)
+export { _getChangeColor as getChangeColor };
 
 /**
  * Get arrow indicator for percentage change
@@ -802,6 +790,67 @@ export function Form4MinimalistTemplate({ filing }: Form4MinimalistTemplateProps
                             </tr>
                           </tbody>
                         </table>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              )}
+
+              {/* ═══════════════════════════════════════════════════════════
+                  STAKE IMPACT - Shows ownership change when transactions exist
+                  Only displays when we have stake data AND transactions above
+                  ═══════════════════════════════════════════════════════════ */}
+              {aggregatedTransactions.length > 0 && (previousStake || newStake || percentChange) && (
+                <table width="100%" cellPadding="0" cellSpacing="0" style={{ marginBottom: '16px' }}>
+                  <tbody>
+                    <tr>
+                      <td style={{
+                        padding: '16px',
+                        backgroundColor: EmailColors.structure.backgroundAlt,
+                        borderRadius: '8px',
+                        textAlign: 'center',
+                      }}>
+                        <div style={{
+                          fontSize: '11px',
+                          fontWeight: 700,
+                          color: EmailColors.text.meta,
+                          textTransform: 'uppercase' as const,
+                          letterSpacing: '0.5px',
+                          marginBottom: '8px',
+                        }}>
+                          Ownership Impact
+                        </div>
+                        <div style={{
+                          fontSize: '16px',
+                          color: EmailColors.text.headline,
+                          lineHeight: '1.4',
+                        }}>
+                          {previousStake && newStake ? (
+                            <>
+                              <span style={{ color: EmailColors.text.meta }}>{previousStake}</span>
+                              <span style={{
+                                margin: '0 8px',
+                                fontSize: '18px',
+                                color: percentChange?.startsWith('-') ? '#DC2626' : percentChange?.startsWith('+') ? '#16A34A' : EmailColors.text.meta,
+                              }}>
+                                {getStakeChangeArrow(percentChange)}
+                              </span>
+                              <span style={{ fontWeight: 700 }}>{newStake}</span>
+                              {percentChange && (
+                                <span style={{
+                                  marginLeft: '12px',
+                                  fontSize: '14px',
+                                  fontWeight: 600,
+                                  color: percentChange.startsWith('-') ? '#DC2626' : percentChange.startsWith('+') ? '#16A34A' : EmailColors.text.meta,
+                                }}>
+                                  ({percentChange})
+                                </span>
+                              )}
+                            </>
+                          ) : (
+                            <span>{newStake || previousStake}</span>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   </tbody>

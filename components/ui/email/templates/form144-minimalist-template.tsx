@@ -173,11 +173,10 @@ export function Form144MinimalistTemplate({ filing }: Form144MinimalistTemplateP
   const estimatedValue = (data?.estimatedValue || extractedData?.estimatedValue || '') as string;
   const pricePerShare = (data?.pricePerShare || extractedData?.pricePerShare || '') as string;
   const percentOfHoldings = (data?.percentOfHoldings || data?.percentOwnership || extractedData?.percentOfHoldings || '') as string;
-  const broker = (data?.broker || extractedData?.broker || '') as string;
   const tradingPlan = (data?.tradingPlan || extractedData?.tradingPlan || '') as string;
   const signalStrength = (data?.signalStrength || extractedData?.signalStrength || '') as string;
-  const recentActivity = (data?.recentActivity || extractedData?.recentActivity || '') as string;
   const remainingHoldings = (data?.remainingHoldings || data?.sharesRemaining || extractedData?.remainingHoldings || '') as string;
+  const investorImplication = (data?.investorImplication || extractedData?.investorImplication || '') as string;
 
   const displayTicker = symbol || ticker || 'N/A';
 
@@ -292,63 +291,17 @@ export function Form144MinimalistTemplate({ filing }: Form144MinimalistTemplateP
               </table>
 
               {/* ═══════════════════════════════════════════════════════════
-                  KEY METRICS - Quick scan cards (Shares + Value)
+                  KEY METRICS - Single row: Value first, then Shares
                   ═══════════════════════════════════════════════════════════ */}
               {hasTransactionData && (
                 <table width="100%" cellPadding="0" cellSpacing="0" style={{ marginBottom: '16px' }}>
                   <tbody>
-                    {/* Row 1: Shares to Sell + Estimated Value */}
                     <tr>
                       <td>
                         <table width="100%" cellPadding="0" cellSpacing="0">
                           <tbody>
                             <tr>
-                              {/* Shares to Sell Card */}
-                              {shares && (
-                                <td style={{
-                                  width: estimatedValue ? '48%' : '100%',
-                                  padding: '16px',
-                                  backgroundColor: '#FEF2F2',
-                                  borderRadius: '8px',
-                                  verticalAlign: 'top',
-                                }}>
-                                  <div style={{
-                                    fontSize: '11px',
-                                    fontWeight: 700,
-                                    color: '#991B1B',
-                                    textTransform: 'uppercase' as const,
-                                    letterSpacing: '0.5px',
-                                    marginBottom: '4px',
-                                  }}>
-                                    Shares to Sell
-                                  </div>
-                                  <div style={{
-                                    fontSize: '22px',
-                                    fontWeight: 800,
-                                    color: '#DC2626',
-                                    lineHeight: '1.2',
-                                  }}>
-                                    {shares}
-                                  </div>
-                                  {pricePerShare && (
-                                    <div style={{
-                                      fontSize: '12px',
-                                      color: '#991B1B',
-                                      opacity: 0.8,
-                                      marginTop: '4px',
-                                    }}>
-                                      @ {pricePerShare}/share
-                                    </div>
-                                  )}
-                                </td>
-                              )}
-
-                              {/* Gap spacer */}
-                              {shares && estimatedValue && (
-                                <td style={{ width: '4%' }}></td>
-                              )}
-
-                              {/* Estimated Value Card */}
+                              {/* Estimated Value Card - FIRST (most important) */}
                               {estimatedValue && (
                                 <td style={{
                                   width: shares ? '48%' : '100%',
@@ -387,57 +340,56 @@ export function Form144MinimalistTemplate({ filing }: Form144MinimalistTemplateP
                                   )}
                                 </td>
                               )}
-                            </tr>
-                          </tbody>
-                        </table>
-                      </td>
-                    </tr>
 
-                    {/* Row 2: Remaining Holdings (if available) */}
-                    {remainingHoldings && (
-                      <tr>
-                        <td style={{ paddingTop: '8px' }}>
-                          <table width="100%" cellPadding="0" cellSpacing="0">
-                            <tbody>
-                              <tr>
+                              {/* Gap spacer */}
+                              {shares && estimatedValue && (
+                                <td style={{ width: '4%' }}></td>
+                              )}
+
+                              {/* Shares to Sell Card - SECOND */}
+                              {shares && (
                                 <td style={{
+                                  width: estimatedValue ? '48%' : '100%',
                                   padding: '16px',
-                                  backgroundColor: EmailColors.structure.backgroundAlt,
+                                  backgroundColor: '#FEF2F2',
                                   borderRadius: '8px',
                                   verticalAlign: 'top',
                                 }}>
                                   <div style={{
                                     fontSize: '11px',
                                     fontWeight: 700,
-                                    color: EmailColors.text.meta,
+                                    color: '#991B1B',
                                     textTransform: 'uppercase' as const,
                                     letterSpacing: '0.5px',
                                     marginBottom: '4px',
                                   }}>
-                                    Shares Remaining After Sale
+                                    Shares to Sell
                                   </div>
                                   <div style={{
                                     fontSize: '22px',
                                     fontWeight: 800,
-                                    color: EmailColors.text.headline,
+                                    color: '#DC2626',
                                     lineHeight: '1.2',
                                   }}>
-                                    {remainingHoldings}
+                                    {shares}
                                   </div>
-                                  <div style={{
-                                    fontSize: '12px',
-                                    color: EmailColors.text.meta,
-                                    marginTop: '4px',
-                                  }}>
-                                    Amount of Securities Beneficially Owned Following Transaction
-                                  </div>
+                                  {remainingHoldings && (
+                                    <div style={{
+                                      fontSize: '12px',
+                                      color: '#991B1B',
+                                      opacity: 0.8,
+                                      marginTop: '4px',
+                                    }}>
+                                      → {remainingHoldings} remaining
+                                    </div>
+                                  )}
                                 </td>
-                              </tr>
-                            </tbody>
-                          </table>
-                        </td>
-                      </tr>
-                    )}
+                              )}
+                            </tr>
+                          </tbody>
+                        </table>
+                      </td>
+                    </tr>
                   </tbody>
                 </table>
               )}
@@ -461,89 +413,42 @@ export function Form144MinimalistTemplate({ filing }: Form144MinimalistTemplateP
               )}
 
               {/* ═══════════════════════════════════════════════════════════
-                  CONTEXT DETAILS - Broker, Trading Plan, Recent Activity
+                  INVESTOR IMPLICATION - What this means for shareholders
                   ═══════════════════════════════════════════════════════════ */}
-              {(broker || tradingPlan || recentActivity) && (
-                <SectionCard>
-                  <tr>
-                    <td>
-                      <div style={{
-                        fontSize: '12px',
-                        fontWeight: 600,
-                        color: EmailColors.text.meta,
-                        textTransform: 'uppercase' as const,
-                        letterSpacing: '0.5px',
-                        marginBottom: '12px',
+              {investorImplication && (
+                <table width="100%" cellPadding="0" cellSpacing="0" style={{ marginBottom: '16px' }}>
+                  <tbody>
+                    <tr>
+                      <td style={{
+                        padding: '16px',
+                        backgroundColor: '#F0F9FF',
+                        borderRadius: '8px',
+                        borderLeft: `4px solid #0EA5E9`,
                       }}>
-                        Filing Details
-                      </div>
-
-                      <table width="100%" cellPadding="0" cellSpacing="0">
-                        <tbody>
-                          {broker && (
-                            <tr>
-                              <td style={{
-                                padding: '6px 0',
-                                fontSize: '13px',
-                                color: EmailColors.text.meta,
-                                width: '100px',
-                              }}>
-                                Broker:
-                              </td>
-                              <td style={{
-                                padding: '6px 0',
-                                fontSize: '13px',
-                                color: EmailColors.text.body,
-                              }}>
-                                {broker}
-                              </td>
-                            </tr>
-                          )}
-                          {tradingPlan && (
-                            <tr>
-                              <td style={{
-                                padding: '6px 0',
-                                fontSize: '13px',
-                                color: EmailColors.text.meta,
-                                width: '100px',
-                              }}>
-                                Trading Plan:
-                              </td>
-                              <td style={{
-                                padding: '6px 0',
-                                fontSize: '13px',
-                                color: EmailColors.text.body,
-                              }}>
-                                {tradingPlan}
-                              </td>
-                            </tr>
-                          )}
-                          {recentActivity && (
-                            <tr>
-                              <td style={{
-                                padding: '6px 0',
-                                fontSize: '13px',
-                                color: EmailColors.text.meta,
-                                width: '100px',
-                                verticalAlign: 'top',
-                              }}>
-                                Context:
-                              </td>
-                              <td style={{
-                                padding: '6px 0',
-                                fontSize: '13px',
-                                color: EmailColors.text.body,
-                              }}>
-                                {recentActivity}
-                              </td>
-                            </tr>
-                          )}
-                        </tbody>
-                      </table>
-                    </td>
-                  </tr>
-                </SectionCard>
+                        <div style={{
+                          fontSize: '11px',
+                          fontWeight: 700,
+                          color: '#0369A1',
+                          textTransform: 'uppercase' as const,
+                          letterSpacing: '0.5px',
+                          marginBottom: '8px',
+                        }}>
+                          💡 Investor Takeaway
+                        </div>
+                        <div style={{
+                          fontSize: '14px',
+                          lineHeight: '1.5',
+                          color: '#0C4A6E',
+                        }}>
+                          {investorImplication}
+                        </div>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
               )}
+
+              {/* Filing Details removed - too much noise for skimming */}
 
               {/* No data fallback */}
               {!hasTransactionData && !summaryText && (

@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { EmailColors, markdownToHtml } from '../design-system';
+import { EmailColors, markdownToHtml, getSentimentColor, getSentimentEmoji } from '../design-system';
 import { EmailHeader } from './sections/EmailHeader';
 import { EmailFooter } from './sections/EmailFooter';
 import { SectionCard } from './sections/SectionCard';
@@ -101,30 +101,6 @@ function getSignalConfig(isMaterial: boolean) {
       textColor: '#475569',    // Slate 600
       icon: '\u2713',
     };
-  }
-}
-
-/**
- * Get sentiment color styling for 8-K filings
- */
-function getSentimentColor(sentiment: string): { bg: string; text: string } {
-  switch (sentiment.toLowerCase()) {
-    case 'positive': return { bg: '#DCFCE7', text: '#166534' }; // Green
-    case 'negative': return { bg: '#FEE2E2', text: '#991B1B' }; // Red
-    case 'mixed': return { bg: '#FEF3C7', text: '#92400E' }; // Amber
-    default: return { bg: '#F3F4F6', text: '#4B5563' }; // Gray (neutral)
-  }
-}
-
-/**
- * Get sentiment emoji indicator
- */
-function getSentimentEmoji(sentiment: string): string {
-  switch (sentiment.toLowerCase()) {
-    case 'positive': return '📈';
-    case 'negative': return '📉';
-    case 'mixed': return '↔️';
-    default: return '➖';
   }
 }
 
@@ -249,6 +225,21 @@ export function Form8KMinimalistTemplate({ filing }: Form8KMinimalistTemplatePro
                               }}>
                                 {signal.icon} {signal.level}
                               </span>
+                              {/* Sentiment badge inline with materiality */}
+                              {sentiment && (
+                                <span style={{
+                                  display: 'inline-block',
+                                  padding: '4px 12px',
+                                  marginLeft: '8px',
+                                  backgroundColor: getSentimentColor(sentiment).bg,
+                                  color: getSentimentColor(sentiment).text,
+                                  borderRadius: '20px',
+                                  fontSize: '11px',
+                                  fontWeight: 600,
+                                }}>
+                                  {getSentimentEmoji(sentiment)} {sentiment.charAt(0).toUpperCase() + sentiment.slice(1)}
+                                </span>
+                              )}
                             </td>
                           </tr>
 
@@ -285,31 +276,6 @@ export function Form8KMinimalistTemplate({ filing }: Form8KMinimalistTemplatePro
                   </tr>
                 </tbody>
               </table>
-
-              {/* ═══════════════════════════════════════════════════════════
-                  SENTIMENT INDICATOR - Shows market sentiment when available
-                  ═══════════════════════════════════════════════════════════ */}
-              {sentiment && (
-                <table width="100%" cellPadding="0" cellSpacing="0" style={{ marginBottom: '16px' }}>
-                  <tbody>
-                    <tr>
-                      <td style={{ textAlign: 'center' }}>
-                        <span style={{
-                          display: 'inline-block',
-                          padding: '6px 16px',
-                          borderRadius: '20px',
-                          fontSize: '13px',
-                          fontWeight: 600,
-                          backgroundColor: getSentimentColor(sentiment).bg,
-                          color: getSentimentColor(sentiment).text,
-                        }}>
-                          {getSentimentEmoji(sentiment)} {sentiment.charAt(0).toUpperCase() + sentiment.slice(1)} Sentiment
-                        </span>
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
-              )}
 
               {/* ═══════════════════════════════════════════════════════════
                   FILING DETAILS - Item numbers and event type
