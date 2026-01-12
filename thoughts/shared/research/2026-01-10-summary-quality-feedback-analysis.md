@@ -145,10 +145,21 @@ function determineSentiment(text: string): string {
 }
 ```
 
-**Template - NOT DISPLAYED (`8k-minimalist-template.tsx:157`)**:
+**Template - ✅ NOW DISPLAYED (`8k-minimalist-template.tsx:157, 229-242`) [UPDATED 2026-01-12]**:
 ```typescript
-const _sentiment = (data?.sentiment || extractedData?.sentiment || '') as string;
-// ↑ Prefixed with underscore = UNUSED
+// Line 157 - Variable renamed from _sentiment to sentiment (active)
+const sentiment = (data?.sentiment || extractedData?.sentiment || '') as string;
+
+// Lines 229-242 - Inline sentiment badge display
+{sentiment && (
+  <span style={{
+    backgroundColor: getSentimentColor(sentiment).bg,
+    color: getSentimentColor(sentiment).text,
+    // ... styling
+  }}>
+    {getSentimentEmoji(sentiment)} {sentiment}
+  </span>
+)}
 ```
 
 #### What IS Displayed: Materiality
