@@ -5,10 +5,11 @@ git_commit: b99f9f46422e2d140c08368483c129c95e58a246
 branch: review-generated-summaries
 repository: review-generated-summaries
 topic: "SEC Filing Summary Quality - User Feedback Analysis"
-tags: [research, codebase, form4, form144, 8k, templates, extractors, xai, grok, per-ticker-agent]
+tags: [research, codebase, form4, form144, 8k, templates, extractors, xai, grok, per-ticker-agent, supabase, pgvector]
 status: complete
 last_updated: 2026-01-10
 last_updated_by: Claude
+last_updated_note: "Corrected cost estimates: xAI Grok 4.1-fast via OpenRouter costs ~$0.024/summary (previously estimated $0.36). Monthly costs revised from $1,080 to $72."
 ---
 
 # Research: SEC Filing Summary Quality - User Feedback Analysis
@@ -624,8 +625,14 @@ const xaiSearch = {
 |-----------|--------------|
 | Tavily Finance News (500/day) | ~$15-30/month |
 | Grok X Search (200/day) | **FREE** |
-| Base summarization | $1,080/month |
-| **Total with enrichment** | **$1,095-1,110/month** |
+| Base summarization | $72/month |
+| **Total with enrichment** | **$87-102/month** |
+
+> **Cost Calculation (xAI Grok 4.1-fast via OpenRouter):**
+> - Input: $0.30/million tokens, Output: $0.50/million tokens
+> - Average summary: 75K input tokens × $0.0000003 = $0.0225
+> - Average output: 3K tokens × $0.0000005 = $0.0015
+> - **Per-summary cost: ~$0.024** (100 summaries/day × 30 days = $72/month)
 
 #### Key References
 - [xAI Search Tools Documentation](https://docs.x.ai/docs/guides/tools/search-tools)
@@ -639,24 +646,24 @@ const xaiSearch = {
 
 #### Executive Summary
 
-A per-ticker expert agent system would enable contextual summarization where each new filing is analyzed with awareness of the company's history, trends, and patterns. **Recommended approach**: pgvector (PostgreSQL extension) integrated with existing Neon database.
+A per-ticker expert agent system would enable contextual summarization where each new filing is analyzed with awareness of the company's history, trends, and patterns. **Recommended approach**: pgvector (PostgreSQL extension) integrated with existing Supabase database.
 
 **Key Metrics**:
 - **Implementation Time**: 3-4 weeks for MVP
-- **Cost Increase**: +27% per summary ($0.46 vs $0.36)
+- **Cost Increase**: +27% per summary ($0.030 vs $0.024)
 - **Expected Quality Improvement**: 20-30% better summaries through contextual awareness
 
 #### Vector Database Comparison
 
 | Database | Deployment | Cost (100K vectors) | Integration | Recommendation |
 |----------|-----------|---------------------|-------------|----------------|
-| **pgvector (Neon)** | Integrated | ~$0.18/month | Low effort | **Recommended** |
+| **pgvector (Supabase)** | Integrated | ~$0.18/month | Low effort | **Recommended** |
 | Pinecone | Managed SaaS | Free tier available | Medium | Enterprise scale |
 | Qdrant | Self-hosted | ~$27/month | Medium | Cost-conscious |
 | Weaviate | Self-hosted | ~$75/month | High | Multimodal search |
 
 **Why pgvector?**
-- Already using Neon PostgreSQL - zero infrastructure overhead
+- Already using Supabase PostgreSQL - zero infrastructure overhead
 - Store embeddings alongside existing `Summary` data
 - ACID guarantees for consistency
 - 30x faster HNSW index builds with recent optimizations
@@ -733,18 +740,20 @@ LIMIT 5;
 - Monthly (100/day): $0.12
 
 **Enhanced Summarization**:
-- Without context: $0.36/summary
-- With context (5 past summaries): $0.46/summary (+27%)
-- With prompt caching: $0.37/summary (cached contexts)
+- Without context: $0.024/summary
+- With context (5 past summaries): $0.030/summary (+27%)
+- With prompt caching: $0.019/summary (cached contexts)
 
 **Monthly Totals (100 summaries/day)**:
 | Component | Cost |
 |-----------|------|
 | Embeddings | $0.12 |
 | Storage (100K vectors) | $0.18 |
-| Base summarization | $1,080 |
-| Historical context | +$297 |
-| **Total** | **$1,377/month** |
+| Base summarization | $72 |
+| Historical context | +$18 |
+| **Total** | **$90/month** |
+
+> **Note on Cost Correction**: Previous estimates used outdated Claude API pricing (~$0.36/summary). Actual xAI Grok 4.1-fast pricing via OpenRouter is ~15x cheaper at $0.024/summary. Source: `lib/ai/config.ts` and `lib/ai/token-counter.ts`.
 
 #### Implementation Approaches
 
@@ -755,7 +764,7 @@ LIMIT 5;
 - Validate if context improves quality
 
 **2. Medium (Recommended) - 4 Weeks**
-- Add pgvector extension to Neon
+- Add pgvector extension to Supabase
 - Generate embeddings with OpenAI API
 - Semantic similarity search for relevant context
 - Backfill existing summaries
@@ -791,8 +800,80 @@ async function getLastNSummaries(tickerId: string, n = 3) {
 - 20-30% quality improvement
 
 #### Key References
-- [Neon pgvector Documentation](https://neon.com/docs/extensions/pgvector)
+- [Supabase pgvector Documentation](https://supabase.com/docs/guides/database/extensions/pgvector)
 - [pgvector vs Pinecone Cost Comparison](https://supabase.com/blog/pgvector-vs-pinecone)
 - [OpenAI Embeddings Pricing](https://platform.openai.com/docs/pricing)
 - [RAG Best Practices](https://www.promptingguide.ai/research/rag)
 - [Financial Time Series RAG](https://arxiv.org/html/2502.05878v1)
+
+---
+
+### Appendix C: Neon Database Cleanup Documentation
+
+#### Summary
+
+The codebase migrated from Neon to Supabase in December 2025. All Neon references are now legacy code. This appendix documents the cleanup performed on 2026-01-10.
+
+#### Files Deleted
+
+| File | Purpose | Reason for Deletion |
+|------|---------|---------------------|
+| `test-neon-connection.js` | Standalone Neon connection test | No longer needed - Supabase is the only database |
+
+#### Legacy Files Retained (Migration Safety)
+
+These files contain Neon references but serve a **migration safety purpose** - they detect if DATABASE_URL accidentally points to Neon and produce clear error messages:
+
+| File | Lines | Purpose | Action |
+|------|-------|---------|--------|
+| `lib/config/database-validation.ts` | 20, 46-48 | Validates DATABASE_URL is NOT Neon | Keep for safety |
+| `lib/config/startup-validation.ts` | 148-150 | CRITICAL error if Neon URL detected | Keep for safety |
+| `lib/db/supabase-config.ts` | 34, 98-102, 256-306 | Detects Neon vs Supabase and warns | Keep for safety |
+
+**Example validation from `startup-validation.ts:148-150`**:
+```typescript
+'CRITICAL: DATABASE_URL points to Neon database. The codebase requires Supabase with app/pipeline schemas.'
+```
+
+#### Environment Variables Cleanup
+
+**Legacy variables in `.env` (lines 54-56, 80-82)**:
+```env
+# neon (legacy - kept for reference)
+NEON_DATABASE_URL_LEGACY=postgresql://...@...neon.tech/tldrsec-prod
+NEON_API=napi_...
+
+# MCP Server Environment Variables
+NEON_API_KEY=napi_...
+NEON_DATABASE_URL=postgresql://...@...neon.tech/tldrsec-prod
+# NOTE: NEON_DATABASE_URL is kept for MCP server reference only - not used by application
+```
+
+**Recommendation**: Remove these legacy variables after confirming:
+1. No MCP servers depend on `NEON_API_KEY` or `NEON_DATABASE_URL`
+2. Neon database has been fully decommissioned
+
+#### Documentation Files (Historical Reference)
+
+The following files in `docs/plans/actioned/2025/12. December/` document the migration:
+- `2025-12-09-neon-to-supabase-migration-implementation.md`
+- `2025-12-09-neon-to-supabase-migration-options-analysis.md`
+- `2025-12-19-unified-supabase-consolidation.md`
+
+These should be retained as historical documentation.
+
+#### Test Files with Neon References
+
+The file `__tests__/db/data-migration.test.ts` contains `EXPECTED_NEON_COUNTS` constants used to validate that the Supabase database matches expected record counts from the Neon migration. This file validates migration completeness and should be retained until the Neon database is fully decommissioned.
+
+#### Current Database Architecture
+
+**Active Database**: Supabase (aws-1-ap-southeast-2)
+- Transaction Mode: `postgres://...@aws-1-ap-southeast-2.pooler.supabase.com:6543/postgres?pgbouncer=true`
+- Session Mode: Port 5432 for migrations and advisory locks
+- Schemas: `app`, `pipeline` (multi-schema architecture)
+
+**Database Stack**:
+- Prisma ORM with singleton client (`lib/db/prisma.ts`)
+- Supabase client for auth/realtime (`lib/supabase/client.ts`, `lib/supabase/server-client.ts`)
+- pgvector extension available for vector embeddings
