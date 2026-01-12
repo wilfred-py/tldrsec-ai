@@ -929,3 +929,149 @@ The file `__tests__/db/data-migration.test.ts` contains `EXPECTED_NEON_COUNTS` c
 - Prisma ORM with singleton client (`lib/db/prisma.ts`)
 - Supabase client for auth/realtime (`lib/supabase/client.ts`, `lib/supabase/server-client.ts`)
 - pgvector extension available for vector embeddings
+
+---
+
+## Follow-up Research: Phase 1 Implementation (2026-01-12)
+
+### Summary of Changes
+
+On 2026-01-12, "Email Summary Design Quality Enrichment - Phase 1" was completed, implementing the following improvements based on this research document:
+
+| Feedback Item | Status | Implementation |
+|--------------|--------|----------------|
+| #2: 8-K sentiment display | ✅ RESOLVED | Sentiment badge now displayed inline with materiality |
+| #4: Form 4 ownership position | ✅ ENHANCED | Stake changes with directional arrows (↑/↓/→) |
+| #4: Form 144 remaining holdings | ✅ ENHANCED | Arrow notation display (`→ X remaining`) |
+
+### Design System Additions
+
+New utilities added to `components/ui/email/design-system.ts`:
+
+#### Sentiment Color Mapping (Lines 296-303)
+```typescript
+export function getSentimentColor(sentiment: string): SentimentColorConfig {
+  switch (sentiment.toLowerCase()) {
+    case 'positive': return { bg: '#DCFCE7', text: '#166534' }; // Green - 4.6:1 contrast
+    case 'negative': return { bg: '#FEE2E2', text: '#991B1B' }; // Red - 5.1:1 contrast
+    case 'mixed': return { bg: '#EDE9FE', text: '#5B21B6' }; // Violet - distinct from amber
+    default: return { bg: '#F3F4F6', text: '#4B5563' }; // Gray (neutral) - 5.3:1 contrast
+  }
+}
+```
+
+All color combinations meet WCAG 2.1 AA (4.5:1+ contrast ratio) requirements.
+
+#### Sentiment Emoji Mapping (Lines 308-315)
+```typescript
+export function getSentimentEmoji(sentiment: string): string {
+  switch (sentiment.toLowerCase()) {
+    case 'positive': return '📈';
+    case 'negative': return '📉';
+    case 'mixed': return '🤔';
+    default: return '➖';
+  }
+}
+```
+
+#### SEC Transaction Codes (Lines 321-350)
+```typescript
+export const SEC_TRANSACTION_CODES: Record<string, string> = {
+  'P': 'Open Market Purchase',
+  'S': 'Open Market Sale',
+  'A': 'Grant/Award',
+  'G': 'Gift',
+  'M': 'Option Exercise',
+  'F': 'Tax Withholding',
+  'C': 'Conversion',
+  'J': 'Trust Transfer',
+  'K': 'Trust Disposition',
+  // ... 19 total codes
+};
+
+export function getTransactionCodeDescription(code: string): string {
+  return SEC_TRANSACTION_CODES[code.toUpperCase()] || 'Other Transaction';
+}
+```
+
+### 8-K Sentiment Implementation Details
+
+**File**: `components/ui/email/templates/8k-minimalist-template.tsx`
+
+**Variable Rename** (Line 157):
+- Before: `const _sentiment = ...` (unused, underscore-prefixed)
+- After: `const sentiment = ...` (active)
+
+**Display Logic** (Lines 229-242):
+```typescript
+{sentiment && (
+  <span style={{
+    display: 'inline-block',
+    padding: '4px 12px',
+    marginLeft: '8px',
+    backgroundColor: getSentimentColor(sentiment).bg,
+    color: getSentimentColor(sentiment).text,
+    borderRadius: '20px',
+    fontSize: '11px',
+    fontWeight: 600,
+  }}>
+    {getSentimentEmoji(sentiment)} {sentiment.charAt(0).toUpperCase() + sentiment.slice(1)}
+  </span>
+)}
+```
+
+**Position**: Inline with materiality badge (immediately after "MATERIAL EVENT" or "ROUTINE DISCLOSURE")
+
+### Form 4 Ownership Impact Enhancement
+
+**File**: `components/ui/email/templates/form4-minimalist-template.tsx`
+
+**Stake Change Arrow Function** (Lines 66-71):
+```typescript
+export function getStakeChangeArrow(percentChange: string | undefined): string {
+  if (!percentChange) return '';
+  const num = parseFloat(percentChange.replace(/[%+]/g, ''));
+  if (isNaN(num) || num === 0) return '→';
+  return num > 0 ? '↑' : '↓';
+}
+```
+
+**Ownership Impact Section** (Lines 803-858):
+- Conditional rendering when `aggregatedTransactions.length > 0` AND stake data exists
+- Previous stake in gray, new stake in bold
+- Directional arrow color-coded:
+  - ↑ Green (#16A34A) for increases
+  - ↓ Red (#DC2626) for decreases
+  - → Gray for neutral
+- Percentage change in parentheses with matching color
+
+### Form 144 Remaining Holdings Enhancement
+
+**File**: `components/ui/email/templates/form144-minimalist-template.tsx`
+
+**Data Extraction** (Line 178):
+```typescript
+const remainingHoldings = (data?.remainingHoldings || data?.sharesRemaining || extractedData?.remainingHoldings || '') as string;
+```
+
+**Arrow Notation Display** (Lines 376-385):
+```typescript
+{remainingHoldings && (
+  <div style={{
+    fontSize: '12px',
+    color: '#991B1B',
+    opacity: 0.8,
+    marginTop: '4px',
+  }}>
+    → {remainingHoldings} remaining
+  </div>
+)}
+```
+
+**Position**: Secondary info below "Shares to Sell" card, matching red-brown (#991B1B) card theme
+
+### Related Documentation
+
+- Plan: [docs/plans/2026-01-10-email-summary-design-quality-enrichment.md](docs/plans/2026-01-10-email-summary-design-quality-enrichment.md)
+- Timeline: [.claude/history/TIMELINE.md](.claude/history/TIMELINE.md) - Line 16
+- Progress: [.claude/PROGRESS.md](.claude/PROGRESS.md)
