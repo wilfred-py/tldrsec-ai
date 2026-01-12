@@ -19,6 +19,15 @@ export interface Form144ExtractedData {
   recentActivity: string;
   remainingHoldings: string;
   signalStrength: string;
+  // Additional Form 144-specific fields (based on SEC Rule 144 requirements)
+  proposedSaleDate: string;        // Date of proposed sale
+  acquisitionDate: string;         // Date(s) securities were acquired
+  securityClass: string;           // Class of securities (e.g., Common Stock, Class A)
+  affiliateStatus: string;         // Whether filer is an affiliate of the issuer
+  priorThreeMonthSales: string;    // Sales in preceding 3 months (Rule 144 limitation)
+  investorImplication: string;     // Key takeaway for investors
+  holdingPeriod: string;           // Time shares have been held (6+ months required)
+  volumeLimit: string;             // Rule 144 volume limitations
 }
 
 /**
@@ -37,6 +46,14 @@ export function extractForm144Data(summaryText: string): Form144ExtractedData {
     recentActivity: '',
     remainingHoldings: '',
     signalStrength: '',
+    proposedSaleDate: '',
+    acquisitionDate: '',
+    securityClass: '',
+    affiliateStatus: '',
+    priorThreeMonthSales: '',
+    investorImplication: '',
+    holdingPeriod: '',
+    volumeLimit: '',
   };
 
   if (!summaryText) {
@@ -73,8 +90,20 @@ export function extractForm144Data(summaryText: string): Form144ExtractedData {
   // Extract remaining holdings (securities beneficially owned after transaction)
   result.remainingHoldings = extractRemainingHoldings(summaryText);
 
+  // Extract additional Form 144-specific fields
+  result.proposedSaleDate = extractProposedSaleDate(summaryText);
+  result.acquisitionDate = extractAcquisitionDate(summaryText);
+  result.securityClass = extractSecurityClass(summaryText);
+  result.affiliateStatus = extractAffiliateStatus(summaryText);
+  result.priorThreeMonthSales = extractPriorThreeMonthSales(summaryText);
+  result.holdingPeriod = extractHoldingPeriod(summaryText);
+  result.volumeLimit = extractVolumeLimit(summaryText);
+
   // Determine signal strength (2-level)
   result.signalStrength = determineSignalStrength(result, summaryText);
+
+  // Generate investor implication based on all extracted data
+  result.investorImplication = generateInvestorImplication(result, summaryText);
 
   return result;
 }
@@ -453,4 +482,244 @@ function determineSignalStrength(data: Form144ExtractedData, text: string): stri
   }
 
   return 'Notable Sale';
+}
+
+/**
+ * Extract proposed sale date from summary
+ */
+function extractProposedSaleDate(text: string): string {
+  const patterns = [
+    // "proposed sale date: January 15, 2026"
+    /(?:proposed\s+)?(?:sale|transaction)\s+date[:\s]+([A-Z][a-z]+\s+\d{1,2},?\s*\d{4}|\d{1,2}\/\d{1,2}\/\d{2,4})/i,
+    // "to be sold on January 15"
+    /(?:to\s+be\s+)?sold\s+(?:on|after)\s+([A-Z][a-z]+\s+\d{1,2},?\s*\d{4}|\d{1,2}\/\d{1,2}\/\d{2,4})/i,
+    // "commencing on January 15"
+    /commenc(?:ing|e)\s+(?:on\s+)?([A-Z][a-z]+\s+\d{1,2},?\s*\d{4}|\d{1,2}\/\d{1,2}\/\d{2,4})/i,
+    // "beginning January 15"
+    /begin(?:ning|s)?\s+(?:on\s+)?([A-Z][a-z]+\s+\d{1,2},?\s*\d{4}|\d{1,2}\/\d{1,2}\/\d{2,4})/i,
+    // "will sell after January 15"
+    /will\s+(?:be\s+)?(?:sold?|selling)\s+(?:on|after)\s+([A-Z][a-z]+\s+\d{1,2},?\s*\d{4}|\d{1,2}\/\d{1,2}\/\d{2,4})/i,
+  ];
+
+  for (const pattern of patterns) {
+    const match = text.match(pattern);
+    if (match?.[1]) {
+      return match[1].trim();
+    }
+  }
+
+  return '';
+}
+
+/**
+ * Extract acquisition date from summary
+ */
+function extractAcquisitionDate(text: string): string {
+  const patterns = [
+    // "acquired on January 15, 2020"
+    /acquired\s+(?:on\s+)?([A-Z][a-z]+\s+\d{1,2},?\s*\d{4}|\d{1,2}\/\d{1,2}\/\d{2,4})/i,
+    // "date acquired: January 15, 2020"
+    /date\s+acquired[:\s]+([A-Z][a-z]+\s+\d{1,2},?\s*\d{4}|\d{1,2}\/\d{1,2}\/\d{2,4})/i,
+    // "acquisition date: January 15"
+    /acquisition\s+date[:\s]+([A-Z][a-z]+\s+\d{1,2},?\s*\d{4}|\d{1,2}\/\d{1,2}\/\d{2,4})/i,
+    // "held since January 2020"
+    /held\s+since\s+([A-Z][a-z]+\s*\d{4}|\d{1,2}\/\d{1,2}\/\d{2,4})/i,
+    // "obtained in 2020"
+    /(?:obtained|received|granted)\s+(?:in|on)\s+(\d{4}|[A-Z][a-z]+\s*\d{4})/i,
+  ];
+
+  for (const pattern of patterns) {
+    const match = text.match(pattern);
+    if (match?.[1]) {
+      return match[1].trim();
+    }
+  }
+
+  return '';
+}
+
+/**
+ * Extract security class from summary
+ */
+function extractSecurityClass(text: string): string {
+  const patterns = [
+    // "Class A Common Stock"
+    /(Class\s+[A-Z]\s+Common\s+Stock)/i,
+    // "Class A shares"
+    /(Class\s+[A-Z])\s+shares?/i,
+    // "Common Stock"
+    /(Common\s+Stock)/i,
+    // "Preferred Stock"
+    /(Preferred\s+Stock)/i,
+    // "ordinary shares"
+    /(Ordinary\s+Shares?)/i,
+  ];
+
+  for (const pattern of patterns) {
+    const match = text.match(pattern);
+    if (match?.[1]) {
+      return match[1].trim();
+    }
+  }
+
+  return '';
+}
+
+/**
+ * Extract affiliate status from summary
+ */
+function extractAffiliateStatus(text: string): string {
+  const textLower = text.toLowerCase();
+
+  // Check for explicit affiliate mentions
+  if (textLower.includes('affiliate of the issuer') || textLower.includes('is an affiliate')) {
+    return 'Affiliate';
+  }
+
+  if (textLower.includes('non-affiliate') || textLower.includes('not an affiliate')) {
+    return 'Non-Affiliate';
+  }
+
+  // Infer from role - officers and directors are typically affiliates
+  if (/\b(CEO|CFO|COO|CTO|Director|Chairman|President|Officer|10%\s*Owner)\b/i.test(text)) {
+    return 'Affiliate (Inferred)';
+  }
+
+  return '';
+}
+
+/**
+ * Extract prior 3-month sales from summary (Rule 144 limitation)
+ */
+function extractPriorThreeMonthSales(text: string): string {
+  const patterns = [
+    // "prior 3 months: X shares"
+    /(?:prior|previous|past|preceding)\s*(?:3|three)\s*months?[:\s]*([\d,]+)\s*shares?/i,
+    // "sold X shares in the past 3 months"
+    /sold\s*([\d,]+)\s*shares?\s*(?:in|during)\s*(?:the\s+)?(?:prior|previous|past|preceding)\s*(?:3|three)\s*months?/i,
+    // "3-month sales: $X"
+    /(?:3|three)[\s-]*month\s+sales?[:\s]*\$?([\d,]+(?:\.\d+)?[KMB]?)/i,
+    // "piling onto X shares ($Y)"
+    /piling\s+onto\s+([\d,]+)\s*shares?\s*(?:\(\$?([\d,]+(?:\.\d+)?[KMB]?)\))?/i,
+  ];
+
+  for (const pattern of patterns) {
+    const match = text.match(pattern);
+    if (match?.[1]) {
+      return match[1].replace(/\B(?=(\d{3})+(?!\d))/g, ',') + ' shares';
+    }
+  }
+
+  return '';
+}
+
+/**
+ * Extract holding period from summary
+ */
+function extractHoldingPeriod(text: string): string {
+  const patterns = [
+    // "held for X months/years"
+    /held\s+(?:for\s+)?([\d]+)\s*(months?|years?)/i,
+    // "holding period: X months"
+    /holding\s+period[:\s]*([\d]+)\s*(months?|years?)/i,
+    // "acquired X years ago"
+    /acquired\s+([\d]+)\s*(months?|years?)\s*ago/i,
+    // "since 2020" - calculate approximate period
+    /(?:held\s+)?since\s+(\d{4})/i,
+  ];
+
+  for (const pattern of patterns) {
+    const match = text.match(pattern);
+    if (match?.[1]) {
+      // Check if it's a year - calculate approximate holding period
+      if (match[1].length === 4 && parseInt(match[1]) > 2000) {
+        const years = new Date().getFullYear() - parseInt(match[1]);
+        return years > 0 ? `~${years} year${years > 1 ? 's' : ''}` : '';
+      }
+      return `${match[1]} ${match[2] || 'months'}`;
+    }
+  }
+
+  return '';
+}
+
+/**
+ * Extract Rule 144 volume limit information from summary
+ */
+function extractVolumeLimit(text: string): string {
+  const patterns = [
+    // "volume limitation: X shares"
+    /volume\s+(?:limitation|limit)[:\s]*([\d,]+)\s*shares?/i,
+    // "1% of outstanding"
+    /(1%\s*(?:of\s+)?(?:the\s+)?(?:outstanding|float))/i,
+    // "average weekly trading volume"
+    /(average\s+weekly\s+trading\s+volume[:\s]*[\d,]+)/i,
+    // "Rule 144 limit: X"
+    /(?:Rule\s+)?144\s+limit[:\s]*([\d,]+)/i,
+  ];
+
+  for (const pattern of patterns) {
+    const match = text.match(pattern);
+    if (match?.[1]) {
+      return match[1].trim();
+    }
+  }
+
+  return '';
+}
+
+/**
+ * Generate investor implication based on extracted data
+ */
+function generateInvestorImplication(data: Form144ExtractedData, text: string): string {
+  const textLower = text.toLowerCase();
+
+  // Check for 10b5-1 plan
+  const has10b51 = textLower.includes('10b5-1');
+
+  // Calculate value for context
+  let valueNum = 0;
+  if (data.estimatedValue) {
+    const match = data.estimatedValue.match(/([\d.]+)\s*([KMB])?/i);
+    if (match) {
+      valueNum = parseFloat(match[1]);
+      const suffix = match[2]?.toUpperCase();
+      if (suffix === 'B') valueNum *= 1000000000;
+      else if (suffix === 'M') valueNum *= 1000000;
+      else if (suffix === 'K') valueNum *= 1000;
+    }
+  }
+
+  // Check for concerning patterns
+  if (data.priorThreeMonthSales) {
+    return 'Pattern of recent sales - monitor for continued insider selling activity.';
+  }
+
+  if (valueNum >= 10000000) {
+    if (has10b51) {
+      return 'Large planned sale under 10b5-1 program. Size warrants attention despite pre-planning.';
+    }
+    return 'Significant sale size may indicate insider perspective on valuation or liquidity needs.';
+  }
+
+  if (has10b51) {
+    return 'Scheduled 10b5-1 trade - no discretionary decision at time of sale.';
+  }
+
+  // Check percent of holdings
+  const percentMatch = data.percentOfHoldings?.match(/([\d.]+)/);
+  if (percentMatch && parseFloat(percentMatch[1]) > 20) {
+    return 'Significant portion of holdings being sold - may indicate diversification or liquidity needs.';
+  }
+
+  // Default implications based on role
+  if (data.filerRole?.toLowerCase().includes('ceo') || data.filerRole?.toLowerCase().includes('cfo')) {
+    return 'Executive sale - consider in context of overall compensation and company performance.';
+  }
+
+  if (data.filerRole?.toLowerCase().includes('director')) {
+    return 'Board member sale - typically routine diversification unless unusual size or timing.';
+  }
+
+  return 'Monitor for additional filings to establish selling pattern.';
 }
