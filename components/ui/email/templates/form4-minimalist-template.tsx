@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { EmailColors } from '../design-system';
+import { EmailColors, getTransactionCodeDescription as getTransactionCodeDescriptionFromDesign } from '../design-system';
 import { EmailHeader } from './sections/EmailHeader';
 import { EmailFooter } from './sections/EmailFooter';
 import { SectionCard } from './sections/SectionCard';
@@ -17,6 +17,57 @@ interface TransactionData {
   totalValue?: string | number;
   acquisitionDisposition?: string;
   code?: string;
+  date?: string;
+}
+
+/**
+ * Get SEC transaction code description
+ * Maps SEC Form 4 transaction codes to human-readable descriptions
+ * @deprecated Use getTransactionCodeDescription from design-system.ts instead
+ */
+export function getTransactionCodeDescription(code: string): string {
+  return getTransactionCodeDescriptionFromDesign(code);
+}
+
+/**
+ * Format transaction date for display
+ * @deprecated Currently unused but kept for future transaction date display
+ */
+function _formatTransactionDate(date: string): string {
+  try {
+    const d = new Date(date);
+    if (isNaN(d.getTime())) return date;
+    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  } catch {
+    return date;
+  }
+}
+
+// Export to prevent unused variable warning (may be used by tests)
+export { _formatTransactionDate as formatTransactionDate };
+
+/**
+ * Get color for percentage change
+ * @deprecated Currently unused but kept for future stake change coloring
+ */
+function _getChangeColor(percentChange: string | undefined): string {
+  if (!percentChange) return EmailColors.text.meta;
+  const num = parseFloat(percentChange.replace(/[%+]/g, ''));
+  if (isNaN(num) || num === 0) return EmailColors.text.meta;
+  return num > 0 ? '#16A34A' : '#DC2626'; // Green for increase, red for decrease
+}
+
+// Export to prevent unused variable warning (may be used in future)
+export { _getChangeColor as getChangeColor };
+
+/**
+ * Get arrow indicator for percentage change
+ */
+export function getStakeChangeArrow(percentChange: string | undefined): string {
+  if (!percentChange) return '';
+  const num = parseFloat(percentChange.replace(/[%+]/g, ''));
+  if (isNaN(num) || num === 0) return '→';
+  return num > 0 ? '↑' : '↓';
 }
 
 /**
@@ -156,14 +207,17 @@ interface AggregatedTransaction {
   sharesDisplay: string;
   valueDisplay: string;
   priceDisplay: string;
+  // SEC transaction code (only populated for single transactions)
+  code?: string;
+  codeDescription?: string;
 }
 
 function aggregateTransactionsByType(transactions: TransactionData[]): AggregatedTransaction[] {
-  const groups: Record<string, { shares: number; value: number; count: number; prices: number[] }> = {
-    gift: { shares: 0, value: 0, count: 0, prices: [] },
-    sale: { shares: 0, value: 0, count: 0, prices: [] },
-    purchase: { shares: 0, value: 0, count: 0, prices: [] },
-    transfer: { shares: 0, value: 0, count: 0, prices: [] },
+  const groups: Record<string, { shares: number; value: number; count: number; prices: number[]; codes: string[] }> = {
+    gift: { shares: 0, value: 0, count: 0, prices: [], codes: [] },
+    sale: { shares: 0, value: 0, count: 0, prices: [], codes: [] },
+    purchase: { shares: 0, value: 0, count: 0, prices: [], codes: [] },
+    transfer: { shares: 0, value: 0, count: 0, prices: [], codes: [] },
   };
 
   for (const tx of transactions) {
@@ -200,6 +254,7 @@ function aggregateTransactionsByType(transactions: TransactionData[]): Aggregate
     groups[groupKey].value += value;
     groups[groupKey].count += 1;
     if (price > 0) groups[groupKey].prices.push(price);
+    if (tx.code) groups[groupKey].codes.push(tx.code);
   }
 
   // Format and return non-empty groups
@@ -210,6 +265,9 @@ function aggregateTransactionsByType(transactions: TransactionData[]): Aggregate
         ? data.prices.reduce((a, b) => a + b, 0) / data.prices.length
         : 0;
 
+      // Get the primary code for single transactions
+      const primaryCode = data.codes.length === 1 ? data.codes[0] : undefined;
+
       result.push({
         type: type as 'gift' | 'sale' | 'purchase' | 'transfer',
         totalShares: data.shares,
@@ -219,6 +277,8 @@ function aggregateTransactionsByType(transactions: TransactionData[]): Aggregate
         sharesDisplay: data.shares.toLocaleString(),
         valueDisplay: formatAggregatedValue(data.value),
         priceDisplay: avgPrice > 0 ? `$${avgPrice.toFixed(2)}` : '$0',
+        code: primaryCode,
+        codeDescription: primaryCode ? getTransactionCodeDescription(primaryCode) : undefined,
       });
     }
   }
@@ -662,6 +722,17 @@ export function Form4MinimalistTemplate({ filing }: Form4MinimalistTemplateProps
                                           }}>
                                             {aggTx.sharesDisplay} shares{aggTx.avgPrice > 0 ? ` @ ${aggTx.priceDisplay}` : ''}
                                           </div>
+                                          {/* SEC transaction code description for single transactions */}
+                                          {aggTx.codeDescription && (
+                                            <div style={{
+                                              fontSize: '11px',
+                                              color: config.textColor,
+                                              opacity: 0.7,
+                                              marginTop: '4px',
+                                            }}>
+                                              {aggTx.codeDescription}
+                                            </div>
+                                          )}
                                         </td>
                                         {/* Add gap spacer between items (not after last item) */}
                                         {!isLast && (
@@ -709,7 +780,7 @@ export function Form4MinimalistTemplate({ filing }: Form4MinimalistTemplateProps
                                       marginTop: '6px',
                                     }}>
                                       {previousStake && newStake
-                                        ? `${previousStake} → ${newStake}`
+                                        ? `${previousStake} ${getStakeChangeArrow(percentChange)} ${newStake}`
                                         : newStake || previousStake
                                       }
                                     </div>
@@ -719,6 +790,67 @@ export function Form4MinimalistTemplate({ filing }: Form4MinimalistTemplateProps
                             </tr>
                           </tbody>
                         </table>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              )}
+
+              {/* ═══════════════════════════════════════════════════════════
+                  STAKE IMPACT - Shows ownership change when transactions exist
+                  Only displays when we have stake data AND transactions above
+                  ═══════════════════════════════════════════════════════════ */}
+              {aggregatedTransactions.length > 0 && (previousStake || newStake || percentChange) && (
+                <table width="100%" cellPadding="0" cellSpacing="0" style={{ marginBottom: '16px' }}>
+                  <tbody>
+                    <tr>
+                      <td style={{
+                        padding: '16px',
+                        backgroundColor: EmailColors.structure.backgroundAlt,
+                        borderRadius: '8px',
+                        textAlign: 'center',
+                      }}>
+                        <div style={{
+                          fontSize: '11px',
+                          fontWeight: 700,
+                          color: EmailColors.text.meta,
+                          textTransform: 'uppercase' as const,
+                          letterSpacing: '0.5px',
+                          marginBottom: '8px',
+                        }}>
+                          Ownership Impact
+                        </div>
+                        <div style={{
+                          fontSize: '16px',
+                          color: EmailColors.text.headline,
+                          lineHeight: '1.4',
+                        }}>
+                          {previousStake && newStake ? (
+                            <>
+                              <span style={{ color: EmailColors.text.meta }}>{previousStake}</span>
+                              <span style={{
+                                margin: '0 8px',
+                                fontSize: '18px',
+                                color: percentChange?.startsWith('-') ? '#DC2626' : percentChange?.startsWith('+') ? '#16A34A' : EmailColors.text.meta,
+                              }}>
+                                {getStakeChangeArrow(percentChange)}
+                              </span>
+                              <span style={{ fontWeight: 700 }}>{newStake}</span>
+                              {percentChange && (
+                                <span style={{
+                                  marginLeft: '12px',
+                                  fontSize: '14px',
+                                  fontWeight: 600,
+                                  color: percentChange.startsWith('-') ? '#DC2626' : percentChange.startsWith('+') ? '#16A34A' : EmailColors.text.meta,
+                                }}>
+                                  ({percentChange})
+                                </span>
+                              )}
+                            </>
+                          ) : (
+                            <span>{newStake || previousStake}</span>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   </tbody>

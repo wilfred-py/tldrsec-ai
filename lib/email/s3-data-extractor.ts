@@ -17,8 +17,8 @@
 
 import {
   extractBulletPoints,
-  // extractMoneyValue, // TODO: Use in future implementation
-  // cleanChange, // TODO: Use in future implementation
+  extractMoneyValue,
+  cleanChange,
 } from './extractor-utils';
 
 /**
