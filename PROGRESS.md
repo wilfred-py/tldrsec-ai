@@ -1,72 +1,60 @@
 # Project Progress
 
 **Date**: 2026-01-12
-**Branch**: review-generated-summaries
-**Status**: Email Summary Design Quality Enrichment - Phase 1 Complete
+**Branch**: main
+**Status**: Database Connection Pool Fix - In Progress
 
 ---
 
-## Current Session: Email Summary Design Quality Enrichment - Phase 1 (2026-01-12)
+## Current Session: Pipeline Stall Investigation (2026-01-12)
 
-Implementing plan from `docs/plans/2026-01-10-email-summary-design-quality-enrichment.md`. Phase 1 focuses on surfacing hidden data and simplifying email templates for skimmability.
+Investigating and fixing pipeline stall where tier-aware cron endpoints are timing out.
 
-### Changes Made:
+### Investigation Progress:
 
-**1. Form 4 Template - Ownership Impact Display**:
-- Added "Ownership Impact" section after transactions showing stake changes
-- Displays: previous shares → new shares with percentage change
-- Arrow indicators: ↑ for increases (green), ↓ for decreases (red)
-- Centered design with inline format
+**Issue**: Tier-aware pipeline jobs timing out at 30-60 seconds despite async fixes.
 
-**2. 8-K Template - Sentiment Badge Refinements**:
-- Moved sentiment badge inline with materiality badge
-- Changed mixed sentiment color from amber to violet (#EDE9FE/#5B21B6) to avoid clash with Material Event yellow background
-- Changed mixed sentiment icon from ↔️ to 🤔 (thinking emoji)
+**Root Cause Found**: **16 zombie database connections in "idle in transaction" state** exhausting the Supabase connection pool. Oldest connections stuck for 1 hour 42 minutes!
 
-**3. Form 144 Template - Simplified for Skimmability**:
-- **Estimated Value card now FIRST** (most important metric)
-- **Shares to Sell card SECOND** with remaining holdings shown inline
-- **Removed entire "Filing Details" card** (Security Class, Affiliate Status, Sale Date, Holding Period, Broker, Trading Plan, Prior 3-Mo Sales) - too much noise
-- Kept "💡 Investor Takeaway" section for essential context
+**Evidence**:
+```sql
+-- Zombie connections found:
+- 16 connections in "idle in transaction" state
+- Oldest: 1:42:43 idle duration
+- Query: "BEGIN" or Prisma JobQueue queries never committed
+- All via Supavisor (connection pooler)
+```
 
-**4. Design System Updates**:
-- Centralized `getSentimentColor()` and `getSentimentEmoji()` in design-system.ts
-- WCAG 2.1 AA compliant contrast ratios for all sentiment badges
+**Fix Applied**: Terminated all idle-in-transaction connections stuck >5 minutes:
+```sql
+SELECT pg_terminate_backend(pid)
+FROM pg_stat_activity
+WHERE state = 'idle in transaction'
+AND NOW() - state_change > interval '5 minutes';
+-- Result: 16 connections terminated
+```
 
-**Files Modified**:
-- `components/ui/email/design-system.ts` - Sentiment utilities
-- `components/ui/email/templates/form4-minimalist-template.tsx` - Ownership Impact section
-- `components/ui/email/templates/8k-minimalist-template.tsx` - Inline sentiment badge
-- `components/ui/email/templates/form144-minimalist-template.tsx` - Simplified layout (Value first, removed Filing Details)
-- `lib/email/form144-data-extractor.ts` - 8 new extraction fields (kept in extractor for future use)
-- `scripts/test-hidden-data-display-email.ts` - Updated test data
+**Status**: Connection pool restored (6 idle, 1 active). Testing endpoint response...
 
-**Verification**: ✅ 6 test emails sent and reviewed
+### Previous Fixes Applied (Still Deployed):
+1. ✅ Fixed BackgroundFilingWorker instantiation (constructor options, not processBatch params)
+2. ✅ Removed inline job processing from tier-aware endpoint (true async 202 pattern)
+3. ✅ Discovered Clerk intercepts Bearer auth before middleware (HMAC bypasses correctly)
+
+**Files Previously Modified**:
+- `app/api/cron/tier-aware/route.ts` - Async 202 pattern, no inline processing
 
 ---
 
-## Recently Completed: GitHub Actions Workflow Updates (2026-01-12)
+## Recently Completed: GitHub Actions Workflow Updates (2026-01-12) ✅
 
 Updated GitHub Actions workflows to reflect the Phase 5-8 pipeline redundancy enhancements.
 
-### Changes Made:
+**Changes Made**:
+- `cloudflare-worker-deploy.yml`: Added Three-Layer Redundancy Architecture section, new endpoints
+- `monitoring-validation.yml`: Extended path triggers, enhanced pipeline health test
 
-**1. cloudflare-worker-deploy.yml**:
-- Added Three-Layer Pipeline Redundancy Architecture section
-- Updated cron schedule descriptions to match implementation
-- Added new endpoints: `/api/cron/final-backup`, `/api/health/pipeline`
-- Updated monitoring command to use production health endpoint
-- Added link to operations runbook
-
-**2. monitoring-validation.yml**:
-- Extended path triggers for new cron and health endpoints
-- Added test for enhanced pipeline health endpoint
-- Updated deployment summary with redundancy architecture
-- Added Recovery Endpoints documentation
-
-**Files Modified**:
-- `.github/workflows/cloudflare-worker-deploy.yml`
-- `.github/workflows/monitoring-validation.yml`
+**Files Modified**: `.github/workflows/cloudflare-worker-deploy.yml`, `.github/workflows/monitoring-validation.yml`
 
 ---
 
@@ -211,5 +199,5 @@ at Function.create (/lib/job-queue/index.ts:220:36)
 
 ---
 
-*Last Updated: 2026-01-12 (Email Summary Design Quality Enrichment - Phase 1)*
+*Last Updated: 2026-01-12 (Pipeline Stall Investigation - Connection Pool Fix)*
 *Older completed projects archived to .claude/history/ - See TIMELINE.md for full history*

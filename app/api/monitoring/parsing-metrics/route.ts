@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuth } from '@clerk/nextjs/server';
-import { getPrismaClient } from '@/lib/prisma';
+import { getPrismaClient } from '@/lib/db/prisma';
 import { jsonParsingMonitor } from '@/lib/monitoring/json-parsing-monitor';
 
 /**

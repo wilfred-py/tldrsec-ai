@@ -10,40 +10,29 @@
  * 2. Immediately clean up ANY stuck jobs found
  * 3. Report all actions taken via Slack
  *
+ * Recovery state is now PERSISTED in database to survive Vercel deployments.
+ * Previously, in-memory state would reset on every deploy, causing:
+ * - False healthy signals after deploys during ongoing incidents
+ * - Reset of consecutiveDegraded counters before action thresholds
+ * - Loss of cleanup/redeploy history
+ *
+ * Phase 6 Enhancements (Eliminate Manual Pipeline Intervention):
+ * - Integrates CronExecutionGapDetector to detect and alert on cron gaps
+ * - Integrates OrphanedFilingDetector to recover orphaned filings
+ * - Response includes cronGapCheck and orphanedFilings counts
+ *
  * @see docs/plans/2026-01-05-100-percent-pipeline-uptime.md
+ * @see docs/plans/2026-01-09-eliminate-manual-pipeline-intervention.md Phase 1, 6
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { RecoveryStateService } from '@/lib/cron/recovery-state-service';
+import { CronExecutionGapDetector } from '@/lib/cron/execution-gap-detector';
+import { OrphanedFilingDetector } from '@/lib/cron/orphaned-filing-detector';
 
-// Track recovery state
-interface RecoveryState {
-  lastCleanupTime: number | null;
-  lastRedeployTime: number | null;
-  consecutiveCleanups: number;
-  consecutiveRedeploys: number;
-  consecutiveDegraded: number;
-  lastDegradedTime: number | null;
-}
-
-let recoveryState: RecoveryState = {
-  lastCleanupTime: null,
-  lastRedeployTime: null,
-  consecutiveCleanups: 0,
-  consecutiveRedeploys: 0,
-  consecutiveDegraded: 0,
-  lastDegradedTime: null,
-};
-
-// For testing only - reset recovery state
-export function _resetRecoveryStateForTesting(): void {
-  recoveryState = {
-    lastCleanupTime: null,
-    lastRedeployTime: null,
-    consecutiveCleanups: 0,
-    consecutiveRedeploys: 0,
-    consecutiveDegraded: 0,
-    lastDegradedTime: null,
-  };
+// For testing only - reset recovery state (now uses persistent service)
+export async function _resetRecoveryStateForTesting(): Promise<void> {
+  await RecoveryStateService.reset();
 }
 
 // Thresholds
@@ -71,8 +60,18 @@ interface CleanupResults {
   invalidJobTypes: number;
   staleProcessing: number;
   staleLocks: number;
+  orphanedFilings: number;  // Phase 6: Orphaned filings recovered
   total: number;
   errors: string[];  // Track any errors during cleanup operations
+}
+
+/**
+ * Result from cron gap detection check
+ */
+interface CronGapCheckResult {
+  checked: boolean;
+  gapsFound: number;
+  alerted: boolean;
 }
 
 async function authenticateRequest(request: NextRequest): Promise<boolean> {
@@ -192,6 +191,7 @@ async function runImmediateCleanup(health: PipelineHealth): Promise<CleanupResul
     invalidJobTypes: 0,
     staleProcessing: 0,
     staleLocks: 0,
+    orphanedFilings: 0,  // Phase 6
     total: 0,
     errors: [],
   };
@@ -271,8 +271,24 @@ async function runImmediateCleanup(health: PipelineHealth): Promise<CleanupResul
     }
   }
 
+  // 5. Phase 6: Recover orphaned filings (processed=false but no jobs)
+  try {
+    const orphanedResult = await OrphanedFilingDetector.checkAndRecover();
+    results.orphanedFilings = orphanedResult.recovered;
+    if (orphanedResult.recovered > 0) {
+      console.log('[AutoRecover] Recovered orphaned filings:', {
+        recovered: orphanedResult.recovered,
+        filings: orphanedResult.filings.map(f => f.accessionNumber),
+      });
+    }
+  } catch (error) {
+    const errorMsg = `orphanedFilings: ${error instanceof Error ? error.message : 'Unknown error'}`;
+    console.error('[AutoRecover] Failed to recover orphaned filings:', error);
+    results.errors.push(errorMsg);
+  }
+
   results.total = results.exhaustedRetrying + results.invalidJobTypes +
-                  results.staleProcessing + results.staleLocks;
+                  results.staleProcessing + results.staleLocks + results.orphanedFilings;
 
   return results;
 }
@@ -314,6 +330,7 @@ async function sendSlackCleanupNotification(results: CleanupResults): Promise<vo
           { type: 'mrkdwn', text: `*Invalid Job Types:* ${results.invalidJobTypes}` },
           { type: 'mrkdwn', text: `*Stale Processing:* ${results.staleProcessing}` },
           { type: 'mrkdwn', text: `*Stale Locks:* ${results.staleLocks}` },
+          { type: 'mrkdwn', text: `*Orphaned Filings:* ${results.orphanedFilings}` },
         ],
       },
     ];
@@ -410,11 +427,35 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     const health = await getPipelineHealth();
     const now = Date.now();
 
+    // Get current recovery state from persistent storage (survives Vercel deploys)
+    const persistentState = await RecoveryStateService.getState();
+
     // =========================================================================
     // PHASE 2: Run immediate cleanup FIRST, before any other decision logic
     // This ensures stuck jobs are cleaned up every execution
     // =========================================================================
     const cleanupResults = await runImmediateCleanup(health);
+
+    // =========================================================================
+    // PHASE 6: Cron execution gap detection
+    // Check for gaps in cron executions that may indicate Cloudflare Worker issues
+    // =========================================================================
+    let cronGapCheck: CronGapCheckResult = {
+      checked: false,
+      gapsFound: 0,
+      alerted: false,
+    };
+    try {
+      const gapResult = await CronExecutionGapDetector.checkAndAlert();
+      cronGapCheck = {
+        checked: true,
+        gapsFound: gapResult.gaps?.length ?? 0,
+        alerted: gapResult.alerted,
+      };
+    } catch (error) {
+      console.error('[AutoRecover] Cron gap detection failed:', error);
+      // Continue execution - gap detection is not critical
+    }
 
     // Log and report if any jobs were cleaned OR if there were errors
     if (cleanupResults.total > 0 || cleanupResults.errors.length > 0) {
@@ -423,6 +464,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         invalidJobTypes: cleanupResults.invalidJobTypes,
         staleProcessing: cleanupResults.staleProcessing,
         staleLocks: cleanupResults.staleLocks,
+        orphanedFilings: cleanupResults.orphanedFilings,
         total: cleanupResults.total,
         errors: cleanupResults.errors,
       });
@@ -431,9 +473,12 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       await sendSlackCleanupNotification(cleanupResults);
 
       if (cleanupResults.total > 0) {
-        recoveryState.lastCleanupTime = now;
-        recoveryState.consecutiveCleanups++;
+        // Record cleanup in persistent storage
+        await RecoveryStateService.recordCleanup();
       }
+
+      // Get updated state for response
+      const updatedState = await RecoveryStateService.getState();
 
       // Return immediately with cleanup results
       const duration = Date.now() - startTime;
@@ -442,13 +487,14 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         reason: cleanupResults.errors.length > 0
           ? `Cleanup had ${cleanupResults.errors.length} errors (${cleanupResults.total} jobs cleaned)`
           : `Cleaned ${cleanupResults.total} stuck jobs`,
-        cleanup: cleanupResults,
+        cleanupResults,  // Phase 6: Use cleanupResults instead of cleanup
+        cronGapCheck,    // Phase 6: Include cron gap check results
         status: health.status,
         duration,
         recoveryState: {
-          consecutiveCleanups: recoveryState.consecutiveCleanups,
-          consecutiveRedeploys: recoveryState.consecutiveRedeploys,
-          consecutiveDegraded: recoveryState.consecutiveDegraded,
+          consecutiveCleanups: updatedState.consecutiveCleanups,
+          consecutiveRedeploys: updatedState.consecutiveRedeploys,
+          consecutiveDegraded: updatedState.consecutiveDegraded,
         },
         timestamp: new Date().toISOString(),
       });
@@ -463,19 +509,21 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
     // If healthy, reset counters and return
     if (health.status === 'HEALTHY') {
-      recoveryState.consecutiveCleanups = 0;
-      recoveryState.consecutiveRedeploys = 0;
-      recoveryState.consecutiveDegraded = 0;
+      // Reset degraded counter on healthy (preserves cleanup/redeploy history)
+      await RecoveryStateService.resetOnHealthy();
+      const healthyState = await RecoveryStateService.getState();
 
       return NextResponse.json({
         action: 'none',
         reason: 'Pipeline is healthy',
+        cleanupResults,  // Phase 6
+        cronGapCheck,    // Phase 6
         status: health.status,
         minutesSinceLastCompletion: health.minutesSinceLastCompletion,
         recoveryState: {
-          consecutiveCleanups: recoveryState.consecutiveCleanups,
-          consecutiveRedeploys: recoveryState.consecutiveRedeploys,
-          consecutiveDegraded: recoveryState.consecutiveDegraded,
+          consecutiveCleanups: healthyState.consecutiveCleanups,
+          consecutiveRedeploys: healthyState.consecutiveRedeploys,
+          consecutiveDegraded: healthyState.consecutiveDegraded,
         },
         timestamp: new Date().toISOString(),
       });
@@ -489,13 +537,14 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       const cleanupResult = await triggerForceCleanup();
       result = cleanupResult;
 
-      recoveryState.lastCleanupTime = now;
-      recoveryState.consecutiveCleanups++;
+      // Record cleanup in persistent storage
+      await RecoveryStateService.recordCleanup();
+      const cleanupState = await RecoveryStateService.getState();
 
       console.log('[AutoRecover] Lock cleanup triggered:', {
         reason,
         locksCleared: cleanupResult.locksCleared,
-        consecutiveCleanups: recoveryState.consecutiveCleanups,
+        consecutiveCleanups: cleanupState.consecutiveCleanups,
         pipelineStatus: health.status,
       });
     }
@@ -505,45 +554,49 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       health.minutesSinceLastCompletion !== null &&
       health.minutesSinceLastCompletion >= STALL_CRITICAL_MINUTES
     ) {
-      // Check if we should wait after cleanup
+      // Check if we should wait after cleanup (using persistent timestamps)
       if (
-        recoveryState.lastCleanupTime &&
-        now - recoveryState.lastCleanupTime < CLEANUP_TO_REDEPLOY_WAIT_MS
+        persistentState.lastCleanupTime &&
+        now - persistentState.lastCleanupTime.getTime() < CLEANUP_TO_REDEPLOY_WAIT_MS
       ) {
         const waitRemaining = Math.ceil(
-          (CLEANUP_TO_REDEPLOY_WAIT_MS - (now - recoveryState.lastCleanupTime)) / 60000
+          (CLEANUP_TO_REDEPLOY_WAIT_MS - (now - persistentState.lastCleanupTime.getTime())) / 60000
         );
 
         return NextResponse.json({
           action: 'wait',
           reason: `Waiting ${waitRemaining} minutes after cleanup before redeploying`,
+          cleanupResults,  // Phase 6
+          cronGapCheck,    // Phase 6
           status: health.status,
           recoveryState: {
-            consecutiveCleanups: recoveryState.consecutiveCleanups,
-            consecutiveRedeploys: recoveryState.consecutiveRedeploys,
-            consecutiveDegraded: recoveryState.consecutiveDegraded,
+            consecutiveCleanups: persistentState.consecutiveCleanups,
+            consecutiveRedeploys: persistentState.consecutiveRedeploys,
+            consecutiveDegraded: persistentState.consecutiveDegraded,
           },
           timestamp: new Date().toISOString(),
         });
       }
 
-      // Check redeploy cooldown
+      // Check redeploy cooldown (using persistent timestamps)
       if (
-        recoveryState.lastRedeployTime &&
-        now - recoveryState.lastRedeployTime < REDEPLOY_COOLDOWN_MS
+        persistentState.lastRedeployTime &&
+        now - persistentState.lastRedeployTime.getTime() < REDEPLOY_COOLDOWN_MS
       ) {
         const cooldownRemaining = Math.ceil(
-          (REDEPLOY_COOLDOWN_MS - (now - recoveryState.lastRedeployTime)) / 60000
+          (REDEPLOY_COOLDOWN_MS - (now - persistentState.lastRedeployTime.getTime())) / 60000
         );
 
         return NextResponse.json({
           action: 'cooldown',
           reason: `Redeploy cooldown active. ${cooldownRemaining} minutes remaining`,
+          cleanupResults,  // Phase 6
+          cronGapCheck,    // Phase 6
           status: health.status,
           recoveryState: {
-            consecutiveCleanups: recoveryState.consecutiveCleanups,
-            consecutiveRedeploys: recoveryState.consecutiveRedeploys,
-            consecutiveDegraded: recoveryState.consecutiveDegraded,
+            consecutiveCleanups: persistentState.consecutiveCleanups,
+            consecutiveRedeploys: persistentState.consecutiveRedeploys,
+            consecutiveDegraded: persistentState.consecutiveDegraded,
           },
           timestamp: new Date().toISOString(),
         });
@@ -556,29 +609,49 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       const redeployResult = await triggerRedeploy(reason);
       result = redeployResult;
 
-      recoveryState.lastRedeployTime = now;
-      recoveryState.consecutiveRedeploys++;
+      // Record redeploy in persistent storage
+      await RecoveryStateService.recordRedeploy();
+      const redeployState = await RecoveryStateService.getState();
 
       console.log('[AutoRecover] Redeploy triggered:', {
         reason,
         deploymentId: redeployResult.deploymentId,
-        consecutiveRedeploys: recoveryState.consecutiveRedeploys,
+        consecutiveRedeploys: redeployState.consecutiveRedeploys,
       });
     }
     // Degraded but not critical - track consecutive degraded count
     else if (health.status === 'DEGRADED') {
-      recoveryState.consecutiveDegraded++;
-      recoveryState.lastDegradedTime = now;
+      // Increment degraded counter in persistent storage
+      await RecoveryStateService.incrementConsecutiveDegraded();
+      const degradedState = await RecoveryStateService.getState();
 
       // After prolonged DEGRADED state, trigger proactive investigation
-      if (recoveryState.consecutiveDegraded >= DEGRADED_ACTION_THRESHOLD) {
+      if (degradedState.consecutiveDegraded >= DEGRADED_ACTION_THRESHOLD) {
         action = 'proactive-investigation';
-        reason = `Pipeline degraded for ${recoveryState.consecutiveDegraded * 5} minutes`;
-        recoveryState.consecutiveDegraded = 0; // Reset after action
+        reason = `Pipeline degraded for ${degradedState.consecutiveDegraded * 5} minutes`;
+
+        // Reset degraded counter after action (but via resetOnHealthy which preserves history)
+        await RecoveryStateService.resetOnHealthy();
+        const resetState = await RecoveryStateService.getState();
 
         console.log('[AutoRecover] Proactive investigation triggered:', {
           reason,
           previousConsecutiveDegraded: DEGRADED_ACTION_THRESHOLD,
+        });
+
+        return NextResponse.json({
+          action,
+          reason,
+          cleanupResults,  // Phase 6
+          cronGapCheck,    // Phase 6
+          status: health.status,
+          minutesSinceLastCompletion: health.minutesSinceLastCompletion,
+          recoveryState: {
+            consecutiveCleanups: resetState.consecutiveCleanups,
+            consecutiveRedeploys: resetState.consecutiveRedeploys,
+            consecutiveDegraded: resetState.consecutiveDegraded,
+          },
+          timestamp: new Date().toISOString(),
         });
       } else {
         action = 'monitoring';
@@ -588,12 +661,14 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       return NextResponse.json({
         action,
         reason,
+        cleanupResults,  // Phase 6
+        cronGapCheck,    // Phase 6
         status: health.status,
         minutesSinceLastCompletion: health.minutesSinceLastCompletion,
         recoveryState: {
-          consecutiveCleanups: recoveryState.consecutiveCleanups,
-          consecutiveRedeploys: recoveryState.consecutiveRedeploys,
-          consecutiveDegraded: recoveryState.consecutiveDegraded,
+          consecutiveCleanups: degradedState.consecutiveCleanups,
+          consecutiveRedeploys: degradedState.consecutiveRedeploys,
+          consecutiveDegraded: degradedState.consecutiveDegraded,
         },
         timestamp: new Date().toISOString(),
       });
@@ -601,16 +676,21 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
     const duration = Date.now() - startTime;
 
+    // Get final state for response
+    const finalState = await RecoveryStateService.getState();
+
     return NextResponse.json({
       action,
       reason,
       ...result,
+      cleanupResults,  // Phase 6
+      cronGapCheck,    // Phase 6
       status: health.status,
       duration,
       recoveryState: {
-        consecutiveCleanups: recoveryState.consecutiveCleanups,
-        consecutiveRedeploys: recoveryState.consecutiveRedeploys,
-        consecutiveDegraded: recoveryState.consecutiveDegraded,
+        consecutiveCleanups: finalState.consecutiveCleanups,
+        consecutiveRedeploys: finalState.consecutiveRedeploys,
+        consecutiveDegraded: finalState.consecutiveDegraded,
       },
       timestamp: new Date().toISOString(),
     });

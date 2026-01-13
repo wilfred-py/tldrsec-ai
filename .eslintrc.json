@@ -1,16 +1,36 @@
 {
+  "extends": "next/core-web-vitals",
   "ignorePatterns": [
     "node_modules/",
     ".next/",
     "out/",
     "public/",
-    "lib/generated/**",
-    "lib/sec-edgar/**",
-    "lib/parsers/**",
-    "lib/job-queue/**",
-    "lib/monitoring/**",
-    "lib/logging/**"
+    "lib/generated/**"
   ],
+  "rules": {
+    "no-restricted-imports": [
+      "error",
+      {
+        "patterns": [
+          {
+            "group": ["**/lib/db/prisma"],
+            "importNames": ["prisma"],
+            "message": "⚠️ DANGEROUS: Use getPrismaClient() instead of direct prisma import. Direct imports cause silent database failures during builds."
+          },
+          {
+            "group": ["@/lib/prisma", "../lib/prisma", "./lib/prisma"],
+            "message": "❌ WRONG PATH: Import from '@/lib/db/prisma' instead. The path '@/lib/prisma' does not exist."
+          }
+        ],
+        "paths": [
+          {
+            "name": "@/lib/prisma",
+            "message": "❌ WRONG PATH: Import from '@/lib/db/prisma' instead. The path '@/lib/prisma' does not exist."
+          }
+        ]
+      }
+    ]
+  },
   "overrides": [
     {
       "files": ["**/__tests__/**", "**/*.test.*", "**/*.spec.*"],

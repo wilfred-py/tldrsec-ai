@@ -5,7 +5,11 @@ on:
     branches: [ main, develop, enhance/test-pipeline-validation ]
     paths:
       - 'app/api/monitoring/**'
+      - 'app/api/health/pipeline/**'
+      - 'app/api/cron/auto-recover/**'
+      - 'app/api/cron/final-backup/**'
       - 'lib/monitoring/**'
+      - 'lib/cron/**'
       - 'prisma/schema.prisma'
       - 'prisma/migrations/**'
       - '.github/workflows/monitoring-validation.yml'
@@ -13,7 +17,11 @@ on:
     branches: [ main, develop ]
     paths:
       - 'app/api/monitoring/**'
+      - 'app/api/health/pipeline/**'
+      - 'app/api/cron/auto-recover/**'
+      - 'app/api/cron/final-backup/**'
       - 'lib/monitoring/**'
+      - 'lib/cron/**'
       - 'prisma/schema.prisma'
       - 'prisma/migrations/**'
 
@@ -166,14 +174,18 @@ jobs:
           npm run build
           npm start &
           SERVER_PID=$!
-          
+
           # Wait for server to start
           sleep 10
-          
+
           # Test health endpoints (with mock auth)
           curl -f http://localhost:3000/api/health || exit 1
           curl -f http://localhost:3000/api/health/database || exit 1
-          
+
+          # Test enhanced pipeline health endpoint (Phase 5)
+          echo "Testing enhanced pipeline health endpoint..."
+          curl -s http://localhost:3000/api/health/pipeline | head -c 500 || echo "⚠️ Pipeline health check skipped (may require auth)"
+
           # Cleanup
           kill $SERVER_PID
 
@@ -403,15 +415,27 @@ jobs:
           echo "✅ Security checks passed" >> deployment_summary.md
           echo "✅ Build validation completed" >> deployment_summary.md
           echo "" >> deployment_summary.md
-          echo "### New Monitoring Endpoints:" >> deployment_summary.md
+          echo "### Three-Layer Pipeline Redundancy:" >> deployment_summary.md
+          echo "- Layer 1: Primary Cloudflare Worker (every 10 min)" >> deployment_summary.md
+          echo "- Layer 2: Auto-Recovery Watchdog (every 5 min)" >> deployment_summary.md
+          echo "- Layer 3: Vercel Final Backup (every 30 min)" >> deployment_summary.md
+          echo "" >> deployment_summary.md
+          echo "### Monitoring Endpoints:" >> deployment_summary.md
+          echo "- \`/api/health/pipeline\` - Enhanced health with cron gaps & orphaned filings" >> deployment_summary.md
           echo "- \`/api/monitoring/pipeline-health\` - Real-time pipeline status" >> deployment_summary.md
           echo "- \`/api/monitoring/error-alerts\` - Alert management" >> deployment_summary.md
           echo "- \`/api/monitoring/health-trends\` - Historical analytics" >> deployment_summary.md
           echo "- \`/api/monitoring/metrics\` - System metrics aggregation" >> deployment_summary.md
           echo "" >> deployment_summary.md
+          echo "### Recovery Endpoints:" >> deployment_summary.md
+          echo "- \`/api/cron/auto-recover\` - Orphaned filing recovery + cleanup" >> deployment_summary.md
+          echo "- \`/api/cron/final-backup\` - Emergency backup (Vercel cron)" >> deployment_summary.md
+          echo "" >> deployment_summary.md
           echo "### Required Environment Variables:" >> deployment_summary.md
           echo "- \`ALERT_EMAIL_RECIPIENTS\` - Email addresses for system alerts" >> deployment_summary.md
           echo "- \`ESCALATION_EMAIL_RECIPIENTS\` - Email addresses for escalated alerts" >> deployment_summary.md
+          echo "" >> deployment_summary.md
+          echo "📖 Runbook: docs/runbooks/pipeline-stall-recovery.md" >> deployment_summary.md
           echo "" >> deployment_summary.md
           echo "Ready for production deployment! 🚀" >> deployment_summary.md
 

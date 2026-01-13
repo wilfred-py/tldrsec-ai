@@ -14,7 +14,7 @@
  * REFERENCE: thoughts/shared/research/2025-12-10-pipeline-job-selection-query-analysis.md
  */
 
-import { prisma } from '../db/prisma';
+import { getPrismaClient } from '../db/prisma';
 import { v4 as uuidv4 } from 'uuid';
 import { z } from 'zod';
 import { sanitizeJSON, detectMaliciousPatterns } from '../validation/sanitizers';
@@ -199,7 +199,7 @@ export class JobQueueService {
 
       // If idempotency key is provided, check for existing job
       if (validatedIdempotencyKey) {
-        const existingJob = await prisma.jobQueue.findFirst({
+        const existingJob = await getPrismaClient().jobQueue.findFirst({
           where: {
             idempotencyKey: validatedIdempotencyKey,
             status: {
@@ -217,7 +217,7 @@ export class JobQueueService {
       const jobId = uuidv4();
 
       // Create a new job
-      return await prisma.jobQueue.create({
+      return await getPrismaClient().jobQueue.create({
         data: {
           id: jobId,
           jobType,
@@ -247,7 +247,7 @@ export class JobQueueService {
       // Validate job ID format
       const validatedId = z.string().uuid().parse(id);
       
-      return await prisma.jobQueue.findUnique({
+      return await getPrismaClient().jobQueue.findUnique({
         where: { id: validatedId }
       });
     } catch (error) {
@@ -294,7 +294,7 @@ export class JobQueueService {
       // Use raw SQL to correctly compare retryCount < maxRetries
       // NOTE: Must use pipeline."JobQueue" for Supabase multi-schema setup
       if (jobType) {
-        const jobs = await prisma.$queryRaw<RawJobQueueRow[]>`
+        const jobs = await getPrismaClient().$queryRaw<RawJobQueueRow[]>`
           SELECT *
           FROM pipeline."JobQueue"
           WHERE "status" IN ('PENDING', 'RETRYING')
@@ -306,7 +306,7 @@ export class JobQueueService {
         `;
         return jobs;
       } else {
-        const jobs = await prisma.$queryRaw<RawJobQueueRow[]>`
+        const jobs = await getPrismaClient().$queryRaw<RawJobQueueRow[]>`
           SELECT *
           FROM pipeline."JobQueue"
           WHERE "status" IN ('PENDING', 'RETRYING')
@@ -367,7 +367,7 @@ export class JobQueueService {
       // Use raw SQL to correctly compare retryCount < maxRetries
       // This is necessary because Prisma's field reference pattern wasn't working
       // NOTE: Must use pipeline."JobQueue" for Supabase multi-schema setup
-      const jobs = await prisma.$queryRaw<RawJobQueueRow[]>`
+      const jobs = await getPrismaClient().$queryRaw<RawJobQueueRow[]>`
         SELECT *
         FROM pipeline."JobQueue"
         WHERE "status" IN ('PENDING', 'RETRYING')
@@ -404,7 +404,7 @@ export class JobQueueService {
       // Use raw SQL to correctly compare retryCount < maxRetries
       // NOTE: Must use pipeline."JobQueue" for Supabase multi-schema setup
       if (jobTypes && jobTypes.length > 0) {
-        const jobs = await prisma.$queryRaw<RawJobQueueRow[]>`
+        const jobs = await getPrismaClient().$queryRaw<RawJobQueueRow[]>`
           SELECT *
           FROM pipeline."JobQueue"
           WHERE "status" IN ('PENDING', 'RETRYING')
@@ -416,7 +416,7 @@ export class JobQueueService {
         `;
         return jobs[0] || null;
       } else {
-        const jobs = await prisma.$queryRaw<RawJobQueueRow[]>`
+        const jobs = await getPrismaClient().$queryRaw<RawJobQueueRow[]>`
           SELECT *
           FROM pipeline."JobQueue"
           WHERE "status" IN ('PENDING', 'RETRYING')
@@ -438,7 +438,7 @@ export class JobQueueService {
    */
   static async updateJobStatus(id: string, status: JobStatus, resultData: JobResultData = {}) {
     try {
-      const job = await prisma.jobQueue.findUnique({
+      const job = await getPrismaClient().jobQueue.findUnique({
         where: { id }
       });
 
@@ -482,7 +482,7 @@ export class JobQueueService {
         }
       }
 
-      return await prisma.jobQueue.update({
+      return await getPrismaClient().jobQueue.update({
         where: { id },
         data: updateData
       });
@@ -508,7 +508,7 @@ export class JobQueueService {
    */
   static async markForRetry(id: string, retryAt: Date, resultData: JobResultData = {}) {
     try {
-      const job = await prisma.jobQueue.findUnique({
+      const job = await getPrismaClient().jobQueue.findUnique({
         where: { id }
       });
 
@@ -554,7 +554,7 @@ export class JobQueueService {
         };
       }
       
-      return await prisma.jobQueue.update({
+      return await getPrismaClient().jobQueue.update({
         where: { id },
         data: updateData
       });
@@ -570,7 +570,7 @@ export class JobQueueService {
    */
   static async getQueueDepth(jobType: JobType): Promise<number> {
     try {
-      return await prisma.jobQueue.count({
+      return await getPrismaClient().jobQueue.count({
         where: {
           jobType,
           status: { in: ['PENDING', 'RETRYING'] },
@@ -587,7 +587,7 @@ export class JobQueueService {
    */
   static async cleanupOldJobs(olderThan: Date) {
     try {
-      return await prisma.jobQueue.deleteMany({
+      return await getPrismaClient().jobQueue.deleteMany({
         where: {
           status: {
             in: ['COMPLETED', 'FAILED']

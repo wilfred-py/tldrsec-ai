@@ -180,6 +180,23 @@ export async function GET(request: NextRequest) {
           throw new Error('Failed to queue discovery job');
         }
 
+        // Check pending job counts to report backlog status
+        const discoveryPending = await JobQueueService.getQueueDepth('ASYNC_DISCOVER_FILINGS');
+        const fetchPending = await JobQueueService.getQueueDepth('ASYNC_FETCH_FILING');
+        const summarizePending = await JobQueueService.getQueueDepth('ASYNC_SUMMARIZE_CACHED');
+        const totalPending = discoveryPending + fetchPending + summarizePending;
+
+        // PIPELINE FIX: Don't process jobs inline - this causes timeouts.
+        // The 3-phase pipeline should be truly async:
+        // 1. tier-aware queues ASYNC_DISCOVER_FILINGS jobs
+        // 2. process-filing-queue endpoint processes jobs in batches
+        // 3. Cloudflare Worker calls each endpoint separately
+        //
+        // If backlog exists, report it but don't try to clear inline.
+        if (totalPending > 0) {
+          cronLogger.info(`[${executionId}] Pending jobs backlog: discovery=${discoveryPending}, fetch=${fetchPending}, summarize=${summarizePending}, total=${totalPending}`);
+        }
+
         const duration = Date.now() - startTime;
 
         cronLogger.info(`[${executionId}] Discovery job queued successfully (3-phase pipeline)`, {
@@ -204,13 +221,20 @@ export async function GET(request: NextRequest) {
           discoveryJob: {
             id: discoveryJob.id,
             status: discoveryJob.status
+          },
+          backlog: {
+            discovery: discoveryPending,
+            fetch: fetchPending,
+            summarize: summarizePending,
+            total: totalPending
           }
         }, {
           status: 202, // 202 Accepted - processing will happen asynchronously
           headers: {
             'X-Processing-Mode': '3-phase-async',
             'X-Execution-ID': executionId,
-            'X-Discovery-Job-ID': discoveryJob.id
+            'X-Discovery-Job-ID': discoveryJob.id,
+            'X-Backlog-Total': totalPending.toString()
           }
         });
 

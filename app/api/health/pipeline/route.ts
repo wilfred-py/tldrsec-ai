@@ -11,20 +11,25 @@
  * - Stale PROCESSING jobs (stuck for >15 minutes)
  * - Invalid job types (jobs with no handler)
  * - Jobs approaching max retries (early warning)
+ * - Cron execution gaps (Cloudflare Worker failures) - Phase 5
+ * - Orphaned filings (unprocessed with no jobs) - Phase 5
  *
  * Health Statuses:
  * - HEALTHY: All systems operating normally
  * - DEGRADED: Some issues detected but pipeline is functional
  *   - Stale PROCESSING jobs detected
  *   - No completions in >60 minutes
+ *   - Orphaned filings exist
  *   - General issues present
  * - CRITICAL: Pipeline may be stalled or severely impacted
  *   - Exhausted RETRYING jobs (caused 41-hour stall in Jan 2026)
  *   - Invalid job types (can never complete)
  *   - No completions in >180 minutes
+ *   - Cron execution gap >20 minutes (Cloudflare Worker likely failed)
  * - ERROR: Unable to determine pipeline status
  *
  * @see docs/plans/2026-01-05-100-percent-pipeline-uptime.md
+ * @see docs/plans/2026-01-09-eliminate-manual-pipeline-intervention.md Phase 5
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -62,6 +67,17 @@ interface PipelineHealthResponse {
     invalidJobTypes: number;
     highRetryCount: number;
   };
+  // Phase 5: Cron execution monitoring
+  cronExecution: {
+    lastExecution: string | null;
+    minutesSinceLastCron: number | null;
+    gapsDetected: number;
+  };
+  // Phase 5: Orphaned filing monitoring
+  filings: {
+    orphanedCount: number;
+    unprocessedTotal: number;
+  };
   lastCompletion: string | null;
   minutesSinceLastCompletion: number | null;
   issues: string[];
@@ -85,6 +101,20 @@ const VALID_JOB_TYPES = [
  */
 const STALE_PROCESSING_MINUTES = 15;
 const HIGH_RETRY_THRESHOLD = 2; // Jobs with retryCount >= this are "approaching" max
+
+/**
+ * Phase 5: Cron execution gap thresholds
+ * - DEGRADED: 15-20 minutes without cron execution
+ * - CRITICAL: >20 minutes without cron execution (Cloudflare Worker likely failed)
+ */
+const CRON_GAP_DEGRADED_MINUTES = 15;
+const CRON_GAP_CRITICAL_MINUTES = 20;
+
+/**
+ * Phase 5: Orphaned filing thresholds
+ * - Only consider filings older than this as potentially orphaned
+ */
+const ORPHAN_AGE_THRESHOLD_MINUTES = 10;
 
 export async function GET(request: NextRequest) {
   const startTime = Date.now();
@@ -160,6 +190,8 @@ export async function GET(request: NextRequest) {
 
     // Count jobs by status - including new stuck job detection
     const staleProcessingCutoff = new Date(now.getTime() - STALE_PROCESSING_MINUTES * 60 * 1000);
+    // Phase 5: Thresholds for orphaned filing detection
+    const orphanAgeThreshold = new Date(now.getTime() - ORPHAN_AGE_THRESHOLD_MINUTES * 60 * 1000);
 
     const [
       pendingCount,
@@ -173,7 +205,12 @@ export async function GET(request: NextRequest) {
       staleProcessingCount,
       invalidJobTypeCount,
       highRetryCount,
-      exhaustedRetryingResult
+      exhaustedRetryingResult,
+      // Phase 5: Cron execution monitoring
+      recentCronExecutions,
+      // Phase 5: Orphaned filing monitoring
+      unprocessedFilingsOlderThanThreshold,
+      unprocessedFilingsTotal
     ] = await Promise.all([
       prisma.jobQueue.count({
         where: { status: 'PENDING' }
@@ -232,11 +269,91 @@ export async function GET(request: NextRequest) {
         FROM pipeline."JobQueue"
         WHERE "status" = 'RETRYING'
           AND "retryCount" >= "maxRetries"
-      `
+      `,
+      // Phase 5: Get recent cron executions (last 60 minutes)
+      prisma.cronJobExecution.findMany({
+        where: {
+          triggeredAt: { gte: oneHourAgo },
+          jobType: 'sec-filing-monitor',
+        },
+        select: { triggeredAt: true },
+        orderBy: { triggeredAt: 'desc' },
+      }),
+      // Phase 5: Unprocessed filings older than threshold (potentially orphaned)
+      prisma.secFiling.findMany({
+        where: {
+          processed: false,
+          createdAt: { lt: orphanAgeThreshold },
+        },
+        select: { id: true },
+        take: 100, // Limit for performance
+      }),
+      // Phase 5: Total unprocessed filings count
+      prisma.secFiling.count({
+        where: { processed: false },
+      }),
     ]);
 
     // Extract exhausted retrying count from raw query result
     const exhaustedRetryingCount = Number(exhaustedRetryingResult[0]?.count || 0);
+
+    // Phase 5: Calculate cron execution metrics
+    const lastCronExecution = recentCronExecutions[0]?.triggeredAt || null;
+    const minutesSinceLastCron = lastCronExecution
+      ? Math.floor((now.getTime() - lastCronExecution.getTime()) / 60000)
+      : null;
+
+    // Phase 5: Detect cron execution gaps
+    let cronGapsDetected = 0;
+    if (recentCronExecutions.length === 0) {
+      // No executions in last hour = one big gap
+      cronGapsDetected = 1;
+    } else {
+      // Check for gaps >15 minutes between executions
+      const sortedExecutions = [...recentCronExecutions].sort(
+        (a, b) => b.triggeredAt.getTime() - a.triggeredAt.getTime()
+      );
+
+      // Check gap from now to most recent execution
+      if (minutesSinceLastCron !== null && minutesSinceLastCron > CRON_GAP_DEGRADED_MINUTES) {
+        cronGapsDetected++;
+      }
+
+      // Check gaps between executions
+      for (let i = 0; i < sortedExecutions.length - 1; i++) {
+        const gapMinutes = (sortedExecutions[i].triggeredAt.getTime() - sortedExecutions[i + 1].triggeredAt.getTime()) / (60 * 1000);
+        if (gapMinutes > CRON_GAP_DEGRADED_MINUTES) {
+          cronGapsDetected++;
+        }
+      }
+    }
+
+    // Phase 5: Calculate orphaned filings count
+    // Orphaned = unprocessed AND old enough AND no active job referencing them
+    let orphanedFilingCount = 0;
+    if (unprocessedFilingsOlderThanThreshold.length > 0) {
+      const potentialOrphanIds = unprocessedFilingsOlderThanThreshold.map(f => f.id);
+
+      // Check which of these have active jobs
+      const jobsForFilings = await prisma.jobQueue.findMany({
+        where: {
+          status: { in: ['PENDING', 'PROCESSING', 'RETRYING'] },
+          OR: potentialOrphanIds.map(id => ({
+            payload: { path: ['filingId'], equals: id },
+          })),
+        },
+        select: { payload: true },
+      });
+
+      const filingIdsWithJobs = new Set(
+        jobsForFilings
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          .map(j => (j.payload as any)?.filingId)
+          .filter(Boolean)
+      );
+
+      orphanedFilingCount = potentialOrphanIds.filter(id => !filingIdsWithJobs.has(id)).length;
+    }
 
     // Calculate time since last completion
     const lastCompletionTime = lastCompletedJob?.completedAt || null;
@@ -295,6 +412,21 @@ export async function GET(request: NextRequest) {
       recommendations.push('Clean up legacy job types with invalid type names');
     }
 
+    // Phase 5: Detect cron execution gaps
+    if (minutesSinceLastCron !== null && minutesSinceLastCron > CRON_GAP_CRITICAL_MINUTES) {
+      issues.push(`Cron execution gap detected: ${minutesSinceLastCron} minutes since last execution`);
+      recommendations.push('Check Cloudflare Worker status and logs');
+    } else if (minutesSinceLastCron !== null && minutesSinceLastCron > CRON_GAP_DEGRADED_MINUTES) {
+      issues.push(`Cron execution gap warning: ${minutesSinceLastCron} minutes since last execution`);
+      recommendations.push('Monitor Cloudflare Worker for potential issues');
+    }
+
+    // Phase 5: Detect orphaned filings
+    if (orphanedFilingCount > 0) {
+      issues.push(`Orphaned filings detected: ${orphanedFilingCount} unprocessed filings with no active jobs`);
+      recommendations.push('Run orphaned filing recovery: OrphanedFilingDetector.checkAndRecover()');
+    }
+
     // Track warnings separately from critical issues
     const warnings: string[] = [];
 
@@ -312,7 +444,9 @@ export async function GET(request: NextRequest) {
       lockMetrics.healthStatus === 'CRITICAL' ||
       (minutesSinceLastCompletion !== null && minutesSinceLastCompletion > 180) ||
       exhaustedRetryingCount > 0 ||  // NEW: Jobs stuck forever without intervention
-      invalidJobTypeCount > 0        // NEW: Jobs that can never complete
+      invalidJobTypeCount > 0 ||     // NEW: Jobs that can never complete
+      // Phase 5: Cron execution gap >20 minutes (Cloudflare Worker likely failed)
+      (minutesSinceLastCron !== null && minutesSinceLastCron > CRON_GAP_CRITICAL_MINUTES)
     ) {
       status = 'CRITICAL';
     }
@@ -321,7 +455,11 @@ export async function GET(request: NextRequest) {
       lockMetrics.healthStatus === 'WARNING' ||
       issues.length > 0 ||
       (minutesSinceLastCompletion !== null && minutesSinceLastCompletion > 60) ||
-      staleProcessingCount > 0  // NEW: Jobs might be hung
+      staleProcessingCount > 0 ||  // NEW: Jobs might be hung
+      // Phase 5: Orphaned filings exist
+      orphanedFilingCount > 0 ||
+      // Phase 5: Cron execution gap 15-20 minutes
+      (minutesSinceLastCron !== null && minutesSinceLastCron > CRON_GAP_DEGRADED_MINUTES)
     ) {
       status = 'DEGRADED';
     }
@@ -346,6 +484,17 @@ export async function GET(request: NextRequest) {
         staleProcessing: staleProcessingCount,
         invalidJobTypes: invalidJobTypeCount,
         highRetryCount: highRetryCount
+      },
+      // Phase 5: Cron execution monitoring
+      cronExecution: {
+        lastExecution: lastCronExecution?.toISOString() || null,
+        minutesSinceLastCron,
+        gapsDetected: cronGapsDetected,
+      },
+      // Phase 5: Orphaned filing monitoring
+      filings: {
+        orphanedCount: orphanedFilingCount,
+        unprocessedTotal: unprocessedFilingsTotal,
       },
       lastCompletion: lastCompletionTime?.toISOString() || null,
       minutesSinceLastCompletion,
@@ -415,6 +564,17 @@ export async function GET(request: NextRequest) {
         staleProcessing: 0,
         invalidJobTypes: 0,
         highRetryCount: 0
+      },
+      // Phase 5: Cron execution monitoring
+      cronExecution: {
+        lastExecution: null,
+        minutesSinceLastCron: null,
+        gapsDetected: 0,
+      },
+      // Phase 5: Orphaned filing monitoring
+      filings: {
+        orphanedCount: 0,
+        unprocessedTotal: 0,
       },
       lastCompletion: null,
       minutesSinceLastCompletion: null,

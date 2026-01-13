@@ -10,6 +10,10 @@
       "maxDuration": 300,
       "memory": 1024
     },
+    "app/api/cron/final-backup/route.ts": {
+      "maxDuration": 300,
+      "memory": 512
+    },
     "app/api/cron/process-filing-queue/route.ts": {
       "maxDuration": 300,
       "memory": 1024
