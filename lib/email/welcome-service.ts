@@ -1,7 +1,7 @@
 'use server';
 
 import { auth, currentUser, clerkClient } from '@clerk/nextjs/server';
-import { prisma } from '@/lib/db/prisma';
+import { getPrismaClient } from '@/lib/db/prisma';
 import { getEmailTemplate } from './templates';
 import { EmailType, EmailMessage } from './types';
 import { sendEmail } from './index';
@@ -29,7 +29,7 @@ export async function queueWelcomeEmail(
   setImmediate(async () => {
     try {
       // Get user's tracked tickers from DB
-      const dbUser = await prisma.user.findUnique({
+      const dbUser = await getPrismaClient().user.findUnique({
         where: { id: userId },
         include: { tickers: true }
       });
@@ -114,7 +114,7 @@ export async function sendWelcomeEmail(): Promise<{ success: boolean; error?: st
     }
     
     // Get user from database
-    const dbUser = await prisma.user.findFirst({
+    const dbUser = await getPrismaClient().user.findFirst({
       where: { 
         authProviderId: userId 
       },
@@ -158,7 +158,7 @@ export async function sendWelcomeEmail(): Promise<{ success: boolean; error?: st
     };
     
     // Update user's onboarding status - do this first to ensure it happens even if email fails
-    await prisma.user.update({
+    await getPrismaClient().user.update({
       where: { id: dbUser.id },
       data: {
         onboardingCompleted: true

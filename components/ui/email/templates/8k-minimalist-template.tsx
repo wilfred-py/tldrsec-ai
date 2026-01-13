@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { EmailColors, markdownToHtml } from '../design-system';
+import { EmailColors, markdownToHtml, getSentimentColor, getSentimentEmoji } from '../design-system';
 import { EmailHeader } from './sections/EmailHeader';
 import { EmailFooter } from './sections/EmailFooter';
 import { SectionCard } from './sections/SectionCard';
@@ -154,7 +154,7 @@ export function Form8KMinimalistTemplate({ filing }: Form8KMinimalistTemplatePro
   const itemNumbers = (data?.itemNumbers || extractedData?.itemNumbers || []) as string[];
   const keyHighlights = (data?.keyHighlights || extractedData?.keyHighlights || []) as string[];
   const financialImpact = (data?.financialImpact || extractedData?.financialImpact || '') as string;
-  const _sentiment = (data?.sentiment || extractedData?.sentiment || '') as string;
+  const sentiment = (data?.sentiment || extractedData?.sentiment || '') as string;
 
   const displayTicker = symbol || ticker || 'N/A';
 
@@ -225,6 +225,21 @@ export function Form8KMinimalistTemplate({ filing }: Form8KMinimalistTemplatePro
                               }}>
                                 {signal.icon} {signal.level}
                               </span>
+                              {/* Sentiment badge inline with materiality */}
+                              {sentiment && (
+                                <span style={{
+                                  display: 'inline-block',
+                                  padding: '4px 12px',
+                                  marginLeft: '8px',
+                                  backgroundColor: getSentimentColor(sentiment).bg,
+                                  color: getSentimentColor(sentiment).text,
+                                  borderRadius: '20px',
+                                  fontSize: '11px',
+                                  fontWeight: 600,
+                                }}>
+                                  {getSentimentEmoji(sentiment)} {sentiment.charAt(0).toUpperCase() + sentiment.slice(1)}
+                                </span>
+                              )}
                             </td>
                           </tr>
 

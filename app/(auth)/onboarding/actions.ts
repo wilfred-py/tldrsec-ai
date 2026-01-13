@@ -1,6 +1,6 @@
 'use server';
 
-import { prisma } from '@/lib/db/prisma';
+import { getPrismaClient } from '@/lib/db/prisma';
 import { revalidatePath } from 'next/cache';
 import { auth, currentUser, clerkClient } from '@clerk/nextjs/server';
 import type {
@@ -47,7 +47,7 @@ export async function saveUserPreferences(preferences: UserPreferencesInput): Pr
     const preferencesJson = JSON.parse(JSON.stringify(preferences));
 
     // Check if user exists
-    const dbUser = await prisma.user.findUnique({
+    const dbUser = await getPrismaClient().user.findUnique({
       where: { 
         email: primaryEmail 
       }
@@ -55,7 +55,7 @@ export async function saveUserPreferences(preferences: UserPreferencesInput): Pr
 
     if (!dbUser) {
       // Create new user
-      await prisma.user.create({
+      await getPrismaClient().user.create({
         data: {
           email: primaryEmail,
           authProvider: 'clerk',
@@ -66,7 +66,7 @@ export async function saveUserPreferences(preferences: UserPreferencesInput): Pr
       });
     } else {
       // Update existing user preferences
-      await prisma.user.update({
+      await getPrismaClient().user.update({
         where: { id: dbUser.id },
         data: {
           preferences: preferencesJson
@@ -106,7 +106,7 @@ export async function addTickerSubscription(subscription: {
     const primaryEmail = clerkUser.emailAddresses[0].emailAddress;
 
     // Get user from database
-    const user = await prisma.user.findUnique({
+    const user = await getPrismaClient().user.findUnique({
       where: { email: primaryEmail }
     });
 
@@ -115,7 +115,7 @@ export async function addTickerSubscription(subscription: {
     }
 
     // Check if ticker is already tracked by the user
-    const existingTicker = await prisma.ticker.findFirst({
+    const existingTicker = await getPrismaClient().ticker.findFirst({
       where: {
         userId: user.id,
         symbol: subscription.symbol
@@ -128,7 +128,7 @@ export async function addTickerSubscription(subscription: {
     }
 
     // Add ticker to user's tracked list
-    await prisma.ticker.create({
+    await getPrismaClient().ticker.create({
       data: {
         symbol: subscription.symbol,
         companyName: subscription.companyName,
@@ -178,7 +178,7 @@ export async function completeOnboarding(): Promise<{ success: boolean; error?: 
     const userName = user.firstName ? `${user.firstName} ${user.lastName || ''}`.trim() : 'User';
     
     // Check if user exists in database by both authProviderId and email
-    let dbUser = await prisma.user.findFirst({
+    let dbUser = await getPrismaClient().user.findFirst({
       where: { 
         OR: [
           { authProviderId: userId },
@@ -198,7 +198,7 @@ export async function completeOnboarding(): Promise<{ success: boolean; error?: 
       };
 
       try {
-        dbUser = await prisma.user.create({
+        dbUser = await getPrismaClient().user.create({
           data: {
             email: primaryEmail,
             authProvider: 'clerk',
@@ -221,7 +221,7 @@ export async function completeOnboarding(): Promise<{ success: boolean; error?: 
 
     // Ensure onboardingCompleted is set to true in the database
     if (dbUser && !dbUser.onboardingCompleted) {
-      await prisma.user.update({
+      await getPrismaClient().user.update({
         where: { id: dbUser.id },
         data: { onboardingCompleted: true }
       });
@@ -312,7 +312,7 @@ export async function completeOnboardingBatched(input: {
     const preferencesJson = JSON.parse(JSON.stringify(input.preferences));
 
     // Use Prisma transaction for atomicity
-    const result = await prisma.$transaction(async (tx) => {
+    const result = await getPrismaClient().$transaction(async (tx) => {
       // Find or create user
       let dbUser = await tx.user.findFirst({
         where: {

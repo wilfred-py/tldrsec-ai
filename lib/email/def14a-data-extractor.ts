@@ -16,7 +16,7 @@
  * @module def14a-data-extractor
  */
 
-// import { extractBulletPoints } from './extractor-utils'; // TODO: Use in future implementation
+import { extractBulletPoints } from './extractor-utils';
 
 /**
  * Executive compensation entry
