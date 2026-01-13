@@ -180,43 +180,21 @@ export async function GET(request: NextRequest) {
           throw new Error('Failed to queue discovery job');
         }
 
-        // CRITICAL FIX: Process pending jobs after queuing discovery job
-        // Without this, jobs remain PENDING indefinitely since Cloudflare Worker
-        // authentication to process-filing-queue endpoints fails
-        cronLogger.info(`[${executionId}] Processing pending jobs after discovery job creation`);
-        
-        try {
-          const { BackgroundFilingWorker } = await import('../../../../lib/cron/background-filing-worker');
-          const worker = new BackgroundFilingWorker();
-          
-          // AGGRESSIVE BACKLOG CLEARING: Increase batch sizes for stuck jobs
-          // Check pending job counts to determine if we're in backlog mode
-          const discoveryPending = await JobQueueService.getQueueDepth('ASYNC_DISCOVER_FILINGS');
-          const fetchPending = await JobQueueService.getQueueDepth('ASYNC_FETCH_FILING'); 
-          const summarizePending = await JobQueueService.getQueueDepth('ASYNC_SUMMARIZE_CACHED');
-          const totalPending = discoveryPending + fetchPending + summarizePending;
-          const isBacklogMode = totalPending > 100; // High backlog threshold
-          
-          if (isBacklogMode) {
-            cronLogger.warn(`[${executionId}] BACKLOG MODE: ${totalPending} pending jobs detected - using aggressive batch sizes`);
-            // Aggressive batch sizes for backlog clearing
-            await worker.processBatch(['ASYNC_DISCOVER_FILINGS'], 50);
-            await worker.processBatch(['ASYNC_FETCH_FILING'], 20);
-            await worker.processBatch(['ASYNC_SUMMARIZE_CACHED'], 30);
-          } else {
-            cronLogger.info(`[${executionId}] Normal mode: ${totalPending} pending jobs - using standard batch sizes`);
-            // Normal batch sizes for regular operation
-            await worker.processBatch(['ASYNC_DISCOVER_FILINGS'], 10);
-            await worker.processBatch(['ASYNC_FETCH_FILING'], 2);
-            await worker.processBatch(['ASYNC_SUMMARIZE_CACHED'], 3);
-          }
-          
-          cronLogger.info(`[${executionId}] Completed processing pending jobs in 3-phase pipeline`);
-        } catch (processingError) {
-          cronLogger.error(`[${executionId}] Failed to process pending jobs, but discovery job queued successfully`, {
-            processingError: processingError instanceof Error ? processingError.message : 'Unknown error'
-          });
-          // Don't fail the request - discovery job was still queued successfully
+        // Check pending job counts to report backlog status
+        const discoveryPending = await JobQueueService.getQueueDepth('ASYNC_DISCOVER_FILINGS');
+        const fetchPending = await JobQueueService.getQueueDepth('ASYNC_FETCH_FILING');
+        const summarizePending = await JobQueueService.getQueueDepth('ASYNC_SUMMARIZE_CACHED');
+        const totalPending = discoveryPending + fetchPending + summarizePending;
+
+        // PIPELINE FIX: Don't process jobs inline - this causes timeouts.
+        // The 3-phase pipeline should be truly async:
+        // 1. tier-aware queues ASYNC_DISCOVER_FILINGS jobs
+        // 2. process-filing-queue endpoint processes jobs in batches
+        // 3. Cloudflare Worker calls each endpoint separately
+        //
+        // If backlog exists, report it but don't try to clear inline.
+        if (totalPending > 0) {
+          cronLogger.info(`[${executionId}] Pending jobs backlog: discovery=${discoveryPending}, fetch=${fetchPending}, summarize=${summarizePending}, total=${totalPending}`);
         }
 
         const duration = Date.now() - startTime;
@@ -243,13 +221,20 @@ export async function GET(request: NextRequest) {
           discoveryJob: {
             id: discoveryJob.id,
             status: discoveryJob.status
+          },
+          backlog: {
+            discovery: discoveryPending,
+            fetch: fetchPending,
+            summarize: summarizePending,
+            total: totalPending
           }
         }, {
           status: 202, // 202 Accepted - processing will happen asynchronously
           headers: {
             'X-Processing-Mode': '3-phase-async',
             'X-Execution-ID': executionId,
-            'X-Discovery-Job-ID': discoveryJob.id
+            'X-Discovery-Job-ID': discoveryJob.id,
+            'X-Backlog-Total': totalPending.toString()
           }
         });
 
