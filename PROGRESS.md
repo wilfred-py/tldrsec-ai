@@ -1,52 +1,34 @@
 # Project Progress
 
-**Date**: 2026-01-12
+**Date**: 2026-01-13
 **Branch**: main
-**Status**: Database Connection Pool Fix - In Progress
+**Status**: Current - Normal Operations
 
 ---
 
-## Current Session: Pipeline Stall Investigation (2026-01-12)
+## Current Session
 
-Investigating and fixing pipeline stall where tier-aware cron endpoints are timing out.
-
-### Investigation Progress:
-
-**Issue**: Tier-aware pipeline jobs timing out at 30-60 seconds despite async fixes.
-
-**Root Cause Found**: **16 zombie database connections in "idle in transaction" state** exhausting the Supabase connection pool. Oldest connections stuck for 1 hour 42 minutes!
-
-**Evidence**:
-```sql
--- Zombie connections found:
-- 16 connections in "idle in transaction" state
-- Oldest: 1:42:43 idle duration
-- Query: "BEGIN" or Prisma JobQueue queries never committed
-- All via Supavisor (connection pooler)
-```
-
-**Fix Applied**: Terminated all idle-in-transaction connections stuck >5 minutes:
-```sql
-SELECT pg_terminate_backend(pid)
-FROM pg_stat_activity
-WHERE state = 'idle in transaction'
-AND NOW() - state_change > interval '5 minutes';
--- Result: 16 connections terminated
-```
-
-**Status**: Connection pool restored (6 idle, 1 active). Testing endpoint response...
-
-### Previous Fixes Applied (Still Deployed):
-1. ✅ Fixed BackgroundFilingWorker instantiation (constructor options, not processBatch params)
-2. ✅ Removed inline job processing from tier-aware endpoint (true async 202 pattern)
-3. ✅ Discovered Clerk intercepts Bearer auth before middleware (HMAC bypasses correctly)
-
-**Files Previously Modified**:
-- `app/api/cron/tier-aware/route.ts` - Async 202 pattern, no inline processing
+No active work in progress.
 
 ---
 
-## Recently Completed: GitHub Actions Workflow Updates (2026-01-12) ✅
+## Recently Completed
+
+### Pipeline Stall Investigation - Database Connection Pool Fix ✅ (2026-01-12)
+
+Fixed pipeline stall caused by zombie database connections exhausting Supabase connection pool.
+
+**Root Cause**: 16 database connections stuck in "idle in transaction" state (oldest: 1:42:43 idle) exhausting the connection pool, causing tier-aware cron endpoints to timeout.
+
+**Fix**: Terminated all idle-in-transaction connections >5 minutes old using `pg_terminate_backend()`. Also previously applied fixes: BackgroundFilingWorker instantiation, async 202 pattern, and proper HMAC auth bypass.
+
+**Files**: `app/api/cron/tier-aware/route.ts`
+
+**Verification**: Connection pool restored (6 idle, 1 active), endpoints responding normally.
+
+---
+
+### GitHub Actions Workflow Updates ✅ (2026-01-12)
 
 Updated GitHub Actions workflows to reflect the Phase 5-8 pipeline redundancy enhancements.
 
@@ -199,5 +181,5 @@ at Function.create (/lib/job-queue/index.ts:220:36)
 
 ---
 
-*Last Updated: 2026-01-12 (Pipeline Stall Investigation - Connection Pool Fix)*
+*Last Updated: 2026-01-13 (Context Compaction & Sync)*
 *Older completed projects archived to .claude/history/ - See TIMELINE.md for full history*
