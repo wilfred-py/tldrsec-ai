@@ -1,12 +1,35 @@
 # Project Progress
 
-**Date**: 2026-01-15
-**Branch**: enhance-summary-quality
-**Status**: SEC Summary Quality Phase 2 - All Phases Complete
+**Date**: 2026-01-16
+**Branch**: fix/8k-template-registry-gap
+**Status**: Active - Email Template Type Errors and 8-K Template Registry Fix
 
 ---
 
-## Current Session
+## Current Session: Email Template Type Errors Fix (2026-01-16)
+
+**Issue**: Property type errors in `lib/email/templates.ts` - summaryData interface missing properties used in template rendering.
+
+**Root Cause**: `FilingTemplateData.summaryData` in `lib/email/types.ts` was missing common fields used for 10-K/10-Q, 8-K, and Form 4 templates.
+
+**Fix Applied**:
+1. Added missing properties to `FilingTemplateData` interface in `types.ts`:
+   - `summaryUrl` - URL to view summary
+   - `summaryData` common fields: `period`, `financials`, `insights` (10-K/10-Q)
+   - 8-K fields: `eventType`, `summary`, `sentiment`, `keyHighlights`, `financialImpact`, `managementCommentary`, `forwardGuidance`, `positiveHighlights`, `negativeHighlights`, `itemNumbers`
+   - Form 4 fields: `filerName`, `relationship`, `percentageChange`, `newStake`
+2. Fixed `generatePlainTextEmail()` function signature to use `FilingTemplateData[]`
+3. Fixed type casts in `getEmailTemplate()` to use `as unknown as` for proper conversion
+
+**Files Modified**:
+- `lib/email/types.ts` - Added missing properties to FilingTemplateData interface
+- `lib/email/templates.ts` - Fixed function signature and type casts
+
+**Verification**: ✅ Build passes (no TypeScript errors in templates.ts)
+
+---
+
+## Recently Completed Sessions
 
 ### SEC Summary Quality Phase 2 - Phase 4: Grokipedia Research ✅ (2026-01-15)
 
@@ -38,6 +61,16 @@ Completed comprehensive research on all 9 SEC form types and updated extraction 
 
 ---
 
+### 8-K Email Template Registry Fix ✅ (2026-01-15)
+
+**Issue**: 8-K emails rendered with GenericMinimalistTemplate instead of Form8KMinimalistTemplate.
+
+**Root Cause**: `lib/email/templates.ts` registry was missing 8-K and Form 144 mappings (emailGenerator.ts had them, but individual filing notifications use templates.ts).
+
+**Fix**: Added imports and registry entries for 8-K (4 variants) and Form 144 (3 variants) in `lib/email/templates.ts`.
+
+**Files**: `lib/email/templates.ts`
+**Verification**: ✅ Build passes, test emails verified
 ### Pipeline Recovery - Database Migration Fix ✅ (2026-01-13)
 
 Restored stalled pipeline after Supabase database server migration.
@@ -225,5 +258,5 @@ at Function.create (/lib/job-queue/index.ts:220:36)
 
 ---
 
-*Last Updated: 2026-01-15 (SEC Summary Quality Phase 2 Complete)*
+*Last Updated: 2026-01-16 (Email Template Type Errors Fix + SEC Summary Quality Phase 2 Complete)*
 *Older completed projects archived to .claude/history/ - See TIMELINE.md for full history*

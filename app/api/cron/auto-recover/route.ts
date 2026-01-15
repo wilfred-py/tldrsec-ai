@@ -29,6 +29,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { RecoveryStateService } from '@/lib/cron/recovery-state-service';
 import { CronExecutionGapDetector } from '@/lib/cron/execution-gap-detector';
 import { OrphanedFilingDetector } from '@/lib/cron/orphaned-filing-detector';
+import { validateCronRequestHmac } from '@/lib/security/hmac-auth';
 
 // For testing only - reset recovery state (now uses persistent service)
 export async function _resetRecoveryStateForTesting(): Promise<void> {
@@ -75,6 +76,17 @@ interface CronGapCheckResult {
 }
 
 async function authenticateRequest(request: NextRequest): Promise<boolean> {
+  // Check HMAC authentication first (used by Cloudflare Worker)
+  const hmacSignature = request.headers.get('x-hmac-signature');
+  const hmacTimestamp = request.headers.get('x-hmac-timestamp');
+  
+  if (hmacSignature && hmacTimestamp) {
+    const hmacValidation = validateCronRequestHmac(request);
+    if (hmacValidation.isValid) {
+      return true;
+    }
+  }
+  
   // Check if middleware already validated the request (HMAC auth)
   const securityValidated = request.headers.get('x-security-validated');
   const authMethod = request.headers.get('x-auth-method');

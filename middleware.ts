@@ -31,7 +31,7 @@ const cronAuthMiddleware = async (request: NextRequest): Promise<NextResponse | 
       method: request.method,
       timestamp: new Date().toISOString()
     });
-    return undefined; // Let the route handler manage auth
+    return undefined; // Let the route handler manage auth completely
   }
   
   // Allow HEAD requests for health checks without authentication
