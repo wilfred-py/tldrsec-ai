@@ -31,55 +31,7 @@ const cronAuthMiddleware = async (request: NextRequest): Promise<NextResponse | 
       method: request.method,
       timestamp: new Date().toISOString()
     });
-    
-    // For auto-recover, we need to handle HMAC auth here to prevent Clerk interference
-    if (pathname === '/api/cron/auto-recover') {
-      const hmacSignature = request.headers.get('x-hmac-signature');
-      const hmacTimestamp = request.headers.get('x-hmac-timestamp');
-      
-      if (hmacSignature && hmacTimestamp) {
-        // Validate HMAC here
-        const { HmacAuthService } = await import('./lib/security/hmac-auth');
-        const cronSecret = process.env.CRON_SECRET;
-        
-        if (cronSecret) {
-          const validation = HmacAuthService.validateRequestHmac(request, cronSecret);
-          
-          if (validation.isValid) {
-            // Add headers to indicate successful HMAC validation
-            const headers = new Headers(request.headers);
-            headers.set('x-security-validated', 'true');
-            headers.set('x-auth-method', 'hmac');
-            
-            // Clone request with validation headers
-            const newRequest = new Request(request, { headers });
-            
-            // Return response that passes through to route handler
-            return NextResponse.next({
-              request: {
-                headers: headers
-              }
-            });
-          } else {
-            middlewareLogger.warn('HMAC validation failed for auto-recover', {
-              error: validation.error,
-              pathname,
-              timestamp: new Date().toISOString()
-            });
-            return new NextResponse(
-              JSON.stringify({
-                error: 'Unauthorized',
-                code: 401,
-                timestamp: new Date().toISOString()
-              }),
-              { status: 401, headers: { 'Content-Type': 'application/json' } }
-            );
-          }
-        }
-      }
-    }
-    
-    return undefined; // Let the route handler manage auth
+    return undefined; // Let the route handler manage auth completely
   }
   
   // Allow HEAD requests for health checks without authentication
