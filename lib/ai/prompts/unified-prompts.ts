@@ -315,16 +315,17 @@ export const FORM_SCHEMAS: Record<string, JSONSchema> = {
       },
       transactions: {
         type: 'array',
-        description: 'List of ALL transactions from Table I and Table II - MUST include price',
+        description: 'List of ALL transactions from Table I and Table II - MUST include shares and price',
         items: {
           type: 'object',
           properties: {
             type: { type: 'string', description: 'Transaction type: A=Acquisition, D=Disposition, P=Purchase, S=Sale, G=Gift, M=Exercise' },
-            shares: { type: 'string', description: 'Number of shares with commas (from column 5)' },
-            price: { type: 'string', description: 'Price per share with $ from column 4 - if $0, check if this is a gift/grant. Never leave blank.' },
+            shares: { type: 'string', description: 'REQUIRED: Number of shares with commas (from column 5). Never leave blank - extract from table or calculate from value/price.' },
+            price: { type: 'string', description: 'REQUIRED: Price per share with $ from column 4 - if $0, check if this is a gift/grant. Never leave blank.' },
             date: { type: 'string', description: 'Transaction date from column 2 (YYYY-MM-DD)' },
             acquisitionDisposition: { type: 'string', description: 'A for acquired, D for disposed' }
-          }
+          },
+          required: ['type', 'shares', 'price']
         }
       },
       totalValue: {
@@ -341,6 +342,10 @@ export const FORM_SCHEMAS: Record<string, JSONSchema> = {
         type: 'string',
         description: 'Percentage change in holdings (e.g., "+5.2%" or "-12.3%")',
         maxLength: 20
+      },
+      has10b51Plan: {
+        type: 'boolean',
+        description: 'CRITICAL: Check footnotes/explanations for 10b5-1 trading plan. Set true if: "pursuant to a 10b5-1", "pre-arranged trading plan", "Rule 10b5-1", "prearranged trading agreement". Set false if: "no 10b5-1", "not pursuant to", or no mention.'
       }
     }
   },
@@ -929,11 +934,18 @@ const FORM_EXTRACTION_GUIDANCE: Record<string, string> = {
 
   '4': `FORM 4 EXTRACTION RULES:
 - Look for "Table I - Non-Derivative Securities" and "Table II - Derivative Securities"
+- CRITICAL: Column 5 has the number of shares - ALWAYS extract this value. Never leave blank.
 - Column 4 has the transaction price - if blank or $0, note this is likely a gift or grant
 - Transaction code in column 3: P=Purchase, S=Sale, A=Award, G=Gift, M=Exercise
 - Column 8 (A or D) indicates Acquisition or Disposition
 - Calculate total value = shares × price for each transaction
-- The summary MUST include: ticker, insider name, transaction type, dollar amount, and signal assessment`,
+- If shares field is missing but total value is available, calculate shares = totalValue / price
+- The summary MUST include: ticker, insider name, transaction type, SHARE COUNT, dollar amount, and signal assessment
+- 10b5-1 DETECTION: Check footnotes and explanation sections for pre-arranged trading plan language:
+  * "pursuant to a 10b5-1" or "Rule 10b5-1" = has10b51Plan: true
+  * "pre-arranged trading plan" or "prearranged trading agreement" = has10b51Plan: true
+  * "adopted on [date]" referring to trading plan = has10b51Plan: true
+  * If no mention of trading plan = has10b51Plan: false`,
 
   '8-K': `8-K EXTRACTION RULES:
 - Item 2.02 (Results of Operations): Extract EXACT revenue, EPS, net income figures with YoY changes

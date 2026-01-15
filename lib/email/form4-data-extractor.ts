@@ -214,7 +214,13 @@ function parseMarkdownTable(text: string): Form4Transaction[] {
   // Find column indices
   const dateIdx = headers.findIndex(h => h.includes('date'));
   const codeIdx = headers.findIndex(h => h.includes('code'));
-  const amountIdx = headers.findIndex(h => h.includes('amount') || h.includes('shares'));
+  const amountIdx = headers.findIndex(h =>
+    h.includes('amount') ||
+    h.includes('shares') ||
+    h.includes('quantity') ||
+    h.includes('units') ||
+    h.includes('number')
+  );
   const adIdx = headers.findIndex(h => h.includes('(a)') || h.includes('(d)') || h.includes('a/d'));
   const priceIdx = headers.findIndex(h => h.includes('price'));
   const _ownershipIdx = headers.findIndex(h => h.includes('ownership') || h.includes('post'));
@@ -515,7 +521,7 @@ function isTransferTransaction(type: string): boolean {
 function determineSignalStrength(data: Form4ExtractedData, text: string): string {
   const textLower = text.toLowerCase();
 
-  // Check for trust/family transfers FIRST
+  // Check for trust/family transfers
   // Transfers represent changes in ownership form, not buying/selling conviction
   const hasTransfer = data.transactions.some(t => isTransferTransaction(t.type));
   const hasTransferText = textLower.includes('trust transfer') ||
@@ -526,18 +532,54 @@ function determineSignalStrength(data: Form4ExtractedData, text: string): string
                           textLower.includes('change in form of') ||
                           (textLower.includes('transfer') && textLower.includes('trust'));
 
-  if (hasTransfer || hasTransferText) {
-    return 'Neutral - Trust/Family Transfer';
-  }
+  // Check for non-transfer transactions (sales, purchases) - from structured data
+  // Exclude generic "Transaction" type and empty types which are fallbacks
+  const hasNonTransferTx = data.transactions.some(t => {
+    const typeLower = t.type.toLowerCase().trim();
+    // Empty or generic "Transaction" types mean we couldn't determine type - rely on text
+    if (typeLower === '' || typeLower === 'transaction') return false;
+    return !isTransferTransaction(t.type);
+  });
+
+  // Check for sale/purchase language in text (when no structured transactions)
+  const hasSalePurchaseText = textLower.includes('sold') ||
+                              textLower.includes('sale') ||
+                              textLower.includes('purchased') ||
+                              textLower.includes('bought');
+
+  // A filing has non-transfer content if:
+  // 1. There are explicit non-transfer transactions (Sale, Purchase, Gift) OR
+  // 2. Text mentions sales/purchases AND doesn't mention transfers
+  // If text mentions transfers/trust, prioritize that even with generic Transaction type
+  const hasNonTransfer = hasNonTransferTx || (hasSalePurchaseText && !hasTransferText);
 
   // Check for 10b5-1 plan (routine, pre-planned)
   // But NOT if it says "no 10b5-1" or "unchecked"
-  const has10b51Mention = textLower.includes('10b5-1') || textLower.includes('10b-5') || textLower.includes('rule 10b');
+  const has10b51Mention = textLower.includes('10b5-1') ||
+                          textLower.includes('10b-5') ||
+                          textLower.includes('rule 10b') ||
+                          textLower.includes('pre-arranged trading plan') ||
+                          textLower.includes('prearranged trading') ||
+                          textLower.includes('pre-planned trading') ||
+                          (textLower.includes('trading plan') && textLower.includes('adopted'));
   const negated10b51 = textLower.includes('no 10b5-1') ||
                        textLower.includes('no rule 10b') ||
                        textLower.includes('unchecked') ||
-                       textLower.includes('not pursuant');
+                       textLower.includes('not pursuant') ||
+                       textLower.includes('no trading plan');
 
+  // For mixed transaction filings (sale + transfer with 10b5-1), prioritize 10b5-1 detection
+  // The 10b5-1 status applies to the sale, not the transfer
+  if (has10b51Mention && !negated10b51 && hasNonTransfer) {
+    return 'Weak - 10b5-1 Plan';
+  }
+
+  // If transfer-related text or transactions, and NO explicit sales/purchases, return neutral
+  if ((hasTransfer || hasTransferText) && !hasNonTransfer) {
+    return 'Neutral - Trust/Family Transfer';
+  }
+
+  // If has 10b5-1 without non-transfer (pure 10b5-1 mention in transfer context is still weak)
   if (has10b51Mention && !negated10b51) {
     return 'Weak - 10b5-1 Plan';
   }
