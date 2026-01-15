@@ -1,12 +1,76 @@
 # Project Progress
 
-**Date**: 2026-01-13
-**Branch**: main
-**Status**: Current - Normal Operations
+**Date**: 2026-01-16
+**Branch**: fix/8k-template-registry-gap
+**Status**: Active - Email Template Type Errors and 8-K Template Registry Fix
 
 ---
 
-## Current Session
+## Current Session: Email Template Type Errors Fix (2026-01-16)
+
+**Issue**: Property type errors in `lib/email/templates.ts` - summaryData interface missing properties used in template rendering.
+
+**Root Cause**: `FilingTemplateData.summaryData` in `lib/email/types.ts` was missing common fields used for 10-K/10-Q, 8-K, and Form 4 templates.
+
+**Fix Applied**:
+1. Added missing properties to `FilingTemplateData` interface in `types.ts`:
+   - `summaryUrl` - URL to view summary
+   - `summaryData` common fields: `period`, `financials`, `insights` (10-K/10-Q)
+   - 8-K fields: `eventType`, `summary`, `sentiment`, `keyHighlights`, `financialImpact`, `managementCommentary`, `forwardGuidance`, `positiveHighlights`, `negativeHighlights`, `itemNumbers`
+   - Form 4 fields: `filerName`, `relationship`, `percentageChange`, `newStake`
+2. Fixed `generatePlainTextEmail()` function signature to use `FilingTemplateData[]`
+3. Fixed type casts in `getEmailTemplate()` to use `as unknown as` for proper conversion
+
+**Files Modified**:
+- `lib/email/types.ts` - Added missing properties to FilingTemplateData interface
+- `lib/email/templates.ts` - Fixed function signature and type casts
+
+**Verification**: ✅ Build passes (no TypeScript errors in templates.ts)
+
+---
+
+## Recently Completed Sessions
+
+### SEC Summary Quality Phase 2 - Phase 4: Grokipedia Research ✅ (2026-01-15)
+
+Completed comprehensive research on all 9 SEC form types and updated extraction guidance.
+
+**Approach**: Spawned 9 parallel research agents to investigate form-specific requirements using authoritative sources (SEC.gov, Deloitte DART, PWC Viewpoint, CFI, DilutionTracker).
+
+**Gap Analysis Results**: Identified significant extraction guidance gaps across all form types.
+
+**Updates Made to `lib/ai/prompts/unified-prompts.ts`**:
+
+| Form | Before | After | Key Additions |
+|------|--------|-------|---------------|
+| 10-K | 14 rules | 22 rules | 16-item/4-part structure, MD&A metrics, human capital disclosure, footnote-first approach |
+| 10-Q | 12 rules | 20 rules | Part I/II structure, DSO/DPO liquidity metrics, non-GAAP reconciliation, red flags |
+| Form 4 | 6 rules | 18 rules | Complete transaction code mapping (P,S,A,D,G,M,F,J,K,X,C,W), 10b5-1 checkbox (Apr 2023) |
+| 8-K | 6 rules | 22 rules | Complete 9-section item mapping, Item 1.05 cybersecurity (Dec 2023), high-impact items |
+| Form 144 | 10 rules | 18 rules | 90-day validity, Rule 144 volume limits, holding periods, broker requirement |
+| S-1 | 13 rules | 20 rules | JOBS Act confidential filing, human capital metrics, lock-up period, pre-revenue handling |
+| S-3 | 8 rules | 22 rules | $75M float requirement, WKSI status, MEF filings, ATM vs bought deal, 3-year shelf |
+| DEF 14A | 9 rules | 20 rules | CD&A section, Summary Compensation Table, say-on-pay thresholds (<70% ISS concern) |
+| 11-K | 10 rules | 20 rules | ERISA vs non-ERISA requirements, PCAOB audit, 90/180 day filing deadlines |
+
+**Files Modified**:
+- `lib/ai/prompts/unified-prompts.ts` - All 9 form type extraction rules enhanced
+- `docs/plans/2026-01-12-sec-summary-quality-phase-2.md` - Phase 4 marked complete
+
+**Verification**: Linter passes (no new errors)
+
+---
+
+### 8-K Email Template Registry Fix ✅ (2026-01-15)
+
+**Issue**: 8-K emails rendered with GenericMinimalistTemplate instead of Form8KMinimalistTemplate.
+
+**Root Cause**: `lib/email/templates.ts` registry was missing 8-K and Form 144 mappings (emailGenerator.ts had them, but individual filing notifications use templates.ts).
+
+**Fix**: Added imports and registry entries for 8-K (4 variants) and Form 144 (3 variants) in `lib/email/templates.ts`.
+
+**Files**: `lib/email/templates.ts`
+**Verification**: ✅ Build passes, test emails verified
 
 ### Pipeline Recovery - Database Migration Fix ✅ (2026-01-13)
 
@@ -195,5 +259,5 @@ at Function.create (/lib/job-queue/index.ts:220:36)
 
 ---
 
-*Last Updated: 2026-01-13 (Context Compaction & Sync)*
+*Last Updated: 2026-01-16 (Email Template Type Errors Fix)*
 *Older completed projects archived to .claude/history/ - See TIMELINE.md for full history*
