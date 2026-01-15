@@ -5,10 +5,11 @@ git_commit: 1ca547b15f4dfae8d28880e19aace86aca67e8d9
 branch: fix/8k-template-registry-gap
 repository: tldrsec-ai
 topic: "Summary Table Field Population Analysis for Cost/Profit Optimization"
-tags: [research, codebase, summary, cost-tracking, token-optimization, database-schema]
+tags: [research, codebase, summary, cost-tracking, token-optimization, database-schema, 424b2, data-extraction]
 status: complete
 last_updated: 2026-01-16
 last_updated_by: Claude Code
+last_updated_note: "Added 424B2 data extractor improvement documentation from PR #315"
 ---
 
 # Research: Summary Table Field Population Analysis for Cost/Profit Optimization
@@ -334,3 +335,103 @@ const PRICING = {
 3. **Is `cost` vs `totalCost` intentional redundancy?** - Both fields exist in schema but only `totalCost` is populated.
 
 4. **How to implement quality-cost optimization?** - Need to populate `qualityScore` and `confidenceLevel` fields from existing validation logic.
+
+---
+
+## Recent Improvement: 424B2 Data Extractor (PR #315)
+
+**Commit**: [2d823d8](https://github.com/wilfred-py/tldrsec-ai/commit/2d823d82354409e24a7c8aed82153e64771ad4a2)
+**Date**: 2026-01-09
+**PR**: #315 - Complete Phase 5: Add SEC filing extractors for SC 13G, SC 13D, and 424B2
+
+### Context: 424B2 Cost Impact
+
+424B2 filings (Prospectus Supplements) are the **highest cost filing type** in production:
+- **37 summaries** generated
+- **$1.59 total cost** (36% of all AI spend)
+- **$0.043 avg cost per summary** (4x the average)
+- **140,331 avg input tokens** (4x the average)
+
+### 424B2 Data Extractor Implementation
+
+A dedicated data extractor was implemented at [lib/email/424b2-data-extractor.ts](lib/email/424b2-data-extractor.ts) (~424 lines) to validate and enrich AI output for prospectus supplements.
+
+**Extracted Fields** (`Form424B2ExtractedData` interface):
+```typescript
+interface Form424B2ExtractedData {
+  offeringType?: string;      // Debt/Equity/Structured Notes
+  offeringAmount?: string;    // e.g., "$2B", "$500M"
+  interestRate?: string;      // e.g., "5.25%"
+  maturityDate?: string;      // e.g., "March 15, 2034"
+  sharesOffered?: string;     // For equity offerings
+  pricePerShare?: string;     // For equity offerings
+  linkedTo?: string;          // For structured notes (e.g., "S&P 500 Index")
+  settlementDate?: string;
+  useOfProceeds?: string;
+  underwriters: string[];     // e.g., ["Goldman Sachs", "Morgan Stanley"]
+}
+```
+
+**Extraction Patterns Supported**:
+
+1. **Offering Type Detection**:
+   - Senior/Subordinated Notes/Bonds
+   - Fixed/Floating Rate Notes
+   - Equity - Common Stock
+   - Structured Notes
+
+2. **Offering Amount Parsing**:
+   - Markdown format: `**Offering Amount**: $2,000,000,000`
+   - Principal amount: `$2,000,000,000 aggregate principal amount`
+   - Billion/Million shorthand: `$2 billion` → `$2B`
+   - Gross proceeds: `gross proceeds of approximately $2.5 billion`
+
+3. **Interest Rate Extraction**:
+   - Rate patterns: `5.25% Senior Notes`, `coupon of 5.25%`, `bearing interest at 5.25%`
+   - Per annum: `5.25% per annum`
+
+4. **Maturity Date Parsing**:
+   - Full date: `due March 15, 2034`
+   - ISO format: `matures on 2034-03-15`
+   - Month-Year only: `maturity date of March 2034`
+
+5. **Underwriter Recognition**:
+   - Known underwriters: Goldman Sachs, Morgan Stanley, JPMorgan, Bank of America, Citigroup, Barclays, etc.
+   - Section extraction from markdown
+
+### Cost Optimization Potential
+
+With the 424B2 extractor in place, the system can:
+1. **Validate AI output** - Ensure critical fields like `offeringAmount`, `interestRate` are extracted correctly
+2. **Fill gaps** - When AI returns sparse data, extractor fills in from raw text
+3. **Quality tracking** - Fill rate metrics track AI accuracy vs extractor contribution
+
+**Observed fill rates** (from Phase 3 integration testing):
+- 10-K: 25% fill rate (financialHighlights)
+- 10-Q: 25% fill rate (guidanceUpdates)
+- 8-K: 71% fill rate (eventType, itemNumbers, keyHighlights)
+
+### Related Extractors in Phase 5
+
+| Filing Type | Extractor | Lines | Test Coverage |
+|-------------|-----------|-------|---------------|
+| SC 13G | [lib/email/sc13g-data-extractor.ts](lib/email/sc13g-data-extractor.ts) | ~248 | 15 tests |
+| SC 13D | [lib/email/sc13d-data-extractor.ts](lib/email/sc13d-data-extractor.ts) | ~355 | 17 tests |
+| 424B2 | [lib/email/424b2-data-extractor.ts](lib/email/424b2-data-extractor.ts) | ~424 | 16 tests |
+
+### Extractor Registry Integration
+
+The extractor registry at [lib/email/extractor-registry.ts](lib/email/extractor-registry.ts) now supports **16 form types**:
+- 10-K, 10-Q, 8-K, Form 4, Form 144
+- S-1, S-3, DEF 14A, Form 11-K
+- SC 13G, SC 13D, 424B2
+- Plus aliases (e.g., "SC13G", "13G", "SC 13G" all map to SC 13G extractor)
+
+### Impact on Summary Quality
+
+The extractor framework provides:
+1. **mergeWithFallback** - AI wins conflicts, extractor fills gaps
+2. **logDataDiscrepancies** - Monitor AI quality vs ground truth
+3. **calculateFillRate** - Track extractor contribution metrics
+
+This enables future quality-cost optimization by measuring how much the AI extracts correctly vs how much the extractor must fill in.
