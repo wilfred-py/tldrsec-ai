@@ -8,7 +8,21 @@
 
 ## Current Session
 
-No active work in progress.
+### Pipeline Recovery - Database Migration Fix ✅ (2026-01-13)
+
+Restored stalled pipeline after Supabase database server migration.
+
+**Root Cause**: Supabase migrated database from `aws-1-ap-southeast-2` to `aws-0-ap-southeast-1` with password change on Dec 23, 2025. Connection remained alive until Jan 12 6:30 PM AEST when it finally expired, causing complete pipeline stall.
+
+**Fix**: 
+- Identified new database credentials in Vercel environment
+- Redeployed Vercel application with `vercel --prod`
+- Updated Cloudflare Worker CRON_SECRET
+- Manually triggered pipeline to clear 126-job backlog
+
+**Files**: `.env.local` (updated DATABASE_URL and DIRECT_URL)
+
+**Verification**: Pipeline restored, processing 73 discovery + 53 summarize jobs
 
 ---
 
