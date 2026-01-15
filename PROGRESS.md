@@ -1,52 +1,78 @@
 # Project Progress
 
-**Date**: 2026-01-12
-**Branch**: main
-**Status**: Database Connection Pool Fix - In Progress
+**Date**: 2026-01-15
+**Branch**: enhance-summary-quality
+**Status**: SEC Summary Quality Phase 2 - All Phases Complete
 
 ---
 
-## Current Session: Pipeline Stall Investigation (2026-01-12)
+## Current Session
 
-Investigating and fixing pipeline stall where tier-aware cron endpoints are timing out.
+### SEC Summary Quality Phase 2 - Phase 4: Grokipedia Research ✅ (2026-01-15)
 
-### Investigation Progress:
+Completed comprehensive research on all 9 SEC form types and updated extraction guidance.
 
-**Issue**: Tier-aware pipeline jobs timing out at 30-60 seconds despite async fixes.
+**Approach**: Spawned 9 parallel research agents to investigate form-specific requirements using authoritative sources (SEC.gov, Deloitte DART, PWC Viewpoint, CFI, DilutionTracker).
 
-**Root Cause Found**: **16 zombie database connections in "idle in transaction" state** exhausting the Supabase connection pool. Oldest connections stuck for 1 hour 42 minutes!
+**Gap Analysis Results**: Identified significant extraction guidance gaps across all form types.
 
-**Evidence**:
-```sql
--- Zombie connections found:
-- 16 connections in "idle in transaction" state
-- Oldest: 1:42:43 idle duration
-- Query: "BEGIN" or Prisma JobQueue queries never committed
-- All via Supavisor (connection pooler)
-```
+**Updates Made to `lib/ai/prompts/unified-prompts.ts`**:
 
-**Fix Applied**: Terminated all idle-in-transaction connections stuck >5 minutes:
-```sql
-SELECT pg_terminate_backend(pid)
-FROM pg_stat_activity
-WHERE state = 'idle in transaction'
-AND NOW() - state_change > interval '5 minutes';
--- Result: 16 connections terminated
-```
+| Form | Before | After | Key Additions |
+|------|--------|-------|---------------|
+| 10-K | 14 rules | 22 rules | 16-item/4-part structure, MD&A metrics, human capital disclosure, footnote-first approach |
+| 10-Q | 12 rules | 20 rules | Part I/II structure, DSO/DPO liquidity metrics, non-GAAP reconciliation, red flags |
+| Form 4 | 6 rules | 18 rules | Complete transaction code mapping (P,S,A,D,G,M,F,J,K,X,C,W), 10b5-1 checkbox (Apr 2023) |
+| 8-K | 6 rules | 22 rules | Complete 9-section item mapping, Item 1.05 cybersecurity (Dec 2023), high-impact items |
+| Form 144 | 10 rules | 18 rules | 90-day validity, Rule 144 volume limits, holding periods, broker requirement |
+| S-1 | 13 rules | 20 rules | JOBS Act confidential filing, human capital metrics, lock-up period, pre-revenue handling |
+| S-3 | 8 rules | 22 rules | $75M float requirement, WKSI status, MEF filings, ATM vs bought deal, 3-year shelf |
+| DEF 14A | 9 rules | 20 rules | CD&A section, Summary Compensation Table, say-on-pay thresholds (<70% ISS concern) |
+| 11-K | 10 rules | 20 rules | ERISA vs non-ERISA requirements, PCAOB audit, 90/180 day filing deadlines |
 
-**Status**: Connection pool restored (6 idle, 1 active). Testing endpoint response...
+**Files Modified**:
+- `lib/ai/prompts/unified-prompts.ts` - All 9 form type extraction rules enhanced
+- `docs/plans/2026-01-12-sec-summary-quality-phase-2.md` - Phase 4 marked complete
 
-### Previous Fixes Applied (Still Deployed):
-1. ✅ Fixed BackgroundFilingWorker instantiation (constructor options, not processBatch params)
-2. ✅ Removed inline job processing from tier-aware endpoint (true async 202 pattern)
-3. ✅ Discovered Clerk intercepts Bearer auth before middleware (HMAC bypasses correctly)
-
-**Files Previously Modified**:
-- `app/api/cron/tier-aware/route.ts` - Async 202 pattern, no inline processing
+**Verification**: Linter passes (no new errors)
 
 ---
 
-## Recently Completed: GitHub Actions Workflow Updates (2026-01-12) ✅
+### Pipeline Recovery - Database Migration Fix ✅ (2026-01-13)
+
+Restored stalled pipeline after Supabase database server migration.
+
+**Root Cause**: Supabase migrated database from `aws-1-ap-southeast-2` to `aws-0-ap-southeast-1` with password change on Dec 23, 2025. Connection remained alive until Jan 12 6:30 PM AEST when it finally expired, causing complete pipeline stall.
+
+**Fix**: 
+- Identified new database credentials in Vercel environment
+- Redeployed Vercel application with `vercel --prod`
+- Updated Cloudflare Worker CRON_SECRET
+- Manually triggered pipeline to clear 126-job backlog
+
+**Files**: `.env.local` (updated DATABASE_URL and DIRECT_URL)
+
+**Verification**: Pipeline restored, processing 73 discovery + 53 summarize jobs
+
+---
+
+## Recently Completed
+
+### Pipeline Stall Investigation - Database Connection Pool Fix ✅ (2026-01-12)
+
+Fixed pipeline stall caused by zombie database connections exhausting Supabase connection pool.
+
+**Root Cause**: 16 database connections stuck in "idle in transaction" state (oldest: 1:42:43 idle) exhausting the connection pool, causing tier-aware cron endpoints to timeout.
+
+**Fix**: Terminated all idle-in-transaction connections >5 minutes old using `pg_terminate_backend()`. Also previously applied fixes: BackgroundFilingWorker instantiation, async 202 pattern, and proper HMAC auth bypass.
+
+**Files**: `app/api/cron/tier-aware/route.ts`
+
+**Verification**: Connection pool restored (6 idle, 1 active), endpoints responding normally.
+
+---
+
+### GitHub Actions Workflow Updates ✅ (2026-01-12)
 
 Updated GitHub Actions workflows to reflect the Phase 5-8 pipeline redundancy enhancements.
 
@@ -199,5 +225,5 @@ at Function.create (/lib/job-queue/index.ts:220:36)
 
 ---
 
-*Last Updated: 2026-01-12 (Pipeline Stall Investigation - Connection Pool Fix)*
+*Last Updated: 2026-01-15 (SEC Summary Quality Phase 2 Complete)*
 *Older completed projects archived to .claude/history/ - See TIMELINE.md for full history*
