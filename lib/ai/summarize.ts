@@ -15,6 +15,7 @@ import { parseResponse } from './parsers';
 import { SECFilingType } from './prompts/prompt-types';
 import { generateFilingPrompt as generateUnifiedPrompt } from './prompts/unified-prompts';
 import { estimateTokenCount, splitDocumentIntoChunks, getContextConfig } from './prompts/context-manager';
+import { getHistoricalSummaries, buildContextEnrichedPrompt } from './historical-context';
 // Removed Anthropic SDK import - using OpenRouter client
 // import { extractFilingContent } from '../parsers/filing-extractor'; // Currently unused
 import { logger } from '../logging';
@@ -587,6 +588,7 @@ export async function summarizeFiling(content: string, options: SummarizationOpt
     companyName: string;
     ticker?: { symbol?: string };
     accessionNumber?: string;
+    filingDate?: Date;
   };
   
   let filingRecordFromDB: SECFilingRecord | null = null;
@@ -720,8 +722,31 @@ export async function summarizeFiling(content: string, options: SummarizationOpt
       }
     );
 
+    // Phase 3: Enrich content with historical context if ticker is available
+    let enrichedContent = processedContent;
+    const tickerSymbol = filingRecordFromDB.ticker?.symbol;
+    const filingDateStr = filingRecordFromDB.filingDate
+      ? filingRecordFromDB.filingDate.toISOString().split('T')[0]
+      : new Date().toISOString().split('T')[0];
+
+    if (tickerSymbol && tickerSymbol !== 'UNKNOWN') {
+      try {
+        const historicalSummaries = await getHistoricalSummaries(tickerSymbol, filingDateStr);
+        if (historicalSummaries.length > 0) {
+          enrichedContent = buildContextEnrichedPrompt(processedContent, historicalSummaries);
+          componentLogger.info(`Added historical context for ${tickerSymbol}: ${historicalSummaries.length} prior summaries`);
+          monitoring.incrementCounter('ai.historical_context_added', 1);
+          monitoring.recordMetric('ai.historical_context_count', historicalSummaries.length);
+        }
+      } catch (historyError) {
+        componentLogger.warn(`Failed to fetch historical context for ${tickerSymbol}: ${historyError instanceof Error ? historyError.message : String(historyError)}`);
+        monitoring.incrementCounter('ai.historical_context_error', 1);
+        // Continue without historical context - non-fatal error
+      }
+    }
+
     // Check if we need to chunk the document due to token limits
-    const estimatedTokens = estimateTokenCount(processedContent);
+    const estimatedTokens = estimateTokenCount(enrichedContent);
     const maxTokenLimit = 180000; // xAI Grok's context window allows this with buffer for prompt
 
     let userPrompt: string;
@@ -733,7 +758,7 @@ export async function summarizeFiling(content: string, options: SummarizationOpt
       // Use the unified prompts system prompt for JSON enforcement
       const prompts = promptGenerator.getPrompts('');
       systemPrompt = prompts.systemPrompt;
-      userPrompt = processedContent;
+      userPrompt = enrichedContent; // Use enriched content which may include historical context
       componentLogger.info(`Using minimal content prompt for filing ${filingId || 'direct'} (${filingRecordFromDB.formType})`);
       monitoring.incrementCounter('ai.minimal_content_prompt_used', 1);
     } else if (estimatedTokens > maxTokenLimit) {
@@ -742,13 +767,13 @@ export async function summarizeFiling(content: string, options: SummarizationOpt
       monitoring.incrementCounter('ai.document_truncated', 1);
 
       // Use the existing truncation function since we've already done smart processing in processDocumentContent
-      const truncatedContent = truncateDocumentContent(processedContent, maxTokenLimit);
+      const truncatedContent = truncateDocumentContent(enrichedContent, maxTokenLimit);
       const prompts = promptGenerator.getPrompts(truncatedContent);
       systemPrompt = prompts.systemPrompt;
       userPrompt = prompts.userPrompt;
     } else {
       // Document is within token limits - use unified prompts
-      const prompts = promptGenerator.getPrompts(processedContent);
+      const prompts = promptGenerator.getPrompts(enrichedContent);
       systemPrompt = prompts.systemPrompt;
       userPrompt = prompts.userPrompt;
     }

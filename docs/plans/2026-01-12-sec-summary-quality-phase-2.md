@@ -5,6 +5,55 @@
 **Branch**: review-generated-summaries
 **Repository**: review-generated-summaries
 
+---
+
+## Implementation Status
+
+### Phase 1: Fix Form 4 Shares Display ✅ COMPLETED (2026-01-15)
+- Created `__tests__/email/form4-shares-display.test.ts` (14 tests)
+- Expanded table header detection in `form4-data-extractor.ts:217` to include `quantity`, `units`, `number`
+- Added `required: ['type', 'shares', 'price']` to Form 4 transaction schema
+- Updated Form 4 extraction guidance with shares requirements
+- Manual verification passed via test emails
+
+### Phase 2: Improve 10b5-1 Detection ✅ COMPLETED (2026-01-15)
+- Created `__tests__/ai/prompts/10b51-extraction.test.ts` (10 tests)
+- Added `has10b51Plan` boolean field to Form 4 schema
+- Added detection for "pre-arranged trading plan", "prearranged trading", "pre-planned trading"
+- Fixed mixed transaction logic (10b5-1 takes priority over transfer)
+- Added negation handling for "not pursuant to", "no 10b5-1"
+- Manual verification passed via test emails
+
+### Phase 3: Add Historical Context ✅ COMPLETED (2026-01-15)
+- Created `lib/ai/historical-context.ts` with `getHistoricalSummaries()` and `buildContextEnrichedPrompt()`
+- Created `__tests__/ai/historical-context.test.ts` (11 tests)
+- Integrated historical context into `lib/ai/summarize.ts`
+- Retrieves last 3 summaries for same ticker, excludes current filing date
+- Historical summaries truncated to 1500 chars to manage token budget
+- Non-blocking: failures in historical fetch don't break summarization
+
+### Phase 4: Research via Grokipedia ✅ COMPLETED (2026-01-15)
+- Spawned 9 parallel research agents to investigate all SEC form types
+- Used web search (Grokipedia unavailable) with authoritative sources: SEC.gov, Deloitte DART, PWC Viewpoint, CFI, DilutionTracker
+- Comprehensive gap analysis against existing `FORM_EXTRACTION_GUIDANCE`
+- Updated all 9 form types in `lib/ai/prompts/unified-prompts.ts` with enhanced extraction rules
+
+**Key Research Findings Integrated:**
+
+| Form | Before | After | Key Additions |
+|------|--------|-------|---------------|
+| 10-K | 14 rules | 22 rules | 16-item structure, MD&A metrics, human capital disclosure, footnote-first approach |
+| 10-Q | 12 rules | 20 rules | Part I/II structure, DSO/DPO liquidity metrics, non-GAAP reconciliation, red flags |
+| Form 4 | 6 rules | 18 rules | Complete transaction code mapping (P,S,A,D,G,M,F,J,K,X,C,W), 10b5-1 checkbox (Apr 2023), Table I/II distinction |
+| 8-K | 6 rules | 22 rules | Complete 9-section item mapping, Item 1.05 cybersecurity (Dec 2023), high-impact item identification |
+| Form 144 | 10 rules | 18 rules | 90-day validity, Rule 144 volume limits, holding periods, broker requirement |
+| S-1 | 13 rules | 20 rules | JOBS Act confidential filing, human capital metrics, lock-up period, pre-revenue handling |
+| S-3 | 8 rules | 22 rules | $75M float requirement, WKSI status, MEF filings, ATM vs bought deal, 3-year shelf validity |
+| DEF 14A | 9 rules | 20 rules | CD&A section, Summary Compensation Table, say-on-pay thresholds (<70% ISS concern), governance metrics |
+| 11-K | 10 rules | 20 rules | ERISA vs non-ERISA requirements, PCAOB audit, filing deadlines, required financial statements |
+
+---
+
 ## Overview
 
 This plan addresses the remaining user feedback items from the SEC Filing Summary Quality analysis (Phase 1 completed 2026-01-12). We focus on three key improvements:
