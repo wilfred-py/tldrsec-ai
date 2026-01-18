@@ -273,11 +273,10 @@ export async function GET(request: NextRequest) {
       // Phase 5: Get recent cron executions (last 60 minutes)
       prisma.cronJobExecution.findMany({
         where: {
-          triggeredAt: { gte: oneHourAgo },
-          jobType: 'sec-filing-monitor',
+          startedAt: { gte: oneHourAgo },
         },
-        select: { triggeredAt: true },
-        orderBy: { triggeredAt: 'desc' },
+        select: { startedAt: true },
+        orderBy: { startedAt: 'desc' },
       }),
       // Phase 5: Unprocessed filings older than threshold (potentially orphaned)
       prisma.secFiling.findMany({
@@ -298,7 +297,7 @@ export async function GET(request: NextRequest) {
     const exhaustedRetryingCount = Number(exhaustedRetryingResult[0]?.count || 0);
 
     // Phase 5: Calculate cron execution metrics
-    const lastCronExecution = recentCronExecutions[0]?.triggeredAt || null;
+    const lastCronExecution = recentCronExecutions[0]?.startedAt || null;
     const minutesSinceLastCron = lastCronExecution
       ? Math.floor((now.getTime() - lastCronExecution.getTime()) / 60000)
       : null;
@@ -311,7 +310,7 @@ export async function GET(request: NextRequest) {
     } else {
       // Check for gaps >15 minutes between executions
       const sortedExecutions = [...recentCronExecutions].sort(
-        (a, b) => b.triggeredAt.getTime() - a.triggeredAt.getTime()
+        (a, b) => b.startedAt.getTime() - a.startedAt.getTime()
       );
 
       // Check gap from now to most recent execution
@@ -321,7 +320,7 @@ export async function GET(request: NextRequest) {
 
       // Check gaps between executions
       for (let i = 0; i < sortedExecutions.length - 1; i++) {
-        const gapMinutes = (sortedExecutions[i].triggeredAt.getTime() - sortedExecutions[i + 1].triggeredAt.getTime()) / (60 * 1000);
+        const gapMinutes = (sortedExecutions[i].startedAt.getTime() - sortedExecutions[i + 1].startedAt.getTime()) / (60 * 1000);
         if (gapMinutes > CRON_GAP_DEGRADED_MINUTES) {
           cronGapsDetected++;
         }
