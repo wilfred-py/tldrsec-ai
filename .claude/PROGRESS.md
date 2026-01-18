@@ -1,112 +1,77 @@
 # Project Progress
 
 **Date**: 2026-01-16
-**Branch**: fix/8k-template-registry-gap
-**Status**: Active - Fixing email template type errors
+**Branch**: main  
+**Status**: Active - Pipeline recovery and monitoring improvements
 
 ---
 
-## Current Session: Email Template Type Errors Fix (2026-01-16)
+## Current Session: Summary Field Population Optimization (2026-01-16)
 
-**Issue**: Property type errors in `lib/email/templates.ts` - summaryData interface missing properties used in template rendering.
+**Issue**: Summary table has 38 fields but `processingTimeMs` field is 0% populated (0/704 summaries) despite the value being calculated.
 
-**Root Cause**: `FilingTemplateData.summaryData` in `lib/email/types.ts` was missing common fields used for 10-K/10-Q, 8-K, and Form 4 templates.
+**Root Cause**: The `summarizeDuration` value is calculated in summarize-cached-handler.ts but not stored in the dedicated `processingTimeMs` database field.
 
 **Fix Applied**:
-1. Added missing properties to `FilingTemplateData` interface in `types.ts`:
-   - `summaryUrl` - URL to view summary
-   - `summaryData` common fields: `period`, `financials`, `insights` (10-K/10-Q)
-   - 8-K fields: `eventType`, `summary`, `sentiment`, `keyHighlights`, `financialImpact`, `managementCommentary`, `forwardGuidance`, `positiveHighlights`, `negativeHighlights`, `itemNumbers`
-   - Form 4 fields: `filerName`, `relationship`, `percentageChange`, `newStake`
-2. Fixed `generatePlainTextEmail()` function signature to use `FilingTemplateData[]`
-3. Fixed type casts in `getEmailTemplate()` to use `as unknown as` for proper conversion
+1. Added `processingTimeMs: summarizeDuration` for new AI summaries (line 419)
+2. Added `processingTimeMs: 0` for shared/cached summaries (line 265)
+3. Created comprehensive tests with 4 test cases validating field population
 
 **Files Modified**:
-- `lib/email/types.ts` - Added missing properties to FilingTemplateData interface
-- `lib/email/templates.ts` - Fixed function signature and type casts
+- [lib/cron/handlers/summarize-cached-handler.ts:265](lib/cron/handlers/summarize-cached-handler.ts#L265) - Cached summary path
+- [lib/cron/handlers/summarize-cached-handler.ts:419](lib/cron/handlers/summarize-cached-handler.ts#L419) - New AI summary path
+- `__tests__/cron/handlers/summarize-cached-handler-fields.test.ts` - New comprehensive tests (4/4 passing)
+- `docs/plans/2026-01-16-summary-field-population-optimization.md` - Implementation plan
 
-**Verification**: ✅ Build passes (no TypeScript errors in templates.ts)
+**Automated Verification**: ✅ All tests pass (4/4), build succeeds, no new lint errors
+
+**Pending Manual Verification**:
+- Deploy to production
+- Trigger real filing summary via cron
+- Query database to verify `processingTimeMs > 0` for new summaries
+- Verify cached summaries have `processingTimeMs = 0`
 
 ---
 
 ## Recently Completed Sessions
 
-### 8-K Email Template Registry Fix (2026-01-15)
+### Pipeline Stall Recovery and Prevention (2026-01-16)
 
-**Issue**: 8-K emails rendered with GenericMinimalistTemplate instead of Form8KMinimalistTemplate.
+**Issue**: Complete pipeline stall since ~8AM AEST with 832+ jobs accumulated in backlog. All three redundancy layers failed.
 
-**Root Cause**: `lib/email/templates.ts` registry was missing 8-K and Form 144 mappings (emailGenerator.ts had them, but individual filing notifications use templates.ts).
+**Root Cause**:
+1. Database connectivity issues preventing health endpoint from working
+2. Auto-recovery authentication mismatch (expected HMAC, received Bearer token)
+3. No automatic restart mechanism for stalled job processors
 
-**Fix**: Added imports and registry entries for 8-K (4 variants) and Form 144 (3 variants) in `lib/email/templates.ts`.
+**Fix Applied**:
+1. Emergency queue cleanup - marked 926 stuck jobs as FAILED
+2. Manual pipeline trigger to restart processing
+3. Cloudflare Worker redeployment with proper schedules (*/5, */10, */15 minutes)
+4. Created emergency recovery scripts for future incidents
 
-**Files**: `lib/email/templates.ts`
-**Verification**: ✅ Build passes, test emails verified
+**Files Modified**:
+- `scripts/emergency-clear-queue.ts` - New emergency cleanup script
+- `scripts/trigger-auto-recovery.ts` - New HMAC authentication script
+- `docs/plans/2026-01-16-pipeline-stall-recovery-and-prevention.md` - Recovery plan
+- `docs/incidents/2026-01-16-pipeline-stall-incident.md` - Incident report
+- `__tests__/pipeline-recovery/pipeline-recovery-validation.test.ts` - Recovery tests
 
-### Context Compaction & Pipeline Recovery (2026-01-15)
-
-**Pipeline Issue**: Fixed critical pipeline stall caused by missing CRON_SECRET in Cloudflare Worker + auto-recovery 401 errors.
-
-**Solutions Applied**:
-1. Generated new CRON_SECRET and deployed to Cloudflare Worker + Vercel
-2. Added HMAC validation to `/api/cron/auto-recover/route.ts`
-3. Cleaned up secret format (removed literal newline characters)
-
-**Files**: `app/api/cron/auto-recover/route.ts`
-**Verification**: ✅ Pipeline restored, auto-recovery working
-
-### Auth-First Onboarding Flow (2026-01-10)
-
-**All 6 phases complete** - Transformed from passwordless-first to auth-first approach:
-- Phase 1: Removed skip buttons, 2-step flow (sectors → companies)
-- Phase 2: 3-state CTA logic on landing page
-- Phase 3: Middleware redirects for auth states
-- Phase 4: Simplified Clerk webhook
-- Phase 5: 21 E2E tests
-- Phase 6: Performance optimization (~30 API calls → 2 blocking + async)
-
-**Key Files**: `onboarding/page.tsx`, `onboarding/actions.ts`, `middleware.ts`, `lib/email/welcome-service.ts`
-
-### Pipeline Redeployment & Backlog Recovery (2026-01-10)
-
-Resolved critical pipeline stall affecting 400+ pending jobs. Both Vercel and Cloudflare Worker redeployed.
-
-### Eliminate Manual Pipeline Intervention (2026-01-09 - 2026-01-11)
-
-**8-phase implementation** for 100% pipeline uptime:
-- Phase 1: Persistent Recovery State (RecoveryStateService + database model)
-- Phase 2: Cron Execution Gap Detection (CronExecutionGapDetector)
-- Phase 3: Orphaned Filing Detection (OrphanedFilingDetector)
-- Phase 4: External Watchdog Worker (cloudflare-watchdog/)
-- Phase 5: Health Endpoint Enhancement
-- Phase 6: Auto-Recovery Integration
-- Phase 7: Vercel Cron Final Backup
-- Phase 8: Documentation & Runbooks
-
-**Key Files**: `lib/cron/recovery-state-service.ts`, `lib/cron/execution-gap-detector.ts`, `lib/cron/orphaned-filing-detector.ts`, `cloudflare-watchdog/`
-
-### Summary Generation Accuracy Improvements (2026-01-07 - 2026-01-09)
-
-**5-phase implementation** for better summary quality:
-- Phase 1: Form 4 Trust Transfer Fix (J/K transaction codes)
-- Phase 2: Code Cleanup (removed deprecated files, temperature 0.2)
-- Phase 3: Template & Email Consistency (EmailSubjectService, TemplateRegistry)
-- Phase 4: Quality Assurance & Testing (101 tests)
-- Phase 5: SC 13G/SC 13D/424B2 Extractors (48 tests)
-
-**Key Files**: `lib/email/form4-data-extractor.ts`, `lib/email/subject-service.ts`, `lib/email/template-registry.ts`, various extractors
+**Verification**: ✅ Pipeline restored, queue cleared (0 pending), Cloudflare Worker redeployed
 
 ---
 
-## Archived Projects (Pre-2026-01-07)
+## Recently Completed Sessions
 
-Projects completed before 2026-01-07 are archived in `.claude/history/2025/`:
-- **Dec 29-31**: Cloudflare Cron Fixes, Email Quality, JSON Parsing Pipeline, Landing Page Redesign
-- **Dec 22-28**: Supabase Migration, Email Link Fixes, Test Data Integrity
-- **Dec 15-21**: Pipeline Discovery, Slack Monitor, Circuit Breaker Fixes
-- **Dec 8-14**: Orphaned Jobs Cleanup, Job Selection Bug Fixes
-- **Dec 1-7**: Email Summarization Phases 1-3, Live Counter SSR Fix
+*No other completed work in the last 30 days*
 
-See `.claude/history/TIMELINE.md` for complete chronological index.
+---
+
+## Archived Projects
+
+Projects completed before 30 days ago are archived in `.claude/history/`:
+- See `.claude/history/TIMELINE.md` for complete chronological index
+- Weekly archive files contain full technical implementation details
 
 ---
 
