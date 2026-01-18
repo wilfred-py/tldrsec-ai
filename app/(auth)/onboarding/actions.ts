@@ -379,20 +379,20 @@ export async function completeOnboardingBatched(input: {
     const dbTime = Date.now() - startTime;
     console.log(`[Onboarding] DB operations completed in ${dbTime}ms`);
 
-    // Update Clerk metadata (non-blocking - don't await in critical path)
-    // Fire and forget, but log errors
-    clerkClient()
-      .then((client) =>
-        client.users.updateUserMetadata(userId, {
-          publicMetadata: { onboardingCompleted: true }
-        })
-      )
-      .then(() => {
-        console.log(`[Onboarding] Clerk metadata synced for ${userId}`);
-      })
-      .catch((err) => {
-        console.error('[Onboarding] Failed to sync Clerk metadata:', err);
+    // CRITICAL: Update Clerk metadata BEFORE returning
+    // This prevents the middleware race condition where user gets redirected back to onboarding
+    // because Clerk's publicMetadata.onboardingCompleted hasn't synced yet
+    try {
+      const client = await clerkClient();
+      await client.users.updateUserMetadata(userId, {
+        publicMetadata: { onboardingCompleted: true }
       });
+      console.log(`[Onboarding] Clerk metadata synced for ${userId}`);
+    } catch (err) {
+      console.error('[Onboarding] Failed to sync Clerk metadata:', err);
+      // Don't fail the entire onboarding, but this could cause redirect issues
+      // The user will still be in the database, so they can retry onboarding
+    }
 
     // Queue welcome email async (doesn't block user)
     queueWelcomeEmail(result.id, primaryEmail, userName).catch((err) => {

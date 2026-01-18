@@ -533,9 +533,21 @@ export async function GET(request: NextRequest) {
   } catch (error) {
     const duration = Date.now() - startTime;
 
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    const errorStack = error instanceof Error ? error.stack : undefined;
+    const errorName = error instanceof Error ? error.name : 'UnknownError';
+
     pipelineLogger.error('Pipeline health check failed', {
-      error: error instanceof Error ? error.message : 'Unknown error',
-      stack: error instanceof Error ? error.stack : undefined,
+      error: errorMessage,
+      errorName,
+      stack: errorStack,
+      duration
+    });
+
+    console.error('[Pipeline Health] Detailed error:', {
+      message: errorMessage,
+      name: errorName,
+      stack: errorStack,
       duration
     });
 
@@ -577,10 +589,16 @@ export async function GET(request: NextRequest) {
       },
       lastCompletion: null,
       minutesSinceLastCompletion: null,
-      issues: ['Failed to check pipeline health'],
+      issues: [`Failed to check pipeline health: ${errorMessage}`],
       recommendations: ['Check system health or contact support'],
-      timestamp: new Date().toISOString()
-    } as PipelineHealthResponse, {
+      timestamp: new Date().toISOString(),
+      // Add debug info in development/error responses
+      debug: {
+        errorName,
+        errorMessage: errorMessage.substring(0, 500), // Limit length
+        duration
+      }
+    } as PipelineHealthResponse & { debug?: unknown }, {
       status: 500,
       headers: {
         'Cache-Control': 'no-store',
