@@ -1,12 +1,42 @@
 # Project Progress
 
-**Date**: 2026-01-16
-**Branch**: fix/8k-template-registry-gap
-**Status**: Active - Email Template Type Errors and 8-K Template Registry Fix
+**Date**: 2026-01-19
+**Branch**: main
+**Status**: Active - Onboarding Redirect Race Condition Fix Complete
 
 ---
 
-## Current Session: Email Template Type Errors Fix (2026-01-16)
+## Current Session: Onboarding Redirect Race Condition Fix (2026-01-19)
+
+**Issue**: Two problems in onboarding flow:
+1. Welcome emails failing with "Missing `html` or `text` field" error
+2. After completing onboarding, users stuck on "Setting up your account" spinner instead of redirecting to /dashboard
+
+**Root Cause 1 - Email Failure**: `getEmailTemplate()` in `lib/email/templates.ts` is an async function (line 926), but was being called without `await` in `welcome-service.ts`, causing `html` and `text` to be Promise objects instead of strings.
+
+**Root Cause 2 - Redirect Loop**: Clerk's `publicMetadata.onboardingCompleted` doesn't immediately sync to JWT session claims. The middleware checks `sessionClaims.publicMetadata.onboardingCompleted`, but the JWT hasn't refreshed yet after the backend updates Clerk metadata, causing redirect back to /onboarding.
+
+**Fix Applied**:
+1. **Email Fix**: Added `await` to `getEmailTemplate()` calls in `welcome-service.ts` at lines 45 and 134
+2. **Redirect Fix**: Implemented cookie-based bypass pattern:
+   - Client sets `onboarding_completed=true` cookie (60s TTL) before navigation
+   - Added `session.reload()` call to attempt Clerk session refresh
+   - Changed to hard navigation (`window.location.href`) instead of client-side `router.push()`
+   - Middleware checks BOTH Clerk session claims AND the cookie
+   - Cookie is cleared after first successful dashboard access
+
+**Files Modified**:
+- `lib/email/welcome-service.ts` - Added `await` to async `getEmailTemplate()` calls
+- `app/(auth)/onboarding/page.tsx` - Added session reload, cookie bypass, hard navigation
+- `middleware.ts` - Added cookie bypass check for onboarding redirect protection
+
+**Verification**: ✅ User confirmed "working now" - onboarding completes and redirects to dashboard successfully
+
+---
+
+## Recently Completed Sessions
+
+### Email Template Type Errors Fix (2026-01-16)
 
 **Issue**: Property type errors in `lib/email/templates.ts` - summaryData interface missing properties used in template rendering.
 
