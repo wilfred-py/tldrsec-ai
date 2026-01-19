@@ -42,7 +42,7 @@ export async function queueWelcomeEmail(
       const selectedTickers = dbUser.tickers.map(ticker => ticker.symbol);
 
       // Generate welcome email content
-      const { html, text } = getEmailTemplate(EmailType.WELCOME, {
+      const { html, text } = await getEmailTemplate(EmailType.WELCOME, {
         recipientName: name || 'there',
         recipientEmail: email,
         selectedTickers,
@@ -131,7 +131,7 @@ export async function sendWelcomeEmail(): Promise<{ success: boolean; error?: st
     const selectedTickers = dbUser.tickers.map(ticker => ticker.symbol);
     
     // Generate welcome email content
-    const { html, text } = getEmailTemplate(EmailType.WELCOME, {
+    const { html, text } = await getEmailTemplate(EmailType.WELCOME, {
       recipientName: dbUser.name || user.firstName || 'there',
       recipientEmail: primaryEmail,
       selectedTickers,

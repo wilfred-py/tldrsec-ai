@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useSession } from "@clerk/nextjs";
 import { useAuthContext } from "@/lib/context/auth-context";
 import { Card, CardContent } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
@@ -143,6 +144,7 @@ const equitiesBySector = {
 
 export default function OnboardingPage() {
   const { isLoading, userName } = useAuthContext();
+  const { session } = useSession();
   const router = useRouter();
   const [initializing, setInitializing] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -298,9 +300,24 @@ export default function OnboardingPage() {
 
       toast.success('Onboarding completed successfully!');
 
-      // Keep loading state active during navigation
-      // Don't reset isSubmitting
-      router.push('/dashboard');
+      // CRITICAL: Force Clerk session refresh to get updated publicMetadata
+      // This prevents the middleware race condition where stale session claims
+      // cause redirect back to /onboarding
+      if (session) {
+        try {
+          await session.reload();
+        } catch (reloadError) {
+          console.warn('Session reload failed, continuing with navigation:', reloadError);
+        }
+      }
+
+      // Set a temporary cookie to bypass middleware check during redirect
+      // This handles the race condition where Clerk's JWT hasn't refreshed yet
+      document.cookie = 'onboarding_completed=true; path=/; max-age=60; SameSite=Lax';
+
+      // Use hard navigation to ensure fresh middleware evaluation with new session
+      // router.push() uses client-side navigation which may use cached session claims
+      window.location.href = '/dashboard';
     } catch (error) {
       console.error('Error completing onboarding:', error);
       const errorMessage = error instanceof Error ? error.message : 'An unexpected error occurred';

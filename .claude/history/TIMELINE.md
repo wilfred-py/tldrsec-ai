@@ -13,6 +13,7 @@ This file provides a chronological index of all completed projects. For detailed
 
 | Date | Project | Status |
 |------|---------|--------|
+| 2026-01-19 | Onboarding Redirect Race Condition Fix (email await + cookie bypass for Clerk JWT sync) | ✅ |
 | 2026-01-16 | Pipeline Stall Recovery and Prevention (926 jobs cleared, CF Worker redeployed) | ✅ |
 | 2026-01-16 | Email Template Type Errors Fix (FilingTemplateData interface + templates.ts casts) | ✅ |
 | 2026-01-15 | SEC Summary Quality Phase 2 - Phase 4: Grokipedia Research (all 9 form types enhanced) | ✅ |
@@ -159,10 +160,10 @@ This file provides a chronological index of all completed projects. For detailed
 
 ## Archive Statistics
 - **Total Archived Projects**: 7 weekly archives (Oct-Dec 2025)
-- **Current PROGRESS.md Lines**: 50 (under threshold: 500)
-- **Last Sync**: 2026-01-16
+- **Current PROGRESS.md Lines**: ~290 (under threshold: 500)
+- **Last Sync**: 2026-01-19
 - **Archive System**: ✅ ACTIVE
-- **Last Compaction**: 2026-01-16 (Pipeline Stall Recovery + Fresh PROGRESS.md created)
+- **Last Compaction**: 2026-01-19 (Onboarding Redirect Race Condition Fix)
 
 **Archives**:
 - `29-Dec-2025.md` - Cloudflare Cron Fix, Email Quality, Form 4 Templates, JSON Parsing Phase 5
