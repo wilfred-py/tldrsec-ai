@@ -279,7 +279,8 @@ export async function GET(request: NextRequest) {
         orderBy: { startedAt: 'desc' },
       }),
       // Phase 5: Unprocessed filings older than threshold (potentially orphaned)
-      prisma.secFiling.findMany({
+      // NOTE: processed field is on RssFilingCheck, not SecFiling
+      prisma.rssFilingCheck.findMany({
         where: {
           processed: false,
           createdAt: { lt: orphanAgeThreshold },
@@ -288,7 +289,7 @@ export async function GET(request: NextRequest) {
         take: 100, // Limit for performance
       }),
       // Phase 5: Total unprocessed filings count
-      prisma.secFiling.count({
+      prisma.rssFilingCheck.count({
         where: { processed: false },
       }),
     ]);
