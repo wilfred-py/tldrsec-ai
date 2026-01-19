@@ -1252,12 +1252,27 @@ export default async function middleware(request: NextRequest) {
 
     // Protect /dashboard from non-onboarded users
     if (pathname.startsWith('/dashboard') && userId) {
-      const isOnboarded = (sessionClaims?.publicMetadata as { onboardingCompleted?: boolean })?.onboardingCompleted === true;
+      // Check Clerk session claims first
+      const isOnboardedFromSession = (sessionClaims?.publicMetadata as { onboardingCompleted?: boolean })?.onboardingCompleted === true;
+
+      // Also check for temporary cookie set during onboarding completion
+      // This handles the race condition where Clerk's JWT hasn't refreshed yet
+      const onboardingCookie = req.cookies.get('onboarding_completed')?.value === 'true';
+
+      const isOnboarded = isOnboardedFromSession || onboardingCookie;
 
       if (!isOnboarded) {
         // Not onboarded → Onboarding
         const onboardingUrl = new URL('/onboarding', req.url);
         return NextResponse.redirect(onboardingUrl);
+      }
+
+      // If we used the cookie bypass, clear it now that we're through
+      // The next request will use the properly synced Clerk session
+      if (onboardingCookie && !isOnboardedFromSession) {
+        const response = NextResponse.next();
+        response.cookies.delete('onboarding_completed');
+        return response;
       }
     }
 
