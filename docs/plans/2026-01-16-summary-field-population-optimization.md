@@ -207,15 +207,22 @@ npm run test -- --testPathPattern="summarize-cached-handler-fields"
 - [x] Full test suite: `npm run test` (specific tests pass, pre-existing failures unrelated to this change)
 
 #### Manual Verification:
-- [ ] Deploy changes to production
-- [ ] Trigger a real filing summary via cron
-- [ ] Query database to verify `processingTimeMs > 0` for new summary
-- [ ] Verify cached/shared summaries have `processingTimeMs = 0`
+- [x] Deploy changes to production (✅ Deployed 2026-01-18 via PR #328, commit 2d514f3)
+- [x] Trigger cron (✅ Attempted 2026-01-20, 159 jobs queued)
+- [ ] **BLOCKED**: Query database to verify `processingTimeMs > 0` - Pipeline stalled, no new summaries since 2026-01-17
+- [ ] **BLOCKED**: Verify cached summaries `processingTimeMs = 0` - Pipeline infrastructure issue
 
-**Pre-deployment database state verified (2026-01-16):**
-- Total summaries: 704
-- With processingTimeMs populated: 0 (0%)
-- Confirms field exists but is unpopulated
+**Production Blocker Identified (2026-01-20):**
+- **Issue**: Connection pool exhaustion in `/api/health/pipeline` endpoint
+- **Impact**: Complete pipeline stall for 12+ hours, 159 jobs stuck in queue
+- **Root Cause**: 18-19 parallel database queries exceeding Supabase's 5-connection pool limit
+- **Resolution**: Implementation plan created at `docs/plans/2026-01-20-fix-pipeline-health-connection-pool-exhaustion.md`
+- **Current Status**: Code changes ARE deployed and correct, awaiting pipeline recovery to verify
+
+**Database State Snapshots:**
+- **Pre-deployment (2026-01-16)**: 704 summaries, 0% with processingTimeMs populated
+- **Post-deployment (2026-01-20)**: 884 summaries, still 0% populated (no new summaries since deployment)
+- **Most recent summary**: 2026-01-17T22:37:29.865Z (1 day before code deployment)
 
 ---
 

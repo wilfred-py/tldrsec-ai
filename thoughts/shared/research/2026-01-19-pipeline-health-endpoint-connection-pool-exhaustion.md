@@ -137,15 +137,17 @@ const [
     - Purpose: Detect cron execution gaps (Cloudflare Worker failures)
 
 13. **Unprocessed Filings Older Than Threshold** (line 282-289)
-    - Query: `prisma.secFiling.findMany()` where `processed=false` and `createdAt < (now - 10 minutes)`
-    - Table: `pipeline.SecFiling`
+    - Query: `prisma.rssFilingCheck.findMany()` where `processed=false` and `createdAt < (now - 10 minutes)`
+    - Table: `app.RssFilingCheck`
     - Limit: 100 records (`take: 100`)
     - Purpose: Find potential orphaned filings
+    - **Note**: Fixed 2026-01-19 - was incorrectly querying `SecFiling` which has no `processed` field
 
 14. **Total Unprocessed Filings** (line 291-293)
-    - Query: `prisma.secFiling.count({ where: { processed: false } })`
-    - Table: `pipeline.SecFiling`
+    - Query: `prisma.rssFilingCheck.count({ where: { processed: false } })`
+    - Table: `app.RssFilingCheck`
     - Purpose: Count all unprocessed filings
+    - **Note**: Fixed 2026-01-19 - was incorrectly querying `SecFiling` which has no `processed` field
 
 #### Additional Follow-Up Query
 
@@ -633,6 +635,63 @@ Time 10s (Timeout reached):
 - [2026-01-05: Database Connection and Pipeline Uptime](thoughts/shared/research/2026-01-05-database-connection-pipeline-uptime.md)
 - [2026-01-01: Infrastructure Uptime and Resilience](thoughts/shared/research/2026-01-01-infrastructure-uptime-resilience.md)
 - [2025-12-17: Slack Pipeline Monitoring Bot Data Sources](thoughts/shared/research/2025-12-17-slack-pipeline-monitoring-bot-data-sources.md)
+
+## Incident: 2026-01-19 Zombie Connection Pool Exhaustion
+
+### Timeline
+
+- **07:05 UTC**: First zombie connection stuck in "idle in transaction" state
+- **08:46 UTC**: Investigation started - pipeline health endpoint returning 500 errors
+- **08:47 UTC**: Identified 16 zombie connections (oldest: 1h41m idle)
+- **08:47 UTC**: Terminated all 16 stale connections via `pg_terminate_backend()`
+- **08:53 UTC**: Fixed bug in health endpoint (SecFiling → RssFilingCheck)
+- **08:57 UTC**: Jobs started completing again
+- **09:01 UTC**: Pipeline status restored to HEALTHY
+
+### Root Cause
+
+**16 database connections** stuck in "idle in transaction" state completely exhausted the 5-connection pool, preventing ALL database operations including the health check endpoint.
+
+```sql
+SELECT state, count(*) FROM pg_stat_activity WHERE datname = current_database() GROUP BY state;
+-- Result at 08:46 UTC:
+-- idle_in_transaction: 16 (stale >5 minutes: 16)
+-- idle: 7
+-- active: 1
+-- total: 26 (exceeding 5-connection pool)
+```
+
+### Additional Bug Discovered
+
+The health endpoint queries 13 and 14 were querying `SecFiling.processed` field, but the `processed` field exists on `RssFilingCheck`, not `SecFiling`. This caused a `PrismaClientValidationError`:
+
+```
+Unknown argument `processed`. Available options are marked with ?.
+```
+
+**Fix Applied**: Changed `prisma.secFiling.findMany()` to `prisma.rssFilingCheck.findMany()` in `app/api/health/pipeline/route.ts:282-293`.
+
+### Recovery Actions
+
+1. **Terminate zombie connections**:
+   ```sql
+   SELECT pg_terminate_backend(pid)
+   FROM pg_stat_activity
+   WHERE state = 'idle in transaction'
+     AND now() - state_change > interval '5 minutes';
+   ```
+
+2. **Clean up invalid job types** (18 legacy `ASYNC_SUMMARIZE_FILING` jobs → DEAD_LETTER)
+
+3. **Reset stuck processing job** (1 job stuck for 25+ hours → PENDING)
+
+4. **Deploy health endpoint fix** (`vercel --prod`)
+
+### Prevention Recommendations
+
+1. **Idle Transaction Timeout**: Configure PostgreSQL `idle_in_transaction_session_timeout` to auto-terminate stuck transactions
+2. **Connection Monitoring**: Add periodic check for zombie connections in auto-recovery endpoint
+3. **Alert on High Idle Transactions**: Slack alert when idle_in_transaction count exceeds threshold
 
 ## Open Questions
 

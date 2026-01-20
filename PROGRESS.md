@@ -36,6 +36,27 @@
 
 ## Recently Completed Sessions
 
+### Pipeline Recovery - Zombie Connection Pool Exhaustion (2026-01-19)
+
+**Issue**: Pipeline stalled for 25+ hours due to 16 zombie database connections stuck in "idle in transaction" state, exhausting the Supabase connection pool.
+
+**Root Cause**: Prisma connections entered "idle in transaction" state and never closed, accumulating over time until all 5 pool connections were consumed (oldest: 1h41m).
+
+**Additional Bug Found**: `/api/health/pipeline` endpoint was querying `SecFiling.processed` field which doesn't exist (the `processed` field is on `RssFilingCheck` table).
+
+**Fix Applied**:
+1. Terminated 16 zombie connections via `pg_terminate_backend()`
+2. Fixed health endpoint to query `RssFilingCheck` instead of `SecFiling`
+3. Moved 18 invalid `ASYNC_SUMMARIZE_FILING` jobs to DEAD_LETTER
+4. Reset 1 stuck processing job (25+ hours old) to PENDING
+
+**Files Modified**:
+- `app/api/health/pipeline/route.ts` - Fixed `processed` field query to use `rssFilingCheck`
+
+**Verification**: ✅ Pipeline HEALTHY, jobs completing, 88-job backlog processing
+
+---
+
 ### Email Template Type Errors Fix (2026-01-16)
 
 **Issue**: Property type errors in `lib/email/templates.ts` - summaryData interface missing properties used in template rendering.
