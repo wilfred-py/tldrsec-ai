@@ -178,7 +178,7 @@ describe('WaitlistForm Integration Tests', () => {
       });
       
       await waitFor(() => {
-        expect(fetch).toHaveBeenCalledWith('/api/newsletter/subscribe', {
+        expect(fetch).toHaveBeenCalledWith('/api/waitlist/subscribe', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -688,7 +688,7 @@ describe('WaitlistForm Integration Tests', () => {
       });
       
       await waitFor(() => {
-        expect(fetch).toHaveBeenCalledWith('/api/newsletter/subscribe', expect.objectContaining({
+        expect(fetch).toHaveBeenCalledWith('/api/waitlist/subscribe', expect.objectContaining({
           body: expect.stringContaining(longEmail),
         }));
       }, { timeout: 3000 });
@@ -715,7 +715,7 @@ describe('WaitlistForm Integration Tests', () => {
       });
       
       await waitFor(() => {
-        expect(fetch).toHaveBeenCalledWith('/api/newsletter/subscribe', expect.objectContaining({
+        expect(fetch).toHaveBeenCalledWith('/api/waitlist/subscribe', expect.objectContaining({
           body: expect.stringContaining(specialEmail),
         }));
       }, { timeout: 3000 });

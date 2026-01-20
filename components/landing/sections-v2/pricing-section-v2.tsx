@@ -21,6 +21,11 @@ import { AnimatedPrice } from './animated-price';
 /**
  * Pricing plans configuration
  * Sourced from centralized Stripe config in lib/stripe.ts
+ *
+ * Note: This is a marketing/landing page component for unauthenticated users.
+ * All plans show "Get Started" CTAs that lead to onboarding.
+ * For authenticated users viewing their current plan status,
+ * see the billing dashboard components.
  */
 const plans = [
   {
@@ -31,10 +36,10 @@ const plans = [
     annualPrice: SUBSCRIPTION_PLANS.FREE.annualPrice,
     description: 'Get started with SEC filings',
     features: SUBSCRIPTION_PLANS.FREE.features,
-    cta: 'Current Plan',
+    cta: 'Get Started',
     href: '/onboarding',
     popular: false,
-    disabled: true,
+    disabled: false,
   },
   {
     key: 'PRO' as const,
@@ -44,7 +49,7 @@ const plans = [
     annualPrice: SUBSCRIPTION_PLANS.PRO.annualPrice,
     description: 'Everything you need for serious investing',
     features: SUBSCRIPTION_PLANS.PRO.features,
-    cta: 'Upgrade to Pro',
+    cta: 'Get Started',
     href: '/onboarding?plan=pro',
     popular: true,
     disabled: false,
@@ -57,7 +62,7 @@ const plans = [
     annualPrice: SUBSCRIPTION_PLANS.MAX.annualPrice,
     description: 'For professional traders & analysts',
     features: SUBSCRIPTION_PLANS.MAX.features,
-    cta: 'Upgrade to Max',
+    cta: 'Get Started',
     href: '/onboarding?plan=max',
     popular: false,
     disabled: false,
