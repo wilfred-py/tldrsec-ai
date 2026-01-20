@@ -1,12 +1,33 @@
 # Project Progress
 
 **Date**: 2026-01-21
-**Branch**: main
-**Status**: Active - Cloudflare Build Fix Complete
+**Branch**: stripe-integration
+**Status**: Active - Landing Page Pricing CTA Fix
 
 ---
 
-## Current Session: Cloudflare Build Fix - Onboarding Dynamic Rendering (2026-01-21)
+## Current Session: Landing Page Pricing CTA Fix (2026-01-21)
+
+**Issue**: Free tier on landing page pricing section shows "Current Plan" (disabled button) for unauthenticated users instead of "Get Started" CTA.
+
+**Root Cause**: `PricingSectionV2` component had hardcoded `cta: 'Current Plan'` and `disabled: true` for the Free tier, regardless of authentication state. This is a marketing landing page for unauthenticated users, so all tiers should show "Get Started".
+
+**Fix Applied**:
+1. Changed Free tier CTA from `'Current Plan'` to `'Get Started'`
+2. Set `disabled: false` so it's a clickable link
+3. Changed Pro/Max CTAs from `'Upgrade to Pro'`/`'Upgrade to Max'` to `'Get Started'` for consistency (users haven't signed up yet, so "Upgrade" doesn't apply)
+4. Added clarifying comment that this is a marketing page for unauthenticated users
+
+**Files Modified**:
+- `components/landing/sections-v2/pricing-section-v2.tsx` - Updated plans config (lines 30-70)
+
+**Verification**: Pending - needs browser refresh on dev server to confirm
+
+---
+
+## Recently Completed Sessions
+
+### Cloudflare Build Fix - Onboarding Dynamic Rendering ✅ (2026-01-21)
 
 **Issue**: Cloudflare Pages build failing with error: "useSession can only be used within the <ClerkProvider /> component" during static page generation of `/onboarding`.
 
@@ -25,11 +46,24 @@ This pattern separates server-side configuration (`dynamic` export) from client-
 
 **Verification**: ✅ Local build passes, `/onboarding` now marked as `ƒ` (Dynamic) instead of `○` (Static). Pushed to main to trigger new Cloudflare build.
 
----
+### Pipeline Health Connection Pool Exhaustion Fix ✅ (2026-01-20)
 
-## Recently Completed Sessions
+**Issue**: Pipeline health endpoint failing with connection pool exhaustion. The `/api/health/pipeline` endpoint was making too many individual database queries causing connection starvation.
 
-### Onboarding Redirect Race Condition Fix (2026-01-19)
+**Root Cause**: Health endpoint was executing multiple separate database queries for job counts, filing status, and other metrics, each acquiring a new connection.
+
+**Fix Applied**:
+1. Implemented query caching to reduce repeated database calls
+2. Aggregated multiple status queries into single SQL statements
+3. Added orphan job sampling instead of full table scans
+4. Implemented batched job status checks
+
+**Files Modified**:
+- `app/api/health/pipeline/route.ts` - Optimized queries with caching and aggregation
+
+**Verification**: ✅ Health endpoint now responds consistently without pool exhaustion
+
+### Onboarding Redirect Race Condition Fix ✅ (2026-01-19)
 
 **Issue**: Two problems in onboarding flow:
 1. Welcome emails failing with "Missing `html` or `text` field" error
@@ -55,11 +89,7 @@ This pattern separates server-side configuration (`dynamic` export) from client-
 
 **Verification**: ✅ User confirmed "working now" - onboarding completes and redirects to dashboard successfully
 
----
-
-## Recently Completed Sessions
-
-### Pipeline Recovery - Zombie Connection Pool Exhaustion (2026-01-19)
+### Pipeline Recovery - Zombie Connection Pool Exhaustion ✅ (2026-01-19)
 
 **Issue**: Pipeline stalled for 25+ hours due to 16 zombie database connections stuck in "idle in transaction" state, exhausting the Supabase connection pool.
 
@@ -101,9 +131,29 @@ This pattern separates server-side configuration (`dynamic` export) from client-
 
 **Verification**: ✅ Build passes (no TypeScript errors in templates.ts)
 
----
+### Pipeline Stall Recovery and Prevention ✅ (2026-01-16)
 
-## Recently Completed Sessions
+**Issue**: Complete pipeline stall since ~8AM AEST with 832+ jobs accumulated in backlog. All three redundancy layers failed.
+
+**Root Cause**:
+1. Database connectivity issues preventing health endpoint from working
+2. Auto-recovery authentication mismatch (expected HMAC, received Bearer token)
+3. No automatic restart mechanism for stalled job processors
+
+**Fix Applied**:
+1. Emergency queue cleanup - marked 926 stuck jobs as FAILED
+2. Manual pipeline trigger to restart processing
+3. Cloudflare Worker redeployment with proper schedules (*/5, */10, */15 minutes)
+4. Created emergency recovery scripts for future incidents
+
+**Files Modified**:
+- `scripts/emergency-clear-queue.ts` - New emergency cleanup script
+- `scripts/trigger-auto-recovery.ts` - New HMAC authentication script
+- `docs/plans/2026-01-16-pipeline-stall-recovery-and-prevention.md` - Recovery plan
+- `docs/incidents/2026-01-16-pipeline-stall-incident.md` - Incident report
+- `__tests__/pipeline-recovery/pipeline-recovery-validation.test.ts` - Recovery tests
+
+**Verification**: ✅ Pipeline restored, queue cleared (0 pending), Cloudflare Worker redeployed
 
 ### SEC Summary Quality Phase 2 - Phase 4: Grokipedia Research ✅ (2026-01-15)
 
@@ -133,7 +183,45 @@ Completed comprehensive research on all 9 SEC form types and updated extraction 
 
 **Verification**: Linter passes (no new errors)
 
----
+### Auto-Recovery Authentication Fix ✅ (2026-01-15)
+
+**Issue**: Auto-recovery endpoint failing with CRON_SECRET mismatch and HMAC validation errors.
+
+**Root Cause**: CRON_SECRET values were mismatched between Vercel and Cloudflare Worker deployments, causing authentication failures.
+
+**Fix Applied**:
+1. Updated CRON_SECRET in Cloudflare Worker to match Vercel
+2. Fixed HMAC validation logic for proper signature comparison
+3. Added PUBLIC_URL environment variable for proper endpoint resolution
+4. Fixed interface types for recovery response
+
+**Files Modified**:
+- `app/api/cron/auto-recover/route.ts` - Fixed HMAC validation
+- Cloudflare Worker secrets - Updated CRON_SECRET
+
+**Verification**: ✅ Auto-recovery now triggers correctly
+
+### Pipeline Stall Recovery - Cloudflare Worker CRON_SECRET Fix ✅ (2026-01-15)
+
+**Issue**: Cloudflare Worker cron triggers failing to authenticate with Vercel endpoint.
+
+**Root Cause**: CRON_SECRET mismatch between Cloudflare Worker and Vercel deployment.
+
+**Fix Applied**:
+1. Updated CRON_SECRET secret in Cloudflare Worker via wrangler
+2. Verified endpoint authentication working
+
+**Verification**: ✅ Cron triggers now authenticating successfully
+
+### Context Compaction & Sync ✅ (2026-01-15)
+
+Performed context compaction to maintain PROGRESS.md under 500 lines while preserving important technical details.
+
+**Actions**:
+- Synced PROGRESS.md with TIMELINE.md
+- Maintained line count under threshold
+
+**Verification**: ✅ Both files synchronized
 
 ### 8-K Email Template Registry Fix ✅ (2026-01-15)
 
@@ -161,10 +249,6 @@ Restored stalled pipeline after Supabase database server migration.
 
 **Verification**: Pipeline restored, processing 73 discovery + 53 summarize jobs
 
----
-
-## Recently Completed
-
 ### Pipeline Stall Investigation - Database Connection Pool Fix ✅ (2026-01-12)
 
 Fixed pipeline stall caused by zombie database connections exhausting Supabase connection pool.
@@ -189,9 +273,7 @@ Updated GitHub Actions workflows to reflect the Phase 5-8 pipeline redundancy en
 
 **Files Modified**: `.github/workflows/cloudflare-worker-deploy.yml`, `.github/workflows/monitoring-validation.yml`
 
----
-
-## Recently Completed: Eliminate Manual Pipeline Intervention - Phases 5-8 (2026-01-11)
+### Eliminate Manual Pipeline Intervention - Phases 5-8 ✅ (2026-01-11)
 
 Completed final phases of the "Eliminate Manual Pipeline Intervention" plan implementing three-layer pipeline redundancy.
 
@@ -246,18 +328,14 @@ Created comprehensive operations documentation.
 
 **Total Tests**: 42 passing across all phases
 
----
-
-## Recently Completed: clerkMiddleware API Fix (2026-01-11)
+### clerkMiddleware API Fix ✅ (2026-01-11)
 
 Fixed TypeScript error in `middleware.ts` using deprecated API pattern. Updated to v6 API pattern using `createRouteMatcher()`.
 
 **Files Modified**: `middleware.ts`
 **Verification**: ✅ TypeScript errors resolved
 
----
-
-## Recently Completed: Critical Job Queue Database Bug Fix (2026-01-10)
+### Critical Job Queue Database Bug Fix ✅ (2026-01-10)
 
 Identified and resolved critical bug causing 394+ pending jobs to remain stuck despite multiple redeployments.
 
@@ -282,11 +360,7 @@ at Function.create (/lib/job-queue/index.ts:220:36)
 
 **Current Status**: Fix deployed to production, job creation restored, pending backlog ready for processing.
 
----
-
-## Recently Completed: Summary Generation Quality Improvement
-
-### Phase 5: Missing Extractors (SC 13G, SC 13D, 424B2) ✅ (2026-01-09)
+### Summary Generation Quality - Phase 5: Missing Extractors (SC 13G, SC 13D, 424B2) ✅ (2026-01-09)
 
 **Goal**: Add data extractors for SC 13G (passive ownership), SC 13D (activist ownership), and 424B2 (prospectus supplement).
 
@@ -332,5 +406,5 @@ at Function.create (/lib/job-queue/index.ts:220:36)
 
 ---
 
-*Last Updated: 2026-01-21 (Cloudflare Build Fix - Onboarding Dynamic Rendering)*
+*Last Updated: 2026-01-21 (Landing Page Pricing CTA Fix)*
 *Older completed projects archived to .claude/history/ - See TIMELINE.md for full history*
