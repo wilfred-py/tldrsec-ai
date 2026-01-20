@@ -13,6 +13,47 @@ This file provides a chronological index of all completed projects. For detailed
 
 | Date | Project | Status |
 |------|---------|--------|
+| 2026-01-21 | Cloudflare Build Fix - Onboarding Dynamic Rendering (force-dynamic export, client/server split) | ✅ |
+| 2026-01-20 | Pipeline Health Connection Pool Exhaustion Fix (caching, aggregated SQL, orphan sampling, batching) | ✅ |
+| 2026-01-19 | Onboarding Redirect Race Condition Fix (email await + cookie bypass for Clerk JWT sync) | ✅ |
+| 2026-01-16 | Pipeline Stall Recovery and Prevention (926 jobs cleared, CF Worker redeployed) | ✅ |
+| 2026-01-16 | Email Template Type Errors Fix (FilingTemplateData interface + templates.ts casts) | ✅ |
+| 2026-01-15 | SEC Summary Quality Phase 2 - Phase 4: Grokipedia Research (all 9 form types enhanced) | ✅ |
+| 2026-01-15 | 8-K Email Template Registry Fix (missing 8-K/Form 144 in lib/email/templates.ts) | ✅ |
+| 2026-01-15 | Context Compaction & Sync (PROGRESS.md 513→maintained, TIMELINE.md sync) | ✅ |
+| 2026-01-15 | Auto-Recovery Authentication Fix (CRON_SECRET mismatch, HMAC validation) | ✅ |
+| 2026-01-15 | Pipeline Stall Recovery - Cloudflare Worker CRON_SECRET Fix | ✅ |
+| 2026-01-13 | Pipeline Recovery - Database Migration Fix (Supabase aws-0 → aws-1 credential update) | ✅ |
+| 2026-01-12 | Pipeline Stall Investigation - Database Connection Pool Fix | ✅ |
+| 2026-01-12 | GitHub Actions Workflow Updates (Phase 5-8 redundancy documentation) | ✅ |
+| 2026-01-11 | clerkMiddleware API Fix (v6 pattern with createRouteMatcher) | ✅ |
+| 2026-01-11 | Eliminate Manual Pipeline Intervention - Phase 8: Documentation & Runbooks | ✅ |
+| 2026-01-11 | Eliminate Manual Pipeline Intervention - Phase 7: Vercel Cron Final Backup | ✅ |
+| 2026-01-11 | Eliminate Manual Pipeline Intervention - Phase 6: Auto-Recovery Integration | ✅ |
+| 2026-01-11 | Eliminate Manual Pipeline Intervention - Phase 5: Health Endpoint Enhancement | ✅ |
+| 2026-01-10 | Critical Job Queue Database Bug Fix (getPrismaClient() fix, 394+ stuck jobs restored) | ✅ |
+| 2026-01-10 | Auth-First Onboarding Flow (All 6 phases: skip buttons removed, 3-state CTAs, middleware redirects, webhook simplified, E2E tests, **performance optimization**) | ✅ Complete |
+| 2026-01-10 | Pipeline Redeployment & Backlog Recovery (pipeline stall fix, 400+ jobs restored) | ✅ |
+| 2026-01-10 | Eliminate Manual Pipeline Intervention - Phase 4: External Watchdog Worker | ✅ |
+| 2026-01-10 | Eliminate Manual Pipeline Intervention - Phase 3: Orphaned Filing Detection | ✅ |
+| 2026-01-10 | Eliminate Manual Pipeline Intervention - Phase 2: Cron Execution Gap Detection | ✅ |
+| 2026-01-10 | Eliminate Manual Pipeline Intervention - Phase 1: Persistent Recovery State | ✅ |
+| 2026-01-09 | Summary Generation Quality - Phase 5: SC 13G/SC 13D/424B2 Extractors | ✅ |
+| 2026-01-09 | Fix Orphaned Filings Pipeline (discovery backlog recovery + schema fixes) | ✅ Verified |
+| 2026-01-08 | Summary Generation Quality - Phase 4: Reddit Filing Types (S-1, S-3, DEF 14A, 11-K) | ✅ |
+| 2026-01-08 | Summary Generation Quality - Phase 3: Extractor Integration + Email Verification | ✅ |
+| 2026-01-08 | Summary Generation Quality - Phase 2: 10-K/10-Q Data Extractors | ✅ |
+| 2026-01-08 | 100% Cron Pipeline Uptime - Zero Silent Failures (3-phase: deploy, handler alerts, error tracking) | ✅ |
+| 2026-01-08 | Dashboard Table Height Stability Fix (skeleton rows, bg-muted) | ✅ |
+| 2026-01-07 | Summary Generation Quality - Phase 1: Schema Alignment Foundation | ✅ |
+| 2026-01-07 | Summary Generation Accuracy (Phase 4: Quality Assurance & Testing) | ✅ |
+| 2026-01-07 | Summary Generation Accuracy (Phase 3: Template & Email Consistency) | ✅ |
+| 2026-01-07 | Summary Generation Accuracy (Phase 2: Code Cleanup & Consolidation) | ✅ |
+| 2026-01-07 | Summary Generation Accuracy (Phase 1: Form 4 Trust Transfer Fix) | ✅ |
+| 2026-01-07 | 100% Pipeline Uptime Implementation - Phase 2: Comprehensive Self-Healing Auto-Recovery | ✅ Complete |
+| 2026-01-06 | 100% Pipeline Uptime Implementation - Phase 5: Documentation and Runbook | ✅ Complete |
+| 2026-01-06 | 100% Pipeline Uptime Implementation - Phase 4: Comprehensive E2E Pipeline Health Test | ✅ Complete |
+| 2026-01-06 | 100% Pipeline Uptime Implementation - Phase 3: Maximum Lock Hold Time Enforcement | ✅ Complete |
 | 2026-01-06 | Waitlist Payment Integration (4-phase TDD implementation) | ✅ |
 | 2026-01-05 | Dashboard Redesign - Inline Ticker Addition (5-phase, minimalist Apple/Stripe/Cursor UI) | ✅ |
 | 2026-01-03 | Pipeline Resilience Improvements (markForRetry validation + exhausted retry cleanup) | ✅ |
@@ -121,10 +162,10 @@ This file provides a chronological index of all completed projects. For detailed
 
 ## Archive Statistics
 - **Total Archived Projects**: 7 weekly archives (Oct-Dec 2025)
-- **Current PROGRESS.md Lines**: 393 (threshold: 500)
-- **Last Sync**: 2026-01-06
+- **Current PROGRESS.md Lines**: 336 (under threshold: 500)
+- **Last Sync**: 2026-01-21
 - **Archive System**: ✅ ACTIVE
-- **Last Compaction**: 2026-01-06 (605 → 413 lines, consolidated Dec 29-31 fixes)
+- **Last Compaction**: 2026-01-21 (Cloudflare Build Fix - Onboarding Dynamic Rendering)
 
 **Archives**:
 - `29-Dec-2025.md` - Cloudflare Cron Fix, Email Quality, Form 4 Templates, JSON Parsing Phase 5
