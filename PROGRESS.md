@@ -1,12 +1,35 @@
 # Project Progress
 
-**Date**: 2026-01-19
+**Date**: 2026-01-21
 **Branch**: main
-**Status**: Active - Onboarding Redirect Race Condition Fix Complete
+**Status**: Active - Cloudflare Build Fix Complete
 
 ---
 
-## Current Session: Onboarding Redirect Race Condition Fix (2026-01-19)
+## Current Session: Cloudflare Build Fix - Onboarding Dynamic Rendering (2026-01-21)
+
+**Issue**: Cloudflare Pages build failing with error: "useSession can only be used within the <ClerkProvider /> component" during static page generation of `/onboarding`.
+
+**Root Cause**: Next.js was attempting to statically prerender the `/onboarding` page during build. The page uses Clerk's `useSession` hook which requires `ClerkProvider`, but during Cloudflare Pages build, environment variables like `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` are not available, so ClerkProvider skips initialization.
+
+**Fix Applied**:
+1. Renamed `page.tsx` to `onboarding-client.tsx` (client component with all UI logic)
+2. Created new server component `page.tsx` that exports `dynamic = "force-dynamic"`
+3. Server component simply renders the client component
+
+This pattern separates server-side configuration (`dynamic` export) from client-side React hooks, which is the proper way to handle this in Next.js 15 App Router.
+
+**Files Modified**:
+- `app/(auth)/onboarding/page.tsx` - New server component with `export const dynamic = "force-dynamic"`
+- `app/(auth)/onboarding/onboarding-client.tsx` - Renamed from page.tsx, contains all client UI logic
+
+**Verification**: ✅ Local build passes, `/onboarding` now marked as `ƒ` (Dynamic) instead of `○` (Static). Pushed to main to trigger new Cloudflare build.
+
+---
+
+## Recently Completed Sessions
+
+### Onboarding Redirect Race Condition Fix (2026-01-19)
 
 **Issue**: Two problems in onboarding flow:
 1. Welcome emails failing with "Missing `html` or `text` field" error
@@ -309,5 +332,5 @@ at Function.create (/lib/job-queue/index.ts:220:36)
 
 ---
 
-*Last Updated: 2026-01-16 (Email Template Type Errors Fix + SEC Summary Quality Phase 2 Complete)*
+*Last Updated: 2026-01-21 (Cloudflare Build Fix - Onboarding Dynamic Rendering)*
 *Older completed projects archived to .claude/history/ - See TIMELINE.md for full history*

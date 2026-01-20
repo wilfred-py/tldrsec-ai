@@ -13,6 +13,7 @@ This file provides a chronological index of all completed projects. For detailed
 
 | Date | Project | Status |
 |------|---------|--------|
+| 2026-01-21 | Cloudflare Build Fix - Onboarding Dynamic Rendering (force-dynamic export, client/server split) | ✅ |
 | 2026-01-20 | Pipeline Health Connection Pool Exhaustion Fix (caching, aggregated SQL, orphan sampling, batching) | ✅ |
 | 2026-01-19 | Onboarding Redirect Race Condition Fix (email await + cookie bypass for Clerk JWT sync) | ✅ |
 | 2026-01-16 | Pipeline Stall Recovery and Prevention (926 jobs cleared, CF Worker redeployed) | ✅ |
@@ -161,10 +162,10 @@ This file provides a chronological index of all completed projects. For detailed
 
 ## Archive Statistics
 - **Total Archived Projects**: 7 weekly archives (Oct-Dec 2025)
-- **Current PROGRESS.md Lines**: 100 (under threshold: 500)
-- **Last Sync**: 2026-01-20
+- **Current PROGRESS.md Lines**: 336 (under threshold: 500)
+- **Last Sync**: 2026-01-21
 - **Archive System**: ✅ ACTIVE
-- **Last Compaction**: 2026-01-20 (Pipeline Health Connection Pool Fix)
+- **Last Compaction**: 2026-01-21 (Cloudflare Build Fix - Onboarding Dynamic Rendering)
 
 **Archives**:
 - `29-Dec-2025.md` - Cloudflare Cron Fix, Email Quality, Form 4 Templates, JSON Parsing Phase 5
