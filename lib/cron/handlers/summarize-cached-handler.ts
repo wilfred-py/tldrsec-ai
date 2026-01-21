@@ -12,7 +12,7 @@
 
 import { logger } from '../../logging';
 // Removed unused import: JobPayload
-import { generateAISummary } from '../../../services/filing/summaryGenerationService';
+import { summarizeFiling } from '../../ai/summarize';
 import { sendFilingSummaryEmail } from '../../email/summary-service';
 import type { FetchJobPayload } from './fetch-handler';
 import { verifyFilingContent, type FilingMetadata } from '../../validation/filing-content-verifier';
@@ -367,34 +367,33 @@ export async function handleSummarizeCached(
       formType: filing.formType
     });
 
-    // Call generateAISummary with correct SECFiling and Company types
-    const summaryResult = await generateAISummary(
+    // Call summarizeFiling with unified prompts (includes verb variety and acronym expansion)
+    const summaryResult = await summarizeFiling(
       cachedContent.content,
       {
-        formType: filing.formType,
-        filingDate: typeof filing.filingDate === 'string' ? filing.filingDate : filing.filingDate.toISOString(),
-        accessionNumber: filing.accessionNumber,
-        filingUrl: filing.filingUrl
-      },
-      {
-        name: ticker.companyName || ticker.symbol,
-        ticker: ticker.symbol,
-        cik: ticker.cik || ''
+        metadata: {
+          ticker: ticker.symbol,
+          companyName: ticker.companyName || ticker.symbol,
+          formType: filing.formType,
+          filingDate: typeof filing.filingDate === 'string' ? filing.filingDate : filing.filingDate.toISOString(),
+          accessionNumber: filing.accessionNumber,
+          cik: ticker.cik || undefined
+        }
       }
     );
 
-    // Check processingStatus (not success) - SummaryGenerationResult uses processingStatus field
-    if (summaryResult.processingStatus !== 'SUCCESS' || !summaryResult.summary) {
-      throw new Error(summaryResult.error || summaryResult.processingError || 'Failed to generate summary');
+    // summarizeFiling throws SummarizationError on failure, so if we reach here, it succeeded
+    if (!summaryResult.summaryText) {
+      throw new Error('Failed to generate summary: summaryText is empty');
     }
 
     const summarizeDuration = Date.now() - startTime;
 
     summarizeLogger.info(`[${executionId}] AI summary generated`, {
-      summaryLength: summaryResult.summary.length,
+      summaryLength: summaryResult.summaryText.length,
       cost: summaryResult.cost,
-      inputTokens: summaryResult.inputTokens,
-      outputTokens: summaryResult.outputTokens,
+      tokensUsed: summaryResult.tokensUsed,
+      model: summaryResult.modelUsed,
       summarizeDuration
     });
 
@@ -406,9 +405,9 @@ export async function handleSummarizeCached(
         filingType: filing.formType,
         filingDate: new Date(filing.filingDate),
         filingUrl: filing.filingUrl,
-        summaryText: summaryResult.summary,
-        summaryJSON: summaryResult.data || null,  // Preserve structured AI response for email templates
-        modelVersion: summaryResult.model || 'x-ai/grok-4-fast:free',
+        summaryText: summaryResult.summaryText,
+        summaryJSON: summaryResult.summaryJSON || null,  // Preserve structured AI response for email templates
+        modelVersion: summaryResult.modelUsed || 'x-ai/grok-4-fast:free',
         promptVersion: 'v1',
         totalCost: summaryResult.cost || 0,
         inputTokens: summaryResult.inputTokens || 0,
@@ -449,9 +448,9 @@ export async function handleSummarizeCached(
         ticker: ticker.symbol,
         filingType: filing.formType,
         filingDate: new Date(filing.filingDate),
-        summary: summaryResult.summary,
+        summary: summaryResult.summaryText,
         filingUrl: cachedContent.primaryDocUrl || filing.filingUrl,  // Prefer direct document URL
-        summaryData: summaryResult.data  // Pass structured AI data to email template
+        summaryData: summaryResult.summaryJSON  // Pass structured AI data to email template
       });
 
       emailSent = true;
