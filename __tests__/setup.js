@@ -81,49 +81,64 @@ console.warn = (...args) => {
 };
 
 // Enhanced Prisma mocking for monitoring tests
-jest.mock('../lib/db', () => ({
-  getPrismaClient: jest.fn().mockReturnValue({
-    $connect: jest.fn().mockResolvedValue(undefined),
-    $disconnect: jest.fn().mockResolvedValue(undefined),
-    $transaction: jest.fn().mockImplementation((callback) => {
-      if (typeof callback === 'function') {
-        return callback(mockPrismaClient);
-      }
-      return Promise.resolve();
-    }),
-    errorAlert: {
-      create: jest.fn().mockResolvedValue({ id: 'mock-alert-id' }),
-      findMany: jest.fn().mockResolvedValue([]),
-      count: jest.fn().mockResolvedValue(0),
-      update: jest.fn().mockResolvedValue({ id: 'mock-alert-id' }),
-      delete: jest.fn().mockResolvedValue({ id: 'mock-alert-id' }),
-    },
-    pipelineHealthHistory: {
-      create: jest.fn().mockResolvedValue({ id: 'mock-health-id' }),
-      findMany: jest.fn().mockResolvedValue([]),
-      aggregate: jest.fn().mockResolvedValue({ _avg: {}, _count: {} }),
-    },
-    securityAuditLog: {
-      create: jest.fn().mockResolvedValue({ id: 'mock-audit-id' }),
-      findMany: jest.fn().mockResolvedValue([]),
-      count: jest.fn().mockResolvedValue(0),
-    },
-    distributedLock: {
-      findFirst: jest.fn().mockResolvedValue(null),
-      create: jest.fn().mockResolvedValue({ id: 'mock-lock-id' }),
-      delete: jest.fn().mockResolvedValue({ id: 'mock-lock-id' }),
-      deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
-    },
-    // Add other models as needed for tests
-    user: {
-      findUnique: jest.fn().mockResolvedValue({ id: 'user_123' }),
-      findMany: jest.fn().mockResolvedValue([]),
-    },
-    summary: {
-      findMany: jest.fn().mockResolvedValue([]),
-      create: jest.fn().mockResolvedValue({ id: 'mock-summary-id' }),
-    },
+// Shared mock prisma client instance - created with all models needed for tests
+const sharedMockPrisma = {
+  $connect: jest.fn().mockResolvedValue(undefined),
+  $disconnect: jest.fn().mockResolvedValue(undefined),
+  $transaction: jest.fn().mockImplementation(function(callback) {
+    if (typeof callback === 'function') {
+      return callback(sharedMockPrisma);
+    }
+    return Promise.resolve();
   }),
+  errorAlert: {
+    create: jest.fn().mockResolvedValue({ id: 'mock-alert-id' }),
+    findMany: jest.fn().mockResolvedValue([]),
+    count: jest.fn().mockResolvedValue(0),
+    update: jest.fn().mockResolvedValue({ id: 'mock-alert-id' }),
+    delete: jest.fn().mockResolvedValue({ id: 'mock-alert-id' }),
+  },
+  pipelineHealthHistory: {
+    create: jest.fn().mockResolvedValue({ id: 'mock-health-id' }),
+    findMany: jest.fn().mockResolvedValue([]),
+    aggregate: jest.fn().mockResolvedValue({ _avg: {}, _count: {} }),
+  },
+  securityAuditLog: {
+    create: jest.fn().mockResolvedValue({ id: 'mock-audit-id' }),
+    findMany: jest.fn().mockResolvedValue([]),
+    count: jest.fn().mockResolvedValue(0),
+  },
+  distributedLock: {
+    findFirst: jest.fn().mockResolvedValue(null),
+    create: jest.fn().mockResolvedValue({ id: 'mock-lock-id' }),
+    delete: jest.fn().mockResolvedValue({ id: 'mock-lock-id' }),
+    deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
+  },
+  user: {
+    findUnique: jest.fn().mockResolvedValue({ id: 'user_123' }),
+    findMany: jest.fn().mockResolvedValue([]),
+  },
+  summary: {
+    findMany: jest.fn().mockResolvedValue([]),
+    create: jest.fn().mockResolvedValue({ id: 'mock-summary-id' }),
+  },
+  recoveryState: {
+    findUnique: jest.fn().mockResolvedValue(null),
+    create: jest.fn().mockResolvedValue({ id: 'singleton' }),
+    upsert: jest.fn().mockResolvedValue({ id: 'singleton' }),
+  },
+};
+
+// Mock lib/db/prisma (direct import path)
+jest.mock('../lib/db/prisma', () => ({
+  getPrismaClient: jest.fn().mockReturnValue(sharedMockPrisma),
+  prisma: sharedMockPrisma,
+}));
+
+// Mock lib/db (re-export path) - uses same shared mock
+jest.mock('../lib/db', () => ({
+  getPrismaClient: jest.fn().mockReturnValue(sharedMockPrisma),
+  prisma: sharedMockPrisma,
 }));
 
 // Mock the monitoring services with proper error handling

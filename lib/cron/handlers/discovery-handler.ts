@@ -163,8 +163,9 @@ export async function createBulkFetchJobs(
         jobType: 'ASYNC_FETCH_FILING',
         status: 'PENDING' as const,
         priority: getPriorityForTier(user.subscriptionTier),
-        maxAttempts: 3,
-        attemptCount: 0,
+        maxRetries: 3,
+        retryCount: 0,
+        scheduledFor: new Date(), // Schedule for immediate execution
         idempotencyKey: `ASYNC_FETCH_FILING:${user.id}:${filing.accessionNumber}`,
         payload: {
           userId: user.id,
@@ -282,10 +283,45 @@ export async function handleDiscovery(
       null // No specific user - ticker-centric discovery
     );
 
-    discoveryLogger.info(`[${executionId}] Filings discovered across all tickers`, {
+    discoveryLogger.info(`[${executionId}] RSS filings discovered across all tickers`, {
       filingsFound: allNewFilings.length,
       tickers: Array.from(new Set(allNewFilings.map(f => f.ticker)))
     });
+
+    // STEP 3.5: ALSO get unprocessed filings from database (backlog recovery)
+    // This catches filings that were discovered but never had jobs created
+    const { getUnprocessedFilings } = await import('../../sec-edgar/ticker-monitoring');
+    const unprocessedFilings = await getUnprocessedFilings(50); // Limit to prevent timeout
+
+    if (unprocessedFilings.length > 0) {
+      discoveryLogger.info(`[${executionId}] Found ${unprocessedFilings.length} unprocessed filings for recovery`);
+
+      // Convert to same format as RSS filings for unified processing
+      for (const filing of unprocessedFilings) {
+        // Add to allNewFilings if not already present (by accessionNumber)
+        const alreadyDiscovered = allNewFilings.some(f => f.accessionNumber === filing.accessionNumber);
+        if (!alreadyDiscovered) {
+          allNewFilings.push({
+            id: filing.id,
+            ticker: filing.ticker.symbol,
+            formType: filing.filingType,
+            filingDate: filing.filingDate.toISOString().split('T')[0],
+            url: filing.filingUrl,
+            accessionNumber: filing.accessionNumber,
+            title: `${filing.filingType} - ${filing.ticker.companyName}`
+          });
+        }
+      }
+
+      discoveryLogger.info(`[${executionId}] Total filings after backlog recovery`, {
+        totalFilings: allNewFilings.length,
+        fromRss: allNewFilings.length - unprocessedFilings.filter(f =>
+          !allNewFilings.slice(0, allNewFilings.length - unprocessedFilings.length)
+            .some(rss => rss.accessionNumber === f.accessionNumber)
+        ).length,
+        fromBacklog: unprocessedFilings.length
+      });
+    }
 
     let totalFetchJobsQueued = 0;
     let totalUsersProcessed = 0;
@@ -350,6 +386,25 @@ export async function handleDiscovery(
 
         totalFetchJobsQueued += jobsCreated;
         totalUsersProcessed += usersForTicker.filter(u => u.tickers.length > 0).length;
+
+        // Mark the filing as processed in RssFilingCheck if jobs were created
+        // This prevents the filing from being picked up again in future recovery passes
+        if (jobsCreated > 0) {
+          try {
+            const { markFilingAsProcessed } = await import('../../sec-edgar/ticker-monitoring');
+            await markFilingAsProcessed(filing.id);
+            discoveryLogger.debug(`[${executionId}] Marked filing as processed`, {
+              filingId: filing.id,
+              accessionNumber: filing.accessionNumber
+            });
+          } catch (markError) {
+            // Log but don't fail - the jobs were created successfully
+            discoveryLogger.warn(`[${executionId}] Failed to mark filing as processed`, {
+              filingId: filing.id,
+              error: markError instanceof Error ? markError.message : 'Unknown error'
+            });
+          }
+        }
 
         discoveryLogger.debug(`[${executionId}] Bulk created jobs for filing`, {
           ticker: filing.ticker,

@@ -41,7 +41,7 @@ cleanup_worktree() {
 
     echo -e "${YELLOW}Cleaning up worktree: $worktree_path${NC}"
 
-    # Step 1: Remove the worktree (Claude Code uses .claude directory, not thoughts)
+    # Step 1: Remove the worktree (includes .claude directory and .env file)
     echo "Removing git worktree..."
     if git worktree remove --force "$worktree_path"; then
         echo -e "${GREEN}✓ Worktree removed successfully${NC}"

@@ -1,19 +1,19 @@
 'use server';
 
-import { prisma } from '@/lib/db/prisma';
+import { getPrismaClient } from '@/lib/db/prisma';
 import { revalidatePath } from 'next/cache';
-import { auth, currentUser } from '@clerk/nextjs/server';
+import { auth, currentUser, clerkClient } from '@clerk/nextjs/server';
 import type {
   FilingTypePreferences,
   NotificationContentPreferences,
   UIPreferences
 } from '@/lib/user/preference-types';
-import { 
+import {
   DEFAULT_NOTIFICATION_PREFERENCES,
   DEFAULT_UI_PREFERENCES
 } from '@/lib/user/preference-types';
 import { NotificationPreference } from '@/lib/email/notification-service';
-import { sendWelcomeEmail } from '@/lib/email/welcome-service';
+import { queueWelcomeEmail } from '@/lib/email/welcome-service';
 
 // Environment check for API vs mock mode
 const API_ENABLED = process.env.NEXT_PUBLIC_API_ENABLED === 'true';
@@ -47,7 +47,7 @@ export async function saveUserPreferences(preferences: UserPreferencesInput): Pr
     const preferencesJson = JSON.parse(JSON.stringify(preferences));
 
     // Check if user exists
-    const dbUser = await prisma.user.findUnique({
+    const dbUser = await getPrismaClient().user.findUnique({
       where: { 
         email: primaryEmail 
       }
@@ -55,7 +55,7 @@ export async function saveUserPreferences(preferences: UserPreferencesInput): Pr
 
     if (!dbUser) {
       // Create new user
-      await prisma.user.create({
+      await getPrismaClient().user.create({
         data: {
           email: primaryEmail,
           authProvider: 'clerk',
@@ -66,7 +66,7 @@ export async function saveUserPreferences(preferences: UserPreferencesInput): Pr
       });
     } else {
       // Update existing user preferences
-      await prisma.user.update({
+      await getPrismaClient().user.update({
         where: { id: dbUser.id },
         data: {
           preferences: preferencesJson
@@ -106,7 +106,7 @@ export async function addTickerSubscription(subscription: {
     const primaryEmail = clerkUser.emailAddresses[0].emailAddress;
 
     // Get user from database
-    const user = await prisma.user.findUnique({
+    const user = await getPrismaClient().user.findUnique({
       where: { email: primaryEmail }
     });
 
@@ -115,7 +115,7 @@ export async function addTickerSubscription(subscription: {
     }
 
     // Check if ticker is already tracked by the user
-    const existingTicker = await prisma.ticker.findFirst({
+    const existingTicker = await getPrismaClient().ticker.findFirst({
       where: {
         userId: user.id,
         symbol: subscription.symbol
@@ -128,7 +128,7 @@ export async function addTickerSubscription(subscription: {
     }
 
     // Add ticker to user's tracked list
-    await prisma.ticker.create({
+    await getPrismaClient().ticker.create({
       data: {
         symbol: subscription.symbol,
         companyName: subscription.companyName,
@@ -178,7 +178,7 @@ export async function completeOnboarding(): Promise<{ success: boolean; error?: 
     const userName = user.firstName ? `${user.firstName} ${user.lastName || ''}`.trim() : 'User';
     
     // Check if user exists in database by both authProviderId and email
-    let dbUser = await prisma.user.findFirst({
+    let dbUser = await getPrismaClient().user.findFirst({
       where: { 
         OR: [
           { authProviderId: userId },
@@ -190,32 +190,54 @@ export async function completeOnboarding(): Promise<{ success: boolean; error?: 
     // If user doesn't exist yet, create a new user record
     if (!dbUser) {
       console.log(`Creating new user during onboarding for ${primaryEmail}`);
-      
+
       // Convert preferences to plain JSON object for database storage
       const defaultPreferences = {
         notifications: JSON.parse(JSON.stringify(DEFAULT_NOTIFICATION_PREFERENCES)),
         ui: JSON.parse(JSON.stringify(DEFAULT_UI_PREFERENCES))
       };
-      
+
       try {
-        dbUser = await prisma.user.create({
+        dbUser = await getPrismaClient().user.create({
           data: {
             email: primaryEmail,
             authProvider: 'clerk',
             authProviderId: userId,
             name: userName,
-            preferences: defaultPreferences
+            preferences: defaultPreferences,
+            onboardingCompleted: true
           }
         });
-        
+
         console.log(`Created new user in database during onboarding: ${dbUser.id}`);
       } catch (createError) {
         console.error('Failed to create user in database:', createError);
-        return { 
-          success: false, 
-          error: createError instanceof Error ? createError.message : 'Failed to create user in database' 
+        return {
+          success: false,
+          error: createError instanceof Error ? createError.message : 'Failed to create user in database'
         };
       }
+    }
+
+    // Ensure onboardingCompleted is set to true in the database
+    if (dbUser && !dbUser.onboardingCompleted) {
+      await getPrismaClient().user.update({
+        where: { id: dbUser.id },
+        data: { onboardingCompleted: true }
+      });
+      console.log(`Set onboardingCompleted=true for user ${dbUser.id}`);
+    }
+
+    // Sync onboardingCompleted to Clerk publicMetadata
+    try {
+      const client = await clerkClient();
+      await client.users.updateUserMetadata(userId, {
+        publicMetadata: { onboardingCompleted: true }
+      });
+      console.log(`Synced onboardingCompleted=true to Clerk metadata for user ${userId}`);
+    } catch (metadataError) {
+      console.error('Failed to sync onboardingCompleted to Clerk:', metadataError);
+      // Continue even if Clerk sync fails - the database is the source of truth
     }
     
     // Send welcome email with proper error handling
@@ -238,9 +260,157 @@ export async function completeOnboarding(): Promise<{ success: boolean; error?: 
     return { success: true };
   } catch (error) {
     console.error('Failed to complete onboarding:', error);
-    return { 
-      success: false, 
-      error: error instanceof Error ? error.message : 'Failed to complete onboarding' 
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to complete onboarding'
+    };
+  }
+}
+
+/**
+ * OPTIMIZED: Complete onboarding in a single batched operation
+ *
+ * This replaces the sequential calls to:
+ * - saveUserPreferences()
+ * - addTickerSubscription() x N
+ * - completeOnboarding()
+ *
+ * With a single server action that:
+ * 1. Gets auth once
+ * 2. Batches all DB operations
+ * 3. Updates Clerk metadata once
+ * 4. Queues welcome email async (doesn't block)
+ */
+export async function completeOnboardingBatched(input: {
+  preferences: UserPreferencesInput;
+  tickers: { symbol: string; companyName: string }[];
+}): Promise<{ success: boolean; error?: string }> {
+  const startTime = Date.now();
+
+  try {
+    // Single auth call for entire operation
+    const { userId } = await auth();
+
+    if (!userId) {
+      return { success: false, error: 'User not authenticated' };
+    }
+
+    // Single Clerk user fetch
+    const clerkUser = await currentUser();
+    if (!clerkUser || !clerkUser.emailAddresses || clerkUser.emailAddresses.length === 0) {
+      return { success: false, error: 'User email not available' };
+    }
+
+    const primaryEmail = clerkUser.emailAddresses[0].emailAddress;
+    const userName = clerkUser.firstName
+      ? `${clerkUser.firstName} ${clerkUser.lastName || ''}`.trim()
+      : 'User';
+
+    console.log(`[Onboarding] Starting batched completion for ${primaryEmail}`);
+
+    // Convert preferences to plain JSON object
+    const preferencesJson = JSON.parse(JSON.stringify(input.preferences));
+
+    // Use Prisma transaction for atomicity
+    const result = await getPrismaClient().$transaction(async (tx) => {
+      // Find or create user
+      let dbUser = await tx.user.findFirst({
+        where: {
+          OR: [{ authProviderId: userId }, { email: primaryEmail }]
+        }
+      });
+
+      if (!dbUser) {
+        // Create new user with all data at once
+        dbUser = await tx.user.create({
+          data: {
+            email: primaryEmail,
+            authProvider: 'clerk',
+            authProviderId: userId,
+            name: userName,
+            preferences: preferencesJson,
+            onboardingCompleted: true
+          }
+        });
+        console.log(`[Onboarding] Created new user: ${dbUser.id}`);
+      } else {
+        // Update existing user
+        dbUser = await tx.user.update({
+          where: { id: dbUser.id },
+          data: {
+            preferences: preferencesJson,
+            onboardingCompleted: true,
+            name: dbUser.name || userName
+          }
+        });
+        console.log(`[Onboarding] Updated user: ${dbUser.id}`);
+      }
+
+      // Batch create tickers (skip duplicates)
+      if (input.tickers.length > 0) {
+        // Get existing tickers for this user
+        const existingTickers = await tx.ticker.findMany({
+          where: {
+            userId: dbUser.id,
+            symbol: { in: input.tickers.map((t) => t.symbol) }
+          },
+          select: { symbol: true }
+        });
+
+        const existingSymbols = new Set(existingTickers.map((t) => t.symbol));
+        const newTickers = input.tickers.filter((t) => !existingSymbols.has(t.symbol));
+
+        if (newTickers.length > 0) {
+          await tx.ticker.createMany({
+            data: newTickers.map((ticker) => ({
+              symbol: ticker.symbol,
+              companyName: ticker.companyName,
+              userId: dbUser.id
+            })),
+            skipDuplicates: true
+          });
+          console.log(`[Onboarding] Created ${newTickers.length} tickers`);
+        }
+      }
+
+      return dbUser;
+    });
+
+    const dbTime = Date.now() - startTime;
+    console.log(`[Onboarding] DB operations completed in ${dbTime}ms`);
+
+    // CRITICAL: Update Clerk metadata BEFORE returning
+    // This prevents the middleware race condition where user gets redirected back to onboarding
+    // because Clerk's publicMetadata.onboardingCompleted hasn't synced yet
+    try {
+      const client = await clerkClient();
+      await client.users.updateUserMetadata(userId, {
+        publicMetadata: { onboardingCompleted: true }
+      });
+      console.log(`[Onboarding] Clerk metadata synced for ${userId}`);
+    } catch (err) {
+      console.error('[Onboarding] Failed to sync Clerk metadata:', err);
+      // Don't fail the entire onboarding, but this could cause redirect issues
+      // The user will still be in the database, so they can retry onboarding
+    }
+
+    // Queue welcome email async (doesn't block user)
+    queueWelcomeEmail(result.id, primaryEmail, userName).catch((err) => {
+      console.error('[Onboarding] Failed to queue welcome email:', err);
+    });
+
+    const totalTime = Date.now() - startTime;
+    console.log(`[Onboarding] Completed in ${totalTime}ms`);
+
+    revalidatePath('/onboarding');
+    revalidatePath('/dashboard');
+
+    return { success: true };
+  } catch (error) {
+    console.error('[Onboarding] Failed:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to complete onboarding'
     };
   }
 } 

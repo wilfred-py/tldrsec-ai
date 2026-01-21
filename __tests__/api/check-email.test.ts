@@ -36,7 +36,7 @@ describe('POST /api/onboarding/check-email', () => {
     });
 
     const response = await POST(request);
-    const data = await response.json();
+    const data = await response.json() as any;
 
     expect(response.status).toBe(200);
     expect(data.status).toBe('NEW_USER');
@@ -56,7 +56,7 @@ describe('POST /api/onboarding/check-email', () => {
     });
 
     const response = await POST(request);
-    const data = await response.json();
+    const data = await response.json() as any;
 
     expect(response.status).toBe(200);
     expect(data.status).toBe('EXISTING_USER');
@@ -78,7 +78,7 @@ describe('POST /api/onboarding/check-email', () => {
     });
 
     const response = await POST(request);
-    const data = await response.json();
+    const data = await response.json() as any;
 
     expect(response.status).toBe(200);
     expect(data.status).toBe('INCOMPLETE_USER');

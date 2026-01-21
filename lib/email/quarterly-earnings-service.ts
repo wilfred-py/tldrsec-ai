@@ -1,8 +1,9 @@
 'use server';
 
-import { prisma } from '@/lib/db/prisma';
+import { getPrismaClient } from '@/lib/db/prisma';
 import { sendEmail } from './index';
-import { getEmailTemplate, EmailType } from './templates';
+import { getEmailTemplate } from './templates';
+import { EmailType } from './types';
 import { logger } from '../logging';
 
 /**
@@ -50,6 +51,7 @@ export async function sendQuarterlyEarningsEmail(
   }
 
   try {
+    const prisma = getPrismaClient();
     // Get latest quarterly summaries (10-K, 10-Q) for each ticker
     // Use distinct to get only one summary per ticker (the most recent)
     const summaries = await prisma.summary.findMany({

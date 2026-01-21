@@ -262,6 +262,7 @@ export async function handleSummarizeCached(
           outputTokens: 0,
           isCacheHit: true,  // Mark as cache hit
           processingCompletedAt: new Date(), // Fix: Add missing completion timestamp
+          processingTimeMs: 0,  // Cached summary - no AI processing time
           metadata: {
             executionId,
             cacheId,
@@ -415,6 +416,7 @@ export async function handleSummarizeCached(
         outputTokens: summaryResult.outputTokens || 0,
         isCacheHit: executionContext.cacheHit || false,
         processingCompletedAt: new Date(), // Fix: Add missing completion timestamp
+        processingTimeMs: summarizeDuration,  // AI processing duration in ms
         metadata: {
           executionId,
           cacheId,

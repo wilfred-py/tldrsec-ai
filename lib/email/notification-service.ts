@@ -35,6 +35,9 @@ import {
 // Import from email-core to avoid circular dependency
 import { emailClient, sendEmail } from './email-core';
 
+// Import EmailSubjectService for consistent subject lines
+import { EmailSubjectService } from './subject-service';
+
 // Create secure logger to prevent PII exposure
 const secureLogger = new SecureEmailLogger(logger.child('notification-service'));
 
@@ -511,16 +514,17 @@ export class NotificationService implements NotificationServiceInterface {
   }
   
   /**
-   * Get notification subject line
+   * Get notification subject line using centralized EmailSubjectService
    * @param payload Filing notification payload
-   * @returns Email subject
+   * @returns Email subject in format: "New [FormType] Filing: [Company] ([Ticker])"
    */
   private getNotificationSubject(payload: FilingNotificationPayload): string {
-    const eventType = payload.summaryId 
-      ? 'Summary Available'
-      : 'New Filing';
-    
-    return `${payload.ticker}: ${payload.formType} ${eventType} - ${payload.companyName}`;
+    // Use centralized subject service for consistent formatting
+    return EmailSubjectService.generateSingleFilingSubject({
+      filingType: payload.formType,
+      companyName: payload.companyName,
+      ticker: payload.ticker
+    });
   }
   
   /**

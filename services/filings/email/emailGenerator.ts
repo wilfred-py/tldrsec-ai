@@ -1,7 +1,7 @@
 import { FilingSummaryResult, FilingError } from '../../filing/types';
 import { getFormMetadata } from '../../../lib/sec-edgar/form-registry';
 import { emailClient } from '../../../lib/email';
-import { prisma } from '../../../lib/db';
+import { getPrismaClient } from '../../../lib/db';
 import { monitoring } from '@/lib/monitoring';
 import { renderAsync } from '@react-email/render';
 import * as React from 'react';
@@ -13,6 +13,7 @@ import { Form144MinimalistTemplate } from '../../../components/ui/email/template
 import { GenericMinimalistTemplate } from '../../../components/ui/email/templates/generic-minimalist-template';
 import { FilingTemplateData } from '../../../lib/email/types';
 import { EmailColors } from '../../../components/ui/email/design-system';
+import { EmailSubjectService } from '../../../lib/email/subject-service';
 
 // Define a safe version of recordEmailSent that handles missing function
 const safeRecordEmailSent = (emailType: string, recipient: string, success: boolean, tags: Record<string, string> = {}): void => {
@@ -226,8 +227,9 @@ export function generatePlainTextEmail(summaries: FilingSummaryResult[], errors:
  */
 export async function markSummariesAsSent(summaries: FilingSummaryResult[]): Promise<number> {
   console.log(`[INFO][EmailGenerator] Marking ${summaries.length} summaries as sent in the database...`);
+  const prisma = getPrismaClient();
   let updatedCount = 0;
-  
+
   for (const summary of summaries) {
     if (summary.accessionNumber) {
       const tickerRecord = await prisma.ticker.findFirst({
@@ -277,10 +279,16 @@ export async function sendSummaryEmail(email: string, summaries: FilingSummaryRe
     
     const startTime = Date.now();
     
+    // Generate subject line using centralized service
+    const subject = EmailSubjectService.generateDigestSubject({
+      date: new Date().toISOString().split('T')[0],
+      filingCount: summaries.length
+    });
+
     // Send the email
     const result = await emailClient.sendEmail({
       to: email,
-      subject: `SEC Filing Summaries - ${new Date().toLocaleDateString()}`,
+      subject,
       html: emailHtml,
       text: plainText,
       tags: [

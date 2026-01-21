@@ -4,18 +4,34 @@ import { getPrismaClient } from '@/lib/db/prisma';
 import { headers } from 'next/headers';
 import { PaymentLogger } from '@/lib/audit/payment-logger';
 
-// Initialize Stripe
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: '2024-12-18.acacia',
-});
+// Helper function to get Stripe instance (lazy initialization)
+function getStripeClient(): Stripe {
+  const apiKey = process.env.STRIPE_SECRET_KEY;
+  if (!apiKey) {
+    throw new Error('STRIPE_SECRET_KEY is not configured');
+  }
+  return new Stripe(apiKey, {
+    apiVersion: '2024-12-18.acacia',
+  });
+}
 
-// Webhook secret for signature validation
-const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET!;
+// Helper function to get webhook secret
+function getWebhookSecret(): string {
+  const secret = process.env.STRIPE_WEBHOOK_SECRET;
+  if (!secret) {
+    throw new Error('STRIPE_WEBHOOK_SECRET is not configured');
+  }
+  return secret;
+}
 
 export async function POST(request: NextRequest) {
   const prisma = getPrismaClient();
   
   try {
+    // Initialize Stripe and webhook secret at runtime
+    const stripe = getStripeClient();
+    const webhookSecret = getWebhookSecret();
+
     // Get the raw body
     const body = await request.text();
     

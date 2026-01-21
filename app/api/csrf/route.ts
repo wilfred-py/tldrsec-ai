@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { generateCSRFToken, setCSRFTokenCookie } from '@/lib/middleware/csrf';
 
-export async function GET(request: NextRequest) {
+export async function GET(_request: NextRequest) {
   const token = generateCSRFToken();
   
   const response = NextResponse.json({ token });

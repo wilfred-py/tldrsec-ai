@@ -25,6 +25,10 @@ import { v4 as uuidv4 } from 'uuid';
 const getPrisma = () => getPrismaClient();
 const lockLogger = logger.child('distributed-lock');
 
+// Maximum absolute hold time for any lock (30 minutes)
+// Prevents hung processes from holding locks indefinitely
+const MAX_ABSOLUTE_HOLD_TIME_MS = 30 * 60 * 1000; // 30 minutes
+
 export interface LockOptions {
   ttl?: number; // Lock timeout in milliseconds
   acquireTimeout?: number; // How long to wait when acquiring lock
@@ -46,6 +50,7 @@ export interface LockContext {
   lockName: string;
   acquiredAt: Date;
   expiresAt: Date;
+  absoluteExpiresAt: Date; // Maximum time this lock can be held (prevents infinite renewal)
   acquiredBy: string;
   autoRenewal: boolean;
   renewalTimer?: NodeJS.Timeout;
@@ -90,9 +95,20 @@ export class DistributedLockManager {
       ...options
     };
 
+    // Cap TTL at maximum absolute hold time
+    const effectiveTtl = Math.min(config.ttl, MAX_ABSOLUTE_HOLD_TIME_MS);
+    if (effectiveTtl < config.ttl) {
+      lockLogger.info('Lock TTL capped at maximum hold time', {
+        requestedTtl: config.ttl,
+        effectiveTtl,
+        maxHoldTime: MAX_ABSOLUTE_HOLD_TIME_MS
+      });
+    }
+
     const lockId = uuidv4();
     const acquiredAt = new Date();
-    const expiresAt = new Date(acquiredAt.getTime() + config.ttl);
+    const expiresAt = new Date(acquiredAt.getTime() + effectiveTtl);
+    const absoluteExpiresAt = new Date(acquiredAt.getTime() + MAX_ABSOLUTE_HOLD_TIME_MS);
 
     lockLogger.info('Attempting to acquire lock', {
       lockName,
@@ -119,6 +135,7 @@ export class DistributedLockManager {
             lockName,
             acquiredAt,
             expiresAt,
+            absoluteExpiresAt,
             acquiredBy: this.instanceId,
             autoRenewal: config.autoRenewal
           };
@@ -127,7 +144,7 @@ export class DistributedLockManager {
 
           // Set up auto-renewal if enabled
           if (config.autoRenewal) {
-            this.setupAutoRenewal(lockContext, config.ttl, config.renewalInterval);
+            this.setupAutoRenewal(lockContext, effectiveTtl, config.renewalInterval);
           }
 
           const acquisitionTime = Date.now() - startTime;
@@ -431,6 +448,21 @@ export class DistributedLockManager {
     const renewalInterval = Math.floor((ttl * renewalPercentage) / 100);
     
     lockContext.renewalTimer = setTimeout(async () => {
+      // Check if we've reached the absolute maximum hold time
+      if (Date.now() >= lockContext.absoluteExpiresAt.getTime()) {
+        lockLogger.warn('Lock reached absolute max hold time, not renewing', {
+          lockName: lockContext.lockName,
+          lockId: lockContext.lockId,
+          absoluteExpiresAt: lockContext.absoluteExpiresAt.toISOString(),
+          holdTime: Date.now() - lockContext.acquiredAt.getTime()
+        });
+        
+        // Release the lock since we can't renew it anymore
+        await this.releaseLock(lockContext.lockId);
+        monitoring.incrementCounter('lock.max_hold_time_reached', 1);
+        return;
+      }
+
       try {
         await this.renewLock(lockContext, ttl);
         
@@ -455,7 +487,15 @@ export class DistributedLockManager {
    * Renew an existing lock
    */
   private async renewLock(lockContext: LockContext, ttl: number): Promise<void> {
-    const newExpiresAt = new Date(Date.now() + ttl);
+    // Don't allow renewal past the absolute max hold time
+    const maxRenewalTime = lockContext.absoluteExpiresAt.getTime() - Date.now();
+    const effectiveTtl = Math.min(ttl, maxRenewalTime);
+    
+    if (effectiveTtl <= 0) {
+      throw new Error('Cannot renew lock - absolute max hold time reached');
+    }
+    
+    const newExpiresAt = new Date(Date.now() + effectiveTtl);
 
     const renewed = await getPrisma().$transaction(async (tx) => {
       // Verify we still hold the advisory lock before renewing
@@ -496,13 +536,30 @@ export class DistributedLockManager {
     if (renewed) {
       lockContext.expiresAt = newExpiresAt;
       
+      // Check if we're approaching max hold time
+      const holdTime = Date.now() - lockContext.acquiredAt.getTime();
+      const percentageOfMaxHold = (holdTime / MAX_ABSOLUTE_HOLD_TIME_MS) * 100;
+      
+      if (percentageOfMaxHold >= 80) {
+        lockLogger.warn('Lock approaching max hold time', {
+          lockName: lockContext.lockName,
+          lockId: lockContext.lockId,
+          holdTime,
+          maxHoldTime: MAX_ABSOLUTE_HOLD_TIME_MS,
+          percentageUsed: Math.round(percentageOfMaxHold)
+        });
+        monitoring.incrementCounter('lock.approaching_max_hold', 1);
+      }
+      
       lockLogger.debug('Lock renewed successfully', {
         lockName: lockContext.lockName,
         lockId: lockContext.lockId,
-        newExpiresAt: newExpiresAt.toISOString()
+        newExpiresAt: newExpiresAt.toISOString(),
+        remainingMaxHold: maxRenewalTime
       });
 
       monitoring.incrementCounter('lock.renewed', 1);
+      monitoring.recordValue('lock.hold_percentage', percentageOfMaxHold);
     } else {
       throw new Error('Failed to renew lock - lock may have been released or expired');
     }
@@ -516,7 +573,9 @@ export class DistributedLockManager {
     lockName: string;
     acquiredAt: Date;
     expiresAt: Date;
+    absoluteExpiresAt: Date;
     holdTime: number;
+    remainingMaxHold: number;
   }> {
     const now = Date.now();
     return Array.from(this.activeLocks.values()).map(lock => ({
@@ -524,7 +583,9 @@ export class DistributedLockManager {
       lockName: lock.lockName,
       acquiredAt: lock.acquiredAt,
       expiresAt: lock.expiresAt,
-      holdTime: now - lock.acquiredAt.getTime()
+      absoluteExpiresAt: lock.absoluteExpiresAt,
+      holdTime: now - lock.acquiredAt.getTime(),
+      remainingMaxHold: Math.max(0, lock.absoluteExpiresAt.getTime() - now)
     }));
   }
 

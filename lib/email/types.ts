@@ -119,8 +119,36 @@ export interface FilingTemplateData {
   filingDate: string;
   filingUrl: string;
   url?: string; // Alternative to filingUrl
+  summaryUrl?: string; // URL to view summary
   summaryText?: string; // Additional summary text
   summaryData?: {
+    // Common fields for 10-K/10-Q
+    period?: string;
+    financials?: Array<{
+      label: string;
+      value: string;
+      growth?: string;
+    }>;
+    insights?: string[];
+
+    // Common fields for 8-K
+    eventType?: string;
+    summary?: string;
+    sentiment?: 'positive' | 'negative' | 'neutral' | 'mixed' | string;
+    keyHighlights?: string[];
+    financialImpact?: string;
+    managementCommentary?: string;
+    forwardGuidance?: string;
+    positiveHighlights?: string;
+    negativeHighlights?: string;
+    itemNumbers?: string[];
+
+    // Form 4 specific
+    filerName?: string;
+    relationship?: string;
+    percentageChange?: string;
+    newStake?: string;
+
     // Form 11-K specific
     planName?: string;
     planYear?: string;
@@ -201,7 +229,7 @@ export interface FilingTemplateData {
     timeline?: string;
     marketImpact?: string;
     investmentContext?: string;
-    
+
     // General summary data fields
     changeDirection?: 'increase' | 'decrease';
     changeAmount?: string;

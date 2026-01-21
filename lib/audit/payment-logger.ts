@@ -22,7 +22,7 @@ export interface PaymentEvent {
   stripeEventId?: string;
   subscriptionId?: string;
   customerId?: string;
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
   ipAddress?: string;
   userAgent?: string;
   error?: string;

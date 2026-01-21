@@ -10,6 +10,7 @@ import { logger } from '../../lib/logging';
 import { SummaryGenerationResult, SECFiling, Company } from './types';
 import { normalizeFormType } from './formTypeService';
 import { generateSecureCorrelationId } from '../../lib/security/secure-random';
+import { cleanHtmlContent } from '../../lib/parsers/filing-extractor-utils';
 
 // Initialize OpenRouter client for summary generation
 const aiClient = openRouterClient;
@@ -17,6 +18,10 @@ const aiClient = openRouterClient;
 /**
  * Generates a comprehensive prompt for AI summarization of SEC filings
  * Updated with journalist tone - Matt Levine style, lead with punchline
+ *
+ * OPTIMIZATION: Cleans HTML content before sending to AI to reduce token usage
+ * by ~90% for PDF-converted filings (like 424B2 prospectuses).
+ *
  * @param content Document content to summarize
  * @param filing SEC filing information
  * @param company Company information
@@ -27,6 +32,24 @@ function generateSummaryPrompt(content: string, filing: SECFiling, company: Comp
   const ticker = company.ticker || '';
   const formType = normalizeFormType(filing.formType || 'UNKNOWN');
   const filingDate = filing.filingDate ? new Date(filing.filingDate).toLocaleDateString() : 'Unknown date';
+
+  // Clean HTML content to remove styling bloat, inline CSS, and PDF-to-HTML artifacts
+  // This dramatically reduces token usage (90%+ savings for 424B2 and similar forms)
+  const rawContentLength = content.length;
+  const cleanedContent = cleanHtmlContent(content);
+  const cleanedContentLength = cleanedContent.length;
+
+  // Log the cleaning effectiveness for monitoring
+  const reductionPercent = rawContentLength > 0
+    ? ((1 - cleanedContentLength / rawContentLength) * 100).toFixed(1)
+    : '0';
+
+  logger.debug(`Content cleaning for ${formType}`, {
+    ticker,
+    rawLength: rawContentLength,
+    cleanedLength: cleanedContentLength,
+    reductionPercent: `${reductionPercent}%`
+  });
 
   // Journalist-tone prompt optimized for xAI models with 2M context window
   const prompt = `You are a sharp financial journalist writing for sophisticated investors who value wit, precision, and zero bullshit.
@@ -102,7 +125,7 @@ TONE EXAMPLES:
 IMPORTANT: Every number must be verifiable from the filing. If specific metrics are not available, indicate "Not disclosed" rather than estimating.
 
 Here is the filing content:
-${content.substring(0, 1800000)}`;
+${cleanedContent.substring(0, 500000)}`;
 
   return prompt;
 }
@@ -134,11 +157,11 @@ export async function generateAISummary(
       correlationId,
       ticker: company.ticker,
       formType,
-      contentLength: content.length,
+      rawContentLength: content.length,
+      promptLength: prompt.length,
       model: model,
       hasApiKey: !!apiKey,
       apiKeyPrefix: apiKey ? apiKey.substring(0, 10) + '...' : 'MISSING',
-      promptLength: prompt.length,
       aiClientExists: !!aiClient
     });
 

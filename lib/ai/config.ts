@@ -106,6 +106,8 @@ export function getFallbackModel(): string {
 
 /**
  * Alias for getDefaultModel to maintain backward compatibility
+ * @deprecated Use getDefaultModel() instead. This alias exists for backward compatibility
+ * with code written before the OpenRouter migration. New code should use getDefaultModel().
  */
 export function getClaudeModel(): string {
   return getDefaultModel();

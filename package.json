@@ -157,7 +157,8 @@
     "audit:test-data:cleanup": "npx tsx scripts/audit-test-data.ts cleanup",
     "audit:test-data:cleanup:execute": "npx tsx scripts/audit-test-data.ts cleanup --execute",
     "audit:test-data:fix": "npx tsx scripts/audit-test-data.ts fix-tracking",
-    "audit:test-data:fix:execute": "npx tsx scripts/audit-test-data.ts fix-tracking --execute"
+    "audit:test-data:fix:execute": "npx tsx scripts/audit-test-data.ts fix-tracking --execute",
+    "test:e2e:pipeline-recovery": "RUN_E2E_PIPELINE_TESTS=true jest __tests__/e2e/pipeline-auto-recovery.test.ts --config=jest.config.mjs --verbose --runInBand"
   },
   "dependencies": {
     "@anthropic-ai/claude-code": "2.0.37",
