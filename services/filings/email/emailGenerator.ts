@@ -1,7 +1,7 @@
 import { FilingSummaryResult, FilingError } from '../../filing/types';
 import { getFormMetadata } from '../../../lib/sec-edgar/form-registry';
 import { emailClient } from '../../../lib/email';
-import { prisma } from '../../../lib/db';
+import { getPrismaClient } from '../../../lib/db';
 import { monitoring } from '@/lib/monitoring';
 import { renderAsync } from '@react-email/render';
 import * as React from 'react';
@@ -227,8 +227,9 @@ export function generatePlainTextEmail(summaries: FilingSummaryResult[], errors:
  */
 export async function markSummariesAsSent(summaries: FilingSummaryResult[]): Promise<number> {
   console.log(`[INFO][EmailGenerator] Marking ${summaries.length} summaries as sent in the database...`);
+  const prisma = getPrismaClient();
   let updatedCount = 0;
-  
+
   for (const summary of summaries) {
     if (summary.accessionNumber) {
       const tickerRecord = await prisma.ticker.findFirst({

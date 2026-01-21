@@ -1,57 +1,35 @@
 # Project Progress
 
-**Date**: 2026-01-20
-**Branch**: main
-**Status**: Active - Pipeline health connection pool exhaustion fix
+**Date**: 2026-01-16
+**Branch**: main  
+**Status**: Active - Pipeline recovery and monitoring improvements
 
 ---
 
-## Current Session: Fix Pipeline Health Connection Pool Exhaustion (2026-01-20)
-
-**Issue**: Connection pool exhaustion in `/api/health/pipeline` endpoint causing pipeline stalls.
-
-**Root Cause**: 18-19 parallel database queries exceeding Supabase's 5-connection limit with 10-second timeout.
-
-**Fix Applied (All 4 Phases Complete)**:
-1. **Phase 1 - Response Caching**: Added 30-second cache layer with X-Cache headers
-2. **Phase 2 - Aggregated SQL Query**: Replaced 10 individual Prisma count() queries with single PostgreSQL FILTER query
-3. **Phase 3 - Orphan Check Sampling**: Expensive orphan detection runs every 6th request (~60 seconds)
-4. **Phase 4 - Sequential Batching**: Queries execute in controlled batches (max 4 concurrent)
-
-**Files Modified**:
-- [app/api/health/pipeline/route.ts](app/api/health/pipeline/route.ts) - Main implementation (caching, aggregated query, sampling)
-- `__tests__/api/health/pipeline-health-caching.test.ts` - Cache layer tests (5/5 passing)
-- `__tests__/api/health/pipeline-health-aggregated-queries.test.ts` - Aggregated query tests (4/4 passing)
-- `__tests__/api/health/pipeline-health-orphan-sampling.test.ts` - Sampling tests (5/5 passing)
-- `__tests__/api/health/pipeline-health-connection-pool.test.ts` - Connection pool tests (3/3 passing)
-- `docs/plans/2026-01-20-fix-pipeline-health-connection-pool-exhaustion.md` - Implementation plan
-
-**Performance Improvements**:
-- Queries per request: 18-19 → 5-6 (uncached), 0 (cached)
-- Max concurrent connections: 14 → 4 (within pool limit)
-- Expected response time: < 300ms (uncached), < 50ms (cached)
-
-**Automated Verification**: ✅ All 17 tests pass, build succeeds, no new lint errors
-
-**Manual Verification Status**:
-- [x] Deploy to staging/preview environment ✅ (verified via local dev server)
-- [x] Health endpoint responds consistently (no timeouts) ✅ (X-Response-Time: 458ms)
-- [x] Verify no "Timed out fetching a new connection" errors ✅
-- [x] Cache headers working: X-Cache: MISS/HIT, X-Cache-Age
-- [x] New fields present: orphanedCountSampled, lastOrphanCheck
-
----
-
-## Previous Session: Summary Field Population Optimization (2026-01-16)
+## Current Session: Summary Field Population Optimization (2026-01-16)
 
 **Issue**: Summary table has 38 fields but `processingTimeMs` field is 0% populated (0/704 summaries) despite the value being calculated.
 
-**Status**: ✅ Code deployed, awaiting pipeline recovery for verification
+**Root Cause**: The `summarizeDuration` value is calculated in summarize-cached-handler.ts but not stored in the dedicated `processingTimeMs` database field.
+
+**Fix Applied**:
+1. Added `processingTimeMs: summarizeDuration` for new AI summaries (line 419)
+2. Added `processingTimeMs: 0` for shared/cached summaries (line 265)
+3. Created comprehensive tests with 4 test cases validating field population
 
 **Files Modified**:
 - [lib/cron/handlers/summarize-cached-handler.ts:265](lib/cron/handlers/summarize-cached-handler.ts#L265) - Cached summary path
 - [lib/cron/handlers/summarize-cached-handler.ts:419](lib/cron/handlers/summarize-cached-handler.ts#L419) - New AI summary path
 - `__tests__/cron/handlers/summarize-cached-handler-fields.test.ts` - New comprehensive tests (4/4 passing)
+- `docs/plans/2026-01-16-summary-field-population-optimization.md` - Implementation plan
+
+**Automated Verification**: ✅ All tests pass (4/4), build succeeds, no new lint errors
+
+**Pending Manual Verification**:
+- Deploy to production
+- Trigger real filing summary via cron
+- Query database to verify `processingTimeMs > 0` for new summaries
+- Verify cached summaries have `processingTimeMs = 0`
 
 ---
 
@@ -97,5 +75,5 @@ Projects completed before 30 days ago are archived in `.claude/history/`:
 
 ---
 
-*Last Updated: 2026-01-20*
+*Last Updated: 2026-01-16*
 *Older completed projects archived to .claude/history/ - See TIMELINE.md for full history*

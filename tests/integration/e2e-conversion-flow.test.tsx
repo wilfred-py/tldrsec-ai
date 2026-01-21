@@ -137,7 +137,7 @@ describe('E2E Conversion Flow Simulation', () => {
 
       // STEP 8: API call is made with correct data
       await waitFor(() => {
-        expect(fetch).toHaveBeenCalledWith('/api/newsletter/subscribe', {
+        expect(fetch).toHaveBeenCalledWith('/api/waitlist/subscribe', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',

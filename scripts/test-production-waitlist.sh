@@ -37,10 +37,10 @@ else
 fi
 echo ""
 
-# Test 2: Newsletter Subscription
-echo "Test 2: Newsletter Subscription"
+# Test 2: Waitlist Subscription
+echo "Test 2: Waitlist Subscription"
 SUBSCRIBE_RESPONSE=$(curl -s -w "\n%{http_code}" \
-  -X POST "$PRODUCTION_URL/api/newsletter/subscribe" \
+  -X POST "$PRODUCTION_URL/api/waitlist/subscribe" \
   -H "Content-Type: application/json" \
   -d "{\"email\":\"$TEST_EMAIL\",\"source\":\"smoke_test\",\"utm_source\":\"test\",\"utm_medium\":\"script\",\"utm_campaign\":\"verification\"}")
 
@@ -48,10 +48,10 @@ SUBSCRIBE_BODY=$(echo "$SUBSCRIBE_RESPONSE" | head -n -1)
 SUBSCRIBE_CODE=$(echo "$SUBSCRIBE_RESPONSE" | tail -n 1)
 
 if [ "$SUBSCRIBE_CODE" = "200" ]; then
-  echo -e "${GREEN}✓ Newsletter subscription succeeded${NC}"
+  echo -e "${GREEN}✓ Waitlist subscription succeeded${NC}"
   echo "  Response: $SUBSCRIBE_BODY" | jq '.' 2>/dev/null || echo "  Response: $SUBSCRIBE_BODY"
 else
-  echo -e "${RED}✗ Newsletter subscription failed (HTTP $SUBSCRIBE_CODE)${NC}"
+  echo -e "${RED}✗ Waitlist subscription failed (HTTP $SUBSCRIBE_CODE)${NC}"
   echo "  Response: $SUBSCRIBE_BODY"
   exit 1
 fi
@@ -60,7 +60,7 @@ echo ""
 # Test 3: Duplicate Subscription Detection
 echo "Test 3: Duplicate Subscription Detection"
 DUPLICATE_RESPONSE=$(curl -s -w "\n%{http_code}" \
-  -X POST "$PRODUCTION_URL/api/newsletter/subscribe" \
+  -X POST "$PRODUCTION_URL/api/waitlist/subscribe" \
   -H "Content-Type: application/json" \
   -d "{\"email\":\"$TEST_EMAIL\",\"source\":\"smoke_test\"}")
 

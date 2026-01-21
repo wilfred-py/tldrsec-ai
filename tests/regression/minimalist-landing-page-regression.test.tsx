@@ -50,10 +50,10 @@ describe('Minimalist Landing Page Regression Tests', () => {
       expect(typeof HomePage.default).toBe('function');
     });
 
-    test('newsletter API route exists and is accessible', async () => {
+    test('waitlist API route exists and is accessible', async () => {
       // This tests that the API route module can be imported without errors
       try {
-        const apiRoute = await import('@/app/api/newsletter/subscribe/route');
+        const apiRoute = await import('@/app/api/waitlist/subscribe/route');
         expect(apiRoute.POST).toBeDefined();
         expect(typeof apiRoute.POST).toBe('function');
       } catch (error) {
@@ -152,7 +152,7 @@ describe('Minimalist Landing Page Regression Tests', () => {
   });
 
   describe('API Endpoint Integrity', () => {
-    test('newsletter subscription endpoint handles POST requests', async () => {
+    test('waitlist subscription endpoint handles POST requests', async () => {
       const mockRequest = {
         json: () => Promise.resolve({
           email: 'test@example.com',
@@ -165,7 +165,7 @@ describe('Minimalist Landing Page Regression Tests', () => {
 
       // Test that the API endpoint structure is maintained
       try {
-        const { POST } = await import('@/app/api/newsletter/subscribe/route');
+        const { POST } = await import('@/app/api/waitlist/subscribe/route');
         expect(POST).toBeDefined();
         expect(typeof POST).toBe('function');
       } catch (error) {
@@ -211,7 +211,7 @@ describe('Minimalist Landing Page Regression Tests', () => {
     test('email domain is correctly configured to tldrsec.app', async () => {
       // Test the email configuration by checking the welcome email template
       try {
-        const { POST } = await import('@/app/api/newsletter/subscribe/route');
+        const { POST } = await import('@/app/api/waitlist/subscribe/route');
         
         // The function should reference tldrsec.app domain
         const functionString = POST.toString();

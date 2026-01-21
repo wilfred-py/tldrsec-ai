@@ -86,7 +86,7 @@ describe('Landing Page Comprehensive Coverage Tests', () => {
 
       // 5. Verify API call was made correctly
       await waitFor(() => {
-        expect(fetch).toHaveBeenCalledWith('/api/newsletter/subscribe', {
+        expect(fetch).toHaveBeenCalledWith('/api/waitlist/subscribe', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
