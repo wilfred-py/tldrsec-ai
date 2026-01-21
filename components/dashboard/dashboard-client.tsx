@@ -54,6 +54,9 @@ import {
 } from "@/lib/api/ticker-service";
 import { useAsync } from "@/lib/hooks/use-async";
 import { TutorialGuide } from "@/components/onboarding/tutorial-guide";
+import { useSubscription } from "@/hooks/use-subscription";
+import { UpgradeCTASection } from "@/components/dashboard/upgrade-cta-section";
+import { SUBSCRIPTION_PLANS, type PlanType } from "@/lib/stripe";
 
 // Column helper for the table
 const columnHelper = createColumnHelper<Company>();
@@ -78,6 +81,10 @@ export function DashboardClient() {
 
   const [showTutorial, setShowTutorial] = useState(false);
   const [tutorialProgress, setTutorialProgress] = useState(0);
+  const [isCheckoutLoading, setIsCheckoutLoading] = useState(false);
+
+  // Subscription hook for upgrade CTA
+  const { subscription, createCheckout } = useSubscription();
 
   // Async hooks for API calls
   const {
@@ -283,6 +290,30 @@ export function DashboardClient() {
       }
     },
     [executeUpdatePreferences]
+  );
+
+  // Handle upgrade click - redirect to Stripe checkout
+  const handleUpgradeClick = useCallback(
+    async (planType: "PRO" | "MAX", billingCycle: "monthly" | "annual") => {
+      setIsCheckoutLoading(true);
+      try {
+        const plan = SUBSCRIPTION_PLANS[planType];
+        const priceId =
+          billingCycle === "annual" ? plan.annualPriceId : plan.monthlyPriceId;
+        if (!priceId) {
+          toast.error("Checkout not available. Please try again later.");
+          return;
+        }
+        const checkoutUrl = await createCheckout(planType, priceId);
+        window.location.href = checkoutUrl;
+      } catch (error) {
+        console.error("Checkout error:", error);
+        toast.error("Failed to start checkout. Please try again.");
+      } finally {
+        setIsCheckoutLoading(false);
+      }
+    },
+    [createCheckout]
   );
 
   // Format date for display
@@ -971,6 +1002,19 @@ export function DashboardClient() {
           </>
         )}
       </div>
+
+      {/* Upgrade CTA for non-MAX users */}
+      {subscription && subscription.planType !== "MAX" && (
+        <UpgradeCTASection
+          currentPlan={subscription.planType as "FREE" | "PRO" | "MAX"}
+          tickerCount={companies.length}
+          tickerLimit={
+            SUBSCRIPTION_PLANS[subscription.planType as PlanType]?.tickerLimit || 3
+          }
+          onUpgradeClick={handleUpgradeClick}
+          isCheckoutLoading={isCheckoutLoading}
+        />
+      )}
 
       {/* Delete Confirmation Dialog */}
       <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
