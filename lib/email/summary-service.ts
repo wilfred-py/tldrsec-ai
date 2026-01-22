@@ -7,6 +7,7 @@ import { EmailType, EmailMessage } from './types';
 import { sendEmail } from './index';
 import { logger } from '../logging';
 import { SecureEmailLogger } from './security-helpers';
+import { EmailSubjectService } from './subject-service';
 
 // Create secure logger to prevent PII exposure
 const secureLogger = new SecureEmailLogger(logger.child('summary-service'));
@@ -249,9 +250,15 @@ export async function sendFilingSummaryEmail(
     });
     
     // Prepare email message
+    const subject = EmailSubjectService.generateSingleFilingSubject({
+      filingType: filingData.filingType,
+      companyName: filingData.companyName,
+      ticker: filingData.ticker
+    });
+
     const message: EmailMessage = {
       to: recipientEmail,
-      subject: `New ${filingData.filingType} Filing: ${filingData.companyName} (${filingData.ticker})`,
+      subject,
       html,
       text,
       tags: [
