@@ -226,7 +226,8 @@ export function Form8KMinimalistTemplate({ filing }: Form8KMinimalistTemplatePro
                                 {signal.icon} {signal.level}
                               </span>
                               {/* Sentiment badge inline with materiality */}
-                              {sentiment && (
+                              {/* Don't show neutral sentiment with material events - conflicting information */}
+                              {sentiment && !(isMaterial && sentiment.toLowerCase() === 'neutral') && (
                                 <span style={{
                                   display: 'inline-block',
                                   padding: '4px 12px',
