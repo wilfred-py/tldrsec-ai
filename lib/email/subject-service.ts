@@ -60,6 +60,7 @@ export class EmailSubjectService {
    * Generate subject line for a single filing notification
    *
    * Format: "New [FormType] Filing: [Company] ([Ticker])"
+   * For amended filings (form types ending with /A): "[AMENDED] New [FormType] Filing: [Company] ([Ticker])"
    *
    * @param params - The filing details for subject generation
    * @returns Formatted subject line string
@@ -68,6 +69,15 @@ export class EmailSubjectService {
    * @example
    * generateSingleFilingSubject({ filingType: '10-K', companyName: 'Apple Inc.', ticker: 'AAPL' })
    * // Returns: "New 10-K Filing: Apple Inc. (AAPL)"
+   *
+   * @example
+   * generateSingleFilingSubject({ filingType: 'Form 4/A', companyName: 'Tesla Inc.', ticker: 'TSLA' })
+   * // Returns: "[AMENDED] New Form 4/A Filing: Tesla Inc. (TSLA)"
+   *
+   * @remarks
+   * The [AMENDED] indicator is automatically added for any filing type ending with '/A',
+   * which is the SEC's standard notation for amended filings (e.g., 10-K/A, 8-K/A, Form 4/A).
+   * This helps users quickly identify filing amendments in their email inbox.
    */
   static generateSingleFilingSubject({
     filingType,
@@ -81,7 +91,12 @@ export class EmailSubjectService {
       );
     }
 
-    return `${INDIVIDUAL_FILING_PREFIX} ${filingType} Filing: ${companyName} (${ticker})`;
+    // Add [AMENDED] indicator for filing amendments (form types ending with /A)
+    // SEC uses /A suffix to denote amended filings (e.g., "Form 4/A" is an amended Form 4)
+    const isAmended = filingType.endsWith('/A');
+    const amendedPrefix = isAmended ? '[AMENDED] ' : '';
+
+    return `${amendedPrefix}${INDIVIDUAL_FILING_PREFIX} ${filingType} Filing: ${companyName} (${ticker})`;
   }
 
   /**
