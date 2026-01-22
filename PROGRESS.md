@@ -1,12 +1,86 @@
 # Project Progress
 
-**Date**: 2026-01-16
-**Branch**: fix/8k-template-registry-gap
-**Status**: Active - Email Template Type Errors and 8-K Template Registry Fix
+**Date**: 2026-01-22
+**Branch**: review-summary-quality
+**Status**: Active - SEC Filing Email Quality Enhancement Complete
 
 ---
 
-## Current Session: Email Template Type Errors Fix (2026-01-16)
+## Current Session: Cloudflare Build Fix - Onboarding Dynamic Rendering (2026-01-21)
+
+**Issue**: Cloudflare Pages build failing with error: "useSession can only be used within the <ClerkProvider /> component" during static page generation of `/onboarding`.
+
+**Root Cause**: Next.js was attempting to statically prerender the `/onboarding` page during build. The page uses Clerk's `useSession` hook which requires `ClerkProvider`, but during Cloudflare Pages build, environment variables like `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` are not available, so ClerkProvider skips initialization.
+
+**Fix Applied**:
+1. Renamed `page.tsx` to `onboarding-client.tsx` (client component with all UI logic)
+2. Created new server component `page.tsx` that exports `dynamic = "force-dynamic"`
+3. Server component simply renders the client component
+
+This pattern separates server-side configuration (`dynamic` export) from client-side React hooks, which is the proper way to handle this in Next.js 15 App Router.
+
+**Files Modified**:
+- `app/(auth)/onboarding/page.tsx` - New server component with `export const dynamic = "force-dynamic"`
+- `app/(auth)/onboarding/onboarding-client.tsx` - Renamed from page.tsx, contains all client UI logic
+
+**Verification**: ✅ Local build passes, `/onboarding` now marked as `ƒ` (Dynamic) instead of `○` (Static). Pushed to main to trigger new Cloudflare build.
+
+---
+
+## Recently Completed Sessions
+
+### Onboarding Redirect Race Condition Fix (2026-01-19)
+
+**Issue**: Two problems in onboarding flow:
+1. Welcome emails failing with "Missing `html` or `text` field" error
+2. After completing onboarding, users stuck on "Setting up your account" spinner instead of redirecting to /dashboard
+
+**Root Cause 1 - Email Failure**: `getEmailTemplate()` in `lib/email/templates.ts` is an async function (line 926), but was being called without `await` in `welcome-service.ts`, causing `html` and `text` to be Promise objects instead of strings.
+
+**Root Cause 2 - Redirect Loop**: Clerk's `publicMetadata.onboardingCompleted` doesn't immediately sync to JWT session claims. The middleware checks `sessionClaims.publicMetadata.onboardingCompleted`, but the JWT hasn't refreshed yet after the backend updates Clerk metadata, causing redirect back to /onboarding.
+
+**Fix Applied**:
+1. **Email Fix**: Added `await` to `getEmailTemplate()` calls in `welcome-service.ts` at lines 45 and 134
+2. **Redirect Fix**: Implemented cookie-based bypass pattern:
+   - Client sets `onboarding_completed=true` cookie (60s TTL) before navigation
+   - Added `session.reload()` call to attempt Clerk session refresh
+   - Changed to hard navigation (`window.location.href`) instead of client-side `router.push()`
+   - Middleware checks BOTH Clerk session claims AND the cookie
+   - Cookie is cleared after first successful dashboard access
+
+**Files Modified**:
+- `lib/email/welcome-service.ts` - Added `await` to async `getEmailTemplate()` calls
+- `app/(auth)/onboarding/page.tsx` - Added session reload, cookie bypass, hard navigation
+- `middleware.ts` - Added cookie bypass check for onboarding redirect protection
+
+**Verification**: ✅ User confirmed "working now" - onboarding completes and redirects to dashboard successfully
+
+---
+
+## Recently Completed Sessions
+
+### Pipeline Recovery - Zombie Connection Pool Exhaustion (2026-01-19)
+
+**Issue**: Pipeline stalled for 25+ hours due to 16 zombie database connections stuck in "idle in transaction" state, exhausting the Supabase connection pool.
+
+**Root Cause**: Prisma connections entered "idle in transaction" state and never closed, accumulating over time until all 5 pool connections were consumed (oldest: 1h41m).
+
+**Additional Bug Found**: `/api/health/pipeline` endpoint was querying `SecFiling.processed` field which doesn't exist (the `processed` field is on `RssFilingCheck` table).
+
+**Fix Applied**:
+1. Terminated 16 zombie connections via `pg_terminate_backend()`
+2. Fixed health endpoint to query `RssFilingCheck` instead of `SecFiling`
+3. Moved 18 invalid `ASYNC_SUMMARIZE_FILING` jobs to DEAD_LETTER
+4. Reset 1 stuck processing job (25+ hours old) to PENDING
+
+**Files Modified**:
+- `app/api/health/pipeline/route.ts` - Fixed `processed` field query to use `rssFilingCheck`
+
+**Verification**: ✅ Pipeline HEALTHY, jobs completing, 88-job backlog processing
+
+---
+
+### Email Template Type Errors Fix (2026-01-16)
 
 **Issue**: Property type errors in `lib/email/templates.ts` - summaryData interface missing properties used in template rendering.
 
@@ -258,5 +332,5 @@ at Function.create (/lib/job-queue/index.ts:220:36)
 
 ---
 
-*Last Updated: 2026-01-16 (Email Template Type Errors Fix + SEC Summary Quality Phase 2 Complete)*
+*Last Updated: 2026-01-21 (Cloudflare Build Fix - Onboarding Dynamic Rendering)*
 *Older completed projects archived to .claude/history/ - See TIMELINE.md for full history*
