@@ -1,16 +1,104 @@
 # Project Progress
 
-**Date**: 2026-01-16
-**Branch**: main  
-**Status**: Active - Pipeline recovery and monitoring improvements
+**Date**: 2026-01-22
+**Branch**: review-summary-quality
+**Status**: Active - SEC Filing Summary Email Quality Improvements
 
 ---
 
-## Current Session: Pipeline Stall Recovery and Prevention (2026-01-16)
+## Current Session: SEC Filing Summary Email Quality - Phase 3 Complete (2026-01-22)
+
+**Plan**: [docs/plans/2026-01-20-fix-filing-summary-email-quality.md](docs/plans/2026-01-20-fix-filing-summary-email-quality.md)
+
+**Phase 3: Email Formatting and Amendment Indicators** ✅
+
+**Issues Fixed**:
+1. Missing [AMENDED] indicator in email subject lines for amended filings (/A suffix)
+2. Form 4 ownership impact display readability (horizontal → vertical layout)
+3. Conflicting badge display on 8-K emails (material + neutral shown together)
+
+**Root Causes**:
+1. `lib/email/summary-service.ts` used hardcoded subject line instead of `EmailSubjectService`
+2. Horizontal ownership layout didn't create clear visual connection between before/after
+3. No check to prevent neutral sentiment badge when filing is MATERIAL EVENT
+
+**Fixes Applied**:
+1. **[AMENDED] Indicator** (lib/email/summary-service.ts:253-257):
+   - Replaced hardcoded subject with `EmailSubjectService.generateSingleFilingSubject()`
+   - Now properly detects /A suffix and adds "[AMENDED]" prefix
+
+2. **Ownership Impact Display** (components/ui/email/templates/form4-minimalist-template.tsx:824-862):
+   - Changed from horizontal to vertical layout
+   - Previous ownership: lighter gray (#9CA3AF), smaller font (14px)
+   - Arrow: large (20px), color-coded by direction (red/green)
+   - New ownership: darker (#000000), bold, prominent (16px)
+   - Added `previousStake` to test data for proper before/after display
+
+3. **Conflicting Badges** (components/ui/email/templates/8k-minimalist-template.tsx:230):
+   - Added check: `!(isMaterial && sentiment.toLowerCase() === 'neutral')`
+   - Prevents neutral badge from showing with MATERIAL EVENT badge
+
+**Files Modified**:
+- `lib/email/summary-service.ts` - EmailSubjectService integration
+- `components/ui/email/templates/form4-minimalist-template.tsx` - Vertical ownership layout
+- `components/ui/email/templates/8k-minimalist-template.tsx` - Badge mutual exclusion
+- `scripts/verify-phase3-email-formatting.ts` - Test data with previousStake
+- `__tests__/components/email/email-formatting.test.tsx` - All 7 tests passing
+
+**Verification**: ✅ Manual testing complete
+- Test emails sent to wilfredchen1@gmail.com
+- [AMENDED] now appears in subject lines for Form 4/A and 10-K/A
+- Ownership impact displays vertically with clear visual hierarchy
+- No conflicting badges on 8-K emails
+
+---
+
+## Previous Sessions (Main Branch Work)
+
+### Pipeline Health Connection Pool Exhaustion Fix (2026-01-20)
+
+**Issue**: Connection pool exhaustion in `/api/health/pipeline` endpoint causing pipeline stalls.
+
+**Root Cause**: 18-19 parallel database queries exceeding Supabase's 5-connection limit with 10-second timeout.
+
+**Fix Applied (All 4 Phases Complete)**:
+1. **Phase 1 - Response Caching**: Added 30-second cache layer with X-Cache headers
+2. **Phase 2 - Aggregated SQL Query**: Replaced 10 individual Prisma count() queries with single PostgreSQL FILTER query
+3. **Phase 3 - Orphan Check Sampling**: Expensive orphan detection runs every 6th request (~60 seconds)
+4. **Phase 4 - Sequential Batching**: Queries execute in controlled batches (max 4 concurrent)
+
+**Files Modified**:
+- `app/api/health/pipeline/route.ts` - Main implementation (caching, aggregated query, sampling)
+- `__tests__/api/health/pipeline-health-*.test.ts` - 17/17 tests passing
+- `docs/plans/2026-01-20-fix-pipeline-health-connection-pool-exhaustion.md` - Implementation plan
+
+**Performance Improvements**:
+- Queries per request: 18-19 → 5-6 (uncached), 0 (cached)
+- Max concurrent connections: 14 → 4 (within pool limit)
+- Expected response time: < 300ms (uncached), < 50ms (cached)
+
+**Verification**: ✅ Automated + Manual complete
+
+---
+
+### Summary Field Population Optimization (2026-01-16)
+
+**Issue**: Summary table has 38 fields but `processingTimeMs` field is 0% populated (0/704 summaries) despite the value being calculated.
+
+**Status**: ✅ Code deployed, awaiting pipeline recovery for verification
+
+**Files Modified**:
+- `lib/cron/handlers/summarize-cached-handler.ts:265` - Cached summary path
+- `lib/cron/handlers/summarize-cached-handler.ts:419` - New AI summary path
+- `__tests__/cron/handlers/summarize-cached-handler-fields.test.ts` - 4/4 tests passing
+
+---
+
+### Pipeline Stall Recovery and Prevention (2026-01-16)
 
 **Issue**: Complete pipeline stall since ~8AM AEST with 832+ jobs accumulated in backlog. All three redundancy layers failed.
 
-**Root Cause**: 
+**Root Cause**:
 1. Database connectivity issues preventing health endpoint from working
 2. Auto-recovery authentication mismatch (expected HMAC, received Bearer token)
 3. No automatic restart mechanism for stalled job processors
@@ -23,7 +111,7 @@
 
 **Files Modified**:
 - `scripts/emergency-clear-queue.ts` - New emergency cleanup script
-- `scripts/trigger-auto-recovery.ts` - New HMAC authentication script  
+- `scripts/trigger-auto-recovery.ts` - New HMAC authentication script
 - `docs/plans/2026-01-16-pipeline-stall-recovery-and-prevention.md` - Recovery plan
 - `docs/incidents/2026-01-16-pipeline-stall-incident.md` - Incident report
 - `__tests__/pipeline-recovery/pipeline-recovery-validation.test.ts` - Recovery tests
@@ -34,7 +122,7 @@
 
 ## Recently Completed Sessions
 
-*No other completed work in the last 30 days*
+*No other completed work in the last 30 days (see main branch PROGRESS.md for historical context)*
 
 ---
 
@@ -46,5 +134,5 @@ Projects completed before 30 days ago are archived in `.claude/history/`:
 
 ---
 
-*Last Updated: 2026-01-16*
+*Last Updated: 2026-01-22*
 *Older completed projects archived to .claude/history/ - See TIMELINE.md for full history*
