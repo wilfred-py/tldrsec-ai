@@ -850,6 +850,11 @@ export async function summarizeFiling(content: string, options: SummarizationOpt
             where: { id: summaryId },
             data: {
               summaryText: parsedResult.data.summary,
+              /**
+               * Store structured JSON data for email templates to use
+               * This eliminates the need for regex extraction fallbacks
+               */
+              summaryJSON: parsedResult.data,
               processingStatus: 'COMPLETED',
               processingCompletedAt: new Date(),
               isPartialResult: false,
@@ -862,6 +867,8 @@ export async function summarizeFiling(content: string, options: SummarizationOpt
               attempts: 1
             }
           });
+
+          componentLogger.info(`Stored summaryJSON for summaryId=${summaryId} with ${Object.keys(parsedResult.data).length} fields`);
         }
         
         return {
