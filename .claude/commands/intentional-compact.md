@@ -51,12 +51,20 @@ You are tasked with compacting the context window by managing PROGRESS.md size a
    - Count total lines using: `wc -l PROGRESS.md`
    - Identify all sections marked with `✅ COMPLETE` or similar completion markers
    - Note the completion date for each completed section
+   - **Check for structural issues**: duplicate section headers, missing details
 
 2. **Read TIMELINE.md completely**:
    - Review `.claude/history/TIMELINE.md` for existing archive structure
    - Note the last archive update date
+   - **Identify entries in TIMELINE.md that are missing detailed descriptions in PROGRESS.md**
 
-3. **Check archive directory**:
+3. **Check for undocumented work** (CRITICAL):
+   - Run: `git log --oneline -30 --since="30 days ago"` to see recent commits
+   - Compare commit messages against PROGRESS.md entries
+   - **Any significant work in git history not in PROGRESS.md must be added**
+   - Check if TIMELINE.md has entries without corresponding PROGRESS.md details
+
+4. **Check archive directory**:
    - Run: `ls -la .claude/history/` to see current archive structure
    - Identify the most recent archive file
 
@@ -118,13 +126,25 @@ PROGRESS.md is the **detailed context file** for fresh agent sessions. It must c
 - Technical specifics needed to continue work or understand decisions
 - Enough context that a new session can pick up where the last left off
 
-1. **Update PROGRESS.md header**:
+**⚠️ CRITICAL: PROGRESS.md MUST be updated with detailed entries. This is NOT optional.**
+
+1. **Fix any structural issues first**:
+   - Remove duplicate section headers (e.g., multiple "## Recently Completed Sessions")
+   - Ensure clean document structure: Current Session → Recently Completed → Archived Projects reference
+   - **Only ONE "## Recently Completed Sessions" section should exist**
+
+2. **Update PROGRESS.md header**:
    - Update "Date" to today's date
    - Update "Branch" to current git branch: `git branch --show-current`
    - Update "Status" to reflect current work
    - Update "Last Updated" at bottom of file
 
-2. **Ensure Recently Completed section has DETAILED entries**:
+3. **Add missing work from git history and TIMELINE.md** (MANDATORY):
+   - For each entry in TIMELINE.md that lacks detailed PROGRESS.md description, ADD IT
+   - For each significant commit not yet documented, ADD IT
+   - **This is a WRITE operation, not just a read/verify**
+
+4. **Ensure Recently Completed section has DETAILED entries**:
    - Each project should have implementation details, not just one-liners
    - Include: root cause, fix approach, files modified, verification steps
    - Format:
@@ -138,11 +158,11 @@ PROGRESS.md is the **detailed context file** for fresh agent sessions. It must c
      **Verification**: [How it was verified]
      ```
 
-3. **Move completed Current Session work to Recently Completed**:
+5. **Move completed Current Session work to Recently Completed**:
    - If previous "Current Session" work is complete, move it with full details
    - Start new "Current Session" if there's active work
 
-4. **Remove projects older than 30 days** from "Recently Completed":
+6. **Remove projects older than 30 days** from "Recently Completed":
    - These should already be in weekly archive files
    - Keep PROGRESS.md focused on actionable recent context
 
@@ -185,9 +205,16 @@ TIMELINE.md is the **master timeline index**. It provides:
    - Report: "Last Archive Update: [date]"
    - If recent completions added: "Recent completions (<30 days) now visible in TIMELINE.md"
 
-4. **Clear context instruction**:
+4. **Verify bidirectional sync** (MANDATORY):
+   - Count entries in TIMELINE.md "Recent Activity" table (last 30 days)
+   - Count detailed entries in PROGRESS.md "Recently Completed" section
+   - **These counts should match** - every TIMELINE.md entry should have PROGRESS.md details
+   - If mismatch: report which entries are missing details and ADD THEM
+
+5. **Clear context instruction**:
    - State: "Context management complete. TIMELINE.md is now synchronized with current PROGRESS.md state."
    - State: "For future sessions, refer to PROGRESS.md for current state and TIMELINE.md for complete historical context."
+   - State: "PROGRESS.md entries: [count], TIMELINE.md recent entries: [count] - SYNCED ✅" (or list discrepancies)
 
 ## Archive File Format Reference
 
@@ -284,3 +311,11 @@ Example: If project completed on Wednesday Nov 27, 2025:
 - **Archive files have full details** - When projects are >30 days old, archive preserves everything
 - **Keep PROGRESS.md under 500 lines** for optimal context window performance
 - **Never archive active/in-progress work** - only completed projects >30 days old
+
+## Common Failure Modes to Avoid
+
+1. **Only updating TIMELINE.md**: Both files MUST be updated. PROGRESS.md needs detailed entries.
+2. **Duplicate section headers**: Only ONE "## Recently Completed Sessions" section.
+3. **Missing details**: Every TIMELINE.md entry needs a corresponding detailed PROGRESS.md entry.
+4. **Stale PROGRESS.md**: Check git history for undocumented work and ADD it.
+5. **Skipping verification**: Always verify counts match at the end.

@@ -31,7 +31,7 @@ export async function POST(request: NextRequest) {
     // Initialize Stripe and webhook secret at runtime
     const stripe = getStripeClient();
     const webhookSecret = getWebhookSecret();
-    
+
     // Get the raw body
     const body = await request.text();
     

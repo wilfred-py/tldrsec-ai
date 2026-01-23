@@ -40,6 +40,105 @@ export const dynamic = 'force-dynamic';
 
 const pipelineLogger = logger.child('pipeline-health');
 
+/**
+ * Response cache for health endpoint
+ * Caches the full response for 30 seconds to prevent redundant database queries.
+ * This is especially important given Supabase's 5-connection pool limit.
+ */
+interface CachedResponse {
+  data: PipelineHealthResponse;
+  timestamp: number;
+  expiresAt: number;
+}
+
+const CACHE_TTL_MS = 30 * 1000; // 30 seconds
+let responseCache: CachedResponse | null = null;
+
+/**
+ * Clear the health endpoint cache.
+ * Exported for testing purposes.
+ */
+export function clearHealthCache(): void {
+  responseCache = null;
+}
+
+/**
+ * Check if cached response is still valid.
+ */
+function getCachedResponse(): PipelineHealthResponse | null {
+  if (!responseCache) return null;
+  if (Date.now() > responseCache.expiresAt) {
+    responseCache = null;
+    return null;
+  }
+  return responseCache.data;
+}
+
+/**
+ * Store response in cache.
+ */
+function setCachedResponse(data: PipelineHealthResponse): void {
+  responseCache = {
+    data,
+    timestamp: Date.now(),
+    expiresAt: Date.now() + CACHE_TTL_MS,
+  };
+}
+
+/**
+ * Orphan check sampling configuration.
+ * The orphan filing check is expensive (requires secondary query), so we sample it
+ * instead of running on every request. At ~10 requests/minute, this runs every ~60 seconds.
+ */
+const ORPHAN_SAMPLE_RATE = 6; // Check every 6th request
+let orphanSampleCounter = 0;
+let lastKnownOrphanCount = 0;
+let lastOrphanCheckTime: Date | null = null;
+
+/**
+ * Reset the orphan sample counter.
+ * Exported for testing purposes.
+ */
+export function resetOrphanSampleCounter(): void {
+  orphanSampleCounter = 0;
+  lastKnownOrphanCount = 0;
+  lastOrphanCheckTime = null;
+}
+
+/**
+ * Check if we should run the orphan check this request.
+ * Returns true on the first request (counter = 0) and every ORPHAN_SAMPLE_RATE requests after.
+ * Pattern: run check on request 1, skip 2-6, run on 7, skip 8-12, run on 13, etc.
+ */
+function shouldRunOrphanCheck(): boolean {
+  orphanSampleCounter++;
+  // Run on first request and every ORPHAN_SAMPLE_RATE requests after
+  if (orphanSampleCounter === 1 || orphanSampleCounter > ORPHAN_SAMPLE_RATE) {
+    if (orphanSampleCounter > ORPHAN_SAMPLE_RATE) {
+      orphanSampleCounter = 1; // Reset cycle
+    }
+    return true;
+  }
+  return false;
+}
+
+/**
+ * Result type for the aggregated JobQueue statistics query.
+ * Uses BigInt because PostgreSQL COUNT returns bigint.
+ */
+interface JobQueueAggregatedStats {
+  pending_count: bigint;
+  processing_count: bigint;
+  completed_1h_count: bigint;
+  completed_24h_count: bigint;
+  dead_letter_count: bigint;
+  retrying_count: bigint;
+  stale_processing_count: bigint;
+  invalid_job_type_count: bigint;
+  high_retry_count: bigint;
+  exhausted_retrying_count: bigint;
+}
+
 interface DatabaseInfo {
   provider: 'supabase' | 'neon' | 'unknown';
   hasAppSchema: boolean;
@@ -77,6 +176,8 @@ interface PipelineHealthResponse {
   filings: {
     orphanedCount: number;
     unprocessedTotal: number;
+    orphanedCountSampled?: boolean;
+    lastOrphanCheck?: string | null;
   };
   lastCompletion: string | null;
   minutesSinceLastCompletion: number | null;
@@ -89,8 +190,10 @@ interface PipelineHealthResponse {
 /**
  * Valid job types that have handlers in the system.
  * Jobs with types not in this list are considered invalid and will be cleaned up.
+ * NOTE: These values are hardcoded in the aggregated SQL query for performance.
+ * If adding new job types, update the SQL in the aggregated query below.
  */
-const VALID_JOB_TYPES = [
+const _VALID_JOB_TYPES = [
   'ASYNC_DISCOVER_FILINGS',
   'ASYNC_FETCH_FILING',
   'ASYNC_SUMMARIZE_CACHED'
@@ -148,9 +251,36 @@ export async function GET(request: NextRequest) {
     }
   } catch (rateLimitError) {
     // Continue if rate limiter fails, but log the issue
-    pipelineLogger.warn('Rate limiter check failed', { 
-      error: rateLimitError instanceof Error ? rateLimitError.message : 'Unknown error' 
+    pipelineLogger.warn('Rate limiter check failed', {
+      error: rateLimitError instanceof Error ? rateLimitError.message : 'Unknown error'
     });
+  }
+
+  // Check for cache bypass via header or query parameter
+  // Query parameter is used as fallback for test environments where headers may not work
+  const url = new URL(request.url);
+  const cacheControlHeader = request.headers.get('Cache-Control');
+  const bypassCache = cacheControlHeader?.includes('no-cache') ||
+                      url.searchParams.get('bypass-cache') === 'true';
+
+  // Check cache first (unless bypass requested)
+  if (!bypassCache) {
+    const cached = getCachedResponse();
+    if (cached) {
+      pipelineLogger.debug('Returning cached health response');
+      return NextResponse.json(cached, {
+        status: cached.status === 'CRITICAL' ? 503 : cached.status === 'ERROR' ? 500 : 200,
+        headers: {
+          'Cache-Control': 'no-store, no-cache, must-revalidate',
+          'X-Pipeline-Status': cached.status,
+          'X-Cache': 'HIT',
+          'X-Cache-Age': String(Math.floor((Date.now() - (responseCache?.timestamp || 0)) / 1000)),
+          'X-Content-Type-Options': 'nosniff',
+          'X-Frame-Options': 'DENY',
+          'X-XSS-Protection': '1; mode=block'
+        }
+      });
+    }
   }
 
   try {
@@ -193,94 +323,71 @@ export async function GET(request: NextRequest) {
     // Phase 5: Thresholds for orphaned filing detection
     const orphanAgeThreshold = new Date(now.getTime() - ORPHAN_AGE_THRESHOLD_MINUTES * 60 * 1000);
 
+    // OPTIMIZED: Single aggregated query for all JobQueue counts
+    // This replaces 10 separate Prisma count() queries with 1 SQL query using PostgreSQL FILTER clause.
+    // Reduces database round-trips from 10 to 1 for JobQueue metrics, preventing connection pool exhaustion.
+    const jobQueueStats = await prisma.$queryRaw<JobQueueAggregatedStats[]>`
+      SELECT
+        COUNT(*) FILTER (WHERE status = 'PENDING') as pending_count,
+        COUNT(*) FILTER (WHERE status = 'PROCESSING') as processing_count,
+        COUNT(*) FILTER (WHERE status = 'COMPLETED' AND "completedAt" >= ${oneHourAgo}) as completed_1h_count,
+        COUNT(*) FILTER (WHERE status = 'COMPLETED' AND "completedAt" >= ${oneDayAgo}) as completed_24h_count,
+        COUNT(*) FILTER (WHERE status = 'DEAD_LETTER') as dead_letter_count,
+        COUNT(*) FILTER (WHERE status = 'RETRYING') as retrying_count,
+        COUNT(*) FILTER (WHERE status = 'PROCESSING' AND "startedAt" < ${staleProcessingCutoff}) as stale_processing_count,
+        COUNT(*) FILTER (
+          WHERE status IN ('PENDING', 'RETRYING', 'PROCESSING')
+          AND "jobType" NOT IN ('ASYNC_DISCOVER_FILINGS', 'ASYNC_FETCH_FILING', 'ASYNC_SUMMARIZE_CACHED')
+        ) as invalid_job_type_count,
+        COUNT(*) FILTER (
+          WHERE status IN ('PENDING', 'RETRYING')
+          AND "retryCount" >= ${HIGH_RETRY_THRESHOLD}
+        ) as high_retry_count,
+        COUNT(*) FILTER (
+          WHERE status = 'RETRYING'
+          AND "retryCount" >= "maxRetries"
+        ) as exhausted_retrying_count
+      FROM pipeline."JobQueue"
+    `;
+
+    // Extract counts from aggregated result (convert BigInt to number)
+    const stats = jobQueueStats[0];
+    const pendingCount = Number(stats.pending_count);
+    const processingCount = Number(stats.processing_count);
+    const completedLast1h = Number(stats.completed_1h_count);
+    const completedLast24h = Number(stats.completed_24h_count);
+    const deadLetterCount = Number(stats.dead_letter_count);
+    const retryingCount = Number(stats.retrying_count);
+    const staleProcessingCount = Number(stats.stale_processing_count);
+    const invalidJobTypeCount = Number(stats.invalid_job_type_count);
+    const highRetryCount = Number(stats.high_retry_count);
+    const exhaustedRetryingCount = Number(stats.exhausted_retrying_count);
+
+    // Remaining queries that still need Prisma (complex operations that can't be aggregated)
+    // These run in parallel but are only 4 queries vs the original 14
     const [
-      pendingCount,
-      processingCount,
-      completedLast1h,
-      completedLast24h,
-      deadLetterCount,
-      retryingCount,
       lastCompletedJob,
-      // New metrics for stuck job detection
-      staleProcessingCount,
-      invalidJobTypeCount,
-      highRetryCount,
-      exhaustedRetryingResult,
-      // Phase 5: Cron execution monitoring
       recentCronExecutions,
-      // Phase 5: Orphaned filing monitoring
       unprocessedFilingsOlderThanThreshold,
       unprocessedFilingsTotal
     ] = await Promise.all([
-      prisma.jobQueue.count({
-        where: { status: 'PENDING' }
-      }),
-      prisma.jobQueue.count({
-        where: { status: 'PROCESSING' }
-      }),
-      prisma.jobQueue.count({
-        where: {
-          status: 'COMPLETED',
-          completedAt: { gte: oneHourAgo }
-        }
-      }),
-      prisma.jobQueue.count({
-        where: {
-          status: 'COMPLETED',
-          completedAt: { gte: oneDayAgo }
-        }
-      }),
-      prisma.jobQueue.count({
-        where: { status: 'DEAD_LETTER' }
-      }),
-      prisma.jobQueue.count({
-        where: { status: 'RETRYING' }
-      }),
+      // Last completed job (needs findFirst with orderBy)
       prisma.jobQueue.findFirst({
         where: { status: 'COMPLETED' },
         orderBy: { completedAt: 'desc' },
         select: { completedAt: true }
       }),
-      // Stale PROCESSING jobs (stuck for > 15 minutes)
-      prisma.jobQueue.count({
-        where: {
-          status: 'PROCESSING',
-          startedAt: { lt: staleProcessingCutoff }
-        }
-      }),
-      // Invalid job types (no handler exists)
-      prisma.jobQueue.count({
-        where: {
-          status: { in: ['PENDING', 'RETRYING', 'PROCESSING'] },
-          jobType: { notIn: VALID_JOB_TYPES }
-        }
-      }),
-      // Jobs approaching max retries (high retry count)
-      prisma.jobQueue.count({
-        where: {
-          status: { in: ['PENDING', 'RETRYING'] },
-          retryCount: { gte: HIGH_RETRY_THRESHOLD }
-        }
-      }),
-      // RETRYING jobs with exhausted retries (retryCount >= maxRetries)
-      // Using raw query for the comparison between two columns
-      prisma.$queryRaw<{count: bigint}[]>`
-        SELECT COUNT(*) as count
-        FROM pipeline."JobQueue"
-        WHERE "status" = 'RETRYING'
-          AND "retryCount" >= "maxRetries"
-      `,
       // Phase 5: Get recent cron executions (last 60 minutes)
       prisma.cronJobExecution.findMany({
         where: {
-          triggeredAt: { gte: oneHourAgo },
-          jobType: 'sec-filing-monitor',
+          startedAt: { gte: oneHourAgo },
         },
-        select: { triggeredAt: true },
-        orderBy: { triggeredAt: 'desc' },
+        select: { startedAt: true },
+        orderBy: { startedAt: 'desc' },
       }),
       // Phase 5: Unprocessed filings older than threshold (potentially orphaned)
-      prisma.secFiling.findMany({
+      // NOTE: processed field is on RssFilingCheck, not SecFiling
+      prisma.rssFilingCheck.findMany({
         where: {
           processed: false,
           createdAt: { lt: orphanAgeThreshold },
@@ -289,16 +396,13 @@ export async function GET(request: NextRequest) {
         take: 100, // Limit for performance
       }),
       // Phase 5: Total unprocessed filings count
-      prisma.secFiling.count({
+      prisma.rssFilingCheck.count({
         where: { processed: false },
       }),
     ]);
 
-    // Extract exhausted retrying count from raw query result
-    const exhaustedRetryingCount = Number(exhaustedRetryingResult[0]?.count || 0);
-
     // Phase 5: Calculate cron execution metrics
-    const lastCronExecution = recentCronExecutions[0]?.triggeredAt || null;
+    const lastCronExecution = recentCronExecutions[0]?.startedAt || null;
     const minutesSinceLastCron = lastCronExecution
       ? Math.floor((now.getTime() - lastCronExecution.getTime()) / 60000)
       : null;
@@ -311,7 +415,7 @@ export async function GET(request: NextRequest) {
     } else {
       // Check for gaps >15 minutes between executions
       const sortedExecutions = [...recentCronExecutions].sort(
-        (a, b) => b.triggeredAt.getTime() - a.triggeredAt.getTime()
+        (a, b) => b.startedAt.getTime() - a.startedAt.getTime()
       );
 
       // Check gap from now to most recent execution
@@ -321,17 +425,22 @@ export async function GET(request: NextRequest) {
 
       // Check gaps between executions
       for (let i = 0; i < sortedExecutions.length - 1; i++) {
-        const gapMinutes = (sortedExecutions[i].triggeredAt.getTime() - sortedExecutions[i + 1].triggeredAt.getTime()) / (60 * 1000);
+        const gapMinutes = (sortedExecutions[i].startedAt.getTime() - sortedExecutions[i + 1].startedAt.getTime()) / (60 * 1000);
         if (gapMinutes > CRON_GAP_DEGRADED_MINUTES) {
           cronGapsDetected++;
         }
       }
     }
 
-    // Phase 5: Calculate orphaned filings count
+    // Phase 5: Calculate orphaned filings count (SAMPLED for performance)
+    // This expensive check only runs every ORPHAN_SAMPLE_RATE requests (~60 seconds at 10 req/min)
     // Orphaned = unprocessed AND old enough AND no active job referencing them
-    let orphanedFilingCount = 0;
-    if (unprocessedFilingsOlderThanThreshold.length > 0) {
+    let orphanedFilingCount = lastKnownOrphanCount;
+    let orphanedCountSampled = true;
+
+    const runOrphanCheck = shouldRunOrphanCheck();
+
+    if (runOrphanCheck && unprocessedFilingsOlderThanThreshold.length > 0) {
       const potentialOrphanIds = unprocessedFilingsOlderThanThreshold.map(f => f.id);
 
       // Check which of these have active jobs
@@ -353,7 +462,17 @@ export async function GET(request: NextRequest) {
       );
 
       orphanedFilingCount = potentialOrphanIds.filter(id => !filingIdsWithJobs.has(id)).length;
+      lastKnownOrphanCount = orphanedFilingCount;
+      lastOrphanCheckTime = now;
+      orphanedCountSampled = false;
+    } else if (runOrphanCheck && unprocessedFilingsOlderThanThreshold.length === 0) {
+      // Ran check but found no candidates
+      orphanedFilingCount = 0;
+      lastKnownOrphanCount = 0;
+      lastOrphanCheckTime = now;
+      orphanedCountSampled = false;
     }
+    // else: use lastKnownOrphanCount (sampling skipped)
 
     // Calculate time since last completion
     const lastCompletionTime = lastCompletedJob?.completedAt || null;
@@ -491,10 +610,12 @@ export async function GET(request: NextRequest) {
         minutesSinceLastCron,
         gapsDetected: cronGapsDetected,
       },
-      // Phase 5: Orphaned filing monitoring
+      // Phase 5: Orphaned filing monitoring (with sampling for performance)
       filings: {
         orphanedCount: orphanedFilingCount,
         unprocessedTotal: unprocessedFilingsTotal,
+        orphanedCountSampled,
+        lastOrphanCheck: lastOrphanCheckTime?.toISOString() || null,
       },
       lastCompletion: lastCompletionTime?.toISOString() || null,
       minutesSinceLastCompletion,
@@ -519,12 +640,16 @@ export async function GET(request: NextRequest) {
     const httpStatus = status === 'CRITICAL' ? 503 :
                        status === 'ERROR' ? 500 : 200;
 
+    // Cache the response
+    setCachedResponse(response);
+
     return NextResponse.json(response, {
       status: httpStatus,
       headers: {
         'Cache-Control': 'no-store, no-cache, must-revalidate',
         'X-Pipeline-Status': status,
         'X-Response-Time': `${duration}ms`,
+        'X-Cache': 'MISS',
         'X-Content-Type-Options': 'nosniff',
         'X-Frame-Options': 'DENY',
         'X-XSS-Protection': '1; mode=block'
@@ -534,9 +659,21 @@ export async function GET(request: NextRequest) {
   } catch (error) {
     const duration = Date.now() - startTime;
 
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    const errorStack = error instanceof Error ? error.stack : undefined;
+    const errorName = error instanceof Error ? error.name : 'UnknownError';
+
     pipelineLogger.error('Pipeline health check failed', {
-      error: error instanceof Error ? error.message : 'Unknown error',
-      stack: error instanceof Error ? error.stack : undefined,
+      error: errorMessage,
+      errorName,
+      stack: errorStack,
+      duration
+    });
+
+    console.error('[Pipeline Health] Detailed error:', {
+      message: errorMessage,
+      name: errorName,
+      stack: errorStack,
       duration
     });
 
@@ -578,10 +715,16 @@ export async function GET(request: NextRequest) {
       },
       lastCompletion: null,
       minutesSinceLastCompletion: null,
-      issues: ['Failed to check pipeline health'],
+      issues: [`Failed to check pipeline health: ${errorMessage}`],
       recommendations: ['Check system health or contact support'],
-      timestamp: new Date().toISOString()
-    } as PipelineHealthResponse, {
+      timestamp: new Date().toISOString(),
+      // Add debug info in development/error responses
+      debug: {
+        errorName,
+        errorMessage: errorMessage.substring(0, 500), // Limit length
+        duration
+      }
+    } as PipelineHealthResponse & { debug?: unknown }, {
       status: 500,
       headers: {
         'Cache-Control': 'no-store',
