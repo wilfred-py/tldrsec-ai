@@ -1,12 +1,42 @@
 # Project Progress
 
-**Date**: 2026-01-20
+**Date**: 2026-01-23
 **Branch**: main
-**Status**: Active - Pipeline health connection pool exhaustion fix
+**Status**: Active - Cloudflare Worker auto-sync implementation
 
 ---
 
-## Current Session: Fix Pipeline Health Connection Pool Exhaustion (2026-01-20)
+## Current Session: Cloudflare Worker Secret Sync Automation (2026-01-23)
+
+**Issue**: CRON_SECRET desynchronization between Vercel and Cloudflare Worker after PR merges causes HMAC authentication failures and pipeline stalls.
+
+**Solution Implemented**:
+1. Created `scripts/sync-cloudflare-worker-secret.sh` - Automated sync script
+2. Updated `.claude/commands/push-pr-review-merge.md` - Added mandatory Step 7 for CF sync
+3. Added npm scripts for easy execution
+
+**New Commands**:
+- `npm run cloudflare:sync-secret` - Full sync: pull from Vercel, update CF Worker, redeploy
+- `npm run cloudflare:sync-secret:verify` - Verify-only mode: check sync status
+
+**Files Modified**:
+- [scripts/sync-cloudflare-worker-secret.sh](scripts/sync-cloudflare-worker-secret.sh) - New automated sync script
+- [.claude/commands/push-pr-review-merge.md](.claude/commands/push-pr-review-merge.md) - Added Step 7
+- [package.json](package.json) - Added cloudflare:sync-secret commands
+- [CLAUDE.md](CLAUDE.md) - Updated Cloudflare Worker commands documentation
+
+**What the sync script does**:
+1. Pulls CRON_SECRET from Vercel production environment
+2. Validates the secret (checks for trailing `\n` issues)
+3. Updates the Cloudflare Worker secret via `wrangler secret put`
+4. Redeploys the Cloudflare Worker
+5. Verifies HMAC authentication works (HTTP 202 response)
+
+**Prevention**: This automation runs at the end of every push-pr-review-merge cycle to ensure the Cloudflare Worker always has the correct CRON_SECRET.
+
+---
+
+## Previous Session: Fix Pipeline Health Connection Pool Exhaustion (2026-01-20)
 
 **Issue**: Connection pool exhaustion in `/api/health/pipeline` endpoint causing pipeline stalls.
 
@@ -97,5 +127,5 @@ Projects completed before 30 days ago are archived in `.claude/history/`:
 
 ---
 
-*Last Updated: 2026-01-20*
+*Last Updated: 2026-01-23*
 *Older completed projects archived to .claude/history/ - See TIMELINE.md for full history*

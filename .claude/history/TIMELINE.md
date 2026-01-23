@@ -13,6 +13,9 @@ This file provides a chronological index of all completed projects. For detailed
 
 | Date | Project | Status |
 |------|---------|--------|
+| 2026-01-23 | Cloudflare Worker Secret Sync Automation (auto-sync script, push-pr-review-merge Step 7) | 🔄 Active |
+| 2026-01-23 | Cloudflare Worker Cron Stall Fix (CRON_SECRET sync, worker redeploy, 258min stall recovered) | ✅ |
+| 2026-01-21 | CRON_SECRET Trailing `\n` Fix - Pipeline Recovery (HMAC auth, env sync, CLAUDE.md docs) | ✅ |
 | 2026-01-21 | Cloudflare Build Fix - Onboarding Dynamic Rendering (force-dynamic export, client/server split) | ✅ |
 | 2026-01-20 | Pipeline Health Connection Pool Exhaustion Fix (caching, aggregated SQL, orphan sampling, batching) | ✅ |
 | 2026-01-19 | Onboarding Redirect Race Condition Fix (email await + cookie bypass for Clerk JWT sync) | ✅ |
@@ -162,10 +165,10 @@ This file provides a chronological index of all completed projects. For detailed
 
 ## Archive Statistics
 - **Total Archived Projects**: 7 weekly archives (Oct-Dec 2025)
-- **Current PROGRESS.md Lines**: 336 (under threshold: 500)
-- **Last Sync**: 2026-01-21
+- **Current PROGRESS.md Lines**: 130 (under threshold: 500)
+- **Last Sync**: 2026-01-23
 - **Archive System**: ✅ ACTIVE
-- **Last Compaction**: 2026-01-21 (Cloudflare Build Fix - Onboarding Dynamic Rendering)
+- **Last Compaction**: 2026-01-23 (Context sync - no archival needed)
 
 **Archives**:
 - `29-Dec-2025.md` - Cloudflare Cron Fix, Email Quality, Form 4 Templates, JSON Parsing Phase 5

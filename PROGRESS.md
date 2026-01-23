@@ -1,12 +1,58 @@
 # Project Progress
 
-**Date**: 2026-01-21
+**Date**: 2026-01-23
 **Branch**: main
-**Status**: Active - Cloudflare Build Fix Complete
+**Status**: Active - Pipeline Recovered from 4-hour Stall
 
 ---
 
-## Current Session: Cloudflare Build Fix - Onboarding Dynamic Rendering (2026-01-21)
+## Current Session: Cloudflare Worker Cron Stall Fix (2026-01-23)
+
+**Issue**: Pipeline stalled for 258+ minutes with 407 pending jobs. No cron executions detected. Status was CRITICAL.
+
+**Root Cause**: Cloudflare Worker CRON_SECRET was out of sync with Vercel after previous fix on 2026-01-21. The worker was deployed but the secret wasn't refreshed to match.
+
+**Detection Method**:
+```bash
+# Pipeline health showed CRITICAL
+curl -s https://tldrsec.app/api/health/pipeline | jq '{status, minutesSinceLastCompletion}'
+# Result: {"status":"CRITICAL","minutesSinceLastCompletion":258}
+
+# Wrangler tail showed no logs for 15+ seconds (cron not firing)
+cd cloudflare-cron && npx wrangler tail --format=pretty
+```
+
+**Fix Applied**:
+1. Verified Vercel CRON_SECRET was clean (80 chars, no trailing `\n`)
+2. Pulled secret and updated Cloudflare Worker: `printf '%s' "$SECRET" | npx wrangler secret put CRON_SECRET`
+3. Redeployed worker: `npx wrangler deploy`
+4. Verified cron fired at :30 mark with full 5-step pipeline execution
+
+**Verification**: ✅
+- Pipeline status changed from CRITICAL → DEGRADED → processing
+- Last completion: 3 minutes ago (was 258 minutes)
+- 3 jobs completed in last hour (was 0)
+- 406 pending jobs being processed
+
+---
+
+## Recently Completed Sessions
+
+### CRON_SECRET Trailing `\n` Fix - Pipeline Recovery (2026-01-21)
+
+**Issue**: Pipeline stalled with 401 Unauthorized errors on cron endpoints. HMAC authentication failing between Cloudflare Worker and Vercel.
+
+**Root Cause**: `CRON_SECRET` in Vercel contained literal `\n` characters (82 chars instead of 80).
+
+**Fix**: Synced clean 80-char secret to all Vercel environments and Cloudflare Worker. Updated CLAUDE.md with comprehensive troubleshooting guide.
+
+**Files**: `CLAUDE.md` - Added "CRITICAL: Environment Variable Trailing `\n` Issue" section
+
+**Verification**: ✅ Pipeline HEALTHY, HMAC auth working
+
+---
+
+### Cloudflare Build Fix - Onboarding Dynamic Rendering (2026-01-21)
 
 **Issue**: Cloudflare Pages build failing with error: "useSession can only be used within the <ClerkProvider /> component" during static page generation of `/onboarding`.
 
@@ -23,11 +69,9 @@ This pattern separates server-side configuration (`dynamic` export) from client-
 - `app/(auth)/onboarding/page.tsx` - New server component with `export const dynamic = "force-dynamic"`
 - `app/(auth)/onboarding/onboarding-client.tsx` - Renamed from page.tsx, contains all client UI logic
 
-**Verification**: ✅ Local build passes, `/onboarding` now marked as `ƒ` (Dynamic) instead of `○` (Static). Pushed to main to trigger new Cloudflare build.
+**Verification**: ✅ Local build passes, `/onboarding` now marked as `ƒ` (Dynamic) instead of `○` (Static).
 
 ---
-
-## Recently Completed Sessions
 
 ### Onboarding Redirect Race Condition Fix (2026-01-19)
 
@@ -56,8 +100,6 @@ This pattern separates server-side configuration (`dynamic` export) from client-
 **Verification**: ✅ User confirmed "working now" - onboarding completes and redirects to dashboard successfully
 
 ---
-
-## Recently Completed Sessions
 
 ### Pipeline Recovery - Zombie Connection Pool Exhaustion (2026-01-19)
 
@@ -102,8 +144,6 @@ This pattern separates server-side configuration (`dynamic` export) from client-
 **Verification**: ✅ Build passes (no TypeScript errors in templates.ts)
 
 ---
-
-## Recently Completed Sessions
 
 ### SEC Summary Quality Phase 2 - Phase 4: Grokipedia Research ✅ (2026-01-15)
 
@@ -162,8 +202,6 @@ Restored stalled pipeline after Supabase database server migration.
 **Verification**: Pipeline restored, processing 73 discovery + 53 summarize jobs
 
 ---
-
-## Recently Completed
 
 ### Pipeline Stall Investigation - Database Connection Pool Fix ✅ (2026-01-12)
 
@@ -332,5 +370,5 @@ at Function.create (/lib/job-queue/index.ts:220:36)
 
 ---
 
-*Last Updated: 2026-01-21 (Cloudflare Build Fix - Onboarding Dynamic Rendering)*
+*Last Updated: 2026-01-23 (Cloudflare Worker Cron Stall Fix)*
 *Older completed projects archived to .claude/history/ - See TIMELINE.md for full history*
