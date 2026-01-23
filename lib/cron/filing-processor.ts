@@ -13,6 +13,7 @@ import { CronSecFilingService } from './sec-filing-service';
 import { CronBudgetService } from './budget-service';
 import { boundedContextManager } from './bounded-context-manager';
 import { validateSummaryWithAI, type SummaryValidationResult } from '../validation/summary-content-validator';
+import { shouldProcessFiling } from '../filing/filing-type-preferences-mapper';
 import type {
   DatabaseUser,
   User,
@@ -164,7 +165,7 @@ export class CronFilingProcessor {
           for (const filing of unprocessedFilings || []) {
             const filingStartTime = Date.now();
             processingMetrics.totalAttempted++;
-            
+
             try {
               if (!filing || !filing.id || !filing.accessionNumber) {
                 processorLogger.warn('Invalid filing object encountered', {
@@ -173,6 +174,27 @@ export class CronFilingProcessor {
                   filing: filing
                 });
                 processingMetrics.errorBreakdown.unknownErrors++;
+                continue;
+              }
+
+              // Check if this filing type should be processed based on ticker preferences
+              const tickerPreferences = originalTicker.preferences as any;
+              if (!shouldProcessFiling(filing.filingType, tickerPreferences)) {
+                processorLogger.info(`Skipping filing due to user preferences`, {
+                  userId: user.id,
+                  ticker: tickerValidation.symbol,
+                  filingType: filing.filingType,
+                  accessionNumber: filing.accessionNumber,
+                  reason: 'Filing type disabled in ticker preferences'
+                });
+
+                // Mark as processed so it doesn't appear as backlog
+                await CronSecFilingService.markFilingAsProcessed(
+                  filing.accessionNumber,
+                  tickerValidation.symbol,
+                  user.id
+                );
+
                 continue;
               }
 
