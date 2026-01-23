@@ -17,6 +17,11 @@ export interface FilingPreferences {
   pre14A?: boolean;
   sOne?: boolean;
   sThree?: boolean;
+  // Prospectus filings (structured products, offerings)
+  fourTwoFourB2?: boolean;
+  fourTwoFourB3?: boolean;
+  fwp?: boolean;
+  schedule?: boolean;
   other: boolean;
 }
 
