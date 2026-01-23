@@ -202,6 +202,51 @@ gh pr merge --rebase --delete-branch
 - Verify branch was deleted
 - Post summary of merge
 
+### 7. Sync Cloudflare Worker (MANDATORY)
+
+**CRITICAL: After every successful merge, synchronize the Cloudflare Worker with Vercel's CRON_SECRET.**
+
+This step prevents HMAC authentication failures that cause pipeline stalls. The CRON_SECRET must be identical between Vercel and Cloudflare Worker.
+
+**Sync Process:**
+```bash
+# Run the sync script from project root
+./scripts/sync-cloudflare-worker-secret.sh
+```
+
+**What this does:**
+1. Pulls CRON_SECRET from Vercel production environment
+2. Validates the secret (checks for trailing `\n` issues)
+3. Updates the Cloudflare Worker secret
+4. Redeploys the Cloudflare Worker
+5. Verifies HMAC authentication works
+
+**Verification:**
+```bash
+# Quick verification after sync
+./scripts/sync-cloudflare-worker-secret.sh --verify-only
+```
+
+**Expected Output:**
+```
+[STEP] Pulling CRON_SECRET from Vercel production...
+[SUCCESS] CRON_SECRET length is correct: 80 characters
+[SUCCESS] CRON_SECRET validation passed
+[STEP] Updating Cloudflare Worker CRON_SECRET...
+[SUCCESS] Cloudflare Worker CRON_SECRET updated
+[STEP] Redeploying Cloudflare Worker...
+[SUCCESS] Cloudflare Worker redeployed successfully
+[STEP] Verifying HMAC authentication...
+[SUCCESS] HMAC authentication verified (HTTP 202)
+[SUCCESS] Cloudflare Worker secret sync complete!
+```
+
+**Error Handling:**
+- If Vercel CLI is not authenticated: Run `vercel login`
+- If Wrangler CLI is not authenticated: Run `npx wrangler login`
+- If HMAC verification fails: Check Vercel secret for trailing `\n` characters
+- If deployment fails: Check Cloudflare dashboard for worker errors
+
 ## Review Comment Format
 
 Use GitHub CLI to post reviews:
@@ -267,6 +312,7 @@ gh pr review <PR-number> --request-changes --body "Issues found"
 8. **Atomic fixes** - Each fix is its own commit
 9. **Track approval status** - Maintain clear status of all reviews
 10. **Post-merge cleanup** - Always delete merged branch
+11. **Always sync Cloudflare Worker** - Run sync script after every merge to prevent HMAC auth failures
 
 ## GitHub CLI Commands Reference
 
@@ -308,6 +354,8 @@ gh pr diff
 ✅ All 6 perspectives approved
 ✅ PR merged successfully
 ✅ Branch deleted post-merge
+✅ Cloudflare Worker synced and redeployed
+✅ HMAC authentication verified
 ✅ Complete audit trail of all actions
 
 ## Example Workflow Output
@@ -372,7 +420,14 @@ gh pr diff
    ✓ PR #123 merged and closed
    ✓ Branch feat/email-validation deleted
 
-✨ Complete! All changes merged to main.
+☁️ Syncing Cloudflare Worker...
+   ✓ Pulled CRON_SECRET from Vercel production
+   ✓ Secret validated (80 characters, no trailing \n)
+   ✓ Updated Cloudflare Worker secret
+   ✓ Redeployed Cloudflare Worker
+   ✓ HMAC authentication verified (HTTP 202)
+
+✨ Complete! All changes merged to main and Cloudflare Worker synced.
 ```
 
 ---
