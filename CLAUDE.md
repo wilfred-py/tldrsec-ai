@@ -114,13 +114,17 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - `npm run cloudflare:deploy:tail` - Deploy and start log monitoring
 - `npm run cloudflare:logs` - View Cloudflare Worker logs in real-time
 - `npm run cloudflare:status` - Check deployment status and list recent deployments
-- `npm run test:cloudflare-integration` - **NEW** Test Cloudflare Worker integration
+- `npm run cloudflare:sync-secret` - **CRITICAL** Sync CRON_SECRET from Vercel and redeploy worker
+- `npm run cloudflare:sync-secret:verify` - Verify CRON_SECRET sync status without making changes
+- `npm run test:cloudflare-integration` - Test Cloudflare Worker integration
 
 **Manual Commands (run from cloudflare-cron/ directory):**
 - `cd cloudflare-cron && npx wrangler deploy` - Deploy worker
 - `cd cloudflare-cron && npx wrangler tail --format=pretty` - View logs
 - `cd cloudflare-cron && npx wrangler deployments list` - List deployments
 - `cd cloudflare-cron && npx wrangler secret put CRON_SECRET` - Set secrets
+
+**IMPORTANT: After every PR merge, run `npm run cloudflare:sync-secret` to prevent HMAC auth failures.**
 
 ### Vercel Deployment Commands
 - `vercel` - Deploy to Vercel
@@ -440,6 +444,109 @@ This ensures Cloudflare Workers can be deployed independently without database c
 
 ## Known Issues and Solutions
 
+### CRITICAL: Environment Variable Trailing `\n` Issue
+
+**This is a recurring issue that causes HMAC authentication failures and pipeline stalls.**
+
+#### Problem Description
+Environment variables (especially `CRON_SECRET`) sometimes contain literal `\n` characters (backslash followed by 'n', not an actual newline). This causes:
+- HMAC signature mismatches between Cloudflare Worker and Vercel
+- 401 Unauthorized errors on cron endpoints
+- Complete pipeline stalls with no job completions
+
+#### How to Detect
+
+```bash
+# Pull current Vercel env and check for issues
+vercel env pull .env.vercel.check --yes
+
+# Check secret length (should be 80 chars, NOT 82)
+SECRET=$(cat .env.vercel.check | grep "^CRON_SECRET=" | cut -d'"' -f2)
+echo "CRON_SECRET length: ${#SECRET}"
+
+# Check for literal \n suffix
+if [[ "$SECRET" == *'\n'* ]]; then
+  echo "WARNING: Contains literal backslash-n characters!"
+fi
+
+# Hex dump to inspect trailing bytes
+echo -n "${SECRET: -10}" | xxd
+# Bad: ends with 5c6e (which is \n in hex)
+# Good: ends with alphanumeric characters
+```
+
+#### How to Fix
+
+**Step 1: Get the clean secret value**
+```bash
+# The lowercase version is usually clean
+CLEAN_SECRET=$(cat .env.vercel.check | grep "^cron_secret=" | cut -d'"' -f2)
+echo "Clean secret length: ${#CLEAN_SECRET}"  # Should be 80
+```
+
+**Step 2: Update Vercel (all environments)**
+```bash
+# CRITICAL: Use printf to avoid adding trailing newline
+printf '%s' "$CLEAN_SECRET" > /tmp/secret_clean.txt
+
+# Update all environments
+cat /tmp/secret_clean.txt | vercel env add CRON_SECRET production --force
+cat /tmp/secret_clean.txt | vercel env add CRON_SECRET preview --force
+cat /tmp/secret_clean.txt | vercel env add CRON_SECRET development --force
+
+# Clean up
+rm /tmp/secret_clean.txt
+
+# Trigger redeploy
+vercel --prod --yes
+```
+
+**Step 3: Update Cloudflare Worker**
+```bash
+cd cloudflare-cron
+printf '%s' "$CLEAN_SECRET" > /tmp/secret_clean.txt
+cat /tmp/secret_clean.txt | npx wrangler secret put CRON_SECRET
+rm /tmp/secret_clean.txt
+```
+
+**Step 4: Verify fix**
+```bash
+# Test HMAC authentication
+TIMESTAMP=$(date +%s%3N)
+PAYLOAD="${TIMESTAMP}:GET:/api/cron/tier-aware"
+SIGNATURE=$(echo -n "$PAYLOAD" | openssl dgst -sha256 -hmac "$CLEAN_SECRET" | cut -d' ' -f2)
+
+curl -s "https://tldrsec.app/api/cron/tier-aware" \
+  -H "x-hmac-signature: ${SIGNATURE}" \
+  -H "x-hmac-timestamp: ${TIMESTAMP}"
+# Should return 202, NOT 401
+```
+
+#### Prevention Strategies
+
+1. **Always use `printf '%s'` instead of `echo`** when piping secrets to avoid trailing newlines
+2. **Verify secret lengths** after any environment variable changes (CRON_SECRET should be exactly 80 chars)
+3. **Check both uppercase and lowercase** versions in pulled env files for discrepancies
+4. **Run pipeline health check** after env changes: `curl https://tldrsec.app/api/health/pipeline`
+5. **Test HMAC auth manually** before assuming changes propagated correctly
+
+#### Quick Diagnostic Commands
+
+```bash
+# Check pipeline health
+curl -s https://tldrsec.app/api/health/pipeline | jq '{status, minutesSinceLastCompletion, jobs: .jobs}'
+
+# If status is CRITICAL or DEGRADED with high minutesSinceLastCompletion, check secrets:
+vercel env pull .env.check --yes
+cat .env.check | grep -E "^(CRON_SECRET|cron_secret)=" | while read line; do
+  val=$(echo "$line" | cut -d'"' -f2)
+  name=$(echo "$line" | cut -d'=' -f1)
+  echo "$name: length=${#val}, ends='${val: -5}'"
+done
+```
+
+---
+
 ### Production Issues Resolved (2025-11-14)
 
 #### Issue: Waitlist form working in dev but not prod
@@ -449,7 +556,12 @@ This ensures Cloudflare Workers can be deployed independently without database c
 - **Verification**: Run `npm run test:production-waitlist`
 - **Documentation**: See [docs/plans/2025-11-14-fix-waitlist-production-errors.md](docs/plans/2025-11-14-fix-waitlist-production-errors.md)
 
-## Recent Updates (Updated: 2025-10-25)
+## Recent Updates (Updated: 2026-01-21)
+
+### Pipeline Recovery (2026-01-21)
+- **CRON_SECRET Trailing `\n` Fix**: Resolved recurring HMAC auth failures caused by literal `\n` characters in environment variables
+- **Secret Synchronization**: Synchronized clean 80-character CRON_SECRET across all Vercel environments and Cloudflare Worker
+- **Documentation**: Added comprehensive troubleshooting guide to Known Issues section
 
 ### Major Features Added
 - **🚨 Comprehensive Alert System**: Full implementation with 10 alert types, async processing, and dashboard integration
