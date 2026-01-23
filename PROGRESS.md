@@ -6,7 +6,84 @@
 
 ---
 
-## Current Session: Cloudflare Build Fix - Onboarding Dynamic Rendering (2026-01-21)
+## Current Session: SEC Filing Summary & Email Quality Enhancement - All 4 Phases Complete ✅ (2026-01-22)
+
+**Plan**: `docs/plans/2026-01-20-fix-filing-summary-email-quality.md`
+
+**Overview**: Comprehensive enhancement resolving 8 quality gaps in SEC filing summarization and email delivery.
+
+### Phase 1: Data Storage Foundation ✅
+**Issue**: AI extracted perfect structured data (filerName, transactions, holdings) but `summaryJSON` was never stored in database.
+
+**Root Cause**: `lib/ai/summarize.ts:852` had `summaryText: parsedResult.data.summary` but missing `summaryJSON: parsedResult.data`.
+
+**Fix**: Added ONE critical line storing `summaryJSON: parsedResult.data` alongside `summaryText`.
+
+**Files**: `lib/ai/summarize.ts` (+1 line)
+**Tests**: 4/4 passing in `__tests__/lib/ai/summarize-data-storage.test.ts`
+
+### Phase 2: Language Quality Enhancement ✅
+**Issue**: "dumped" appeared in 100% of Form 4/144 summaries (NVDA, GOOGL, KO emails Jan 7-16).
+
+**Root Cause**: Production prompt in `summaryGenerationService.ts` instructed `"Active voice: 'Bezos dumped $3B'"`.
+
+**Fix**:
+- Added verb variety guidance to `unified-prompts.ts`: "sold", "divested", "offloaded", "shed", "liquidated"
+- Added acronym expansion: "TSR (Total Shareholder Return)", "PSU (Performance Stock Units)"
+- Removed repetitive "dumped" language
+
+**Files**: `lib/ai/prompts/unified-prompts.ts` (~30 lines)
+**Tests**: 5/5 passing in `__tests__/lib/ai/prompt-language-quality.test.ts`
+**Verification**: 5 test summaries confirmed varied vocabulary
+
+### Phase 3: Email Formatting & Amendment Indicators ✅
+**Issue**: Email summaries were long paragraphs with no structure. Amended filings had no [AMENDED] indicator.
+
+**Fix**:
+- Enhanced AI prompts to generate markdown (## headers, bullet lists, paragraph breaks)
+- Created `EmailSubjectService` with [AMENDED] detection for /A filings
+- Updated templates to use `markdownToHtml()` for proper rendering
+
+**Files**:
+- `lib/ai/prompts/unified-prompts.ts` (markdown guidance)
+- `lib/email/subject-service.ts` (new service)
+- `components/ui/email/templates/form4-minimalist-template.tsx` (rendering)
+
+**Tests**: 7/7 passing in `__tests__/components/email/email-formatting.test.ts`
+**Manual Verification**: 4 test emails sent (TSLA, AAPL Form 4/A, NVDA 10-K/A, MSFT 8-K) - all rendered correctly
+
+### Phase 4: Duplicate Email Prevention ✅
+**Issue**: Same summary sent twice to same user during concurrent cron job execution.
+
+**Root Cause**: Cron overlap (Cloudflare every 10 min + Vercel backup every 30 min) caused race conditions.
+
+**Fix**: Implemented PostgreSQL advisory lock mechanism:
+- Added `pg_try_advisory_lock` at start of `sendEmailSummary()`
+- Lock key: `email:${userId}:${tickers}`
+- Automatic release in `finally` block
+- Three-layer prevention: Advisory locks + DB unique constraints + transaction atomicity
+
+**Files**: `services/filing/sendEmailSummary.ts` (+50 lines: lock helpers + integration)
+**Verification**: Advisory lock script confirmed 2/3 concurrent requests blocked successfully
+
+### Quality Metrics
+- **Test Coverage**: 16/16 tests passing (100%)
+- **Build Status**: ✅ TypeScript compilation SUCCESS
+- **8 Quality Gaps**: All resolved
+- **Backward Compatible**: Old summaries still work
+
+### Three-Layer Duplicate Prevention
+1. **Database Layer**: `SummaryEmailDelivery` unique constraint on `[userId, summaryId]`
+2. **Transaction Layer**: `createMany` with `skipDuplicates: true` + atomic email send
+3. **Advisory Lock Layer**: `pg_try_advisory_lock` prevents cron overlap
+
+**Production Ready**: ✅ Deploy and monitor for 24-48 hours
+
+---
+
+## Recently Completed Sessions
+
+### Cloudflare Build Fix - Onboarding Dynamic Rendering (2026-01-21)
 
 **Issue**: Cloudflare Pages build failing with error: "useSession can only be used within the <ClerkProvider /> component" during static page generation of `/onboarding`.
 
@@ -332,5 +409,5 @@ at Function.create (/lib/job-queue/index.ts:220:36)
 
 ---
 
-*Last Updated: 2026-01-21 (Cloudflare Build Fix - Onboarding Dynamic Rendering)*
+*Last Updated: 2026-01-22 (SEC Filing Summary & Email Quality Enhancement - All 4 Phases Complete)*
 *Older completed projects archived to .claude/history/ - See TIMELINE.md for full history*
