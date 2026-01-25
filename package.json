@@ -70,6 +70,8 @@
     "cloudflare:status": "cd cloudflare-cron && npx wrangler deployments list",
     "cloudflare:verify": "cd cloudflare-cron && ./verify-deployment.sh",
     "cloudflare:fix-deploy": "cd cloudflare-cron && npx wrangler deploy",
+    "cloudflare:sync-secret": "./scripts/sync-cloudflare-worker-secret.sh",
+    "cloudflare:sync-secret:verify": "./scripts/sync-cloudflare-worker-secret.sh --verify-only",
     "test:timeout-scenarios": "jest __tests__/timeout/timeout-scenarios.test.ts --config=jest.config.mjs --verbose",
     "test:samples": "node scripts/parsers/sample-content-reader.js",
     "test:extract-xbrl": "node scripts/parsers/extract-xbrl.js",

@@ -26,7 +26,7 @@ import { useAsync } from "@/lib/hooks/use-async";
 import { TutorialGuide } from "@/components/onboarding/tutorial-guide";
 import { useSubscription } from "@/hooks/use-subscription";
 import { UpgradeCTASection } from "@/components/dashboard/upgrade-cta-section";
-import { SUBSCRIPTION_PLANS, type PlanType } from "@/lib/stripe/plans";
+import { SUBSCRIPTION_PLANS, type PlanType } from "@/lib/stripe";
 import {
   TickersTable,
   TickersLoadingSkeleton,

@@ -1,7 +1,10 @@
 import { FilingSummary } from '../../types/sec/filing';
 import { FilingSummaryResult, FilingError } from './types';
-import { prisma } from '../../lib/db/index';
+import { getPrismaClient } from '../../lib/db/index';
 import { emailClient } from '../../lib/email';
+
+// Get Prisma client instance
+const prisma = getPrismaClient();
 import { getEmailTemplate } from '../../lib/email/templates';
 import { EmailType } from '../../lib/email/types';
 import { sanitizeForEmail, generatePlainTextEmail } from './utils';
@@ -105,10 +108,25 @@ export async function sendEmailSummary(
   debug: boolean = false,
   userId?: string
 ) {
+  // Acquire advisory lock to prevent concurrent sends (prevents cron overlap duplicates)
+  const lockKey = `email:${userId || email}:${tickers.sort().join(',')}`;
+  const lockAcquired = await acquireAdvisoryLock(lockKey, 30000);
+
+  if (!lockAcquired) {
+    console.log(`[DUPLICATE_PREVENTION][FilingService] Failed to acquire lock for ${email}, duplicate send prevented by advisory lock`);
+    return {
+      success: true,
+      message: 'Duplicate send prevented by advisory lock - another process is sending this email',
+      summaryCount: 0,
+      errorCount: 0,
+      duplicatesDetected: tickers.length
+    };
+  }
+
   try {
     console.log(`[INFO][FilingService] Starting bulletproof email summary process for ${email}`);
     console.log(`[INFO][FilingService] Tickers: ${tickers.join(', ')}, User ID: ${userId || 'not provided'}`);
-    
+
     // Get the latest summaries for each ticker with bulletproof deduplication
     const summaries: FilingSummaryResult[] = [];
     const errors: FilingError[] = [];
@@ -574,6 +592,50 @@ export async function sendEmailSummary(
       success: false,
       error: error instanceof Error ? error.message : 'Failed to send email summary'
     };
+  } finally {
+    // Always release the advisory lock
+    await releaseAdvisoryLock(lockKey);
+    console.log(`[INFO][FilingService] Released advisory lock for ${email}`);
+  }
+}
+
+/**
+ * Advisory lock implementation using PostgreSQL advisory locks
+ * Prevents concurrent email sends to the same user/ticker combination
+ */
+function hashString(str: string): number {
+  // Simple hash function for pg_advisory_lock (needs 32-bit integer)
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    hash = ((hash << 5) - hash) + str.charCodeAt(i);
+    hash = hash & hash; // Convert to 32bit integer
+  }
+  return Math.abs(hash);
+}
+
+async function acquireAdvisoryLock(key: string, timeoutMs: number = 30000): Promise<boolean> {
+  const hashedKey = hashString(key);
+
+  try {
+    const result = await prisma.$queryRaw<Array<{ acquired: boolean }>>`
+      SELECT pg_try_advisory_lock(${hashedKey}) as acquired
+    `;
+    return result[0]?.acquired === true;
+  } catch (error) {
+    console.error(`[ERROR][FilingService] Advisory lock acquisition failed: ${error}`);
+    return false;
+  }
+}
+
+async function releaseAdvisoryLock(key: string): Promise<void> {
+  const hashedKey = hashString(key);
+
+  try {
+    await prisma.$queryRaw`
+      SELECT pg_advisory_unlock(${hashedKey})
+    `;
+  } catch (error) {
+    console.error(`[ERROR][FilingService] Advisory lock release failed: ${error}`);
   }
 }
 

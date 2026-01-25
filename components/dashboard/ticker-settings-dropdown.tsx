@@ -64,6 +64,15 @@ const FORM_TYPE_CATEGORIES = {
       { id: "sThree", label: "S-3", description: "Shelf Registration" },
     ],
   },
+  prospectus: {
+    label: "Prospectus Filings",
+    types: [
+      { id: "fourTwoFourB2", label: "424B2", description: "Prospectus Supplement" },
+      { id: "fourTwoFourB3", label: "424B3", description: "Term Sheet" },
+      { id: "fwp", label: "FWP", description: "Free Writing Prospectus" },
+      { id: "schedule", label: "SCHEDULE", description: "Schedule Forms" },
+    ],
+  },
 } as const;
 
 // Mapping from form type ID to preference key
@@ -85,6 +94,10 @@ const FORM_TYPE_TO_PREFERENCE: Record<string, string> = {
   pre14A: "pre14A",
   sOne: "sOne",
   sThree: "sThree",
+  fourTwoFourB2: "fourTwoFourB2",
+  fourTwoFourB3: "fourTwoFourB3",
+  fwp: "fwp",
+  schedule: "schedule",
 };
 
 export interface ExtendedFilingPreferences {
@@ -105,6 +118,10 @@ export interface ExtendedFilingPreferences {
   pre14A?: boolean;
   sOne?: boolean;
   sThree?: boolean;
+  fourTwoFourB2?: boolean;
+  fourTwoFourB3?: boolean;
+  fwp?: boolean;
+  schedule?: boolean;
   other: boolean;
 }
 
@@ -134,6 +151,10 @@ const DEFAULT_PREFERENCES: ExtendedFilingPreferences = {
   pre14A: false,
   sOne: false,
   sThree: false,
+  fourTwoFourB2: false,
+  fourTwoFourB3: false,
+  fwp: false,
+  schedule: false,
   other: false,
 };
 

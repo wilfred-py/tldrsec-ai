@@ -1,12 +1,13 @@
 'use server';
 
 import { auth, currentUser } from '@clerk/nextjs/server';
-import { prisma } from '@/lib/db/prisma';
+import { getPrismaClient } from '@/lib/db/prisma';
 import { getEmailTemplate } from './templates';
 import { EmailType, EmailMessage } from './types';
 import { sendEmail } from './index';
 import { logger } from '../logging';
 import { SecureEmailLogger } from './security-helpers';
+import { EmailSubjectService } from './subject-service';
 
 // Create secure logger to prevent PII exposure
 const secureLogger = new SecureEmailLogger(logger.child('summary-service'));
@@ -15,6 +16,7 @@ const secureLogger = new SecureEmailLogger(logger.child('summary-service'));
  * Get summaries for 10-K and 10-Q filings for a user's tickers
  */
 async function getSummariesForUser(userId: string) {
+  const prisma = getPrismaClient();
   try {
     // Get user's tickers
     const tickers = await prisma.ticker.findMany({
@@ -249,9 +251,15 @@ export async function sendFilingSummaryEmail(
     });
     
     // Prepare email message
+    const subject = EmailSubjectService.generateSingleFilingSubject({
+      filingType: filingData.filingType,
+      companyName: filingData.companyName,
+      ticker: filingData.ticker
+    });
+
     const message: EmailMessage = {
       to: recipientEmail,
-      subject: `New ${filingData.filingType} Filing: ${filingData.companyName} (${filingData.ticker})`,
+      subject,
       html,
       text,
       tags: [

@@ -879,7 +879,17 @@ WRITING STYLE:
 - Be concise: prefer "Revenue hit $45B" over "The company reported total revenue of $45B"
 - Use active voice: "CEO Smith sold" not "Shares were sold by CEO Smith"
 - Include specific numbers with units ($, %, shares)
-- For complex filings, structure as: [Headline fact] + [Key context] + [Significance]`;
+- For complex filings, structure as: [Headline fact] + [Key context] + [Significance]
+- Vary your verbs to avoid repetition:
+  * Sales: "sold", "divested", "offloaded", "shed", "liquidated"
+  * Purchases: "acquired", "bought", "purchased", "scooped up", "added"
+  * Grants: "granted", "awarded", "received", "secured"
+  * Avoid overusing any single verb - mix it up for readability
+- Acronym usage:
+  * Expand uncommon acronyms on first use: "TSR (Total Shareholder Return)", "PSU (Performance Stock Units)"
+  * After expansion, subsequent use of the acronym alone is acceptable
+  * Common acronyms OK without expansion: CEO, CFO, SEC, IPO, M&A
+  * Financial metrics: Spell out "year-over-year" on first use, then "YoY"`;
 
 // =============================================================================
 // Main Function - Generate Filing Prompt

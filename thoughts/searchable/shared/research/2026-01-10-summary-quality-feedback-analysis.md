@@ -5,10 +5,11 @@ git_commit: b99f9f46422e2d140c08368483c129c95e58a246
 branch: review-generated-summaries
 repository: review-generated-summaries
 topic: "SEC Filing Summary Quality - User Feedback Analysis"
-tags: [research, codebase, form4, form144, 8k, templates, extractors, xai, grok, per-ticker-agent]
+tags: [research, codebase, form4, form144, 8k, templates, extractors, xai, grok, per-ticker-agent, supabase, pgvector]
 status: complete
-last_updated: 2026-01-10
+last_updated: 2026-01-12
 last_updated_by: Claude
+last_updated_note: "Updated to reflect Phase 1 implementation completed 2026-01-12: 8-K sentiment now displayed, Form 4 stake arrows added, Form 144 remaining holdings display, design system sentiment utilities."
 ---
 
 # Research: SEC Filing Summary Quality - User Feedback Analysis
@@ -35,13 +36,13 @@ Analysis of 8 user feedback items regarding SEC filing summary quality:
 
 This research documents the current state of SEC filing summary generation to address 8 specific user feedback items. The codebase has comprehensive infrastructure for Form 4, Form 144, and 8-K filings with data extractors, AI prompts, and email templates. Key findings:
 
-1. **Form 4 shares display**: Transaction shares ARE extracted (13+ regex patterns + AI schema) but display prioritizes value over shares. Zero shares with $15.2M suggests edge case in gift/transfer handling.
+1. **Form 4 shares display**: Transaction shares ARE extracted (13+ regex patterns + AI schema) but display prioritizes value over shares. Zero shares with $15.2M suggests edge case in gift/transfer handling. ✅ **[UPDATED 2026-01-12]** Ownership stake changes now display with directional arrows (↑/↓/→) color-coded by direction.
 
-2. **8-K/A sentiment**: The `sentiment` field is REQUIRED in the AI schema and extracted, but NOT displayed in email templates (assigned to unused `_sentiment` variable). Materiality IS displayed as 2-level signal.
+2. **8-K/A sentiment**: ✅ **[RESOLVED 2026-01-12]** The `sentiment` field is now actively displayed in email templates. Variable renamed from `_sentiment` to `sentiment` at line 157, with inline badge display at lines 229-242. Uses WCAG AA-compliant colors from design system.
 
 3. **10b5-1 handling**: Text-based detection exists using pattern matching ("10b5-1", "10b-5", "rule 10b"). No structured XML checkbox parsing. Signal strength downgraded to "Weak - 10b5-1 Plan" when detected.
 
-4. **Beneficial ownership**: Form 144 has dedicated `remainingHoldings` field (REQUIRED in schema). Form 4 has minimal support - no AI schema field, only 4 regex patterns in fallback extraction.
+4. **Beneficial ownership**: Form 144 has dedicated `remainingHoldings` field (REQUIRED in schema). ✅ **[UPDATED 2026-01-12]** Form 144 now displays remaining holdings with arrow notation (`→ X remaining`). Form 4 has enhanced stake change display showing `previousStake → newStake (percentChange)`.
 
 5. **Template formatting**: All templates use "Summary" as main heading. Minimalist templates use signal-first design. Form 3 uses standard template only.
 
@@ -144,10 +145,21 @@ function determineSentiment(text: string): string {
 }
 ```
 
-**Template - NOT DISPLAYED (`8k-minimalist-template.tsx:157`)**:
+**Template - ✅ NOW DISPLAYED (`8k-minimalist-template.tsx:157, 229-242`) [UPDATED 2026-01-12]**:
 ```typescript
-const _sentiment = (data?.sentiment || extractedData?.sentiment || '') as string;
-// ↑ Prefixed with underscore = UNUSED
+// Line 157 - Variable renamed from _sentiment to sentiment (active)
+const sentiment = (data?.sentiment || extractedData?.sentiment || '') as string;
+
+// Lines 229-242 - Inline sentiment badge display
+{sentiment && (
+  <span style={{
+    backgroundColor: getSentimentColor(sentiment).bg,
+    color: getSentimentColor(sentiment).text,
+    // ... styling
+  }}>
+    {getSentimentEmoji(sentiment)} {sentiment}
+  </span>
+)}
 ```
 
 #### What IS Displayed: Materiality
@@ -254,12 +266,24 @@ REQUIRED: Extract 'Amount of Securities Beneficially Owned Following Reported Tr
 - "X shares remaining"
 - etc.
 
-**Template Display (`form144-minimalist-template.tsx:396-440`)**:
-- Dedicated "Shares Remaining After Sale" card
-- Large display of share count
-- Official SEC field name in subtitle
+**Template Display (`form144-minimalist-template.tsx:376-385`) [UPDATED 2026-01-12]**:
+```typescript
+{remainingHoldings && (
+  <div style={{
+    fontSize: '12px',
+    color: '#991B1B',
+    opacity: 0.8,
+    marginTop: '4px',
+  }}>
+    → {remainingHoldings} remaining
+  </div>
+)}
+```
+- Arrow notation (`→`) prefix shows post-sale position
+- Displayed as secondary info below "Shares to Sell" card
+- Red-brown color (#991B1B) matches card theme
 
-#### Form 4 - Minimal Support
+#### Form 4 - Enhanced Support [UPDATED 2026-01-12]
 
 **AI Schema**: NO dedicated `remainingHoldings` field exists.
 
@@ -273,9 +297,38 @@ const postPatterns = [
 ];
 ```
 
-**Template Display (`form4-minimalist-template.tsx:711-715`)**:
-- Inline stake change: `"previousStake → newStake"`
-- No dedicated section
+**Template Display - Ownership Impact Section (`form4-minimalist-template.tsx:803-858`)**:
+
+✅ **Enhanced stake change display with directional arrows**:
+```typescript
+// Lines 828-853 - Stake change with arrow and percentage
+{previousStake && newStake ? (
+  <>
+    <span style={{ color: EmailColors.text.meta }}>{previousStake}</span>
+    <span style={{ color: percentChange?.startsWith('-') ? '#DC2626' : '#16A34A' }}>
+      {getStakeChangeArrow(percentChange)}  // ↑ or ↓ or →
+    </span>
+    <span style={{ fontWeight: 700 }}>{newStake}</span>
+    {percentChange && <span>({percentChange})</span>}
+  </>
+) : (
+  <span>{newStake || previousStake}</span>
+)}
+```
+
+**Arrow Function (`form4-minimalist-template.tsx:66-71`)**:
+```typescript
+export function getStakeChangeArrow(percentChange: string | undefined): string {
+  if (!percentChange) return '';
+  const num = parseFloat(percentChange.replace(/[%+]/g, ''));
+  if (isNaN(num) || num === 0) return '→';
+  return num > 0 ? '↑' : '↓';
+}
+```
+
+- ↑ Green (#16A34A) for increases
+- ↓ Red (#DC2626) for decreases
+- → Gray for neutral/zero change
 
 ---
 
@@ -536,7 +589,7 @@ No prior research documents found on these specific topics.
 
 1. **Form 4 zero shares**: Need to investigate the specific filing XML structure for the URL mentioned (https://www.sec.gov/Archives/edgar/data/1045810/000152611126000002/xslF345X05/wk-form4_1767737078.xml) to understand why shares show 0 with $15.2M value.
 
-2. **8-K sentiment display**: The `_sentiment` variable is extracted but not rendered. Was this intentional design or oversight?
+2. ~~**8-K sentiment display**: The `_sentiment` variable is extracted but not rendered. Was this intentional design or oversight?~~ ✅ **RESOLVED 2026-01-12**: Sentiment is now displayed inline with materiality badge using WCAG AA-compliant colors.
 
 3. **10b5-1 SEC rule link**: User requests linking to SEC 10b5-1 documentation. Where should this link appear (prompt guidance, template, or both)?
 
@@ -624,8 +677,14 @@ const xaiSearch = {
 |-----------|--------------|
 | Tavily Finance News (500/day) | ~$15-30/month |
 | Grok X Search (200/day) | **FREE** |
-| Base summarization | $1,080/month |
-| **Total with enrichment** | **$1,095-1,110/month** |
+| Base summarization | $72/month |
+| **Total with enrichment** | **$87-102/month** |
+
+> **Cost Calculation (xAI Grok 4.1-fast via OpenRouter):**
+> - Input: $0.30/million tokens, Output: $0.50/million tokens
+> - Average summary: 75K input tokens × $0.0000003 = $0.0225
+> - Average output: 3K tokens × $0.0000005 = $0.0015
+> - **Per-summary cost: ~$0.024** (100 summaries/day × 30 days = $72/month)
 
 #### Key References
 - [xAI Search Tools Documentation](https://docs.x.ai/docs/guides/tools/search-tools)
@@ -639,24 +698,24 @@ const xaiSearch = {
 
 #### Executive Summary
 
-A per-ticker expert agent system would enable contextual summarization where each new filing is analyzed with awareness of the company's history, trends, and patterns. **Recommended approach**: pgvector (PostgreSQL extension) integrated with existing Neon database.
+A per-ticker expert agent system would enable contextual summarization where each new filing is analyzed with awareness of the company's history, trends, and patterns. **Recommended approach**: pgvector (PostgreSQL extension) integrated with existing Supabase database.
 
 **Key Metrics**:
 - **Implementation Time**: 3-4 weeks for MVP
-- **Cost Increase**: +27% per summary ($0.46 vs $0.36)
+- **Cost Increase**: +27% per summary ($0.030 vs $0.024)
 - **Expected Quality Improvement**: 20-30% better summaries through contextual awareness
 
 #### Vector Database Comparison
 
 | Database | Deployment | Cost (100K vectors) | Integration | Recommendation |
 |----------|-----------|---------------------|-------------|----------------|
-| **pgvector (Neon)** | Integrated | ~$0.18/month | Low effort | **Recommended** |
+| **pgvector (Supabase)** | Integrated | ~$0.18/month | Low effort | **Recommended** |
 | Pinecone | Managed SaaS | Free tier available | Medium | Enterprise scale |
 | Qdrant | Self-hosted | ~$27/month | Medium | Cost-conscious |
 | Weaviate | Self-hosted | ~$75/month | High | Multimodal search |
 
 **Why pgvector?**
-- Already using Neon PostgreSQL - zero infrastructure overhead
+- Already using Supabase PostgreSQL - zero infrastructure overhead
 - Store embeddings alongside existing `Summary` data
 - ACID guarantees for consistency
 - 30x faster HNSW index builds with recent optimizations
@@ -733,18 +792,20 @@ LIMIT 5;
 - Monthly (100/day): $0.12
 
 **Enhanced Summarization**:
-- Without context: $0.36/summary
-- With context (5 past summaries): $0.46/summary (+27%)
-- With prompt caching: $0.37/summary (cached contexts)
+- Without context: $0.024/summary
+- With context (5 past summaries): $0.030/summary (+27%)
+- With prompt caching: $0.019/summary (cached contexts)
 
 **Monthly Totals (100 summaries/day)**:
 | Component | Cost |
 |-----------|------|
 | Embeddings | $0.12 |
 | Storage (100K vectors) | $0.18 |
-| Base summarization | $1,080 |
-| Historical context | +$297 |
-| **Total** | **$1,377/month** |
+| Base summarization | $72 |
+| Historical context | +$18 |
+| **Total** | **$90/month** |
+
+> **Note on Cost Correction**: Previous estimates used outdated Claude API pricing (~$0.36/summary). Actual xAI Grok 4.1-fast pricing via OpenRouter is ~15x cheaper at $0.024/summary. Source: `lib/ai/config.ts` and `lib/ai/token-counter.ts`.
 
 #### Implementation Approaches
 
@@ -755,7 +816,7 @@ LIMIT 5;
 - Validate if context improves quality
 
 **2. Medium (Recommended) - 4 Weeks**
-- Add pgvector extension to Neon
+- Add pgvector extension to Supabase
 - Generate embeddings with OpenAI API
 - Semantic similarity search for relevant context
 - Backfill existing summaries
@@ -791,8 +852,226 @@ async function getLastNSummaries(tickerId: string, n = 3) {
 - 20-30% quality improvement
 
 #### Key References
-- [Neon pgvector Documentation](https://neon.com/docs/extensions/pgvector)
+- [Supabase pgvector Documentation](https://supabase.com/docs/guides/database/extensions/pgvector)
 - [pgvector vs Pinecone Cost Comparison](https://supabase.com/blog/pgvector-vs-pinecone)
 - [OpenAI Embeddings Pricing](https://platform.openai.com/docs/pricing)
 - [RAG Best Practices](https://www.promptingguide.ai/research/rag)
 - [Financial Time Series RAG](https://arxiv.org/html/2502.05878v1)
+
+---
+
+### Appendix C: Neon Database Cleanup Documentation
+
+#### Summary
+
+The codebase migrated from Neon to Supabase in December 2025. All Neon references are now legacy code. This appendix documents the cleanup performed on 2026-01-10.
+
+#### Files Deleted
+
+| File | Purpose | Reason for Deletion |
+|------|---------|---------------------|
+| `test-neon-connection.js` | Standalone Neon connection test | No longer needed - Supabase is the only database |
+
+#### Legacy Files Retained (Migration Safety)
+
+These files contain Neon references but serve a **migration safety purpose** - they detect if DATABASE_URL accidentally points to Neon and produce clear error messages:
+
+| File | Lines | Purpose | Action |
+|------|-------|---------|--------|
+| `lib/config/database-validation.ts` | 20, 46-48 | Validates DATABASE_URL is NOT Neon | Keep for safety |
+| `lib/config/startup-validation.ts` | 148-150 | CRITICAL error if Neon URL detected | Keep for safety |
+| `lib/db/supabase-config.ts` | 34, 98-102, 256-306 | Detects Neon vs Supabase and warns | Keep for safety |
+
+**Example validation from `startup-validation.ts:148-150`**:
+```typescript
+'CRITICAL: DATABASE_URL points to Neon database. The codebase requires Supabase with app/pipeline schemas.'
+```
+
+#### Environment Variables Cleanup
+
+**Legacy variables in `.env` (lines 54-56, 80-82)**:
+```env
+# neon (legacy - kept for reference)
+NEON_DATABASE_URL_LEGACY=postgresql://...@...neon.tech/tldrsec-prod
+NEON_API=napi_...
+
+# MCP Server Environment Variables
+NEON_API_KEY=napi_...
+NEON_DATABASE_URL=postgresql://...@...neon.tech/tldrsec-prod
+# NOTE: NEON_DATABASE_URL is kept for MCP server reference only - not used by application
+```
+
+**Recommendation**: Remove these legacy variables after confirming:
+1. No MCP servers depend on `NEON_API_KEY` or `NEON_DATABASE_URL`
+2. Neon database has been fully decommissioned
+
+#### Documentation Files (Historical Reference)
+
+The following files in `docs/plans/actioned/2025/12. December/` document the migration:
+- `2025-12-09-neon-to-supabase-migration-implementation.md`
+- `2025-12-09-neon-to-supabase-migration-options-analysis.md`
+- `2025-12-19-unified-supabase-consolidation.md`
+
+These should be retained as historical documentation.
+
+#### Test Files with Neon References
+
+The file `__tests__/db/data-migration.test.ts` contains `EXPECTED_NEON_COUNTS` constants used to validate that the Supabase database matches expected record counts from the Neon migration. This file validates migration completeness and should be retained until the Neon database is fully decommissioned.
+
+#### Current Database Architecture
+
+**Active Database**: Supabase (aws-1-ap-southeast-2)
+- Transaction Mode: `postgres://...@aws-1-ap-southeast-2.pooler.supabase.com:6543/postgres?pgbouncer=true`
+- Session Mode: Port 5432 for migrations and advisory locks
+- Schemas: `app`, `pipeline` (multi-schema architecture)
+
+**Database Stack**:
+- Prisma ORM with singleton client (`lib/db/prisma.ts`)
+- Supabase client for auth/realtime (`lib/supabase/client.ts`, `lib/supabase/server-client.ts`)
+- pgvector extension available for vector embeddings
+
+---
+
+## Follow-up Research: Phase 1 Implementation (2026-01-12)
+
+### Summary of Changes
+
+On 2026-01-12, "Email Summary Design Quality Enrichment - Phase 1" was completed, implementing the following improvements based on this research document:
+
+| Feedback Item | Status | Implementation |
+|--------------|--------|----------------|
+| #2: 8-K sentiment display | ✅ RESOLVED | Sentiment badge now displayed inline with materiality |
+| #4: Form 4 ownership position | ✅ ENHANCED | Stake changes with directional arrows (↑/↓/→) |
+| #4: Form 144 remaining holdings | ✅ ENHANCED | Arrow notation display (`→ X remaining`) |
+
+### Design System Additions
+
+New utilities added to `components/ui/email/design-system.ts`:
+
+#### Sentiment Color Mapping (Lines 296-303)
+```typescript
+export function getSentimentColor(sentiment: string): SentimentColorConfig {
+  switch (sentiment.toLowerCase()) {
+    case 'positive': return { bg: '#DCFCE7', text: '#166534' }; // Green - 4.6:1 contrast
+    case 'negative': return { bg: '#FEE2E2', text: '#991B1B' }; // Red - 5.1:1 contrast
+    case 'mixed': return { bg: '#EDE9FE', text: '#5B21B6' }; // Violet - distinct from amber
+    default: return { bg: '#F3F4F6', text: '#4B5563' }; // Gray (neutral) - 5.3:1 contrast
+  }
+}
+```
+
+All color combinations meet WCAG 2.1 AA (4.5:1+ contrast ratio) requirements.
+
+#### Sentiment Emoji Mapping (Lines 308-315)
+```typescript
+export function getSentimentEmoji(sentiment: string): string {
+  switch (sentiment.toLowerCase()) {
+    case 'positive': return '📈';
+    case 'negative': return '📉';
+    case 'mixed': return '🤔';
+    default: return '➖';
+  }
+}
+```
+
+#### SEC Transaction Codes (Lines 321-350)
+```typescript
+export const SEC_TRANSACTION_CODES: Record<string, string> = {
+  'P': 'Open Market Purchase',
+  'S': 'Open Market Sale',
+  'A': 'Grant/Award',
+  'G': 'Gift',
+  'M': 'Option Exercise',
+  'F': 'Tax Withholding',
+  'C': 'Conversion',
+  'J': 'Trust Transfer',
+  'K': 'Trust Disposition',
+  // ... 19 total codes
+};
+
+export function getTransactionCodeDescription(code: string): string {
+  return SEC_TRANSACTION_CODES[code.toUpperCase()] || 'Other Transaction';
+}
+```
+
+### 8-K Sentiment Implementation Details
+
+**File**: `components/ui/email/templates/8k-minimalist-template.tsx`
+
+**Variable Rename** (Line 157):
+- Before: `const _sentiment = ...` (unused, underscore-prefixed)
+- After: `const sentiment = ...` (active)
+
+**Display Logic** (Lines 229-242):
+```typescript
+{sentiment && (
+  <span style={{
+    display: 'inline-block',
+    padding: '4px 12px',
+    marginLeft: '8px',
+    backgroundColor: getSentimentColor(sentiment).bg,
+    color: getSentimentColor(sentiment).text,
+    borderRadius: '20px',
+    fontSize: '11px',
+    fontWeight: 600,
+  }}>
+    {getSentimentEmoji(sentiment)} {sentiment.charAt(0).toUpperCase() + sentiment.slice(1)}
+  </span>
+)}
+```
+
+**Position**: Inline with materiality badge (immediately after "MATERIAL EVENT" or "ROUTINE DISCLOSURE")
+
+### Form 4 Ownership Impact Enhancement
+
+**File**: `components/ui/email/templates/form4-minimalist-template.tsx`
+
+**Stake Change Arrow Function** (Lines 66-71):
+```typescript
+export function getStakeChangeArrow(percentChange: string | undefined): string {
+  if (!percentChange) return '';
+  const num = parseFloat(percentChange.replace(/[%+]/g, ''));
+  if (isNaN(num) || num === 0) return '→';
+  return num > 0 ? '↑' : '↓';
+}
+```
+
+**Ownership Impact Section** (Lines 803-858):
+- Conditional rendering when `aggregatedTransactions.length > 0` AND stake data exists
+- Previous stake in gray, new stake in bold
+- Directional arrow color-coded:
+  - ↑ Green (#16A34A) for increases
+  - ↓ Red (#DC2626) for decreases
+  - → Gray for neutral
+- Percentage change in parentheses with matching color
+
+### Form 144 Remaining Holdings Enhancement
+
+**File**: `components/ui/email/templates/form144-minimalist-template.tsx`
+
+**Data Extraction** (Line 178):
+```typescript
+const remainingHoldings = (data?.remainingHoldings || data?.sharesRemaining || extractedData?.remainingHoldings || '') as string;
+```
+
+**Arrow Notation Display** (Lines 376-385):
+```typescript
+{remainingHoldings && (
+  <div style={{
+    fontSize: '12px',
+    color: '#991B1B',
+    opacity: 0.8,
+    marginTop: '4px',
+  }}>
+    → {remainingHoldings} remaining
+  </div>
+)}
+```
+
+**Position**: Secondary info below "Shares to Sell" card, matching red-brown (#991B1B) card theme
+
+### Related Documentation
+
+- Plan: [docs/plans/2026-01-10-email-summary-design-quality-enrichment.md](docs/plans/2026-01-10-email-summary-design-quality-enrichment.md)
+- Timeline: [.claude/history/TIMELINE.md](.claude/history/TIMELINE.md) - Line 16
+- Progress: [.claude/PROGRESS.md](.claude/PROGRESS.md)

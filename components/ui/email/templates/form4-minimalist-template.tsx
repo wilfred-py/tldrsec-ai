@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { EmailColors, getTransactionCodeDescription as getTransactionCodeDescriptionFromDesign } from '../design-system';
+import { EmailColors, getTransactionCodeDescription as getTransactionCodeDescriptionFromDesign, markdownToHtml } from '../design-system';
 import { EmailHeader } from './sections/EmailHeader';
 import { EmailFooter } from './sections/EmailFooter';
 import { SectionCard } from './sections/SectionCard';
@@ -474,8 +474,9 @@ function getSignalConfig(signalStrength: string, summaryText: string, isSale: bo
 
 /**
  * Format text with bold styling for key elements
+ * @deprecated Use markdownToHtml from design-system instead
  */
-function formatText(text: string): string {
+function _formatText(text: string): string {
   if (!text) return '';
   let html = text;
   html = html.replace(/&(?!amp;|lt;|gt;|quot;|#)/g, '&amp;');
@@ -820,35 +821,53 @@ export function Form4MinimalistTemplate({ filing }: Form4MinimalistTemplateProps
                         }}>
                           Ownership Impact
                         </div>
-                        <div style={{
-                          fontSize: '16px',
-                          color: EmailColors.text.headline,
-                          lineHeight: '1.4',
-                        }}>
+                        <div>
                           {previousStake && newStake ? (
                             <>
-                              <span style={{ color: EmailColors.text.meta }}>{previousStake}</span>
-                              <span style={{
-                                margin: '0 8px',
-                                fontSize: '18px',
+                              {/* Previous ownership (before transaction) */}
+                              <div style={{
+                                fontSize: '14px',
+                                color: EmailColors.text.muted,
+                                marginBottom: '6px',
+                              }}>
+                                {previousStake}
+                              </div>
+                              {/* Direction arrow */}
+                              <div style={{
+                                fontSize: '20px',
+                                lineHeight: '1',
+                                margin: '4px 0',
                                 color: percentChange?.startsWith('-') ? '#DC2626' : percentChange?.startsWith('+') ? '#16A34A' : EmailColors.text.meta,
                               }}>
                                 {getStakeChangeArrow(percentChange)}
-                              </span>
-                              <span style={{ fontWeight: 700 }}>{newStake}</span>
-                              {percentChange && (
-                                <span style={{
-                                  marginLeft: '12px',
-                                  fontSize: '14px',
-                                  fontWeight: 600,
-                                  color: percentChange.startsWith('-') ? '#DC2626' : percentChange.startsWith('+') ? '#16A34A' : EmailColors.text.meta,
-                                }}>
-                                  ({percentChange})
-                                </span>
-                              )}
+                              </div>
+                              {/* New ownership (after transaction) */}
+                              <div style={{
+                                fontSize: '16px',
+                                fontWeight: 700,
+                                color: EmailColors.text.headline,
+                                marginTop: '6px',
+                              }}>
+                                {newStake}
+                                {percentChange && (
+                                  <span style={{
+                                    marginLeft: '8px',
+                                    fontSize: '14px',
+                                    fontWeight: 600,
+                                    color: percentChange.startsWith('-') ? '#DC2626' : percentChange.startsWith('+') ? '#16A34A' : EmailColors.text.meta,
+                                  }}>
+                                    ({percentChange})
+                                  </span>
+                                )}
+                              </div>
                             </>
                           ) : (
-                            <span>{newStake || previousStake}</span>
+                            <div style={{
+                              fontSize: '16px',
+                              color: EmailColors.text.headline,
+                            }}>
+                              {newStake || previousStake}
+                            </div>
                           )}
                         </div>
                       </td>
@@ -872,7 +891,7 @@ export function Form4MinimalistTemplate({ filing }: Form4MinimalistTemplateProps
                           padding: '16px',
                           backgroundColor: 'transparent',
                         }}
-                        dangerouslySetInnerHTML={{ __html: formatText(headline) }}
+                        dangerouslySetInnerHTML={{ __html: markdownToHtml(headline) }}
                       />
                     </tr>
                   </tbody>
