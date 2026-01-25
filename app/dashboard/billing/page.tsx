@@ -25,7 +25,7 @@ import {
 } from 'lucide-react';
 import { formatDistanceToNow, format } from 'date-fns';
 import { useUser } from '@clerk/nextjs';
-import { SUBSCRIPTION_PLANS, type PlanType } from '@/lib/stripe';
+import { SUBSCRIPTION_PLANS, type PlanType } from '@/lib/stripe/plans';
 
 // Transform SUBSCRIPTION_PLANS for billing page UI
 interface BillingPlan {

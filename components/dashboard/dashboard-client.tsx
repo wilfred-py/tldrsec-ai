@@ -26,7 +26,7 @@ import { useAsync } from "@/lib/hooks/use-async";
 import { TutorialGuide } from "@/components/onboarding/tutorial-guide";
 import { useSubscription } from "@/hooks/use-subscription";
 import { UpgradeCTASection } from "@/components/dashboard/upgrade-cta-section";
-import { SUBSCRIPTION_PLANS, type PlanType } from "@/lib/stripe";
+import { SUBSCRIPTION_PLANS, type PlanType } from "@/lib/stripe/plans";
 import {
   TickersTable,
   TickersLoadingSkeleton,
@@ -299,14 +299,9 @@ export function DashboardClient({ showWelcome = false, shouldMergePending = fals
     async (planType: "PRO" | "MAX", billingCycle: "monthly" | "annual") => {
       setIsCheckoutLoading(true);
       try {
-        const plan = SUBSCRIPTION_PLANS[planType];
-        const priceId =
-          billingCycle === "annual" ? plan.annualPriceId : plan.monthlyPriceId;
-        if (!priceId) {
-          toast.error("Checkout not available. Please try again later.");
-          return;
-        }
-        const checkoutUrl = await createCheckout(planType, priceId);
+        // Don't check priceId on client - env vars aren't available
+        // Let the API resolve priceId from server-side env vars
+        const checkoutUrl = await createCheckout(planType, billingCycle);
         window.location.href = checkoutUrl;
       } catch (error) {
         console.error("Checkout error:", error);

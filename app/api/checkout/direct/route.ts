@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { clerkClient } from '@clerk/nextjs/server';
-import { stripe, SUBSCRIPTION_PLANS } from '@/lib/stripe';
+import { stripe, SUBSCRIPTION_PLANS, getPriceIdForPlan } from '@/lib/stripe';
 import { rateLimit, rateLimitConfigs } from '@/lib/middleware/rate-limit';
 import { PaymentLogger } from '@/lib/audit/payment-logger';
 
@@ -50,9 +50,15 @@ export async function POST(request: NextRequest) {
     
     // Handle PRO and MAX plans
     if (planType === 'PRO' || planType === 'MAX') {
-      const plan = SUBSCRIPTION_PLANS[planType];
-      const priceId = plan.monthlyPriceId; // Default monthly only
-      
+      if (!stripe) {
+        return NextResponse.json({ error: 'Stripe not configured' }, { status: 503 });
+      }
+
+      const priceId = getPriceIdForPlan(planType, 'monthly');
+      if (!priceId) {
+        return NextResponse.json({ error: `Price ID not configured for ${planType}` }, { status: 503 });
+      }
+
       const session = await stripe.checkout.sessions.create({
         payment_method_types: ['card'],
         line_items: [{ price: priceId, quantity: 1 }],

@@ -2,7 +2,7 @@
 
 import { Button } from '@/components/ui/button';
 import { Crown, Zap, Loader2 } from 'lucide-react';
-import { SUBSCRIPTION_PLANS } from '@/lib/stripe';
+import { SUBSCRIPTION_PLANS } from '@/lib/stripe/plans';
 
 interface UpgradeCTASectionProps {
   currentPlan: 'FREE' | 'PRO' | 'MAX';

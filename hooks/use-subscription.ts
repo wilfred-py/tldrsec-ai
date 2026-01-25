@@ -28,7 +28,7 @@ interface UseSubscriptionReturn {
   loading: boolean;
   error: string | null;
   refetch: () => Promise<void>;
-  createCheckout: (planType: string, priceId: string) => Promise<string>;
+  createCheckout: (planType: string, billingInterval: 'monthly' | 'annual') => Promise<string>;
   openBillingPortal: () => Promise<void>;
 }
 
@@ -71,7 +71,7 @@ export function useSubscription(): UseSubscriptionReturn {
     }
   }, [isLoaded, user]);
 
-  const createCheckout = useCallback(async (planType: string, priceId: string): Promise<string> => {
+  const createCheckout = useCallback(async (planType: string, billingInterval: 'monthly' | 'annual'): Promise<string> => {
     try {
       setError(null);
 
@@ -82,7 +82,7 @@ export function useSubscription(): UseSubscriptionReturn {
         },
         body: JSON.stringify({
           planType,
-          priceId,
+          billingInterval,
         }),
       });
 
@@ -92,7 +92,7 @@ export function useSubscription(): UseSubscriptionReturn {
       }
 
       const data = await response.json();
-      
+
       if (!data.checkoutUrl) {
         throw new Error('No checkout URL received');
       }
