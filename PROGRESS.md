@@ -1,12 +1,74 @@
 # Project Progress
 
-**Date**: 2026-01-22
+**Date**: 2026-01-25
 **Branch**: review-summary-quality
-**Status**: Active - SEC Filing Email Quality Enhancement Complete
+**Status**: Active - BAC 424B2 Filtering Breach Investigation Complete
 
 ---
 
-## Current Session: SEC Filing Summary & Email Quality Enhancement - All 4 Phases Complete ✅ (2026-01-22)
+## Current Session: BAC 424B2 Filtering Breach Investigation & Resolution ✅ (2026-01-25)
+
+**Issue**: User received BAC 424B2 email at 4:01 PM AEST despite prospectus filtering being deployed.
+
+**Root Cause Discovered**:
+1. **Immediate**: BAC ticker had NULL preferences (no defaults set)
+2. **Systemic**: Async pipeline handlers (`summarize-cached-handler.ts`) bypass filtering - don't re-check preferences at summarize stage
+3. **Timing**: Jobs queued before deployment (Jan 21) processed after deployment (Jan 25) without preference validation
+
+**Critical Discovery**: **27 out of 31 tickers had NULL preferences** (87% of all tickers!)
+
+**Timeline of Breach**:
+- Jan 21, 22:20 UTC: Discovery phase (BEFORE filtering deployed)
+- Jan 21, 23:07 UTC: Fetch phase (BEFORE filtering deployed)
+- **Jan 23, 09:18 UTC**: Filtering code deployed (commit 48791f8)
+- Jan 25, 04:57 UTC: Summarize phase sent emails (AFTER filtering deployed!)
+
+**Immediate Fixes Applied**:
+1. ✅ Set BAC ticker preferences to disable 424B2
+2. ✅ Updated all 27 vulnerable tickers with default preferences
+3. ✅ Result: All 31 tickers now have explicit preferences
+
+**Scripts Created**:
+- `scripts/investigate-bac-424b2-breach.ts` - Diagnostic investigation
+- `scripts/check-null-preferences.ts` - Find tickers with NULL preferences
+- `scripts/set-default-preferences-all-tickers.ts` - Fix all NULL tickers (updated 27 tickers)
+- `scripts/test-424b2-filtering-live.ts` - Test filtering with live preferences
+- `scripts/test-424b2-filtering-disabled.ts` - Test filtering when disabled
+
+**Documentation Created**:
+- `docs/investigation/2026-01-25-bac-424b2-filtering-breach.md` - Full technical investigation
+- `docs/investigation/2026-01-25-filtering-breach-SUMMARY.md` - Executive summary
+
+**Systemic Fix Needed** (documented for next deployment):
+- Add preference filtering to `lib/cron/handlers/summarize-cached-handler.ts`
+- Add defense-in-depth validation at ALL async pipeline stages
+- Prevents old queued jobs from bypassing filtering
+
+**Impact**: 15 BAC 424B2 emails sent (13 after filtering deployed), affected 3 users, widespread vulnerability across 87% of tickers
+
+**Verification**: ✅ All 31 tickers now have preferences, BAC 424B2 emails will be filtered going forward
+
+---
+
+## Previous Session: Cloudflare Worker Secret Sync Automation Documentation (2026-01-23)
+
+**Issue**: CRON_SECRET desynchronization between Vercel and Cloudflare Worker after PR merges causes HMAC authentication failures and pipeline stalls.
+
+**Solution Documented**:
+1. Added comprehensive troubleshooting documentation to CLAUDE.md for CRON_SECRET trailing `\n` issue
+2. Updated push-pr-review-merge workflow with mandatory Step 7 for Cloudflare Worker secret sync
+3. Added npm scripts: `cloudflare:sync-secret` and `cloudflare:sync-secret:verify`
+
+**Documentation Added**:
+- **CLAUDE.md**: 103-line section covering problem description, detection methods, fix procedures, prevention strategies
+- **push-pr-review-merge.md**: New Step 7 with sync process, verification, expected output, error handling
+- **package.json**: Two new npm scripts for automated secret synchronization
+
+**Prevention Mechanism**: Mandatory post-merge secret sync ensures Cloudflare Worker and Vercel always have matching CRON_SECRET values, preventing future HMAC auth failures and pipeline stalls.
+
+---
+
+## Previous Session: SEC Filing Summary & Email Quality Enhancement - All 4 Phases Complete ✅ (2026-01-22)
 
 **Plan**: `docs/plans/2026-01-20-fix-filing-summary-email-quality.md`
 
@@ -83,6 +145,35 @@
 
 ## Recently Completed Sessions
 
+### Prospectus Filing Type Preferences Implementation ✅ (2026-01-23)
+
+**Issue**: JPMorgan excessive email volume - 153 emails in 48 hours (136 were 424B2 prospectus supplements).
+
+**Root Cause**: No user-configurable preferences for prospectus filing types (424B2, 424B3, FWP, SCHEDULE).
+
+**Fix Applied**:
+1. Added 4 new filing preference types to FilingPreferences interface
+2. Updated ticker settings UI with "Prospectus Filings" category (4 toggles)
+3. Implemented filtering logic in `filing-processor.ts` using `shouldProcessFiling()`
+4. Created `filing-type-preferences-mapper.ts` utility (157 lines)
+
+**Files Modified**:
+- `lib/api/types.ts` - Added `fourTwoFourB2`, `fourTwoFourB3`, `fwp`, `schedule` fields
+- `components/dashboard/ticker-settings-dropdown.tsx` - Added prospectus preferences UI
+- `app/api/user/tickers/route.ts` - Set defaults (all prospectus types disabled by default)
+- `lib/filing/filing-type-preferences-mapper.ts` - New filtering utility
+- `lib/cron/filing-processor.ts` - Integrated filtering before AI processing
+
+**Impact**: 89% email reduction for JPMorgan (153 → 17 emails per 48 hours), ~$200/month cost savings
+
+**Tests**: 26/26 passing in `scripts/test-filing-preferences.ts`
+
+**Deployment**: PR #335 merged to main, Vercel auto-deployed
+
+**NOTE**: This deployment revealed a systemic issue - async pipeline handlers don't re-check preferences (see BAC 424B2 Filtering Breach session above)
+
+---
+
 ### Cloudflare Build Fix - Onboarding Dynamic Rendering (2026-01-21)
 
 **Issue**: Cloudflare Pages build failing with error: "useSession can only be used within the <ClerkProvider /> component" during static page generation of `/onboarding`.
@@ -134,8 +225,6 @@ This pattern separates server-side configuration (`dynamic` export) from client-
 
 ---
 
-## Recently Completed Sessions
-
 ### Pipeline Recovery - Zombie Connection Pool Exhaustion (2026-01-19)
 
 **Issue**: Pipeline stalled for 25+ hours due to 16 zombie database connections stuck in "idle in transaction" state, exhausting the Supabase connection pool.
@@ -180,8 +269,6 @@ This pattern separates server-side configuration (`dynamic` export) from client-
 
 ---
 
-## Recently Completed Sessions
-
 ### SEC Summary Quality Phase 2 - Phase 4: Grokipedia Research ✅ (2026-01-15)
 
 Completed comprehensive research on all 9 SEC form types and updated extraction guidance.
@@ -222,6 +309,9 @@ Completed comprehensive research on all 9 SEC form types and updated extraction 
 
 **Files**: `lib/email/templates.ts`
 **Verification**: ✅ Build passes, test emails verified
+
+---
+
 ### Pipeline Recovery - Database Migration Fix ✅ (2026-01-13)
 
 Restored stalled pipeline after Supabase database server migration.
@@ -268,7 +358,7 @@ Updated GitHub Actions workflows to reflect the Phase 5-8 pipeline redundancy en
 
 ---
 
-## Recently Completed: Eliminate Manual Pipeline Intervention - Phases 5-8 (2026-01-11)
+### Eliminate Manual Pipeline Intervention - Phases 5-8 (2026-01-11)
 
 Completed final phases of the "Eliminate Manual Pipeline Intervention" plan implementing three-layer pipeline redundancy.
 
@@ -325,7 +415,7 @@ Created comprehensive operations documentation.
 
 ---
 
-## Recently Completed: clerkMiddleware API Fix (2026-01-11)
+### clerkMiddleware API Fix (2026-01-11)
 
 Fixed TypeScript error in `middleware.ts` using deprecated API pattern. Updated to v6 API pattern using `createRouteMatcher()`.
 
@@ -334,7 +424,7 @@ Fixed TypeScript error in `middleware.ts` using deprecated API pattern. Updated 
 
 ---
 
-## Recently Completed: Critical Job Queue Database Bug Fix (2026-01-10)
+### Critical Job Queue Database Bug Fix (2026-01-10)
 
 Identified and resolved critical bug causing 394+ pending jobs to remain stuck despite multiple redeployments.
 
@@ -361,9 +451,9 @@ at Function.create (/lib/job-queue/index.ts:220:36)
 
 ---
 
-## Recently Completed: Summary Generation Quality Improvement
+### Summary Generation Quality Improvement - Phase 5 (2026-01-09)
 
-### Phase 5: Missing Extractors (SC 13G, SC 13D, 424B2) ✅ (2026-01-09)
+**Phase 5: Missing Extractors (SC 13G, SC 13D, 424B2) ✅**
 
 **Goal**: Add data extractors for SC 13G (passive ownership), SC 13D (activist ownership), and 424B2 (prospectus supplement).
 
@@ -392,7 +482,9 @@ at Function.create (/lib/job-queue/index.ts:220:36)
 
 **Next Step**: Plan complete - all phases implemented
 
-### Fix Orphaned Filings Pipeline ✅ VERIFIED AND WORKING (2026-01-09)
+---
+
+### Fix Orphaned Filings Pipeline ✅ (2026-01-09)
 
 **Plan**: [2026-01-08-fix-orphaned-filings-pipeline.md](docs/plans/2026-01-08-fix-orphaned-filings-pipeline.md)
 
@@ -409,5 +501,5 @@ at Function.create (/lib/job-queue/index.ts:220:36)
 
 ---
 
-*Last Updated: 2026-01-22 (SEC Filing Summary & Email Quality Enhancement - All 4 Phases Complete)*
+*Last Updated: 2026-01-25 (BAC 424B2 Filtering Breach Investigation & Resolution)*
 *Older completed projects archived to .claude/history/ - See TIMELINE.md for full history*

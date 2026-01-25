@@ -13,6 +13,9 @@
 
 | Date | Project | Status |
 |------|---------|--------|
+| 2026-01-25 | BAC 424B2 Filtering Breach Investigation & Resolution | 🔄 Active in PROGRESS.md |
+| 2026-01-23 | Prospectus Filing Type Preferences Implementation | 🔄 Active in PROGRESS.md |
+| 2026-01-23 | Cloudflare Worker Secret Sync Automation Documentation | 🔄 Active in PROGRESS.md |
 | 2026-01-22 | SEC Filing Summary & Email Quality Enhancement (All 4 Phases) | 🔄 Active in PROGRESS.md |
 | 2026-01-21 | Cloudflare Build Fix - Onboarding Dynamic Rendering | 🔄 Active in PROGRESS.md |
 | 2026-01-19 | Onboarding Redirect Race Condition Fix | 🔄 Active in PROGRESS.md |
@@ -43,6 +46,6 @@
 
 ## Archive Statistics
 - **Total Archived Projects**: 0
-- **Current PROGRESS.md Lines**: 335
-- **Last Sync**: 2026-01-22
+- **Current PROGRESS.md Lines**: 504
+- **Last Sync**: 2026-01-25
 - **Archive System**: ✅ ACTIVE
