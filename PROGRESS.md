@@ -1,44 +1,166 @@
 # Project Progress
 
-**Date**: 2026-01-21
+**Date**: 2026-01-25
 **Branch**: stripe-integration
-**Status**: Active - Stripe CTA Dashboard Integration
+**Status**: Active - Stripe Dashboard Integration & Checkout Flow
 
 ---
 
-## Current Session: Stripe CTA Dashboard Integration (2026-01-21)
+## Current Session: Stripe Dashboard Integration Fixes (2026-01-25)
 
-**Goal**: Add subscription tier CTA button on /dashboard that converts free users to Pro or Max tier by redirecting to Stripe checkout.
+**Goal**: Fix Stripe checkout flow from dashboard upgrade CTA buttons.
 
-**Implementation**:
-1. **Updated `UpgradeCTASection` component** (`/components/dashboard/upgrade-cta-section.tsx`):
-   - Fixed outdated hardcoded pricing ($99/$139 → $199/$349 from `SUBSCRIPTION_PLANS`)
-   - Added both monthly AND annual pricing buttons with "Save 17%" badge
-   - Changed from `<Link href="/dashboard/billing">` to `<Button onClick>` for direct Stripe checkout
-   - Added loading state with spinner during checkout
-   - Fixed feature text (25 companies instead of 10 for PRO)
+### Stripe Client/Server Module Split ✅
+**Issue**: Browser console showing "Missing Stripe environment variables" warnings on every page load.
 
-2. **Updated `DashboardClient` component** (`/components/dashboard/dashboard-client.tsx`):
-   - Added `useSubscription` hook integration
-   - Added `handleUpgradeClick` handler that:
-     - Selects correct price ID based on billing cycle (monthly/annual)
-     - Calls `createCheckout` from the subscription hook
-     - Redirects to Stripe checkout URL
-     - Shows error toast on failure
-   - Added `UpgradeCTASection` below the tracked tickers card
+**Root Cause**: `lib/stripe.ts` was imported by client components (`dashboard-client.tsx`, `upgrade-cta-section.tsx`, etc.) but environment variables without `NEXT_PUBLIC_` prefix are only available server-side.
 
-**User Experience**:
-- FREE users see: Blue gradient CTA "Upgrade to Pro" - $199/mo or $1,990/yr (Save 17%)
-- PRO users see: Amber gradient CTA "Go Max" - $349/mo or $3,490/yr (Save 17%)
-- MAX users see: No CTA (already at top tier)
+**Fix**: Split `lib/stripe.ts` into separate modules:
+- `lib/stripe/plans.ts` - Client-safe constants (SUBSCRIPTION_PLANS, types, utility functions)
+- `lib/stripe/index.ts` - Server-only Stripe client (env var checks only run server-side)
+
+**Files Created**:
+- `lib/stripe/plans.ts` (~170 lines)
+- `lib/stripe/index.ts` (~270 lines)
+
+**Files Modified** (updated imports to use `@/lib/stripe/plans`):
+- `components/dashboard/upgrade-cta-section.tsx`
+- `components/dashboard/dashboard-client.tsx`
+- `components/landing/sections/pricing-section.tsx`
+- `components/landing/sections-v2/pricing-section-v2.tsx`
+- `components/billing/subscription-plans.tsx`
+- `app/dashboard/billing/page.tsx`
+
+**Files Renamed**: `lib/stripe.ts` → `lib/stripe.ts.bak`
+
+### Subscription API Price ID Lookup Fix ✅
+**Issue**: POST `/api/user/subscription` returning 503 "Stripe price ID not configured for PRO monthly"
+
+**Root Cause**: API route was reading `plan.monthlyPriceId` from `SUBSCRIPTION_PLANS` which now returns `null` (client-safe version doesn't include env vars).
+
+**Fix**: Updated routes to use `getPriceIdForPlan()` function that reads directly from environment variables.
 
 **Files Modified**:
-- `components/dashboard/upgrade-cta-section.tsx` - Fixed pricing, added dual billing options
-- `components/dashboard/dashboard-client.tsx` - Integrated CTA with checkout handler
+- `app/api/user/subscription/route.ts` - Added `getPriceIdForPlan` import and usage
+- `app/api/checkout/direct/route.ts` - Same fix plus null check for stripe client
 
-**Verification**: ✅ Dev server starts successfully, TypeScript compiles without errors
+### Database PlanType Enum Migration ✅
+**Issue**: Prisma upsert failing with `invalid input value for enum app."PlanType": "PRO"`
 
-**Note**: Pre-existing build error in `/api/checkout/direct` (lru-cache issue) unrelated to these changes.
+**Root Cause**: Database had old enum values (BASIC, PROFESSIONAL, PREMIUM) but code uses new values (FREE, PRO, MAX).
+
+**Fix**:
+1. Added new enum values: `ALTER TYPE app."PlanType" ADD VALUE IF NOT EXISTS 'FREE/PRO/MAX'`
+2. Migrated existing records: `UPDATE app."UserSubscription" SET "planType" = 'FREE' WHERE "planType" = 'BASIC'` (etc.)
+3. Updated type cast in route.ts from `'BASIC' | 'PROFESSIONAL' | 'MAX'` to `'FREE' | 'PRO' | 'MAX'`
+
+### Clerk User Sync Script ✅
+**Issue**: "User not found in database" warnings for Clerk-authenticated users.
+
+**Root Cause**: User logged into Clerk but no corresponding record in local Prisma database.
+
+**Fix**: Created `scripts/sync-clerk-user.ts` to fetch user from Clerk API and create/update local database record.
+
+**Files Created**: `scripts/sync-clerk-user.ts` (~130 lines)
+
+**Usage**: `npx tsx scripts/sync-clerk-user.ts <clerk_user_id>` or `--email <email>`
+
+### Stripe Product Description Copy Update
+Updated Pro Monthly product description in Stripe Dashboard from feature list to benefit-focused copy:
+> "Real-time SEC filing intelligence. Stop finding out about material events after the market moves."
+
+---
+
+## Previous Session: Cloudflare Worker Secret Sync Automation Documentation ✅ (2026-01-23)
+
+**Issue**: CRON_SECRET desynchronization between Vercel and Cloudflare Worker after PR merges causes HMAC authentication failures and pipeline stalls.
+
+**Solution Documented**:
+1. Added comprehensive troubleshooting documentation to CLAUDE.md for CRON_SECRET trailing `\n` issue
+2. Updated push-pr-review-merge workflow with mandatory Step 7 for Cloudflare Worker secret sync
+3. Added npm scripts: `cloudflare:sync-secret` and `cloudflare:sync-secret:verify`
+
+**Documentation Added**:
+- **CLAUDE.md**: 103-line section covering problem description, detection methods, fix procedures, prevention strategies
+- **push-pr-review-merge.md**: New Step 7 with sync process, verification, expected output, error handling
+- **package.json**: Two new npm scripts for automated secret synchronization
+
+**Prevention Mechanism**: Mandatory post-merge secret sync ensures Cloudflare Worker and Vercel always have matching CRON_SECRET values, preventing future HMAC auth failures and pipeline stalls.
+
+---
+
+## SEC Filing Summary & Email Quality Enhancement - All 4 Phases Complete ✅ (2026-01-22)
+
+**Plan**: `docs/plans/2026-01-20-fix-filing-summary-email-quality.md`
+
+**Overview**: Comprehensive enhancement resolving 8 quality gaps in SEC filing summarization and email delivery.
+
+### Phase 1: Data Storage Foundation ✅
+**Issue**: AI extracted perfect structured data (filerName, transactions, holdings) but `summaryJSON` was never stored in database.
+
+**Root Cause**: `lib/ai/summarize.ts:852` had `summaryText: parsedResult.data.summary` but missing `summaryJSON: parsedResult.data`.
+
+**Fix**: Added ONE critical line storing `summaryJSON: parsedResult.data` alongside `summaryText`.
+
+**Files**: `lib/ai/summarize.ts` (+1 line)
+**Tests**: 4/4 passing in `__tests__/lib/ai/summarize-data-storage.test.ts`
+
+### Phase 2: Language Quality Enhancement ✅
+**Issue**: "dumped" appeared in 100% of Form 4/144 summaries (NVDA, GOOGL, KO emails Jan 7-16).
+
+**Root Cause**: Production prompt in `summaryGenerationService.ts` instructed `"Active voice: 'Bezos dumped $3B'"`.
+
+**Fix**:
+- Added verb variety guidance to `unified-prompts.ts`: "sold", "divested", "offloaded", "shed", "liquidated"
+- Added acronym expansion: "TSR (Total Shareholder Return)", "PSU (Performance Stock Units)"
+- Removed repetitive "dumped" language
+
+**Files**: `lib/ai/prompts/unified-prompts.ts` (~30 lines)
+**Tests**: 5/5 passing in `__tests__/lib/ai/prompt-language-quality.test.ts`
+**Verification**: 5 test summaries confirmed varied vocabulary
+
+### Phase 3: Email Formatting & Amendment Indicators ✅
+**Issue**: Email summaries were long paragraphs with no structure. Amended filings had no [AMENDED] indicator.
+
+**Fix**:
+- Enhanced AI prompts to generate markdown (## headers, bullet lists, paragraph breaks)
+- Created `EmailSubjectService` with [AMENDED] detection for /A filings
+- Updated templates to use `markdownToHtml()` for proper rendering
+
+**Files**:
+- `lib/ai/prompts/unified-prompts.ts` (markdown guidance)
+- `lib/email/subject-service.ts` (new service)
+- `components/ui/email/templates/form4-minimalist-template.tsx` (rendering)
+
+**Tests**: 7/7 passing in `__tests__/components/email/email-formatting.test.ts`
+**Manual Verification**: 4 test emails sent (TSLA, AAPL Form 4/A, NVDA 10-K/A, MSFT 8-K) - all rendered correctly
+
+### Phase 4: Duplicate Email Prevention ✅
+**Issue**: Same summary sent twice to same user during concurrent cron job execution.
+
+**Root Cause**: Cron overlap (Cloudflare every 10 min + Vercel backup every 30 min) caused race conditions.
+
+**Fix**: Implemented PostgreSQL advisory lock mechanism:
+- Added `pg_try_advisory_lock` at start of `sendEmailSummary()`
+- Lock key: `email:${userId}:${tickers}`
+- Automatic release in `finally` block
+- Three-layer prevention: Advisory locks + DB unique constraints + transaction atomicity
+
+**Files**: `services/filing/sendEmailSummary.ts` (+50 lines: lock helpers + integration)
+**Verification**: Advisory lock script confirmed 2/3 concurrent requests blocked successfully
+
+### Quality Metrics
+- **Test Coverage**: 16/16 tests passing (100%)
+- **Build Status**: ✅ TypeScript compilation SUCCESS
+- **8 Quality Gaps**: All resolved
+- **Backward Compatible**: Old summaries still work
+
+### Three-Layer Duplicate Prevention
+1. **Database Layer**: `SummaryEmailDelivery` unique constraint on `[userId, summaryId]`
+2. **Transaction Layer**: `createMany` with `skipDuplicates: true` + atomic email send
+3. **Advisory Lock Layer**: `pg_try_advisory_lock` prevents cron overlap
+
+**Production Ready**: ✅ Deploy and monitor for 24-48 hours
 
 ---
 
@@ -55,13 +177,17 @@
 2. Created new server component `page.tsx` that exports `dynamic = "force-dynamic"`
 3. Server component simply renders the client component
 
+This pattern separates server-side configuration (`dynamic` export) from client-side React hooks, which is the proper way to handle this in Next.js 15 App Router.
+
 **Files Modified**:
 - `app/(auth)/onboarding/page.tsx` - New server component with `export const dynamic = "force-dynamic"`
 - `app/(auth)/onboarding/onboarding-client.tsx` - Renamed from page.tsx, contains all client UI logic
 
-**Verification**: ✅ Local build passes, `/onboarding` now marked as `ƒ` (Dynamic) instead of `○` (Static).
+**Verification**: ✅ Local build passes, `/onboarding` now marked as `ƒ` (Dynamic) instead of `○` (Static). Pushed to main to trigger new Cloudflare build.
 
 ---
+
+## Recently Completed Sessions
 
 ### Onboarding Redirect Race Condition Fix (2026-01-19)
 
@@ -90,6 +216,8 @@
 **Verification**: ✅ User confirmed "working now" - onboarding completes and redirects to dashboard successfully
 
 ---
+
+## Recently Completed Sessions
 
 ### Pipeline Recovery - Zombie Connection Pool Exhaustion (2026-01-19)
 
@@ -135,11 +263,15 @@
 
 ---
 
+## Recently Completed Sessions
+
 ### SEC Summary Quality Phase 2 - Phase 4: Grokipedia Research ✅ (2026-01-15)
 
 Completed comprehensive research on all 9 SEC form types and updated extraction guidance.
 
 **Approach**: Spawned 9 parallel research agents to investigate form-specific requirements using authoritative sources (SEC.gov, Deloitte DART, PWC Viewpoint, CFI, DilutionTracker).
+
+**Gap Analysis Results**: Identified significant extraction guidance gaps across all form types.
 
 **Updates Made to `lib/ai/prompts/unified-prompts.ts`**:
 
@@ -157,6 +289,7 @@ Completed comprehensive research on all 9 SEC form types and updated extraction 
 
 **Files Modified**:
 - `lib/ai/prompts/unified-prompts.ts` - All 9 form type extraction rules enhanced
+- `docs/plans/2026-01-12-sec-summary-quality-phase-2.md` - Phase 4 marked complete
 
 **Verification**: Linter passes (no new errors)
 
@@ -166,22 +299,19 @@ Completed comprehensive research on all 9 SEC form types and updated extraction 
 
 **Issue**: 8-K emails rendered with GenericMinimalistTemplate instead of Form8KMinimalistTemplate.
 
-**Root Cause**: `lib/email/templates.ts` registry was missing 8-K and Form 144 mappings.
+**Root Cause**: `lib/email/templates.ts` registry was missing 8-K and Form 144 mappings (emailGenerator.ts had them, but individual filing notifications use templates.ts).
 
 **Fix**: Added imports and registry entries for 8-K (4 variants) and Form 144 (3 variants) in `lib/email/templates.ts`.
 
 **Files**: `lib/email/templates.ts`
 **Verification**: ✅ Build passes, test emails verified
-
----
-
 ### Pipeline Recovery - Database Migration Fix ✅ (2026-01-13)
 
 Restored stalled pipeline after Supabase database server migration.
 
 **Root Cause**: Supabase migrated database from `aws-1-ap-southeast-2` to `aws-0-ap-southeast-1` with password change on Dec 23, 2025. Connection remained alive until Jan 12 6:30 PM AEST when it finally expired, causing complete pipeline stall.
 
-**Fix**:
+**Fix**: 
 - Identified new database credentials in Vercel environment
 - Redeployed Vercel application with `vercel --prod`
 - Updated Cloudflare Worker CRON_SECRET
@@ -192,6 +322,8 @@ Restored stalled pipeline after Supabase database server migration.
 **Verification**: Pipeline restored, processing 73 discovery + 53 summarize jobs
 
 ---
+
+## Recently Completed
 
 ### Pipeline Stall Investigation - Database Connection Pool Fix ✅ (2026-01-12)
 
@@ -219,43 +351,146 @@ Updated GitHub Actions workflows to reflect the Phase 5-8 pipeline redundancy en
 
 ---
 
-### Eliminate Manual Pipeline Intervention - Phases 5-8 (2026-01-11)
+## Recently Completed: Eliminate Manual Pipeline Intervention - Phases 5-8 (2026-01-11)
 
 Completed final phases of the "Eliminate Manual Pipeline Intervention" plan implementing three-layer pipeline redundancy.
 
-**Phase 5: Health Endpoint Enhancement** - Enhanced `/api/health/pipeline` with cron execution gap and orphaned filing detection.
-**Phase 6: Auto-Recovery Integration** - Enhanced `/api/cron/auto-recover` with orphaned filing recovery.
-**Phase 7: Vercel Cron Final Backup** - Created `/api/cron/final-backup` as last-resort emergency trigger.
-**Phase 8: Documentation & Runbooks** - Created comprehensive operations documentation.
+### Phase 5: Health Endpoint Enhancement ✅
+Enhanced `/api/health/pipeline` with cron execution gap and orphaned filing detection.
+
+**Changes**:
+- Added `cronExecution` field: `lastExecution`, `minutesSinceLastCron`, `gapsDetected`
+- Added `filings` field: `orphanedCount`, `unprocessedTotal`
+- Status thresholds: DEGRADED at 15+ min gap, CRITICAL at 20+ min gap
+- Orphaned filings (processed=false, no jobs, >10 min old) trigger DEGRADED
+
+**Files Modified**: `app/api/health/pipeline/route.ts`
+**Tests**: 14 passing in `__tests__/api/health/enhanced-pipeline-health.test.ts`
+
+### Phase 6: Auto-Recovery Integration ✅
+Enhanced `/api/cron/auto-recover` with orphaned filing recovery.
+
+**Changes**:
+- Added `OrphanedFilingDetector.checkAndRecover()` call in cleanup flow
+- Recovers filings with `processed=false` and no associated jobs
+- Creates ASYNC_SUMMARIZE_CACHED jobs for orphaned filings
+- Fixed test mock to avoid triggering cleanup path before DEGRADED branch
+
+**Files Modified**: `app/api/cron/auto-recover/route.ts`
+**Tests**: 12 passing in `__tests__/cron/comprehensive-auto-recover.test.ts`
+
+### Phase 7: Vercel Cron Final Backup ✅
+Created `/api/cron/final-backup` as last-resort emergency trigger.
+
+**Implementation**:
+- Runs every 30 minutes via Vercel cron
+- Checks for any pipeline execution in last 25 minutes
+- If none found: sends emergency Slack alert + triggers tier-aware pipeline
+- Logs execution with source `"final-backup"`
+
+**Files Created**:
+- `app/api/cron/final-backup/route.ts`
+- `__tests__/cron/final-backup.test.ts` (16 tests)
+
+**Files Modified**: `vercel.json` (added cron + function config)
+
+### Phase 8: Documentation & Runbooks ✅
+Created comprehensive operations documentation.
+
+**Files Created**:
+- `docs/runbooks/pipeline-stall-recovery.md` - Full operations runbook
+
+**Files Modified**:
+- `CLAUDE.md` - Added redundancy architecture, health/recovery commands
+- `.claude/history/TIMELINE.md` - Added Phases 5-8 entries
 
 **Total Tests**: 42 passing across all phases
 
 ---
 
-### Critical Job Queue Database Bug Fix (2026-01-10)
+## Recently Completed: clerkMiddleware API Fix (2026-01-11)
 
-Identified and resolved critical bug causing 394+ pending jobs to remain stuck despite multiple redeployments.
+Fixed TypeScript error in `middleware.ts` using deprecated API pattern. Updated to v6 API pattern using `createRouteMatcher()`.
 
-**Root Cause**: Job queue system was importing `prisma` directly instead of using `getPrismaClient()` function, resulting in undefined Prisma client during runtime.
-
-**Solution**: Updated `lib/job-queue/index.ts` to use `getPrismaClient()` instead of direct `prisma` import.
-
-**Impact**: 394 pending jobs (323 ASYNC_SUMMARIZE_CACHED + 71 ASYNC_DISCOVER_FILINGS) restored.
+**Files Modified**: `middleware.ts`
+**Verification**: ✅ TypeScript errors resolved
 
 ---
 
-### Summary Generation Quality - Phase 5: Missing Extractors (2026-01-09)
+## Recently Completed: Critical Job Queue Database Bug Fix (2026-01-10)
 
-Added data extractors for SC 13G (passive ownership), SC 13D (activist ownership), and 424B2 (prospectus supplement).
+Identified and resolved critical bug causing 394+ pending jobs to remain stuck despite multiple redeployments.
+
+**Root Cause**: Job queue system was importing `prisma` directly instead of using `getPrismaClient()` function, resulting in undefined Prisma client during runtime. This caused all job creation and processing operations to fail silently.
+
+**Error Evidence**:
+```
+Error adding job to queue: TypeError: Cannot read properties of undefined (reading 'create')
+at Function.create (/lib/job-queue/index.ts:220:36)
+```
+
+**Solution**: 
+- ✅ Updated `lib/job-queue/index.ts` to use `getPrismaClient()` instead of direct `prisma` import
+- ✅ Replaced all 10+ `prisma.` calls with `getPrismaClient().` calls
+- ✅ Vercel production deployment with fix completed
+- ✅ E2E pipeline test successful - job creation now working
+
+**Impact**: 
+- 394 pending jobs (323 ASYNC_SUMMARIZE_CACHED + 71 ASYNC_DISCOVER_FILINGS)
+- Jobs stuck for 44+ hours (oldest from 2026-01-09T01:16:47.107Z)
+- Pipeline was accepting cron triggers but unable to create/process jobs
+
+**Current Status**: Fix deployed to production, job creation restored, pending backlog ready for processing.
+
+---
+
+## Recently Completed: Summary Generation Quality Improvement
+
+### Phase 5: Missing Extractors (SC 13G, SC 13D, 424B2) ✅ (2026-01-09)
+
+**Goal**: Add data extractors for SC 13G (passive ownership), SC 13D (activist ownership), and 424B2 (prospectus supplement).
+
+**Changes Made**:
+1. Created 3 new data extractors:
+   - `lib/email/sc13g-data-extractor.ts` - Passive beneficial ownership (>5%) extraction
+   - `lib/email/sc13d-data-extractor.ts` - Activist beneficial ownership extraction with activist intent detection
+   - `lib/email/424b2-data-extractor.ts` - Prospectus supplement (debt/equity/structured notes)
+
+2. Key extraction features:
+   - **SC 13G**: filerName, ownershipPercentage, sharesOwned, filingPurpose, isAmendment
+   - **SC 13D**: filerName, ownershipPercentage, purpose, intentions[], isActivist, isGroupFiling
+   - **424B2**: offeringType, offeringAmount, interestRate, maturityDate, linkedTo, underwriters[]
+
+3. Updated `lib/email/extractor-registry.ts` (now supports 16 form types with aliases)
 
 **Files Added**:
 - `lib/email/sc13g-data-extractor.ts` (~240 lines)
 - `lib/email/sc13d-data-extractor.ts` (~360 lines)
 - `lib/email/424b2-data-extractor.ts` (~425 lines)
+- `__tests__/email/extractors/sc13g-data-extractor.test.ts` (15 tests)
+- `__tests__/email/extractors/sc13d-data-extractor.test.ts` (17 tests)
+- `__tests__/email/extractors/424b2-data-extractor.test.ts` (16 tests)
 
 **Verification**: ✅ 48 Phase 5 tests passing, 149 total extractor tests
 
+**Next Step**: Plan complete - all phases implemented
+
+### Fix Orphaned Filings Pipeline ✅ VERIFIED AND WORKING (2026-01-09)
+
+**Plan**: [2026-01-08-fix-orphaned-filings-pipeline.md](docs/plans/2026-01-08-fix-orphaned-filings-pipeline.md)
+
+**Root Cause**: Discovery handler only checked RSS feeds, not `processed=false` entries in RssFilingCheck table. When 3-phase pipeline is enabled, legacy backlog processing code is never reached.
+
+**Fix**: Added STEP 3.5 to discovery-handler.ts - calls `getUnprocessedFilings(50)` after RSS check, merges with RSS results (deduplicating by accessionNumber), and marks filings as processed after job creation.
+
+**Schema Fixes Applied During Verification**:
+- Added `scheduledFor: new Date()` - Required field in JobQueue schema
+- Changed `maxAttempts` → `maxRetries` - Correct field name per schema
+
+**Files Modified**:
+- `lib/cron/handlers/discovery-handler.ts` - Unprocessed filing recovery + schema field fixes
+
 ---
 
-*Last Updated: 2026-01-21 (Stripe CTA Dashboard Integration)*
+*Last Updated: 2026-01-25 (Stripe Dashboard Integration Fixes)*
 *Older completed projects archived to .claude/history/ - See TIMELINE.md for full history*
