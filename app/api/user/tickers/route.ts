@@ -34,6 +34,10 @@ const DEFAULT_PREFERENCES = {
   pre14A: false,
   sOne: false,
   sThree: false,
+  fourTwoFourB2: false,
+  fourTwoFourB3: false,
+  fwp: false,
+  schedule: false,
   other: false,
 };
 

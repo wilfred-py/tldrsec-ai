@@ -13,8 +13,7 @@ This file provides a chronological index of all completed projects. For detailed
 
 | Date | Project | Status |
 |------|---------|--------|
-| 2026-01-23 | Cloudflare Worker Secret Sync Automation Documentation (CRON_SECRET troubleshooting, push-pr-review-merge Step 7) | ✅ |
-| 2026-01-22 | SEC Filing Summary Email Quality - Phase 3 ([AMENDED] indicator, vertical ownership layout, badge fix) | ✅ |
+| 2026-01-21 | Stripe CTA Dashboard Integration (UpgradeCTASection + direct Stripe checkout, $199/$349 pricing) | 🔄 Active |
 | 2026-01-21 | Cloudflare Build Fix - Onboarding Dynamic Rendering (force-dynamic export, client/server split) | ✅ |
 | 2026-01-20 | Pipeline Health Connection Pool Exhaustion Fix (caching, aggregated SQL, orphan sampling, batching) | ✅ |
 | 2026-01-19 | Onboarding Redirect Race Condition Fix (email await + cookie bypass for Clerk JWT sync) | ✅ |
@@ -163,11 +162,11 @@ This file provides a chronological index of all completed projects. For detailed
 ---
 
 ## Archive Statistics
-- **Total Archived Projects**: 9 weekly archives (Oct-Dec 2025)
-- **Current PROGRESS.md Lines**: 138 (under threshold: 500)
-- **Last Sync**: 2026-01-23
+- **Total Archived Projects**: 7 weekly archives (Oct-Dec 2025)
+- **Current PROGRESS.md Lines**: 261 (under threshold: 500)
+- **Last Sync**: 2026-01-21
 - **Archive System**: ✅ ACTIVE
-- **Last Compaction**: 2026-01-22 (SEC Filing Summary Email Quality - Phase 3)
+- **Last Compaction**: 2026-01-21 (Stripe CTA session added, structural duplicates fixed)
 
 **Archives**:
 - `29-Dec-2025.md` - Cloudflare Cron Fix, Email Quality, Form 4 Templates, JSON Parsing Phase 5

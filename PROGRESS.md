@@ -1,12 +1,77 @@
 # Project Progress
 
-**Date**: 2026-01-23
-**Branch**: main
-**Status**: Active - Cloudflare Worker Auto-Sync Documentation
+**Date**: 2026-01-25
+**Branch**: stripe-integration
+**Status**: Active - Stripe Dashboard Integration & Checkout Flow
 
 ---
 
-## Current Session: Cloudflare Worker Secret Sync Automation Documentation (2026-01-23)
+## Current Session: Stripe Dashboard Integration Fixes (2026-01-25)
+
+**Goal**: Fix Stripe checkout flow from dashboard upgrade CTA buttons.
+
+### Stripe Client/Server Module Split ✅
+**Issue**: Browser console showing "Missing Stripe environment variables" warnings on every page load.
+
+**Root Cause**: `lib/stripe.ts` was imported by client components (`dashboard-client.tsx`, `upgrade-cta-section.tsx`, etc.) but environment variables without `NEXT_PUBLIC_` prefix are only available server-side.
+
+**Fix**: Split `lib/stripe.ts` into separate modules:
+- `lib/stripe/plans.ts` - Client-safe constants (SUBSCRIPTION_PLANS, types, utility functions)
+- `lib/stripe/index.ts` - Server-only Stripe client (env var checks only run server-side)
+
+**Files Created**:
+- `lib/stripe/plans.ts` (~170 lines)
+- `lib/stripe/index.ts` (~270 lines)
+
+**Files Modified** (updated imports to use `@/lib/stripe/plans`):
+- `components/dashboard/upgrade-cta-section.tsx`
+- `components/dashboard/dashboard-client.tsx`
+- `components/landing/sections/pricing-section.tsx`
+- `components/landing/sections-v2/pricing-section-v2.tsx`
+- `components/billing/subscription-plans.tsx`
+- `app/dashboard/billing/page.tsx`
+
+**Files Renamed**: `lib/stripe.ts` → `lib/stripe.ts.bak`
+
+### Subscription API Price ID Lookup Fix ✅
+**Issue**: POST `/api/user/subscription` returning 503 "Stripe price ID not configured for PRO monthly"
+
+**Root Cause**: API route was reading `plan.monthlyPriceId` from `SUBSCRIPTION_PLANS` which now returns `null` (client-safe version doesn't include env vars).
+
+**Fix**: Updated routes to use `getPriceIdForPlan()` function that reads directly from environment variables.
+
+**Files Modified**:
+- `app/api/user/subscription/route.ts` - Added `getPriceIdForPlan` import and usage
+- `app/api/checkout/direct/route.ts` - Same fix plus null check for stripe client
+
+### Database PlanType Enum Migration ✅
+**Issue**: Prisma upsert failing with `invalid input value for enum app."PlanType": "PRO"`
+
+**Root Cause**: Database had old enum values (BASIC, PROFESSIONAL, PREMIUM) but code uses new values (FREE, PRO, MAX).
+
+**Fix**:
+1. Added new enum values: `ALTER TYPE app."PlanType" ADD VALUE IF NOT EXISTS 'FREE/PRO/MAX'`
+2. Migrated existing records: `UPDATE app."UserSubscription" SET "planType" = 'FREE' WHERE "planType" = 'BASIC'` (etc.)
+3. Updated type cast in route.ts from `'BASIC' | 'PROFESSIONAL' | 'MAX'` to `'FREE' | 'PRO' | 'MAX'`
+
+### Clerk User Sync Script ✅
+**Issue**: "User not found in database" warnings for Clerk-authenticated users.
+
+**Root Cause**: User logged into Clerk but no corresponding record in local Prisma database.
+
+**Fix**: Created `scripts/sync-clerk-user.ts` to fetch user from Clerk API and create/update local database record.
+
+**Files Created**: `scripts/sync-clerk-user.ts` (~130 lines)
+
+**Usage**: `npx tsx scripts/sync-clerk-user.ts <clerk_user_id>` or `--email <email>`
+
+### Stripe Product Description Copy Update
+Updated Pro Monthly product description in Stripe Dashboard from feature list to benefit-focused copy:
+> "Real-time SEC filing intelligence. Stop finding out about material events after the market moves."
+
+---
+
+## Previous Session: Cloudflare Worker Secret Sync Automation Documentation ✅ (2026-01-23)
 
 **Issue**: CRON_SECRET desynchronization between Vercel and Cloudflare Worker after PR merges causes HMAC authentication failures and pipeline stalls.
 
@@ -24,7 +89,7 @@
 
 ---
 
-## Previous Session: SEC Filing Summary & Email Quality Enhancement - All 4 Phases Complete ✅ (2026-01-22)
+## SEC Filing Summary & Email Quality Enhancement - All 4 Phases Complete ✅ (2026-01-22)
 
 **Plan**: `docs/plans/2026-01-20-fix-filing-summary-email-quality.md`
 
@@ -427,5 +492,5 @@ at Function.create (/lib/job-queue/index.ts:220:36)
 
 ---
 
-*Last Updated: 2026-01-23 (Cloudflare Worker Secret Sync Automation Documentation)*
+*Last Updated: 2026-01-25 (Stripe Dashboard Integration Fixes)*
 *Older completed projects archived to .claude/history/ - See TIMELINE.md for full history*

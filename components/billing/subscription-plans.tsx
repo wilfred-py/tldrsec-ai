@@ -10,7 +10,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { CheckCircle, Loader2, CreditCard } from 'lucide-react';
-import { getAllPlans, type PlanType } from '@/lib/stripe';
+import { getAllPlans, type PlanType } from '@/lib/stripe/plans';
 
 interface SubscriptionPlansProps {
   currentPlan?: PlanType | null;
