@@ -16,6 +16,7 @@ import { summarizeFiling } from '../../ai/summarize';
 import { sendFilingSummaryEmail } from '../../email/summary-service';
 import type { FetchJobPayload } from './fetch-handler';
 import { verifyFilingContent, type FilingMetadata } from '../../validation/filing-content-verifier';
+import { shouldProcessFiling } from '../../filing/filing-type-preferences-mapper';
 
 const summarizeLogger = logger.child('summarize-cached-handler');
 
@@ -138,19 +139,42 @@ export async function handleSummarizeCached(
       });
     }
 
-    // Look up the user's ticker ID for this symbol
+    // Look up the user's ticker ID and preferences for this symbol
     const userTicker = await prisma.ticker.findFirst({
       where: {
         userId,
         symbol: ticker.symbol
       },
       select: {
-        id: true
+        id: true,
+        preferences: true
       }
     });
 
     if (!userTicker) {
       throw new Error(`Ticker ${ticker.symbol} not found for user ${userId}`);
+    }
+
+    // CRITICAL FIX: Check user preferences before creating summary
+    // This prevents prospectus emails from bypassing filtering in async pipeline
+    const tickerPreferences = userTicker.preferences as any;
+    if (!shouldProcessFiling(filing.formType, tickerPreferences)) {
+      summarizeLogger.info(`[${executionId}] Skipping due to user preferences`, {
+        userId,
+        ticker: ticker.symbol,
+        filingType: filing.formType,
+        accessionNumber: filing.accessionNumber,
+        reason: 'Filing type disabled in ticker preferences'
+      });
+
+      return {
+        success: true,
+        summaryId: undefined,
+        cost: 0,
+        summarizeDuration: Date.now() - startTime,
+        emailSent: false,
+        error: undefined
+      };
     }
 
     // Check if summary already exists for this filing+user combination
