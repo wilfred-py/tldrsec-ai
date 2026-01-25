@@ -17,7 +17,7 @@ import {
   SUBSCRIPTION_PLANS,
   calculateSavingsPercentage,
   type BillingInterval,
-} from '@/lib/stripe';
+} from '@/lib/stripe/plans';
 import { AnimatedPrice } from './animated-price';
 
 /**

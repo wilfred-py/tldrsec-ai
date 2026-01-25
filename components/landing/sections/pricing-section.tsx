@@ -5,7 +5,7 @@ import { motion } from 'framer-motion';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { Check, Sparkles, Crown, Zap } from 'lucide-react';
-import { SUBSCRIPTION_PLANS, calculateSavingsPercentage } from '@/lib/stripe';
+import { SUBSCRIPTION_PLANS, calculateSavingsPercentage } from '@/lib/stripe/plans';
 import Link from 'next/link';
 
 type BillingInterval = 'monthly' | 'annual';

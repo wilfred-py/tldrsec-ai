@@ -9,7 +9,7 @@
 
 import { describe, it, expect, beforeEach, afterEach, jest } from '@jest/globals';
 import { sendEmailSummary } from '../../../services/filing/sendEmailSummary';
-import { prisma } from '../../../lib/db/index';
+import { getPrismaClient } from '../../../lib/db/index';
 
 // Mock email client to prevent actual emails during testing
 jest.mock('../../../lib/email/resend-client', () => {
@@ -34,6 +34,7 @@ describe('Email Duplicate Detection', () => {
   let testTicker: any;
 
   beforeEach(async () => {
+    const prisma = getPrismaClient();
     // Clean up test data
     await prisma.summaryEmailDelivery.deleteMany({
       where: { emailAddress: { contains: 'duplicate-test' } }

@@ -1,7 +1,10 @@
 import { FilingSummary } from '../../types/sec/filing';
 import { FilingSummaryResult, FilingError } from './types';
-import { prisma } from '../../lib/db/index';
+import { getPrismaClient } from '../../lib/db/index';
 import { emailClient } from '../../lib/email';
+
+// Get Prisma client instance
+const prisma = getPrismaClient();
 import { getEmailTemplate } from '../../lib/email/templates';
 import { EmailType } from '../../lib/email/types';
 import { sanitizeForEmail, generatePlainTextEmail } from './utils';

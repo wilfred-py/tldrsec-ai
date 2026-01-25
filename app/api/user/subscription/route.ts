@@ -7,13 +7,14 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { auth } from '@clerk/nextjs/server';
+import { auth, currentUser } from '@clerk/nextjs/server';
 import { getPrismaClient } from '../../../../lib/db/prisma';
 import {
   isStripeEnabled,
   handleStripeError,
   getCustomer,
   SUBSCRIPTION_PLANS,
+  getPriceIdForPlan,
 } from '../../../../lib/stripe';
 
 type BillingInterval = 'monthly' | 'annual';
@@ -177,8 +178,8 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      priceId =
-        billingInterval === 'annual' ? plan.annualPriceId : plan.monthlyPriceId;
+      // Use server-side function to get price ID from environment variables
+      priceId = getPriceIdForPlan(planType as 'PRO' | 'MAX', billingInterval);
 
       if (!priceId) {
         return NextResponse.json(
@@ -197,20 +198,55 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Get user info
-    const user = await prisma.user.findUnique({
-      where: { id: userId },
+    // Get Clerk user info for auto-creation if needed
+    const clerkUser = await currentUser();
+    if (!clerkUser?.emailAddresses?.[0]?.emailAddress) {
+      return NextResponse.json(
+        { error: 'Unable to get user email from authentication provider' },
+        { status: 400 }
+      );
+    }
+
+    const primaryEmail = clerkUser.emailAddresses[0].emailAddress;
+    const userName = clerkUser.firstName
+      ? `${clerkUser.firstName} ${clerkUser.lastName || ''}`.trim()
+      : undefined;
+
+    // Find user by Clerk ID or email (auto-create pattern)
+    let user = await prisma.user.findFirst({
+      where: {
+        OR: [
+          { id: userId },
+          { authProviderId: userId },
+          { email: primaryEmail }
+        ]
+      },
       select: {
+        id: true,
         email: true,
         name: true,
       },
     });
 
+    // Create user if not found (auto-create pattern from /api/user/tickers)
     if (!user) {
-      return NextResponse.json(
-        { error: 'User not found' },
-        { status: 404 }
-      );
+      user = await prisma.user.create({
+        data: {
+          id: userId,
+          email: primaryEmail,
+          authProvider: 'clerk',
+          authProviderId: userId,
+          name: userName,
+          subscriptionTier: 'FREE',
+          onboardingCompleted: true,
+        },
+        select: {
+          id: true,
+          email: true,
+          name: true,
+        },
+      });
+      console.log(`[subscription] Auto-created user ${userId} for checkout`);
     }
 
     // Check if user already has a subscription
@@ -257,13 +293,26 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // Get app URL for checkout redirects
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL || (process.env.VERCEL_URL
+      ? `https://${process.env.VERCEL_URL}`
+      : null);
+
+    if (!appUrl) {
+      console.error('[subscription] NEXT_PUBLIC_APP_URL not configured');
+      return NextResponse.json(
+        { error: 'Application URL not configured. Set NEXT_PUBLIC_APP_URL in environment.' },
+        { status: 503 }
+      );
+    }
+
     // Create checkout session
     const { createCheckoutSession } = await import('../../../../lib/stripe');
     const session = await createCheckoutSession({
       priceId,
       customerId: stripeCustomerId,
-      successUrl: `${process.env.NEXT_PUBLIC_APP_URL}/dashboard/billing?success=true&session_id={CHECKOUT_SESSION_ID}`,
-      cancelUrl: `${process.env.NEXT_PUBLIC_APP_URL}/dashboard/billing?canceled=true`,
+      successUrl: `${appUrl}/dashboard/billing?success=true&session_id={CHECKOUT_SESSION_ID}`,
+      cancelUrl: `${appUrl}/dashboard/billing?canceled=true`,
       metadata: {
         userId,
         planType,
@@ -280,7 +329,7 @@ export async function POST(request: NextRequest) {
       },
       create: {
         userId,
-        planType: planType as 'BASIC' | 'PROFESSIONAL' | 'MAX',
+        planType: planType as 'FREE' | 'PRO' | 'MAX',
         isActive: false, // Will be activated by webhook
         currentPeriodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days from now
         stripeCustomerId,

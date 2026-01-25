@@ -1,7 +1,7 @@
 'use server';
 
 import { auth, currentUser } from '@clerk/nextjs/server';
-import { prisma } from '@/lib/db/prisma';
+import { getPrismaClient } from '@/lib/db/prisma';
 import { getEmailTemplate } from './templates';
 import { EmailType, EmailMessage } from './types';
 import { sendEmail } from './index';
@@ -16,6 +16,7 @@ const secureLogger = new SecureEmailLogger(logger.child('summary-service'));
  * Get summaries for 10-K and 10-Q filings for a user's tickers
  */
 async function getSummariesForUser(userId: string) {
+  const prisma = getPrismaClient();
   try {
     // Get user's tickers
     const tickers = await prisma.ticker.findMany({
