@@ -70,6 +70,30 @@
 - [ ] Verify alert email arrives at configured address
 - [ ] Test CRON_SECRET sanitization in Cloudflare after deploy
 
+### Phase 4: Pipeline Stall Recovery & Bug Fixes (2026-01-26) ✅
+**Issue**: Pipeline stalled for 5.5+ hours with 290 pending jobs, 0 processing, no completions.
+
+**Root Causes Discovered**:
+1. **Auto-recover cascade failure**: Health endpoint returns HTTP 503 for CRITICAL status, but auto-recover checked `response.ok` which is false for 503, causing it to throw an error instead of proceeding with recovery - exactly when recovery is needed most!
+2. **OrphanedFilingDetector using wrong table**: Code queried `SecFiling.processed` field which doesn't exist (the `processed` field is on `RssFilingCheck` table), causing Prisma errors.
+3. **Cloudflare Worker stopped executing**: Unknown reason caused all cron triggers to stop for 38+ minutes.
+
+**Fixes Applied**:
+1. **Auto-recover HTTP 503 handling**: Updated `getPipelineHealth()` in `app/api/cron/auto-recover/route.ts` to parse JSON body even for 503 responses (CRITICAL status), only failing on 500 (ERROR).
+2. **OrphanedFilingDetector table fix**: Updated `lib/cron/orphaned-filing-detector.ts` to query `rssFilingCheck` table instead of `secFiling`, and changed job type to `ASYNC_SUMMARIZE_CACHED`.
+3. **Cloudflare Worker redeploy**: Redeployed worker to restart cron triggers.
+
+**Files Modified**:
+- `app/api/cron/auto-recover/route.ts` - Handle HTTP 503 from health endpoint
+- `lib/cron/orphaned-filing-detector.ts` - Use correct table (RssFilingCheck)
+
+**Recovery Results**:
+- Status: CRITICAL → DEGRADED
+- completedLast1h: 0 → 25+
+- minutesSinceLastCompletion: 335 → 2
+- Cron execution restored (every 5 minutes)
+- Backlog being processed (276 remaining)
+
 ---
 
 ## Previous Session: BAC 424B2 Filtering Breach Investigation & Documentation (2026-01-25)
