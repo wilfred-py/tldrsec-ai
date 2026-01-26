@@ -13,7 +13,7 @@ This file provides a chronological index of all completed projects. For detailed
 
 | Date | Project | Status |
 |------|---------|--------|
-| 2026-01-26 | Pipeline Resilience Zero-Intervention (CRON_SECRET sanitization, orphan detection, GitHub Action watchdog) | 🔄 Active |
+| 2026-01-26 | Pipeline Resilience Zero-Intervention (CRON_SECRET sanitization, orphan detection, GitHub Action watchdog) | ✅ |
 | 2026-01-25 | Stripe CTA Dashboard Integration (UpgradeCTASection + direct Stripe checkout, $199/$349 pricing) | ✅ |
 | 2026-01-21 | Cloudflare Build Fix - Onboarding Dynamic Rendering (force-dynamic export, client/server split) | ✅ |
 | 2026-01-20 | Pipeline Health Connection Pool Exhaustion Fix (caching, aggregated SQL, orphan sampling, batching) | ✅ |
@@ -163,11 +163,11 @@ This file provides a chronological index of all completed projects. For detailed
 ---
 
 ## Archive Statistics
-- **Total Archived Projects**: 7 weekly archives (Oct-Dec 2025)
-- **Current PROGRESS.md Lines**: 554 (threshold: 500)
-- **Last Sync**: 2026-01-26
+- **Total Archived Projects**: 11 weekly archives (Oct-Dec 2025)
+- **Current PROGRESS.md Lines**: 546 (threshold: 500)
+- **Last Sync**: 2026-01-27
 - **Archive System**: ✅ ACTIVE
-- **Last Compaction**: 2026-01-26 (Pipeline Resilience session added, structural duplicates fixed)
+- **Last Compaction**: 2026-01-27 (Older project details consolidated, Pipeline Resilience completed)
 
 **Archives**:
 - `29-Dec-2025.md` - Cloudflare Cron Fix, Email Quality, Form 4 Templates, JSON Parsing Phase 5
