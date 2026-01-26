@@ -8,6 +8,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -19,11 +20,11 @@ import {
   ArrowRight,
   AlertTriangle,
   Zap,
-  Shield,
   Clock,
   Users
 } from 'lucide-react';
-import { formatDistanceToNow, format } from 'date-fns';
+import { toast } from 'sonner';
+import { format } from 'date-fns';
 import { useUser } from '@clerk/nextjs';
 import { SUBSCRIPTION_PLANS, type PlanType } from '@/lib/stripe/plans';
 
@@ -81,10 +82,30 @@ interface UserSubscription {
 
 export default function BillingPage() {
   const { user } = useUser();
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const [subscription, setSubscription] = useState<UserSubscription | null>(null);
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Handle checkout cancellation - redirect to dashboard
+  useEffect(() => {
+    if (searchParams.get('canceled') === 'true') {
+      router.replace('/dashboard');
+    }
+  }, [searchParams, router]);
+
+  // Handle checkout success - show toast and redirect to dashboard
+  useEffect(() => {
+    if (searchParams.get('success') === 'true') {
+      toast.success('Payment successful!', {
+        description: 'Your subscription has been activated.',
+        duration: 5000,
+      });
+      router.replace('/dashboard?subscription_success=true');
+    }
+  }, [searchParams, router]);
 
   useEffect(() => {
     async function fetchSubscription() {
@@ -231,7 +252,7 @@ export default function BillingPage() {
 
       {/* Current Subscription Status */}
       {subscription && (
-        <Card>
+        <Card className="border-0 shadow-sm bg-gray-50">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <CreditCard className="h-5 w-5" />
@@ -239,33 +260,20 @@ export default function BillingPage() {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="font-semibold text-lg">
-                  {currentPlanConfig?.name || 'Unknown Plan'}
-                </h3>
-                <p className="text-gray-600">
-                  {currentBillingPlan?.price || 'Price unavailable'}
-                </p>
-              </div>
-              <Badge variant={subscription.isActive ? 'default' : 'destructive'}>
-                {subscription.isActive ? 'Active' : 'Inactive'}
-              </Badge>
+            <div>
+              <h3 className="font-semibold text-lg">
+                {currentPlanConfig?.name || 'Unknown Plan'}
+              </h3>
+              <p className="text-gray-600">
+                {currentBillingPlan?.price || 'Price unavailable'}
+              </p>
             </div>
 
-            <div className="grid grid-cols-2 gap-4 text-sm">
-              <div>
-                <p className="text-gray-500">Billing Period</p>
-                <p className="font-medium">
-                  Renews {formatDistanceToNow(new Date(subscription.currentPeriodEnd), { addSuffix: true })}
-                </p>
-              </div>
-              <div>
-                <p className="text-gray-500">Companies Tracked</p>
-                <p className="font-medium">
-                  {currentBillingPlan?.tickerDisplay || 'Unknown'}
-                </p>
-              </div>
+            <div className="text-sm">
+              <p className="text-gray-500">Billing Period</p>
+              <p className="font-medium">
+                Renews on {format(new Date(subscription.currentPeriodEnd), 'MMMM d, yyyy')}
+              </p>
             </div>
 
             {subscription.cancelAtPeriodEnd && (
@@ -306,12 +314,15 @@ export default function BillingPage() {
       <div>
         <h2 className="text-2xl font-semibold mb-6">Available Plans</h2>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {billingPlans.map((plan) => (
+          {billingPlans.map((plan) => {
+            // Only show "Recommended" badge for Pro plan if user is on FREE tier
+            const showRecommended = plan.recommended && currentPlanKey === 'FREE';
+            return (
             <Card
               key={plan.planKey}
-              className={`relative landing-card ${plan.recommended ? 'ring-2 ring-[var(--landing-primary)] shadow-lg' : ''}`}
+              className={`relative landing-card flex flex-col ${showRecommended ? 'ring-2 ring-[var(--landing-primary)] shadow-lg' : ''}`}
             >
-              {plan.recommended && (
+              {showRecommended && (
                 <div className="absolute -top-3 left-1/2 transform -translate-x-1/2">
                   <Badge className="bg-[var(--landing-primary)] hover:bg-[var(--landing-primary-hover)]">
                     Recommended
@@ -320,18 +331,15 @@ export default function BillingPage() {
               )}
 
               <CardHeader>
-                <CardTitle className="flex items-center justify-between">
+                <CardTitle>
                   {plan.name}
-                  {currentPlanKey === plan.planKey && (
-                    <Badge variant="outline">Current</Badge>
-                  )}
                 </CardTitle>
                 <CardDescription>
                   <span className="text-2xl font-bold text-gray-900">{plan.price}</span>
                 </CardDescription>
               </CardHeader>
 
-              <CardContent className="space-y-4">
+              <CardContent className="space-y-4 flex flex-col flex-grow">
                 <div className="space-y-2">
                   <div className="flex items-center gap-2 text-sm">
                     <Users className="h-4 w-4 text-gray-500" />
@@ -345,7 +353,7 @@ export default function BillingPage() {
 
                 <Separator />
 
-                <ul className="space-y-2">
+                <ul className="space-y-2 flex-grow">
                   {plan.features.map((feature, index) => {
                     // Convert markdown-style bold (**text**) to proper semantic HTML
                     const parts = feature.split(/\*\*([^*]+)\*\*/g);
@@ -353,7 +361,7 @@ export default function BillingPage() {
                       <li key={index} className="flex items-center gap-2 text-sm">
                         <CheckCircle className="h-3 w-3 text-green-500 flex-shrink-0" />
                         <span>
-                          {parts.map((part, partIndex) => 
+                          {parts.map((part, partIndex) =>
                             partIndex % 2 === 1 ? (
                               <strong key={partIndex}>{part}</strong>
                             ) : (
@@ -366,33 +374,31 @@ export default function BillingPage() {
                   })}
                 </ul>
 
-                <Button
-                  className="w-full"
-                  variant={currentPlanKey === plan.planKey ? 'outline' : 'default'}
-                  disabled={currentPlanKey === plan.planKey || updating}
-                  onClick={() => handlePlanChange(plan.planKey)}
-                >
-                  {currentPlanKey === plan.planKey ? 'Current Plan' : (plan.planKey === 'FREE' ? 'Downgrade' : 'Upgrade')}
-                  {currentPlanKey !== plan.planKey && <ArrowRight className="h-4 w-4 ml-2" />}
-                </Button>
+                {(() => {
+                  const isCurrentPlan = currentPlanKey === plan.planKey;
+                  const planOrder = { FREE: 0, PRO: 1, MAX: 2 };
+                  const currentOrder = currentPlanKey ? planOrder[currentPlanKey] : 0;
+                  const targetOrder = planOrder[plan.planKey];
+                  const isDowngrade = targetOrder < currentOrder;
+
+                  return (
+                    <Button
+                      className="w-full border mt-auto"
+                      variant={isCurrentPlan ? 'outline' : 'outline'}
+                      disabled={isCurrentPlan || updating}
+                      onClick={() => handlePlanChange(plan.planKey)}
+                    >
+                      {isCurrentPlan ? 'Current Plan' : (isDowngrade ? 'Downgrade' : 'Upgrade')}
+                      {!isCurrentPlan && <ArrowRight className="h-4 w-4 ml-2" />}
+                    </Button>
+                  );
+                })()}
               </CardContent>
             </Card>
-          ))}
+          );
+          })}
         </div>
       </div>
-
-      {/* Security Notice */}
-      <Card className="bg-blue-50 border-blue-200">
-        <CardContent className="pt-6">
-          <div className="flex items-center gap-2 text-blue-800 mb-2">
-            <Shield className="h-4 w-4" />
-            <span className="font-medium">Secure Billing</span>
-          </div>
-          <p className="text-sm text-blue-700">
-            All payments are processed securely through Stripe. We never store your payment information on our servers.
-          </p>
-        </CardContent>
-      </Card>
     </div>
   );
 }

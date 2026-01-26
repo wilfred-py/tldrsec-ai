@@ -35,9 +35,10 @@ import {
 interface DashboardClientProps {
   showWelcome?: boolean;
   shouldMergePending?: boolean;
+  subscriptionSuccess?: boolean;
 }
 
-export function DashboardClient({ showWelcome = false, shouldMergePending = false }: DashboardClientProps) {
+export function DashboardClient({ showWelcome = false, shouldMergePending = false, subscriptionSuccess = false }: DashboardClientProps) {
   // State for tracked companies
   const [companies, setCompanies] = useState<Company[]>([]);
   const [currentCompany, setCurrentCompany] = useState<Company | null>(null);
@@ -130,6 +131,16 @@ export function DashboardClient({ showWelcome = false, shouldMergePending = fals
       setTutorialProgress(parseInt(savedProgress, 10));
     }
   }, [loadCompanies, showWelcome]);
+
+  // Show success toast when subscription is activated
+  useEffect(() => {
+    if (subscriptionSuccess) {
+      toast.success('Welcome to your new plan!', {
+        description: 'Your subscription is now active. Start tracking more companies!',
+        duration: 5000,
+      });
+    }
+  }, [subscriptionSuccess]);
 
   // Lazy-load companies for search - only fetch when user clicks Add Ticker
   const loadCompaniesForSearch = useCallback(async () => {
