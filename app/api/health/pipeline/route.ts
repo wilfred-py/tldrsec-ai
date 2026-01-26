@@ -86,40 +86,22 @@ function setCachedResponse(data: PipelineHealthResponse): void {
 }
 
 /**
- * Orphan check sampling configuration.
- * The orphan filing check is expensive (requires secondary query), so we sample it
- * instead of running on every request. At ~10 requests/minute, this runs every ~60 seconds.
+ * Orphan detection timing (no longer sampled).
+ *
+ * Previously, orphan detection was sampled every 6th request for performance.
+ * Analysis showed the query is lightweight (~5ms), so we now run it on every
+ * request for faster detection (target: <15 seconds to detect orphaned filings).
+ *
+ * @see docs/plans/2026-01-26-pipeline-resilience-zero-intervention.md Phase 2
  */
-const ORPHAN_SAMPLE_RATE = 6; // Check every 6th request
-let orphanSampleCounter = 0;
-let lastKnownOrphanCount = 0;
 let lastOrphanCheckTime: Date | null = null;
 
 /**
- * Reset the orphan sample counter.
+ * Reset orphan check state.
  * Exported for testing purposes.
  */
 export function resetOrphanSampleCounter(): void {
-  orphanSampleCounter = 0;
-  lastKnownOrphanCount = 0;
   lastOrphanCheckTime = null;
-}
-
-/**
- * Check if we should run the orphan check this request.
- * Returns true on the first request (counter = 0) and every ORPHAN_SAMPLE_RATE requests after.
- * Pattern: run check on request 1, skip 2-6, run on 7, skip 8-12, run on 13, etc.
- */
-function shouldRunOrphanCheck(): boolean {
-  orphanSampleCounter++;
-  // Run on first request and every ORPHAN_SAMPLE_RATE requests after
-  if (orphanSampleCounter === 1 || orphanSampleCounter > ORPHAN_SAMPLE_RATE) {
-    if (orphanSampleCounter > ORPHAN_SAMPLE_RATE) {
-      orphanSampleCounter = 1; // Reset cycle
-    }
-    return true;
-  }
-  return false;
 }
 
 /**
@@ -432,15 +414,14 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // Phase 5: Calculate orphaned filings count (SAMPLED for performance)
-    // This expensive check only runs every ORPHAN_SAMPLE_RATE requests (~60 seconds at 10 req/min)
+    // Phase 5 + Zero-Intervention Phase 2: Calculate orphaned filings count (ALWAYS, no sampling)
     // Orphaned = unprocessed AND old enough AND no active job referencing them
-    let orphanedFilingCount = lastKnownOrphanCount;
-    let orphanedCountSampled = true;
+    // The query is lightweight (~5ms), so we run it on every request for faster detection.
+    // @see docs/plans/2026-01-26-pipeline-resilience-zero-intervention.md Phase 2
+    let orphanedFilingCount = 0;
+    const orphanedCountSampled = false; // No longer sampled
 
-    const runOrphanCheck = shouldRunOrphanCheck();
-
-    if (runOrphanCheck && unprocessedFilingsOlderThanThreshold.length > 0) {
+    if (unprocessedFilingsOlderThanThreshold.length > 0) {
       const potentialOrphanIds = unprocessedFilingsOlderThanThreshold.map(f => f.id);
 
       // Check which of these have active jobs
@@ -462,17 +443,12 @@ export async function GET(request: NextRequest) {
       );
 
       orphanedFilingCount = potentialOrphanIds.filter(id => !filingIdsWithJobs.has(id)).length;
-      lastKnownOrphanCount = orphanedFilingCount;
       lastOrphanCheckTime = now;
-      orphanedCountSampled = false;
-    } else if (runOrphanCheck && unprocessedFilingsOlderThanThreshold.length === 0) {
-      // Ran check but found no candidates
+    } else {
+      // No candidates older than threshold
       orphanedFilingCount = 0;
-      lastKnownOrphanCount = 0;
       lastOrphanCheckTime = now;
-      orphanedCountSampled = false;
     }
-    // else: use lastKnownOrphanCount (sampling skipped)
 
     // Calculate time since last completion
     const lastCompletionTime = lastCompletedJob?.completedAt || null;
