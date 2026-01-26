@@ -72,6 +72,35 @@
 
 ---
 
+## Previous Session: BAC 424B2 Filtering Breach Investigation & Documentation (2026-01-25)
+
+**Issue**: User received BAC 424B2 email at 4:01 PM AEST despite prospectus filtering being deployed.
+
+**Root Cause Discovered**:
+1. **Immediate**: BAC ticker had NULL preferences (no defaults set)
+2. **Systemic**: Async pipeline handlers (`summarize-cached-handler.ts`) bypass filtering - don't re-check preferences at summarize stage
+3. **Timing**: Jobs queued before deployment (Jan 21) processed after deployment (Jan 25) without preference validation
+
+**Critical Discovery**: **27 out of 31 tickers had NULL preferences** (87% of all tickers!)
+
+**Documentation Created**:
+- `docs/investigation/2026-01-25-bac-424b2-filtering-breach.md` (351 lines) - Full technical investigation
+- `docs/investigation/2026-01-25-filtering-breach-SUMMARY.md` (325 lines) - Executive summary
+- `DEPLOYMENT_NEXT_STEPS.md` (299 lines) - PR #335 deployment procedures
+
+**Impact**: 15 BAC 424B2 emails sent (13 after filtering deployed), affected 3 users, widespread vulnerability across 87% of tickers
+
+**Immediate Fixes Applied** (not in this PR - already in production):
+1. ✅ Set BAC ticker preferences to disable 424B2
+2. ✅ Updated all 27 vulnerable tickers with default preferences
+3. ✅ Result: All 31 tickers now have explicit preferences
+
+**Systemic Fix Needed** (documented for next deployment):
+- Add preference filtering to `lib/cron/handlers/summarize-cached-handler.ts`
+- Add defense-in-depth validation at ALL async pipeline stages
+
+---
+
 ## Previous Session: Stripe Dashboard Integration Fixes ✅ (2026-01-25)
 
 **Goal**: Fix Stripe checkout flow from dashboard upgrade CTA buttons.

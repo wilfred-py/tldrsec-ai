@@ -16,6 +16,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   const params = await searchParams;
   const showWelcome = params.welcome === 'true';
   const shouldMergePending = params.merge === 'pending' || showWelcome;
+  const subscriptionSuccess = params.subscription_success === 'true';
 
-  return <DashboardClient showWelcome={showWelcome} shouldMergePending={shouldMergePending} />;
+  return <DashboardClient showWelcome={showWelcome} shouldMergePending={shouldMergePending} subscriptionSuccess={subscriptionSuccess} />;
 }

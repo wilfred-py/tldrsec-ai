@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Check, Zap, Sparkles, Crown, Loader2 } from 'lucide-react';
+import { toast } from 'sonner';
 import {
   staggerContainer,
   staggerItem,
@@ -137,14 +138,33 @@ export function PricingSectionV2() {
 
       const data = await response.json();
 
+      if (!response.ok) {
+        if (response.status === 409) {
+          // User already has an active subscription
+          toast.error('You already have an active subscription', {
+            description: 'Visit your billing page to manage or upgrade your plan.',
+            action: {
+              label: 'Go to Billing',
+              onClick: () => router.push('/dashboard/billing'),
+            },
+          });
+        } else {
+          toast.error(data.error || 'Failed to create checkout session');
+        }
+        setLoadingPlan(null);
+        return;
+      }
+
       if (data.checkoutUrl) {
         window.location.href = data.checkoutUrl;
       } else {
         console.error('No checkout URL returned:', data);
+        toast.error('Failed to start checkout. Please try again.');
         setLoadingPlan(null);
       }
     } catch (error) {
       console.error('Error creating checkout session:', error);
+      toast.error('An error occurred. Please try again.');
       setLoadingPlan(null);
     }
   };
