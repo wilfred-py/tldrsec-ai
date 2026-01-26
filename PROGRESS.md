@@ -1,14 +1,83 @@
 # Project Progress
 
-**Date**: 2026-01-25
-**Branch**: stripe-integration
-**Status**: Active - Stripe Dashboard Integration & Checkout Flow
+**Date**: 2026-01-26
+**Branch**: feature/pipeline-resilience-zero-intervention
+**Status**: Active - Pipeline Resilience Zero-Intervention Implementation
 
 ---
 
-## Current Session: Stripe Dashboard Integration Fixes (2026-01-25)
+## Current Session: Pipeline Resilience Zero-Intervention (2026-01-26)
+
+**Plan**: `docs/plans/2026-01-26-pipeline-resilience-zero-intervention.md`
+
+**Goal**: Eliminate human intervention requirements for pipeline recovery by addressing three root causes of manual intervention.
+
+### Phase 1: Defensive CRON_SECRET Sanitization ✅
+**Issue**: CRON_SECRET contamination from `vercel env pull` adding literal `\n` characters causes HMAC auth failures and 13+ hour pipeline stalls.
+
+**Root Cause**: Vercel CLI sometimes adds literal `\n` (hex `5c 6e`) to environment variables. Vercel side uses `.trim()` but Cloudflare Worker did not, causing HMAC mismatch.
+
+**Fix**: Added defensive sanitization on Cloudflare Worker side to match Vercel's handling:
+- Created `lib/cron/secret-sanitization.ts` with `sanitizeCronSecret()` function
+- Removes literal `\n`, actual newlines, and trims whitespace
+- Updated `cloudflare-cron/index.js` (v2.7.0) to sanitize all 4 CRON_SECRET usages
+
+**Files Created**:
+- `lib/cron/secret-sanitization.ts` (~65 lines)
+- `__tests__/unit/cron-secret-sanitization.test.ts` (18 tests)
+
+**Files Modified**:
+- `cloudflare-cron/index.js` - Added `sanitizeCronSecret()` function, updated version to 2.7.0
+
+**Tests**: 18/18 passing
+
+### Phase 2: Eliminate Orphan Detection Delay ✅
+**Issue**: Orphan detection only ran every 6th health check request (~60 second delay).
+
+**Root Cause**: Performance-focused sampling was over-conservative; query is actually lightweight (~5ms).
+
+**Fix**: Removed sampling logic from `app/api/health/pipeline/route.ts`:
+- Removed `ORPHAN_SAMPLE_RATE`, `orphanSampleCounter`, `lastKnownOrphanCount` variables
+- Removed `shouldRunOrphanCheck()` function
+- Orphan detection now runs on every request
+- Target: <15 seconds to detect orphaned filings
+
+**Files Modified**:
+- `app/api/health/pipeline/route.ts` - Removed sampling, orphan check runs every request
+
+### Phase 3: External Heartbeat Watchdog (GitHub Action) ✅
+**Issue**: If all 3 internal layers fail (Cloudflare + Auto-Recovery + Vercel backup), no external alert.
+
+**Fix**: Created GitHub Action that runs every 10 minutes as external watchdog:
+- Checks `https://tldrsec.app/api/health/pipeline` endpoint
+- Sends email alert via Resend API if no completion in 15+ minutes or CRITICAL status
+- Independent of all internal systems (last line of defense)
+
+**Files Created**:
+- `lib/monitoring/heartbeat-alert.ts` (~165 lines) - Alert email generator with HTML/plain text
+- `__tests__/integration/heartbeat-watchdog.test.ts` (12 tests)
+- `.github/workflows/pipeline-heartbeat-watchdog.yml` - GitHub Action workflow
+
+**Tests**: 12/12 passing
+
+### Verification Results
+- **Total Tests**: 30/30 passing (18 Phase 1 + 12 Phase 3)
+- **Build**: ✅ SUCCESS
+- **YAML Validation**: ✅ pipeline-heartbeat-watchdog.yml is valid
+
+### Manual Verification Pending
+- [ ] Trigger GitHub Action watchdog with `force_alert=true`
+- [ ] Verify alert email arrives at configured address
+- [ ] Test CRON_SECRET sanitization in Cloudflare after deploy
+
+---
+
+## Previous Session: Stripe Dashboard Integration Fixes ✅ (2026-01-25)
 
 **Goal**: Fix Stripe checkout flow from dashboard upgrade CTA buttons.
+
+### Summary
+Fixed multiple issues preventing Stripe checkout from dashboard: client/server module split, Price ID lookup, database enum migration, and Clerk user sync.
 
 ### Stripe Client/Server Module Split ✅
 **Issue**: Browser console showing "Missing Stripe environment variables" warnings on every page load.
@@ -164,9 +233,7 @@ Updated Pro Monthly product description in Stripe Dashboard from feature list to
 
 ---
 
-## Recently Completed Sessions
-
-### Cloudflare Build Fix - Onboarding Dynamic Rendering (2026-01-21)
+### Cloudflare Build Fix - Onboarding Dynamic Rendering ✅ (2026-01-21)
 
 **Issue**: Cloudflare Pages build failing with error: "useSession can only be used within the <ClerkProvider /> component" during static page generation of `/onboarding`.
 
@@ -187,9 +254,7 @@ This pattern separates server-side configuration (`dynamic` export) from client-
 
 ---
 
-## Recently Completed Sessions
-
-### Onboarding Redirect Race Condition Fix (2026-01-19)
+### Onboarding Redirect Race Condition Fix ✅ (2026-01-19)
 
 **Issue**: Two problems in onboarding flow:
 1. Welcome emails failing with "Missing `html` or `text` field" error
@@ -217,9 +282,7 @@ This pattern separates server-side configuration (`dynamic` export) from client-
 
 ---
 
-## Recently Completed Sessions
-
-### Pipeline Recovery - Zombie Connection Pool Exhaustion (2026-01-19)
+### Pipeline Recovery - Zombie Connection Pool Exhaustion ✅ (2026-01-19)
 
 **Issue**: Pipeline stalled for 25+ hours due to 16 zombie database connections stuck in "idle in transaction" state, exhausting the Supabase connection pool.
 
@@ -262,8 +325,6 @@ This pattern separates server-side configuration (`dynamic` export) from client-
 **Verification**: ✅ Build passes (no TypeScript errors in templates.ts)
 
 ---
-
-## Recently Completed Sessions
 
 ### SEC Summary Quality Phase 2 - Phase 4: Grokipedia Research ✅ (2026-01-15)
 
@@ -322,8 +383,6 @@ Restored stalled pipeline after Supabase database server migration.
 **Verification**: Pipeline restored, processing 73 discovery + 53 summarize jobs
 
 ---
-
-## Recently Completed
 
 ### Pipeline Stall Investigation - Database Connection Pool Fix ✅ (2026-01-12)
 
@@ -492,5 +551,5 @@ at Function.create (/lib/job-queue/index.ts:220:36)
 
 ---
 
-*Last Updated: 2026-01-25 (Stripe Dashboard Integration Fixes)*
+*Last Updated: 2026-01-26 (Pipeline Resilience Zero-Intervention Implementation)*
 *Older completed projects archived to .claude/history/ - See TIMELINE.md for full history*
