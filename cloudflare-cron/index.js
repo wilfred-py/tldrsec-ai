@@ -1,7 +1,32 @@
 // index.js - Cloudflare Worker for Cron Trigger
 // Enhanced with advanced rate limiting, circuit breaker patterns, and comprehensive monitoring
 // Features: Request tracking, adaptive backoff, circuit breaker state persistence, burst protection
-// Version: 2.6.0 - Added circuit breaker status to health endpoint, enabled KV persistence
+// Version: 2.7.0 - Added defensive CRON_SECRET sanitization to prevent HMAC auth failures
+
+/**
+ * Sanitizes CRON_SECRET by removing common contamination:
+ * - Literal backslash-n sequences (\\n) from CLI escaping issues
+ * - Actual newline characters (\n) from `vercel env pull`
+ * - Leading/trailing whitespace from copy-paste errors
+ *
+ * This mirrors the defensive .trim() handling on the Vercel side,
+ * eliminating HMAC signature mismatches that caused 13+ hour stalls.
+ *
+ * @param {string} secret - The potentially contaminated CRON_SECRET
+ * @returns {string} The sanitized secret
+ * @see docs/plans/2026-01-26-pipeline-resilience-zero-intervention.md Phase 1
+ */
+function sanitizeCronSecret(secret) {
+  if (!secret) {
+    return '';
+  }
+  // Order matters: remove contamination first, then trim
+  // This handles cases like "  secret  \n" correctly
+  return secret
+    .replace(/\\n/g, '') // Remove literal \n (backslash followed by n)
+    .replace(/\n/g, '')  // Remove actual newline characters
+    .trim();             // Trim after removing \n to catch whitespace before \n
+}
 
 // In-memory heartbeat tracking (reset on each worker instance)
 // For persistent tracking, enable KV storage in wrangler.toml
@@ -323,7 +348,7 @@ export default {
       const encoder = new TextEncoder();
       const key = await crypto.subtle.importKey(
         'raw',
-        encoder.encode(env.CRON_SECRET),
+        encoder.encode(sanitizeCronSecret(env.CRON_SECRET)),
         { name: 'HMAC', hash: 'SHA-256' },
         false,
         ['sign']
@@ -387,7 +412,7 @@ export default {
       const encoder = new TextEncoder();
       const key = await crypto.subtle.importKey(
         'raw',
-        encoder.encode(env.CRON_SECRET),
+        encoder.encode(sanitizeCronSecret(env.CRON_SECRET)),
         { name: 'HMAC', hash: 'SHA-256' },
         false,
         ['sign']
@@ -448,7 +473,7 @@ export default {
       const encoder = new TextEncoder();
       const key = await crypto.subtle.importKey(
         'raw',
-        encoder.encode(env.CRON_SECRET),
+        encoder.encode(sanitizeCronSecret(env.CRON_SECRET)),
         { name: 'HMAC', hash: 'SHA-256' },
         false,
         ['sign']
@@ -647,7 +672,9 @@ export default {
         pattern: 'Sequential execution: cleanup → queue discovery → process discovery → fetch → summarize'
       });
       console.log(`[${executionId}] PUBLIC_URL: ${env.PUBLIC_URL}`);
-      console.log(`[${executionId}] CRON_SECRET configured: ${env.CRON_SECRET ? 'Yes (' + env.CRON_SECRET.length + ' chars)' : 'No'}`);
+      const rawSecretLen = env.CRON_SECRET?.length || 0;
+      const sanitizedSecretLen = sanitizeCronSecret(env.CRON_SECRET).length;
+      console.log(`[${executionId}] CRON_SECRET configured: ${env.CRON_SECRET ? 'Yes' : 'No'} (raw: ${rawSecretLen} chars, sanitized: ${sanitizedSecretLen} chars${rawSecretLen !== sanitizedSecretLen ? ' - SANITIZATION APPLIED' : ''})`);
       
       // Helper function to generate HMAC signature for a specific URL
       const generateSignature = async (targetUrl) => {
@@ -663,7 +690,7 @@ export default {
         const encoder = new TextEncoder();
         const key = await crypto.subtle.importKey(
           'raw',
-          encoder.encode(env.CRON_SECRET),
+          encoder.encode(sanitizeCronSecret(env.CRON_SECRET)),
           { name: 'HMAC', hash: 'SHA-256' },
           false,
           ['sign']

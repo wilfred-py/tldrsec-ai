@@ -117,14 +117,22 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
   }
 
   try {
-    // Update subscription record with planType, subscription ID, and active status
-    await prisma.userSubscription.update({
+    // Update or create subscription record using upsert for robustness
+    await prisma.userSubscription.upsert({
       where: { userId },
-      data: {
+      update: {
         planType, // Update the plan type from checkout metadata
         stripeSubscriptionId: session.subscription as string,
         isActive: true,
         updatedAt: new Date(),
+      },
+      create: {
+        userId,
+        planType: (planType as 'FREE' | 'PRO' | 'MAX') || 'PRO',
+        stripeSubscriptionId: session.subscription as string,
+        stripeCustomerId: session.customer as string,
+        isActive: true,
+        currentPeriodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
       },
     });
 
@@ -134,14 +142,14 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
     const periodEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0);
     const resetAt = new Date(now.getFullYear(), now.getMonth() + 1, 1);
 
-    // Get filing limit based on plan type
-    const planLimits = {
-      BASIC: 50,
-      PROFESSIONAL: 200,
+    // Get filing limit based on plan type (matches PlanType enum: FREE, PRO, MAX)
+    const planLimits: Record<string, number> = {
+      FREE: 50,
+      PRO: 200,
       MAX: 1000,
     };
 
-    const filingLimit = planLimits[planType as keyof typeof planLimits] || 50;
+    const filingLimit = planLimits[planType] || 50;
 
     await prisma.usagePeriod.upsert({
       where: {
@@ -152,13 +160,13 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
       },
       update: {
         filingLimit,
-        planType: planType as 'BASIC' | 'PROFESSIONAL' | 'MAX',
+        planType: planType as 'FREE' | 'PRO' | 'MAX',
       },
       create: {
         userId,
         periodStart,
         periodEnd,
-        planType: planType as 'BASIC' | 'PROFESSIONAL' | 'MAX',
+        planType: planType as 'FREE' | 'PRO' | 'MAX',
         filingLimit,
         resetAt,
       },
