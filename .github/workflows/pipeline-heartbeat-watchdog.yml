@@ -11,8 +11,12 @@ name: Pipeline Heartbeat Watchdog
 
 on:
   schedule:
-    # Run every 10 minutes
-    - cron: '*/10 * * * *'
+    # Run every 30 minutes (reduced from */10 to save GitHub Actions minutes)
+    # This is safe because we have 3-layer redundancy:
+    #   Layer 1: Cloudflare Worker (every 10 min) - primary trigger
+    #   Layer 2: Auto-Recovery (every 5 min) - self-healing
+    #   Layer 3: This watchdog (every 30 min) - external alerting only
+    - cron: '*/30 * * * *'
   workflow_dispatch:
     inputs:
       force_alert:

@@ -1,9 +1,34 @@
 name: Quality Gates
-on: 
+on:
   push:
     branches: [main, continue-newsletter-implementation]
+    paths:
+      # Only run on code changes, skip docs/config-only changes
+      - 'app/**'
+      - 'lib/**'
+      - 'components/**'
+      - 'services/**'
+      - 'prisma/**'
+      - 'cloudflare-cron/**'
+      - '__tests__/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'tsconfig.json'
+      - 'next.config.js'
   pull_request:
     branches: [main]
+    paths:
+      - 'app/**'
+      - 'lib/**'
+      - 'components/**'
+      - 'services/**'
+      - 'prisma/**'
+      - 'cloudflare-cron/**'
+      - '__tests__/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'tsconfig.json'
+      - 'next.config.js'
 
 concurrency:
   group: quality-gates-${{ github.workflow }}-${{ github.ref }}
