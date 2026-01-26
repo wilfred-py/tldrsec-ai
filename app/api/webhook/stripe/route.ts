@@ -11,10 +11,33 @@ import Stripe from 'stripe';
 
 const prisma = getPrismaClient();
 
+/**
+ * Derive plan type from Stripe price ID
+ * Returns FREE if price ID doesn't match any configured plan
+ */
+function getPlanTypeFromPriceId(priceId: string | undefined): 'FREE' | 'PRO' | 'MAX' {
+  if (!priceId) return 'FREE';
+
+  const proMonthlyPriceId = process.env.STRIPE_PRO_MONTHLY_PRICE_ID;
+  const proAnnualPriceId = process.env.STRIPE_PRO_ANNUAL_PRICE_ID;
+  const maxMonthlyPriceId = process.env.STRIPE_MAX_MONTHLY_PRICE_ID;
+  const maxAnnualPriceId = process.env.STRIPE_MAX_ANNUAL_PRICE_ID;
+
+  if (priceId === proMonthlyPriceId || priceId === proAnnualPriceId) {
+    return 'PRO';
+  }
+  if (priceId === maxMonthlyPriceId || priceId === maxAnnualPriceId) {
+    return 'MAX';
+  }
+
+  return 'FREE';
+}
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.text();
-    const signature = headers().get('stripe-signature');
+    const headersList = await headers();
+    const signature = headersList.get('stripe-signature');
 
     if (!signature) {
       console.error('Missing Stripe signature');
@@ -86,7 +109,7 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
   }
 
   const userId = session.metadata?.userId;
-  const planType = session.metadata?.planType;
+  const planType = session.metadata?.planType as 'FREE' | 'PRO' | 'MAX' | undefined;
 
   if (!userId || !planType) {
     console.error('Missing metadata in checkout session');
@@ -94,10 +117,11 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
   }
 
   try {
-    // Update subscription record
+    // Update subscription record with planType, subscription ID, and active status
     await prisma.userSubscription.update({
       where: { userId },
       data: {
+        planType, // Update the plan type from checkout metadata
         stripeSubscriptionId: session.subscription as string,
         isActive: true,
         updatedAt: new Date(),
@@ -163,10 +187,14 @@ async function handleSubscriptionCreated(subscription: Stripe.Subscription) {
   }
 
   try {
-    // Update subscription with Stripe data
+    // Derive plan type from price ID
+    const planType = getPlanTypeFromPriceId(priceId);
+
+    // Update subscription with Stripe data including planType
     await prisma.userSubscription.update({
       where: { userId: userSubscription.userId },
       data: {
+        planType,
         stripeSubscriptionId: subscription.id,
         stripePriceId: priceId,
         isActive: subscription.status === 'active',
@@ -177,7 +205,7 @@ async function handleSubscriptionCreated(subscription: Stripe.Subscription) {
       },
     });
 
-    console.log(`Subscription created for user ${userSubscription.userId}`);
+    console.log(`Subscription created for user ${userSubscription.userId}, plan: ${planType}`);
   } catch (error) {
     console.error('Failed to process subscription creation:', error);
   }
@@ -198,10 +226,13 @@ async function handleSubscriptionUpdated(subscription: Stripe.Subscription) {
 
   try {
     const priceId = subscription.items.data[0]?.price.id;
+    // Derive plan type from price ID for subscription changes (upgrades/downgrades)
+    const planType = getPlanTypeFromPriceId(priceId);
 
     await prisma.userSubscription.update({
       where: { userId: userSubscription.userId },
       data: {
+        planType,
         stripePriceId: priceId,
         isActive: subscription.status === 'active',
         currentPeriodStart: new Date(subscription.current_period_start * 1000),
@@ -211,7 +242,7 @@ async function handleSubscriptionUpdated(subscription: Stripe.Subscription) {
       },
     });
 
-    console.log(`Subscription updated for user ${userSubscription.userId}`);
+    console.log(`Subscription updated for user ${userSubscription.userId}, plan: ${planType}`);
   } catch (error) {
     console.error('Failed to process subscription update:', error);
   }
@@ -234,13 +265,14 @@ async function handleSubscriptionDeleted(subscription: Stripe.Subscription) {
     await prisma.userSubscription.update({
       where: { userId: userSubscription.userId },
       data: {
+        planType: 'FREE', // Revert to free tier on cancellation
         isActive: false,
         cancelAtPeriodEnd: false,
         updatedAt: new Date(),
       },
     });
 
-    console.log(`Subscription cancelled for user ${userSubscription.userId}`);
+    console.log(`Subscription cancelled for user ${userSubscription.userId}, reverted to FREE`);
   } catch (error) {
     console.error('Failed to process subscription deletion:', error);
   }
