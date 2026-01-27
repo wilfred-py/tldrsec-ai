@@ -161,6 +161,13 @@ interface PipelineHealthResponse {
     orphanedCountSampled?: boolean;
     lastOrphanCheck?: string | null;
   };
+  // NEW: TickerMonitoring health check (critical for discovery)
+  tickerMonitoring: {
+    totalRecords: number;
+    activeRecords: number;
+    userTickersWithoutMonitoring: number;
+    missingTickers: string[];
+  };
   lastCompletion: string | null;
   minutesSinceLastCompletion: number | null;
   issues: string[];
@@ -346,12 +353,15 @@ export async function GET(request: NextRequest) {
     const exhaustedRetryingCount = Number(stats.exhausted_retrying_count);
 
     // Remaining queries that still need Prisma (complex operations that can't be aggregated)
-    // These run in parallel but are only 4 queries vs the original 14
+    // These run in parallel but are only 7 queries vs the original 14
     const [
       lastCompletedJob,
       recentCronExecutions,
       unprocessedFilingsOlderThanThreshold,
-      unprocessedFilingsTotal
+      unprocessedFilingsTotal,
+      tickerMonitoringTotal,
+      tickerMonitoringActive,
+      userTickerSymbols
     ] = await Promise.all([
       // Last completed job (needs findFirst with orderBy)
       prisma.jobQueue.findFirst({
@@ -380,6 +390,17 @@ export async function GET(request: NextRequest) {
       // Phase 5: Total unprocessed filings count
       prisma.rssFilingCheck.count({
         where: { processed: false },
+      }),
+      // NEW: TickerMonitoring health check - total records
+      prisma.tickerMonitoring.count(),
+      // NEW: TickerMonitoring health check - active records
+      prisma.tickerMonitoring.count({
+        where: { isActive: true },
+      }),
+      // NEW: Get all unique user ticker symbols to check for missing monitoring
+      prisma.ticker.findMany({
+        select: { symbol: true },
+        distinct: ['symbol'],
       }),
     ]);
 
@@ -456,6 +477,17 @@ export async function GET(request: NextRequest) {
       ? Math.floor((now.getTime() - lastCompletionTime.getTime()) / 60000)
       : null;
 
+    // NEW: Check TickerMonitoring health (critical for discovery phase)
+    // Get all ticker monitoring symbols to compare against user tickers
+    const tickerMonitoringSymbols = await prisma.tickerMonitoring.findMany({
+      where: { isActive: true },
+      select: { symbol: true },
+    });
+    const monitoredSymbolSet = new Set(tickerMonitoringSymbols.map(t => t.symbol));
+    const userSymbols = userTickerSymbols.map(t => t.symbol);
+    const missingTickers = userSymbols.filter(s => !monitoredSymbolSet.has(s));
+    const userTickersWithoutMonitoring = missingTickers.length;
+
     // Analyze issues
     if (lockMetrics.staleLocksCount > 0) {
       issues.push(`${lockMetrics.staleLocksCount} stale locks detected`);
@@ -522,6 +554,17 @@ export async function GET(request: NextRequest) {
       recommendations.push('Run orphaned filing recovery: OrphanedFilingDetector.checkAndRecover()');
     }
 
+    // NEW: Detect TickerMonitoring issues (CRITICAL - empty table caused complete discovery failure)
+    // This was a critical bug discovered 2026-01-27 where the 3-phase pipeline didn't create
+    // TickerMonitoring records, causing discovery to silently skip all tickers.
+    if (tickerMonitoringActive === 0 && userSymbols.length > 0) {
+      issues.push(`CRITICAL: TickerMonitoring table is EMPTY - discovery will skip ALL tickers`);
+      recommendations.push('URGENT: Run discovery job manually or restart pipeline to populate TickerMonitoring');
+    } else if (userTickersWithoutMonitoring > 0) {
+      issues.push(`${userTickersWithoutMonitoring} user tickers missing from TickerMonitoring: ${missingTickers.slice(0, 5).join(', ')}${missingTickers.length > 5 ? '...' : ''}`);
+      recommendations.push('Run getActiveTickersForMonitoring() to create missing records');
+    }
+
     // Track warnings separately from critical issues
     const warnings: string[] = [];
 
@@ -541,7 +584,9 @@ export async function GET(request: NextRequest) {
       exhaustedRetryingCount > 0 ||  // NEW: Jobs stuck forever without intervention
       invalidJobTypeCount > 0 ||     // NEW: Jobs that can never complete
       // Phase 5: Cron execution gap >20 minutes (Cloudflare Worker likely failed)
-      (minutesSinceLastCron !== null && minutesSinceLastCron > CRON_GAP_CRITICAL_MINUTES)
+      (minutesSinceLastCron !== null && minutesSinceLastCron > CRON_GAP_CRITICAL_MINUTES) ||
+      // NEW: Empty TickerMonitoring with active user tickers - discovery will fail completely
+      (tickerMonitoringActive === 0 && userSymbols.length > 0)
     ) {
       status = 'CRITICAL';
     }
@@ -592,6 +637,13 @@ export async function GET(request: NextRequest) {
         unprocessedTotal: unprocessedFilingsTotal,
         orphanedCountSampled,
         lastOrphanCheck: lastOrphanCheckTime?.toISOString() || null,
+      },
+      // NEW: TickerMonitoring health check (critical for discovery)
+      tickerMonitoring: {
+        totalRecords: tickerMonitoringTotal,
+        activeRecords: tickerMonitoringActive,
+        userTickersWithoutMonitoring,
+        missingTickers: missingTickers.slice(0, 10), // Limit to first 10 for response size
       },
       lastCompletion: lastCompletionTime?.toISOString() || null,
       minutesSinceLastCompletion,
@@ -688,6 +740,13 @@ export async function GET(request: NextRequest) {
       filings: {
         orphanedCount: 0,
         unprocessedTotal: 0,
+      },
+      // NEW: TickerMonitoring health check
+      tickerMonitoring: {
+        totalRecords: 0,
+        activeRecords: 0,
+        userTickersWithoutMonitoring: 0,
+        missingTickers: [],
       },
       lastCompletion: null,
       minutesSinceLastCompletion: null,
