@@ -3,8 +3,33 @@ name: PR Validation Pipeline
 on:
   pull_request:
     types: [opened, synchronize, reopened]
+    paths:
+      # Only run on code changes, skip docs/config-only changes
+      - 'app/**'
+      - 'lib/**'
+      - 'components/**'
+      - 'services/**'
+      - 'prisma/**'
+      - 'cloudflare-cron/**'
+      - '__tests__/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'tsconfig.json'
+      - 'next.config.js'
   push:
     branches: [main]
+    paths:
+      - 'app/**'
+      - 'lib/**'
+      - 'components/**'
+      - 'services/**'
+      - 'prisma/**'
+      - 'cloudflare-cron/**'
+      - '__tests__/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'tsconfig.json'
+      - 'next.config.js'
 
 jobs:
   infrastructure-validation:

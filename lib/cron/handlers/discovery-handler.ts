@@ -212,13 +212,17 @@ export async function createBulkFetchJobs(
  * Phase 1: Discover new filings and queue fetch jobs
  *
  * Fast operation (<5s) that uses TICKER-CENTRIC discovery:
- * 1. Gets all unique tickers across ALL users
+ * 1. Gets all active tickers with TickerMonitoring records (creates if missing)
  * 2. Checks SEC RSS feeds ONCE per unique ticker
  * 3. For each new filing, finds ALL users tracking that ticker
  * 4. Queues ASYNC_FETCH_FILING jobs for EACH user (multi-user support)
  *
  * This ensures all users tracking a ticker get notified when a filing is discovered,
  * not just the first user processed.
+ *
+ * IMPORTANT: Uses getActiveTickersForMonitoring() to ensure TickerMonitoring records
+ * are created/updated. This was a critical bug fix - the 3-phase pipeline was skipping
+ * this step, causing the TickerMonitoring table to become empty.
  *
  * Does NOT fetch content or summarize - just discovers and queues
  */
@@ -237,8 +241,19 @@ export async function handleDiscovery(
     const { getPrismaClient } = await import('../../db/prisma');
     const prisma = getPrismaClient();
 
-    // STEP 1: Get all unique ticker symbols across ALL users
-    // This is more efficient than per-user discovery
+    // STEP 1: Ensure TickerMonitoring records exist via getActiveTickersForMonitoring
+    // CRITICAL: This was missing in the original 3-phase pipeline, causing
+    // TickerMonitoring table to become empty and discovery to fail silently.
+    // getActiveTickersForMonitoring() upserts records for all active tickers.
+    const { getActiveTickersForMonitoring } = await import('../../sec-edgar/ticker-monitoring');
+    const activeTickersFromMonitoring = await getActiveTickersForMonitoring();
+
+    discoveryLogger.info(`[${executionId}] TickerMonitoring records ensured`, {
+      activeTickerCount: activeTickersFromMonitoring.length,
+      tickers: activeTickersFromMonitoring.map(t => t.symbol)
+    });
+
+    // Also get unique ticker symbols for enrichment (includes any tickers not yet in monitoring)
     const uniqueTickerSymbols = await prisma.ticker.findMany({
       select: {
         symbol: true
@@ -250,7 +265,8 @@ export async function handleDiscovery(
 
     discoveryLogger.info(`[${executionId}] Unique tickers identified`, {
       uniqueTickerCount: tickerSymbols.length,
-      tickers: tickerSymbols
+      tickers: tickerSymbols,
+      monitoringRecords: activeTickersFromMonitoring.length
     });
 
     if (tickerSymbols.length === 0) {

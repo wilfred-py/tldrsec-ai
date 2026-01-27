@@ -1,15 +1,18 @@
 /**
  * Orphaned Filing Detector
  *
- * Detects and recovers filings that have processed=false but no corresponding
+ * Detects and recovers RSS filing checks that have processed=false but no corresponding
  * JobQueue entries. This can happen when:
- * - Discovery creates a filing but pipeline stalls before creating a job
+ * - Discovery creates a filing check but pipeline stalls before creating a job
  * - A job was deleted or failed without being recreated
- * - Database inconsistency between SecFiling and JobQueue tables
+ * - Database inconsistency between RssFilingCheck and JobQueue tables
+ *
+ * IMPORTANT: Uses RssFilingCheck table (which has the `processed` field), NOT SecFiling.
+ * The SecFiling table does not have a `processed` field.
  *
  * Features:
- * - Detects orphaned filings older than configurable threshold
- * - Creates ASYNC_FETCH_FILING jobs to recover orphaned filings
+ * - Detects orphaned filing checks older than configurable threshold
+ * - Creates ASYNC_SUMMARIZE_CACHED jobs to recover orphaned filings
  * - Rate-limited alerting to prevent duplicate notifications
  * - Configurable via environment variables
  *
@@ -150,7 +153,9 @@ export class OrphanedFilingDetector {
       );
     } else {
       const prisma = getPrismaClient();
-      unprocessedFilings = await prisma.secFiling.findMany({
+      // CRITICAL FIX: Use RssFilingCheck table (which has the `processed` field)
+      // NOT SecFiling (which does NOT have a `processed` field)
+      const rssFilingChecks = await prisma.rssFilingCheck.findMany({
         where: {
           processed: false,
           createdAt: { lt: ageThreshold },
@@ -158,12 +163,21 @@ export class OrphanedFilingDetector {
         select: {
           id: true,
           accessionNumber: true,
-          formType: true,
-          tickerId: true,
+          filingType: true,  // RssFilingCheck uses filingType, not formType
+          tickerMonitoringId: true,  // Use tickerMonitoringId as tickerId equivalent
           createdAt: true,
         },
         take: limit,
       });
+
+      // Map to the expected shape
+      unprocessedFilings = rssFilingChecks.map(f => ({
+        id: f.id,
+        accessionNumber: f.accessionNumber,
+        formType: f.filingType,
+        tickerId: f.tickerMonitoringId,
+        createdAt: f.createdAt,
+      }));
     }
 
     if (unprocessedFilings.length === 0) {
@@ -225,12 +239,14 @@ export class OrphanedFilingDetector {
 
     for (const filing of orphanedFilings) {
       const jobData: RecoveryJobData = {
-        jobType: 'ASYNC_FETCH_FILING',
+        // Use ASYNC_SUMMARIZE_CACHED since this is for RssFilingCheck entries
+        // that were discovered but not yet processed into summaries
+        jobType: 'ASYNC_SUMMARIZE_CACHED',
         payload: {
-          filingId: filing.id,
+          filingId: filing.id,  // This is now the RssFilingCheck ID
           accessionNumber: filing.accessionNumber,
           formType: filing.formType,
-          tickerId: filing.tickerId,
+          tickerId: filing.tickerId,  // This is tickerMonitoringId
           source: 'orphaned-filing-recovery',
         },
         priority: 5, // Higher priority for recovery
@@ -333,7 +349,7 @@ export class OrphanedFilingDetector {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          text: `:recycle: *Orphaned Filing Recovery*\n\nRecovered ${count} orphaned filing(s) by creating ASYNC_FETCH_FILING jobs.\n\nThese filings had \`processed=false\` but no active jobs in the queue.`,
+          text: `:recycle: *Orphaned Filing Recovery*\n\nRecovered ${count} orphaned filing(s) by creating ASYNC_SUMMARIZE_CACHED jobs.\n\nThese filings (from RssFilingCheck) had \`processed=false\` but no active jobs in the queue.`,
         }),
       });
     } catch (error) {

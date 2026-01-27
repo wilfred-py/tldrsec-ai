@@ -1,74 +1,96 @@
 # Project Progress
 
-**Date**: 2026-01-26
+**Date**: 2026-01-27
 **Branch**: feature/pipeline-resilience-zero-intervention
-**Status**: Active - Pipeline Resilience Zero-Intervention Implementation
+**Status**: GitHub Actions Optimization Complete
 
 ---
 
-## Current Session: Pipeline Resilience Zero-Intervention (2026-01-26)
+## Current Session: GitHub Actions Minutes Optimization ✅ (2026-01-27)
 
-**Plan**: `docs/plans/2026-01-26-pipeline-resilience-zero-intervention.md`
+**Goal**: Reduce GitHub Actions usage to fit within GitHub Pro 3,000 minute limit.
+
+**Analysis**: 7 workflows consuming ~1,990 minutes/month (at 2,000 limit capacity)
+
+**Optimizations Applied**:
+1. **Watchdog frequency reduced**: `*/10` → `*/30` (saves ~480 min/month)
+   - Safe because Cloudflare Worker (Layer 1) and Auto-Recovery (Layer 2) are primary triggers
+   - GitHub watchdog is "last line of defense" for external alerting only
+2. **Path filters added to quality-gates.yml**: Skip docs/config-only changes (saves ~150 min/month)
+3. **Path filters added to pr-validation.yml**: Skip docs/config-only changes (saves ~120 min/month)
+
+**Files Modified**:
+- `.github/workflows/pipeline-heartbeat-watchdog.yml` - Changed cron from `*/10` to `*/30`
+- `.github/workflows/quality-gates.yml` - Added path filters for code-only triggers
+- `.github/workflows/pr-validation.yml` - Added path filters for code-only triggers
+
+**Estimated Savings**: ~750 minutes/month → ~1,240 min/month usage (well within 3,000 Pro limit)
+
+---
+
+## Recently Completed Sessions
+
+### Pipeline Resilience Zero-Intervention ✅ (2026-01-26)
+
+**PR**: [#340](https://github.com/wilfred-py/tldrsec-ai/pull/340) - Merged to main
 
 **Goal**: Eliminate human intervention requirements for pipeline recovery by addressing three root causes of manual intervention.
 
-### Phase 1: Defensive CRON_SECRET Sanitization ✅
-**Issue**: CRON_SECRET contamination from `vercel env pull` adding literal `\n` characters causes HMAC auth failures and 13+ hour pipeline stalls.
+**Implementation**:
 
-**Root Cause**: Vercel CLI sometimes adds literal `\n` (hex `5c 6e`) to environment variables. Vercel side uses `.trim()` but Cloudflare Worker did not, causing HMAC mismatch.
+1. **Defensive CRON_SECRET Sanitization**:
+   - Created `lib/cron/secret-sanitization.ts` with automatic `.trim()` to prevent HMAC auth failures
+   - Updated `cloudflare-cron/index.js` (v2.7.0) to sanitize all CRON_SECRET usages
+   - Prevents recurring 13+ hour pipeline stalls from trailing `\n` characters
 
-**Fix**: Added defensive sanitization on Cloudflare Worker side to match Vercel's handling:
-- Created `lib/cron/secret-sanitization.ts` with `sanitizeCronSecret()` function
-- Removes literal `\n`, actual newlines, and trims whitespace
-- Updated `cloudflare-cron/index.js` (v2.7.0) to sanitize all 4 CRON_SECRET usages
+2. **Faster Orphan Detection**:
+   - Removed 5% sampling limit from `app/api/health/pipeline/route.ts`
+   - Orphan detection now runs on every request (<15 second detection time)
+   - Enables immediate recovery of orphaned filings
 
-**Files Created**:
-- `lib/cron/secret-sanitization.ts` (~65 lines)
-- `__tests__/unit/cron-secret-sanitization.test.ts` (18 tests)
+3. **External Heartbeat Watchdog**:
+   - Created `.github/workflows/pipeline-heartbeat-watchdog.yml` - runs every 10 minutes
+   - Monitors `/api/health/pipeline` endpoint independently
+   - Sends email alerts via Resend API if pipeline stalls (15+ min without completion)
+   - Last line of defense when all internal layers fail
+
+**Verification**:
+- ✅ 30/30 tests passing (18 unit + 12 integration)
+- ✅ Multi-perspective review: 6/6 approved (Product, Developer, QE, Security, DevOps, UX)
+- ✅ Cloudflare Worker secret sync completed
+- ✅ HMAC authentication verified (HTTP 202)
+- ✅ External watchdog test alert sent successfully
+
+**Files**:
+- Created: `lib/cron/secret-sanitization.ts`, `lib/monitoring/heartbeat-alert.ts`, `.github/workflows/pipeline-heartbeat-watchdog.yml`
+- Modified: `cloudflare-cron/index.js`, `app/api/health/pipeline/route.ts`
+- Tests: `__tests__/unit/cron-secret-sanitization.test.ts`, `__tests__/integration/heartbeat-watchdog.test.ts`
+
+**Impact**: Zero manual intervention required for pipeline recovery, MTTR reduced from hours to minutes
+
+### Phase 4: Pipeline Stall Recovery & Bug Fixes (2026-01-26) ✅
+**Issue**: Pipeline stalled for 5.5+ hours with 290 pending jobs, 0 processing, no completions.
+
+**Root Causes Discovered**:
+1. **Auto-recover cascade failure**: Health endpoint returns HTTP 503 for CRITICAL status, but auto-recover checked `response.ok` which is false for 503, causing it to throw an error instead of proceeding with recovery - exactly when recovery is needed most!
+2. **OrphanedFilingDetector using wrong table**: Code queried `SecFiling.processed` field which doesn't exist (the `processed` field is on `RssFilingCheck` table), causing Prisma errors.
+3. **Cloudflare Worker stopped executing**: Unknown reason caused all cron triggers to stop for 38+ minutes.
+
+**Fixes Applied**:
+1. **Auto-recover HTTP 503 handling**: Updated `getPipelineHealth()` in `app/api/cron/auto-recover/route.ts` to parse JSON body even for 503 responses (CRITICAL status), only failing on 500 (ERROR).
+2. **OrphanedFilingDetector table fix**: Updated `lib/cron/orphaned-filing-detector.ts` to query `rssFilingCheck` table instead of `secFiling`, and changed job type to `ASYNC_SUMMARIZE_CACHED`.
+3. **Cloudflare Worker redeploy**: Redeployed worker to restart cron triggers.
 
 **Files Modified**:
-- `cloudflare-cron/index.js` - Added `sanitizeCronSecret()` function, updated version to 2.7.0
+- `app/api/cron/auto-recover/route.ts` - Handle HTTP 503 from health endpoint
+- `lib/cron/orphaned-filing-detector.ts` - Use correct table (RssFilingCheck)
 
-**Tests**: 18/18 passing
-
-### Phase 2: Eliminate Orphan Detection Delay ✅
-**Issue**: Orphan detection only ran every 6th health check request (~60 second delay).
-
-**Root Cause**: Performance-focused sampling was over-conservative; query is actually lightweight (~5ms).
-
-**Fix**: Removed sampling logic from `app/api/health/pipeline/route.ts`:
-- Removed `ORPHAN_SAMPLE_RATE`, `orphanSampleCounter`, `lastKnownOrphanCount` variables
-- Removed `shouldRunOrphanCheck()` function
-- Orphan detection now runs on every request
-- Target: <15 seconds to detect orphaned filings
-
-**Files Modified**:
-- `app/api/health/pipeline/route.ts` - Removed sampling, orphan check runs every request
-
-### Phase 3: External Heartbeat Watchdog (GitHub Action) ✅
-**Issue**: If all 3 internal layers fail (Cloudflare + Auto-Recovery + Vercel backup), no external alert.
-
-**Fix**: Created GitHub Action that runs every 10 minutes as external watchdog:
-- Checks `https://tldrsec.app/api/health/pipeline` endpoint
-- Sends email alert via Resend API if no completion in 15+ minutes or CRITICAL status
-- Independent of all internal systems (last line of defense)
-
-**Files Created**:
-- `lib/monitoring/heartbeat-alert.ts` (~165 lines) - Alert email generator with HTML/plain text
-- `__tests__/integration/heartbeat-watchdog.test.ts` (12 tests)
-- `.github/workflows/pipeline-heartbeat-watchdog.yml` - GitHub Action workflow
-
-**Tests**: 12/12 passing
-
-### Verification Results
-- **Total Tests**: 30/30 passing (18 Phase 1 + 12 Phase 3)
-- **Build**: ✅ SUCCESS
-- **YAML Validation**: ✅ pipeline-heartbeat-watchdog.yml is valid
-
-### Manual Verification Pending
-- [ ] Trigger GitHub Action watchdog with `force_alert=true`
-- [ ] Verify alert email arrives at configured address
-- [ ] Test CRON_SECRET sanitization in Cloudflare after deploy
+**Recovery Results**:
+- Status: CRITICAL → DEGRADED
+- completedLast1h: 0 → 25+
+- minutesSinceLastCompletion: 335 → 2
+- Cron execution restored (every 5 minutes)
+- Backlog being processed (276 remaining)
 
 ---
 
@@ -439,146 +461,34 @@ Updated GitHub Actions workflows to reflect the Phase 5-8 pipeline redundancy en
 
 ---
 
-## Recently Completed: Eliminate Manual Pipeline Intervention - Phases 5-8 (2026-01-11)
+### Pipeline Intervention Elimination Phases 5-8 ✅ (2026-01-11)
+Three-layer pipeline redundancy implementation:
+- **Phase 5**: Enhanced `/api/health/pipeline` with cron gap + orphan detection (14 tests)
+- **Phase 6**: Auto-recovery integration with orphaned filing recovery (12 tests)
+- **Phase 7**: Vercel cron final backup at `/api/cron/final-backup` (16 tests)
+- **Phase 8**: Operations runbook at `docs/runbooks/pipeline-stall-recovery.md`
+**Total Tests**: 42 passing
 
-Completed final phases of the "Eliminate Manual Pipeline Intervention" plan implementing three-layer pipeline redundancy.
+### clerkMiddleware API Fix ✅ (2026-01-11)
+Updated `middleware.ts` to v6 API pattern with `createRouteMatcher()`.
 
-### Phase 5: Health Endpoint Enhancement ✅
-Enhanced `/api/health/pipeline` with cron execution gap and orphaned filing detection.
-
-**Changes**:
-- Added `cronExecution` field: `lastExecution`, `minutesSinceLastCron`, `gapsDetected`
-- Added `filings` field: `orphanedCount`, `unprocessedTotal`
-- Status thresholds: DEGRADED at 15+ min gap, CRITICAL at 20+ min gap
-- Orphaned filings (processed=false, no jobs, >10 min old) trigger DEGRADED
-
-**Files Modified**: `app/api/health/pipeline/route.ts`
-**Tests**: 14 passing in `__tests__/api/health/enhanced-pipeline-health.test.ts`
-
-### Phase 6: Auto-Recovery Integration ✅
-Enhanced `/api/cron/auto-recover` with orphaned filing recovery.
-
-**Changes**:
-- Added `OrphanedFilingDetector.checkAndRecover()` call in cleanup flow
-- Recovers filings with `processed=false` and no associated jobs
-- Creates ASYNC_SUMMARIZE_CACHED jobs for orphaned filings
-- Fixed test mock to avoid triggering cleanup path before DEGRADED branch
-
-**Files Modified**: `app/api/cron/auto-recover/route.ts`
-**Tests**: 12 passing in `__tests__/cron/comprehensive-auto-recover.test.ts`
-
-### Phase 7: Vercel Cron Final Backup ✅
-Created `/api/cron/final-backup` as last-resort emergency trigger.
-
-**Implementation**:
-- Runs every 30 minutes via Vercel cron
-- Checks for any pipeline execution in last 25 minutes
-- If none found: sends emergency Slack alert + triggers tier-aware pipeline
-- Logs execution with source `"final-backup"`
-
-**Files Created**:
-- `app/api/cron/final-backup/route.ts`
-- `__tests__/cron/final-backup.test.ts` (16 tests)
-
-**Files Modified**: `vercel.json` (added cron + function config)
-
-### Phase 8: Documentation & Runbooks ✅
-Created comprehensive operations documentation.
-
-**Files Created**:
-- `docs/runbooks/pipeline-stall-recovery.md` - Full operations runbook
-
-**Files Modified**:
-- `CLAUDE.md` - Added redundancy architecture, health/recovery commands
-- `.claude/history/TIMELINE.md` - Added Phases 5-8 entries
-
-**Total Tests**: 42 passing across all phases
+### Critical Job Queue Database Bug Fix ✅ (2026-01-10)
+**Root Cause**: Job queue importing `prisma` directly instead of `getPrismaClient()`.
+**Fix**: Updated `lib/job-queue/index.ts` with `getPrismaClient()` calls.
+**Impact**: Restored 394+ stuck jobs (44+ hours backlog).
 
 ---
 
-## Recently Completed: clerkMiddleware API Fix (2026-01-11)
+## Archived Sessions (See TIMELINE.md for Full Details)
 
-Fixed TypeScript error in `middleware.ts` using deprecated API pattern. Updated to v6 API pattern using `createRouteMatcher()`.
+For complete technical details of projects older than 30 days, see the weekly archive files in `.claude/history/`:
+- **December 2025**: 5 weekly archives with 100+ completed projects
+- **November 2025**: 4 weekly archives
+- **October 2025**: 2 weekly archives
 
-**Files Modified**: `middleware.ts`
-**Verification**: ✅ TypeScript errors resolved
-
----
-
-## Recently Completed: Critical Job Queue Database Bug Fix (2026-01-10)
-
-Identified and resolved critical bug causing 394+ pending jobs to remain stuck despite multiple redeployments.
-
-**Root Cause**: Job queue system was importing `prisma` directly instead of using `getPrismaClient()` function, resulting in undefined Prisma client during runtime. This caused all job creation and processing operations to fail silently.
-
-**Error Evidence**:
-```
-Error adding job to queue: TypeError: Cannot read properties of undefined (reading 'create')
-at Function.create (/lib/job-queue/index.ts:220:36)
-```
-
-**Solution**: 
-- ✅ Updated `lib/job-queue/index.ts` to use `getPrismaClient()` instead of direct `prisma` import
-- ✅ Replaced all 10+ `prisma.` calls with `getPrismaClient().` calls
-- ✅ Vercel production deployment with fix completed
-- ✅ E2E pipeline test successful - job creation now working
-
-**Impact**: 
-- 394 pending jobs (323 ASYNC_SUMMARIZE_CACHED + 71 ASYNC_DISCOVER_FILINGS)
-- Jobs stuck for 44+ hours (oldest from 2026-01-09T01:16:47.107Z)
-- Pipeline was accepting cron triggers but unable to create/process jobs
-
-**Current Status**: Fix deployed to production, job creation restored, pending backlog ready for processing.
+Recent highlights include SEC filing quality enhancements, pipeline resilience improvements, dashboard redesigns, and comprehensive auth/onboarding flows. All archived projects maintain full technical documentation including root causes, implementation details, files modified, and verification results
 
 ---
 
-## Recently Completed: Summary Generation Quality Improvement
-
-### Phase 5: Missing Extractors (SC 13G, SC 13D, 424B2) ✅ (2026-01-09)
-
-**Goal**: Add data extractors for SC 13G (passive ownership), SC 13D (activist ownership), and 424B2 (prospectus supplement).
-
-**Changes Made**:
-1. Created 3 new data extractors:
-   - `lib/email/sc13g-data-extractor.ts` - Passive beneficial ownership (>5%) extraction
-   - `lib/email/sc13d-data-extractor.ts` - Activist beneficial ownership extraction with activist intent detection
-   - `lib/email/424b2-data-extractor.ts` - Prospectus supplement (debt/equity/structured notes)
-
-2. Key extraction features:
-   - **SC 13G**: filerName, ownershipPercentage, sharesOwned, filingPurpose, isAmendment
-   - **SC 13D**: filerName, ownershipPercentage, purpose, intentions[], isActivist, isGroupFiling
-   - **424B2**: offeringType, offeringAmount, interestRate, maturityDate, linkedTo, underwriters[]
-
-3. Updated `lib/email/extractor-registry.ts` (now supports 16 form types with aliases)
-
-**Files Added**:
-- `lib/email/sc13g-data-extractor.ts` (~240 lines)
-- `lib/email/sc13d-data-extractor.ts` (~360 lines)
-- `lib/email/424b2-data-extractor.ts` (~425 lines)
-- `__tests__/email/extractors/sc13g-data-extractor.test.ts` (15 tests)
-- `__tests__/email/extractors/sc13d-data-extractor.test.ts` (17 tests)
-- `__tests__/email/extractors/424b2-data-extractor.test.ts` (16 tests)
-
-**Verification**: ✅ 48 Phase 5 tests passing, 149 total extractor tests
-
-**Next Step**: Plan complete - all phases implemented
-
-### Fix Orphaned Filings Pipeline ✅ VERIFIED AND WORKING (2026-01-09)
-
-**Plan**: [2026-01-08-fix-orphaned-filings-pipeline.md](docs/plans/2026-01-08-fix-orphaned-filings-pipeline.md)
-
-**Root Cause**: Discovery handler only checked RSS feeds, not `processed=false` entries in RssFilingCheck table. When 3-phase pipeline is enabled, legacy backlog processing code is never reached.
-
-**Fix**: Added STEP 3.5 to discovery-handler.ts - calls `getUnprocessedFilings(50)` after RSS check, merges with RSS results (deduplicating by accessionNumber), and marks filings as processed after job creation.
-
-**Schema Fixes Applied During Verification**:
-- Added `scheduledFor: new Date()` - Required field in JobQueue schema
-- Changed `maxAttempts` → `maxRetries` - Correct field name per schema
-
-**Files Modified**:
-- `lib/cron/handlers/discovery-handler.ts` - Unprocessed filing recovery + schema field fixes
-
----
-
-*Last Updated: 2026-01-26 (Pipeline Resilience Zero-Intervention Implementation)*
-*Older completed projects archived to .claude/history/ - See TIMELINE.md for full history*
+*Last Updated: 2026-01-27 (GitHub Actions optimization session)*
+*Completed projects older than 30 days are archived to .claude/history/ - See TIMELINE.md for complete historical context*

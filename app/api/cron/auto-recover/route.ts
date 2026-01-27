@@ -137,10 +137,22 @@ async function getPipelineHealth(): Promise<PipelineHealth> {
     headers: { 'Cache-Control': 'no-cache' },
   });
 
-  if (!response.ok) {
+  // CRITICAL FIX: Health endpoint returns 503 when CRITICAL, 500 when ERROR
+  // We need to parse the JSON body even for non-200 responses since that's
+  // exactly when auto-recovery is most needed!
+  //
+  // HTTP Status codes from health endpoint:
+  // - 200: HEALTHY or DEGRADED
+  // - 503: CRITICAL (pipeline needs immediate attention)
+  // - 500: ERROR (health check itself failed)
+  //
+  // Only fail if we can't get a valid response at all
+  if (response.status === 500) {
     throw new Error(`Health check failed: ${response.status}`);
   }
 
+  // For 200 (HEALTHY/DEGRADED) and 503 (CRITICAL), parse the JSON body
+  // This allows auto-recovery to take action on CRITICAL status
   return response.json() as Promise<PipelineHealth>;
 }
 
