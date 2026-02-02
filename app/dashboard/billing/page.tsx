@@ -130,7 +130,46 @@ export default function BillingPage() {
 
   const handlePlanChange = async (newPlan: string) => {
     if (!subscription) return;
-    
+
+    const planType = newPlan.toUpperCase() as PlanType;
+    const planOrder = { FREE: 0, PRO: 1, MAX: 2 };
+    const currentOrder = planOrder[subscription.planType];
+    const targetOrder = planOrder[planType];
+    const isUpgrade = targetOrder > currentOrder;
+
+    // For upgrades to paid plans, go directly to checkout
+    if (isUpgrade && planType !== 'FREE') {
+      setUpdating(true);
+      try {
+        const response = await fetch('/api/user/subscription', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            planType,
+            billingInterval: 'monthly'
+          })
+        });
+
+        if (!response.ok) {
+          const data = await response.json();
+          throw new Error(data.error || 'Failed to create checkout session');
+        }
+
+        const { checkoutUrl } = await response.json();
+        if (checkoutUrl) {
+          window.location.href = checkoutUrl;
+          return;
+        }
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Checkout failed');
+        setUpdating(false);
+      }
+      return;
+    }
+
+    // For downgrades, use PUT
     setUpdating(true);
     try {
       const response = await fetch('/api/user/subscription', {
@@ -139,17 +178,46 @@ export default function BillingPage() {
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          planType: newPlan.toUpperCase(),
-          isActive: true
+          planType
         })
       });
 
+      const data = await response.json();
+
       if (!response.ok) {
-        throw new Error('Failed to update subscription');
+        // If API says we need checkout (e.g., upgrade), redirect
+        if (data.action === 'checkout') {
+          const checkoutResponse = await fetch('/api/user/subscription', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              planType: data.planType,
+              billingInterval: 'monthly'
+            })
+          });
+
+          if (checkoutResponse.ok) {
+            const { checkoutUrl } = await checkoutResponse.json();
+            if (checkoutUrl) {
+              window.location.href = checkoutUrl;
+              return;
+            }
+          }
+        }
+        throw new Error(data.error || 'Failed to update subscription');
       }
 
-      const updatedSubscription = await response.json();
-      setSubscription(updatedSubscription);
+      // Show success message if present
+      if (data.message) {
+        toast.success('Plan Updated', {
+          description: data.message,
+          duration: 5000,
+        });
+      }
+
+      setSubscription(data);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Update failed');
     } finally {
