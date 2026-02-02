@@ -10,11 +10,6 @@ jest.mock('@clerk/nextjs', () => ({
   ClerkProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }));
 
-// Mock admin status
-jest.mock('@/lib/hooks/use-admin-status', () => ({
-  useAdminStatus: () => ({ isAdmin: false, loading: false })
-}));
-
 // Mock next/navigation
 jest.mock('next/navigation', () => ({
   usePathname: () => '/dashboard',
