@@ -45,12 +45,20 @@ interface UserForEligibility {
 
 /**
  * Normalize subscription tier to PRO or HOBBY
+ * Maps new unified tiers: FREE→HOBBY, PRO→PRO, MAX→PRO
+ * Also handles legacy tiers for backwards compatibility
  */
 function normalizeTier(tier: string): NormalizedTier {
   const upperTier = tier?.toUpperCase() || '';
-  if (upperTier === 'PRO' || upperTier === 'PROFESSIONAL' || upperTier === 'ENTERPRISE' || upperTier === 'INSTITUTION') {
+  // New unified tiers
+  if (upperTier === 'PRO' || upperTier === 'MAX') {
     return 'PRO';
   }
+  // Legacy tiers (for backwards compatibility)
+  if (upperTier === 'PROFESSIONAL' || upperTier === 'ENTERPRISE' || upperTier === 'INSTITUTION') {
+    return 'PRO';
+  }
+  // FREE, HOBBY, and anything else defaults to HOBBY
   return 'HOBBY';
 }
 
