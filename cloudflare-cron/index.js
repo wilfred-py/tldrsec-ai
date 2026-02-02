@@ -288,14 +288,14 @@ export default {
       console.log(`[${executionId}] Scheduled event triggered with cron expression: ${cronExpression}`);
 
       // Route based on cron expression
+      // "*/3 * * * *" = Summarize-only processing (clears AI job backlog faster)
       // "*/5 * * * *" = Pipeline processing (every 5 minutes)
-      // "*/10 * * * *" = 10-minute interval Slack summary (detailed verification report)
       // "*/15 * * * *" = Auto-recovery health check and remediation
       // "0 22 * * *" = Daily Slack report (9 AM AEST = 22:00 UTC)
 
-      if (cronExpression === '*/10 * * * *') {
-        // 10-minute interval Slack summary (detailed verification report)
-        return await this.handleIntervalSummary(event, env, ctx);
+      if (cronExpression === '*/3 * * * *') {
+        // Summarize-only processing (every 3 minutes) - clears AI job backlog faster
+        return await this.handleSummarizeOnly(event, env, ctx);
       }
 
       if (cronExpression === '*/15 * * * *') {
@@ -526,6 +526,65 @@ export default {
       console.error(`[${executionId}] Auto-recovery error: ${error.message}`);
       recordHandlerExecution('autoRecovery', false);
       await alertOnHandlerFailure('autoRecovery', error, env);
+      return { success: false, executionId, duration, error: error.message };
+    }
+  },
+
+  // Handle summarize-only processing (every 2 minutes)
+  // This dedicated handler clears the AI job backlog faster than the full pipeline
+  async handleSummarizeOnly(event, env, ctx) {
+    const executionId = `summarize-only-${Date.now()}`;
+    const startTime = Date.now();
+
+    console.log(`[${executionId}] ====== SUMMARIZE-ONLY PROCESSING ======`);
+
+    try {
+      const url = `${env.PUBLIC_URL}/api/cron/process-filing-queue?jobTypes=ASYNC_SUMMARIZE_CACHED`;
+
+      // Generate HMAC signature
+      const timestamp = Date.now();
+      const payload = `${timestamp}:GET:/api/cron/process-filing-queue`;
+      const encoder = new TextEncoder();
+      const key = await crypto.subtle.importKey(
+        'raw',
+        encoder.encode(sanitizeCronSecret(env.CRON_SECRET)),
+        { name: 'HMAC', hash: 'SHA-256' },
+        false,
+        ['sign']
+      );
+      const signature = await crypto.subtle.sign('HMAC', key, encoder.encode(payload));
+      const signatureHex = Array.from(new Uint8Array(signature))
+        .map(byte => byte.toString(16).padStart(2, '0'))
+        .join('');
+
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Execution-Id': executionId,
+          'X-Cloudflare-Worker': 'tldrsec-cron',
+          'User-Agent': 'Cloudflare-Worker/1.0 SummarizeOnly',
+          'x-hmac-signature': signatureHex,
+          'x-hmac-timestamp': timestamp.toString(),
+        },
+      });
+
+      const duration = Date.now() - startTime;
+
+      if (response.ok) {
+        const result = await response.json();
+        console.log(`[${executionId}] Summarize-only completed in ${duration}ms`, {
+          jobsProcessed: result.jobsProcessed || 0,
+        });
+        return { success: true, executionId, duration, jobsProcessed: result.jobsProcessed };
+      } else {
+        const errorText = await response.text();
+        console.error(`[${executionId}] Summarize-only failed: ${response.status} - ${errorText}`);
+        return { success: false, executionId, duration, error: errorText };
+      }
+    } catch (error) {
+      const duration = Date.now() - startTime;
+      console.error(`[${executionId}] Summarize-only error: ${error.message}`);
       return { success: false, executionId, duration, error: error.message };
     }
   },
