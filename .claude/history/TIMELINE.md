@@ -13,6 +13,8 @@ This file provides a chronological index of all completed projects. For detailed
 
 | Date | Project | Status |
 |------|---------|--------|
+| 2026-01-27 | Unsent Email Recovery (47 completed summaries resent, scripts created) | ✅ |
+| 2026-01-27 | TickerMonitoring Root Cause Fix (3-phase pipeline missing upsert, health endpoint enhancement) | ✅ |
 | 2026-01-27 | GitHub Actions Minutes Optimization (watchdog */30, path filters for quality-gates + pr-validation) | ✅ |
 | 2026-01-26 | Pipeline Resilience Zero-Intervention (CRON_SECRET sanitization, orphan detection, GitHub Action watchdog) | ✅ |
 | 2026-01-25 | Stripe CTA Dashboard Integration (UpgradeCTASection + direct Stripe checkout, $199/$349 pricing) | ✅ |
@@ -168,7 +170,7 @@ This file provides a chronological index of all completed projects. For detailed
 - **Current PROGRESS.md Lines**: ~500 (threshold: 500)
 - **Last Sync**: 2026-01-27
 - **Archive System**: ✅ ACTIVE
-- **Last Compaction**: 2026-01-27 (Phases 5-8 consolidated, GitHub Actions optimization added)
+- **Last Compaction**: 2026-01-27 (Unsent email recovery session)
 
 **Archives**:
 - `29-Dec-2025.md` - Cloudflare Cron Fix, Email Quality, Form 4 Templates, JSON Parsing Phase 5

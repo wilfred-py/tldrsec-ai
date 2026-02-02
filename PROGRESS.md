@@ -1,12 +1,140 @@
 # Project Progress
 
-**Date**: 2026-01-27
+**Date**: 2026-01-28
 **Branch**: feature/pipeline-resilience-zero-intervention
-**Status**: GitHub Actions Optimization Complete
+**Status**: Pipeline Stall Recovery Complete
 
 ---
 
-## Current Session: GitHub Actions Minutes Optimization ✅ (2026-01-27)
+## Current Session: Pipeline Stall Recovery + Throughput Optimization ✅ (2026-01-28)
+
+**Issue**: Pipeline stalled for 12+ hours (731 minutes since last completion) with 799 pending jobs and 0 processing. After initial recovery, throughput was only 12 jobs/hour (73 hours to clear backlog).
+
+**Root Causes Identified**:
+
+1. **vercel.json Invalid JSON**: Trailing commas on lines 32 and 122 made the file invalid JSON
+   - Line 32: After `email/welcome/route.ts` config block
+   - Line 122: After last item in `rewrites` array
+   - Impact: Could cause Vercel deployment/configuration failures
+
+2. **Cloudflare Worker Crons Not Firing**: Worker crons had stopped executing
+   - `cronExecution.lastExecution: null` in health endpoint
+   - `cronExecution.gapsDetected: 1`
+   - Resolution: Redeployed worker with `wrangler deploy`
+
+3. **CRON_SECRET Sync**: Re-synced 80-character secret to ensure Cloudflare and Vercel match
+
+4. **Low Summarize Throughput**: `ASYNC_SUMMARIZE_CACHED` batch size = 1 (intentional due to 30-270s AI processing time), but only triggered every 5 minutes = 12 jobs/hour max
+
+**Fixes Applied**:
+
+1. **Fixed vercel.json** - Removed trailing commas (lines 32, 122)
+2. **Redeployed Cloudflare Worker** - Restored cron schedule execution
+3. **Synced CRON_SECRET** - Used `wrangler secret put` to update Cloudflare Worker
+4. **Added Dedicated Summarize Cron** - New */3 cron for summarize-only processing
+   - Replaced */10 interval Slack summary (less critical) with */3 summarize-only
+   - New cron schedule: `*/3, */5, */15, daily` (4 crons, under Cloudflare 5-limit)
+   - Created `handleSummarizeOnly()` handler in index.js
+5. **Manual Backlog Processing** - Triggered 50+ manual summarize batches
+
+**Throughput Improvement**:
+- Before: 12 summarize jobs/hour (only from */5 pipeline)
+- After: ~32 summarize jobs/hour (*/3 summarize-only + */5 pipeline)
+- Effective: 130+ completions/hour observed
+
+**Recovery Results**:
+- Status: CRITICAL → HEALTHY
+- minutesSinceLastCompletion: 731 → 0
+- completedLast1h: 0 → 130+
+- Backlog: 880 → 719 (clearing at ~130/hour)
+- cronExecution.gapsDetected: 1 → 0
+
+**Files Modified**:
+- `vercel.json` - Fixed invalid JSON (trailing commas)
+- `cloudflare-cron/wrangler.toml` - Added */3 summarize cron, removed */10 Slack summary
+- `cloudflare-cron/index.js` - Added `handleSummarizeOnly()` handler
+
+**Verification**:
+- ✅ HMAC authentication working (HTTP 202)
+- ✅ Cloudflare Worker deployed with optimized cron schedules
+- ✅ Jobs completing at 130+/hour (was 12/hour)
+- ✅ Pipeline status HEALTHY
+
+---
+
+## Previous Session: Unsent Email Recovery ✅ (2026-01-27)
+
+**Issue**: 47 completed summaries had `sentToUser: false` - emails never delivered.
+
+**Investigation Findings**:
+- 756 summaries with null `processingStatus` are LEGACY records (already sent before status tracking added)
+- 47 COMPLETED summaries with `sentToUser: false` were the actual backlog
+- All 47 had identical `processingCompletedAt` timestamp (2026-01-02T08:16:56.190Z) - indicating bulk status update
+- Original creation dates: Nov 28 (23), Dec 15 (17), Dec 26 (5), Jan 1 (2)
+- Root cause: Bulk migration to COMPLETED status didn't trigger email delivery
+
+**Scripts Created**:
+- `scripts/investigate-unsent.ts` - Analyze unsent summaries metadata, model versions, date distribution
+- `scripts/resend-unsent-emails.ts` - Resend emails with tracking updates and delivery records
+
+**Results**:
+- ✅ 46 emails sent successfully
+- ⚠️ 1 skipped (orphaned ticker - user deleted the ticker)
+- ✅ Database updated: `sentToUser: true`, `totalEmailsSent` incremented
+- ✅ SummaryEmailDelivery records created for audit trail
+
+**Usage**: `npx tsx scripts/resend-unsent-emails.ts [--dry-run] [--limit=N]`
+
+---
+
+## Previous Session: TickerMonitoring Root Cause Fix ✅ (2026-01-27)
+
+**Issue**: SEC filing discovery silently skipping all tickers because TickerMonitoring table was empty.
+
+**Root Cause Discovered**:
+The 3-phase async pipeline (default since 2025-12-24) bypassed the code path that creates TickerMonitoring records:
+1. **Legacy pipeline** (`runSecFilingMonitoring()`) calls `getActiveTickersForMonitoring()` which **UPSERTS** TickerMonitoring records
+2. **3-phase pipeline** (`handleDiscovery()`) only called `checkForNewFilings()` which **READS** from TickerMonitoring
+3. `checkForNewFilings()` silently skips any ticker without a TickerMonitoring record (line 90-97 in sec-filing-service.ts)
+4. Result: Discovery phase found 0 filings because there were no TickerMonitoring records to check
+
+**Critical Code Path Analysis**:
+- `sec-filing-service.ts:90-97` - Silent skip: `if (!tickerMonitoring) { continue; }`
+- `sec-filing-service.ts:156-221` - `runSecFilingMonitoring()` calls `getActiveTickersForMonitoring()` (UPSERTS)
+- `ticker-monitoring.ts:31-168` - `getActiveTickersForMonitoring()` upserts via `upsertTickerMonitoringWithLock()`
+- `tier-aware/route.ts:155-157` - 3-phase became default on 2025-12-24
+
+**Fixes Applied**:
+
+1. **Discovery Handler Fix** (`lib/cron/handlers/discovery-handler.ts`):
+   - Added call to `getActiveTickersForMonitoring()` at start of discovery phase
+   - Ensures TickerMonitoring records are created BEFORE RSS checking
+   - Lines 244-254: New STEP 1 with logging
+
+2. **Health Endpoint Enhancement** (`app/api/health/pipeline/route.ts`):
+   - Added `tickerMonitoring` section to health response
+   - Detects empty TickerMonitoring table as CRITICAL status
+   - Reports: totalRecords, activeRecords, userTickersWithoutMonitoring, missingTickers
+
+3. **Database Cleanup** - Removed duplicate GOOG ticker (user already had GOOGL tracked)
+
+**Verification**:
+- ✅ 15/15 user tickers now have TickerMonitoring records
+- ✅ 15/15 user tickers have CikMapping records
+- ✅ Health endpoint reports HEALTHY status with tickerMonitoring metrics
+- ✅ TypeScript compilation passes for modified files
+
+**Files Modified**:
+- `lib/cron/handlers/discovery-handler.ts` - Added `getActiveTickersForMonitoring()` call at discovery start
+- `app/api/health/pipeline/route.ts` - Added TickerMonitoring health check section
+
+**Impact**: Pipeline will now correctly discover filings for all tracked tickers instead of silently skipping them all
+
+---
+
+## Recently Completed Sessions
+
+### GitHub Actions Minutes Optimization ✅ (2026-01-27)
 
 **Goal**: Reduce GitHub Actions usage to fit within GitHub Pro 3,000 minute limit.
 
@@ -27,8 +155,6 @@
 **Estimated Savings**: ~750 minutes/month → ~1,240 min/month usage (well within 3,000 Pro limit)
 
 ---
-
-## Recently Completed Sessions
 
 ### Pipeline Resilience Zero-Intervention ✅ (2026-01-26)
 
@@ -490,5 +616,5 @@ Recent highlights include SEC filing quality enhancements, pipeline resilience i
 
 ---
 
-*Last Updated: 2026-01-27 (GitHub Actions optimization session)*
+*Last Updated: 2026-01-27 (Unsent email recovery session)*
 *Completed projects older than 30 days are archived to .claude/history/ - See TIMELINE.md for complete historical context*
