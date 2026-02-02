@@ -2,11 +2,71 @@
 
 **Date**: 2026-01-28
 **Branch**: feature/pipeline-resilience-zero-intervention
-**Status**: Pipeline Stall Recovery Complete
+**Status**: Subscription Management Complete
 
 ---
 
-## Current Session: Pipeline Stall Recovery + Throughput Optimization ✅ (2026-01-28)
+## Current Session: Unified Subscription Tiers + Billing Downgrade Fix ✅ (2026-01-28)
+
+**Issue 1**: 405 PUT errors when trying to downgrade from MAX plan on billing page.
+
+**Root Cause**: `/api/user/subscription` route only had GET and POST handlers - missing PUT handler for plan changes and cancellation toggles.
+
+**Issue 2**: Prisma enum mismatch between `SubscriptionTier` (FREE/PROFESSIONAL/ENTERPRISE/INSTITUTION/HOBBY/PRO) and `PlanType` (FREE/PRO/MAX).
+
+**Root Cause**: Two different enums required mapping function `mapPlanToSubscriptionTier()` to convert between them, causing type complexity.
+
+**Fixes Applied**:
+
+1. **Added PUT Handler** (`app/api/user/subscription/route.ts`):
+   - Cancellation toggle: Updates `cancelAtPeriodEnd` in both Stripe and database
+   - Downgrade to FREE: Cancels Stripe subscription at period end
+   - Downgrade between paid plans (MAX→PRO): Updates Stripe subscription with proration
+   - Upgrades: Returns 400 with `action: 'checkout'` to redirect to Stripe checkout
+
+2. **Enhanced Billing Page** (`app/dashboard/billing/page.tsx`):
+   - For upgrades: Direct POST to create checkout session
+   - For downgrades: Use PUT to update subscription
+   - Shows success toast messages on plan changes
+   - Handles `action: 'checkout'` response from API
+
+3. **Unified Subscription Enums** (`prisma/schema.prisma`):
+   - Changed `SubscriptionTier` from `FREE/PROFESSIONAL/ENTERPRISE/INSTITUTION/HOBBY/PRO` to `FREE/PRO/MAX`
+   - Now matches `PlanType` enum exactly - no mapping needed
+   - Removed `mapPlanToSubscriptionTier()` function
+
+4. **Data Migration** (`scripts/migrate-to-unified-tiers.ts`):
+   - Migrated HOBBY→FREE (1 user)
+   - Would migrate INSTITUTION/PROFESSIONAL/ENTERPRISE→PRO (none found)
+   - Final distribution: 2 FREE users, 1 PRO user
+
+5. **Updated Tier Normalization** (`lib/cron/tier-eligibility.ts`):
+   - Maps PRO/MAX → PRO processing tier (5-minute frequency)
+   - Maps FREE → HOBBY processing tier (120-minute frequency)
+   - Maintains backwards compatibility with legacy tier names
+
+**Files Modified**:
+- `app/api/user/subscription/route.ts` - Added PUT handler, removed mapping function
+- `app/dashboard/billing/page.tsx` - Enhanced plan change logic
+- `prisma/schema.prisma` - Unified `SubscriptionTier` enum to FREE/PRO/MAX
+- `lib/cron/tier-eligibility.ts` - Updated normalization with new tiers
+- `scripts/migrate-to-unified-tiers.ts` - Created data migration script
+
+**Verification**:
+- ✅ Prisma client generated successfully
+- ✅ No TypeScript errors on subscription routes
+- ✅ Data migration completed (1 HOBBY→FREE user)
+- ✅ Lint passes without tier-related errors
+
+**Benefits**:
+- **Type Safety**: No more mapping errors between enums
+- **Simplicity**: Single source of truth for subscription tiers
+- **Consistency**: Stripe plans and database tiers use identical values
+- **Backwards Compatibility**: Legacy tier names still work through normalization
+
+---
+
+## Previous Session: Pipeline Stall Recovery + Throughput Optimization ✅ (2026-01-28)
 
 **Issue**: Pipeline stalled for 12+ hours (731 minutes since last completion) with 799 pending jobs and 0 processing. After initial recovery, throughput was only 12 jobs/hour (73 hours to clear backlog).
 
@@ -317,294 +377,6 @@ Updated Pro Monthly product description in Stripe Dashboard from feature list to
 
 ---
 
-## Previous Session: Cloudflare Worker Secret Sync Automation Documentation ✅ (2026-01-23)
-
-**Issue**: CRON_SECRET desynchronization between Vercel and Cloudflare Worker after PR merges causes HMAC authentication failures and pipeline stalls.
-
-**Solution Documented**:
-1. Added comprehensive troubleshooting documentation to CLAUDE.md for CRON_SECRET trailing `\n` issue
-2. Updated push-pr-review-merge workflow with mandatory Step 7 for Cloudflare Worker secret sync
-3. Added npm scripts: `cloudflare:sync-secret` and `cloudflare:sync-secret:verify`
-
-**Documentation Added**:
-- **CLAUDE.md**: 103-line section covering problem description, detection methods, fix procedures, prevention strategies
-- **push-pr-review-merge.md**: New Step 7 with sync process, verification, expected output, error handling
-- **package.json**: Two new npm scripts for automated secret synchronization
-
-**Prevention Mechanism**: Mandatory post-merge secret sync ensures Cloudflare Worker and Vercel always have matching CRON_SECRET values, preventing future HMAC auth failures and pipeline stalls.
-
----
-
-## SEC Filing Summary & Email Quality Enhancement - All 4 Phases Complete ✅ (2026-01-22)
-
-**Plan**: `docs/plans/2026-01-20-fix-filing-summary-email-quality.md`
-
-**Overview**: Comprehensive enhancement resolving 8 quality gaps in SEC filing summarization and email delivery.
-
-### Phase 1: Data Storage Foundation ✅
-**Issue**: AI extracted perfect structured data (filerName, transactions, holdings) but `summaryJSON` was never stored in database.
-
-**Root Cause**: `lib/ai/summarize.ts:852` had `summaryText: parsedResult.data.summary` but missing `summaryJSON: parsedResult.data`.
-
-**Fix**: Added ONE critical line storing `summaryJSON: parsedResult.data` alongside `summaryText`.
-
-**Files**: `lib/ai/summarize.ts` (+1 line)
-**Tests**: 4/4 passing in `__tests__/lib/ai/summarize-data-storage.test.ts`
-
-### Phase 2: Language Quality Enhancement ✅
-**Issue**: "dumped" appeared in 100% of Form 4/144 summaries (NVDA, GOOGL, KO emails Jan 7-16).
-
-**Root Cause**: Production prompt in `summaryGenerationService.ts` instructed `"Active voice: 'Bezos dumped $3B'"`.
-
-**Fix**:
-- Added verb variety guidance to `unified-prompts.ts`: "sold", "divested", "offloaded", "shed", "liquidated"
-- Added acronym expansion: "TSR (Total Shareholder Return)", "PSU (Performance Stock Units)"
-- Removed repetitive "dumped" language
-
-**Files**: `lib/ai/prompts/unified-prompts.ts` (~30 lines)
-**Tests**: 5/5 passing in `__tests__/lib/ai/prompt-language-quality.test.ts`
-**Verification**: 5 test summaries confirmed varied vocabulary
-
-### Phase 3: Email Formatting & Amendment Indicators ✅
-**Issue**: Email summaries were long paragraphs with no structure. Amended filings had no [AMENDED] indicator.
-
-**Fix**:
-- Enhanced AI prompts to generate markdown (## headers, bullet lists, paragraph breaks)
-- Created `EmailSubjectService` with [AMENDED] detection for /A filings
-- Updated templates to use `markdownToHtml()` for proper rendering
-
-**Files**:
-- `lib/ai/prompts/unified-prompts.ts` (markdown guidance)
-- `lib/email/subject-service.ts` (new service)
-- `components/ui/email/templates/form4-minimalist-template.tsx` (rendering)
-
-**Tests**: 7/7 passing in `__tests__/components/email/email-formatting.test.ts`
-**Manual Verification**: 4 test emails sent (TSLA, AAPL Form 4/A, NVDA 10-K/A, MSFT 8-K) - all rendered correctly
-
-### Phase 4: Duplicate Email Prevention ✅
-**Issue**: Same summary sent twice to same user during concurrent cron job execution.
-
-**Root Cause**: Cron overlap (Cloudflare every 10 min + Vercel backup every 30 min) caused race conditions.
-
-**Fix**: Implemented PostgreSQL advisory lock mechanism:
-- Added `pg_try_advisory_lock` at start of `sendEmailSummary()`
-- Lock key: `email:${userId}:${tickers}`
-- Automatic release in `finally` block
-- Three-layer prevention: Advisory locks + DB unique constraints + transaction atomicity
-
-**Files**: `services/filing/sendEmailSummary.ts` (+50 lines: lock helpers + integration)
-**Verification**: Advisory lock script confirmed 2/3 concurrent requests blocked successfully
-
-### Quality Metrics
-- **Test Coverage**: 16/16 tests passing (100%)
-- **Build Status**: ✅ TypeScript compilation SUCCESS
-- **8 Quality Gaps**: All resolved
-- **Backward Compatible**: Old summaries still work
-
-### Three-Layer Duplicate Prevention
-1. **Database Layer**: `SummaryEmailDelivery` unique constraint on `[userId, summaryId]`
-2. **Transaction Layer**: `createMany` with `skipDuplicates: true` + atomic email send
-3. **Advisory Lock Layer**: `pg_try_advisory_lock` prevents cron overlap
-
-**Production Ready**: ✅ Deploy and monitor for 24-48 hours
-
----
-
-### Cloudflare Build Fix - Onboarding Dynamic Rendering ✅ (2026-01-21)
-
-**Issue**: Cloudflare Pages build failing with error: "useSession can only be used within the <ClerkProvider /> component" during static page generation of `/onboarding`.
-
-**Root Cause**: Next.js was attempting to statically prerender the `/onboarding` page during build. The page uses Clerk's `useSession` hook which requires `ClerkProvider`, but during Cloudflare Pages build, environment variables like `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` are not available, so ClerkProvider skips initialization.
-
-**Fix Applied**:
-1. Renamed `page.tsx` to `onboarding-client.tsx` (client component with all UI logic)
-2. Created new server component `page.tsx` that exports `dynamic = "force-dynamic"`
-3. Server component simply renders the client component
-
-This pattern separates server-side configuration (`dynamic` export) from client-side React hooks, which is the proper way to handle this in Next.js 15 App Router.
-
-**Files Modified**:
-- `app/(auth)/onboarding/page.tsx` - New server component with `export const dynamic = "force-dynamic"`
-- `app/(auth)/onboarding/onboarding-client.tsx` - Renamed from page.tsx, contains all client UI logic
-
-**Verification**: ✅ Local build passes, `/onboarding` now marked as `ƒ` (Dynamic) instead of `○` (Static). Pushed to main to trigger new Cloudflare build.
-
----
-
-### Onboarding Redirect Race Condition Fix ✅ (2026-01-19)
-
-**Issue**: Two problems in onboarding flow:
-1. Welcome emails failing with "Missing `html` or `text` field" error
-2. After completing onboarding, users stuck on "Setting up your account" spinner instead of redirecting to /dashboard
-
-**Root Cause 1 - Email Failure**: `getEmailTemplate()` in `lib/email/templates.ts` is an async function (line 926), but was being called without `await` in `welcome-service.ts`, causing `html` and `text` to be Promise objects instead of strings.
-
-**Root Cause 2 - Redirect Loop**: Clerk's `publicMetadata.onboardingCompleted` doesn't immediately sync to JWT session claims. The middleware checks `sessionClaims.publicMetadata.onboardingCompleted`, but the JWT hasn't refreshed yet after the backend updates Clerk metadata, causing redirect back to /onboarding.
-
-**Fix Applied**:
-1. **Email Fix**: Added `await` to `getEmailTemplate()` calls in `welcome-service.ts` at lines 45 and 134
-2. **Redirect Fix**: Implemented cookie-based bypass pattern:
-   - Client sets `onboarding_completed=true` cookie (60s TTL) before navigation
-   - Added `session.reload()` call to attempt Clerk session refresh
-   - Changed to hard navigation (`window.location.href`) instead of client-side `router.push()`
-   - Middleware checks BOTH Clerk session claims AND the cookie
-   - Cookie is cleared after first successful dashboard access
-
-**Files Modified**:
-- `lib/email/welcome-service.ts` - Added `await` to async `getEmailTemplate()` calls
-- `app/(auth)/onboarding/page.tsx` - Added session reload, cookie bypass, hard navigation
-- `middleware.ts` - Added cookie bypass check for onboarding redirect protection
-
-**Verification**: ✅ User confirmed "working now" - onboarding completes and redirects to dashboard successfully
-
----
-
-### Pipeline Recovery - Zombie Connection Pool Exhaustion ✅ (2026-01-19)
-
-**Issue**: Pipeline stalled for 25+ hours due to 16 zombie database connections stuck in "idle in transaction" state, exhausting the Supabase connection pool.
-
-**Root Cause**: Prisma connections entered "idle in transaction" state and never closed, accumulating over time until all 5 pool connections were consumed (oldest: 1h41m).
-
-**Additional Bug Found**: `/api/health/pipeline` endpoint was querying `SecFiling.processed` field which doesn't exist (the `processed` field is on `RssFilingCheck` table).
-
-**Fix Applied**:
-1. Terminated 16 zombie connections via `pg_terminate_backend()`
-2. Fixed health endpoint to query `RssFilingCheck` instead of `SecFiling`
-3. Moved 18 invalid `ASYNC_SUMMARIZE_FILING` jobs to DEAD_LETTER
-4. Reset 1 stuck processing job (25+ hours old) to PENDING
-
-**Files Modified**:
-- `app/api/health/pipeline/route.ts` - Fixed `processed` field query to use `rssFilingCheck`
-
-**Verification**: ✅ Pipeline HEALTHY, jobs completing, 88-job backlog processing
-
----
-
-### Email Template Type Errors Fix (2026-01-16)
-
-**Issue**: Property type errors in `lib/email/templates.ts` - summaryData interface missing properties used in template rendering.
-
-**Root Cause**: `FilingTemplateData.summaryData` in `lib/email/types.ts` was missing common fields used for 10-K/10-Q, 8-K, and Form 4 templates.
-
-**Fix Applied**:
-1. Added missing properties to `FilingTemplateData` interface in `types.ts`:
-   - `summaryUrl` - URL to view summary
-   - `summaryData` common fields: `period`, `financials`, `insights` (10-K/10-Q)
-   - 8-K fields: `eventType`, `summary`, `sentiment`, `keyHighlights`, `financialImpact`, `managementCommentary`, `forwardGuidance`, `positiveHighlights`, `negativeHighlights`, `itemNumbers`
-   - Form 4 fields: `filerName`, `relationship`, `percentageChange`, `newStake`
-2. Fixed `generatePlainTextEmail()` function signature to use `FilingTemplateData[]`
-3. Fixed type casts in `getEmailTemplate()` to use `as unknown as` for proper conversion
-
-**Files Modified**:
-- `lib/email/types.ts` - Added missing properties to FilingTemplateData interface
-- `lib/email/templates.ts` - Fixed function signature and type casts
-
-**Verification**: ✅ Build passes (no TypeScript errors in templates.ts)
-
----
-
-### SEC Summary Quality Phase 2 - Phase 4: Grokipedia Research ✅ (2026-01-15)
-
-Completed comprehensive research on all 9 SEC form types and updated extraction guidance.
-
-**Approach**: Spawned 9 parallel research agents to investigate form-specific requirements using authoritative sources (SEC.gov, Deloitte DART, PWC Viewpoint, CFI, DilutionTracker).
-
-**Gap Analysis Results**: Identified significant extraction guidance gaps across all form types.
-
-**Updates Made to `lib/ai/prompts/unified-prompts.ts`**:
-
-| Form | Before | After | Key Additions |
-|------|--------|-------|---------------|
-| 10-K | 14 rules | 22 rules | 16-item/4-part structure, MD&A metrics, human capital disclosure, footnote-first approach |
-| 10-Q | 12 rules | 20 rules | Part I/II structure, DSO/DPO liquidity metrics, non-GAAP reconciliation, red flags |
-| Form 4 | 6 rules | 18 rules | Complete transaction code mapping (P,S,A,D,G,M,F,J,K,X,C,W), 10b5-1 checkbox (Apr 2023) |
-| 8-K | 6 rules | 22 rules | Complete 9-section item mapping, Item 1.05 cybersecurity (Dec 2023), high-impact items |
-| Form 144 | 10 rules | 18 rules | 90-day validity, Rule 144 volume limits, holding periods, broker requirement |
-| S-1 | 13 rules | 20 rules | JOBS Act confidential filing, human capital metrics, lock-up period, pre-revenue handling |
-| S-3 | 8 rules | 22 rules | $75M float requirement, WKSI status, MEF filings, ATM vs bought deal, 3-year shelf |
-| DEF 14A | 9 rules | 20 rules | CD&A section, Summary Compensation Table, say-on-pay thresholds (<70% ISS concern) |
-| 11-K | 10 rules | 20 rules | ERISA vs non-ERISA requirements, PCAOB audit, 90/180 day filing deadlines |
-
-**Files Modified**:
-- `lib/ai/prompts/unified-prompts.ts` - All 9 form type extraction rules enhanced
-- `docs/plans/2026-01-12-sec-summary-quality-phase-2.md` - Phase 4 marked complete
-
-**Verification**: Linter passes (no new errors)
-
----
-
-### 8-K Email Template Registry Fix ✅ (2026-01-15)
-
-**Issue**: 8-K emails rendered with GenericMinimalistTemplate instead of Form8KMinimalistTemplate.
-
-**Root Cause**: `lib/email/templates.ts` registry was missing 8-K and Form 144 mappings (emailGenerator.ts had them, but individual filing notifications use templates.ts).
-
-**Fix**: Added imports and registry entries for 8-K (4 variants) and Form 144 (3 variants) in `lib/email/templates.ts`.
-
-**Files**: `lib/email/templates.ts`
-**Verification**: ✅ Build passes, test emails verified
-### Pipeline Recovery - Database Migration Fix ✅ (2026-01-13)
-
-Restored stalled pipeline after Supabase database server migration.
-
-**Root Cause**: Supabase migrated database from `aws-1-ap-southeast-2` to `aws-0-ap-southeast-1` with password change on Dec 23, 2025. Connection remained alive until Jan 12 6:30 PM AEST when it finally expired, causing complete pipeline stall.
-
-**Fix**: 
-- Identified new database credentials in Vercel environment
-- Redeployed Vercel application with `vercel --prod`
-- Updated Cloudflare Worker CRON_SECRET
-- Manually triggered pipeline to clear 126-job backlog
-
-**Files**: `.env.local` (updated DATABASE_URL and DIRECT_URL)
-
-**Verification**: Pipeline restored, processing 73 discovery + 53 summarize jobs
-
----
-
-### Pipeline Stall Investigation - Database Connection Pool Fix ✅ (2026-01-12)
-
-Fixed pipeline stall caused by zombie database connections exhausting Supabase connection pool.
-
-**Root Cause**: 16 database connections stuck in "idle in transaction" state (oldest: 1:42:43 idle) exhausting the connection pool, causing tier-aware cron endpoints to timeout.
-
-**Fix**: Terminated all idle-in-transaction connections >5 minutes old using `pg_terminate_backend()`. Also previously applied fixes: BackgroundFilingWorker instantiation, async 202 pattern, and proper HMAC auth bypass.
-
-**Files**: `app/api/cron/tier-aware/route.ts`
-
-**Verification**: Connection pool restored (6 idle, 1 active), endpoints responding normally.
-
----
-
-### GitHub Actions Workflow Updates ✅ (2026-01-12)
-
-Updated GitHub Actions workflows to reflect the Phase 5-8 pipeline redundancy enhancements.
-
-**Changes Made**:
-- `cloudflare-worker-deploy.yml`: Added Three-Layer Redundancy Architecture section, new endpoints
-- `monitoring-validation.yml`: Extended path triggers, enhanced pipeline health test
-
-**Files Modified**: `.github/workflows/cloudflare-worker-deploy.yml`, `.github/workflows/monitoring-validation.yml`
-
----
-
-### Pipeline Intervention Elimination Phases 5-8 ✅ (2026-01-11)
-Three-layer pipeline redundancy implementation:
-- **Phase 5**: Enhanced `/api/health/pipeline` with cron gap + orphan detection (14 tests)
-- **Phase 6**: Auto-recovery integration with orphaned filing recovery (12 tests)
-- **Phase 7**: Vercel cron final backup at `/api/cron/final-backup` (16 tests)
-- **Phase 8**: Operations runbook at `docs/runbooks/pipeline-stall-recovery.md`
-**Total Tests**: 42 passing
-
-### clerkMiddleware API Fix ✅ (2026-01-11)
-Updated `middleware.ts` to v6 API pattern with `createRouteMatcher()`.
-
-### Critical Job Queue Database Bug Fix ✅ (2026-01-10)
-**Root Cause**: Job queue importing `prisma` directly instead of `getPrismaClient()`.
-**Fix**: Updated `lib/job-queue/index.ts` with `getPrismaClient()` calls.
-**Impact**: Restored 394+ stuck jobs (44+ hours backlog).
-
----
-
 ## Archived Sessions (See TIMELINE.md for Full Details)
 
 For complete technical details of projects older than 30 days, see the weekly archive files in `.claude/history/`:
@@ -612,9 +384,9 @@ For complete technical details of projects older than 30 days, see the weekly ar
 - **November 2025**: 4 weekly archives
 - **October 2025**: 2 weekly archives
 
-Recent highlights include SEC filing quality enhancements, pipeline resilience improvements, dashboard redesigns, and comprehensive auth/onboarding flows. All archived projects maintain full technical documentation including root causes, implementation details, files modified, and verification results
+Recent highlights include SEC filing quality enhancements, pipeline resilience improvements, dashboard redesigns, and comprehensive auth/onboarding flows. All archived projects maintain full technical documentation including root causes, implementation details, files modified, and verification results.
 
 ---
 
-*Last Updated: 2026-01-27 (Unsent email recovery session)*
+*Last Updated: 2026-01-28 (Unified subscription tiers + billing downgrade fix)*
 *Completed projects older than 30 days are archived to .claude/history/ - See TIMELINE.md for complete historical context*
