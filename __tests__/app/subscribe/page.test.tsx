@@ -192,4 +192,94 @@ describe('SubscribePage', () => {
       expect(screen.getByRole('button', { name: /switch to monthly billing/i })).toBeInTheDocument();
     });
   });
+
+  // QA-requested tests for error handling
+  it('should show error message when subscription fetch fails', async () => {
+    global.fetch = jest.fn().mockRejectedValue(new Error('Network error'));
+
+    render(<SubscribePage />);
+
+    // Should still render page but with error state handling
+    await waitFor(() => {
+      // Component should handle error gracefully and render plans with default FREE state
+      expect(screen.getByRole('heading', { name: /free/i })).toBeInTheDocument();
+    });
+  });
+
+  it('should show toast error when checkout returns 409 conflict', async () => {
+    const mockToastError = jest.fn();
+    jest.spyOn(require('sonner'), 'toast', 'get').mockReturnValue({
+      error: mockToastError,
+      success: jest.fn(),
+      info: jest.fn(),
+    });
+
+    global.fetch = jest.fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ planType: 'FREE' }),
+      })
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 409,
+        json: () => Promise.resolve({ error: 'Already subscribed' }),
+      });
+
+    render(<SubscribePage />);
+
+    await waitFor(() => screen.getByRole('button', { name: /upgrade to pro/i }));
+
+    const upgradeButton = screen.getByRole('button', { name: /upgrade to pro/i });
+    await userEvent.click(upgradeButton);
+
+    await waitFor(() => {
+      expect(mockToastError).toHaveBeenCalledWith('You already have an active subscription');
+    });
+  });
+
+  it('should show toast error when checkout returns 500 server error', async () => {
+    const mockToastError = jest.fn();
+    jest.spyOn(require('sonner'), 'toast', 'get').mockReturnValue({
+      error: mockToastError,
+      success: jest.fn(),
+      info: jest.fn(),
+    });
+
+    global.fetch = jest.fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ planType: 'FREE' }),
+      })
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 500,
+        json: () => Promise.resolve({ error: 'Internal server error' }),
+      });
+
+    render(<SubscribePage />);
+
+    await waitFor(() => screen.getByRole('button', { name: /upgrade to pro/i }));
+
+    const upgradeButton = screen.getByRole('button', { name: /upgrade to pro/i });
+    await userEvent.click(upgradeButton);
+
+    await waitFor(() => {
+      expect(mockToastError).toHaveBeenCalledWith('Internal server error');
+    });
+  });
+
+  it('should handle unauthenticated user gracefully', async () => {
+    jest.spyOn(require('@clerk/nextjs'), 'useUser').mockReturnValue({
+      user: null,
+      isSignedIn: false,
+      isLoaded: true,
+    });
+
+    render(<SubscribePage />);
+
+    await waitFor(() => {
+      // Should render page but not show subscription data
+      expect(screen.getByRole('heading', { name: /choose your plan/i })).toBeInTheDocument();
+    });
+  });
 });

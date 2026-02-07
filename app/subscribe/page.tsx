@@ -1,12 +1,12 @@
 'use client';
 
-import { Suspense, useEffect, useState, useCallback } from 'react';
+import { Suspense, useEffect, useState, useCallback, Component, type ReactNode } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useUser } from '@clerk/nextjs';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import { ArrowLeft, Check, Loader2, Zap, Sparkles, Crown } from 'lucide-react';
+import { ArrowLeft, Check, Loader2, Zap, Sparkles, Crown, AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -52,17 +52,25 @@ function SubscribePageContent() {
 
   // Fetch user's current subscription
   useEffect(() => {
+    let cancelled = false;
+
     async function fetchSubscription() {
       try {
         const response = await fetch('/api/user/subscription');
         if (response.ok) {
           const data = await response.json();
-          setSubscription(data);
+          if (!cancelled) {
+            setSubscription(data);
+          }
         }
       } catch (error) {
-        console.error('Failed to fetch subscription:', error);
+        if (!cancelled) {
+          console.error('Failed to fetch subscription:', error);
+        }
       } finally {
-        setLoading(false);
+        if (!cancelled) {
+          setLoading(false);
+        }
       }
     }
 
@@ -71,6 +79,10 @@ function SubscribePageContent() {
     } else if (isLoaded && !user) {
       setLoading(false);
     }
+
+    return () => {
+      cancelled = true;
+    };
   }, [isLoaded, user]);
 
   // Handle ESC key to go back
@@ -371,10 +383,64 @@ function SubscribePageLoading() {
   );
 }
 
+// Error fallback component
+function SubscribePageError() {
+  const router = useRouter();
+
+  return (
+    <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: 'var(--landing-bg)' }}>
+      <div className="text-center space-y-4 max-w-md">
+        <AlertTriangle className="h-12 w-12 text-red-500 mx-auto" />
+        <h2 className="text-2xl font-bold">Failed to load subscription plans</h2>
+        <p className="text-[var(--landing-text-muted)]">
+          We encountered an error loading the subscription page. Please try again.
+        </p>
+        <div className="flex gap-4 justify-center">
+          <Button variant="outline" onClick={() => router.back()}>
+            Go Back
+          </Button>
+          <Button onClick={() => window.location.reload()}>
+            Try Again
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Error boundary component
+class SubscribeErrorBoundary extends Component<
+  { children: ReactNode },
+  { hasError: boolean }
+> {
+  constructor(props: { children: ReactNode }) {
+    super(props);
+    this.state = { hasError: false };
+  }
+
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+
+  componentDidCatch(error: Error, errorInfo: unknown) {
+    console.error('Subscribe page error:', error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return <SubscribePageError />;
+    }
+
+    return this.props.children;
+  }
+}
+
 export default function SubscribePage() {
   return (
-    <Suspense fallback={<SubscribePageLoading />}>
-      <SubscribePageContent />
-    </Suspense>
+    <SubscribeErrorBoundary>
+      <Suspense fallback={<SubscribePageLoading />}>
+        <SubscribePageContent />
+      </Suspense>
+    </SubscribeErrorBoundary>
   );
 }
