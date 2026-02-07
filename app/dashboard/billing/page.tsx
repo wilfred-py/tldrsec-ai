@@ -9,67 +9,19 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Switch } from '@/components/ui/switch';
 import {
   CreditCard,
-  CheckCircle,
-  ArrowRight,
   AlertTriangle,
-  Zap,
-  Clock,
-  Users
+  Clock
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { useUser } from '@clerk/nextjs';
 import { SUBSCRIPTION_PLANS, type PlanType } from '@/lib/stripe/plans';
-
-// Transform SUBSCRIPTION_PLANS for billing page UI
-interface BillingPlan {
-  name: string;
-  price: string;
-  tickerLimit: number;
-  tickerDisplay: string;
-  features: readonly string[];
-  recommended: boolean;
-  planKey: PlanType;
-}
-
-function getBillingPlans(): BillingPlan[] {
-  return [
-    {
-      name: SUBSCRIPTION_PLANS.FREE.name,
-      price: '$0/month',
-      tickerLimit: SUBSCRIPTION_PLANS.FREE.tickerLimit,
-      tickerDisplay: `${SUBSCRIPTION_PLANS.FREE.tickerLimit} companies`,
-      features: SUBSCRIPTION_PLANS.FREE.features,
-      recommended: false,
-      planKey: 'FREE',
-    },
-    {
-      name: SUBSCRIPTION_PLANS.PRO.name,
-      price: `$${SUBSCRIPTION_PLANS.PRO.monthlyPrice}/month`,
-      tickerLimit: SUBSCRIPTION_PLANS.PRO.tickerLimit,
-      tickerDisplay: `${SUBSCRIPTION_PLANS.PRO.tickerLimit} companies`,
-      features: SUBSCRIPTION_PLANS.PRO.features,
-      recommended: true,
-      planKey: 'PRO',
-    },
-    {
-      name: SUBSCRIPTION_PLANS.MAX.name,
-      price: `$${SUBSCRIPTION_PLANS.MAX.monthlyPrice}/month`,
-      tickerLimit: SUBSCRIPTION_PLANS.MAX.tickerLimit,
-      tickerDisplay: 'Unlimited companies',
-      features: SUBSCRIPTION_PLANS.MAX.features,
-      recommended: false,
-      planKey: 'MAX',
-    },
-  ];
-}
 
 interface UserSubscription {
   planType: PlanType;
@@ -86,7 +38,7 @@ export default function BillingPage() {
   const searchParams = useSearchParams();
   const [subscription, setSubscription] = useState<UserSubscription | null>(null);
   const [loading, setLoading] = useState(true);
-  const [updating, setUpdating] = useState(false);
+  const [updatingCancellation, setUpdatingCancellation] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // Handle checkout cancellation - redirect to dashboard
@@ -128,107 +80,10 @@ export default function BillingPage() {
     }
   }, [user]);
 
-  const handlePlanChange = async (newPlan: string) => {
-    if (!subscription) return;
-
-    const planType = newPlan.toUpperCase() as PlanType;
-    const planOrder = { FREE: 0, PRO: 1, MAX: 2 };
-    const currentOrder = planOrder[subscription.planType];
-    const targetOrder = planOrder[planType];
-    const isUpgrade = targetOrder > currentOrder;
-
-    // For upgrades to paid plans, go directly to checkout
-    if (isUpgrade && planType !== 'FREE') {
-      setUpdating(true);
-      try {
-        const response = await fetch('/api/user/subscription', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            planType,
-            billingInterval: 'monthly'
-          })
-        });
-
-        if (!response.ok) {
-          const data = await response.json();
-          throw new Error(data.error || 'Failed to create checkout session');
-        }
-
-        const { checkoutUrl } = await response.json();
-        if (checkoutUrl) {
-          window.location.href = checkoutUrl;
-          return;
-        }
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Checkout failed');
-        setUpdating(false);
-      }
-      return;
-    }
-
-    // For downgrades, use PUT
-    setUpdating(true);
-    try {
-      const response = await fetch('/api/user/subscription', {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          planType
-        })
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        // If API says we need checkout (e.g., upgrade), redirect
-        if (data.action === 'checkout') {
-          const checkoutResponse = await fetch('/api/user/subscription', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-              planType: data.planType,
-              billingInterval: 'monthly'
-            })
-          });
-
-          if (checkoutResponse.ok) {
-            const { checkoutUrl } = await checkoutResponse.json();
-            if (checkoutUrl) {
-              window.location.href = checkoutUrl;
-              return;
-            }
-          }
-        }
-        throw new Error(data.error || 'Failed to update subscription');
-      }
-
-      // Show success message if present
-      if (data.message) {
-        toast.success('Plan Updated', {
-          description: data.message,
-          duration: 5000,
-        });
-      }
-
-      setSubscription(data);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Update failed');
-    } finally {
-      setUpdating(false);
-    }
-  };
-
   const handleCancelToggle = async () => {
     if (!subscription) return;
-    
-    setUpdating(true);
+
+    setUpdatingCancellation(true);
     try {
       const response = await fetch('/api/user/subscription', {
         method: 'PUT',
@@ -249,7 +104,7 @@ export default function BillingPage() {
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Update failed');
     } finally {
-      setUpdating(false);
+      setUpdatingCancellation(false);
     }
   };
 
@@ -281,20 +136,19 @@ export default function BillingPage() {
         <div className="animate-pulse space-y-4">
           <div className="h-8 bg-[var(--landing-border)] rounded w-64"></div>
           <div className="h-4 bg-[var(--landing-border)] rounded w-96"></div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {[1, 2, 3].map(i => (
-              <div key={i} className="h-96 bg-[var(--landing-border)] rounded-lg"></div>
-            ))}
-          </div>
+          <div className="h-48 bg-[var(--landing-border)] rounded-lg"></div>
         </div>
       </div>
     );
   }
 
-  const billingPlans = getBillingPlans();
   const currentPlanKey = subscription?.planType;
   const currentPlanConfig = currentPlanKey ? SUBSCRIPTION_PLANS[currentPlanKey] : null;
-  const currentBillingPlan = billingPlans.find(p => p.planKey === currentPlanKey);
+  const currentPrice = currentPlanKey === 'FREE'
+    ? '$0/month'
+    : currentPlanConfig
+      ? `$${currentPlanConfig.monthlyPrice}/month`
+      : 'Price unavailable';
 
   return (
     <div className="container mx-auto py-8 space-y-8">
@@ -333,7 +187,7 @@ export default function BillingPage() {
                 {currentPlanConfig?.name || 'Unknown Plan'}
               </h3>
               <p className="text-gray-600">
-                {currentBillingPlan?.price || 'Price unavailable'}
+                {currentPrice}
               </p>
             </div>
 
@@ -367,7 +221,7 @@ export default function BillingPage() {
                 <Switch
                   checked={!subscription.cancelAtPeriodEnd}
                   onCheckedChange={handleCancelToggle}
-                  disabled={updating}
+                  disabled={updatingCancellation}
                 />
                 <span className="text-sm">
                   {subscription.cancelAtPeriodEnd ? 'Reactivate' : 'Cancel'} at period end
@@ -378,95 +232,6 @@ export default function BillingPage() {
         </Card>
       )}
 
-      {/* Available Plans */}
-      <div>
-        <h2 className="text-2xl font-semibold mb-6">Available Plans</h2>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {billingPlans.map((plan) => {
-            // Only show "Recommended" badge for Pro plan if user is on FREE tier
-            const showRecommended = plan.recommended && currentPlanKey === 'FREE';
-            return (
-            <Card
-              key={plan.planKey}
-              className={`relative landing-card flex flex-col ${showRecommended ? 'ring-2 ring-[var(--landing-primary)] shadow-lg' : ''}`}
-            >
-              {showRecommended && (
-                <div className="absolute -top-3 left-1/2 transform -translate-x-1/2">
-                  <Badge className="bg-[var(--landing-primary)] hover:bg-[var(--landing-primary-hover)]">
-                    Recommended
-                  </Badge>
-                </div>
-              )}
-
-              <CardHeader>
-                <CardTitle>
-                  {plan.name}
-                </CardTitle>
-                <CardDescription>
-                  <span className="text-2xl font-bold text-gray-900">{plan.price}</span>
-                </CardDescription>
-              </CardHeader>
-
-              <CardContent className="space-y-4 flex flex-col flex-grow">
-                <div className="space-y-2">
-                  <div className="flex items-center gap-2 text-sm">
-                    <Users className="h-4 w-4 text-gray-500" />
-                    <span>{plan.tickerDisplay}</span>
-                  </div>
-                  <div className="flex items-center gap-2 text-sm">
-                    <Zap className="h-4 w-4 text-gray-500" />
-                    <span>{SUBSCRIPTION_PLANS[plan.planKey].emailFrequency === 'realtime' ? 'Real-time alerts' : 'Weekly digest'}</span>
-                  </div>
-                </div>
-
-                <Separator />
-
-                <ul className="space-y-2 flex-grow">
-                  {plan.features.map((feature, index) => {
-                    // Convert markdown-style bold (**text**) to proper semantic HTML
-                    const parts = feature.split(/\*\*([^*]+)\*\*/g);
-                    return (
-                      <li key={index} className="flex items-center gap-2 text-sm">
-                        <CheckCircle className="h-3 w-3 text-green-500 flex-shrink-0" />
-                        <span>
-                          {parts.map((part, partIndex) =>
-                            partIndex % 2 === 1 ? (
-                              <strong key={partIndex}>{part}</strong>
-                            ) : (
-                              part
-                            )
-                          )}
-                        </span>
-                      </li>
-                    );
-                  })}
-                </ul>
-
-                {(() => {
-                  const isCurrentPlan = currentPlanKey === plan.planKey;
-                  const planOrder = { FREE: 0, PRO: 1, MAX: 2 };
-                  const currentOrder = currentPlanKey ? planOrder[currentPlanKey] : 0;
-                  const targetOrder = planOrder[plan.planKey];
-                  const isDowngrade = targetOrder < currentOrder;
-
-                  return (
-                    <Button
-                      className="w-full border mt-auto"
-                      variant={isCurrentPlan ? 'outline' : 'outline'}
-                      disabled={isCurrentPlan || updating}
-                      onClick={() => handlePlanChange(plan.planKey)}
-                    >
-                      {isCurrentPlan ? 'Current Plan' : (isDowngrade ? 'Downgrade' : 'Upgrade')}
-                      {!isCurrentPlan && <ArrowRight className="h-4 w-4 ml-2" />}
-                    </Button>
-                  );
-                })()}
-              </CardContent>
-            </Card>
-          );
-          })}
-        </div>
-      </div>
     </div>
   );
 }
