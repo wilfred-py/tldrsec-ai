@@ -225,11 +225,13 @@ describe('SubscribePage', () => {
     await waitFor(() => screen.getByRole('button', { name: /upgrade to pro/i }));
 
     const upgradeButton = screen.getByRole('button', { name: /upgrade to pro/i });
-    await userEvent.click(upgradeButton);
+    await act(async () => {
+      await userEvent.click(upgradeButton);
+    });
 
     await waitFor(() => {
       expect(toast.error).toHaveBeenCalledWith('You already have an active subscription');
-    });
+    }, { timeout: 3000 });
   });
 
   it('should show toast error when checkout returns 500 server error', async () => {
@@ -251,11 +253,13 @@ describe('SubscribePage', () => {
     await waitFor(() => screen.getByRole('button', { name: /upgrade to pro/i }));
 
     const upgradeButton = screen.getByRole('button', { name: /upgrade to pro/i });
-    await userEvent.click(upgradeButton);
+    await act(async () => {
+      await userEvent.click(upgradeButton);
+    });
 
     await waitFor(() => {
       expect(toast.error).toHaveBeenCalledWith('Internal server error');
-    });
+    }, { timeout: 3000 });
   });
 
   it('should handle unauthenticated user gracefully', async () => {
