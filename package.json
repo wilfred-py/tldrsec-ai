@@ -9,6 +9,8 @@
     "start": "next start",
     "lint": "next lint",
     "worktrees": "bash scripts/open-worktrees.sh",
+    "worktrees:create": "bash hack/create_worktree.sh",
+    "worktrees:cleanup": "bash hack/cleanup_worktree.sh",
     "worktrees:stripe": "bash scripts/open-worktrees.sh stripe-integration",
     "test": "NODE_OPTIONS='--no-deprecation' jest --config=jest.config.mjs",
     "test:esm": "node --experimental-vm-modules node_modules/jest/bin/jest.js --config jest.config.mjs",
