@@ -151,10 +151,12 @@ export async function POST(request: NextRequest) {
       planType,
       priceId: legacyPriceId,
       billingInterval = 'monthly',
+      cancelUrl: customCancelUrl,
     } = body as {
       planType?: NewPlanKey;
       priceId?: string;
       billingInterval?: BillingInterval;
+      cancelUrl?: string;
     };
 
     // Determine price ID - support both legacy and new modes
@@ -307,12 +309,17 @@ export async function POST(request: NextRequest) {
     }
 
     // Create checkout session
+    // Use custom cancel URL if provided (e.g., from /subscribe page), otherwise default to billing page
+    const cancelUrl = customCancelUrl
+      ? `${appUrl}${customCancelUrl.startsWith('/') ? customCancelUrl : `/${customCancelUrl}`}`
+      : `${appUrl}/dashboard/billing?canceled=true`;
+
     const { createCheckoutSession } = await import('../../../../lib/stripe');
     const session = await createCheckoutSession({
       priceId,
       customerId: stripeCustomerId,
       successUrl: `${appUrl}/dashboard?subscription_success=true&session_id={CHECKOUT_SESSION_ID}`,
-      cancelUrl: `${appUrl}/dashboard/billing?canceled=true`,
+      cancelUrl,
       metadata: {
         userId,
         planType,
