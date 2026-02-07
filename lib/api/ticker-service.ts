@@ -1,6 +1,5 @@
 import { Company, TickerSearchResult, ApiResponse, FilingPreferences } from './types';
 import { AVAILABLE_TICKERS } from './mock-data';
-// import { prisma } from '@/lib/db/prisma'; // Currently unused
 
 // Environment check for API vs mock mode
 const API_ENABLED = process.env.NEXT_PUBLIC_API_ENABLED === 'true';
@@ -51,8 +50,10 @@ export async function getTrackedCompanies(): Promise<ApiResponse<Company[]>> {
         
         // Convert API tickers to Company format
         // The API now includes lastFilingDate directly from summaries
+        // Note: Default preferences are now managed server-side with form4: true
         const userCompanies: Company[] = userData.tickers.map((ticker: Record<string, unknown>) => {
           // Use stored preferences or default values
+          // Server always provides preferences, but fallback just in case
           const storedPrefs = ticker.preferences as Record<string, boolean> | null;
           return {
             id: ticker.id,
@@ -62,7 +63,8 @@ export async function getTrackedCompanies(): Promise<ApiResponse<Company[]>> {
             lastFiling: "—",
             lastFilingDate: ticker.lastFilingDate as string | null,
             summaryCount: (ticker.summaryCount as number) || 0,
-            preferences: storedPrefs || { tenK: true, tenQ: true, eightK: true, form4: false, other: false }
+            // Server always provides preferences now; this fallback matches new defaults
+            preferences: storedPrefs || { tenK: true, tenQ: true, eightK: true, form4: true, other: false }
           };
         });
 

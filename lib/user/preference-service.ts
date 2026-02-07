@@ -1,5 +1,6 @@
-import { prisma } from '@/lib/db/prisma';
+import { getPrismaClient } from '@/lib/db/prisma';
 import { DEFAULT_USER_PREFERENCES, NotificationPreferences, PreferenceUpdateResponse, TickerSubscription, UserPreferences, SubscriptionUpdateResponse } from './preference-types';
+import { syncUserTickerPreferences } from './preference-sync';
 import { logger } from '../logging';
 // import { v4 as uuidv4 } from 'uuid';
 
@@ -14,6 +15,7 @@ export class PreferenceService {
    * @returns User preferences
    */
   static async getUserPreferences(userId: string): Promise<UserPreferences> {
+    const prisma = getPrismaClient();
     try {
       // Get user from database
       const user = await prisma.user.findUnique({
@@ -60,13 +62,14 @@ export class PreferenceService {
    * @returns Response with updated preferences
    */
   static async updateUserPreferences(
-    userId: string, 
+    userId: string,
     updates: Partial<UserPreferences>
   ): Promise<PreferenceUpdateResponse> {
+    const prisma = getPrismaClient();
     try {
       // Get existing preferences
       const existingPrefs = await this.getUserPreferences(userId);
-      
+
       // Merge updates with existing preferences
       const updatedPrefs = this.mergePreferences(existingPrefs, updates);
       
@@ -85,7 +88,19 @@ export class PreferenceService {
           preferences: updatedPrefs as Record<string, unknown>, // Prisma will handle JSON conversion
         }
       });
-      
+
+      // Sync filing type preferences to all user's tickers
+      // This ensures Ticker.preferences stays in sync with User.preferences
+      if (updates.notifications?.filingTypes) {
+        try {
+          const syncedCount = await syncUserTickerPreferences(userId);
+          logger.info(`Synced preferences to ${syncedCount} tickers for user ${userId}`);
+        } catch (syncError) {
+          // Log but don't fail the preference update
+          logger.error('Failed to sync ticker preferences after user preference update', syncError);
+        }
+      }
+
       return {
         success: true,
         message: 'Preferences updated successfully',

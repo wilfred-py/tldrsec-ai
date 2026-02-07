@@ -5,6 +5,8 @@ import { dbRetry } from '@/lib/db/retry-wrapper';
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { checkTierLimit, getTierLimitInfo } from '@/lib/subscription/three-tier-limits';
+import { convertUserPrefsToTickerPrefs, getDefaultTickerPreferences } from '@/lib/user/preference-sync';
+import { UserPreferences } from '@/lib/user/preference-types';
 
 // Input validation schema for ticker creation
 const createTickerSchema = z.object({
@@ -15,31 +17,8 @@ const createTickerSchema = z.object({
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-// Default filing preferences
-const DEFAULT_PREFERENCES = {
-  tenK: true,
-  tenQ: true,
-  eightK: true,
-  form4: false,
-  form3: false,
-  form5: false,
-  form144: false,
-  twentyF: false,
-  fortyF: false,
-  sixK: false,
-  sc13D: false,
-  sc13G: false,
-  thirteenF: false,
-  def14A: false,
-  pre14A: false,
-  sOne: false,
-  sThree: false,
-  fourTwoFourB2: false,
-  fourTwoFourB3: false,
-  fwp: false,
-  schedule: false,
-  other: false,
-};
+// Get default preferences from the centralized source (form4: true by default)
+const DEFAULT_PREFERENCES = getDefaultTickerPreferences();
 
 /**
  * GET /api/user/tickers
@@ -199,6 +178,7 @@ export async function POST(request: Request) {
     const primaryEmail = user.emailAddresses[0].emailAddress;
 
     // Find user in database - use findFirst with multiple conditions to be more flexible
+    // Include preferences to derive ticker preferences from user settings
     const dbUser = await prisma.user.findFirst({
       where: {
         OR: [
@@ -206,7 +186,11 @@ export async function POST(request: Request) {
           { authProviderId: userId }
         ]
       },
-      include: {
+      select: {
+        id: true,
+        email: true,
+        subscriptionTier: true,
+        preferences: true,
         tickers: true
       }
     });
@@ -287,14 +271,20 @@ export async function POST(request: Request) {
       }, { status: 403 });
     }
 
-    // Add ticker to user's tracked list with default preferences
-    console.log(`Adding ticker ${symbol} for user ${dbUser.id}`);
+    // Derive ticker preferences from user's preferences (or use defaults)
+    const userPrefs = dbUser.preferences as unknown as UserPreferences | null;
+    const tickerPrefs = userPrefs?.notifications?.filingTypes
+      ? convertUserPrefsToTickerPrefs(userPrefs.notifications.filingTypes)
+      : DEFAULT_PREFERENCES;
+
+    // Add ticker to user's tracked list with user-derived preferences
+    console.log(`Adding ticker ${symbol} for user ${dbUser.id} with preferences from user settings`);
     const newTicker = await prisma.ticker.create({
       data: {
         symbol,
         companyName,
         userId: dbUser.id,
-        preferences: DEFAULT_PREFERENCES,
+        preferences: tickerPrefs,
       }
     });
 
@@ -311,7 +301,7 @@ export async function POST(request: Request) {
       addedAt: newTicker.addedAt,
       lastFiling: "—",
       summaryCount: 0,
-      preferences: DEFAULT_PREFERENCES,
+      preferences: tickerPrefs,
     });
   } catch (error) {
     console.error('Error adding ticker:', error);
