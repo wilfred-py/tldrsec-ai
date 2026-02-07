@@ -56,16 +56,10 @@ export async function GET() {
     }
 
     // Get user's subscription from database
+    // Note: We don't include the user relation since it's not used in the response
+    // and can cause errors if the user record is missing (data integrity issue)
     const userSubscription = await prisma.userSubscription.findUnique({
       where: { userId },
-      include: {
-        user: {
-          select: {
-            email: true,
-            name: true,
-          },
-        },
-      },
     });
 
     if (!userSubscription) {
