@@ -2,11 +2,129 @@
 
 **Date**: 2026-02-07
 **Branch**: feature/pipeline-resilience-zero-intervention
-**Status**: Active - Form 4 preference sync fixed
+**Status**: Active - Context compaction complete
 
 ---
 
-## Current Session: Form 4 Preference Sync Fix ✅ (2026-02-07)
+## Current Session: None
+
+**Status**: Ready for next task
+
+---
+
+## Recently Completed Sessions
+
+### Dashboard Loading Skeleton Enhancement ✅ (2026-02-07)
+
+**Goal**: Fix loading skeleton UI issues - remove purple borders, add smooth animations, create seamless loading experience.
+
+**Problem**: Loading skeleton cards showing purple borders with blank spaces, no animation effects, content "snapping in" without transitions.
+
+**Root Cause**:
+1. Purple borders from custom `landing-card` class with hover effects
+2. Animation classes (`animate-fadeIn`, `animate-slideUp`) not defined in Tailwind config
+3. Skeleton shimmer using arbitrary value syntax not working
+
+**Fixes Applied**:
+
+1. **Enhanced Skeleton Component** (`components/ui/skeleton.tsx`):
+   - Added shimmer animation gradient overlay
+   - Improved contrast with `bg-muted/60`
+   - Created continuous sweeping shimmer effect
+
+2. **Added Animation Keyframes** (`app/globals.css` + `tailwind.config.ts`):
+   - `fadeIn`: 0.5s ease-out opacity transition
+   - `slideUp`: 0.4s ease-out with 10px upward motion
+   - `shimmer`: 2s infinite gradient sweep
+   - Defined in both globals.css (@layer utilities) and Tailwind config for reliability
+
+3. **Improved Loading UI** (`app/dashboard/loading.tsx`):
+   - Replaced custom `landing-card` with shadcn `Card` components
+   - Added staggered row animations (50ms delay between rows)
+   - Enhanced visual hierarchy with proper borders and shadows
+   - Added fade-in container animation
+   - Added contextual skeleton cards for complete loading state
+
+4. **Updated Table Skeleton** (`components/dashboard/tickers-table/tickers-table-skeleton.tsx`):
+   - Applied slideUp animations with staggered delays
+   - Enhanced mobile skeleton cards with better spacing
+   - Improved pagination skeleton with button shapes
+
+**Files Modified**:
+- `components/ui/skeleton.tsx` - Shimmer gradient overlay
+- `app/globals.css` - Animation keyframes in @layer utilities
+- `tailwind.config.ts` - Keyframe and animation definitions
+- `app/dashboard/loading.tsx` - Card components + animations
+- `components/dashboard/tickers-table/tickers-table-skeleton.tsx` - Animation classes
+
+**Verification**:
+- ✅ All 3 animations working (fadeIn, slideUp, shimmer) verified via Playwright
+- ✅ Animation properties confirmed: fadeIn (0.5s), slideUp (0.4s), shimmer (2s infinite)
+- ✅ Purple borders removed (shadcn Card components)
+- ✅ Shimmer effect visible and continuous
+- ✅ Build compiles successfully
+
+**Why Animations Rarely Seen**: Dashboard loads extremely fast (<500ms) so loading state is barely visible. Animations work perfectly but only visible on slow connections or initial loads.
+
+**Impact**: Professional, polished loading experience with smooth animations when loading state is visible.
+
+---
+
+### Dashboard UI Polish ✅ (2026-02-07)
+
+**Goal**: Remove visual clutter from dashboard interface.
+
+**Work Completed**:
+1. **Manage Subscription Button Border Removal** ✅
+   - Changed button variant from `outline` (black border) to `ghost` (borderless)
+   - Maintains hover effects and clickability
+   - Aligns with minimalist Apple/Stripe/Cursor UI aesthetic
+   - File: `components/layout/minimal-header.tsx:25`
+
+---
+
+### Orphaned UserSubscription Database Cleanup ✅ (2026-02-07)
+
+**Goal**: Fix dashboard loading failures caused by orphaned UserSubscription records.
+
+**Problem**: Dashboard failing to load with Prisma error "Inconsistent query result: Field user is required to return data, got `null` instead" when accessing `/api/user/subscription` endpoint.
+
+**Root Cause**: 2 orphaned UserSubscription records (user IDs: `user_38eUp39nFdtmBwywmNdHehPd6aX`, `user_2xntabt8XePuJ5tQEMPYT3wd6vC`) referenced deleted User records. When the API route tried to include the `user` relation, Prisma failed because it expected valid user data but found `null`.
+
+**Fixes Applied**:
+
+1. **API Route Fix** (`app/api/user/subscription/route.ts`):
+   - Removed unnecessary `include: { user: ... }` clause from GET handler (line 59-69)
+   - User data wasn't used in response anyway, so including it was redundant
+   - Prevents future failures when data integrity issues occur
+
+2. **Created Cleanup Script** (`scripts/fix-orphaned-subscriptions.ts`):
+   - Identifies UserSubscription records with missing User references
+   - Safely deletes orphaned records with detailed reporting
+   - Can be reused for future data integrity checks
+
+3. **Database Cleanup**:
+   - Deleted 2 orphaned PRO plan subscriptions
+   - Verified 1 valid subscription remains
+   - All subscription records now have valid user references
+
+**Files Modified**:
+- `app/api/user/subscription/route.ts` - Removed user relation include
+- Created: `scripts/fix-orphaned-subscriptions.ts` (~130 lines)
+
+**Verification**:
+- ✅ 2 orphaned subscriptions identified and deleted
+- ✅ 1 valid subscription verified
+- ✅ Dashboard loads without errors
+- ✅ API endpoint handles missing user relations gracefully
+
+**Impact**: Dashboard is now resilient to data integrity issues. Even if orphaned subscriptions exist in future, the API won't crash.
+
+---
+
+## Recently Completed Sessions
+
+### Form 4 Preference Sync Fix ✅ (2026-02-07)
 
 **Goal**: Fix missed Form 4 email notifications and prevent future preference sync issues.
 
@@ -58,8 +176,6 @@ When tickers were created via POST `/api/user/tickers`, they received hardcoded 
 **Impact**: Form 4 notifications will now be sent correctly for future filings. The 60 missed Form 4 emails were a one-time data issue that has been resolved.
 
 ---
-
-## Recently Completed Sessions
 
 ### CLAUDE.md Agent Guidelines + Feedback Loop ✅ (2026-02-07)
 
@@ -477,5 +593,5 @@ Recent highlights include SEC filing quality enhancements, pipeline resilience i
 
 ---
 
-*Last Updated: 2026-02-07 (Form 4 preference sync fix + context compaction)*
+*Last Updated: 2026-02-07 (Loading skeleton enhancement + dashboard UI polish + orphaned subscriptions cleanup + bidirectional PROGRESS/TIMELINE sync)*
 *Completed projects older than 30 days are archived to .claude/history/ - See TIMELINE.md for complete historical context*

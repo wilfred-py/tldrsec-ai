@@ -29,6 +29,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 5. **Check git status first** - Before any commit, run `git status` to see actual changes
 6. **Run tests before committing** - See Pre-Commit Testing section for mandatory tests
 7. **Never store API keys in shell config** - API keys belong in `.env.local` files (gitignored), not `.zshrc` or `.bashrc` where they can be exposed or committed to version control
+8. **Define CSS animations explicitly** - Don't rely on Tailwind auto-generation for custom animations. Define keyframes and animation classes in `app/globals.css` using `@layer utilities` to ensure they're always available
 
 ### Pattern References
 When implementing new features, reference these exemplar files:
