@@ -13,6 +13,7 @@ This file provides a chronological index of all completed projects. For detailed
 
 | Date | Project | Status |
 |------|---------|--------|
+| 2026-02-07 | Form 4 Preference Sync Fix (60 missed emails, centralized sync utilities) | ✅ |
 | 2026-02-07 | CLAUDE.md Agent Guidelines + intentional-compact feedback loop (prevent agent mistakes) | ✅ |
 | 2026-01-28 | Unified Subscription Tiers + Billing Downgrade Fix (enum consolidation, PUT handler) | ✅ |
 | 2026-01-28 | Pipeline Stall Recovery + Throughput Optimization (vercel.json fix, */3 summarize cron) | ✅ |
@@ -170,10 +171,10 @@ This file provides a chronological index of all completed projects. For detailed
 
 ## Archive Statistics
 - **Total Archived Projects**: 11 weekly archives (Oct-Dec 2025)
-- **Current PROGRESS.md Lines**: 392 (threshold: 500)
+- **Current PROGRESS.md Lines**: 481 (threshold: 500)
 - **Last Sync**: 2026-02-07
 - **Archive System**: ✅ ACTIVE
-- **Last Compaction**: 2026-02-07 (Agent Guidelines + feedback loop session)
+- **Last Compaction**: 2026-02-07 (No archival needed - under threshold)
 
 **Archives**:
 - `29-Dec-2025.md` - Cloudflare Cron Fix, Email Quality, Form 4 Templates, JSON Parsing Phase 5

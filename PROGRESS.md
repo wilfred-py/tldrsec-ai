@@ -2,11 +2,66 @@
 
 **Date**: 2026-02-07
 **Branch**: feature/pipeline-resilience-zero-intervention
-**Status**: Agent Guidelines + Context Management
+**Status**: Active - Form 4 preference sync fixed
 
 ---
 
-## Current Session: CLAUDE.md Agent Guidelines + Feedback Loop ✅ (2026-02-07)
+## Current Session: Form 4 Preference Sync Fix ✅ (2026-02-07)
+
+**Goal**: Fix missed Form 4 email notifications and prevent future preference sync issues.
+
+**Problem**: User hadn't received any notifications for 7+ days despite healthy pipeline. Investigation revealed 60 Form 4 filings completed but emails NOT sent.
+
+**Root Cause Discovered**:
+Two separate preference systems with no synchronization:
+- **User.preferences** (nested JSON): `preferences.notifications.filingTypes.insiderTrading.form4 = true`
+- **Ticker.preferences** (flat JSON): `preferences.form4 = false` (incorrectly defaulted)
+
+When tickers were created via POST `/api/user/tickers`, they received hardcoded `DEFAULT_PREFERENCES` with `form4: false`, completely ignoring the user's actual preference of `form4: true`.
+
+**Critical Finding**: `shouldProcessFiling()` in `summarize-cached-handler.ts` checks `Ticker.preferences`, not `User.preferences`, causing all Form 4 emails to be skipped.
+
+**Fixes Applied**:
+
+1. **Created `/lib/user/preference-sync.ts`** - Centralized preference conversion utilities:
+   - `convertUserPrefsToTickerPrefs()` - Converts nested User prefs to flat Ticker prefs
+   - `syncUserTickerPreferences()` - Syncs all ticker preferences for a user
+   - `getDefaultTickerPreferences()` - Centralized defaults (form4: true)
+
+2. **Updated `/app/api/user/tickers/route.ts`** - New tickers inherit user preferences:
+   - Reads user preferences when creating tickers
+   - Uses `convertUserPrefsToTickerPrefs()` to derive ticker preferences
+   - Falls back to centralized defaults from `getDefaultTickerPreferences()`
+
+3. **Updated `/app/api/user/tickers/[id]/route.ts`** - Uses centralized defaults
+
+4. **Updated `/lib/user/preference-service.ts`** - Auto-sync on preference updates:
+   - When user updates filing type preferences, automatically syncs to all tickers
+   - Ensures Ticker.preferences stays in sync with User.preferences
+
+5. **Updated `/lib/api/ticker-service.ts`** - Client-side fallback updated to `form4: true`
+
+6. **Synced existing data** - Fixed all 30 tickers across 3 users to have `form4: true`
+
+**Files Modified**:
+- Created: `lib/user/preference-sync.ts` (~140 lines)
+- Updated: `app/api/user/tickers/route.ts`, `app/api/user/tickers/[id]/route.ts`, `lib/user/preference-service.ts`, `lib/api/ticker-service.ts`
+
+**Verification**:
+- ✅ All 30 tickers now have `form4: true`
+- ✅ All 3 users have `form4: true` in their preferences
+- ✅ Build passes successfully
+- ✅ New tickers will inherit user preferences
+- ✅ User preference changes will auto-sync to all tickers
+- ✅ Database state verified with `scripts/verify-db-state.js`
+
+**Impact**: Form 4 notifications will now be sent correctly for future filings. The 60 missed Form 4 emails were a one-time data issue that has been resolved.
+
+---
+
+## Recently Completed Sessions
+
+### CLAUDE.md Agent Guidelines + Feedback Loop ✅ (2026-02-07)
 
 **Goal**: Create a feedback loop so future agents don't repeat past mistakes.
 
@@ -42,7 +97,7 @@
 
 ---
 
-## Previous Session: Unified Subscription Tiers + Billing Downgrade Fix ✅ (2026-01-28)
+### Unified Subscription Tiers + Billing Downgrade Fix ✅ (2026-01-28)
 
 **Issue 1**: 405 PUT errors when trying to downgrade from MAX plan on billing page.
 
@@ -102,7 +157,7 @@
 
 ---
 
-## Previous Session: Pipeline Stall Recovery + Throughput Optimization ✅ (2026-01-28)
+### Pipeline Stall Recovery + Throughput Optimization ✅ (2026-01-28)
 
 **Issue**: Pipeline stalled for 12+ hours (731 minutes since last completion) with 799 pending jobs and 0 processing. After initial recovery, throughput was only 12 jobs/hour (73 hours to clear backlog).
 
@@ -158,7 +213,7 @@
 
 ---
 
-## Previous Session: Unsent Email Recovery ✅ (2026-01-27)
+### Unsent Email Recovery ✅ (2026-01-27)
 
 **Issue**: 47 completed summaries had `sentToUser: false` - emails never delivered.
 
@@ -183,7 +238,7 @@
 
 ---
 
-## Previous Session: TickerMonitoring Root Cause Fix ✅ (2026-01-27)
+### TickerMonitoring Root Cause Fix ✅ (2026-01-27)
 
 **Issue**: SEC filing discovery silently skipping all tickers because TickerMonitoring table was empty.
 
@@ -227,8 +282,6 @@ The 3-phase async pipeline (default since 2025-12-24) bypassed the code path tha
 **Impact**: Pipeline will now correctly discover filings for all tracked tickers instead of silently skipping them all
 
 ---
-
-## Recently Completed Sessions
 
 ### GitHub Actions Minutes Optimization ✅ (2026-01-27)
 
@@ -316,7 +369,7 @@ The 3-phase async pipeline (default since 2025-12-24) bypassed the code path tha
 
 ---
 
-## Previous Session: BAC 424B2 Filtering Breach Investigation & Documentation (2026-01-25)
+### BAC 424B2 Filtering Breach Investigation & Documentation ✅ (2026-01-25)
 
 **Issue**: User received BAC 424B2 email at 4:01 PM AEST despite prospectus filtering being deployed.
 
@@ -345,7 +398,7 @@ The 3-phase async pipeline (default since 2025-12-24) bypassed the code path tha
 
 ---
 
-## Previous Session: Stripe Dashboard Integration Fixes ✅ (2026-01-25)
+### Stripe Dashboard Integration Fixes ✅ (2026-01-25)
 
 **Goal**: Fix Stripe checkout flow from dashboard upgrade CTA buttons.
 
@@ -424,5 +477,5 @@ Recent highlights include SEC filing quality enhancements, pipeline resilience i
 
 ---
 
-*Last Updated: 2026-02-07 (Agent Guidelines + intentional-compact feedback loop)*
+*Last Updated: 2026-02-07 (Form 4 preference sync fix + context compaction)*
 *Completed projects older than 30 days are archived to .claude/history/ - See TIMELINE.md for complete historical context*
