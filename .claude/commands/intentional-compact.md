@@ -216,6 +216,39 @@ TIMELINE.md is the **master timeline index**. It provides:
    - State: "For future sessions, refer to PROGRESS.md for current state and TIMELINE.md for complete historical context."
    - State: "PROGRESS.md entries: [count], TIMELINE.md recent entries: [count] - SYNCED ✅" (or list discrepancies)
 
+### Step 6: Capture Lessons Learned for CLAUDE.md (Recommended)
+
+**Purpose**: Create a feedback loop so future agents don't repeat mistakes from this session.
+
+1. **Review session for agent mistakes**:
+   - Did the agent guess file paths incorrectly?
+   - Did it use wrong import patterns (e.g., direct `prisma` instead of `getPrismaClient()`)?
+   - Did it miss a testing step before committing?
+   - Did it misunderstand architecture or make wrong assumptions?
+   - Did it fail to read files fully before planning?
+
+2. **If mistakes were identified, update CLAUDE.md**:
+   - Open `CLAUDE.md` and find the `## Agent Guidelines` section
+   - Add new entries to `### Common Mistakes to Avoid`:
+     ```markdown
+     N. **[Short description]** - [What to do instead]
+     ```
+   - Keep entries actionable and specific (not vague)
+   - Example: `7. **Don't assume test file locations** - Check __tests__/ structure first`
+
+3. **If new patterns were established**:
+   - Add to `### Pattern References` table in CLAUDE.md:
+     ```markdown
+     | [Pattern name] | `path/to/exemplar.ts` |
+     ```
+   - Only add patterns that will be reused
+
+4. **Report what was captured**:
+   - If updates made: "Updated CLAUDE.md Agent Guidelines with [N] new entries: [list items]"
+   - If no updates needed: "No new agent guidelines needed this session"
+
+**When to skip this step**: If the session had no mistakes or the mistakes are already documented.
+
 ## Archive File Format Reference
 
 ### Weekly Archive File Structure
@@ -319,3 +352,5 @@ Example: If project completed on Wednesday Nov 27, 2025:
 3. **Missing details**: Every TIMELINE.md entry needs a corresponding detailed PROGRESS.md entry.
 4. **Stale PROGRESS.md**: Check git history for undocumented work and ADD it.
 5. **Skipping verification**: Always verify counts match at the end.
+6. **Skipping Step 6**: When mistakes occurred, ALWAYS update CLAUDE.md to prevent recurrence.
+7. **Vague guideline entries**: "Be careful with imports" is useless. "Use `getPrismaClient()` not `prisma`" is actionable.

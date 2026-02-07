@@ -13,6 +13,9 @@ This file provides a chronological index of all completed projects. For detailed
 
 | Date | Project | Status |
 |------|---------|--------|
+| 2026-02-07 | CLAUDE.md Agent Guidelines + intentional-compact feedback loop (prevent agent mistakes) | ✅ |
+| 2026-01-28 | Unified Subscription Tiers + Billing Downgrade Fix (enum consolidation, PUT handler) | ✅ |
+| 2026-01-28 | Pipeline Stall Recovery + Throughput Optimization (vercel.json fix, */3 summarize cron) | ✅ |
 | 2026-01-27 | Unsent Email Recovery (47 completed summaries resent, scripts created) | ✅ |
 | 2026-01-27 | TickerMonitoring Root Cause Fix (3-phase pipeline missing upsert, health endpoint enhancement) | ✅ |
 | 2026-01-27 | GitHub Actions Minutes Optimization (watchdog */30, path filters for quality-gates + pr-validation) | ✅ |
@@ -167,10 +170,10 @@ This file provides a chronological index of all completed projects. For detailed
 
 ## Archive Statistics
 - **Total Archived Projects**: 11 weekly archives (Oct-Dec 2025)
-- **Current PROGRESS.md Lines**: ~500 (threshold: 500)
-- **Last Sync**: 2026-01-27
+- **Current PROGRESS.md Lines**: 392 (threshold: 500)
+- **Last Sync**: 2026-02-07
 - **Archive System**: ✅ ACTIVE
-- **Last Compaction**: 2026-01-27 (Unsent email recovery session)
+- **Last Compaction**: 2026-02-07 (Agent Guidelines + feedback loop session)
 
 **Archives**:
 - `29-Dec-2025.md` - Cloudflare Cron Fix, Email Quality, Form 4 Templates, JSON Parsing Phase 5

@@ -1,12 +1,48 @@
 # Project Progress
 
-**Date**: 2026-01-28
+**Date**: 2026-02-07
 **Branch**: feature/pipeline-resilience-zero-intervention
-**Status**: Subscription Management Complete
+**Status**: Agent Guidelines + Context Management
 
 ---
 
-## Current Session: Unified Subscription Tiers + Billing Downgrade Fix ✅ (2026-01-28)
+## Current Session: CLAUDE.md Agent Guidelines + Feedback Loop ✅ (2026-02-07)
+
+**Goal**: Create a feedback loop so future agents don't repeat past mistakes.
+
+**Problem Identified**: CLAUDE.md documented project architecture and commands but lacked agent-specific guidance. When agents made mistakes (wrong imports, guessed file paths, skipped tests), there was no mechanism to capture these learnings.
+
+**Fixes Applied**:
+
+1. **Added Agent Guidelines Section to CLAUDE.md** (lines 20-48):
+   - `### Common Mistakes to Avoid` - 6 actionable rules with HTML comment noting updates come via `/intentional-compact`
+   - `### Pattern References` - Table of exemplar files for API routes, services, database access, etc.
+   - `### Pre-Implementation Checklist` - Quick checks before writing code
+
+2. **Added Step 6 to intentional-compact.md** (lines 219-250):
+   - "Capture Lessons Learned for CLAUDE.md" step
+   - Reviews session for agent mistakes
+   - Updates CLAUDE.md Agent Guidelines when patterns emerge
+   - Reports what was captured
+
+3. **Updated Common Failure Modes** (lines 322-323):
+   - Added `6. Skipping Step 6` - Reminder to update CLAUDE.md
+   - Added `7. Vague guideline entries` - Entries must be actionable
+
+**Files Modified**:
+- `CLAUDE.md` - Added Agent Guidelines section (~30 lines)
+- `.claude/commands/intentional-compact.md` - Added Step 6 + failure modes (~35 lines)
+
+**Verification**:
+- ✅ CLAUDE.md now has Agent Guidelines section
+- ✅ intentional-compact.md has Step 6 for lessons learned
+- ✅ Feedback loop documented: mistake → /intentional-compact → CLAUDE.md update → future agents
+
+**Impact**: Future agents will read Agent Guidelines before implementation and avoid documented mistakes.
+
+---
+
+## Previous Session: Unified Subscription Tiers + Billing Downgrade Fix ✅ (2026-01-28)
 
 **Issue 1**: 405 PUT errors when trying to downgrade from MAX plan on billing page.
 
@@ -388,5 +424,5 @@ Recent highlights include SEC filing quality enhancements, pipeline resilience i
 
 ---
 
-*Last Updated: 2026-01-28 (Unified subscription tiers + billing downgrade fix)*
+*Last Updated: 2026-02-07 (Agent Guidelines + intentional-compact feedback loop)*
 *Completed projects older than 30 days are archived to .claude/history/ - See TIMELINE.md for complete historical context*
