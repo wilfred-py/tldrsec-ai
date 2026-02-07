@@ -24,9 +24,6 @@ import {
 } from "@/lib/api/ticker-service";
 import { useAsync } from "@/lib/hooks/use-async";
 import { TutorialGuide } from "@/components/onboarding/tutorial-guide";
-import { useSubscription } from "@/hooks/use-subscription";
-import { UpgradeCTASection } from "@/components/dashboard/upgrade-cta-section";
-import { SUBSCRIPTION_PLANS, type PlanType } from "@/lib/stripe";
 import {
   TickersTable,
   TickersLoadingSkeleton,
@@ -54,11 +51,7 @@ export function DashboardClient({ showWelcome = false, shouldMergePending = fals
 
   const [showTutorial, setShowTutorial] = useState(false);
   const [tutorialProgress, setTutorialProgress] = useState(0);
-  const [isCheckoutLoading, setIsCheckoutLoading] = useState(false);
   const [hasMergedPending, setHasMergedPending] = useState(false);
-
-  // Subscription hook for upgrade CTA
-  const { subscription, createCheckout } = useSubscription();
 
   // Async hooks for API calls
   const {
@@ -305,24 +298,6 @@ export function DashboardClient({ showWelcome = false, shouldMergePending = fals
     [executeUpdatePreferences]
   );
 
-// Handle upgrade click - redirect to Stripe checkout
-  const handleUpgradeClick = useCallback(
-    async (planType: "PRO" | "MAX", billingCycle: "monthly" | "annual") => {
-      setIsCheckoutLoading(true);
-      try {
-        // Don't check priceId on client - env vars aren't available
-        // Let the API resolve priceId from server-side env vars
-        const checkoutUrl = await createCheckout(planType, billingCycle);
-        window.location.href = checkoutUrl;
-      } catch (error) {
-        console.error("Checkout error:", error);
-        toast.error("Failed to start checkout. Please try again.");
-      } finally {
-        setIsCheckoutLoading(false);
-      }
-    },
-    [createCheckout]
-  );
 
   // Handle delete click from table
   const handleDeleteClick = useCallback((company: Company) => {
@@ -460,18 +435,6 @@ export function DashboardClient({ showWelcome = false, shouldMergePending = fals
         )}
       </div>
 
-      {/* Upgrade CTA for non-MAX users */}
-      {subscription && subscription.planType !== "MAX" && (
-        <UpgradeCTASection
-          currentPlan={subscription.planType as "FREE" | "PRO" | "MAX"}
-          tickerCount={companies.length}
-          tickerLimit={
-            SUBSCRIPTION_PLANS[subscription.planType as PlanType]?.tickerLimit || 3
-          }
-          onUpgradeClick={handleUpgradeClick}
-          isCheckoutLoading={isCheckoutLoading}
-        />
-      )}
 
       {/* Delete Confirmation Dialog */}
       <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
