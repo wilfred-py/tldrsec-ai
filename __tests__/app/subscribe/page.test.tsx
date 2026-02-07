@@ -207,12 +207,7 @@ describe('SubscribePage', () => {
   });
 
   it('should show toast error when checkout returns 409 conflict', async () => {
-    const mockToastError = jest.fn();
-    jest.spyOn(require('sonner'), 'toast', 'get').mockReturnValue({
-      error: mockToastError,
-      success: jest.fn(),
-      info: jest.fn(),
-    });
+    const { toast } = require('sonner');
 
     global.fetch = jest.fn()
       .mockResolvedValueOnce({
@@ -233,17 +228,12 @@ describe('SubscribePage', () => {
     await userEvent.click(upgradeButton);
 
     await waitFor(() => {
-      expect(mockToastError).toHaveBeenCalledWith('You already have an active subscription');
+      expect(toast.error).toHaveBeenCalledWith('You already have an active subscription');
     });
   });
 
   it('should show toast error when checkout returns 500 server error', async () => {
-    const mockToastError = jest.fn();
-    jest.spyOn(require('sonner'), 'toast', 'get').mockReturnValue({
-      error: mockToastError,
-      success: jest.fn(),
-      info: jest.fn(),
-    });
+    const { toast } = require('sonner');
 
     global.fetch = jest.fn()
       .mockResolvedValueOnce({
@@ -264,7 +254,7 @@ describe('SubscribePage', () => {
     await userEvent.click(upgradeButton);
 
     await waitFor(() => {
-      expect(mockToastError).toHaveBeenCalledWith('Internal server error');
+      expect(toast.error).toHaveBeenCalledWith('Internal server error');
     });
   });
 
