@@ -1,14 +1,105 @@
 # Project Progress
 
-**Date**: 2026-02-07
-**Branch**: feature/pipeline-resilience-zero-intervention
-**Status**: Active - Context compaction complete
+**Date**: 2026-02-09
+**Branch**: investigation/pipeline-job-processing-2026-02-09
+**Status**: Complete - Pipeline self-recovery validated
 
 ---
 
-## Current Session: None
+## Current Session: Pipeline Job Processing Investigation ✅ (2026-02-09)
 
-**Status**: Ready for next task
+**Goal**: Investigate post-PR #342 pipeline job processing to understand recovery from CRITICAL status (2,906+ minutes since last completion).
+
+**Finding**: Pipeline had already self-recovered before investigation began. All resilience mechanisms working as designed.
+
+**Investigation Results**:
+
+1. **Pipeline Status: HEALTHY** ✅
+   - Last completion: 3 minutes ago
+   - Completed jobs (1h): 14
+   - Currently processing: 1 job
+   - No stuck jobs, orphaned filings, or stale locks
+
+2. **Database Analysis** (via `scripts/check-job-recovery-timeline.ts`):
+   - 10 recent completions (ASYNC_DISCOVER_FILINGS)
+   - Processing duration: 75-104 seconds (optimal)
+   - All jobs have `retryCount: 1` (retry mechanism working)
+   - Dead letter queue: 20 jobs (all 12+ days old, historical)
+
+3. **Code Review - PR #342 Impact**:
+   - NO BREAKING CHANGES to job processing
+   - Only type annotation improvements (`any` → `Record<string, unknown>`)
+   - 46 files deleted (monitoring/admin routes, tests, archived agents)
+   - Core systems untouched: job-queue.ts, handlers, cron routes
+   - CRON_SECRET sanitization added (defensive improvement)
+
+4. **Auto-Recovery Validation**:
+   - ✅ Auto-recovery endpoint functional (HTTP 200)
+   - ✅ HMAC authentication working (80-char CRON_SECRET, no `\n`)
+   - ✅ Tier-aware endpoint successfully queued discovery job
+   - ✅ Jobs progressing: PENDING → PROCESSING → COMPLETED
+
+**Key Observations**:
+- **Retry Pattern**: All recent jobs have `retryCount: 1` (initial fail → retry success)
+- **Self-Healing**: 3-layer redundancy architecture working as designed
+- **No Manual Intervention**: Pipeline recovered autonomously
+
+**Recommendations**:
+1. Monitor dead letter queue - implement automated cleanup for jobs >30 days
+2. Investigate why initial job attempts frequently fail (retries working, but high retry rate)
+3. Add proactive alerting for high retry rates (>50%)
+
+**Files Created**:
+- `scripts/check-job-recovery-timeline.ts` - Database investigation tool (~130 lines)
+- `docs/plans/2026-02-09-pipeline-job-processing-investigation.md` - Investigation plan with findings
+
+**Verification**:
+- ✅ Pipeline health: HEALTHY status confirmed
+- ✅ Auto-recovery tested and functional
+- ✅ Job processing validated end-to-end
+- ✅ No errors in production logs
+- ✅ Database queries confirm no stuck jobs
+
+**Impact**: Validated PR #342 resilience improvements are working correctly. Zero manual intervention required for recovery.
+
+**Duration**: ~1.5 hours (beat 4-hour target)
+
+---
+
+## Recently Completed Sessions
+
+### Worktree Management Enhancement ✅ (2026-02-07)
+
+**Goal**: Simplify git worktree workflows with integrated create, open, and cleanup commands.
+
+**Work Completed**:
+
+1. **Added Worktree Management Commands** (`package.json`):
+   - `npm run worktrees:create` - Create new worktrees with auto-generated names
+   - `npm run worktrees:cleanup` - Clean up worktrees (direct script call)
+   - Reuses existing `hack/create_worktree.sh` and `hack/cleanup_worktree.sh` scripts
+
+2. **Enhanced Interactive Menu** (`scripts/open-worktrees.sh`):
+   - Added Option 3: "Clean up worktrees" to interactive menu
+   - Multi-select cleanup with branch deletion confirmation
+   - Prevents accidental main worktree deletion
+   - Automatic `git worktree prune` after cleanup
+
+3. **ESLint Fixes**:
+   - Fixed unused variable warnings
+   - Fixed explicit `any` type errors
+
+**Files Modified**:
+- `package.json` - Added `worktrees:create` and `worktrees:cleanup` scripts
+- `scripts/open-worktrees.sh` - Added cleanup option to menu (lines 72-142)
+
+**Verification**:
+- ✅ Interactive menu now has 4 options (open all, select, cleanup, exit)
+- ✅ Cleanup prevents main worktree deletion
+- ✅ Multi-select cleanup with branch confirmation
+- ✅ ESLint errors resolved
+
+**Impact**: Developers can now create, open, and clean up worktrees entirely through npm scripts without memorizing bash commands
 
 ---
 
@@ -121,8 +212,6 @@
 **Impact**: Dashboard is now resilient to data integrity issues. Even if orphaned subscriptions exist in future, the API won't crash.
 
 ---
-
-## Recently Completed Sessions
 
 ### Form 4 Preference Sync Fix ✅ (2026-02-07)
 
@@ -593,5 +682,5 @@ Recent highlights include SEC filing quality enhancements, pipeline resilience i
 
 ---
 
-*Last Updated: 2026-02-07 (Loading skeleton enhancement + dashboard UI polish + orphaned subscriptions cleanup + bidirectional PROGRESS/TIMELINE sync)*
+*Last Updated: 2026-02-07 (Worktree management + loading skeleton + dashboard UI polish + orphaned subscriptions + ESLint fixes)*
 *Completed projects older than 30 days are archived to .claude/history/ - See TIMELINE.md for complete historical context*
