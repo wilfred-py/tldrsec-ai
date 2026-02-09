@@ -56,16 +56,10 @@ export async function GET() {
     }
 
     // Get user's subscription from database
+    // Note: We don't include the user relation since it's not used in the response
+    // and can cause errors if the user record is missing (data integrity issue)
     const userSubscription = await prisma.userSubscription.findUnique({
       where: { userId },
-      include: {
-        user: {
-          select: {
-            email: true,
-            name: true,
-          },
-        },
-      },
     });
 
     if (!userSubscription) {
@@ -350,6 +344,192 @@ export async function POST(request: NextRequest) {
 
   } catch (error) {
     console.error('Failed to create checkout session:', error);
+    const stripeError = handleStripeError(error);
+    return NextResponse.json(
+      { error: stripeError.message },
+      { status: stripeError.statusCode }
+    );
+  }
+}
+
+/**
+ * PUT /api/user/subscription
+ * Update subscription (plan changes, cancellation toggle)
+ */
+export async function PUT(request: NextRequest) {
+  try {
+    const { userId } = await auth();
+    if (!userId) {
+      return NextResponse.json(
+        { error: 'Authentication required' },
+        { status: 401 }
+      );
+    }
+
+    const body = await request.json();
+    const { planType, cancelAtPeriodEnd } = body as {
+      planType?: NewPlanKey;
+      cancelAtPeriodEnd?: boolean;
+    };
+
+    // Get existing subscription
+    const userSubscription = await prisma.userSubscription.findUnique({
+      where: { userId },
+    });
+
+    if (!userSubscription) {
+      return NextResponse.json(
+        { error: 'No subscription found' },
+        { status: 404 }
+      );
+    }
+
+    // Handle cancellation toggle
+    if (typeof cancelAtPeriodEnd === 'boolean') {
+      // If user has a Stripe subscription, update it in Stripe
+      if (userSubscription.stripeSubscriptionId && isStripeEnabled()) {
+        const { updateSubscription } = await import('../../../../lib/stripe');
+        await updateSubscription(userSubscription.stripeSubscriptionId, {
+          cancel_at_period_end: cancelAtPeriodEnd,
+        });
+      }
+
+      // Update database record
+      const updated = await prisma.userSubscription.update({
+        where: { userId },
+        data: {
+          cancelAtPeriodEnd,
+          updatedAt: new Date(),
+        },
+      });
+
+      return NextResponse.json({
+        planType: updated.planType,
+        isActive: updated.isActive,
+        currentPeriodEnd: updated.currentPeriodEnd,
+        cancelAtPeriodEnd: updated.cancelAtPeriodEnd,
+        stripeCustomerId: updated.stripeCustomerId,
+        stripeSubscriptionId: updated.stripeSubscriptionId,
+      });
+    }
+
+    // Handle plan change
+    if (planType) {
+      const currentPlanOrder = { FREE: 0, PRO: 1, MAX: 2 };
+      const newPlanOrder = currentPlanOrder[planType];
+      const currentOrder = currentPlanOrder[userSubscription.planType as NewPlanKey] ?? 0;
+
+      // Downgrade to FREE
+      if (planType === 'FREE') {
+        // Cancel Stripe subscription if exists
+        if (userSubscription.stripeSubscriptionId && isStripeEnabled()) {
+          const { cancelSubscription } = await import('../../../../lib/stripe');
+          await cancelSubscription(userSubscription.stripeSubscriptionId, true); // Cancel at period end
+        }
+
+        // Update database - mark as canceling at period end
+        const updated = await prisma.userSubscription.update({
+          where: { userId },
+          data: {
+            cancelAtPeriodEnd: true,
+            updatedAt: new Date(),
+          },
+        });
+
+        return NextResponse.json({
+          planType: updated.planType,
+          isActive: updated.isActive,
+          currentPeriodEnd: updated.currentPeriodEnd,
+          cancelAtPeriodEnd: updated.cancelAtPeriodEnd,
+          stripeCustomerId: updated.stripeCustomerId,
+          stripeSubscriptionId: updated.stripeSubscriptionId,
+          message: 'Subscription will be downgraded to Free at the end of the billing period',
+        });
+      }
+
+      // Upgrade or change between paid plans
+      if (newPlanOrder > currentOrder || (newPlanOrder !== currentOrder && newPlanOrder > 0)) {
+        // For upgrades or plan changes, redirect to checkout
+        // This ensures proper payment handling through Stripe
+        return NextResponse.json(
+          {
+            error: 'Plan upgrades require checkout',
+            action: 'checkout',
+            planType,
+          },
+          { status: 400 }
+        );
+      }
+
+      // Downgrade between paid plans (MAX -> PRO)
+      if (newPlanOrder < currentOrder && newPlanOrder > 0) {
+        // For downgrades between paid plans, update in Stripe
+        if (userSubscription.stripeSubscriptionId && isStripeEnabled()) {
+          const priceId = getPriceIdForPlan(planType as 'PRO' | 'MAX', 'monthly');
+          if (!priceId) {
+            return NextResponse.json(
+              { error: `Price ID not configured for ${planType}` },
+              { status: 503 }
+            );
+          }
+
+          const { getSubscription, updateSubscription } = await import('../../../../lib/stripe');
+
+          // Get current subscription to find the item ID
+          const stripeSubscription = await getSubscription(userSubscription.stripeSubscriptionId);
+          if (!stripeSubscription || stripeSubscription.items.data.length === 0) {
+            return NextResponse.json(
+              { error: 'Could not retrieve Stripe subscription' },
+              { status: 500 }
+            );
+          }
+
+          const itemId = stripeSubscription.items.data[0].id;
+
+          // Update subscription with new price (prorated, takes effect at period end)
+          await updateSubscription(userSubscription.stripeSubscriptionId, {
+            items: [{
+              id: itemId,
+              price: priceId,
+            }],
+            proration_behavior: 'create_prorations',
+          });
+        }
+
+        // Update database
+        const updated = await prisma.userSubscription.update({
+          where: { userId },
+          data: {
+            planType,
+            updatedAt: new Date(),
+          },
+        });
+
+        // Also update user's subscription tier (now aligned with plan type)
+        await prisma.user.update({
+          where: { id: userId },
+          data: { subscriptionTier: planType },
+        });
+
+        return NextResponse.json({
+          planType: updated.planType,
+          isActive: updated.isActive,
+          currentPeriodEnd: updated.currentPeriodEnd,
+          cancelAtPeriodEnd: updated.cancelAtPeriodEnd,
+          stripeCustomerId: updated.stripeCustomerId,
+          stripeSubscriptionId: updated.stripeSubscriptionId,
+          message: `Successfully changed plan to ${planType}`,
+        });
+      }
+    }
+
+    return NextResponse.json(
+      { error: 'No valid update parameters provided' },
+      { status: 400 }
+    );
+
+  } catch (error) {
+    console.error('Failed to update subscription:', error);
     const stripeError = handleStripeError(error);
     return NextResponse.json(
       { error: stripeError.message },

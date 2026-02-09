@@ -1,31 +1,13 @@
 import { NextResponse } from 'next/server';
 import { auth, currentUser } from '@clerk/nextjs/server';
 import { getPrismaClient } from '@/lib/db/prisma';
+import { getDefaultTickerPreferences } from '@/lib/user/preference-sync';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-// Default filing preferences
-const DEFAULT_PREFERENCES = {
-  tenK: true,
-  tenQ: true,
-  eightK: true,
-  form4: false,
-  form3: false,
-  form5: false,
-  form144: false,
-  twentyF: false,
-  fortyF: false,
-  sixK: false,
-  sc13D: false,
-  sc13G: false,
-  thirteenF: false,
-  def14A: false,
-  pre14A: false,
-  sOne: false,
-  sThree: false,
-  other: false,
-};
+// Get default preferences from the centralized source
+const DEFAULT_PREFERENCES = getDefaultTickerPreferences();
 
 /**
  * PATCH /api/user/tickers/[id]

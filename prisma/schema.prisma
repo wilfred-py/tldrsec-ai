@@ -760,11 +760,8 @@ model RecoveryState {
 
 enum SubscriptionTier {
   FREE
-  PROFESSIONAL
-  ENTERPRISE
-  INSTITUTION
-  HOBBY
   PRO
+  MAX
 
   @@schema("app")
 }

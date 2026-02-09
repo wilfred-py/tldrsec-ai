@@ -2,15 +2,12 @@
 
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { CreditCard, Activity } from "lucide-react";
+import { CreditCard } from "lucide-react";
 import UserButton from "@/components/auth/user-button";
 import { useUser } from "@clerk/nextjs";
-import { useAdminStatus } from "@/lib/hooks/use-admin-status";
-import { Badge } from "@/components/ui/badge";
 
 export function MinimalHeader() {
   const { user } = useUser();
-  const { isAdmin, loading: adminLoading } = useAdminStatus();
 
   return (
     <header className="sticky top-0 z-40 w-full border-b border-[var(--landing-border)] bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
@@ -21,29 +18,11 @@ export function MinimalHeader() {
           <span className="font-bold text-lg">SEC</span>
         </Link>
 
-        {/* Right side: Admin + Manage Subscription + User */}
+        {/* Right side: Manage Subscription + User */}
         <div className="flex items-center gap-4">
-          {/* Admin Monitoring Link */}
-          {!adminLoading && isAdmin && (
-            <Button
-              variant="ghost"
-              size="sm"
-              asChild
-              className="hidden sm:flex"
-            >
-              <Link href="/dashboard/monitoring">
-                <Activity className="h-4 w-4 mr-2" />
-                Monitoring
-                <Badge variant="secondary" className="ml-2 text-xs">
-                  Admin
-                </Badge>
-              </Link>
-            </Button>
-          )}
-
           {/* Manage Subscription Button */}
           <Button
-            variant="outline"
+            variant="ghost"
             size="sm"
             asChild
           >

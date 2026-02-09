@@ -14,8 +14,41 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - Use concise language to create the final plan for approval by me. 
 
 ### While implementing
-- You should update the plan as you work. 
-- After you complete tasks in the plan, you should update and append detailed descriptions of the changes you made, so following tasks can be easily handed over to other engineers. 
+- You should update the plan as you work.
+- After you complete tasks in the plan, you should update and append detailed descriptions of the changes you made, so following tasks can be easily handed over to other engineers.
+
+## Agent Guidelines
+
+### Common Mistakes to Avoid
+<!-- Updated via /intentional-compact command when patterns emerge -->
+
+1. **Don't guess file locations** - Use codebase-locator agent or Grep/Glob before assuming paths
+2. **Use `getPrismaClient()` not direct `prisma` import** - Direct imports fail in API routes
+3. **Verify secret lengths** - CRON_SECRET must be exactly 80 chars (see Known Issues)
+4. **Read files fully** - Never use limit/offset when understanding context for planning
+5. **Check git status first** - Before any commit, run `git status` to see actual changes
+6. **Run tests before committing** - See Pre-Commit Testing section for mandatory tests
+7. **Never store API keys in shell config** - API keys belong in `.env.local` files (gitignored), not `.zshrc` or `.bashrc` where they can be exposed or committed to version control
+8. **Define CSS animations explicitly** - Don't rely on Tailwind auto-generation for custom animations. Define keyframes and animation classes in `app/globals.css` using `@layer utilities` to ensure they're always available
+
+### Pattern References
+When implementing new features, reference these exemplar files:
+
+| Pattern | Reference File |
+|---------|---------------|
+| API route | `app/api/cron/tier-aware/route.ts` |
+| Service class | `lib/email/async-email-queue.ts` |
+| Database access | `lib/db/prisma.ts` → use `getPrismaClient()` |
+| Error handling | `lib/monitoring/pipeline-error-detector.ts` |
+| React component | `components/dashboard/system-health-banner.tsx` |
+| Test file | `__tests__/lib/monitoring/` |
+| Preference sync | `lib/user/preference-sync.ts` |
+
+### Pre-Implementation Checklist
+Before writing code for any task:
+- [ ] Read relevant existing files fully (no limit/offset)
+- [ ] Identify patterns to follow from Pattern References above
+- [ ] Check if similar functionality exists elsewhere in codebase
 
 ## Development Commands
 

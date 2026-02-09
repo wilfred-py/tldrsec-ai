@@ -157,7 +157,7 @@ export async function handleSummarizeCached(
 
     // CRITICAL FIX: Check user preferences before creating summary
     // This prevents prospectus emails from bypassing filtering in async pipeline
-    const tickerPreferences = userTicker.preferences as any;
+    const tickerPreferences = userTicker.preferences as Record<string, unknown>;
     if (!shouldProcessFiling(filing.formType, tickerPreferences)) {
       summarizeLogger.info(`[${executionId}] Skipping due to user preferences`, {
         userId,

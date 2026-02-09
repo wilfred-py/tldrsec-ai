@@ -6,4 +6,3 @@ export {
   TickersLoadingSkeleton,
 } from "./tickers-table-skeleton";
 export { TickersMobileView } from "./tickers-mobile-view";
-export { UpgradeRow } from "./upgrade-row";

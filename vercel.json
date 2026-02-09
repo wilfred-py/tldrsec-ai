@@ -29,10 +29,6 @@
     "app/api/email/welcome/route.ts": {
       "maxDuration": 30,
       "memory": 256
-    },
-    "app/api/monitoring/pipeline-health/route.ts": {
-      "maxDuration": 60,
-      "memory": 512
     }
   },
   "headers": [
@@ -85,23 +81,6 @@
       ]
     },
     {
-      "source": "/api/monitoring/(.*)",
-      "headers": [
-        {
-          "key": "Cache-Control",
-          "value": "no-cache, max-age=0"
-        },
-        {
-          "key": "X-Robots-Tag",
-          "value": "noindex, nofollow"
-        },
-        {
-          "key": "Access-Control-Allow-Methods",
-          "value": "GET, POST, PATCH, DELETE, OPTIONS"
-        }
-      ]
-    },
-    {
       "source": "/(.*)",
       "headers": [
         {
@@ -139,22 +118,6 @@
     {
       "source": "/health/readiness",
       "destination": "/api/health/readiness"
-    },
-    {
-      "source": "/monitoring/health",
-      "destination": "/api/monitoring/pipeline-health"
-    },
-    {
-      "source": "/monitoring/alerts",
-      "destination": "/api/monitoring/error-alerts"
-    },
-    {
-      "source": "/monitoring/trends",
-      "destination": "/api/monitoring/health-trends"
-    },
-    {
-      "source": "/monitoring/metrics",
-      "destination": "/api/monitoring/metrics"
     }
   ],
   "regions": ["iad1"],

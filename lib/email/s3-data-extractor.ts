@@ -17,8 +17,8 @@
 
 import {
   extractBulletPoints,
-  extractMoneyValue,
-  cleanChange,
+  extractMoneyValue as _extractMoneyValue,
+  cleanChange as _cleanChange,
 } from './extractor-utils';
 
 /**

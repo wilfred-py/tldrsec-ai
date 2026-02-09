@@ -10,24 +10,18 @@ import {
   LayoutDashboardIcon,
   Menu,
   CrownIcon,
-  ActivityIcon,
 } from "lucide-react";
 import UserButton from "@/components/auth/user-button";
 import { useUser } from "@clerk/nextjs";
-import { useAdminStatus } from "@/lib/hooks/use-admin-status";
-import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
-import { ShieldIcon } from "lucide-react";
 
 export function Sidebar() {
   const pathname = usePathname();
   const { user } = useUser();
-  const { isAdmin, loading: adminLoading } = useAdminStatus();
 
   // For demo purposes - in a real app, this would come from user's database record
   const userPlan = "Pro Plan";
   const isProPlan = userPlan === "Pro Plan";
-  
+
   const navItems = [
     {
       name: "Dashboard",
@@ -76,7 +70,7 @@ export function Sidebar() {
                   data-tutorial={item.name === "Summaries" ? "sidebar-summaries" : undefined}
                   className={cn(
                     "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium hover:bg-accent hover:text-accent-foreground",
-                    (pathname === item.href || 
+                    (pathname === item.href ||
                      (item.href !== "/dashboard" && pathname.startsWith(item.href)))
                       ? "bg-[var(--landing-primary-light)] text-[var(--landing-primary)]"
                       : "transparent"
@@ -86,34 +80,6 @@ export function Sidebar() {
                   {item.name}
                 </Link>
               ))}
-              
-              {/* Admin Section */}
-              {!adminLoading && isAdmin && (
-                <>
-                  <Separator className="my-2" />
-                  <div className="px-3 py-2">
-                    <h4 className="text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Administration
-                    </h4>
-                  </div>
-                  <Link
-                    href="/dashboard/monitoring"
-                    aria-label="Monitoring dashboard (Admin only)"
-                    className={cn(
-                      "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium hover:bg-accent hover:text-accent-foreground",
-                      (pathname === "/dashboard/monitoring" || pathname.startsWith("/dashboard/monitoring"))
-                        ? "bg-[var(--landing-primary-light)] text-[var(--landing-primary)]"
-                        : "transparent"
-                    )}
-                  >
-                    <ActivityIcon className="h-4 w-4" aria-hidden="true" />
-                    Monitoring
-                    <Badge variant="secondary" className="ml-auto text-xs">
-                      Admin
-                    </Badge>
-                  </Link>
-                </>
-              )}
             </nav>
           </ScrollArea>
           <div className="border-t p-4">
@@ -123,8 +89,7 @@ export function Sidebar() {
                 <span className="font-medium">{user?.fullName || "User"}</span>
                 <div className="flex items-center text-xs text-muted-foreground">
                   {isProPlan && <CrownIcon className="h-3 w-3 mr-1 text-yellow-500" />}
-                  {!adminLoading && isAdmin && <ShieldIcon className="h-3 w-3 mr-1 text-[var(--landing-primary)]" />}
-                  {userPlan} {!adminLoading && isAdmin && "• Admin"}
+                  {userPlan}
                 </div>
               </div>
             </div>
@@ -143,8 +108,7 @@ function MobileSidebar({
   pathname: string;
 }) {
   const { user } = useUser();
-  const { isAdmin, loading: adminLoading } = useAdminStatus();
-  
+
   // For demo purposes - in a real app, this would come from user's database record
   const userPlan = "Pro Plan";
   const isProPlan = userPlan === "Pro Plan";
@@ -166,7 +130,7 @@ function MobileSidebar({
               data-tutorial={item.name === "Summaries" ? "sidebar-summaries" : undefined}
               className={cn(
                 "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium hover:bg-accent hover:text-accent-foreground",
-                (pathname === item.href || 
+                (pathname === item.href ||
                  (item.href !== "/dashboard" && pathname.startsWith(item.href)))
                   ? "bg-[var(--landing-primary-light)] text-[var(--landing-primary)]"
                   : "transparent"
@@ -176,34 +140,6 @@ function MobileSidebar({
               {item.name}
             </Link>
           ))}
-          
-          {/* Admin Section - Mobile */}
-          {!adminLoading && isAdmin && (
-            <>
-              <Separator className="my-2" />
-              <div className="px-3 py-2">
-                <h4 className="text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Administration
-                </h4>
-              </div>
-              <Link
-                href="/dashboard/monitoring"
-                aria-label="Monitoring dashboard (Admin only)"
-                className={cn(
-                  "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium hover:bg-accent hover:text-accent-foreground",
-                  (pathname === "/dashboard/monitoring" || pathname.startsWith("/dashboard/monitoring"))
-                    ? "bg-[var(--landing-primary-light)] text-[var(--landing-primary)]"
-                    : "transparent"
-                )}
-              >
-                <ActivityIcon className="h-4 w-4" aria-hidden="true" />
-                Monitoring
-                <Badge variant="secondary" className="ml-auto text-xs">
-                  Admin
-                </Badge>
-              </Link>
-            </>
-          )}
         </nav>
       </ScrollArea>
       <div className="border-t p-4">
@@ -213,12 +149,11 @@ function MobileSidebar({
             <span className="font-medium">{user?.fullName || "User"}</span>
             <div className="flex items-center text-xs text-muted-foreground">
               {isProPlan && <CrownIcon className="h-3 w-3 mr-1 text-yellow-500" />}
-              {!adminLoading && isAdmin && <ShieldIcon className="h-3 w-3 mr-1 text-[var(--landing-primary)]" />}
-              {userPlan} {!adminLoading && isAdmin && "• Admin"}
+              {userPlan}
             </div>
           </div>
         </div>
       </div>
     </div>
   );
-} 
+}
