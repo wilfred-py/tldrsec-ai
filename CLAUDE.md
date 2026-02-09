@@ -43,6 +43,7 @@ When implementing new features, reference these exemplar files:
 | React component | `components/dashboard/system-health-banner.tsx` |
 | Test file | `__tests__/lib/monitoring/` |
 | Preference sync | `lib/user/preference-sync.ts` |
+| Worktree scripts | `hack/create_worktree.sh`, `hack/cleanup_worktree.sh` |
 
 ### Pre-Implementation Checklist
 Before writing code for any task:
