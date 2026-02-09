@@ -178,7 +178,7 @@ export class CronFilingProcessor {
               }
 
               // Check if this filing type should be processed based on ticker preferences
-              const tickerPreferences = originalTicker.preferences as any;
+              const tickerPreferences = originalTicker.preferences as Record<string, unknown>;
               if (!shouldProcessFiling(filing.filingType, tickerPreferences)) {
                 processorLogger.info(`Skipping filing due to user preferences`, {
                   userId: user.id,

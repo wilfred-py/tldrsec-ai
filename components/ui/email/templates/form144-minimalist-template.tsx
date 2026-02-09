@@ -171,7 +171,7 @@ export function Form144MinimalistTemplate({ filing }: Form144MinimalistTemplateP
   const filerRole = (data?.filerRole || data?.position || extractedData?.filerRole || '') as string;
   const shares = (data?.shares || data?.sharesSold || extractedData?.shares || '') as string;
   const estimatedValue = (data?.estimatedValue || extractedData?.estimatedValue || '') as string;
-  const pricePerShare = (data?.pricePerShare || extractedData?.pricePerShare || '') as string;
+  const _pricePerShare = (data?.pricePerShare || extractedData?.pricePerShare || '') as string;
   const percentOfHoldings = (data?.percentOfHoldings || data?.percentOwnership || extractedData?.percentOfHoldings || '') as string;
   const tradingPlan = (data?.tradingPlan || extractedData?.tradingPlan || '') as string;
   const signalStrength = (data?.signalStrength || extractedData?.signalStrength || '') as string;

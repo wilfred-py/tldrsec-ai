@@ -20,7 +20,7 @@
 import {
   extractBulletPoints,
   extractFinancialHighlightsFromProse,
-  extractMoneyValue,
+  extractMoneyValue as _extractMoneyValue,
   cleanChange,
   type FinancialHighlight,
 } from './extractor-utils';
