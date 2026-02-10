@@ -40,6 +40,7 @@ const handlerHealth = {
   autoRecovery: { lastHeartbeat: null, lastSuccess: null, consecutiveFailures: 0, totalExecutions: 0 },
   intervalSummary: { lastHeartbeat: null, lastSuccess: null, consecutiveFailures: 0, totalExecutions: 0 },
   dailyReport: { lastHeartbeat: null, lastSuccess: null, consecutiveFailures: 0, totalExecutions: 0 },
+  dlqCleanup: { lastHeartbeat: null, lastSuccess: null, consecutiveFailures: 0, totalExecutions: 0 },
 };
 
 /**
@@ -291,6 +292,7 @@ export default {
       // "*/3 * * * *" = Summarize-only processing (clears AI job backlog faster)
       // "*/5 * * * *" = Pipeline processing (every 5 minutes)
       // "*/15 * * * *" = Auto-recovery health check and remediation
+      // "0 2 * * *" = DLQ cleanup (2 AM UTC daily)
       // "0 22 * * *" = Daily Slack report (9 AM AEST = 22:00 UTC)
 
       if (cronExpression === '*/3 * * * *') {
@@ -301,6 +303,11 @@ export default {
       if (cronExpression === '*/15 * * * *') {
         // Auto-recovery health check and remediation
         return await this.handleAutoRecovery(event, env, ctx);
+      }
+
+      if (cronExpression === '0 2 * * *') {
+        // DLQ cleanup (2 AM UTC daily)
+        return await this.handleDLQCleanup(event, env, ctx);
       }
 
       if (cronExpression === '0 22 * * *') {
@@ -451,6 +458,78 @@ export default {
       console.error(`[${executionId}] Daily report error: ${error.message}`);
       recordHandlerExecution('dailyReport', false);
       await alertOnHandlerFailure('dailyReport', error, env);
+      return { success: false, executionId, duration, error: error.message };
+    }
+  },
+
+  // Handle DLQ cleanup (daily at 2 AM UTC)
+  async handleDLQCleanup(event, env, ctx) {
+    const executionId = `dlq-cleanup-${Date.now()}`;
+    const startTime = Date.now();
+
+    // Record handler execution start
+    console.log(`[${executionId}] Starting DLQ cleanup (2 AM UTC daily)`);
+
+    try {
+      const url = `${env.PUBLIC_URL}/api/cron/cleanup-dlq`;
+
+      // Generate HMAC signature
+      const timestamp = Date.now();
+      const payload = `${timestamp}:POST:/api/cron/cleanup-dlq`;
+      const encoder = new TextEncoder();
+      const key = await crypto.subtle.importKey(
+        'raw',
+        encoder.encode(sanitizeCronSecret(env.CRON_SECRET)),
+        { name: 'HMAC', hash: 'SHA-256' },
+        false,
+        ['sign']
+      );
+      const signature = await crypto.subtle.sign('HMAC', key, encoder.encode(payload));
+      const signatureHex = Array.from(new Uint8Array(signature))
+        .map(byte => byte.toString(16).padStart(2, '0'))
+        .join('');
+
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Execution-Id': executionId,
+          'X-Cloudflare-Worker': 'tldrsec-cron',
+          'x-hmac-signature': signatureHex,
+          'x-hmac-timestamp': timestamp.toString(),
+        },
+      });
+
+      const duration = Date.now() - startTime;
+
+      if (response.ok) {
+        const result = await response.json();
+        console.log(`[${executionId}] DLQ cleanup completed successfully in ${duration}ms`, {
+          dlqCleaned: result.dlqCleaned,
+          failedJobsCleaned: result.failedJobsCleaned,
+          pendingCount: result.dlqMetrics?.pendingCount,
+          alerts: result.alerts?.length || 0
+        });
+
+        // Alert if DLQ has grown significantly
+        if (result.alerts && result.alerts.length > 0) {
+          const criticalAlerts = result.alerts.filter(a => a.level === 'CRITICAL');
+          if (criticalAlerts.length > 0) {
+            await alertOnHandlerFailure('dlqCleanup', new Error(`CRITICAL: ${criticalAlerts[0].message}`), env);
+          }
+        }
+
+        return { success: true, executionId, duration, result };
+      } else {
+        const errorText = await response.text();
+        console.error(`[${executionId}] DLQ cleanup failed: ${response.status} - ${errorText}`);
+        await alertOnHandlerFailure('dlqCleanup', new Error(errorText), env);
+        return { success: false, executionId, duration, error: errorText };
+      }
+    } catch (error) {
+      const duration = Date.now() - startTime;
+      console.error(`[${executionId}] DLQ cleanup error: ${error.message}`);
+      await alertOnHandlerFailure('dlqCleanup', error, env);
       return { success: false, executionId, duration, error: error.message };
     }
   },
