@@ -1,7 +1,7 @@
 import { FilingSummaryResult, FilingError } from '../../filing/types';
 import { getFormMetadata } from '../../../lib/sec-edgar/form-registry';
 import { emailClient } from '../../../lib/email';
-import { getPrismaClient } from '../../../lib/db';
+import { getPrismaClient } from '../../../lib/db/index';
 import { monitoring } from '@/lib/monitoring';
 import { renderAsync } from '@react-email/render';
 import * as React from 'react';
