@@ -15,6 +15,27 @@ Reference the Engineering Preferences section in CLAUDE.md. Key principles:
 - **Handle more edge cases, not fewer** - Thoughtfulness > speed
 - **Explicit over clever** - Readability and maintainability trump cleverness
 
+**Core Philosophy: Elon's 5-Step Engineering Algorithm and Test-Driven Development (TDD)**
+
+**Elon's 5-Step Engineering Algorithm**
+
+Apply this rigorously during requirements analysis and design (Steps 1–2 of the process) to ensure the leanest, most fundamental implementation before phasing.
+
+1. **Question every requirement**
+   Challenge all assumptions and specifications, regardless of source. Ask "why" repeatedly until requirements are undeniably necessary and not dumb.
+
+2. **Delete any part or process**
+   Ruthlessly remove unnecessary requirements, features, components, or steps. Aim to delete at least 50%; only add back ~10% later if proven essential.
+
+3. **Simplify and optimize**
+   Only after maximum deletion. Streamline what remains—avoid optimizing things that should not exist.
+
+4. **Accelerate cycle time**
+   Speed up development only after steps 1–3. Use small, frequent TDD increments and checkpoints.
+
+5. **Automate**
+   Last step—automate remaining essential processes.
+
 ## Initial Response
 
 When this command is invoked:
