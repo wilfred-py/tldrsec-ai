@@ -179,6 +179,21 @@ Before writing code for any task:
 ### Context & Workflow Testing
 - `npm run test:context-workflow` - **NEW** Test processing context tracking and workflow
 
+### Dead Letter Queue Management
+- `curl https://tldrsec.app/api/monitoring/dlq-status` - Check DLQ health (pending count, error patterns, age distribution)
+- `curl -H "Authorization: Bearer $CRON_SECRET" https://tldrsec.app/api/cron/cleanup-dlq` - Manual cleanup trigger
+
+**Automatic cleanup runs daily at 02:00 UTC:**
+- Removes reprocessed DLQ entries older than 30 days
+- Removes FAILED jobs older than 14 days from main queue
+- Reports DLQ metrics and error patterns
+- Triggers alerts at thresholds (50=WARNING, 100=CRITICAL)
+
+**DLQ Health Status:**
+- HEALTHY: <50 pending entries
+- WARNING: 50-99 pending entries (monitor error patterns)
+- CRITICAL: ≥100 pending entries (immediate investigation required)
+
 ### Security Operations
 - API key generation and management for secure access
 - Security configuration validation and setup
@@ -578,6 +593,72 @@ cat .env.check | grep -E "^(CRON_SECRET|cron_secret)=" | while read line; do
   echo "$name: length=${#val}, ends='${val: -5}'"
 done
 ```
+
+---
+
+### Job Queue Retry Patterns (EXPECTED BEHAVIOR)
+
+**The retryCount=1 pattern observed in 100% of successful jobs is EXPECTED BEHAVIOR, not a bug.**
+
+#### Normal Operating Conditions
+
+- **100% of jobs have retryCount=1** - This is EXPECTED, not a bug
+- **Root cause**: Serverless cold start + database connection pool initialization
+- **User impact**: None - filings processed within 2 minutes
+- **Timeline**: Initial attempt fails (cold start) → 1 minute backoff → retry succeeds
+
+#### Why This Happens
+
+Vercel serverless functions experience cold starts that cause initial job attempts to timeout:
+1. **Cold start overhead**: 2-5 seconds (function initialization)
+2. **Database connection pool**: 2-5 seconds (TCP + authentication)
+3. **Prisma client initialization**: 1-3 seconds (query engine setup)
+4. **Total**: 5-13 seconds of initialization overhead
+
+By the time the retry occurs (after 1-minute backoff), all resources are warm and the job completes successfully.
+
+#### Monitoring
+
+Check retry rate health:
+```bash
+# Current retry rate status
+curl https://tldrsec.app/api/monitoring/retry-rates
+
+# Last 48 hours with details
+curl https://tldrsec.app/api/monitoring/retry-rates?hours=48&detailed=true
+```
+
+Expected response:
+```json
+{
+  "healthy": true,
+  "metrics": {
+    "retryPercentage": 100,
+    "multipleRetryPercentage": 0
+  },
+  "interpretation": {
+    "status": "NORMAL",
+    "message": "retryCount=1 pattern is normal for serverless cold starts"
+  }
+}
+```
+
+#### When to Investigate
+
+⚠️ **Investigate if any of these conditions are met**:
+
+1. **>10% of jobs have retryCount>1** (indicates persistent errors beyond cold starts)
+2. **Jobs reaching maxRetries and entering DLQ** (complete failures)
+3. **Processing time consistently >200 seconds** (performance degradation)
+4. **Sudden spike in retryCount=0 jobs** (unusual, but not necessarily bad)
+
+#### Complete Documentation
+
+See `docs/architecture/job-retry-patterns.md` for:
+- Complete root cause analysis
+- Performance metrics from investigation
+- Potential optimizations (future considerations)
+- Detailed timeline breakdown
 
 ---
 
