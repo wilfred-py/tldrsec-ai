@@ -1,0 +1,156 @@
+/**
+ * TrialService - Manages trial status checks for users
+ *
+ * Handles three user types:
+ * - Grandfathered FREE users (NULL trial dates) - always active
+ * - Trial users (isTrialing + trialEndsAt) - active until expiry
+ * - Paid users (PRO/MAX) - always active
+ */
+
+import { getPrismaClient } from '@/lib/db/prisma';
+import { TRIAL_CONFIG } from './trial-config';
+
+export interface TrialStatus {
+  isActive: boolean;
+  daysRemaining: number;
+  trialEndsAt: Date | null;
+  isGrandfathered: boolean;
+}
+
+export class TrialService {
+  /**
+   * Check trial status for a user.
+   * Returns status for trial users, grandfathered users, and paid users.
+   */
+  static async checkTrialStatus(userId: string): Promise<TrialStatus> {
+    const prisma = getPrismaClient();
+
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        subscriptionTier: true,
+        trialEndsAt: true,
+        trialStartedAt: true,
+        isTrialing: true,
+      },
+    });
+
+    if (!user) {
+      throw new Error('User not found');
+    }
+
+    // Paid users (PRO/MAX) - always active
+    if (user.subscriptionTier === 'PRO' || user.subscriptionTier === 'MAX') {
+      return {
+        isActive: true,
+        daysRemaining: Infinity,
+        trialEndsAt: null,
+        isGrandfathered: false,
+      };
+    }
+
+    // Grandfathered free users (no trial dates) - always active
+    if (user.subscriptionTier === 'FREE' && !user.trialStartedAt) {
+      return {
+        isActive: true,
+        daysRemaining: Infinity,
+        trialEndsAt: null,
+        isGrandfathered: true,
+      };
+    }
+
+    // Trial users - check expiration
+    if (user.trialEndsAt) {
+      const now = new Date();
+      const daysRemaining = Math.ceil(
+        (user.trialEndsAt.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)
+      );
+      const isActive = daysRemaining > 0;
+
+      return {
+        isActive,
+        daysRemaining,
+        trialEndsAt: user.trialEndsAt,
+        isGrandfathered: false,
+      };
+    }
+
+    // Fallback: FREE user with trialStartedAt but no trialEndsAt (shouldn't happen)
+    return {
+      isActive: false,
+      daysRemaining: 0,
+      trialEndsAt: null,
+      isGrandfathered: false,
+    };
+  }
+
+  /**
+   * Calculate trial end date from a start date.
+   */
+  static calculateTrialEnd(startDate: Date): Date {
+    return new Date(
+      startDate.getTime() + TRIAL_CONFIG.TRIAL_DURATION_DAYS * 24 * 60 * 60 * 1000
+    );
+  }
+
+  /**
+   * Batch check trial status for multiple users.
+   * Used by email delivery gate to pre-fetch status.
+   */
+  static async batchCheckTrialStatus(
+    userIds: string[]
+  ): Promise<Map<string, TrialStatus>> {
+    const prisma = getPrismaClient();
+
+    const users = await prisma.user.findMany({
+      where: { id: { in: userIds } },
+      select: {
+        id: true,
+        subscriptionTier: true,
+        trialEndsAt: true,
+        trialStartedAt: true,
+        isTrialing: true,
+      },
+    });
+
+    const statusMap = new Map<string, TrialStatus>();
+    const now = new Date();
+
+    for (const user of users) {
+      if (user.subscriptionTier === 'PRO' || user.subscriptionTier === 'MAX') {
+        statusMap.set(user.id, {
+          isActive: true,
+          daysRemaining: Infinity,
+          trialEndsAt: null,
+          isGrandfathered: false,
+        });
+      } else if (user.subscriptionTier === 'FREE' && !user.trialStartedAt) {
+        statusMap.set(user.id, {
+          isActive: true,
+          daysRemaining: Infinity,
+          trialEndsAt: null,
+          isGrandfathered: true,
+        });
+      } else if (user.trialEndsAt) {
+        const daysRemaining = Math.ceil(
+          (user.trialEndsAt.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)
+        );
+        statusMap.set(user.id, {
+          isActive: daysRemaining > 0,
+          daysRemaining,
+          trialEndsAt: user.trialEndsAt,
+          isGrandfathered: false,
+        });
+      } else {
+        statusMap.set(user.id, {
+          isActive: false,
+          daysRemaining: 0,
+          trialEndsAt: null,
+          isGrandfathered: false,
+        });
+      }
+    }
+
+    return statusMap;
+  }
+}
