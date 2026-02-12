@@ -315,6 +315,11 @@ export default {
         return await this.handleDailyReport(event, env, ctx);
       }
 
+      if (cronExpression === '0 0 * * *') {
+        // Daily trial expiration check (midnight UTC)
+        return await this.handleTrialExpiration(event, env, ctx);
+      }
+
       // Default: Pipeline processing (*/5 * * * *)
       return await this.handlePipelineProcessing(event, env, ctx);
       
@@ -530,6 +535,72 @@ export default {
       const duration = Date.now() - startTime;
       console.error(`[${executionId}] DLQ cleanup error: ${error.message}`);
       await alertOnHandlerFailure('dlqCleanup', error, env);
+      return { success: false, executionId, duration, error: error.message };
+    }
+  },
+
+  // Handle trial expiration check (daily at midnight UTC)
+  async handleTrialExpiration(event, env, ctx) {
+    const executionId = `trial-check-${Date.now()}`;
+    const startTime = Date.now();
+
+    recordHandlerExecution('trialExpiration', null);
+    console.log(`[${executionId}] Starting trial expiration check (midnight UTC)`);
+
+    try {
+      const url = `${env.PUBLIC_URL}/api/cron/check-trial-expiration`;
+
+      // Generate HMAC signature
+      const timestamp = Date.now();
+      const payload = `${timestamp}:GET:/api/cron/check-trial-expiration`;
+      const encoder = new TextEncoder();
+      const key = await crypto.subtle.importKey(
+        'raw',
+        encoder.encode(sanitizeCronSecret(env.CRON_SECRET)),
+        { name: 'HMAC', hash: 'SHA-256' },
+        false,
+        ['sign']
+      );
+      const signature = await crypto.subtle.sign('HMAC', key, encoder.encode(payload));
+      const signatureHex = Array.from(new Uint8Array(signature))
+        .map(byte => byte.toString(16).padStart(2, '0'))
+        .join('');
+
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Execution-Id': executionId,
+          'X-Cloudflare-Worker': 'tldrsec-cron',
+          'x-hmac-signature': signatureHex,
+          'x-hmac-timestamp': timestamp.toString(),
+          'x-cron-source': 'cloudflare-worker',
+        },
+      });
+
+      const duration = Date.now() - startTime;
+
+      if (response.ok) {
+        const result = await response.json();
+        console.log(`[${executionId}] Trial expiration check completed in ${duration}ms`, {
+          expiredTrials: result.expiredTrials,
+          processed: result.processed,
+          emailsSent: result.emailsSent,
+        });
+        recordHandlerExecution('trialExpiration', true);
+        return { success: true, executionId, duration, result };
+      } else {
+        const errorText = await response.text();
+        console.error(`[${executionId}] Trial expiration check failed: ${response.status} - ${errorText}`);
+        recordHandlerExecution('trialExpiration', false);
+        await alertOnHandlerFailure('trialExpiration', new Error(errorText), env);
+        return { success: false, executionId, duration, error: errorText };
+      }
+    } catch (error) {
+      const duration = Date.now() - startTime;
+      console.error(`[${executionId}] Trial expiration check error: ${error.message}`);
+      recordHandlerExecution('trialExpiration', false);
+      await alertOnHandlerFailure('trialExpiration', error, env);
       return { success: false, executionId, duration, error: error.message };
     }
   },
