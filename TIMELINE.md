@@ -13,21 +13,22 @@
 
 | Date | Project | Status |
 |------|---------|--------|
-| 2026-01-22 | SEC Filing Summary & Email Quality Enhancement (All 4 Phases) | 🔄 Active in PROGRESS.md |
-| 2026-01-21 | Cloudflare Build Fix - Onboarding Dynamic Rendering | 🔄 Active in PROGRESS.md |
-| 2026-01-19 | Onboarding Redirect Race Condition Fix | 🔄 Active in PROGRESS.md |
-| 2026-01-19 | Pipeline Recovery - Zombie Connection Pool Exhaustion | 🔄 Active in PROGRESS.md |
-| 2026-01-16 | Email Template Type Errors Fix | 🔄 Active in PROGRESS.md |
-| 2026-01-15 | SEC Summary Quality Phase 2 - Phase 4: Grokipedia Research | 🔄 Active in PROGRESS.md |
-| 2026-01-15 | 8-K Email Template Registry Fix | 🔄 Active in PROGRESS.md |
-| 2026-01-13 | Pipeline Recovery - Database Migration Fix | 🔄 Active in PROGRESS.md |
-| 2026-01-12 | Pipeline Stall Investigation - Database Connection Pool Fix | 🔄 Active in PROGRESS.md |
-| 2026-01-12 | GitHub Actions Workflow Updates | 🔄 Active in PROGRESS.md |
-| 2026-01-11 | Eliminate Manual Pipeline Intervention - Phases 5-8 | 🔄 Active in PROGRESS.md |
-| 2026-01-11 | clerkMiddleware API Fix | 🔄 Active in PROGRESS.md |
-| 2026-01-10 | Critical Job Queue Database Bug Fix | 🔄 Active in PROGRESS.md |
-| 2026-01-09 | Summary Generation Quality Improvement - Phase 5 | 🔄 Active in PROGRESS.md |
-| 2026-01-09 | Fix Orphaned Filings Pipeline | 🔄 Active in PROGRESS.md |
+| 2026-02-11 | FREE Plan to 7-Day Trial Migration (8 Phases) | ✅ Complete |
+| 2026-02-10 | Pipeline Job Processing Improvements (DLQ, Retry Docs, Tests) | ✅ Complete |
+| 2026-02-07 | Dashboard Loading Skeleton Enhancement | ✅ Complete |
+| 2026-02-07 | Dashboard UI Polish | ✅ Complete |
+| 2026-02-07 | Orphaned UserSubscription Database Cleanup | ✅ Complete |
+| 2026-02-07 | Form 4 Preference Sync Fix | ✅ Complete |
+| 2026-02-07 | CLAUDE.md Agent Guidelines + Feedback Loop | ✅ Complete |
+| 2026-01-28 | Unified Subscription Tiers + Billing Downgrade Fix | ✅ Complete |
+| 2026-01-28 | Pipeline Stall Recovery + Throughput Optimization | ✅ Complete |
+| 2026-01-27 | Unsent Email Recovery (46 emails resent) | ✅ Complete |
+| 2026-01-27 | TickerMonitoring Root Cause Fix | ✅ Complete |
+| 2026-01-27 | GitHub Actions Minutes Optimization | ✅ Complete |
+| 2026-01-26 | Pipeline Resilience Zero-Intervention (PR #340) | ✅ Complete |
+| 2026-01-26 | Pipeline Stall Recovery & Bug Fixes | ✅ Complete |
+| 2026-01-25 | BAC 424B2 Filtering Breach Investigation | ✅ Complete |
+| 2026-01-25 | Stripe Dashboard Integration Fixes | ✅ Complete |
 
 *These will be archived once they are older than 30 days AND PROGRESS.md exceeds 500 lines*
 
@@ -43,6 +44,6 @@
 
 ## Archive Statistics
 - **Total Archived Projects**: 0
-- **Current PROGRESS.md Lines**: 335
-- **Last Sync**: 2026-01-22
+- **Current PROGRESS.md Lines**: 220
+- **Last Sync**: 2026-02-11
 - **Archive System**: ✅ ACTIVE
