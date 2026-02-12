@@ -220,60 +220,60 @@ export const DEFAULT_NOTIFICATION_PREFERENCES: NotificationPreferences = {
   filingTypes: {
     annualReports: {
       form10K: true,
-      form10KA: false,
-      form20F: false,
-      form40F: false,
-      formNCSR: false,
-      formNCSRS: false,
-      formNT10K: false
+      form10KA: true,
+      form20F: true,
+      form40F: true,
+      formNCSR: true,
+      formNCSRS: true,
+      formNT10K: true
     },
     quarterlyReports: {
       form10Q: true,
-      form10QA: false,
-      form6K: false,
-      formNT10Q: false
+      form10QA: true,
+      form6K: true,
+      formNT10Q: true
     },
     currentEvents: {
       form8K: true,
-      form8KA: false
+      form8KA: true
     },
     insiderTrading: {
       form4: true,
-      form3: false,
-      form5: false,
-      form144: false
+      form3: true,
+      form5: true,
+      form144: true
     },
     beneficialOwnership: {
-      formSC13D: false,
-      formSC13DA: false,
-      formSC13G: false,
-      formSC13GA: false,
-      form13F: false
+      formSC13D: true,
+      formSC13DA: true,
+      formSC13G: true,
+      formSC13GA: true,
+      form13F: true
     },
     proxyFilings: {
-      formDEFA14A: false,
-      formDEF14A: false,
-      formPRE14A: false,
-      formDEF14C: false
+      formDEFA14A: true,
+      formDEF14A: true,
+      formPRE14A: true,
+      formDEF14C: true
     },
     registrationFilings: {
-      formS1: false,
-      formS3: false,
-      formF1: false,
-      formF3: false,
-      formPOSAM: false,
-      form424B2: false,
-      form424B3: false,
-      form424B5: false,
-      formFWP: false
+      formS1: true,
+      formS3: true,
+      formF1: true,
+      formF3: true,
+      formPOSAM: true,
+      form424B2: true,
+      form424B3: true,
+      form424B5: true,
+      formFWP: true
     },
     otherFilings: {
-      formN2: false,
-      formNMFP: false,
-      formD: false,
-      form497: false,
-      formSD: false,
-      formARS: false
+      formN2: true,
+      formNMFP: true,
+      formD: true,
+      form497: true,
+      formSD: true,
+      formARS: true
     }
   },
   contentPreferences: {

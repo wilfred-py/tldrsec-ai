@@ -34,6 +34,12 @@ model User {
   tierProcessingCount   Int                    @default(0)
   lastTierUpgrade       DateTime?
 
+  // Trial tracking fields
+  trialStartedAt        DateTime?
+  trialEndsAt           DateTime?
+  isTrialing            Boolean                @default(false)
+  signupIpAddress       String?
+
   // Ticker confirmation tracking (Phase 2: Quarterly Earnings Email)
   tickersConfirmedAt          DateTime?
   lastConfirmationEmailSentAt DateTime?
@@ -49,6 +55,8 @@ model User {
   usagePeriods          UsagePeriod[]
   userSubscription      UserSubscription?
 
+  @@index([isTrialing, trialEndsAt])
+  @@index([signupIpAddress, createdAt])
   @@schema("app")
 }
 
