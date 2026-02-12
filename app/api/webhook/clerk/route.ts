@@ -2,6 +2,9 @@ import { headers } from 'next/headers';
 import { WebhookEvent } from '@clerk/nextjs/server';
 import { NextResponse } from 'next/server';
 import { getPrismaClient } from '@/lib/db/prisma';
+import { TRIAL_CONFIG } from '@/lib/auth/trial-config';
+import { TrialService } from '@/lib/auth/trial-service';
+import { checkIPTrialAbuse } from '@/lib/security/trial-abuse-prevention';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -67,7 +70,31 @@ export async function POST(req: Request) {
         const primaryEmail = userData.email_addresses?.[0]?.email_address;
 
         if (primaryEmail && userData.id) {
-          // Create user with onboardingCompleted=false (auth-first flow)
+          // Extract IP address for trial abuse prevention
+          const headerPayloadForIP = await headers();
+          const ipAddress = headerPayloadForIP.get('x-forwarded-for')?.split(',')[0]?.trim()
+            || headerPayloadForIP.get('x-real-ip')
+            || 'unknown';
+
+          // Check for IP-based trial abuse (fails open - allows signup if check fails)
+          let grantTrial = true;
+          if (ipAddress !== 'unknown') {
+            try {
+              const abuseCheck = await checkIPTrialAbuse(ipAddress);
+              if (!abuseCheck.allowed) {
+                console.warn(`[trial-abuse] IP ${ipAddress} blocked: ${abuseCheck.reason}`);
+                grantTrial = false;
+              }
+            } catch (err) {
+              console.error('[trial-abuse] Check failed, granting trial anyway:', err);
+            }
+          }
+
+          // Calculate trial dates
+          const now = new Date();
+          const trialEndsAt = grantTrial ? TrialService.calculateTrialEnd(now) : undefined;
+
+          // Create user with trial fields (auth-first flow)
           const newUser = await prisma.user.create({
             data: {
               id: userData.id, // Use Clerk user ID as primary key
@@ -77,9 +104,14 @@ export async function POST(req: Request) {
               name: userData.first_name ? `${userData.first_name} ${userData.last_name || ''}`.trim() : undefined,
               subscriptionTier: 'FREE', // Default tier for new users
               onboardingCompleted: false, // Always false - user completes onboarding after auth
+              // Trial fields
+              trialStartedAt: grantTrial ? now : undefined,
+              trialEndsAt: trialEndsAt,
+              isTrialing: grantTrial,
+              signupIpAddress: ipAddress !== 'unknown' ? ipAddress : undefined,
             }
           });
-          console.log('User created in database:', newUser.id);
+          console.log(`User created in database: ${newUser.id}, trial: ${grantTrial}`);
         } else {
           console.error('Missing required user data in webhook:', { id: userData.id, email: primaryEmail });
         }
