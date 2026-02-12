@@ -39,7 +39,9 @@ export type JobType =
   // Phase 3: 3-phase async pipeline (202 pattern)
   | 'ASYNC_DISCOVER_FILINGS'  // Fast discovery job (<5s)
   | 'ASYNC_FETCH_FILING'       // SEC content fetch (60-120s)
-  | 'ASYNC_SUMMARIZE_CACHED';  // AI summarization using cached content (17-90s)
+  | 'ASYNC_SUMMARIZE_CACHED'   // AI summarization using cached content (17-90s)
+  // Trial management
+  | 'CHECK_TRIAL_EXPIRATION';  // Process expired trial users
 
 // Job status
 export type JobStatus = 
