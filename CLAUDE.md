@@ -30,6 +30,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 6. **Run tests before committing** - See Pre-Commit Testing section for mandatory tests
 7. **Never store API keys in shell config** - API keys belong in `.env.local` files (gitignored), not `.zshrc` or `.bashrc` where they can be exposed or committed to version control
 8. **Define CSS animations explicitly** - Don't rely on Tailwind auto-generation for custom animations. Define keyframes and animation classes in `app/globals.css` using `@layer utilities` to ensure they're always available
+9. **Look up users by `authProviderId` not just `id`** - Clerk `userId` is stored in `authProviderId`, not the DB `id` field. Use `findFirst({ where: { OR: [{ id }, { authProviderId }] } })` or look up by email. See tickers route pattern: `app/api/user/tickers/route.ts`
 
 ### Pattern References
 When implementing new features, reference these exemplar files:
