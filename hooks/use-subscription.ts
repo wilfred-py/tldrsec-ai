@@ -16,6 +16,10 @@ interface SubscriptionData {
   cancelAtPeriodEnd: boolean;
   stripeCustomerId: string | null;
   stripeSubscriptionId: string | null;
+  trialEndsAt: string | null;
+  isTrialing: boolean;
+  daysRemaining: number;
+  isGrandfathered: boolean;
   limits: {
     monthlyFilings: number;
     usedFilings: number;
