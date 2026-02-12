@@ -5,14 +5,12 @@ name = "cloudflare-cron"
 main = "index.js"
 compatibility_date = "2024-10-01"
 
-# Cron schedules:
-# - Every 3 minutes: Summarize-only processing (clears AI job backlog faster)
+# Cron schedules (Cloudflare free tier limit: 3 triggers):
 # - Every 5 minutes: Main pipeline processing (discovery, fetch, summarize)
 # - Every 15 minutes: Auto-recovery health check and remediation
-# - Daily at 22:00 UTC (9:00 AM AEST): Daily pipeline report
-# - Daily at 00:00 UTC: Trial expiration check
+# - Daily at 00:00 UTC: Combined daily tasks (trial expiration, DLQ cleanup, report)
 [triggers]
-crons = ["*/3 * * * *", "*/5 * * * *", "*/15 * * * *", "0 22 * * *", "0 0 * * *"]
+crons = ["*/5 * * * *", "*/15 * * * *", "0 0 * * *"]
 
 # Environment variables (non-sensitive)
 [vars]

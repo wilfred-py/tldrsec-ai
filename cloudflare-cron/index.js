@@ -289,35 +289,18 @@ export default {
       console.log(`[${executionId}] Scheduled event triggered with cron expression: ${cronExpression}`);
 
       // Route based on cron expression
-      // "*/3 * * * *" = Summarize-only processing (clears AI job backlog faster)
       // "*/5 * * * *" = Pipeline processing (every 5 minutes)
       // "*/15 * * * *" = Auto-recovery health check and remediation
-      // "0 2 * * *" = DLQ cleanup (2 AM UTC daily)
-      // "0 22 * * *" = Daily Slack report (9 AM AEST = 22:00 UTC)
-
-      if (cronExpression === '*/3 * * * *') {
-        // Summarize-only processing (every 3 minutes) - clears AI job backlog faster
-        return await this.handleSummarizeOnly(event, env, ctx);
-      }
+      // "0 0 * * *" = Combined daily tasks (trial expiration, DLQ cleanup, report)
 
       if (cronExpression === '*/15 * * * *') {
         // Auto-recovery health check and remediation
         return await this.handleAutoRecovery(event, env, ctx);
       }
 
-      if (cronExpression === '0 2 * * *') {
-        // DLQ cleanup (2 AM UTC daily)
-        return await this.handleDLQCleanup(event, env, ctx);
-      }
-
-      if (cronExpression === '0 22 * * *') {
-        // Daily Slack report (9 AM AEST)
-        return await this.handleDailyReport(event, env, ctx);
-      }
-
       if (cronExpression === '0 0 * * *') {
-        // Daily trial expiration check (midnight UTC)
-        return await this.handleTrialExpiration(event, env, ctx);
+        // Combined daily tasks at midnight UTC (Cloudflare free tier: 3 cron limit)
+        return await this.handleDailyTasks(event, env, ctx);
       }
 
       // Default: Pipeline processing (*/5 * * * *)
@@ -602,6 +585,62 @@ export default {
       recordHandlerExecution('trialExpiration', false);
       await alertOnHandlerFailure('trialExpiration', error, env);
       return { success: false, executionId, duration, error: error.message };
+    }
+  },
+
+  // Handle combined daily tasks at midnight UTC (Cloudflare free tier: 3 cron limit)
+  async handleDailyTasks(event, env, ctx) {
+    const executionId = `daily-tasks-${Date.now()}`;
+    const startTime = Date.now();
+
+    console.log(`[${executionId}] Starting combined daily tasks (00:00 UTC)`);
+
+    const results = {
+      trialExpiration: null,
+      dlqCleanup: null,
+      dailyReport: null,
+    };
+
+    try {
+      // Task 1: Trial expiration check (most critical for user experience)
+      console.log(`[${executionId}] Running trial expiration check...`);
+      results.trialExpiration = await this.handleTrialExpiration(event, env, ctx);
+
+      // Task 2: DLQ cleanup (important for operational health)
+      console.log(`[${executionId}] Running DLQ cleanup...`);
+      results.dlqCleanup = await this.handleDLQCleanup(event, env, ctx);
+
+      // Task 3: Daily report (informational, least critical)
+      console.log(`[${executionId}] Running daily report...`);
+      results.dailyReport = await this.handleDailyReport(event, env, ctx);
+
+      const duration = Date.now() - startTime;
+      const allSuccessful = results.trialExpiration?.success &&
+                            results.dlqCleanup?.success &&
+                            results.dailyReport?.success;
+
+      console.log(`[${executionId}] Combined daily tasks completed in ${duration}ms`, {
+        trialExpiration: results.trialExpiration?.success ? 'SUCCESS' : 'FAILED',
+        dlqCleanup: results.dlqCleanup?.success ? 'SUCCESS' : 'FAILED',
+        dailyReport: results.dailyReport?.success ? 'SUCCESS' : 'FAILED',
+      });
+
+      return {
+        success: allSuccessful,
+        executionId,
+        duration,
+        results,
+      };
+    } catch (error) {
+      const duration = Date.now() - startTime;
+      console.error(`[${executionId}] Combined daily tasks error: ${error.message}`);
+      return {
+        success: false,
+        executionId,
+        duration,
+        error: error.message,
+        results,
+      };
     }
   },
 
