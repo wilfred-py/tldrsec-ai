@@ -13,7 +13,11 @@ This file provides a chronological index of all completed projects. For detailed
 
 | Date | Project | Status |
 |------|---------|--------|
+| 2026-02-12 | TrialService User Lookup Fix (findFirst with authProviderId, graceful fallback) | 🔄 |
+| 2026-02-12 | Cloudflare Cron Schedule Consolidation (fit free tier limit) | ✅ |
+| 2026-02-11 | FREE Plan to 7-Day Trial Migration (database-managed trial, 8 phases, email gates) | ✅ |
 | 2026-02-10 | Pipeline Job Processing Improvements (DLQ cleanup automation, retry pattern docs, test fixes) | ✅ |
+| 2026-02-07 | Subscription Management UX Redesign (Grok-inspired interface, PR #343) | ✅ |
 | 2026-02-07 | Dashboard Loading Skeleton Enhancement (animations, shimmer, Card components, Playwright validation) | ✅ |
 | 2026-02-07 | Dashboard UI Polish (Manage Subscription button border removal) | ✅ |
 | 2026-02-07 | Orphaned UserSubscription Database Cleanup (dashboard loading fix, 2 orphaned records deleted) | ✅ |
@@ -24,8 +28,10 @@ This file provides a chronological index of all completed projects. For detailed
 | 2026-01-27 | Unsent Email Recovery (47 completed summaries resent, scripts created) | ✅ |
 | 2026-01-27 | TickerMonitoring Root Cause Fix (3-phase pipeline missing upsert, health endpoint enhancement) | ✅ |
 | 2026-01-27 | GitHub Actions Minutes Optimization (watchdog */30, path filters for quality-gates + pr-validation) | ✅ |
+| 2026-01-26 | Stripe Webhook planType Sync Fix (PR #339, checkout UX improvements) | ✅ |
 | 2026-01-26 | Pipeline Resilience Zero-Intervention (CRON_SECRET sanitization, orphan detection, GitHub Action watchdog) | ✅ |
 | 2026-01-25 | Stripe CTA Dashboard Integration (UpgradeCTASection + direct Stripe checkout, $199/$349 pricing) | ✅ |
+| 2026-01-23 | Prospectus Filing Type Preferences (424B2 filtering, email volume reduction, PR #335) | ✅ |
 | 2026-01-21 | Cloudflare Build Fix - Onboarding Dynamic Rendering (force-dynamic export, client/server split) | ✅ |
 | 2026-01-20 | Pipeline Health Connection Pool Exhaustion Fix (caching, aggregated SQL, orphan sampling, batching) | ✅ |
 | 2026-01-19 | Onboarding Redirect Race Condition Fix (email await + cookie bypass for Clerk JWT sync) | ✅ |
@@ -175,11 +181,10 @@ This file provides a chronological index of all completed projects. For detailed
 
 ## Archive Statistics
 - **Total Archived Projects**: 11 weekly archives (Oct-Dec 2025)
-- **Current PROGRESS.md Lines**: 727 (threshold: 500) ⚠️ 227 LINES OVER
-- **Last Sync**: 2026-02-10
+- **Current PROGRESS.md Lines**: 263 (threshold: 500) ✅ HEALTHY
+- **Last Sync**: 2026-02-12
 - **Archive System**: ✅ ACTIVE
-- **Last Compaction**: 2026-02-10 (No archival - all projects < 30 days old, structural cleanup performed)
-- **Note**: File is 227 lines over threshold but no projects qualify for archival (oldest: 2026-01-25, needs 30+ days). Duplicate "Recently Completed Sessions" header removed.
+- **Last Compaction**: 2026-02-12 (No archival needed — 263 lines, all projects < 30 days old)
 
 **Archives**:
 - `29-Dec-2025.md` - Cloudflare Cron Fix, Email Quality, Form 4 Templates, JSON Parsing Phase 5

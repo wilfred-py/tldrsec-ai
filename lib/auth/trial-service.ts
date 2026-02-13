@@ -25,8 +25,13 @@ export class TrialService {
   static async checkTrialStatus(userId: string): Promise<TrialStatus> {
     const prisma = getPrismaClient();
 
-    const user = await prisma.user.findUnique({
-      where: { id: userId },
+    const user = await prisma.user.findFirst({
+      where: {
+        OR: [
+          { id: userId },
+          { authProviderId: userId },
+        ],
+      },
       select: {
         subscriptionTier: true,
         trialEndsAt: true,
@@ -36,7 +41,14 @@ export class TrialService {
     });
 
     if (!user) {
-      throw new Error('User not found');
+      // User exists in Clerk but not yet in DB (created on first tickers fetch).
+      // Return active/grandfathered so the subscription endpoint doesn't 500.
+      return {
+        isActive: true,
+        daysRemaining: Infinity,
+        trialEndsAt: null,
+        isGrandfathered: true,
+      };
     }
 
     // Paid users (PRO/MAX) - always active
