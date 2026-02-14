@@ -6,6 +6,7 @@ import { SectionCard } from './sections/SectionCard';
 import { FilingTemplateData } from '../../../../lib/email/types';
 import { extract8KData } from '../../../../lib/email/8k-data-extractor';
 import { getItemDescription } from '../../../../lib/constants/sec-item-descriptions';
+import { StalenessBanner } from './sections/StalenessBanner';
 
 export { getItemDescription };
 
@@ -46,7 +47,8 @@ const MATERIAL_ITEMS = new Set([
   '6.03', // Change in Credit Enhancement
   '6.04', // Failure to Make Required Distribution
   '6.05', // Securities Act Updating Disclosure
-  '8.01', // Other Events (often material)
+  // 8.01 (Other Events) and 9.01 (Financial Statements/Exhibits) excluded -
+  // too common and often routine. Materiality determined by content/dollar amounts.
 ]);
 
 /**
@@ -66,9 +68,10 @@ export function isMaterialFiling(itemNumbers: string[], summaryText: string): bo
   const materialKeywords = [
     'acquisition', 'merger', 'earnings', 'revenue', 'profit', 'loss',
     'ceo', 'cfo', 'officer', 'director', 'departure', 'appointed',
-    'dividend', 'buyback', 'repurchase', 'material', 'significant',
+    'dividend', 'buyback', 'repurchase',
     'restructuring', 'layoff', 'workforce', 'guidance', 'outlook',
-    'agreement', 'contract', 'settlement', 'litigation', 'lawsuit'
+    'settlement', 'litigation', 'lawsuit', 'bankruptcy', 'impairment',
+    'restatement', 'cybersecurity incident',
   ];
 
   for (const keyword of materialKeywords) {
@@ -247,6 +250,13 @@ export function Form8KMinimalistTemplate({ filing }: Form8KMinimalistTemplatePro
         filingType={filingType || '8-K'}
         filingDate={filingDate}
       />
+
+      {/* Staleness warning */}
+      {filingDate && (
+        <div style={{ padding: '0 15px' }}>
+          <StalenessBanner filingDate={new Date(filingDate)} />
+        </div>
+      )}
 
       {/* Main content */}
       <table width="100%" cellPadding="0" cellSpacing="0">
