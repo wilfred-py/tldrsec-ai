@@ -2,10 +2,10 @@
 
 import { useState, useEffect, useRef, memo, useCallback } from 'react';
 import { motion, AnimatePresence, useInView } from 'framer-motion';
-import { useUser } from '@clerk/nextjs';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
+import { useAuth } from '@/contexts/auth-context';
 import {
   ArrowRight,
   Sparkles,
@@ -760,9 +760,8 @@ export const GmailInboxHero = memo<GmailInboxHeroProps>(({ className = '', heroR
   const [displayedEmails, setDisplayedEmails] = useState<EmailSummary[]>([]);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
-  // User authentication state from Clerk
-  const { isSignedIn, isLoaded, user } = useUser();
-  const isOnboarded = Boolean(user?.publicMetadata?.onboardingCompleted);
+  // User authentication state from Auth context
+  const { isSignedIn, isLoaded, isOnboarded } = useAuth();
 
   // Expanded state for fullscreen-like view
   const [isExpanded, setIsExpanded] = useState(false);
@@ -964,6 +963,13 @@ export const GmailInboxHero = memo<GmailInboxHeroProps>(({ className = '', heroR
     }
   }, [heroRef]);
 
+  // Extract caption logic for clarity
+  const getCaptionText = () => {
+    if (isSignedIn && !isOnboarded) return 'Just one more step!';
+    if (!isSignedIn) return 'No credit card required. Cancel anytime.';
+    return ''; // Authenticated and onboarded users see no caption
+  };
+
   return (
     <section
       ref={combinedRef}
@@ -1065,7 +1071,7 @@ export const GmailInboxHero = memo<GmailInboxHeroProps>(({ className = '', heroR
             </motion.div>
 
             <motion.p variants={staggerItem} className="landing-caption">
-              {isOnboarded ? 'Welcome back!' : isSignedIn ? 'Just one more step!' : 'No credit card required. Cancel anytime.'}
+              {getCaptionText()}
             </motion.p>
           </motion.div>
 

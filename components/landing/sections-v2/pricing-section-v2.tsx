@@ -1,17 +1,12 @@
 'use client';
 
 import { useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { useUser } from '@clerk/nextjs';
+import { motion } from 'framer-motion';
 import { useRouter } from 'next/navigation';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { Skeleton } from '@/components/ui/skeleton';
-import { Check, Zap, Sparkles, Crown, Loader2 } from 'lucide-react';
+import { Zap, Sparkles, Crown } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   staggerContainer,
-  staggerItem,
   viewportOnce,
 } from '@/lib/animations/landing-animations';
 import {
@@ -19,16 +14,13 @@ import {
   calculateSavingsPercentage,
   type BillingInterval,
 } from '@/lib/stripe/plans';
-import { AnimatedPrice } from './animated-price';
+import { useAuth } from '@/contexts/auth-context';
+import { useSubscriptionContext } from '@/contexts/subscription-context';
+import { PricingCard } from '@/components/landing/pricing-card';
 
 /**
  * Pricing plans configuration
  * Sourced from centralized Stripe config in lib/stripe.ts
- *
- * Note: This is a marketing/landing page component for unauthenticated users.
- * All plans show "Get Started" CTAs that lead to onboarding.
- * For authenticated users viewing their current plan status,
- * see the billing dashboard components.
  */
 const plans = [
   {
@@ -52,7 +44,7 @@ const plans = [
     annualPrice: SUBSCRIPTION_PLANS.PRO.annualPrice,
     description: 'Everything you need for serious investing',
     features: SUBSCRIPTION_PLANS.PRO.features,
-    cta: 'Get Started',
+    cta: 'Upgrade to Pro',
     href: '/onboarding?plan=pro',
     popular: true,
     disabled: false,
@@ -65,7 +57,7 @@ const plans = [
     annualPrice: SUBSCRIPTION_PLANS.MAX.annualPrice,
     description: 'For professional traders & analysts',
     features: SUBSCRIPTION_PLANS.MAX.features,
-    cta: 'Get Started',
+    cta: 'Upgrade to Max',
     href: '/onboarding?plan=max',
     popular: false,
     disabled: false,
@@ -75,21 +67,34 @@ const plans = [
 /**
  * Pricing Section V2 Component
  *
- * Grok-inspired design with:
- * - Clean toggle with "Save with yearly billing" label
- * - Savings percentage badges on annual pricing
- * - "Popular" badge on Pro plan
- * - Feature lists with checkmarks
- * - Clear CTA hierarchy
+ * Enhanced with personalized experience:
+ * - Shows current plan for authenticated users
+ * - Trial ending soon badges
+ * - Graceful error handling
+ * - SWR-cached subscription data
  */
 export function PricingSectionV2() {
   const [billingInterval, setBillingInterval] = useState<BillingInterval>('monthly');
   const [loadingPlan, setLoadingPlan] = useState<string | null>(null);
   const router = useRouter();
 
-  // User authentication state from Clerk
-  const { isSignedIn, isLoaded, user } = useUser();
-  const isOnboarded = Boolean(user?.publicMetadata?.onboardingCompleted);
+  // Auth context
+  const { isSignedIn, isLoaded, isOnboarded } = useAuth();
+
+  // Subscription context (with SWR caching + SSE)
+  const { subscription, loading: subscriptionLoading, error } = useSubscriptionContext();
+
+  // Check if this plan is the user's current active plan
+  const isCurrentPlan = (planKey: string) => {
+    if (!subscription) return false; // API failed or not loaded - graceful degradation
+    return subscription.planType === planKey && subscription.isActive;
+  };
+
+  // Check if trial is ending soon (last day)
+  const isTrialEndingSoon = (planKey: string) => {
+    if (!subscription || !subscription.isTrialing) return false;
+    return isCurrentPlan(planKey) && subscription.daysRemaining < 1;
+  };
 
   const getPrice = (plan: typeof plans[0]) => {
     if (billingInterval === 'annual') {
@@ -110,23 +115,40 @@ export function PricingSectionV2() {
     return calculateSavingsPercentage(plan.key);
   };
 
-  // Handle checkout - routes based on 3 auth states
+  // Determine CTA text based on auth state
+  const getCtaText = (plan: typeof plans[0]) => {
+    if (plan.disabled) return plan.cta;
+    if (!isSignedIn) return 'Get Started';
+    if (!isOnboarded) return 'Complete Setup';
+    return plan.cta; // "Upgrade to Pro" or "Upgrade to Max"
+  };
+
+  // Handle checkout/signup flow
   const handleCheckout = async (planKey: string) => {
-    if (!isSignedIn) {
-      // State 1: Unauthenticated → Sign Up with plan params
-      router.push(`/sign-up?plan=${planKey.toLowerCase()}${billingInterval === 'annual' ? '&interval=annual' : ''}`);
-      return;
-    }
-
-    if (!isOnboarded) {
-      // State 2: Authenticated but NOT onboarded → Onboarding with plan params
-      router.push(`/onboarding?plan=${planKey.toLowerCase()}${billingInterval === 'annual' ? '&interval=annual' : ''}`);
-      return;
-    }
-
-    // State 3: Authenticated AND onboarded → Stripe checkout
     setLoadingPlan(planKey);
+
     try {
+      // Unauthenticated: redirect to sign-up with plan params
+      if (!isSignedIn) {
+        const params = new URLSearchParams({
+          plan: planKey.toLowerCase(),
+          interval: billingInterval,
+        });
+        router.push(`/sign-up?${params.toString()}`);
+        return;
+      }
+
+      // Authenticated but not onboarded: redirect to onboarding
+      if (!isOnboarded) {
+        const params = new URLSearchParams({
+          plan: planKey.toLowerCase(),
+          interval: billingInterval,
+        });
+        router.push(`/onboarding?${params.toString()}`);
+        return;
+      }
+
+      // Authenticated and onboarded: create Stripe checkout session
       const response = await fetch('/api/user/subscription', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -136,11 +158,9 @@ export function PricingSectionV2() {
         }),
       });
 
-      const data = await response.json();
-
       if (!response.ok) {
+        const data = await response.json();
         if (response.status === 409) {
-          // User already has an active subscription
           toast.error('You already have an active subscription', {
             description: 'Visit your billing page to manage or upgrade your plan.',
             action: {
@@ -155,27 +175,22 @@ export function PricingSectionV2() {
         return;
       }
 
-      if (data.checkoutUrl) {
-        window.location.href = data.checkoutUrl;
+      const { checkoutUrl } = await response.json();
+      if (checkoutUrl) {
+        window.location.href = checkoutUrl;
       } else {
-        console.error('No checkout URL returned:', data);
         toast.error('Failed to start checkout. Please try again.');
         setLoadingPlan(null);
       }
     } catch (error) {
-      console.error('Error creating checkout session:', error);
+      console.error('Checkout error:', error);
       toast.error('An error occurred. Please try again.');
       setLoadingPlan(null);
     }
   };
 
-  // Get CTA text based on user state and plan
-  const getCtaText = (plan: typeof plans[0]) => {
-    if (plan.disabled) return plan.cta;
-    if (!isSignedIn) return 'Get Started';
-    if (!isOnboarded) return 'Complete Setup';
-    return plan.cta; // "Upgrade to Pro" or "Upgrade to Max"
-  };
+  // Combined loading state (Clerk + subscription)
+  const showLoading = !isLoaded || (isSignedIn && subscriptionLoading);
 
   return (
     <section className="py-24 bg-[var(--landing-bg-subtle)]" id="pricing">
@@ -196,7 +211,7 @@ export function PricingSectionV2() {
           </p>
         </motion.div>
 
-        {/* Billing Toggle - Grok Style */}
+        {/* Billing Toggle */}
         <motion.div
           initial={{ opacity: 0, y: 10 }}
           whileInView={{ opacity: 1, y: 0 }}
@@ -224,7 +239,7 @@ export function PricingSectionV2() {
           </button>
         </motion.div>
 
-        {/* Pricing Cards */}
+        {/* Pricing Cards Grid */}
         <motion.div
           variants={staggerContainer}
           initial="initial"
@@ -232,152 +247,30 @@ export function PricingSectionV2() {
           viewport={viewportOnce}
           className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-5xl mx-auto"
         >
-          {plans.map((plan) => {
-            const savings = getSavings(plan);
-            const monthlyEquiv = getMonthlyEquivalent(plan);
-
-            return (
-              <motion.div
-                key={plan.name}
-                variants={staggerItem}
-                whileHover={{
-                  y: -4,
-                  boxShadow: '0 20px 40px -10px rgba(0, 0, 0, 0.15)',
-                }}
-                transition={{ duration: 0.2 }}
-                className={`landing-card relative flex flex-col ${
-                  plan.popular
-                    ? 'ring-2 ring-[var(--landing-primary)] shadow-lg'
-                    : ''
-                }`}
-              >
-                {/* Plan Header with Popular Badge inline */}
-                <div className="flex items-center justify-between mb-4">
-                  <div>
-                    <p className="text-xs text-[var(--landing-text-muted)] uppercase tracking-wide mb-1">
-                      {plan.key === 'FREE' ? 'Basic' : plan.name}
-                    </p>
-                    <h3
-                      className="text-2xl font-bold"
-                      style={{ color: 'var(--landing-secondary)' }}
-                    >
-                      {plan.name}
-                    </h3>
-                  </div>
-                  {plan.popular && (
-                    <Badge className="bg-[var(--landing-primary)] text-white text-xs px-2 py-0.5">
-                      Popular
-                    </Badge>
-                  )}
-                </div>
-
-                {/* Price Display - Grok Style with Animation */}
-                {/* Fixed height container prevents layout shift */}
-                <div className="mb-6 h-[88px]">
-                  {plan.monthlyPrice === 0 ? (
-                    <div className="h-full" />
-                  ) : (
-                    <>
-                      <AnimatedPrice
-                        value={getPrice(plan)}
-                        suffix={billingInterval === 'annual' ? '/year' : '/month'}
-                        savings={billingInterval === 'annual' ? savings : null}
-                      />
-                      {/* Fixed height container for monthly equivalent text */}
-                      <div className="h-4 mt-1">
-                        <AnimatePresence mode="wait">
-                          {monthlyEquiv && (
-                            <motion.p
-                              key="monthly-equiv"
-                              initial={{ opacity: 0 }}
-                              animate={{ opacity: 1 }}
-                              exit={{ opacity: 0 }}
-                              transition={{ duration: 0.2 }}
-                              className="text-xs text-[var(--landing-text-muted)]"
-                            >
-                              ${monthlyEquiv}/mo billed annually
-                            </motion.p>
-                          )}
-                        </AnimatePresence>
-                      </div>
-                    </>
-                  )}
-                </div>
-
-                {/* CTA Button - Positioned after price like Grok */}
-                <div className="mb-6">
-                  {!isLoaded ? (
-                    // Loading state - show skeleton button
-                    <Skeleton className="h-10 w-full rounded-lg" />
-                  ) : plan.disabled ? (
-                    <Button
-                      className="w-full bg-gray-100 text-gray-500 border border-gray-200 cursor-default hover:bg-gray-100"
-                      disabled
-                    >
-                      {plan.cta}
-                    </Button>
-                  ) : (
-                    <Button
-                      onClick={() => handleCheckout(plan.key)}
-                      disabled={loadingPlan === plan.key}
-                      className={`w-full ${
-                        plan.popular
-                          ? 'landing-button-primary'
-                          : 'landing-button-secondary'
-                      }`}
-                    >
-                      {loadingPlan === plan.key ? (
-                        <>
-                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                          Loading...
-                        </>
-                      ) : (
-                        getCtaText(plan)
-                      )}
-                    </Button>
-                  )}
-                </div>
-
-                {/* Features */}
-                <ul className="space-y-3 flex-grow">
-                  {plan.features.map((feature, idx) => {
-                    // Parse **text** markdown bold syntax
-                    const parts = feature.split(/(\*\*[^*]+\*\*)/);
-                    return (
-                      <li key={idx} className="flex items-start gap-3">
-                        <Check className="w-4 h-4 text-[var(--landing-success)] flex-shrink-0 mt-0.5" />
-                        <span className="text-sm" style={{ color: 'var(--landing-text)' }}>
-                          {parts.map((part, i) => {
-                            if (part.startsWith('**') && part.endsWith('**')) {
-                              return (
-                                <strong key={i} className="font-semibold">
-                                  {part.slice(2, -2)}
-                                </strong>
-                              );
-                            }
-                            return part;
-                          })}
-                        </span>
-                      </li>
-                    );
-                  })}
-                </ul>
-
-                {/* "Everything in X" footer for higher tiers */}
-                {plan.key !== 'FREE' && (
-                  <div className="mt-4 pt-4 border-t border-gray-100">
-                    <div className="flex items-center gap-2 text-sm text-[var(--landing-text-muted)]">
-                      <span className="text-[var(--landing-primary)]">+</span>
-                      <span>
-                        Everything in {plan.key === 'PRO' ? 'Free' : 'Pro'}
-                      </span>
-                    </div>
-                  </div>
-                )}
-              </motion.div>
-            );
-          })}
+          {plans.map((plan) => (
+            <PricingCard
+              key={plan.key}
+              plan={plan}
+              billingInterval={billingInterval}
+              isCurrentPlan={isCurrentPlan(plan.key)}
+              isTrialEndingSoon={isTrialEndingSoon(plan.key)}
+              loading={showLoading}
+              checkoutLoading={loadingPlan === plan.key}
+              onCheckout={handleCheckout}
+              getCtaText={getCtaText}
+              getPrice={getPrice}
+              getMonthlyEquivalent={getMonthlyEquivalent}
+              getSavings={getSavings}
+            />
+          ))}
         </motion.div>
+
+        {/* Error banner (graceful degradation) */}
+        {error && isSignedIn && (
+          <div className="mt-8 max-w-2xl mx-auto p-4 bg-yellow-50 border border-yellow-200 rounded-lg text-sm text-yellow-800">
+            ⚠️ Unable to load subscription status. You can still view pricing and upgrade.
+          </div>
+        )}
       </div>
     </section>
   );
