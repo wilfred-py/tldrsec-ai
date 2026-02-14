@@ -403,6 +403,15 @@ npm run test  # No regressions
 
 ## Phase 2: AI Prompt Improvements
 
+**STATUS: COMPLETE** - All 4 tests pass.
+
+### Implementation Notes (2026-02-14)
+- Added 10-word blocklist to `SYSTEM_PROMPT` in `unified-prompts.ts` with replacement suggestions
+- Added 3 BAD/GOOD example pairs for writing style
+- Added `itemDescriptions` array field to 8-K schema in `FORM_SCHEMAS`
+- Changed 10-K extraction guidance "KEY METRIC" to "MANDATORY" for gross margin
+- Test file: `__tests__/ai/prompt-quality.test.ts` (4 tests)
+
 ### Overview
 Add a word blocklist to the unified prompts, improve style enforcement, and add negative examples. This addresses the "snag" language pattern issue and general AI output quality.
 
@@ -539,6 +548,19 @@ npm run test
 ---
 
 ## Phase 3: 8-K Template Improvements
+
+**STATUS: COMPLETE** - All 19 tests pass.
+
+### Implementation Notes (2026-02-14)
+- Created `lib/constants/sec-item-descriptions.ts` as shared constants (DRY - single source of truth)
+- Exported `isMaterialFiling`, `formatText`, re-exported `getItemDescription` from 8-K template
+- Added `hasLargeDollarAmount()` function detecting amounts >= $500M (handles $XB, $XM, $X billion, $X million, $X,XXX,XXX,XXX)
+- Removed `8.01` and `9.01` from MATERIAL_ITEMS (too common/routine - materiality now determined by content)
+- Refined materialKeywords: removed overly broad terms ("agreement", "contract", "material", "significant")
+- Changed `formatText()` font-weight from 700 to 600 (matches design-system)
+- Added leading bullet/dash stripping in `formatText()`
+- Wired item descriptions into items display with "Item X.XX - Description" format
+- Test files: `8k-materiality.test.ts` (11), `8k-item-descriptions.test.ts` (4), `8k-formatting.test.ts` (4)
 
 ### Overview
 Fix materiality classification to consider dollar amounts, wire item descriptions to the template, fix bold formatting consistency, and prevent double-bullet rendering.
@@ -806,6 +828,21 @@ npm run test
 
 ## Phase 4: Form 4 Template Improvements
 
+**STATUS: COMPLETE** - All 14 tests pass.
+
+### Implementation Notes (2026-02-14)
+- Rewrote `extractFilerName()` with 6 new patterns:
+  - `**Reporting Person**: NAME` / `**Filer**: NAME` (markdown bold labels with ALL CAPS support)
+  - `Name, Role` pattern (e.g., "Vaibhav Taneja, Chief Financial Officer")
+  - `filed by NAME` with ALL CAPS support
+  - `NAME reported/disclosed/filed` pattern
+  - Explicit case-sensitive patterns to avoid false positives ("insider sold" no longer matches)
+- Added `toTitleCase()` helper for ALL CAPS name conversion
+- Added `isAllCaps()` detection for automatic title-case conversion
+- Supports hyphenated last names (`[A-Za-z-]+` instead of `[a-z]+`)
+- Supports middle initials (e.g., "Mary J. Smith")
+- Test file: `form4-improvements.test.ts` (14 tests including graceful degradation)
+
 ### Overview
 Improve filerName extraction reliability, fix multi-transaction display, and ensure ownership impact section renders when data is available.
 
@@ -994,6 +1031,21 @@ npm run test
 ---
 
 ## Phase 5: Timeliness & Staleness
+
+**STATUS: COMPLETE** - All 12 tests pass.
+
+### Implementation Notes (2026-02-14)
+- Created `lib/validation/staleness-detector.ts` with `StalenessDetector` class:
+  - `check(filingDate, now?)` → `{ isStale, daysOld, severity, message }`
+  - Thresholds: 7 days = warning, 30 days = critical
+  - `formatRelativeTime(daysOld)` → human-readable ("Filed 2 weeks ago", "Filed 3 months ago")
+- Created `components/ui/email/templates/sections/StalenessBanner.tsx`:
+  - Injectable `now` prop for deterministic testing
+  - Amber background for warning, red for critical
+  - Renders nothing for fresh filings
+- Integrated StalenessBanner into 4 main templates: 8-K, 10-K, 10-Q, Form 4
+- Skipped optional 90-day age filter in discovery (not critical, can add later)
+- Test files: `staleness-detection.test.ts` (10), `staleness-banner.test.tsx` (2)
 
 ### Overview
 Add staleness detection and warning banners for filings that are delivered more than 7 days after their filing date. Add optional relative time display. Optionally add age-based filtering to prevent processing very old filings.
@@ -1186,6 +1238,14 @@ npm run test
 ---
 
 ## Phase 6: Content Quality & Edge Cases
+
+**STATUS: COMPLETE** - All 6 tests pass.
+
+### Implementation Notes (2026-02-14)
+- Content quality checks test file validates `detectEmptySections` for all form types
+- Updated Form 4 template to show "Gift (no monetary value)" instead of "$0" for gift/transfer transactions
+- Skipped duplicate logging enhancement (low priority, existing logging is adequate)
+- Total tests across all phases: 118 passing, 0 failing
 
 ### Overview
 Address remaining issues: sparse/blank section detection (integrated with quality gate), gift $0 display improvement, and improved duplicate logging. ~~Consistent bold formatting across all templates~~ (REMOVED - Review Decision #3: only 8-K needs fixing, done in Phase 3. 10-K/10-Q/Form4 already use `markdownToHtml()` with correct font-weight:600).
