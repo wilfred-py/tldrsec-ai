@@ -659,6 +659,12 @@ export class BackgroundFilingWorker {
           return await handleSummarizeCached(payload as SummarizePayloadType) as HandlerResult;
         }
 
+        case 'CHECK_TRIAL_EXPIRATION': {
+          const { handleTrialExpiration } = await import('./handlers/trial-expiration-handler');
+          type TrialPayloadType = Parameters<typeof handleTrialExpiration>[0];
+          return await handleTrialExpiration(payload as TrialPayloadType) as HandlerResult;
+        }
+
         case 'ASYNC_SUMMARIZE_FILING':
         default:
           // Legacy filing processing for backward compatibility

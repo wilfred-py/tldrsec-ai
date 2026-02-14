@@ -16,13 +16,13 @@ export const SUBSCRIPTION_PLANS = {
     monthlyPrice: 0,
     annualPrice: 0,
     tickerLimit: 3,
-    filingTypes: ['10-K', '10-Q'] as const, // Only annual/quarterly reports
-    emailFrequency: 'weekly' as const,
+    filingTypes: ['ALL'] as const, // Trial users get all filing types to showcase full product
+    emailFrequency: 'realtime' as const,
     features: [
       '3 companies to track',
-      'Weekly digest emails',
-      '10-K and 10-Q summaries only',
-      'Basic filing alerts',
+      'Real-time email alerts',
+      'All SEC filing types',
+      '7-day free trial',
     ],
   },
   PRO: {

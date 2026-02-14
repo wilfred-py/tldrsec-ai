@@ -17,6 +17,7 @@ import { sendFilingSummaryEmail } from '../../email/summary-service';
 import type { FetchJobPayload } from './fetch-handler';
 import { verifyFilingContent, type FilingMetadata } from '../../validation/filing-content-verifier';
 import { shouldProcessFiling } from '../../filing/filing-type-preferences-mapper';
+import { TrialService } from '../../auth/trial-service';
 
 const summarizeLogger = logger.child('summarize-cached-handler');
 
@@ -75,6 +76,27 @@ export async function handleSummarizeCached(
   try {
     const { getPrismaClient } = await import('../../db/prisma');
     const prisma = getPrismaClient();
+
+    // Email delivery gate: check if user's trial is still active
+    // Expired trial users don't receive emails (soft block)
+    let shouldSendEmail = true;
+    try {
+      const trialStatus = await TrialService.checkTrialStatus(userId);
+      if (!trialStatus.isGrandfathered && !trialStatus.isActive) {
+        shouldSendEmail = false;
+        summarizeLogger.info(`[${executionId}] Email delivery blocked - trial expired`, {
+          userId,
+          ticker: ticker.symbol,
+          daysRemaining: trialStatus.daysRemaining,
+        });
+      }
+    } catch (trialError) {
+      // Fail open - send email if trial check fails
+      summarizeLogger.warn(`[${executionId}] Trial check failed, sending email anyway`, {
+        userId,
+        error: trialError instanceof Error ? trialError.message : 'Unknown error',
+      });
+    }
 
     // Retrieve cached content including primaryDocUrl for email links
     const cachedContent = await prisma.filingContentCache.findUnique({
@@ -197,37 +219,47 @@ export async function handleSummarizeCached(
         createdAt: existingSummary.createdAt
       });
 
-      // Summary exists, just send email notification using correct signature:
-      // sendFilingSummaryEmail(recipientEmail, { companyName, ticker, filingType, filingDate, summary, filingUrl })
-      try {
-        // Need to fetch the summary text to include in email
-        const existingSummaryFull = await prisma.summary.findUnique({
-          where: { id: existingSummary.id },
-          select: { summaryText: true }
-        });
+      // Summary exists, send email if trial is active
+      if (shouldSendEmail) {
+        try {
+          // Need to fetch the summary text to include in email
+          const existingSummaryFull = await prisma.summary.findUnique({
+            where: { id: existingSummary.id },
+            select: { summaryText: true }
+          });
 
-        await sendFilingSummaryEmail(userEmail, {
-          companyName: ticker.companyName || ticker.symbol,
-          ticker: ticker.symbol,
-          filingType: filing.formType,
-          filingDate: new Date(filing.filingDate),
-          summary: existingSummaryFull?.summaryText || 'Summary available in dashboard',
-          filingUrl: cachedContent.primaryDocUrl || filing.filingUrl  // Prefer direct document URL
-        });
+          await sendFilingSummaryEmail(userEmail, {
+            companyName: ticker.companyName || ticker.symbol,
+            ticker: ticker.symbol,
+            filingType: filing.formType,
+            filingDate: new Date(filing.filingDate),
+            summary: existingSummaryFull?.summaryText || 'Summary available in dashboard',
+            filingUrl: cachedContent.primaryDocUrl || filing.filingUrl  // Prefer direct document URL
+          });
 
-        return {
-          success: true,
-          summaryId: existingSummary.id,
-          cost: 0,
-          summarizeDuration: 0,
-          emailSent: true
-        };
-      } catch (emailError) {
-        summarizeLogger.error(`[${executionId}] Failed to send email for existing summary`, {
-          summaryId: existingSummary.id,
-          error: emailError instanceof Error ? emailError.message : 'Unknown error'
-        });
+          return {
+            success: true,
+            summaryId: existingSummary.id,
+            cost: 0,
+            summarizeDuration: 0,
+            emailSent: true
+          };
+        } catch (emailError) {
+          summarizeLogger.error(`[${executionId}] Failed to send email for existing summary`, {
+            summaryId: existingSummary.id,
+            error: emailError instanceof Error ? emailError.message : 'Unknown error'
+          });
 
+          return {
+            success: true,
+            summaryId: existingSummary.id,
+            cost: 0,
+            summarizeDuration: 0,
+            emailSent: false
+          };
+        }
+      } else {
+        // Trial expired - skip email but return success
         return {
           success: true,
           summaryId: existingSummary.id,
@@ -318,54 +350,56 @@ export async function handleSummarizeCached(
         costSaved: sharedSummary.totalCost
       });
 
-      // Send email notification
+      // Send email notification (gated by trial status)
       let emailSent = false;
-      try {
-        await sendFilingSummaryEmail(userEmail, {
-          companyName: ticker.companyName || ticker.symbol,
-          ticker: ticker.symbol,
-          filingType: filing.formType,
-          filingDate: new Date(filing.filingDate),
-          summary: sharedSummary.summaryText,
-          filingUrl: cachedContent.primaryDocUrl || filing.filingUrl,  // Prefer direct document URL
-          summaryData: sharedSummary.summaryJSON as Record<string, unknown> | undefined
-        });
-
-        emailSent = true;
-        summarizeLogger.info(`[${executionId}] Email notification sent for shared summary`, {
-          summaryId: summary.id,
-          userEmail
-        });
-
-        // Update email tracking
+      if (shouldSendEmail) {
         try {
-          await prisma.summary.update({
-            where: { id: summary.id },
-            data: {
-              sentToUser: true,
-              totalEmailsSent: { increment: 1 }
-            }
+          await sendFilingSummaryEmail(userEmail, {
+            companyName: ticker.companyName || ticker.symbol,
+            ticker: ticker.symbol,
+            filingType: filing.formType,
+            filingDate: new Date(filing.filingDate),
+            summary: sharedSummary.summaryText,
+            filingUrl: cachedContent.primaryDocUrl || filing.filingUrl,  // Prefer direct document URL
+            summaryData: sharedSummary.summaryJSON as Record<string, unknown> | undefined
           });
 
-          await prisma.summaryEmailDelivery.create({
-            data: {
-              summaryId: summary.id,
-              userId: userId,
-              emailAddress: userEmail,
-              deliveryStatus: 'sent'
-            }
-          });
-        } catch (trackingError) {
-          summarizeLogger.warn(`[${executionId}] Failed to update email tracking for shared summary`, {
+          emailSent = true;
+          summarizeLogger.info(`[${executionId}] Email notification sent for shared summary`, {
             summaryId: summary.id,
-            error: trackingError instanceof Error ? trackingError.message : 'Unknown error'
+            userEmail
+          });
+
+          // Update email tracking
+          try {
+            await prisma.summary.update({
+              where: { id: summary.id },
+              data: {
+                sentToUser: true,
+                totalEmailsSent: { increment: 1 }
+              }
+            });
+
+            await prisma.summaryEmailDelivery.create({
+              data: {
+                summaryId: summary.id,
+                userId: userId,
+                emailAddress: userEmail,
+                deliveryStatus: 'sent'
+              }
+            });
+          } catch (trackingError) {
+            summarizeLogger.warn(`[${executionId}] Failed to update email tracking for shared summary`, {
+              summaryId: summary.id,
+              error: trackingError instanceof Error ? trackingError.message : 'Unknown error'
+            });
+          }
+        } catch (emailError) {
+          summarizeLogger.error(`[${executionId}] Failed to send email for shared summary`, {
+            summaryId: summary.id,
+            error: emailError instanceof Error ? emailError.message : 'Unknown error'
           });
         }
-      } catch (emailError) {
-        summarizeLogger.error(`[${executionId}] Failed to send email for shared summary`, {
-          summaryId: summary.id,
-          error: emailError instanceof Error ? emailError.message : 'Unknown error'
-        });
       }
 
       return {
@@ -465,63 +499,64 @@ export async function handleSummarizeCached(
       formType: filing.formType
     });
 
-    // Send email notification using correct signature:
-    // sendFilingSummaryEmail(recipientEmail, { companyName, ticker, filingType, filingDate, summary, filingUrl, summaryData })
+    // Send email notification (gated by trial status)
     let emailSent = false;
-    try {
-      await sendFilingSummaryEmail(userEmail, {
-        companyName: ticker.companyName || ticker.symbol,
-        ticker: ticker.symbol,
-        filingType: filing.formType,
-        filingDate: new Date(filing.filingDate),
-        summary: summaryResult.summaryText,
-        filingUrl: cachedContent.primaryDocUrl || filing.filingUrl,  // Prefer direct document URL
-        summaryData: summaryResult.summaryJSON  // Pass structured AI data to email template
-      });
-
-      emailSent = true;
-      summarizeLogger.info(`[${executionId}] Email notification sent`, {
-        summaryId: summary.id,
-        userEmail
-      });
-
-      // Update Summary record to reflect email was sent
+    if (shouldSendEmail) {
       try {
-        await prisma.summary.update({
-          where: { id: summary.id },
-          data: {
-            sentToUser: true,
-            totalEmailsSent: { increment: 1 }
-          }
+        await sendFilingSummaryEmail(userEmail, {
+          companyName: ticker.companyName || ticker.symbol,
+          ticker: ticker.symbol,
+          filingType: filing.formType,
+          filingDate: new Date(filing.filingDate),
+          summary: summaryResult.summaryText,
+          filingUrl: cachedContent.primaryDocUrl || filing.filingUrl,  // Prefer direct document URL
+          summaryData: summaryResult.summaryJSON  // Pass structured AI data to email template
         });
 
-        // Create SummaryEmailDelivery record for tracking
-        await prisma.summaryEmailDelivery.create({
-          data: {
+        emailSent = true;
+        summarizeLogger.info(`[${executionId}] Email notification sent`, {
+          summaryId: summary.id,
+          userEmail
+        });
+
+        // Update Summary record to reflect email was sent
+        try {
+          await prisma.summary.update({
+            where: { id: summary.id },
+            data: {
+              sentToUser: true,
+              totalEmailsSent: { increment: 1 }
+            }
+          });
+
+          // Create SummaryEmailDelivery record for tracking
+          await prisma.summaryEmailDelivery.create({
+            data: {
+              summaryId: summary.id,
+              userId: userId,
+              emailAddress: userEmail,
+              deliveryStatus: 'sent'
+            }
+          });
+
+          summarizeLogger.debug(`[${executionId}] Email tracking records updated`, {
             summaryId: summary.id,
-            userId: userId,
-            emailAddress: userEmail,
-            deliveryStatus: 'sent'
-          }
-        });
-
-        summarizeLogger.debug(`[${executionId}] Email tracking records updated`, {
+            userId
+          });
+        } catch (trackingError) {
+          // Don't fail the job if tracking update fails - email was still sent
+          summarizeLogger.warn(`[${executionId}] Failed to update email tracking records`, {
+            summaryId: summary.id,
+            userId,
+            error: trackingError instanceof Error ? trackingError.message : 'Unknown error'
+          });
+        }
+      } catch (emailError) {
+        summarizeLogger.error(`[${executionId}] Failed to send email notification`, {
           summaryId: summary.id,
-          userId
-        });
-      } catch (trackingError) {
-        // Don't fail the job if tracking update fails - email was still sent
-        summarizeLogger.warn(`[${executionId}] Failed to update email tracking records`, {
-          summaryId: summary.id,
-          userId,
-          error: trackingError instanceof Error ? trackingError.message : 'Unknown error'
+          error: emailError instanceof Error ? emailError.message : 'Unknown error'
         });
       }
-    } catch (emailError) {
-      summarizeLogger.error(`[${executionId}] Failed to send email notification`, {
-        summaryId: summary.id,
-        error: emailError instanceof Error ? emailError.message : 'Unknown error'
-      });
     }
 
     // Update lastProcessedAt timestamp

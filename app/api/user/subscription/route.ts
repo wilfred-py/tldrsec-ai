@@ -16,6 +16,7 @@ import {
   SUBSCRIPTION_PLANS,
   getPriceIdForPlan,
 } from '../../../../lib/stripe';
+import { TrialService } from '../../../../lib/auth/trial-service';
 
 type BillingInterval = 'monthly' | 'annual';
 type NewPlanKey = 'FREE' | 'PRO' | 'MAX';
@@ -36,6 +37,9 @@ export async function GET() {
       );
     }
 
+    // Fetch trial data for the user (used in all response paths)
+    const trialData = await TrialService.checkTrialStatus(userId);
+
     // When Stripe is not configured, return mock Free tier subscription
     // This allows the billing page to render properly in development
     if (!isStripeEnabled()) {
@@ -52,6 +56,10 @@ export async function GET() {
           remainingFilings: SUBSCRIPTION_PLANS.FREE.tickerLimit,
         },
         _stripeDisabled: true, // Indicates Stripe is not configured
+        trialEndsAt: trialData.trialEndsAt?.toISOString() ?? null,
+        isTrialing: trialData.isActive,
+        daysRemaining: trialData.daysRemaining,
+        isGrandfathered: trialData.isGrandfathered,
       });
     }
 
@@ -76,6 +84,10 @@ export async function GET() {
           usedFilings: 0,
           remainingFilings: SUBSCRIPTION_PLANS.FREE.tickerLimit,
         },
+        trialEndsAt: trialData.trialEndsAt?.toISOString() ?? null,
+        isTrialing: trialData.isActive,
+        daysRemaining: trialData.daysRemaining,
+        isGrandfathered: trialData.isGrandfathered,
       });
     }
 
@@ -106,6 +118,10 @@ export async function GET() {
         usedFilings: currentPeriod?.filingsUsed || 0,
         remainingFilings,
       },
+      trialEndsAt: trialData.trialEndsAt?.toISOString() ?? null,
+      isTrialing: trialData.isActive,
+      daysRemaining: trialData.daysRemaining,
+      isGrandfathered: trialData.isGrandfathered,
     });
 
   } catch (error) {
