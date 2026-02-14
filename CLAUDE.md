@@ -30,6 +30,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 6. **Run tests before committing** - See Pre-Commit Testing section for mandatory tests
 7. **Never store API keys in shell config** - API keys belong in `.env.local` files (gitignored), not `.zshrc` or `.bashrc` where they can be exposed or committed to version control
 8. **Define CSS animations explicitly** - Don't rely on Tailwind auto-generation for custom animations. Define keyframes and animation classes in `app/globals.css` using `@layer utilities` to ensure they're always available
+9. **Don't use `/i` flag with name-extraction regexes** - When matching names with `[A-Z][a-z]+` patterns, the `/i` flag makes all character classes match any letter, causing verbs to match as names (e.g., "insider sold" → "sold" matches as name)
+10. **Assert on text content, not hex colors, in React tests** - `container.innerHTML` doesn't preserve raw hex strings like `#FEF3C7` after React renders inline styles. Assert on text content or `getByText()` instead
 
 ### Pattern References
 When implementing new features, reference these exemplar files:
