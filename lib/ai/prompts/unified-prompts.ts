@@ -274,6 +274,18 @@ export const FORM_SCHEMAS: Record<string, JSONSchema> = {
         description: 'SEC item numbers reported (e.g., ["2.02", "9.01"])',
         items: { type: 'string', description: 'Item number', maxLength: 10 }
       },
+      itemDescriptions: {
+        type: 'array',
+        description: 'Human-readable description for each item number (e.g., [{"item": "2.02", "description": "Results of Operations and Financial Condition"}])',
+        items: {
+          type: 'object',
+          properties: {
+            item: { type: 'string', description: 'Item number (e.g., "2.02")', maxLength: 10 },
+            description: { type: 'string', description: 'Human-readable description of the item', maxLength: 100 }
+          },
+          required: ['item', 'description']
+        }
+      },
       keyHighlights: {
         type: 'array',
         description: 'Top 3-5 material facts with specific numbers. Lead with the most important.',
@@ -889,7 +901,30 @@ WRITING STYLE:
   * Expand uncommon acronyms on first use: "TSR (Total Shareholder Return)", "PSU (Performance Stock Units)"
   * After expansion, subsequent use of the acronym alone is acceptable
   * Common acronyms OK without expansion: CEO, CFO, SEC, IPO, M&A
-  * Financial metrics: Spell out "year-over-year" on first use, then "YoY"`;
+  * Financial metrics: Spell out "year-over-year" on first use, then "YoY"
+
+NEVER use these words or phrases in summaries:
+- "snag", "snagged", "snags" (use "acquired", "secured", "obtained")
+- "game-changer", "game-changing" (use "significant", "transformative")
+- "dive into", "deep dive" (use "examine", "analyze", "review")
+- "boasts" (use "features", "includes", "offers")
+- "whopping" (use the actual number - let it speak for itself)
+- "in a nutshell" (just state the summary directly)
+- "at the end of the day" (remove entirely - adds no value)
+- "going forward" (use "in the future" or "next quarter")
+- "robust" (use "strong", "resilient", "solid")
+- "leverage" as a verb (use "use", "utilize", "employ")
+
+EXAMPLES - BAD vs GOOD writing style:
+BAD: "Tesla snagged a whopping $2B contract"
+GOOD: "Tesla secured a $2B contract"
+
+BAD: "This game-changing acquisition boasts robust synergies"
+GOOD: "The $1.2B acquisition creates $200M in projected annual synergies"
+
+BAD: "Let's dive into the company's robust revenue growth going forward"
+GOOD: "Revenue grew 25% to $12.5B. Management expects 15-20% growth next quarter."`;
+
 
 // =============================================================================
 // Main Function - Generate Filing Prompt
@@ -932,7 +967,7 @@ const FORM_EXTRACTION_GUIDANCE: Record<string, string> = {
 - FOOTNOTE-FIRST APPROACH: Read financial statement footnotes carefully - they often contain critical context (accounting policy changes, contingent liabilities, segment detail)
 - RISK FACTOR ANALYSIS: Compare to prior year - note NEW risks added and any removed. Risk factors should be specific and quantified (e.g., "Tariff exposure could reduce margins by 5%")
 - HUMAN CAPITAL METRICS (required since 2020): Employee count, turnover rates, DEI metrics if disclosed
-- Gross margin is a KEY METRIC for investors - if not explicitly stated, calculate it from revenue and cost of revenue/COGS
+- Gross margin is a MANDATORY metric for investors - if not explicitly stated, calculate it from revenue and cost of revenue/COGS
 - Include segment breakdown if the company has multiple business units
 - For fiscal year, extract the EXACT year (e.g., "2024" or "FY2025")
 - The summary MUST lead with: company name, total revenue, and profitability highlight`,

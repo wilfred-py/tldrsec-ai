@@ -5,6 +5,7 @@ import { EmailFooter } from './sections/EmailFooter';
 import { SectionCard } from './sections/SectionCard';
 import { FilingTemplateData } from '../../../../lib/email/types';
 import { extractForm4Data } from '../../../../lib/email/form4-data-extractor';
+import { StalenessBanner } from './sections/StalenessBanner';
 
 interface Form4MinimalistTemplateProps {
   filing: FilingTemplateData;
@@ -583,6 +584,13 @@ export function Form4MinimalistTemplate({ filing }: Form4MinimalistTemplateProps
         filerRole={filerRole}
       />
 
+      {/* Staleness warning */}
+      {filingDate && (
+        <div style={{ padding: '0 15px' }}>
+          <StalenessBanner filingDate={new Date(filingDate)} />
+        </div>
+      )}
+
       {/* Main content */}
       <table width="100%" cellPadding="0" cellSpacing="0">
         <tbody>
@@ -711,8 +719,10 @@ export function Form4MinimalistTemplate({ filing }: Form4MinimalistTemplateProps
                                             color: config.valueColor,
                                             lineHeight: '1.2',
                                           }}>
-                                            {/* All transaction types show $ value as primary */}
-                                            {aggTx.valueDisplay || '$0'}
+                                            {/* Show descriptive text for gift/transfer $0 transactions */}
+                                            {aggTx.totalValue === 0 && (aggTx.type === 'gift' || aggTx.type === 'transfer')
+                                              ? 'Gift (no monetary value)'
+                                              : (aggTx.valueDisplay || '$0')}
                                           </div>
                                           {/* Secondary info: shares count */}
                                           <div style={{
