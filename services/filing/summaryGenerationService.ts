@@ -166,7 +166,7 @@ export async function generateAISummary(
       promptLength: prompt.length,
       model: model,
       hasApiKey: !!apiKey,
-      apiKeyPrefix: apiKey ? apiKey.substring(0, 10) + '...' : 'MISSING',
+      hasApiKeyConfigured: !!apiKey,
       aiClientExists: !!aiClient
     });
 

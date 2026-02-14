@@ -169,7 +169,12 @@ export function formatText(text: string): string {
   let html = text;
   // Strip leading bullets/dashes that AI may have included in JSON string values
   html = html.replace(/^[\s]*[•\-\*]\s*/, '');
+  // Escape all HTML entities to prevent XSS from AI-generated content
   html = html.replace(/&(?!amp;|lt;|gt;|quot;|#)/g, '&amp;');
+  html = html.replace(/</g, '&lt;');
+  html = html.replace(/>/g, '&gt;');
+  html = html.replace(/"/g, '&quot;');
+  html = html.replace(/'/g, '&#39;');
   // Bold dollar amounts
   html = html.replace(
     /(\$[\d,]+(?:\.\d+)?[KMB]?)/g,
