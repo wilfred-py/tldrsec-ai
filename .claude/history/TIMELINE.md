@@ -13,19 +13,7 @@ This file provides a chronological index of all completed projects. For detailed
 
 | Date | Project | Status |
 |------|---------|--------|
-| 2026-02-10 | Pipeline Job Processing Improvements (DLQ cleanup automation, retry pattern docs, test fixes) | ✅ |
-| 2026-02-07 | Dashboard Loading Skeleton Enhancement (animations, shimmer, Card components, Playwright validation) | ✅ |
-| 2026-02-07 | Dashboard UI Polish (Manage Subscription button border removal) | ✅ |
-| 2026-02-07 | Orphaned UserSubscription Database Cleanup (dashboard loading fix, 2 orphaned records deleted) | ✅ |
-| 2026-02-07 | Form 4 Preference Sync Fix (60 missed emails, centralized sync utilities) | ✅ |
-| 2026-02-07 | CLAUDE.md Agent Guidelines + intentional-compact feedback loop (prevent agent mistakes) | ✅ |
-| 2026-01-28 | Unified Subscription Tiers + Billing Downgrade Fix (enum consolidation, PUT handler) | ✅ |
-| 2026-01-28 | Pipeline Stall Recovery + Throughput Optimization (vercel.json fix, */3 summarize cron) | ✅ |
-| 2026-01-27 | Unsent Email Recovery (47 completed summaries resent, scripts created) | ✅ |
-| 2026-01-27 | TickerMonitoring Root Cause Fix (3-phase pipeline missing upsert, health endpoint enhancement) | ✅ |
-| 2026-01-27 | GitHub Actions Minutes Optimization (watchdog */30, path filters for quality-gates + pr-validation) | ✅ |
-| 2026-01-26 | Pipeline Resilience Zero-Intervention (CRON_SECRET sanitization, orphan detection, GitHub Action watchdog) | ✅ |
-| 2026-01-25 | Stripe CTA Dashboard Integration (UpgradeCTASection + direct Stripe checkout, $199/$349 pricing) | ✅ |
+| 2026-01-22 | SEC Filing Summary Email Quality - Phase 3 ([AMENDED] indicator, vertical ownership layout, badge fix) | ✅ |
 | 2026-01-21 | Cloudflare Build Fix - Onboarding Dynamic Rendering (force-dynamic export, client/server split) | ✅ |
 | 2026-01-20 | Pipeline Health Connection Pool Exhaustion Fix (caching, aggregated SQL, orphan sampling, batching) | ✅ |
 | 2026-01-19 | Onboarding Redirect Race Condition Fix (email await + cookie bypass for Clerk JWT sync) | ✅ |
@@ -174,12 +162,11 @@ This file provides a chronological index of all completed projects. For detailed
 ---
 
 ## Archive Statistics
-- **Total Archived Projects**: 11 weekly archives (Oct-Dec 2025)
-- **Current PROGRESS.md Lines**: 727 (threshold: 500) ⚠️ 227 LINES OVER
-- **Last Sync**: 2026-02-10
+- **Total Archived Projects**: 9 weekly archives (Oct-Dec 2025)
+- **Current PROGRESS.md Lines**: 138 (under threshold: 500)
+- **Last Sync**: 2026-01-22
 - **Archive System**: ✅ ACTIVE
-- **Last Compaction**: 2026-02-10 (No archival - all projects < 30 days old, structural cleanup performed)
-- **Note**: File is 227 lines over threshold but no projects qualify for archival (oldest: 2026-01-25, needs 30+ days). Duplicate "Recently Completed Sessions" header removed.
+- **Last Compaction**: 2026-01-22 (SEC Filing Summary Email Quality - Phase 3)
 
 **Archives**:
 - `29-Dec-2025.md` - Cloudflare Cron Fix, Email Quality, Form 4 Templates, JSON Parsing Phase 5
