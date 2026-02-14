@@ -5,6 +5,9 @@ import { EmailFooter } from './sections/EmailFooter';
 import { SectionCard } from './sections/SectionCard';
 import { FilingTemplateData } from '../../../../lib/email/types';
 import { extract8KData } from '../../../../lib/email/8k-data-extractor';
+import { getItemDescription } from '../../../../lib/constants/sec-item-descriptions';
+
+export { getItemDescription };
 
 interface Form8KMinimalistTemplateProps {
   filing: FilingTemplateData;
@@ -47,9 +50,10 @@ const MATERIAL_ITEMS = new Set([
 ]);
 
 /**
- * Determine if an 8-K filing is material based on item numbers
+ * Determine if an 8-K filing is material based on item numbers,
+ * keywords, or large dollar amounts (>= $500M).
  */
-function isMaterialFiling(itemNumbers: string[], summaryText: string): boolean {
+export function isMaterialFiling(itemNumbers: string[], summaryText: string): boolean {
   // Check item numbers for material items
   for (const item of itemNumbers) {
     if (MATERIAL_ITEMS.has(item)) {
@@ -73,7 +77,56 @@ function isMaterialFiling(itemNumbers: string[], summaryText: string): boolean {
     }
   }
 
+  // Check for large dollar amounts (>= $500M threshold)
+  if (summaryText && hasLargeDollarAmount(summaryText)) {
+    return true;
+  }
+
   // Default to routine if only exhibits or FD disclosure
+  return false;
+}
+
+/**
+ * Detect dollar amounts >= $500M in text.
+ * Handles formats: $1.2B, $500M, $750m, $1,200,000,000, $X billion, $X million (>= 500)
+ */
+function hasLargeDollarAmount(text: string): boolean {
+  // Match $XB or $X.YB (any billion amount is material)
+  if (/\$[\d,.]+\s*[Bb]/i.test(text)) return true;
+
+  // Match "$X billion" (any billion amount is material)
+  if (/\$[\d,.]+\s+billion/i.test(text)) return true;
+
+  // Match $XM or $X.YM and check if >= 500
+  const mMatch = text.match(/\$(\d[\d,.]*)\s*[Mm]/g);
+  if (mMatch) {
+    for (const match of mMatch) {
+      const numStr = match.replace(/\$/, '').replace(/[Mm]/, '').replace(/,/g, '').trim();
+      const num = parseFloat(numStr);
+      if (num >= 500) return true;
+    }
+  }
+
+  // Match "$X million" and check if >= 500
+  const millionMatch = text.match(/\$([\d,.]+)\s+million/gi);
+  if (millionMatch) {
+    for (const match of millionMatch) {
+      const numStr = match.replace(/\$/, '').replace(/\s+million/i, '').replace(/,/g, '').trim();
+      const num = parseFloat(numStr);
+      if (num >= 500) return true;
+    }
+  }
+
+  // Match $X,XXX,XXX,XXX (>= 500,000,000)
+  const fullAmountMatch = text.match(/\$([\d,]+(?:\.\d+)?)/g);
+  if (fullAmountMatch) {
+    for (const match of fullAmountMatch) {
+      const numStr = match.replace(/\$/, '').replace(/,/g, '');
+      const num = parseFloat(numStr);
+      if (num >= 500_000_000) return true;
+    }
+  }
+
   return false;
 }
 
@@ -105,21 +158,24 @@ function getSignalConfig(isMaterial: boolean) {
 }
 
 /**
- * Format text with bold styling for key values
+ * Format text with bold styling for key values.
+ * Uses font-weight:600 to match design-system.ts markdownToHtml().
  */
-function formatText(text: string): string {
+export function formatText(text: string): string {
   if (!text) return '';
   let html = text;
+  // Strip leading bullets/dashes that AI may have included in JSON string values
+  html = html.replace(/^[\s]*[•\-\*]\s*/, '');
   html = html.replace(/&(?!amp;|lt;|gt;|quot;|#)/g, '&amp;');
   // Bold dollar amounts
   html = html.replace(
     /(\$[\d,]+(?:\.\d+)?[KMB]?)/g,
-    `<strong style="color:${EmailColors.text.headline};font-weight:700;">$1</strong>`
+    `<strong style="color:${EmailColors.text.headline};font-weight:600;">$1</strong>`
   );
   // Bold percentages
   html = html.replace(
     /(-?\d+(?:\.\d+)?%)/g,
-    `<strong style="color:${EmailColors.text.headline};font-weight:700;">$1</strong>`
+    `<strong style="color:${EmailColors.text.headline};font-weight:600;">$1</strong>`
   );
   html = html.replace(/—/g, '&mdash;');
   return html;
@@ -168,9 +224,12 @@ export function Form8KMinimalistTemplate({ filing }: Form8KMinimalistTemplatePro
     headline = summaryText;
   }
 
-  // Format items for display
+  // Format items for display with human-readable descriptions
   const itemsDisplay = itemNumbers.length > 0
-    ? itemNumbers.map(item => `Item ${item}`).join(', ')
+    ? itemNumbers.map(item => {
+        const desc = getItemDescription(item);
+        return desc ? `Item ${item} - ${desc}` : `Item ${item}`;
+      }).join(' | ')
     : '';
 
   return (
