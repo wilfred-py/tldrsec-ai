@@ -2,11 +2,12 @@
 
 import { createContext, useContext, ReactNode } from 'react';
 import { useUser } from '@clerk/nextjs';
+import type { UserResource } from '@clerk/types';
 
 interface AuthContextValue {
   isSignedIn: boolean;
   isLoaded: boolean;
-  user: any;
+  user: UserResource | null | undefined;
   isOnboarded: boolean;
 }
 

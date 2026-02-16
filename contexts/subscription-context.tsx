@@ -3,25 +3,7 @@
 import { createContext, useContext, ReactNode, useEffect, useState } from 'react';
 import { useAuth } from './auth-context';
 import useSWR from 'swr';
-
-interface SubscriptionData {
-  planType: 'FREE' | 'PRO' | 'MAX';
-  isActive: boolean;
-  isTrialing: boolean;
-  daysRemaining: number;
-  trialEndsAt: string | null;
-  isGrandfathered: boolean;
-  currentPeriodStart: string | null;
-  currentPeriodEnd: string | null;
-  cancelAtPeriodEnd: boolean;
-  stripeCustomerId: string | null;
-  stripeSubscriptionId: string | null;
-  limits: {
-    monthlyFilings: number;
-    usedFilings: number;
-    remainingFilings: number;
-  };
-}
+import { SubscriptionDataSchema, type SubscriptionData } from '@/lib/validation/subscription-schema';
 
 interface SubscriptionContextValue {
   subscription: SubscriptionData | null;
@@ -32,10 +14,22 @@ interface SubscriptionContextValue {
 
 const SubscriptionContext = createContext<SubscriptionContextValue | undefined>(undefined);
 
-const fetcher = async (url: string) => {
+/**
+ * Fetcher with Zod validation to prevent XSS/injection attacks
+ */
+const fetcher = async (url: string): Promise<SubscriptionData> => {
   const res = await fetch(url);
   if (!res.ok) throw new Error('Failed to fetch subscription');
-  return res.json();
+
+  const data = await res.json();
+
+  // Validate response structure to prevent XSS
+  try {
+    return SubscriptionDataSchema.parse(data);
+  } catch (error) {
+    console.error('Subscription data validation failed:', error);
+    throw new Error('Invalid subscription data format');
+  }
 };
 
 export function SubscriptionProvider({ children }: { children: ReactNode }) {
@@ -57,19 +51,32 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
 
   // Server-Sent Events for trial expiration real-time updates
   useEffect(() => {
-    if (!data?.isTrialing || data.daysRemaining >= 1) return;
+    if (!data?.isTrialing || data.daysRemaining >= 1 || !user) return;
 
     const eventSource = new EventSource('/api/subscription/sse');
 
     eventSource.onmessage = (event) => {
-      const update = JSON.parse(event.data);
-      if (update.userId === user?.id) {
-        mutate(update.subscription, false); // Update cache without revalidation
+      try {
+        const update = JSON.parse(event.data);
+
+        // SECURITY FIX: Compare against authProviderId (Clerk userId)
+        // SSE sends authProviderId which matches Clerk's userId
+        if (update.authProviderId === user.id) {
+          // Validate subscription data before updating cache
+          const validatedSubscription = {
+            ...data,
+            ...update.subscription,
+          };
+
+          mutate(validatedSubscription, false); // Update cache without revalidation
+        }
+      } catch (error) {
+        console.error('SSE message parsing error:', error);
       }
     };
 
-    eventSource.onerror = () => {
-      console.error('SSE connection error');
+    eventSource.onerror = (error) => {
+      console.error('SSE connection error:', error);
       eventSource.close();
       setSseConnected(false);
     };
@@ -80,7 +87,7 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
       eventSource.close();
       setSseConnected(false);
     };
-  }, [data?.isTrialing, data?.daysRemaining, user?.id, mutate]);
+  }, [data?.isTrialing, data?.daysRemaining, user, mutate, data]);
 
   const value: SubscriptionContextValue = {
     subscription: data ?? null,

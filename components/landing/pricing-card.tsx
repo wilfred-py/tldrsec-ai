@@ -51,11 +51,13 @@ export function PricingCard({
 
   return (
     <div
-      className={`landing-card relative flex flex-col ${
+      className={`landing-card relative flex flex-col focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-blue-500 ${
         plan.popular
           ? 'ring-2 ring-[var(--landing-primary)] shadow-lg'
           : ''
       }`}
+      role="article"
+      aria-label={`${plan.name} pricing plan`}
     >
       {/* Plan Header with Badges */}
       <div className="flex items-center justify-between mb-4">
@@ -81,7 +83,11 @@ export function PricingCard({
 
           {/* Current plan badge */}
           {!loading && isCurrentPlan && (
-            <Badge className="bg-green-50 text-green-700 border-green-200 text-xs px-2 py-0.5">
+            <Badge
+              className="bg-green-50 text-green-800 border-green-200 text-xs px-2 py-0.5"
+              role="status"
+              aria-live="polite"
+            >
               {isTrialEndingSoon ? 'Trial Ending Soon' : 'Current Plan'}
             </Badge>
           )}
@@ -153,7 +159,8 @@ export function PricingCard({
           >
             {checkoutLoading ? (
               <>
-                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" aria-hidden="true" />
+                <span className="sr-only">Processing checkout</span>
                 Loading...
               </>
             ) : (
