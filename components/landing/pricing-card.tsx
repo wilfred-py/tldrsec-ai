@@ -3,7 +3,7 @@
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Check, Loader2 } from 'lucide-react';
+import { Check, Loader2, CheckCircle2 } from 'lucide-react';
 
 interface PricingPlan {
   key: string;
@@ -95,9 +95,19 @@ export function PricingCard({
       </div>
 
       {/* Price Display */}
-      <div className="mb-6 h-[88px]">
+      <div className="mb-6 h-[88px] flex flex-col justify-center">
         {plan.monthlyPrice === 0 ? (
-          <div className="h-full" />
+          <div className="flex items-baseline gap-2">
+            <span
+              className="text-4xl font-bold"
+              style={{ color: 'var(--landing-secondary)' }}
+            >
+              Free
+            </span>
+            <span className="text-[var(--landing-text-muted)]">
+              forever
+            </span>
+          </div>
         ) : (
           <>
             <div className="flex items-baseline gap-2">
@@ -131,11 +141,12 @@ export function PricingCard({
           // Loading state - show skeleton button
           <Skeleton className="h-10 w-full rounded-lg" />
         ) : isCurrentPlan ? (
-          // Current plan - show disabled button
+          // Current plan - show disabled button with checkmark icon
           <Button
-            className="w-full bg-gray-100 text-gray-500 border border-gray-200 cursor-default hover:bg-gray-100"
+            className="w-full bg-green-50 text-green-700 border-2 border-green-200 cursor-default hover:bg-green-50 font-semibold"
             disabled
           >
+            <CheckCircle2 className="w-4 h-4 mr-2" aria-hidden="true" />
             {isTrialEndingSoon ? 'Trial Ending Soon' : 'Current Plan'}
           </Button>
         ) : plan.disabled ? (

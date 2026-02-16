@@ -152,6 +152,23 @@
   .animate-slideUp {
     animation: slideUp 0.4s ease-out forwards;
   }
+
+  /* Respect user's motion preferences (WCAG 2.3.1) */
+  @media (prefers-reduced-motion: reduce) {
+    .animate-shimmer,
+    .animate-fadeIn,
+    .animate-slideUp {
+      animation: none !important;
+      transition: none !important;
+    }
+
+    /* Show content immediately for reduced motion users */
+    .animate-fadeIn,
+    .animate-slideUp {
+      opacity: 1 !important;
+      transform: none !important;
+    }
+  }
 }
 
 /* Landing Page V2 - Typography & Component Styles */
