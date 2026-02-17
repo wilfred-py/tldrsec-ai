@@ -31,6 +31,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 7. **Never store API keys in shell config** - API keys belong in `.env.local` files (gitignored), not `.zshrc` or `.bashrc` where they can be exposed or committed to version control
 8. **Define CSS animations explicitly** - Don't rely on Tailwind auto-generation for custom animations. Define keyframes and animation classes in `app/globals.css` using `@layer utilities` to ensure they're always available
 9. **Look up users by `authProviderId` not just `id`** - Clerk `userId` is stored in `authProviderId`, not the DB `id` field. Use `findFirst({ where: { OR: [{ id }, { authProviderId }] } })` or look up by email. See tickers route pattern: `app/api/user/tickers/route.ts`
+10. **Check `jest.config.mjs` moduleNameMapper for new `@/` paths** - When importing from new top-level directories (e.g., `@/contexts/*`, `@/hooks/*`), verify the path is mapped in `jest.config.mjs`. Missing mappings cause "Cannot find module" errors in tests
 
 ### Pattern References
 When implementing new features, reference these exemplar files:
@@ -43,6 +44,8 @@ When implementing new features, reference these exemplar files:
 | Error handling | `lib/monitoring/pipeline-error-detector.ts` |
 | React component | `components/dashboard/system-health-banner.tsx` |
 | Test file | `__tests__/lib/monitoring/` |
+| Auth context test mock | `__tests__/components/landing/landing-page-auth.test.tsx` |
+| Subscription fixtures | `__tests__/fixtures/subscription-fixtures.ts` |
 | Preference sync | `lib/user/preference-sync.ts` |
 | Worktree scripts | `hack/create_worktree.sh`, `hack/cleanup_worktree.sh` |
 

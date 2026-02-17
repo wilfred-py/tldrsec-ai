@@ -1,12 +1,42 @@
 # Project Progress
 
-**Date**: 2026-02-14
+**Date**: 2026-02-18
 **Branch**: feature/personalized-pricing-subscription-ux
-**Status**: Skeleton Loading States + Personalized Pricing UX
+**Status**: Landing Page Auth-Aware Test Coverage Complete
 
 ---
 
 ## Current Session
+
+### Worktree Manager Create-and-Open Option (2026-02-18)
+
+**Goal**: Add ability to create and open a worktree from the `npm run worktrees` interactive menu.
+
+**Changes**:
+- **`hack/create_worktree.sh`** - Added `--open` flag that opens the new worktree in Windsurf after creation (detects `windsurf` CLI or macOS app path)
+- **`scripts/open-worktrees.sh`** - Added "Create new worktree" as option 4 in interactive menu (prompts for name and base branch, calls `create_worktree.sh --open`)
+- **`package.json`** - Added `worktrees:create:open` convenience npm script
+
+---
+
+### Landing Page Auth-Aware Test Coverage ✅ (2026-02-18)
+
+**Goal**: Add comprehensive test coverage for personalized landing page behaviors (hero caption, navbar visibility, pricing badges) across all auth/subscription states.
+
+**Files Created**:
+- `__tests__/fixtures/subscription-fixtures.ts` - Shared mock data factory for all subscription states (FREE trial, PRO, MAX, grandfathered, not onboarded, loading)
+- `__tests__/components/landing/landing-navbar.test.tsx` - 8 tests: 3-state CTA (Get Started/Complete Setup/Go to Dashboard), scroll visibility, auth bypass
+- `__tests__/components/landing/pricing-card.test.tsx` - 13 tests: Current Plan badge, Trial Ending Soon, loading skeleton, Popular badge, checkout spinner, bold markdown
+- `__tests__/components/landing/landing-page-auth.test.tsx` - 9 integration tests: all 6 verification scenarios + error banner + loading skeletons
+- `__tests__/e2e/landing-page-journeys.test.tsx` - 4 user journey tests + QA manual test data docs (skipped)
+
+**Files Modified**:
+- `__tests__/components/landing/pricing-section-v2.test.tsx` - Added auth/subscription context mocks, updated price assertions ($199/$349), fixed CTA selectors
+- `jest.config.mjs` - Added `@/contexts/*` and `@/hooks/*` module name mappings
+
+**Verification**: 5 suites, 42 tests passing, 1 skipped (QA docs), 0 lint errors
+
+---
 
 ### Skeleton Loading States for Billing & Subscribe ✅ (2026-02-14)
 
@@ -293,5 +323,5 @@ For complete technical details of projects older than 30 days, see the weekly ar
 
 ---
 
-*Last Updated: 2026-02-14 (Skeleton loading states, personalized pricing UX)*
+*Last Updated: 2026-02-18 (Worktree manager create-and-open option)*
 *Completed projects older than 30 days are archived to .claude/history/ - See TIMELINE.md for complete historical context*
