@@ -11,29 +11,36 @@ jest.mock('@/contexts/auth-context', () => ({
 }));
 
 // Mock framer-motion - filter animation-specific props
-jest.mock('framer-motion', () => ({
-  motion: {
-    nav: React.forwardRef(
-      (
-        { children, initial, animate, exit, transition, ...props }: React.PropsWithChildren<Record<string, unknown>>,
-        ref
-      ) => (
-        <nav ref={ref as React.Ref<HTMLElement>} {...props}>
-          {children}
-        </nav>
-      )
-    ),
-  },
-  AnimatePresence: ({ children }: { children: React.ReactNode }) => <>{children}</>,
-}));
+jest.mock('framer-motion', () => {
+  const MotionNav = React.forwardRef(
+    (
+      { children, initial, animate, exit, transition, ...props }: React.PropsWithChildren<Record<string, unknown>>,
+      ref
+    ) => (
+      <nav ref={ref as React.Ref<HTMLElement>} {...props}>
+        {children}
+      </nav>
+    )
+  );
+  MotionNav.displayName = 'MotionNav';
+
+  return {
+    motion: { nav: MotionNav },
+    AnimatePresence: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+  };
+});
 
 // Mock next/link
 jest.mock('next/link', () => {
-  return ({ children, href, ...props }: React.PropsWithChildren<{ href: string }>) => (
-    <a href={href} {...props}>
-      {children}
-    </a>
-  );
+  function MockLink({ children, href, ...props }: React.PropsWithChildren<{ href: string }>) {
+    return (
+      <a href={href} {...props}>
+        {children}
+      </a>
+    );
+  }
+  MockLink.displayName = 'MockLink';
+  return MockLink;
 });
 
 // Mock Sheet components (shadcn/ui)
@@ -77,9 +84,7 @@ describe('LandingNavbar', () => {
 
     it('shows "Get Started" CTA linking to /sign-up after scroll', () => {
       // Make the observer trigger with isIntersecting: false (scrolled past hero)
-      const observerCallback = jest.fn();
       const mockObserver = jest.fn().mockImplementation((cb) => {
-        observerCallback.mockImplementation(cb);
         return {
           observe: () => {
             // Simulate scrolling past hero immediately
@@ -93,11 +98,10 @@ describe('LandingNavbar', () => {
 
       render(<LandingNavbar heroRef={heroRef} />);
 
-      expect(screen.getByText('Get Started')).toBeInTheDocument();
-      expect(screen.getByText('Get Started').closest('a')).toHaveAttribute(
-        'href',
-        '/sign-up'
-      );
+      // Desktop + mobile both render the CTA
+      const links = screen.getAllByText('Get Started');
+      expect(links.length).toBeGreaterThanOrEqual(1);
+      expect(links[0].closest('a')).toHaveAttribute('href', '/sign-up');
     });
   });
 
@@ -113,11 +117,9 @@ describe('LandingNavbar', () => {
 
     it('shows "Complete Setup" CTA linking to /onboarding', () => {
       render(<LandingNavbar heroRef={heroRef} />);
-      expect(screen.getByText('Complete Setup')).toBeInTheDocument();
-      expect(screen.getByText('Complete Setup').closest('a')).toHaveAttribute(
-        'href',
-        '/onboarding'
-      );
+      const links = screen.getAllByText('Complete Setup');
+      expect(links.length).toBeGreaterThanOrEqual(1);
+      expect(links[0].closest('a')).toHaveAttribute('href', '/onboarding');
     });
   });
 
@@ -133,11 +135,9 @@ describe('LandingNavbar', () => {
 
     it('shows "Go to Dashboard" CTA linking to /dashboard', () => {
       render(<LandingNavbar heroRef={heroRef} />);
-      expect(screen.getByText('Go to Dashboard')).toBeInTheDocument();
-      expect(screen.getByText('Go to Dashboard').closest('a')).toHaveAttribute(
-        'href',
-        '/dashboard'
-      );
+      const links = screen.getAllByText('Go to Dashboard');
+      expect(links.length).toBeGreaterThanOrEqual(1);
+      expect(links[0].closest('a')).toHaveAttribute('href', '/dashboard');
     });
 
     it('renders navigation links (Features, Pricing)', () => {
