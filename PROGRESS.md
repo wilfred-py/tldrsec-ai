@@ -1,24 +1,58 @@
 # Project Progress
 
-**Date**: 2026-02-12
-**Branch**: main
-**Status**: Trial System Live + TrialService Lookup Fix
+**Date**: 2026-02-14
+**Branch**: feature/personalized-pricing-subscription-ux
+**Status**: Skeleton Loading States + Personalized Pricing UX
 
 ---
 
 ## Current Session
 
-### TrialService User Lookup Fix (2026-02-12)
+### Skeleton Loading States for Billing & Subscribe ✅ (2026-02-14)
 
-**Problem**: `/api/user/subscription` returning 500 — `TrialService.checkTrialStatus()` looked up users by `where: { id: userId }` but Clerk `userId` is stored in `authProviderId`, not `id`.
+**Goal**: Replace white-screen/generic loading fallbacks on `/dashboard/billing` and `/subscribe` with layout-matching skeleton loading states using the existing `Skeleton` component.
 
-**Fix**: Changed `findUnique({ where: { id } })` to `findFirst({ where: { OR: [{ id }, { authProviderId }] } })` in `lib/auth/trial-service.ts`. Also made it return a default active/grandfathered status instead of throwing when user isn't in DB yet (user gets auto-created on first `/api/user/tickers` call).
+**Changes**:
+- **Created** `app/dashboard/billing/loading.tsx` - Route-level skeleton with Card layout matching billing page (header, icon+title, plan name, price, billing period, separator, action buttons)
+- **Created** `app/subscribe/loading.tsx` - Route-level skeleton with back button, centered header, billing toggle, 3-card responsive grid with staggered animations, ESC hint
+- **Created** `app/dashboard/billing/__tests__/loading.test.tsx` - 5 tests (skeletons, container, shadow, fadeIn, separator)
+- **Created** `app/subscribe/__tests__/loading.test.tsx` - 7 tests (skeletons, back button, header, toggle, 3 cards, responsive grid, fadeIn)
+- **Updated** `app/dashboard/billing/page.tsx` - Replaced `animate-pulse` divs with `Skeleton` components + added import
+- **Updated** `app/subscribe/page.tsx` - Updated both `if (loading)` block and `SubscribePageLoading` Suspense fallback with layout-matching skeletons
 
-**Files**: `lib/auth/trial-service.ts`
+**Patterns used**: `animate-fadeIn`, `animate-slideUp` with staggered delays, `data-slot="skeleton"`, `data-testid` for test targeting
+
+**Verification**: 12/12 tests pass, build succeeds, no new lint errors
+
+---
+
+### Personalized Pricing Experience for Authenticated Users ✅ (2026-02-14)
+
+**Goal**: Show authenticated users their current plan status on the landing page pricing section, with personalized CTAs and subscription-aware UI.
+
+**Implementation**:
+- **Auth/Subscription Context Providers** (`components/providers/auth-provider.tsx`, `components/providers/subscription-provider.tsx`) - React context for user auth state and subscription data with SWR caching
+- **Subscription Status API** (`app/api/user/subscription/status/route.ts`) - Lightweight endpoint returning plan type and status
+- **PricingCard extraction** (`components/landing/sections-v2/pricing-card.tsx`) - Extracted from monolithic pricing section for better organization
+- **Landing page integration** - Pricing section shows "Current Plan" badges, disabled buttons for current plan, upgrade/downgrade CTAs based on subscription status
+- **Security & accessibility fixes** - ARIA labels, role attributes, keyboard navigation, focus states on loading skeletons
+- **Test coverage** - SSE and SubscriptionContext tests, comprehensive test coverage for new providers
+
+**Files**: `components/providers/`, `app/api/user/subscription/status/`, `components/landing/sections-v2/pricing-card.tsx`, `components/landing/sections-v2/pricing-section-v2.tsx`
 
 ---
 
 ## Recently Completed Sessions
+
+### TrialService User Lookup Fix ✅ (2026-02-12)
+
+**Problem**: `/api/user/subscription` returning 500 — `TrialService.checkTrialStatus()` looked up users by `where: { id: userId }` but Clerk `userId` is stored in `authProviderId`, not `id`.
+
+**Fix**: Changed `findUnique({ where: { id } })` to `findFirst({ where: { OR: [{ id }, { authProviderId }] } })` in `lib/auth/trial-service.ts`. Also made it return a default active/grandfathered status instead of throwing when user isn't in DB yet.
+
+**Files**: `lib/auth/trial-service.ts`
+
+---
 
 ### Cloudflare Cron Schedule Consolidation ✅ (2026-02-12)
 
@@ -259,5 +293,5 @@ For complete technical details of projects older than 30 days, see the weekly ar
 
 ---
 
-*Last Updated: 2026-02-12 (TrialService fix, Cloudflare cron consolidation)*
+*Last Updated: 2026-02-14 (Skeleton loading states, personalized pricing UX)*
 *Completed projects older than 30 days are archived to .claude/history/ - See TIMELINE.md for complete historical context*
