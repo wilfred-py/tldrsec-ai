@@ -1,14 +1,41 @@
 # Project Progress
 
-**Date**: 2026-02-18
-**Branch**: feature/personalized-pricing-subscription-ux
-**Status**: Landing Page Auth-Aware Test Coverage Complete
+**Date**: 2026-02-19
+**Branch**: main
+**Status**: Dashboard slow load fix
 
 ---
 
 ## Current Session
 
-### Worktree Manager Create-and-Open Option (2026-02-18)
+### Fix Dashboard Slow Load After Sign-In (2026-02-19)
+
+**Problem**: Dashboard took 4-6s to show meaningful content after sign-in due to sequential waterfall: server-side `currentUser()` → client-side Clerk `useUser()` (2-3s blocking via ProtectedRoute) → client-side API fetch for tickers → render.
+
+**Fix** (4 changes):
+1. **`components/dashboard/dashboard-shell.tsx`** - Removed `ProtectedRoute` wrapper (redundant — auth already enforced by Clerk middleware + server-side `currentUser()` in page.tsx). Eliminates 2-3s client-side Clerk blocking.
+2. **`app/dashboard/page.tsx`** - Added server-side Prisma query to fetch user's tickers after `currentUser()`. Uses `_count` + `take: 1` for efficient query. Passes results as `initialCompanies` prop. Falls back gracefully on error.
+3. **`components/dashboard/dashboard-client.tsx`** - Added `initialCompanies` prop (defaults to `[]`). Initializes `companies` state with server data. Skips initial `loadCompanies()` API call when data provided. `loadCompanies` still available for mutations.
+4. **`app/api/user/tickers/route.ts`** - Optimized GET query: `_count: { select: { summaries: true } }` + `take: 1` instead of loading all summaries. Applied to both main query and auto-create path.
+
+**Result**: Dashboard renders with data in ~1s (loading.tsx skeleton visible during server fetch). No new test regressions.
+
+**Status**: Implemented, not yet committed.
+
+---
+
+### Auth Redirect for Logged-In Users (2026-02-18)
+
+**Goal**: Redirect authenticated users visiting `/sign-up` or `/sign-in` to `/dashboard` instead of `/onboarding`.
+
+**Changes**:
+- **`middleware.ts`** - Added `auth()` check inside Clerk middleware callback. If `userId` exists and pathname starts with `/sign-up` or `/sign-in`, redirects to `/dashboard`.
+
+**Status**: Implemented, not yet committed.
+
+---
+
+### Worktree Manager Create-and-Open Option ✅ (2026-02-18)
 
 **Goal**: Add ability to create and open a worktree from the `npm run worktrees` interactive menu.
 
@@ -35,6 +62,22 @@
 - `jest.config.mjs` - Added `@/contexts/*` and `@/hooks/*` module name mappings
 
 **Verification**: 5 suites, 42 tests passing, 1 skipped (QA docs), 0 lint errors
+
+---
+
+### Email Summary Quality Improvements ✅ (2026-02-14)
+
+**PR**: [#349](https://github.com/wilfred-py/tldrsec-ai/pull/349)
+
+**Goal**: Improve email summary quality with quality gates, staleness detection, and prompt enhancements.
+
+**Key Changes**:
+- **`lib/ai/summarize.ts`** - Store complete AI-generated JSON output in `summaryJSON` field instead of discarding it (fixes missing filer names/transaction details in emails)
+- **Quality gates** for summary generation to catch degraded output
+- **Staleness detection** to identify outdated cached summaries
+- **Prompt enhancements** across filing types for better extraction
+
+**Root Cause**: summaryJSON field was being discarded, forcing email templates to rely on regex fallbacks that fail with natural language variations.
 
 ---
 
@@ -151,6 +194,17 @@
 - `components/billing/subscription-plans.tsx` - Missing `priceId`/`monthlyFilings` properties (6 errors)
 
 **Verification**: Build passes, all trial-related functionality implemented across 8 phases.
+
+---
+
+### Engineering Process Improvements + Dashboard Refactoring ✅ (2026-02-11)
+
+**PR**: [#346](https://github.com/wilfred-py/tldrsec-ai/pull/346)
+
+**Changes**:
+- **`app/dashboard/layout.tsx`** - Split server layout from client `DashboardShell` to fix `'use client'` layout issue
+- **`components/dashboard/dashboard-shell.tsx`** - Extracted client-side dashboard shell component
+- **`.claude/commands/review_plan.md`** - Added 6-perspective review command for plan validation
 
 ---
 
@@ -323,5 +377,5 @@ For complete technical details of projects older than 30 days, see the weekly ar
 
 ---
 
-*Last Updated: 2026-02-18 (Worktree manager create-and-open option)*
+*Last Updated: 2026-02-19 (Dashboard slow load fix)*
 *Completed projects older than 30 days are archived to .claude/history/ - See TIMELINE.md for complete historical context*
