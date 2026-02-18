@@ -33,11 +33,12 @@ interface DashboardClientProps {
   showWelcome?: boolean;
   shouldMergePending?: boolean;
   subscriptionSuccess?: boolean;
+  initialCompanies?: Company[];
 }
 
-export function DashboardClient({ showWelcome = false, shouldMergePending = false, subscriptionSuccess = false }: DashboardClientProps) {
+export function DashboardClient({ showWelcome = false, shouldMergePending = false, subscriptionSuccess = false, initialCompanies = [] }: DashboardClientProps) {
   // State for tracked companies
-  const [companies, setCompanies] = useState<Company[]>([]);
+  const [companies, setCompanies] = useState<Company[]>(initialCompanies);
   const [currentCompany, setCurrentCompany] = useState<Company | null>(null);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [showInlineAdd, setShowInlineAdd] = useState(false);
@@ -107,9 +108,11 @@ export function DashboardClient({ showWelcome = false, shouldMergePending = fals
     mergePending();
   }, [shouldMergePending, hasMergedPending, loadCompanies]);
 
-  // Load tracked companies on component mount
+  // Load tracked companies on component mount (skip if server-provided data exists)
   useEffect(() => {
-    loadCompanies();
+    if (initialCompanies.length === 0) {
+      loadCompanies();
+    }
 
     // Check if user is new and should see tutorial (from URL param or localStorage)
     const hasSeenTutorial = localStorage.getItem("hasSeenTutorial");
@@ -123,7 +126,8 @@ export function DashboardClient({ showWelcome = false, shouldMergePending = fals
     if (savedProgress) {
       setTutorialProgress(parseInt(savedProgress, 10));
     }
-  }, [loadCompanies, showWelcome]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Show success toast when subscription is activated
   useEffect(() => {
