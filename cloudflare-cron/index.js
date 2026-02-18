@@ -291,7 +291,7 @@ export default {
       // Route based on cron expression
       // "*/5 * * * *" = Pipeline processing (every 5 minutes)
       // "*/15 * * * *" = Auto-recovery health check and remediation
-      // "0 0 * * *" = Combined daily tasks (trial expiration, DLQ cleanup, report)
+      // "0 0 * * *" = Combined daily tasks (DLQ cleanup, report)
 
       if (cronExpression === '*/15 * * * *') {
         // Auto-recovery health check and remediation
@@ -522,72 +522,6 @@ export default {
     }
   },
 
-  // Handle trial expiration check (daily at midnight UTC)
-  async handleTrialExpiration(event, env, ctx) {
-    const executionId = `trial-check-${Date.now()}`;
-    const startTime = Date.now();
-
-    recordHandlerExecution('trialExpiration', null);
-    console.log(`[${executionId}] Starting trial expiration check (midnight UTC)`);
-
-    try {
-      const url = `${env.PUBLIC_URL}/api/cron/check-trial-expiration`;
-
-      // Generate HMAC signature
-      const timestamp = Date.now();
-      const payload = `${timestamp}:GET:/api/cron/check-trial-expiration`;
-      const encoder = new TextEncoder();
-      const key = await crypto.subtle.importKey(
-        'raw',
-        encoder.encode(sanitizeCronSecret(env.CRON_SECRET)),
-        { name: 'HMAC', hash: 'SHA-256' },
-        false,
-        ['sign']
-      );
-      const signature = await crypto.subtle.sign('HMAC', key, encoder.encode(payload));
-      const signatureHex = Array.from(new Uint8Array(signature))
-        .map(byte => byte.toString(16).padStart(2, '0'))
-        .join('');
-
-      const response = await fetch(url, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Execution-Id': executionId,
-          'X-Cloudflare-Worker': 'tldrsec-cron',
-          'x-hmac-signature': signatureHex,
-          'x-hmac-timestamp': timestamp.toString(),
-          'x-cron-source': 'cloudflare-worker',
-        },
-      });
-
-      const duration = Date.now() - startTime;
-
-      if (response.ok) {
-        const result = await response.json();
-        console.log(`[${executionId}] Trial expiration check completed in ${duration}ms`, {
-          expiredTrials: result.expiredTrials,
-          processed: result.processed,
-          emailsSent: result.emailsSent,
-        });
-        recordHandlerExecution('trialExpiration', true);
-        return { success: true, executionId, duration, result };
-      } else {
-        const errorText = await response.text();
-        console.error(`[${executionId}] Trial expiration check failed: ${response.status} - ${errorText}`);
-        recordHandlerExecution('trialExpiration', false);
-        await alertOnHandlerFailure('trialExpiration', new Error(errorText), env);
-        return { success: false, executionId, duration, error: errorText };
-      }
-    } catch (error) {
-      const duration = Date.now() - startTime;
-      console.error(`[${executionId}] Trial expiration check error: ${error.message}`);
-      recordHandlerExecution('trialExpiration', false);
-      await alertOnHandlerFailure('trialExpiration', error, env);
-      return { success: false, executionId, duration, error: error.message };
-    }
-  },
-
   // Handle combined daily tasks at midnight UTC (Cloudflare free tier: 3 cron limit)
   async handleDailyTasks(event, env, ctx) {
     const executionId = `daily-tasks-${Date.now()}`;
@@ -596,31 +530,24 @@ export default {
     console.log(`[${executionId}] Starting combined daily tasks (00:00 UTC)`);
 
     const results = {
-      trialExpiration: null,
       dlqCleanup: null,
       dailyReport: null,
     };
 
     try {
-      // Task 1: Trial expiration check (most critical for user experience)
-      console.log(`[${executionId}] Running trial expiration check...`);
-      results.trialExpiration = await this.handleTrialExpiration(event, env, ctx);
-
-      // Task 2: DLQ cleanup (important for operational health)
+      // Task 1: DLQ cleanup (important for operational health)
       console.log(`[${executionId}] Running DLQ cleanup...`);
       results.dlqCleanup = await this.handleDLQCleanup(event, env, ctx);
 
-      // Task 3: Daily report (informational, least critical)
+      // Task 2: Daily report (informational, least critical)
       console.log(`[${executionId}] Running daily report...`);
       results.dailyReport = await this.handleDailyReport(event, env, ctx);
 
       const duration = Date.now() - startTime;
-      const allSuccessful = results.trialExpiration?.success &&
-                            results.dlqCleanup?.success &&
+      const allSuccessful = results.dlqCleanup?.success &&
                             results.dailyReport?.success;
 
       console.log(`[${executionId}] Combined daily tasks completed in ${duration}ms`, {
-        trialExpiration: results.trialExpiration?.success ? 'SUCCESS' : 'FAILED',
         dlqCleanup: results.dlqCleanup?.success ? 'SUCCESS' : 'FAILED',
         dailyReport: results.dailyReport?.success ? 'SUCCESS' : 'FAILED',
       });
