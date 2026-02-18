@@ -373,12 +373,21 @@ export default async function middleware(request: NextRequest) {
   // For all other requests: Use Clerk middleware with security middleware
   return clerkMiddleware(
     async (auth, request: NextRequest) => {
+      const url = new URL(request.url);
+      const pathname = url.pathname;
+
+      // Redirect authenticated users away from auth pages to dashboard
+      const { userId } = await auth();
+      if (userId && (pathname.startsWith('/sign-up') || pathname.startsWith('/sign-in'))) {
+        return NextResponse.redirect(new URL('/dashboard', request.url));
+      }
+
       // Apply our security middleware for non-cron endpoints
       const securityResponse = await securityMiddleware(request);
       if (securityResponse) {
         return securityResponse;
       }
-      
+
       // Continue with default Clerk processing
       return;
     },

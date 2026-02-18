@@ -1,7 +1,6 @@
 "use client";
 
 import { MinimalHeader } from "@/components/layout/minimal-header";
-import { ProtectedRoute } from "@/components/auth";
 import { ErrorHandler } from "@/components/ui/error-handler";
 import { PlanStatusBanner } from "@/components/dashboard/plan-status-banner";
 import { useSubscription } from "@/hooks/use-subscription";
@@ -15,7 +14,7 @@ export function DashboardShell({ children }: DashboardShellProps) {
   const { subscription } = useSubscription();
 
   return (
-    <ProtectedRoute>
+    <>
       <Suspense fallback={null}>
         <ErrorHandler />
       </Suspense>
@@ -30,6 +29,6 @@ export function DashboardShell({ children }: DashboardShellProps) {
           </div>
         </main>
       </div>
-    </ProtectedRoute>
+    </>
   );
 }
