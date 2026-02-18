@@ -33,6 +33,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 9. **Don't use `/i` flag with name-extraction regexes** - When matching names with `[A-Z][a-z]+` patterns, the `/i` flag makes all character classes match any letter, causing verbs to match as names (e.g., "insider sold" → "sold" matches as name)
 10. **Assert on text content, not hex colors, in React tests** - `container.innerHTML` doesn't preserve raw hex strings like `#FEF3C7` after React renders inline styles. Assert on text content or `getByText()` instead
 11. **Look up users by `authProviderId` not just `id`** - Clerk `userId` is stored in `authProviderId`, not the DB `id` field. Use `findFirst({ where: { OR: [{ id }, { authProviderId }] } })` or look up by email. See tickers route pattern: `app/api/user/tickers/route.ts`
+12. **Check `jest.config.mjs` moduleNameMapper for new `@/` paths** - When importing from new top-level directories (e.g., `@/contexts/*`, `@/hooks/*`), verify the path is mapped in `jest.config.mjs`. Missing mappings cause "Cannot find module" errors in tests
 
 ### Pattern References
 When implementing new features, reference these exemplar files:
@@ -45,6 +46,8 @@ When implementing new features, reference these exemplar files:
 | Error handling | `lib/monitoring/pipeline-error-detector.ts` |
 | React component | `components/dashboard/system-health-banner.tsx` |
 | Test file | `__tests__/lib/monitoring/` |
+| Auth context test mock | `__tests__/components/landing/landing-page-auth.test.tsx` |
+| Subscription fixtures | `__tests__/fixtures/subscription-fixtures.ts` |
 | Preference sync | `lib/user/preference-sync.ts` |
 | Worktree scripts | `hack/create_worktree.sh`, `hack/cleanup_worktree.sh` |
 

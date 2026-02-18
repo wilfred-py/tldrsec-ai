@@ -1,9 +1,10 @@
 #!/bin/bash
 
 # create_worktree.sh - Create a new worktree for development work
-# Usage: ./create_worktree.sh [--no-thoughts] [worktree_name] [base_branch]
+# Usage: ./create_worktree.sh [--no-thoughts] [--open] [worktree_name] [base_branch]
 # If no name provided, generates a unique human-readable one
 # If no base branch provided, uses current branch
+# --open: Open the worktree in Windsurf after creation
 
 set -e  # Exit on any error
 
@@ -22,10 +23,15 @@ generate_unique_name() {
 
 # Parse flags
 INIT_THOUGHTS=true
+OPEN_AFTER=false
 while [[ $# -gt 0 ]]; do
     case $1 in
         --no-thoughts)
             INIT_THOUGHTS=false
+            shift
+            ;;
+        --open)
+            OPEN_AFTER=true
             shift
             ;;
         *)
@@ -155,6 +161,24 @@ cd - > /dev/null
 echo "✅ Worktree created successfully!"
 echo "📁 Path: ${WORKTREE_PATH}"
 echo "🔀 Branch: ${WORKTREE_NAME}"
+
+# Open in Windsurf if --open flag was provided
+if [ "$OPEN_AFTER" = true ]; then
+    if command -v windsurf &> /dev/null; then
+        WINDSURF_CMD="windsurf"
+    elif [ -f "/Applications/Windsurf.app/Contents/MacOS/Windsurf" ]; then
+        WINDSURF_CMD="/Applications/Windsurf.app/Contents/MacOS/Windsurf"
+    else
+        echo "⚠️  Windsurf not found. Skipping auto-open."
+        WINDSURF_CMD=""
+    fi
+
+    if [ -n "$WINDSURF_CMD" ]; then
+        echo "🚀 Opening worktree in Windsurf..."
+        "$WINDSURF_CMD" --new-window "$WORKTREE_PATH" &
+    fi
+fi
+
 echo ""
 echo "To work in this worktree:"
 echo "  cd ${WORKTREE_PATH}"

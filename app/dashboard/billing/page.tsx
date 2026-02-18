@@ -10,6 +10,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { Switch } from '@/components/ui/switch';
@@ -132,12 +133,12 @@ export default function BillingPage() {
 
   if (loading) {
     return (
-      <div className="container mx-auto py-8 space-y-6">
-        <div className="animate-pulse space-y-4">
-          <div className="h-8 bg-[var(--landing-border)] rounded w-64"></div>
-          <div className="h-4 bg-[var(--landing-border)] rounded w-96"></div>
-          <div className="h-48 bg-[var(--landing-border)] rounded-lg"></div>
+      <div className="container mx-auto py-8 space-y-6 animate-fadeIn">
+        <div className="space-y-2">
+          <Skeleton className="h-8 w-64" />
+          <Skeleton className="h-4 w-96" />
         </div>
+        <Skeleton className="h-48 w-full rounded-lg" />
       </div>
     );
   }

@@ -2,11 +2,11 @@
 
 import { useEffect, useState, RefObject } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useUser } from '@clerk/nextjs';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetTrigger, SheetContent } from '@/components/ui/sheet';
 import { Menu, ArrowRight } from 'lucide-react';
+import { useAuth } from '@/contexts/auth-context';
 
 interface LandingNavbarProps {
   heroRef: RefObject<HTMLElement | null>;
@@ -15,19 +15,25 @@ interface LandingNavbarProps {
 /**
  * Scroll-aware Landing Navbar
  *
- * - Hidden when hero section is in viewport
+ * - Hidden when hero section is in viewport (for unauthenticated users)
+ * - Always visible for authenticated users (sticky navigation)
  * - Visible (sticky) when user scrolls past hero section
  * - Shows different CTAs based on user state
  */
 export function LandingNavbar({ heroRef }: LandingNavbarProps) {
-  const { isSignedIn, isLoaded, user } = useUser();
+  const { isSignedIn, isLoaded, isOnboarded } = useAuth();
   const [isVisible, setIsVisible] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
-  const isOnboarded = Boolean(user?.publicMetadata?.onboardingCompleted);
-
   // Track hero section visibility with Intersection Observer
   useEffect(() => {
+    // If user is authenticated, always show navbar
+    if (isSignedIn) {
+      setIsVisible(true);
+      return; // Don't set up observer for authenticated users
+    }
+
+    // For unauthenticated users, use scroll-based visibility
     if (!heroRef.current) return;
 
     const observer = new IntersectionObserver(
@@ -44,7 +50,7 @@ export function LandingNavbar({ heroRef }: LandingNavbarProps) {
     observer.observe(heroRef.current);
 
     return () => observer.disconnect();
-  }, [heroRef]);
+  }, [heroRef, isSignedIn]); // Add isSignedIn to dependency array
 
   // Don't render until Clerk is loaded (prevents flash)
   if (!isLoaded) return null;

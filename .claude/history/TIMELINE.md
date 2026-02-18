@@ -13,7 +13,11 @@ This file provides a chronological index of all completed projects. For detailed
 
 | Date | Project | Status |
 |------|---------|--------|
-| 2026-02-12 | TrialService User Lookup Fix (findFirst with authProviderId, graceful fallback) | 🔄 |
+| 2026-02-18 | Worktree Manager Create-and-Open Option (--open flag, interactive menu option 4) | 🔄 |
+| 2026-02-18 | Landing Page Auth-Aware Test Coverage (42 tests: navbar, PricingCard, integration, E2E journeys, fixtures) | ✅ |
+| 2026-02-14 | Skeleton Loading States for Billing & Subscribe (route-level loading.tsx, 12 tests) | ✅ |
+| 2026-02-14 | Personalized Pricing Experience (auth/subscription contexts, PricingCard, subscription-aware CTAs) | ✅ |
+| 2026-02-12 | TrialService User Lookup Fix (findFirst with authProviderId, graceful fallback) | ✅ |
 | 2026-02-12 | Cloudflare Cron Schedule Consolidation (fit free tier limit) | ✅ |
 | 2026-02-11 | FREE Plan to 7-Day Trial Migration (database-managed trial, 8 phases, email gates) | ✅ |
 | 2026-02-10 | Pipeline Job Processing Improvements (DLQ cleanup automation, retry pattern docs, test fixes) | ✅ |
@@ -181,10 +185,10 @@ This file provides a chronological index of all completed projects. For detailed
 
 ## Archive Statistics
 - **Total Archived Projects**: 11 weekly archives (Oct-Dec 2025)
-- **Current PROGRESS.md Lines**: 263 (threshold: 500) ✅ HEALTHY
-- **Last Sync**: 2026-02-12
+- **Current PROGRESS.md Lines**: 327 (threshold: 500) ✅ HEALTHY
+- **Last Sync**: 2026-02-18
 - **Archive System**: ✅ ACTIVE
-- **Last Compaction**: 2026-02-12 (No archival needed — 263 lines, all projects < 30 days old)
+- **Last Compaction**: 2026-02-18 (No archival needed — 327 lines, under threshold)
 
 **Archives**:
 - `29-Dec-2025.md` - Cloudflare Cron Fix, Email Quality, Form 4 Templates, JSON Parsing Phase 5

@@ -25,6 +25,8 @@ const config = {
     '^@/components/(.*)$': '<rootDir>/components/$1',
     '^@/lib/(.*)$': '<rootDir>/lib/$1',
     '^@/app/(.*)$': '<rootDir>/app/$1',
+    '^@/contexts/(.*)$': '<rootDir>/contexts/$1',
+    '^@/hooks/(.*)$': '<rootDir>/hooks/$1',
     '^@/__tests__/(.*)$': '<rootDir>/__tests__/$1',
     '\\.(css|less|scss|sass)$': 'identity-obj-proxy',
     '@clerk/backend': '<rootDir>/__tests__/__mocks__/@clerk/backend.js',

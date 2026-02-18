@@ -1,6 +1,25 @@
 import { render, screen, fireEvent } from '@testing-library/react';
 import '@testing-library/jest-dom';
-import { PricingSectionV2 } from '@/components/landing/sections-v2/pricing-section-v2';
+import React from 'react';
+
+// Mock auth and subscription contexts (unauthenticated defaults)
+jest.mock('@/contexts/auth-context', () => ({
+  useAuth: () => ({
+    isSignedIn: false,
+    isLoaded: true,
+    isOnboarded: false,
+    user: null,
+  }),
+}));
+
+jest.mock('@/contexts/subscription-context', () => ({
+  useSubscriptionContext: () => ({
+    subscription: null,
+    loading: false,
+    error: null,
+    refetch: jest.fn(),
+  }),
+}));
 
 jest.mock('framer-motion', () => ({
   motion: {
@@ -8,6 +27,22 @@ jest.mock('framer-motion', () => ({
     h2: ({ children, ...props }: React.PropsWithChildren<Record<string, unknown>>) => <h2 {...props}>{children}</h2>,
   },
 }));
+
+jest.mock('next/navigation', () => ({
+  useRouter: () => ({
+    push: jest.fn(),
+    replace: jest.fn(),
+    prefetch: jest.fn(),
+  }),
+  usePathname: () => '/',
+  useSearchParams: () => new URLSearchParams(),
+}));
+
+jest.mock('sonner', () => ({
+  toast: { success: jest.fn(), error: jest.fn() },
+}));
+
+import { PricingSectionV2 } from '@/components/landing/sections-v2/pricing-section-v2';
 
 describe('PricingSectionV2', () => {
   it('should render section heading', () => {
@@ -17,7 +52,6 @@ describe('PricingSectionV2', () => {
 
   it('should render 3 pricing tiers', () => {
     render(<PricingSectionV2 />);
-    // Get tier headings - use getAllByRole to find h3 tier names
     const tierHeadings = screen.getAllByRole('heading', { level: 3 });
     const tierNames = tierHeadings.map((h) => h.textContent);
     expect(tierNames).toContain('Free');
@@ -25,42 +59,51 @@ describe('PricingSectionV2', () => {
     expect(tierNames).toContain('Max');
   });
 
-  it('should display prices', () => {
+  it('should display prices for all tiers', () => {
     render(<PricingSectionV2 />);
-    expect(screen.getByText(/\$0/)).toBeInTheDocument();
-    expect(screen.getByText(/\$15/)).toBeInTheDocument();
-    expect(screen.getByText(/\$40/)).toBeInTheDocument();
+    // Free tier shows "Free"
+    expect(screen.getByText('Free', { selector: 'span' })).toBeInTheDocument();
+    // PRO tier shows $199
+    expect(screen.getByText('$199')).toBeInTheDocument();
+    // MAX tier shows $349
+    expect(screen.getByText('$349')).toBeInTheDocument();
   });
 
-  it('should show "Most Popular" badge on Pro plan', () => {
+  it('should show "Popular" badge on Pro plan', () => {
     render(<PricingSectionV2 />);
-    expect(screen.getByText(/Most Popular/i)).toBeInTheDocument();
+    expect(screen.getByText('Popular')).toBeInTheDocument();
   });
 
-  it('should have billing toggle for monthly/annual', () => {
+  it('should have billing toggle', () => {
     render(<PricingSectionV2 />);
-    expect(screen.getByRole('switch')).toBeInTheDocument();
+    // Toggle is a button with aria-label
+    expect(
+      screen.getByRole('button', { name: /switch to annual billing/i })
+    ).toBeInTheDocument();
   });
 
   it('should update prices when toggling to annual', () => {
     render(<PricingSectionV2 />);
-    const toggle = screen.getByRole('switch');
+    const toggle = screen.getByRole('button', { name: /switch to annual billing/i });
     fireEvent.click(toggle);
-    // Annual prices should show monthly equivalent - multiple tiers have /month
-    const monthLabels = screen.getAllByText(/\/month/i);
-    expect(monthLabels.length).toBeGreaterThan(0);
+    // Annual prices should show (e.g., $1990, $3490)
+    expect(screen.getByText('$1990')).toBeInTheDocument();
+    expect(screen.getByText('$3490')).toBeInTheDocument();
   });
 
   it('should display feature lists for each tier', () => {
     render(<PricingSectionV2 />);
     expect(screen.getByText(/3 companies/i)).toBeInTheDocument();
-    expect(screen.getByText(/10 companies/i)).toBeInTheDocument();
+    // PRO: "25" in bold (rendered within <strong>)
+    expect(screen.getByText('25')).toBeInTheDocument();
     expect(screen.getByText(/Unlimited/i)).toBeInTheDocument();
   });
 
-  it('should have CTA buttons for each tier', () => {
+  it('should have CTA buttons for each tier (unauthenticated shows "Get Started")', () => {
     render(<PricingSectionV2 />);
-    const buttons = screen.getAllByRole('link', { name: /Get Started|Start Free|Go Max/i });
+    const buttons = screen.getAllByRole('button').filter(
+      (btn) => btn.textContent?.includes('Get Started')
+    );
     expect(buttons.length).toBe(3);
   });
 });
