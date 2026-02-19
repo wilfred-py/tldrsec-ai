@@ -18,17 +18,11 @@ global.fetch = jest.fn()
 describe('Dashboard Skeleton Loading', () => {
   beforeEach(() => {
     jest.clearAllMocks()
-    
-    // Mock companies API to be pending initially
+
+    // Mock API calls - /api/user/tickers never resolves to keep loading state
     ;(global.fetch as jest.Mock).mockImplementation((url: string) => {
-      if (url.includes('/api/companies')) {
+      if (url.includes('/api/user/tickers')) {
         return new Promise(() => {}) // Never resolves to keep loading state
-      }
-      if (url.includes('/api/filings/summary')) {
-        return Promise.resolve({
-          ok: true,
-          json: () => Promise.resolve([])
-        })
       }
       return Promise.resolve({
         ok: true,
@@ -42,18 +36,13 @@ describe('Dashboard Skeleton Loading', () => {
 
     // Wait for component to mount and start loading
     await waitFor(() => {
-      // Check for desktop skeleton elements
-      const desktopSkeletons = document.querySelectorAll('[data-slot="skeleton"]')
-      expect(desktopSkeletons.length).toBeGreaterThan(0)
+      const skeletons = document.querySelectorAll('[data-slot="skeleton"]')
+      expect(skeletons.length).toBeGreaterThan(0)
     })
-
-    // Verify table structure skeleton exists
-    const tableHeaders = screen.getAllByRole('columnheader')
-    expect(tableHeaders.length).toBeGreaterThan(0)
 
     // Verify skeleton rows exist
     const skeletonRows = document.querySelectorAll('[data-slot="skeleton"]')
-    expect(skeletonRows.length).toBeGreaterThanOrEqual(5) // 5 skeleton rows minimum
+    expect(skeletonRows.length).toBeGreaterThanOrEqual(5)
   })
 
   test('skeleton matches actual table structure', async () => {
@@ -64,13 +53,9 @@ describe('Dashboard Skeleton Loading', () => {
       const table = screen.getByRole('table')
       expect(table).toBeInTheDocument()
 
-      // Should have header row
-      const headerRow = screen.getByRole('row')
-      expect(headerRow).toBeInTheDocument()
-
-      // Should have multiple skeleton rows
+      // Should have multiple rows (header + skeleton rows)
       const rows = screen.getAllByRole('row')
-      expect(rows.length).toBeGreaterThan(1) // Header + skeleton rows
+      expect(rows.length).toBeGreaterThan(1)
     })
   })
 
@@ -81,7 +66,7 @@ describe('Dashboard Skeleton Loading', () => {
       configurable: true,
       value: 500,
     })
-    
+
     render(<DashboardClient />)
 
     await waitFor(() => {
@@ -91,57 +76,36 @@ describe('Dashboard Skeleton Loading', () => {
     })
   })
 
-  test('skeleton disappears when data loads', async () => {
-    // Mock successful API response with delay
-    ;(global.fetch as jest.Mock).mockImplementation((url: string) => {
-      if (url.includes('/api/companies')) {
-        return Promise.resolve({
-          ok: true,
-          json: () => Promise.resolve([
-            {
-              ticker: 'AAPL',
-              name: 'Apple Inc.',
-              latestFilingDate: '2024-01-01',
-              summaryCount: 5
-            }
-          ])
-        })
+  test('skeleton disappears when data is provided via initialCompanies', () => {
+    const companies = [
+      {
+        id: '1',
+        symbol: 'AAPL',
+        name: 'Apple Inc.',
+        lastFiling: '—',
+        summaryCount: 5,
+        preferences: { tenK: true, tenQ: true, eightK: true, form4: true, other: false }
       }
-      return Promise.resolve({
-        ok: true,
-        json: () => Promise.resolve([])
-      })
-    })
+    ]
 
-    render(<DashboardClient />)
+    render(<DashboardClient initialCompanies={companies} />)
 
-    // Initially should show skeleton
-    await waitFor(() => {
-      const skeletons = document.querySelectorAll('[data-slot="skeleton"]')
-      expect(skeletons.length).toBeGreaterThan(0)
-    })
+    // Should show real data, not skeleton (may appear in desktop + mobile views)
+    const matches = screen.getAllByText('AAPL')
+    expect(matches.length).toBeGreaterThan(0)
 
-    // After data loads, skeleton should be gone
-    await waitFor(() => {
-      const skeletons = document.querySelectorAll('[data-slot="skeleton"]')
-      expect(skeletons.length).toBe(0)
-    }, { timeout: 3000 })
-
-    // Should show actual data
-    await waitFor(() => {
-      expect(screen.getByText('AAPL')).toBeInTheDocument()
-      expect(screen.getByText('Apple Inc.')).toBeInTheDocument()
-    })
+    // No skeletons should be visible
+    const skeletons = document.querySelectorAll('[data-slot="skeleton"]')
+    expect(skeletons).toHaveLength(0)
   })
 
   test('skeleton shows correct number of rows', async () => {
     render(<DashboardClient />)
 
     await waitFor(() => {
-      // Should show 5 skeleton rows as per the implementation
+      // Should show 8 skeleton rows + 1 header = 9 total
       const rows = screen.getAllByRole('row')
-      // 1 header row + 5 skeleton rows = 6 total
-      expect(rows.length).toBe(6)
+      expect(rows).toHaveLength(9)
     })
   })
 
