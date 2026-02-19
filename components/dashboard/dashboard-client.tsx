@@ -34,9 +34,10 @@ interface DashboardClientProps {
   shouldMergePending?: boolean;
   subscriptionSuccess?: boolean;
   initialCompanies?: Company[];
+  tutorialCompleted?: boolean;
 }
 
-export function DashboardClient({ showWelcome = false, shouldMergePending = false, subscriptionSuccess = false, initialCompanies = [] }: DashboardClientProps) {
+export function DashboardClient({ showWelcome = false, shouldMergePending = false, subscriptionSuccess = false, initialCompanies = [], tutorialCompleted = false }: DashboardClientProps) {
   // State for tracked companies
   const [companies, setCompanies] = useState<Company[]>(initialCompanies);
   const [currentCompany, setCurrentCompany] = useState<Company | null>(null);
@@ -114,9 +115,10 @@ export function DashboardClient({ showWelcome = false, shouldMergePending = fals
       loadCompanies();
     }
 
-    // Check if user is new and should see tutorial (from URL param or localStorage)
+    // Check if user is new and should see tutorial
+    // Skip if tutorial already completed in DB or user already has tickers
     const hasSeenTutorial = localStorage.getItem("hasSeenTutorial");
-    if (showWelcome || !hasSeenTutorial) {
+    if (!tutorialCompleted && initialCompanies.length === 0 && (showWelcome || !hasSeenTutorial)) {
       setShowTutorial(true);
       localStorage.setItem("hasSeenTutorial", "true");
     }

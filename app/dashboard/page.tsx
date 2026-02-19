@@ -22,6 +22,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
 
   // Fetch tickers server-side to eliminate client-side waterfall
   let initialCompanies: Company[] = [];
+  let tutorialCompleted = false;
   const email = user.emailAddresses?.[0]?.emailAddress;
   if (email) {
     try {
@@ -42,6 +43,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
         },
       });
       if (dbUser) {
+        tutorialCompleted = dbUser.tutorialCompletedAt != null;
         initialCompanies = dbUser.tickers.map(ticker => ({
           id: ticker.id,
           symbol: ticker.symbol,
@@ -64,6 +66,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
       shouldMergePending={shouldMergePending}
       subscriptionSuccess={subscriptionSuccess}
       initialCompanies={initialCompanies}
+      tutorialCompleted={tutorialCompleted}
     />
   );
 }
