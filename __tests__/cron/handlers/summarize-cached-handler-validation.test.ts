@@ -6,16 +6,9 @@
  * enriched data and validation metadata correctly.
  */
 
-// --- Mock setup (jest.mock is hoisted, so use inline jest.fn()) ---
+// --- Mock setup (all jest.fn() inline to avoid hoisting issues) ---
 
-jest.mock('../../../lib/ai/summarize-with-validation', () => ({
-  summarizeFilingWithValidation: jest.fn(),
-}));
-
-jest.mock('../../../lib/ai/summarize', () => ({
-  summarizeFiling: jest.fn(),
-}));
-
+// Mock prisma - use a function wrapper so the variable is accessed at runtime, not at hoist time
 const mockPrisma = {
   summary: {
     findFirst: jest.fn(),
@@ -54,9 +47,17 @@ jest.mock('../../../lib/logging', () => ({
   },
 }));
 
-const mockSendFilingSummaryEmail = jest.fn().mockResolvedValue(undefined);
+// All module mocks with inline jest.fn() - no variable references
+jest.mock('../../../lib/ai/summarize-with-validation', () => ({
+  summarizeFilingWithValidation: jest.fn(),
+}));
+
+jest.mock('../../../lib/ai/summarize', () => ({
+  summarizeFiling: jest.fn(),
+}));
+
 jest.mock('../../../lib/email/summary-service', () => ({
-  sendFilingSummaryEmail: mockSendFilingSummaryEmail,
+  sendFilingSummaryEmail: jest.fn().mockResolvedValue(undefined),
 }));
 
 jest.mock('../../../lib/validation/filing-content-verifier', () => ({
@@ -92,10 +93,12 @@ jest.mock('../../../lib/auth/trial-service', () => ({
 import { handleSummarizeCached, SummarizeJobPayload } from '../../../lib/cron/handlers/summarize-cached-handler';
 import { summarizeFilingWithValidation } from '../../../lib/ai/summarize-with-validation';
 import { summarizeFiling } from '../../../lib/ai/summarize';
+import { sendFilingSummaryEmail } from '../../../lib/email/summary-service';
 
 // Cast to jest.Mock for per-test control
-const mockSummarizeFilingWithValidation = summarizeFilingWithValidation as jest.Mock;
+const mockSummarizeWithValidation = summarizeFilingWithValidation as jest.Mock;
 const mockSummarizeFiling = summarizeFiling as jest.Mock;
+const mockSendEmail = sendFilingSummaryEmail as jest.Mock;
 
 // --- Test data ---
 
@@ -191,7 +194,7 @@ function setupBaseMocks() {
   mockPrisma.user.update.mockResolvedValue({});
   mockPrisma.summaryEmailDelivery.create.mockResolvedValue({});
 
-  mockSummarizeFilingWithValidation.mockResolvedValue(mockEnrichedResult);
+  mockSummarizeWithValidation.mockResolvedValue(mockEnrichedResult);
 }
 
 // --- Tests ---
@@ -205,14 +208,14 @@ describe('summarize-cached-handler with validation wrapper', () => {
     const result = await handleSummarizeCached(basePayload);
 
     expect(result.success).toBe(true);
-    expect(mockSummarizeFilingWithValidation).toHaveBeenCalledTimes(1);
+    expect(mockSummarizeWithValidation).toHaveBeenCalledTimes(1);
     expect(mockSummarizeFiling).not.toHaveBeenCalled();
   });
 
   it('should pass formType in options for extractor lookup', async () => {
     await handleSummarizeCached(basePayload);
 
-    expect(mockSummarizeFilingWithValidation).toHaveBeenCalledWith(
+    expect(mockSummarizeWithValidation).toHaveBeenCalledWith(
       expect.any(String),
       expect.objectContaining({
         formType: '10-K',
@@ -223,7 +226,7 @@ describe('summarize-cached-handler with validation wrapper', () => {
   it('should pass metadata in options', async () => {
     await handleSummarizeCached(basePayload);
 
-    expect(mockSummarizeFilingWithValidation).toHaveBeenCalledWith(
+    expect(mockSummarizeWithValidation).toHaveBeenCalledWith(
       expect.any(String),
       expect.objectContaining({
         metadata: expect.objectContaining({
@@ -250,22 +253,22 @@ describe('summarize-cached-handler with validation wrapper', () => {
   it('should pass enriched summaryJSON as summaryData to email template', async () => {
     await handleSummarizeCached(basePayload);
 
-    expect(mockSendFilingSummaryEmail).toHaveBeenCalledTimes(1);
-    const emailCall = mockSendFilingSummaryEmail.mock.calls[0];
+    expect(mockSendEmail).toHaveBeenCalledTimes(1);
+    const emailCall = mockSendEmail.mock.calls[0];
 
     expect(emailCall[1].summaryData).toEqual(mockEnrichedResult.summaryJSON);
   });
 
   it('should handle validation wrapper returning extractorValidated=false gracefully', async () => {
-    mockSummarizeFilingWithValidation.mockResolvedValue(mockBaseResultNoValidation);
+    mockSummarizeWithValidation.mockResolvedValue(mockBaseResultNoValidation);
 
     const result = await handleSummarizeCached(basePayload);
 
     expect(result.success).toBe(true);
     expect(result.emailSent).toBe(true);
 
-    expect(mockSendFilingSummaryEmail).toHaveBeenCalledTimes(1);
-    const emailCall = mockSendFilingSummaryEmail.mock.calls[0];
+    expect(mockSendEmail).toHaveBeenCalledTimes(1);
+    const emailCall = mockSendEmail.mock.calls[0];
     expect(emailCall[1].summaryData).toEqual(mockBaseResultNoValidation.summaryJSON);
   });
 
@@ -291,10 +294,9 @@ describe('summarize-cached-handler with validation wrapper', () => {
   });
 
   it('should not log extractor validation when extractorValidated is not in result', async () => {
-    // Return a plain result without extractorValidated
     const plainResult = { ...mockBaseResultNoValidation };
     delete (plainResult as Record<string, unknown>).extractorValidated;
-    mockSummarizeFilingWithValidation.mockResolvedValue(plainResult);
+    mockSummarizeWithValidation.mockResolvedValue(plainResult);
 
     await handleSummarizeCached(basePayload);
 
@@ -321,7 +323,7 @@ describe('summarize-cached-handler with validation wrapper', () => {
 
     await handleSummarizeCached(form4Payload);
 
-    expect(mockSummarizeFilingWithValidation).toHaveBeenCalledWith(
+    expect(mockSummarizeWithValidation).toHaveBeenCalledWith(
       expect.any(String),
       expect.objectContaining({
         formType: '4',
@@ -332,7 +334,7 @@ describe('summarize-cached-handler with validation wrapper', () => {
   it('should pass cik from ticker when available', async () => {
     await handleSummarizeCached(basePayload);
 
-    expect(mockSummarizeFilingWithValidation).toHaveBeenCalledWith(
+    expect(mockSummarizeWithValidation).toHaveBeenCalledWith(
       expect.any(String),
       expect.objectContaining({
         metadata: expect.objectContaining({
