@@ -15,6 +15,7 @@ import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { Switch } from '@/components/ui/switch';
 import {
+  ArrowLeft,
   CreditCard,
   AlertTriangle,
   Clock
@@ -155,6 +156,15 @@ export default function BillingPage() {
     <div className="container mx-auto py-8 space-y-8">
       {/* Header */}
       <div>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="mb-4 -ml-2 text-gray-600 hover:text-gray-900"
+          onClick={() => router.push('/dashboard')}
+        >
+          <ArrowLeft className="h-4 w-4 mr-1" />
+          Back to Dashboard
+        </Button>
         <h1 className="text-3xl font-bold tracking-tight">Billing & Subscription</h1>
         <p className="text-gray-600 mt-2">
           Manage your subscription, billing, and payment methods
