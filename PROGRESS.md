@@ -1,24 +1,161 @@
 # Project Progress
 
-**Date**: 2026-02-12
-**Branch**: main
-**Status**: Trial System Live + TrialService Lookup Fix
+**Date**: 2026-02-19
+**Branch**: summary-quality-review (worktree)
+**Status**: Summary Quality Fixes - Phase 2 complete, Phase 3 pending
 
 ---
 
 ## Current Session
 
-### TrialService User Lookup Fix (2026-02-12)
+### Summary Quality Fixes: Form 4 Classification, 10-K Blank Sections, Duplicate Emails (2026-02-18 → ongoing)
 
-**Problem**: `/api/user/subscription` returning 500 — `TrialService.checkTrialStatus()` looked up users by `where: { id: userId }` but Clerk `userId` is stored in `authProviderId`, not `id`.
+**Branch**: `summary-quality-review` | **Plan**: `docs/plans/2026-02-18-summary-quality-fixes.md` | **Research**: `thoughts/shared/research/2026-02-18-summary-quality-review.md`
 
-**Fix**: Changed `findUnique({ where: { id } })` to `findFirst({ where: { OR: [{ id }, { authProviderId }] } })` in `lib/auth/trial-service.ts`. Also made it return a default active/grandfathered status instead of throwing when user isn't in DB yet (user gets auto-created on first `/api/user/tickers` call).
+**Problems**: (1) Form 4 "BOUGHT $0" for gifts/awards (GOOGL, JNJ) - 17 of 21 SEC codes defaulted to misleading "purchase". (2) 10-K blank Financial Highlights/Segments (COIN) - `summarizeFilingWithValidation()` existed but wasn't wired in. (3) Duplicate emails on job retry - race condition between summary save and `sentToUser` update.
 
-**Files**: `lib/auth/trial-service.ts`
+**Phase 1: Expand Form 4 Classification to 7 Buckets** ✅ (2026-02-18)
+- Added 3 new classification functions: `isAwardTransaction()` (codes A, I), `isExerciseTransaction()` (M, C, X, O, E, H), `isOtherTransaction()` (D, F, U, V, L)
+- Updated `isGiftTransaction()` (+code W), `isTransferTransaction()` (+code Z)
+- Added code-first guard to `isSaleTransaction()` - SEC code is authoritative over AI text
+- Changed default fallback from "purchase" to "other" (neutral)
+- Added 3 new display buckets: award (amber), exercise (teal), other (slate)
+- `getAggregatedTransactionConfig()` now delegates to `getTransactionTypeConfig()` (DRY)
+- Updated `SEC_TRANSACTION_CODES` (added V, fixed E/H/I/K descriptions), `TRANSACTION_CODE_MAP` (added 11 missing codes)
+- **Files**: `form4-minimalist-template.tsx`, `design-system.ts`, `form4-data-extractor.ts`
+- **Tests**: 78 new tests in `form4-transaction-classification.test.ts`, 112/112 Form 4 tests pass
+
+**Phase 2: Wire `summarizeFilingWithValidation()` into Production Pipeline** ✅ (2026-02-19)
+- Replaced `import { summarizeFiling }` with `import { summarizeFilingWithValidation }` in `summarize-cached-handler.ts`
+- Updated call to pass `formType: filing.formType` for extractor lookup
+- Added extractor validation metadata logging (`extractorValidated`, `fieldsFilledByExtractor`, `fieldsWithDiscrepancies`, `extractorFillRate`)
+- Updated existing `summarize-cached-handler-fields.test.ts` mocks (logger, validation wrapper, trial service, preferences)
+- **Files**: `lib/cron/handlers/summarize-cached-handler.ts`, `__tests__/cron/handlers/summarize-cached-handler-validation.test.ts` (new, 10 tests), `__tests__/cron/handlers/summarize-cached-handler-fields.test.ts` (updated)
+- **Tests**: 14/14 handler tests pass, build passes, lint clean
+
+**Phase 3: Fix Duplicate Email Race Condition** - PENDING
+**Phase 4: Integration Testing and Regression Verification** - PENDING
+
+---
+
+### Fix Dashboard Slow Load After Sign-In (2026-02-19)
+
+**Problem**: Dashboard took 4-6s to show meaningful content after sign-in due to sequential waterfall: server-side `currentUser()` → client-side Clerk `useUser()` (2-3s blocking via ProtectedRoute) → client-side API fetch for tickers → render.
+
+**Fix** (4 changes):
+1. **`components/dashboard/dashboard-shell.tsx`** - Removed `ProtectedRoute` wrapper (redundant — auth already enforced by Clerk middleware + server-side `currentUser()` in page.tsx). Eliminates 2-3s client-side Clerk blocking.
+2. **`app/dashboard/page.tsx`** - Added server-side Prisma query to fetch user's tickers after `currentUser()`. Uses `_count` + `take: 1` for efficient query. Passes results as `initialCompanies` prop. Falls back gracefully on error.
+3. **`components/dashboard/dashboard-client.tsx`** - Added `initialCompanies` prop (defaults to `[]`). Initializes `companies` state with server data. Skips initial `loadCompanies()` API call when data provided. `loadCompanies` still available for mutations.
+4. **`app/api/user/tickers/route.ts`** - Optimized GET query: `_count: { select: { summaries: true } }` + `take: 1` instead of loading all summaries. Applied to both main query and auto-create path.
+
+**Result**: Dashboard renders with data in ~1s (loading.tsx skeleton visible during server fetch). No new test regressions.
+
+**Status**: Implemented, not yet committed.
+
+---
+
+### Auth Redirect for Logged-In Users (2026-02-18)
+
+**Goal**: Redirect authenticated users visiting `/sign-up` or `/sign-in` to `/dashboard` instead of `/onboarding`.
+
+**Changes**:
+- **`middleware.ts`** - Added `auth()` check inside Clerk middleware callback. If `userId` exists and pathname starts with `/sign-up` or `/sign-in`, redirects to `/dashboard`.
+
+**Status**: Implemented, not yet committed.
+
+---
+
+### Worktree Manager Create-and-Open Option ✅ (2026-02-18)
+
+**Goal**: Add ability to create and open a worktree from the `npm run worktrees` interactive menu.
+
+**Changes**:
+- **`hack/create_worktree.sh`** - Added `--open` flag that opens the new worktree in Windsurf after creation (detects `windsurf` CLI or macOS app path)
+- **`scripts/open-worktrees.sh`** - Added "Create new worktree" as option 4 in interactive menu (prompts for name and base branch, calls `create_worktree.sh --open`)
+- **`package.json`** - Added `worktrees:create:open` convenience npm script
+
+---
+
+### Landing Page Auth-Aware Test Coverage ✅ (2026-02-18)
+
+**Goal**: Add comprehensive test coverage for personalized landing page behaviors (hero caption, navbar visibility, pricing badges) across all auth/subscription states.
+
+**Files Created**:
+- `__tests__/fixtures/subscription-fixtures.ts` - Shared mock data factory for all subscription states (FREE trial, PRO, MAX, grandfathered, not onboarded, loading)
+- `__tests__/components/landing/landing-navbar.test.tsx` - 8 tests: 3-state CTA (Get Started/Complete Setup/Go to Dashboard), scroll visibility, auth bypass
+- `__tests__/components/landing/pricing-card.test.tsx` - 13 tests: Current Plan badge, Trial Ending Soon, loading skeleton, Popular badge, checkout spinner, bold markdown
+- `__tests__/components/landing/landing-page-auth.test.tsx` - 9 integration tests: all 6 verification scenarios + error banner + loading skeletons
+- `__tests__/e2e/landing-page-journeys.test.tsx` - 4 user journey tests + QA manual test data docs (skipped)
+
+**Files Modified**:
+- `__tests__/components/landing/pricing-section-v2.test.tsx` - Added auth/subscription context mocks, updated price assertions ($199/$349), fixed CTA selectors
+- `jest.config.mjs` - Added `@/contexts/*` and `@/hooks/*` module name mappings
+
+**Verification**: 5 suites, 42 tests passing, 1 skipped (QA docs), 0 lint errors
+
+---
+
+### Email Summary Quality Improvements ✅ (2026-02-14)
+
+**PR**: [#349](https://github.com/wilfred-py/tldrsec-ai/pull/349)
+
+**Goal**: Improve email summary quality with quality gates, staleness detection, and prompt enhancements.
+
+**Key Changes**:
+- **`lib/ai/summarize.ts`** - Store complete AI-generated JSON output in `summaryJSON` field instead of discarding it (fixes missing filer names/transaction details in emails)
+- **Quality gates** for summary generation to catch degraded output
+- **Staleness detection** to identify outdated cached summaries
+- **Prompt enhancements** across filing types for better extraction
+
+**Root Cause**: summaryJSON field was being discarded, forcing email templates to rely on regex fallbacks that fail with natural language variations.
+
+---
+
+### Skeleton Loading States for Billing & Subscribe ✅ (2026-02-14)
+
+**Goal**: Replace white-screen/generic loading fallbacks on `/dashboard/billing` and `/subscribe` with layout-matching skeleton loading states using the existing `Skeleton` component.
+
+**Changes**:
+- **Created** `app/dashboard/billing/loading.tsx` - Route-level skeleton with Card layout matching billing page (header, icon+title, plan name, price, billing period, separator, action buttons)
+- **Created** `app/subscribe/loading.tsx` - Route-level skeleton with back button, centered header, billing toggle, 3-card responsive grid with staggered animations, ESC hint
+- **Created** `app/dashboard/billing/__tests__/loading.test.tsx` - 5 tests (skeletons, container, shadow, fadeIn, separator)
+- **Created** `app/subscribe/__tests__/loading.test.tsx` - 7 tests (skeletons, back button, header, toggle, 3 cards, responsive grid, fadeIn)
+- **Updated** `app/dashboard/billing/page.tsx` - Replaced `animate-pulse` divs with `Skeleton` components + added import
+- **Updated** `app/subscribe/page.tsx` - Updated both `if (loading)` block and `SubscribePageLoading` Suspense fallback with layout-matching skeletons
+
+**Patterns used**: `animate-fadeIn`, `animate-slideUp` with staggered delays, `data-slot="skeleton"`, `data-testid` for test targeting
+
+**Verification**: 12/12 tests pass, build succeeds, no new lint errors
+
+---
+
+### Personalized Pricing Experience for Authenticated Users ✅ (2026-02-14)
+
+**Goal**: Show authenticated users their current plan status on the landing page pricing section, with personalized CTAs and subscription-aware UI.
+
+**Implementation**:
+- **Auth/Subscription Context Providers** (`components/providers/auth-provider.tsx`, `components/providers/subscription-provider.tsx`) - React context for user auth state and subscription data with SWR caching
+- **Subscription Status API** (`app/api/user/subscription/status/route.ts`) - Lightweight endpoint returning plan type and status
+- **PricingCard extraction** (`components/landing/sections-v2/pricing-card.tsx`) - Extracted from monolithic pricing section for better organization
+- **Landing page integration** - Pricing section shows "Current Plan" badges, disabled buttons for current plan, upgrade/downgrade CTAs based on subscription status
+- **Security & accessibility fixes** - ARIA labels, role attributes, keyboard navigation, focus states on loading skeletons
+- **Test coverage** - SSE and SubscriptionContext tests, comprehensive test coverage for new providers
+
+**Files**: `components/providers/`, `app/api/user/subscription/status/`, `components/landing/sections-v2/pricing-card.tsx`, `components/landing/sections-v2/pricing-section-v2.tsx`
 
 ---
 
 ## Recently Completed Sessions
+
+### TrialService User Lookup Fix ✅ (2026-02-12)
+
+**Problem**: `/api/user/subscription` returning 500 — `TrialService.checkTrialStatus()` looked up users by `where: { id: userId }` but Clerk `userId` is stored in `authProviderId`, not `id`.
+
+**Fix**: Changed `findUnique({ where: { id } })` to `findFirst({ where: { OR: [{ id }, { authProviderId }] } })` in `lib/auth/trial-service.ts`. Also made it return a default active/grandfathered status instead of throwing when user isn't in DB yet.
+
+**Files**: `lib/auth/trial-service.ts`
+
+---
 
 ### Cloudflare Cron Schedule Consolidation ✅ (2026-02-12)
 
@@ -87,6 +224,17 @@
 - `components/billing/subscription-plans.tsx` - Missing `priceId`/`monthlyFilings` properties (6 errors)
 
 **Verification**: Build passes, all trial-related functionality implemented across 8 phases.
+
+---
+
+### Engineering Process Improvements + Dashboard Refactoring ✅ (2026-02-11)
+
+**PR**: [#346](https://github.com/wilfred-py/tldrsec-ai/pull/346)
+
+**Changes**:
+- **`app/dashboard/layout.tsx`** - Split server layout from client `DashboardShell` to fix `'use client'` layout issue
+- **`components/dashboard/dashboard-shell.tsx`** - Extracted client-side dashboard shell component
+- **`.claude/commands/review_plan.md`** - Added 6-perspective review command for plan validation
 
 ---
 
@@ -259,5 +407,5 @@ For complete technical details of projects older than 30 days, see the weekly ar
 
 ---
 
-*Last Updated: 2026-02-12 (TrialService fix, Cloudflare cron consolidation)*
+*Last Updated: 2026-02-19 (Summary Quality Fixes Phase 2 complete)*
 *Completed projects older than 30 days are archived to .claude/history/ - See TIMELINE.md for complete historical context*
