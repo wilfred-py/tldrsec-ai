@@ -789,19 +789,19 @@ Similarly, `summaryResult.summaryJSON` at line 513 (email `summaryData`) automat
 
 ### Step 2.3: 🔵 Refactor
 
-- [ ] Remove unused `summarizeFiling` import if no longer needed
-- [ ] Verify no other files import `summarizeFiling` directly for pipeline use (search for non-test imports)
+- [x] Remove unused `summarizeFiling` import if no longer needed
+- [x] Verify no other files import `summarizeFiling` directly for pipeline use (search for non-test imports)
 
 **Checkpoint 2.3**: All tests pass after cleanup.
 
 ### Step 2.4: Final Phase 2 Verification
 
 #### Automated Verification:
-- [ ] New handler tests pass: `npm run test -- --testPathPattern="summarize-cached-handler"`
-- [ ] Existing extractor tests pass: `npm run test -- --testPathPattern="summarize-with-extraction"`
-- [ ] Type checking passes: `npm run build`
-- [ ] Linting passes: `npm run lint`
-- [ ] No regressions: `npm run test`
+- [x] New handler tests pass: `npm run test -- --testPathPattern="summarize-cached-handler"` (14/14 pass)
+- [x] Existing extractor tests pass: `npm run test -- --testPathPattern="summarize-with-extraction"` (26/27 pass, 1 pre-existing failure: SC 13G)
+- [x] Type checking passes: `npm run build`
+- [x] Linting passes: `npm run lint` (pre-existing errors only)
+- [x] No regressions: `npm run test` (all 126 directly-affected tests pass; broad suite has pre-existing failures only)
 
 #### Manual Verification:
 - [ ] Review logs to confirm extractor validation metadata appears
@@ -947,11 +947,11 @@ if (existingSummary) {
 ### Step 3.4: Final Phase 3 Verification
 
 #### Automated Verification:
-- [ ] Dedup tests pass: `npm run test -- --testPathPattern="summarize-cached-handler-dedup"`
-- [ ] Existing handler tests pass: `npm run test -- --testPathPattern="summarize-cached-handler"`
-- [ ] Type checking passes: `npm run build`
-- [ ] Linting passes: `npm run lint`
-- [ ] No regressions: `npm run test`
+- [x] Dedup tests pass: `npm run test -- --testPathPattern="summarize-cached-handler-dedup"` (7/7 pass)
+- [x] Existing handler tests pass: `npm run test -- --testPathPattern="summarize-cached-handler"` (21/21 pass)
+- [x] Type checking passes: `npm run build`
+- [x] Linting passes: `npm run lint` (pre-existing errors only)
+- [x] No regressions: `npm run test` (all directly-affected tests pass; broad suite has pre-existing failures only)
 
 #### Manual Verification:
 - [ ] Verify that legitimate first-sends still work (not over-blocked)

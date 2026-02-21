@@ -6,9 +6,13 @@
  * enriched data and validation metadata correctly.
  */
 
-// --- Mock setup (all jest.fn() inline to avoid hoisting issues) ---
+// --- Mock setup ---
+// jest.mock is hoisted before const declarations. Variables referenced in
+// factory functions must either be defined inline or accessed at runtime.
+// For logger, we define the mock instance inside the factory and export it
+// via a test-accessible property, because logger.child() is called at
+// module load time (top-level const in handler).
 
-// Mock prisma - use a function wrapper so the variable is accessed at runtime, not at hoist time
 const mockPrisma = {
   summary: {
     findFirst: jest.fn(),
@@ -34,20 +38,22 @@ jest.mock('../../../lib/db/prisma', () => ({
   getPrismaClient: jest.fn(() => mockPrisma),
 }));
 
-const mockLoggerInstance = {
-  info: jest.fn(),
-  debug: jest.fn(),
-  warn: jest.fn(),
-  error: jest.fn(),
-};
+// Logger instance created inside factory because logger.child() runs at module load
+jest.mock('../../../lib/logging', () => {
+  const instance = {
+    info: jest.fn(),
+    debug: jest.fn(),
+    warn: jest.fn(),
+    error: jest.fn(),
+  };
+  return {
+    logger: {
+      child: () => instance,
+    },
+    _testLoggerInstance: instance,
+  };
+});
 
-jest.mock('../../../lib/logging', () => ({
-  logger: {
-    child: () => mockLoggerInstance,
-  },
-}));
-
-// All module mocks with inline jest.fn() - no variable references
 jest.mock('../../../lib/ai/summarize-with-validation', () => ({
   summarizeFilingWithValidation: jest.fn(),
 }));
@@ -95,7 +101,11 @@ import { summarizeFilingWithValidation } from '../../../lib/ai/summarize-with-va
 import { summarizeFiling } from '../../../lib/ai/summarize';
 import { sendFilingSummaryEmail } from '../../../lib/email/summary-service';
 
-// Cast to jest.Mock for per-test control
+// Retrieve the logger instance created inside the mock factory
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const { _testLoggerInstance: mockLoggerInstance } = require('../../../lib/logging');
+
+// Cast imported mocks for per-test control
 const mockSummarizeWithValidation = summarizeFilingWithValidation as jest.Mock;
 const mockSummarizeFiling = summarizeFiling as jest.Mock;
 const mockSendEmail = sendFilingSummaryEmail as jest.Mock;

@@ -32,6 +32,10 @@ jest.mock('../../../lib/db/prisma', () => ({
 
 jest.mock('../../../lib/logging', () => ({
   logger: {
+    info: jest.fn(),
+    debug: jest.fn(),
+    warn: jest.fn(),
+    error: jest.fn(),
     child: () => ({
       info: jest.fn(),
       debug: jest.fn(),
@@ -57,8 +61,40 @@ jest.mock('../../../services/filing/summaryGenerationService', () => ({
   })
 }));
 
+jest.mock('../../../lib/ai/summarize-with-validation', () => ({
+  summarizeFilingWithValidation: jest.fn().mockImplementation(async () => {
+    await new Promise(resolve => setTimeout(resolve, 15));
+    return {
+      summary: 'Test summary',
+      summaryText: 'Test summary',
+      summaryJSON: { test: 'data' },
+      duration: 15,
+      modelUsed: 'test-model',
+      inputTokens: 100,
+      outputTokens: 50,
+      tokensUsed: 150,
+      cost: 0.001,
+      extractorValidated: false,
+    };
+  })
+}));
+
 jest.mock('../../../lib/email/summary-service', () => ({
   sendFilingSummaryEmail: jest.fn().mockResolvedValue(undefined)
+}));
+
+jest.mock('../../../lib/filing/filing-type-preferences-mapper', () => ({
+  shouldProcessFiling: jest.fn().mockReturnValue(true)
+}));
+
+jest.mock('../../../lib/auth/trial-service', () => ({
+  TrialService: {
+    checkTrialStatus: jest.fn().mockResolvedValue({
+      isActive: true,
+      isGrandfathered: false,
+      daysRemaining: 30,
+    }),
+  },
 }));
 
 jest.mock('../../../lib/validation/filing-content-verifier', () => ({
