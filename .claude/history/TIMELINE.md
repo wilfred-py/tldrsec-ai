@@ -13,8 +13,14 @@ This file provides a chronological index of all completed projects. For detailed
 
 | Date | Project | Status |
 |------|---------|--------|
-| 2026-02-19 | Fix Dashboard Slow Load After Sign-In (remove ProtectedRoute, server-side ticker fetch, query optimization) | 🔄 |
-| 2026-02-18 | Auth Redirect for Logged-In Users (middleware redirect to /dashboard) | 🔄 |
+| 2026-02-20 | Fix Subscribe Page Bugs + Downgrade Support (abandoned checkout planType, back nav, downgrade dialog) | ✅ |
+| 2026-02-20 | Redirect Upgrade Links to /subscribe (dashboard-client.tsx upgrade button + toast) | ✅ |
+| 2026-02-19 | Back to Dashboard Button on Billing Page | ✅ |
+| 2026-02-19 | Tutorial Overlay Bug Fixes (spotlight effect, skip for existing users, tooltip contrast) | ✅ |
+| 2026-02-19 | Dashboard Skeleton Refinement (match actual DOM layout) | ✅ |
+| 2026-02-19 | Sign-Up Page Skeleton + Auth Nav Cleanup (Clerk hydration shimmer, hide nav on auth) | ✅ |
+| 2026-02-19 | Fix Dashboard Slow Load After Sign-In (remove ProtectedRoute, server-side ticker fetch) | ✅ |
+| 2026-02-19 | Auth Redirect for Logged-In Users (middleware redirect to /dashboard) | ✅ |
 | 2026-02-18 | Worktree Manager Create-and-Open Option (--open flag, interactive menu option 4) | ✅ |
 | 2026-02-18 | Landing Page Auth-Aware Test Coverage (42 tests: navbar, PricingCard, integration, E2E journeys, fixtures) | ✅ |
 | 2026-02-14 | Email Summary Quality Improvements (PR #349: summaryJSON storage, quality gates, staleness detection) | ✅ |
@@ -107,10 +113,10 @@ This file provides a chronological index of all completed projects. For detailed
 
 ## Archive Statistics
 - **Total Archived Projects**: 11 weekly archives (Oct-Dec 2025) + Jan 2026 consolidated
-- **Current PROGRESS.md Lines**: 381 (threshold: 500) ✅ HEALTHY
-- **Last Sync**: 2026-02-19
+- **Current PROGRESS.md Lines**: 431 (threshold: 500) ✅ HEALTHY
+- **Last Sync**: 2026-02-20
 - **Archive System**: ✅ ACTIVE
-- **Last Compaction**: 2026-02-19 (No archival needed — under 500 lines, no projects >30 days in PROGRESS.md)
+- **Last Compaction**: 2026-02-20 (No archival needed — under 500 lines)
 
 ---
 
