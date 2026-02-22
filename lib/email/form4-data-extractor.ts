@@ -33,14 +33,24 @@
 export const TRANSACTION_CODE_MAP: Record<string, string> = {
   'S': 'Sale',
   'P': 'Purchase',
+  'V': 'Voluntarily Reported',
   'A': 'Award',
-  'G': 'Gift',
-  'M': 'Exercise',
-  'F': 'Tax Withholding',
-  'C': 'Conversion',
   'D': 'Disposition',
-  'J': 'Trust Transfer',   // Other acquisition/disposition - commonly trust transfers
-  'K': 'Family Transfer',  // Equity swap or similar - commonly family trust restructuring
+  'F': 'Tax Withholding',
+  'I': 'Discretionary',
+  'M': 'Exercise',
+  'C': 'Conversion',
+  'E': 'Expiration',
+  'H': 'Expiration',
+  'O': 'Exercise',
+  'X': 'Exercise',
+  'G': 'Gift',
+  'L': 'Small Acquisition',
+  'W': 'Will/Descent',
+  'Z': 'Voting Trust',
+  'J': 'Trust Transfer',
+  'K': 'Equity Swap',
+  'U': 'Tender',
 } as const;
 
 /**
@@ -49,7 +59,8 @@ export const TRANSACTION_CODE_MAP: Record<string, string> = {
  */
 export const TRANSFER_TRANSACTION_TYPES = [
   'Trust Transfer',
-  'Family Transfer',
+  'Equity Swap',
+  'Voting Trust',
   'Transfer',
 ] as const;
 

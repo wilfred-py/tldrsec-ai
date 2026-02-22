@@ -49,7 +49,8 @@ describe('Form 4 Transfer Detection', () => {
       const result = extractForm4Data(summaryText);
 
       expect(result.transactions.length).toBeGreaterThan(0);
-      expect(result.transactions[0].type).toBe('Family Transfer');
+      // K code maps to "Equity Swap" per SEC official definition
+      expect(result.transactions[0].type).toBe('Equity Swap');
     });
 
     it('should distinguish trust transfers from gifts', () => {

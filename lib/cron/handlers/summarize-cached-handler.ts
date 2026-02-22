@@ -12,7 +12,7 @@
 
 import { logger } from '../../logging';
 // Removed unused import: JobPayload
-import { summarizeFiling } from '../../ai/summarize';
+import { summarizeFilingWithValidation } from '../../ai/summarize-with-validation';
 import { sendFilingSummaryEmail } from '../../email/summary-service';
 import type { FetchJobPayload } from './fetch-handler';
 import { verifyFilingContent, type FilingMetadata } from '../../validation/filing-content-verifier';
@@ -209,17 +209,41 @@ export async function handleSummarizeCached(
       },
       select: {
         id: true,
-        createdAt: true
+        createdAt: true,
+        sentToUser: true,
       }
     });
 
     if (existingSummary) {
       summarizeLogger.info(`[${executionId}] Summary already exists`, {
         summaryId: existingSummary.id,
-        createdAt: existingSummary.createdAt
+        createdAt: existingSummary.createdAt,
+        sentToUser: existingSummary.sentToUser,
       });
 
-      // Summary exists, send email if trial is active
+      // Review Issue 2A: Either sentToUser OR delivery record is sufficient to skip.
+      // These are independent guards - don't require both.
+      const existingDelivery = await prisma.summaryEmailDelivery.findFirst({
+        where: { summaryId: existingSummary.id, userId },
+        select: { id: true }
+      });
+
+      if (existingSummary.sentToUser || existingDelivery) {
+        summarizeLogger.info(`[${executionId}] Email already delivered, skipping`, {
+          summaryId: existingSummary.id,
+          sentToUser: existingSummary.sentToUser,
+          hasDeliveryRecord: !!existingDelivery,
+        });
+        return {
+          success: true,
+          summaryId: existingSummary.id,
+          cost: 0,
+          summarizeDuration: 0,
+          emailSent: false
+        };
+      }
+
+      // Email not yet sent - proceed with sending if trial is active
       if (shouldSendEmail) {
         try {
           // Need to fetch the summary text to include in email
@@ -426,10 +450,11 @@ export async function handleSummarizeCached(
       formType: filing.formType
     });
 
-    // Call summarizeFiling with unified prompts (includes verb variety and acronym expansion)
-    const summaryResult = await summarizeFiling(
+    // Call summarizeFilingWithValidation for AI summary + extractor enrichment
+    const summaryResult = await summarizeFilingWithValidation(
       cachedContent.content,
       {
+        formType: filing.formType,
         metadata: {
           ticker: ticker.symbol,
           companyName: ticker.companyName || ticker.symbol,
@@ -455,6 +480,16 @@ export async function handleSummarizeCached(
       model: summaryResult.modelUsed,
       summarizeDuration
     });
+
+    // Log extractor validation results
+    if ('extractorValidated' in summaryResult) {
+      summarizeLogger.info(`[${executionId}] Extractor validation`, {
+        extractorValidated: summaryResult.extractorValidated,
+        fieldsFilledByExtractor: summaryResult.fieldsFilledByExtractor,
+        fieldsWithDiscrepancies: summaryResult.fieldsWithDiscrepancies,
+        extractorFillRate: summaryResult.extractorFillRate,
+      });
+    }
 
     // Save summary to database
     // Note: Summary model uses tickerId, filingType, filingUrl, summaryText (not userId, formType, summary)

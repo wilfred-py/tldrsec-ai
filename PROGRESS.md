@@ -1,14 +1,71 @@
 # Project Progress
 
-**Date**: 2026-02-18
-**Branch**: feature/personalized-pricing-subscription-ux
-**Status**: Landing Page Auth-Aware Test Coverage Complete
+**Date**: 2026-02-19
+**Branch**: summary-quality-review (worktree)
+**Status**: Summary Quality Fixes - Phase 2 complete, Phase 3 pending
 
 ---
 
 ## Current Session
 
-### Worktree Manager Create-and-Open Option (2026-02-18)
+### Summary Quality Fixes: Form 4 Classification, 10-K Blank Sections, Duplicate Emails (2026-02-18 → ongoing)
+
+**Branch**: `summary-quality-review` | **Plan**: `docs/plans/2026-02-18-summary-quality-fixes.md` | **Research**: `thoughts/shared/research/2026-02-18-summary-quality-review.md`
+
+**Problems**: (1) Form 4 "BOUGHT $0" for gifts/awards (GOOGL, JNJ) - 17 of 21 SEC codes defaulted to misleading "purchase". (2) 10-K blank Financial Highlights/Segments (COIN) - `summarizeFilingWithValidation()` existed but wasn't wired in. (3) Duplicate emails on job retry - race condition between summary save and `sentToUser` update.
+
+**Phase 1: Expand Form 4 Classification to 7 Buckets** ✅ (2026-02-18)
+- Added 3 new classification functions: `isAwardTransaction()` (codes A, I), `isExerciseTransaction()` (M, C, X, O, E, H), `isOtherTransaction()` (D, F, U, V, L)
+- Updated `isGiftTransaction()` (+code W), `isTransferTransaction()` (+code Z)
+- Added code-first guard to `isSaleTransaction()` - SEC code is authoritative over AI text
+- Changed default fallback from "purchase" to "other" (neutral)
+- Added 3 new display buckets: award (amber), exercise (teal), other (slate)
+- `getAggregatedTransactionConfig()` now delegates to `getTransactionTypeConfig()` (DRY)
+- Updated `SEC_TRANSACTION_CODES` (added V, fixed E/H/I/K descriptions), `TRANSACTION_CODE_MAP` (added 11 missing codes)
+- **Files**: `form4-minimalist-template.tsx`, `design-system.ts`, `form4-data-extractor.ts`
+- **Tests**: 78 new tests in `form4-transaction-classification.test.ts`, 112/112 Form 4 tests pass
+
+**Phase 2: Wire `summarizeFilingWithValidation()` into Production Pipeline** ✅ (2026-02-19)
+- Replaced `import { summarizeFiling }` with `import { summarizeFilingWithValidation }` in `summarize-cached-handler.ts`
+- Updated call to pass `formType: filing.formType` for extractor lookup
+- Added extractor validation metadata logging (`extractorValidated`, `fieldsFilledByExtractor`, `fieldsWithDiscrepancies`, `extractorFillRate`)
+- Updated existing `summarize-cached-handler-fields.test.ts` mocks (logger, validation wrapper, trial service, preferences)
+- **Files**: `lib/cron/handlers/summarize-cached-handler.ts`, `__tests__/cron/handlers/summarize-cached-handler-validation.test.ts` (new, 10 tests), `__tests__/cron/handlers/summarize-cached-handler-fields.test.ts` (updated)
+- **Tests**: 14/14 handler tests pass, build passes, lint clean
+
+**Phase 3: Fix Duplicate Email Race Condition** - PENDING
+**Phase 4: Integration Testing and Regression Verification** - PENDING
+
+---
+
+### Fix Dashboard Slow Load After Sign-In (2026-02-19)
+
+**Problem**: Dashboard took 4-6s to show meaningful content after sign-in due to sequential waterfall: server-side `currentUser()` → client-side Clerk `useUser()` (2-3s blocking via ProtectedRoute) → client-side API fetch for tickers → render.
+
+**Fix** (4 changes):
+1. **`components/dashboard/dashboard-shell.tsx`** - Removed `ProtectedRoute` wrapper (redundant — auth already enforced by Clerk middleware + server-side `currentUser()` in page.tsx). Eliminates 2-3s client-side Clerk blocking.
+2. **`app/dashboard/page.tsx`** - Added server-side Prisma query to fetch user's tickers after `currentUser()`. Uses `_count` + `take: 1` for efficient query. Passes results as `initialCompanies` prop. Falls back gracefully on error.
+3. **`components/dashboard/dashboard-client.tsx`** - Added `initialCompanies` prop (defaults to `[]`). Initializes `companies` state with server data. Skips initial `loadCompanies()` API call when data provided. `loadCompanies` still available for mutations.
+4. **`app/api/user/tickers/route.ts`** - Optimized GET query: `_count: { select: { summaries: true } }` + `take: 1` instead of loading all summaries. Applied to both main query and auto-create path.
+
+**Result**: Dashboard renders with data in ~1s (loading.tsx skeleton visible during server fetch). No new test regressions.
+
+**Status**: Implemented, not yet committed.
+
+---
+
+### Auth Redirect for Logged-In Users (2026-02-18)
+
+**Goal**: Redirect authenticated users visiting `/sign-up` or `/sign-in` to `/dashboard` instead of `/onboarding`.
+
+**Changes**:
+- **`middleware.ts`** - Added `auth()` check inside Clerk middleware callback. If `userId` exists and pathname starts with `/sign-up` or `/sign-in`, redirects to `/dashboard`.
+
+**Status**: Implemented, not yet committed.
+
+---
+
+### Worktree Manager Create-and-Open Option ✅ (2026-02-18)
 
 **Goal**: Add ability to create and open a worktree from the `npm run worktrees` interactive menu.
 
@@ -16,7 +73,6 @@
 - **`hack/create_worktree.sh`** - Added `--open` flag that opens the new worktree in Windsurf after creation (detects `windsurf` CLI or macOS app path)
 - **`scripts/open-worktrees.sh`** - Added "Create new worktree" as option 4 in interactive menu (prompts for name and base branch, calls `create_worktree.sh --open`)
 - **`package.json`** - Added `worktrees:create:open` convenience npm script
-
 ---
 
 ### Landing Page Auth-Aware Test Coverage ✅ (2026-02-18)
@@ -38,6 +94,21 @@
 
 ---
 
+### Email Summary Quality Improvements ✅ (2026-02-14)
+
+**PR**: [#349](https://github.com/wilfred-py/tldrsec-ai/pull/349)
+
+**Goal**: Improve email summary quality with quality gates, staleness detection, and prompt enhancements.
+
+**Key Changes**:
+- **`lib/ai/summarize.ts`** - Store complete AI-generated JSON output in `summaryJSON` field instead of discarding it (fixes missing filer names/transaction details in emails)
+- **Quality gates** for summary generation to catch degraded output
+- **Staleness detection** to identify outdated cached summaries
+- **Prompt enhancements** across filing types for better extraction
+
+**Root Cause**: summaryJSON field was being discarded, forcing email templates to rely on regex fallbacks that fail with natural language variations.
+
+---
 ### Skeleton Loading States for Billing & Subscribe ✅ (2026-02-14)
 
 **Goal**: Replace white-screen/generic loading fallbacks on `/dashboard/billing` and `/subscribe` with layout-matching skeleton loading states using the existing `Skeleton` component.
@@ -151,6 +222,17 @@
 - `components/billing/subscription-plans.tsx` - Missing `priceId`/`monthlyFilings` properties (6 errors)
 
 **Verification**: Build passes, all trial-related functionality implemented across 8 phases.
+
+---
+
+### Engineering Process Improvements + Dashboard Refactoring ✅ (2026-02-11)
+
+**PR**: [#346](https://github.com/wilfred-py/tldrsec-ai/pull/346)
+
+**Changes**:
+- **`app/dashboard/layout.tsx`** - Split server layout from client `DashboardShell` to fix `'use client'` layout issue
+- **`components/dashboard/dashboard-shell.tsx`** - Extracted client-side dashboard shell component
+- **`.claude/commands/review_plan.md`** - Added 6-perspective review command for plan validation
 
 ---
 
@@ -323,5 +405,5 @@ For complete technical details of projects older than 30 days, see the weekly ar
 
 ---
 
-*Last Updated: 2026-02-18 (Worktree manager create-and-open option)*
+*Last Updated: 2026-02-19 (Summary Quality Fixes Phase 2 complete)*
 *Completed projects older than 30 days are archived to .claude/history/ - See TIMELINE.md for complete historical context*
