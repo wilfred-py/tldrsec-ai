@@ -346,7 +346,7 @@ export async function POST(request: NextRequest) {
       },
       create: {
         userId,
-        planType: planType as 'FREE' | 'PRO' | 'MAX',
+        planType: 'FREE', // Stays FREE until Stripe webhook confirms payment
         isActive: false, // Will be activated by webhook
         currentPeriodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days from now
         stripeCustomerId,

@@ -290,6 +290,24 @@ export async function cancelSubscription(subscriptionId: string, atPeriodEnd = t
 }
 
 /**
+ * Retrieve a checkout session by ID (for post-redirect verification)
+ */
+export async function retrieveCheckoutSession(sessionId: string): Promise<Stripe.Checkout.Session | null> {
+  if (!stripe) {
+    throw new Error('Stripe not configured');
+  }
+
+  try {
+    return await stripe.checkout.sessions.retrieve(sessionId);
+  } catch (error) {
+    if (error instanceof Stripe.errors.StripeError && error.code === 'resource_missing') {
+      return null;
+    }
+    throw error;
+  }
+}
+
+/**
  * Update subscription
  */
 export async function updateSubscription(
