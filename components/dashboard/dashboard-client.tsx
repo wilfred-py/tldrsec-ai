@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { DashboardHeader } from "@/components/dashboard";
-import { PlusIcon, Loader2, Search } from "lucide-react";
+import { PlusIcon, Loader2, Search, ArrowUpRight } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -35,9 +35,11 @@ interface DashboardClientProps {
   subscriptionSuccess?: boolean;
   initialCompanies?: Company[];
   tutorialCompleted?: boolean;
+  subscriptionTier?: 'FREE' | 'PRO' | 'MAX';
+  tickerLimit?: number;
 }
 
-export function DashboardClient({ showWelcome = false, shouldMergePending = false, subscriptionSuccess = false, initialCompanies = [], tutorialCompleted = false }: DashboardClientProps) {
+export function DashboardClient({ showWelcome = false, shouldMergePending = false, subscriptionSuccess = false, initialCompanies = [], tutorialCompleted = false, subscriptionTier = 'FREE', tickerLimit = 3 }: DashboardClientProps) {
   // State for tracked companies
   const [companies, setCompanies] = useState<Company[]>(initialCompanies);
   const [currentCompany, setCurrentCompany] = useState<Company | null>(null);
@@ -61,7 +63,8 @@ export function DashboardClient({ showWelcome = false, shouldMergePending = fals
     isLoading: isLoadingCompanies,
     error: companiesError,
   } = useAsync([]);
-  const { execute: executeAddTicker } = useAsync();
+  // Note: addTrackedCompany is called directly (not via useAsync) to preserve
+  // tier limit error details for user-friendly messaging
   const { execute: executeDeleteTicker, isLoading: isDeletingTicker } =
     useAsync();
   const { execute: executeUpdatePreferences } = useAsync();
@@ -194,11 +197,38 @@ export function DashboardClient({ showWelcome = false, shouldMergePending = fals
     setCompanies((prevCompanies) => [newCompany, ...prevCompanies]);
 
     try {
-      const result = await executeAddTicker(() =>
-        addTrackedCompany(symbol, name)
-      );
+      // Call directly (not via useAsync) so we can handle tier limit errors with full detail
+      const result = await addTrackedCompany(symbol, name);
 
-      if (result && result.success && result.data) {
+      // Check for tier limit error
+      if (result.error) {
+        // Revert optimistic update
+        setCompanies((prevCompanies) =>
+          prevCompanies.filter((company) => company.id !== newCompany.id)
+        );
+
+        const err = result.error as { limitReached?: boolean; currentTier?: string; maxTickers?: number; upgradeRequired?: boolean; message?: string };
+        if (err.limitReached) {
+          toast.error(
+            `You've reached your ${err.maxTickers}-ticker limit on the ${err.currentTier} plan.`,
+            {
+              description: err.upgradeRequired
+                ? "Upgrade your plan to track more companies."
+                : undefined,
+              action: err.upgradeRequired
+                ? { label: "Upgrade", onClick: () => window.location.href = "/subscribe" }
+                : undefined,
+              duration: 8000,
+            }
+          );
+          return;
+        }
+
+        toast.error(err.message || `Failed to add ${symbol}`);
+        return;
+      }
+
+      if (result.data) {
         toast.success(`Added ${symbol} to your tracked companies`);
 
         // Update with real data from response
@@ -206,8 +236,8 @@ export function DashboardClient({ showWelcome = false, shouldMergePending = fals
           prevCompanies.map((c) =>
             c.id === newCompany.id
               ? {
-                  ...result.data,
-                  name: result.data.name,
+                  ...result.data!,
+                  name: result.data!.name,
                 }
               : c
           )
@@ -222,12 +252,7 @@ export function DashboardClient({ showWelcome = false, shouldMergePending = fals
         setCompanies((prevCompanies) =>
           prevCompanies.filter((company) => company.id !== newCompany.id)
         );
-
-        let errorMessage = `Failed to add ${symbol}`;
-        if (!result.success && result.data === null) {
-          errorMessage = `Failed to add ${symbol}: The ticker may already be tracked or not exist`;
-        }
-        toast.error(errorMessage);
+        toast.error(`Failed to add ${symbol}`);
       }
     } catch (error) {
       // Revert on error
@@ -314,6 +339,11 @@ export function DashboardClient({ showWelcome = false, shouldMergePending = fals
   const showEmptyState =
     (companies?.length === 0 && !isLoadingCompanies) || companiesError;
 
+  // Ticker limit: -1 means unlimited (MAX tier)
+  const isUnlimited = tickerLimit === -1;
+  const isAtLimit = !isUnlimited && companies.length >= tickerLimit;
+  const canUpgrade = subscriptionTier !== 'MAX';
+
   return (
     <div className="space-y-6">
       <DashboardHeader heading="Dashboard" />
@@ -325,25 +355,40 @@ export function DashboardClient({ showWelcome = false, shouldMergePending = fals
             <div className="text-left">
               <h2 className="text-lg font-semibold">Tracked Tickers</h2>
               <p className="text-sm text-muted-foreground">
-                Manage your tracked companies.
+                {!isUnlimited
+                  ? `${companies.length} / ${tickerLimit} tickers used on ${subscriptionTier} plan`
+                  : "Manage your tracked companies."}
               </p>
             </div>
 
-            <div className="flex gap-2">
-              <Button
-                onClick={() => {
-                  loadCompaniesForSearch();
-                  setShowInlineAdd(true);
-                }}
-                className="gap-1 bg-primary hover:bg-primary/90 text-primary-foreground font-medium shadow-sm"
-                data-tutorial="add-ticker"
-                disabled={showInlineAdd}
-                size="lg"
-              >
-                <PlusIcon className="h-5 w-5 mr-1" />
-                <span className="hidden sm:inline">Add Ticker</span>
-                <span className="inline sm:hidden">Add</span>
-              </Button>
+            <div className="flex items-center gap-2">
+              {isAtLimit && canUpgrade ? (
+                <Button
+                  onClick={() => window.location.href = "/subscribe"}
+                  variant="outline"
+                  size="lg"
+                  className="gap-1 border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-100 hover:text-amber-900 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-200 dark:hover:bg-amber-900"
+                >
+                  <ArrowUpRight className="h-4 w-4" />
+                  <span className="hidden sm:inline">Upgrade to add more</span>
+                  <span className="inline sm:hidden">Upgrade</span>
+                </Button>
+              ) : (
+                <Button
+                  onClick={() => {
+                    loadCompaniesForSearch();
+                    setShowInlineAdd(true);
+                  }}
+                  className="gap-1 bg-primary hover:bg-primary/90 text-primary-foreground font-medium shadow-sm"
+                  data-tutorial="add-ticker"
+                  disabled={showInlineAdd || isAtLimit}
+                  size="lg"
+                >
+                  <PlusIcon className="h-5 w-5 mr-1" />
+                  <span className="hidden sm:inline">Add Ticker</span>
+                  <span className="inline sm:hidden">Add</span>
+                </Button>
+              )}
             </div>
           </div>
         </div>
