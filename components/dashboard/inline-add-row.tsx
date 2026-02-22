@@ -110,7 +110,7 @@ export function InlineAddRow({
 
             {/* Dropdown results */}
             {showResults && results.length > 0 && (
-              <div className="absolute top-full left-0 right-0 mt-1 bg-background border rounded-md shadow-lg z-50 max-h-64 overflow-auto">
+              <div className="absolute top-full left-0 right-0 mt-1 border rounded-md shadow-lg z-50 max-h-64 overflow-auto bg-white dark:bg-zinc-950">
                 {results.map((result, index) => (
                   <div
                     key={result.symbol}
@@ -133,7 +133,7 @@ export function InlineAddRow({
             )}
 
             {showResults && searchQuery.length >= 1 && results.length === 0 && (
-              <div className="absolute top-full left-0 right-0 mt-1 bg-background border rounded-md shadow-lg z-50 p-3 text-center text-muted-foreground text-sm">
+              <div className="absolute top-full left-0 right-0 mt-1 border rounded-md shadow-lg z-50 p-3 text-center text-muted-foreground text-sm bg-white dark:bg-zinc-950">
                 No results found
               </div>
             )}
