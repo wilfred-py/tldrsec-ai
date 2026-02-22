@@ -4,6 +4,7 @@ import { EmailHeader } from './sections/EmailHeader';
 import { EmailFooter } from './sections/EmailFooter';
 import { SectionCard } from './sections/SectionCard';
 import { SectionHeader } from './sections/SectionHeader';
+import { StalenessBanner } from './sections/StalenessBanner';
 import { FilingTemplateData } from '../../../../lib/email/types';
 
 interface Form10QMinimalistTemplateProps {
@@ -74,6 +75,13 @@ export function Form10QMinimalistTemplate({ filing }: Form10QMinimalistTemplateP
         filingType={filingType}
         filingDate={filingDate}
       />
+
+      {/* Staleness warning */}
+      {filingDate && (
+        <div style={{ padding: '0 15px' }}>
+          <StalenessBanner filingDate={new Date(filingDate)} />
+        </div>
+      )}
 
       {/* Main content */}
       <table width="100%" cellPadding="0" cellSpacing="0">

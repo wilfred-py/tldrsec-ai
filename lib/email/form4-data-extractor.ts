@@ -135,22 +135,69 @@ export function extractForm4Data(summaryText: string): Form4ExtractedData {
 }
 
 /**
- * Extract filer name from summary
+ * Convert an ALL CAPS or mixed-case name to Title Case.
+ * Preserves middle initials (e.g., "J.") and hyphenated names.
+ */
+function toTitleCase(name: string): string {
+  return name
+    .split(/\s+/)
+    .map(part => {
+      // Preserve middle initials like "J."
+      if (/^[A-Z]\.?$/.test(part)) return part.length === 1 ? `${part}.` : part;
+      // Handle hyphenated names
+      if (part.includes('-')) {
+        return part.split('-').map(p =>
+          p.charAt(0).toUpperCase() + p.slice(1).toLowerCase()
+        ).join('-');
+      }
+      return part.charAt(0).toUpperCase() + part.slice(1).toLowerCase();
+    })
+    .join(' ');
+}
+
+/**
+ * Check if a name string appears to be ALL CAPS (needs title-case conversion)
+ */
+function isAllCaps(name: string): boolean {
+  const letters = name.replace(/[^A-Za-z]/g, '');
+  return letters.length > 2 && letters === letters.toUpperCase();
+}
+
+/**
+ * Extract filer name from summary.
+ * Supports ALL CAPS names, hyphenated names, middle initials,
+ * and various formatting patterns.
  */
 function extractFilerName(text: string): string {
-  // Pattern: "Reporting Person": Name or "Reporting Person: Name"
-  const patterns = [
-    /\*\*Reporting Person\*\*:\s*([^\n*]+)/i,
-    /Reporting Person[:\s]+([A-Z][a-z]+(?:\s+[A-Z]\.?\s+)?[A-Z][a-z]+)/i,
-    /\*\*Filer\*\*:\s*([^\n*]+)/i,
-    /Insider[:\s]+([A-Z][a-z]+(?:\s+[A-Z]\.?\s+)?[A-Z][a-z]+)/i,
-    /filed by\s+([A-Z][a-z]+(?:\s+[A-Z]\.?\s+)?[A-Z][a-z]+)/i,
+  // Name pattern component: matches "Firstname Lastname", "Firstname M. Lastname",
+  // "FIRSTNAME LASTNAME", "Firstname Last-Name"
+  // Note: patterns use explicit case checks (no /i flag) to avoid false positives
+  const NAME_PATTERN = '([A-Z][A-Za-z-]+(?:\\s+[A-Z]\\.?\\s+)?\\s+[A-Z][A-Za-z-]+)';
+
+  const patterns: Array<{ regex: RegExp; group: number }> = [
+    // **Reporting Person**: Name or **Filer**: Name (markdown bold labels)
+    { regex: /\*\*(?:Reporting Person|Filer)\*\*:\s*([^\n*]+)/i, group: 1 },
+    // "Name, Role" pattern: "Vaibhav Taneja, Chief Financial Officer"
+    { regex: new RegExp('([A-Z][A-Za-z-]+(?:\\s+[A-Z]\\.?)?\\s+[A-Z][A-Za-z-]+),\\s*(?:Chief|CEO|CFO|COO|CTO|Director|Officer|President|VP|Vice|Chairman|General|Senior|Executive|Managing)', 'i'), group: 1 },
+    // "filed by NAME" with ALL CAPS and comma-terminated support
+    { regex: new RegExp('filed by\\s+' + NAME_PATTERN, 'i'), group: 1 },
+    // "NAME reported/disclosed/filed" pattern
+    { regex: new RegExp(NAME_PATTERN + '(?:,\\s*[A-Za-z\\s]+,)?\\s+(?:reported|disclosed|filed)', 'i'), group: 1 },
+    // Reporting Person: Name (without markdown bold)
+    { regex: new RegExp('Reporting Person[:\\s]+' + NAME_PATTERN), group: 1 },
+    // Insider: Name (without /i flag to avoid matching "insider sold")
+    { regex: new RegExp('Insider[:\\s]+' + NAME_PATTERN), group: 1 },
   ];
 
-  for (const pattern of patterns) {
-    const match = text.match(pattern);
-    if (match?.[1]) {
-      return match[1].trim().replace(/\*+/g, '');
+  for (const { regex, group } of patterns) {
+    const match = text.match(regex);
+    if (match?.[group]) {
+      let name = match[group].trim().replace(/\*+/g, '');
+      // Convert ALL CAPS names to Title Case
+      if (isAllCaps(name)) {
+        name = toTitleCase(name);
+      }
+      return name;
     }
   }
 

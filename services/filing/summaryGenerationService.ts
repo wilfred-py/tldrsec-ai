@@ -137,10 +137,15 @@ ${cleanedContent.substring(0, 500000)}`;
  * @param company Company information
  * @returns Summary generation result with enhanced metadata
  */
+export interface GenerationOptions {
+  temperature?: number;
+}
+
 export async function generateAISummary(
-  content: string, 
-  filing: SECFiling, 
-  company: Company
+  content: string,
+  filing: SECFiling,
+  company: Company,
+  options?: GenerationOptions
 ): Promise<SummaryGenerationResult> {
   const correlationId = generateSecureCorrelationId('xai_summary');
   const startTime = Date.now();
@@ -161,7 +166,7 @@ export async function generateAISummary(
       promptLength: prompt.length,
       model: model,
       hasApiKey: !!apiKey,
-      apiKeyPrefix: apiKey ? apiKey.substring(0, 10) + '...' : 'MISSING',
+      hasApiKeyConfigured: !!apiKey,
       aiClientExists: !!aiClient
     });
 
@@ -171,7 +176,7 @@ export async function generateAISummary(
       {
         model: process.env.DEFAULT_AI_MODEL,
         maxTokens: 4000,
-        temperature: 0.1,
+        temperature: options?.temperature ?? 0.1,
         system: 'You are a sharp financial journalist writing for sophisticated investors. Lead with the punchline, be hyper-specific with numbers, use active voice, and cut the corporate-speak. Provide accurate summaries in valid JSON format with punchy, actionable insights.',
         requestType: 'standard',
         timeout: parseInt(process.env.AI_SUMMARY_TIMEOUT_MS || '100000', 10), // 100s - must fit within 150s job timeout (leaves ~50s for SEC fetch + DB ops)
@@ -344,9 +349,10 @@ export async function generateAISummary(
  */
 export async function generateAISummaryWithRetry(
   content: string,
-  filing: SECFiling, 
+  filing: SECFiling,
   company: Company,
-  maxRetries: number = 1 // Reduced from 2 to 1 to prevent timeout cascading
+  maxRetries: number = 1, // Reduced from 2 to 1 to prevent timeout cascading
+  options?: GenerationOptions
 ): Promise<SummaryGenerationResult> {
   let lastError: Error | null = null;
   let attempt = 0;
@@ -363,7 +369,7 @@ export async function generateAISummaryWithRetry(
     });
     
     try {
-      const result = await generateAISummary(content, filing, company);
+      const result = await generateAISummary(content, filing, company, options);
       
       // Check if the result indicates success
       if (result.processingStatus === 'SUCCESS' && result.summary && result.summary.length > 0) {

@@ -94,11 +94,15 @@ jest.mock('next/navigation', () => ({
 
 // Mock next/link
 jest.mock('next/link', () => {
-  return ({ children, href, ...props }: React.PropsWithChildren<{ href: string }>) => (
-    <a href={href} {...props}>
-      {children}
-    </a>
-  );
+  function MockLink({ children, href, ...props }: React.PropsWithChildren<{ href: string }>) {
+    return (
+      <a href={href} {...props}>
+        {children}
+      </a>
+    );
+  }
+  MockLink.displayName = 'MockLink';
+  return MockLink;
 });
 
 // Mock sonner

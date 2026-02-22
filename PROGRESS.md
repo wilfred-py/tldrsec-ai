@@ -73,7 +73,6 @@
 - **`hack/create_worktree.sh`** - Added `--open` flag that opens the new worktree in Windsurf after creation (detects `windsurf` CLI or macOS app path)
 - **`scripts/open-worktrees.sh`** - Added "Create new worktree" as option 4 in interactive menu (prompts for name and base branch, calls `create_worktree.sh --open`)
 - **`package.json`** - Added `worktrees:create:open` convenience npm script
-
 ---
 
 ### Landing Page Auth-Aware Test Coverage ✅ (2026-02-18)
@@ -110,7 +109,6 @@
 **Root Cause**: summaryJSON field was being discarded, forcing email templates to rely on regex fallbacks that fail with natural language variations.
 
 ---
-
 ### Skeleton Loading States for Billing & Subscribe ✅ (2026-02-14)
 
 **Goal**: Replace white-screen/generic loading fallbacks on `/dashboard/billing` and `/subscribe` with layout-matching skeleton loading states using the existing `Skeleton` component.

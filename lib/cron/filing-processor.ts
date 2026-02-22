@@ -13,6 +13,7 @@ import { CronSecFilingService } from './sec-filing-service';
 import { CronBudgetService } from './budget-service';
 import { boundedContextManager } from './bounded-context-manager';
 import { validateSummaryWithAI, type SummaryValidationResult } from '../validation/summary-content-validator';
+import { QualityGate } from '../validation/quality-gate';
 import { shouldProcessFiling } from '../filing/filing-type-preferences-mapper';
 import type {
   DatabaseUser,
@@ -1259,6 +1260,7 @@ export class CronFilingProcessor {
       // This validates that the summary accurately reflects the source content
       // Only validate new AI-generated summaries, not cached ones
       let validationResult: SummaryValidationResult | undefined;
+      let qualityBlocked = false;
 
       if (!processingContext.isCached && summaryResult.summary) {
         processorLogger.info(`🔄 STEP 3.5: Validating AI summary quality for filing ${filingForProcessing.accessionNumber}`, {
@@ -1297,20 +1299,79 @@ export class CronFilingProcessor {
             nextStep: 'Store summary in database'
           });
 
-          // Log warning if validation fails, but continue processing
-          // (informational only initially as per plan - don't block on low scores)
-          if (!validationResult.isValid || validationResult.confidenceScore < 50) {
-            processorLogger.warn(`⚠️ AI summary validation flagged issues for filing ${filingForProcessing.accessionNumber}`, {
+          // Quality gate: block low-quality summaries from email delivery
+          const qualityGateResult = QualityGate.evaluate(validationResult);
+
+          if (qualityGateResult.shouldBlock && qualityGateResult.action === 'retry') {
+            processorLogger.warn(`⚠️ Quality gate BLOCKED summary for filing ${filingForProcessing.accessionNumber} - attempting retry`, {
               userId: user.id,
               ticker: filingForProcessing.tickerData.symbol,
-              isValid: validationResult.isValid,
-              confidenceScore: validationResult.confidenceScore,
+              reasons: qualityGateResult.reasons,
               accuracyScore: validationResult.accuracyScore,
               completenessScore: validationResult.completenessScore,
               relevanceScore: validationResult.relevanceScore,
-              issues: validationResult.issues,
-              overallAssessment: validationResult.overallAssessment,
-              action: 'Proceeding with storing summary despite validation issues (warn only)'
+              confidenceScore: validationResult.confidenceScore,
+            });
+
+            // Retry with higher temperature (0.2 vs 0.1 baseline)
+            const retryStartTime = Date.now();
+            try {
+              const retryResult = await generateAISummaryWithRetry(
+                filingContent,
+                {
+                  accessionNumber: filingForProcessing.accessionNumber,
+                  formType: filingForProcessing.formType,
+                  filingDate: filingForProcessing.filingDate.toISOString()
+                },
+                {
+                  name: filingForProcessing.tickerData.companyName,
+                  ticker: filingForProcessing.tickerData.symbol
+                },
+                0, // single attempt
+                { temperature: 0.2 }
+              );
+
+              const retryCost = retryResult.cost || 0;
+              const retryDuration = Date.now() - retryStartTime;
+
+              if (retryResult.processingStatus === 'SUCCESS' && retryResult.summary) {
+                summaryResult = retryResult;
+                processorLogger.info(`🔄 Quality gate retry produced new summary`, {
+                  userId: user.id,
+                  ticker: filingForProcessing.tickerData.symbol,
+                  retryCost,
+                  retryDurationMs: retryDuration,
+                });
+              }
+
+              // Re-evaluate with isRetry flag (will return 'drop' if still below threshold)
+              const retryGateResult = QualityGate.evaluate(validationResult, { isRetry: true });
+              if (retryGateResult.shouldBlock) {
+                qualityBlocked = true;
+                processorLogger.warn(`🚫 Quality gate DROPPED summary after retry for filing ${filingForProcessing.accessionNumber}`, {
+                  userId: user.id,
+                  ticker: filingForProcessing.tickerData.symbol,
+                  action: 'drop',
+                  reasons: retryGateResult.reasons,
+                  retryCost,
+                  retryDurationMs: retryDuration,
+                });
+              }
+            } catch (retryError) {
+              qualityBlocked = true;
+              processorLogger.error(`Quality gate retry failed for filing ${filingForProcessing.accessionNumber}`, {
+                error: retryError instanceof Error ? retryError.message : String(retryError),
+                userId: user.id,
+                ticker: filingForProcessing.tickerData.symbol,
+              });
+            }
+          } else if (qualityGateResult.shouldBlock && qualityGateResult.action === 'drop') {
+            qualityBlocked = true;
+            processorLogger.warn(`🚫 Quality gate DROPPED summary for filing ${filingForProcessing.accessionNumber}`, {
+              userId: user.id,
+              ticker: filingForProcessing.tickerData.symbol,
+              action: 'drop',
+              reasons: qualityGateResult.reasons,
             });
           }
         } catch (validationError) {
@@ -1386,7 +1447,8 @@ export class CronFilingProcessor {
                   strengths: validationResult.strengths,
                   overallAssessment: validationResult.overallAssessment,
                   validationDurationMs: validationResult.validationDurationMs
-                } : undefined
+                } : undefined,
+                qualityBlocked,
               },
               tokensUsed: summaryResult.tokensUsed || 0,
               cost: actualCost,
@@ -1430,7 +1492,8 @@ export class CronFilingProcessor {
                   strengths: validationResult.strengths,
                   overallAssessment: validationResult.overallAssessment,
                   validationDurationMs: validationResult.validationDurationMs
-                } : undefined
+                } : undefined,
+                qualityBlocked,
               },
               // Update tokens and cost (accumulate for re-generations)
               tokensUsed: summaryResult.tokensUsed || 0,
@@ -1511,7 +1574,13 @@ export class CronFilingProcessor {
       }
 
       // STEP 5: Queue email notification for async processing (rate limit compliant)
-      if (user.email && summaryRecord) {
+      // Skip email delivery if quality gate blocked this summary
+      if (qualityBlocked) {
+        processorLogger.info(`📭 STEP 5 SKIPPED: Email delivery blocked by quality gate for filing ${filingForProcessing.accessionNumber}`, {
+          userId: user.id,
+          ticker: filingForProcessing.tickerData.symbol,
+        });
+      } else if (user.email && summaryRecord) {
         processorLogger.info(`🔄 STEP 5: Queuing async email notification for filing ${filingForProcessing.accessionNumber}`, {
           userId: user.id,
           email: user.email,

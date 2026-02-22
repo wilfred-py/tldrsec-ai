@@ -79,11 +79,15 @@ jest.mock('next/navigation', () => ({
 }));
 
 jest.mock('next/link', () => {
-  return ({ children, href, ...props }: React.PropsWithChildren<{ href: string }>) => (
-    <a href={href} {...props}>
-      {children}
-    </a>
-  );
+  function MockLink({ children, href, ...props }: React.PropsWithChildren<{ href: string }>) {
+    return (
+      <a href={href} {...props}>
+        {children}
+      </a>
+    );
+  }
+  MockLink.displayName = 'MockLink';
+  return MockLink;
 });
 
 jest.mock('sonner', () => ({
@@ -119,7 +123,7 @@ describe('Landing Page User Journeys', () => {
       makeSubscriptionContext(subscriptionFixtures.noSubscription)
     );
 
-    const { container } = render(
+    render(
       <>
         <LandingNavbar heroRef={heroRef} />
         <PricingSectionV2 />
@@ -158,8 +162,9 @@ describe('Landing Page User Journeys', () => {
     // Navbar visible immediately for authenticated users
     expect(screen.getByText('tldrSEC')).toBeInTheDocument();
 
-    // Navbar CTA shows "Go to Dashboard"
-    expect(screen.getByText('Go to Dashboard')).toBeInTheDocument();
+    // Navbar CTA shows "Go to Dashboard" (desktop + mobile)
+    const dashboardLinks = screen.getAllByText('Go to Dashboard');
+    expect(dashboardLinks.length).toBeGreaterThanOrEqual(1);
 
     // FREE card shows "Current Plan" badge
     const statusBadge = screen.getByRole('status');
@@ -183,8 +188,9 @@ describe('Landing Page User Journeys', () => {
       </>
     );
 
-    // Navbar shows dashboard link
-    expect(screen.getByText('Go to Dashboard')).toBeInTheDocument();
+    // Navbar shows dashboard link (desktop + mobile)
+    const dashLinks = screen.getAllByText('Go to Dashboard');
+    expect(dashLinks.length).toBeGreaterThanOrEqual(1);
 
     // PRO card is current plan (disabled)
     const currentPlanBtn = screen.getByRole('button', { name: /Current Plan/i });
