@@ -107,8 +107,8 @@ export function isTransferTransaction(tx: TransactionData): boolean {
     return true;
   }
 
-  // J and K codes typically represent trust/family transfers
-  if (code === 'J' || code === 'K') {
+  // J, K, Z codes represent trust/family transfers and voting trust deposits
+  if (code === 'J' || code === 'K' || code === 'Z') {
     return true;
   }
 
@@ -132,8 +132,11 @@ export function isGiftTransaction(tx: TransactionData): boolean {
   const type = tx.type?.toLowerCase() || '';
   const code = tx.code?.toUpperCase() || '';
 
-  // Explicit gift indicators
-  if (type === 'gift' || type === 'g' || type.includes('gift') || code === 'G') {
+  // SEC code is authoritative. If a code is present and not G/W, not a gift.
+  if (code && code !== 'G' && code !== 'W') return false;
+
+  // Explicit gift indicators (W = will/descent, semantically similar to gift)
+  if (type === 'gift' || type === 'g' || type.includes('gift') || code === 'G' || code === 'W') {
     return true;
   }
 
@@ -144,19 +147,23 @@ export function isGiftTransaction(tx: TransactionData): boolean {
  * Check if a transaction is a sale (not gift or transfer)
  * A sale is a disposition with non-zero price
  */
-function isSaleTransaction(tx: TransactionData): boolean {
+export function isSaleTransaction(tx: TransactionData): boolean {
   // Transfers and gifts are not sales
   if (isTransferTransaction(tx) || isGiftTransaction(tx)) return false;
 
   const type = tx.type?.toLowerCase() || '';
   const code = tx.code?.toUpperCase() || '';
 
-  // Explicit sale indicators
+  // SEC code is authoritative. If a code is present and it's not 'S',
+  // this is definitively NOT a sale regardless of AI-parsed type text.
+  if (code && code !== 'S') return false;
+
+  // Explicit sale indicators (code S or text-based for codeless transactions)
   if (type.includes('sale') || type.includes('sell') || type === 's' || code === 'S') {
     return true;
   }
 
-  // Disposition with a price is a sale (gifts/transfers are $0)
+  // Disposition with a price is a sale (only reached for codeless transactions)
   if (tx.acquisitionDisposition === 'D') {
     const price = typeof tx.pricePerShare === 'string'
       ? tx.pricePerShare.replace(/[$,]/g, '')
@@ -178,15 +185,76 @@ export function isPurchaseTransaction(tx: TransactionData): boolean {
   const type = tx.type?.toLowerCase() || '';
   const code = tx.code?.toUpperCase() || '';
 
+  // SEC code is authoritative. If a code is present and not P, not a purchase.
+  if (code && code !== 'P') return false;
+
   // Explicit purchase indicators
   if (type.includes('purchase') || type.includes('bought') || type === 'p' || code === 'P') {
     return true;
   }
 
-  // Acquisition with a price is a purchase
+  // Acquisition with a price is a purchase (only for codeless transactions)
   if (tx.acquisitionDisposition === 'A') {
-    // Award codes (A) at $0 are not purchases - they're awards
-    if (code === 'A') return false;
+    return true;
+  }
+
+  return false;
+}
+
+/**
+ * Check if a transaction is an equity compensation award/grant
+ * Covers SEC codes A (Award/Grant) and I (Discretionary 16b-3)
+ */
+export function isAwardTransaction(tx: TransactionData): boolean {
+  if (isTransferTransaction(tx)) return false;
+
+  const type = tx.type?.toLowerCase() || '';
+  const code = tx.code?.toUpperCase() || '';
+
+  if (code === 'A' || code === 'I') return true;
+
+  if (type.includes('award') || type.includes('grant') ||
+      type.includes('rsu') || type.includes('psu')) {
+    return true;
+  }
+
+  return false;
+}
+
+/**
+ * Check if a transaction is a derivative exercise, conversion, or expiration
+ * Covers SEC codes M, C, X, O, E, H
+ */
+export function isExerciseTransaction(tx: TransactionData): boolean {
+  if (isTransferTransaction(tx)) return false;
+
+  const type = tx.type?.toLowerCase() || '';
+  const code = tx.code?.toUpperCase() || '';
+
+  if (['M', 'C', 'X', 'O', 'E', 'H'].includes(code)) return true;
+
+  if (type.includes('exercise') || type.includes('conversion') ||
+      type.includes('convert') || type.includes('expir')) {
+    return true;
+  }
+
+  return false;
+}
+
+/**
+ * Check if a transaction is a disposition, tax withholding, or other non-market transaction
+ * Covers SEC codes D, F, U, V, L
+ */
+export function isOtherTransaction(tx: TransactionData): boolean {
+  if (isTransferTransaction(tx)) return false;
+
+  const code = tx.code?.toUpperCase() || '';
+  const type = tx.type?.toLowerCase() || '';
+
+  if (['D', 'F', 'U', 'V', 'L'].includes(code)) return true;
+
+  if (type.includes('tax') || type.includes('withholding') ||
+      type.includes('disposition') || type.includes('tender')) {
     return true;
   }
 
@@ -199,7 +267,7 @@ export function isPurchaseTransaction(tx: TransactionData): boolean {
  * Returns up to 4 aggregated transaction groups
  */
 interface AggregatedTransaction {
-  type: 'gift' | 'sale' | 'purchase' | 'transfer';
+  type: 'gift' | 'sale' | 'purchase' | 'transfer' | 'award' | 'exercise' | 'other';
   totalShares: number;
   totalValue: number;
   avgPrice: number;
@@ -213,24 +281,35 @@ interface AggregatedTransaction {
   codeDescription?: string;
 }
 
-function aggregateTransactionsByType(transactions: TransactionData[]): AggregatedTransaction[] {
+export function aggregateTransactionsByType(transactions: TransactionData[]): AggregatedTransaction[] {
   const groups: Record<string, { shares: number; value: number; count: number; prices: number[]; codes: string[] }> = {
     gift: { shares: 0, value: 0, count: 0, prices: [], codes: [] },
     sale: { shares: 0, value: 0, count: 0, prices: [], codes: [] },
     purchase: { shares: 0, value: 0, count: 0, prices: [], codes: [] },
     transfer: { shares: 0, value: 0, count: 0, prices: [], codes: [] },
+    award: { shares: 0, value: 0, count: 0, prices: [], codes: [] },
+    exercise: { shares: 0, value: 0, count: 0, prices: [], codes: [] },
+    other: { shares: 0, value: 0, count: 0, prices: [], codes: [] },
   };
 
   for (const tx of transactions) {
-    let groupKey: 'gift' | 'sale' | 'purchase' | 'transfer';
+    let groupKey: 'gift' | 'sale' | 'purchase' | 'transfer' | 'award' | 'exercise' | 'other';
     if (isTransferTransaction(tx)) {
       groupKey = 'transfer';
     } else if (isGiftTransaction(tx)) {
       groupKey = 'gift';
     } else if (isSaleTransaction(tx)) {
       groupKey = 'sale';
-    } else {
+    } else if (isAwardTransaction(tx)) {
+      groupKey = 'award';
+    } else if (isExerciseTransaction(tx)) {
+      groupKey = 'exercise';
+    } else if (isPurchaseTransaction(tx)) {
       groupKey = 'purchase';
+    } else if (isOtherTransaction(tx)) {
+      groupKey = 'other';
+    } else {
+      groupKey = 'other';
     }
 
     const shares = Math.round(parseNumericValue(tx.shares));
@@ -270,7 +349,7 @@ function aggregateTransactionsByType(transactions: TransactionData[]): Aggregate
       const primaryCode = data.codes.length === 1 ? data.codes[0] : undefined;
 
       result.push({
-        type: type as 'gift' | 'sale' | 'purchase' | 'transfer',
+        type: type as 'gift' | 'sale' | 'purchase' | 'transfer' | 'award' | 'exercise' | 'other',
         totalShares: data.shares,
         totalValue: data.value,
         avgPrice,
@@ -284,9 +363,9 @@ function aggregateTransactionsByType(transactions: TransactionData[]): Aggregate
     }
   }
 
-  // Sort: sales first, then transfers, then gifts, then purchases
+  // Sort: sales first, then transfers, gifts, awards, exercises, purchases, other
   return result.sort((a, b) => {
-    const order = { sale: 0, transfer: 1, gift: 2, purchase: 3 };
+    const order = { sale: 0, transfer: 1, gift: 2, award: 3, exercise: 4, purchase: 5, other: 6 };
     return order[a.type] - order[b.type];
   });
 }
@@ -355,52 +434,62 @@ export function getTransactionTypeConfig(type: string): TransactionTypeConfig {
     };
   }
 
-  // Default to purchase
+  // Award type
+  if (typeLower.includes('award') || typeLower.includes('grant') || typeLower.includes('rsu') || typeLower.includes('psu')) {
+    return {
+      label: 'Awarded',
+      icon: '🏆',
+      bgColor: '#FFFBEB',
+      textColor: '#92400E',
+      color: '#D97706', // Amber
+      valueColor: '#D97706',
+    };
+  }
+
+  // Exercise/Derivative type (label covers exercises + expirations)
+  if (typeLower.includes('exercise') || typeLower.includes('conversion') || typeLower.includes('expir') || typeLower.includes('derivative')) {
+    return {
+      label: 'Derivative Activity',
+      icon: '⚡',
+      bgColor: '#F0FDFA',
+      textColor: '#115E59',
+      color: '#0D9488', // Teal
+      valueColor: '#0D9488',
+    };
+  }
+
+  // Purchase type (explicit, no longer default)
+  if (typeLower.includes('purchase') || typeLower.includes('bought') || typeLower === 'p') {
+    return {
+      label: 'Bought',
+      icon: '📈',
+      bgColor: '#F0FDF4',
+      textColor: '#166534',
+      color: '#16A34A', // Green
+      valueColor: '#16A34A',
+    };
+  }
+
+  // Default to Other (neutral) instead of Purchase
   return {
-    label: 'Bought',
-    icon: '📈',
-    bgColor: '#F0FDF4',
-    textColor: '#166534',
-    color: '#16A34A', // Green
-    valueColor: '#16A34A',
+    label: 'Other',
+    icon: '📋',
+    bgColor: '#F8FAFC',
+    textColor: '#475569',
+    color: '#64748B', // Slate
+    valueColor: '#64748B',
   };
 }
 
-function getAggregatedTransactionConfig(type: 'gift' | 'sale' | 'purchase' | 'transfer') {
-  switch (type) {
-    case 'transfer':
-      return {
-        label: 'Transfer',
-        icon: '🔄',
-        bgColor: '#EBF8FF',
-        textColor: '#1E40AF',
-        valueColor: '#3B82F6',
-      };
-    case 'gift':
-      return {
-        label: 'Gift',
-        icon: '🎁',
-        bgColor: '#F3E8FF',
-        textColor: '#7C3AED',
-        valueColor: '#7C3AED',
-      };
-    case 'sale':
-      return {
-        label: 'Sold',
-        icon: '📉',
-        bgColor: '#FEF2F2',
-        textColor: '#991B1B',
-        valueColor: '#DC2626',
-      };
-    case 'purchase':
-      return {
-        label: 'Bought',
-        icon: '📈',
-        bgColor: '#F0FDF4',
-        textColor: '#166534',
-        valueColor: '#16A34A',
-      };
-  }
+function getAggregatedTransactionConfig(type: 'gift' | 'sale' | 'purchase' | 'transfer' | 'award' | 'exercise' | 'other') {
+  const config = getTransactionTypeConfig(type);
+  return {
+    label: config.label,
+    icon: config.icon,
+    bgColor: config.bgColor,
+    textColor: config.textColor,
+    valueColor: config.valueColor,
+  };
 }
 
 /**
@@ -842,14 +931,14 @@ export function Form4MinimalistTemplate({ filing }: Form4MinimalistTemplateProps
                               }}>
                                 {previousStake}
                               </div>
-                              {/* Direction arrow */}
+                              {/* Direction arrow - always points down (old → new visual flow); color shows sentiment */}
                               <div style={{
                                 fontSize: '20px',
                                 lineHeight: '1',
                                 margin: '4px 0',
                                 color: percentChange?.startsWith('-') ? '#DC2626' : percentChange?.startsWith('+') ? '#16A34A' : EmailColors.text.meta,
                               }}>
-                                {getStakeChangeArrow(percentChange)}
+                                ↓
                               </div>
                               {/* New ownership (after transaction) */}
                               <div style={{

@@ -1,8 +1,8 @@
 # Project Progress
 
 **Date**: 2026-02-20
-**Branch**: main
-**Status**: Subscribe page bug fixes (abandoned checkout, back nav, downgrade buttons)
+**Branch**: feat/subscription-tier-improvements
+**Status**: Subscription tier sync fixes and downgrade support ready for merge
 
 ---
 
@@ -22,12 +22,44 @@
 - **`app/api/user/subscription/route.ts:349`** — Changed `planType: planType as 'FREE' | 'PRO' | 'MAX'` to `planType: 'FREE'` in upsert create clause. Stripe webhook still sets real planType on successful payment.
 - **`app/subscribe/page.tsx`** — `isCurrentPlan()` now checks `isActive` flag (inactive subscription = effectively FREE). Replaced `router.back()` with `router.push('/dashboard')` in 3 places (Back button, ESC handler, error page). Added `PLAN_RANK`, `getEffectivePlan()`, `getButtonType()` helpers. New downgrade button (outline style with ArrowDown icon) and confirmation Dialog.
 - **`app/subscribe/page.tsx`** — `handleDowngrade()` calls PUT `/api/user/subscription` with `{ cancelAtPeriodEnd: true }` for Free or `{ planType }` for paid-to-paid. Shows toast, refreshes subscription data.
+- **`app/api/webhook/stripe/route.ts`** — Added `syncUserSubscriptionTier()` helper to sync User.subscriptionTier on all webhook events
+- **`app/dashboard/page.tsx`**, **`lib/stripe/index.ts`** — Added checkout session verification fallback for webhook delays
 
 ### Redirect Upgrade Links to /subscribe ✅ (2026-02-20)
 
 **Change**: Dashboard "Upgrade to add more" button and toast action now navigate to `/subscribe` instead of `/dashboard/billing`.
 
 **Files**: `components/dashboard/dashboard-client.tsx` — lines 219, 367 changed from `/dashboard/billing` to `/subscribe`.
+
+---
+
+### Summary Quality Fixes: Form 4 Classification, 10-K Blank Sections, Duplicate Emails (2026-02-18 → 2026-02-19)
+
+**Branch**: `summary-quality-review` | **Plan**: `docs/plans/2026-02-18-summary-quality-fixes.md` | **Research**: `thoughts/shared/research/2026-02-18-summary-quality-review.md`
+
+**Problems**: (1) Form 4 "BOUGHT $0" for gifts/awards (GOOGL, JNJ) - 17 of 21 SEC codes defaulted to misleading "purchase". (2) 10-K blank Financial Highlights/Segments (COIN) - `summarizeFilingWithValidation()` existed but wasn't wired in. (3) Duplicate emails on job retry - race condition between summary save and `sentToUser` update.
+
+**Phase 1: Expand Form 4 Classification to 7 Buckets** ✅ (2026-02-18)
+- Added 3 new classification functions: `isAwardTransaction()` (codes A, I), `isExerciseTransaction()` (M, C, X, O, E, H), `isOtherTransaction()` (D, F, U, V, L)
+- Updated `isGiftTransaction()` (+code W), `isTransferTransaction()` (+code Z)
+- Added code-first guard to `isSaleTransaction()` - SEC code is authoritative over AI text
+- Changed default fallback from "purchase" to "other" (neutral)
+- Added 3 new display buckets: award (amber), exercise (teal), other (slate)
+- `getAggregatedTransactionConfig()` now delegates to `getTransactionTypeConfig()` (DRY)
+- Updated `SEC_TRANSACTION_CODES` (added V, fixed E/H/I/K descriptions), `TRANSACTION_CODE_MAP` (added 11 missing codes)
+- **Files**: `form4-minimalist-template.tsx`, `design-system.ts`, `form4-data-extractor.ts`
+- **Tests**: 78 new tests in `form4-transaction-classification.test.ts`, 112/112 Form 4 tests pass
+
+**Phase 2: Wire `summarizeFilingWithValidation()` into Production Pipeline** ✅ (2026-02-19)
+- Replaced `import { summarizeFiling }` with `import { summarizeFilingWithValidation }` in `summarize-cached-handler.ts`
+- Updated call to pass `formType: filing.formType` for extractor lookup
+- Added extractor validation metadata logging (`extractorValidated`, `fieldsFilledByExtractor`, `fieldsWithDiscrepancies`, `extractorFillRate`)
+- Updated existing `summarize-cached-handler-fields.test.ts` mocks (logger, validation wrapper, trial service, preferences)
+- **Files**: `lib/cron/handlers/summarize-cached-handler.ts`, `__tests__/cron/handlers/summarize-cached-handler-validation.test.ts` (new, 10 tests), `__tests__/cron/handlers/summarize-cached-handler-fields.test.ts` (updated)
+- **Tests**: 14/14 handler tests pass, build passes, lint clean
+
+**Phase 3: Fix Duplicate Email Race Condition** - PENDING
+**Phase 4: Integration Testing and Regression Verification** - PENDING
 
 ---
 
@@ -81,7 +113,7 @@ Added "Back to Dashboard" navigation button to `app/dashboard/billing/page.tsx`.
 
 ---
 
-### Auth Redirect for Logged-In Users ✅ (2026-02-19)
+### Auth Redirect for Logged-In Users ✅ (2026-02-18)
 
 **Change**: `middleware.ts` - Redirect authenticated users visiting `/sign-up` or `/sign-in` to `/dashboard`.
 
@@ -95,7 +127,6 @@ Added "Back to Dashboard" navigation button to `app/dashboard/billing/page.tsx`.
 - **`hack/create_worktree.sh`** - Added `--open` flag that opens the new worktree in Windsurf after creation (detects `windsurf` CLI or macOS app path)
 - **`scripts/open-worktrees.sh`** - Added "Create new worktree" as option 4 in interactive menu (prompts for name and base branch, calls `create_worktree.sh --open`)
 - **`package.json`** - Added `worktrees:create:open` convenience npm script
-
 ---
 
 ### Landing Page Auth-Aware Test Coverage ✅ (2026-02-18)
@@ -427,5 +458,5 @@ For complete technical details of projects older than 30 days, see the weekly ar
 
 ---
 
-*Last Updated: 2026-02-20 (Subscribe page bug fixes, downgrade support, upgrade link redirect)*
+*Last Updated: 2026-02-20 (Subscription tier sync fixes, downgrade support, summary quality Phase 2)*
 *Completed projects older than 30 days are archived to .claude/history/ - See TIMELINE.md for complete historical context*

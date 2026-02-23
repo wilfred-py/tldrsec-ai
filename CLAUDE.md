@@ -34,6 +34,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 10. **Assert on text content, not hex colors, in React tests** - `container.innerHTML` doesn't preserve raw hex strings like `#FEF3C7` after React renders inline styles. Assert on text content or `getByText()` instead
 11. **Look up users by `authProviderId` not just `id`** - Clerk `userId` is stored in `authProviderId`, not the DB `id` field. Use `findFirst({ where: { OR: [{ id }, { authProviderId }] } })` or look up by email. See tickers route pattern: `app/api/user/tickers/route.ts`
 12. **Check `jest.config.mjs` moduleNameMapper for new `@/` paths** - When importing from new top-level directories (e.g., `@/contexts/*`, `@/hooks/*`), verify the path is mapped in `jest.config.mjs`. Missing mappings cause "Cannot find module" errors in tests
+13. **Jest mock hoisting: don't reference `const` variables in `jest.mock()` factories** - `jest.mock()` is hoisted before `const` declarations, causing `ReferenceError: Cannot access 'X' before initialization`. Use inline `jest.fn()` in factories, then import and cast: `const mock = importedFn as jest.Mock`. For logger mocks (called at module load via `logger.child()`), create instance inside factory and export via `_testLoggerInstance`. See `__tests__/cron/handlers/summarize-cached-handler-validation.test.ts` for pattern.
 
 ### Pattern References
 When implementing new features, reference these exemplar files:
@@ -46,6 +47,7 @@ When implementing new features, reference these exemplar files:
 | Error handling | `lib/monitoring/pipeline-error-detector.ts` |
 | React component | `components/dashboard/system-health-banner.tsx` |
 | Test file | `__tests__/lib/monitoring/` |
+| Handler test w/ mocks | `__tests__/cron/handlers/summarize-cached-handler-validation.test.ts` |
 | Auth context test mock | `__tests__/components/landing/landing-page-auth.test.tsx` |
 | Subscription fixtures | `__tests__/fixtures/subscription-fixtures.ts` |
 | Preference sync | `lib/user/preference-sync.ts` |
