@@ -1,14 +1,39 @@
 # Project Progress
 
-**Date**: 2026-02-19
-**Branch**: summary-quality-review (worktree)
-**Status**: Summary Quality Fixes - Phase 2 complete, Phase 3 pending
+**Date**: 2026-02-20
+**Branch**: feat/subscription-tier-improvements
+**Status**: Subscription tier sync fixes and downgrade support ready for merge
 
 ---
 
 ## Current Session
 
-### Summary Quality Fixes: Form 4 Classification, 10-K Blank Sections, Duplicate Emails (2026-02-18 → ongoing)
+*No active work in progress.*
+
+---
+
+## Recently Completed Sessions
+
+### Fix Subscribe Page Bugs + Downgrade Support ✅ (2026-02-20)
+
+**Problems**: (1) Plan shows as Pro after aborting checkout — upsert created subscription with requested planType before payment confirmed. (2) Back button navigated to Stripe checkout URL (browser history pollution from `window.location.href`). (3) No way to downgrade from Pro/Max.
+
+**Fixes**:
+- **`app/api/user/subscription/route.ts:349`** — Changed `planType: planType as 'FREE' | 'PRO' | 'MAX'` to `planType: 'FREE'` in upsert create clause. Stripe webhook still sets real planType on successful payment.
+- **`app/subscribe/page.tsx`** — `isCurrentPlan()` now checks `isActive` flag (inactive subscription = effectively FREE). Replaced `router.back()` with `router.push('/dashboard')` in 3 places (Back button, ESC handler, error page). Added `PLAN_RANK`, `getEffectivePlan()`, `getButtonType()` helpers. New downgrade button (outline style with ArrowDown icon) and confirmation Dialog.
+- **`app/subscribe/page.tsx`** — `handleDowngrade()` calls PUT `/api/user/subscription` with `{ cancelAtPeriodEnd: true }` for Free or `{ planType }` for paid-to-paid. Shows toast, refreshes subscription data.
+- **`app/api/webhook/stripe/route.ts`** — Added `syncUserSubscriptionTier()` helper to sync User.subscriptionTier on all webhook events
+- **`app/dashboard/page.tsx`**, **`lib/stripe/index.ts`** — Added checkout session verification fallback for webhook delays
+
+### Redirect Upgrade Links to /subscribe ✅ (2026-02-20)
+
+**Change**: Dashboard "Upgrade to add more" button and toast action now navigate to `/subscribe` instead of `/dashboard/billing`.
+
+**Files**: `components/dashboard/dashboard-client.tsx` — lines 219, 367 changed from `/dashboard/billing` to `/subscribe`.
+
+---
+
+### Summary Quality Fixes: Form 4 Classification, 10-K Blank Sections, Duplicate Emails (2026-02-18 → 2026-02-19)
 
 **Branch**: `summary-quality-review` | **Plan**: `docs/plans/2026-02-18-summary-quality-fixes.md` | **Research**: `thoughts/shared/research/2026-02-18-summary-quality-review.md`
 
@@ -38,30 +63,59 @@
 
 ---
 
-### Fix Dashboard Slow Load After Sign-In (2026-02-19)
+### Back to Dashboard Button on Billing Page ✅ (2026-02-19)
+
+Added "Back to Dashboard" navigation button to `app/dashboard/billing/page.tsx`.
+
+---
+
+### Tutorial Overlay Bug Fixes ✅ (2026-02-19)
+
+**Problems**: (1) Tutorial showed for existing users who already completed it or had tickers. (2) No spotlight/cut-out effect on highlighted element — just a flat overlay. (3) Tooltip appeared grayed out behind overlay.
+
+**Fixes**:
+- **`app/dashboard/page.tsx`** - Read `tutorialCompletedAt` from DB user, pass `tutorialCompleted` prop to client
+- **`components/dashboard/dashboard-client.tsx`** - Skip tutorial if `tutorialCompleted || initialCompanies.length > 0`
+- **`app/globals.css`** - Replaced z-index overlay approach with `box-shadow: 0 0 0 9999px rgba(0,0,0,0.5)` spotlight technique. Removed forced `background-color: white !important` overrides
+- **`components/onboarding/tutorial-guide.tsx`** - Removed always-present overlay div, added conditional overlay only for non-highlighted steps. Tooltip: `z-[10000] bg-white dark:bg-zinc-900` with explicit borders
+
+---
+
+### Dashboard Skeleton Refinement ✅ (2026-02-19)
+
+**Goal**: Make loading skeleton match actual dashboard DOM structure for seamless transition.
+
+**Changes**:
+- **`app/dashboard/loading.tsx`** - Rewrote to mirror `DashboardClient` layout (landing-card container, header spacing, table structure)
+- **Tests** - Updated to mock `/api/user/tickers` instead of `/api/companies`, test `initialCompanies` prop instead of async fetch
+
+---
+
+### Sign-Up Page Skeleton + Auth Nav Cleanup ✅ (2026-02-19)
+
+**Changes**:
+- **`app/(auth)/sign-up/[[...sign-up]]/page.tsx`** - Added shimmer skeleton matching Clerk form layout, visible during Clerk JS hydration. Uses MutationObserver to detect `.cl-card` render
+- **`components/navigation.tsx`** - Hide sign-in/get-started nav buttons on `/sign-in` and `/sign-up` paths
+
+---
+
+### Fix Dashboard Slow Load After Sign-In ✅ (2026-02-19)
 
 **Problem**: Dashboard took 4-6s to show meaningful content after sign-in due to sequential waterfall: server-side `currentUser()` → client-side Clerk `useUser()` (2-3s blocking via ProtectedRoute) → client-side API fetch for tickers → render.
 
 **Fix** (4 changes):
-1. **`components/dashboard/dashboard-shell.tsx`** - Removed `ProtectedRoute` wrapper (redundant — auth already enforced by Clerk middleware + server-side `currentUser()` in page.tsx). Eliminates 2-3s client-side Clerk blocking.
-2. **`app/dashboard/page.tsx`** - Added server-side Prisma query to fetch user's tickers after `currentUser()`. Uses `_count` + `take: 1` for efficient query. Passes results as `initialCompanies` prop. Falls back gracefully on error.
-3. **`components/dashboard/dashboard-client.tsx`** - Added `initialCompanies` prop (defaults to `[]`). Initializes `companies` state with server data. Skips initial `loadCompanies()` API call when data provided. `loadCompanies` still available for mutations.
-4. **`app/api/user/tickers/route.ts`** - Optimized GET query: `_count: { select: { summaries: true } }` + `take: 1` instead of loading all summaries. Applied to both main query and auto-create path.
+1. **`components/dashboard/dashboard-shell.tsx`** - Removed `ProtectedRoute` wrapper (redundant — auth already enforced by Clerk middleware + server-side `currentUser()` in page.tsx)
+2. **`app/dashboard/page.tsx`** - Added server-side Prisma query to fetch user's tickers. Uses `_count` + `take: 1` for efficient query. Passes `initialCompanies` prop
+3. **`components/dashboard/dashboard-client.tsx`** - Added `initialCompanies` prop. Skips initial API call when data provided
+4. **`app/api/user/tickers/route.ts`** - Optimized GET query with `_count` + `take: 1`
 
-**Result**: Dashboard renders with data in ~1s (loading.tsx skeleton visible during server fetch). No new test regressions.
-
-**Status**: Implemented, not yet committed.
+**Result**: Dashboard renders with data in ~1s.
 
 ---
 
-### Auth Redirect for Logged-In Users (2026-02-18)
+### Auth Redirect for Logged-In Users ✅ (2026-02-18)
 
-**Goal**: Redirect authenticated users visiting `/sign-up` or `/sign-in` to `/dashboard` instead of `/onboarding`.
-
-**Changes**:
-- **`middleware.ts`** - Added `auth()` check inside Clerk middleware callback. If `userId` exists and pathname starts with `/sign-up` or `/sign-in`, redirects to `/dashboard`.
-
-**Status**: Implemented, not yet committed.
+**Change**: `middleware.ts` - Redirect authenticated users visiting `/sign-up` or `/sign-in` to `/dashboard`.
 
 ---
 
@@ -109,6 +163,7 @@
 **Root Cause**: summaryJSON field was being discarded, forcing email templates to rely on regex fallbacks that fail with natural language variations.
 
 ---
+
 ### Skeleton Loading States for Billing & Subscribe ✅ (2026-02-14)
 
 **Goal**: Replace white-screen/generic loading fallbacks on `/dashboard/billing` and `/subscribe` with layout-matching skeleton loading states using the existing `Skeleton` component.
@@ -142,8 +197,6 @@
 **Files**: `components/providers/`, `app/api/user/subscription/status/`, `components/landing/sections-v2/pricing-card.tsx`, `components/landing/sections-v2/pricing-section-v2.tsx`
 
 ---
-
-## Recently Completed Sessions
 
 ### TrialService User Lookup Fix ✅ (2026-02-12)
 
@@ -405,5 +458,5 @@ For complete technical details of projects older than 30 days, see the weekly ar
 
 ---
 
-*Last Updated: 2026-02-19 (Summary Quality Fixes Phase 2 complete)*
+*Last Updated: 2026-02-20 (Subscription tier sync fixes, downgrade support, summary quality Phase 2)*
 *Completed projects older than 30 days are archived to .claude/history/ - See TIMELINE.md for complete historical context*

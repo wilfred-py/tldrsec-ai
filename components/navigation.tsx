@@ -1,11 +1,15 @@
 'use client';
 
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { useAuthContext } from '@/lib/context/auth-context';
 
 export function Navigation() {
   const { isAuthenticated, isLoading } = useAuthContext();
+  const pathname = usePathname();
+
+  const isAuthPage = pathname.startsWith('/sign-in') || pathname.startsWith('/sign-up');
 
   return (
     <div className="sticky top-0 z-40 w-full bg-background/70 backdrop-blur-lg">
@@ -16,19 +20,19 @@ export function Navigation() {
               tldrSEC
             </Link>
           </div>
-          
+
           <nav className="hidden md:flex items-center space-x-1">
             <NavLink href="#features">Features</NavLink>
             <NavLink href="#pricing">Pricing</NavLink>
             <NavLink href="/changelog">Changelog</NavLink>
             <NavLink href="/contact">Contact</NavLink>
           </nav>
-          
+
           <div className="flex items-center">
-            {!isLoading && (
+            {!isLoading && !isAuthPage && (
               isAuthenticated ? (
                 <Link href="/dashboard">
-                  <Button 
+                  <Button
                     className="bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 text-white rounded-lg"
                   >
                     Dashboard
@@ -36,7 +40,7 @@ export function Navigation() {
                 </Link>
               ) : (
                 <Link href="/sign-up">
-                  <Button 
+                  <Button
                     className="bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 text-white rounded-lg"
                   >
                     Get Started

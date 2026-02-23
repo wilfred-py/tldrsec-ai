@@ -49,7 +49,9 @@ export async function GET() {
         include: {
           tickers: {
             include: {
+              _count: { select: { summaries: true } },
               summaries: {
+                take: 1,
                 select: {
                   id: true,
                   filingDate: true,
@@ -82,7 +84,9 @@ export async function GET() {
             include: {
               tickers: {
                 include: {
+                  _count: { select: { summaries: true } },
                   summaries: {
+                    take: 1,
                     select: {
                       id: true,
                       filingDate: true,
@@ -103,7 +107,7 @@ export async function GET() {
             const latestSummary = ticker.summaries?.[0];
             return {
               ...ticker,
-              summaryCount: ticker.summaries?.length || 0,
+              summaryCount: ticker._count.summaries,
               lastFilingDate: latestSummary?.filingDate?.toISOString() || null,
               preferences: ticker.preferences || DEFAULT_PREFERENCES,
             };
@@ -123,7 +127,7 @@ export async function GET() {
         const latestSummary = ticker.summaries?.[0];
         return {
           ...ticker,
-          summaryCount: ticker.summaries?.length || 0,
+          summaryCount: ticker._count.summaries,
           lastFilingDate: latestSummary?.filingDate?.toISOString() || null,
           preferences: ticker.preferences || DEFAULT_PREFERENCES,
         };

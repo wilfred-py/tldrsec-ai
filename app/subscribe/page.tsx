@@ -6,7 +6,15 @@ import { useUser } from '@clerk/nextjs';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import { ArrowLeft, Check, Loader2, Zap, Sparkles, Crown, AlertTriangle } from 'lucide-react';
+import { ArrowLeft, Check, Loader2, Sparkles, Crown, AlertTriangle, ArrowDown } from 'lucide-react';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { toast } from 'sonner';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -22,13 +30,14 @@ interface UserSubscription {
   isActive: boolean;
 }
 
-const PLAN_ICONS = {
-  FREE: Zap,
+const PLAN_ICONS: Record<PlanType, typeof Sparkles | null> = {
+  FREE: null,
   PRO: Sparkles,
   MAX: Crown,
-} as const;
+};
 
 const PLAN_ORDER: PlanType[] = ['FREE', 'PRO', 'MAX'];
+const PLAN_RANK: Record<PlanType, number> = { FREE: 0, PRO: 1, MAX: 2 };
 
 function SubscribePageContent() {
   const router = useRouter();
@@ -38,6 +47,8 @@ function SubscribePageContent() {
   const [loading, setLoading] = useState(true);
   const [billingInterval, setBillingInterval] = useState<BillingInterval>('monthly');
   const [checkingOut, setCheckingOut] = useState<PlanType | null>(null);
+  const [downgradingTo, setDowngradingTo] = useState<PlanType | null>(null);
+  const [showDowngradeConfirm, setShowDowngradeConfirm] = useState<PlanType | null>(null);
 
   // Handle checkout cancellation - show toast
   useEffect(() => {
@@ -88,7 +99,7 @@ function SubscribePageContent() {
   // Handle ESC key to go back
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
     if (e.key === 'Escape') {
-      router.back();
+      router.push('/dashboard');
     }
   }, [router]);
 
@@ -99,7 +110,7 @@ function SubscribePageContent() {
 
   // Handle checkout
   const handleCheckout = async (planType: PlanType) => {
-    if (planType === 'FREE' || planType === subscription?.planType) return;
+    if (planType === 'FREE' || isCurrentPlan(planType)) return;
 
     setCheckingOut(planType);
     try {
@@ -147,7 +158,64 @@ function SubscribePageContent() {
     return null;
   };
 
-  const isCurrentPlan = (planKey: PlanType) => subscription?.planType === planKey;
+  const isCurrentPlan = (planKey: PlanType) => {
+    if (!subscription) return false;
+    // If subscription is inactive, user is effectively on FREE
+    const effectivePlan = subscription.isActive ? subscription.planType : 'FREE';
+    return effectivePlan === planKey;
+  };
+
+  const getEffectivePlan = (): PlanType => {
+    if (!subscription || !subscription.isActive) return 'FREE';
+    return subscription.planType;
+  };
+
+  const getButtonType = (planKey: PlanType): 'current' | 'upgrade' | 'downgrade' | 'free' => {
+    const effectivePlan = getEffectivePlan();
+    if (planKey === effectivePlan) return 'current';
+    if (!subscription && planKey === 'FREE') return 'free';
+    if (PLAN_RANK[planKey] > PLAN_RANK[effectivePlan]) return 'upgrade';
+    return 'downgrade';
+  };
+
+  const handleDowngrade = async (planType: PlanType) => {
+    setDowngradingTo(planType);
+    try {
+      const body = planType === 'FREE'
+        ? { cancelAtPeriodEnd: true }
+        : { planType };
+
+      const response = await fetch('/api/user/subscription', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        toast.error(data.error || 'Failed to downgrade');
+        return;
+      }
+
+      toast.success(`Downgrading to ${SUBSCRIPTION_PLANS[planType].name}`, {
+        description: planType === 'FREE'
+          ? 'Your current plan will remain active until the end of the billing period.'
+          : 'Your plan has been changed.',
+      });
+
+      // Refresh subscription data
+      const subResponse = await fetch('/api/user/subscription');
+      if (subResponse.ok) {
+        setSubscription(await subResponse.json());
+      }
+    } catch {
+      toast.error('An error occurred. Please try again.');
+    } finally {
+      setDowngradingTo(null);
+      setShowDowngradeConfirm(null);
+    }
+  };
 
   if (loading) {
     return (
@@ -193,9 +261,9 @@ function SubscribePageContent() {
         {/* Back Button */}
         <Button
           variant="ghost"
-          onClick={() => router.back()}
+          onClick={() => router.push('/dashboard')}
           className="mb-8 text-[var(--landing-text-muted)] hover:text-[var(--landing-text)]"
-          aria-label="Go back"
+          aria-label="Go back to dashboard"
         >
           <ArrowLeft className="h-4 w-4 mr-2" />
           Back
@@ -241,7 +309,6 @@ function SubscribePageContent() {
           {PLAN_ORDER.map((planKey, index) => {
             const plan = SUBSCRIPTION_PLANS[planKey];
             const Icon = PLAN_ICONS[planKey];
-            const isCurrent = isCurrentPlan(planKey);
             const savings = planKey !== 'FREE' ? calculateSavingsPercentage(planKey) : null;
             const monthlyEquiv = getMonthlyEquivalent(planKey);
 
@@ -273,13 +340,13 @@ function SubscribePageContent() {
                       {plan.name}
                     </h3>
                   </div>
-                  <Icon className="h-6 w-6 text-[var(--landing-primary)]" />
+                  {Icon && <Icon className="h-6 w-6 text-[var(--landing-primary)]" />}
                 </div>
 
                 {/* Price - Using AnimatedPrice component */}
                 <div className="mb-6 h-[88px]">
                   {plan.monthlyPrice === 0 ? (
-                    <StaticPrice label="Free" />
+                    <StaticPrice label="$0" />
                   ) : (
                     <>
                       <AnimatedPrice
@@ -310,39 +377,71 @@ function SubscribePageContent() {
 
                 {/* CTA Button */}
                 <div className="mb-6">
-                  {isCurrent ? (
-                    <Button
-                      disabled
-                      className="w-full bg-gray-100 text-gray-500 cursor-not-allowed"
-                    >
-                      Current Plan
-                    </Button>
-                  ) : planKey === 'FREE' ? (
-                    <Button
-                      variant="outline"
-                      disabled
-                      className="w-full"
-                    >
-                      Free Tier
-                    </Button>
-                  ) : (
-                    <Button
-                      onClick={() => handleCheckout(planKey)}
-                      disabled={checkingOut === planKey}
-                      className={`w-full ${
-                        planKey === 'PRO' ? 'landing-button-primary' : 'landing-button-secondary'
-                      }`}
-                    >
-                      {checkingOut === planKey ? (
-                        <>
-                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                          Loading...
-                        </>
-                      ) : (
-                        `Upgrade to ${plan.name}`
-                      )}
-                    </Button>
-                  )}
+                  {(() => {
+                    const buttonType = getButtonType(planKey);
+                    switch (buttonType) {
+                      case 'current':
+                        return (
+                          <Button
+                            disabled
+                            className="w-full bg-gray-100 text-gray-500 cursor-not-allowed"
+                          >
+                            Current Plan
+                          </Button>
+                        );
+                      case 'free':
+                        return (
+                          <Button
+                            variant="outline"
+                            disabled
+                            className="w-full"
+                          >
+                            Free Tier
+                          </Button>
+                        );
+                      case 'downgrade':
+                        return (
+                          <Button
+                            variant="outline"
+                            onClick={() => setShowDowngradeConfirm(planKey)}
+                            disabled={downgradingTo === planKey}
+                            className="w-full"
+                          >
+                            {downgradingTo === planKey ? (
+                              <>
+                                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                                Processing...
+                              </>
+                            ) : (
+                              <>
+                                <ArrowDown className="w-4 h-4 mr-2" />
+                                Downgrade to {plan.name}
+                              </>
+                            )}
+                          </Button>
+                        );
+                      case 'upgrade':
+                      default:
+                        return (
+                          <Button
+                            onClick={() => handleCheckout(planKey)}
+                            disabled={checkingOut === planKey}
+                            className={`w-full ${
+                              planKey === 'PRO' ? 'landing-button-primary' : 'landing-button-secondary'
+                            }`}
+                          >
+                            {checkingOut === planKey ? (
+                              <>
+                                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                                Loading...
+                              </>
+                            ) : (
+                              `Upgrade to ${plan.name}`
+                            )}
+                          </Button>
+                        );
+                    }
+                  })()}
                 </div>
 
                 {/* Features */}
@@ -383,6 +482,49 @@ function SubscribePageContent() {
         <p className="text-center mt-8 text-sm text-[var(--landing-text-muted)]">
           Press <kbd className="px-2 py-1 bg-gray-100 rounded text-xs">ESC</kbd> to go back
         </p>
+
+        {/* Downgrade Confirmation Dialog */}
+        <Dialog
+          open={showDowngradeConfirm !== null}
+          onOpenChange={(open) => { if (!open) setShowDowngradeConfirm(null); }}
+        >
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>
+                Downgrade to {showDowngradeConfirm ? SUBSCRIPTION_PLANS[showDowngradeConfirm].name : ''}?
+              </DialogTitle>
+              <DialogDescription>
+                {showDowngradeConfirm === 'FREE'
+                  ? `You'll lose access to ${SUBSCRIPTION_PLANS[getEffectivePlan()].name} features at the end of your billing period. Your current plan will remain active until then.`
+                  : `Your plan will be changed to ${showDowngradeConfirm ? SUBSCRIPTION_PLANS[showDowngradeConfirm].name : ''}. You'll lose access to higher-tier features.`
+                }
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => setShowDowngradeConfirm(null)}
+                disabled={downgradingTo !== null}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="destructive"
+                onClick={() => showDowngradeConfirm && handleDowngrade(showDowngradeConfirm)}
+                disabled={downgradingTo !== null}
+              >
+                {downgradingTo ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Processing...
+                  </>
+                ) : (
+                  'Confirm Downgrade'
+                )}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     </div>
   );
@@ -440,7 +582,7 @@ function SubscribePageError() {
           We encountered an error loading the subscription page. Please try again.
         </p>
         <div className="flex gap-4 justify-center">
-          <Button variant="outline" onClick={() => router.back()}>
+          <Button variant="outline" onClick={() => router.push('/dashboard')}>
             Go Back
           </Button>
           <Button onClick={() => window.location.reload()}>
