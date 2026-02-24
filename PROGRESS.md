@@ -401,69 +401,35 @@ Added Agent Guidelines section to CLAUDE.md (Common Mistakes, Pattern References
 
 ### Unified Subscription Tiers + Billing Downgrade Fix ✅ (2026-01-28)
 
-**Issues**: 405 PUT errors on billing downgrade; Prisma enum mismatch between `SubscriptionTier` and `PlanType`.
-
-**Fixes**:
-- Added PUT handler to `app/api/user/subscription/route.ts` (cancellation, downgrade, upgrade redirect)
-- Unified `SubscriptionTier` enum to `FREE/PRO/MAX` in `prisma/schema.prisma`
-- Created `scripts/migrate-to-unified-tiers.ts` - migrated HOBBY->FREE
-- Updated `lib/cron/tier-eligibility.ts` normalization
-
----
+405 PUT errors + Prisma enum mismatch. Added PUT handler to subscription route, unified `SubscriptionTier` enum to FREE/PRO/MAX, created migration script.
 
 ### Pipeline Stall Recovery + Throughput Optimization ✅ (2026-01-28)
 
-**Issue**: Pipeline stalled 12+ hours, 799 pending jobs, throughput only 12 jobs/hour.
-
-**Root Causes**: `vercel.json` invalid JSON (trailing commas), Cloudflare Worker crons stopped, CRON_SECRET sync issue, low summarize batch frequency.
-
-**Fixes**: Fixed vercel.json, redeployed CF Worker, synced secrets, added dedicated */3 summarize-only cron. Throughput improved from 12 to 130+ jobs/hour.
-
----
+Pipeline stalled 12h, 799 pending jobs. Fixed vercel.json, redeployed CF Worker, synced secrets, added */3 summarize cron. Throughput: 12→130+ jobs/hour.
 
 ### Unsent Email Recovery ✅ (2026-01-27)
 
-47 completed summaries with `sentToUser: false` from bulk migration. Created `scripts/resend-unsent-emails.ts`. Sent 46 emails (1 skipped - orphaned ticker).
-
----
+47 completed summaries with `sentToUser: false` resent. Created `scripts/resend-unsent-emails.ts`.
 
 ### TickerMonitoring Root Cause Fix ✅ (2026-01-27)
 
-**Problem**: SEC filing discovery silently skipping all tickers - TickerMonitoring table empty.
-
-**Root Cause**: 3-phase async pipeline bypassed code path that creates TickerMonitoring records. `checkForNewFilings()` silently skips tickers without TickerMonitoring records.
-
-**Fix**: Added `getActiveTickersForMonitoring()` call to `lib/cron/handlers/discovery-handler.ts` at start of discovery phase. Added TickerMonitoring health check to `app/api/health/pipeline/route.ts`.
-
----
+3-phase pipeline bypassed TickerMonitoring record creation. Added `getActiveTickersForMonitoring()` to discovery handler.
 
 ### GitHub Actions Minutes Optimization ✅ (2026-01-27)
 
-Reduced GitHub Actions usage: Watchdog frequency `*/10` -> `*/30`, added path filters to quality-gates.yml and pr-validation.yml. Savings: ~750 min/month.
-
----
+Watchdog */10→*/30, path filters on quality-gates.yml and pr-validation.yml. Savings: ~750 min/month.
 
 ### Pipeline Resilience Zero-Intervention ✅ (2026-01-26)
 
-**PR**: [#340](https://github.com/wilfred-py/tldrsec-ai/pull/340)
-
-Created: `lib/cron/secret-sanitization.ts` (CRON_SECRET auto-trim), removed 5% sampling limit from orphan detection, `.github/workflows/pipeline-heartbeat-watchdog.yml` (external monitoring). 30/30 tests passing.
-
----
+PR #340. CRON_SECRET auto-trim, orphan detection fix, GitHub Action watchdog. 30/30 tests.
 
 ### Stripe Webhook planType Sync Fix ✅ (2026-01-26)
 
-**PR**: [#339](https://github.com/wilfred-py/tldrsec-ai/pull/339)
-
-**Fix**: Stripe webhook was not syncing `planType` to User.subscriptionTier. Also improved checkout UX flow.
-
----
+PR #339. Webhook not syncing planType to User.subscriptionTier. Fixed + checkout UX improvements.
 
 ### Pipeline Stall Recovery & Bug Fixes ✅ (2026-01-26)
 
-**Root Causes**: Auto-recover threw error on HTTP 503 (CRITICAL status) instead of proceeding with recovery; OrphanedFilingDetector queried wrong table.
-
-**Fixes**: `app/api/cron/auto-recover/route.ts` handles 503 now; `lib/cron/orphaned-filing-detector.ts` queries correct table.
+Auto-recover threw error on 503 instead of proceeding. Fixed + OrphanedFilingDetector table query.
 
 ---
 
@@ -477,5 +443,5 @@ For complete technical details of projects older than 30 days, see the weekly ar
 
 ---
 
-*Last Updated: 2026-02-24 (E2E pipeline script alignment, subscription tier sync PR #352 completed)*
+*Last Updated: 2026-02-24 (Stripe duplicate sub fix & upgrade/downgrade flow, E2E pipeline script alignment)*
 *Completed projects older than 30 days are archived to .claude/history/ - See TIMELINE.md for complete historical context*

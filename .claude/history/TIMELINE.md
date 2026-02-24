@@ -13,7 +13,8 @@ This file provides a chronological index of all completed projects. For detailed
 
 | Date | Project | Status |
 |------|---------|--------|
-| 2026-02-24 | E2E Pipeline Script Alignment (rewrite test-e2e-email.ts to use production 3-phase pipeline code) | In Progress |
+| 2026-02-24 | Fix Stripe Duplicate Subscriptions & Upgrade/Downgrade Flow (userId mismatch, Stripe source-of-truth check, PUT upgrade support) | In Progress |
+| 2026-02-24 | E2E Pipeline Script Alignment (rewrite test-e2e-email.ts to use production 3-phase pipeline code) | ✅ |
 | 2026-02-24 | Fix Subscription State Not Updating (webhook tier sync, checkout verification fallback, trial banner props, subscribe UI, PR #352) | ✅ |
 | 2026-02-20 | Fix Subscribe Page Bugs + Downgrade Support (abandoned checkout planType, back nav, downgrade dialog) | ✅ |
 | 2026-02-20 | Redirect Upgrade Links to /subscribe (dashboard-client.tsx upgrade button + toast) | ✅ |
@@ -116,10 +117,10 @@ This file provides a chronological index of all completed projects. For detailed
 
 ## Archive Statistics
 - **Total Archived Projects**: 11 weekly archives (Oct-Dec 2025) + Jan 2026 consolidated
-- **Current PROGRESS.md Lines**: 473 (threshold: 500) ✅ HEALTHY
+- **Current PROGRESS.md Lines**: 447 (threshold: 500) ✅ HEALTHY
 - **Last Sync**: 2026-02-24
 - **Archive System**: ✅ ACTIVE
-- **Last Compaction**: 2026-02-24 (Bidirectional sync, E2E pipeline alignment added)
+- **Last Compaction**: 2026-02-24 (Stripe duplicate sub fix added, Jan entries condensed)
 
 ---
 
