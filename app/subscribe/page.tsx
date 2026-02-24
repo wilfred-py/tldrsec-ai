@@ -108,9 +108,51 @@ function SubscribePageContent() {
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, [handleKeyDown]);
 
-  // Handle checkout
+  // Handle upgrade via PUT (modifies existing Stripe subscription)
+  const handleUpgrade = async (planType: PlanType) => {
+    setCheckingOut(planType);
+    try {
+      const response = await fetch('/api/user/subscription', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          planType,
+          billingInterval,
+        }),
+      });
+
+      const data = (await response.json()) as { error?: string };
+
+      if (!response.ok) {
+        toast.error(data.error || 'Failed to upgrade');
+        return;
+      }
+
+      toast.success(`Upgraded to ${SUBSCRIPTION_PLANS[planType].name}`, {
+        description: 'Your plan has been upgraded. Prorated charges have been applied.',
+      });
+
+      // Refresh subscription data
+      const subResponse = await fetch('/api/user/subscription');
+      if (subResponse.ok) {
+        setSubscription(await subResponse.json());
+      }
+    } catch {
+      toast.error('An error occurred. Please try again.');
+    } finally {
+      setCheckingOut(null);
+    }
+  };
+
+  // Handle checkout (new subscription via Stripe checkout)
   const handleCheckout = async (planType: PlanType) => {
     if (planType === 'FREE' || isCurrentPlan(planType)) return;
+
+    // If user has an active paid plan and target is higher tier, use PUT upgrade
+    const effectivePlan = getEffectivePlan();
+    if (subscription?.isActive && PLAN_RANK[effectivePlan] > 0 && PLAN_RANK[planType] > PLAN_RANK[effectivePlan]) {
+      return handleUpgrade(planType);
+    }
 
     setCheckingOut(planType);
     try {
@@ -124,9 +166,13 @@ function SubscribePageContent() {
         }),
       });
 
-      const data = await response.json();
+      const data = (await response.json()) as { error?: string; action?: string; checkoutUrl?: string };
 
       if (!response.ok) {
+        // Handle 409 with action: 'use_put' - stale client state, use PUT instead
+        if (response.status === 409 && data.action === 'use_put') {
+          return handleUpgrade(planType);
+        }
         if (response.status === 409) {
           toast.error('You already have an active subscription');
         } else {

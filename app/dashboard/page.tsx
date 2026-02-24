@@ -73,17 +73,18 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                   where: { id: dbUser.id },
                   data: { subscriptionTier: paidPlan },
                 });
-                // Also ensure UserSubscription record matches
+                // Also ensure UserSubscription record matches (use dbUser.id, not Clerk user.id)
                 await prisma.userSubscription.upsert({
-                  where: { userId: user.id },
+                  where: { userId: dbUser.id },
                   update: {
                     planType: paidPlan,
                     stripeSubscriptionId: session.subscription as string || undefined,
+                    stripeCustomerId: session.customer as string || undefined,
                     isActive: true,
                     updatedAt: new Date(),
                   },
                   create: {
-                    userId: user.id,
+                    userId: dbUser.id,
                     planType: paidPlan,
                     stripeSubscriptionId: session.subscription as string || undefined,
                     stripeCustomerId: session.customer as string || undefined,

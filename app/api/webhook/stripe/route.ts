@@ -6,7 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { headers } from 'next/headers';
 import { getPrismaClient } from '../../../../lib/db/prisma';
-import { validateWebhookSignature } from '../../../../lib/stripe';
+import { validateWebhookSignature, getPlanTypeFromPriceId } from '../../../../lib/stripe';
 import Stripe from 'stripe';
 
 const prisma = getPrismaClient();
@@ -27,28 +27,6 @@ async function syncUserSubscriptionTier(userId: string, planType: 'FREE' | 'PRO'
   } catch (error) {
     console.error(`[webhook] Failed to sync User.subscriptionTier for ${userId}:`, error);
   }
-}
-
-/**
- * Derive plan type from Stripe price ID
- * Returns FREE if price ID doesn't match any configured plan
- */
-function getPlanTypeFromPriceId(priceId: string | undefined): 'FREE' | 'PRO' | 'MAX' {
-  if (!priceId) return 'FREE';
-
-  const proMonthlyPriceId = process.env.STRIPE_PRO_MONTHLY_PRICE_ID;
-  const proAnnualPriceId = process.env.STRIPE_PRO_ANNUAL_PRICE_ID;
-  const maxMonthlyPriceId = process.env.STRIPE_MAX_MONTHLY_PRICE_ID;
-  const maxAnnualPriceId = process.env.STRIPE_MAX_ANNUAL_PRICE_ID;
-
-  if (priceId === proMonthlyPriceId || priceId === proAnnualPriceId) {
-    return 'PRO';
-  }
-  if (priceId === maxMonthlyPriceId || priceId === maxAnnualPriceId) {
-    return 'MAX';
-  }
-
-  return 'FREE';
 }
 
 export async function POST(request: NextRequest) {
@@ -126,21 +104,29 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
     return;
   }
 
-  const userId = session.metadata?.userId;
+  const metadataUserId = session.metadata?.userId;
   const planType = session.metadata?.planType as 'FREE' | 'PRO' | 'MAX' | undefined;
 
-  if (!userId || !planType) {
+  if (!metadataUserId || !planType) {
     console.error('Missing metadata in checkout session');
     return;
   }
 
   try {
+    // Resolve Clerk ID → DB user ID
+    const dbUser = await prisma.user.findFirst({
+      where: { OR: [{ id: metadataUserId }, { authProviderId: metadataUserId }] },
+      select: { id: true },
+    });
+    const userId = dbUser?.id ?? metadataUserId;
+
     // Update or create subscription record using upsert for robustness
     await prisma.userSubscription.upsert({
       where: { userId },
       update: {
         planType, // Update the plan type from checkout metadata
         stripeSubscriptionId: session.subscription as string,
+        stripeCustomerId: session.customer as string,
         isActive: true,
         updatedAt: new Date(),
       },
