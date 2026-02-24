@@ -13,6 +13,9 @@ This file provides a chronological index of all completed projects. For detailed
 
 | Date | Project | Status |
 |------|---------|--------|
+| 2026-02-24 | Fix Stripe Duplicate Subscriptions & Upgrade/Downgrade Flow (userId mismatch, Stripe source-of-truth check, PUT upgrade support) | In Progress |
+| 2026-02-24 | E2E Pipeline Script Alignment (rewrite test-e2e-email.ts to use production 3-phase pipeline code) | ✅ |
+| 2026-02-24 | Fix Subscription State Not Updating (webhook tier sync, checkout verification fallback, trial banner props, subscribe UI, PR #352) | ✅ |
 | 2026-02-20 | Fix Subscribe Page Bugs + Downgrade Support (abandoned checkout planType, back nav, downgrade dialog) | ✅ |
 | 2026-02-20 | Redirect Upgrade Links to /subscribe (dashboard-client.tsx upgrade button + toast) | ✅ |
 | 2026-02-19 | Back to Dashboard Button on Billing Page | ✅ |
@@ -44,8 +47,6 @@ This file provides a chronological index of all completed projects. For detailed
 | 2026-01-27 | GitHub Actions Minutes Optimization (watchdog */30, path filters for quality-gates + pr-validation) | ✅ |
 | 2026-01-26 | Stripe Webhook planType Sync Fix (PR #339, checkout UX improvements) | ✅ |
 | 2026-01-26 | Pipeline Resilience Zero-Intervention (CRON_SECRET sanitization, orphan detection, GitHub Action watchdog) | ✅ |
-| 2026-01-25 | Stripe CTA Dashboard Integration (UpgradeCTASection + direct Stripe checkout, $199/$349 pricing) | ✅ |
-| 2026-01-23 | Prospectus Filing Type Preferences (424B2 filtering, email volume reduction, PR #335) | ✅ |
 
 *See PROGRESS.md for detailed implementation notes on current work*
 
@@ -57,6 +58,9 @@ This file provides a chronological index of all completed projects. For detailed
 
 | Date | Project | Status |
 |------|---------|--------|
+| 2026-01-25 | BAC 424B2 Filtering Breach Investigation (NULL preferences, 87% tickers affected) | ✅ |
+| 2026-01-25 | Stripe Dashboard Integration Fixes (lib/stripe split, PlanType migration) | ✅ |
+| 2026-01-23 | Prospectus Filing Type Preferences (PR #335, 424B2 filtering) | ✅ |
 | 2026-01-21 | Cloudflare Build Fix - Onboarding Dynamic Rendering | ✅ |
 | 2026-01-20 | Pipeline Health Connection Pool Exhaustion Fix | ✅ |
 | 2026-01-19 | Onboarding Redirect Race Condition Fix | ✅ |
@@ -113,10 +117,10 @@ This file provides a chronological index of all completed projects. For detailed
 
 ## Archive Statistics
 - **Total Archived Projects**: 11 weekly archives (Oct-Dec 2025) + Jan 2026 consolidated
-- **Current PROGRESS.md Lines**: 431 (threshold: 500) ✅ HEALTHY
-- **Last Sync**: 2026-02-20
+- **Current PROGRESS.md Lines**: 447 (threshold: 500) ✅ HEALTHY
+- **Last Sync**: 2026-02-24
 - **Archive System**: ✅ ACTIVE
-- **Last Compaction**: 2026-02-20 (No archival needed — under 500 lines)
+- **Last Compaction**: 2026-02-24 (Stripe duplicate sub fix added, Jan entries condensed)
 
 ---
 

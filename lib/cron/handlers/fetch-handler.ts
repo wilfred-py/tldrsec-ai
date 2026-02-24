@@ -347,7 +347,7 @@ export async function handleFetch(
 /**
  * Result of fetching filing content with document URL
  */
-interface FetchContentResult {
+export interface FetchContentResult {
   content: string;
   primaryDocUrl: string | null;
 }
@@ -371,7 +371,7 @@ interface FetchContentResult {
  * @param executionId Execution ID for logging
  * @returns Filing content and primary document URL
  */
-async function fetchFilingContentOptimized(
+export async function fetchFilingContentOptimized(
   accessionNumber: string,
   filingUrl: string,
   cik: string | undefined,
