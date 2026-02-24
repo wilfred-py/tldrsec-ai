@@ -1,35 +1,72 @@
 # Project Progress
 
-**Date**: 2026-02-20
-**Branch**: feat/subscription-tier-improvements
-**Status**: Subscription tier sync fixes and downgrade support ready for merge
+**Date**: 2026-02-24
+**Branch**: main
+**Status**: Stripe duplicate subscription fix and upgrade/downgrade flow (in progress)
 
 ---
 
 ## Current Session
 
-*No active work in progress.*
+### Fix Stripe Duplicate Subscriptions & Upgrade/Downgrade Flow (2026-02-24)
+
+**Goal**: Fix 4 duplicate Stripe subscriptions across 2 customers, orphaned DB records from userId mismatch, and upgrades creating new subs instead of modifying existing ones.
+
+**Root Causes**: (1) POST handler only checked `isActive` in DB, not Stripe source of truth. (2) `userId` mismatch - Clerk ID used for `UserSubscription.userId` FK but FK points to `User.id` (different UUID). (3) Upgrades (PRO→MAX) returned 400 "requires checkout" instead of modifying existing Stripe subscription. (4) Downgrade handler hardcoded `'monthly'` billing interval.
+
+**Changes**:
+1. **`lib/stripe/index.ts`** - Added `listActiveSubscriptions(customerId)` and `getPlanTypeFromPriceId(priceId)` shared helpers
+2. **`app/api/webhook/stripe/route.ts`** - Removed local `getPlanTypeFromPriceId`, imports from `lib/stripe`. Fixed `handleCheckoutCompleted` to resolve Clerk ID → DB user ID. Added `stripeCustomerId` to upsert update clause
+3. **`app/api/user/subscription/route.ts`** - Major refactor:
+   - GET: Resolves `clerkId` → `dbUser.id` before querying `UserSubscription`
+   - POST: Uses `dbUserId` for all DB ops, stores `clerkId` in Stripe metadata. **New Stripe-side duplicate check** - queries Stripe for active subs before checkout, syncs DB and returns 409 `action: 'use_put'` if found
+   - PUT: Resolves `clerkId` → `dbUser.id`. Accepts `billingInterval` param. **New upgrade support** - modifies existing Stripe subscription with `always_invoice` proration. Downgrade detects interval from Stripe instead of hardcoding `'monthly'`
+4. **`app/dashboard/page.tsx`** - Fixed checkout verification fallback to use `dbUser.id` instead of Clerk `user.id`
+5. **`app/subscribe/page.tsx`** - Added `handleUpgrade()` that calls PUT for paid→higher paid. `handleCheckout()` routes upgrades through PUT. Handles `action: 'use_put'` 409 response as fallback
+6. **`scripts/cleanup-duplicate-subscriptions.ts`** - One-time script: cancels duplicate Stripe subs (keeps most recent per customer), deletes orphaned records, syncs DB with Stripe. Supports `--dry-run`
+
+**Status**: Code complete, lint clean, build passes, 0 new TS errors. Cleanup script and manual testing pending.
 
 ---
 
 ## Recently Completed Sessions
+
+### E2E Pipeline Script Alignment with Production Architecture ✅ (2026-02-24)
+
+**Goal**: Rewrite `scripts/test-e2e-email.ts` to use production 3-phase pipeline code paths.
+
+**Problem**: E2E test used legacy monolithic approach, producing wrong results (Form 4 "BOUGHT $0", blank 10-K sections) because it bypassed extractor enrichment, content verification, and per-filing email templates.
+
+**Changes**: Exported `fetchFilingContentOptimized()` from `fetch-handler.ts`. Complete rewrite of `test-e2e-email.ts` with Discovery → Fetch → Verify → Summarize → Email using production functions.
+
+**Files**: `lib/cron/handlers/fetch-handler.ts`, `scripts/test-e2e-email.ts`
+
+### Fix Subscription State Not Updating + Dashboard/Subscribe UI Issues ✅ (2026-02-24)
+
+**PR**: [#352](https://github.com/wilfred-py/tldrsec-ai/pull/352)
+
+**Root Causes**: (1) Webhook handlers update `UserSubscription.planType` but never sync `User.subscriptionTier`. (2) No fallback when webhook hasn't fired. (3) Trial banner not receiving props. (4) Subscribe page UI issues.
+
+**Fixes**: Added `syncUserSubscriptionTier()` to all Stripe webhook handlers, checkout session verification fallback in dashboard, trial banner prop passing, subscribe page UI polish ($0 instead of "Free", no lightning icon for FREE).
+
+**Files**: `app/api/webhook/stripe/route.ts`, `lib/stripe/index.ts`, `app/dashboard/page.tsx`, `components/dashboard/dashboard-shell.tsx`, `app/subscribe/page.tsx`
+
+---
 
 ### Fix Subscribe Page Bugs + Downgrade Support ✅ (2026-02-20)
 
 **Problems**: (1) Plan shows as Pro after aborting checkout — upsert created subscription with requested planType before payment confirmed. (2) Back button navigated to Stripe checkout URL (browser history pollution from `window.location.href`). (3) No way to downgrade from Pro/Max.
 
 **Fixes**:
-- **`app/api/user/subscription/route.ts:349`** — Changed `planType: planType as 'FREE' | 'PRO' | 'MAX'` to `planType: 'FREE'` in upsert create clause. Stripe webhook still sets real planType on successful payment.
-- **`app/subscribe/page.tsx`** — `isCurrentPlan()` now checks `isActive` flag (inactive subscription = effectively FREE). Replaced `router.back()` with `router.push('/dashboard')` in 3 places (Back button, ESC handler, error page). Added `PLAN_RANK`, `getEffectivePlan()`, `getButtonType()` helpers. New downgrade button (outline style with ArrowDown icon) and confirmation Dialog.
-- **`app/subscribe/page.tsx`** — `handleDowngrade()` calls PUT `/api/user/subscription` with `{ cancelAtPeriodEnd: true }` for Free or `{ planType }` for paid-to-paid. Shows toast, refreshes subscription data.
-- **`app/api/webhook/stripe/route.ts`** — Added `syncUserSubscriptionTier()` helper to sync User.subscriptionTier on all webhook events
-- **`app/dashboard/page.tsx`**, **`lib/stripe/index.ts`** — Added checkout session verification fallback for webhook delays
+- **`app/api/user/subscription/route.ts:349`** — Changed planType to `'FREE'` in upsert create clause. Webhook sets real planType on success.
+- **`app/subscribe/page.tsx`** — `isCurrentPlan()` checks `isActive` flag. Replaced `router.back()` with `router.push('/dashboard')`. Added `PLAN_RANK`, `getEffectivePlan()`, `getButtonType()` helpers. New downgrade button + confirmation Dialog.
+- **`app/subscribe/page.tsx`** — `handleDowngrade()` calls PUT `/api/user/subscription`.
 
 ### Redirect Upgrade Links to /subscribe ✅ (2026-02-20)
 
 **Change**: Dashboard "Upgrade to add more" button and toast action now navigate to `/subscribe` instead of `/dashboard/billing`.
 
-**Files**: `components/dashboard/dashboard-client.tsx` — lines 219, 367 changed from `/dashboard/billing` to `/subscribe`.
+**Files**: `components/dashboard/dashboard-client.tsx` — lines 219, 367.
 
 ---
 
@@ -58,7 +95,8 @@
 - **Files**: `lib/cron/handlers/summarize-cached-handler.ts`, `__tests__/cron/handlers/summarize-cached-handler-validation.test.ts` (new, 10 tests), `__tests__/cron/handlers/summarize-cached-handler-fields.test.ts` (updated)
 - **Tests**: 14/14 handler tests pass, build passes, lint clean
 
-**Phase 3: Fix Duplicate Email Race Condition** - PENDING
+**Phase 3: Dedup Guard** ✅ (2026-02-19) - Included in PR #351. Added `sentToUser` + `SummaryEmailDelivery` dedup checks in `summarize-cached-handler.ts` to prevent duplicate emails on job retry.
+
 **Phase 4: Integration Testing and Regression Verification** - PENDING
 
 ---
@@ -429,34 +467,15 @@ Created: `lib/cron/secret-sanitization.ts` (CRON_SECRET auto-trim), removed 5% s
 
 ---
 
-### BAC 424B2 Filtering Breach Investigation ✅ (2026-01-25)
-
-User received BAC 424B2 email despite filtering. Root cause: BAC ticker had NULL preferences, 27/31 tickers had NULL preferences (87%). Fixed all 31 tickers with explicit preferences. Documented in `docs/investigation/`.
-
----
-
-### Prospectus Filing Type Preferences ✅ (2026-01-23)
-
-**PR**: [#335](https://github.com/wilfred-py/tldrsec-ai/pull/335)
-
-**Goal**: Add prospectus filing type preferences to reduce email volume. Users can now filter out 424B2 and similar filings.
-
----
-
-### Stripe Dashboard Integration Fixes ✅ (2026-01-25)
-
-Split `lib/stripe.ts` into `lib/stripe/plans.ts` (client-safe) + `lib/stripe/index.ts` (server-only). Fixed Price ID lookup with `getPriceIdForPlan()`. Migrated PlanType enum (BASIC/PROFESSIONAL/PREMIUM -> FREE/PRO/MAX). Created `scripts/sync-clerk-user.ts`.
-
----
-
 ## Archived Sessions (See TIMELINE.md for Full Details)
 
 For complete technical details of projects older than 30 days, see the weekly archive files in `.claude/history/`:
+- **January 2026**: BAC 424B2 investigation, Prospectus preferences, Stripe integration fixes, Pipeline stall recovery, and 30+ more
 - **December 2025**: 5 weekly archives with 100+ completed projects
 - **November 2025**: 4 weekly archives
 - **October 2025**: 2 weekly archives
 
 ---
 
-*Last Updated: 2026-02-20 (Subscription tier sync fixes, downgrade support, summary quality Phase 2)*
+*Last Updated: 2026-02-24 (E2E pipeline script alignment, subscription tier sync PR #352 completed)*
 *Completed projects older than 30 days are archived to .claude/history/ - See TIMELINE.md for complete historical context*
