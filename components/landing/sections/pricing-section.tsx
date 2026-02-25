@@ -51,7 +51,7 @@ function PricingCard({
 
   const ctaText =
     planKey === 'FREE'
-      ? 'Start Free'
+      ? 'Start Free Trial'
       : planKey === 'PRO'
         ? 'Start Pro Trial'
         : 'Start Max';
@@ -118,9 +118,6 @@ function PricingCard({
           )}
           {billingInterval === 'monthly' && planKey !== 'FREE' && (
             <p className="text-sm text-slate-500 mt-1">Billed monthly</p>
-          )}
-          {planKey === 'FREE' && (
-            <p className="text-sm text-slate-500 mt-1">Free forever</p>
           )}
         </div>
 
