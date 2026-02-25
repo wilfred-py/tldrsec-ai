@@ -21,12 +21,14 @@ export function Navigation() {
             </Link>
           </div>
 
-          <nav className="hidden md:flex items-center space-x-1">
-            <NavLink href="#features">Features</NavLink>
-            <NavLink href="#pricing">Pricing</NavLink>
-            <NavLink href="/changelog">Changelog</NavLink>
-            <NavLink href="/contact">Contact</NavLink>
-          </nav>
+          {!isAuthPage && (
+            <nav className="hidden md:flex items-center space-x-1">
+              <NavLink href="#features">Features</NavLink>
+              <NavLink href="#pricing">Pricing</NavLink>
+              <NavLink href="/changelog">Changelog</NavLink>
+              <NavLink href="/contact">Contact</NavLink>
+            </nav>
+          )}
 
           <div className="flex items-center">
             {!isLoading && !isAuthPage && (
