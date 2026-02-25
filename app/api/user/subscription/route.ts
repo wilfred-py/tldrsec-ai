@@ -37,7 +37,7 @@ export async function GET() {
       );
     }
 
-    // Resolve Clerk ID → DB user ID
+    // Resolve Clerk ID → DB user ID (CLAUDE.md #11: Clerk userId stored in authProviderId)
     const dbUser = await prisma.user.findFirst({
       where: { OR: [{ id: clerkId }, { authProviderId: clerkId }] },
       select: { id: true },

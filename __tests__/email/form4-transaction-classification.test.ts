@@ -53,6 +53,12 @@ describe('Form 4 Transaction Classification - All 21 SEC Codes', () => {
       expect(isAwardTransaction(tx({ type: 'PSU Award' }))).toBe(true);
     });
 
+    it('should return true for type containing "restricted stock"', () => {
+      expect(isAwardTransaction(tx({ type: 'Restricted Stock Units' }))).toBe(true);
+      expect(isAwardTransaction(tx({ type: 'Restricted Stock' }))).toBe(true);
+      expect(isAwardTransaction(tx({ type: 'restricted stock award' }))).toBe(true);
+    });
+
     it('should return false for transfers even with award-like text', () => {
       expect(isAwardTransaction(tx({ type: 'Trust Transfer Award', code: 'J' }))).toBe(false);
     });

@@ -214,7 +214,8 @@ export function isAwardTransaction(tx: TransactionData): boolean {
   if (code === 'A' || code === 'I') return true;
 
   if (type.includes('award') || type.includes('grant') ||
-      type.includes('rsu') || type.includes('psu')) {
+      type.includes('rsu') || type.includes('psu') ||
+      type.includes('restricted stock')) {
     return true;
   }
 
@@ -435,7 +436,7 @@ export function getTransactionTypeConfig(type: string): TransactionTypeConfig {
   }
 
   // Award type
-  if (typeLower.includes('award') || typeLower.includes('grant') || typeLower.includes('rsu') || typeLower.includes('psu')) {
+  if (typeLower.includes('award') || typeLower.includes('grant') || typeLower.includes('rsu') || typeLower.includes('psu') || typeLower.includes('restricted stock')) {
     return {
       label: 'Awarded',
       icon: '🏆',
@@ -808,19 +809,23 @@ export function Form4MinimalistTemplate({ filing }: Form4MinimalistTemplateProps
                                             color: config.valueColor,
                                             lineHeight: '1.2',
                                           }}>
-                                            {/* Show descriptive text for gift/transfer $0 transactions */}
+                                            {/* For $0 transactions: show shares as the hero number, not misleading "$0" */}
                                             {aggTx.totalValue === 0 && (aggTx.type === 'gift' || aggTx.type === 'transfer')
-                                              ? 'Gift (no monetary value)'
+                                              ? `${aggTx.sharesDisplay} shares`
+                                              : aggTx.totalValue === 0 && (aggTx.type === 'award' || aggTx.type === 'exercise' || aggTx.type === 'other')
+                                              ? `${aggTx.sharesDisplay} shares`
                                               : (aggTx.valueDisplay || '$0')}
                                           </div>
-                                          {/* Secondary info: shares count */}
+                                          {/* Secondary info: shares count (only when value is the hero) or price info */}
                                           <div style={{
                                             fontSize: '12px',
                                             color: config.textColor,
                                             opacity: 0.8,
                                             marginTop: '4px',
                                           }}>
-                                            {aggTx.sharesDisplay} shares{aggTx.avgPrice > 0 ? ` @ ${aggTx.priceDisplay}` : ''}
+                                            {aggTx.totalValue === 0
+                                              ? (aggTx.type === 'award' ? 'Equity compensation' : aggTx.type === 'gift' || aggTx.type === 'transfer' ? 'No monetary value' : `${aggTx.sharesDisplay} shares`)
+                                              : `${aggTx.sharesDisplay} shares${aggTx.avgPrice > 0 ? ` @ ${aggTx.priceDisplay}` : ''}`}
                                           </div>
                                           {/* SEC transaction code description for single transactions */}
                                           {aggTx.codeDescription && (
@@ -900,7 +905,12 @@ export function Form4MinimalistTemplate({ filing }: Form4MinimalistTemplateProps
                   STAKE IMPACT - Shows ownership change when transactions exist
                   Only displays when we have stake data AND transactions above
                   ═══════════════════════════════════════════════════════════ */}
-              {aggregatedTransactions.length > 0 && (previousStake || newStake || percentChange) && (
+              {/* Only show Ownership Impact when there's meaningful content to display */}
+              {aggregatedTransactions.length > 0 && (
+                (previousStake && newStake) || // Have before/after comparison
+                (newStake && percentChange) || // Have new stake with change
+                (previousStake && percentChange) // Have previous stake with change
+              ) && (
                 <table width="100%" cellPadding="0" cellSpacing="0" style={{ marginBottom: '16px' }}>
                   <tbody>
                     <tr>
@@ -961,11 +971,23 @@ export function Form4MinimalistTemplate({ filing }: Form4MinimalistTemplateProps
                               </div>
                             </>
                           ) : (
+                            /* Single stake value with optional percent change */
                             <div style={{
                               fontSize: '16px',
+                              fontWeight: 700,
                               color: EmailColors.text.headline,
                             }}>
                               {newStake || previousStake}
+                              {percentChange && (
+                                <span style={{
+                                  marginLeft: '8px',
+                                  fontSize: '14px',
+                                  fontWeight: 600,
+                                  color: percentChange.startsWith('-') ? '#DC2626' : percentChange.startsWith('+') ? '#16A34A' : EmailColors.text.meta,
+                                }}>
+                                  ({percentChange})
+                                </span>
+                              )}
                             </div>
                           )}
                         </div>
