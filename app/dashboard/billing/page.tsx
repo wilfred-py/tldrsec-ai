@@ -15,9 +15,11 @@ import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { Switch } from '@/components/ui/switch';
 import {
+  ArrowLeft,
   CreditCard,
   AlertTriangle,
-  Clock
+  Clock,
+  Sparkles
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
@@ -145,7 +147,8 @@ export default function BillingPage() {
 
   const currentPlanKey = subscription?.planType;
   const currentPlanConfig = currentPlanKey ? SUBSCRIPTION_PLANS[currentPlanKey] : null;
-  const currentPrice = currentPlanKey === 'FREE'
+  const isFree = currentPlanKey === 'FREE';
+  const currentPrice = isFree
     ? '$0/month'
     : currentPlanConfig
       ? `$${currentPlanConfig.monthlyPrice}/month`
@@ -155,6 +158,15 @@ export default function BillingPage() {
     <div className="container mx-auto py-8 space-y-8">
       {/* Header */}
       <div>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="mb-4 -ml-2 text-gray-600 hover:text-gray-900"
+          onClick={() => router.push('/dashboard')}
+        >
+          <ArrowLeft className="h-4 w-4 mr-1" />
+          Back to Dashboard
+        </Button>
         <h1 className="text-3xl font-bold tracking-tight">Billing & Subscription</h1>
         <p className="text-gray-600 mt-2">
           Manage your subscription, billing, and payment methods
@@ -192,12 +204,14 @@ export default function BillingPage() {
               </p>
             </div>
 
-            <div className="text-sm">
-              <p className="text-gray-500">Billing Period</p>
-              <p className="font-medium">
-                Renews on {format(new Date(subscription.currentPeriodEnd), 'MMMM d, yyyy')}
-              </p>
-            </div>
+            {!isFree && (
+              <div className="text-sm">
+                <p className="text-gray-500">Billing Period</p>
+                <p className="font-medium">
+                  Renews on {format(new Date(subscription.currentPeriodEnd), 'MMMM d, yyyy')}
+                </p>
+              </div>
+            )}
 
             {subscription.cancelAtPeriodEnd && (
               <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
@@ -214,20 +228,32 @@ export default function BillingPage() {
             <Separator />
 
             <div className="flex gap-2">
-              <Button variant="outline" onClick={openStripePortal} disabled={!subscription.stripeCustomerId}>
-                <CreditCard className="h-4 w-4 mr-2" />
-                Manage Payment Methods
-              </Button>
-              <div className="flex items-center gap-2">
-                <Switch
-                  checked={!subscription.cancelAtPeriodEnd}
-                  onCheckedChange={handleCancelToggle}
-                  disabled={updatingCancellation}
-                />
-                <span className="text-sm">
-                  {subscription.cancelAtPeriodEnd ? 'Reactivate' : 'Cancel'} at period end
-                </span>
-              </div>
+              {isFree ? (
+                <Button
+                  onClick={() => router.push('/subscribe')}
+                  className="bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 text-white shadow-md hover:shadow-lg transition-all duration-200"
+                >
+                  <Sparkles className="h-4 w-4 mr-2" />
+                  Upgrade Plan
+                </Button>
+              ) : (
+                <>
+                  <Button variant="outline" onClick={openStripePortal} disabled={!subscription.stripeCustomerId}>
+                    <CreditCard className="h-4 w-4 mr-2" />
+                    Manage Payment Methods
+                  </Button>
+                  <div className="flex items-center gap-2">
+                    <Switch
+                      checked={!subscription.cancelAtPeriodEnd}
+                      onCheckedChange={handleCancelToggle}
+                      disabled={updatingCancellation}
+                    />
+                    <span className="text-sm">
+                      {subscription.cancelAtPeriodEnd ? 'Reactivate' : 'Cancel'} at period end
+                    </span>
+                  </div>
+                </>
+              )}
             </div>
           </CardContent>
         </Card>

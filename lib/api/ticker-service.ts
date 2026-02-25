@@ -1,4 +1,4 @@
-import { Company, TickerSearchResult, ApiResponse, FilingPreferences } from './types';
+import { Company, TickerSearchResult, ApiResponse, ApiError, FilingPreferences } from './types';
 import { AVAILABLE_TICKERS } from './mock-data';
 
 // Environment check for API vs mock mode
@@ -168,17 +168,31 @@ export async function addTrackedCompany(symbol: string, name: string): Promise<A
         });
         
         if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.error || `API error: ${response.status}`);
+          const errorData = await response.json() as Record<string, unknown>;
+          // Propagate tier limit info so the UI can show a specific message
+          if (response.status === 403 && errorData.limitReached) {
+            return {
+              error: {
+                status: 403,
+                message: (errorData.error as string) || 'Ticker limit reached',
+                limitReached: true,
+                currentTier: errorData.currentTier as string,
+                maxTickers: errorData.maxTickers as number,
+                currentCount: errorData.currentCount as number,
+                upgradeRequired: errorData.upgradeRequired as boolean,
+              } as unknown as ApiError,
+            };
+          }
+          throw new Error((errorData.error as string) || `API error: ${response.status}`);
         }
-        
+
         const data = await response.json();
-        
-        // If the ticker was already being tracked, data is still returned, so we 
+
+        // If the ticker was already being tracked, data is still returned, so we
         // should adjust the return value to avoid confusing the user
-        return { 
+        return {
           data,
-          // Note that we're not setting an error here because the API already 
+          // Note that we're not setting an error here because the API already
           // returns the existing ticker if it exists
          };
       } catch (apiError) {

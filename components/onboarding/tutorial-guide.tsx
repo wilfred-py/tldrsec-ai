@@ -365,18 +365,20 @@ export function TutorialGuide({
   
   return (
     <>
-      {/* Semi-transparent overlay - prevent clicks from exiting tutorial */}
-      <div 
-        className="fixed inset-0 bg-black/50 z-40 h-[100vh] w-[100vw]" 
-        onClick={(e) => {
-          e.preventDefault();
-          e.stopPropagation();
-        }} 
-      />
-      
+      {/* Click-blocking overlay for steps with no highlighted element (e.g. email step) */}
+      {!highlightedElement && (
+        <div
+          className="fixed inset-0 bg-black/50 z-[9998]"
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+          }}
+        />
+      )}
+
       {/* Tutorial tooltip */}
-      <div 
-        className="fixed z-50 bg-card border rounded-xl shadow-lg w-[90vw] sm:w-[350px] max-w-[350px] p-4 animate-in fade-in slide-in-from-top-4 duration-300"
+      <div
+        className="fixed z-[10000] bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-700 rounded-xl shadow-2xl w-[90vw] sm:w-[350px] max-w-[350px] p-4 animate-in fade-in slide-in-from-top-4 duration-300"
         style={{
           top: tooltipPosition.top,
           left: tooltipPosition.left,

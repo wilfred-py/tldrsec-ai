@@ -146,13 +146,14 @@ export async function GET() {
  */
 export async function POST(request: NextRequest) {
   try {
-    const { userId } = await auth();
-    if (!userId) {
+    const { userId: clerkId } = await auth();
+    if (!clerkId) {
       return NextResponse.json(
         { error: 'Authentication required' },
         { status: 401 }
       );
     }
+    // Keep clerkId for Stripe metadata, resolve DB user ID below
 
     if (!isStripeEnabled()) {
       return NextResponse.json(
@@ -233,8 +234,8 @@ export async function POST(request: NextRequest) {
     let user = await prisma.user.findFirst({
       where: {
         OR: [
-          { id: userId },
-          { authProviderId: userId },
+          { id: clerkId },
+          { authProviderId: clerkId },
           { email: primaryEmail }
         ]
       },
@@ -249,10 +250,10 @@ export async function POST(request: NextRequest) {
     if (!user) {
       user = await prisma.user.create({
         data: {
-          id: userId,
+          id: clerkId,
           email: primaryEmail,
           authProvider: 'clerk',
-          authProviderId: userId,
+          authProviderId: clerkId,
           name: userName,
           subscriptionTier: 'FREE',
           onboardingCompleted: true,
@@ -263,12 +264,15 @@ export async function POST(request: NextRequest) {
           name: true,
         },
       });
-      console.log(`[subscription] Auto-created user ${userId} for checkout`);
+      console.log(`[subscription] Auto-created user ${clerkId} for checkout`);
     }
+
+    // Use resolved DB user ID for all DB operations
+    const dbUserId = user.id;
 
     // Check if user already has a subscription
     const existingSubscription = await prisma.userSubscription.findUnique({
-      where: { userId },
+      where: { userId: dbUserId },
     });
 
     if (existingSubscription && existingSubscription.isActive) {
@@ -280,14 +284,14 @@ export async function POST(request: NextRequest) {
 
     // Create or get Stripe customer
     let stripeCustomerId = existingSubscription?.stripeCustomerId;
-    
+
     if (!stripeCustomerId) {
       const { createCustomer } = await import('../../../../lib/stripe');
       const customer = await createCustomer({
         email: user.email,
         name: user.name || undefined,
         metadata: {
-          userId,
+          userId: clerkId, // Store Clerk ID in Stripe metadata for webhook resolution
           planType,
         },
       });
@@ -302,11 +306,57 @@ export async function POST(request: NextRequest) {
           email: user.email,
           name: user.name || undefined,
           metadata: {
-            userId,
+            userId: clerkId,
             planType,
           },
         });
         stripeCustomerId = newCustomer.id;
+      }
+    }
+
+    // Check Stripe for active subscriptions (source of truth)
+    // This catches cases where DB says inactive but Stripe has an active sub
+    if (stripeCustomerId) {
+      const { listActiveSubscriptions } = await import('../../../../lib/stripe');
+      const activeSubs = await listActiveSubscriptions(stripeCustomerId);
+      if (activeSubs.length > 0) {
+        // Sync DB state from Stripe
+        const latestSub = activeSubs[0];
+        const { getPlanTypeFromPriceId: getPlan } = await import('../../../../lib/stripe');
+        const activePlanType = getPlan(latestSub.items.data[0]?.price.id);
+        // Access period fields via cast (available at runtime despite TS API version mismatch)
+        const subData = latestSub as unknown as { current_period_start: number; current_period_end: number };
+        const periodStart = new Date(subData.current_period_start * 1000);
+        const periodEnd = new Date(subData.current_period_end * 1000);
+        await prisma.userSubscription.upsert({
+          where: { userId: dbUserId },
+          update: {
+            planType: activePlanType,
+            stripeSubscriptionId: latestSub.id,
+            stripeCustomerId,
+            isActive: true,
+            currentPeriodStart: periodStart,
+            currentPeriodEnd: periodEnd,
+            updatedAt: new Date(),
+          },
+          create: {
+            userId: dbUserId,
+            planType: activePlanType,
+            stripeSubscriptionId: latestSub.id,
+            stripeCustomerId,
+            isActive: true,
+            currentPeriodEnd: periodEnd,
+          },
+        });
+        console.log(`[subscription] Synced existing Stripe sub ${latestSub.id} for user ${dbUserId}`);
+        return NextResponse.json(
+          {
+            error: 'User already has an active subscription in Stripe',
+            action: 'use_put',
+            currentPlan: activePlanType,
+          },
+          { status: 409 }
+        );
       }
     }
 
@@ -336,7 +386,7 @@ export async function POST(request: NextRequest) {
       successUrl: `${appUrl}/dashboard?subscription_success=true&session_id={CHECKOUT_SESSION_ID}`,
       cancelUrl,
       metadata: {
-        userId,
+        userId: clerkId, // Store Clerk ID for webhook resolution
         planType,
         billingInterval, // Track whether monthly or annual
       },
@@ -344,14 +394,14 @@ export async function POST(request: NextRequest) {
 
     // Update or create subscription record with customer ID
     await prisma.userSubscription.upsert({
-      where: { userId },
+      where: { userId: dbUserId },
       update: {
         stripeCustomerId,
         updatedAt: new Date(),
       },
       create: {
-        userId,
-        planType: planType as 'FREE' | 'PRO' | 'MAX',
+        userId: dbUserId,
+        planType: 'FREE', // Stays FREE until Stripe webhook confirms payment
         isActive: false, // Will be activated by webhook
         currentPeriodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days from now
         stripeCustomerId,
@@ -379,17 +429,25 @@ export async function POST(request: NextRequest) {
  */
 export async function PUT(request: NextRequest) {
   try {
-    const { userId } = await auth();
-    if (!userId) {
+    const { userId: clerkId } = await auth();
+    if (!clerkId) {
       return NextResponse.json(
         { error: 'Authentication required' },
         { status: 401 }
       );
     }
 
+    // Resolve Clerk ID → DB user ID
+    const dbUser = await prisma.user.findFirst({
+      where: { OR: [{ id: clerkId }, { authProviderId: clerkId }] },
+      select: { id: true },
+    });
+    const userId = dbUser?.id ?? clerkId;
+
     const body = await request.json();
-    const { planType, cancelAtPeriodEnd } = body as {
+    const { planType, billingInterval: requestedInterval, cancelAtPeriodEnd } = body as {
       planType?: NewPlanKey;
+      billingInterval?: BillingInterval;
       cancelAtPeriodEnd?: boolean;
     };
 
@@ -468,35 +526,83 @@ export async function PUT(request: NextRequest) {
         });
       }
 
-      // Upgrade or change between paid plans
-      if (newPlanOrder > currentOrder || (newPlanOrder !== currentOrder && newPlanOrder > 0)) {
-        // For upgrades or plan changes, redirect to checkout
-        // This ensures proper payment handling through Stripe
-        return NextResponse.json(
-          {
-            error: 'Plan upgrades require checkout',
-            action: 'checkout',
+      // Upgrade between paid plans (PRO -> MAX)
+      if (newPlanOrder > currentOrder && newPlanOrder > 0) {
+        if (!userSubscription.stripeSubscriptionId || !isStripeEnabled()) {
+          return NextResponse.json(
+            { error: 'No active Stripe subscription to upgrade' },
+            { status: 400 }
+          );
+        }
+
+        const { getSubscription, updateSubscription } = await import('../../../../lib/stripe');
+
+        // Get current subscription to find the item ID and detect billing interval
+        const stripeSubscription = await getSubscription(userSubscription.stripeSubscriptionId);
+        if (!stripeSubscription || stripeSubscription.items.data.length === 0) {
+          return NextResponse.json(
+            { error: 'Could not retrieve Stripe subscription' },
+            { status: 500 }
+          );
+        }
+
+        // Use requested interval if provided, otherwise detect from current subscription
+        const currentInterval = stripeSubscription.items.data[0].price.recurring?.interval;
+        const billingInterval: BillingInterval = requestedInterval
+          ?? (currentInterval === 'year' ? 'annual' : 'monthly');
+
+        const priceId = getPriceIdForPlan(planType as 'PRO' | 'MAX', billingInterval);
+        if (!priceId) {
+          return NextResponse.json(
+            { error: `Price ID not configured for ${planType} ${billingInterval}` },
+            { status: 503 }
+          );
+        }
+
+        const itemId = stripeSubscription.items.data[0].id;
+
+        // Update subscription with new price (immediate prorated charge for upgrades)
+        await updateSubscription(userSubscription.stripeSubscriptionId, {
+          items: [{
+            id: itemId,
+            price: priceId,
+          }],
+          proration_behavior: 'always_invoice',
+        });
+
+        // Update database
+        const updated = await prisma.userSubscription.update({
+          where: { userId },
+          data: {
             planType,
+            cancelAtPeriodEnd: false, // Clear any pending cancellation on upgrade
+            updatedAt: new Date(),
           },
-          { status: 400 }
-        );
+        });
+
+        // Also update user's subscription tier
+        await prisma.user.update({
+          where: { id: userId },
+          data: { subscriptionTier: planType },
+        });
+
+        return NextResponse.json({
+          planType: updated.planType,
+          isActive: updated.isActive,
+          currentPeriodEnd: updated.currentPeriodEnd,
+          cancelAtPeriodEnd: updated.cancelAtPeriodEnd,
+          stripeCustomerId: updated.stripeCustomerId,
+          stripeSubscriptionId: updated.stripeSubscriptionId,
+          message: `Successfully upgraded to ${planType}`,
+        });
       }
 
       // Downgrade between paid plans (MAX -> PRO)
       if (newPlanOrder < currentOrder && newPlanOrder > 0) {
-        // For downgrades between paid plans, update in Stripe
         if (userSubscription.stripeSubscriptionId && isStripeEnabled()) {
-          const priceId = getPriceIdForPlan(planType as 'PRO' | 'MAX', 'monthly');
-          if (!priceId) {
-            return NextResponse.json(
-              { error: `Price ID not configured for ${planType}` },
-              { status: 503 }
-            );
-          }
-
           const { getSubscription, updateSubscription } = await import('../../../../lib/stripe');
 
-          // Get current subscription to find the item ID
+          // Get current subscription to find the item ID and detect billing interval
           const stripeSubscription = await getSubscription(userSubscription.stripeSubscriptionId);
           if (!stripeSubscription || stripeSubscription.items.data.length === 0) {
             return NextResponse.json(
@@ -505,9 +611,22 @@ export async function PUT(request: NextRequest) {
             );
           }
 
+          // Use requested interval if provided, otherwise detect from current subscription
+          const currentInterval = stripeSubscription.items.data[0].price.recurring?.interval;
+          const billingInterval: BillingInterval = requestedInterval
+            ?? (currentInterval === 'year' ? 'annual' : 'monthly');
+
+          const priceId = getPriceIdForPlan(planType as 'PRO' | 'MAX', billingInterval);
+          if (!priceId) {
+            return NextResponse.json(
+              { error: `Price ID not configured for ${planType} ${billingInterval}` },
+              { status: 503 }
+            );
+          }
+
           const itemId = stripeSubscription.items.data[0].id;
 
-          // Update subscription with new price (prorated, takes effect at period end)
+          // Update subscription with new price (prorated credit for downgrades)
           await updateSubscription(userSubscription.stripeSubscriptionId, {
             items: [{
               id: itemId,
@@ -526,7 +645,7 @@ export async function PUT(request: NextRequest) {
           },
         });
 
-        // Also update user's subscription tier (now aligned with plan type)
+        // Also update user's subscription tier
         await prisma.user.update({
           where: { id: userId },
           data: { subscriptionTier: planType },

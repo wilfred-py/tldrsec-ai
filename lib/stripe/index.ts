@@ -290,6 +290,24 @@ export async function cancelSubscription(subscriptionId: string, atPeriodEnd = t
 }
 
 /**
+ * Retrieve a checkout session by ID (for post-redirect verification)
+ */
+export async function retrieveCheckoutSession(sessionId: string): Promise<Stripe.Checkout.Session | null> {
+  if (!stripe) {
+    throw new Error('Stripe not configured');
+  }
+
+  try {
+    return await stripe.checkout.sessions.retrieve(sessionId);
+  } catch (error) {
+    if (error instanceof Stripe.errors.StripeError && error.code === 'resource_missing') {
+      return null;
+    }
+    throw error;
+  }
+}
+
+/**
  * Update subscription
  */
 export async function updateSubscription(
@@ -301,4 +319,45 @@ export async function updateSubscription(
   }
 
   return await stripe.subscriptions.update(subscriptionId, updates);
+}
+
+/**
+ * List active subscriptions for a Stripe customer.
+ * Used to check Stripe as source of truth before creating new checkout sessions.
+ */
+export async function listActiveSubscriptions(
+  customerId: string
+): Promise<Stripe.Subscription[]> {
+  if (!stripe) {
+    throw new Error('Stripe not configured');
+  }
+
+  const subscriptions = await stripe.subscriptions.list({
+    customer: customerId,
+    status: 'active',
+  });
+
+  return subscriptions.data;
+}
+
+/**
+ * Derive plan type from Stripe price ID.
+ * Returns FREE if price ID doesn't match any configured plan.
+ */
+export function getPlanTypeFromPriceId(priceId: string | undefined): 'FREE' | 'PRO' | 'MAX' {
+  if (!priceId) return 'FREE';
+
+  const proMonthlyPriceId = process.env.STRIPE_PRO_MONTHLY_PRICE_ID;
+  const proAnnualPriceId = process.env.STRIPE_PRO_ANNUAL_PRICE_ID;
+  const maxMonthlyPriceId = process.env.STRIPE_MAX_MONTHLY_PRICE_ID;
+  const maxAnnualPriceId = process.env.STRIPE_MAX_ANNUAL_PRICE_ID;
+
+  if (priceId === proMonthlyPriceId || priceId === proAnnualPriceId) {
+    return 'PRO';
+  }
+  if (priceId === maxMonthlyPriceId || priceId === maxAnnualPriceId) {
+    return 'MAX';
+  }
+
+  return 'FREE';
 }

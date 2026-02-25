@@ -4,10 +4,10 @@ function Skeleton({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
       data-slot="skeleton"
-      className={cn("relative overflow-hidden rounded-md bg-muted/60", className)}
+      className={cn("relative overflow-hidden rounded-md bg-gray-200 dark:bg-zinc-700", className)}
       {...props}
     >
-      <div className="absolute inset-0 -translate-x-full animate-shimmer bg-gradient-to-r from-transparent via-muted-foreground/10 to-transparent" />
+      <div className="absolute inset-0 -translate-x-full animate-shimmer bg-gradient-to-r from-transparent via-gray-300 dark:via-zinc-600 to-transparent" />
     </div>
   )
 }

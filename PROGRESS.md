@@ -1,14 +1,76 @@
 # Project Progress
 
-**Date**: 2026-02-19
-**Branch**: summary-quality-review (worktree)
-**Status**: Summary Quality Fixes - Phase 2 complete, Phase 3 pending
+**Date**: 2026-02-24
+**Branch**: main
+**Status**: Stripe duplicate subscription fix and upgrade/downgrade flow (in progress)
 
 ---
 
 ## Current Session
 
-### Summary Quality Fixes: Form 4 Classification, 10-K Blank Sections, Duplicate Emails (2026-02-18 → ongoing)
+### Fix Stripe Duplicate Subscriptions & Upgrade/Downgrade Flow (2026-02-24)
+
+**Goal**: Fix 4 duplicate Stripe subscriptions across 2 customers, orphaned DB records from userId mismatch, and upgrades creating new subs instead of modifying existing ones.
+
+**Root Causes**: (1) POST handler only checked `isActive` in DB, not Stripe source of truth. (2) `userId` mismatch - Clerk ID used for `UserSubscription.userId` FK but FK points to `User.id` (different UUID). (3) Upgrades (PRO→MAX) returned 400 "requires checkout" instead of modifying existing Stripe subscription. (4) Downgrade handler hardcoded `'monthly'` billing interval.
+
+**Changes**:
+1. **`lib/stripe/index.ts`** - Added `listActiveSubscriptions(customerId)` and `getPlanTypeFromPriceId(priceId)` shared helpers
+2. **`app/api/webhook/stripe/route.ts`** - Removed local `getPlanTypeFromPriceId`, imports from `lib/stripe`. Fixed `handleCheckoutCompleted` to resolve Clerk ID → DB user ID. Added `stripeCustomerId` to upsert update clause
+3. **`app/api/user/subscription/route.ts`** - Major refactor:
+   - GET: Resolves `clerkId` → `dbUser.id` before querying `UserSubscription`
+   - POST: Uses `dbUserId` for all DB ops, stores `clerkId` in Stripe metadata. **New Stripe-side duplicate check** - queries Stripe for active subs before checkout, syncs DB and returns 409 `action: 'use_put'` if found
+   - PUT: Resolves `clerkId` → `dbUser.id`. Accepts `billingInterval` param. **New upgrade support** - modifies existing Stripe subscription with `always_invoice` proration. Downgrade detects interval from Stripe instead of hardcoding `'monthly'`
+4. **`app/dashboard/page.tsx`** - Fixed checkout verification fallback to use `dbUser.id` instead of Clerk `user.id`
+5. **`app/subscribe/page.tsx`** - Added `handleUpgrade()` that calls PUT for paid→higher paid. `handleCheckout()` routes upgrades through PUT. Handles `action: 'use_put'` 409 response as fallback
+6. **`scripts/cleanup-duplicate-subscriptions.ts`** - One-time script: cancels duplicate Stripe subs (keeps most recent per customer), deletes orphaned records, syncs DB with Stripe. Supports `--dry-run`
+
+**Status**: Code complete, lint clean, build passes, 0 new TS errors. Cleanup script and manual testing pending.
+
+---
+
+## Recently Completed Sessions
+
+### E2E Pipeline Script Alignment with Production Architecture ✅ (2026-02-24)
+
+**Goal**: Rewrite `scripts/test-e2e-email.ts` to use production 3-phase pipeline code paths.
+
+**Problem**: E2E test used legacy monolithic approach, producing wrong results (Form 4 "BOUGHT $0", blank 10-K sections) because it bypassed extractor enrichment, content verification, and per-filing email templates.
+
+**Changes**: Exported `fetchFilingContentOptimized()` from `fetch-handler.ts`. Complete rewrite of `test-e2e-email.ts` with Discovery → Fetch → Verify → Summarize → Email using production functions.
+
+**Files**: `lib/cron/handlers/fetch-handler.ts`, `scripts/test-e2e-email.ts`
+
+### Fix Subscription State Not Updating + Dashboard/Subscribe UI Issues ✅ (2026-02-24)
+
+**PR**: [#352](https://github.com/wilfred-py/tldrsec-ai/pull/352)
+
+**Root Causes**: (1) Webhook handlers update `UserSubscription.planType` but never sync `User.subscriptionTier`. (2) No fallback when webhook hasn't fired. (3) Trial banner not receiving props. (4) Subscribe page UI issues.
+
+**Fixes**: Added `syncUserSubscriptionTier()` to all Stripe webhook handlers, checkout session verification fallback in dashboard, trial banner prop passing, subscribe page UI polish ($0 instead of "Free", no lightning icon for FREE).
+
+**Files**: `app/api/webhook/stripe/route.ts`, `lib/stripe/index.ts`, `app/dashboard/page.tsx`, `components/dashboard/dashboard-shell.tsx`, `app/subscribe/page.tsx`
+
+---
+
+### Fix Subscribe Page Bugs + Downgrade Support ✅ (2026-02-20)
+
+**Problems**: (1) Plan shows as Pro after aborting checkout — upsert created subscription with requested planType before payment confirmed. (2) Back button navigated to Stripe checkout URL (browser history pollution from `window.location.href`). (3) No way to downgrade from Pro/Max.
+
+**Fixes**:
+- **`app/api/user/subscription/route.ts:349`** — Changed planType to `'FREE'` in upsert create clause. Webhook sets real planType on success.
+- **`app/subscribe/page.tsx`** — `isCurrentPlan()` checks `isActive` flag. Replaced `router.back()` with `router.push('/dashboard')`. Added `PLAN_RANK`, `getEffectivePlan()`, `getButtonType()` helpers. New downgrade button + confirmation Dialog.
+- **`app/subscribe/page.tsx`** — `handleDowngrade()` calls PUT `/api/user/subscription`.
+
+### Redirect Upgrade Links to /subscribe ✅ (2026-02-20)
+
+**Change**: Dashboard "Upgrade to add more" button and toast action now navigate to `/subscribe` instead of `/dashboard/billing`.
+
+**Files**: `components/dashboard/dashboard-client.tsx` — lines 219, 367.
+
+---
+
+### Summary Quality Fixes: Form 4 Classification, 10-K Blank Sections, Duplicate Emails (2026-02-18 → 2026-02-19)
 
 **Branch**: `summary-quality-review` | **Plan**: `docs/plans/2026-02-18-summary-quality-fixes.md` | **Research**: `thoughts/shared/research/2026-02-18-summary-quality-review.md`
 
@@ -33,35 +95,65 @@
 - **Files**: `lib/cron/handlers/summarize-cached-handler.ts`, `__tests__/cron/handlers/summarize-cached-handler-validation.test.ts` (new, 10 tests), `__tests__/cron/handlers/summarize-cached-handler-fields.test.ts` (updated)
 - **Tests**: 14/14 handler tests pass, build passes, lint clean
 
-**Phase 3: Fix Duplicate Email Race Condition** - PENDING
+**Phase 3: Dedup Guard** ✅ (2026-02-19) - Included in PR #351. Added `sentToUser` + `SummaryEmailDelivery` dedup checks in `summarize-cached-handler.ts` to prevent duplicate emails on job retry.
+
 **Phase 4: Integration Testing and Regression Verification** - PENDING
 
 ---
 
-### Fix Dashboard Slow Load After Sign-In (2026-02-19)
+### Back to Dashboard Button on Billing Page ✅ (2026-02-19)
+
+Added "Back to Dashboard" navigation button to `app/dashboard/billing/page.tsx`.
+
+---
+
+### Tutorial Overlay Bug Fixes ✅ (2026-02-19)
+
+**Problems**: (1) Tutorial showed for existing users who already completed it or had tickers. (2) No spotlight/cut-out effect on highlighted element — just a flat overlay. (3) Tooltip appeared grayed out behind overlay.
+
+**Fixes**:
+- **`app/dashboard/page.tsx`** - Read `tutorialCompletedAt` from DB user, pass `tutorialCompleted` prop to client
+- **`components/dashboard/dashboard-client.tsx`** - Skip tutorial if `tutorialCompleted || initialCompanies.length > 0`
+- **`app/globals.css`** - Replaced z-index overlay approach with `box-shadow: 0 0 0 9999px rgba(0,0,0,0.5)` spotlight technique. Removed forced `background-color: white !important` overrides
+- **`components/onboarding/tutorial-guide.tsx`** - Removed always-present overlay div, added conditional overlay only for non-highlighted steps. Tooltip: `z-[10000] bg-white dark:bg-zinc-900` with explicit borders
+
+---
+
+### Dashboard Skeleton Refinement ✅ (2026-02-19)
+
+**Goal**: Make loading skeleton match actual dashboard DOM structure for seamless transition.
+
+**Changes**:
+- **`app/dashboard/loading.tsx`** - Rewrote to mirror `DashboardClient` layout (landing-card container, header spacing, table structure)
+- **Tests** - Updated to mock `/api/user/tickers` instead of `/api/companies`, test `initialCompanies` prop instead of async fetch
+
+---
+
+### Sign-Up Page Skeleton + Auth Nav Cleanup ✅ (2026-02-19)
+
+**Changes**:
+- **`app/(auth)/sign-up/[[...sign-up]]/page.tsx`** - Added shimmer skeleton matching Clerk form layout, visible during Clerk JS hydration. Uses MutationObserver to detect `.cl-card` render
+- **`components/navigation.tsx`** - Hide sign-in/get-started nav buttons on `/sign-in` and `/sign-up` paths
+
+---
+
+### Fix Dashboard Slow Load After Sign-In ✅ (2026-02-19)
 
 **Problem**: Dashboard took 4-6s to show meaningful content after sign-in due to sequential waterfall: server-side `currentUser()` → client-side Clerk `useUser()` (2-3s blocking via ProtectedRoute) → client-side API fetch for tickers → render.
 
 **Fix** (4 changes):
-1. **`components/dashboard/dashboard-shell.tsx`** - Removed `ProtectedRoute` wrapper (redundant — auth already enforced by Clerk middleware + server-side `currentUser()` in page.tsx). Eliminates 2-3s client-side Clerk blocking.
-2. **`app/dashboard/page.tsx`** - Added server-side Prisma query to fetch user's tickers after `currentUser()`. Uses `_count` + `take: 1` for efficient query. Passes results as `initialCompanies` prop. Falls back gracefully on error.
-3. **`components/dashboard/dashboard-client.tsx`** - Added `initialCompanies` prop (defaults to `[]`). Initializes `companies` state with server data. Skips initial `loadCompanies()` API call when data provided. `loadCompanies` still available for mutations.
-4. **`app/api/user/tickers/route.ts`** - Optimized GET query: `_count: { select: { summaries: true } }` + `take: 1` instead of loading all summaries. Applied to both main query and auto-create path.
+1. **`components/dashboard/dashboard-shell.tsx`** - Removed `ProtectedRoute` wrapper (redundant — auth already enforced by Clerk middleware + server-side `currentUser()` in page.tsx)
+2. **`app/dashboard/page.tsx`** - Added server-side Prisma query to fetch user's tickers. Uses `_count` + `take: 1` for efficient query. Passes `initialCompanies` prop
+3. **`components/dashboard/dashboard-client.tsx`** - Added `initialCompanies` prop. Skips initial API call when data provided
+4. **`app/api/user/tickers/route.ts`** - Optimized GET query with `_count` + `take: 1`
 
-**Result**: Dashboard renders with data in ~1s (loading.tsx skeleton visible during server fetch). No new test regressions.
-
-**Status**: Implemented, not yet committed.
+**Result**: Dashboard renders with data in ~1s.
 
 ---
 
-### Auth Redirect for Logged-In Users (2026-02-18)
+### Auth Redirect for Logged-In Users ✅ (2026-02-18)
 
-**Goal**: Redirect authenticated users visiting `/sign-up` or `/sign-in` to `/dashboard` instead of `/onboarding`.
-
-**Changes**:
-- **`middleware.ts`** - Added `auth()` check inside Clerk middleware callback. If `userId` exists and pathname starts with `/sign-up` or `/sign-in`, redirects to `/dashboard`.
-
-**Status**: Implemented, not yet committed.
+**Change**: `middleware.ts` - Redirect authenticated users visiting `/sign-up` or `/sign-in` to `/dashboard`.
 
 ---
 
@@ -109,6 +201,7 @@
 **Root Cause**: summaryJSON field was being discarded, forcing email templates to rely on regex fallbacks that fail with natural language variations.
 
 ---
+
 ### Skeleton Loading States for Billing & Subscribe ✅ (2026-02-14)
 
 **Goal**: Replace white-screen/generic loading fallbacks on `/dashboard/billing` and `/subscribe` with layout-matching skeleton loading states using the existing `Skeleton` component.
@@ -142,8 +235,6 @@
 **Files**: `components/providers/`, `app/api/user/subscription/status/`, `components/landing/sections-v2/pricing-card.tsx`, `components/landing/sections-v2/pricing-section-v2.tsx`
 
 ---
-
-## Recently Completed Sessions
 
 ### TrialService User Lookup Fix ✅ (2026-02-12)
 
@@ -310,100 +401,47 @@ Added Agent Guidelines section to CLAUDE.md (Common Mistakes, Pattern References
 
 ### Unified Subscription Tiers + Billing Downgrade Fix ✅ (2026-01-28)
 
-**Issues**: 405 PUT errors on billing downgrade; Prisma enum mismatch between `SubscriptionTier` and `PlanType`.
-
-**Fixes**:
-- Added PUT handler to `app/api/user/subscription/route.ts` (cancellation, downgrade, upgrade redirect)
-- Unified `SubscriptionTier` enum to `FREE/PRO/MAX` in `prisma/schema.prisma`
-- Created `scripts/migrate-to-unified-tiers.ts` - migrated HOBBY->FREE
-- Updated `lib/cron/tier-eligibility.ts` normalization
-
----
+405 PUT errors + Prisma enum mismatch. Added PUT handler to subscription route, unified `SubscriptionTier` enum to FREE/PRO/MAX, created migration script.
 
 ### Pipeline Stall Recovery + Throughput Optimization ✅ (2026-01-28)
 
-**Issue**: Pipeline stalled 12+ hours, 799 pending jobs, throughput only 12 jobs/hour.
-
-**Root Causes**: `vercel.json` invalid JSON (trailing commas), Cloudflare Worker crons stopped, CRON_SECRET sync issue, low summarize batch frequency.
-
-**Fixes**: Fixed vercel.json, redeployed CF Worker, synced secrets, added dedicated */3 summarize-only cron. Throughput improved from 12 to 130+ jobs/hour.
-
----
+Pipeline stalled 12h, 799 pending jobs. Fixed vercel.json, redeployed CF Worker, synced secrets, added */3 summarize cron. Throughput: 12→130+ jobs/hour.
 
 ### Unsent Email Recovery ✅ (2026-01-27)
 
-47 completed summaries with `sentToUser: false` from bulk migration. Created `scripts/resend-unsent-emails.ts`. Sent 46 emails (1 skipped - orphaned ticker).
-
----
+47 completed summaries with `sentToUser: false` resent. Created `scripts/resend-unsent-emails.ts`.
 
 ### TickerMonitoring Root Cause Fix ✅ (2026-01-27)
 
-**Problem**: SEC filing discovery silently skipping all tickers - TickerMonitoring table empty.
-
-**Root Cause**: 3-phase async pipeline bypassed code path that creates TickerMonitoring records. `checkForNewFilings()` silently skips tickers without TickerMonitoring records.
-
-**Fix**: Added `getActiveTickersForMonitoring()` call to `lib/cron/handlers/discovery-handler.ts` at start of discovery phase. Added TickerMonitoring health check to `app/api/health/pipeline/route.ts`.
-
----
+3-phase pipeline bypassed TickerMonitoring record creation. Added `getActiveTickersForMonitoring()` to discovery handler.
 
 ### GitHub Actions Minutes Optimization ✅ (2026-01-27)
 
-Reduced GitHub Actions usage: Watchdog frequency `*/10` -> `*/30`, added path filters to quality-gates.yml and pr-validation.yml. Savings: ~750 min/month.
-
----
+Watchdog */10→*/30, path filters on quality-gates.yml and pr-validation.yml. Savings: ~750 min/month.
 
 ### Pipeline Resilience Zero-Intervention ✅ (2026-01-26)
 
-**PR**: [#340](https://github.com/wilfred-py/tldrsec-ai/pull/340)
-
-Created: `lib/cron/secret-sanitization.ts` (CRON_SECRET auto-trim), removed 5% sampling limit from orphan detection, `.github/workflows/pipeline-heartbeat-watchdog.yml` (external monitoring). 30/30 tests passing.
-
----
+PR #340. CRON_SECRET auto-trim, orphan detection fix, GitHub Action watchdog. 30/30 tests.
 
 ### Stripe Webhook planType Sync Fix ✅ (2026-01-26)
 
-**PR**: [#339](https://github.com/wilfred-py/tldrsec-ai/pull/339)
-
-**Fix**: Stripe webhook was not syncing `planType` to User.subscriptionTier. Also improved checkout UX flow.
-
----
+PR #339. Webhook not syncing planType to User.subscriptionTier. Fixed + checkout UX improvements.
 
 ### Pipeline Stall Recovery & Bug Fixes ✅ (2026-01-26)
 
-**Root Causes**: Auto-recover threw error on HTTP 503 (CRITICAL status) instead of proceeding with recovery; OrphanedFilingDetector queried wrong table.
-
-**Fixes**: `app/api/cron/auto-recover/route.ts` handles 503 now; `lib/cron/orphaned-filing-detector.ts` queries correct table.
-
----
-
-### BAC 424B2 Filtering Breach Investigation ✅ (2026-01-25)
-
-User received BAC 424B2 email despite filtering. Root cause: BAC ticker had NULL preferences, 27/31 tickers had NULL preferences (87%). Fixed all 31 tickers with explicit preferences. Documented in `docs/investigation/`.
-
----
-
-### Prospectus Filing Type Preferences ✅ (2026-01-23)
-
-**PR**: [#335](https://github.com/wilfred-py/tldrsec-ai/pull/335)
-
-**Goal**: Add prospectus filing type preferences to reduce email volume. Users can now filter out 424B2 and similar filings.
-
----
-
-### Stripe Dashboard Integration Fixes ✅ (2026-01-25)
-
-Split `lib/stripe.ts` into `lib/stripe/plans.ts` (client-safe) + `lib/stripe/index.ts` (server-only). Fixed Price ID lookup with `getPriceIdForPlan()`. Migrated PlanType enum (BASIC/PROFESSIONAL/PREMIUM -> FREE/PRO/MAX). Created `scripts/sync-clerk-user.ts`.
+Auto-recover threw error on 503 instead of proceeding. Fixed + OrphanedFilingDetector table query.
 
 ---
 
 ## Archived Sessions (See TIMELINE.md for Full Details)
 
 For complete technical details of projects older than 30 days, see the weekly archive files in `.claude/history/`:
+- **January 2026**: BAC 424B2 investigation, Prospectus preferences, Stripe integration fixes, Pipeline stall recovery, and 30+ more
 - **December 2025**: 5 weekly archives with 100+ completed projects
 - **November 2025**: 4 weekly archives
 - **October 2025**: 2 weekly archives
 
 ---
 
-*Last Updated: 2026-02-19 (Summary Quality Fixes Phase 2 complete)*
+*Last Updated: 2026-02-24 (Stripe duplicate sub fix & upgrade/downgrade flow, E2E pipeline script alignment)*
 *Completed projects older than 30 days are archived to .claude/history/ - See TIMELINE.md for complete historical context*
