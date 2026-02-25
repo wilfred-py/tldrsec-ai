@@ -29,16 +29,23 @@ const prisma = getPrismaClient();
  */
 export async function GET() {
   try {
-    const { userId } = await auth();
-    if (!userId) {
+    const { userId: clerkId } = await auth();
+    if (!clerkId) {
       return NextResponse.json(
         { error: 'Authentication required' },
         { status: 401 }
       );
     }
 
+    // Resolve Clerk ID → DB user ID (CLAUDE.md #11: Clerk userId stored in authProviderId)
+    const dbUser = await prisma.user.findFirst({
+      where: { OR: [{ id: clerkId }, { authProviderId: clerkId }] },
+      select: { id: true },
+    });
+    const userId = dbUser?.id ?? clerkId;
+
     // Fetch trial data for the user (used in all response paths)
-    const trialData = await TrialService.checkTrialStatus(userId);
+    const trialData = await TrialService.checkTrialStatus(clerkId);
 
     // When Stripe is not configured, return mock Free tier subscription
     // This allows the billing page to render properly in development
@@ -63,9 +70,7 @@ export async function GET() {
       });
     }
 
-    // Get user's subscription from database
-    // Note: We don't include the user relation since it's not used in the response
-    // and can cause errors if the user record is missing (data integrity issue)
+    // Get user's subscription from database using resolved DB user ID
     const userSubscription = await prisma.userSubscription.findUnique({
       where: { userId },
     });

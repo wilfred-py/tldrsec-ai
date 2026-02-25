@@ -12,6 +12,26 @@ import Stripe from 'stripe';
 const prisma = getPrismaClient();
 
 /**
+ * Sync User.subscriptionTier to match the subscription plan.
+ * Uses updateMany with OR to handle both DB id and Clerk authProviderId.
+ * This is critical because the cron pipeline, trial service, RBAC, and
+ * ticker limits all read User.subscriptionTier for tier-based decisions.
+ */
+async function syncUserSubscriptionTier(userId: string, planType: 'FREE' | 'PRO' | 'MAX') {
+  try {
+    await prisma.user.updateMany({
+      where: {
+        OR: [{ id: userId }, { authProviderId: userId }],
+      },
+      data: { subscriptionTier: planType },
+    });
+    console.log(`[webhook] Synced User.subscriptionTier to ${planType} for ${userId}`);
+  } catch (error) {
+    console.error(`[webhook] Failed to sync User.subscriptionTier for ${userId}:`, error);
+  }
+}
+
+/**
  * Derive plan type from Stripe price ID
  * Returns FREE if price ID doesn't match any configured plan
  */
@@ -123,6 +143,7 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
       update: {
         planType, // Update the plan type from checkout metadata
         stripeSubscriptionId: session.subscription as string,
+        stripeCustomerId: session.customer as string,
         isActive: true,
         updatedAt: new Date(),
       },
@@ -172,6 +193,9 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
       },
     });
 
+    // Sync User.subscriptionTier so cron pipeline and dashboard read correct plan
+    await syncUserSubscriptionTier(userId, planType);
+
     console.log(`Subscription activated for user ${userId}, plan: ${planType}`);
   } catch (error) {
     console.error('Failed to process checkout completion:', error);
@@ -213,6 +237,8 @@ async function handleSubscriptionCreated(subscription: Stripe.Subscription) {
       },
     });
 
+    await syncUserSubscriptionTier(userSubscription.userId, planType);
+
     console.log(`Subscription created for user ${userSubscription.userId}, plan: ${planType}`);
   } catch (error) {
     console.error('Failed to process subscription creation:', error);
@@ -250,6 +276,8 @@ async function handleSubscriptionUpdated(subscription: Stripe.Subscription) {
       },
     });
 
+    await syncUserSubscriptionTier(userSubscription.userId, planType);
+
     console.log(`Subscription updated for user ${userSubscription.userId}, plan: ${planType}`);
   } catch (error) {
     console.error('Failed to process subscription update:', error);
@@ -279,6 +307,8 @@ async function handleSubscriptionDeleted(subscription: Stripe.Subscription) {
         updatedAt: new Date(),
       },
     });
+
+    await syncUserSubscriptionTier(userSubscription.userId, 'FREE');
 
     console.log(`Subscription cancelled for user ${userSubscription.userId}, reverted to FREE`);
   } catch (error) {
