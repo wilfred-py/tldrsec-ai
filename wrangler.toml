@@ -6,17 +6,18 @@ name = "cloudflare-cron"
 main = "cloudflare-cron/index.js"
 compatibility_date = "2024-10-01"
 
-# Cron schedule: Every 10 minutes
+# Cron schedules (Cloudflare free tier limit: 3 triggers):
+# - Every 5 minutes: Main pipeline processing (discovery, fetch, summarize)
+# - Every 15 minutes: Auto-recovery health check and remediation
+# - Daily at 00:00 UTC: Combined daily tasks (trial expiration, DLQ cleanup, report)
 [triggers]
-crons = ["*/10 * * * *"]
+crons = ["*/5 * * * *", "*/15 * * * *", "0 0 * * *"]
 
 # Environment variables (non-sensitive)
 [vars]
 PUBLIC_URL = "https://tldrsec.app"
-USE_ASYNC_PROCESSING = "false"
 DEBUG_MODE = "true"
-WORKER_VERSION = "2.4.0-stable"
-RATE_LIMIT_STRATEGY = "adaptive-global-aware"
+WORKER_VERSION = "2.5.0-stable"
 
 # Enhanced logging for production monitoring
 [observability.logs]

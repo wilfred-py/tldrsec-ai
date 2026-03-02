@@ -1,9 +1,5 @@
-/**
- * Tests for Cloudflare Worker cron routing configuration
- *
- * These tests verify the Worker is correctly configured to route
- * the 10-minute interval cron schedule to the interval summary endpoint.
- */
+// Tests for Cloudflare Worker cron routing configuration
+// Verifies correct routing of cron schedules to appropriate handlers.
 
 import * as fs from 'fs';
 import * as path from 'path';
@@ -20,71 +16,65 @@ describe('Cloudflare Worker Cron Routing', () => {
   });
 
   describe('wrangler.toml configuration', () => {
-    it('should have */10 * * * * cron schedule configured', () => {
-      expect(wranglerConfig).toContain('*/10 * * * *');
+    it('should have */5 * * * * pipeline processing schedule', () => {
+      expect(wranglerConfig).toContain('*/5 * * * *');
     });
 
-    it('should have removed the 0 * * * * hourly schedule', () => {
-      // The old hourly schedule should not be in the crons array
+    it('should have */15 * * * * auto-recovery schedule', () => {
+      expect(wranglerConfig).toContain('*/15 * * * *');
+    });
+
+    it('should have 0 0 * * * daily tasks schedule', () => {
+      expect(wranglerConfig).toContain('0 0 * * *');
+    });
+
+    it('should have exactly 3 cron triggers (free tier limit)', () => {
       const cronsMatch = wranglerConfig.match(/crons\s*=\s*\[([^\]]+)\]/);
       expect(cronsMatch).toBeTruthy();
-      const cronsArray = cronsMatch![1];
-      expect(cronsArray).not.toContain('"0 * * * *"');
+      const schedules = cronsMatch![1].match(/"[^"]+"/g);
+      expect(schedules).toHaveLength(3);
     });
 
-    it('should still have the daily report schedule', () => {
-      expect(wranglerConfig).toContain('0 22 * * *');
-    });
-
-    it('should still have the pipeline processing schedule', () => {
-      expect(wranglerConfig).toContain('*/5 * * * *');
+    it('should NOT have old hourly schedule', () => {
+      const cronsMatch = wranglerConfig.match(/crons\s*=\s*\[([^\]]+)\]/);
+      expect(cronsMatch).toBeTruthy();
+      expect(cronsMatch![1]).not.toContain('"0 * * * *"');
     });
   });
 
   describe('Worker routing logic', () => {
-    it('should have handleIntervalSummary function defined', () => {
-      expect(workerCode).toContain('handleIntervalSummary');
+    it('should route */15 * * * * to handleAutoRecovery', () => {
+      expect(workerCode).toContain("cronExpression === '*/15 * * * *'");
+      expect(workerCode).toContain('handleAutoRecovery');
     });
 
-    it('should route */10 * * * * to handleIntervalSummary', () => {
-      // Check the routing logic matches the expression
-      expect(workerCode).toContain("cronExpression === '*/10 * * * *'");
-      expect(workerCode).toContain('handleIntervalSummary');
+    it('should route 0 0 * * * to handleDailyTasks', () => {
+      expect(workerCode).toContain("cronExpression === '0 0 * * *'");
+      expect(workerCode).toContain('handleDailyTasks');
     });
 
-    it('should call the correct endpoint from interval handler', () => {
-      expect(workerCode).toContain('/api/cron/slack-interval-summary');
+    it('should default to handlePipelineProcessing for */5 * * * *', () => {
+      expect(workerCode).toContain('handlePipelineProcessing');
     });
 
-    it('should not have the old hourly summary routing', () => {
-      // The old hourly routing should not exist
-      expect(workerCode).not.toContain("cronExpression === '0 * * * *'");
-      expect(workerCode).not.toContain('handleHourlySummary');
-    });
-
-    it('should generate proper HMAC signature for interval endpoint', () => {
-      // Check that HMAC is generated for the correct endpoint
-      expect(workerCode).toContain('GET:/api/cron/slack-interval-summary');
-    });
-
-    it('should log skipped status when no activity', () => {
-      // Check that the handler logs skip status
-      expect(workerCode).toContain('result.skipped');
+    it('should NOT contain removed dead handlers', () => {
+      expect(workerCode).not.toMatch(/async\s+handleIntervalSummary\s*\(/);
+      expect(workerCode).not.toMatch(/async\s+handleSummarizeOnly\s*\(/);
     });
   });
 
   describe('Worker handler structure', () => {
-    it('should have daily report handler still defined', () => {
-      expect(workerCode).toContain('handleDailyReport');
-      expect(workerCode).toContain('/api/cron/slack-daily-report');
-    });
-
-    it('should have pipeline processing handler still defined', () => {
+    it('should have all active handlers defined', () => {
       expect(workerCode).toContain('handlePipelineProcessing');
+      expect(workerCode).toContain('handleAutoRecovery');
+      expect(workerCode).toContain('handleDailyTasks');
+      expect(workerCode).toContain('handleDLQCleanup');
+      expect(workerCode).toContain('handleDailyReport');
     });
 
-    it('should route 0 22 * * * to daily report', () => {
-      expect(workerCode).toContain("cronExpression === '0 22 * * *'");
+    it('should have handleDailyTasks calling DLQ cleanup and daily report', () => {
+      expect(workerCode).toContain('handleDLQCleanup');
+      expect(workerCode).toContain('handleDailyReport');
     });
   });
 });

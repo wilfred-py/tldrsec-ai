@@ -15,10 +15,8 @@ crons = ["*/5 * * * *", "*/15 * * * *", "0 0 * * *"]
 # Environment variables (non-sensitive)
 [vars]
 PUBLIC_URL = "https://tldrsec.app"
-USE_ASYNC_PROCESSING = "false"
 DEBUG_MODE = "true"
 WORKER_VERSION = "2.5.0-stable"
-RATE_LIMIT_STRATEGY = "adaptive-global-aware"
 
 # IMPORTANT: Sensitive secrets must be added via Cloudflare Dashboard or wrangler CLI:
 # - CRON_SECRET (required for API authentication) - CRITICAL

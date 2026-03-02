@@ -28,6 +28,17 @@ function sanitizeCronSecret(secret) {
     .trim();             // Trim after removing \n to catch whitespace before \n
 }
 
+/**
+ * Debug logger that only outputs when DEBUG_MODE is enabled.
+ * Use for verbose per-request, per-attempt, and backoff detail logs.
+ * Always use console.warn/console.error directly for important messages.
+ */
+function debugLog(env, ...args) {
+  if (env?.DEBUG_MODE === 'true') {
+    console.log(...args);
+  }
+}
+
 // In-memory heartbeat tracking (reset on each worker instance)
 // For persistent tracking, enable KV storage in wrangler.toml
 let lastHeartbeat = null;
@@ -38,7 +49,6 @@ let heartbeatCount = 0;
 const handlerHealth = {
   pipelineProcessing: { lastHeartbeat: null, lastSuccess: null, consecutiveFailures: 0, totalExecutions: 0 },
   autoRecovery: { lastHeartbeat: null, lastSuccess: null, consecutiveFailures: 0, totalExecutions: 0 },
-  intervalSummary: { lastHeartbeat: null, lastSuccess: null, consecutiveFailures: 0, totalExecutions: 0 },
   dailyReport: { lastHeartbeat: null, lastSuccess: null, consecutiveFailures: 0, totalExecutions: 0 },
   dlqCleanup: { lastHeartbeat: null, lastSuccess: null, consecutiveFailures: 0, totalExecutions: 0 },
 };
@@ -325,70 +335,6 @@ export default {
     }
   },
 
-  // Handle 10-minute interval Slack summary (replaces hourly)
-  async handleIntervalSummary(event, env, ctx) {
-    const executionId = `interval-summary-${Date.now()}`;
-    const startTime = Date.now();
-
-    // Record handler execution start
-    recordHandlerExecution('intervalSummary', null);
-    console.log(`[${executionId}] Starting 10-minute interval Slack summary`);
-
-    try {
-      const url = `${env.PUBLIC_URL}/api/cron/slack-interval-summary`;
-
-      // Generate HMAC signature
-      const timestamp = Date.now();
-      const payload = `${timestamp}:GET:/api/cron/slack-interval-summary`;
-      const encoder = new TextEncoder();
-      const key = await crypto.subtle.importKey(
-        'raw',
-        encoder.encode(sanitizeCronSecret(env.CRON_SECRET)),
-        { name: 'HMAC', hash: 'SHA-256' },
-        false,
-        ['sign']
-      );
-      const signature = await crypto.subtle.sign('HMAC', key, encoder.encode(payload));
-      const signatureHex = Array.from(new Uint8Array(signature))
-        .map(byte => byte.toString(16).padStart(2, '0'))
-        .join('');
-
-      const response = await fetch(url, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Execution-Id': executionId,
-          'X-Cloudflare-Worker': 'tldrsec-cron',
-          'x-hmac-signature': signatureHex,
-          'x-hmac-timestamp': timestamp.toString(),
-        },
-      });
-
-      const duration = Date.now() - startTime;
-
-      if (response.ok) {
-        const result = await response.json();
-        console.log(`[${executionId}] Interval summary completed successfully in ${duration}ms`, {
-          skipped: result.skipped || false,
-        });
-        recordHandlerExecution('intervalSummary', true);
-        return { success: true, executionId, duration, skipped: result.skipped };
-      } else {
-        const errorText = await response.text();
-        console.error(`[${executionId}] Interval summary failed: ${response.status} - ${errorText}`);
-        recordHandlerExecution('intervalSummary', false);
-        await alertOnHandlerFailure('intervalSummary', new Error(errorText), env);
-        return { success: false, executionId, duration, error: errorText };
-      }
-    } catch (error) {
-      const duration = Date.now() - startTime;
-      console.error(`[${executionId}] Interval summary error: ${error.message}`);
-      recordHandlerExecution('intervalSummary', false);
-      await alertOnHandlerFailure('intervalSummary', error, env);
-      return { success: false, executionId, duration, error: error.message };
-    }
-  },
-
   // Handle daily Slack report (9 AM AEST)
   async handleDailyReport(event, env, ctx) {
     const executionId = `daily-report-${Date.now()}`;
@@ -450,13 +396,13 @@ export default {
     }
   },
 
-  // Handle DLQ cleanup (daily at 2 AM UTC)
+  // Handle DLQ cleanup (daily at midnight UTC via handleDailyTasks)
   async handleDLQCleanup(event, env, ctx) {
     const executionId = `dlq-cleanup-${Date.now()}`;
     const startTime = Date.now();
 
     // Record handler execution start
-    console.log(`[${executionId}] Starting DLQ cleanup (2 AM UTC daily)`);
+    console.log(`[${executionId}] Starting DLQ cleanup`);
 
     try {
       const url = `${env.PUBLIC_URL}/api/cron/cleanup-dlq`;
@@ -646,65 +592,6 @@ export default {
     }
   },
 
-  // Handle summarize-only processing (every 2 minutes)
-  // This dedicated handler clears the AI job backlog faster than the full pipeline
-  async handleSummarizeOnly(event, env, ctx) {
-    const executionId = `summarize-only-${Date.now()}`;
-    const startTime = Date.now();
-
-    console.log(`[${executionId}] ====== SUMMARIZE-ONLY PROCESSING ======`);
-
-    try {
-      const url = `${env.PUBLIC_URL}/api/cron/process-filing-queue?jobTypes=ASYNC_SUMMARIZE_CACHED`;
-
-      // Generate HMAC signature
-      const timestamp = Date.now();
-      const payload = `${timestamp}:GET:/api/cron/process-filing-queue`;
-      const encoder = new TextEncoder();
-      const key = await crypto.subtle.importKey(
-        'raw',
-        encoder.encode(sanitizeCronSecret(env.CRON_SECRET)),
-        { name: 'HMAC', hash: 'SHA-256' },
-        false,
-        ['sign']
-      );
-      const signature = await crypto.subtle.sign('HMAC', key, encoder.encode(payload));
-      const signatureHex = Array.from(new Uint8Array(signature))
-        .map(byte => byte.toString(16).padStart(2, '0'))
-        .join('');
-
-      const response = await fetch(url, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Execution-Id': executionId,
-          'X-Cloudflare-Worker': 'tldrsec-cron',
-          'User-Agent': 'Cloudflare-Worker/1.0 SummarizeOnly',
-          'x-hmac-signature': signatureHex,
-          'x-hmac-timestamp': timestamp.toString(),
-        },
-      });
-
-      const duration = Date.now() - startTime;
-
-      if (response.ok) {
-        const result = await response.json();
-        console.log(`[${executionId}] Summarize-only completed in ${duration}ms`, {
-          jobsProcessed: result.jobsProcessed || 0,
-        });
-        return { success: true, executionId, duration, jobsProcessed: result.jobsProcessed };
-      } else {
-        const errorText = await response.text();
-        console.error(`[${executionId}] Summarize-only failed: ${response.status} - ${errorText}`);
-        return { success: false, executionId, duration, error: errorText };
-      }
-    } catch (error) {
-      const duration = Date.now() - startTime;
-      console.error(`[${executionId}] Summarize-only error: ${error.message}`);
-      return { success: false, executionId, duration, error: error.message };
-    }
-  },
-
   // Handle main pipeline processing (every 5 minutes)
   async handlePipelineProcessing(event, env, ctx) {
     // Record handler execution start
@@ -763,6 +650,8 @@ export default {
     const GLOBAL_SUBREQUEST_LIMIT = 1800; // Global limit per minute (10% buffer under 2000 limit)
     const BURST_PROTECTION_WINDOW_MS = 10000; // 10-second burst window
     const MAX_BURST_REQUESTS = 5; // Maximum requests in burst window
+    const SUMMARIZE_TIME_BUFFER_MS = 60000; // 60s buffer before worker timeout
+    const MAX_SUMMARIZE_ITERATIONS = 10;     // Safety cap on loop iterations
     
     try {
       // Environment validation with KV storage checks
@@ -938,7 +827,8 @@ export default {
             globalLimit: GLOBAL_SUBREQUEST_LIMIT,
             burstWindowMs: BURST_PROTECTION_WINDOW_MS,
             breakerThreshold: CIRCUIT_BREAKER_THRESHOLD
-          }
+          },
+          env
         });
 
         console.log(`[${executionId}] Step 0 completed: lock cleanup success`, {
@@ -985,7 +875,8 @@ export default {
             globalLimit: GLOBAL_SUBREQUEST_LIMIT,
             burstWindowMs: BURST_PROTECTION_WINDOW_MS,
             breakerThreshold: CIRCUIT_BREAKER_THRESHOLD
-          }
+          },
+          env
         });
 
         console.log(`[${executionId}] Step 1 completed: tier-aware endpoint success`, {
@@ -1038,7 +929,8 @@ export default {
             globalLimit: GLOBAL_SUBREQUEST_LIMIT,
             burstWindowMs: BURST_PROTECTION_WINDOW_MS,
             breakerThreshold: CIRCUIT_BREAKER_THRESHOLD
-          }
+          },
+          env
         });
 
         console.log(`[${executionId}] Step 1.5 completed: discovery jobs processed`, {
@@ -1098,7 +990,8 @@ export default {
             globalLimit: GLOBAL_SUBREQUEST_LIMIT,
             burstWindowMs: BURST_PROTECTION_WINDOW_MS,
             breakerThreshold: CIRCUIT_BREAKER_THRESHOLD
-          }
+          },
+          env
         });
 
         console.log(`[${executionId}] Step 2 completed: fetch jobs endpoint success`);
@@ -1111,47 +1004,85 @@ export default {
       }
 
       // ========================================
-      // STEP 3: Process Summarize Jobs (AI Processing)
+      // STEP 3: Process Summarize Jobs (Loop until drained or time limit)
       // ========================================
-      console.log(`[${executionId}] ====== STEP 3: SUMMARIZE JOBS ======`);
-      console.log(`[${executionId}] Step 3: Calling process-filing-queue endpoint to process summarize jobs...`);
+      console.log(`[${executionId}] ====== STEP 3: SUMMARIZE JOBS (LOOP) ======`);
       let summarizeResult;
+      let summarizeIterations = 0;
+      let totalSummarizeJobsProcessed = 0;
+      let summarizeLoopResults = [];
+
       try {
-        const { signatureHex: step3Signature, timestamp: step3Timestamp } = await generateSignature(summarizeUrl);
-        const summarizeHeaders = createHeaders(step3Signature, step3Timestamp);
-        console.log(`[${executionId}] Step 3 URL: ${summarizeUrl}`);
-        console.log(`[${executionId}] Step 3 signature generated, timestamp: ${step3Timestamp}`);
+        while (summarizeIterations < MAX_SUMMARIZE_ITERATIONS) {
+          const elapsed = Date.now() - startTime;
+          const remaining = WORKER_TIMEOUT_MS - elapsed;
 
-        summarizeResult = await executeWithAdvancedRateLimiting({
-          executionId,
-          url: summarizeUrl,
-          headers: summarizeHeaders,
-          workerTimeoutMs: WORKER_TIMEOUT_MS,
-          requestTimeoutMs: REQUEST_TIMEOUT_MS,
-          maxAttempts: MAX_ATTEMPTS,
-          initialBackoffMs: INITIAL_BACKOFF_MS,
-          maxBackoffMs: MAX_BACKOFF_MS,
-          jitterPercentage: JITTER_PERCENTAGE,
-          rateLimiter,
-          circuitBreaker,
-          monitor,
-          rateLimitConfig: {
-            windowMs: RATE_LIMIT_WINDOW_MS,
-            maxRequests: MAX_REQUESTS_PER_WINDOW,
-            burstLimit: MAX_BURST_REQUESTS,
-            globalLimit: GLOBAL_SUBREQUEST_LIMIT,
-            burstWindowMs: BURST_PROTECTION_WINDOW_MS,
-            breakerThreshold: CIRCUIT_BREAKER_THRESHOLD
+          if (remaining < SUMMARIZE_TIME_BUFFER_MS) {
+            debugLog(env, `[${executionId}] [Step 3] Stopping loop: ${remaining}ms remaining < ${SUMMARIZE_TIME_BUFFER_MS}ms buffer`);
+            break;
           }
-        });
 
-        console.log(`[${executionId}] Step 3 completed: summarize jobs endpoint success`);
+          summarizeIterations++;
+
+          // Generate fresh HMAC signature per iteration (timestamps must be current)
+          const { signatureHex: step3Signature, timestamp: step3Timestamp } = await generateSignature(summarizeUrl);
+          const summarizeHeaders = createHeaders(step3Signature, step3Timestamp);
+
+          debugLog(env, `[${executionId}] [Step 3] Iteration ${summarizeIterations}: ${remaining}ms remaining`);
+
+          const iterationResult = await executeWithAdvancedRateLimiting({
+            executionId,
+            url: summarizeUrl,
+            headers: summarizeHeaders,
+            workerTimeoutMs: WORKER_TIMEOUT_MS,
+            requestTimeoutMs: REQUEST_TIMEOUT_MS,
+            maxAttempts: MAX_ATTEMPTS,
+            initialBackoffMs: INITIAL_BACKOFF_MS,
+            maxBackoffMs: MAX_BACKOFF_MS,
+            jitterPercentage: JITTER_PERCENTAGE,
+            rateLimiter,
+            circuitBreaker,
+            monitor,
+            rateLimitConfig: {
+              windowMs: RATE_LIMIT_WINDOW_MS,
+              maxRequests: MAX_REQUESTS_PER_WINDOW,
+              burstLimit: MAX_BURST_REQUESTS,
+              globalLimit: GLOBAL_SUBREQUEST_LIMIT,
+              burstWindowMs: BURST_PROTECTION_WINDOW_MS,
+              breakerThreshold: CIRCUIT_BREAKER_THRESHOLD
+            },
+            env
+          });
+
+          summarizeResult = iterationResult;
+          summarizeLoopResults.push(iterationResult);
+
+          const jobsProcessed = iterationResult?.jobsProcessed ?? 0;
+          totalSummarizeJobsProcessed += jobsProcessed;
+
+          if (jobsProcessed === 0) {
+            debugLog(env, `[${executionId}] [Step 3] Queue drained after iteration ${summarizeIterations}`);
+            break;
+          }
+
+          console.log(`[${executionId}] [Step 3] Iteration ${summarizeIterations}: processed ${jobsProcessed} job(s), total: ${totalSummarizeJobsProcessed}`);
+        }
       } catch (summarizeError) {
-        console.error(`[${executionId}] Step 3 failed: summarize jobs endpoint error`, {
-          error: summarizeError.message
-        });
-        // Don't throw - log warning but consider execution partially successful
-        console.warn(`[${executionId}] Summarize endpoint failed - jobs will retry on next cycle`);
+        console.warn(`[${executionId}] [Step 3] Loop stopped at iteration ${summarizeIterations}: ${summarizeError.message}`);
+      }
+
+      if (summarizeIterations > 0) {
+        console.log(`[${executionId}] [Step 3] Complete: ${totalSummarizeJobsProcessed} jobs in ${summarizeIterations} iteration(s)`);
+      }
+
+      // Shape summarizeResult for downstream compatibility
+      if (summarizeResult) {
+        summarizeResult = {
+          ...summarizeResult,
+          success: totalSummarizeJobsProcessed > 0 || summarizeResult?.success,
+          totalIterations: summarizeIterations,
+          totalJobsProcessed: totalSummarizeJobsProcessed
+        };
       }
 
       // Combine results from all five endpoints (including discovery)
@@ -1163,7 +1094,7 @@ export default {
         summarize: summarizeResult,
         // Note: cleanup and discovery failures don't fail the whole pipeline
         // Discovery failures are non-fatal - jobs will retry on next cycle
-        combinedSuccess: tierAwareResult?.success && fetchResult?.success && summarizeResult?.success,
+        combinedSuccess: tierAwareResult?.success && fetchResult?.success && (totalSummarizeJobsProcessed > 0 || summarizeResult?.success),
         metrics: {
           cleanup: {
             duration: cleanupResult?.duration || 0,
@@ -1190,7 +1121,9 @@ export default {
           summarize: {
             duration: summarizeResult?.duration || 0,
             filesProcessed: summarizeResult?.filesProcessed || 0,
-            status: summarizeResult?.success ? 'success' : 'failed'
+            iterations: summarizeIterations,
+            totalJobsProcessed: totalSummarizeJobsProcessed,
+            status: totalSummarizeJobsProcessed > 0 ? 'success' : (summarizeResult?.success ? 'success' : 'failed')
           }
         }
       };
@@ -1425,7 +1358,8 @@ async function executeWithAdvancedRateLimiting({
   rateLimiter,
   circuitBreaker,
   monitor,
-  rateLimitConfig
+  rateLimitConfig,
+  env
 }) {
   let lastError;
   let consecutiveRateLimitErrors = 0;
@@ -1438,7 +1372,7 @@ async function executeWithAdvancedRateLimiting({
     // Check circuit breaker state before each attempt
     const circuitState = await circuitBreaker.getState();
 
-    console.log(`[${executionId}] Enhanced attempt ${attempt}/${maxAttempts}:`, {
+    debugLog(env, `[${executionId}] Enhanced attempt ${attempt}/${maxAttempts}:`, {
       remainingWorkerTime: `${remainingWorkerTime}ms`,
       circuitState: circuitState.state,
       failureCount: circuitState.failureCount,
@@ -1490,11 +1424,12 @@ async function executeWithAdvancedRateLimiting({
           'X-Advanced-Retry': 'true',
           'X-Circuit-State': circuitState.state
         },
-        timeoutMs: effectiveTimeout
+        timeoutMs: effectiveTimeout,
+        env
       });
       
       const attemptDuration = Date.now() - attemptStartTime;
-      console.log(`[${executionId}] Enhanced attempt ${attempt} succeeded in ${attemptDuration}ms:`, {
+      debugLog(env, `[${executionId}] Enhanced attempt ${attempt} succeeded in ${attemptDuration}ms:`, {
         duration: attemptDuration,
         url: url,
         circuitStateAfter: 'SUCCESS_RECORDED',
@@ -1578,7 +1513,7 @@ async function executeWithAdvancedRateLimiting({
         executionId
       });
       
-      console.log(`[${executionId}] Enhanced adaptive backoff calculated:`, {
+      debugLog(env, `[${executionId}] Enhanced adaptive backoff calculated:`, {
         backoffDelay: `${backoffDelay}ms`,
         consecutiveRateLimitErrors,
         circuitState: circuitState.state,
@@ -1735,14 +1670,14 @@ function getAdaptiveJitterMultiplier(isRateLimitError, consecutiveErrors, rateLi
 /**
  * Execute a single request with timeout protection
  */
-async function executeRequestWithTimeout({ executionId, url, headers, timeoutMs }) {
+async function executeRequestWithTimeout({ executionId, url, headers, timeoutMs, env }) {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => {
     controller.abort(new DOMException(`Request timeout after ${timeoutMs}ms`, 'TimeoutError'));
   }, timeoutMs);
   
   try {
-    console.log(`[${executionId}] Making request with ${timeoutMs}ms timeout`);
+    debugLog(env, `[${executionId}] Making request with ${timeoutMs}ms timeout`);
     
     const response = await fetch(url, {
       method: 'GET',
@@ -1750,8 +1685,8 @@ async function executeRequestWithTimeout({ executionId, url, headers, timeoutMs 
       signal: controller.signal
     });
     
-    console.log(`[${executionId}] Received response: ${response.status} ${response.statusText}`);
-    console.log(`[${executionId}] Response headers:`, Object.fromEntries(response.headers.entries()));
+    debugLog(env, `[${executionId}] Received response: ${response.status} ${response.statusText}`);
+    debugLog(env, `[${executionId}] Response headers:`, Object.fromEntries(response.headers.entries()));
     
     // Handle different response types with enhanced error details
     if (response.status === 404) {
@@ -1821,8 +1756,8 @@ async function executeRequestWithTimeout({ executionId, url, headers, timeoutMs 
     }
     
     const responseText = await response.text();
-    console.log(`[${executionId}] Response status: ${response.status}`);
-    console.log(`[${executionId}] Response body preview: ${responseText.substring(0, 500)}...`);
+    debugLog(env, `[${executionId}] Response status: ${response.status}`);
+    debugLog(env, `[${executionId}] Response body preview: ${responseText.substring(0, 500)}...`);
     
     if (!response.ok) {
       console.error(`[${executionId}] Request failed:`, {
