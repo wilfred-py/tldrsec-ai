@@ -13,7 +13,8 @@
 
 | Date | Project | Status |
 |------|---------|--------|
-| 2026-03-02 | Pipeline Throughput & Worker Cleanup (3 phases) | 🔄 In Progress |
+| 2026-03-02 | Pipeline Throughput & Worker Cleanup (PR #357) | ✅ Complete |
+| 2026-02-25 | Update Free Tier Pricing Card CTA (PR #355) | ✅ Complete |
 | 2026-02-25 | Hide Nav Links on Sign-In/Sign-Up Pages (PR #354) | ✅ Complete |
 | 2026-02-24 | Fix Stripe Duplicate Subscriptions & Upgrade/Downgrade Flow | ✅ Complete |
 | 2026-02-24 | E2E Pipeline Script Alignment with Production Architecture | ✅ Complete |
@@ -78,7 +79,7 @@
 
 ## Archive Statistics
 - **Total Archived Projects**: 10
-- **Current PROGRESS.md Lines**: 479
-- **Last Sync**: 2026-03-02
-- **Last Archive Update**: 2026-03-02
+- **Current PROGRESS.md Lines**: 467
+- **Last Sync**: 2026-03-03
+- **Last Archive Update**: 2026-03-03
 - **Archive System**: ✅ ACTIVE

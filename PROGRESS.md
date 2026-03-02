@@ -1,55 +1,43 @@
 # Project Progress
 
-**Date**: 2026-03-02
-**Branch**: worktree-summary_enhancements
-**Status**: Pipeline Throughput & Worker Cleanup - All 3 phases implemented, pending deploy
+**Date**: 2026-03-03
+**Branch**: main
+**Status**: No active work. Pipeline Throughput PR merged and deployed.
 
 ---
 
 ## Current Session
 
-### Pipeline Throughput & Worker Cleanup (2026-03-02)
-
-**Plan**: `docs/plans/2026-03-02-pipeline-throughput-and-worker-cleanup.md`
-**Research**: `thoughts/shared/research/2026-02-26-pipeline-throughput-cloudflare-dead-code.md`
-
-**Goal**: Maximize summaries generated and sent per cron run by looping Step 3 (summarize), removing dead code from Cloudflare Worker, and gating verbose logging behind DEBUG_MODE.
-
-**Phase 1: Dead Code Removal** ✅
-- Removed `handleIntervalSummary` (~62 lines) and `handleSummarizeOnly` (~58 lines) from `cloudflare-cron/index.js`
-- Removed `intervalSummary` from `handlerHealth`
-- Removed `USE_ASYNC_PROCESSING` and `RATE_LIMIT_STRATEGY` from `cloudflare-cron/wrangler.toml`
-- Fixed stale DLQ comment
-- **Tests**: 6 new tests in `__tests__/cloudflare/worker-dead-code-removal.test.ts`
-- **Fixed**: `cron-routing.test.ts` and `config-synchronization.test.ts` updated for removed code
-
-**Phase 2: DEBUG_MODE Logging Gate** ✅
-- Added `debugLog(env, ...args)` helper gated on `env?.DEBUG_MODE === 'true'`
-- Threaded `env` parameter into `executeWithAdvancedRateLimiting` and `executeRequestWithTimeout`
-- Converted 8 verbose `console.log` calls to `debugLog` (53 unconditional logs preserved)
-- Synced root `wrangler.toml` with `cloudflare-cron/wrangler.toml` (cron schedules, version)
-- **Tests**: 7 new tests in `__tests__/cloudflare/worker-debug-logging-gate.test.ts`
-
-**Phase 3: Step 3 Summarize Loop** ✅
-- Added `SUMMARIZE_TIME_BUFFER_MS = 60000` and `MAX_SUMMARIZE_ITERATIONS = 10`
-- Replaced single Step 3 call with `while` loop: checks time budget, generates fresh HMAC per iteration, breaks on 0 jobs or time exhaustion
-- Updated `result.metrics.summarize` with `iterations` and `totalJobsProcessed`
-- Updated `combinedSuccess` logic for multi-iteration results
-- **Tests**: 8 new tests in `__tests__/cloudflare/worker-summarize-loop.test.ts`
-
-**Files Modified**:
-- `cloudflare-cron/index.js` - All 3 phases (dead code removal, debugLog, summarize loop)
-- `cloudflare-cron/wrangler.toml` - Removed dead vars
-- `wrangler.toml` (root) - Synced with cloudflare-cron version
-- `__tests__/cloudflare-cron/cron-routing.test.ts` - Rewritten for current architecture
-- `__tests__/cloudflare/config-synchronization.test.ts` - Updated for removed vars
-
-**Verification**: 21 new tests all passing, 183 total cloudflare tests pass, wrangler dry-run succeeds.
-**Pending**: Deploy to Cloudflare and verify production log output.
+*No active work.*
 
 ---
 
 ## Recently Completed Sessions
+
+### Pipeline Throughput & Worker Cleanup ✅ (2026-03-02)
+
+**PR**: [#357](https://github.com/wilfred-py/tldrsec-ai/pull/357) | **Plan**: `docs/plans/2026-03-02-pipeline-throughput-and-worker-cleanup.md`
+
+**Goal**: Maximize summaries per cron run by looping Step 3 (summarize), removing dead code, and gating verbose logging.
+
+**Phase 1: Dead Code Removal** - Removed `handleIntervalSummary`, `handleSummarizeOnly`, `intervalSummary` health tracking, `USE_ASYNC_PROCESSING` and `RATE_LIMIT_STRATEGY` config vars.
+
+**Phase 2: DEBUG_MODE Logging Gate** - Added `debugLog(env, ...args)` helper, threaded `env` through rate limiting functions, converted 8 verbose logs to debug-only.
+
+**Phase 3: Summarize Loop** - Replaced single Step 3 call with time-budgeted `while` loop (60s buffer, max 10 iterations, fresh HMAC per iteration, breaks on 0 jobs).
+
+**Files**: `cloudflare-cron/index.js`, `cloudflare-cron/wrangler.toml`, `wrangler.toml`, tests updated/created.
+**Verification**: 21 new tests, deployed to Cloudflare (v2.5.0-stable), HMAC verified (HTTP 202).
+
+---
+
+### Update Free Tier Pricing Card CTA ✅ (2026-02-25)
+
+**PR**: [#355](https://github.com/wilfred-py/tldrsec-ai/pull/355)
+
+**Change**: Updated free tier pricing card CTA text and removed redundant copy on landing page.
+
+---
 
 ### Fix Stripe Duplicate Subscriptions & Upgrade/Downgrade Flow ✅ (2026-02-24)
 
@@ -475,5 +463,5 @@ For complete technical details of projects older than 30 days, see the weekly ar
 
 ---
 
-*Last Updated: 2026-03-02 (Pipeline Throughput & Worker Cleanup - 3 phases complete)*
+*Last Updated: 2026-03-03 (Pipeline Throughput & Worker Cleanup - merged PR #357, deployed)*
 *Completed projects older than 30 days are archived to .claude/history/ - See TIMELINE.md for complete historical context*
