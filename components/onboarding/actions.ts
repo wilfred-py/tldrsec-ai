@@ -1,7 +1,7 @@
 'use server';
 
 import { auth } from '@clerk/nextjs/server';
-import { prisma } from '@/lib/db/prisma';
+import { getPrismaClient } from '@/lib/db/prisma';
 import { revalidatePath } from 'next/cache';
 
 /**
@@ -27,7 +27,7 @@ export async function updateTutorialProgress(
     }
     
     // Get user from database
-    const user = await prisma.user.findFirst({
+    const user = await getPrismaClient().user.findFirst({
       where: { 
         authProviderId: userId 
       }
@@ -38,7 +38,7 @@ export async function updateTutorialProgress(
     }
     
     // Update the user's tutorial progress
-    await prisma.user.update({
+    await getPrismaClient().user.update({
       where: { id: user.id },
       data: {
         tutorialProgress: progress,
@@ -85,7 +85,7 @@ export async function getUserOnboardingStatus(): Promise<{
     }
     
     // Get user from database
-    const user = await prisma.user.findFirst({
+    const user = await getPrismaClient().user.findFirst({
       where: { 
         authProviderId: userId 
       }
