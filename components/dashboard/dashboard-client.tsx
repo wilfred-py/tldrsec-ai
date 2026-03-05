@@ -39,7 +39,7 @@ interface DashboardClientProps {
   tickerLimit?: number;
 }
 
-export function DashboardClient({ showWelcome = false, shouldMergePending = false, subscriptionSuccess = false, initialCompanies = [], tutorialCompleted = false, subscriptionTier = 'FREE', tickerLimit = 3 }: DashboardClientProps) {
+export function DashboardClient({ showWelcome: _showWelcome = false, shouldMergePending = false, subscriptionSuccess = false, initialCompanies = [], tutorialCompleted = false, subscriptionTier = 'FREE', tickerLimit = 3 }: DashboardClientProps) {
   // State for tracked companies
   const [companies, setCompanies] = useState<Company[]>(initialCompanies);
   const [currentCompany, setCurrentCompany] = useState<Company | null>(null);
@@ -118,18 +118,22 @@ export function DashboardClient({ showWelcome = false, shouldMergePending = fals
       loadCompanies();
     }
 
-    // Check if user is new and should see tutorial
-    // Skip if tutorial already completed in DB or user already has tickers
-    const hasSeenTutorial = localStorage.getItem("hasSeenTutorial");
-    if (!tutorialCompleted && initialCompanies.length === 0 && (showWelcome || !hasSeenTutorial)) {
+    // Always show tutorial if not completed (unskippable)
+    if (!tutorialCompleted) {
       setShowTutorial(true);
-      localStorage.setItem("hasSeenTutorial", "true");
-    }
 
-    // Load tutorial progress if available
-    const savedProgress = localStorage.getItem("tutorialProgress");
-    if (savedProgress) {
-      setTutorialProgress(parseInt(savedProgress, 10));
+      // Restore tutorial step from localStorage if user refreshed mid-tutorial
+      const savedProgress = localStorage.getItem("tutorialProgress");
+      if (savedProgress) {
+        try {
+          const parsed = JSON.parse(savedProgress);
+          if (parsed.currentStep) {
+            setTutorialProgress(parsed.currentStep);
+          }
+        } catch {
+          // Ignore parse errors from old format
+        }
+      }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -532,7 +536,8 @@ export function DashboardClient({ showWelcome = false, shouldMergePending = fals
       <TutorialGuide
         active={showTutorial}
         onComplete={() => setShowTutorial(false)}
-        initialProgress={tutorialProgress}
+        initialStep={tutorialProgress}
+        tickerLimit={tickerLimit}
       />
     </div>
   );

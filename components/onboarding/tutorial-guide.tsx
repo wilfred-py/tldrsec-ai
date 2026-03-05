@@ -1,25 +1,18 @@
 'use client';
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useLayoutEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { Confetti } from '@/components/ui/confetti';
 import { toast } from 'sonner';
 import { updateTutorialProgress } from '@/components/onboarding/actions';
-import { sendLatestSummariesEmail } from '@/lib/email/summary-service';
-import { useRouter } from 'next/navigation';
 import {
   List,
-  ActivityIcon,
   Settings,
   Trash2,
-  Search,
   Mail,
   ArrowRight,
   ArrowLeft,
-  X,
-  ThumbsUp,
-  ThumbsDown
 } from 'lucide-react';
 
 interface TutorialGuideProps {
@@ -27,456 +20,404 @@ interface TutorialGuideProps {
   onComplete: () => void;
   initialStep?: number;
   initialProgress?: number;
+  tickerLimit?: number;
 }
 
-// Define the tutorial steps with selectors for highlighting elements
+interface StepDef {
+  title: string;
+  description: string;
+  selector: string;
+  icon: React.ReactNode;
+  position: 'top' | 'bottom' | 'left' | 'right' | 'center';
+  circular?: boolean;
+}
 
-export function TutorialGuide({ 
-  active, 
+export function TutorialGuide({
+  active,
   onComplete,
   initialStep = 0,
-  initialProgress = 0 
+  tickerLimit = 3,
 }: TutorialGuideProps) {
   const [isActive, setIsActive] = useState(false);
   const [currentStep, setCurrentStep] = useState(initialStep);
-  const [progress, setProgress] = useState(initialProgress);
+  const [progress, setProgress] = useState(0);
   const [showConfetti, setShowConfetti] = useState(false);
-  const [highlightedElement, setHighlightedElement] = useState<HTMLElement | null>(null);
-  const [isSendingEmail, setIsSendingEmail] = useState(false);
-  const router = useRouter();
-  
-  // Define the tutorial steps
-  const tutorialSteps = useMemo(() => [
+  const [targetRect, setTargetRect] = useState<DOMRect | null>(null);
+  // Track window dimensions for SVG viewport
+  const [windowSize, setWindowSize] = useState({ w: 0, h: 0 });
+
+  // Initialize and track window size
+  useEffect(() => {
+    const update = () => setWindowSize({ w: window.innerWidth, h: window.innerHeight });
+    update();
+    window.addEventListener('resize', update);
+    return () => window.removeEventListener('resize', update);
+  }, []);
+
+  const tickerLimitText = tickerLimit === -1
+    ? "unlimited companies"
+    : `up to ${tickerLimit} companies on your current plan`;
+
+  const tutorialSteps: StepDef[] = useMemo(() => [
     {
-      title: "Add",
-      description: "Click the 'Add Ticker' button to start tracking a company's SEC filings.",
+      title: "Add Tickers",
+      description: `Click the 'Add Ticker' button to start tracking a company's SEC filings. You can track ${tickerLimitText}.`,
       selector: '[data-tutorial="add-ticker"]',
       icon: <List className="h-5 w-5" />,
-      position: 'bottom'
-    },
-    {
-      title: "Filter Companies",
-      description: "Use the search box to quickly filter your tracked companies by name or symbol.",
-      selector: '[data-tutorial="filter-companies"]',
-      icon: <Search className="h-5 w-5" />,
-      position: 'bottom'
+      position: 'bottom',
     },
     {
       title: "Manage Preferences",
-      description: "Click the settings icon to customize notification preferences for each company.",
+      description: "Click the settings icon to customize which filing types you receive notifications for — 10-K, 10-Q, 8-K, and more.",
       selector: '[data-tutorial="ticker-preferences"]',
       icon: <Settings className="h-5 w-5" />,
-      position: 'left'
+      position: 'left',
+      circular: true,
     },
     {
       title: "Remove Companies",
-      description: "Use the trash icon to remove companies you no longer want to track.",
+      description: "Use the trash icon to remove companies you no longer want to track. You can always add them back later.",
       selector: '[data-tutorial="delete-ticker"]',
       icon: <Trash2 className="h-5 w-5" />,
-      position: 'left'
-    },
-    {
-      title: "View Summaries",
-      description: "Click the 'Summaries' link in the sidebar to view all your SEC filing summaries.",
-      selector: '[data-tutorial="sidebar-summaries"]',
-      icon: <ActivityIcon className="h-5 w-5" />,
-      position: 'right'
-    },
-    {
-      title: "Explore Details",
-      description: "After navigating to Summaries, you can click on any filing to view its full analysis.",
-      selector: '[data-tutorial="summary-card"]',
-      icon: <Mail className="h-5 w-5" />,
-      position: 'top'
+      position: 'left',
+      circular: true,
     },
     {
       title: "Email Summaries",
-      description: "Would you like to receive an email with the latest 10-K and 10-Q summaries for your tracked companies?",
-      selector: '.tutorial-highlight-placeholder', // This won't actually highlight anything
+      description: "You'll receive AI-powered summaries of SEC filings for your tracked companies directly to your email. We'll send you the most relevant summaries shortly!",
+      selector: '.tutorial-highlight-placeholder',
       icon: <Mail className="h-5 w-5" />,
-      position: 'center'
+      position: 'center',
     }
-  ], []);
-  
+  ], [tickerLimitText]);
+
   const totalSteps = tutorialSteps.length;
-  
-  // Calculate tooltip position with improved edge detection
-  const calculateTooltipPosition = useCallback(() => {
-    if (!highlightedElement) return { top: '50%', left: '50%' };
-    
-    const rect = highlightedElement.getBoundingClientRect();
-    const position = tutorialSteps[currentStep]?.position || 'bottom';
-    
-    // Get viewport dimensions
-    const viewportWidth = window.innerWidth;
-    const viewportHeight = window.innerHeight;
-    
-    // Responsive tooltip width
-    const tooltipWidth = viewportWidth < 640 ? Math.min(viewportWidth * 0.9, 350) : 350;
-    const tooltipHeight = 200;
-    
-    // Add padding from edges
-    const edgePadding = 20;
-    
-    let top, left;
-    
-    switch (position) {
-      case 'top':
-        top = Math.max(edgePadding, rect.top - tooltipHeight - 16); // Extra gap
-        left = Math.max(edgePadding, Math.min(viewportWidth - tooltipWidth - edgePadding, rect.left + rect.width/2 - tooltipWidth/2));
-        
-        // If tooltip would be too close to top, position it below
-        if (top < edgePadding * 2) {
-          top = Math.min(viewportHeight - tooltipHeight - edgePadding, rect.bottom + 16);
-        }
-        break;
-        
-      case 'right':
-        top = Math.max(edgePadding, Math.min(viewportHeight - tooltipHeight - edgePadding, rect.top + rect.height/2 - tooltipHeight/2));
-        left = Math.min(viewportWidth - tooltipWidth - edgePadding, rect.right + 16);
-        
-        // If tooltip would be too close to right edge, position it to the left
-        if (left + tooltipWidth > viewportWidth - edgePadding) {
-          left = Math.max(edgePadding, rect.left - tooltipWidth - 16);
-        }
-        break;
-        
-      case 'bottom':
-        top = Math.min(viewportHeight - tooltipHeight - edgePadding, rect.bottom + 16);
-        left = Math.max(edgePadding, Math.min(viewportWidth - tooltipWidth - edgePadding, rect.left + rect.width/2 - tooltipWidth/2));
-        
-        // If tooltip would be too close to bottom, position it above
-        if (top + tooltipHeight > viewportHeight - edgePadding * 2) {
-          top = Math.max(edgePadding, rect.top - tooltipHeight - 16);
-        }
-        break;
-        
-      case 'left':
-        top = Math.max(edgePadding, Math.min(viewportHeight - tooltipHeight - edgePadding, rect.top + rect.height/2 - tooltipHeight/2));
-        left = Math.max(edgePadding, rect.left - tooltipWidth - 16);
-        
-        // If tooltip would be too close to left edge, position it to the right
-        if (left < edgePadding) {
-          left = Math.min(viewportWidth - tooltipWidth - edgePadding, rect.right + 16);
-        }
-        break;
-        
-      case 'center':
-      default:
-        // Center in the viewport
-        top = (viewportHeight - tooltipHeight) / 2;
-        left = (viewportWidth - tooltipWidth) / 2;
-        break;
-    }
-    
-    return { top: `${top}px`, left: `${left}px` };
-  }, [highlightedElement, currentStep, tutorialSteps]);
-  
-  // Activate highlighting for the current step
-  const highlightCurrentElement = useCallback(() => {
-    if (!isActive || !tutorialSteps[currentStep]) return;
-    
-    const selector = tutorialSteps[currentStep].selector;
-    
-    // Special case for the email summaries step which has no element to highlight
-    if (selector === '.tutorial-highlight-placeholder') {
-      setHighlightedElement(null);
+  const step = tutorialSteps[currentStep];
+  const isCenter = step?.position === 'center';
+  const isCircular = step?.circular ?? false;
+
+  // Find and track the target element's rect (runs before browser paint)
+  useLayoutEffect(() => {
+    if (!isActive || !step) {
+      setTargetRect(null);
       return;
     }
-    
-    // Clear previous highlighting
-    document.querySelectorAll('.tutorial-highlight').forEach(el => {
-      el.classList.remove('tutorial-highlight');
-    });
-    
-    // Find and highlight new element
-    const element = document.querySelector(selector) as HTMLElement;
-    if (element) {
-      element.classList.add('tutorial-highlight');
-      setHighlightedElement(element);
-      
-      // Ensure the element is visible and scrolled into view if needed
-      if (element.scrollIntoView) {
-        element.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      }
-    } else {
-      setHighlightedElement(null);
-      console.warn(`Tutorial element not found: ${selector}`);
+
+    if (step.selector === '.tutorial-highlight-placeholder') {
+      setTargetRect(null);
+      return;
     }
-  }, [isActive, currentStep, tutorialSteps]);
-  
-  // Handle next step
-  const handleNextStep = () => {
+
+    const el = document.querySelector(step.selector) as HTMLElement | null;
+    if (el) {
+      setTargetRect(el.getBoundingClientRect());
+    } else {
+      setTargetRect(null);
+    }
+  }, [isActive, currentStep, step]);
+
+  // Update rect on resize/scroll
+  useEffect(() => {
+    if (!isActive || !step || step.selector === '.tutorial-highlight-placeholder') return;
+
+    const update = () => {
+      const el = document.querySelector(step.selector) as HTMLElement | null;
+      if (el) setTargetRect(el.getBoundingClientRect());
+    };
+
+    window.addEventListener('resize', update);
+    window.addEventListener('scroll', update, true);
+    return () => {
+      window.removeEventListener('resize', update);
+      window.removeEventListener('scroll', update, true);
+    };
+  }, [isActive, currentStep, step]);
+
+  // Calculate tooltip position close to the highlighted element
+  const tooltipPosition = useMemo((): { top: string; left: string; transform?: string } => {
+    if (typeof window === 'undefined') return { top: '50%', left: '50%', transform: 'translate(-50%, -50%)' };
+
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    const tw = vw < 640 ? Math.min(vw * 0.9, 350) : 350;
+    const th = 200;
+    const pad = 16;
+
+    if (!targetRect) {
+      // Use CSS transform centering for the center step (no estimate needed)
+      return { top: '50%', left: '50%', transform: 'translate(-50%, -50%)' };
+    }
+
+    const pos = step?.position || 'bottom';
+    let top: number, left: number;
+
+    switch (pos) {
+      case 'bottom':
+        top = Math.min(vh - th - pad, targetRect.bottom + 12);
+        left = Math.max(pad, Math.min(vw - tw - pad, targetRect.left + targetRect.width / 2 - tw / 2));
+        if (top + th > vh - pad * 2) {
+          top = Math.max(pad, targetRect.top - th - 12);
+        }
+        break;
+      case 'left':
+        top = Math.max(pad, Math.min(vh - th - pad, targetRect.top + targetRect.height / 2 - th / 2));
+        left = Math.max(pad, targetRect.left - tw - 12);
+        if (left < pad) {
+          left = Math.min(vw - tw - pad, targetRect.right + 12);
+        }
+        break;
+      case 'right':
+        top = Math.max(pad, Math.min(vh - th - pad, targetRect.top + targetRect.height / 2 - th / 2));
+        left = Math.min(vw - tw - pad, targetRect.right + 12);
+        if (left + tw > vw - pad) {
+          left = Math.max(pad, targetRect.left - tw - 12);
+        }
+        break;
+      case 'top':
+        top = Math.max(pad, targetRect.top - th - 12);
+        left = Math.max(pad, Math.min(vw - tw - pad, targetRect.left + targetRect.width / 2 - tw / 2));
+        if (top < pad * 2) {
+          top = Math.min(vh - th - pad, targetRect.bottom + 12);
+        }
+        break;
+      default:
+        top = (vh - th) / 2;
+        left = (vw - tw) / 2;
+    }
+
+    return { top: `${top}px`, left: `${left}px` };
+  }, [targetRect, step]);
+
+  const handleNextStep = useCallback(() => {
     if (currentStep < totalSteps - 1) {
       setCurrentStep(prev => prev + 1);
-    } else {
-      // Last step - complete tutorial
-      completeTutorial();
     }
-  };
-  
-  // Complete the tutorial
-  const completeTutorial = async () => {
+  }, [currentStep, totalSteps]);
+
+  const handlePrevStep = useCallback(() => {
+    if (currentStep > 0) {
+      setCurrentStep(prev => prev - 1);
+    }
+  }, [currentStep]);
+
+  const completeTutorial = useCallback(async () => {
     try {
-      // Show confetti
+      // Immediately show confetti and hide overlay + tooltip
+      setTargetRect(null);
       setShowConfetti(true);
-      
-      // Update tutorial progress in database
+
       const result = await updateTutorialProgress(100, {
         currentStep: currentStep,
         currentSubstep: 0,
         completed: true
       });
-      
+
       if (!result.success) {
         console.error('Failed to update tutorial progress:', result.error);
         toast.error('Failed to save your progress');
       }
-      
+
+      // Fire-and-forget: deliver cached summaries
+      fetch('/api/onboarding/deliver-summaries', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      }).catch(err => {
+        console.error('Failed to deliver cached summaries:', err);
+      });
+
       // Send welcome email in the background
-      // We don't await this to prevent UI stalling
       fetch('/api/email/welcome', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          data: {}
-        })
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ data: {} })
       }).catch(err => {
         console.error('Failed to send welcome email:', err);
-        // Don't show error to user since this is a background task
       });
-      
-      // Hide the tutorial after a delay
+
+      // Hide tutorial after confetti (5s)
       setTimeout(() => {
         setIsActive(false);
         onComplete();
-      }, 3000);
+      }, 5000);
     } catch (error) {
       console.error('Error completing tutorial:', error);
       toast.error('Something went wrong. Please try again.');
     }
-  };
-  
-  // Handle yes/no for email summaries
-  const handleEmailSummariesResponse = async (sendEmail: boolean) => {
-    try {
-      setIsSendingEmail(true);
-      
-      // First complete the tutorial to prevent UI stalling
-      // This ensures the confetti shows and the tutorial closes properly
-      completeTutorial();
-      
-      if (sendEmail) {
-        // Send the email summaries in the background
-        // We don't await this to prevent stalling the UI
-        toast.promise(
-          sendLatestSummariesEmail(),
-          {
-            loading: 'Sending email summaries...',
-            success: 'Email summaries sent successfully!',
-            error: (err) => `Failed to send email: ${err?.error || 'Unknown error'}`
-          }
-        );
-      }
-    } catch (error) {
-      console.error('Error handling email summaries response:', error);
-      toast.error('Something went wrong. Please try again.');
-      setIsSendingEmail(false);
-    }
-  };
-  
-  // Handle previous step
-  const handlePrevStep = () => {
-    if (currentStep > 0) {
-      setCurrentStep(prev => prev - 1);
-    }
-  };
-  
-  // Handle skip tutorial
-  const handleSkipTutorial = () => {
-    // Mark tutorial as complete
-    updateTutorialProgress(100, {
-      currentStep: currentStep,
-      currentSubstep: 0,
-      completed: true,
-    }).catch(error => {
-      console.error('Failed to mark tutorial as complete:', error);
-    });
-    
-    setIsActive(false);
-    onComplete();
-    toast('Tutorial skipped. You can always revisit it from your profile settings.');
-    router.push('/dashboard');
-  };
-  
-  // Update active state based on props
+  }, [currentStep, onComplete]);
+
+  // Sync active prop
   useEffect(() => {
     setIsActive(active);
   }, [active]);
-  
-  // Update highlight when active state or current step changes
-  useEffect(() => {
-    highlightCurrentElement();
-    
-    // Cleanup function to remove highlighting when component unmounts or step changes
-    return () => {
-      document.querySelectorAll('.tutorial-highlight').forEach(el => {
-        el.classList.remove('tutorial-highlight');
-      });
-    };
-  }, [isActive, currentStep, highlightCurrentElement]);
-  
-  // Update progress when step changes
+
+  // Persist progress
   useEffect(() => {
     const newProgress = Math.round(((currentStep + 1) / totalSteps) * 100);
     setProgress(newProgress);
-    
-    // Save progress to the server
+
+    localStorage.setItem('tutorialProgress', JSON.stringify({
+      currentStep,
+      progress: newProgress,
+    }));
+
     updateTutorialProgress(newProgress, {
-      currentStep: currentStep,
+      currentStep,
       currentSubstep: 0,
-      completed: newProgress === 100,
+      completed: false,
     }).catch((error) => {
       console.error('Failed to update tutorial progress:', error);
     });
   }, [currentStep, totalSteps]);
-  
-  // Add resize listener to reposition tooltip on window resize
-  useEffect(() => {
-    const handleResize = () => {
-      if (highlightedElement) {
-        // Force re-calculation of tooltip position
-        setHighlightedElement(highlightedElement);
-      }
-    };
-    
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, [highlightedElement]);
-  
+
   if (!isActive) return null;
-  
-  const tooltipPosition = calculateTooltipPosition();
-  
-  // Special rendering for the email summaries step
-  const isEmailSummariesStep = currentStep === tutorialSteps.length - 1;
-  
+
+  const isLastStep = currentStep === totalSteps - 1;
+  const showOverlay = !showConfetti;
+  const showTooltip = !showConfetti && (isCenter || targetRect);
+
+  // SVG cutout dimensions
+  const cutoutPad = 8;
+  const cutout = targetRect ? {
+    x: targetRect.left - cutoutPad,
+    y: targetRect.top - cutoutPad,
+    w: targetRect.width + cutoutPad * 2,
+    h: targetRect.height + cutoutPad * 2,
+    cx: targetRect.left + targetRect.width / 2,
+    cy: targetRect.top + targetRect.height / 2,
+    r: Math.max(targetRect.width, targetRect.height) / 2 + cutoutPad,
+  } : null;
+
+  const vw = windowSize.w;
+  const vh = windowSize.h;
+
   return (
     <>
-      {/* Click-blocking overlay for steps with no highlighted element (e.g. email step) */}
-      {!highlightedElement && (
-        <div
-          className="fixed inset-0 bg-black/50 z-[9998]"
-          onClick={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
+      {/* SVG overlay with spotlight cutout - disappears immediately on confetti */}
+      {showOverlay && vw > 0 && (
+        <svg
+          width={vw}
+          height={vh}
+          viewBox={`0 0 ${vw} ${vh}`}
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            zIndex: 9998,
+            pointerEvents: 'auto',
+            margin: 0,
+            padding: 0,
           }}
-        />
+          onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}
+        >
+          <defs>
+            <mask id="tutorial-spotlight">
+              {/* White = overlay visible, Black = cutout (transparent) */}
+              <rect x={0} y={0} width={vw} height={vh} fill="white" />
+              {cutout && (isCircular ? (
+                <circle cx={cutout.cx} cy={cutout.cy} r={cutout.r} fill="black" />
+              ) : (
+                <rect x={cutout.x} y={cutout.y} width={cutout.w} height={cutout.h} rx={10} fill="black" />
+              ))}
+            </mask>
+            <linearGradient id="brand-ring-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stopColor="#0079F2" />
+              <stop offset="100%" stopColor="#8B5CF6" />
+            </linearGradient>
+          </defs>
+
+          {/* Dark overlay with cutout hole */}
+          <rect x={0} y={0} width={vw} height={vh} fill="rgba(0,0,0,0.5)" mask="url(#tutorial-spotlight)" />
+
+          {/* Brand-colored ring around the cutout */}
+          {cutout && (isCircular ? (
+            <circle
+              cx={cutout.cx} cy={cutout.cy} r={cutout.r}
+              fill="none" stroke="url(#brand-ring-gradient)" strokeWidth="3"
+            >
+              <animate attributeName="stroke-width" values="3;5;3" dur="2s" repeatCount="indefinite" />
+              <animate attributeName="stroke-opacity" values="0.8;0.4;0.8" dur="2s" repeatCount="indefinite" />
+            </circle>
+          ) : (
+            <rect
+              x={cutout.x} y={cutout.y} width={cutout.w} height={cutout.h} rx={10}
+              fill="none" stroke="url(#brand-ring-gradient)" strokeWidth="3"
+            >
+              <animate attributeName="stroke-width" values="3;5;3" dur="2s" repeatCount="indefinite" />
+              <animate attributeName="stroke-opacity" values="0.8;0.4;0.8" dur="2s" repeatCount="indefinite" />
+            </rect>
+          ))}
+        </svg>
       )}
 
       {/* Tutorial tooltip */}
-      <div
-        className="fixed z-[10000] bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-700 rounded-xl shadow-2xl w-[90vw] sm:w-[350px] max-w-[350px] p-4 animate-in fade-in slide-in-from-top-4 duration-300"
-        style={{
-          top: tooltipPosition.top,
-          left: tooltipPosition.left,
-        }}
-      >
-        {/* Header */}
-        <div className="flex items-center justify-between mb-2">
-          <div className="flex items-center gap-2">
-            <div className="bg-primary/10 text-primary p-1 rounded-full">
-              {tutorialSteps[currentStep]?.icon || <ActivityIcon className="h-5 w-5" />}
+      {showTooltip && (
+        <div
+          className="fixed z-[10000] bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-700 rounded-xl shadow-2xl w-[90vw] sm:w-[350px] max-w-[350px] p-4"
+          style={tooltipPosition}
+        >
+          {/* Header */}
+          <div className="flex items-center gap-2 mb-2">
+            <div className="p-1.5 rounded-full" style={{ background: 'linear-gradient(135deg, #0079F2, #8B5CF6)' }}>
+              <span className="text-white">{step?.icon || <List className="h-5 w-5" />}</span>
             </div>
-            <h3 className="font-medium">{tutorialSteps[currentStep]?.title || 'Tutorial'}</h3>
+            <h3 className="font-semibold text-sm">{step?.title || 'Tutorial'}</h3>
           </div>
-          <Button variant="ghost" size="icon" className="h-6 w-6" onClick={handleSkipTutorial}>
-            <X className="h-4 w-4" />
-          </Button>
-        </div>
-        
-        {/* Progress bar */}
-        <div className="mb-3">
-          <div className="flex justify-between text-xs mb-1">
-            <span>Progress</span>
-            <span>{progress}%</span>
+
+          {/* Progress bar */}
+          <div className="mb-3">
+            <div className="flex justify-between text-xs mb-1 text-muted-foreground">
+              <span>Step {currentStep + 1} of {totalSteps}</span>
+              <span>{progress}%</span>
+            </div>
+            <Progress value={progress} variant="brand" className="h-1" />
           </div>
-          <Progress value={progress} className="h-1" />
+
+          {/* Description */}
+          <p className="text-sm text-muted-foreground mb-4">
+            {step?.description || 'Learn how to use tldrSEC effectively.'}
+          </p>
+
+          {/* Navigation */}
+          <div className="flex justify-between">
+            {isLastStep ? (
+              <>
+                <Button variant="outline" size="sm" onClick={handlePrevStep} className="gap-1">
+                  <ArrowLeft className="h-4 w-4" />
+                  Back
+                </Button>
+                <Button
+                  size="sm"
+                  onClick={completeTutorial}
+                  className="gap-1 text-white"
+                  style={{ background: 'linear-gradient(135deg, #0079F2, #8B5CF6)' }}
+                >
+                  Complete Tutorial
+                  <ArrowRight className="h-4 w-4" />
+                </Button>
+              </>
+            ) : (
+              <>
+                <Button variant="outline" size="sm" onClick={handlePrevStep} disabled={currentStep === 0} className="gap-1">
+                  <ArrowLeft className="h-4 w-4" />
+                  Back
+                </Button>
+                <Button
+                  size="sm"
+                  onClick={handleNextStep}
+                  className="gap-1 text-white"
+                  style={{ background: 'linear-gradient(135deg, #0079F2, #8B5CF6)' }}
+                >
+                  Next
+                  <ArrowRight className="h-4 w-4" />
+                </Button>
+              </>
+            )}
+          </div>
         </div>
-        
-        {/* Description */}
-        <p className="text-sm text-muted-foreground mb-4">
-          {tutorialSteps[currentStep]?.description || 'Learn how to use tldrSEC effectively.'}
-        </p>
-        
-        {/* Navigation buttons */}
-        <div className="flex justify-between">
-          {isEmailSummariesStep ? (
-            // Yes/No buttons for email summaries step
-            <>
-              <Button 
-                variant="outline" 
-                size="sm"
-                onClick={() => handleEmailSummariesResponse(false)}
-                className="gap-1"
-                disabled={isSendingEmail}
-              >
-                <ThumbsDown className="h-4 w-4" />
-                No, thanks
-              </Button>
-              
-              <Button 
-                variant="default" 
-                size="sm"
-                onClick={() => handleEmailSummariesResponse(true)}
-                className="gap-1"
-                disabled={isSendingEmail}
-              >
-                {isSendingEmail ? (
-                  <>
-                    <span className="animate-spin mr-1">⟳</span>
-                    Sending...
-                  </>
-                ) : (
-                  <>
-                    <ThumbsUp className="h-4 w-4" />
-                    Yes, send it!
-                  </>
-                )}
-              </Button>
-            </>
-          ) : (
-            // Standard navigation for other steps
-            <>
-              <Button 
-                variant="outline" 
-                size="sm"
-                onClick={handlePrevStep}
-                disabled={currentStep === 0}
-                className="gap-1"
-              >
-                <ArrowLeft className="h-4 w-4" />
-                Back
-              </Button>
-              
-              <Button 
-                variant="default" 
-                size="sm"
-                onClick={handleNextStep}
-                className="gap-1"
-              >
-                {currentStep === totalSteps - 2 ? 'Next' : 'Next'}
-                <ArrowRight className="h-4 w-4" />
-              </Button>
-            </>
-          )}
-        </div>
-      </div>
-      
-      {/* Confetti celebration for completion */}
-      <Confetti active={showConfetti} explosion={true} particleCount={100} />
+      )}
+
+      {/* Confetti */}
+      <Confetti active={showConfetti} duration={3000} />
     </>
   );
-} 
+}
