@@ -1,35 +1,110 @@
 # Project Progress
 
-**Date**: 2026-02-24
-**Branch**: main
-**Status**: Stripe duplicate subscription fix and upgrade/downgrade flow (in progress)
+**Date**: 2026-03-08
+**Branch**: worktree-stripe (main for merged work)
+**Status**: Stripe duplicate subscription prevention — all phases complete, dry-run verified, ready for live cleanup.
 
 ---
 
 ## Current Session
 
-### Fix Stripe Duplicate Subscriptions & Upgrade/Downgrade Flow (2026-02-24)
+### Fix Stripe Duplicate Subscription Prevention (worktree-stripe) 🔄
 
-**Goal**: Fix 4 duplicate Stripe subscriptions across 2 customers, orphaned DB records from userId mismatch, and upgrades creating new subs instead of modifying existing ones.
+**Branch**: `worktree-stripe` | **Plan**: `.claude/docs/plans/2026-03-02-fix-stripe-duplicate-subscriptions.md`
 
-**Root Causes**: (1) POST handler only checked `isActive` in DB, not Stripe source of truth. (2) `userId` mismatch - Clerk ID used for `UserSubscription.userId` FK but FK points to `User.id` (different UUID). (3) Upgrades (PRO→MAX) returned 400 "requires checkout" instead of modifying existing Stripe subscription. (4) Downgrade handler hardcoded `'monthly'` billing interval.
+**Problem**: Two users had duplicate Stripe subscriptions. Root cause: `/api/checkout/direct` (homepage pre-auth checkout) had zero duplicate prevention — created new Stripe customer on every call, omitted `userId` from metadata, webhook silently dropped events.
 
-**Changes**:
-1. **`lib/stripe/index.ts`** - Added `listActiveSubscriptions(customerId)` and `getPlanTypeFromPriceId(priceId)` shared helpers
-2. **`app/api/webhook/stripe/route.ts`** - Removed local `getPlanTypeFromPriceId`, imports from `lib/stripe`. Fixed `handleCheckoutCompleted` to resolve Clerk ID → DB user ID. Added `stripeCustomerId` to upsert update clause
-3. **`app/api/user/subscription/route.ts`** - Major refactor:
-   - GET: Resolves `clerkId` → `dbUser.id` before querying `UserSubscription`
-   - POST: Uses `dbUserId` for all DB ops, stores `clerkId` in Stripe metadata. **New Stripe-side duplicate check** - queries Stripe for active subs before checkout, syncs DB and returns 409 `action: 'use_put'` if found
-   - PUT: Resolves `clerkId` → `dbUser.id`. Accepts `billingInterval` param. **New upgrade support** - modifies existing Stripe subscription with `always_invoice` proration. Downgrade detects interval from Stripe instead of hardcoding `'monthly'`
-4. **`app/dashboard/page.tsx`** - Fixed checkout verification fallback to use `dbUser.id` instead of Clerk `user.id`
-5. **`app/subscribe/page.tsx`** - Added `handleUpgrade()` that calls PUT for paid→higher paid. `handleCheckout()` routes upgrades through PUT. Handles `action: 'use_put'` 409 response as fallback
-6. **`scripts/cleanup-duplicate-subscriptions.ts`** - One-time script: cancels duplicate Stripe subs (keeps most recent per customer), deletes orphaned records, syncs DB with Stripe. Supports `--dry-run`
+**Implementation** (4 phases, all complete):
 
-**Status**: Code complete, lint clean, build passes, 0 new TS errors. Cleanup script and manual testing pending.
+- **Pre-Phase**: Extracted shared `lib/stripe/sync-subscription.ts` (`syncSubscriptionFromStripeData` + `syncUserSubscriptionTier`). Migrated 4 webhook call sites. Added Stripe mock factories to test fixtures.
+
+- **Phase 0 (Cleanup Script)**: `scripts/cleanup-duplicate-subscriptions.ts` — finds duplicate subs by email, keeps newest, cancels rest, consolidates customers, outputs JSON audit log. Dry-run verified: 2 users with duplicates, 0 errors.
+
+- **Phase 1 (Direct Checkout Fix)**: `app/api/checkout/direct/route.ts` — `Promise.all` parallelized checks (open sessions, customer lookup, DB user), `client_reference_id` idempotency, active sub 409 with sign-in link, customer reuse, `PaymentLogger.checkoutFailed()`, fail-open DB pattern.
+
+- **Phase 2 (Webhook Fix)**: `app/api/webhook/stripe/route.ts` — email fallback in `handleCheckoutCompleted` when userId missing, email fallback in `handleSubscriptionCreated`, uses shared `syncSubscriptionFromStripeData`.
+
+- **Phase 3 (Reconciliation)**: `lib/stripe/reconcile.ts` for onboarding, `isNewUser` guard in `actions.ts`, `subscription_success` param forwarding through onboarding, dashboard sync indicator. Added `sendCheckoutReminderEmail` for users who pay but don't complete onboarding.
+
+**Files Created**: `lib/stripe/sync-subscription.ts`, `lib/stripe/reconcile.ts`, 5 test files
+**Files Modified**: `app/api/checkout/direct/route.ts`, `app/api/webhook/stripe/route.ts`, `app/(auth)/onboarding/actions.ts`, `app/(auth)/onboarding/onboarding-client.tsx`, `components/dashboard/dashboard-client.tsx`, `lib/email/trial-emails.ts`, `scripts/cleanup-duplicate-subscriptions.ts`
+
+**Next**: Run cleanup script live, then merge to main.
 
 ---
 
 ## Recently Completed Sessions
+
+### Pipeline Throughput & Worker Cleanup ✅ (2026-03-02)
+
+**PR**: [#357](https://github.com/wilfred-py/tldrsec-ai/pull/357) | **Plan**: `docs/plans/2026-03-02-pipeline-throughput-and-worker-cleanup.md`
+
+**Goal**: Maximize summaries per cron run by looping Step 3 (summarize), removing dead code, and gating verbose logging.
+
+**Phase 1: Dead Code Removal** - Removed `handleIntervalSummary`, `handleSummarizeOnly`, `intervalSummary` health tracking, `USE_ASYNC_PROCESSING` and `RATE_LIMIT_STRATEGY` config vars.
+
+**Phase 2: DEBUG_MODE Logging Gate** - Added `debugLog(env, ...args)` helper, threaded `env` through rate limiting functions, converted 8 verbose logs to debug-only.
+
+**Phase 3: Summarize Loop** - Replaced single Step 3 call with time-budgeted `while` loop (60s buffer, max 10 iterations, fresh HMAC per iteration, breaks on 0 jobs).
+
+**Files**: `cloudflare-cron/index.js`, `cloudflare-cron/wrangler.toml`, `wrangler.toml`, tests updated/created.
+**Verification**: 21 new tests, deployed to Cloudflare (v2.5.0-stable), HMAC verified (HTTP 202).
+
+---
+
+### Update Free Tier Pricing Card CTA ✅ (2026-02-25)
+
+**PR**: [#355](https://github.com/wilfred-py/tldrsec-ai/pull/355)
+
+**Change**: Updated free tier pricing card CTA text and removed redundant copy on landing page.
+
+---
+
+### Fix Stripe Duplicate Subscriptions & Upgrade/Downgrade Flow ✅ (2026-02-24)
+
+**Goal**: Fix 4 duplicate Stripe subscriptions across 2 customers, orphaned DB records from userId mismatch, and upgrades creating new subs instead of modifying existing ones.
+
+**Root Causes**: (1) POST handler only checked `isActive` in DB, not Stripe source of truth. (2) `userId` mismatch. (3) Upgrades returned 400 instead of modifying existing sub. (4) Downgrade hardcoded `'monthly'`.
+
+**Files**: `lib/stripe/index.ts`, `app/api/webhook/stripe/route.ts`, `app/api/user/subscription/route.ts`, `app/dashboard/page.tsx`, `app/subscribe/page.tsx`, `scripts/cleanup-duplicate-subscriptions.ts`
+
+---
+
+### Hide Nav Links on Sign-In/Sign-Up Pages ✅ (2026-02-25)
+
+**PR**: [#354](https://github.com/wilfred-py/tldrsec-ai/pull/354)
+
+---
+
+### Dashboard Layout Build Fix ✅ (2026-02-11)
+
+**Goal**: Fix Vercel build failure on `/dashboard/billing` page caused by Clerk `useUser()` called during static prerendering.
+
+**Root Cause**: `app/dashboard/layout.tsx` was a `'use client'` component calling `useSubscription()` → `useUser()`. During Next.js static generation, `ClerkProvider` isn't available (no `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` at build time). Most dashboard pages avoided this because they're server components using `currentUser()` (auto-forces dynamic rendering), but `/dashboard/billing` is purely client-side — so Next.js attempted prerendering and the layout's hook blew up.
+
+**Fix (Next.js best practice)**: Split layout into server + client components:
+1. `app/dashboard/layout.tsx` — Server component with `export const dynamic = "force-dynamic"` that delegates to `DashboardShell`
+2. `components/dashboard/dashboard-shell.tsx` — New `'use client'` component with original layout logic (hooks, `ProtectedRoute`, subscription banner)
+
+**Files Created**: `components/dashboard/dashboard-shell.tsx`
+**Files Modified**: `app/dashboard/layout.tsx`
+**Verification**: `npm run build` passes, all `/dashboard/*` routes render as `ƒ` (dynamic)
+
+---
+
+### Pipeline Job Processing Improvements ✅ (2026-02-10)
+
+**Goal**: DLQ cleanup automation, retry pattern documentation, test suite fixes following pipeline investigation.
+
+**Phase 1 - Retry Pattern Documentation**: 100% retryCount=1 is EXPECTED (serverless cold starts). Created `docs/architecture/job-retry-patterns.md`, `lib/monitoring/retry-rate-monitor.ts` (12 tests), `app/api/monitoring/retry-rates/route.ts`.
+
+**Phase 2 - Test Suite Fixes**: Fixed 3 expectations in `__tests__/lib/email/async-email-queue.test.ts` (email masking + resilient design behavior). All 57 tests passing.
+
+**Phase 3 - DLQ Automated Cleanup**: Created `app/api/cron/cleanup-dlq/route.ts` (14/30 day cutoffs, alert thresholds), `app/api/monitoring/dlq-status/route.ts`, updated `cloudflare-cron/index.js` with `0 2 * * *` daily schedule. 9 tests passing.
+
+**Total**: ~1,200 lines new code, 21 tests, complete documentation.
+
+---
 
 ### E2E Pipeline Script Alignment with Production Architecture ✅ (2026-02-24)
 
@@ -399,49 +474,15 @@ Added Agent Guidelines section to CLAUDE.md (Common Mistakes, Pattern References
 
 ---
 
-### Unified Subscription Tiers + Billing Downgrade Fix ✅ (2026-01-28)
-
-405 PUT errors + Prisma enum mismatch. Added PUT handler to subscription route, unified `SubscriptionTier` enum to FREE/PRO/MAX, created migration script.
-
-### Pipeline Stall Recovery + Throughput Optimization ✅ (2026-01-28)
-
-Pipeline stalled 12h, 799 pending jobs. Fixed vercel.json, redeployed CF Worker, synced secrets, added */3 summarize cron. Throughput: 12→130+ jobs/hour.
-
-### Unsent Email Recovery ✅ (2026-01-27)
-
-47 completed summaries with `sentToUser: false` resent. Created `scripts/resend-unsent-emails.ts`.
-
-### TickerMonitoring Root Cause Fix ✅ (2026-01-27)
-
-3-phase pipeline bypassed TickerMonitoring record creation. Added `getActiveTickersForMonitoring()` to discovery handler.
-
-### GitHub Actions Minutes Optimization ✅ (2026-01-27)
-
-Watchdog */10→*/30, path filters on quality-gates.yml and pr-validation.yml. Savings: ~750 min/month.
-
-### Pipeline Resilience Zero-Intervention ✅ (2026-01-26)
-
-PR #340. CRON_SECRET auto-trim, orphan detection fix, GitHub Action watchdog. 30/30 tests.
-
-### Stripe Webhook planType Sync Fix ✅ (2026-01-26)
-
-PR #339. Webhook not syncing planType to User.subscriptionTier. Fixed + checkout UX improvements.
-
-### Pipeline Stall Recovery & Bug Fixes ✅ (2026-01-26)
-
-Auto-recover threw error on 503 instead of proceeding. Fixed + OrphanedFilingDetector table query.
-
----
-
 ## Archived Sessions (See TIMELINE.md for Full Details)
 
 For complete technical details of projects older than 30 days, see the weekly archive files in `.claude/history/`:
-- **January 2026**: BAC 424B2 investigation, Prospectus preferences, Stripe integration fixes, Pipeline stall recovery, and 30+ more
+- **January 2026**: BAC 424B2 investigation, Prospectus preferences, Stripe integration fixes, Pipeline stall recovery, Unified subscription tiers, and 30+ more
 - **December 2025**: 5 weekly archives with 100+ completed projects
 - **November 2025**: 4 weekly archives
 - **October 2025**: 2 weekly archives
 
 ---
 
-*Last Updated: 2026-02-24 (Stripe duplicate sub fix & upgrade/downgrade flow, E2E pipeline script alignment)*
+*Last Updated: 2026-03-08 (Stripe Duplicate Subscription Prevention — all phases complete, dry-run verified)*
 *Completed projects older than 30 days are archived to .claude/history/ - See TIMELINE.md for complete historical context*
