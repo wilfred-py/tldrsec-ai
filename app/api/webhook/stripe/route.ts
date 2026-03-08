@@ -6,28 +6,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { headers } from 'next/headers';
 import { getPrismaClient } from '../../../../lib/db/prisma';
-import { validateWebhookSignature, getPlanTypeFromPriceId } from '../../../../lib/stripe';
+import { validateWebhookSignature, getPlanTypeFromPriceId, stripe } from '../../../../lib/stripe';
+import { syncUserSubscriptionTier, syncSubscriptionFromStripeData } from '../../../../lib/stripe/sync-subscription';
 import Stripe from 'stripe';
 
 const prisma = getPrismaClient();
-
-/**
- * Sync User.subscriptionTier to match the subscription plan.
- * Uses updateMany with OR to handle both DB id and Clerk authProviderId.
- */
-async function syncUserSubscriptionTier(userId: string, planType: 'FREE' | 'PRO' | 'MAX') {
-  try {
-    await prisma.user.updateMany({
-      where: {
-        OR: [{ id: userId }, { authProviderId: userId }],
-      },
-      data: { subscriptionTier: planType },
-    });
-    console.log(`[webhook] Synced User.subscriptionTier to ${planType} for ${userId}`);
-  } catch (error) {
-    console.error(`[webhook] Failed to sync User.subscriptionTier for ${userId}:`, error);
-  }
-}
 
 export async function POST(request: NextRequest) {
   try {
@@ -104,21 +87,65 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
     return;
   }
 
-  const metadataUserId = session.metadata?.userId;
+  let metadataUserId = session.metadata?.userId;
   const planType = session.metadata?.planType as 'FREE' | 'PRO' | 'MAX' | undefined;
 
-  if (!metadataUserId || !planType) {
-    console.error('Missing metadata in checkout session');
+  if (!planType) {
+    console.error('[webhook] Missing planType in checkout session metadata:', session.id);
     return;
   }
 
+  // R8: If userId not in metadata, try to resolve by email (store for reuse)
+  let resolvedDbUser: { id: string; authProviderId: string | null } | null = null;
+  if (!metadataUserId) {
+    const customerEmail = session.customer_details?.email || session.customer_email;
+    if (customerEmail) {
+      try {
+        resolvedDbUser = await prisma.user.findFirst({
+          where: { email: customerEmail },
+          select: { id: true, authProviderId: true },
+        });
+        if (resolvedDbUser) {
+          metadataUserId = resolvedDbUser.authProviderId || resolvedDbUser.id;
+          console.log(`[webhook] Resolved user by email ${customerEmail} -> ${metadataUserId}`);
+        } else {
+          console.warn(`[webhook] No DB user found for email ${customerEmail}, session ${session.id}. Will be reconciled at onboarding.`);
+          // Q3: Send reminder email to complete signup (fire-and-forget)
+          import('../../../../lib/email/trial-emails')
+            .then(({ sendCheckoutReminderEmail }) =>
+              sendCheckoutReminderEmail({
+                email: customerEmail,
+                sessionId: session.id,
+                planType: planType || 'PRO',
+              })
+            )
+            .catch((emailErr) => {
+              console.error('[webhook] Failed to send checkout reminder email:', emailErr);
+            });
+          return;
+        }
+      } catch (dbError) {
+        console.error('[webhook] Email fallback DB lookup failed:', dbError);
+        return;
+      }
+    } else {
+      console.error('[webhook] No userId or email available in session:', session.id);
+      return;
+    }
+  }
+
   try {
-    // Resolve Clerk ID → DB user ID
-    const dbUser = await prisma.user.findFirst({
-      where: { OR: [{ id: metadataUserId }, { authProviderId: metadataUserId }] },
-      select: { id: true },
-    });
-    const userId = dbUser?.id ?? metadataUserId;
+    // R8: Reuse resolvedDbUser if available, otherwise resolve by metadataUserId
+    let userId: string;
+    if (resolvedDbUser) {
+      userId = resolvedDbUser.id;
+    } else {
+      const dbUser = await prisma.user.findFirst({
+        where: { OR: [{ id: metadataUserId }, { authProviderId: metadataUserId }] },
+        select: { id: true },
+      });
+      userId = dbUser?.id ?? metadataUserId;
+    }
 
     // Update or create subscription record using upsert for robustness
     await prisma.userSubscription.upsert({
@@ -196,7 +223,29 @@ async function handleSubscriptionCreated(subscription: Stripe.Subscription) {
     where: { stripeCustomerId: customerId },
   });
 
+  // Issue 2: If not found by customer ID, try email fallback via Stripe customer
   if (!userSubscription) {
+    try {
+      if (stripe) {
+        const customer = await stripe.customers.retrieve(customerId);
+        if (customer && !customer.deleted && 'email' in customer && customer.email) {
+          const dbUser = await prisma.user.findFirst({
+            where: { email: customer.email },
+            select: { id: true },
+          });
+          if (dbUser) {
+            const { planType } = await syncSubscriptionFromStripeData(
+              dbUser.id, subscription, customerId
+            );
+            console.log(`[webhook] Subscription created via email fallback for ${customer.email}: ${planType}`);
+            return;
+          }
+        }
+      }
+    } catch (error) {
+      console.error('[webhook] Email fallback failed for customer:', customerId, error);
+    }
+
     console.error('User not found for customer:', customerId);
     return;
   }

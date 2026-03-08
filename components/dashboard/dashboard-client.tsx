@@ -135,14 +135,25 @@ export function DashboardClient({ showWelcome = false, shouldMergePending = fals
   }, []);
 
   // Show success toast when subscription is activated
+  // R14: If subscription_success=true but tier is still FREE, the webhook/reconciliation
+  // hasn't synced yet. Auto-refresh after 3s to pick up the updated tier.
   useEffect(() => {
     if (subscriptionSuccess) {
-      toast.success('Welcome to your new plan!', {
-        description: 'Your subscription is now active. Start tracking more companies!',
-        duration: 5000,
-      });
+      if (subscriptionTier === 'FREE') {
+        toast.loading('Verifying subscription...', {
+          description: 'Your payment was received. Activating your plan now.',
+          duration: 4000,
+        });
+        const timer = setTimeout(() => window.location.reload(), 3000);
+        return () => clearTimeout(timer);
+      } else {
+        toast.success('Welcome to your new plan!', {
+          description: 'Your subscription is now active. Start tracking more companies!',
+          duration: 5000,
+        });
+      }
     }
-  }, [subscriptionSuccess]);
+  }, [subscriptionSuccess, subscriptionTier]);
 
   // Lazy-load companies for search - only fetch when user clicks Add Ticker
   const loadCompaniesForSearch = useCallback(async () => {

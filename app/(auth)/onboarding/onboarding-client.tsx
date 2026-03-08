@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useSession } from "@clerk/nextjs";
 import { useAuthContext } from "@/lib/context/auth-context";
 import { Card, CardContent } from "@/components/ui/card";
@@ -146,6 +146,7 @@ export default function OnboardingPage() {
   const { isLoading, userName } = useAuthContext();
   const { session } = useSession();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [initializing, setInitializing] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -317,7 +318,10 @@ export default function OnboardingPage() {
 
       // Use hard navigation to ensure fresh middleware evaluation with new session
       // router.push() uses client-side navigation which may use cached session claims
-      window.location.href = '/dashboard';
+      // Forward subscription_success param so dashboard can show sync indicator
+      const subscriptionSuccess = searchParams.get('subscription_success');
+      const dashboardUrl = subscriptionSuccess ? '/dashboard?subscription_success=true' : '/dashboard';
+      window.location.href = dashboardUrl;
     } catch (error) {
       console.error('Error completing onboarding:', error);
       const errorMessage = error instanceof Error ? error.message : 'An unexpected error occurred';
