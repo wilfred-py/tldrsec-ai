@@ -1,59 +1,64 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import ReactConfetti from 'react-confetti';
-import { useWindowSize } from 'react-use';
+import { useEffect, useRef } from 'react';
+import confetti from 'canvas-confetti';
 
 interface ConfettiProps {
   active: boolean;
-  duration?: number; // Duration in milliseconds
-  particleCount?: number;
-  recycle?: boolean;
-  explosion?: boolean; // Whether to use explosion style (centered confetti)
+  duration?: number;
 }
 
-export function Confetti({ 
-  active, 
-  duration = 3000, 
-  particleCount = 200,
-  recycle = false,
-  explosion = false
-}: ConfettiProps) {
-  const [isActive, setIsActive] = useState(false);
-  const { width, height } = useWindowSize();
-  
-  useEffect(() => {
-    if (active && !isActive) {
-      setIsActive(true);
-      
-      if (!recycle) {
-        const timer = setTimeout(() => {
-          setIsActive(false);
-        }, duration);
-        
-        return () => clearTimeout(timer);
-      }
-    } else if (!active && isActive && !recycle) {
-      setIsActive(false);
-    }
-  }, [active, duration, isActive, recycle]);
+/**
+ * Side cannons confetti using canvas-confetti (Magic UI pattern).
+ * Fires particles from both sides of the viewport simultaneously.
+ */
+export function Confetti({ active, duration = 3000 }: ConfettiProps) {
+  const firedRef = useRef(false);
 
-  if (!isActive) return null;
-  
-  // Use explosion style (more concentrated confetti) if requested
-  const confettiSource = explosion 
-    ? { x: width / 2, y: height / 3, w: 10, h: 10 }
-    : { x: width / 2, y: height / 3, w: 0, h: 0 };
-  
-  // Use full screen confetti with adjusted source
-  return (
-    <ReactConfetti
-      width={width}
-      height={height}
-      numberOfPieces={particleCount}
-      recycle={recycle}
-      confettiSource={confettiSource}
-      className="fixed inset-0 z-50 pointer-events-none"
-    />
-  );
-} 
+  useEffect(() => {
+    if (!active || firedRef.current) return;
+    firedRef.current = true;
+
+    const end = Date.now() + duration;
+    const colors = ['#0079F2', '#8B5CF6', '#a786ff', '#fd8bbc', '#eca184', '#f8deb1'];
+
+    const frame = () => {
+      if (Date.now() > end) return;
+
+      // Left cannon
+      confetti({
+        particleCount: 2,
+        angle: 60,
+        spread: 55,
+        startVelocity: 60,
+        origin: { x: 0, y: 0.5 },
+        colors,
+        zIndex: 10001,
+      });
+
+      // Right cannon
+      confetti({
+        particleCount: 2,
+        angle: 120,
+        spread: 55,
+        startVelocity: 60,
+        origin: { x: 1, y: 0.5 },
+        colors,
+        zIndex: 10001,
+      });
+
+      requestAnimationFrame(frame);
+    };
+
+    frame();
+  }, [active, duration]);
+
+  // Reset fired state when deactivated so it can fire again next time
+  useEffect(() => {
+    if (!active) {
+      firedRef.current = false;
+    }
+  }, [active]);
+
+  return null;
+}

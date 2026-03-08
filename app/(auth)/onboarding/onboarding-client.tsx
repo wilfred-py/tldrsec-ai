@@ -1,7 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useSession } from "@clerk/nextjs";
 import { useAuthContext } from "@/lib/context/auth-context";
 import { Card, CardContent } from "@/components/ui/card";
@@ -12,14 +11,19 @@ import { Button } from "@/components/ui/button";
 import { CheckCircle, ArrowRight, Building2, Cpu, Heart, Car, ShoppingCart, Zap, Home, Banknote, Search, Loader2, ArrowLeft } from "lucide-react";
 import { toast } from "sonner";
 import { NotificationPreference } from "@/lib/email/notification-types";
-import { 
-  FilingTypePreferences, 
+import {
+  FilingTypePreferences,
   NotificationContentPreferences,
   UIPreferences,
   DEFAULT_NOTIFICATION_PREFERENCES,
   DEFAULT_UI_PREFERENCES
 } from "@/lib/user/preference-types";
 import { completeOnboardingBatched } from "./actions";
+import { THREE_TIER_LIMITS } from "@/lib/subscription/three-tier-limits";
+import { CompanyLogo } from "@/components/ui/company-logo";
+import { OnboardingTransition } from "@/components/onboarding/onboarding-transition";
+
+const MAX_TICKERS = THREE_TIER_LIMITS.FREE; // 3
 
 // Define sectors with their icons and descriptions
 const sectors = [
@@ -82,8 +86,7 @@ const sectors = [
 ];
 
 // Sample equities by sector for the reference implementation
-// In production, this would be fetched from an API
-const equitiesBySector = {
+const equitiesBySector: Record<string, { symbol: string; name: string }[]> = {
   technology: [
     { symbol: "AAPL", name: "Apple Inc." },
     { symbol: "MSFT", name: "Microsoft Corporation" },
@@ -145,11 +148,10 @@ const equitiesBySector = {
 export default function OnboardingPage() {
   const { isLoading, userName } = useAuthContext();
   const { session } = useSession();
-  const router = useRouter();
-  const searchParams = useSearchParams();
   const [initializing, setInitializing] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showTransition, setShowTransition] = useState(false);
 
   // New state for the simplified onboarding flow
   const [currentStep, setCurrentStep] = useState(1);
@@ -157,6 +159,11 @@ export default function OnboardingPage() {
   const [selectedEquities, setSelectedEquities] = useState<string[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [isTransitioning, setIsTransitioning] = useState(false);
+
+  // API search state
+  const [apiSearchResults, setApiSearchResults] = useState<{ symbol: string; name: string }[]>([]);
+  const [isSearchingApi, setIsSearchingApi] = useState(false);
+  const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   // Default preferences
   const [emailFrequency] = useState<NotificationPreference>(
@@ -178,7 +185,6 @@ export default function OnboardingPage() {
   }, [userName]);
 
   // Initialize page state once auth context is loaded
-  // Note: Onboarding now requires authentication (auth-first flow)
   useEffect(() => {
     try {
       if (!isLoading) {
@@ -191,14 +197,62 @@ export default function OnboardingPage() {
     }
   }, [isLoading]);
 
+  // API-backed search with debounce
+  const searchApi = useCallback(async (query: string) => {
+    if (query.length < 2) {
+      setApiSearchResults([]);
+      setIsSearchingApi(false);
+      return;
+    }
+
+    setIsSearchingApi(true);
+    try {
+      const response = await fetch(`/api/companies/search?q=${encodeURIComponent(query)}`);
+      if (response.ok) {
+        const data = (await response.json()) as { companies?: Array<{ symbol: string; name: string }> };
+        if (data.companies && Array.isArray(data.companies)) {
+          setApiSearchResults(
+            data.companies.slice(0, 20).map((c) => ({
+              symbol: c.symbol,
+              name: c.name,
+            }))
+          );
+        }
+      }
+    } catch (err) {
+      console.error("API search error:", err);
+    } finally {
+      setIsSearchingApi(false);
+    }
+  }, []);
+
+  // Handle search query change with debounced API search
+  const handleSearchChange = useCallback((query: string) => {
+    setSearchQuery(query);
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
+    }
+    if (query.length >= 2) {
+      setIsSearchingApi(true);
+      debounceTimerRef.current = setTimeout(() => {
+        searchApi(query);
+      }, 300);
+    } else {
+      setApiSearchResults([]);
+      setIsSearchingApi(false);
+    }
+  }, [searchApi]);
+
   // Calculate progress based on current step and selections (2-step flow)
+  // Cap at 90% until submission completes - 100% is only shown via transition screen
   const calculateProgress = () => {
     if (currentStep === 1) {
-      // Step 1: 0% if no sectors selected, 50% if at least one sector is selected
-      return selectedSectors.length > 0 ? 50 : 0;
+      // Step 1: 0-45% based on how many sectors selected (up to 3 shown)
+      return Math.min(45, selectedSectors.length * 15);
     } else {
-      // Step 2: 50% base + 50% if at least one company is selected = 100%
-      return 50 + (selectedEquities.length > 0 ? 50 : 0);
+      // Step 2: 50-90% based on how many equities selected out of max
+      const equityProgress = Math.min(40, (selectedEquities.length / MAX_TICKERS) * 40);
+      return 50 + Math.round(equityProgress);
     }
   };
 
@@ -206,7 +260,7 @@ export default function OnboardingPage() {
 
   // Handle sector selection
   const handleSectorToggle = (sectorId: string) => {
-    setSelectedSectors((prev) => 
+    setSelectedSectors((prev) =>
       prev.includes(sectorId) ? prev.filter((id) => id !== sectorId) : [...prev, sectorId]
     );
   };
@@ -217,7 +271,7 @@ export default function OnboardingPage() {
       if (prev.includes(symbol)) {
         return prev.filter((s) => s !== symbol);
       }
-      if (prev.length < 5) {
+      if (prev.length < MAX_TICKERS) {
         return [...prev, symbol];
       }
       return prev;
@@ -226,22 +280,31 @@ export default function OnboardingPage() {
 
   // Get available equities based on selected sectors and search query
   const getAvailableEquities = () => {
-    if (selectedSectors.length === 0) return [];
+    if (selectedSectors.length === 0 && !searchQuery) return [];
 
-    const allEquities = selectedSectors.flatMap((sectorId) => equitiesBySector[sectorId as keyof typeof equitiesBySector] || []);
-    const uniqueEquities = allEquities.filter(
+    // Sector-based results
+    const sectorEquities = selectedSectors.flatMap(
+      (sectorId) => equitiesBySector[sectorId] || []
+    );
+    const uniqueSectorEquities = sectorEquities.filter(
       (equity, index, self) => index === self.findIndex((e) => e.symbol === equity.symbol)
     );
 
+    // Filter sector results by search query
+    let filteredSectorResults = uniqueSectorEquities;
     if (searchQuery) {
-      return uniqueEquities.filter(
+      filteredSectorResults = uniqueSectorEquities.filter(
         (equity) =>
           equity.symbol.toLowerCase().includes(searchQuery.toLowerCase()) ||
           equity.name.toLowerCase().includes(searchQuery.toLowerCase())
       );
     }
 
-    return uniqueEquities;
+    // Merge API results (deduplicate, sector results first)
+    const sectorSymbols = new Set(filteredSectorResults.map((e) => e.symbol));
+    const uniqueApiResults = apiSearchResults.filter((r) => !sectorSymbols.has(r.symbol));
+
+    return [...filteredSectorResults, ...uniqueApiResults];
   };
 
   // Handle next button click
@@ -253,7 +316,6 @@ export default function OnboardingPage() {
         setIsTransitioning(false);
       }, 300);
     } else if (currentStep === 2) {
-      // Step 2 is now the final step - complete onboarding
       handleCompleteOnboarding();
     }
   };
@@ -267,22 +329,20 @@ export default function OnboardingPage() {
     }, 300);
   };
 
-  // Handle onboarding completion - OPTIMIZED with single batched server action
+  // Handle onboarding completion
   const handleCompleteOnboarding = async () => {
     try {
       setIsSubmitting(true);
       setError(null);
 
-      // Format selected tickers for saving
-      const formattedTickers = getAvailableEquities()
+      const allEquities = getAvailableEquities();
+      const formattedTickers = allEquities
         .filter(equity => selectedEquities.includes(equity.symbol))
         .map(equity => ({
           symbol: equity.symbol,
           companyName: equity.name
         }));
 
-      // Single batched server action replaces 3+ sequential calls
-      // This reduces: ~15 Clerk API calls + ~15 DB queries → 2 Clerk + 1 DB transaction
       const result = await completeOnboardingBatched({
         preferences: {
           notifications: {
@@ -299,29 +359,18 @@ export default function OnboardingPage() {
         throw new Error(result.error || 'Failed to complete onboarding');
       }
 
-      toast.success('Onboarding completed successfully!');
-
-      // CRITICAL: Force Clerk session refresh to get updated publicMetadata
-      // This prevents the middleware race condition where stale session claims
-      // cause redirect back to /onboarding
-      if (session) {
-        try {
-          await session.reload();
-        } catch (reloadError) {
-          console.warn('Session reload failed, continuing with navigation:', reloadError);
-        }
-      }
-
-      // Set a temporary cookie to bypass middleware check during redirect
-      // This handles the race condition where Clerk's JWT hasn't refreshed yet
+      // Set temporary cookie BEFORE transition to bypass middleware race condition
       document.cookie = 'onboarding_completed=true; path=/; max-age=60; SameSite=Lax';
 
-      // Use hard navigation to ensure fresh middleware evaluation with new session
-      // router.push() uses client-side navigation which may use cached session claims
-      // Forward subscription_success param so dashboard can show sync indicator
-      const subscriptionSuccess = searchParams.get('subscription_success');
-      const dashboardUrl = subscriptionSuccess ? '/dashboard?subscription_success=true' : '/dashboard';
-      window.location.href = dashboardUrl;
+      // Show animated transition screen instead of toast
+      setShowTransition(true);
+
+      // Refresh Clerk session in background (fire-and-forget to avoid state reset)
+      if (session) {
+        session.reload().catch((reloadError) => {
+          console.warn('Session reload failed, continuing with navigation:', reloadError);
+        });
+      }
     } catch (error) {
       console.error('Error completing onboarding:', error);
       const errorMessage = error instanceof Error ? error.message : 'An unexpected error occurred';
@@ -342,7 +391,7 @@ export default function OnboardingPage() {
     );
   }
 
-  if (error) {
+  if (error && !showTransition) {
     return (
       <div className="flex min-h-screen items-center justify-center p-4">
         <Card className="w-full max-w-md">
@@ -350,10 +399,10 @@ export default function OnboardingPage() {
             <div className="text-center">
               <h2 className="text-2xl font-bold text-red-600 mb-4">Error</h2>
               <p className="mb-6">{error}</p>
-              <Button 
+              <Button
                 onClick={() => {
                   setError(null);
-                  router.refresh();
+                  setIsSubmitting(false);
                 }}
               >
                 Retry
@@ -365,15 +414,9 @@ export default function OnboardingPage() {
     );
   }
 
-  if (isSubmitting) {
-    return (
-      <div className="flex min-h-screen items-center justify-center">
-        <div className="text-center">
-          <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4" />
-          <p>Setting up your account...</p>
-        </div>
-      </div>
-    );
+  // Show animated transition screen on success
+  if (showTransition) {
+    return <OnboardingTransition />;
   }
 
   return (
@@ -382,7 +425,6 @@ export default function OnboardingPage() {
         <div className="mx-auto max-w-4xl">
           {/* Header */}
           <div className="mb-8 text-center">
-
             <h1 className="mt-10 mb-2 text-2xl font-bold">Welcome to tldrSEC!</h1>
             <p className="text-muted-foreground">Let&apos;s personalize your experience in just 2 quick steps.</p>
           </div>
@@ -393,7 +435,7 @@ export default function OnboardingPage() {
               <span className="font-medium">Step {currentStep} of 2</span>
               <span className="text-muted-foreground">{Math.round(progress)}% complete</span>
             </div>
-            <Progress value={progress} className="h-2" />
+            <Progress value={progress} variant="brand" className="h-2" />
           </div>
 
           {/* Step Container with Transition */}
@@ -461,7 +503,6 @@ export default function OnboardingPage() {
                 </Card>
               )}
 
-
               {/* Step 2: Equity Selection */}
               {currentStep === 2 && (
                 <Card className="border-0 shadow-lg">
@@ -469,7 +510,7 @@ export default function OnboardingPage() {
                     <div className="text-center mb-6">
                       <h2 className="text-xl font-bold">Choose your first companies</h2>
                       <p className="text-muted-foreground">
-                        Select up to 5 companies to start tracking. Based on your selected sectors.
+                        Select up to {MAX_TICKERS} tickers to start tracking. Based on your selected sectors.
                       </p>
                     </div>
 
@@ -478,11 +519,23 @@ export default function OnboardingPage() {
                       <Input
                         placeholder="Search companies..."
                         value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
+                        onChange={(e) => handleSearchChange(e.target.value)}
                         className="pl-10"
                       />
                       <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                      {isSearchingApi && (
+                        <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                          <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                        </div>
+                      )}
                     </div>
+
+                    {/* Searching more indicator */}
+                    {isSearchingApi && searchQuery.length >= 2 && (
+                      <p className="text-xs text-muted-foreground mb-4 text-center">
+                        searching more companies...
+                      </p>
+                    )}
 
                     {/* Selected Sectors */}
                     <div className="mb-6">
@@ -503,7 +556,7 @@ export default function OnboardingPage() {
                     <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                       {getAvailableEquities().map((equity) => {
                         const isSelected = selectedEquities.includes(equity.symbol);
-                        const isDisabled = !isSelected && selectedEquities.length >= 5;
+                        const isDisabled = !isSelected && selectedEquities.length >= MAX_TICKERS;
                         return (
                           <div
                             key={equity.symbol}
@@ -516,12 +569,13 @@ export default function OnboardingPage() {
                             }`}
                             onClick={() => !isDisabled && handleEquityToggle(equity.symbol)}
                           >
-                            <div className="flex items-center justify-between">
-                              <div>
+                            <div className="flex items-center gap-3">
+                              <CompanyLogo symbol={equity.symbol} companyName={equity.name} size="md" />
+                              <div className="flex-1 min-w-0">
                                 <div className="font-medium">{equity.symbol}</div>
-                                <div className="text-sm text-muted-foreground">{equity.name}</div>
+                                <div className="text-sm text-muted-foreground truncate">{equity.name}</div>
                               </div>
-                              {isSelected && <CheckCircle className="h-5 w-5 text-primary" />}
+                              {isSelected && <CheckCircle className="h-5 w-5 text-primary shrink-0" />}
                             </div>
                           </div>
                         )
@@ -545,11 +599,20 @@ export default function OnboardingPage() {
                       </Button>
                       <div className="flex items-center gap-4">
                         <span className="text-sm text-muted-foreground">
-                          {selectedEquities.length} of 5 companies selected
+                          {selectedEquities.length} of {MAX_TICKERS} tickers selected
                         </span>
-                        <Button onClick={handleNext} disabled={selectedEquities.length === 0}>
-                          Complete Setup
-                          <ArrowRight className="ml-2 h-4 w-4" />
+                        <Button onClick={handleNext} disabled={selectedEquities.length === 0 || isSubmitting}>
+                          {isSubmitting ? (
+                            <>
+                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                              Saving...
+                            </>
+                          ) : (
+                            <>
+                              Complete Setup
+                              <ArrowRight className="ml-2 h-4 w-4" />
+                            </>
+                          )}
                         </Button>
                       </div>
                     </div>
@@ -557,11 +620,10 @@ export default function OnboardingPage() {
                 </Card>
               )}
 
-
             </div>
           </div>
         </div>
       </div>
     </div>
   );
-} 
+}

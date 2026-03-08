@@ -98,13 +98,15 @@ export function getTickersColumns(
       cell: ({ row }) => {
         const company = row.original;
         return (
-          <TickerSettingsDropdown
-            tickerSymbol={company.symbol}
-            preferences={company.preferences}
-            onPreferenceChange={(key, value) =>
-              onPreferenceChange(company, key as keyof FilingPreferences, value)
-            }
-          />
+          <div className="inline-flex" data-tutorial={row.index === 0 ? "ticker-preferences" : undefined}>
+            <TickerSettingsDropdown
+              tickerSymbol={company.symbol}
+              preferences={company.preferences}
+              onPreferenceChange={(key, value) =>
+                onPreferenceChange(company, key as keyof FilingPreferences, value)
+              }
+            />
+          </div>
         );
       },
       size: 40,
@@ -121,6 +123,7 @@ export function getTickersColumns(
             onClick={() => onDelete(company)}
             className="h-8 w-8 text-muted-foreground hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950"
             aria-label={`Delete ${company.symbol}`}
+            data-tutorial={row.index === 0 ? "delete-ticker" : undefined}
           >
             <Trash2Icon className="h-4 w-4" />
           </Button>
