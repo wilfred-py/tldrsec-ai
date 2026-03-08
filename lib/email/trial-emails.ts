@@ -168,3 +168,64 @@ export async function sendTrialExpirationEmail(
 
   trialEmailLogger.info('Trial expiration email sent', { userId });
 }
+
+// --- Checkout Reminder (Q3) ---
+
+interface CheckoutReminderParams {
+  email: string;
+  sessionId: string;
+  planType: string;
+}
+
+/**
+ * Send reminder email to users who paid via direct checkout but haven't
+ * completed onboarding yet (no DB user record exists for their email).
+ * Called from the Stripe webhook when handleCheckoutCompleted finds no
+ * matching user in the database.
+ */
+export async function sendCheckoutReminderEmail(
+  params: CheckoutReminderParams
+): Promise<void> {
+  const { email, sessionId, planType } = params;
+
+  const message: EmailMessage = {
+    to: email,
+    subject: 'Complete your tldrSEC setup',
+    html: `
+      <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+        <h1 style="color: #1a1a2e; font-size: 24px;">You're almost there!</h1>
+        <p style="color: #4a4a5a; font-size: 16px; line-height: 1.6;">
+          We received your ${planType} subscription payment — thank you! To start receiving
+          AI-powered SEC filing summaries, you just need to complete your account setup.
+        </p>
+        <p style="color: #4a4a5a; font-size: 16px; line-height: 1.6;">
+          This takes less than a minute: pick the companies you want to track and set your
+          notification preferences.
+        </p>
+        <div style="text-align: center; margin: 30px 0;">
+          <a href="${APP_URL}/sign-up" style="background-color: #10b981; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: 600; font-size: 16px;">
+            Complete Setup
+          </a>
+        </div>
+        <p style="color: #9a9aaa; font-size: 14px;">
+          Your subscription is active and will be automatically linked to your account once
+          you complete setup. If you need help, reply to this email.
+        </p>
+      </div>
+    `,
+    text: `You're almost there! We received your ${planType} subscription payment. To start receiving AI-powered SEC filing summaries, complete your account setup at ${APP_URL}/sign-up. Your subscription will be automatically linked once you finish.`,
+    tags: ['type:checkout-reminder', `plan:${planType.toLowerCase()}`],
+  };
+
+  const result = await sendEmail(message);
+  if (!result.success) {
+    trialEmailLogger.error('Failed to send checkout reminder email', {
+      email,
+      sessionId,
+      error: result.error?.message,
+    });
+    throw new Error(result.error?.message || 'Failed to send checkout reminder email');
+  }
+
+  trialEmailLogger.info('Checkout reminder email sent', { email, sessionId, planType });
+}

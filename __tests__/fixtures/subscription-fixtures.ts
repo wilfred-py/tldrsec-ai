@@ -1,5 +1,57 @@
 import type { SubscriptionData } from '@/lib/validation/subscription-schema';
 
+// ---------------------------------------------------------------------------
+// Stripe API response mock factories (Issue 12)
+// ---------------------------------------------------------------------------
+
+export function makeStripeCustomer(overrides?: Partial<{ id: string; email: string; deleted: boolean }>): any {
+  return {
+    id: overrides?.id ?? 'cus_test_mock',
+    email: overrides?.email ?? 'test@example.com',
+    object: 'customer',
+    deleted: false,
+    ...overrides,
+  };
+}
+
+export function makeStripeSubscription(overrides?: Partial<{
+  id: string; status: string; customer: string; priceId: string; created: number;
+}>): any {
+  return {
+    id: overrides?.id ?? 'sub_test_mock',
+    status: overrides?.status ?? 'active',
+    customer: overrides?.customer ?? 'cus_test_mock',
+    created: overrides?.created ?? Math.floor(Date.now() / 1000),
+    current_period_start: Math.floor(Date.now() / 1000),
+    current_period_end: Math.floor(Date.now() / 1000) + 30 * 86400,
+    cancel_at_period_end: false,
+    items: {
+      data: [{
+        price: { id: overrides?.priceId ?? 'price_pro_monthly_test' },
+      }],
+    },
+    ...overrides,
+  };
+}
+
+export function makeCheckoutSession(overrides?: Partial<{
+  id: string; metadata: Record<string, string>; customer: string;
+  customer_details: { email: string }; customer_email: string;
+  subscription: string; mode: string; url: string;
+}>): any {
+  return {
+    id: overrides?.id ?? 'cs_test_mock',
+    mode: overrides?.mode ?? 'subscription',
+    metadata: overrides?.metadata ?? { planType: 'PRO', source: 'homepage' },
+    customer: overrides?.customer ?? 'cus_test_mock',
+    customer_details: overrides?.customer_details ?? { email: 'test@example.com' },
+    customer_email: overrides?.customer_email ?? 'test@example.com',
+    subscription: overrides?.subscription ?? 'sub_test_mock',
+    url: overrides?.url ?? 'https://checkout.stripe.com/test',
+    ...overrides,
+  };
+}
+
 /**
  * Shared subscription test fixtures
  * Covers every subscription state from the verification matrix
