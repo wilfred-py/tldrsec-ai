@@ -331,13 +331,15 @@ export const FORM_SCHEMAS: Record<string, JSONSchema> = {
         items: {
           type: 'object',
           properties: {
-            type: { type: 'string', description: 'Transaction type: A=Acquisition, D=Disposition, P=Purchase, S=Sale, G=Gift, M=Exercise' },
+            code: { type: 'string', description: 'REQUIRED: Raw SEC transaction code letter from Column 3 (e.g., P, S, A, D, G, M, F, J, K, X, C, W). Single uppercase letter exactly as shown in the filing.' },
+            type: { type: 'string', description: 'Human-readable transaction type: Purchase, Sale, Award/Grant, Gift, Exercise, Disposition, Transfer. Use the full word, not the letter code.' },
             shares: { type: 'string', description: 'REQUIRED: Number of shares with commas (from column 5). Never leave blank - extract from table or calculate from value/price.' },
-            price: { type: 'string', description: 'REQUIRED: Price per share with $ from column 4 - if $0, check if this is a gift/grant. Never leave blank.' },
+            pricePerShare: { type: 'string', description: 'REQUIRED: Price per share with $ from column 4 - if $0, check if this is a gift/grant. Never leave blank.' },
             date: { type: 'string', description: 'Transaction date from column 2 (YYYY-MM-DD)' },
-            acquisitionDisposition: { type: 'string', description: 'A for acquired, D for disposed' }
+            acquisitionDisposition: { type: 'string', description: 'A for acquired, D for disposed' },
+            sharesOwnedFollowing: { type: 'string', description: 'Amount of Securities Beneficially Owned Following Reported Transaction from Table I Column 5. Total shares held after this transaction.' }
           },
-          required: ['type', 'shares', 'price']
+          required: ['code', 'type', 'shares', 'pricePerShare', 'sharesOwnedFollowing']
         }
       },
       totalValue: {
@@ -364,7 +366,7 @@ export const FORM_SCHEMAS: Record<string, JSONSchema> = {
 
   '144': {
     type: 'object',
-    required: ['company', 'summary', 'filerName', 'shares', 'estimatedValue', 'remainingHoldings', 'signalStrength'],
+    required: ['company', 'summary', 'filerName', 'shares', 'estimatedValue', 'remainingHoldings', 'signalStrength', 'sharesOutstanding'],
     properties: {
       ...BASE_SCHEMA_PROPERTIES,
       filerName: {
@@ -425,6 +427,11 @@ export const FORM_SCHEMAS: Record<string, JSONSchema> = {
       securityType: {
         type: 'string',
         description: 'Type of securities (e.g., "Common Stock")',
+        maxLength: 50
+      },
+      sharesOutstanding: {
+        type: 'string',
+        description: 'REQUIRED: "Number of Shares or Other Units of the Class Outstanding" - total shares outstanding for the security class (e.g., "3,700,000,000"). Extract from the securitiesInformation section.',
         maxLength: 50
       }
     }
@@ -1025,6 +1032,7 @@ const FORM_EXTRACTION_GUIDANCE: Record<string, string> = {
   * If checkbox marked OR language found = has10b51Plan: true
   * If no checkbox/mention = has10b51Plan: false
 - FOOTNOTES ARE CRITICAL: Often contain essential context about the transaction (vesting schedules, plan details, related transactions)
+- POST-TRANSACTION OWNERSHIP: For each transaction, extract "Amount of Securities Beneficially Owned Following Reported Transaction(s)" (Table I, Column 5) into the sharesOwnedFollowing field. This is the total shares the insider holds AFTER the transaction.
 - The summary MUST include: ticker, insider name, transaction type, SHARE COUNT, dollar amount, and signal assessment`,
 
   '8-K': `8-K EXTRACTION RULES:
@@ -1079,6 +1087,7 @@ const FORM_EXTRACTION_GUIDANCE: Record<string, string> = {
 - CRITICAL: Find the EXACT number of shares proposed for sale - look for "Amount of Securities to be Sold" or similar. Format with commas (e.g., "56,820")
 - Calculate estimated value (shares × approx price per share) and format as "$X.XM" or "$X,XXX,XXX"
 - REQUIRED: Extract "Amount of Securities Beneficially Owned Following Reported Transaction(s)" as remainingHoldings - this is the total shares the filer will STILL OWN after the proposed sale
+- REQUIRED: Extract "Number of Shares or Other Units of the Class Outstanding" as sharesOutstanding - this is the TOTAL shares outstanding for the class (can be billions, e.g., "3,700,000,000" for Tesla). Format with commas.
 - 10b5-1 PLAN REFERENCES: If mentioned, extract plan adoption date - pre-arranged plans are less concerning
 - Check if filing mentions recent related sales by same insider for context (pattern of sales is more significant)
 - The summary MUST lead with: ticker, insider name, shares count, and dollar value
@@ -1265,6 +1274,15 @@ function formatSchemaDescription(schema: JSONSchema): string {
 
     if (prop.type === 'array' && prop.items) {
       lines.push(`  "${key}": [...]${requiredMarker}${constraint} - ${prop.description}`);
+      // Render inner item fields so the AI sees exact field names
+      if (prop.items.type === 'object' && prop.items.properties) {
+        const itemRequiredSet = new Set(prop.items.required || []);
+        lines.push(`    Each item in "${key}" MUST have these fields:`);
+        for (const [itemKey, itemProp] of Object.entries(prop.items.properties)) {
+          const itemRequired = itemRequiredSet.has(itemKey) ? ' (REQUIRED)' : '';
+          lines.push(`      "${itemKey}": "${(itemProp as { type: string }).type}"${itemRequired} - ${(itemProp as { description: string }).description}`);
+        }
+      }
     } else if (prop.type === 'object') {
       lines.push(`  "${key}": {...}${requiredMarker} - ${prop.description}`);
     } else {

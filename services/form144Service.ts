@@ -39,6 +39,8 @@ interface ParsedFilingContent {
   proposedSaleDate?: string;
   broker?: string;
   note?: string;
+  sharesOutstanding?: string;
+  aggregateMarketValue?: string;
 }
 
 interface FilingDocument {
@@ -103,7 +105,9 @@ export async function parseForm144(filing: ExtendedSecFilingDetails): Promise<Pa
       amountOfSecurities: getElementText('amountOfSecurities'),
       proposedSaleDate: getElementText('proposedSaleDate'),
       broker: getElementText('broker'),
-      note: undefined
+      note: undefined,
+      sharesOutstanding: getElementText('noOfUnitsOutstanding'),
+      aggregateMarketValue: getElementText('aggregateMarketValue'),
     };
 
     return parsedContent;

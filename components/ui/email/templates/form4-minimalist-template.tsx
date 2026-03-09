@@ -314,7 +314,7 @@ export function aggregateTransactionsByType(transactions: TransactionData[]): Ag
     }
 
     const shares = Math.round(parseNumericValue(tx.shares));
-    const price = parseNumericValue(tx.pricePerShare);
+    const price = parseNumericValue(tx.pricePerShare ?? (tx as Record<string, unknown>).price);
 
     // Calculate value: prefer totalValue if it's meaningful (> 0), otherwise calculate from shares * price
     let value = 0;
@@ -450,7 +450,7 @@ export function getTransactionTypeConfig(type: string): TransactionTypeConfig {
   // Exercise/Derivative type (label covers exercises + expirations)
   if (typeLower.includes('exercise') || typeLower.includes('conversion') || typeLower.includes('expir') || typeLower.includes('derivative')) {
     return {
-      label: 'Derivative Activity',
+      label: 'Exercised Options',
       icon: '⚡',
       bgColor: '#F0FDFA',
       textColor: '#115E59',
@@ -620,7 +620,11 @@ export function Form4MinimalistTemplate({ filing }: Form4MinimalistTemplateProps
   const filerRole = (data?.relationship || data?.position || extractedData?.relationship || '') as string;
 
   // Merge transactions from both sources
-  const dataTransactions = (data?.transactions || []) as TransactionData[];
+  const rawTransactions = (data?.transactions || []) as Array<TransactionData & { price?: string | number }>;
+  const dataTransactions = rawTransactions.map(t => ({
+    ...t,
+    pricePerShare: t.pricePerShare ?? t.price,
+  })) as TransactionData[];
   const extractedTransactions = hasExtractedData ? extractedData.transactions.map(t => ({
     type: t.type,
     shares: t.shares,
@@ -629,7 +633,9 @@ export function Form4MinimalistTemplate({ filing }: Form4MinimalistTemplateProps
     acquisitionDisposition: t.acquisitionDisposition,
     code: t.code,
   })) : [];
-  const transactions = dataTransactions.length > 0 ? dataTransactions : extractedTransactions;
+  // Filter out structurally invalid transactions (e.g., spread strings produce {"0":"S","1":"o",...})
+  const validTransactions = dataTransactions.filter(t => t.type || t.code || t.shares);
+  const transactions = validTransactions.length > 0 ? validTransactions : extractedTransactions;
   const firstTx = transactions[0] || {};
 
   const percentChange = (data?.percentageChange || data?.changePercent || extractedData?.percentageChange || '') as string;
@@ -910,7 +916,15 @@ export function Form4MinimalistTemplate({ filing }: Form4MinimalistTemplateProps
                 (previousStake && newStake) || // Have before/after comparison
                 (newStake && percentChange) || // Have new stake with change
                 (previousStake && percentChange) // Have previous stake with change
-              ) && (
+              ) && (() => {
+                // Parse percentage for color logic (handles "-10.00%", "50.00%", "+5.0%")
+                const pctNum = parseFloat((percentChange || '0').replace(/[%+]/g, ''));
+                const pctColor = pctNum < 0 ? '#DC2626' : pctNum > 0 ? '#16A34A' : EmailColors.text.meta;
+                const pctDisplay = percentChange
+                  ? (pctNum > 0 && !percentChange.startsWith('+') ? `+${percentChange}` : percentChange)
+                  : '';
+
+                return (
                 <table width="100%" cellPadding="0" cellSpacing="0" style={{ marginBottom: '16px' }}>
                   <tbody>
                     <tr>
@@ -946,7 +960,7 @@ export function Form4MinimalistTemplate({ filing }: Form4MinimalistTemplateProps
                                 fontSize: '20px',
                                 lineHeight: '1',
                                 margin: '4px 0',
-                                color: percentChange?.startsWith('-') ? '#DC2626' : percentChange?.startsWith('+') ? '#16A34A' : EmailColors.text.meta,
+                                color: pctColor,
                               }}>
                                 ↓
                               </div>
@@ -958,14 +972,14 @@ export function Form4MinimalistTemplate({ filing }: Form4MinimalistTemplateProps
                                 marginTop: '6px',
                               }}>
                                 {newStake}
-                                {percentChange && (
+                                {pctDisplay && (
                                   <span style={{
                                     marginLeft: '8px',
                                     fontSize: '14px',
                                     fontWeight: 600,
-                                    color: percentChange.startsWith('-') ? '#DC2626' : percentChange.startsWith('+') ? '#16A34A' : EmailColors.text.meta,
+                                    color: pctColor,
                                   }}>
-                                    ({percentChange})
+                                    ({pctDisplay})
                                   </span>
                                 )}
                               </div>
@@ -978,14 +992,14 @@ export function Form4MinimalistTemplate({ filing }: Form4MinimalistTemplateProps
                               color: EmailColors.text.headline,
                             }}>
                               {newStake || previousStake}
-                              {percentChange && (
+                              {pctDisplay && (
                                 <span style={{
                                   marginLeft: '8px',
                                   fontSize: '14px',
                                   fontWeight: 600,
-                                  color: percentChange.startsWith('-') ? '#DC2626' : percentChange.startsWith('+') ? '#16A34A' : EmailColors.text.meta,
+                                  color: pctColor,
                                 }}>
-                                  ({percentChange})
+                                  ({pctDisplay})
                                 </span>
                               )}
                             </div>
@@ -995,7 +1009,8 @@ export function Form4MinimalistTemplate({ filing }: Form4MinimalistTemplateProps
                     </tr>
                   </tbody>
                 </table>
-              )}
+                );
+              })()}
 
               {/* ═══════════════════════════════════════════════════════════
                   THE STORY - One-liner summary

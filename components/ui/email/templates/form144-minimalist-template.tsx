@@ -176,6 +176,7 @@ export function Form144MinimalistTemplate({ filing }: Form144MinimalistTemplateP
   const tradingPlan = (data?.tradingPlan || extractedData?.tradingPlan || '') as string;
   const signalStrength = (data?.signalStrength || extractedData?.signalStrength || '') as string;
   const remainingHoldings = (data?.remainingHoldings || data?.sharesRemaining || extractedData?.remainingHoldings || '') as string;
+  const sharesOutstanding = (data?.sharesOutstanding || '') as string;
   const investorImplication = (data?.investorImplication || extractedData?.investorImplication || '') as string;
 
   const displayTicker = symbol || ticker || 'N/A';
@@ -373,7 +374,7 @@ export function Form144MinimalistTemplate({ filing }: Form144MinimalistTemplateP
                                   }}>
                                     {shares}
                                   </div>
-                                  {remainingHoldings && (
+                                  {remainingHoldings && parseNumericValue(remainingHoldings) > 0 && (
                                     <div style={{
                                       fontSize: '12px',
                                       color: '#991B1B',
@@ -393,6 +394,92 @@ export function Form144MinimalistTemplate({ filing }: Form144MinimalistTemplateP
                   </tbody>
                 </table>
               )}
+
+              {/* ═══════════════════════════════════════════════════════════
+                  OWNERSHIP IMPACT - Before/after ownership comparison
+                  Matches Form 4 visual: before → ↓ → after (percentage)
+                  ═══════════════════════════════════════════════════════════ */}
+              {/* Ownership Impact: Only show when we have the insider's actual remaining holdings.
+                  sharesOutstanding is the issuer's total class outstanding — NOT the insider's position.
+                  Showing issuer-level data as "ownership impact" is misleading for director/officer filers. */}
+              {shares && remainingHoldings && parseNumericValue(remainingHoldings) > 0 && (() => {
+                const sharesNum = parseNumericValue(shares);
+                const remainingNum = parseNumericValue(remainingHoldings);
+                const outstandingNum = parseNumericValue(sharesOutstanding);
+                const beforeNum = sharesNum + remainingNum;
+                const pctChange = beforeNum > 0 ? -((sharesNum / beforeNum) * 100) : 0;
+                const pctColor = '#DC2626'; // Sales are always red
+                const pctDisplay = `${pctChange.toFixed(1)}%`;
+
+                return (
+                  <table width="100%" cellPadding="0" cellSpacing="0" style={{ marginBottom: '16px' }}>
+                    <tbody>
+                      <tr>
+                        <td style={{
+                          padding: '16px',
+                          backgroundColor: EmailColors.structure.backgroundAlt,
+                          borderRadius: '8px',
+                          textAlign: 'center',
+                        }}>
+                          <div style={{
+                            fontSize: '11px',
+                            fontWeight: 700,
+                            color: EmailColors.text.meta,
+                            textTransform: 'uppercase' as const,
+                            letterSpacing: '0.5px',
+                            marginBottom: '8px',
+                          }}>
+                            Ownership Impact
+                          </div>
+                          {/* Previous ownership (before sale) */}
+                          <div style={{
+                            fontSize: '14px',
+                            color: EmailColors.text.muted,
+                            marginBottom: '6px',
+                          }}>
+                            {beforeNum.toLocaleString()} shares
+                          </div>
+                          {/* Direction arrow */}
+                          <div style={{
+                            fontSize: '20px',
+                            lineHeight: '1',
+                            margin: '4px 0',
+                            color: pctColor,
+                          }}>
+                            ↓
+                          </div>
+                          {/* New ownership (after sale) */}
+                          <div style={{
+                            fontSize: '16px',
+                            fontWeight: 700,
+                            color: EmailColors.text.headline,
+                            marginTop: '6px',
+                          }}>
+                            {remainingNum.toLocaleString()} shares
+                            <span style={{
+                              marginLeft: '8px',
+                              fontSize: '14px',
+                              fontWeight: 600,
+                              color: pctColor,
+                            }}>
+                              ({pctDisplay})
+                            </span>
+                          </div>
+                          {outstandingNum > 0 && (
+                            <div style={{
+                              fontSize: '11px',
+                              color: EmailColors.text.meta,
+                              marginTop: '8px',
+                            }}>
+                              of {outstandingNum.toLocaleString()} class shares outstanding
+                            </div>
+                          )}
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                );
+              })()}
 
               {/* ═══════════════════════════════════════════════════════════
                   THE STORY - Summary with key values highlighted

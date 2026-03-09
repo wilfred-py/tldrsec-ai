@@ -31,7 +31,9 @@ export const parseForm144 = async (filingDetails: SecFilingDetails): Promise<For
       amountOfSecurities: getNodeText('//ns:sharesAmount'),
       proposedSaleDate: getNodeText('//ns:proposedSaleDate'),
       broker: getNodeText('//ns:brokerName'),
-      note: getNodeText('//ns:remarks') || ''
+      note: getNodeText('//ns:remarks') || '',
+      sharesOutstanding: getNodeText('//ns:noOfUnitsOutstanding') || undefined,
+      aggregateMarketValue: getNodeText('//ns:aggregateMarketValue') || undefined,
     };
   } catch (error) {
     secLogger.error(`Error parsing Form 144: ${error}`);

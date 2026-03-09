@@ -28,6 +28,7 @@ export interface Form144ExtractedData {
   investorImplication: string;     // Key takeaway for investors
   holdingPeriod: string;           // Time shares have been held (6+ months required)
   volumeLimit: string;             // Rule 144 volume limitations
+  sharesOutstanding: string;       // Number of shares or other units of the class outstanding
 }
 
 /**
@@ -54,6 +55,7 @@ export function extractForm144Data(summaryText: string): Form144ExtractedData {
     investorImplication: '',
     holdingPeriod: '',
     volumeLimit: '',
+    sharesOutstanding: '',
   };
 
   if (!summaryText) {
@@ -98,6 +100,7 @@ export function extractForm144Data(summaryText: string): Form144ExtractedData {
   result.priorThreeMonthSales = extractPriorThreeMonthSales(summaryText);
   result.holdingPeriod = extractHoldingPeriod(summaryText);
   result.volumeLimit = extractVolumeLimit(summaryText);
+  result.sharesOutstanding = extractSharesOutstanding(summaryText);
 
   // Determine signal strength (2-level)
   result.signalStrength = determineSignalStrength(result, summaryText);
@@ -196,8 +199,8 @@ function extractShares(text: string): string {
     if (match?.[1]) {
       const numStr = match[1].replace(/,/g, '');
       const num = parseInt(numStr, 10);
-      // Only accept if it's a reasonable share count (> 0 and not absurdly large like a phone number)
-      if (num > 0 && num < 100000000) {
+      // Only accept if it's a reasonable share count (> 0 and not absurdly large)
+      if (num > 0 && num < 10000000000) {
         return numStr.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
       }
     }
@@ -416,8 +419,58 @@ function extractRemainingHoldings(text: string): string {
     if (match?.[1]) {
       const numStr = match[1].replace(/,/g, '');
       const num = parseInt(numStr, 10);
-      // Sanity check - remaining holdings should be a reasonable number
-      if (num > 0 && num < 1000000000) {
+      // Sanity check - remaining holdings can be very large (e.g., Tesla has 3.7B shares outstanding)
+      if (num > 0 && num < 100000000000) {
+        return numStr.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+      }
+    }
+  }
+
+  return '';
+}
+
+/**
+ * Extract total shares outstanding for the class from summary
+ */
+function extractSharesOutstanding(text: string): string {
+  const patterns = [
+    // "X shares outstanding" or "X shares of the class outstanding"
+    /([\d,]+)\s*(?:shares?|units?)\s*(?:of\s+(?:the\s+)?(?:class\s+)?)?outstanding/i,
+    // "outstanding shares: X"
+    /outstanding\s*(?:shares?|stock)[:\s]*([\d,]+)/i,
+    // "X billion shares outstanding"
+    /([\d.]+)\s*billion\s*shares?\s*outstanding/i,
+    // "X million shares outstanding"
+    /([\d.]+)\s*million\s*shares?\s*outstanding/i,
+    // "total shares outstanding: X"
+    /total\s+shares?\s+outstanding[:\s]*([\d,]+)/i,
+    // "class outstanding: X"
+    /class\s+outstanding[:\s]*([\d,]+)/i,
+  ];
+
+  for (const pattern of patterns) {
+    const match = text.match(pattern);
+    if (match?.[1]) {
+      // Handle "billion" suffix
+      if (text.match(/([\d.]+)\s*billion/i)) {
+        const num = parseFloat(match[1]);
+        if (num > 0 && num < 1000) {
+          const total = Math.round(num * 1000000000);
+          return total.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+        }
+      }
+      // Handle "million" suffix
+      if (text.match(/([\d.]+)\s*million/i) && !match[0].includes(',')) {
+        const num = parseFloat(match[1]);
+        if (num > 0 && num < 1000000) {
+          const total = Math.round(num * 1000000);
+          return total.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+        }
+      }
+      // Regular number
+      const numStr = match[1].replace(/,/g, '');
+      const num = parseInt(numStr, 10);
+      if (num > 0 && num < 100000000000) {
         return numStr.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
       }
     }

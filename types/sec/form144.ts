@@ -7,4 +7,6 @@ export interface Form144ParsedContent {
   proposedSaleDate: string;
   broker: string;
   note: string;
+  sharesOutstanding?: string;
+  aggregateMarketValue?: string;
 }

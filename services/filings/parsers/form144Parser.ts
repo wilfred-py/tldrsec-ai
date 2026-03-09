@@ -57,6 +57,13 @@ export async function parseForm144(filing: {
       const proposedSaleDate = getNodeText('//ns1:proposedSaleDate/text()');
       const broker = getNodeText('//ns1:brokerName/text()');
       const note = getNodeText('//ns1:remarks/text()');
+      // Form 144 XML: securitiesInformation > noOfUnitsOutstanding
+      const sharesOutstanding = getNodeText('//ns1:securitiesInformation/ns1:noOfUnitsOutstanding/text()')
+        || getNodeText('//ns1:noOfUnitsOutstanding/text()')
+        || getNodeText('//noOfUnitsOutstanding/text()');
+      const aggregateMarketValue = getNodeText('//ns1:securitiesInformation/ns1:aggregateMarketValue/text()')
+        || getNodeText('//ns1:aggregateMarketValue/text()')
+        || getNodeText('//aggregateMarketValue/text()');
 
       return {
         reportingPerson,
@@ -66,7 +73,9 @@ export async function parseForm144(filing: {
         amountOfSecurities,
         proposedSaleDate,
         broker,
-        note
+        note,
+        sharesOutstanding: sharesOutstanding || undefined,
+        aggregateMarketValue: aggregateMarketValue || undefined,
       };
     } else {
       // No XML content found, try to extract information from HTML content
