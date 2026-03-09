@@ -1,42 +1,54 @@
 # Project Progress
 
-**Date**: 2026-03-05
-**Branch**: worktree-onboarding
-**Status**: Onboarding & Tutorial Flow Overhaul - in progress (Tasks 1-7 complete, polishing tutorial conditions)
+**Date**: 2026-03-10
+**Branch**: worktree-summary-enhancements
+**Status**: Summary quality enhancements - Form 144 ownership, Form 4 schema, email template visual fixes
 
 ---
 
 ## Current Session
 
+### Summary Quality Enhancements: Form 144 & Email Templates (2026-03-04 → in progress)
+
+**Branch**: `worktree-summary-enhancements` | **Plan**: `docs/plans/2026-03-04-fix-form4-classification-data-flow.md`
+
+**Goal**: Fix Form 4 classification data flow, Form 144 ownership data gaps, and polish email template visuals across all form types.
+
+**Completed Work**:
+
+**Form 4 AI Schema** ✅ - Made `sharesOwnedFollowing` required in Form 4 transaction items in `unified-prompts.ts`. AI now always extracts post-transaction beneficial ownership.
+
+**Form 144 Ownership Data Extraction** ✅ - Multi-layer fix:
+- Raised `extractRemainingHoldings` regex cap from 1B→100B (Tesla has 3.7B outstanding)
+- Raised `extractShares` cap from 100M→10B in `form144-data-extractor.ts`
+- Added `noOfUnitsOutstanding` and `aggregateMarketValue` XML extraction to all 3 Form 144 parsers (`form144Parser.ts`, `form144.ts`, `form144Service.ts`)
+- Added `sharesOutstanding` as required field in Form 144 AI schema
+- Added `extractSharesOutstanding()` text-based fallback in data extractor
+- Added `sharesOutstanding`/`aggregateMarketValue` to `Form144ParsedContent` interface
+
+**Form 144 Email Template** ✅ - `form144-minimalist-template.tsx`:
+- Ownership Impact only shows when insider's actual `remainingHoldings` is available (numeric)
+- Removed misleading Case 2 that showed issuer-level `sharesOutstanding` as "ownership impact" — this is company total class shares, not the insider's position
+- Filtered out non-numeric `remainingHoldings` values (e.g., "Not disclosed") from Shares card
+- When remaining holdings IS available: shows before→↓→after with percentage (matches Form 4 visual)
+
+**8-K Email Template** ✅ - `8k-minimalist-template.tsx`:
+- Key Highlights bullets changed from inline `<span>` to two-column `<table>` layout
+- Wrapped text now aligns with text content, not the bullet character
+
+**Verification**: All E2E tests passing (5/5 - TSLA, VRT, COIN, KO, NVDA). 79/79 Form 4 classification tests pass. 40/40 Form 4 AI schema regression tests pass.
+
+**Files Modified**: `lib/ai/prompts/unified-prompts.ts`, `lib/email/form144-data-extractor.ts`, `types/sec/form144.ts`, `services/filings/parsers/form144Parser.ts`, `services/filings/form144.ts`, `services/form144Service.ts`, `components/ui/email/templates/form144-minimalist-template.tsx`, `components/ui/email/templates/8k-minimalist-template.tsx`, `components/ui/email/templates/form4-minimalist-template.tsx`
+
+**Files Created**: `__tests__/regression/form4-ai-schema-classification.test.ts`, `docs/plans/2026-03-04-fix-form4-classification-data-flow.md`
+
+---
+
+## Other Active Worktree
+
 ### Onboarding & Tutorial Flow Overhaul (2026-03-02 → in progress)
 
-**Branch**: `worktree-onboarding` | **Plan**: `docs/plans/2026-03-02-onboarding-tutorial-flow-overhaul.md`
-
-**Goal**: Polish the onboarding → tutorial experience with unskippable flow, company logos, animated transitions, confetti, and cached summary delivery.
-
-**Completed Tasks**:
-
-**Task 1: Update Onboarding Flow** ✅ - Changed ticker limit from 5 to 3 (FREE tier), added Clearbit company logos with letter-avatar fallback (`components/ui/company-logo.tsx`), enhanced search with dual sector + API-backed results, made onboarding unskippable.
-
-**Task 2: Brand-Colored Progress Bar** ✅ - Added `variant="brand"` to `components/ui/progress.tsx` with gradient `from-[#0079F2] to-[#8B5CF6]`, defined in `app/globals.css`.
-
-**Task 3: Animated Transition Screen** ✅ - Created `components/onboarding/onboarding-transition.tsx` with Framer Motion text cycling (completion-based, ~2s minimum), replaces toast on success.
-
-**Task 4: Make Tutorial Unskippable** ✅ - Removed skip button and X close from `tutorial-guide.tsx`, removed `hasSeenTutorial` localStorage, kept `tutorialProgress` localStorage for step resume on refresh, tutorial only dismisses after completing all steps.
-
-**Task 5: Cached Summary Delivery** ✅ - Created `lib/onboarding/cached-summary-delivery.ts` (composite ranking: type weight 40% + quality 30% + recency 30%), `app/api/onboarding/deliver-summaries/route.ts` (POST endpoint). Finds top 2 summaries per ticker across all users, sends as digest email. Edge cases handled: no email, zero summaries, email failure.
-
-**Task 6: Confetti Enhancement** ✅ - Increased particles to 200, dismiss delay to 5s in `components/ui/confetti.tsx`.
-
-**Task 7: Wire Everything Together** ✅ - End-to-end flow: onboarding → transition screen → dashboard → tutorial → confetti → cached summaries + welcome email.
-
-**Current polish**:
-- Tutorial show condition uses `tutorialCompletedAt` (not ticker count) - confirmed correct
-- Made step 1 ticker limit dynamic via `tickerLimit` prop (FREE=3, PRO=25, MAX=unlimited)
-
-**Files Modified**: `app/(auth)/onboarding/onboarding-client.tsx`, `components/onboarding/tutorial-guide.tsx`, `components/onboarding/actions.ts`, `components/dashboard/dashboard-client.tsx`, `components/dashboard/tickers-table/columns.tsx`, `components/ui/progress.tsx`, `components/ui/confetti.tsx`, `app/globals.css`, `__tests__/components/dashboard/dashboard-inline-integration.test.tsx`
-
-**Files Created**: `components/ui/company-logo.tsx`, `components/onboarding/onboarding-transition.tsx`, `lib/onboarding/cached-summary-delivery.ts`, `app/api/onboarding/deliver-summaries/route.ts`, `docs/plans/2026-03-02-onboarding-tutorial-flow-overhaul.md`
+**Branch**: `worktree-onboarding` | Tasks 1-7 complete, polishing tutorial conditions. See onboarding worktree for full details.
 
 ---
 
@@ -138,5 +150,5 @@ For complete technical details of projects older than 30 days, see the weekly ar
 
 ---
 
-*Last Updated: 2026-03-05 (Onboarding tutorial flow overhaul - worktree in progress)*
+*Last Updated: 2026-03-10 (Summary quality enhancements - Form 144 ownership, email template fixes)*
 *Completed projects older than 30 days are archived to .claude/history/ - See TIMELINE.md for complete historical context*
