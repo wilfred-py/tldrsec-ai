@@ -459,13 +459,21 @@ export function Form8KMinimalistTemplate({ filing }: Form8KMinimalistTemplatePro
                         <tbody>
                           {keyHighlights.slice(0, 5).map((highlight, index) => (
                             <tr key={index}>
+                              <td valign="top" width="16" style={{
+                                width: '16px',
+                                padding: '4px 8px 4px 0',
+                                fontSize: '14px',
+                                lineHeight: '1.5',
+                                color: EmailColors.text.meta,
+                              }}>
+                                •
+                              </td>
                               <td style={{
                                 padding: '4px 0',
                                 fontSize: '14px',
                                 lineHeight: '1.5',
                                 color: EmailColors.text.body,
                               }}>
-                                <span style={{ marginRight: '8px', color: EmailColors.text.meta }}>•</span>
                                 <span dangerouslySetInnerHTML={{ __html: formatText(highlight) }} />
                               </td>
                             </tr>

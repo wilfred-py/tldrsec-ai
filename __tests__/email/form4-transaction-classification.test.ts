@@ -252,7 +252,7 @@ describe('Form 4 Transaction Classification - All 21 SEC Codes', () => {
 
     it('should return teal config for exercise type', () => {
       const config = getTransactionTypeConfig('exercise');
-      expect(config.label).toBe('Derivative Activity');
+      expect(config.label).toBe('Exercised Options');
       expect(config.bgColor).toBe('#F0FDFA');
     });
 

@@ -16,8 +16,66 @@ import { secLogger as logger } from '../../../utils/logger';
 import { jsonParsingMonitor } from '../../monitoring/json-parsing-monitor';
 
 /**
+ * Transaction code to human-readable type mapping
+ */
+const TX_CODE_TO_TYPE: Record<string, string> = {
+  'P': 'Purchase',
+  'S': 'Sale',
+  'A': 'Award/Grant',
+  'D': 'Disposition',
+  'G': 'Gift',
+  'M': 'Exercise',
+  'F': 'Disposition',
+  'J': 'Transfer',
+  'K': 'Transfer',
+  'X': 'Exercise',
+  'C': 'Exercise',
+  'W': 'Gift',
+};
+
+/**
+ * Parse a string transaction into a structured object.
+ * AI models (especially grok-4.1-fast) sometimes output transactions as strings:
+ *   "Sold 80 Common Stock shares at $412.460 (S, D)"
+ *   "Exercised into 40,000 Common Stock shares at $14.99 (M, A)"
+ *
+ * @param str - Transaction string from AI output
+ * @returns Structured transaction object, or null if unparseable
+ */
+export function parseStringTransaction(str: string): Record<string, string> | null {
+  if (!str || typeof str !== 'string') return null;
+
+  // Extract (CODE, A/D) parenthetical at end of string
+  const codeMatch = str.match(/\(([A-Z]),\s*([AD])\)\s*$/);
+  const code = codeMatch?.[1] || '';
+  const acquisitionDisposition = codeMatch?.[2] || '';
+
+  // Map code to human-readable type
+  const type = code ? (TX_CODE_TO_TYPE[code] || 'Other') : '';
+
+  // Extract share count: look for "N,NNN shares" or "N,NNN [SecurityType]"
+  const sharesMatch = str.match(/([\d,]+(?:\.\d+)?)\s+(?:Common\s+Stock\s+)?(?:shares?|Non-Qualified)/i);
+  const shares = sharesMatch?.[1] || '';
+
+  // Extract price: look for "at $N.NN" or "$N.NN"
+  const priceMatch = str.match(/at\s+\$([\d,.]+)/i) || str.match(/\$([\d,.]+)/);
+  const pricePerShare = priceMatch ? `$${priceMatch[1]}` : '';
+
+  // Must have at least code or shares to be useful
+  if (!code && !shares) return null;
+
+  return {
+    code,
+    type,
+    shares,
+    pricePerShare,
+    acquisitionDisposition,
+  };
+}
+
+/**
  * Normalize fields based on filing type
- * 
+ *
  * @param data - Data to normalize
  * @param filingType - Type of SEC filing
  * @returns Normalized data
@@ -80,9 +138,57 @@ function normalizeFields(data: unknown, filingType: SECFilingType): unknown {
       // Insider trading forms
       if (Array.isArray(normalized.transactions)) {
         normalized.transactions = (normalized.transactions as unknown[]).map((tx: unknown) => {
+          // Handle string transactions: AI sometimes outputs strings like
+          // "Sold 80 shares at $412.460 (S, D)" instead of structured objects
+          if (typeof tx === 'string') {
+            const parsed = parseStringTransaction(tx);
+            if (!parsed) return null; // Drop unparseable strings
+            return parsed;
+          }
           const txObj = tx as Record<string, unknown>;
           const result = { ...txObj };
-          
+
+          // Field-name aliasing: AI models use variant names for the same fields
+          if (!result.code && result.transactionCode) {
+            result.code = result.transactionCode;
+            delete result.transactionCode;
+          }
+          if (!result.type && result.transactionType) {
+            result.type = result.transactionType;
+            delete result.transactionType;
+          }
+          if (!result.pricePerShare && result.price) {
+            result.pricePerShare = result.price;
+          }
+          if (!result.acquisitionDisposition && result.ownershipType) {
+            result.acquisitionDisposition = result.ownershipType;
+            delete result.ownershipType;
+          }
+
+          // Infer code from type when code is missing/empty
+          if ((!result.code || result.code === '') && result.type && typeof result.type === 'string') {
+            const typeStr = (result.type as string).toLowerCase();
+            if (typeStr.includes('sale') || typeStr.includes('sell') || typeStr === 's') result.code = 'S';
+            else if (typeStr.includes('purchase') || typeStr.includes('bought') || typeStr === 'p') result.code = 'P';
+            else if (typeStr.includes('award') || typeStr.includes('grant') || typeStr.includes('rsu')) result.code = 'A';
+            else if (typeStr.includes('gift')) result.code = 'G';
+            else if (typeStr.includes('exercise') || typeStr.includes('conversion')) result.code = 'M';
+            else if (typeStr.includes('disposition') || typeStr.includes('withhold')) result.code = 'D';
+            else if (typeStr.includes('transfer') || typeStr.includes('trust')) result.code = 'J';
+          }
+
+          // Infer type from code when type is missing/empty
+          if ((!result.type || result.type === '') && result.code && typeof result.code === 'string') {
+            result.type = TX_CODE_TO_TYPE[(result.code as string).toUpperCase()] || '';
+          }
+
+          // Strip bracket artifacts from key fields (AI sometimes includes stray [ or ])
+          for (const field of ['code', 'type', 'shares', 'pricePerShare', 'sharesOwnedFollowing']) {
+            if (result[field] && typeof result[field] === 'string') {
+              result[field] = (result[field] as string).replace(/[\[\]]/g, '').trim();
+            }
+          }
+
           // Normalize transaction values
           if (result.price && (typeof result.price === 'string' || typeof result.price === 'number')) {
             result.price = normalizeCurrency(result.price);
@@ -97,9 +203,61 @@ function normalizeFields(data: unknown, filingType: SECFilingType): unknown {
           }
           
           return result;
-        });
+        }).filter(Boolean);
       }
-      
+
+      // Derive newStake from last transaction's sharesOwnedFollowing when not already set
+      if (!normalized.newStake && Array.isArray(normalized.transactions)) {
+        const txArr = normalized.transactions as Record<string, unknown>[];
+        // Use the last transaction's post-transaction ownership as the final stake
+        for (let i = txArr.length - 1; i >= 0; i--) {
+          const sof = txArr[i].sharesOwnedFollowing;
+          if (sof && String(sof).trim()) {
+            const cleaned = String(sof).replace(/[$,\[\]]/g, '').trim();
+            if (/\d/.test(cleaned)) {
+              normalized.newStake = `${cleaned} shares`;
+              break;
+            }
+          }
+        }
+      }
+
+      // Derive previousStake from first transaction's sharesOwnedFollowing + shares
+      if (!normalized.previousStake && normalized.newStake && Array.isArray(normalized.transactions)) {
+        const txArr = normalized.transactions as Record<string, unknown>[];
+        // Find first transaction with sharesOwnedFollowing
+        for (let i = 0; i < txArr.length; i++) {
+          const sof = txArr[i].sharesOwnedFollowing;
+          if (sof && String(sof).trim()) {
+            const sofCleaned = parseFloat(String(sof).replace(/[$,\[\]]/g, '').trim());
+            const txShares = parseFloat(String(txArr[i].shares || '0').replace(/[$,\[\]]/g, '').trim());
+            if (!isNaN(sofCleaned) && !isNaN(txShares) && txShares > 0) {
+              const ad = String(txArr[i].acquisitionDisposition || '').toUpperCase();
+              const code = String(txArr[i].code || '').toUpperCase();
+              // Disposition: shares were removed → before = after + shares
+              // Acquisition: shares were added → before = after - shares
+              const isDisposition = ad === 'D' || code === 'S' || code === 'D' || code === 'G' || code === 'F';
+              const previousNum = isDisposition ? sofCleaned + txShares : sofCleaned - txShares;
+              if (previousNum > 0) {
+                normalized.previousStake = `${Math.round(previousNum)} shares`;
+              }
+              break;
+            }
+          }
+        }
+      }
+
+      // Derive percentageChange from previousStake and newStake
+      if (!normalized.percentageChange && normalized.previousStake && normalized.newStake) {
+        const prevNum = parseFloat(String(normalized.previousStake).replace(/[^0-9.]/g, ''));
+        const newNum = parseFloat(String(normalized.newStake).replace(/[^0-9.]/g, ''));
+        if (!isNaN(prevNum) && !isNaN(newNum) && prevNum > 0) {
+          const pctChange = ((newNum - prevNum) / prevNum) * 100;
+          const sign = pctChange >= 0 ? '+' : '';
+          normalized.percentageChange = `${sign}${pctChange.toFixed(1)}%`;
+        }
+      }
+
       // Normalize stake values
       if (normalized.previousStake && typeof normalized.previousStake === 'string') {
         if (/\d/.test(normalized.previousStake)) {
