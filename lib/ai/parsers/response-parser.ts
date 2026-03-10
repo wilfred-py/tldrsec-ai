@@ -236,7 +236,7 @@ function normalizeFields(data: unknown, filingType: SECFilingType): unknown {
               const code = String(txArr[i].code || '').toUpperCase();
               // Disposition: shares were removed → before = after + shares
               // Acquisition: shares were added → before = after - shares
-              const isDisposition = ad === 'D' || code === 'S' || code === 'G' || code === 'F';
+              const isDisposition = ad === 'D' || code === 'S' || code === 'D' || code === 'G' || code === 'F';
               const previousNum = isDisposition ? sofCleaned + txShares : sofCleaned - txShares;
               if (previousNum > 0) {
                 normalized.previousStake = `${Math.round(previousNum)} shares`;

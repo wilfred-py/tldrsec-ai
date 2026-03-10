@@ -451,16 +451,16 @@ function extractSharesOutstanding(text: string): string {
   for (const pattern of patterns) {
     const match = text.match(pattern);
     if (match?.[1]) {
-      // Handle "billion" suffix
-      if (text.match(/([\d.]+)\s*billion/i)) {
+      // Handle "billion" suffix — check the matched substring, not full text
+      if (/billion/i.test(match[0])) {
         const num = parseFloat(match[1]);
         if (num > 0 && num < 1000) {
           const total = Math.round(num * 1000000000);
           return total.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
         }
       }
-      // Handle "million" suffix
-      if (text.match(/([\d.]+)\s*million/i) && !match[0].includes(',')) {
+      // Handle "million" suffix — check the matched substring, not full text
+      if (/million/i.test(match[0]) && !match[0].includes(',')) {
         const num = parseFloat(match[1]);
         if (num > 0 && num < 1000000) {
           const total = Math.round(num * 1000000);

@@ -955,14 +955,14 @@ export function Form4MinimalistTemplate({ filing }: Form4MinimalistTemplateProps
                               }}>
                                 {previousStake}
                               </div>
-                              {/* Direction arrow - always points down (old → new visual flow); color shows sentiment */}
+                              {/* Direction arrow - matches sentiment direction */}
                               <div style={{
                                 fontSize: '20px',
                                 lineHeight: '1',
                                 margin: '4px 0',
                                 color: pctColor,
                               }}>
-                                ↓
+                                {pctNum > 0 ? '↑' : '↓'}
                               </div>
                               {/* New ownership (after transaction) */}
                               <div style={{

@@ -122,7 +122,12 @@ function getSignalConfig(isNotable: boolean, has10b51: boolean) {
 function formatText(text: string): string {
   if (!text) return '';
   let html = text;
+  // Escape all HTML entities to prevent XSS from AI-generated content
   html = html.replace(/&(?!amp;|lt;|gt;|quot;|#)/g, '&amp;');
+  html = html.replace(/</g, '&lt;');
+  html = html.replace(/>/g, '&gt;');
+  html = html.replace(/"/g, '&quot;');
+  html = html.replace(/'/g, '&#39;');
   // Bold dollar amounts
   html = html.replace(
     /(\$[\d,]+(?:\.\d+)?[KMB]?)/g,
@@ -405,6 +410,7 @@ export function Form144MinimalistTemplate({ filing }: Form144MinimalistTemplateP
               {shares && remainingHoldings && parseNumericValue(remainingHoldings) > 0 && (() => {
                 const sharesNum = parseNumericValue(shares);
                 const remainingNum = parseNumericValue(remainingHoldings);
+                if (!Number.isFinite(sharesNum) || !Number.isFinite(remainingNum)) return null;
                 const outstandingNum = parseNumericValue(sharesOutstanding);
                 const beforeNum = sharesNum + remainingNum;
                 const pctChange = beforeNum > 0 ? -((sharesNum / beforeNum) * 100) : 0;

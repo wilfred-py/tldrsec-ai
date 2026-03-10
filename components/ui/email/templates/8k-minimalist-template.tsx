@@ -460,7 +460,8 @@ export function Form8KMinimalistTemplate({ filing }: Form8KMinimalistTemplatePro
                           {keyHighlights.slice(0, 5).map((highlight, index) => (
                             <tr key={index}>
                               <td valign="top" width="16" style={{
-                                padding: '4px 0',
+                                width: '16px',
+                                padding: '4px 8px 4px 0',
                                 fontSize: '14px',
                                 lineHeight: '1.5',
                                 color: EmailColors.text.meta,
