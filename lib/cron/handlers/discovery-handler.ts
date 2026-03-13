@@ -16,6 +16,7 @@
 import { logger } from '../../logging';
 import type { JobPayload } from '../../job-queue';
 import { CronSecFilingService } from '../sec-filing-service';
+import { getPriorityForTier } from '../tier-priority';
 
 const discoveryLogger = logger.child('discovery-handler');
 
@@ -92,6 +93,8 @@ export interface UserForFiling {
   id: string;
   email: string;
   subscriptionTier: string;
+  isTrialing?: boolean;
+  trialEndsAt?: Date | null;
   tickers: Array<{ id: string; companyName: string | null }>;
 }
 
@@ -116,20 +119,7 @@ export interface BulkJobExecutionContext {
   cronTriggerTime: string;
 }
 
-/**
- * Get priority based on subscription tier
- */
-function getPriorityForTier(tier: string): number {
-  switch (tier) {
-    case 'ENTERPRISE':
-      return 8;
-    case 'PROFESSIONAL':
-    case 'INSTITUTION':
-      return 7;
-    default:
-      return 5;
-  }
-}
+// getPriorityForTier imported from ../tier-priority.ts (single source of truth)
 
 /**
  * Bulk create fetch jobs for all users tracking a filing
@@ -162,7 +152,7 @@ export async function createBulkFetchJobs(
       return {
         jobType: 'ASYNC_FETCH_FILING',
         status: 'PENDING' as const,
-        priority: getPriorityForTier(user.subscriptionTier),
+        priority: getPriorityForTier(user.subscriptionTier, user.isTrialing, user.trialEndsAt),
         maxRetries: 3,
         retryCount: 0,
         scheduledFor: new Date(), // Schedule for immediate execution
@@ -343,26 +333,53 @@ export async function handleDiscovery(
     let totalUsersProcessed = 0;
     const usersPerFilingCounts: number[] = [];
 
-    // STEP 4: For each filing, find ALL users tracking that ticker and create jobs in bulk
-    for (const filing of allNewFilings) {
-      try {
-        // Find ALL users who track this ticker
-        const usersForTicker = await prisma.user.findMany({
+    // STEP 4: Pre-fetch ALL users for all discovered tickers in one query (fixes N+1)
+    const allDiscoveredTickers = [...new Set(allNewFilings.map(f => f.ticker))];
+    const allUsersForTickers = allDiscoveredTickers.length > 0
+      ? await prisma.user.findMany({
           where: {
             tickers: {
-              some: { symbol: filing.ticker }
+              some: { symbol: { in: allDiscoveredTickers } }
             }
           },
           select: {
             id: true,
             email: true,
             subscriptionTier: true,
+            isTrialing: true,
+            trialEndsAt: true,
             tickers: {
-              where: { symbol: filing.ticker },
-              select: { id: true, companyName: true }
+              where: { symbol: { in: allDiscoveredTickers } },
+              select: { id: true, symbol: true, companyName: true }
             }
           }
-        });
+        })
+      : [];
+
+    // Build lookup: ticker symbol → users tracking it
+    const usersByTicker = new Map<string, typeof allUsersForTickers>();
+    for (const user of allUsersForTickers) {
+      for (const ticker of user.tickers) {
+        const list = usersByTicker.get(ticker.symbol) || [];
+        list.push(user);
+        usersByTicker.set(ticker.symbol, list);
+      }
+    }
+
+    discoveryLogger.info(`[${executionId}] Pre-fetched users for ${allDiscoveredTickers.length} tickers`, {
+      totalUsers: allUsersForTickers.length,
+      tickersWithUsers: usersByTicker.size
+    });
+
+    // For each filing, use pre-fetched users to create jobs in bulk
+    for (const filing of allNewFilings) {
+      try {
+        // Use pre-fetched users instead of per-filing query
+        const usersForTicker = (usersByTicker.get(filing.ticker) || []).map(u => ({
+          ...u,
+          // Filter tickers to only the one matching this filing
+          tickers: u.tickers.filter(t => t.symbol === filing.ticker)
+        }));
 
         discoveryLogger.debug(`[${executionId}] Users found for filing`, {
           ticker: filing.ticker,
@@ -386,6 +403,8 @@ export async function handleDiscovery(
             id: u.id,
             email: u.email || '',
             subscriptionTier: u.subscriptionTier || 'FREE',
+            isTrialing: u.isTrialing,
+            trialEndsAt: u.trialEndsAt,
             tickers: u.tickers
           })),
           {

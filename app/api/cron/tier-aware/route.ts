@@ -159,6 +159,26 @@ export async function GET(request: NextRequest) {
     // Log feature flag status for debugging - now defaults to true
     cronLogger.info(`[${executionId}] 3-phase pipeline: ${use3PhasePipeline ? 'ENABLED (default)' : 'DISABLED (explicit opt-out)'} [USE_3_PHASE_PIPELINE=${process.env.USE_3_PHASE_PIPELINE || 'not set'}]`);
 
+    // Skip discovery during EDGAR quiet hours (10:15 PM – 5:45 AM ET, weekends, holidays)
+    // Saves ~48 wasted runs/day. Fetch/summarize for already-queued jobs still proceed.
+    const { isEdgarOpen } = await import('../../../../lib/cron/edgar-schedule');
+    if (!isEdgarOpen()) {
+      clearTimeout(timeoutId);
+      if (monitor) await monitor.complete(CronJobStatus.SUCCESS, 'Skipped: EDGAR quiet hours');
+
+      cronLogger.info(`[${executionId}] Skipping pipeline: EDGAR quiet hours`, {
+        duration: Date.now() - startTime,
+      });
+
+      return NextResponse.json({
+        success: true,
+        status: 'skipped',
+        reason: 'EDGAR quiet hours',
+        executionId,
+        duration: Date.now() - startTime,
+      }, { status: 200 });
+    }
+
     if (use3PhasePipeline) {
       cronLogger.info(`[${executionId}] Using 3-phase async pipeline mode`);
 

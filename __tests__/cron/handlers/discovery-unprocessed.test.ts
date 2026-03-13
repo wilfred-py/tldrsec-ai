@@ -42,6 +42,7 @@ jest.mock('../../../lib/db/prisma', () => ({
 
 // Mock ticker-monitoring module
 jest.mock('../../../lib/sec-edgar/ticker-monitoring', () => ({
+  getActiveTickersForMonitoring: jest.fn().mockResolvedValue([]),
   getUnprocessedFilings: jest.fn(),
   markFilingAsProcessed: jest.fn(async (id: string) => {
     markFilingAsProcessedCalls.push({ id });
@@ -132,24 +133,25 @@ describe('Discovery Handler - Unprocessed Filing Recovery', () => {
     const { getUnprocessedFilings } = await import('../../../lib/sec-edgar/ticker-monitoring');
     (getUnprocessedFilings as jest.Mock).mockResolvedValueOnce(unprocessedFilings);
 
-    // Mock: Users tracking these tickers
-    mockPrisma.user.findMany
-      .mockResolvedValueOnce([
-        {
-          id: 'user-1',
-          email: 'user1@example.com',
-          subscriptionTier: 'PROFESSIONAL',
-          tickers: [{ id: 'ticker-1', companyName: 'Apple Inc.' }],
-        },
-      ])
-      .mockResolvedValueOnce([
-        {
-          id: 'user-2',
-          email: 'user2@example.com',
-          subscriptionTier: 'FREE',
-          tickers: [{ id: 'ticker-2', companyName: 'Tesla, Inc.' }],
-        },
-      ]);
+    // Mock: Pre-fetch ALL users for all discovered tickers (single bulk query)
+    mockPrisma.user.findMany.mockResolvedValueOnce([
+      {
+        id: 'user-1',
+        email: 'user1@example.com',
+        subscriptionTier: 'PRO',
+        isTrialing: false,
+        trialEndsAt: null,
+        tickers: [{ id: 'ticker-1', symbol: 'AAPL', companyName: 'Apple Inc.' }],
+      },
+      {
+        id: 'user-2',
+        email: 'user2@example.com',
+        subscriptionTier: 'FREE',
+        isTrialing: false,
+        trialEndsAt: null,
+        tickers: [{ id: 'ticker-2', symbol: 'TSLA', companyName: 'Tesla, Inc.' }],
+      },
+    ]);
 
     // Mock: Job creation returns count
     mockPrisma.jobQueue.createMany.mockResolvedValue({ count: 1 });
@@ -208,13 +210,15 @@ describe('Discovery Handler - Unprocessed Filing Recovery', () => {
     const { getUnprocessedFilings, markFilingAsProcessed } = await import('../../../lib/sec-edgar/ticker-monitoring');
     (getUnprocessedFilings as jest.Mock).mockResolvedValueOnce(unprocessedFilings);
 
-    // Mock: User tracking this ticker
+    // Mock: Pre-fetch ALL users for all discovered tickers (single bulk query)
     mockPrisma.user.findMany.mockResolvedValueOnce([
       {
         id: 'user-mark-test',
         email: 'user@example.com',
         subscriptionTier: 'FREE',
-        tickers: [{ id: 'ticker-mark-test', companyName: 'Apple Inc.' }],
+        isTrialing: false,
+        trialEndsAt: null,
+        tickers: [{ id: 'ticker-mark-test', symbol: 'AAPL', companyName: 'Apple Inc.' }],
       },
     ]);
 
@@ -286,24 +290,25 @@ describe('Discovery Handler - Unprocessed Filing Recovery', () => {
     const { getUnprocessedFilings } = await import('../../../lib/sec-edgar/ticker-monitoring');
     (getUnprocessedFilings as jest.Mock).mockResolvedValueOnce([unprocessedFiling]);
 
-    // Mock: Users tracking these tickers
-    mockPrisma.user.findMany
-      .mockResolvedValueOnce([
-        {
-          id: 'user-nvda',
-          email: 'nvda@example.com',
-          subscriptionTier: 'FREE',
-          tickers: [{ id: 'ticker-nvda', companyName: 'NVIDIA Corporation' }],
-        },
-      ])
-      .mockResolvedValueOnce([
-        {
-          id: 'user-aapl-backlog',
-          email: 'aapl@example.com',
-          subscriptionTier: 'FREE',
-          tickers: [{ id: 'ticker-aapl', companyName: 'Apple Inc.' }],
-        },
-      ]);
+    // Mock: Pre-fetch ALL users for all discovered tickers (single bulk query)
+    mockPrisma.user.findMany.mockResolvedValueOnce([
+      {
+        id: 'user-nvda',
+        email: 'nvda@example.com',
+        subscriptionTier: 'FREE',
+        isTrialing: false,
+        trialEndsAt: null,
+        tickers: [{ id: 'ticker-nvda', symbol: 'NVDA', companyName: 'NVIDIA Corporation' }],
+      },
+      {
+        id: 'user-aapl-backlog',
+        email: 'aapl@example.com',
+        subscriptionTier: 'FREE',
+        isTrialing: false,
+        trialEndsAt: null,
+        tickers: [{ id: 'ticker-aapl', symbol: 'AAPL', companyName: 'Apple Inc.' }],
+      },
+    ]);
 
     // Mock: Job creation returns count
     mockPrisma.jobQueue.createMany.mockResolvedValue({ count: 1 });
@@ -369,13 +374,15 @@ describe('Discovery Handler - Unprocessed Filing Recovery', () => {
     const { getUnprocessedFilings } = await import('../../../lib/sec-edgar/ticker-monitoring');
     (getUnprocessedFilings as jest.Mock).mockResolvedValueOnce([unprocessedFiling]);
 
-    // Mock: Users tracking this ticker
+    // Mock: Pre-fetch ALL users for all discovered tickers (single bulk query)
     mockPrisma.user.findMany.mockResolvedValueOnce([
       {
         id: 'user-dedup',
         email: 'dedup@example.com',
         subscriptionTier: 'FREE',
-        tickers: [{ id: 'ticker-dedup', companyName: 'Apple Inc.' }],
+        isTrialing: false,
+        trialEndsAt: null,
+        tickers: [{ id: 'ticker-dedup', symbol: 'AAPL', companyName: 'Apple Inc.' }],
       },
     ]);
 
