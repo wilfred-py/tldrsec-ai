@@ -161,8 +161,9 @@ export async function GET(request: NextRequest) {
 
     // Skip discovery during EDGAR quiet hours (10:15 PM – 5:45 AM ET, weekends, holidays)
     // Saves ~48 wasted runs/day. Fetch/summarize for already-queued jobs still proceed.
+    // Only enforced in production — dev/test may run outside US market hours (e.g. from Australia).
     const { isEdgarOpen } = await import('../../../../lib/cron/edgar-schedule');
-    if (!isEdgarOpen()) {
+    if (process.env.NODE_ENV === 'production' && !isEdgarOpen()) {
       clearTimeout(timeoutId);
       if (monitor) await monitor.complete(CronJobStatus.SUCCESS, 'Skipped: EDGAR quiet hours');
 
