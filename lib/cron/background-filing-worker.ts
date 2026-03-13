@@ -18,7 +18,7 @@ import { CronFilingProcessor } from './filing-processor';
 import { getPrismaClient } from '../db/prisma';
 import type { FilingJobPayload } from './async-filing-queue';
 import type { JobQueue } from '@prisma/client';
-import { FILING_PROCESSING_TIMEOUT, getBatchSizeForJobType } from './types';
+import { FILING_PROCESSING_TIMEOUT, getBatchSizeForJobType, SUMMARIZE_TIME_BUDGET_MS } from './types';
 
 const workerLogger = logger.child('background-filing-worker');
 // Lazy accessor to avoid build-time initialization
@@ -293,7 +293,24 @@ export class BackgroundFilingWorker {
     });
 
     // Process jobs sequentially (respects SEC API rate limits)
+    // For summarize batches: adaptive time-budget stops early if AI call detected
+    const batchStart = Date.now();
     for (const job of jobs) {
+      // For summarize jobs after the first: check time budget
+      if (job.jobType === 'ASYNC_SUMMARIZE_CACHED' && jobResults.length > 0) {
+        const lastDuration = jobResults[jobResults.length - 1].durationMs || 0;
+        const remaining = SUMMARIZE_TIME_BUDGET_MS - (Date.now() - batchStart);
+        if (lastDuration > 30_000 || remaining < 60_000) {
+          workerLogger.info('Stopping summarize batch - time budget', {
+            elapsed: Date.now() - batchStart,
+            remaining,
+            lastDuration,
+            processed: jobResults.length,
+            total: jobs.length,
+          });
+          break;
+        }
+      }
       const jobResult = await this.processJob(job);
       jobResults.push(jobResult);
     }

@@ -179,7 +179,7 @@ export const FILING_PROCESSING_TIMEOUT = 270000; // 4.5 minutes - matches OpenRo
 export const JOB_BATCH_SIZES: Record<string, number> = {
   ASYNC_DISCOVER_FILINGS: 10,    // Fast jobs: 2-5s each
   ASYNC_FETCH_FILING: 5,          // Fast jobs now: 4-10s each (optimized)
-  ASYNC_SUMMARIZE_CACHED: 1,      // Slow jobs: 30-270s each (AI processing)
+  ASYNC_SUMMARIZE_CACHED: 5,      // Adaptive: up to 5, time-budget stops batch if AI call detected
   // Legacy jobs use default
   DEFAULT: 1,
 };
@@ -191,6 +191,21 @@ export const JOB_BATCH_SIZES: Record<string, number> = {
 export function getBatchSizeForJobType(jobType: string): number {
   return JOB_BATCH_SIZES[jobType] ?? JOB_BATCH_SIZES.DEFAULT;
 }
+
+/**
+ * Time budget for summarize batch processing (ms).
+ * 240s budget leaves 60s buffer before Vercel's 300s limit.
+ * The batch loop stops early if the last job was slow (>30s = likely AI call)
+ * or if less than 60s remains.
+ */
+export const SUMMARIZE_TIME_BUDGET_MS = 240_000;
+
+/**
+ * Stagger delay between RSS checks within a batch (ms).
+ * 5 checks × 200ms = 800ms spread → ~6.25 req/s effective rate,
+ * well under SEC's 10 req/s limit.
+ */
+export const RSS_STAGGER_DELAY_MS = 200;
 
 // Platform detection types
 export type CronPlatform = 'RAILWAY_CRON' | 'VERCEL_CRON' | 'MANUAL_TRIGGER';

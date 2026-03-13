@@ -14,7 +14,7 @@ import {
   markFilingAsProcessedByAccession
 } from '../sec-edgar/ticker-monitoring';
 // import type { DatabaseUser } from './types';
-import { MAX_CONCURRENT_RSS_CHECKS } from './types';
+import { MAX_CONCURRENT_RSS_CHECKS, RSS_STAGGER_DELAY_MS } from './types';
 
 const filingLogger = logger.child('cron-sec-filing');
 
@@ -399,21 +399,26 @@ export class CronSecFilingService {
     let newFilingsFound = 0;
     let errors = 0;
 
-    const batchPromises = batch.map(async (ticker) => {
-      try {
-        const newFilings = await checkTickerForNewFilings(ticker);
-        const filingsCount = newFilings.length;
-        newFilingsFound += filingsCount;
-        
-        filingLogger.debug(`Checked ${ticker.symbol}: ${filingsCount} new filings`);
-        
-        return { filingsFound: filingsCount, error: null };
-      } catch (error) {
-        filingLogger.error(`Failed to check ticker ${ticker.symbol}`, { error });
-        if (monitor) await monitor.updateMetrics({ errorCount: 1 });
-        errors++;
-        return { filingsFound: 0, error };
-      }
+    // Stagger RSS checks within batch to avoid SEC rate limit bursts
+    // Each check launches 200ms after the previous one
+    const batchPromises = batch.map((ticker, i) => {
+      return new Promise<void>(resolve => setTimeout(resolve, i * RSS_STAGGER_DELAY_MS))
+        .then(async () => {
+          try {
+            const newFilings = await checkTickerForNewFilings(ticker);
+            const filingsCount = newFilings.length;
+            newFilingsFound += filingsCount;
+
+            filingLogger.debug(`Checked ${ticker.symbol}: ${filingsCount} new filings`);
+
+            return { filingsFound: filingsCount, error: null };
+          } catch (error) {
+            filingLogger.error(`Failed to check ticker ${ticker.symbol}`, { error });
+            if (monitor) await monitor.updateMetrics({ errorCount: 1 });
+            errors++;
+            return { filingsFound: 0, error };
+          }
+        });
     });
 
     const results = await Promise.allSettled(batchPromises);

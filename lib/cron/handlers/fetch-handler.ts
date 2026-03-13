@@ -20,6 +20,7 @@ import type { JobPayload } from '../../job-queue';
 import { createHash } from 'crypto';
 import { SECEdgarClient } from '../../sec-edgar/client';
 import { verifyFilingContent, type FilingMetadata, type ContentVerificationResult } from '../../validation/filing-content-verifier';
+import { getPriorityForTier } from '../tier-priority';
 
 const fetchLogger = logger.child('fetch-handler');
 
@@ -299,8 +300,7 @@ export async function handleFetch(
           cacheHit: false
         }
       },
-      priority: userTier === 'MAX' ? 9 :
-               userTier === 'PLUS' ? 7 : 5,
+      priority: getPriorityForTier(userTier),
       maxAttempts: 3
     });
 
