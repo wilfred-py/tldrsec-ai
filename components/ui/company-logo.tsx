@@ -10,14 +10,76 @@ interface CompanyLogoProps {
   className?: string;
 }
 
-// Heuristic: derive domain from company name
-// e.g. "Apple Inc." -> "apple.com", "JPMorgan Chase & Co." -> "jpmorganchase.com"
+// Static ticker → domain map for known companies.
+// Avoids error-prone domain derivation (e.g., Alphabet ≠ alphabet.com).
+// Used with AllInvestView CDN: https://cdn.tickerlogos.com/{domain}
+const TICKER_DOMAIN_MAP: Record<string, string> = {
+  // Technology
+  AAPL: 'apple.com',
+  MSFT: 'microsoft.com',
+  GOOGL: 'google.com',
+  AMZN: 'amazon.com',
+  META: 'meta.com',
+  // Healthcare
+  JNJ: 'jnj.com',
+  PFE: 'pfizer.com',
+  UNH: 'unitedhealthgroup.com',
+  ABBV: 'abbvie.com',
+  TMO: 'thermofisher.com',
+  // Financial Services
+  JPM: 'jpmorganchase.com',
+  BAC: 'bankofamerica.com',
+  WFC: 'wellsfargo.com',
+  GS: 'goldmansachs.com',
+  MS: 'morganstanley.com',
+  // Automotive
+  TSLA: 'tesla.com',
+  F: 'ford.com',
+  GM: 'gm.com',
+  TM: 'global.toyota',
+  HMC: 'honda.co.jp',
+  // Consumer Goods
+  WMT: 'stock.walmart.com',
+  PG: 'pginvestor.com',
+  KO: 'coca-colacompany.com',
+  PEP: 'pepsico.com',
+  COST: 'costco.com',
+  // Energy
+  XOM: 'corporate.exxonmobil.com',
+  CVX: 'chevron.com',
+  COP: 'conocophillips.com',
+  EOG: 'eogresources.com',
+  SLB: 'slb.com',
+  // Real Estate
+  AMT: 'americantower.com',
+  PLD: 'prologis.com',
+  CCI: 'crowncastle.com',
+  EQIX: 'equinix.com',
+  SPG: 'simon.com',
+  // Industrial
+  BA: 'boeing.com',
+  CAT: 'caterpillar.com',
+  HON: 'honeywell.com',
+  UPS: 'ups.com',
+  LMT: 'lockheedmartin.com',
+};
+
+// Fallback: derive domain from company name for tickers not in the map
 function deriveDomain(companyName: string): string {
   return companyName
     .toLowerCase()
     .replace(/\s*(inc\.?|corp\.?|corporation|company|co\.?|ltd\.?|llc|plc|group|&|the)\s*/gi, '')
     .replace(/[^a-z0-9]/g, '')
     .trim() + '.com';
+}
+
+function getDomain(symbol: string, companyName: string): string {
+  return TICKER_DOMAIN_MAP[symbol.toUpperCase()] || deriveDomain(companyName);
+}
+
+/** Returns the CDN logo URL for a given ticker/company. Useful for preloading. */
+export function getLogoUrl(symbol: string, companyName: string): string {
+  return `https://cdn.tickerlogos.com/${getDomain(symbol, companyName)}`;
 }
 
 const sizeClasses = {
@@ -42,7 +104,7 @@ function getAvatarColor(symbol: string): string {
 
 export function CompanyLogo({ symbol, companyName, size = 'md', className }: CompanyLogoProps) {
   const [imgError, setImgError] = useState(false);
-  const domain = deriveDomain(companyName);
+  const domain = getDomain(symbol, companyName);
   const letter = symbol.charAt(0).toUpperCase();
   const colorClass = getAvatarColor(symbol);
 
@@ -75,15 +137,14 @@ export function CompanyLogo({ symbol, companyName, size = 'md', className }: Com
       >
         {letter}
       </div>
-      {/* Clearbit logo overlays on successful load */}
+      {/* AllInvestView CDN logo overlays on successful load */}
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
-        src={`https://logo.clearbit.com/${domain}`}
+        src={`https://cdn.tickerlogos.com/${domain}`}
         alt={`${companyName} logo`}
-        loading="lazy"
+        loading="eager"
         className={cn('relative rounded-full object-cover', sizeClasses[size])}
         onLoad={(e) => {
-          // Show the image by making it opaque
           (e.target as HTMLImageElement).style.opacity = '1';
         }}
         onError={() => setImgError(true)}

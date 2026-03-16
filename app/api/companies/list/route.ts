@@ -25,6 +25,8 @@ interface CompanyData {
   symbol: string;
   name: string;
   cik: string;
+  sic?: string;
+  sector?: string | null;
 }
 
 /**

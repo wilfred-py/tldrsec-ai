@@ -5,10 +5,13 @@ import { useSession } from "@clerk/nextjs";
 import { useAuthContext } from "@/lib/context/auth-context";
 import { Card, CardContent } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
-import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { CheckCircle, ArrowRight, Building2, Cpu, Heart, Car, ShoppingCart, Zap, Home, Banknote, Search, Loader2, ArrowLeft } from "lucide-react";
+import {
+  CheckCircle, ArrowRight, Cpu, Heart, ShoppingCart,
+  Zap, Home, Banknote, Search, Loader2, ArrowLeft,
+  Lightbulb, Layers, Factory, Megaphone, ShoppingBag,
+} from "lucide-react";
 import { toast } from "sonner";
 import { NotificationPreference } from "@/lib/email/notification-types";
 import {
@@ -16,11 +19,11 @@ import {
   NotificationContentPreferences,
   UIPreferences,
   DEFAULT_NOTIFICATION_PREFERENCES,
-  DEFAULT_UI_PREFERENCES
+  DEFAULT_UI_PREFERENCES,
 } from "@/lib/user/preference-types";
 import { completeOnboardingBatched } from "./actions";
 import { THREE_TIER_LIMITS } from "@/lib/subscription/three-tier-limits";
-import { CompanyLogo } from "@/components/ui/company-logo";
+import { CompanyLogo, getLogoUrl } from "@/components/ui/company-logo";
 import { OnboardingTransition } from "@/components/onboarding/onboarding-transition";
 
 const TIER_LIMIT = THREE_TIER_LIMITS.FREE;
@@ -28,126 +31,109 @@ const isUnlimited = TIER_LIMIT === -1;
 const ONBOARDING_SOFT_CAP = 15; // Soft cap for onboarding picker UI only
 const MAX_TICKERS = isUnlimited ? ONBOARDING_SOFT_CAP : TIER_LIMIT;
 
-// Define sectors with their icons and descriptions
+// ---------------------------------------------------------------------------
+// GICS Sector definitions (step 1) — 11 standard GICS sectors
+// ---------------------------------------------------------------------------
 const sectors = [
   {
-    id: "technology",
-    name: "Technology",
+    id: "information-technology",
+    name: "Information Technology",
     icon: Cpu,
-    description: "Software, hardware, and tech services",
+    description: "Software, hardware, semiconductors, and IT services",
     color: "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950 dark:text-blue-300 dark:border-blue-800",
   },
   {
-    id: "healthcare",
-    name: "Healthcare",
+    id: "health-care",
+    name: "Health Care",
     icon: Heart,
-    description: "Pharmaceuticals, biotech, and medical devices",
+    description: "Pharma, biotech, medical devices, and providers",
     color: "bg-green-50 text-green-700 border-green-200 dark:bg-green-950 dark:text-green-300 dark:border-green-800",
   },
   {
-    id: "financial",
-    name: "Financial Services",
+    id: "financials",
+    name: "Financials",
     icon: Banknote,
-    description: "Banks, insurance, and investment firms",
+    description: "Banks, insurance, and capital markets",
     color: "bg-yellow-50 text-yellow-700 border-yellow-200 dark:bg-yellow-950 dark:text-yellow-300 dark:border-yellow-800",
   },
   {
-    id: "automotive",
-    name: "Automotive",
-    icon: Car,
-    description: "Auto manufacturers and suppliers",
+    id: "consumer-discretionary",
+    name: "Consumer Discretionary",
+    icon: ShoppingCart,
+    description: "Retail, autos, apparel, hotels, and entertainment",
     color: "bg-red-50 text-red-700 border-red-200 dark:bg-red-950 dark:text-red-300 dark:border-red-800",
   },
   {
-    id: "consumer",
-    name: "Consumer Goods",
-    icon: ShoppingCart,
-    description: "Retail, food, and consumer products",
+    id: "consumer-staples",
+    name: "Consumer Staples",
+    icon: ShoppingBag,
+    description: "Food, beverages, tobacco, and household products",
     color: "bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-950 dark:text-purple-300 dark:border-purple-800",
   },
   {
     id: "energy",
     name: "Energy",
     icon: Zap,
-    description: "Oil, gas, and renewable energy",
+    description: "Oil, gas, and energy equipment and services",
     color: "bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-950 dark:text-orange-300 dark:border-orange-800",
   },
   {
-    id: "realestate",
-    name: "Real Estate",
-    icon: Home,
-    description: "REITs and property companies",
-    color: "bg-teal-50 text-teal-700 border-teal-200 dark:bg-teal-950 dark:text-teal-300 dark:border-teal-800",
+    id: "industrials",
+    name: "Industrials",
+    icon: Factory,
+    description: "Aerospace, defense, machinery, and transportation",
+    color: "bg-gray-50 text-gray-700 border-gray-200 dark:bg-gray-950 dark:text-gray-300 dark:border-gray-800",
   },
   {
-    id: "industrial",
-    name: "Industrial",
-    icon: Building2,
-    description: "Manufacturing and industrial services",
-    color: "bg-gray-50 text-gray-700 border-gray-200 dark:bg-gray-950 dark:text-gray-300 dark:border-gray-800",
+    id: "communication-services",
+    name: "Communication Services",
+    icon: Megaphone,
+    description: "Telecom, media, and interactive entertainment",
+    color: "bg-sky-50 text-sky-700 border-sky-200 dark:bg-sky-950 dark:text-sky-300 dark:border-sky-800",
+  },
+  {
+    id: "materials",
+    name: "Materials",
+    icon: Layers,
+    description: "Chemicals, metals, mining, and construction materials",
+    color: "bg-stone-50 text-stone-700 border-stone-200 dark:bg-stone-950 dark:text-stone-300 dark:border-stone-800",
+  },
+  {
+    id: "utilities",
+    name: "Utilities",
+    icon: Lightbulb,
+    description: "Electric, gas, water, and renewable utilities",
+    color: "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950 dark:text-amber-300 dark:border-amber-800",
+  },
+  {
+    id: "real-estate",
+    name: "Real Estate",
+    icon: Home,
+    description: "REITs and real estate management",
+    color: "bg-teal-50 text-teal-700 border-teal-200 dark:bg-teal-950 dark:text-teal-300 dark:border-teal-800",
   },
 ];
 
-// Sample equities by sector for the reference implementation
-const equitiesBySector: Record<string, { symbol: string; name: string }[]> = {
-  technology: [
-    { symbol: "AAPL", name: "Apple Inc." },
-    { symbol: "MSFT", name: "Microsoft Corporation" },
-    { symbol: "GOOGL", name: "Alphabet Inc." },
-    { symbol: "AMZN", name: "Amazon.com Inc." },
-    { symbol: "META", name: "Meta Platforms Inc." },
-  ],
-  healthcare: [
-    { symbol: "JNJ", name: "Johnson & Johnson" },
-    { symbol: "PFE", name: "Pfizer Inc." },
-    { symbol: "UNH", name: "UnitedHealth Group" },
-    { symbol: "ABBV", name: "AbbVie Inc." },
-    { symbol: "TMO", name: "Thermo Fisher Scientific" },
-  ],
-  financial: [
-    { symbol: "JPM", name: "JPMorgan Chase & Co." },
-    { symbol: "BAC", name: "Bank of America Corp" },
-    { symbol: "WFC", name: "Wells Fargo & Company" },
-    { symbol: "GS", name: "Goldman Sachs Group" },
-    { symbol: "MS", name: "Morgan Stanley" },
-  ],
-  automotive: [
-    { symbol: "TSLA", name: "Tesla Inc." },
-    { symbol: "F", name: "Ford Motor Company" },
-    { symbol: "GM", name: "General Motors Company" },
-    { symbol: "TM", name: "Toyota Motor Corporation" },
-    { symbol: "HMC", name: "Honda Motor Co." },
-  ],
-  consumer: [
-    { symbol: "WMT", name: "Walmart Inc." },
-    { symbol: "PG", name: "Procter & Gamble" },
-    { symbol: "KO", name: "Coca-Cola Company" },
-    { symbol: "PEP", name: "PepsiCo Inc." },
-    { symbol: "COST", name: "Costco Wholesale" },
-  ],
-  energy: [
-    { symbol: "XOM", name: "Exxon Mobil Corporation" },
-    { symbol: "CVX", name: "Chevron Corporation" },
-    { symbol: "COP", name: "ConocoPhillips" },
-    { symbol: "EOG", name: "EOG Resources" },
-    { symbol: "SLB", name: "Schlumberger Limited" },
-  ],
-  realestate: [
-    { symbol: "AMT", name: "American Tower Corporation" },
-    { symbol: "PLD", name: "Prologis Inc." },
-    { symbol: "CCI", name: "Crown Castle Inc." },
-    { symbol: "EQIX", name: "Equinix Inc." },
-    { symbol: "SPG", name: "Simon Property Group" },
-  ],
-  industrial: [
-    { symbol: "BA", name: "Boeing Company" },
-    { symbol: "CAT", name: "Caterpillar Inc." },
-    { symbol: "HON", name: "Honeywell International" },
-    { symbol: "UPS", name: "United Parcel Service" },
-    { symbol: "LMT", name: "Lockheed Martin Corporation" },
-  ],
-};
+// ---------------------------------------------------------------------------
+// Types
+// ---------------------------------------------------------------------------
+interface CompanyItem {
+  symbol: string;
+  name: string;
+  sector?: string | null;
+}
 
+interface BySectorResponse {
+  companies: CompanyItem[];
+  total: number;
+  page: number;
+  totalPages: number;
+  sectorCounts: Record<string, number>;
+}
+
+// ---------------------------------------------------------------------------
+// Component
+// ---------------------------------------------------------------------------
 export default function OnboardingPage() {
   const { isLoading, userName } = useAuthContext();
   const { session } = useSession();
@@ -156,17 +142,28 @@ export default function OnboardingPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showTransition, setShowTransition] = useState(false);
 
-  // New state for the simplified onboarding flow
   const [currentStep, setCurrentStep] = useState(1);
   const [selectedSectors, setSelectedSectors] = useState<string[]>([]);
   const [selectedEquities, setSelectedEquities] = useState<string[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [isTransitioning, setIsTransitioning] = useState(false);
 
-  // API search state
-  const [apiSearchResults, setApiSearchResults] = useState<{ symbol: string; name: string }[]>([]);
+  // Step 2 API state — paginated browse
+  const [browseCompanies, setBrowseCompanies] = useState<CompanyItem[]>([]);
+  const [browsePage, setBrowsePage] = useState(1);
+  const [browseTotalPages, setBrowseTotalPages] = useState(0);
+  const [browseTotal, setBrowseTotal] = useState(0);
+  const [sectorCounts, setSectorCounts] = useState<Record<string, number>>({});
+  const [isBrowseLoading, setIsBrowseLoading] = useState(false);
+  const [activeSectorFilter, setActiveSectorFilter] = useState<string | null>(null);
+
+  // Step 2 API state — search
+  const [apiSearchResults, setApiSearchResults] = useState<CompanyItem[]>([]);
   const [isSearchingApi, setIsSearchingApi] = useState(false);
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  // We need a ref to track selected equities' names for onboarding completion
+  const equityNamesRef = useRef<Map<string, string>>(new Map());
 
   // Default preferences
   const [emailFrequency] = useState<NotificationPreference>(
@@ -180,19 +177,16 @@ export default function OnboardingPage() {
   );
   const [uiPreferences] = useState<UIPreferences>(DEFAULT_UI_PREFERENCES);
 
-  // Initialize with user's name if available
+  // Initialize page state once auth context is loaded
   useEffect(() => {
     if (userName) {
-      // Set any user-specific initial values
+      // placeholder for user-specific init
     }
   }, [userName]);
 
-  // Initialize page state once auth context is loaded
   useEffect(() => {
     try {
-      if (!isLoading) {
-        setInitializing(false);
-      }
+      if (!isLoading) setInitializing(false);
     } catch (err) {
       console.error("Error during initialization:", err);
       setError("An error occurred while loading. Please try refreshing the page.");
@@ -200,24 +194,88 @@ export default function OnboardingPage() {
     }
   }, [isLoading]);
 
-  // API-backed search with debounce
+  // -----------------------------------------------------------------------
+  // Browse-by-sector fetch
+  // -----------------------------------------------------------------------
+  const fetchBySector = useCallback(
+    async (sectorsList: string[], page: number, filterSector?: string | null) => {
+      setIsBrowseLoading(true);
+      try {
+        const sectorsParam = filterSector ? filterSector : sectorsList.join(",");
+        const res = await fetch(
+          `/api/companies/by-sector?sectors=${encodeURIComponent(sectorsParam)}&page=${page}&limit=50`
+        );
+        if (!res.ok) throw new Error("Failed to fetch companies");
+        const data: BySectorResponse = await res.json();
+
+        if (page === 1) {
+          setBrowseCompanies(data.companies);
+        } else {
+          setBrowseCompanies((prev) => [...prev, ...data.companies]);
+        }
+        setBrowsePage(data.page);
+        setBrowseTotalPages(data.totalPages);
+        setBrowseTotal(data.total);
+
+        // Only update sector counts from an unfiltered request
+        if (!filterSector && data.sectorCounts) {
+          setSectorCounts(data.sectorCounts);
+        }
+
+        // Preload logos for the fetched page
+        data.companies.forEach(({ symbol, name }) => {
+          const img = new Image();
+          img.src = getLogoUrl(symbol, name);
+        });
+      } catch (err) {
+        console.error("Browse fetch error:", err);
+      } finally {
+        setIsBrowseLoading(false);
+      }
+    },
+    []
+  );
+
+  // Fetch initial sector counts (unfiltered) when entering step 2
+  const fetchSectorCounts = useCallback(
+    async (sectorsList: string[]) => {
+      try {
+        const res = await fetch(
+          `/api/companies/by-sector?sectors=${encodeURIComponent(sectorsList.join(","))}&page=1&limit=1`
+        );
+        if (res.ok) {
+          const data: BySectorResponse = await res.json();
+          if (data.sectorCounts) setSectorCounts(data.sectorCounts);
+        }
+      } catch {
+        // non-critical
+      }
+    },
+    []
+  );
+
+  // -----------------------------------------------------------------------
+  // API search
+  // -----------------------------------------------------------------------
   const searchApi = useCallback(async (query: string) => {
     if (query.length < 2) {
       setApiSearchResults([]);
       setIsSearchingApi(false);
       return;
     }
-
     setIsSearchingApi(true);
     try {
       const response = await fetch(`/api/companies/search?q=${encodeURIComponent(query)}`);
       if (response.ok) {
-        const data = (await response.json()) as { companies?: Array<{ symbol: string; name: string }> };
+        const data = (await response.json()) as {
+          companies?: Array<{ symbol: string; name: string; sector?: string | null }>;
+        };
         if (data.companies && Array.isArray(data.companies)) {
           setApiSearchResults(
             data.companies.slice(0, 20).map((c) => ({
               symbol: c.symbol,
               name: c.name,
+              sector: c.sector,
             }))
           );
         }
@@ -229,160 +287,150 @@ export default function OnboardingPage() {
     }
   }, []);
 
-  // Handle search query change with debounced API search
-  const handleSearchChange = useCallback((query: string) => {
-    setSearchQuery(query);
-    if (debounceTimerRef.current) {
-      clearTimeout(debounceTimerRef.current);
-    }
-    if (query.length >= 2) {
-      setIsSearchingApi(true);
-      debounceTimerRef.current = setTimeout(() => {
-        searchApi(query);
-      }, 300);
-    } else {
-      setApiSearchResults([]);
-      setIsSearchingApi(false);
-    }
-  }, [searchApi]);
+  const handleSearchChange = useCallback(
+    (query: string) => {
+      setSearchQuery(query);
+      if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
+      if (query.length >= 2) {
+        setIsSearchingApi(true);
+        debounceTimerRef.current = setTimeout(() => searchApi(query), 300);
+      } else {
+        setApiSearchResults([]);
+        setIsSearchingApi(false);
+      }
+    },
+    [searchApi]
+  );
 
-  // Calculate progress based on current step and selections (2-step flow)
-  // Cap at 90% until submission completes - 100% is only shown via transition screen
+  // -----------------------------------------------------------------------
+  // Progress
+  // -----------------------------------------------------------------------
   const calculateProgress = () => {
     if (currentStep === 1) {
-      // Step 1: 0-45% based on how many sectors selected (up to 3 shown)
       return Math.min(45, selectedSectors.length * 15);
-    } else {
-      // Step 2: 50-90% based on how many equities selected out of max
-      const equityProgress = Math.min(40, (selectedEquities.length / MAX_TICKERS) * 40);
-      return 50 + Math.round(equityProgress);
     }
+    const equityProgress = Math.min(40, (selectedEquities.length / MAX_TICKERS) * 40);
+    return 50 + Math.round(equityProgress);
   };
-
   const progress = calculateProgress();
 
-  // Handle sector selection
+  // -----------------------------------------------------------------------
+  // Handlers
+  // -----------------------------------------------------------------------
   const handleSectorToggle = (sectorId: string) => {
     setSelectedSectors((prev) =>
       prev.includes(sectorId) ? prev.filter((id) => id !== sectorId) : [...prev, sectorId]
     );
   };
 
-  // Handle equity selection
-  const handleEquityToggle = (symbol: string) => {
+  const handleEquityToggle = (company: CompanyItem) => {
+    const { symbol, name } = company;
     setSelectedEquities((prev) => {
       if (prev.includes(symbol)) {
+        equityNamesRef.current.delete(symbol);
         return prev.filter((s) => s !== symbol);
       }
       if (prev.length < MAX_TICKERS) {
+        equityNamesRef.current.set(symbol, name);
         return [...prev, symbol];
       }
       return prev;
     });
   };
 
-  // Get available equities based on selected sectors and search query
-  const getAvailableEquities = () => {
-    if (selectedSectors.length === 0 && !searchQuery) return [];
-
-    // Sector-based results
-    const sectorEquities = selectedSectors.flatMap(
-      (sectorId) => equitiesBySector[sectorId] || []
-    );
-    const uniqueSectorEquities = sectorEquities.filter(
-      (equity, index, self) => index === self.findIndex((e) => e.symbol === equity.symbol)
-    );
-
-    // Filter sector results by search query
-    let filteredSectorResults = uniqueSectorEquities;
-    if (searchQuery) {
-      filteredSectorResults = uniqueSectorEquities.filter(
-        (equity) =>
-          equity.symbol.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          equity.name.toLowerCase().includes(searchQuery.toLowerCase())
-      );
-    }
-
-    // Merge API results (deduplicate, sector results first)
-    const sectorSymbols = new Set(filteredSectorResults.map((e) => e.symbol));
-    const uniqueApiResults = apiSearchResults.filter((r) => !sectorSymbols.has(r.symbol));
-
-    return [...filteredSectorResults, ...uniqueApiResults];
+  const handleSectorFilterClick = (sectorId: string) => {
+    const next = activeSectorFilter === sectorId ? null : sectorId;
+    setActiveSectorFilter(next);
+    setBrowseCompanies([]);
+    setBrowsePage(1);
+    fetchBySector(selectedSectors, 1, next);
   };
 
-  // Handle next button click
+  const handleLoadMore = () => {
+    const nextPage = browsePage + 1;
+    fetchBySector(selectedSectors, nextPage, activeSectorFilter);
+  };
+
+  // Visible companies: search results when searching, browse results otherwise
+  const displayedCompanies: CompanyItem[] =
+    searchQuery.length >= 2 ? apiSearchResults : browseCompanies;
+
+  // -----------------------------------------------------------------------
+  // Navigation
+  // -----------------------------------------------------------------------
   const handleNext = () => {
     if (currentStep === 1) {
       setIsTransitioning(true);
       setTimeout(() => {
         setCurrentStep(2);
         setIsTransitioning(false);
+        // Fetch first page of companies for the selected sectors
+        setActiveSectorFilter(null);
+        setBrowseCompanies([]);
+        setBrowsePage(1);
+        fetchBySector(selectedSectors, 1);
+        fetchSectorCounts(selectedSectors);
       }, 300);
     } else if (currentStep === 2) {
       handleCompleteOnboarding();
     }
   };
 
-  // Handle back button click
   const handleBack = () => {
     setIsTransitioning(true);
     setTimeout(() => {
       setCurrentStep(currentStep - 1);
       setIsTransitioning(false);
+      setSearchQuery("");
+      setApiSearchResults([]);
     }, 300);
   };
 
-  // Handle onboarding completion
+  // -----------------------------------------------------------------------
+  // Complete onboarding
+  // -----------------------------------------------------------------------
   const handleCompleteOnboarding = async () => {
     try {
       setIsSubmitting(true);
       setError(null);
 
-      const allEquities = getAvailableEquities();
-      const formattedTickers = allEquities
-        .filter(equity => selectedEquities.includes(equity.symbol))
-        .map(equity => ({
-          symbol: equity.symbol,
-          companyName: equity.name
-        }));
+      const formattedTickers = selectedEquities.map((symbol) => ({
+        symbol,
+        companyName: equityNamesRef.current.get(symbol) || symbol,
+      }));
 
       const result = await completeOnboardingBatched({
         preferences: {
-          notifications: {
-            emailFrequency,
-            filingTypes,
-            contentPreferences
-          },
-          ui: uiPreferences
+          notifications: { emailFrequency, filingTypes, contentPreferences },
+          ui: uiPreferences,
         },
-        tickers: formattedTickers
+        tickers: formattedTickers,
       });
 
       if (!result.success) {
-        throw new Error(result.error || 'Failed to complete onboarding');
+        throw new Error(result.error || "Failed to complete onboarding");
       }
 
-      // Set temporary cookie BEFORE transition to bypass middleware race condition
-      document.cookie = 'onboarding_completed=true; path=/; max-age=60; SameSite=Lax';
-
-      // Show animated transition screen instead of toast
+      document.cookie = "onboarding_completed=true; path=/; max-age=60; SameSite=Lax";
       setShowTransition(true);
 
-      // Refresh Clerk session in background (fire-and-forget to avoid state reset)
       if (session) {
         session.reload().catch((reloadError) => {
-          console.warn('Session reload failed, continuing with navigation:', reloadError);
+          console.warn("Session reload failed, continuing with navigation:", reloadError);
         });
       }
     } catch (error) {
-      console.error('Error completing onboarding:', error);
-      const errorMessage = error instanceof Error ? error.message : 'An unexpected error occurred';
+      console.error("Error completing onboarding:", error);
+      const errorMessage = error instanceof Error ? error.message : "An unexpected error occurred";
       setError(errorMessage);
-      toast.error('Failed to complete onboarding. Please try again.');
+      toast.error("Failed to complete onboarding. Please try again.");
       setIsSubmitting(false);
     }
   };
 
+  // -----------------------------------------------------------------------
+  // Render guards
+  // -----------------------------------------------------------------------
   if (isLoading || initializing) {
     return (
       <div className="flex min-h-screen items-center justify-center">
@@ -402,12 +450,7 @@ export default function OnboardingPage() {
             <div className="text-center">
               <h2 className="text-2xl font-bold text-red-600 mb-4">Error</h2>
               <p className="mb-6">{error}</p>
-              <Button
-                onClick={() => {
-                  setError(null);
-                  setIsSubmitting(false);
-                }}
-              >
+              <Button onClick={() => { setError(null); setIsSubmitting(false); }}>
                 Retry
               </Button>
             </div>
@@ -417,11 +460,13 @@ export default function OnboardingPage() {
     );
   }
 
-  // Show animated transition screen on success
   if (showTransition) {
     return <OnboardingTransition />;
   }
 
+  // -----------------------------------------------------------------------
+  // Main render
+  // -----------------------------------------------------------------------
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50 dark:from-gray-950 dark:via-gray-900 dark:to-gray-950">
       <div className="container mx-auto px-4 py-8">
@@ -429,7 +474,9 @@ export default function OnboardingPage() {
           {/* Header */}
           <div className="mb-8 text-center">
             <h1 className="mt-10 mb-2 text-2xl font-bold">Welcome to tldrSEC!</h1>
-            <p className="text-muted-foreground">Let&apos;s personalize your experience in just 2 quick steps.</p>
+            <p className="text-muted-foreground">
+              Let&apos;s personalize your experience in just 2 quick steps.
+            </p>
           </div>
 
           {/* Progress */}
@@ -445,17 +492,22 @@ export default function OnboardingPage() {
           <div className="relative overflow-hidden">
             <div
               className={`transition-all duration-300 ease-in-out ${
-                isTransitioning ? "translate-x-[-100%] opacity-0" : "translate-x-0 opacity-100"
+                isTransitioning
+                  ? "translate-x-[-100%] opacity-0"
+                  : "translate-x-0 opacity-100"
               }`}
             >
-              {/* Step 1: Sector Selection */}
+              {/* ============================================================ */}
+              {/* Step 1: Sector Selection                                      */}
+              {/* ============================================================ */}
               {currentStep === 1 && (
                 <Card className="border-0 shadow-lg">
                   <CardContent className="p-6">
                     <div className="text-center mb-6">
                       <h2 className="text-xl font-bold">What sectors interest you?</h2>
                       <p className="text-muted-foreground">
-                        Select the industries you&apos;d like to track. You can always change this later.
+                        Select the industries you&apos;d like to track. You can always change
+                        this later.
                       </p>
                     </div>
 
@@ -480,13 +532,17 @@ export default function OnboardingPage() {
                                 <Icon className="h-6 w-6" />
                               </div>
                               <h3 className="mb-1 font-medium">{sector.name}</h3>
-                              <p className="mb-6 text-xs text-muted-foreground">{sector.description}</p>
+                              <p className="mb-6 text-xs text-muted-foreground">
+                                {sector.description}
+                              </p>
                               <div className="h-5 flex items-center justify-center">
-                                {isSelected && <CheckCircle className="h-5 w-5 text-primary" />}
+                                {isSelected && (
+                                  <CheckCircle className="h-5 w-5 text-primary" />
+                                )}
                               </div>
                             </div>
                           </div>
-                        )
+                        );
                       })}
                     </div>
 
@@ -494,9 +550,13 @@ export default function OnboardingPage() {
                       <div></div>
                       <div className="flex items-center gap-4">
                         <span className="text-sm text-muted-foreground">
-                          {selectedSectors.length} sector{selectedSectors.length !== 1 ? "s" : ""} selected
+                          {selectedSectors.length} sector
+                          {selectedSectors.length !== 1 ? "s" : ""} selected
                         </span>
-                        <Button onClick={handleNext} disabled={selectedSectors.length === 0}>
+                        <Button
+                          onClick={handleNext}
+                          disabled={selectedSectors.length === 0}
+                        >
                           Continue
                           <ArrowRight className="ml-2 h-4 w-4" />
                         </Button>
@@ -506,7 +566,9 @@ export default function OnboardingPage() {
                 </Card>
               )}
 
-              {/* Step 2: Equity Selection */}
+              {/* ============================================================ */}
+              {/* Step 2: Equity Selection (API-powered)                        */}
+              {/* ============================================================ */}
               {currentStep === 2 && (
                 <Card className="border-0 shadow-lg">
                   <CardContent className="p-6">
@@ -514,16 +576,16 @@ export default function OnboardingPage() {
                       <h2 className="text-xl font-bold">Choose your first companies</h2>
                       <p className="text-muted-foreground">
                         {isUnlimited
-                          ? 'Select the companies you want to track. Based on your selected sectors.'
-                          : `Select up to ${MAX_TICKERS} tickers to start tracking. Based on your selected sectors.`
+                          ? 'Select the companies you want to track. Browse by sector or search for any company.'
+                          : `Select up to ${MAX_TICKERS} tickers to start tracking. Browse by sector or search for any company.`
                         }
                       </p>
                     </div>
 
                     {/* Search */}
-                    <div className="relative mb-6">
+                    <div className="relative mb-4">
                       <Input
-                        placeholder="Search companies..."
+                        placeholder="Search any SEC-listed company..."
                         value={searchQuery}
                         onChange={(e) => handleSearchChange(e.target.value)}
                         className="pl-10"
@@ -536,36 +598,70 @@ export default function OnboardingPage() {
                       )}
                     </div>
 
-                    {/* Searching more indicator */}
+                    {/* Sector filter pills */}
+                    {searchQuery.length < 2 && (
+                      <div className="mb-6 flex flex-wrap gap-2">
+                        <button
+                          className={`inline-flex items-center rounded-full px-3 py-1 text-sm transition-colors ${
+                            activeSectorFilter === null
+                              ? "bg-primary text-primary-foreground"
+                              : "bg-muted text-muted-foreground hover:bg-muted/80"
+                          }`}
+                          onClick={() => {
+                            setActiveSectorFilter(null);
+                            setBrowseCompanies([]);
+                            setBrowsePage(1);
+                            fetchBySector(selectedSectors, 1, null);
+                          }}
+                        >
+                          All
+                          {Object.values(sectorCounts).reduce((a, b) => a + b, 0) > 0 && (
+                            <span className="ml-1 opacity-70">
+                              ({Object.values(sectorCounts).reduce((a, b) => a + b, 0).toLocaleString()})
+                            </span>
+                          )}
+                        </button>
+                        {selectedSectors.map((sectorId) => {
+                          const sector = sectors.find((s) => s.id === sectorId);
+                          const count = sectorCounts[sectorId] || 0;
+                          return (
+                            <button
+                              key={sectorId}
+                              className={`inline-flex items-center rounded-full px-3 py-1 text-sm transition-colors ${
+                                activeSectorFilter === sectorId
+                                  ? "bg-primary text-primary-foreground"
+                                  : "bg-muted text-muted-foreground hover:bg-muted/80"
+                              }`}
+                              onClick={() => handleSectorFilterClick(sectorId)}
+                            >
+                              {sector?.name}
+                              {count > 0 && (
+                                <span className="ml-1 opacity-70">
+                                  ({count.toLocaleString()})
+                                </span>
+                              )}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+
+                    {/* Searching indicator */}
                     {isSearchingApi && searchQuery.length >= 2 && (
                       <p className="text-xs text-muted-foreground mb-4 text-center">
-                        searching more companies...
+                        Searching all SEC-listed companies...
                       </p>
                     )}
 
-                    {/* Selected Sectors */}
-                    <div className="mb-6">
-                      <h3 className="mb-2 text-sm font-medium">Selected Sectors:</h3>
-                      <div className="flex flex-wrap gap-2">
-                        {selectedSectors.map((sectorId) => {
-                          const sector = sectors.find((s) => s.id === sectorId);
-                          return (
-                            <Badge key={sectorId} variant="secondary">
-                              {sector?.name}
-                            </Badge>
-                          )
-                        })}
-                      </div>
-                    </div>
-
-                    {/* Equity Grid */}
+                    {/* Company Grid */}
                     <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                      {getAvailableEquities().map((equity) => {
-                        const isSelected = selectedEquities.includes(equity.symbol);
-                        const isDisabled = !isSelected && selectedEquities.length >= MAX_TICKERS;
+                      {displayedCompanies.map((company) => {
+                        const isSelected = selectedEquities.includes(company.symbol);
+                        const isDisabled =
+                          !isSelected && selectedEquities.length >= MAX_TICKERS;
                         return (
                           <div
-                            key={equity.symbol}
+                            key={company.symbol}
                             className={`cursor-pointer rounded-lg border p-3 transition-all ${
                               isSelected
                                 ? "border-primary bg-primary/10 shadow-sm"
@@ -573,31 +669,62 @@ export default function OnboardingPage() {
                                   ? "border-gray-200 bg-muted/50 opacity-50 dark:border-gray-700"
                                   : "border-gray-200 hover:border-primary/50 hover:shadow-sm dark:border-gray-700"
                             }`}
-                            onClick={() => !isDisabled && handleEquityToggle(equity.symbol)}
+                            onClick={() =>
+                              !isDisabled && handleEquityToggle(company)
+                            }
                           >
                             <div className="flex items-center gap-3">
-                              <CompanyLogo symbol={equity.symbol} companyName={equity.name} size="md" />
+                              <CompanyLogo
+                                symbol={company.symbol}
+                                companyName={company.name}
+                                size="md"
+                              />
                               <div className="flex-1 min-w-0">
-                                <div className="font-medium">{equity.symbol}</div>
-                                <div className="text-sm text-muted-foreground truncate">{equity.name}</div>
+                                <div className="font-medium">{company.symbol}</div>
+                                <div className="text-sm text-muted-foreground truncate">
+                                  {company.name}
+                                </div>
                               </div>
-                              {isSelected && <CheckCircle className="h-5 w-5 text-primary shrink-0" />}
+                              {isSelected && (
+                                <CheckCircle className="h-5 w-5 text-primary shrink-0" />
+                              )}
                             </div>
                           </div>
-                        )
+                        );
                       })}
                     </div>
 
-                    {getAvailableEquities().length === 0 && (
-                      <div className="py-8 text-center text-muted-foreground">
-                        {selectedSectors.length === 0
-                          ? "Please select at least one sector to see available companies."
-                          : searchQuery
-                            ? "No companies found matching your search."
-                            : "No companies available for selected sectors."}
+                    {/* Loading indicator for browse */}
+                    {isBrowseLoading && searchQuery.length < 2 && (
+                      <div className="flex justify-center py-6">
+                        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
                       </div>
                     )}
 
+                    {/* Load More button */}
+                    {searchQuery.length < 2 &&
+                      !isBrowseLoading &&
+                      browsePage < browseTotalPages && (
+                        <div className="mt-4 flex justify-center">
+                          <Button variant="outline" onClick={handleLoadMore}>
+                            Load More
+                            <span className="ml-1 text-muted-foreground text-xs">
+                              ({browseCompanies.length} of {browseTotal.toLocaleString()})
+                            </span>
+                          </Button>
+                        </div>
+                      )}
+
+                    {/* Empty state */}
+                    {displayedCompanies.length === 0 && !isBrowseLoading && !isSearchingApi && (
+                      <div className="py-8 text-center text-muted-foreground">
+                        {searchQuery.length >= 2
+                          ? "No companies found matching your search."
+                          : "No companies available for selected sectors. Run the SIC population script to enrich company data."}
+                      </div>
+                    )}
+
+                    {/* Footer */}
                     <div className="mt-8 flex items-center justify-between">
                       <Button variant="outline" onClick={handleBack}>
                         <ArrowLeft className="mr-2 h-4 w-4" />
@@ -610,7 +737,10 @@ export default function OnboardingPage() {
                             : `${selectedEquities.length} of ${MAX_TICKERS} tickers selected`
                           }
                         </span>
-                        <Button onClick={handleNext} disabled={selectedEquities.length === 0 || isSubmitting}>
+                        <Button
+                          onClick={handleNext}
+                          disabled={selectedEquities.length === 0 || isSubmitting}
+                        >
                           {isSubmitting ? (
                             <>
                               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -628,7 +758,6 @@ export default function OnboardingPage() {
                   </CardContent>
                 </Card>
               )}
-
             </div>
           </div>
         </div>
