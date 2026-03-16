@@ -191,7 +191,7 @@ export async function POST(request: NextRequest) {
       // FREE tier doesn't need checkout
       if (planType === 'FREE') {
         return NextResponse.json(
-          { error: 'Free tier does not require checkout' },
+          { error: 'Trial tier does not require checkout' },
           { status: 400 }
         );
       }
@@ -522,7 +522,7 @@ export async function PUT(request: NextRequest) {
           cancelAtPeriodEnd: updated.cancelAtPeriodEnd,
           stripeCustomerId: updated.stripeCustomerId,
           stripeSubscriptionId: updated.stripeSubscriptionId,
-          message: 'Subscription will be downgraded to Free at the end of the billing period',
+          message: 'Subscription will be downgraded to Trial at the end of the billing period',
         });
       }
 

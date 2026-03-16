@@ -161,7 +161,7 @@ export function FilingPreviewCard({ filing, index }: FilingPreviewCardProps) {
               Want summaries like this for your portfolio?
             </p>
             <Button asChild>
-              <Link href="/sign-up">Start Free Trial</Link>
+              <Link href="/sign-up">Start Trial</Link>
             </Button>
           </div>
         </DialogContent>

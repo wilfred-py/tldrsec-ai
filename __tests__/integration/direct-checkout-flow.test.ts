@@ -51,7 +51,7 @@ jest.mock('@/lib/stripe', () => ({
     },
   },
   SUBSCRIPTION_PLANS: {
-    FREE: { name: 'Free', monthlyPriceId: null, monthlyPrice: 0, tickerLimit: 3 },
+    FREE: { name: 'Trial', monthlyPriceId: null, monthlyPrice: 0, tickerLimit: -1 },
     PRO: { name: 'Pro', monthlyPriceId: 'price_pro_monthly', monthlyPrice: 2900, tickerLimit: 25 },
     MAX: { name: 'Max', monthlyPriceId: 'price_max_monthly', monthlyPrice: 9900, tickerLimit: -1 },
   },

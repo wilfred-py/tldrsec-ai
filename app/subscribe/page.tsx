@@ -24,11 +24,7 @@ import {
   type BillingInterval,
 } from '@/lib/stripe/plans';
 import { AnimatedPrice, StaticPrice } from '@/components/landing/sections-v2/animated-price';
-
-interface UserSubscription {
-  planType: PlanType;
-  isActive: boolean;
-}
+import type { UserSubscription } from '@/lib/types/subscription';
 
 const PLAN_ICONS: Record<PlanType, typeof Sparkles | null> = {
   FREE: null,
@@ -36,7 +32,7 @@ const PLAN_ICONS: Record<PlanType, typeof Sparkles | null> = {
   MAX: Crown,
 };
 
-const PLAN_ORDER: PlanType[] = ['FREE', 'PRO', 'MAX'];
+const PLAN_ORDER: PlanType[] = ['PRO', 'MAX'];
 const PLAN_RANK: Record<PlanType, number> = { FREE: 0, PRO: 1, MAX: 2 };
 
 function SubscribePageContent() {
@@ -216,10 +212,9 @@ function SubscribePageContent() {
     return subscription.planType;
   };
 
-  const getButtonType = (planKey: PlanType): 'current' | 'upgrade' | 'downgrade' | 'free' => {
+  const getButtonType = (planKey: PlanType): 'current' | 'upgrade' | 'downgrade' => {
     const effectivePlan = getEffectivePlan();
     if (planKey === effectivePlan) return 'current';
-    if (!subscription && planKey === 'FREE') return 'free';
     if (PLAN_RANK[planKey] > PLAN_RANK[effectivePlan]) return 'upgrade';
     return 'downgrade';
   };
@@ -276,8 +271,8 @@ function SubscribePageContent() {
             <Skeleton className="h-4 w-36" />
             <Skeleton className="h-6 w-12 rounded-full" />
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {Array.from({ length: 3 }).map((_, i) => (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {Array.from({ length: 2 }).map((_, i) => (
               <div key={i} className="rounded-xl border p-6 space-y-4 animate-slideUp" style={{ animationDelay: `${i * 100}ms`, backgroundColor: 'var(--landing-card-bg, white)' }}>
                 <div className="flex items-center justify-between">
                   <div className="space-y-1"><Skeleton className="h-3 w-12" /><Skeleton className="h-7 w-24" /></div>
@@ -351,7 +346,7 @@ function SubscribePageContent() {
         </motion.div>
 
         {/* Plan Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {PLAN_ORDER.map((planKey, index) => {
             const plan = SUBSCRIPTION_PLANS[planKey];
             const Icon = PLAN_ICONS[planKey];
@@ -380,7 +375,7 @@ function SubscribePageContent() {
                 <div className="flex items-center justify-between mb-4">
                   <div>
                     <p className="text-xs text-[var(--landing-text-muted)] uppercase tracking-wide mb-1">
-                      {planKey === 'FREE' ? 'Basic' : plan.name}
+                      {plan.name}
                     </p>
                     <h3 className="text-2xl font-bold" style={{ color: 'var(--landing-secondary)' }}>
                       {plan.name}
@@ -433,16 +428,6 @@ function SubscribePageContent() {
                             className="w-full bg-gray-100 text-gray-500 cursor-not-allowed"
                           >
                             Current Plan
-                          </Button>
-                        );
-                      case 'free':
-                        return (
-                          <Button
-                            variant="outline"
-                            disabled
-                            className="w-full"
-                          >
-                            Free Tier
                           </Button>
                         );
                       case 'downgrade':
@@ -510,12 +495,12 @@ function SubscribePageContent() {
                   })}
                 </ul>
 
-                {/* Everything in X footer */}
-                {planKey !== 'FREE' && (
+                {/* Everything in Pro footer (MAX only) */}
+                {planKey === 'MAX' && (
                   <div className="mt-4 pt-4 border-t border-gray-100">
                     <div className="flex items-center gap-2 text-sm text-[var(--landing-text-muted)]">
                       <span className="text-[var(--landing-primary)]">+</span>
-                      <span>Everything in {planKey === 'PRO' ? 'Free' : 'Pro'}</span>
+                      <span>Everything in Pro</span>
                     </div>
                   </div>
                 )}
@@ -590,8 +575,8 @@ function SubscribePageLoading() {
           <Skeleton className="h-4 w-36" />
           <Skeleton className="h-6 w-12 rounded-full" />
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {Array.from({ length: 3 }).map((_, i) => (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {Array.from({ length: 2 }).map((_, i) => (
             <div key={i} className="rounded-xl border p-6 space-y-4 animate-slideUp" style={{ animationDelay: `${i * 100}ms`, backgroundColor: 'var(--landing-card-bg, white)' }}>
               <div className="flex items-center justify-between">
                 <div className="space-y-1"><Skeleton className="h-3 w-12" /><Skeleton className="h-7 w-24" /></div>

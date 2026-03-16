@@ -23,7 +23,10 @@ import { THREE_TIER_LIMITS } from "@/lib/subscription/three-tier-limits";
 import { CompanyLogo } from "@/components/ui/company-logo";
 import { OnboardingTransition } from "@/components/onboarding/onboarding-transition";
 
-const MAX_TICKERS = THREE_TIER_LIMITS.FREE; // 3
+const TIER_LIMIT = THREE_TIER_LIMITS.FREE;
+const isUnlimited = TIER_LIMIT === -1;
+const ONBOARDING_SOFT_CAP = 15; // Soft cap for onboarding picker UI only
+const MAX_TICKERS = isUnlimited ? ONBOARDING_SOFT_CAP : TIER_LIMIT;
 
 // Define sectors with their icons and descriptions
 const sectors = [
@@ -510,7 +513,10 @@ export default function OnboardingPage() {
                     <div className="text-center mb-6">
                       <h2 className="text-xl font-bold">Choose your first companies</h2>
                       <p className="text-muted-foreground">
-                        Select up to {MAX_TICKERS} tickers to start tracking. Based on your selected sectors.
+                        {isUnlimited
+                          ? 'Select the companies you want to track. Based on your selected sectors.'
+                          : `Select up to ${MAX_TICKERS} tickers to start tracking. Based on your selected sectors.`
+                        }
                       </p>
                     </div>
 
@@ -599,7 +605,10 @@ export default function OnboardingPage() {
                       </Button>
                       <div className="flex items-center gap-4">
                         <span className="text-sm text-muted-foreground">
-                          {selectedEquities.length} of {MAX_TICKERS} tickers selected
+                          {isUnlimited
+                            ? `${selectedEquities.length} tickers selected`
+                            : `${selectedEquities.length} of ${MAX_TICKERS} tickers selected`
+                          }
                         </span>
                         <Button onClick={handleNext} disabled={selectedEquities.length === 0 || isSubmitting}>
                           {isSubmitting ? (

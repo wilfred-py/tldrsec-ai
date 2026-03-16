@@ -24,7 +24,7 @@ export function NewCTASection() {
           </h2>
           <p className="text-lg text-blue-100 mb-8">
             Join thousands of investors who use tldrsec.app to stay informed
-            without the time commitment. Start your free trial today.
+            without the time commitment. Start your trial today.
           </p>
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
             <Link href="/sign-up">
@@ -32,7 +32,7 @@ export function NewCTASection() {
                 size="lg"
                 className="h-14 px-8 text-base font-semibold bg-white text-blue-600 hover:bg-blue-50 shadow-xl"
               >
-                Start Free Trial
+                Start Trial
                 <ArrowRight className="w-5 h-5 ml-2" />
               </Button>
             </Link>
@@ -47,7 +47,7 @@ export function NewCTASection() {
             </Link>
           </div>
           <p className="mt-6 text-sm text-blue-200">
-            No credit card required. Free plan available.
+            No credit card required.
           </p>
         </motion.div>
       </div>

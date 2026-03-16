@@ -1,12 +1,17 @@
 import { SUBSCRIPTION_PLANS, getPlanConfig, calculateSavingsPercentage } from '@/lib/stripe';
 
 describe('Stripe Pricing Configuration', () => {
-  describe('Free Tier', () => {
-    it('should have $0 price and 3 ticker limit', () => {
+  describe('Free (Trial) Tier', () => {
+    it('should have $0 price and unlimited ticker limit', () => {
       const plan = getPlanConfig('FREE');
       expect(plan).toBeDefined();
       expect(plan?.monthlyPrice).toBe(0);
-      expect(plan?.tickerLimit).toBe(3);
+      expect(plan?.tickerLimit).toBe(-1);
+    });
+
+    it('should be named Trial', () => {
+      const plan = getPlanConfig('FREE');
+      expect(plan?.name).toBe('Trial');
     });
   });
 
@@ -108,9 +113,9 @@ describe('Stripe Pricing Configuration', () => {
   });
 
   describe('Plan Features', () => {
-    it('Free tier should have limited filing types', () => {
+    it('Free (Trial) tier should have ALL filing types', () => {
       const plan = getPlanConfig('FREE');
-      expect(plan?.filingTypes).toEqual(['10-K', '10-Q']);
+      expect(plan?.filingTypes).toEqual(['ALL']);
     });
 
     it('Pro tier should have ALL filing types at $199 tier', () => {
@@ -135,9 +140,9 @@ describe('Stripe Pricing Configuration', () => {
   });
 
   describe('Email Frequency', () => {
-    it('Free tier should have weekly email frequency', () => {
+    it('Free (Trial) tier should have realtime email frequency', () => {
       const plan = getPlanConfig('FREE');
-      expect(plan?.emailFrequency).toBe('weekly');
+      expect(plan?.emailFrequency).toBe('realtime');
     });
 
     it('Pro tier should have realtime email frequency', () => {

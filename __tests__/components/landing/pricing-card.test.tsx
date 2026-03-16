@@ -13,12 +13,12 @@ jest.mock('lucide-react', () => ({
 // Default plan fixture
 const freePlan = {
   key: 'FREE',
-  name: 'Free',
+  name: 'Trial',
   monthlyPrice: 0,
   annualPrice: 0,
-  description: 'Get started with SEC filings',
-  features: ['3 companies to track', 'Real-time email alerts'],
-  cta: 'Get Started',
+  description: 'Full access for 7 days',
+  features: ['**Unlimited** companies', 'Real-time email alerts'],
+  cta: 'Start Free Trial',
   href: '/onboarding',
   popular: false,
   disabled: false,
@@ -59,8 +59,8 @@ describe('PricingCard', () => {
   it('renders plan name, price, and features', () => {
     render(<PricingCard {...defaultProps} />);
 
-    expect(screen.getByRole('heading', { level: 3, name: /Free/i })).toBeInTheDocument();
-    expect(screen.getByText('3 companies to track')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 3, name: /Trial/i })).toBeInTheDocument();
+    expect(screen.getByText('Unlimited')).toBeInTheDocument();
     expect(screen.getByText('Real-time email alerts')).toBeInTheDocument();
   });
 
@@ -160,9 +160,9 @@ describe('PricingCard', () => {
     expect(strongElement.tagName).toBe('STRONG');
   });
 
-  it('shows "Everything in Free" footer for PRO plan', () => {
+  it('shows "Everything in Trial" footer for PRO plan', () => {
     render(<PricingCard {...defaultProps} plan={proPlan} />);
 
-    expect(screen.getByText('Everything in Free')).toBeInTheDocument();
+    expect(screen.getByText('Everything in Trial')).toBeInTheDocument();
   });
 });

@@ -19,7 +19,7 @@ const mockBillingPage = () => {
       name: SUBSCRIPTION_PLANS.FREE.name,
       price: '$0/month',
       tickerLimit: SUBSCRIPTION_PLANS.FREE.tickerLimit,
-      tickerDisplay: `${SUBSCRIPTION_PLANS.FREE.tickerLimit} companies`,
+      tickerDisplay: SUBSCRIPTION_PLANS.FREE.tickerLimit === -1 ? 'Unlimited companies' : `${SUBSCRIPTION_PLANS.FREE.tickerLimit} companies`,
       features: SUBSCRIPTION_PLANS.FREE.features,
       recommended: false,
       planKey: 'FREE' as const,
@@ -77,11 +77,11 @@ describe('Billing Page Component', () => {
   });
 
   describe('Pricing Display', () => {
-    it('should display correct Free tier pricing', () => {
+    it('should display correct Trial tier pricing', () => {
       render(mockBillingPage());
-      
+
       expect(screen.getByTestId('price-free')).toHaveTextContent('$0/month');
-      expect(screen.getByTestId('ticker-limit-free')).toHaveTextContent('3 companies');
+      expect(screen.getByTestId('ticker-limit-free')).toHaveTextContent('Unlimited companies');
     });
 
     it('should display correct Pro tier pricing ($199/month)', () => {

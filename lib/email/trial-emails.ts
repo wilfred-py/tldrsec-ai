@@ -40,7 +40,7 @@ export async function sendTrialWelcomeEmail(
       <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
         <h1 style="color: #1a1a2e; font-size: 24px;">Welcome to tldrSEC${name ? `, ${name}` : ''}!</h1>
         <p style="color: #4a4a5a; font-size: 16px; line-height: 1.6;">
-          Your 7-day free trial has started. Here's what you get:
+          Your 7-day trial has started. Here's what you get:
         </p>
         <ul style="color: #4a4a5a; font-size: 16px; line-height: 1.8;">
           <li>Track up to 3 companies</li>
@@ -60,7 +60,7 @@ export async function sendTrialWelcomeEmail(
         </p>
       </div>
     `,
-    text: `Welcome to tldrSEC${name ? `, ${name}` : ''}! Your 7-day free trial has started. Track up to 3 companies with all SEC filing types. Your trial ends on ${trialEndsAt.toLocaleDateString()}. Visit ${APP_URL}/dashboard to get started.`,
+    text: `Welcome to tldrSEC${name ? `, ${name}` : ''}! Your 7-day trial has started. Track up to 3 companies with all SEC filing types. Your trial ends on ${trialEndsAt.toLocaleDateString()}. Visit ${APP_URL}/dashboard to get started.`,
     tags: ['type:trial-welcome'],
   };
 
@@ -93,7 +93,7 @@ export async function sendTrialReminderEmail(
       <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
         <h1 style="color: #1a1a2e; font-size: 24px;">Your trial ${urgency}</h1>
         <p style="color: #4a4a5a; font-size: 16px; line-height: 1.6;">
-          Your free trial ends on <strong>${trialEndsAt.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</strong>.
+          Your trial ends on <strong>${trialEndsAt.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</strong>.
           Upgrade now to keep receiving AI-powered SEC filing summaries.
         </p>
         <div style="text-align: center; margin: 30px 0;">
@@ -138,7 +138,7 @@ export async function sendTrialExpirationEmail(
       <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
         <h1 style="color: #1a1a2e; font-size: 24px;">Your trial has ended</h1>
         <p style="color: #4a4a5a; font-size: 16px; line-height: 1.6;">
-          Your 7-day free trial ended on ${trialExpiredAt.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}.
+          Your 7-day trial ended on ${trialExpiredAt.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}.
         </p>
         <p style="color: #4a4a5a; font-size: 16px; line-height: 1.6;">
           You can still access the dashboard and view your existing summaries, but you won't receive new filing notifications until you upgrade.

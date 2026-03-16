@@ -10,19 +10,21 @@
 // =============================================================================
 export const SUBSCRIPTION_PLANS = {
   FREE: {
-    name: 'Free',
+    name: 'Trial',
     monthlyPriceId: null,
     annualPriceId: null,
     monthlyPrice: 0,
     annualPrice: 0,
-    tickerLimit: 3,
+    tickerLimit: -1, // unlimited (same as MAX)
     filingTypes: ['ALL'] as const, // Trial users get all filing types to showcase full product
     emailFrequency: 'realtime' as const,
     features: [
-      '3 companies to track',
+      '**Unlimited** companies',
       'Real-time email alerts',
       'All SEC filing types',
-      '7-day free trial',
+      '7-day trial period',
+      '**First** priority processing queue',
+      'Dedicated support',
     ],
   },
   PRO: {

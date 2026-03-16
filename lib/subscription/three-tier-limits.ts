@@ -1,6 +1,6 @@
 // Simplified 3-tier system with MAX unlimited
 export const THREE_TIER_LIMITS = {
-  FREE: 3,
+  FREE: -1, // unlimited (same as MAX)
   PRO: 25,
   MAX: -1  // -1 = unlimited (no validation needed)
 } as const;

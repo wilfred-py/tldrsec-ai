@@ -29,9 +29,9 @@ const plans = [
     icon: Zap,
     monthlyPrice: SUBSCRIPTION_PLANS.FREE.monthlyPrice,
     annualPrice: SUBSCRIPTION_PLANS.FREE.annualPrice,
-    description: 'Get started with SEC filings',
+    description: 'Full access for 7 days',
     features: SUBSCRIPTION_PLANS.FREE.features,
-    cta: 'Get Started',
+    cta: 'Start Free Trial',
     href: '/onboarding',
     popular: false,
     disabled: false,
@@ -207,7 +207,7 @@ export function PricingSectionV2() {
             Simple, Transparent Pricing
           </h2>
           <p className="landing-body max-w-2xl mx-auto mb-8">
-            Start free, upgrade when you&apos;re ready. No hidden fees.
+            Start with a free trial, upgrade when you&apos;re ready. No hidden fees.
           </p>
         </motion.div>
 

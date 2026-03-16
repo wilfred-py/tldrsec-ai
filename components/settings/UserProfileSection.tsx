@@ -165,7 +165,7 @@ export default function UserProfileSection({ user }: UserProfileSectionProps) {
           <div className="rounded-lg border border-blue-100 bg-blue-50 p-4">
             <div className="flex justify-between">
               <div>
-                <h3 className="font-semibold">Free Plan</h3>
+                <h3 className="font-semibold">Trial</h3>
                 <p className="text-sm">$0/month</p>
               </div>
               <span className="inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold bg-blue-100 text-blue-800 border-blue-200">

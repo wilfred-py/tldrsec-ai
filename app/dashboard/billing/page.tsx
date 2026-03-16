@@ -24,16 +24,8 @@ import {
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { useUser } from '@clerk/nextjs';
-import { SUBSCRIPTION_PLANS, type PlanType } from '@/lib/stripe/plans';
-
-interface UserSubscription {
-  planType: PlanType;
-  isActive: boolean;
-  currentPeriodEnd: string;
-  cancelAtPeriodEnd: boolean;
-  stripeCustomerId?: string;
-  stripeSubscriptionId?: string;
-}
+import { SUBSCRIPTION_PLANS } from '@/lib/stripe/plans';
+import type { UserSubscription } from '@/lib/types/subscription';
 
 export default function BillingPage() {
   const { user } = useUser();
@@ -148,8 +140,17 @@ export default function BillingPage() {
   const currentPlanKey = subscription?.planType;
   const currentPlanConfig = currentPlanKey ? SUBSCRIPTION_PLANS[currentPlanKey] : null;
   const isFree = currentPlanKey === 'FREE';
+
+  const getTrialStatusText = () => {
+    if (!subscription || !isFree) return null;
+    if (subscription.isTrialing && subscription.daysRemaining > 0) {
+      return `Trial — ${subscription.daysRemaining} ${subscription.daysRemaining === 1 ? 'day' : 'days'} remaining`;
+    }
+    return 'Trial Expired — Upgrade to continue receiving summaries';
+  };
+
   const currentPrice = isFree
-    ? '$0/month'
+    ? (getTrialStatusText() || 'Trial')
     : currentPlanConfig
       ? `$${currentPlanConfig.monthlyPrice}/month`
       : 'Price unavailable';
@@ -197,7 +198,7 @@ export default function BillingPage() {
           <CardContent className="space-y-4">
             <div>
               <h3 className="font-semibold text-lg">
-                {currentPlanConfig?.name || 'Unknown Plan'}
+                {isFree ? 'Trial' : (currentPlanConfig?.name || 'Unknown Plan')}
               </h3>
               <p className="text-gray-600">
                 {currentPrice}

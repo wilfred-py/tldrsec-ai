@@ -53,15 +53,15 @@ export function PricingSection3Tier() {
     {
       name: 'FREE',
       price: '$0',
-      period: 'forever',
-      description: 'Perfect for trying out tldrsec.ai',
+      period: 'for 7 days',
+      description: 'Full access trial',
       features: [
-        '3 companies to track',
-        'Weekly digest emails',
-        '10-K and 10-Q summaries only',
-        'Basic filing alerts',
+        'Unlimited companies to track',
+        'Real-time email alerts',
+        'All SEC filing types',
+        'First priority processing queue',
       ],
-      buttonText: 'Start FREE Trial',
+      buttonText: 'Start Trial',
       popular: false,
     },
     {
