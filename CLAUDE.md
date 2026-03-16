@@ -2,20 +2,77 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## Plan & Review
+## Engineering Philosophy
 
-### Before starting work
-- Always start in plan mode to make a plan. 
-- Write a plan to .claude/tasks/TASK_NAME.md.
-- The plan should be a detailed implementation plan and the reasoning behind them, as well as tasks broken down into subtasks.
-- Review the plan with me.
-- Always list unresolved questions you have at the end of the plan. 
-- For any unresolved questions, allow me to answer them before you continue.
-- Use concise language to create the final plan for approval by me. 
+### Elon's 5-Step Engineering Algorithm
+Apply these steps IN ORDER to every task:
 
-### While implementing
-- You should update the plan as you work.
-- After you complete tasks in the plan, you should update and append detailed descriptions of the changes you made, so following tasks can be easily handed over to other engineers.
+1. **Make the requirements less dumb** - Question every requirement. Requirements from smart people are the most dangerous because you're less likely to question them. Requirements should come with the name of the person who made them — not a department.
+2. **Delete the part or process step** - If you're not occasionally adding things back, you're not deleting enough. Every requirement, process, or component should be presumed guilty until proven innocent.
+3. **Simplify or optimize** - Only AFTER steps 1-2. The most common engineering mistake is optimizing something that shouldn't exist.
+4. **Accelerate cycle time** - Only AFTER steps 1-3. Move faster, but never skip the first three steps.
+5. **Automate** - Only AFTER steps 1-4. Don't automate a broken or unnecessary process.
+
+### Core Principles
+- **Simplicity First**: Make every change as simple as possible. Impact minimal code.
+- **No Laziness**: Find root causes. No temporary fixes. Senior developer standards.
+- **Minimal Impact**: Changes should only touch what's necessary. Avoid introducing bugs.
+
+## Workflow Orchestration
+
+### 1. Plan Mode Default
+- Enter plan mode for ANY non-trivial task (3+ steps or architectural decisions)
+- If something goes sideways, STOP and re-plan immediately — don't keep pushing
+- Use plan mode for verification steps, not just building
+- Write detailed specs upfront to reduce ambiguity
+- Write a plan to .claude/tasks/TASK_NAME.md
+- The plan should be a detailed implementation plan with reasoning, broken down into subtasks
+- Review the plan with me before implementing
+- Always list unresolved questions at the end of the plan
+- For any unresolved questions, allow me to answer them before you continue
+
+### 2. Subagent Strategy
+- Use subagents liberally to keep main context window clean
+- Offload research, exploration, and parallel analysis to subagents
+- For complex problems, throw more compute at it via subagents
+- One task per subagent for focused execution
+
+### 3. Self-Improvement Loop
+- After ANY correction from the user: update `tasks/lessons.md` with the pattern
+- Write rules for yourself that prevent the same mistake
+- Ruthlessly iterate on these lessons until mistake rate drops
+- Review lessons at session start for relevant project
+
+### 4. Verification Before Done
+- Never mark a task complete without proving it works
+- Diff behavior between main and your changes when relevant
+- Ask yourself: "Would a staff engineer approve this?"
+- Run tests, check logs, demonstrate correctness
+
+### 5. Demand Elegance (Balanced)
+- For non-trivial changes: pause and ask "is there a more elegant way?"
+- If a fix feels hacky: "Knowing everything I know now, implement the elegant solution"
+- Skip this for simple, obvious fixes — don't over-engineer
+- Challenge your own work before presenting it
+
+### 6. Autonomous Bug Fixing
+- When given a bug report: just fix it. Don't ask for hand-holding
+- Point at logs, errors, failing tests — then resolve them
+- Zero context switching required from the user
+- Go fix failing CI tests without being told how
+
+### While Implementing
+- You should update the plan as you work
+- After you complete tasks in the plan, update and append detailed descriptions of the changes you made, so following tasks can be easily handed over to other engineers
+
+## Task Management
+
+1. **Plan First**: Write plan to `tasks/todo.md` with checkable items
+2. **Verify Plan**: Check in before starting implementation
+3. **Track Progress**: Mark items complete as you go
+4. **Explain Changes**: High-level summary at each step
+5. **Document Results**: Add review section to `tasks/todo.md`
+6. **Capture Lessons**: Update `tasks/lessons.md` after corrections
 
 ## Agent Guidelines
 
