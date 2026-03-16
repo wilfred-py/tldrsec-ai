@@ -193,9 +193,14 @@ export function isPurchaseTransaction(tx: TransactionData): boolean {
     return true;
   }
 
-  // Acquisition with a price is a purchase (only for codeless transactions)
+  // Acquisition with a non-zero price is a purchase (only for codeless transactions)
+  // $0 codeless acquisitions are awards/grants, not purchases
   if (tx.acquisitionDisposition === 'A') {
-    return true;
+    const price = typeof tx.pricePerShare === 'string'
+      ? tx.pricePerShare.replace(/[$,]/g, '')
+      : String(tx.pricePerShare || '');
+    const priceNum = parseFloat(price) || 0;
+    return priceNum > 0;
   }
 
   return false;
@@ -215,7 +220,8 @@ export function isAwardTransaction(tx: TransactionData): boolean {
 
   if (type.includes('award') || type.includes('grant') ||
       type.includes('rsu') || type.includes('psu') ||
-      type.includes('restricted stock')) {
+      type.includes('restricted stock') ||
+      type.includes('stock option') || type.includes('option award') || type.includes('option grant')) {
     return true;
   }
 

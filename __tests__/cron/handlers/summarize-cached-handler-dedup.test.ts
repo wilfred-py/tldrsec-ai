@@ -88,6 +88,10 @@ jest.mock('../../../lib/auth/trial-service', () => ({
   },
 }));
 
+jest.mock('../../../lib/ai/parsers/response-parser', () => ({
+  parseResponse: jest.fn().mockReturnValue({ success: false, data: null }),
+}));
+
 // --- Imports (after all jest.mock calls) ---
 
 import { handleSummarizeCached, SummarizeJobPayload } from '../../../lib/cron/handlers/summarize-cached-handler';
@@ -152,9 +156,10 @@ function setupExistingSummaryMocks(opts: {
     sentToUser: opts.sentToUser,
   });
 
-  // findUnique for fetching full summary text (used in re-send path)
+  // findUnique for fetching full summary text + JSON (used in re-send path)
   mockPrisma.summary.findUnique.mockResolvedValue({
     summaryText: 'Existing summary text for re-send',
+    summaryJSON: { filerName: 'Test Insider', transactions: [{ code: 'S', shares: '100' }] },
   });
 
   // summaryEmailDelivery.findFirst: check for delivery record
@@ -257,5 +262,133 @@ describe('Duplicate email prevention', () => {
         hasDeliveryRecord: true,
       })
     );
+  });
+});
+
+describe('Re-send path delivery tracking (Bug 1A)', () => {
+  it('should create delivery record after re-sending email for existing summary', async () => {
+    setupExistingSummaryMocks({ sentToUser: false, hasDeliveryRecord: false });
+
+    const result = await handleSummarizeCached(basePayload);
+
+    expect(result.success).toBe(true);
+    expect(result.emailSent).toBe(true);
+
+    // Should update sentToUser flag
+    expect(mockPrisma.summary.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'existing-summary-123' },
+        data: expect.objectContaining({
+          sentToUser: true,
+          totalEmailsSent: { increment: 1 },
+        }),
+      })
+    );
+
+    // Should create delivery record
+    expect(mockPrisma.summaryEmailDelivery.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          summaryId: 'existing-summary-123',
+          userId: 'test-user-id',
+          emailAddress: 'test@example.com',
+          deliveryStatus: 'sent',
+        }),
+      })
+    );
+  });
+
+  it('should still return success if tracking update fails after email sent', async () => {
+    setupExistingSummaryMocks({ sentToUser: false, hasDeliveryRecord: false });
+    // Make tracking update fail
+    mockPrisma.summary.update.mockRejectedValue(new Error('DB error'));
+
+    const result = await handleSummarizeCached(basePayload);
+
+    expect(result.success).toBe(true);
+    expect(result.emailSent).toBe(true);
+  });
+});
+
+describe('Re-send path passes summaryData (Bug 3)', () => {
+  it('should pass summaryJSON as summaryData to sendFilingSummaryEmail', async () => {
+    setupExistingSummaryMocks({ sentToUser: false, hasDeliveryRecord: false });
+
+    await handleSummarizeCached(basePayload);
+
+    expect(mockSendEmail).toHaveBeenCalledWith(
+      'test@example.com',
+      expect.objectContaining({
+        summaryData: { filerName: 'Test Insider', transactions: [{ code: 'S', shares: '100' }] },
+      })
+    );
+  });
+});
+
+describe('Shared summary P2002 race condition (Bug 1B)', () => {
+  function setupSharedSummaryMocks() {
+    jest.clearAllMocks();
+
+    mockPrisma.filingContentCache.findUnique.mockResolvedValue({
+      content: '<html><body>Test Form 4 filing</body></html>',
+      contentLength: 100,
+      status: 'CACHED',
+      fetchError: null,
+      primaryDocUrl: 'https://www.sec.gov/test-doc.htm',
+    });
+
+    mockPrisma.ticker.findFirst.mockResolvedValue({
+      id: 'test-ticker-id',
+      preferences: null,
+    });
+
+    // No existing summary for this user
+    mockPrisma.summary.findFirst
+      .mockResolvedValueOnce(null) // existingSummary check
+      .mockResolvedValueOnce({     // shared summary found
+        id: 'shared-summary-456',
+        summaryText: 'Shared summary text',
+        summaryJSON: null,
+        modelVersion: 'test-model',
+        inputTokens: 100,
+        outputTokens: 50,
+        totalCost: 0.001,
+        createdAt: new Date('2026-02-15T10:00:00Z'),
+      });
+
+    mockPrisma.summary.update.mockResolvedValue({});
+    mockPrisma.summaryEmailDelivery.create.mockResolvedValue({});
+  }
+
+  it('should handle P2002 error gracefully on shared summary create', async () => {
+    setupSharedSummaryMocks();
+
+    // Simulate P2002 unique constraint violation
+    const p2002Error = new Error('Unique constraint violation');
+    (p2002Error as { code?: string }).code = 'P2002';
+    mockPrisma.summary.create.mockRejectedValue(p2002Error);
+
+    // Re-read finds the summary created by the other job
+    mockPrisma.summary.findFirst.mockResolvedValueOnce({
+      id: 'race-winner-summary',
+      sentToUser: true,
+    });
+
+    const result = await handleSummarizeCached(basePayload);
+
+    expect(result.success).toBe(true);
+    expect(result.summaryId).toBe('race-winner-summary');
+    expect(result.emailSent).toBe(false); // Other job already sent
+  });
+
+  it('should re-throw non-P2002 errors', async () => {
+    setupSharedSummaryMocks();
+
+    mockPrisma.summary.create.mockRejectedValue(new Error('Database unavailable'));
+
+    const result = await handleSummarizeCached(basePayload);
+
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('Database unavailable');
   });
 });

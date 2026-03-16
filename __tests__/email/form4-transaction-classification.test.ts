@@ -321,6 +321,67 @@ describe('Form 4 Transaction Classification - All 21 SEC Codes', () => {
     });
   });
 
+  describe('Codeless acquisition classification (Bug 2)', () => {
+    it('should NOT classify $0 codeless acquisition as purchase', () => {
+      // A $0 codeless acquisition is an award/grant, not a purchase
+      expect(isPurchaseTransaction(tx({
+        acquisitionDisposition: 'A',
+        pricePerShare: '$0',
+      }))).toBe(false);
+    });
+
+    it('should NOT classify $0 numeric codeless acquisition as purchase', () => {
+      expect(isPurchaseTransaction(tx({
+        acquisitionDisposition: 'A',
+        pricePerShare: 0,
+      }))).toBe(false);
+    });
+
+    it('should classify priced codeless acquisition as purchase', () => {
+      // Non-zero codeless acquisition IS a purchase
+      expect(isPurchaseTransaction(tx({
+        acquisitionDisposition: 'A',
+        pricePerShare: '$150.00',
+      }))).toBe(true);
+    });
+
+    it('should classify priced numeric codeless acquisition as purchase', () => {
+      expect(isPurchaseTransaction(tx({
+        acquisitionDisposition: 'A',
+        pricePerShare: 150,
+      }))).toBe(true);
+    });
+
+    it('should still classify code P as purchase regardless of price', () => {
+      expect(isPurchaseTransaction(tx({ code: 'P', pricePerShare: '$0' }))).toBe(true);
+      expect(isPurchaseTransaction(tx({ code: 'P', pricePerShare: '$100' }))).toBe(true);
+    });
+  });
+
+  describe('Option keyword classification (Bug 2 addendum)', () => {
+    it('should classify "stock option" type as award', () => {
+      expect(isAwardTransaction(tx({ type: 'Stock Option' }))).toBe(true);
+    });
+
+    it('should classify "option award" type as award', () => {
+      expect(isAwardTransaction(tx({ type: 'Option Award' }))).toBe(true);
+    });
+
+    it('should classify "option grant" type as award', () => {
+      expect(isAwardTransaction(tx({ type: 'Option Grant' }))).toBe(true);
+    });
+
+    it('should aggregate $0 codeless acquisition as other (not purchase)', () => {
+      // Without code, $0 A/D='A' should NOT be purchase
+      const result = aggregateTransactionsByType([
+        tx({ shares: 5000, pricePerShare: '$0', acquisitionDisposition: 'A' }),
+      ]);
+      expect(result.length).toBe(1);
+      // Should be 'other' since no code and $0 price means it's not a purchase
+      expect(result[0].type).not.toBe('purchase');
+    });
+  });
+
   describe('Edge cases - null/empty/lowercase (Review Issue 12A)', () => {
     it('should classify { code: null, type: "" } into other bucket', () => {
       const result = aggregateTransactionsByType([
