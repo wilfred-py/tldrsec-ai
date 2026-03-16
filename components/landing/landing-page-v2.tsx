@@ -31,7 +31,6 @@ import { SubscriptionProvider } from '@/contexts/subscription-context';
  * - 15 curated real summaries ranked by impact
  * - Click any email to see full AI analysis
  *
- * Controlled by NEXT_PUBLIC_LANDING_V2_ENABLED feature flag
  */
 export function LandingPageV2() {
   // Ref for hero section - used by navbar's Intersection Observer
