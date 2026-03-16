@@ -13,8 +13,11 @@
 
 | Date | Project | Status |
 |------|---------|--------|
-| 2026-03-10 | Summary Quality Enhancements: Form 144 Ownership & Email Templates (worktree) | 🔄 In Progress |
-| 2026-03-05 | Onboarding & Tutorial Flow Overhaul (worktree) | 🔄 In Progress |
+| 2026-03-17 | Stripe Subscription Sync Fix (worktree-trial-tier) | 🔄 In Progress |
+| 2026-03-13 | Expired Trial Banner + Free→Trial Rename | ✅ Complete |
+| 2026-03-10 | Summary Quality: Form 144, Form 4 Schema, Email Templates (PR #361) | ✅ Complete |
+| 2026-03-08 | Document PR #356 Analysis + UI Celebration Dependencies (PR #360) | ✅ Complete |
+| 2026-03-05 | Onboarding & Tutorial Flow Overhaul (PR #358) | ✅ Complete |
 | 2026-03-02 | Pipeline Throughput & Worker Cleanup (PR #357) | ✅ Complete |
 | 2026-02-25 | Update Free Tier Pricing Card CTA (PR #355) | ✅ Complete |
 | 2026-02-25 | Hide Nav Links on Sign-In/Sign-Up Pages (PR #354) | ✅ Complete |
@@ -23,10 +26,7 @@
 | 2026-02-24 | Fix Subscription State Not Updating + Dashboard/Subscribe UI (PR #352) | ✅ Complete |
 | 2026-02-20 | Fix Subscribe Page Bugs + Downgrade Support | ✅ Complete |
 | 2026-02-19 | Summary Quality Fixes Phase 2+3: Validation Wrapper + Dedup Guard | ✅ Complete |
-| 2026-02-19 | Tutorial Overlay Bug Fixes | ✅ Complete |
-| 2026-02-19 | Dashboard & Auth UX Polish (skeleton, prefetch, auth redirect) | ✅ Complete |
 | 2026-02-18 | Summary Quality Fixes Phase 1: Form 4 Classification (7 Buckets) | ✅ Complete |
-| 2026-02-18 | Worktree Manager + Landing Page Auth Tests (42 tests) | ✅ Complete |
 
 *These will be archived once they are older than 30 days AND PROGRESS.md exceeds 500 lines*
 
@@ -95,7 +95,7 @@
 
 ## Archive Statistics
 - **Total Archived Projects**: 25
-- **Current PROGRESS.md Lines**: 142
-- **Last Sync**: 2026-03-10
-- **Last Archive Update**: 2026-03-05
+- **Current PROGRESS.md Lines**: 131
+- **Last Sync**: 2026-03-17
+- **Last Archive Update**: 2026-03-17
 - **Archive System**: ✅ ACTIVE
