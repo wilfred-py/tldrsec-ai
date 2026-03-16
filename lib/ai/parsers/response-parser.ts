@@ -215,7 +215,24 @@ function normalizeFields(data: unknown, filingType: SECFilingType): unknown {
           if (sof && String(sof).trim()) {
             const cleaned = String(sof).replace(/[$,\[\]]/g, '').trim();
             if (/\d/.test(cleaned)) {
-              normalized.newStake = `${cleaned} shares`;
+              // Detect if ALL transactions are derivative-type
+              // Derivative codes: M (exercise), C (conversion), X (exercise ITM),
+              // O (exercise OTM), E (expiration short), H (expiration long),
+              // or A with $0 price (option grant)
+              const derivativeCodes = new Set(['M', 'C', 'X', 'O', 'E', 'H']);
+              const allDerivative = txArr.every(t => {
+                const txCode = String(t.code || '').toUpperCase();
+                if (derivativeCodes.has(txCode)) return true;
+                // Code A with $0 price = option/grant (derivative)
+                if (txCode === 'A') {
+                  const txPrice = parseFloat(String(t.pricePerShare || '0').replace(/[$,]/g, '')) || 0;
+                  return txPrice === 0;
+                }
+                return false;
+              });
+
+              const suffix = allDerivative ? 'derivative securities' : 'shares';
+              normalized.newStake = `${cleaned} ${suffix}`;
               break;
             }
           }
@@ -267,7 +284,10 @@ function normalizeFields(data: unknown, filingType: SECFilingType): unknown {
       
       if (normalized.newStake && typeof normalized.newStake === 'string') {
         if (/\d/.test(normalized.newStake)) {
-          normalized.newStake = normalized.newStake.replace(/([\d,]+)\s*shares?/i, '$1 shares');
+          // Don't normalize "derivative securities" suffix - only normalize bare "share(s)"
+          if (!normalized.newStake.includes('derivative securities')) {
+            normalized.newStake = normalized.newStake.replace(/([\d,]+)\s*shares?/i, '$1 shares');
+          }
         }
       }
       

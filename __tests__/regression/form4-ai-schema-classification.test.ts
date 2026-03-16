@@ -390,7 +390,8 @@ describe('Form 4: AI Schema → Template Classification', () => {
       });
       const result = parseResponse(aiResponse, '4');
       const data = result.data as Record<string, unknown>;
-      expect(data.newStake).toBe('659729 shares');
+      // Code A + $0 price = derivative grant → suffix is "derivative securities"
+      expect(data.newStake).toBe('659729 derivative securities');
       expect(data.newStake).not.toContain(']');
     });
   });
@@ -426,8 +427,9 @@ describe('Form 4: AI Schema → Template Classification', () => {
       });
       const result = parseResponse(aiResponse, '4');
       const data = result.data as Record<string, unknown>;
-      expect(data.previousStake).toBe('100000 shares'); // 150000 - 50000
-      expect(data.newStake).toBe('150000 shares');
+      // Code A + $0 price = derivative grant → suffix is "derivative securities"
+      expect(data.previousStake).toBe('100000 shares'); // 150000 - 50000 (previousStake always uses "shares")
+      expect(data.newStake).toBe('150000 derivative securities');
     });
 
     it('should derive previousStake for sale inferred from code S', () => {

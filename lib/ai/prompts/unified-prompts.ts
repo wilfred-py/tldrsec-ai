@@ -337,7 +337,7 @@ export const FORM_SCHEMAS: Record<string, JSONSchema> = {
             pricePerShare: { type: 'string', description: 'REQUIRED: Price per share with $ from column 4 - if $0, check if this is a gift/grant. Never leave blank.' },
             date: { type: 'string', description: 'Transaction date from column 2 (YYYY-MM-DD)' },
             acquisitionDisposition: { type: 'string', description: 'A for acquired, D for disposed' },
-            sharesOwnedFollowing: { type: 'string', description: 'Amount of Securities Beneficially Owned Following Reported Transaction from Table I Column 5. Total shares held after this transaction.' }
+            sharesOwnedFollowing: { type: 'string', description: 'Amount of Securities Beneficially Owned Following Reported Transaction. For Table I use Column 5 (shares of common stock). For Table II use Column 11 (derivative securities remaining, e.g., stock options). Total shares/securities held after this transaction.' }
           },
           required: ['code', 'type', 'shares', 'pricePerShare', 'sharesOwnedFollowing']
         }
@@ -1032,7 +1032,15 @@ const FORM_EXTRACTION_GUIDANCE: Record<string, string> = {
   * If checkbox marked OR language found = has10b51Plan: true
   * If no checkbox/mention = has10b51Plan: false
 - FOOTNOTES ARE CRITICAL: Often contain essential context about the transaction (vesting schedules, plan details, related transactions)
-- POST-TRANSACTION OWNERSHIP: For each transaction, extract "Amount of Securities Beneficially Owned Following Reported Transaction(s)" (Table I, Column 5) into the sharesOwnedFollowing field. This is the total shares the insider holds AFTER the transaction.
+- POST-TRANSACTION OWNERSHIP: For each transaction, extract "Amount of Securities Beneficially Owned Following Reported Transaction(s)" into the sharesOwnedFollowing field. This is the total shares/securities the insider holds AFTER the transaction.
+  * Table I (Non-Derivative): Use Column 5 for shares of common stock remaining
+  * Table II (Derivative): Use Column 11 for derivative securities remaining (e.g., stock options)
+- TABLE II DERIVATIVE TRANSACTIONS (MUST NOT BE SKIPPED):
+  * If a filing has ONLY Table II entries and NO Table I entries, you MUST still populate the transactions array
+  * Stock option grants: code='A', type='Award/Grant', shares=[number of options], pricePerShare='$0', acquisitionDisposition='A'
+  * Option exercises: code='M', type='Exercise', shares=[number exercised], pricePerShare=[exercise price]
+  * Conversions: code='C', type='Conversion', shares=[number converted]
+  * For derivative grants at $0, the sharesOwnedFollowing represents derivative securities count, not equity shares
 - The summary MUST include: ticker, insider name, transaction type, SHARE COUNT, dollar amount, and signal assessment`,
 
   '8-K': `8-K EXTRACTION RULES:

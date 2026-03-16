@@ -18,6 +18,8 @@ import type { FetchJobPayload } from './fetch-handler';
 import { verifyFilingContent, type FilingMetadata } from '../../validation/filing-content-verifier';
 import { shouldProcessFiling } from '../../filing/filing-type-preferences-mapper';
 import { TrialService } from '../../auth/trial-service';
+import { parseResponse } from '../../ai/parsers/response-parser';
+import type { SECFilingType } from '../../ai/prompts/prompt-types';
 
 const summarizeLogger = logger.child('summarize-cached-handler');
 
@@ -249,7 +251,7 @@ export async function handleSummarizeCached(
           // Need to fetch the summary text to include in email
           const existingSummaryFull = await prisma.summary.findUnique({
             where: { id: existingSummary.id },
-            select: { summaryText: true }
+            select: { summaryText: true, summaryJSON: true }
           });
 
           await sendFilingSummaryEmail(userEmail, {
@@ -258,8 +260,35 @@ export async function handleSummarizeCached(
             filingType: filing.formType,
             filingDate: new Date(filing.filingDate),
             summary: existingSummaryFull?.summaryText || 'Summary available in dashboard',
-            filingUrl: cachedContent.primaryDocUrl || filing.filingUrl  // Prefer direct document URL
+            filingUrl: cachedContent.primaryDocUrl || filing.filingUrl,  // Prefer direct document URL
+            summaryData: existingSummaryFull?.summaryJSON as Record<string, unknown> | undefined
           });
+
+          // Update email tracking to prevent duplicate sends on next cycle
+          try {
+            await prisma.summary.update({
+              where: { id: existingSummary.id },
+              data: {
+                sentToUser: true,
+                totalEmailsSent: { increment: 1 }
+              }
+            });
+
+            await prisma.summaryEmailDelivery.create({
+              data: {
+                summaryId: existingSummary.id,
+                userId: userId,
+                emailAddress: userEmail,
+                deliveryStatus: 'sent'
+              }
+            });
+          } catch (trackingError) {
+            // Don't fail the job if tracking update fails - email was still sent
+            summarizeLogger.warn(`[${executionId}] Failed to update email tracking for existing summary re-send`, {
+              summaryId: existingSummary.id,
+              error: trackingError instanceof Error ? trackingError.message : 'Unknown error'
+            });
+          }
 
           return {
             success: true,
@@ -326,45 +355,126 @@ export async function handleSummarizeCached(
         formType: filing.formType
       });
 
-      // Create a new Summary record for this user using the shared content
-      const summary = await prisma.summary.create({
-        data: {
-          tickerId: userTicker.id,
-          filingType: filing.formType,
-          filingDate: new Date(filing.filingDate),
-          filingUrl: filing.filingUrl,
-          summaryText: sharedSummary.summaryText,
-          summaryJSON: sharedSummary.summaryJSON || null,
-          modelVersion: sharedSummary.modelVersion || 'x-ai/grok-4-fast:free',
-          promptVersion: 'v1',
-          totalCost: 0,  // No additional AI cost for shared summary
-          inputTokens: 0,
-          outputTokens: 0,
-          isCacheHit: true,  // Mark as cache hit
-          processingCompletedAt: new Date(), // Fix: Add missing completion timestamp
-          processingTimeMs: 0,  // Cached summary - no AI processing time
-          metadata: {
-            executionId,
-            cacheId,
-            cacheHit: true,
-            summarizeDuration: 0,
-            cronTriggerTime: executionContext.cronTriggerTime,
-            sourceContext: executionContext.sourceContext,
-            discoveryPhaseCompletedAt: executionContext.discoveryPhaseCompletedAt,
-            fetchPhaseCompletedAt: executionContext.fetchPhaseCompletedAt,
-            summarizePhaseCompletedAt: new Date().toISOString(),
-            ticker: ticker.symbol,
-            companyName: ticker.companyName,
-            accessionNumber: filing.accessionNumber,
-            userId,
-            sharedFromSummaryId: sharedSummary.id,
-            sharedFromCreatedAt: sharedSummary.createdAt.toISOString(),
-            originalCost: sharedSummary.totalCost,
-            originalInputTokens: sharedSummary.inputTokens,
-            originalOutputTokens: sharedSummary.outputTokens
+      // Re-normalize stale pre-deployment summaries that lack transaction codes
+      let normalizedJSON = sharedSummary.summaryJSON;
+      if (normalizedJSON && typeof normalizedJSON === 'object') {
+        const jsonObj = normalizedJSON as Record<string, unknown>;
+        const txArr = Array.isArray(jsonObj.transactions) ? jsonObj.transactions as Record<string, unknown>[] : [];
+        const hasCodelessTx = txArr.length > 0 && txArr.some(t => !t.code || t.code === '');
+        if (hasCodelessTx) {
+          summarizeLogger.info(`[${executionId}] Re-normalizing stale shared summary (missing transaction codes)`, {
+            sharedSummaryId: sharedSummary.id,
+            transactionCount: txArr.length
+          });
+          try {
+            const reNormalized = parseResponse(
+              JSON.stringify(jsonObj),
+              filing.formType as SECFilingType
+            );
+            if (reNormalized.success && reNormalized.data) {
+              normalizedJSON = reNormalized.data as Record<string, unknown>;
+            }
+          } catch (normalizeError) {
+            summarizeLogger.warn(`[${executionId}] Failed to re-normalize shared summary, using original`, {
+              error: normalizeError instanceof Error ? normalizeError.message : 'Unknown error'
+            });
           }
         }
-      });
+      }
+
+      // Create a new Summary record for this user using the shared content
+      // Wrap in try/catch to handle P2002 unique constraint race condition
+      // (two concurrent jobs for same user+filing can both find shared summary)
+      let summary;
+      try {
+        summary = await prisma.summary.create({
+          data: {
+            tickerId: userTicker.id,
+            filingType: filing.formType,
+            filingDate: new Date(filing.filingDate),
+            filingUrl: filing.filingUrl,
+            summaryText: sharedSummary.summaryText,
+            summaryJSON: normalizedJSON || null,
+            modelVersion: sharedSummary.modelVersion || 'x-ai/grok-4-fast:free',
+            promptVersion: 'v1',
+            totalCost: 0,  // No additional AI cost for shared summary
+            inputTokens: 0,
+            outputTokens: 0,
+            isCacheHit: true,  // Mark as cache hit
+            processingCompletedAt: new Date(), // Fix: Add missing completion timestamp
+            processingTimeMs: 0,  // Cached summary - no AI processing time
+            metadata: {
+              executionId,
+              cacheId,
+              cacheHit: true,
+              summarizeDuration: 0,
+              cronTriggerTime: executionContext.cronTriggerTime,
+              sourceContext: executionContext.sourceContext,
+              discoveryPhaseCompletedAt: executionContext.discoveryPhaseCompletedAt,
+              fetchPhaseCompletedAt: executionContext.fetchPhaseCompletedAt,
+              summarizePhaseCompletedAt: new Date().toISOString(),
+              ticker: ticker.symbol,
+              companyName: ticker.companyName,
+              accessionNumber: filing.accessionNumber,
+              userId,
+              sharedFromSummaryId: sharedSummary.id,
+              sharedFromCreatedAt: sharedSummary.createdAt.toISOString(),
+              originalCost: sharedSummary.totalCost,
+              originalInputTokens: sharedSummary.inputTokens,
+              originalOutputTokens: sharedSummary.outputTokens
+            }
+          }
+        });
+      } catch (createError) {
+        // Handle P2002 unique constraint violation (race condition)
+        if ((createError as { code?: string }).code === 'P2002') {
+          summarizeLogger.info(`[${executionId}] Summary already created by concurrent job (P2002)`, {
+            userId,
+            ticker: ticker.symbol,
+            filingUrl: filing.filingUrl
+          });
+
+          // Re-read the existing summary created by the other job
+          const raceSummary = await prisma.summary.findFirst({
+            where: {
+              tickerId: userTicker.id,
+              filingUrl: filing.filingUrl,
+              filingType: filing.formType
+            },
+            select: { id: true, sentToUser: true }
+          });
+
+          if (raceSummary) {
+            // Check if email was already sent by the winning job
+            const raceDelivery = await prisma.summaryEmailDelivery.findFirst({
+              where: { summaryId: raceSummary.id, userId },
+              select: { id: true }
+            });
+
+            if (raceSummary.sentToUser || raceDelivery) {
+              return {
+                success: true,
+                summaryId: raceSummary.id,
+                cost: 0,
+                summarizeDuration: Date.now() - startTime,
+                emailSent: false
+              };
+            }
+          }
+
+          // If no summary found or email not sent, return success without email
+          // (the winning job will handle email delivery)
+          return {
+            success: true,
+            summaryId: raceSummary?.id,
+            cost: 0,
+            summarizeDuration: Date.now() - startTime,
+            emailSent: false
+          };
+        }
+        // Re-throw non-P2002 errors
+        throw createError;
+      }
 
       summarizeLogger.info(`[${executionId}] Shared summary saved for user`, {
         summaryId: summary.id,
@@ -385,7 +495,7 @@ export async function handleSummarizeCached(
             filingDate: new Date(filing.filingDate),
             summary: sharedSummary.summaryText,
             filingUrl: cachedContent.primaryDocUrl || filing.filingUrl,  // Prefer direct document URL
-            summaryData: sharedSummary.summaryJSON as Record<string, unknown> | undefined
+            summaryData: normalizedJSON as Record<string, unknown> | undefined
           });
 
           emailSent = true;
