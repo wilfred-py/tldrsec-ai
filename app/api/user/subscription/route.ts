@@ -71,9 +71,34 @@ export async function GET() {
     }
 
     // Get user's subscription from database using resolved DB user ID
-    const userSubscription = await prisma.userSubscription.findUnique({
+    let userSubscription = await prisma.userSubscription.findUnique({
       where: { userId },
     });
+
+    // Safety net: if no subscription or FREE with a stripeCustomerId, reconcile from Stripe
+    if (
+      (!userSubscription || (userSubscription.planType === 'FREE' && userSubscription.stripeCustomerId)) &&
+      isStripeEnabled()
+    ) {
+      try {
+        // Resolve email for Stripe lookup
+        const clerkUser = await currentUser();
+        const email = clerkUser?.emailAddresses?.[0]?.emailAddress;
+        if (email) {
+          const { reconcileStripeSubscription } = await import('@/lib/stripe/reconcile');
+          const result = await reconcileStripeSubscription(userId, email);
+          if (result.reconciled) {
+            console.log(`[subscription GET] Reconciled Stripe subscription: ${result.planType}`);
+            // Re-fetch after reconciliation
+            userSubscription = await prisma.userSubscription.findUnique({
+              where: { userId },
+            });
+          }
+        }
+      } catch (reconcileError) {
+        console.error('[subscription GET] Reconciliation failed:', reconcileError);
+      }
+    }
 
     if (!userSubscription) {
       // Return default free tier info if no subscription exists

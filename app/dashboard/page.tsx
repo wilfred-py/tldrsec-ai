@@ -48,6 +48,31 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
       if (dbUser) {
         tutorialCompleted = dbUser.tutorialCompletedAt != null;
         subscriptionTier = (dbUser.subscriptionTier as 'FREE' | 'PRO' | 'MAX') || 'FREE';
+
+        // Safety net: reconcile Stripe subscription for FREE users who have interacted with Stripe
+        if (subscriptionTier === 'FREE' && email) {
+          try {
+            // Only reconcile if user has a UserSubscription with stripeCustomerId
+            const existingSub = await prisma.userSubscription.findUnique({
+              where: { userId: dbUser.id },
+              select: { stripeCustomerId: true, planType: true },
+            });
+            if (existingSub?.stripeCustomerId && existingSub.planType === 'FREE') {
+              const { isStripeEnabled } = await import('@/lib/stripe');
+              if (isStripeEnabled()) {
+                const { reconcileStripeSubscription } = await import('@/lib/stripe/reconcile');
+                const result = await reconcileStripeSubscription(dbUser.id, email);
+                if (result.reconciled && result.planType) {
+                  subscriptionTier = result.planType as 'FREE' | 'PRO' | 'MAX';
+                  console.log(`[dashboard] Reconciled Stripe subscription: ${result.planType}`);
+                }
+              }
+            }
+          } catch (reconcileError) {
+            console.error('[dashboard] Stripe reconciliation failed:', reconcileError);
+          }
+        }
+
         initialCompanies = dbUser.tickers.map(ticker => ({
           id: ticker.id,
           symbol: ticker.symbol,

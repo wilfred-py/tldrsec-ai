@@ -178,7 +178,6 @@ export async function completeOnboarding(): Promise<{ success: boolean; error?: 
     const userName = user.firstName ? `${user.firstName} ${user.lastName || ''}`.trim() : 'User';
     
     // Check if user exists in database by both authProviderId and email
-    // R7: Also used to determine isNewUser for reconciliation guard
     let dbUser = await getPrismaClient().user.findFirst({
       where: {
         OR: [
@@ -187,7 +186,6 @@ export async function completeOnboarding(): Promise<{ success: boolean; error?: 
         ]
       }
     });
-    const isNewUser = !dbUser;
 
     // If user doesn't exist yet, create a new user record
     if (!dbUser) {
@@ -258,8 +256,8 @@ export async function completeOnboarding(): Promise<{ success: boolean; error?: 
     }
 
     // Reconcile Stripe subscription (fire-and-forget)
-    // Only for pre-existing users (skip freshly-created users)
-    if (!isNewUser && dbUser) {
+    // Always attempt — handles re-onboarded users whose Stripe sub still exists
+    if (dbUser) {
       import('@/lib/stripe/reconcile')
         .then(({ reconcileStripeSubscription }) =>
           reconcileStripeSubscription(dbUser.id, primaryEmail)
@@ -326,13 +324,6 @@ export async function completeOnboardingBatched(input: {
       : 'User';
 
     console.log(`[Onboarding] Starting batched completion for ${primaryEmail}`);
-
-    // R7: Pre-transaction check for user existence (for reconciliation guard)
-    const existingUser = await getPrismaClient().user.findFirst({
-      where: { OR: [{ authProviderId: userId }, { email: primaryEmail }] },
-      select: { id: true },
-    });
-    const isNewUser = !existingUser;
 
     // Convert preferences to plain JSON object
     const preferencesJson = JSON.parse(JSON.stringify(input.preferences));
@@ -425,9 +416,9 @@ export async function completeOnboardingBatched(input: {
       console.error('[Onboarding] Failed to queue welcome email:', err);
     });
 
-    // Reconcile Stripe subscription (Issue 15: fire-and-forget)
-    // Only for pre-existing users (Issue 6: skip freshly-created users)
-    if (!isNewUser) {
+    // Reconcile Stripe subscription (fire-and-forget)
+    // Always attempt — handles re-onboarded users whose Stripe sub still exists
+    {
       import('@/lib/stripe/reconcile')
         .then(({ reconcileStripeSubscription }) =>
           reconcileStripeSubscription(result.id, primaryEmail)
