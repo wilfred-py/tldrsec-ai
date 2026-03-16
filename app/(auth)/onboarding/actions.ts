@@ -418,20 +418,18 @@ export async function completeOnboardingBatched(input: {
 
     // Reconcile Stripe subscription (fire-and-forget)
     // Always attempt — handles re-onboarded users whose Stripe sub still exists
-    {
-      import('@/lib/stripe/reconcile')
-        .then(({ reconcileStripeSubscription }) =>
-          reconcileStripeSubscription(result.id, primaryEmail)
-        )
-        .then((reconcileResult) => {
-          if (reconcileResult.reconciled) {
-            console.log(`[Onboarding] Reconciled Stripe subscription: ${reconcileResult.planType}`);
-          }
-        })
-        .catch((reconcileError) => {
-          console.error('[Onboarding] Stripe reconciliation failed:', reconcileError);
-        });
-    }
+    import('@/lib/stripe/reconcile')
+      .then(({ reconcileStripeSubscription }) =>
+        reconcileStripeSubscription(result.id, primaryEmail)
+      )
+      .then((reconcileResult) => {
+        if (reconcileResult.reconciled) {
+          console.log(`[Onboarding] Reconciled Stripe subscription: ${reconcileResult.planType}`);
+        }
+      })
+      .catch((reconcileError) => {
+        console.error('[Onboarding] Stripe reconciliation failed:', reconcileError);
+      });
 
     const totalTime = Date.now() - startTime;
     console.log(`[Onboarding] Completed in ${totalTime}ms`);
