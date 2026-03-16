@@ -9,13 +9,17 @@ interface CompanyData {
   symbol: string;
   name: string;
   cik: string;
+  sic?: string;
+  sector?: string | null;
 }
 
 // Schema for validating cached company data
 const CompanyDataSchema = z.array(z.object({
   symbol: z.string().regex(/^[A-Z0-9\-\.]+$/).max(10),
   name: z.string().max(200),
-  cik: z.string().regex(/^[0-9]+$/).max(15)
+  cik: z.string().regex(/^[0-9]+$/).max(15),
+  sic: z.string().optional(),
+  sector: z.string().nullable().optional(),
 }));
 
 /**
