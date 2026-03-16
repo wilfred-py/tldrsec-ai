@@ -18,7 +18,7 @@ describe('PricingSection3Tier - FREE + PRO + MAX', () => {
     expect(screen.getByText('MAX')).toBeInTheDocument();
     expect(screen.getByText('$199')).toBeInTheDocument();
     expect(screen.getByText('$349')).toBeInTheDocument();
-    expect(screen.getByText('3 companies to track')).toBeInTheDocument();
+    expect(screen.getByText('Unlimited companies to track')).toBeInTheDocument();
     expect(screen.getByText('25 companies to track')).toBeInTheDocument();
     expect(screen.getByText('Unlimited companies')).toBeInTheDocument();
   });
@@ -90,7 +90,7 @@ describe('PricingSection3Tier - FREE + PRO + MAX', () => {
     render(<PricingSection3Tier />);
     
     fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'test@example.com' } });
-    fireEvent.click(screen.getByText('Start FREE Trial'));
+    fireEvent.click(screen.getByText('Start Trial'));
 
     await waitFor(() => {
       expect(mockFetch).toHaveBeenCalledWith('/api/checkout/direct', {

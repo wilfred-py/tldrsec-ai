@@ -51,7 +51,7 @@ function PricingCard({
 
   const ctaText =
     planKey === 'FREE'
-      ? 'Start Free Trial'
+      ? 'Start Trial'
       : planKey === 'PRO'
         ? 'Start Pro Trial'
         : 'Start Max';
@@ -179,7 +179,7 @@ export function NewPricingSection() {
             Simple, Transparent Pricing
           </h2>
           <p className="text-lg text-slate-600 max-w-2xl mx-auto">
-            Start free and upgrade when you need more. No hidden fees, cancel
+            Start with a trial, upgrade when you need more. No hidden fees, cancel
             anytime.
           </p>
         </motion.div>
@@ -248,8 +248,7 @@ export function NewPricingSection() {
           className="mt-16 text-center"
         >
           <p className="text-sm text-slate-500">
-            All plans include 14-day free trial. No credit card required for
-            Free plan.
+            All plans include 7-day trial. No credit card required.
           </p>
         </motion.div>
       </div>

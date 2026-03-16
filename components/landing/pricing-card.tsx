@@ -63,7 +63,7 @@ export function PricingCard({
       <div className="flex items-center justify-between mb-4">
         <div>
           <p className="text-xs text-[var(--landing-text-muted)] uppercase tracking-wide mb-1">
-            {plan.key === 'FREE' ? 'Basic' : plan.name}
+            {plan.key === 'FREE' ? 'Trial' : plan.name}
           </p>
           <h3
             className="text-2xl font-bold"
@@ -105,7 +105,7 @@ export function PricingCard({
               Free
             </span>
             <span className="text-[var(--landing-text-muted)]">
-              forever
+              for 7 days
             </span>
           </div>
         ) : (
@@ -212,7 +212,7 @@ export function PricingCard({
           <div className="flex items-center gap-2 text-sm text-[var(--landing-text-muted)]">
             <span className="text-[var(--landing-primary)]">+</span>
             <span>
-              Everything in {plan.key === 'PRO' ? 'Free' : 'Pro'}
+              Everything in {plan.key === 'PRO' ? 'Trial' : 'Pro'}
             </span>
           </div>
         </div>

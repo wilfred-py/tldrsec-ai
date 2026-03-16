@@ -16,16 +16,16 @@ describe('E2E: Pricing Page with Max Tier', () => {
   });
 
   describe('Pricing Page Display', () => {
-    it('should display three tiers: Free, Pro, and Max', async () => {
+    it('should display three tiers: Trial, Pro, and Max', async () => {
       await page.goto(`${baseUrl}/pricing`);
       await page.waitForLoadState('networkidle');
 
       // Check for tier names
-      const freeTier = await page.locator('text=Free').first();
+      const trialTier = await page.locator('text=Trial').first();
       const proTier = await page.locator('text=Pro').first();
       const maxTier = await page.locator('text=Max').first();
 
-      expect(await freeTier.isVisible()).toBe(true);
+      expect(await trialTier.isVisible()).toBe(true);
       expect(await proTier.isVisible()).toBe(true);
       expect(await maxTier.isVisible()).toBe(true);
     });

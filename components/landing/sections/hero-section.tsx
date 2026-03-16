@@ -92,7 +92,7 @@ export function NewHeroSection() {
                 size="lg"
                 className="h-14 px-8 text-base font-semibold bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 shadow-lg shadow-blue-500/25"
               >
-                Start Free Trial
+                Start Trial
                 <ArrowRight className="w-5 h-5 ml-2" />
               </Button>
             </Link>

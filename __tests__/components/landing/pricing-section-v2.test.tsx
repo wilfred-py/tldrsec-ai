@@ -54,14 +54,14 @@ describe('PricingSectionV2', () => {
     render(<PricingSectionV2 />);
     const tierHeadings = screen.getAllByRole('heading', { level: 3 });
     const tierNames = tierHeadings.map((h) => h.textContent);
-    expect(tierNames).toContain('Free');
+    expect(tierNames).toContain('Trial');
     expect(tierNames).toContain('Pro');
     expect(tierNames).toContain('Max');
   });
 
   it('should display prices for all tiers', () => {
     render(<PricingSectionV2 />);
-    // Free tier shows "Free"
+    // Trial tier shows "Free" price text
     expect(screen.getByText('Free', { selector: 'span' })).toBeInTheDocument();
     // PRO tier shows $199
     expect(screen.getByText('$199')).toBeInTheDocument();
@@ -93,10 +93,10 @@ describe('PricingSectionV2', () => {
 
   it('should display feature lists for each tier', () => {
     render(<PricingSectionV2 />);
-    expect(screen.getByText(/3 companies/i)).toBeInTheDocument();
+    // Trial tier now shows unlimited companies
+    expect(screen.getAllByText(/Unlimited/i).length).toBeGreaterThanOrEqual(2); // Trial + Max both have unlimited
     // PRO: "25" in bold (rendered within <strong>)
     expect(screen.getByText('25')).toBeInTheDocument();
-    expect(screen.getByText(/Unlimited/i)).toBeInTheDocument();
   });
 
   it('should have CTA buttons for each tier (unauthenticated shows "Get Started")', () => {

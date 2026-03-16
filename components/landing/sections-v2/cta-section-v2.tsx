@@ -13,7 +13,7 @@ import { viewportOnce } from '@/lib/animations/landing-animations';
  */
 const trustPoints = [
   'No credit card required',
-  'Start with 3 free tickers',
+  'Start with unlimited tickers',
   'Cancel anytime',
 ];
 

@@ -69,39 +69,41 @@ describe('SubscribePage', () => {
     jest.restoreAllMocks();
   });
 
-  it('should render all three subscription plans', async () => {
+  it('should render only PRO and MAX plans (no FREE card)', async () => {
     global.fetch = jest.fn().mockResolvedValue({
       ok: true,
-      json: () => Promise.resolve({ planType: 'FREE' }),
+      json: () => Promise.resolve({ planType: 'FREE', isTrialing: true, daysRemaining: 5 }),
     });
 
     render(<SubscribePage />);
 
     await waitFor(() => {
-      expect(screen.getByRole('heading', { name: /free/i })).toBeInTheDocument();
       expect(screen.getByRole('heading', { name: /pro/i })).toBeInTheDocument();
       expect(screen.getByRole('heading', { name: /max/i })).toBeInTheDocument();
     });
   });
 
-  it('should show disabled CTA for current plan (FREE)', async () => {
+  it('should not show trial banner on subscribe page', async () => {
     global.fetch = jest.fn().mockResolvedValue({
       ok: true,
-      json: () => Promise.resolve({ planType: 'FREE' }),
+      json: () => Promise.resolve({ planType: 'FREE', isActive: true, isTrialing: true, daysRemaining: 5 }),
     });
 
     render(<SubscribePage />);
 
     await waitFor(() => {
-      const currentPlanButton = screen.getByRole('button', { name: /current plan/i });
-      expect(currentPlanButton).toBeDisabled();
+      expect(screen.getByRole('heading', { name: /pro/i })).toBeInTheDocument();
     });
+
+    // Trial banner should not be present on subscribe page
+    expect(screen.queryByText(/days remaining/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Trial Expired/)).not.toBeInTheDocument();
   });
 
-  it('should show upgrade CTAs for non-current plans', async () => {
+  it('should show upgrade CTAs for PRO and MAX plans', async () => {
     global.fetch = jest.fn().mockResolvedValue({
       ok: true,
-      json: () => Promise.resolve({ planType: 'FREE' }),
+      json: () => Promise.resolve({ planType: 'FREE', isTrialing: true, daysRemaining: 5 }),
     });
 
     render(<SubscribePage />);
@@ -122,12 +124,12 @@ describe('SubscribePage', () => {
 
     // Wait for loading to complete
     await waitFor(() => {
-      expect(screen.getByRole('heading', { name: /free/i })).toBeInTheDocument();
+      expect(screen.getByRole('heading', { name: /pro/i })).toBeInTheDocument();
     });
 
     await userEvent.keyboard('{Escape}');
 
-    expect(mockBack).toHaveBeenCalled();
+    expect(mockPush).toHaveBeenCalledWith('/dashboard');
   });
 
   it('should navigate back when back arrow is clicked', async () => {
@@ -139,29 +141,26 @@ describe('SubscribePage', () => {
     render(<SubscribePage />);
 
     await waitFor(() => {
-      expect(screen.getByRole('heading', { name: /free/i })).toBeInTheDocument();
+      expect(screen.getByRole('heading', { name: /pro/i })).toBeInTheDocument();
     });
 
     const backButton = screen.getByRole('button', { name: /go back/i });
     await userEvent.click(backButton);
 
-    expect(mockBack).toHaveBeenCalled();
+    expect(mockPush).toHaveBeenCalledWith('/dashboard');
   });
 
   it('should show PRO plan as current when user has PRO subscription', async () => {
     global.fetch = jest.fn().mockResolvedValue({
       ok: true,
-      json: () => Promise.resolve({ planType: 'PRO' }),
+      json: () => Promise.resolve({ planType: 'PRO', isActive: true }),
     });
 
     render(<SubscribePage />);
 
     await waitFor(() => {
       // PRO plan should have disabled "Current Plan" button
-      const buttons = screen.getAllByRole('button');
-      const currentPlanButton = buttons.find(btn =>
-        btn.textContent?.toLowerCase().includes('current plan')
-      );
+      const currentPlanButton = screen.getByRole('button', { name: /current plan/i });
       expect(currentPlanButton).toBeDisabled();
 
       // Upgrade to Max should be enabled
@@ -178,7 +177,7 @@ describe('SubscribePage', () => {
     render(<SubscribePage />);
 
     await waitFor(() => {
-      expect(screen.getByRole('heading', { name: /free/i })).toBeInTheDocument();
+      expect(screen.getByRole('heading', { name: /pro/i })).toBeInTheDocument();
     });
 
     // Find the toggle button by its aria-label
@@ -202,7 +201,7 @@ describe('SubscribePage', () => {
     // Should still render page but with error state handling
     await waitFor(() => {
       // Component should handle error gracefully and render plans with default FREE state
-      expect(screen.getByRole('heading', { name: /free/i })).toBeInTheDocument();
+      expect(screen.getByRole('heading', { name: /pro/i })).toBeInTheDocument();
     });
   });
 
