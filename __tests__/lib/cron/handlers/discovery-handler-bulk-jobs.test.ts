@@ -151,9 +151,9 @@ describe('Discovery Handler Bulk Job Creation', () => {
 
     it('should set correct priority based on subscription tier', async () => {
       const usersForFiling = [
-        { id: 'user-1', email: 'user1@example.com', subscriptionTier: 'ENTERPRISE', tickers: [{ id: 'ticker-1', companyName: 'Apple' }] },
-        { id: 'user-2', email: 'user2@example.com', subscriptionTier: 'PROFESSIONAL', tickers: [{ id: 'ticker-2', companyName: 'Apple' }] },
-        { id: 'user-3', email: 'user3@example.com', subscriptionTier: 'HOBBY', tickers: [{ id: 'ticker-3', companyName: 'Apple' }] },
+        { id: 'user-1', email: 'user1@example.com', subscriptionTier: 'MAX', tickers: [{ id: 'ticker-1', companyName: 'Apple' }] },
+        { id: 'user-2', email: 'user2@example.com', subscriptionTier: 'PRO', tickers: [{ id: 'ticker-2', companyName: 'Apple' }] },
+        { id: 'user-3', email: 'user3@example.com', subscriptionTier: 'FREE', tickers: [{ id: 'ticker-3', companyName: 'Apple' }] },
       ];
 
       const filing = {
@@ -178,13 +178,13 @@ describe('Discovery Handler Bulk Job Creation', () => {
       const jobs = createManyCall.data;
 
       // Find jobs by userId in payload
-      const enterpriseJob = jobs.find((j: { payload: { userId: string } }) => j.payload.userId === 'user-1');
-      const professionalJob = jobs.find((j: { payload: { userId: string } }) => j.payload.userId === 'user-2');
-      const hobbyJob = jobs.find((j: { payload: { userId: string } }) => j.payload.userId === 'user-3');
+      const maxJob = jobs.find((j: { payload: { userId: string } }) => j.payload.userId === 'user-1');
+      const proJob = jobs.find((j: { payload: { userId: string } }) => j.payload.userId === 'user-2');
+      const freeJob = jobs.find((j: { payload: { userId: string } }) => j.payload.userId === 'user-3');
 
-      expect(enterpriseJob.priority).toBe(8); // ENTERPRISE
-      expect(professionalJob.priority).toBe(7); // PROFESSIONAL
-      expect(hobbyJob.priority).toBe(5); // HOBBY
+      expect(maxJob.priority).toBe(9); // MAX
+      expect(proJob.priority).toBe(7); // PRO
+      expect(freeJob.priority).toBe(5); // FREE
     });
 
     it('should skip users without ticker records', async () => {
