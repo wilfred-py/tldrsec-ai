@@ -707,18 +707,16 @@ export function welcomeTemplate(
     ` : ''}
     
     <h2>Getting Started</h2>
-    <p>Here's how to make the most of tldrSEC:</p>
     <ol>
-      <li><strong>Add more tickers</strong> - Go to your dashboard to search and add more companies to track.</li>
-      <li><strong>Set preferences</strong> - Customize your notification preferences to receive updates how and when you want them.</li>
-      <li><strong>Explore summaries</strong> - Browse through our existing collection of AI-generated filing summaries.</li>
+      <li><strong>Add more tickers</strong> - Search and add more companies to track.</li>
+      <li><strong>Set preferences</strong> - Choose how and when you receive updates.</li>
     </ol>
-    
+
     <p style="margin-top:25px">
       <a href="https://tldrsec.com/dashboard" class="button">Go to Your Dashboard</a>
     </p>
-    
-    <p style="margin-top:25px">If you have any questions or feedback, just reply to this email.</p>
+
+    <p style="margin-top:25px">Questions or feedback? Just reply to this email.</p>
     <p>Welcome aboard!</p>
     <p>The tldrSEC Team</p>
   `;
@@ -740,15 +738,13 @@ You can add or remove tickers at any time from your dashboard.
 ` : ''}
 
 GETTING STARTED
-Here's how to make the most of tldrSEC:
 
-1. Add more tickers - Go to your dashboard to search and add more companies to track.
-2. Set preferences - Customize your notification preferences to receive updates how and when you want them.
-3. Explore summaries - Browse through our existing collection of AI-generated filing summaries.
+1. Add more tickers - Search and add more companies to track.
+2. Set preferences - Choose how and when you receive updates.
 
 Go to Your Dashboard: https://tldrsec.com/dashboard
 
-If you have any questions or feedback, just reply to this email.
+Questions or feedback? Just reply to this email.
 
 Welcome aboard!
 The tldrSEC Team
