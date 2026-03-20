@@ -231,7 +231,7 @@ describe('SEC Cron Job Database Storage', () => {
     it('should create system user if not exists', async () => {
       const systemUser = {
         id: 'system-123',
-        email: 'system@tldrsec.com',
+        email: 'system@tldrsec.app',
         name: 'System User',
         authProvider: 'system',
         authProviderId: 'system-cron',
@@ -248,13 +248,13 @@ describe('SEC Cron Job Database Storage', () => {
 
       // Simulate the findOrCreateTicker function behavior
       let user = await mockPrisma.user.findFirst({
-        where: { email: 'system@tldrsec.com' }
+        where: { email: 'system@tldrsec.app' }
       });
 
       if (!user) {
         user = await mockPrisma.user.create({
           data: {
-            email: 'system@tldrsec.com',
+            email: 'system@tldrsec.app',
             name: 'System User',
             authProvider: 'system',
             authProviderId: 'system-cron',
@@ -265,7 +265,7 @@ describe('SEC Cron Job Database Storage', () => {
 
       expect(mockPrisma.user.create).toHaveBeenCalledWith({
         data: {
-          email: 'system@tldrsec.com',
+          email: 'system@tldrsec.app',
           name: 'System User',
           authProvider: 'system',
           authProviderId: 'system-cron',

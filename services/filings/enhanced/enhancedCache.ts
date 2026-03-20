@@ -47,13 +47,13 @@ async function findOrCreateTestTicker(symbol: string, companyName?: string): Pro
   try {
     // Try to find or create a test user
     let testUser = await prisma.user.findFirst({
-      where: { email: 'test@tldrsec.com' }
+      where: { email: 'test@tldrsec.app' }
     });
 
     if (!testUser) {
       testUser = await prisma.user.create({
         data: {
-          email: 'test@tldrsec.com',
+          email: 'test@tldrsec.app',
           name: 'Test User',
           authProvider: 'test',
           authProviderId: 'test-user-id',

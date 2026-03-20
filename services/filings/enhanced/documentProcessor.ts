@@ -338,7 +338,7 @@ export async function processFilingDocument(
     maxRetries = 3,
     timeout = 30000,
     prioritizeHtml = true,
-    userAgent = 'tldrSEC-AI Bot (contact@tldrsec.com)'
+    userAgent = 'tldrSEC-AI Bot (contact@tldrsec.app)'
   } = options;
 
   try {

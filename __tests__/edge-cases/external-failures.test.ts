@@ -292,7 +292,7 @@ describe('SEC Filing Cron Job - External Service Failures', () => {
       mockPrisma.ticker.upsert.mockResolvedValue({ id: 'db-ticker-1' });
       mockPrisma.summary.create.mockResolvedValue({ id: 'summary-1', summaryText: mockFallbackResult.summary });
       mockPrisma.user.findMany.mockResolvedValue([]);
-      mockPrisma.user.findFirst.mockResolvedValue({ id: 'system-user', email: 'system@tldrsec.com', name: 'System User' });
+      mockPrisma.user.findFirst.mockResolvedValue({ id: 'system-user', email: 'system@tldrsec.app', name: 'System User' });
       
       const response = await GET(mockRequest);
       const result = await response.json();
@@ -344,7 +344,7 @@ describe('SEC Filing Cron Job - External Service Failures', () => {
       mockPrisma.ticker.upsert.mockResolvedValue({ id: 'db-ticker-1' });
       mockPrisma.summary.create.mockResolvedValue({ id: 'summary-1', summaryText: mockFallbackResult.summary });
       mockPrisma.user.findMany.mockResolvedValue([]);
-      mockPrisma.user.findFirst.mockResolvedValue({ id: 'system-user', email: 'system@tldrsec.com', name: 'System User' });
+      mockPrisma.user.findFirst.mockResolvedValue({ id: 'system-user', email: 'system@tldrsec.app', name: 'System User' });
       
       const response = await GET(mockRequest);
       const result = await response.json();
@@ -400,7 +400,7 @@ describe('SEC Filing Cron Job - External Service Failures', () => {
       mockPrisma.ticker.upsert.mockResolvedValue({ id: 'db-ticker-1' });
       mockPrisma.summary.create.mockResolvedValue({ id: 'summary-1', summaryText: mockFallbackResult.summary });
       mockPrisma.user.findMany.mockResolvedValue([]);
-      mockPrisma.user.findFirst.mockResolvedValue({ id: 'system-user', email: 'system@tldrsec.com', name: 'System User' });
+      mockPrisma.user.findFirst.mockResolvedValue({ id: 'system-user', email: 'system@tldrsec.app', name: 'System User' });
       
       const response = await GET(mockRequest);
       const result = await response.json();
@@ -450,7 +450,7 @@ describe('SEC Filing Cron Job - External Service Failures', () => {
       mockPrisma.ticker.upsert.mockResolvedValue({ id: 'db-ticker-1' });
       mockPrisma.summary.create.mockResolvedValue({ id: 'summary-1', summaryText: mockFallbackResult.summary });
       mockPrisma.user.findMany.mockResolvedValue([]);
-      mockPrisma.user.findFirst.mockResolvedValue({ id: 'system-user', email: 'system@tldrsec.com', name: 'System User' });
+      mockPrisma.user.findFirst.mockResolvedValue({ id: 'system-user', email: 'system@tldrsec.app', name: 'System User' });
       
       const response = await GET(mockRequest);
       const result = await response.json();
@@ -496,7 +496,7 @@ describe('SEC Filing Cron Job - External Service Failures', () => {
       mockPrisma.ticker.upsert.mockResolvedValue({ id: 'db-ticker-1' });
       mockPrisma.summary.create.mockResolvedValue({ id: 'summary-1', summaryText: mockFallbackResult.summary });
       mockPrisma.user.findMany.mockResolvedValue([]);
-      mockPrisma.user.findFirst.mockResolvedValue({ id: 'system-user', email: 'system@tldrsec.com', name: 'System User' });
+      mockPrisma.user.findFirst.mockResolvedValue({ id: 'system-user', email: 'system@tldrsec.app', name: 'System User' });
       
       const response = await GET(mockRequest);
       const result = await response.json();
@@ -538,7 +538,7 @@ describe('SEC Filing Cron Job - External Service Failures', () => {
       mockPrisma.user.findMany.mockResolvedValue([
         { id: 'user1', email: 'user1@example.com', name: 'User One' }
       ]);
-      mockPrisma.user.findFirst.mockResolvedValue({ id: 'system-user', email: 'system@tldrsec.com', name: 'System User' });
+      mockPrisma.user.findFirst.mockResolvedValue({ id: 'system-user', email: 'system@tldrsec.app', name: 'System User' });
       
       // Email service completely down
       mockEmailService.sendFilingSummaryEmail.mockResolvedValue({
@@ -600,7 +600,7 @@ describe('SEC Filing Cron Job - External Service Failures', () => {
       mockPrisma.ticker.upsert.mockResolvedValue({ id: 'db-ticker-1' });
       mockPrisma.summary.create.mockResolvedValue({ id: 'summary-1', summaryText: 'Valid summary' });
       mockPrisma.user.findMany.mockResolvedValue(mockSubscribers);
-      mockPrisma.user.findFirst.mockResolvedValue({ id: 'system-user', email: 'system@tldrsec.com', name: 'System User' });
+      mockPrisma.user.findFirst.mockResolvedValue({ id: 'system-user', email: 'system@tldrsec.app', name: 'System User' });
       
       // First two emails succeed, third fails due to rate limit
       mockEmailService.sendFilingSummaryEmail
@@ -660,7 +660,7 @@ describe('SEC Filing Cron Job - External Service Failures', () => {
       mockPrisma.ticker.upsert.mockResolvedValue({ id: 'db-ticker-1' });
       mockPrisma.summary.create.mockResolvedValue({ id: 'summary-1', summaryText: 'Valid summary' });
       mockPrisma.user.findMany.mockResolvedValue(mockSubscribers);
-      mockPrisma.user.findFirst.mockResolvedValue({ id: 'system-user', email: 'system@tldrsec.com', name: 'System User' });
+      mockPrisma.user.findFirst.mockResolvedValue({ id: 'system-user', email: 'system@tldrsec.app', name: 'System User' });
       
       // Valid emails succeed, invalid email fails
       mockEmailService.sendFilingSummaryEmail
@@ -716,7 +716,7 @@ describe('SEC Filing Cron Job - External Service Failures', () => {
       mockPrisma.user.findMany.mockResolvedValue([
         { id: 'user1', email: 'user1@example.com', name: 'User One' }
       ]);
-      mockPrisma.user.findFirst.mockResolvedValue({ id: 'system-user', email: 'system@tldrsec.com', name: 'System User' });
+      mockPrisma.user.findFirst.mockResolvedValue({ id: 'system-user', email: 'system@tldrsec.app', name: 'System User' });
       
       // Email template rendering fails
       mockEmailService.sendFilingSummaryEmail.mockResolvedValue({

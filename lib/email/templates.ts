@@ -265,7 +265,7 @@ export function baseTemplate(content: string, data: BaseTemplateData): string {
 <body>
   <div class="container">
     <div class="header">
-      <img src="https://tldrsec.com/images/logo-white.png" alt="tldrSEC Logo" class="header-logo">
+      <img src="https://tldrsec.app/images/logo-white.png" alt="tldrSEC Logo" class="header-logo">
     </div>
     
     <div class="content">
@@ -715,7 +715,7 @@ export function welcomeTemplate(
     </ol>
     
     <p style="margin-top:25px">
-      <a href="https://tldrsec.com/dashboard" class="button">Go to Your Dashboard</a>
+      <a href="https://tldrsec.app/dashboard" class="button">Go to Your Dashboard</a>
     </p>
     
     <p style="margin-top:25px">If you have any questions or feedback, just reply to this email.</p>
@@ -746,7 +746,7 @@ Here's how to make the most of tldrSEC:
 2. Set preferences - Customize your notification preferences to receive updates how and when you want them.
 3. Explore summaries - Browse through our existing collection of AI-generated filing summaries.
 
-Go to Your Dashboard: https://tldrsec.com/dashboard
+Go to Your Dashboard: https://tldrsec.app/dashboard
 
 If you have any questions or feedback, just reply to this email.
 
