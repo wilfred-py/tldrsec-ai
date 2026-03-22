@@ -2,7 +2,6 @@ import { headers } from 'next/headers';
 import { WebhookEvent } from '@clerk/nextjs/server';
 import { NextResponse } from 'next/server';
 import { getPrismaClient } from '@/lib/db/prisma';
-import { TRIAL_CONFIG } from '@/lib/auth/trial-config';
 import { TrialService } from '@/lib/auth/trial-service';
 import { checkIPTrialAbuse } from '@/lib/security/trial-abuse-prevention';
 

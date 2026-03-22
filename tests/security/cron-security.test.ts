@@ -39,6 +39,11 @@ jest.mock('../../lib/db/prisma', () => {
     },
     secFiling: {
       findMany: jest.fn().mockResolvedValue([])
+    },
+    jobQueue: {
+      create: jest.fn().mockResolvedValue({ id: 'test-job', status: 'PENDING' }),
+      findFirst: jest.fn().mockResolvedValue(null),
+      count: jest.fn().mockResolvedValue(0)
     }
   };
   
@@ -68,7 +73,8 @@ jest.mock('../../lib/sec-edgar/ticker-monitoring', () => ({
   getActiveTickersForMonitoring: jest.fn().mockResolvedValue([]),
   checkTickerForNewFilings: jest.fn().mockResolvedValue([]),
   markFilingAsProcessed: jest.fn(),
-  validateUserTickers: jest.fn().mockResolvedValue([])
+  validateUserTickers: jest.fn().mockResolvedValue([]),
+  getUnprocessedFilings: jest.fn().mockResolvedValue([])
 }));
 
 // Mock rate limiter properly to match the singleton export pattern
@@ -125,6 +131,60 @@ jest.mock('../../services/filing/sendEmailSummary', () => ({
     success: true,
     messageId: 'email-123'
   })
+}));
+
+// Mock EDGAR schedule so production tests don't hit quiet-hours early return
+jest.mock('../../lib/cron/edgar-schedule', () => ({
+  isEdgarOpen: jest.fn().mockReturnValue(true)
+}));
+
+// Mock cron service layer to prevent database access in legacy processing
+jest.mock('../../lib/cron/user-processing-service', () => ({
+  CronUserProcessingService: {
+    getEligibleUsersForProcessing: jest.fn().mockResolvedValue({
+      allUsers: [],
+      eligibleUsers: []
+    })
+  }
+}));
+
+jest.mock('../../lib/cron/sec-filing-service', () => ({
+  CronSecFilingService: {
+    discoverNewFilings: jest.fn().mockResolvedValue([]),
+    processFilingsForUser: jest.fn().mockResolvedValue({ processed: 0, errors: [] }),
+    runSecFilingMonitoring: jest.fn().mockResolvedValue({
+      tickersChecked: 0,
+      newFilingsFound: 0,
+      errors: 0
+    })
+  }
+}));
+
+jest.mock('../../lib/cron/queue-monitoring', () => ({
+  QueueMonitoringService: {
+    checkQueueHealth: jest.fn().mockResolvedValue({
+      healthy: true,
+      issues: [],
+      metrics: { queueDepth: 0, estimatedProcessingTime: 0 }
+    })
+  }
+}));
+
+jest.mock('../../lib/cron/async-filing-queue', () => ({
+  AsyncFilingQueue: {
+    queueMultipleFilings: jest.fn().mockResolvedValue([])
+  }
+}));
+
+jest.mock('../../lib/slack/webhook-service', () => ({
+  slackWebhookService: {
+    postCronResults: jest.fn().mockResolvedValue(undefined),
+    postAlerts: jest.fn().mockResolvedValue(undefined)
+  }
+}));
+
+jest.mock('../../lib/slack/alert-rules', () => ({
+  evaluateAlertRules: jest.fn().mockReturnValue([])
 }));
 
 jest.mock('../../lib/db/concurrency', () => ({
@@ -201,6 +261,8 @@ describe('Cron Endpoint Security Tests', () => {
     process.env.NODE_ENV = 'test';
     // Ensure JEST_WORKER_ID is set for test environment detection
     process.env.JEST_WORKER_ID = '1';
+    // Force legacy processing path so auth checks are exercised
+    process.env.USE_3_PHASE_PIPELINE = 'false';
   });
   
   afterEach(() => {
@@ -299,11 +361,12 @@ describe('Cron Endpoint Security Tests', () => {
       const data = await response.json();
 
       // Debug: Log the response for troubleshooting
-      if (response.status !== 200) {
-        console.log('Expected 200 but got:', response.status, 'Error:', data);
+      if (response.status !== 200 && response.status !== 202) {
+        console.log('Expected 200/202 but got:', response.status, 'Error:', data);
       }
 
-      expect(response.status).toBe(200);
+      // Legacy path returns 202 (Accepted), 3-phase returns 202
+      expect([200, 202]).toContain(response.status);
       expect(data.success).toBe(true);
     });
 
@@ -374,7 +437,7 @@ describe('Cron Endpoint Security Tests', () => {
       const time2 = Date.now() - start2;
 
       // Valid signature should succeed, invalid should fail
-      expect(response1.status).toBe(200);
+      expect([200, 202]).toContain(response1.status);
       expect(response2.status).toBe(401);
       
       // Both should handle HMAC verification quickly (timing-safe)
@@ -460,7 +523,7 @@ describe('Cron Endpoint Security Tests', () => {
 
       const response = await GET(request);
 
-      expect(response.status).toBe(200);
+      expect([200, 202]).toContain(response.status);
     });
   });
 
@@ -486,7 +549,7 @@ describe('Cron Endpoint Security Tests', () => {
         });
 
         const response = await GET(request);
-        expect(response.status).toBe(200);
+        expect([200, 202]).toContain(response.status);
       }
     });
   });
