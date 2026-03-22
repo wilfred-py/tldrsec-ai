@@ -2,6 +2,8 @@ import type { Metadata } from 'next';
 import { Suspense } from 'react';
 import { LandingPageV2 } from '@/components/landing/landing-page-v2';
 
+export const dynamic = 'force-dynamic';
+
 export async function generateMetadata(): Promise<Metadata> {
   return {
     title: 'Save 10+ Hours Weekly on SEC Filing Analysis',

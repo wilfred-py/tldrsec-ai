@@ -89,7 +89,7 @@ interface DeliverySummaryResult {
 export async function deliverCachedSummaries(
   userId: string,
   userEmail: string,
-  userName: string
+  _userName: string
 ): Promise<DeliverySummaryResult> {
   const prisma = getPrismaClient();
 

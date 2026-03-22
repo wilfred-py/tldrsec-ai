@@ -22,7 +22,7 @@ export const dynamic = 'force-dynamic';
  *
  * Returns Dead Letter Queue health metrics.
  */
-export async function GET(request: NextRequest) {
+export async function GET(_request: NextRequest) {
   try {
     const prisma = getPrismaClient();
 

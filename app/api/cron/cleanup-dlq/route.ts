@@ -44,7 +44,7 @@ export async function POST(request: Request) {
     console.log('Starting DLQ cleanup job');
 
     const prisma = getPrismaClient();
-    const results: any = {
+    const results: Record<string, unknown> = {
       timestamp: new Date().toISOString(),
       dlqCleaned: 0,
       failedJobsCleaned: 0,

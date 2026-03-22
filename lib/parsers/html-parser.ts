@@ -82,7 +82,7 @@ export async function parseHTMLFromUrl(
       logger.debug(`Fetching HTML content from ${url}`);
       const response = await axios.get(url, {
         headers: {
-          'User-Agent': 'TLDRSec-AI/1.0 (https://tldrsec.com; support@tldrsec.com)'
+          'User-Agent': 'TLDRSec-AI/1.0 (https://tldrsec.app; support@tldrsec.app)'
         }
       });
       return response.data;

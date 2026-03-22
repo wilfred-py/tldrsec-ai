@@ -230,7 +230,7 @@ describe('SEC Filings Cron Job', () => {
       // Mock database operations
       mockPrisma.user.findFirst.mockResolvedValue({
         id: 'system-user-id',
-        email: 'system@tldrsec.com'
+        email: 'system@tldrsec.app'
       });
       
       mockPrisma.ticker.upsert.mockResolvedValue({
@@ -435,7 +435,7 @@ describe('SEC Filings Cron Job', () => {
       // Mock system user creation
       const systemUser = {
         id: 'new-system-user-id',
-        email: 'system@tldrsec.com',
+        email: 'system@tldrsec.app',
         name: 'System User'
       };
       mockPrisma.user.create.mockResolvedValue(systemUser);
@@ -444,7 +444,7 @@ describe('SEC Filings Cron Job', () => {
 
       expect(mockPrisma.user.create).toHaveBeenCalledWith({
         data: {
-          email: 'system@tldrsec.com',
+          email: 'system@tldrsec.app',
           name: 'System User',
           authProvider: 'system',
           authProviderId: 'system-cron',

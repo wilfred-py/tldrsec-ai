@@ -57,7 +57,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Build response
-    const response: any = {
+    const response: Record<string, unknown> = {
       healthy: health.healthy,
       timeWindow: {
         hours,

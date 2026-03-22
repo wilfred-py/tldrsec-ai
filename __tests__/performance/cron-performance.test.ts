@@ -147,7 +147,7 @@ describe('SEC Filing Cron Job - Performance Tests', () => {
       mockPrisma.user.findMany.mockResolvedValue([
         { id: 'user1', email: 'user@example.com', name: 'User' }
       ]);
-      mockPrisma.user.findFirst.mockResolvedValue({ id: 'system-user', email: 'system@tldrsec.com', name: 'System User' });
+      mockPrisma.user.findFirst.mockResolvedValue({ id: 'system-user', email: 'system@tldrsec.app', name: 'System User' });
       
       mockEmailService.sendFilingSummaryEmail
         .mockImplementation(() => new Promise(resolve => setTimeout(() => resolve({ success: true }), 300)));
@@ -214,7 +214,7 @@ describe('SEC Filing Cron Job - Performance Tests', () => {
       mockPrisma.ticker.upsert.mockResolvedValue({ id: 'ticker-1' });
       mockPrisma.summary.create.mockResolvedValue({ id: 'summary-1', summaryText: 'Summary' });
       mockPrisma.user.findMany.mockResolvedValue([]);
-      mockPrisma.user.findFirst.mockResolvedValue({ id: 'system-user', email: 'system@tldrsec.com', name: 'System User' });
+      mockPrisma.user.findFirst.mockResolvedValue({ id: 'system-user', email: 'system@tldrsec.app', name: 'System User' });
       
       perfMonitor.start();
       const response = await GET(mockRequest);
@@ -272,7 +272,7 @@ describe('SEC Filing Cron Job - Performance Tests', () => {
       mockPrisma.ticker.upsert.mockResolvedValue({ id: 'ticker-1' });
       mockPrisma.summary.create.mockResolvedValue({ id: 'summary-1', summaryText: 'Summary' });
       mockPrisma.user.findMany.mockResolvedValue([]);
-      mockPrisma.user.findFirst.mockResolvedValue({ id: 'system-user', email: 'system@tldrsec.com', name: 'System User' });
+      mockPrisma.user.findFirst.mockResolvedValue({ id: 'system-user', email: 'system@tldrsec.app', name: 'System User' });
       
       perfMonitor.start();
       const response = await GET(mockRequest);
@@ -326,7 +326,7 @@ describe('SEC Filing Cron Job - Performance Tests', () => {
       mockPrisma.ticker.upsert.mockResolvedValue({ id: 'ticker-1' });
       mockPrisma.summary.create.mockResolvedValue({ id: 'summary-1', summaryText: 'Summary' });
       mockPrisma.user.findMany.mockResolvedValue([]);
-      mockPrisma.user.findFirst.mockResolvedValue({ id: 'system-user', email: 'system@tldrsec.com', name: 'System User' });
+      mockPrisma.user.findFirst.mockResolvedValue({ id: 'system-user', email: 'system@tldrsec.app', name: 'System User' });
       
       const initialMemory = process.memoryUsage();
       
@@ -383,7 +383,7 @@ describe('SEC Filing Cron Job - Performance Tests', () => {
       mockPrisma.ticker.upsert.mockResolvedValue({ id: 'ticker-1' });
       mockPrisma.summary.create.mockResolvedValue({ id: 'summary-1', summaryText: 'Summary' });
       mockPrisma.user.findMany.mockResolvedValue([]);
-      mockPrisma.user.findFirst.mockResolvedValue({ id: 'system-user', email: 'system@tldrsec.com', name: 'System User' });
+      mockPrisma.user.findFirst.mockResolvedValue({ id: 'system-user', email: 'system@tldrsec.app', name: 'System User' });
       
       perfMonitor.start();
       const response = await GET(mockRequest);
@@ -482,7 +482,7 @@ describe('SEC Filing Cron Job - Performance Tests', () => {
       mockPrisma.user.findFirst.mockImplementation(() =>
         new Promise(resolve => setTimeout(() => resolve({ 
           id: 'system-user', 
-          email: 'system@tldrsec.com', 
+          email: 'system@tldrsec.app', 
           name: 'System User' 
         }), 25))
       );
@@ -571,7 +571,7 @@ describe('SEC Filing Cron Job - Performance Tests', () => {
       mockPrisma.ticker.upsert.mockResolvedValue({ id: 'ticker-1' });
       mockPrisma.summary.create.mockResolvedValue({ id: 'summary-1', summaryText: 'Summary' });
       mockPrisma.user.findMany.mockResolvedValue(mockSubscribers);
-      mockPrisma.user.findFirst.mockResolvedValue({ id: 'system-user', email: 'system@tldrsec.com', name: 'System User' });
+      mockPrisma.user.findFirst.mockResolvedValue({ id: 'system-user', email: 'system@tldrsec.app', name: 'System User' });
       
       mockEmailService.sendFilingSummaryEmail.mockImplementation(() =>
         new Promise(resolve => setTimeout(() => resolve({ success: true }), 100))
@@ -628,7 +628,7 @@ describe('SEC Filing Cron Job - Performance Tests', () => {
       mockPrisma.ticker.upsert.mockResolvedValue({ id: 'ticker-1' });
       mockPrisma.summary.create.mockResolvedValue({ id: 'summary-1', summaryText: 'Summary' });
       mockPrisma.user.findMany.mockResolvedValue(mockSubscribers);
-      mockPrisma.user.findFirst.mockResolvedValue({ id: 'system-user', email: 'system@tldrsec.com', name: 'System User' });
+      mockPrisma.user.findFirst.mockResolvedValue({ id: 'system-user', email: 'system@tldrsec.app', name: 'System User' });
       
       // Fast email sending
       mockEmailService.sendFilingSummaryEmail.mockResolvedValue({ success: true });
@@ -680,7 +680,7 @@ describe('SEC Filing Cron Job - Performance Tests', () => {
       mockPrisma.ticker.upsert.mockResolvedValue({ id: 'ticker-1' });
       mockPrisma.summary.create.mockResolvedValue({ id: 'summary-1', summaryText: 'Summary' });
       mockPrisma.user.findMany.mockResolvedValue([]);
-      mockPrisma.user.findFirst.mockResolvedValue({ id: 'system-user', email: 'system@tldrsec.com', name: 'System User' });
+      mockPrisma.user.findFirst.mockResolvedValue({ id: 'system-user', email: 'system@tldrsec.app', name: 'System User' });
       
       const initialMemory = process.memoryUsage();
       

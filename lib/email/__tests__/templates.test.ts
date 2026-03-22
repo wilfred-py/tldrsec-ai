@@ -16,8 +16,8 @@ describe('Email Templates', () => {
   const baseTemplateData: BaseTemplateData = {
     recipientName: 'Test User',
     recipientEmail: 'test@example.com',
-    unsubscribeUrl: 'https://tldrsec.com/unsubscribe',
-    preferencesUrl: 'https://tldrsec.com/settings',
+    unsubscribeUrl: 'https://tldrsec.app/unsubscribe',
+    preferencesUrl: 'https://tldrsec.app/settings',
     currentYear: 2023
   };
 
@@ -78,7 +78,7 @@ describe('Email Templates', () => {
       filingType: '10-K',
       filingDate: new Date('2023-01-15'),
       filingUrl: 'https://example.com/filing.pdf',
-      summaryUrl: 'https://tldrsec.com/summary/123',
+      summaryUrl: 'https://tldrsec.app/summary/123',
       summaryId: '123',
       summaryData: {
         period: 'FY 2022',
@@ -100,7 +100,7 @@ describe('Email Templates', () => {
       filingType: '8-K',
       filingDate: new Date('2023-02-20'),
       filingUrl: 'https://example.com/filing8k.pdf',
-      summaryUrl: 'https://tldrsec.com/summary/456',
+      summaryUrl: 'https://tldrsec.app/summary/456',
       summaryId: '456',
       summaryData: {
         eventType: 'Executive Changes',
@@ -116,7 +116,7 @@ describe('Email Templates', () => {
       filingType: 'Form4',
       filingDate: new Date('2023-03-10'),
       filingUrl: 'https://example.com/form4.pdf',
-      summaryUrl: 'https://tldrsec.com/summary/789',
+      summaryUrl: 'https://tldrsec.app/summary/789',
       summaryId: '789',
       summaryData: {
         filerName: 'Elon Musk',
@@ -222,7 +222,7 @@ describe('Email Templates', () => {
             filingType: '10-K',
             filingDate: new Date('2023-01-15'),
             filingUrl: 'https://example.com/filing.pdf',
-            summaryUrl: 'https://tldrsec.com/summary/123',
+            summaryUrl: 'https://tldrsec.app/summary/123',
             summaryId: '123',
             summaryData: {
               period: 'FY 2022',
@@ -235,7 +235,7 @@ describe('Email Templates', () => {
             filingType: '8-K',
             filingDate: new Date('2023-01-20'),
             filingUrl: 'https://example.com/filing2.pdf',
-            summaryUrl: 'https://tldrsec.com/summary/124',
+            summaryUrl: 'https://tldrsec.app/summary/124',
             summaryId: '124',
             summaryData: {
               eventType: 'Earnings Release',
@@ -254,7 +254,7 @@ describe('Email Templates', () => {
             filingType: 'Form4',
             filingDate: new Date('2023-01-18'),
             filingUrl: 'https://example.com/filing3.pdf',
-            summaryUrl: 'https://tldrsec.com/summary/125',
+            summaryUrl: 'https://tldrsec.app/summary/125',
             summaryId: '125',
             summaryData: {
               filerName: 'Satya Nadella',

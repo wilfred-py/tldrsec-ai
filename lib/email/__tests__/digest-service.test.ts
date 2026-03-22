@@ -205,7 +205,7 @@ describe('DigestService', () => {
       expect(require('../index').sendEmail).toHaveBeenCalledWith(
         expect.objectContaining({
           to: expect.anything(), // Allow any value for 'to' since we now use an object with email/name
-          from: 'digest@tldrsec.com',
+          from: 'digest@tldrsec.app',
           subject: expect.stringContaining('Your Daily SEC Filings Digest'), // Subject now includes date
           metadata: expect.objectContaining({
             type: 'daily-digest',

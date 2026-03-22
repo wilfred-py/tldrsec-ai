@@ -26,6 +26,30 @@ jest.mock('../../lib/db/prisma', () => ({
       findMany: jest.fn().mockResolvedValue([]),
       findUnique: jest.fn().mockResolvedValue(null),
       updateMany: jest.fn().mockResolvedValue({ count: 0 })
+    },
+    jobQueue: {
+      create: jest.fn().mockResolvedValue({ id: 'test-job', status: 'PENDING' }),
+      findFirst: jest.fn().mockResolvedValue(null),
+      count: jest.fn().mockResolvedValue(0)
+    },
+    jobLock: {
+      findFirst: jest.fn().mockResolvedValue(null),
+      upsert: jest.fn().mockResolvedValue({
+        id: 'test-lock-id',
+        lockName: 'test-lock',
+        acquiredBy: 'test',
+        acquiredAt: new Date(),
+        expiresAt: new Date(Date.now() + 30 * 60 * 1000),
+        released: false
+      }),
+      updateMany: jest.fn().mockResolvedValue({ count: 0 }),
+      update: jest.fn().mockResolvedValue({})
+    },
+    ticker: {
+      findMany: jest.fn().mockResolvedValue([])
+    },
+    summary: {
+      count: jest.fn().mockResolvedValue(0)
     }
   }))
 }));
@@ -64,6 +88,11 @@ jest.mock('../../lib/sec-edgar/ticker-monitoring', () => ({
   getActiveTickersForMonitoring: jest.fn().mockResolvedValue([])
 }));
 
+// Mock EDGAR schedule so production tests don't hit quiet-hours early return
+jest.mock('../../lib/cron/edgar-schedule', () => ({
+  isEdgarOpen: jest.fn().mockReturnValue(true)
+}));
+
 describe('SECURITY: Authentication Bypass Prevention', () => {
   const originalEnv = process.env;
 
@@ -76,6 +105,8 @@ describe('SECURITY: Authentication Bypass Prevention', () => {
     process.env.DATABASE_URL = 'postgresql://test:test@localhost:5432/testdb';
     // Ensure JEST_WORKER_ID is set for test environment detection
     process.env.JEST_WORKER_ID = '1';
+    // Force legacy processing path so auth checks are exercised
+    process.env.USE_3_PHASE_PIPELINE = 'false';
   });
 
   afterAll(() => {
