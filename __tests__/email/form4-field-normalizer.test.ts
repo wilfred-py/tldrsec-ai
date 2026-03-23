@@ -327,16 +327,18 @@ describe('Form 4 Field Normalizer', () => {
   });
 
   describe('normalizePersonName', () => {
-    it('should flip "Last First" to "First Last"', () => {
-      expect(normalizePersonName('Newstead Jennifer')).toBe('Jennifer Newstead');
+    it('should NOT flip mixed-case names (already natural order)', () => {
+      // Mixed case = assume already in natural order, just title-case
+      expect(normalizePersonName('Newstead Jennifer')).toBe('Newstead Jennifer');
+      expect(normalizePersonName('Jennifer Newstead')).toBe('Jennifer Newstead');
     });
 
-    it('should handle ALL CAPS SEC format', () => {
+    it('should flip ALL CAPS SEC format to "First Last"', () => {
       expect(normalizePersonName('MOYNIHAN BRIAN T')).toBe('Brian T. Moynihan');
     });
 
-    it('should handle middle initial', () => {
-      expect(normalizePersonName('Puri Ajay K')).toBe('Ajay K. Puri');
+    it('should handle ALL CAPS with middle initial', () => {
+      expect(normalizePersonName('PURI AJAY K')).toBe('Ajay K. Puri');
     });
 
     it('should preserve entity names', () => {

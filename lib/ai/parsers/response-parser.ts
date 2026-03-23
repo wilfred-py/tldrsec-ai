@@ -311,7 +311,8 @@ function normalizeFields(data: unknown, filingType: SECFilingType): unknown {
                 }
               }
               if (hasValidNumber) {
-                result.totalCompensation = `$${sum.toLocaleString()}`;
+                // Use explicit comma formatting instead of toLocaleString (locale-dependent)
+                result.totalCompensation = `$${sum.toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g, ',')}`;
               }
             }
           }

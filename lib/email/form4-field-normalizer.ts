@@ -376,7 +376,7 @@ export function normalizeForm4Data(summaryJSON: Record<string, unknown> | null |
 
       const prevNum = isDisposition ? sofNum + sharesNum : sofNum - sharesNum;
       if (prevNum > 0) {
-        previousStake = prevNum.toLocaleString();
+        previousStake = formatNumberWithCommas(prevNum);
       }
     }
   }
@@ -491,7 +491,6 @@ export function normalizePersonName(name: string): string {
 
   // Detect entity names (contain /, Corp, Inc, LLC, etc.)
   if (/[\/]|Corp|Inc|LLC|Ltd|Holdings|Partners/i.test(trimmed)) {
-    // Just Title Case the entity name
     return titleCase(trimmed);
   }
 
@@ -499,47 +498,61 @@ export function normalizePersonName(name: string): string {
   const parts = trimmed.split(/\s+/);
   if (parts.length < 2) return titleCase(trimmed);
 
-  // Detect if already in natural order: first word is a common first name pattern
-  // (starts with uppercase, rest lowercase) and last word looks like a surname
-  // Heuristic: if ALL parts are UPPERCASE, it's SEC format (LAST FIRST MIDDLE)
+  // Heuristic: ALL UPPERCASE = definitely SEC format (LAST FIRST MIDDLE)
   const allUpper = parts.every(p => p === p.toUpperCase() && /^[A-Z]/.test(p));
 
-  // If not all uppercase, check if it's "Last First" format
-  // SEC pattern: last name first, then given names
-  // We detect this by checking if the name has 2-3 parts and the first part
-  // is a plausible last name (not a common single-letter initial)
-  if (allUpper || (parts.length >= 2 && parts.length <= 4)) {
-    // Assume SEC format: LAST FIRST [MIDDLE] [SUFFIX]
-    const suffixes = ['JR', 'JR.', 'SR', 'SR.', 'II', 'III', 'IV', 'V'];
-    const lastParts: string[] = [];
-    const remainingParts = [...parts];
-
-    // Extract suffix if present at end
-    let suffix = '';
-    if (remainingParts.length > 2 && suffixes.includes(remainingParts[remainingParts.length - 1].toUpperCase().replace('.', '') + '.') || suffixes.includes(remainingParts[remainingParts.length - 1].toUpperCase())) {
-      suffix = remainingParts.pop()!;
-    }
-
-    // First part is last name, rest are given names
-    const lastName = remainingParts.shift()!;
-    const givenNames = remainingParts;
-
-    if (givenNames.length === 0) {
-      return titleCase(trimmed);
-    }
-
-    // Format middle initials with periods
-    const formattedGiven = givenNames.map(n => {
-      if (n.length === 1) return `${n.toUpperCase()}.`;
-      return titleCase(n);
-    });
-
-    const result = [...formattedGiven, titleCase(lastName)];
-    if (suffix) result.push(titleCase(suffix));
-    return result.join(' ');
+  // Mixed case heuristic: "Newstead Jennifer" is SEC format (Last First)
+  // "Jennifer Newstead" is already natural order — DON'T flip
+  // Detection: if the FIRST part looks like a surname (capitalized, >1 char)
+  // and the SECOND part also looks like a name, check if the comma convention
+  // or the SEC "last-name-first" pattern applies.
+  // Best heuristic: SEC ALWAYS puts last name first. If name is mixed case,
+  // we only flip if the first word is NOT a plausible first name.
+  // Since we can't reliably distinguish, only flip ALL CAPS names.
+  if (!allUpper) {
+    // Mixed case — assume already in natural order, just title-case
+    return titleCase(trimmed);
   }
 
-  return titleCase(trimmed);
+  // ALL CAPS SEC format: LAST FIRST [MIDDLE] [SUFFIX]
+  const suffixes = ['JR', 'JR.', 'SR', 'SR.', 'II', 'III', 'IV', 'V'];
+  const remainingParts = [...parts];
+
+  // Extract suffix if present at end (with correct precedence)
+  let suffix = '';
+  if (remainingParts.length > 2) {
+    const lastPart = remainingParts[remainingParts.length - 1].toUpperCase();
+    const lastPartNoDot = lastPart.replace(/\./g, '');
+    if (suffixes.includes(lastPart) || suffixes.includes(lastPartNoDot)) {
+      suffix = remainingParts.pop()!;
+    }
+  }
+
+  // First part is last name, rest are given names
+  const lastName = remainingParts.shift()!;
+  const givenNames = remainingParts;
+
+  if (givenNames.length === 0) {
+    return titleCase(trimmed);
+  }
+
+  // Format middle initials with periods
+  const formattedGiven = givenNames.map(n => {
+    if (n.length === 1) return `${n.toUpperCase()}.`;
+    return titleCase(n);
+  });
+
+  const result = [...formattedGiven, titleCase(lastName)];
+  if (suffix) result.push(titleCase(suffix));
+  return result.join(' ');
+}
+
+/**
+ * Format a number with US-style commas. Locale-independent.
+ * 14788 → "14,788"
+ */
+function formatNumberWithCommas(num: number): string {
+  return Math.round(num).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
 }
 
 /**
