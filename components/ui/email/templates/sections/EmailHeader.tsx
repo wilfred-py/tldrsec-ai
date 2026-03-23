@@ -8,6 +8,7 @@ interface EmailHeaderProps {
   filingDate: string | Date;
   filerName?: string;
   filerRole?: string;
+  dataQuality?: 'full' | 'partial' | 'extractor-only' | 'degraded';
 }
 
 /**
@@ -25,6 +26,9 @@ export function EmailHeader({
   const formattedDate = filingDate instanceof Date
     ? filingDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
     : new Date(filingDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+
+  // Show filer name if it's not the default fallback
+  const hasFiler = filerName && filerName !== 'Insider';
 
   return (
     <table width="100%" cellPadding="0" cellSpacing="0">
@@ -77,7 +81,7 @@ export function EmailHeader({
               letterSpacing: '0.5px',
               marginBottom: '8px',
             }}>
-              {filingType} {filerName ? '| Insider' : ''}
+              {filingType} {hasFiler ? '| Insider' : ''}
             </div>
 
             <h1 style={{
@@ -87,8 +91,8 @@ export function EmailHeader({
               color: EmailColors.text.headline,
               lineHeight: '1.3',
             }}>
-              {ticker}: {filerName || companyName}
-              {filerName && filerRole && (
+              {ticker}: {hasFiler ? filerName : companyName}
+              {hasFiler && filerRole && (
                 <span style={{
                   fontWeight: 400,
                   fontSize: '16px',
