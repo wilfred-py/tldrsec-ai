@@ -8,6 +8,7 @@ import { sendEmail } from './index';
 import { logger } from '../logging';
 import { SecureEmailLogger } from './security-helpers';
 import { EmailSubjectService } from './subject-service';
+import { normalizePersonName } from './form4-field-normalizer';
 
 // Create secure logger to prevent PII exposure
 const secureLogger = new SecureEmailLogger(logger.child('summary-service'));
@@ -250,12 +251,22 @@ export async function sendFilingSummaryEmail(
       preferencesUrl: `${process.env.NEXT_PUBLIC_APP_URL}/settings`
     });
     
-    // Prepare email message
+    // Prepare email message — include filer name for insider filings
+    // Use normalizer to resolve aliases (reportingPerson → filerName) and normalize format
+    const summaryJSON = filingData.summaryData as Record<string, unknown> | undefined;
+    const rawFilerName = (summaryJSON?.filerName || summaryJSON?.reportingPerson || summaryJSON?.insiderName) as string | undefined;
+    const filerName = rawFilerName ? normalizePersonName(rawFilerName) : undefined;
     const subject = EmailSubjectService.generateSingleFilingSubject({
       filingType: filingData.filingType,
       companyName: filingData.companyName,
-      ticker: filingData.ticker
+      ticker: filingData.ticker,
+      filerName,
     });
+
+    // Determine data quality level for monitoring
+    const hasFiler = !!filerName && filerName !== 'Insider';
+    const hasTxns = Array.isArray(summaryJSON?.transactions) && (summaryJSON.transactions as unknown[]).length > 0;
+    const dataQuality = hasFiler && hasTxns ? 'full' : hasFiler || hasTxns ? 'partial' : 'degraded';
 
     const message: EmailMessage = {
       to: recipientEmail,
@@ -265,13 +276,15 @@ export async function sendFilingSummaryEmail(
       tags: [
         'type:filing-notification',
         `filing-type:${filingData.filingType.toLowerCase()}`,
-        `ticker:${filingData.ticker}`
+        `ticker:${filingData.ticker}`,
+        `data-quality:${dataQuality}`,
       ],
       metadata: {
         type: 'filing-notification',
         ticker: filingData.ticker,
         filingType: filingData.filingType,
-        companyName: filingData.companyName
+        companyName: filingData.companyName,
+        dataQuality,
       }
     };
     

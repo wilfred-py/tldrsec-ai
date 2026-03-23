@@ -14,6 +14,11 @@ import { normalizeDate, normalizeCurrency, normalizePercentage } from './normali
 import { SECFilingType } from '../prompts/prompt-types';
 import { secLogger as logger } from '../../../utils/logger';
 import { jsonParsingMonitor } from '../../monitoring/json-parsing-monitor';
+import {
+  normalizeTransaction as centralNormalizeTx,
+  parseStringTransaction as centralParseStringTx,
+  isCharacterIndexedObject,
+} from '../../email/form4-field-normalizer';
 
 /**
  * Transaction code to human-readable type mapping
@@ -110,23 +115,35 @@ function normalizeFields(data: unknown, filingType: SECFilingType): unknown {
     case '10-K':
     case '10-Q':
     case '20-F':
-    case '6-K':
-      // Financial statements
-      if (Array.isArray(normalized.financials)) {
-        normalized.financials = (normalized.financials as unknown[]).map((item: unknown) => {
+    case '6-K': {
+      // Financial statements — schema uses `financialHighlights`, AI may return `financials`
+      // Alias: if AI returned `financials` but not `financialHighlights`, copy it over
+      if (Array.isArray(normalized.financials) && !Array.isArray(normalized.financialHighlights)) {
+        normalized.financialHighlights = normalized.financials;
+        delete normalized.financials;
+      }
+
+      // Normalize currency/percentage in financial highlights
+      const finArray = (normalized.financialHighlights || normalized.financials) as unknown[] | undefined;
+      if (Array.isArray(finArray)) {
+        const normalizedArray = finArray.map((item: unknown) => {
           const itemObj = item as Record<string, unknown>;
           return {
             ...itemObj,
-            value: typeof itemObj.value === 'string' || typeof itemObj.value === 'number' 
-              ? normalizeCurrency(itemObj.value) 
+            value: typeof itemObj.value === 'string' || typeof itemObj.value === 'number'
+              ? normalizeCurrency(itemObj.value)
               : itemObj.value,
-            growth: typeof itemObj.growth === 'string' || typeof itemObj.growth === 'number' 
-              ? normalizePercentage(itemObj.growth) 
+            growth: typeof itemObj.growth === 'string' || typeof itemObj.growth === 'number'
+              ? normalizePercentage(itemObj.growth)
               : itemObj.growth
           };
         });
+        // Always write to the canonical field name
+        normalized.financialHighlights = normalizedArray;
+        if (normalized.financials) delete normalized.financials;
       }
       break;
+    }
       
     case '8-K':
       // No specific fields that need normalization
@@ -135,73 +152,38 @@ function normalizeFields(data: unknown, filingType: SECFilingType): unknown {
     case '3' as SECFilingType:
     case '4' as SECFilingType:
     case '144' as SECFilingType:
-      // Insider trading forms
+      // Insider trading forms — use centralized normalizer for field-name resolution
       if (Array.isArray(normalized.transactions)) {
         normalized.transactions = (normalized.transactions as unknown[]).map((tx: unknown) => {
           // Handle string transactions: AI sometimes outputs strings like
           // "Sold 80 shares at $412.460 (S, D)" instead of structured objects
           if (typeof tx === 'string') {
-            const parsed = parseStringTransaction(tx);
+            const parsed = centralParseStringTx(tx);
             if (!parsed) return null; // Drop unparseable strings
             return parsed;
           }
-          const txObj = tx as Record<string, unknown>;
-          const result = { ...txObj };
 
-          // Field-name aliasing: AI models use variant names for the same fields
-          if (!result.code && result.transactionCode) {
-            result.code = result.transactionCode;
-            delete result.transactionCode;
-          }
-          if (!result.type && result.transactionType) {
-            result.type = result.transactionType;
-            delete result.transactionType;
-          }
-          if (!result.pricePerShare && result.price) {
-            result.pricePerShare = result.price;
-          }
-          if (!result.acquisitionDisposition && result.ownershipType) {
-            result.acquisitionDisposition = result.ownershipType;
-            delete result.ownershipType;
+          // Detect and skip character-indexed objects from stale string-spread data
+          if (isCharacterIndexedObject(tx)) {
+            logger.warn('Skipping character-indexed transaction object (stale data)');
+            return null;
           }
 
-          // Infer code from type when code is missing/empty
-          if ((!result.code || result.code === '') && result.type && typeof result.type === 'string') {
-            const typeStr = (result.type as string).toLowerCase();
-            if (typeStr.includes('sale') || typeStr.includes('sell') || typeStr === 's') result.code = 'S';
-            else if (typeStr.includes('purchase') || typeStr.includes('bought') || typeStr === 'p') result.code = 'P';
-            else if (typeStr.includes('award') || typeStr.includes('grant') || typeStr.includes('rsu')) result.code = 'A';
-            else if (typeStr.includes('gift')) result.code = 'G';
-            else if (typeStr.includes('exercise') || typeStr.includes('conversion')) result.code = 'M';
-            else if (typeStr.includes('disposition') || typeStr.includes('withhold')) result.code = 'D';
-            else if (typeStr.includes('transfer') || typeStr.includes('trust')) result.code = 'J';
-          }
+          // Use centralized normalizer for all field-name resolution
+          // This handles: price→pricePerShare (zero-safe), action→type,
+          // transactionCode→code, code↔type inference, bracket stripping
+          const normalizedTx = centralNormalizeTx(tx);
+          if (!normalizedTx) return null;
 
-          // Infer type from code when type is missing/empty
-          if ((!result.type || result.type === '') && result.code && typeof result.code === 'string') {
-            result.type = TX_CODE_TO_TYPE[(result.code as string).toUpperCase()] || '';
+          // Additional normalization: currency and date formatting
+          const result = normalizedTx as unknown as Record<string, unknown>;
+          if (result.pricePerShare && (typeof result.pricePerShare === 'string' || typeof result.pricePerShare === 'number')) {
+            result.pricePerShare = normalizeCurrency(result.pricePerShare);
           }
-
-          // Strip bracket artifacts from key fields (AI sometimes includes stray [ or ])
-          for (const field of ['code', 'type', 'shares', 'pricePerShare', 'sharesOwnedFollowing']) {
-            if (result[field] && typeof result[field] === 'string') {
-              result[field] = (result[field] as string).replace(/[\[\]]/g, '').trim();
-            }
-          }
-
-          // Normalize transaction values
-          if (result.price && (typeof result.price === 'string' || typeof result.price === 'number')) {
-            result.price = normalizeCurrency(result.price);
-          }
-          
-          if (result.value && (typeof result.value === 'string' || typeof result.value === 'number')) {
-            result.value = normalizeCurrency(result.value);
-          }
-          
           if (result.date && typeof result.date === 'string') {
             result.date = normalizeDate(result.date);
           }
-          
+
           return result;
         }).filter(Boolean);
       }
@@ -306,14 +288,47 @@ function normalizeFields(data: unknown, filingType: SECFilingType): unknown {
         normalized.executiveCompensation = (normalized.executiveCompensation as unknown[]).map((item: unknown) => {
           const itemObj = item as Record<string, unknown>;
           const result = { ...itemObj };
-          
-          // Normalize compensation fields
+
+          // Alias: AI may return SEC column names instead of schema field names
+          // Schema expects `totalCompensation`, AI may return `total` or individual components
+          if (!result.totalCompensation && result.total) {
+            result.totalCompensation = result.total;
+            delete result.total;
+          }
+
+          // If AI returned individual components but no totalCompensation, sum them
+          if (!result.totalCompensation) {
+            const components = ['salary', 'bonus', 'stockAwards', 'optionAwards', 'otherCompensation'];
+            const hasComponents = components.some(f => result[f]);
+            if (hasComponents) {
+              // Try to compute total from components
+              let sum = 0;
+              let hasValidNumber = false;
+              for (const field of components) {
+                if (result[field]) {
+                  const num = parseFloat(String(result[field]).replace(/[$,]/g, ''));
+                  if (!isNaN(num)) { sum += num; hasValidNumber = true; }
+                }
+              }
+              if (hasValidNumber) {
+                // Use explicit comma formatting instead of toLocaleString (locale-dependent)
+                result.totalCompensation = `$${sum.toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g, ',')}`;
+              }
+            }
+          }
+
+          // Normalize currency in totalCompensation
+          if (result.totalCompensation && (typeof result.totalCompensation === 'string' || typeof result.totalCompensation === 'number')) {
+            result.totalCompensation = normalizeCurrency(result.totalCompensation);
+          }
+
+          // Also normalize individual components if present (for display flexibility)
           for (const field of ['salary', 'bonus', 'stockAwards', 'optionAwards', 'total']) {
             if (result[field] && (typeof result[field] === 'string' || typeof result[field] === 'number')) {
               result[field] = normalizeCurrency(result[field]);
             }
           }
-          
+
           return result;
         });
       }

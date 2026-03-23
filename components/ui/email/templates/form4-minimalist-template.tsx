@@ -6,6 +6,11 @@ import { SectionCard } from './sections/SectionCard';
 import { FilingTemplateData } from '../../../../lib/email/types';
 import { extractForm4Data } from '../../../../lib/email/form4-data-extractor';
 import { StalenessBanner } from './sections/StalenessBanner';
+import {
+  normalizeForm4Data,
+  normalizePersonName,
+  truncateWithEllipsis,
+} from '../../../../lib/email/form4-field-normalizer';
 
 interface Form4MinimalistTemplateProps {
   filing: FilingTemplateData;
@@ -320,7 +325,7 @@ export function aggregateTransactionsByType(transactions: TransactionData[]): Ag
     }
 
     const shares = Math.round(parseNumericValue(tx.shares));
-    const price = parseNumericValue(tx.pricePerShare ?? (tx as Record<string, unknown>).price);
+    const price = parseNumericValue(tx.pricePerShare ?? (tx as Record<string, unknown>).price as string | number | undefined);
 
     // Calculate value: prefer totalValue if it's meaningful (> 0), otherwise calculate from shares * price
     let value = 0;
@@ -611,9 +616,12 @@ export function Form4MinimalistTemplate({ filing }: Form4MinimalistTemplateProps
     summaryData,
   } = filing;
 
-  const data = summaryData as Record<string, unknown> | undefined;
+  const rawData = summaryData as Record<string, unknown> | undefined;
 
-  // Extract structured data from summaryText if summaryData is sparse
+  // Use centralized normalizer for field-name resolution
+  const normalizedData = normalizeForm4Data(rawData as Record<string, unknown> | null, summaryText);
+
+  // Extract structured data from summaryText as fallback
   const extractedData = summaryText ? extractForm4Data(summaryText) : null;
   const hasExtractedData = extractedData && (
     extractedData.filerName ||
@@ -621,16 +629,22 @@ export function Form4MinimalistTemplate({ filing }: Form4MinimalistTemplateProps
     extractedData.totalValue
   );
 
-  // Use extracted data as fallback when summaryData is incomplete
-  const filerName = (data?.filerName || data?.reportingPerson || extractedData?.filerName || 'Insider') as string;
-  const filerRole = (data?.relationship || data?.position || extractedData?.relationship || '') as string;
+  // Use normalized data with extractor fallback — normalizer handles all aliases
+  const rawFilerName = normalizedData?.filerName || extractedData?.filerName || 'Insider';
+  const filerName = normalizePersonName(rawFilerName);
+  const rawFilerRole = normalizedData?.filerRole || extractedData?.relationship || '';
+  const filerRole = truncateWithEllipsis(rawFilerRole, 30);
 
-  // Merge transactions from both sources
-  const rawTransactions = (data?.transactions || []) as Array<TransactionData & { price?: string | number }>;
-  const dataTransactions = rawTransactions.map(t => ({
-    ...t,
-    pricePerShare: t.pricePerShare ?? t.price,
-  })) as TransactionData[];
+  // Transactions: use normalized data (already char-indexed-safe), fall back to extractor
+  const normalizedTransactions: TransactionData[] = (normalizedData?.transactions || []).map(t => ({
+    code: t.code,
+    type: t.type,
+    shares: String(t.shares),
+    pricePerShare: String(t.pricePerShare),
+    sharesOwnedFollowing: t.sharesOwnedFollowing !== undefined ? String(t.sharesOwnedFollowing) : undefined,
+    acquisitionDisposition: t.acquisitionDisposition,
+    date: t.date,
+  }));
   const extractedTransactions = hasExtractedData ? extractedData.transactions.map(t => ({
     type: t.type,
     shares: t.shares,
@@ -639,15 +653,22 @@ export function Form4MinimalistTemplate({ filing }: Form4MinimalistTemplateProps
     acquisitionDisposition: t.acquisitionDisposition,
     code: t.code,
   })) : [];
-  // Filter out structurally invalid transactions (e.g., spread strings produce {"0":"S","1":"o",...})
-  const validTransactions = dataTransactions.filter(t => t.type || t.code || t.shares);
+
+  // Use normalized transactions if available, fall back to extractor
+  const validTransactions = normalizedTransactions.filter(t => t.type || t.code || t.shares);
   const transactions = validTransactions.length > 0 ? validTransactions : extractedTransactions;
   const firstTx = transactions[0] || {};
 
-  const percentChange = (data?.percentageChange || data?.changePercent || extractedData?.percentageChange || '') as string;
-  const newStake = (data?.newStake || data?.sharesRemaining || extractedData?.newStake || '') as string;
-  const previousStake = (data?.previousStake || data?.sharesOwned || extractedData?.previousStake || '') as string;
-  const signalStrength = (data?.signalStrength || extractedData?.signalStrength || '') as string;
+  // Determine data quality for email metadata
+  const dataQuality: 'full' | 'partial' | 'extractor-only' | 'degraded' =
+    validTransactions.length > 0 && normalizedData?.filerName ? 'full' :
+    validTransactions.length > 0 || normalizedData?.filerName ? 'partial' :
+    hasExtractedData ? 'extractor-only' : 'degraded';
+
+  const percentChange = (normalizedData?.percentageChange || extractedData?.percentageChange || '') as string;
+  const newStake = (normalizedData?.newStake || extractedData?.newStake || '') as string;
+  const previousStake = (normalizedData?.previousStake || extractedData?.previousStake || '') as string;
+  const signalStrength = (normalizedData?.signalStrength || extractedData?.signalStrength || '') as string;
 
   // For signal config, check if primary transaction is a sale (not gift)
   const primaryIsSale = transactions.length > 0 ? isSaleTransaction(firstTx) : percentChange?.startsWith('-');
@@ -668,6 +689,9 @@ export function Form4MinimalistTemplate({ filing }: Form4MinimalistTemplateProps
     headline = summaryText;
   }
 
+  // Build preheader text for inbox preview
+  const preheaderText = `${signal.level} SIGNAL: ${signal.verdict} — ${(summaryText || '').substring(0, 100)}`;
+
   return (
     <div style={{
       maxWidth: '600px',
@@ -676,6 +700,20 @@ export function Form4MinimalistTemplate({ filing }: Form4MinimalistTemplateProps
       backgroundColor: EmailColors.structure.background,
       color: EmailColors.text.body,
     }}>
+      {/* Preheader: invisible text shown in inbox preview after subject */}
+      <div style={{
+        display: 'none',
+        fontSize: '1px',
+        color: EmailColors.structure.background,
+        lineHeight: '1px',
+        maxHeight: '0px',
+        maxWidth: '0px',
+        opacity: 0,
+        overflow: 'hidden',
+      }}>
+        {preheaderText}
+      </div>
+
       {/* Header */}
       <EmailHeader
         ticker={displayTicker}
@@ -684,6 +722,7 @@ export function Form4MinimalistTemplate({ filing }: Form4MinimalistTemplateProps
         filingDate={filingDate}
         filerName={filerName}
         filerRole={filerRole}
+        dataQuality={dataQuality}
       />
 
       {/* Staleness warning */}
@@ -850,6 +889,17 @@ export function Form4MinimalistTemplate({ filing }: Form4MinimalistTemplateProps
                                               {aggTx.codeDescription}
                                             </div>
                                           )}
+                                          {/* Show (estimated) tag when using extractor-derived data */}
+                                          {dataQuality === 'extractor-only' && (
+                                            <div style={{
+                                              fontSize: '10px',
+                                              color: EmailColors.text.muted,
+                                              fontStyle: 'italic',
+                                              marginTop: '4px',
+                                            }}>
+                                              (estimated)
+                                            </div>
+                                          )}
                                         </td>
                                         {/* Add gap spacer between items (not after last item) */}
                                         {!isLast && (
@@ -917,11 +967,15 @@ export function Form4MinimalistTemplate({ filing }: Form4MinimalistTemplateProps
                   STAKE IMPACT - Shows ownership change when transactions exist
                   Only displays when we have stake data AND transactions above
                   ═══════════════════════════════════════════════════════════ */}
-              {/* Only show Ownership Impact when there's meaningful content to display */}
-              {aggregatedTransactions.length > 0 && (
+              {/* Adaptive stake display:
+                  - Full bar: when both previousStake and newStake exist
+                  - Current holdings: when only newStake exists (from fallback extraction)
+                  - Hidden: when neither exists */}
+              {(
                 (previousStake && newStake) || // Have before/after comparison
                 (newStake && percentChange) || // Have new stake with change
-                (previousStake && percentChange) // Have previous stake with change
+                (previousStake && percentChange) || // Have previous stake with change
+                newStake // Have current holdings from fallback extraction
               ) && (() => {
                 // Parse percentage for color logic (handles "-10.00%", "50.00%", "+5.0%")
                 const pctNum = parseFloat((percentChange || '0').replace(/[%+]/g, ''));
@@ -948,7 +1002,7 @@ export function Form4MinimalistTemplate({ filing }: Form4MinimalistTemplateProps
                           letterSpacing: '0.5px',
                           marginBottom: '8px',
                         }}>
-                          Ownership Impact
+                          {previousStake && newStake ? 'Ownership Impact' : 'Current Holdings'}
                         </div>
                         <div>
                           {previousStake && newStake ? (

@@ -31,7 +31,7 @@ export function EmailFooter({ filingUrl, formType }: EmailFooterProps) {
               href={viewerUrl}
               style={{
                 display: 'inline-block',
-                padding: '12px 24px',
+                padding: '16px 24px',
                 backgroundColor: EmailColors.semantic.accent,
                 color: '#ffffff',
                 textDecoration: 'none',

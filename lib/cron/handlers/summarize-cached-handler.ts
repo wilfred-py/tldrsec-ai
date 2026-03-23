@@ -648,6 +648,21 @@ export async function handleSummarizeCached(
     let emailSent = false;
     if (shouldSendEmail) {
       try {
+        // Debug: log summaryData shape to diagnose template rendering issues
+        const summaryJSON = summaryResult.summaryJSON as Record<string, unknown> | null;
+        if (summaryJSON && ['3', '4', '144'].includes(filing.formType)) {
+          summarizeLogger.debug(`[${executionId}] Insider filing summaryData shape`, {
+            ticker: ticker.symbol,
+            formType: filing.formType,
+            hasFilerName: !!summaryJSON.filerName,
+            hasFilerRole: !!summaryJSON.filerRole,
+            hasTransactions: Array.isArray(summaryJSON.transactions),
+            transactionCount: Array.isArray(summaryJSON.transactions) ? (summaryJSON.transactions as unknown[]).length : 0,
+            hasPercentageChange: !!summaryJSON.percentageChange,
+            fields: Object.keys(summaryJSON).join(', '),
+          });
+        }
+
         await sendFilingSummaryEmail(userEmail, {
           companyName: ticker.companyName || ticker.symbol,
           ticker: ticker.symbol,
