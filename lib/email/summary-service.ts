@@ -250,12 +250,20 @@ export async function sendFilingSummaryEmail(
       preferencesUrl: `${process.env.NEXT_PUBLIC_APP_URL}/settings`
     });
     
-    // Prepare email message
+    // Prepare email message — include filer name for insider filings
+    const summaryJSON = filingData.summaryData as Record<string, unknown> | undefined;
+    const filerName = (summaryJSON?.filerName as string) || undefined;
     const subject = EmailSubjectService.generateSingleFilingSubject({
       filingType: filingData.filingType,
       companyName: filingData.companyName,
-      ticker: filingData.ticker
+      ticker: filingData.ticker,
+      filerName,
     });
+
+    // Determine data quality level for monitoring
+    const hasFiler = !!filerName && filerName !== 'Insider';
+    const hasTxns = Array.isArray(summaryJSON?.transactions) && (summaryJSON.transactions as unknown[]).length > 0;
+    const dataQuality = hasFiler && hasTxns ? 'full' : hasFiler || hasTxns ? 'partial' : 'degraded';
 
     const message: EmailMessage = {
       to: recipientEmail,
@@ -265,13 +273,15 @@ export async function sendFilingSummaryEmail(
       tags: [
         'type:filing-notification',
         `filing-type:${filingData.filingType.toLowerCase()}`,
-        `ticker:${filingData.ticker}`
+        `ticker:${filingData.ticker}`,
+        `data-quality:${dataQuality}`,
       ],
       metadata: {
         type: 'filing-notification',
         ticker: filingData.ticker,
         filingType: filingData.filingType,
-        companyName: filingData.companyName
+        companyName: filingData.companyName,
+        dataQuality,
       }
     };
     
