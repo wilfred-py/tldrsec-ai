@@ -6,7 +6,7 @@
  */
 
 import { NextRequest } from 'next/server';
-import { GET } from '../../app/api/cron/tier-aware/route';
+import { GET } from '../../app/api/cron/route';
 import { HmacAuthService } from '../../lib/security/hmac-auth';
 
 // Mock dependencies similar to cron-security.test.ts
@@ -26,6 +26,30 @@ jest.mock('../../lib/db/prisma', () => ({
       findMany: jest.fn().mockResolvedValue([]),
       findUnique: jest.fn().mockResolvedValue(null),
       updateMany: jest.fn().mockResolvedValue({ count: 0 })
+    },
+    jobQueue: {
+      create: jest.fn().mockResolvedValue({ id: 'test-job', status: 'PENDING' }),
+      findFirst: jest.fn().mockResolvedValue(null),
+      count: jest.fn().mockResolvedValue(0)
+    },
+    jobLock: {
+      findFirst: jest.fn().mockResolvedValue(null),
+      upsert: jest.fn().mockResolvedValue({
+        id: 'test-lock-id',
+        lockName: 'test-lock',
+        acquiredBy: 'test',
+        acquiredAt: new Date(),
+        expiresAt: new Date(Date.now() + 30 * 60 * 1000),
+        released: false
+      }),
+      updateMany: jest.fn().mockResolvedValue({ count: 0 }),
+      update: jest.fn().mockResolvedValue({})
+    },
+    ticker: {
+      findMany: jest.fn().mockResolvedValue([])
+    },
+    summary: {
+      count: jest.fn().mockResolvedValue(0)
     }
   }))
 }));
@@ -64,6 +88,11 @@ jest.mock('../../lib/sec-edgar/ticker-monitoring', () => ({
   getActiveTickersForMonitoring: jest.fn().mockResolvedValue([])
 }));
 
+// Mock EDGAR schedule so production tests don't hit quiet-hours early return
+jest.mock('../../lib/cron/edgar-schedule', () => ({
+  isEdgarOpen: jest.fn().mockReturnValue(true)
+}));
+
 describe('SECURITY: Authentication Bypass Prevention', () => {
   const originalEnv = process.env;
 
@@ -76,6 +105,8 @@ describe('SECURITY: Authentication Bypass Prevention', () => {
     process.env.DATABASE_URL = 'postgresql://test:test@localhost:5432/testdb';
     // Ensure JEST_WORKER_ID is set for test environment detection
     process.env.JEST_WORKER_ID = '1';
+    // Force legacy processing path so auth checks are exercised
+    process.env.USE_3_PHASE_PIPELINE = 'false';
   });
 
   afterAll(() => {
@@ -89,7 +120,7 @@ describe('SECURITY: Authentication Bypass Prevention', () => {
       process.env.CRON_SECRET = 'test-secret-key-with-proper-length-32chars-min-security-requirement';
 
       // Mock request from localhost without auth header
-      const request = new NextRequest('http://localhost:3000/api/cron/tier-aware', {
+      const request = new NextRequest('http://localhost:3000/api/cron?action=tier-aware', {
         headers: {
           'x-forwarded-for': '127.0.0.1',
           'x-real-ip': '127.0.0.1'
@@ -116,7 +147,7 @@ describe('SECURITY: Authentication Bypass Prevention', () => {
       const localhostIPs = ['127.0.0.1', '::1', 'localhost'];
 
       for (const ip of localhostIPs) {
-        const request = new NextRequest('http://localhost:3000/api/cron/tier-aware', {
+        const request = new NextRequest('http://localhost:3000/api/cron?action=tier-aware', {
           headers: {
             'x-forwarded-for': ip,
             'x-real-ip': ip
@@ -136,7 +167,7 @@ describe('SECURITY: Authentication Bypass Prevention', () => {
       process.env.NODE_ENV = 'test';
       process.env.CRON_SECRET = 'test-secret-key-with-proper-length-32chars-min-security-requirement';
 
-      const request = new NextRequest('http://localhost:3000/api/cron/tier-aware', {
+      const request = new NextRequest('http://localhost:3000/api/cron?action=tier-aware', {
         headers: {
           'x-forwarded-for': '127.0.0.1'
         }
@@ -159,7 +190,7 @@ describe('SECURITY: Authentication Bypass Prevention', () => {
         process.env.NODE_ENV = env;
         
         for (const ip of ips) {
-          const request = new NextRequest('http://localhost:3000/api/cron/tier-aware', {
+          const request = new NextRequest('http://localhost:3000/api/cron?action=tier-aware', {
             headers: {
               'x-forwarded-for': ip,
               'x-real-ip': ip
@@ -185,7 +216,7 @@ describe('SECURITY: Authentication Bypass Prevention', () => {
       // Use the actual HmacAuthService to generate a valid signature
       const timestamp = Date.now();
       const method = 'GET';
-      const path = '/api/cron/tier-aware';
+      const path = '/api/cron';
       const { signature } = HmacAuthService.generateSignature(
         process.env.CRON_SECRET!,
         method,
@@ -193,7 +224,7 @@ describe('SECURITY: Authentication Bypass Prevention', () => {
         timestamp
       );
 
-      const request = new NextRequest('http://localhost:3000/api/cron/tier-aware', {
+      const request = new NextRequest('http://localhost:3000/api/cron?action=tier-aware', {
         headers: {
           'x-hmac-signature': signature,
           'x-hmac-timestamp': timestamp.toString(),
@@ -214,7 +245,7 @@ describe('SECURITY: Authentication Bypass Prevention', () => {
     it('should reject requests with invalid HMAC signature', async () => {
       process.env.CRON_SECRET = 'valid-secret-key-with-proper-length-32chars-min-security-requirement';
       
-      const request = new NextRequest('http://localhost:3000/api/cron/tier-aware', {
+      const request = new NextRequest('http://localhost:3000/api/cron?action=tier-aware', {
         headers: {
           'x-hmac-signature': 'invalid-signature-hash',
           'x-hmac-timestamp': Date.now().toString(),
@@ -232,7 +263,7 @@ describe('SECURITY: Authentication Bypass Prevention', () => {
     it('should reject requests without authorization header', async () => {
       process.env.CRON_SECRET = 'valid-secret-key-with-proper-length-32chars-min-security-requirement';
       
-      const request = new NextRequest('http://localhost:3000/api/cron/tier-aware', {
+      const request = new NextRequest('http://localhost:3000/api/cron?action=tier-aware', {
         headers: {
           'x-forwarded-for': '127.0.0.1'
         }
@@ -249,7 +280,7 @@ describe('SECURITY: Authentication Bypass Prevention', () => {
       // Remove CRON_SECRET
       delete process.env.CRON_SECRET;
       
-      const request = new NextRequest('http://localhost:3000/api/cron/tier-aware', {
+      const request = new NextRequest('http://localhost:3000/api/cron?action=tier-aware', {
         headers: {
           'authorization': 'Bearer any-token',
           'x-forwarded-for': '127.0.0.1'
@@ -276,7 +307,7 @@ describe('SECURITY: Authentication Bypass Prevention', () => {
       // This would require mocking the logger - shows intent for comprehensive logging
       process.env.CRON_SECRET = 'test-secret';
 
-      const request = new NextRequest('http://localhost:3000/api/cron/tier-aware', {
+      const request = new NextRequest('http://localhost:3000/api/cron?action=tier-aware', {
         headers: {
           'x-forwarded-for': '127.0.0.1'
         }
@@ -304,7 +335,7 @@ describe('SECURITY: Authentication Bypass Prevention', () => {
       const timings: number[] = [];
 
       for (const token of tokens) {
-        const request = new NextRequest('http://localhost:3000/api/cron/tier-aware', {
+        const request = new NextRequest('http://localhost:3000/api/cron?action=tier-aware', {
           headers: {
             'authorization': `Bearer ${token}`,
             'x-forwarded-for': '127.0.0.1'

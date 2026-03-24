@@ -5,7 +5,7 @@
 
 import { NextRequest } from 'next/server';
 // Note: tier-aware-async route is disabled, using tier-aware route for testing
-import { GET } from '../../../app/api/cron/tier-aware/route';
+import { GET } from '../../../app/api/cron/route';
 
 // Mock dependencies
 jest.mock('../../../lib/logging', () => ({

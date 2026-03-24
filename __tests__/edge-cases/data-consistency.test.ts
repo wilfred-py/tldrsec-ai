@@ -82,7 +82,7 @@ describe('SEC Filing Cron Job - Edge Cases & Data Consistency', () => {
       mockSummaryService.generateAISummaryWithRetry.mockResolvedValue({ summary: 'Summary', cost: 0.01 });
       
       mockPrisma.ticker.upsert.mockResolvedValue({ id: 'db-ticker-1' });
-      mockPrisma.user.findFirst.mockResolvedValue({ id: 'system-user', email: 'system@tldrsec.com', name: 'System User' });
+      mockPrisma.user.findFirst.mockResolvedValue({ id: 'system-user', email: 'system@tldrsec.app', name: 'System User' });
       
       // First summary creation succeeds
       mockPrisma.summary.create.mockResolvedValueOnce({ id: 'summary-1', summaryText: 'Summary' });
@@ -219,7 +219,7 @@ describe('SEC Filing Cron Job - Edge Cases & Data Consistency', () => {
       
       mockPrisma.ticker.upsert.mockResolvedValue({ id: 'db-ticker-1' });
       mockPrisma.summary.create.mockResolvedValue({ id: 'summary-1', summaryText: 'Summary' });
-      mockPrisma.user.findFirst.mockResolvedValue({ id: 'system-user', email: 'system@tldrsec.com', name: 'System User' });
+      mockPrisma.user.findFirst.mockResolvedValue({ id: 'system-user', email: 'system@tldrsec.app', name: 'System User' });
       
       // No subscribers found for this ticker
       mockPrisma.user.findMany.mockResolvedValue([]);
@@ -262,7 +262,7 @@ describe('SEC Filing Cron Job - Edge Cases & Data Consistency', () => {
       
       // Ticker creation fails due to invalid data
       mockPrisma.ticker.upsert.mockRejectedValue(new Error('Invalid ticker symbol format'));
-      mockPrisma.user.findFirst.mockResolvedValue({ id: 'system-user', email: 'system@tldrsec.com', name: 'System User' });
+      mockPrisma.user.findFirst.mockResolvedValue({ id: 'system-user', email: 'system@tldrsec.app', name: 'System User' });
       
       const response = await GET(mockRequest);
       const result = await response.json();
@@ -344,7 +344,7 @@ describe('SEC Filing Cron Job - Edge Cases & Data Consistency', () => {
       mockFormParser.parseFormContentEnhanced.mockResolvedValue({ sections: 'Content...', metadata: {} });
       mockSummaryService.generateAISummaryWithRetry.mockResolvedValue({ summary: 'Summary', cost: 0.01 });
       
-      mockPrisma.user.findFirst.mockResolvedValue({ id: 'system-user', email: 'system@tldrsec.com', name: 'System User' });
+      mockPrisma.user.findFirst.mockResolvedValue({ id: 'system-user', email: 'system@tldrsec.app', name: 'System User' });
       
       // Database operations fail due to connection pool exhaustion
       mockPrisma.ticker.upsert.mockRejectedValue(

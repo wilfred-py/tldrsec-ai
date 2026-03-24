@@ -287,7 +287,7 @@ jest.mock('../../services/company/filings', () => ({
 
 // Import after mocks are set up
 import { getPrismaClient } from '../../lib/db/prisma';
-import { GET as tierAwareRoute } from '../../app/api/cron/tier-aware/route';
+import { GET as tierAwareRoute } from '../../app/api/cron/route';
 import { CronAuthService } from '../../lib/cron/auth-service';
 import { CronUserProcessingService } from '../../lib/cron/user-processing-service';
 import { CronSecFilingService } from '../../lib/cron/sec-filing-service';

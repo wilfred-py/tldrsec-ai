@@ -62,7 +62,7 @@ describe('Database + Email Integration', () => {
       // Mock system user
       const systemUser = {
         id: 'system-123',
-        email: 'system@tldrsec.com',
+        email: 'system@tldrsec.app',
         name: 'System User'
       };
 

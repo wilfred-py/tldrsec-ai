@@ -88,7 +88,7 @@ jest.mock('@/lib/db/supabase-config', () => ({
   }),
 }));
 
-import { GET, clearHealthCache } from '@/app/api/health/pipeline/route';
+import { GET, clearHealthCache } from '@/app/api/health/route';
 
 function createMockRequest(): NextRequest {
   return new NextRequest('http://localhost:3000/api/health/pipeline?bypass-cache=true', {

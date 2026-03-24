@@ -1037,9 +1037,12 @@ const FORM_EXTRACTION_GUIDANCE: Record<string, string> = {
   * If checkbox marked OR language found = has10b51Plan: true
   * If no checkbox/mention = has10b51Plan: false
 - FOOTNOTES ARE CRITICAL: Often contain essential context about the transaction (vesting schedules, plan details, related transactions)
-- POST-TRANSACTION OWNERSHIP: For each transaction, extract "Amount of Securities Beneficially Owned Following Reported Transaction(s)" into the sharesOwnedFollowing field. This is the total shares/securities the insider holds AFTER the transaction.
-  * Table I (Non-Derivative): Use Column 5 for shares of common stock remaining
-  * Table II (Derivative): Use Column 11 for derivative securities remaining (e.g., stock options)
+- **CRITICAL** POST-TRANSACTION OWNERSHIP — sharesOwnedFollowing is REQUIRED for EVERY transaction:
+  * You MUST populate sharesOwnedFollowing on every transaction object. This field drives the ownership change display.
+  * Table I (Non-Derivative): Extract from Column 5 — total shares of common stock remaining after this transaction
+  * Table II (Derivative): Extract from Column 11 — total derivative securities remaining (e.g., stock options)
+  * If the exact column value is not visible, extract from footnotes or the text "Amount of Securities Beneficially Owned Following Reported Transaction(s)"
+  * NEVER omit this field. If truly unavailable after checking all sources, use "unknown" rather than omitting it.
 - TABLE II DERIVATIVE TRANSACTIONS (MUST NOT BE SKIPPED):
   * If a filing has ONLY Table II entries and NO Table I entries, you MUST still populate the transactions array
   * Stock option grants: code='A', type='Award/Grant', shares=[number of options], pricePerShare='$0', acquisitionDisposition='A'

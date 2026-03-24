@@ -19,7 +19,7 @@ jest.mock('../../../../../lib/db/prisma', () => {
 });
 
 import { NextRequest } from 'next/server';
-import { GET } from '../../../../../app/api/cron/tier-aware/route';
+import { GET } from '../../../../../app/api/cron/route';
 import { getPrismaClient } from '../../../../../lib/db/prisma';
 import { rateLimiter } from '../../../../../lib/security/rate-limiter';
 

@@ -4,7 +4,7 @@
  */
 
 import { NextRequest } from 'next/server';
-import { GET } from '../../app/api/cron/tier-aware/route';
+import { GET } from '../../app/api/cron/route';
 import { HmacAuthService } from '../../lib/security/hmac-auth';
 
 // Mock dependencies with more comprehensive database model coverage
@@ -39,6 +39,11 @@ jest.mock('../../lib/db/prisma', () => {
     },
     secFiling: {
       findMany: jest.fn().mockResolvedValue([])
+    },
+    jobQueue: {
+      create: jest.fn().mockResolvedValue({ id: 'test-job', status: 'PENDING' }),
+      findFirst: jest.fn().mockResolvedValue(null),
+      count: jest.fn().mockResolvedValue(0)
     }
   };
   
@@ -68,7 +73,8 @@ jest.mock('../../lib/sec-edgar/ticker-monitoring', () => ({
   getActiveTickersForMonitoring: jest.fn().mockResolvedValue([]),
   checkTickerForNewFilings: jest.fn().mockResolvedValue([]),
   markFilingAsProcessed: jest.fn(),
-  validateUserTickers: jest.fn().mockResolvedValue([])
+  validateUserTickers: jest.fn().mockResolvedValue([]),
+  getUnprocessedFilings: jest.fn().mockResolvedValue([])
 }));
 
 // Mock rate limiter properly to match the singleton export pattern
@@ -125,6 +131,60 @@ jest.mock('../../services/filing/sendEmailSummary', () => ({
     success: true,
     messageId: 'email-123'
   })
+}));
+
+// Mock EDGAR schedule so production tests don't hit quiet-hours early return
+jest.mock('../../lib/cron/edgar-schedule', () => ({
+  isEdgarOpen: jest.fn().mockReturnValue(true)
+}));
+
+// Mock cron service layer to prevent database access in legacy processing
+jest.mock('../../lib/cron/user-processing-service', () => ({
+  CronUserProcessingService: {
+    getEligibleUsersForProcessing: jest.fn().mockResolvedValue({
+      allUsers: [],
+      eligibleUsers: []
+    })
+  }
+}));
+
+jest.mock('../../lib/cron/sec-filing-service', () => ({
+  CronSecFilingService: {
+    discoverNewFilings: jest.fn().mockResolvedValue([]),
+    processFilingsForUser: jest.fn().mockResolvedValue({ processed: 0, errors: [] }),
+    runSecFilingMonitoring: jest.fn().mockResolvedValue({
+      tickersChecked: 0,
+      newFilingsFound: 0,
+      errors: 0
+    })
+  }
+}));
+
+jest.mock('../../lib/cron/queue-monitoring', () => ({
+  QueueMonitoringService: {
+    checkQueueHealth: jest.fn().mockResolvedValue({
+      healthy: true,
+      issues: [],
+      metrics: { queueDepth: 0, estimatedProcessingTime: 0 }
+    })
+  }
+}));
+
+jest.mock('../../lib/cron/async-filing-queue', () => ({
+  AsyncFilingQueue: {
+    queueMultipleFilings: jest.fn().mockResolvedValue([])
+  }
+}));
+
+jest.mock('../../lib/slack/webhook-service', () => ({
+  slackWebhookService: {
+    postCronResults: jest.fn().mockResolvedValue(undefined),
+    postAlerts: jest.fn().mockResolvedValue(undefined)
+  }
+}));
+
+jest.mock('../../lib/slack/alert-rules', () => ({
+  evaluateAlertRules: jest.fn().mockReturnValue([])
 }));
 
 jest.mock('../../lib/db/concurrency', () => ({
@@ -201,6 +261,8 @@ describe('Cron Endpoint Security Tests', () => {
     process.env.NODE_ENV = 'test';
     // Ensure JEST_WORKER_ID is set for test environment detection
     process.env.JEST_WORKER_ID = '1';
+    // Force legacy processing path so auth checks are exercised
+    process.env.USE_3_PHASE_PIPELINE = 'false';
   });
   
   afterEach(() => {
@@ -209,7 +271,7 @@ describe('Cron Endpoint Security Tests', () => {
 
   describe('Authentication Security', () => {
     test('CRITICAL: Must reject requests without HMAC signature', async () => {
-      const request = new NextRequest('http://localhost:3000/api/cron/tier-aware', {
+      const request = new NextRequest('http://localhost:3000/api/cron?action=tier-aware', {
         method: 'GET',
         headers: {
           'x-forwarded-for': '127.0.0.1'
@@ -229,7 +291,7 @@ describe('Cron Endpoint Security Tests', () => {
     });
 
     test('CRITICAL: Must reject requests with invalid HMAC signature', async () => {
-      const request = new NextRequest('http://localhost:3000/api/cron/tier-aware', {
+      const request = new NextRequest('http://localhost:3000/api/cron?action=tier-aware', {
         method: 'GET',
         headers: {
           'x-hmac-signature': 'invalid-signature',
@@ -246,7 +308,7 @@ describe('Cron Endpoint Security Tests', () => {
     });
 
     test('CRITICAL: Must reject requests with malformed HMAC timestamp', async () => {
-      const request = new NextRequest('http://localhost:3000/api/cron/tier-aware', {
+      const request = new NextRequest('http://localhost:3000/api/cron?action=tier-aware', {
         method: 'GET',
         headers: {
           'x-hmac-signature': 'valid-looking-signature-but-invalid',
@@ -265,7 +327,7 @@ describe('Cron Endpoint Security Tests', () => {
     test('CRITICAL: Must reject requests when CRON_SECRET is missing', async () => {
       delete process.env.CRON_SECRET;
       
-      const request = new NextRequest('http://localhost:3000/api/cron/tier-aware', {
+      const request = new NextRequest('http://localhost:3000/api/cron?action=tier-aware', {
         method: 'GET',
         headers: {
           'x-hmac-signature': 'some-signature',
@@ -284,10 +346,10 @@ describe('Cron Endpoint Security Tests', () => {
 
     test('SECURITY: Must accept valid HMAC signature', async () => {
       const method = 'GET';
-      const path = '/api/cron/tier-aware';
+      const path = '/api/cron';
       const hmacHeaders = generateValidHmacHeaders(method, path);
       
-      const request = new NextRequest('http://localhost:3000/api/cron/tier-aware', {
+      const request = new NextRequest('http://localhost:3000/api/cron?action=tier-aware', {
         method: 'GET',
         headers: {
           ...hmacHeaders,
@@ -299,11 +361,12 @@ describe('Cron Endpoint Security Tests', () => {
       const data = await response.json();
 
       // Debug: Log the response for troubleshooting
-      if (response.status !== 200) {
-        console.log('Expected 200 but got:', response.status, 'Error:', data);
+      if (response.status !== 200 && response.status !== 202) {
+        console.log('Expected 200/202 but got:', response.status, 'Error:', data);
       }
 
-      expect(response.status).toBe(200);
+      // Legacy path returns 202 (Accepted), 3-phase returns 202
+      expect([200, 202]).toContain(response.status);
       expect(data.success).toBe(true);
     });
 
@@ -311,7 +374,7 @@ describe('Cron Endpoint Security Tests', () => {
       process.env.NODE_ENV = 'development';
       
       // Test with localhost IP
-      const localhostRequest = new NextRequest('http://localhost:3000/api/cron/tier-aware', {
+      const localhostRequest = new NextRequest('http://localhost:3000/api/cron?action=tier-aware', {
         method: 'GET',
         headers: {
           'x-forwarded-for': '127.0.0.1'
@@ -323,7 +386,7 @@ describe('Cron Endpoint Security Tests', () => {
       expect(response.status).toBe(401); // Must be unauthorized, no bypass
 
       // Test with development NODE_ENV but no auth
-      const devRequest = new NextRequest('http://localhost:3000/api/cron/tier-aware', {
+      const devRequest = new NextRequest('http://localhost:3000/api/cron?action=tier-aware', {
         method: 'GET',
         headers: {
           'x-forwarded-for': '192.168.1.1'
@@ -339,7 +402,7 @@ describe('Cron Endpoint Security Tests', () => {
   describe('Timing Attack Prevention', () => {
     test('SECURITY: Must use timing-safe comparison for HMAC signatures', async () => {
       const method = 'GET';
-      const path = '/api/cron/tier-aware';
+      const path = '/api/cron';
       const validHmacHeaders = generateValidHmacHeaders(method, path);
       
       // Create invalid signature by replacing part of it
@@ -349,7 +412,7 @@ describe('Cron Endpoint Security Tests', () => {
       };
       
       // Both requests should take similar time and return different results
-      const request1 = new NextRequest('http://localhost:3000/api/cron/tier-aware', {
+      const request1 = new NextRequest('http://localhost:3000/api/cron?action=tier-aware', {
         method: 'GET',
         headers: {
           ...validHmacHeaders,
@@ -357,7 +420,7 @@ describe('Cron Endpoint Security Tests', () => {
         }
       });
 
-      const request2 = new NextRequest('http://localhost:3000/api/cron/tier-aware', {
+      const request2 = new NextRequest('http://localhost:3000/api/cron?action=tier-aware', {
         method: 'GET',
         headers: {
           ...invalidHmacHeaders,
@@ -374,7 +437,7 @@ describe('Cron Endpoint Security Tests', () => {
       const time2 = Date.now() - start2;
 
       // Valid signature should succeed, invalid should fail
-      expect(response1.status).toBe(200);
+      expect([200, 202]).toContain(response1.status);
       expect(response2.status).toBe(401);
       
       // Both should handle HMAC verification quickly (timing-safe)
@@ -396,10 +459,10 @@ describe('Cron Endpoint Security Tests', () => {
       });
 
       const method = 'GET';
-      const path = '/api/cron/tier-aware';
+      const path = '/api/cron';
       const hmacHeaders = generateValidHmacHeaders(method, path);
 
-      const request = new NextRequest('http://localhost:3000/api/cron/tier-aware', {
+      const request = new NextRequest('http://localhost:3000/api/cron?action=tier-aware', {
         method: 'GET',
         headers: {
           ...hmacHeaders,
@@ -425,10 +488,10 @@ describe('Cron Endpoint Security Tests', () => {
       process.env.CRON_ALLOWED_IPS = '192.168.1.100,10.0.0.1';
 
       const method = 'GET';
-      const path = '/api/cron/tier-aware';
+      const path = '/api/cron';
       const hmacHeaders = generateValidHmacHeaders(method, path);
 
-      const request = new NextRequest('http://localhost:3000/api/cron/tier-aware', {
+      const request = new NextRequest('http://localhost:3000/api/cron?action=tier-aware', {
         method: 'GET',
         headers: {
           ...hmacHeaders,
@@ -447,10 +510,10 @@ describe('Cron Endpoint Security Tests', () => {
       process.env.CRON_ALLOWED_IPS = '192.168.1.100,127.0.0.1';
 
       const method = 'GET';
-      const path = '/api/cron/tier-aware';
+      const path = '/api/cron';
       const hmacHeaders = generateValidHmacHeaders(method, path);
 
-      const request = new NextRequest('http://localhost:3000/api/cron/tier-aware', {
+      const request = new NextRequest('http://localhost:3000/api/cron?action=tier-aware', {
         method: 'GET',
         headers: {
           ...hmacHeaders,
@@ -460,7 +523,7 @@ describe('Cron Endpoint Security Tests', () => {
 
       const response = await GET(request);
 
-      expect(response.status).toBe(200);
+      expect([200, 202]).toContain(response.status);
     });
   });
 
@@ -474,10 +537,10 @@ describe('Cron Endpoint Security Tests', () => {
 
       for (const test of tests) {
         const method = 'GET';
-        const path = '/api/cron/tier-aware';
+        const path = '/api/cron';
         const hmacHeaders = generateValidHmacHeaders(method, path);
 
-        const request = new NextRequest('http://localhost:3000/api/cron/tier-aware', {
+        const request = new NextRequest('http://localhost:3000/api/cron?action=tier-aware', {
           method: 'GET',
           headers: {
             ...hmacHeaders,
@@ -486,7 +549,7 @@ describe('Cron Endpoint Security Tests', () => {
         });
 
         const response = await GET(request);
-        expect(response.status).toBe(200);
+        expect([200, 202]).toContain(response.status);
       }
     });
   });

@@ -269,7 +269,7 @@ describe('RSS Parser - CIK Validation', () => {
         'https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=0001318605&output=atom',
         expect.objectContaining({
           headers: expect.objectContaining({
-            'User-Agent': 'tldrSEC-AI RSS Monitor (contact@tldrsec.com)'
+            'User-Agent': 'tldrSEC-AI RSS Monitor (contact@tldrsec.app)'
           })
         })
       );

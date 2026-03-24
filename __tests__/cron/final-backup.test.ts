@@ -41,7 +41,7 @@ jest.mock('@/lib/logging', () => ({
 }));
 
 // Import after mocks
-import { GET } from '@/app/api/cron/final-backup/route';
+import { GET } from '@/app/api/cron/route';
 
 function createMockRequest(
   url = 'http://localhost:3000/api/cron/final-backup'

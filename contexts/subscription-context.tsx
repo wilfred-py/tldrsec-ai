@@ -38,7 +38,7 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
 
   // SWR for caching with 5-minute revalidation
   const { data, error, isLoading, mutate } = useSWR<SubscriptionData>(
-    isLoaded && isSignedIn && user ? '/api/user/subscription' : null,
+    isLoaded && isSignedIn && user ? '/api/user?type=subscription' : null,
     fetcher,
     {
       revalidateOnFocus: false,

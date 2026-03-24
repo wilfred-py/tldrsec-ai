@@ -95,7 +95,7 @@ export async function searchCompanies(query: string): Promise<ApiResponse<Ticker
   try {
     if (API_ENABLED && query.length > 0) {
       // Real API call
-      const response = await fetch(`${API_BASE_URL}/api/companies/search?q=${encodeURIComponent(query)}`, {
+      const response = await fetch(`${API_BASE_URL}/api/companies?q=${encodeURIComponent(query)}`, {
         credentials: 'include',
       });
       

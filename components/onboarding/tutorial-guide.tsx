@@ -218,7 +218,7 @@ export function TutorialGuide({
       }
 
       // Fire-and-forget: deliver cached summaries
-      fetch('/api/onboarding/deliver-summaries', {
+      fetch('/api/onboarding?action=deliver-summaries', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
       }).catch(err => {
@@ -226,7 +226,7 @@ export function TutorialGuide({
       });
 
       // Send welcome email in the background
-      fetch('/api/email/welcome', {
+      fetch('/api/onboarding?action=welcome-email', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ data: {} })

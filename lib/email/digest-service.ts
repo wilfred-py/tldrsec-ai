@@ -343,7 +343,7 @@ export class DigestService {
           email: digestData.email,
           name: digestData.name || undefined
         },
-        from: 'digest@tldrsec.com',
+        from: 'digest@tldrsec.app',
         subject: `Your Daily SEC Filings Digest - ${new Date().toLocaleDateString()}`,
         html: emailContent.html,
         text: emailContent.text,
@@ -451,7 +451,7 @@ export class DigestService {
   private formatDigestEmail(digestData: UserDigestData): { html: string, text: string } {
     try {
       // Get base URL for links
-      const baseUrl = process.env.SITE_URL || 'https://tldrsec.com';
+      const baseUrl = process.env.SITE_URL || 'https://tldrsec.app';
       
       // Prepare base template data
       const baseTemplateData: BaseTemplateData = {
@@ -633,7 +633,7 @@ export class DigestService {
         
         // Add link to view full summary
         html += `
-            <p><a href="https://tldrsec.com/summary/${summary.id}" target="_blank">View Full Summary</a></p>
+            <p><a href="https://tldrsec.app/summary/${summary.id}" target="_blank">View Full Summary</a></p>
           </div>
         `;
       }
@@ -643,7 +643,7 @@ export class DigestService {
     html += `
         <div class="footer">
           <p>You received this digest because you're subscribed to daily updates on tldrSEC.</p>
-          <p><a href="https://tldrsec.com/settings">Manage your notification preferences</a> | <a href="https://tldrsec.com/unsubscribe?email=${encodeURIComponent(digestData.email)}&type=digest">Unsubscribe</a></p>
+          <p><a href="https://tldrsec.app/settings">Manage your notification preferences</a> | <a href="https://tldrsec.app/unsubscribe?email=${encodeURIComponent(digestData.email)}&type=digest">Unsubscribe</a></p>
         </div>
       </body>
       </html>
@@ -690,7 +690,7 @@ export class DigestService {
           text += `${snippet}\n`;
         }
         
-        text += `View Full Summary: https://tldrsec.com/summary/${summary.id}\n\n`;
+        text += `View Full Summary: https://tldrsec.app/summary/${summary.id}\n\n`;
       }
       
       text += '\n';
@@ -699,8 +699,8 @@ export class DigestService {
     // Add footer
     text += `\n---------------------------------\n`;
     text += `You received this digest because you're subscribed to daily updates on tldrSEC.\n`;
-    text += `Manage your preferences: https://tldrsec.com/settings\n`;
-    text += `Unsubscribe: https://tldrsec.com/unsubscribe?email=${encodeURIComponent(digestData.email)}&type=digest\n`;
+    text += `Manage your preferences: https://tldrsec.app/settings\n`;
+    text += `Unsubscribe: https://tldrsec.app/unsubscribe?email=${encodeURIComponent(digestData.email)}&type=digest\n`;
     
     return { html, text };
   }

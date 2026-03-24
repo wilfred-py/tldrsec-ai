@@ -23,7 +23,7 @@ export default function SettingsForm() {
     const fetchPreferences = async () => {
       try {
         setLoading(true);
-        const response = await fetch('/api/user/preferences');
+        const response = await fetch('/api/user?type=preferences');
         const data = await response.json();
         
         if (data.success && data.preferences) {
@@ -95,7 +95,7 @@ export default function SettingsForm() {
     
     try {
       setSaving(true);
-      const response = await fetch('/api/user/preferences', {
+      const response = await fetch('/api/user?type=preferences', {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',

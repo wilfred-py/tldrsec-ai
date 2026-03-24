@@ -544,7 +544,7 @@ export class NotificationService implements NotificationServiceInterface {
       });
       
       // Get the site URL from env or use default
-      const baseUrl = process.env.SITE_URL || 'https://tldrsec.com';
+      const baseUrl = process.env.SITE_URL || 'https://tldrsec.app';
       
       // Prepare template data for the filing
       const filingData: FilingTemplateData = {

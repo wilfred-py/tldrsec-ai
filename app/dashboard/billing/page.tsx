@@ -57,7 +57,7 @@ export default function BillingPage() {
   useEffect(() => {
     async function fetchSubscription() {
       try {
-        const response = await fetch('/api/user/subscription');
+        const response = await fetch('/api/user?type=subscription');
         if (!response.ok) {
           throw new Error('Failed to fetch subscription');
         }
@@ -80,7 +80,7 @@ export default function BillingPage() {
 
     setUpdatingCancellation(true);
     try {
-      const response = await fetch('/api/user/subscription', {
+      const response = await fetch('/api/user?type=subscription', {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json'
@@ -107,7 +107,7 @@ export default function BillingPage() {
     if (!subscription?.stripeCustomerId) return;
     
     try {
-      const response = await fetch('/api/billing/portal', {
+      const response = await fetch('/api/user?type=billing-portal', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'

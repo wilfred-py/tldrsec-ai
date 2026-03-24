@@ -149,7 +149,7 @@ export function PricingSectionV2() {
       }
 
       // Authenticated and onboarded: create Stripe checkout session
-      const response = await fetch('/api/user/subscription', {
+      const response = await fetch('/api/user?type=subscription', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

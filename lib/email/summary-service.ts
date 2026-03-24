@@ -290,13 +290,13 @@ export async function sendFilingSummaryEmail(
       tags: [
         'type:filing-notification',
         `filing-type:${filingData.filingType.toLowerCase()}`,
-        `ticker:${filingData.ticker}`
+        `ticker:${filingData.ticker}`,
       ],
       metadata: {
         type: 'filing-notification',
         ticker: filingData.ticker,
         filingType: filingData.filingType,
-        companyName: filingData.companyName
+        companyName: filingData.companyName,
       }
     };
     

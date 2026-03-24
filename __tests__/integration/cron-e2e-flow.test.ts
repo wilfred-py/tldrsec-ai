@@ -139,7 +139,7 @@ describe('SEC Filing Cron Job - End-to-End Integration', () => {
       mockPrisma.ticker.upsert.mockResolvedValue(mockDbTicker);
       mockPrisma.summary.create.mockResolvedValue(mockSavedSummary);
       mockPrisma.user.findMany.mockResolvedValue(mockSubscribers);
-      mockPrisma.user.findFirst.mockResolvedValue({ id: 'system-user', email: 'system@tldrsec.com', name: 'System User' });
+      mockPrisma.user.findFirst.mockResolvedValue({ id: 'system-user', email: 'system@tldrsec.app', name: 'System User' });
       
       mockEmailService.sendFilingSummaryEmail.mockResolvedValue({ success: true });
       
@@ -170,7 +170,7 @@ describe('SEC Filing Cron Job - End-to-End Integration', () => {
         expect.objectContaining({
           responseType: 'text',
           headers: expect.objectContaining({
-            'User-Agent': 'tldrSEC-AI Cron Monitor (contact@tldrsec.com)'
+            'User-Agent': 'tldrSEC-AI Cron Monitor (contact@tldrsec.app)'
           }),
           operationName: 'sec-filing-cron-fetch'
         })
@@ -266,7 +266,7 @@ describe('SEC Filing Cron Job - End-to-End Integration', () => {
       mockPrisma.ticker.upsert.mockResolvedValue({ id: 'db-ticker-1' });
       mockPrisma.summary.create.mockResolvedValue({ id: 'summary-1', summaryText: mockFallbackResult.summary });
       mockPrisma.user.findMany.mockResolvedValue([{ id: 'user1', email: 'user1@example.com', name: 'User One' }]);
-      mockPrisma.user.findFirst.mockResolvedValue({ id: 'system-user', email: 'system@tldrsec.com', name: 'System User' });
+      mockPrisma.user.findFirst.mockResolvedValue({ id: 'system-user', email: 'system@tldrsec.app', name: 'System User' });
       
       mockEmailService.sendFilingSummaryEmail.mockResolvedValue({ success: true });
       
@@ -332,7 +332,7 @@ describe('SEC Filing Cron Job - End-to-End Integration', () => {
       mockPrisma.ticker.upsert.mockResolvedValue({ id: 'db-ticker-1' });
       mockPrisma.summary.create.mockResolvedValue({ id: 'summary-1', summaryText: mockSummaryResult.summary });
       mockPrisma.user.findMany.mockResolvedValue([{ id: 'user1', email: 'user1@example.com', name: 'User One' }]);
-      mockPrisma.user.findFirst.mockResolvedValue({ id: 'system-user', email: 'system@tldrsec.com', name: 'System User' });
+      mockPrisma.user.findFirst.mockResolvedValue({ id: 'system-user', email: 'system@tldrsec.app', name: 'System User' });
       
       // Email fails
       mockEmailService.sendFilingSummaryEmail.mockResolvedValue({ 
@@ -397,7 +397,7 @@ describe('SEC Filing Cron Job - End-to-End Integration', () => {
       mockSummaryService.generateAISummaryWithRetry.mockResolvedValue({ summary: 'Summary', cost: 0.01 });
       
       mockPrisma.ticker.upsert.mockResolvedValue({ id: 'db-ticker-1' });
-      mockPrisma.user.findFirst.mockResolvedValue({ id: 'system-user', email: 'system@tldrsec.com', name: 'System User' });
+      mockPrisma.user.findFirst.mockResolvedValue({ id: 'system-user', email: 'system@tldrsec.app', name: 'System User' });
       
       // Database save fails
       mockPrisma.summary.create.mockRejectedValue(new Error('Database connection timeout'));
@@ -486,7 +486,7 @@ describe('SEC Filing Cron Job - End-to-End Integration', () => {
       mockPrisma.ticker.upsert.mockResolvedValue({ id: 'db-ticker-1' });
       mockPrisma.summary.create.mockResolvedValue({ id: 'summary-1', summaryText: 'Summary' });
       mockPrisma.user.findMany.mockResolvedValue([]);
-      mockPrisma.user.findFirst.mockResolvedValue({ id: 'system-user', email: 'system@tldrsec.com', name: 'System User' });
+      mockPrisma.user.findFirst.mockResolvedValue({ id: 'system-user', email: 'system@tldrsec.app', name: 'System User' });
       
       const response = await GET(mockRequest);
       const result = await response.json();

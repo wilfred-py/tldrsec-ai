@@ -143,7 +143,7 @@ export class RetryRateMonitor {
     if (metrics.anomalyDetected) {
       recommendations.push(
         'Investigate jobs with retryCount>1 for persistent errors',
-        'Check /api/health/pipeline for infrastructure issues',
+        'Check /api/health for infrastructure issues',
         'Review Dead Letter Queue for completely failed jobs',
         'Consider reviewing error patterns in job logs'
       );

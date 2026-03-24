@@ -405,11 +405,11 @@ export default {
     console.log(`[${executionId}] Starting DLQ cleanup`);
 
     try {
-      const url = `${env.PUBLIC_URL}/api/cron/cleanup-dlq`;
+      const url = `${env.PUBLIC_URL}/api/cron?action=cleanup-dlq`;
 
       // Generate HMAC signature
       const timestamp = Date.now();
-      const payload = `${timestamp}:POST:/api/cron/cleanup-dlq`;
+      const payload = `${timestamp}:POST:/api/cron`;
       const encoder = new TextEncoder();
       const key = await crypto.subtle.importKey(
         'raw',
@@ -588,11 +588,11 @@ export default {
     console.log(`[${executionId}] ====== AUTO-RECOVERY CHECK ======`);
 
     try {
-      const url = `${env.PUBLIC_URL}/api/cron/auto-recover`;
+      const url = `${env.PUBLIC_URL}/api/cron?action=auto-recover`;
 
       // Generate HMAC signature (consistent with other cron handlers)
       const timestamp = Date.now();
-      const payload = `${timestamp}:GET:/api/cron/auto-recover`;
+      const payload = `${timestamp}:GET:/api/cron`;
       const encoder = new TextEncoder();
       const key = await crypto.subtle.importKey(
         'raw',
@@ -775,18 +775,18 @@ export default {
       
       // Build URLs for Vercel endpoints (five-step pipeline for async processing)
       // Step 0: Proactive lock cleanup (PREVENTS PIPELINE STALLS!)
-      const cleanupLocksUrl = `${env.PUBLIC_URL}/api/cron/cleanup-locks`;
+      const cleanupLocksUrl = `${env.PUBLIC_URL}/api/cron?action=cleanup-locks`;
       // Step 1: Queue new filings for discovery
-      const tierAwareUrl = `${env.PUBLIC_URL}/api/cron/tier-aware`;
+      const tierAwareUrl = `${env.PUBLIC_URL}/api/cron?action=tier-aware`;
       // Step 1.5: Process discovery jobs (RSS feed checking, queues fetch jobs)
-      const discoveryUrl = `${env.PUBLIC_URL}/api/cron/process-filing-queue?jobTypes=ASYNC_DISCOVER_FILINGS`;
+      const discoveryUrl = `${env.PUBLIC_URL}/api/cron?action=process-queue&jobTypes=ASYNC_DISCOVER_FILINGS`;
       // Step 2: Process fetch jobs (content retrieval from SEC)
       // IMPORTANT: We separate fetch and summarize jobs to ensure both get processing time.
       // The previous combined approach caused summarize jobs to be blocked by the fetch backlog.
-      const fetchUrl = `${env.PUBLIC_URL}/api/cron/process-filing-queue?jobTypes=ASYNC_FETCH_FILING`;
+      const fetchUrl = `${env.PUBLIC_URL}/api/cron?action=process-queue&jobTypes=ASYNC_FETCH_FILING`;
       // Step 3: Process summarize jobs (AI summarization)
-      const summarizeUrl = `${env.PUBLIC_URL}/api/cron/process-filing-queue?jobTypes=ASYNC_SUMMARIZE_CACHED`;
-      const dailyCountUrl = `${env.PUBLIC_URL}/api/cron/update-daily-count`;
+      const summarizeUrl = `${env.PUBLIC_URL}/api/cron?action=process-queue&jobTypes=ASYNC_SUMMARIZE_CACHED`;
+      const dailyCountUrl = `${env.PUBLIC_URL}/api/cron?action=update-daily-count`;
 
       console.log(`[${executionId}] Five-step pipeline configuration:`, {
         step0: cleanupLocksUrl,

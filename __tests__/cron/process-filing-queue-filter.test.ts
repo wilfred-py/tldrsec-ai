@@ -5,7 +5,7 @@
  * discovery jobs from blocking fetch/summarize jobs in the cron pipeline.
  */
 
-import { GET } from '../../app/api/cron/process-filing-queue/route';
+import { GET } from '../../app/api/cron/route';
 
 // Mock dependencies
 jest.mock('../../lib/logging', () => ({

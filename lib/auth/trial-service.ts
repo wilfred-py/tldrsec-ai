@@ -61,8 +61,8 @@ export class TrialService {
       };
     }
 
-    // Grandfathered free users (no trial dates) - always active
-    if (user.subscriptionTier === 'FREE' && !user.trialStartedAt) {
+    // Grandfathered free users (no trial dates at all) - always active
+    if (user.subscriptionTier === 'FREE' && !user.trialStartedAt && !user.trialEndsAt) {
       return {
         isActive: true,
         daysRemaining: Infinity,
@@ -136,7 +136,7 @@ export class TrialService {
           trialEndsAt: null,
           isGrandfathered: false,
         });
-      } else if (user.subscriptionTier === 'FREE' && !user.trialStartedAt) {
+      } else if (user.subscriptionTier === 'FREE' && !user.trialStartedAt && !user.trialEndsAt) {
         statusMap.set(user.id, {
           isActive: true,
           daysRemaining: Infinity,

@@ -37,6 +37,8 @@ export interface SingleFilingSubjectParams {
   companyName: string;
   /** The stock ticker symbol (e.g., "AAPL") */
   ticker: string;
+  /** Optional filer name for insider filings (Form 3, 4, 144) */
+  filerName?: string;
 }
 
 /**
@@ -82,7 +84,8 @@ export class EmailSubjectService {
   static generateSingleFilingSubject({
     filingType,
     companyName,
-    ticker
+    ticker,
+    filerName
   }: SingleFilingSubjectParams): string {
     // Validate required parameters
     if (!filingType || !companyName || !ticker) {
@@ -95,6 +98,14 @@ export class EmailSubjectService {
     // SEC uses /A suffix to denote amended filings (e.g., "Form 4/A" is an amended Form 4)
     const isAmended = filingType.endsWith('/A');
     const amendedPrefix = isAmended ? '[AMENDED] ' : '';
+
+    // For insider filings (Form 3, 4, 144), include the filer name if available
+    // Format: "AAPL Form 4: Jennifer Newstead" instead of "New 4 Filing: Apple Inc. (AAPL)"
+    const insiderFormTypes = ['3', '4', '144'];
+    const baseType = filingType.replace('/A', '');
+    if (insiderFormTypes.includes(baseType) && filerName && filerName !== 'Insider') {
+      return `${amendedPrefix}${ticker} Form ${baseType}: ${filerName}`;
+    }
 
     return `${amendedPrefix}${INDIVIDUAL_FILING_PREFIX} ${filingType} Filing: ${companyName} (${ticker})`;
   }

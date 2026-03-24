@@ -56,7 +56,7 @@ describe('Checkout Flow Integration', () => {
       const planType = 'PRO';
       const billingInterval = 'monthly';
 
-      await fetch('/api/user/subscription', {
+      await fetch('/api/user?type=subscription', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ planType, billingInterval }),
@@ -64,7 +64,7 @@ describe('Checkout Flow Integration', () => {
 
       // Verify the API receives billingInterval (not priceId)
       expect(mockFetch).toHaveBeenCalledWith(
-        '/api/user/subscription',
+        '/api/user?type=subscription',
         expect.objectContaining({
           method: 'POST',
           body: JSON.stringify({ planType: 'PRO', billingInterval: 'monthly' }),
@@ -83,7 +83,7 @@ describe('Checkout Flow Integration', () => {
       const planType = 'PRO';
       const billingInterval = 'annual';
 
-      await fetch('/api/user/subscription', {
+      await fetch('/api/user?type=subscription', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ planType, billingInterval }),

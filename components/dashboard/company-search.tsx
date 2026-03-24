@@ -23,7 +23,7 @@ export function CompanySearch({ onSelect }: CompanySearchProps) {
     const loadCompanies = async () => {
       setIsLoading(true);
       try {
-        const response = await fetch('/api/companies/list');
+        const response = await fetch('/api/companies?list=true');
         if (!response.ok) {
           throw new Error(`API error: ${response.status}`);
         }
@@ -69,7 +69,7 @@ export function CompanySearch({ onSelect }: CompanySearchProps) {
         setResults(filteredResults);
       } else {
         // Fallback to API search if companies aren't loaded
-        fetch(`/api/companies/search?q=${encodeURIComponent(value)}`)
+        fetch(`/api/companies?q=${encodeURIComponent(value)}`)
           .then(response => response.json())
           .then(data => {
             if (data.companies) {
