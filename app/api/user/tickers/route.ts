@@ -7,6 +7,8 @@ import { z } from 'zod';
 import { checkTierLimit, getTierLimitInfo } from '@/lib/subscription/three-tier-limits';
 import { convertUserPrefsToTickerPrefs, getDefaultTickerPreferences } from '@/lib/user/preference-sync';
 import { UserPreferences } from '@/lib/user/preference-types';
+import { sendQuarterlyEarningsEmail } from '@/lib/email/quarterly-earnings-service';
+import { logger } from '@/lib/logging';
 
 // Input validation schema for ticker creation
 const createTickerSchema = z.object({
@@ -144,14 +146,20 @@ export async function GET() {
 
 /**
  * POST /api/user/tickers
- * Add a new ticker to the user's tracked list
+ * - body {action: 'confirm'} → confirm portfolio and trigger quarterly emails
+ * - body {symbol, companyName} → add a new ticker
  */
 export async function POST(request: Request) {
   try {
     const prisma = getPrismaClient();
-    
-    // Parse and validate request body
+
+    // Parse request body
     const body = await request.json();
+
+    // Route to confirm handler if action is 'confirm'
+    if (body?.action === 'confirm') {
+      return handleConfirm(prisma);
+    }
     
     // Validate input data
     const validationResult = createTickerSchema.safeParse(body);
@@ -310,8 +318,125 @@ export async function POST(request: Request) {
   } catch (error) {
     console.error('Error adding ticker:', error);
     return NextResponse.json(
-      { error: 'Failed to add ticker' }, 
+      { error: 'Failed to add ticker' },
       { status: 500 }
     );
   }
-} 
+}
+
+// Grace period in milliseconds (1 minute)
+const GRACE_PERIOD_MS = 60 * 1000;
+
+/**
+ * Confirm portfolio and trigger quarterly earnings emails.
+ * Implements a 1-minute grace period to prevent duplicate emails.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function handleConfirm(prisma: any) {
+  try {
+    const { userId: clerkUserId } = await auth();
+
+    if (!clerkUserId) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const user = await prisma.user.findFirst({
+      where: { authProviderId: clerkUserId },
+      include: {
+        tickers: {
+          select: { symbol: true, companyName: true },
+        },
+      },
+    });
+
+    if (!user) {
+      return NextResponse.json({ error: 'User not found' }, { status: 404 });
+    }
+
+    const currentTickers = user.tickers.map((t: { symbol: string }) => t.symbol);
+    const previousTickers = user.tickersAtLastConfirmation || [];
+    const now = new Date();
+
+    const lastConfirmation = user.tickersConfirmedAt;
+    const isWithinGracePeriod =
+      lastConfirmation && now.getTime() - lastConfirmation.getTime() < GRACE_PERIOD_MS;
+
+    let emailSent = false;
+    let newTickersEmailed: string[] = [];
+    let reason = '';
+    let emailError: string | undefined;
+
+    if (currentTickers.length === 0) {
+      reason = 'no_tickers';
+    } else if (isWithinGracePeriod) {
+      const newTickers = currentTickers.filter((t: string) => !previousTickers.includes(t));
+
+      if (newTickers.length === 0) {
+        reason = 'within_grace_period';
+      } else {
+        const emailResult = await sendQuarterlyEarningsEmail({
+          userId: user.id,
+          tickerSymbols: newTickers,
+          email: user.email,
+          recipientName: user.name || undefined,
+        });
+
+        if (emailResult.success) {
+          emailSent = true;
+          newTickersEmailed = newTickers;
+        } else {
+          emailError = emailResult.error;
+        }
+      }
+    } else {
+      const emailResult = await sendQuarterlyEarningsEmail({
+        userId: user.id,
+        tickerSymbols: currentTickers,
+        email: user.email,
+        recipientName: user.name || undefined,
+      });
+
+      if (emailResult.success) {
+        emailSent = true;
+        newTickersEmailed = currentTickers;
+      } else {
+        emailError = emailResult.error;
+      }
+    }
+
+    await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        tickersConfirmedAt: now,
+        lastConfirmationEmailSentAt: emailSent ? now : user.lastConfirmationEmailSentAt,
+        tickersAtLastConfirmation: currentTickers,
+      },
+    });
+
+    logger.info('Ticker confirmation processed', {
+      userId: user.id,
+      tickerCount: currentTickers.length,
+      emailSent,
+      newTickersEmailed: newTickersEmailed.length,
+      reason: reason || undefined,
+    });
+
+    return NextResponse.json({
+      tickersConfirmed: true,
+      tickerCount: currentTickers.length,
+      emailSent,
+      newTickersEmailed,
+      reason: reason || undefined,
+      emailError,
+    });
+  } catch (error) {
+    logger.error('Error confirming tickers', {
+      error: error instanceof Error ? error.message : 'Unknown error',
+    });
+
+    return NextResponse.json(
+      { error: 'Failed to confirm tickers' },
+      { status: 500 }
+    );
+  }
+}

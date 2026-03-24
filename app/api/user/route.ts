@@ -1,33 +1,185 @@
 /**
- * User Subscription API Routes
- * Fresh implementation for Stripe subscription management
+ * Consolidated User API Route
+ * Handles preferences, subscription, and billing-portal via ?type= query parameter
  *
- * Pricing tiers: Free ($0) / Pro ($199) / Max ($349)
- * with monthly and annual billing intervals
+ * Routes:
+ *   GET  /api/user?type=preferences    → user preferences
+ *   PATCH /api/user?type=preferences   → update user preferences
+ *   GET  /api/user?type=subscription   → subscription info
+ *   POST /api/user?type=subscription   → create checkout session
+ *   POST /api/user?type=billing-portal → create billing portal session
+ *   PUT  /api/user?type=subscription   → update subscription (plan change, cancel toggle)
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { auth, currentUser } from '@clerk/nextjs/server';
-import { getPrismaClient } from '../../../../lib/db/prisma';
+import { currentUser, auth } from '@clerk/nextjs/server';
+import { PreferenceService } from '@/lib/user/preference-service';
+import { logger } from '@/lib/logging';
+import { getPrismaClient } from '@/lib/db/prisma';
 import {
   isStripeEnabled,
   handleStripeError,
   getCustomer,
   SUBSCRIPTION_PLANS,
   getPriceIdForPlan,
-} from '../../../../lib/stripe';
-import { TrialService } from '../../../../lib/auth/trial-service';
+  createBillingPortalSession,
+} from '@/lib/stripe';
+import { TrialService } from '@/lib/auth/trial-service';
 
 type BillingInterval = 'monthly' | 'annual';
 type NewPlanKey = 'FREE' | 'PRO' | 'MAX';
 
 const prisma = getPrismaClient();
 
-/**
- * GET /api/user/subscription
- * Retrieve user's current subscription information
- */
-export async function GET() {
+// ---------------------------------------------------------------------------
+// Helpers to extract query param
+// ---------------------------------------------------------------------------
+
+function getType(request: NextRequest): string | null {
+  return request.nextUrl.searchParams.get('type');
+}
+
+function badType(type: string | null) {
+  return NextResponse.json(
+    { error: `Invalid or missing type parameter: ${type}` },
+    { status: 400 }
+  );
+}
+
+// ===========================================================================
+// GET handler
+// ===========================================================================
+
+export async function GET(request: NextRequest) {
+  const type = getType(request);
+
+  switch (type) {
+    case 'preferences':
+      return handleGetPreferences();
+    case 'subscription':
+      return handleGetSubscription();
+    default:
+      return badType(type);
+  }
+}
+
+// ===========================================================================
+// PATCH handler (preferences only)
+// ===========================================================================
+
+export async function PATCH(request: NextRequest) {
+  const type = getType(request);
+
+  if (type !== 'preferences') {
+    return badType(type);
+  }
+
+  return handlePatchPreferences(request);
+}
+
+// ===========================================================================
+// POST handler
+// ===========================================================================
+
+export async function POST(request: NextRequest) {
+  const type = getType(request);
+
+  switch (type) {
+    case 'subscription':
+      return handlePostSubscription(request);
+    case 'billing-portal':
+      return handlePostBillingPortal();
+    default:
+      return badType(type);
+  }
+}
+
+// ===========================================================================
+// PUT handler (subscription only)
+// ===========================================================================
+
+export async function PUT(request: NextRequest) {
+  const type = getType(request);
+
+  if (type !== 'subscription') {
+    return badType(type);
+  }
+
+  return handlePutSubscription(request);
+}
+
+// ===========================================================================
+// Preferences sub-handlers
+// ===========================================================================
+
+async function handleGetPreferences() {
+  try {
+    const user = await currentUser();
+
+    if (!user) {
+      return NextResponse.json({
+        success: false,
+        message: 'Unauthorized'
+      }, { status: 401 });
+    }
+
+    const preferences = await PreferenceService.getUserPreferences(user.id);
+
+    return NextResponse.json({
+      success: true,
+      preferences
+    });
+  } catch (error) {
+    logger.error('Error retrieving user preferences', error);
+
+    return NextResponse.json({
+      success: false,
+      message: error instanceof Error ? error.message : 'Error retrieving preferences'
+    }, { status: 500 });
+  }
+}
+
+async function handlePatchPreferences(request: NextRequest) {
+  try {
+    const user = await currentUser();
+
+    if (!user) {
+      return NextResponse.json({
+        success: false,
+        message: 'Unauthorized'
+      }, { status: 401 });
+    }
+
+    let updates;
+    try {
+      updates = await request.json();
+    } catch {
+      return NextResponse.json({
+        success: false,
+        message: 'Invalid JSON in request body'
+      }, { status: 400 });
+    }
+
+    const result = await PreferenceService.updateUserPreferences(user.id, updates);
+
+    return NextResponse.json(result, {
+      status: result.success ? 200 : 400
+    });
+  } catch (error) {
+    logger.error('Error updating user preferences', error);
+
+    return NextResponse.json({
+      success: false,
+      message: error instanceof Error ? error.message : 'Error updating preferences'
+    }, { status: 500 });
+  }
+}
+
+// ===========================================================================
+// Subscription sub-handlers
+// ===========================================================================
+
+async function handleGetSubscription() {
   try {
     const { userId: clerkId } = await auth();
     if (!clerkId) {
@@ -37,7 +189,7 @@ export async function GET() {
       );
     }
 
-    // Resolve Clerk ID → DB user ID (CLAUDE.md #11: Clerk userId stored in authProviderId)
+    // Resolve Clerk ID -> DB user ID (CLAUDE.md #11: Clerk userId stored in authProviderId)
     const dbUser = await prisma.user.findFirst({
       where: { OR: [{ id: clerkId }, { authProviderId: clerkId }] },
       select: { id: true },
@@ -48,7 +200,6 @@ export async function GET() {
     const trialData = await TrialService.checkTrialStatus(clerkId);
 
     // When Stripe is not configured, return mock Free tier subscription
-    // This allows the billing page to render properly in development
     if (!isStripeEnabled()) {
       return NextResponse.json({
         planType: 'FREE',
@@ -62,7 +213,7 @@ export async function GET() {
           usedFilings: 0,
           remainingFilings: SUBSCRIPTION_PLANS.FREE.tickerLimit,
         },
-        _stripeDisabled: true, // Indicates Stripe is not configured
+        _stripeDisabled: true,
         trialEndsAt: trialData.trialEndsAt?.toISOString() ?? null,
         isTrialing: trialData.isActive,
         daysRemaining: trialData.daysRemaining,
@@ -81,7 +232,6 @@ export async function GET() {
       isStripeEnabled()
     ) {
       try {
-        // Resolve email for Stripe lookup
         const clerkUser = await currentUser();
         const email = clerkUser?.emailAddresses?.[0]?.emailAddress;
         if (email) {
@@ -89,7 +239,6 @@ export async function GET() {
           const result = await reconcileStripeSubscription(userId, email);
           if (result.reconciled) {
             console.log(`[subscription GET] Reconciled Stripe subscription: ${result.planType}`);
-            // Re-fetch after reconciliation
             userSubscription = await prisma.userSubscription.findUnique({
               where: { userId },
             });
@@ -101,7 +250,6 @@ export async function GET() {
     }
 
     if (!userSubscription) {
-      // Return default free tier info if no subscription exists
       return NextResponse.json({
         planType: 'FREE',
         isActive: true,
@@ -131,7 +279,7 @@ export async function GET() {
       },
     });
 
-    const remainingFilings = currentPeriod 
+    const remainingFilings = currentPeriod
       ? Math.max(0, currentPeriod.filingLimit - currentPeriod.filingsUsed)
       : 0;
 
@@ -163,13 +311,7 @@ export async function GET() {
   }
 }
 
-/**
- * POST /api/user/subscription/create-checkout
- * Create Stripe checkout session for subscription
- *
- * Supports both legacy (priceId) and new (planType + billingInterval) modes
- */
-export async function POST(request: NextRequest) {
+async function handlePostSubscription(request: NextRequest) {
   try {
     const { userId: clerkId } = await auth();
     if (!clerkId) {
@@ -178,7 +320,6 @@ export async function POST(request: NextRequest) {
         { status: 401 }
       );
     }
-    // Keep clerkId for Stripe metadata, resolve DB user ID below
 
     if (!isStripeEnabled()) {
       return NextResponse.json(
@@ -204,7 +345,6 @@ export async function POST(request: NextRequest) {
     let priceId: string | null = legacyPriceId || null;
 
     if (!priceId && planType) {
-      // Use new SUBSCRIPTION_PLANS to get price ID
       const plan = SUBSCRIPTION_PLANS[planType as keyof typeof SUBSCRIPTION_PLANS];
       if (!plan) {
         return NextResponse.json(
@@ -213,7 +353,6 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      // FREE tier doesn't need checkout
       if (planType === 'FREE') {
         return NextResponse.json(
           { error: 'Trial tier does not require checkout' },
@@ -221,7 +360,6 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      // Use server-side function to get price ID from environment variables
       priceId = getPriceIdForPlan(planType as 'PRO' | 'MAX', billingInterval);
 
       if (!priceId) {
@@ -271,7 +409,7 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    // Create user if not found (auto-create pattern from /api/user/tickers)
+    // Create user if not found
     if (!user) {
       user = await prisma.user.create({
         data: {
@@ -292,7 +430,6 @@ export async function POST(request: NextRequest) {
       console.log(`[subscription] Auto-created user ${clerkId} for checkout`);
     }
 
-    // Use resolved DB user ID for all DB operations
     const dbUserId = user.id;
 
     // Check if user already has a subscription
@@ -311,22 +448,20 @@ export async function POST(request: NextRequest) {
     let stripeCustomerId = existingSubscription?.stripeCustomerId;
 
     if (!stripeCustomerId) {
-      const { createCustomer } = await import('../../../../lib/stripe');
+      const { createCustomer } = await import('@/lib/stripe');
       const customer = await createCustomer({
         email: user.email,
         name: user.name || undefined,
         metadata: {
-          userId: clerkId, // Store Clerk ID in Stripe metadata for webhook resolution
+          userId: clerkId,
           planType,
         },
       });
       stripeCustomerId = customer.id;
     } else {
-      // Verify customer exists in Stripe
       const customer = await getCustomer(stripeCustomerId);
       if (!customer) {
-        // Customer was deleted in Stripe, create a new one
-        const { createCustomer } = await import('../../../../lib/stripe');
+        const { createCustomer } = await import('@/lib/stripe');
         const newCustomer = await createCustomer({
           email: user.email,
           name: user.name || undefined,
@@ -340,16 +475,13 @@ export async function POST(request: NextRequest) {
     }
 
     // Check Stripe for active subscriptions (source of truth)
-    // This catches cases where DB says inactive but Stripe has an active sub
     if (stripeCustomerId) {
-      const { listActiveSubscriptions } = await import('../../../../lib/stripe');
+      const { listActiveSubscriptions } = await import('@/lib/stripe');
       const activeSubs = await listActiveSubscriptions(stripeCustomerId);
       if (activeSubs.length > 0) {
-        // Sync DB state from Stripe
         const latestSub = activeSubs[0];
-        const { getPlanTypeFromPriceId: getPlan } = await import('../../../../lib/stripe');
+        const { getPlanTypeFromPriceId: getPlan } = await import('@/lib/stripe');
         const activePlanType = getPlan(latestSub.items.data[0]?.price.id);
-        // Access period fields via cast (available at runtime despite TS API version mismatch)
         const subData = latestSub as unknown as { current_period_start: number; current_period_end: number };
         const periodStart = new Date(subData.current_period_start * 1000);
         const periodEnd = new Date(subData.current_period_end * 1000);
@@ -399,21 +531,20 @@ export async function POST(request: NextRequest) {
     }
 
     // Create checkout session
-    // Use custom cancel URL if provided (e.g., from /subscribe page), otherwise default to billing page
     const cancelUrl = customCancelUrl
       ? `${appUrl}${customCancelUrl.startsWith('/') ? customCancelUrl : `/${customCancelUrl}`}`
       : `${appUrl}/dashboard/billing?canceled=true`;
 
-    const { createCheckoutSession } = await import('../../../../lib/stripe');
+    const { createCheckoutSession } = await import('@/lib/stripe');
     const session = await createCheckoutSession({
       priceId,
       customerId: stripeCustomerId,
       successUrl: `${appUrl}/dashboard?subscription_success=true&session_id={CHECKOUT_SESSION_ID}`,
       cancelUrl,
       metadata: {
-        userId: clerkId, // Store Clerk ID for webhook resolution
+        userId: clerkId,
         planType,
-        billingInterval, // Track whether monthly or annual
+        billingInterval,
       },
     });
 
@@ -426,9 +557,9 @@ export async function POST(request: NextRequest) {
       },
       create: {
         userId: dbUserId,
-        planType: 'FREE', // Stays FREE until Stripe webhook confirms payment
-        isActive: false, // Will be activated by webhook
-        currentPeriodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days from now
+        planType: 'FREE',
+        isActive: false,
+        currentPeriodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
         stripeCustomerId,
       },
     });
@@ -448,11 +579,7 @@ export async function POST(request: NextRequest) {
   }
 }
 
-/**
- * PUT /api/user/subscription
- * Update subscription (plan changes, cancellation toggle)
- */
-export async function PUT(request: NextRequest) {
+async function handlePutSubscription(request: NextRequest) {
   try {
     const { userId: clerkId } = await auth();
     if (!clerkId) {
@@ -462,7 +589,7 @@ export async function PUT(request: NextRequest) {
       );
     }
 
-    // Resolve Clerk ID → DB user ID
+    // Resolve Clerk ID -> DB user ID
     const dbUser = await prisma.user.findFirst({
       where: { OR: [{ id: clerkId }, { authProviderId: clerkId }] },
       select: { id: true },
@@ -490,15 +617,13 @@ export async function PUT(request: NextRequest) {
 
     // Handle cancellation toggle
     if (typeof cancelAtPeriodEnd === 'boolean') {
-      // If user has a Stripe subscription, update it in Stripe
       if (userSubscription.stripeSubscriptionId && isStripeEnabled()) {
-        const { updateSubscription } = await import('../../../../lib/stripe');
+        const { updateSubscription } = await import('@/lib/stripe');
         await updateSubscription(userSubscription.stripeSubscriptionId, {
           cancel_at_period_end: cancelAtPeriodEnd,
         });
       }
 
-      // Update database record
       const updated = await prisma.userSubscription.update({
         where: { userId },
         data: {
@@ -525,13 +650,11 @@ export async function PUT(request: NextRequest) {
 
       // Downgrade to FREE
       if (planType === 'FREE') {
-        // Cancel Stripe subscription if exists
         if (userSubscription.stripeSubscriptionId && isStripeEnabled()) {
-          const { cancelSubscription } = await import('../../../../lib/stripe');
-          await cancelSubscription(userSubscription.stripeSubscriptionId, true); // Cancel at period end
+          const { cancelSubscription } = await import('@/lib/stripe');
+          await cancelSubscription(userSubscription.stripeSubscriptionId, true);
         }
 
-        // Update database - mark as canceling at period end
         const updated = await prisma.userSubscription.update({
           where: { userId },
           data: {
@@ -560,9 +683,8 @@ export async function PUT(request: NextRequest) {
           );
         }
 
-        const { getSubscription, updateSubscription } = await import('../../../../lib/stripe');
+        const { getSubscription, updateSubscription } = await import('@/lib/stripe');
 
-        // Get current subscription to find the item ID and detect billing interval
         const stripeSubscription = await getSubscription(userSubscription.stripeSubscriptionId);
         if (!stripeSubscription || stripeSubscription.items.data.length === 0) {
           return NextResponse.json(
@@ -571,7 +693,6 @@ export async function PUT(request: NextRequest) {
           );
         }
 
-        // Use requested interval if provided, otherwise detect from current subscription
         const currentInterval = stripeSubscription.items.data[0].price.recurring?.interval;
         const billingInterval: BillingInterval = requestedInterval
           ?? (currentInterval === 'year' ? 'annual' : 'monthly');
@@ -586,7 +707,6 @@ export async function PUT(request: NextRequest) {
 
         const itemId = stripeSubscription.items.data[0].id;
 
-        // Update subscription with new price (immediate prorated charge for upgrades)
         await updateSubscription(userSubscription.stripeSubscriptionId, {
           items: [{
             id: itemId,
@@ -595,17 +715,15 @@ export async function PUT(request: NextRequest) {
           proration_behavior: 'always_invoice',
         });
 
-        // Update database
         const updated = await prisma.userSubscription.update({
           where: { userId },
           data: {
             planType,
-            cancelAtPeriodEnd: false, // Clear any pending cancellation on upgrade
+            cancelAtPeriodEnd: false,
             updatedAt: new Date(),
           },
         });
 
-        // Also update user's subscription tier
         await prisma.user.update({
           where: { id: userId },
           data: { subscriptionTier: planType },
@@ -625,9 +743,8 @@ export async function PUT(request: NextRequest) {
       // Downgrade between paid plans (MAX -> PRO)
       if (newPlanOrder < currentOrder && newPlanOrder > 0) {
         if (userSubscription.stripeSubscriptionId && isStripeEnabled()) {
-          const { getSubscription, updateSubscription } = await import('../../../../lib/stripe');
+          const { getSubscription, updateSubscription } = await import('@/lib/stripe');
 
-          // Get current subscription to find the item ID and detect billing interval
           const stripeSubscription = await getSubscription(userSubscription.stripeSubscriptionId);
           if (!stripeSubscription || stripeSubscription.items.data.length === 0) {
             return NextResponse.json(
@@ -636,7 +753,6 @@ export async function PUT(request: NextRequest) {
             );
           }
 
-          // Use requested interval if provided, otherwise detect from current subscription
           const currentInterval = stripeSubscription.items.data[0].price.recurring?.interval;
           const billingInterval: BillingInterval = requestedInterval
             ?? (currentInterval === 'year' ? 'annual' : 'monthly');
@@ -651,7 +767,6 @@ export async function PUT(request: NextRequest) {
 
           const itemId = stripeSubscription.items.data[0].id;
 
-          // Update subscription with new price (prorated credit for downgrades)
           await updateSubscription(userSubscription.stripeSubscriptionId, {
             items: [{
               id: itemId,
@@ -661,7 +776,6 @@ export async function PUT(request: NextRequest) {
           });
         }
 
-        // Update database
         const updated = await prisma.userSubscription.update({
           where: { userId },
           data: {
@@ -670,7 +784,6 @@ export async function PUT(request: NextRequest) {
           },
         });
 
-        // Also update user's subscription tier
         await prisma.user.update({
           where: { id: userId },
           data: { subscriptionTier: planType },
@@ -695,6 +808,61 @@ export async function PUT(request: NextRequest) {
 
   } catch (error) {
     console.error('Failed to update subscription:', error);
+    const stripeError = handleStripeError(error);
+    return NextResponse.json(
+      { error: stripeError.message },
+      { status: stripeError.statusCode }
+    );
+  }
+}
+
+// ===========================================================================
+// Billing portal sub-handler
+// ===========================================================================
+
+async function handlePostBillingPortal() {
+  try {
+    const { userId } = await auth();
+    if (!userId) {
+      return NextResponse.json(
+        { error: 'Authentication required' },
+        { status: 401 }
+      );
+    }
+
+    if (!isStripeEnabled()) {
+      return NextResponse.json(
+        { error: 'Billing portal not configured' },
+        { status: 503 }
+      );
+    }
+
+    const userSubscription = await prisma.userSubscription.findUnique({
+      where: { userId },
+      select: {
+        stripeCustomerId: true,
+        isActive: true,
+      },
+    });
+
+    if (!userSubscription?.stripeCustomerId) {
+      return NextResponse.json(
+        { error: 'No billing information found. Please create a subscription first.' },
+        { status: 404 }
+      );
+    }
+
+    const session = await createBillingPortalSession({
+      customerId: userSubscription.stripeCustomerId,
+      returnUrl: `${process.env.NEXT_PUBLIC_APP_URL}/dashboard/billing`,
+    });
+
+    return NextResponse.json({
+      url: session.url,
+    });
+
+  } catch (error) {
+    console.error('Failed to create billing portal session:', error);
     const stripeError = handleStripeError(error);
     return NextResponse.json(
       { error: stripeError.message },
