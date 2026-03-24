@@ -63,7 +63,7 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: `Price ID not configured for ${planType}` }, { status: 503 });
       }
 
-      const origin = request.nextUrl?.origin || 'http://localhost:3000';
+      const origin = new URL(request.url).origin || 'http://localhost:3000';
 
       // R13: Parallelize independent checks with Promise.all
       // R6: DB call wrapped with .catch() for fail-open behavior

@@ -65,7 +65,8 @@ function missingActionResponse(method: string) {
 // ---------------------------------------------------------------------------
 
 export async function GET(request: NextRequest) {
-  const action = request.nextUrl.searchParams.get('action');
+  const url = new URL(request.url);
+  const action = url.searchParams.get('action');
 
   if (!action || !(GET_ACTIONS as readonly string[]).includes(action)) {
     return missingActionResponse('GET');
@@ -943,8 +944,8 @@ async function handleProcessQueue(request: NextRequest) {
   const executionId = `queue-processor-${Date.now()}`;
   routeLogger.info('Filing queue processing triggered', { executionId });
 
-  const searchParams = request.nextUrl.searchParams;
-  const jobTypesParam = searchParams.get('jobTypes');
+  const processQueueUrl = new URL(request.url);
+  const jobTypesParam = processQueueUrl.searchParams.get('jobTypes');
 
   let jobTypesFilter: JobType[] | undefined;
   if (jobTypesParam) {

@@ -27,7 +27,7 @@ export async function GET(request: NextRequest) {
     const { userId } = await auth();
     
     // Extract query parameters
-    const searchParams = request.nextUrl.searchParams;
+    const searchParams = new URL(request.url).searchParams;
     const ticker = searchParams.get('ticker');
     const formType = searchParams.get('formType');
     const useStreaming = searchParams.get('useStreaming') === 'true';

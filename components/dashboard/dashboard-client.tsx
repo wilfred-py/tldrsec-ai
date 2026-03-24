@@ -39,7 +39,7 @@ interface DashboardClientProps {
   tickerLimit?: number;
 }
 
-export function DashboardClient({ showWelcome: _showWelcome = false, shouldMergePending = false, subscriptionSuccess = false, initialCompanies = [], tutorialCompleted = false, subscriptionTier = 'FREE', tickerLimit = 3 }: DashboardClientProps) {
+export function DashboardClient({ showWelcome: _showWelcome = false, shouldMergePending: _shouldMergePending = false, subscriptionSuccess = false, initialCompanies = [], tutorialCompleted = false, subscriptionTier = 'FREE', tickerLimit = 3 }: DashboardClientProps) {
   // State for tracked companies
   const [companies, setCompanies] = useState<Company[]>(initialCompanies);
   const [currentCompany, setCurrentCompany] = useState<Company | null>(null);

@@ -36,7 +36,7 @@ const prisma = getPrismaClient();
 // ---------------------------------------------------------------------------
 
 function getType(request: NextRequest): string | null {
-  return request.nextUrl.searchParams.get('type');
+  return new URL(request.url).searchParams.get('type');
 }
 
 function badType(type: string | null) {
