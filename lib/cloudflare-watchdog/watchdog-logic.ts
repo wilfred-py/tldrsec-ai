@@ -106,7 +106,7 @@ export class WatchdogLogic {
     const startTime = Date.now();
 
     try {
-      const response = await fetch(`${url}/api/health/pipeline`, {
+      const response = await fetch(`${url}/api/health`, {
         headers: { 'Cache-Control': 'no-cache' },
       });
 

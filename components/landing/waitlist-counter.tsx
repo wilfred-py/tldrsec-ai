@@ -58,7 +58,7 @@ export function WaitlistCounter({
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 8000);
 
-      const response = await fetch('/api/waitlist/count', {
+      const response = await fetch('/api/waitlist', {
         signal: controller.signal,
       });
 

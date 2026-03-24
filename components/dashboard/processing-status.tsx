@@ -22,7 +22,7 @@ export function ProcessingStatus() {
   useEffect(() => {
     const fetchMetrics = async () => {
       try {
-        const response = await fetch('/api/system/processing-metrics');
+        const response = await fetch('/api/health');
         if (response.ok) {
           const data = await response.json();
           setMetrics(data);

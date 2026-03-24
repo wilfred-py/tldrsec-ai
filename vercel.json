@@ -1,39 +1,23 @@
 {
   "crons": [
     {
-      "path": "/api/cron/tier-aware",
+      "path": "/api/cron?action=tier-aware",
       "schedule": "0 9 * * 1,2,3,4,5"
     }
   ],
   "functions": {
-    "app/api/cron/tier-aware/route.ts": {
+    "app/api/cron/route.ts": {
       "maxDuration": 300,
       "memory": 1024
     },
-    "app/api/cron/final-backup/route.ts": {
-      "maxDuration": 300,
-      "memory": 512
-    },
-    "app/api/cron/process-filing-queue/route.ts": {
-      "maxDuration": 300,
-      "memory": 1024
-    },
-    "app/api/filings/enhanced-summary/route.ts": {
+    "app/api/filings/route.ts": {
       "maxDuration": 300,
       "memory": 2048
-    },
-    "app/api/email/summary/route.ts": {
-      "maxDuration": 60,
-      "memory": 512
-    },
-    "app/api/email/welcome/route.ts": {
-      "maxDuration": 30,
-      "memory": 256
     }
   },
   "headers": [
     {
-      "source": "/api/cron/(.*)",
+      "source": "/api/cron(.*)",
       "headers": [
         {
           "key": "Cache-Control",
@@ -46,37 +30,11 @@
       ]
     },
     {
-      "source": "/api/health/(.*)",
+      "source": "/api/health(.*)",
       "headers": [
         {
           "key": "Cache-Control",
           "value": "no-cache, max-age=0"
-        }
-      ]
-    },
-    {
-      "source": "/api/test/(.*)",
-      "headers": [
-        {
-          "key": "Cache-Control",
-          "value": "no-cache, no-store, must-revalidate"
-        },
-        {
-          "key": "X-Robots-Tag",
-          "value": "noindex, nofollow"
-        }
-      ]
-    },
-    {
-      "source": "/api/debug/(.*)",
-      "headers": [
-        {
-          "key": "Cache-Control",
-          "value": "no-cache, no-store, must-revalidate"
-        },
-        {
-          "key": "X-Robots-Tag",
-          "value": "noindex, nofollow"
         }
       ]
     },
@@ -106,18 +64,6 @@
     {
       "source": "/health",
       "destination": "/api/health"
-    },
-    {
-      "source": "/health/database",
-      "destination": "/api/health/database"
-    },
-    {
-      "source": "/health/liveness",
-      "destination": "/api/health/liveness"
-    },
-    {
-      "source": "/health/readiness",
-      "destination": "/api/health/readiness"
     }
   ],
   "regions": ["iad1"],

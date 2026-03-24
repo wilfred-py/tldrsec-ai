@@ -235,7 +235,7 @@ export function useEnhancedFilingSummary(
         abortControllerRef.current = abortController;
         
         // Create URL for regular endpoint
-        const url = new URL('/api/filings/enhanced-summary', window.location.origin);
+        const url = new URL('/api/filings', window.location.origin);
         url.searchParams.append('ticker', ticker);
         url.searchParams.append('formType', formType);
         

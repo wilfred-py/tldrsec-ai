@@ -104,7 +104,7 @@ export default function UsageAnalyticsPage() {
         setAnalytics(analyticsData);
 
         // Fetch subscription limits
-        const limitsResponse = await fetch('/api/user/subscription');
+        const limitsResponse = await fetch('/api/user?type=subscription');
         if (limitsResponse.ok) {
           const subscriptionData = await limitsResponse.json();
           setLimits({

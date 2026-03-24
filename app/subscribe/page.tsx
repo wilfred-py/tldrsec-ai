@@ -63,7 +63,7 @@ function SubscribePageContent() {
 
     async function fetchSubscription() {
       try {
-        const response = await fetch('/api/user/subscription');
+        const response = await fetch('/api/user?type=subscription');
         if (response.ok) {
           const data = await response.json();
           if (!cancelled) {
@@ -108,7 +108,7 @@ function SubscribePageContent() {
   const handleUpgrade = async (planType: PlanType) => {
     setCheckingOut(planType);
     try {
-      const response = await fetch('/api/user/subscription', {
+      const response = await fetch('/api/user?type=subscription', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -129,7 +129,7 @@ function SubscribePageContent() {
       });
 
       // Refresh subscription data
-      const subResponse = await fetch('/api/user/subscription');
+      const subResponse = await fetch('/api/user?type=subscription');
       if (subResponse.ok) {
         setSubscription(await subResponse.json());
       }
@@ -152,7 +152,7 @@ function SubscribePageContent() {
 
     setCheckingOut(planType);
     try {
-      const response = await fetch('/api/user/subscription', {
+      const response = await fetch('/api/user?type=subscription', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -226,7 +226,7 @@ function SubscribePageContent() {
         ? { cancelAtPeriodEnd: true }
         : { planType };
 
-      const response = await fetch('/api/user/subscription', {
+      const response = await fetch('/api/user?type=subscription', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
@@ -246,7 +246,7 @@ function SubscribePageContent() {
       });
 
       // Refresh subscription data
-      const subResponse = await fetch('/api/user/subscription');
+      const subResponse = await fetch('/api/user?type=subscription');
       if (subResponse.ok) {
         setSubscription(await subResponse.json());
       }

@@ -80,7 +80,7 @@ export function SubscriptionStatus({ userId }: SubscriptionStatusProps) {
         setLoading(true);
         
         // Fetch subscription status
-        const subResponse = await fetch(`/api/user/subscription`);
+        const subResponse = await fetch(`/api/user?type=subscription`);
         if (!subResponse.ok) {
           throw new Error('Failed to fetch subscription data');
         }

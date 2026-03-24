@@ -14,7 +14,7 @@ const cronAuthMiddleware = async (request: NextRequest): Promise<NextResponse | 
   const pathname = url.pathname;
   
   // Only handle cron endpoints
-  if (!pathname.startsWith('/api/cron/')) {
+  if (!pathname.startsWith('/api/cron')) {
     return undefined; // Pass to next middleware (Clerk)
   }
   
@@ -244,7 +244,7 @@ const securityMiddleware = async (request: NextRequest): Promise<NextResponse | 
   let requiresSecurityValidation = false;
 
   // Classify endpoint types for appropriate security controls
-  if (pathname.startsWith('/api/cron/')) {
+  if (pathname.startsWith('/api/cron')) {
     endpointType = 'CRON';
     requiresSecurityValidation = true;
   } else if (pathname.startsWith('/api/health')) {
@@ -267,7 +267,7 @@ const securityMiddleware = async (request: NextRequest): Promise<NextResponse | 
     const vercelSetCookie = request.headers.get('x-vercel-set-bypass-cookie');
     const cloudflareWorker = request.headers.get('x-cloudflare-worker');
     
-    if (vercelBypass && vercelSetCookie && cloudflareWorker && pathname.startsWith('/api/cron/')) {
+    if (vercelBypass && vercelSetCookie && cloudflareWorker && pathname.startsWith('/api/cron')) {
       middlewareLogger.info('Bypassing middleware security validation for Vercel-protected Cloudflare Worker request', {
         path: pathname,
         cloudflareWorker,
@@ -393,28 +393,21 @@ export default async function middleware(request: NextRequest) {
     },
     {
       publicRoutes: [
-        // Health endpoints (rate-limited by our middleware)
+        // Health endpoint (all types via ?type= param)
         '/api/health',
-        '/api/health/database',
-        '/api/health/liveness',
-        '/api/health/readiness',
-        '/api/health/optimized',
-        '/api/health/cloudflare-worker',
-        '/api/health/deployment',
-        '/api/debug/sec-connectivity',
 
-        // Webhooks (signature-verified in handler)
-        '/api/webhooks/vercel-deployment',
-        
-        // Cron endpoints (we handle auth ourselves)
-        '/api/cron/tier-aware',
-        '/api/cron/tier-aware-optimized',
-        '/api/cron/tier-aware-async',
-        '/api/cron/microservices',
-        '/api/cron/process-jobs',
-        '/api/cron/unified',
-        '/api/cron/queue-status', // Public monitoring endpoint
-        
+        // Webhook endpoint (Clerk + Stripe, signature-verified in handler)
+        '/api/webhook',
+
+        // Cron endpoint (all actions via ?action= param, auth handled internally)
+        '/api/cron',
+
+        // Waitlist (public landing page)
+        '/api/waitlist',
+
+        // Checkout (unauthenticated direct checkout)
+        '/api/checkout',
+
         // Marketing pages
         '/',
         '/pricing',
@@ -422,10 +415,8 @@ export default async function middleware(request: NextRequest) {
         '/privacy',
         '/terms',
 
-        // Passwordless onboarding (public - no auth required)
+        // Onboarding page
         '/onboarding',
-        '/api/onboarding/check-email',
-        '/api/onboarding/save-pending'
       ]
     }
   )(request);

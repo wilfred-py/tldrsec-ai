@@ -10,13 +10,14 @@
 function isBuildTime(): boolean {
   // Check for explicit build indicators
   const buildIndicators = [
+    process.env.NEXT_PHASE === 'phase-production-build', // Next.js build phase (works on Vercel)
     process.env.NODE_ENV === 'production' && !process.env.VERCEL, // Non-Vercel production builds
     process.env.CF_PAGES === '1' && !process.env.ANTHROPIC_API_KEY, // Cloudflare Pages build
     process.env.GITHUB_ACTIONS === 'true', // GitHub Actions build
     process.env.CI === 'true' && !process.env.ANTHROPIC_API_KEY, // General CI environment
     process.env.BUILD_PHASE === 'true' // Explicit build phase flag
   ];
-  
+
   return buildIndicators.some(indicator => indicator);
 }
 

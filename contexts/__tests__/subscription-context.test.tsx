@@ -273,7 +273,7 @@ describe('SubscriptionContext', () => {
       );
 
       expect(useSWR).toHaveBeenCalledWith(
-        '/api/user/subscription',
+        '/api/user?type=subscription',
         expect.any(Function),
         expect.any(Object)
       );
@@ -296,7 +296,7 @@ describe('SubscriptionContext', () => {
       );
 
       expect(useSWR).toHaveBeenCalledWith(
-        '/api/user/subscription',
+        '/api/user?type=subscription',
         expect.any(Function),
         expect.objectContaining({
           revalidateOnFocus: false,

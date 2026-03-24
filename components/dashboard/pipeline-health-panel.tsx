@@ -53,7 +53,7 @@ export function PipelineHealthPanel() {
     try {
       setLoading(true);
       setError(null);
-      const response = await fetch('/api/health/pipeline');
+      const response = await fetch('/api/health');
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}`);
       }
