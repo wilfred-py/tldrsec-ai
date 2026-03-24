@@ -1065,7 +1065,7 @@ export function Form4MinimalistTemplate({ filing }: Form4MinimalistTemplateProps
       <EmailFooter
         filingUrl={filingUrl}
         formType={filingType || 'Form 4'}
-        unsubscribeUrl={`${process.env.NEXT_PUBLIC_APP_URL || ''}/settings/notifications`}
+        unsubscribeUrl={`${process.env.NEXT_PUBLIC_APP_URL || ''}/dashboard/settings`}
       />
     </div>
   );

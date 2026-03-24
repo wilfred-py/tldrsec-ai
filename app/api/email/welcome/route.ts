@@ -58,7 +58,7 @@ export async function POST(req: NextRequest) {
       recipientName: user.name || 'there',
       recipientEmail: email,
       dashboardUrl: `${process.env.NEXT_PUBLIC_APP_URL}/dashboard`,
-      unsubscribeUrl: `${process.env.NEXT_PUBLIC_APP_URL}/settings/notifications`,
+      unsubscribeUrl: `${process.env.NEXT_PUBLIC_APP_URL}/dashboard/settings`,
       preferencesUrl: `${process.env.NEXT_PUBLIC_APP_URL}/settings`
     });
 

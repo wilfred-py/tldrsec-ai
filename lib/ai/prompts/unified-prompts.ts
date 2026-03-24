@@ -83,6 +83,11 @@ const BASE_SCHEMA_PROPERTIES: Record<string, SchemaProperty> = {
   filingDate: {
     type: 'string',
     description: 'Filing date in YYYY-MM-DD format'
+  },
+  importanceScore: {
+    type: 'string',
+    description: 'How important is this filing to a shareholder? Rate based on materiality: "critical" = CEO change, acquisition, earnings miss >10%, large insider sell >$5M; "high" = material event, new risk factors, insider transactions >$1M; "medium" = routine quarterly update, standard vesting grant; "low" = administrative amendment, minor update.',
+    enum: ['critical', 'high', 'medium', 'low']
   }
 };
 

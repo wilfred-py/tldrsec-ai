@@ -135,6 +135,90 @@ export class EmailSubjectService {
    * formatDate('2026-01-06') // Returns: "1/6/2026"
    * formatDate('2026-12-25') // Returns: "12/25/2026"
    */
+  /**
+   * Generate a smart subject line from AI-structured summary data.
+   * Extracts the most material fact for compelling email subjects.
+   * Falls back to generateSingleFilingSubject if extraction fails.
+   *
+   * @example
+   * // Form 4: "AAPL: Tim Cook sold $14.8M in shares"
+   * // 8-K: "NVDA: $3B supply deal with TSMC announced"
+   * // 10-K: "MSFT: FY2026 revenue up 18% to $287B"
+   */
+  static generateSmartSubject(
+    summaryJSON: Record<string, unknown> | null | undefined,
+    params: SingleFilingSubjectParams
+  ): string {
+    try {
+      if (!summaryJSON) {
+        return this.generateSingleFilingSubject(params);
+      }
+
+      const { ticker, filingType } = params;
+      const summary = typeof summaryJSON.summary === 'string' ? summaryJSON.summary : '';
+
+      // Extract a compelling one-liner from the summary text
+      if (summary) {
+        // Take the first sentence and trim to a reasonable subject length
+        const firstSentence = summary.split(/\.\s/)[0];
+        if (firstSentence && firstSentence.length > 20 && firstSentence.length < 120) {
+          // Ensure it mentions the ticker or company
+          const hasTicker = firstSentence.toUpperCase().includes(ticker.toUpperCase());
+          if (hasTicker) {
+            return firstSentence.endsWith('.') ? firstSentence : `${firstSentence}.`;
+          }
+          return `${ticker}: ${firstSentence}${firstSentence.endsWith('.') ? '' : '.'}`;
+        }
+      }
+
+      // Form-specific extraction as fallback
+      const normalizedType = filingType.replace(/^Form\s*/i, '').replace(/\/A$/, '');
+
+      if (normalizedType === '4' || normalizedType === '4/A') {
+        return this.extractForm4Subject(summaryJSON, params);
+      }
+
+      if (normalizedType === '8-K') {
+        return this.extractEightKSubject(summaryJSON, params);
+      }
+
+      // Default fallback
+      return this.generateSingleFilingSubject(params);
+    } catch {
+      return this.generateSingleFilingSubject(params);
+    }
+  }
+
+  private static extractForm4Subject(
+    data: Record<string, unknown>,
+    params: SingleFilingSubjectParams
+  ): string {
+    const transactions = data.transactions;
+    if (Array.isArray(transactions) && transactions.length > 0) {
+      const txn = transactions[0] as Record<string, unknown>;
+      const filerName = typeof data.filerName === 'string' ? data.filerName : '';
+      const action = typeof txn.transactionType === 'string' ? txn.transactionType.toLowerCase() : '';
+      const value = typeof txn.totalValue === 'string' ? txn.totalValue : '';
+
+      if (filerName && action) {
+        const valueStr = value ? ` ${value}` : '';
+        return `${params.ticker}: ${filerName} ${action}${valueStr} in shares`;
+      }
+    }
+    return this.generateSingleFilingSubject(params);
+  }
+
+  private static extractEightKSubject(
+    data: Record<string, unknown>,
+    params: SingleFilingSubjectParams
+  ): string {
+    const eventType = typeof data.eventType === 'string' ? data.eventType : '';
+    if (eventType) {
+      return `${params.ticker} 8-K: ${eventType}`;
+    }
+    return this.generateSingleFilingSubject(params);
+  }
+
   static formatDate(date: string): string {
     const parsedDate = new Date(date);
 

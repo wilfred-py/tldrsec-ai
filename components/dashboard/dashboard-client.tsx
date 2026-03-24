@@ -14,8 +14,11 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { TickerSearchResult } from "@/lib/api/types";
 import { Company, FilingPreferences } from "@/lib/api/types";
+import { HoursSavedWidget } from "@/components/dashboard/hours-saved-widget";
+import { ActivityFeed } from "@/components/dashboard/activity-feed";
 import {
   getTrackedCompanies,
   addTrackedCompany,
@@ -29,6 +32,17 @@ import {
   TickersLoadingSkeleton,
 } from "@/components/dashboard/tickers-table";
 
+interface ActivitySummary {
+  id: string;
+  filingType: string;
+  filingDate: string;
+  importance: string | null;
+  smartSubject: string | null;
+  companyName: string;
+  ticker: string;
+  filingUrl: string;
+}
+
 interface DashboardClientProps {
   showWelcome?: boolean;
   shouldMergePending?: boolean;
@@ -37,9 +51,12 @@ interface DashboardClientProps {
   tutorialCompleted?: boolean;
   subscriptionTier?: 'FREE' | 'PRO' | 'MAX';
   tickerLimit?: number;
+  hoursSavedThisMonth?: number;
+  hoursSavedTotal?: number;
+  recentSummaries?: ActivitySummary[];
 }
 
-export function DashboardClient({ showWelcome: _showWelcome = false, shouldMergePending = false, subscriptionSuccess = false, initialCompanies = [], tutorialCompleted = false, subscriptionTier = 'FREE', tickerLimit = 3 }: DashboardClientProps) {
+export function DashboardClient({ showWelcome: _showWelcome = false, shouldMergePending = false, subscriptionSuccess = false, initialCompanies = [], tutorialCompleted = false, subscriptionTier = 'FREE', tickerLimit = 3, hoursSavedThisMonth = 0, hoursSavedTotal = 0, recentSummaries = [] }: DashboardClientProps) {
   // State for tracked companies
   const [companies, setCompanies] = useState<Company[]>(initialCompanies);
   const [currentCompany, setCurrentCompany] = useState<Company | null>(null);
@@ -363,7 +380,39 @@ export function DashboardClient({ showWelcome: _showWelcome = false, shouldMerge
     <div className="space-y-6">
       <DashboardHeader heading="Dashboard" />
 
-      {/* Tracked Tickers */}
+      {/* Hours Saved + Stats Row */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="md:col-span-1">
+          <HoursSavedWidget
+            hoursSavedThisMonth={hoursSavedThisMonth}
+            hoursSavedTotal={hoursSavedTotal}
+          />
+        </div>
+        <div className="md:col-span-2 flex items-center">
+          <div className="landing-card w-full p-4">
+            <div className="flex items-center gap-4 text-sm text-muted-foreground">
+              <span><strong className="text-foreground">{companies.length}</strong> tickers tracked</span>
+              <span><strong className="text-foreground">{recentSummaries.length}</strong> recent summaries</span>
+              <span className="capitalize"><strong className="text-foreground">{subscriptionTier}</strong> plan</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Tabs: Activity / Tickers */}
+      <Tabs defaultValue="activity" className="w-full">
+        <TabsList className="mb-4">
+          <TabsTrigger value="activity">Activity</TabsTrigger>
+          <TabsTrigger value="tickers">Tickers</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="activity">
+          <div className="landing-card">
+            <ActivityFeed summaries={recentSummaries} />
+          </div>
+        </TabsContent>
+
+        <TabsContent value="tickers">
       <div className="landing-card">
         <div className="mb-6">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -500,7 +549,8 @@ export function DashboardClient({ showWelcome: _showWelcome = false, shouldMerge
           />
         )}
       </div>
-
+        </TabsContent>
+      </Tabs>
 
       {/* Delete Confirmation Dialog */}
       <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>

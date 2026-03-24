@@ -158,7 +158,7 @@ export async function sendLatestSummariesEmail(): Promise<{ success: boolean; er
       recipientName: dbUser.name || user.firstName || 'there',
       recipientEmail: primaryEmail,
       tickerGroups: tickerGroups,
-      unsubscribeUrl: `${process.env.NEXT_PUBLIC_APP_URL}/settings/notifications`,
+      unsubscribeUrl: `${process.env.NEXT_PUBLIC_APP_URL || 'https://tldrsec.app'}/dashboard/settings`,
       preferencesUrl: `${process.env.NEXT_PUBLIC_APP_URL}/settings`
     });
     
@@ -232,9 +232,28 @@ export async function sendFilingSummaryEmail(
     summary: string;
     filingUrl: string;
     summaryData?: Record<string, unknown>;  // Structured AI response for rich email templates
+    userId?: string;      // For feedback token generation
+    summaryId?: string;   // For feedback token generation
+    importance?: string;  // For importance badge in email
+    smartSubject?: string; // AI-generated subject line
   }
 ): Promise<{ success: boolean; error?: string }> {
   try {
+    // Generate feedback links if userId and summaryId provided
+    let feedbackUpUrl: string | undefined;
+    let feedbackDownUrl: string | undefined;
+    if (filingData.userId && filingData.summaryId) {
+      try {
+        const { generateFeedbackToken } = await import('./feedback-tokens');
+        const token = generateFeedbackToken(filingData.userId, filingData.summaryId);
+        const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://tldrsec.app';
+        feedbackUpUrl = `${baseUrl}/api/feedback?token=${encodeURIComponent(token)}&vote=up`;
+        feedbackDownUrl = `${baseUrl}/api/feedback?token=${encodeURIComponent(token)}&vote=down`;
+      } catch {
+        // Non-fatal: skip feedback links if token generation fails
+      }
+    }
+
     // Generate email content using filing data
     const { html, text } = await getEmailTemplate(EmailType.FILING_NOTIFICATION, {
       recipientName: 'Investor',
@@ -246,16 +265,22 @@ export async function sendFilingSummaryEmail(
       summary: filingData.summary,
       filingUrl: filingData.filingUrl,
       summaryData: filingData.summaryData,  // Pass structured data to email template
-      unsubscribeUrl: `${process.env.NEXT_PUBLIC_APP_URL}/settings/notifications`,
+      importance: filingData.importance,
+      feedbackUpUrl,
+      feedbackDownUrl,
+      unsubscribeUrl: `${process.env.NEXT_PUBLIC_APP_URL || 'https://tldrsec.app'}/dashboard/settings`,
       preferencesUrl: `${process.env.NEXT_PUBLIC_APP_URL}/settings`
     });
-    
-    // Prepare email message
-    const subject = EmailSubjectService.generateSingleFilingSubject({
-      filingType: filingData.filingType,
-      companyName: filingData.companyName,
-      ticker: filingData.ticker
-    });
+
+    // Use smart subject if available, fall back to standard
+    const subject = filingData.smartSubject || EmailSubjectService.generateSmartSubject(
+      filingData.summaryData || null,
+      {
+        filingType: filingData.filingType,
+        companyName: filingData.companyName,
+        ticker: filingData.ticker
+      }
+    );
 
     const message: EmailMessage = {
       to: recipientEmail,

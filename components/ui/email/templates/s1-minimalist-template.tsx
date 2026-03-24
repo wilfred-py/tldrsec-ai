@@ -350,7 +350,7 @@ export function FormS1MinimalistTemplate({ filing }: FormS1MinimalistTemplatePro
       <EmailFooter
         filingUrl={filingUrl}
         formType={filingType || 'S-1'}
-        unsubscribeUrl={`${process.env.NEXT_PUBLIC_APP_URL || ''}/settings/notifications`}
+        unsubscribeUrl={`${process.env.NEXT_PUBLIC_APP_URL || ''}/dashboard/settings`}
       />
     </div>
   );
