@@ -17,8 +17,10 @@ export function TickerConfirmationSection({ tickerCount }: TickerConfirmationSec
     setIsConfirming(true);
 
     try {
-      const response = await fetch('/api/user/tickers/confirm', {
+      const response = await fetch('/api/user/tickers', {
         method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'confirm' }),
       });
 
       const data = await response.json();

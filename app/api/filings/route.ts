@@ -10,11 +10,11 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
-import { enhancedFilingService } from '../../../../services/enhancedFilingService';
-import { logger } from '../../../../lib/logging';
-import { FilingType } from '../../../../lib/sec-edgar/types';
-import { getFormMetadata } from '../../../../lib/sec-edgar/form-registry';
-import { getPrismaClient } from '../../../../lib/db/prisma';
+import { enhancedFilingService } from '@/services/enhancedFilingService';
+import { logger } from '@/lib/logging';
+import { FilingType } from '@/lib/sec-edgar/types';
+import { getFormMetadata } from '@/lib/sec-edgar/form-registry';
+import { getPrismaClient } from '@/lib/db/prisma';
 
 // API route logger
 const apiLogger = logger.child('api-enhanced-summary');
@@ -27,7 +27,7 @@ export async function GET(request: NextRequest) {
     const { userId } = await auth();
     
     // Extract query parameters
-    const searchParams = request.nextUrl.searchParams;
+    const searchParams = new URL(request.url).searchParams;
     const ticker = searchParams.get('ticker');
     const formType = searchParams.get('formType');
     const useStreaming = searchParams.get('useStreaming') === 'true';

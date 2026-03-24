@@ -1,382 +1,833 @@
-import { NextResponse } from 'next/server';
-import { monitoring } from '@/lib/monitoring';
-import { appRouterAsyncHandler } from '@/lib/error-handling';
+/**
+ * Pipeline Health Monitoring Endpoint
+ *
+ * This endpoint provides comprehensive health status for the SEC filing pipeline.
+ * It monitors:
+ * - Lock health (stale/expired locks that can block processing)
+ * - Job queue status (pending, processing, completed jobs)
+ * - Processing latency (time since last completion)
+ * - Pipeline throughput (jobs completed in last hour)
+ * - Exhausted RETRYING jobs (retryCount >= maxRetries, CRITICAL condition)
+ * - Stale PROCESSING jobs (stuck for >15 minutes)
+ * - Invalid job types (jobs with no handler)
+ * - Jobs approaching max retries (early warning)
+ * - Cron execution gaps (Cloudflare Worker failures) - Phase 5
+ * - Orphaned filings (unprocessed with no jobs) - Phase 5
+ *
+ * Health Statuses:
+ * - HEALTHY: All systems operating normally
+ * - DEGRADED: Some issues detected but pipeline is functional
+ *   - Stale PROCESSING jobs detected
+ *   - No completions in >60 minutes
+ *   - Orphaned filings exist
+ *   - General issues present
+ * - CRITICAL: Pipeline may be stalled or severely impacted
+ *   - Exhausted RETRYING jobs (caused 41-hour stall in Jan 2026)
+ *   - Invalid job types (can never complete)
+ *   - No completions in >180 minutes
+ *   - Cron execution gap >20 minutes (Cloudflare Worker likely failed)
+ * - ERROR: Unable to determine pipeline status
+ *
+ * @see docs/plans/2026-01-05-100-percent-pipeline-uptime.md
+ * @see docs/plans/2026-01-09-eliminate-manual-pipeline-intervention.md Phase 5
+ */
+
+import { NextRequest, NextResponse } from 'next/server';
 import { logger } from '@/lib/logging';
-import { getPrismaClient } from '@/lib/db/prisma';
-import { CircuitBreakerRegistry } from '@/lib/resilience/circuit-breaker';
-import { GlobalErrorHandler } from '@/lib/resilience/error-handling';
-import { rateLimiter } from '@/lib/security/rate-limiter';
-import { headers } from 'next/headers';
+import { getPrismaClient as getDeploymentPrisma } from '@/lib/db/prisma';
 
-// Note: Edge Runtime disabled due to ioredis compatibility in rate limiter
-// export const runtime = 'edge';
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
 
-// SECURITY: Check if we're in Edge Runtime
-const isEdgeRuntime = typeof (globalThis as unknown as { EdgeRuntime?: unknown }).EdgeRuntime !== 'undefined' || 
-                      process.env.RUNTIME === 'edge';
+const pipelineLogger = logger.child('pipeline-health');
 
-// Component logger
-const componentLogger = logger.child('health-api');
-const prisma = getPrismaClient();
+// Deployment health tracking
+const deploymentInstanceStartTime = Date.now();
+let deploymentWarmupComplete = false;
 
 /**
- * Enhanced health check endpoint for PR #173 infrastructure
- * Includes Edge Runtime, concurrency systems, and security validation
- * GET /api/health
+ * Response cache for health endpoint
+ * Caches the full response for 30 seconds to prevent redundant database queries.
+ * This is especially important given Supabase's 5-connection pool limit.
  */
-export const GET = appRouterAsyncHandler(async () => {
-  const startTime = Date.now();
-  
-  // SECURITY: Rate limit health endpoint to prevent reconnaissance abuse
-  const headersList = await headers();
-  const clientIP = headersList.get('x-forwarded-for') || 
-                   headersList.get('x-real-ip') || 
-                   'unknown';
-  
-  const rateLimitResult = await rateLimiter.checkLimit(
-    'health-api',
-    clientIP,
-    30, // 30 requests per minute max
-    60000 // 1 minute window
-  );
-  
-  if (!rateLimitResult.allowed) {
-    componentLogger.warn('Health API rate limit exceeded', { 
-      clientIP: 'redacted',
-      remaining: rateLimitResult.remaining 
-    });
-    
-    return NextResponse.json(
-      { error: 'Rate limit exceeded', status: 'rate_limited' },
-      { 
-        status: 429,
-        headers: {
-          'X-RateLimit-Limit': '30',
-          'X-RateLimit-Remaining': '0',
-          'X-RateLimit-Reset': rateLimitResult.resetTime.toString(),
-          'Retry-After': '60'
-        }
-      }
-    );
-  }
-  
-  // Get base health status
-  const healthStatus = await monitoring.checkHealth();
-  
-  // Add PR #173 specific health checks
-  const pr173Checks = await performPR173HealthChecks();
-  
-  // Add resilience system status
-  const resilienceStatus = getResilienceSystemStatus();
-  
-  // Merge health status with PR #173 checks and resilience monitoring
-  const enhancedHealthStatus = {
-    ...healthStatus,
-    pr173_infrastructure: pr173Checks,
-    resilience_systems: resilienceStatus,
-    version: '1.2',
-    pr_version: 'PR #173+: Edge Runtime, concurrency, and enhanced error handling with circuit breakers',
-    timestamp: new Date().toISOString()
-  };
-  
-  // Determine overall status considering PR #173 components and resilience systems
-  let overallStatus = healthStatus.status;
-  if (pr173Checks.overall_status === 'unhealthy' || resilienceStatus.overall_status === 'unhealthy') {
-    overallStatus = 'unhealthy';
-  } else if ((pr173Checks.overall_status === 'degraded' || resilienceStatus.overall_status === 'degraded') && overallStatus === 'healthy') {
-    overallStatus = 'degraded';
-  }
-  
-  enhancedHealthStatus.status = overallStatus;
-  
-  // Determine status code based on enhanced health status
-  const statusCode = overallStatus === 'healthy' 
-    ? 200 
-    : overallStatus === 'degraded' 
-      ? 200 // Still respond with 200 for "degraded" but with warning in body
-      : 503; // Service Unavailable
-  
-  componentLogger.info(`Enhanced health check performed`, { 
-    status: overallStatus,
-    components: Object.keys(healthStatus.components).length,
-    pr173_checks: Object.keys(pr173Checks.checks).length,
-    responseTime: Date.now() - startTime
-  });
-  
-  // Track this API call
-  monitoring.trackApiCall('/api/health', 'GET', statusCode, startTime);
-  
-  return NextResponse.json(enhancedHealthStatus, { 
-    status: statusCode,
-    headers: {
-      // SECURITY: Comprehensive security headers
-      'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
-      'X-Content-Type-Options': 'nosniff',
-      'X-Frame-Options': 'DENY',
-      'X-XSS-Protection': '1; mode=block',
-      'Referrer-Policy': 'no-referrer',
-      'Content-Security-Policy': "default-src 'none'; frame-ancestors 'none'",
-      // Rate limiting headers
-      'X-RateLimit-Limit': '30',
-      'X-RateLimit-Remaining': rateLimitResult.remaining.toString(),
-      'X-RateLimit-Reset': rateLimitResult.resetTime.toString()
-    }
-  });
-});
+interface CachedResponse {
+  data: PipelineHealthResponse;
+  timestamp: number;
+  expiresAt: number;
+}
+
+const CACHE_TTL_MS = 30 * 1000; // 30 seconds
+let responseCache: CachedResponse | null = null;
 
 /**
- * Perform PR #173 specific infrastructure health checks
+ * Clear the health endpoint cache.
+ * Exported for testing purposes.
  */
-async function performPR173HealthChecks() {
-  const checks: { [key: string]: unknown } = {};
-  let overallStatus = 'healthy';
-  
-  try {
-    // 1. Database Schema Validation (optimistic locking) - SQL INJECTION FIX
-    try {
-      const schemaStart = Date.now();
-      // SECURITY FIX: Use parameterized query instead of raw SQL to prevent injection
-      const result = await prisma.$queryRaw<Array<{ count: number }>>`
-        SELECT COUNT(*) as count
-        FROM information_schema.columns 
-        WHERE table_name = ${`TickerMonitoring`}
-        AND column_name = ${`version`}
-      `;
-      
-      const versionColumnExists = result[0]?.count > 0;
-      
-      checks.database_schema = {
-        status: 'healthy',
-        optimistic_locking_enabled: versionColumnExists,
-        version_column_exists: versionColumnExists,
-        responseTime: Date.now() - schemaStart
-      };
-    } catch {
-      checks.database_schema = {
-        status: 'unhealthy',
-        optimistic_locking_enabled: false,
-        // SECURITY FIX: Sanitize error messages to prevent information disclosure
-        error: 'Schema validation failed'
-      };
-      overallStatus = 'unhealthy';
-    }
+export function clearHealthCache(): void {
+  responseCache = null;
+}
 
-    // 2. Web Crypto API Validation (Edge Runtime compatibility)
-    try {
-      const cryptoStart = Date.now();
-      
-      // Test Web Crypto API operations
-      const encoder = new TextEncoder();
-      const testData = encoder.encode('health-test');
-      await crypto.subtle.digest('SHA-256', testData);
-      
-      checks.web_crypto = {
-        status: 'healthy',
-        edge_runtime_compatible: true,
-        operations_validated: ['digest'],
-        responseTime: Date.now() - cryptoStart
-      };
-    } catch (error) {
-      checks.web_crypto = {
-        status: 'unhealthy',
-        edge_runtime_compatible: false,
-        error: error instanceof Error ? error.message : 'Web Crypto API failed'
-      };
-      overallStatus = 'unhealthy';
-    }
-
-    // 3. Concurrency System Validation
-    try {
-      const concurrencyStart = Date.now();
-      
-      // Test that we can query version fields
-      const sampleRecord = await prisma.tickerMonitoring.findFirst({
-        select: { id: true, version: true, cik: true },
-        where: { isActive: true }
-      });
-      
-      checks.concurrency_system = {
-        status: 'healthy',
-        optimistic_locking_ready: true,
-        sample_version_field: sampleRecord?.version ?? null,
-        responseTime: Date.now() - concurrencyStart
-      };
-    } catch (error) {
-      checks.concurrency_system = {
-        status: 'degraded',
-        optimistic_locking_ready: false,
-        error: error instanceof Error ? error.message : 'Concurrency system check failed'
-      };
-      if (overallStatus === 'healthy') overallStatus = 'degraded';
-    }
-
-    // 4. Security System Validation (timing-safe operations)
-    try {
-      const securityStart = Date.now();
-      
-      // SECURITY FIX: Enhanced timing-safe comparison to prevent timing attacks
-      function timingSafeEqual(a: string, b: string): boolean {
-        // Always perform comparison on equal-length strings to prevent length-based timing attacks
-        const maxLength = Math.max(a.length, b.length);
-        const aNormalized = a.padEnd(maxLength, '\0');
-        const bNormalized = b.padEnd(maxLength, '\0');
-        
-        const encoder = new TextEncoder();
-        const aBytes = encoder.encode(aNormalized);
-        const bBytes = encoder.encode(bNormalized);
-        
-        let result = 0;
-        // Ensure constant-time comparison regardless of input
-        for (let i = 0; i < maxLength; i++) {
-          result |= aBytes[i] ^ bBytes[i];
-        }
-        
-        // Return length equality AND content equality
-        return (a.length === b.length) && (result === 0);
-      }
-      
-      const timingSafeWorks = !timingSafeEqual('test1', 'test2');
-      
-      checks.security_system = {
-        status: 'healthy',
-        timing_safe_comparison: timingSafeWorks,
-        enhanced_security_ready: true,
-        responseTime: Date.now() - securityStart
-      };
-    } catch (error) {
-      checks.security_system = {
-        status: 'degraded',
-        timing_safe_comparison: false,
-        error: error instanceof Error ? error.message : 'Security system check failed'
-      };
-      if (overallStatus === 'healthy') overallStatus = 'degraded';
-    }
-
-    // 5. Environment Configuration (sanitized for security)
-    checks.environment = {
-      status: 'healthy',
-      // SECURITY: Remove platform fingerprinting
-      runtime_type: isEdgeRuntime ? 'edge' : 'node',
-      // SECURITY: Only indicate if required secrets are present, not their names
-      secrets_configured: !!process.env.CRON_SECRET && !!process.env.DATABASE_URL,
-      // SECURITY: Only show production vs non-production
-      is_production: process.env.NODE_ENV === 'production'
-    };
-
-  } catch (error) {
-    componentLogger.error('PR #173 health checks failed', { error });
-    overallStatus = 'unhealthy';
-    
-    checks.general_error = {
-      status: 'unhealthy',
-      error: error instanceof Error ? error.message : 'Unknown error'
-    };
+/**
+ * Check if cached response is still valid.
+ */
+function getCachedResponse(): PipelineHealthResponse | null {
+  if (!responseCache) return null;
+  if (Date.now() > responseCache.expiresAt) {
+    responseCache = null;
+    return null;
   }
+  return responseCache.data;
+}
 
-  return {
-    overall_status: overallStatus,
-    checks,
-    timestamp: new Date().toISOString()
+/**
+ * Store response in cache.
+ */
+function setCachedResponse(data: PipelineHealthResponse): void {
+  responseCache = {
+    data,
+    timestamp: Date.now(),
+    expiresAt: Date.now() + CACHE_TTL_MS,
   };
 }
 
 /**
- * Get resilience system status including circuit breakers and error monitoring
+ * Orphan detection timing (no longer sampled).
+ *
+ * Previously, orphan detection was sampled every 6th request for performance.
+ * Analysis showed the query is lightweight (~5ms), so we now run it on every
+ * request for faster detection (target: <15 seconds to detect orphaned filings).
+ *
+ * @see docs/plans/2026-01-26-pipeline-resilience-zero-intervention.md Phase 2
  */
-function getResilienceSystemStatus() {
-  const checks: { [key: string]: unknown } = {};
-  let overallStatus = 'healthy';
-  
+let lastOrphanCheckTime: Date | null = null;
+
+/**
+ * Reset orphan check state.
+ * Exported for testing purposes.
+ */
+export function resetOrphanSampleCounter(): void {
+  lastOrphanCheckTime = null;
+}
+
+/**
+ * Result type for the aggregated JobQueue statistics query.
+ * Uses BigInt because PostgreSQL COUNT returns bigint.
+ */
+interface JobQueueAggregatedStats {
+  pending_count: bigint;
+  processing_count: bigint;
+  completed_1h_count: bigint;
+  completed_24h_count: bigint;
+  dead_letter_count: bigint;
+  retrying_count: bigint;
+  stale_processing_count: bigint;
+  invalid_job_type_count: bigint;
+  high_retry_count: bigint;
+  exhausted_retrying_count: bigint;
+}
+
+interface DatabaseInfo {
+  provider: 'supabase' | 'neon' | 'unknown';
+  hasAppSchema: boolean;
+  hasPipelineSchema: boolean;
+  migrationComplete: boolean;
+}
+
+interface PipelineHealthResponse {
+  status: 'HEALTHY' | 'DEGRADED' | 'CRITICAL' | 'ERROR';
+  database: DatabaseInfo;
+  locks: {
+    healthStatus: string;
+    staleCount: number;
+    activeCount: number;
+  };
+  jobs: {
+    pending: number;
+    processing: number;
+    completedLast1h: number;
+    completedLast24h: number;
+    deadLetter: number;
+    retrying: number;
+    exhaustedRetrying: number;
+    staleProcessing: number;
+    invalidJobTypes: number;
+    highRetryCount: number;
+  };
+  // Phase 5: Cron execution monitoring
+  cronExecution: {
+    lastExecution: string | null;
+    minutesSinceLastCron: number | null;
+    gapsDetected: number;
+  };
+  // Phase 5: Orphaned filing monitoring
+  filings: {
+    orphanedCount: number;
+    unprocessedTotal: number;
+    orphanedCountSampled?: boolean;
+    lastOrphanCheck?: string | null;
+  };
+  // NEW: TickerMonitoring health check (critical for discovery)
+  tickerMonitoring: {
+    totalRecords: number;
+    activeRecords: number;
+    userTickersWithoutMonitoring: number;
+    missingTickers: string[];
+  };
+  lastCompletion: string | null;
+  minutesSinceLastCompletion: number | null;
+  issues: string[];
+  warnings?: string[];
+  recommendations: string[];
+  timestamp: string;
+}
+
+/**
+ * Valid job types that have handlers in the system.
+ * Jobs with types not in this list are considered invalid and will be cleaned up.
+ * NOTE: These values are hardcoded in the aggregated SQL query for performance.
+ * If adding new job types, update the SQL in the aggregated query below.
+ */
+const _VALID_JOB_TYPES = [
+  'ASYNC_DISCOVER_FILINGS',
+  'ASYNC_FETCH_FILING',
+  'ASYNC_SUMMARIZE_CACHED'
+];
+
+/**
+ * Time thresholds for detecting stale jobs
+ */
+const STALE_PROCESSING_MINUTES = 15;
+const HIGH_RETRY_THRESHOLD = 2; // Jobs with retryCount >= this are "approaching" max
+
+/**
+ * Phase 5: Cron execution gap thresholds
+ * - DEGRADED: 15-20 minutes without cron execution
+ * - CRITICAL: >20 minutes without cron execution (Cloudflare Worker likely failed)
+ */
+const CRON_GAP_DEGRADED_MINUTES = 15;
+const CRON_GAP_CRITICAL_MINUTES = 20;
+
+/**
+ * Phase 5: Orphaned filing thresholds
+ * - Only consider filings older than this as potentially orphaned
+ */
+const ORPHAN_AGE_THRESHOLD_MINUTES = 10;
+
+export async function GET(request: NextRequest) {
+  // Route by ?type= parameter
+  const url = new URL(request.url);
+  const type = url.searchParams.get('type');
+
+  if (type === 'deployment') {
+    return handleDeploymentHealth();
+  }
+
+  // Default: pipeline health (the most critical check)
+  const startTime = Date.now();
+  const issues: string[] = [];
+  const recommendations: string[] = [];
+
+  // Add rate limiting to prevent abuse of expensive database queries
   try {
-    // Get circuit breaker registry
-    const circuitBreakerRegistry = CircuitBreakerRegistry.getInstance();
-    const circuitBreakerMetrics = circuitBreakerRegistry.getAllMetrics();
+    const clientIP = request.headers.get('x-forwarded-for') || 
+                    request.headers.get('x-real-ip') || 
+                    request.ip || 
+                    'unknown';
     
-    // Check circuit breaker status
-    let openCircuitBreakers = 0;
-    let degradedCircuitBreakers = 0;
-    const circuitBreakerStatuses: { [key: string]: unknown } = {};
+    // Import rate limiter dynamically
+    const { rateLimiter } = await import('@/lib/security/rate-limiter');
+    const rateLimitResult = await rateLimiter.checkLimit('health-endpoint', clientIP);
     
-    for (const [name, metrics] of Object.entries(circuitBreakerMetrics)) {
-      circuitBreakerStatuses[name] = {
-        state: metrics.state,
-        totalCalls: metrics.totalCalls,
-        successRate: metrics.totalCalls > 0 
-          ? ((metrics.successfulCalls / metrics.totalCalls) * 100).toFixed(2) + '%'
-          : '100%',
-        averageResponseTime: Math.round(metrics.averageResponseTime) + 'ms',
-        lastStateChange: metrics.lastStateChange
-      };
-      
-      if (metrics.state === 'OPEN') {
-        openCircuitBreakers++;
-      } else if (metrics.state === 'HALF_OPEN') {
-        degradedCircuitBreakers++;
+    if (!rateLimitResult || !rateLimitResult.allowed) {
+      pipelineLogger.warn('Health endpoint rate limit exceeded', { clientIP });
+      return NextResponse.json({
+        status: 'ERROR',
+        error: 'Rate limit exceeded. Please try again later.',
+        timestamp: new Date().toISOString()
+      }, { 
+        status: 429,
+        headers: {
+          'Retry-After': '60',
+          'X-RateLimit-Remaining': '0'
+        }
+      });
+    }
+  } catch (rateLimitError) {
+    // Continue if rate limiter fails, but log the issue
+    pipelineLogger.warn('Rate limiter check failed', {
+      error: rateLimitError instanceof Error ? rateLimitError.message : 'Unknown error'
+    });
+  }
+
+  // Check for cache bypass via header or query parameter
+  const cacheControlHeader = request.headers.get('Cache-Control');
+  const bypassCache = cacheControlHeader?.includes('no-cache') ||
+                      url.searchParams.get('bypass-cache') === 'true';
+
+  // Check cache first (unless bypass requested)
+  if (!bypassCache) {
+    const cached = getCachedResponse();
+    if (cached) {
+      pipelineLogger.debug('Returning cached health response');
+      return NextResponse.json(cached, {
+        status: cached.status === 'CRITICAL' ? 503 : cached.status === 'ERROR' ? 500 : 200,
+        headers: {
+          'Cache-Control': 'no-store, no-cache, must-revalidate',
+          'X-Pipeline-Status': cached.status,
+          'X-Cache': 'HIT',
+          'X-Cache-Age': String(Math.floor((Date.now() - (responseCache?.timestamp || 0)) / 1000)),
+          'X-Content-Type-Options': 'nosniff',
+          'X-Frame-Options': 'DENY',
+          'X-XSS-Protection': '1; mode=block'
+        }
+      });
+    }
+  }
+
+  try {
+    // Dynamic import to avoid build-time dependencies
+    const { getPrismaClient } = await import('@/lib/db/prisma');
+    const { LockService } = await import('@/lib/job-queue/lock-service');
+    const { checkDatabaseSchemas } = await import('@/lib/db/supabase-config');
+    const prisma = getPrismaClient();
+
+    // Get database source information
+    const schemaDiagnostic = await checkDatabaseSchemas();
+    const databaseInfo: DatabaseInfo = {
+      provider: schemaDiagnostic.databaseType,
+      hasAppSchema: schemaDiagnostic.foundSchemas.includes('app'),
+      hasPipelineSchema: schemaDiagnostic.foundSchemas.includes('pipeline'),
+      migrationComplete: schemaDiagnostic.migrationComplete,
+    };
+
+    // Check for database configuration issues
+    if (!schemaDiagnostic.migrationComplete) {
+      if (schemaDiagnostic.databaseType === 'neon') {
+        issues.push('DATABASE_URL points to Neon instead of Supabase');
+        recommendations.push('Update DATABASE_URL in Vercel to point to Supabase');
+      } else if (!schemaDiagnostic.hasExpectedSchemas) {
+        issues.push(`Missing required schemas: ${schemaDiagnostic.message}`);
+        recommendations.push('Run Prisma migrations to create app and pipeline schemas');
       }
     }
-    
-    checks.circuit_breakers = {
-      status: openCircuitBreakers > 0 ? 'degraded' : 'healthy',
-      total: Object.keys(circuitBreakerMetrics).length,
-      open: openCircuitBreakers,
-      half_open: degradedCircuitBreakers,
-      closed: Object.keys(circuitBreakerMetrics).length - openCircuitBreakers - degradedCircuitBreakers,
-      details: circuitBreakerStatuses
-    };
-    
-    if (openCircuitBreakers > 0 && overallStatus === 'healthy') {
-      overallStatus = 'degraded';
+
+    // Get lock health metrics
+    const lockMetrics = await LockService.getLockHealthMetrics();
+
+    // Get job queue statistics
+    const now = new Date();
+    const oneHourAgo = new Date(now.getTime() - 60 * 60 * 1000);
+    const oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+
+    // Count jobs by status - including new stuck job detection
+    const staleProcessingCutoff = new Date(now.getTime() - STALE_PROCESSING_MINUTES * 60 * 1000);
+    // Phase 5: Thresholds for orphaned filing detection
+    const orphanAgeThreshold = new Date(now.getTime() - ORPHAN_AGE_THRESHOLD_MINUTES * 60 * 1000);
+
+    // OPTIMIZED: Single aggregated query for all JobQueue counts
+    // This replaces 10 separate Prisma count() queries with 1 SQL query using PostgreSQL FILTER clause.
+    // Reduces database round-trips from 10 to 1 for JobQueue metrics, preventing connection pool exhaustion.
+    const jobQueueStats = await prisma.$queryRaw<JobQueueAggregatedStats[]>`
+      SELECT
+        COUNT(*) FILTER (WHERE status = 'PENDING') as pending_count,
+        COUNT(*) FILTER (WHERE status = 'PROCESSING') as processing_count,
+        COUNT(*) FILTER (WHERE status = 'COMPLETED' AND "completedAt" >= ${oneHourAgo}) as completed_1h_count,
+        COUNT(*) FILTER (WHERE status = 'COMPLETED' AND "completedAt" >= ${oneDayAgo}) as completed_24h_count,
+        COUNT(*) FILTER (WHERE status = 'DEAD_LETTER') as dead_letter_count,
+        COUNT(*) FILTER (WHERE status = 'RETRYING') as retrying_count,
+        COUNT(*) FILTER (WHERE status = 'PROCESSING' AND "startedAt" < ${staleProcessingCutoff}) as stale_processing_count,
+        COUNT(*) FILTER (
+          WHERE status IN ('PENDING', 'RETRYING', 'PROCESSING')
+          AND "jobType" NOT IN ('ASYNC_DISCOVER_FILINGS', 'ASYNC_FETCH_FILING', 'ASYNC_SUMMARIZE_CACHED')
+        ) as invalid_job_type_count,
+        COUNT(*) FILTER (
+          WHERE status IN ('PENDING', 'RETRYING')
+          AND "retryCount" >= ${HIGH_RETRY_THRESHOLD}
+        ) as high_retry_count,
+        COUNT(*) FILTER (
+          WHERE status = 'RETRYING'
+          AND "retryCount" >= "maxRetries"
+        ) as exhausted_retrying_count
+      FROM pipeline."JobQueue"
+    `;
+
+    // Extract counts from aggregated result (convert BigInt to number)
+    const stats = jobQueueStats[0];
+    const pendingCount = Number(stats.pending_count);
+    const processingCount = Number(stats.processing_count);
+    const completedLast1h = Number(stats.completed_1h_count);
+    const completedLast24h = Number(stats.completed_24h_count);
+    const deadLetterCount = Number(stats.dead_letter_count);
+    const retryingCount = Number(stats.retrying_count);
+    const staleProcessingCount = Number(stats.stale_processing_count);
+    const invalidJobTypeCount = Number(stats.invalid_job_type_count);
+    const highRetryCount = Number(stats.high_retry_count);
+    const exhaustedRetryingCount = Number(stats.exhausted_retrying_count);
+
+    // Remaining queries that still need Prisma (complex operations that can't be aggregated)
+    // These run in parallel but are only 7 queries vs the original 14
+    const [
+      lastCompletedJob,
+      recentCronExecutions,
+      unprocessedFilingsOlderThanThreshold,
+      unprocessedFilingsTotal,
+      tickerMonitoringTotal,
+      tickerMonitoringActive,
+      userTickerSymbols
+    ] = await Promise.all([
+      // Last completed job (needs findFirst with orderBy)
+      prisma.jobQueue.findFirst({
+        where: { status: 'COMPLETED' },
+        orderBy: { completedAt: 'desc' },
+        select: { completedAt: true }
+      }),
+      // Phase 5: Get recent cron executions (last 60 minutes)
+      prisma.cronJobExecution.findMany({
+        where: {
+          startedAt: { gte: oneHourAgo },
+        },
+        select: { startedAt: true },
+        orderBy: { startedAt: 'desc' },
+      }),
+      // Phase 5: Unprocessed filings older than threshold (potentially orphaned)
+      // NOTE: processed field is on RssFilingCheck, not SecFiling
+      prisma.rssFilingCheck.findMany({
+        where: {
+          processed: false,
+          createdAt: { lt: orphanAgeThreshold },
+        },
+        select: { id: true },
+        take: 100, // Limit for performance
+      }),
+      // Phase 5: Total unprocessed filings count
+      prisma.rssFilingCheck.count({
+        where: { processed: false },
+      }),
+      // NEW: TickerMonitoring health check - total records
+      prisma.tickerMonitoring.count(),
+      // NEW: TickerMonitoring health check - active records
+      prisma.tickerMonitoring.count({
+        where: { isActive: true },
+      }),
+      // NEW: Get all unique user ticker symbols to check for missing monitoring
+      prisma.ticker.findMany({
+        select: { symbol: true },
+        distinct: ['symbol'],
+      }),
+    ]);
+
+    // Phase 5: Calculate cron execution metrics
+    const lastCronExecution = recentCronExecutions[0]?.startedAt || null;
+    const minutesSinceLastCron = lastCronExecution
+      ? Math.floor((now.getTime() - lastCronExecution.getTime()) / 60000)
+      : null;
+
+    // Phase 5: Detect cron execution gaps
+    let cronGapsDetected = 0;
+    if (recentCronExecutions.length === 0) {
+      // No executions in last hour = one big gap
+      cronGapsDetected = 1;
+    } else {
+      // Check for gaps >15 minutes between executions
+      const sortedExecutions = [...recentCronExecutions].sort(
+        (a, b) => b.startedAt.getTime() - a.startedAt.getTime()
+      );
+
+      // Check gap from now to most recent execution
+      if (minutesSinceLastCron !== null && minutesSinceLastCron > CRON_GAP_DEGRADED_MINUTES) {
+        cronGapsDetected++;
+      }
+
+      // Check gaps between executions
+      for (let i = 0; i < sortedExecutions.length - 1; i++) {
+        const gapMinutes = (sortedExecutions[i].startedAt.getTime() - sortedExecutions[i + 1].startedAt.getTime()) / (60 * 1000);
+        if (gapMinutes > CRON_GAP_DEGRADED_MINUTES) {
+          cronGapsDetected++;
+        }
+      }
     }
-    
-    // Get global error handler statistics
-    const errorHandler = GlobalErrorHandler.getInstance();
-    const errorStats = errorHandler.getStatistics();
-    
-    // Calculate recent error rate (errors in last 10)
-    const recentErrors = errorStats.recentErrors;
-    const criticalErrorsRecent = recentErrors.filter(e => e.severity === 'CRITICAL' || e.severity === 'HIGH').length;
-    
-    checks.error_monitoring = {
-      status: criticalErrorsRecent > 5 ? 'degraded' : 'healthy',
-      total_errors: errorStats.totalErrors,
-      recent_errors: recentErrors.length,
-      critical_recent: criticalErrorsRecent,
-      error_categories: errorStats.errorsByCategory,
-      error_severities: errorStats.errorsBySeverity,
-      retryable_errors: errorStats.retryableErrors,
-      transient_errors: errorStats.transientErrors
-    };
-    
-    if (criticalErrorsRecent > 5 && overallStatus === 'healthy') {
-      overallStatus = 'degraded';
+
+    // Phase 5 + Zero-Intervention Phase 2: Calculate orphaned filings count (ALWAYS, no sampling)
+    // Orphaned = unprocessed AND old enough AND no active job referencing them
+    // The query is lightweight (~5ms), so we run it on every request for faster detection.
+    // @see docs/plans/2026-01-26-pipeline-resilience-zero-intervention.md Phase 2
+    let orphanedFilingCount = 0;
+    const orphanedCountSampled = false; // No longer sampled
+
+    if (unprocessedFilingsOlderThanThreshold.length > 0) {
+      const potentialOrphanIds = unprocessedFilingsOlderThanThreshold.map(f => f.id);
+
+      // Check which of these have active jobs
+      const jobsForFilings = await prisma.jobQueue.findMany({
+        where: {
+          status: { in: ['PENDING', 'PROCESSING', 'RETRYING'] },
+          OR: potentialOrphanIds.map(id => ({
+            payload: { path: ['filingId'], equals: id },
+          })),
+        },
+        select: { payload: true },
+      });
+
+      const filingIdsWithJobs = new Set(
+        jobsForFilings
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          .map(j => (j.payload as any)?.filingId)
+          .filter(Boolean)
+      );
+
+      orphanedFilingCount = potentialOrphanIds.filter(id => !filingIdsWithJobs.has(id)).length;
+      lastOrphanCheckTime = now;
+    } else {
+      // No candidates older than threshold
+      orphanedFilingCount = 0;
+      lastOrphanCheckTime = now;
     }
-    if (criticalErrorsRecent > 10) {
-      overallStatus = 'unhealthy';
+
+    // Calculate time since last completion
+    const lastCompletionTime = lastCompletedJob?.completedAt || null;
+    const minutesSinceLastCompletion = lastCompletionTime
+      ? Math.floor((now.getTime() - lastCompletionTime.getTime()) / 60000)
+      : null;
+
+    // NEW: Check TickerMonitoring health (critical for discovery phase)
+    // Get all ticker monitoring symbols to compare against user tickers
+    const tickerMonitoringSymbols = await prisma.tickerMonitoring.findMany({
+      where: { isActive: true },
+      select: { symbol: true },
+    });
+    const monitoredSymbolSet = new Set(tickerMonitoringSymbols.map(t => t.symbol));
+    const userSymbols = userTickerSymbols.map(t => t.symbol);
+    const missingTickers = userSymbols.filter(s => !monitoredSymbolSet.has(s));
+    const userTickersWithoutMonitoring = missingTickers.length;
+
+    // Analyze issues
+    if (lockMetrics.staleLocksCount > 0) {
+      issues.push(`${lockMetrics.staleLocksCount} stale locks detected`);
+      recommendations.push('Run lock cleanup: npx tsx scripts/cleanup-locks.ts');
     }
-    
-    // System resilience configuration status
-    checks.resilience_config = {
-      status: 'healthy',
-      circuit_breaker_registry: 'active',
-      global_error_handler: 'active',
-      retry_mechanisms: 'enabled',
-      timeout_protection: 'enabled',
-      correlation_tracking: 'enabled'
+
+    if (lockMetrics.healthStatus === 'CRITICAL') {
+      issues.push('Lock health is CRITICAL - pipeline may be blocked');
+      recommendations.push('URGENT: Clear stale locks immediately');
+    }
+
+    if (minutesSinceLastCompletion !== null && minutesSinceLastCompletion > 60) {
+      issues.push(`No job completions in ${minutesSinceLastCompletion} minutes`);
+      if (minutesSinceLastCompletion > 120) {
+        recommendations.push('Pipeline appears stalled - check Cloudflare Worker logs');
+      }
+    }
+
+    if (completedLast1h === 0 && pendingCount > 0) {
+      issues.push('Pending jobs exist but no completions in the last hour');
+      recommendations.push('Verify Cloudflare Worker is running: wrangler tail');
+    }
+
+    if (processingCount === 0 && pendingCount > 100) {
+      issues.push(`${pendingCount} pending jobs but none are processing`);
+      recommendations.push('Check for lock contention or endpoint availability');
+    }
+
+    if (deadLetterCount > 1000) {
+      issues.push(`${deadLetterCount} jobs in dead letter queue`);
+      recommendations.push('Review dead letter jobs for patterns');
+    }
+
+    // NEW: Detect exhausted RETRYING jobs (CRITICAL - caused 41-hour stall)
+    if (exhaustedRetryingCount > 0) {
+      issues.push(`RETRYING jobs with exhausted retries detected: ${exhaustedRetryingCount}`);
+      recommendations.push('Run: npm run verify:daily -- --force-cleanup');
+    }
+
+    // NEW: Detect stale PROCESSING jobs
+    if (staleProcessingCount > 0) {
+      issues.push(`PROCESSING jobs stuck for >${STALE_PROCESSING_MINUTES} minutes: ${staleProcessingCount}`);
+      recommendations.push('Check for crashed workers or hung processes');
+    }
+
+    // NEW: Detect invalid job types
+    if (invalidJobTypeCount > 0) {
+      issues.push(`Jobs with invalid/unknown job types detected: ${invalidJobTypeCount}`);
+      recommendations.push('Clean up legacy job types with invalid type names');
+    }
+
+    // Phase 5: Detect cron execution gaps
+    if (minutesSinceLastCron !== null && minutesSinceLastCron > CRON_GAP_CRITICAL_MINUTES) {
+      issues.push(`Cron execution gap detected: ${minutesSinceLastCron} minutes since last execution`);
+      recommendations.push('Check Cloudflare Worker status and logs');
+    } else if (minutesSinceLastCron !== null && minutesSinceLastCron > CRON_GAP_DEGRADED_MINUTES) {
+      issues.push(`Cron execution gap warning: ${minutesSinceLastCron} minutes since last execution`);
+      recommendations.push('Monitor Cloudflare Worker for potential issues');
+    }
+
+    // Phase 5: Detect orphaned filings
+    if (orphanedFilingCount > 0) {
+      issues.push(`Orphaned filings detected: ${orphanedFilingCount} unprocessed filings with no active jobs`);
+      recommendations.push('Run orphaned filing recovery: OrphanedFilingDetector.checkAndRecover()');
+    }
+
+    // NEW: Detect TickerMonitoring issues (CRITICAL - empty table caused complete discovery failure)
+    // This was a critical bug discovered 2026-01-27 where the 3-phase pipeline didn't create
+    // TickerMonitoring records, causing discovery to silently skip all tickers.
+    if (tickerMonitoringActive === 0 && userSymbols.length > 0) {
+      issues.push(`CRITICAL: TickerMonitoring table is EMPTY - discovery will skip ALL tickers`);
+      recommendations.push('URGENT: Run discovery job manually or restart pipeline to populate TickerMonitoring');
+    } else if (userTickersWithoutMonitoring > 0) {
+      issues.push(`${userTickersWithoutMonitoring} user tickers missing from TickerMonitoring: ${missingTickers.slice(0, 5).join(', ')}${missingTickers.length > 5 ? '...' : ''}`);
+      recommendations.push('Run getActiveTickersForMonitoring() to create missing records');
+    }
+
+    // Track warnings separately from critical issues
+    const warnings: string[] = [];
+
+    // NEW: Warn about jobs approaching max retries
+    if (highRetryCount > 0) {
+      warnings.push(`Jobs approaching max retry limit: ${highRetryCount}`);
+      recommendations.push('Monitor these jobs for potential failures');
+    }
+
+    // Determine overall health status
+    let status: 'HEALTHY' | 'DEGRADED' | 'CRITICAL' | 'ERROR' = 'HEALTHY';
+
+    // CRITICAL conditions - pipeline is stalled or severely impacted
+    if (
+      lockMetrics.healthStatus === 'CRITICAL' ||
+      (minutesSinceLastCompletion !== null && minutesSinceLastCompletion > 180) ||
+      exhaustedRetryingCount > 0 ||  // NEW: Jobs stuck forever without intervention
+      invalidJobTypeCount > 0 ||     // NEW: Jobs that can never complete
+      // Phase 5: Cron execution gap >20 minutes (Cloudflare Worker likely failed)
+      (minutesSinceLastCron !== null && minutesSinceLastCron > CRON_GAP_CRITICAL_MINUTES) ||
+      // NEW: Empty TickerMonitoring with active user tickers - discovery will fail completely
+      (tickerMonitoringActive === 0 && userSymbols.length > 0)
+    ) {
+      status = 'CRITICAL';
+    }
+    // DEGRADED conditions - issues detected but pipeline may recover
+    else if (
+      lockMetrics.healthStatus === 'WARNING' ||
+      issues.length > 0 ||
+      (minutesSinceLastCompletion !== null && minutesSinceLastCompletion > 60) ||
+      staleProcessingCount > 0 ||  // NEW: Jobs might be hung
+      // Phase 5: Orphaned filings exist
+      orphanedFilingCount > 0 ||
+      // Phase 5: Cron execution gap 15-20 minutes
+      (minutesSinceLastCron !== null && minutesSinceLastCron > CRON_GAP_DEGRADED_MINUTES)
+    ) {
+      status = 'DEGRADED';
+    }
+
+    const response: PipelineHealthResponse = {
+      status,
+      database: databaseInfo,
+      locks: {
+        healthStatus: lockMetrics.healthStatus,
+        staleCount: lockMetrics.staleLocksCount,
+        activeCount: lockMetrics.activeLocks
+      },
+      jobs: {
+        pending: pendingCount,
+        processing: processingCount,
+        completedLast1h,
+        completedLast24h,
+        deadLetter: deadLetterCount,
+        retrying: retryingCount,
+        // NEW: Stuck job detection metrics
+        exhaustedRetrying: exhaustedRetryingCount,
+        staleProcessing: staleProcessingCount,
+        invalidJobTypes: invalidJobTypeCount,
+        highRetryCount: highRetryCount
+      },
+      // Phase 5: Cron execution monitoring
+      cronExecution: {
+        lastExecution: lastCronExecution?.toISOString() || null,
+        minutesSinceLastCron,
+        gapsDetected: cronGapsDetected,
+      },
+      // Phase 5: Orphaned filing monitoring (with sampling for performance)
+      filings: {
+        orphanedCount: orphanedFilingCount,
+        unprocessedTotal: unprocessedFilingsTotal,
+        orphanedCountSampled,
+        lastOrphanCheck: lastOrphanCheckTime?.toISOString() || null,
+      },
+      // NEW: TickerMonitoring health check (critical for discovery)
+      tickerMonitoring: {
+        totalRecords: tickerMonitoringTotal,
+        activeRecords: tickerMonitoringActive,
+        userTickersWithoutMonitoring,
+        missingTickers: missingTickers.slice(0, 10), // Limit to first 10 for response size
+      },
+      lastCompletion: lastCompletionTime?.toISOString() || null,
+      minutesSinceLastCompletion,
+      issues,
+      warnings: warnings.length > 0 ? warnings : undefined,
+      recommendations,
+      timestamp: now.toISOString()
     };
-    
+
+    const duration = Date.now() - startTime;
+
+    pipelineLogger.info('Pipeline health check completed', {
+      status,
+      duration,
+      issues: issues.length,
+      lockHealth: lockMetrics.healthStatus,
+      pendingJobs: pendingCount,
+      completedLast1h
+    });
+
+    // Return appropriate HTTP status code
+    const httpStatus = status === 'CRITICAL' ? 503 :
+                       status === 'ERROR' ? 500 : 200;
+
+    // Cache the response
+    setCachedResponse(response);
+
+    return NextResponse.json(response, {
+      status: httpStatus,
+      headers: {
+        'Cache-Control': 'no-store, no-cache, must-revalidate',
+        'X-Pipeline-Status': status,
+        'X-Response-Time': `${duration}ms`,
+        'X-Cache': 'MISS',
+        'X-Content-Type-Options': 'nosniff',
+        'X-Frame-Options': 'DENY',
+        'X-XSS-Protection': '1; mode=block'
+      }
+    });
+
   } catch (error) {
-    componentLogger.error('Resilience system health check failed', { error });
-    overallStatus = 'unhealthy';
-    
-    checks.general_error = {
-      status: 'unhealthy',
-      error: error instanceof Error ? error.message : 'Resilience system check failed'
-    };
+    const duration = Date.now() - startTime;
+
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    const errorStack = error instanceof Error ? error.stack : undefined;
+    const errorName = error instanceof Error ? error.name : 'UnknownError';
+
+    pipelineLogger.error('Pipeline health check failed', {
+      error: errorMessage,
+      errorName,
+      stack: errorStack,
+      duration
+    });
+
+    console.error('[Pipeline Health] Detailed error:', {
+      message: errorMessage,
+      name: errorName,
+      stack: errorStack,
+      duration
+    });
+
+    return NextResponse.json({
+      status: 'ERROR',
+      database: {
+        provider: 'unknown',
+        hasAppSchema: false,
+        hasPipelineSchema: false,
+        migrationComplete: false,
+      },
+      locks: {
+        healthStatus: 'UNKNOWN',
+        staleCount: 0,
+        activeCount: 0
+      },
+      jobs: {
+        pending: 0,
+        processing: 0,
+        completedLast1h: 0,
+        completedLast24h: 0,
+        deadLetter: 0,
+        retrying: 0,
+        exhaustedRetrying: 0,
+        staleProcessing: 0,
+        invalidJobTypes: 0,
+        highRetryCount: 0
+      },
+      // Phase 5: Cron execution monitoring
+      cronExecution: {
+        lastExecution: null,
+        minutesSinceLastCron: null,
+        gapsDetected: 0,
+      },
+      // Phase 5: Orphaned filing monitoring
+      filings: {
+        orphanedCount: 0,
+        unprocessedTotal: 0,
+      },
+      // NEW: TickerMonitoring health check
+      tickerMonitoring: {
+        totalRecords: 0,
+        activeRecords: 0,
+        userTickersWithoutMonitoring: 0,
+        missingTickers: [],
+      },
+      lastCompletion: null,
+      minutesSinceLastCompletion: null,
+      issues: [`Failed to check pipeline health: ${errorMessage}`],
+      recommendations: ['Check system health or contact support'],
+      timestamp: new Date().toISOString(),
+      // Add debug info in development/error responses
+      debug: {
+        errorName,
+        errorMessage: errorMessage.substring(0, 500), // Limit length
+        duration
+      }
+    } as PipelineHealthResponse & { debug?: unknown }, {
+      status: 500,
+      headers: {
+        'Cache-Control': 'no-store',
+        'X-Pipeline-Status': 'ERROR',
+        'X-Response-Time': `${duration}ms`,
+        'X-Content-Type-Options': 'nosniff',
+        'X-Frame-Options': 'DENY',
+        'X-XSS-Protection': '1; mode=block'
+      }
+    });
   }
-  
-  return {
-    overall_status: overallStatus,
-    checks,
-    timestamp: new Date().toISOString()
+}
+
+// ─── Deployment Health Handler ──────────────────────────────────────────────
+
+async function handleDeploymentHealth() {
+  const startTime = Date.now();
+  const instanceAge = Date.now() - deploymentInstanceStartTime;
+
+  const checks = {
+    database: { connected: false, latencyMs: 0 },
+    environment: { cronSecretConfigured: false, databaseUrlConfigured: false },
+    warmup: { complete: deploymentWarmupComplete, instanceAgeMs: instanceAge, coldStart: instanceAge < 5000 }
   };
-} 
+
+  let allHealthy = true;
+
+  try {
+    const dbStart = Date.now();
+    const prisma = getDeploymentPrisma();
+    await prisma.$queryRaw`SELECT 1`;
+    checks.database = { connected: true, latencyMs: Date.now() - dbStart };
+    if (!deploymentWarmupComplete) deploymentWarmupComplete = true;
+  } catch {
+    checks.database = { connected: false, latencyMs: Date.now() - startTime };
+    allHealthy = false;
+  }
+
+  checks.environment = {
+    cronSecretConfigured: !!process.env.CRON_SECRET,
+    databaseUrlConfigured: !!process.env.DATABASE_URL
+  };
+
+  if (!checks.environment.cronSecretConfigured || !checks.environment.databaseUrlConfigured) {
+    allHealthy = false;
+  }
+
+  return NextResponse.json({
+    ready: allHealthy,
+    status: allHealthy ? 'OK' : 'NOT_READY',
+    checks,
+    deploymentId: process.env.VERCEL_DEPLOYMENT_ID || 'local',
+    timestamp: new Date().toISOString(),
+    responseTimeMs: Date.now() - startTime
+  }, {
+    status: allHealthy ? 200 : 503,
+    headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0' }
+  });
+}

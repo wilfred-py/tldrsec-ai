@@ -203,7 +203,7 @@ export default function OnboardingPage() {
       try {
         const sectorsParam = filterSector ? filterSector : sectorsList.join(",");
         const res = await fetch(
-          `/api/companies/by-sector?sectors=${encodeURIComponent(sectorsParam)}&page=${page}&limit=50`
+          `/api/companies?sectors=${encodeURIComponent(sectorsParam)}&page=${page}&limit=50`
         );
         if (!res.ok) throw new Error("Failed to fetch companies");
         const data: BySectorResponse = await res.json();
@@ -241,7 +241,7 @@ export default function OnboardingPage() {
     async (sectorsList: string[]) => {
       try {
         const res = await fetch(
-          `/api/companies/by-sector?sectors=${encodeURIComponent(sectorsList.join(","))}&page=1&limit=1`
+          `/api/companies?sectors=${encodeURIComponent(sectorsList.join(","))}&page=1&limit=1`
         );
         if (res.ok) {
           const data: BySectorResponse = await res.json();
@@ -265,7 +265,7 @@ export default function OnboardingPage() {
     }
     setIsSearchingApi(true);
     try {
-      const response = await fetch(`/api/companies/search?q=${encodeURIComponent(query)}`);
+      const response = await fetch(`/api/companies?q=${encodeURIComponent(query)}`);
       if (response.ok) {
         const data = (await response.json()) as {
           companies?: Array<{ symbol: string; name: string; sector?: string | null }>;

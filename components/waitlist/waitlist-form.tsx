@@ -46,7 +46,7 @@ export function WaitlistForm({ onSuccess }: WaitlistFormProps = {}) {
     await trackPageAnalytics('home', 'waitlist_signup_attempt', utmParams);
 
     try {
-      const response = await fetch('/api/waitlist/subscribe', {
+      const response = await fetch('/api/waitlist', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

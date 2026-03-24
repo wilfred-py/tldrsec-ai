@@ -1,91 +1,206 @@
 /**
- * Stripe Webhook Handler
- * Processes Stripe events for subscription lifecycle management
+ * Unified Webhook Handler
+ *
+ * POST /api/webhook?provider=clerk  → Clerk user lifecycle events
+ * POST /api/webhook?provider=stripe → Stripe billing events
  */
 
-import { NextRequest, NextResponse } from 'next/server';
 import { headers } from 'next/headers';
-import { getPrismaClient } from '../../../../lib/db/prisma';
-import { validateWebhookSignature, getPlanTypeFromPriceId, stripe } from '../../../../lib/stripe';
-import { syncUserSubscriptionTier, syncSubscriptionFromStripeData } from '../../../../lib/stripe/sync-subscription';
+import { WebhookEvent } from '@clerk/nextjs/server';
+import { NextRequest, NextResponse } from 'next/server';
+import { getPrismaClient } from '@/lib/db/prisma';
+import { TrialService } from '@/lib/auth/trial-service';
+import { checkIPTrialAbuse } from '@/lib/security/trial-abuse-prevention';
+import { validateWebhookSignature, getPlanTypeFromPriceId, stripe } from '@/lib/stripe';
+import { syncUserSubscriptionTier, syncSubscriptionFromStripeData } from '@/lib/stripe/sync-subscription';
 import Stripe from 'stripe';
+
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
 
 const prisma = getPrismaClient();
 
-export async function POST(request: NextRequest) {
+export async function POST(req: NextRequest) {
+  const { searchParams } = new URL(req.url);
+  const provider = searchParams.get('provider');
+
+  switch (provider) {
+    case 'clerk':
+      return handleClerkWebhook(req);
+    case 'stripe':
+      return handleStripeWebhook(req);
+    default:
+      return NextResponse.json({ error: 'Unknown provider. Use ?provider=clerk or ?provider=stripe' }, { status: 400 });
+  }
+}
+
+// ─── Clerk Webhook ──────────────────────────────────────────────────────────
+
+async function handleClerkWebhook(req: Request) {
+  const WEBHOOK_SECRET = process.env.CLERK_WEBHOOK_SECRET;
+
+  if (!WEBHOOK_SECRET) {
+    throw new Error('Please add CLERK_WEBHOOK_SECRET from Clerk Dashboard to .env or .env.local');
+  }
+
+  const headerPayload = await headers();
+  const svix_id = headerPayload.get('svix-id');
+  const svix_timestamp = headerPayload.get('svix-timestamp');
+  const svix_signature = headerPayload.get('svix-signature');
+
+  if (!svix_id || !svix_timestamp || !svix_signature) {
+    return new Response('Error missing Svix headers', { status: 400 });
+  }
+
+  const payload = await req.json();
+  const body = JSON.stringify(payload);
+
+  const { Webhook } = await import('svix');
+  const wh = new Webhook(WEBHOOK_SECRET);
+
+  let evt: WebhookEvent;
+
+  try {
+    evt = wh.verify(body, {
+      'svix-id': svix_id,
+      'svix-timestamp': svix_timestamp,
+      'svix-signature': svix_signature,
+    }) as WebhookEvent;
+  } catch (err) {
+    console.error('Error verifying webhook:', err);
+    return new Response('Error verifying webhook', { status: 400 });
+  }
+
+  const eventType = evt.type;
+  console.log(`Webhook event type: ${eventType}`);
+
+  switch (eventType) {
+    case 'user.created':
+      try {
+        const userData = evt.data;
+        const primaryEmail = userData.email_addresses?.[0]?.email_address;
+
+        if (primaryEmail && userData.id) {
+          const headerPayloadForIP = await headers();
+          const ipAddress = headerPayloadForIP.get('x-forwarded-for')?.split(',')[0]?.trim()
+            || headerPayloadForIP.get('x-real-ip')
+            || 'unknown';
+
+          let grantTrial = true;
+          if (ipAddress !== 'unknown') {
+            try {
+              const abuseCheck = await checkIPTrialAbuse(ipAddress);
+              if (!abuseCheck.allowed) {
+                console.warn(`[trial-abuse] IP ${ipAddress} blocked: ${abuseCheck.reason}`);
+                grantTrial = false;
+              }
+            } catch (err) {
+              console.error('[trial-abuse] Check failed, granting trial anyway:', err);
+            }
+          }
+
+          const now = new Date();
+          const trialEndsAt = grantTrial ? TrialService.calculateTrialEnd(now) : undefined;
+
+          const newUser = await prisma.user.create({
+            data: {
+              id: userData.id,
+              email: primaryEmail,
+              authProvider: 'clerk',
+              authProviderId: userData.id,
+              name: userData.first_name ? `${userData.first_name} ${userData.last_name || ''}`.trim() : undefined,
+              subscriptionTier: 'FREE',
+              onboardingCompleted: false,
+              trialStartedAt: grantTrial ? now : undefined,
+              trialEndsAt: trialEndsAt,
+              isTrialing: grantTrial,
+              signupIpAddress: ipAddress !== 'unknown' ? ipAddress : undefined,
+            }
+          });
+          console.log(`User created in database: ${newUser.id}, trial: ${grantTrial}`);
+        } else {
+          console.error('Missing required user data in webhook:', { id: userData.id, email: primaryEmail });
+        }
+      } catch (error) {
+        console.error('Failed to create user in database from webhook:', error);
+      }
+      break;
+    case 'user.updated':
+      console.log('User updated:', evt.data);
+      break;
+    case 'user.deleted':
+      try {
+        const userData = evt.data;
+        if (userData.id) {
+          await prisma.user.delete({ where: { id: userData.id } });
+          console.log('User deleted from database:', userData.id);
+        }
+      } catch (error) {
+        console.error('Failed to delete user from database:', error);
+      }
+      break;
+    default:
+      console.log('Unhandled webhook event type:', eventType);
+  }
+
+  return NextResponse.json({ success: true });
+}
+
+// ─── Stripe Webhook ─────────────────────────────────────────────────────────
+
+async function handleStripeWebhook(request: Request) {
   try {
     const body = await request.text();
     const headersList = await headers();
     const signature = headersList.get('stripe-signature');
 
     if (!signature) {
-      console.error('Missing Stripe signature');
-      return NextResponse.json(
-        { error: 'Missing signature' },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: 'Missing signature' }, { status: 400 });
     }
 
-    // Validate webhook signature
     const event = validateWebhookSignature(body, signature);
     if (!event) {
-      console.error('Invalid webhook signature');
-      return NextResponse.json(
-        { error: 'Invalid signature' },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: 'Invalid signature' }, { status: 400 });
     }
 
     console.log(`Received Stripe webhook: ${event.type}`);
 
-    // Process the event
     switch (event.type) {
       case 'checkout.session.completed':
         await handleCheckoutCompleted(event.data.object as Stripe.Checkout.Session);
         break;
-
       case 'customer.subscription.created':
         await handleSubscriptionCreated(event.data.object as Stripe.Subscription);
         break;
-
       case 'customer.subscription.updated':
         await handleSubscriptionUpdated(event.data.object as Stripe.Subscription);
         break;
-
       case 'customer.subscription.deleted':
         await handleSubscriptionDeleted(event.data.object as Stripe.Subscription);
         break;
-
       case 'invoice.payment_succeeded':
         await handlePaymentSucceeded(event.data.object as Stripe.Invoice);
         break;
-
       case 'invoice.payment_failed':
         await handlePaymentFailed(event.data.object as Stripe.Invoice);
         break;
-
       default:
         console.log(`Unhandled event type: ${event.type}`);
     }
 
     return NextResponse.json({ received: true });
-
   } catch (error) {
     console.error('Webhook processing error:', error);
-    return NextResponse.json(
-      { error: 'Webhook processing failed' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Webhook processing failed' }, { status: 500 });
   }
 }
+
+// ─── Stripe Event Handlers ──────────────────────────────────────────────────
 
 async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
   console.log('Processing checkout completion:', session.id);
 
-  if (session.mode !== 'subscription') {
-    console.log('Ignoring non-subscription checkout session');
-    return;
-  }
+  if (session.mode !== 'subscription') return;
 
   let metadataUserId = session.metadata?.userId;
   const planType = session.metadata?.planType as 'FREE' | 'PRO' | 'MAX' | undefined;
@@ -95,7 +210,6 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
     return;
   }
 
-  // R8: If userId not in metadata, try to resolve by email (store for reuse)
   let resolvedDbUser: { id: string; authProviderId: string | null } | null = null;
   if (!metadataUserId) {
     const customerEmail = session.customer_details?.email || session.customer_email;
@@ -107,21 +221,12 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
         });
         if (resolvedDbUser) {
           metadataUserId = resolvedDbUser.authProviderId || resolvedDbUser.id;
-          console.log(`[webhook] Resolved user by email ${customerEmail} -> ${metadataUserId}`);
         } else {
-          console.warn(`[webhook] No DB user found for email ${customerEmail}, session ${session.id}. Will be reconciled at onboarding.`);
-          // Q3: Send reminder email to complete signup (fire-and-forget)
-          import('../../../../lib/email/trial-emails')
+          import('@/lib/email/trial-emails')
             .then(({ sendCheckoutReminderEmail }) =>
-              sendCheckoutReminderEmail({
-                email: customerEmail,
-                sessionId: session.id,
-                planType: planType || 'PRO',
-              })
+              sendCheckoutReminderEmail({ email: customerEmail, sessionId: session.id, planType: planType || 'PRO' })
             )
-            .catch((emailErr) => {
-              console.error('[webhook] Failed to send checkout reminder email:', emailErr);
-            });
+            .catch((emailErr) => console.error('[webhook] Failed to send checkout reminder:', emailErr));
           return;
         }
       } catch (dbError) {
@@ -135,7 +240,6 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
   }
 
   try {
-    // R8: Reuse resolvedDbUser if available, otherwise resolve by metadataUserId
     let userId: string;
     if (resolvedDbUser) {
       userId = resolvedDbUser.id;
@@ -144,14 +248,13 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
         where: { OR: [{ id: metadataUserId }, { authProviderId: metadataUserId }] },
         select: { id: true },
       });
-      userId = dbUser?.id ?? metadataUserId;
+      userId = dbUser?.id ?? metadataUserId!;
     }
 
-    // Update or create subscription record using upsert for robustness
     await prisma.userSubscription.upsert({
       where: { userId },
       update: {
-        planType, // Update the plan type from checkout metadata
+        planType,
         stripeSubscriptionId: session.subscription as string,
         stripeCustomerId: session.customer as string,
         isActive: true,
@@ -159,7 +262,7 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
       },
       create: {
         userId,
-        planType: (planType as 'FREE' | 'PRO' | 'MAX') || 'PRO',
+        planType: planType || 'PRO',
         stripeSubscriptionId: session.subscription as string,
         stripeCustomerId: session.customer as string,
         isActive: true,
@@ -167,45 +270,20 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
       },
     });
 
-    // Create initial usage period
     const now = new Date();
     const periodStart = new Date(now.getFullYear(), now.getMonth(), 1);
     const periodEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0);
     const resetAt = new Date(now.getFullYear(), now.getMonth() + 1, 1);
-
-    // Get filing limit based on plan type (matches PlanType enum: FREE, PRO, MAX)
-    const planLimits: Record<string, number> = {
-      FREE: 50,
-      PRO: 200,
-      MAX: 1000,
-    };
-
+    const planLimits: Record<string, number> = { FREE: 50, PRO: 200, MAX: 1000 };
     const filingLimit = planLimits[planType] || 50;
 
     await prisma.usagePeriod.upsert({
-      where: {
-        userId_periodStart: {
-          userId,
-          periodStart,
-        },
-      },
-      update: {
-        filingLimit,
-        planType: planType as 'FREE' | 'PRO' | 'MAX',
-      },
-      create: {
-        userId,
-        periodStart,
-        periodEnd,
-        planType: planType as 'FREE' | 'PRO' | 'MAX',
-        filingLimit,
-        resetAt,
-      },
+      where: { userId_periodStart: { userId, periodStart } },
+      update: { filingLimit, planType },
+      create: { userId, periodStart, periodEnd, planType, filingLimit, resetAt },
     });
 
-    // Sync User.subscriptionTier so dashboard reads the correct plan
     await syncUserSubscriptionTier(userId, planType);
-
     console.log(`Subscription activated for user ${userId}, plan: ${planType}`);
   } catch (error) {
     console.error('Failed to process checkout completion:', error);
@@ -213,17 +291,13 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
 }
 
 async function handleSubscriptionCreated(subscription: Stripe.Subscription) {
-  console.log('Processing subscription creation:', subscription.id);
-
   const customerId = subscription.customer as string;
   const priceId = subscription.items.data[0]?.price.id;
 
-  // Find user by Stripe customer ID
   const userSubscription = await prisma.userSubscription.findUnique({
     where: { stripeCustomerId: customerId },
   });
 
-  // Issue 2: If not found by customer ID, try email fallback via Stripe customer
   if (!userSubscription) {
     try {
       if (stripe) {
@@ -234,10 +308,8 @@ async function handleSubscriptionCreated(subscription: Stripe.Subscription) {
             select: { id: true },
           });
           if (dbUser) {
-            const { planType } = await syncSubscriptionFromStripeData(
-              dbUser.id, subscription, customerId
-            );
-            console.log(`[webhook] Subscription created via email fallback for ${customer.email}: ${planType}`);
+            const { planType } = await syncSubscriptionFromStripeData(dbUser.id, subscription, customerId);
+            console.log(`[webhook] Subscription created via email fallback: ${planType}`);
             return;
           }
         }
@@ -245,16 +317,12 @@ async function handleSubscriptionCreated(subscription: Stripe.Subscription) {
     } catch (error) {
       console.error('[webhook] Email fallback failed for customer:', customerId, error);
     }
-
     console.error('User not found for customer:', customerId);
     return;
   }
 
   try {
-    // Derive plan type from price ID
     const planType = getPlanTypeFromPriceId(priceId);
-
-    // Update subscription with Stripe data including planType
     await prisma.userSubscription.update({
       where: { userId: userSubscription.userId },
       data: {
@@ -268,19 +336,13 @@ async function handleSubscriptionCreated(subscription: Stripe.Subscription) {
         updatedAt: new Date(),
       },
     });
-
     await syncUserSubscriptionTier(userSubscription.userId, planType);
-
-    console.log(`Subscription created for user ${userSubscription.userId}, plan: ${planType}`);
   } catch (error) {
     console.error('Failed to process subscription creation:', error);
   }
 }
 
 async function handleSubscriptionUpdated(subscription: Stripe.Subscription) {
-  console.log('Processing subscription update:', subscription.id);
-
-  // Find user by subscription ID
   const userSubscription = await prisma.userSubscription.findUnique({
     where: { stripeSubscriptionId: subscription.id },
   });
@@ -292,9 +354,7 @@ async function handleSubscriptionUpdated(subscription: Stripe.Subscription) {
 
   try {
     const priceId = subscription.items.data[0]?.price.id;
-    // Derive plan type from price ID for subscription changes (upgrades/downgrades)
     const planType = getPlanTypeFromPriceId(priceId);
-
     await prisma.userSubscription.update({
       where: { userId: userSubscription.userId },
       data: {
@@ -307,19 +367,13 @@ async function handleSubscriptionUpdated(subscription: Stripe.Subscription) {
         updatedAt: new Date(),
       },
     });
-
     await syncUserSubscriptionTier(userSubscription.userId, planType);
-
-    console.log(`Subscription updated for user ${userSubscription.userId}, plan: ${planType}`);
   } catch (error) {
     console.error('Failed to process subscription update:', error);
   }
 }
 
 async function handleSubscriptionDeleted(subscription: Stripe.Subscription) {
-  console.log('Processing subscription deletion:', subscription.id);
-
-  // Find user by subscription ID
   const userSubscription = await prisma.userSubscription.findUnique({
     where: { stripeSubscriptionId: subscription.id },
   });
@@ -332,76 +386,41 @@ async function handleSubscriptionDeleted(subscription: Stripe.Subscription) {
   try {
     await prisma.userSubscription.update({
       where: { userId: userSubscription.userId },
-      data: {
-        planType: 'FREE', // Revert to free tier on cancellation
-        isActive: false,
-        cancelAtPeriodEnd: false,
-        updatedAt: new Date(),
-      },
+      data: { planType: 'FREE', isActive: false, cancelAtPeriodEnd: false, updatedAt: new Date() },
     });
-
     await syncUserSubscriptionTier(userSubscription.userId, 'FREE');
-
-    console.log(`Subscription cancelled for user ${userSubscription.userId}, reverted to FREE`);
   } catch (error) {
     console.error('Failed to process subscription deletion:', error);
   }
 }
 
 async function handlePaymentSucceeded(invoice: Stripe.Invoice) {
-  console.log('Processing successful payment:', invoice.id);
+  if (!invoice.subscription) return;
 
-  if (!invoice.subscription) {
-    console.log('Ignoring non-subscription invoice');
-    return;
-  }
-
-  // Find user by subscription ID
   const userSubscription = await prisma.userSubscription.findUnique({
     where: { stripeSubscriptionId: invoice.subscription as string },
   });
 
-  if (!userSubscription) {
-    console.error('User not found for subscription:', invoice.subscription);
-    return;
-  }
+  if (!userSubscription) return;
 
   try {
-    // Ensure subscription is active
     await prisma.userSubscription.update({
       where: { userId: userSubscription.userId },
-      data: {
-        isActive: true,
-        updatedAt: new Date(),
-      },
+      data: { isActive: true, updatedAt: new Date() },
     });
-
-    console.log(`Payment processed for user ${userSubscription.userId}`);
   } catch (error) {
     console.error('Failed to process payment success:', error);
   }
 }
 
 async function handlePaymentFailed(invoice: Stripe.Invoice) {
-  console.log('Processing failed payment:', invoice.id);
+  if (!invoice.subscription) return;
 
-  if (!invoice.subscription) {
-    console.log('Ignoring non-subscription invoice');
-    return;
-  }
-
-  // Find user by subscription ID
   const userSubscription = await prisma.userSubscription.findUnique({
     where: { stripeSubscriptionId: invoice.subscription as string },
   });
 
-  if (!userSubscription) {
-    console.error('User not found for subscription:', invoice.subscription);
-    return;
+  if (userSubscription) {
+    console.log(`Payment failed for user ${userSubscription.userId}`);
   }
-
-  // Note: We might want to send an email notification here
-  // or implement a grace period before deactivating
-
-  console.log(`Payment failed for user ${userSubscription.userId}`);
 }

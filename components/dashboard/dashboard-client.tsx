@@ -39,7 +39,7 @@ interface DashboardClientProps {
   tickerLimit?: number;
 }
 
-export function DashboardClient({ showWelcome: _showWelcome = false, shouldMergePending = false, subscriptionSuccess = false, initialCompanies = [], tutorialCompleted = false, subscriptionTier = 'FREE', tickerLimit = 3 }: DashboardClientProps) {
+export function DashboardClient({ showWelcome: _showWelcome = false, shouldMergePending: _shouldMergePending = false, subscriptionSuccess = false, initialCompanies = [], tutorialCompleted = false, subscriptionTier = 'FREE', tickerLimit = 3 }: DashboardClientProps) {
   // State for tracked companies
   const [companies, setCompanies] = useState<Company[]>(initialCompanies);
   const [currentCompany, setCurrentCompany] = useState<Company | null>(null);
@@ -55,7 +55,6 @@ export function DashboardClient({ showWelcome: _showWelcome = false, shouldMerge
 
   const [showTutorial, setShowTutorial] = useState(false);
   const [tutorialProgress, setTutorialProgress] = useState(0);
-  const [hasMergedPending, setHasMergedPending] = useState(false);
 
   // Async hooks for API calls
   const {
@@ -84,33 +83,7 @@ export function DashboardClient({ showWelcome: _showWelcome = false, shouldMerge
     }
   }, [executeGetCompanies, setCompanies]);
 
-  // Merge pending onboarding tickers for existing users
-  useEffect(() => {
-    if (!shouldMergePending || hasMergedPending) return;
-
-    const mergePending = async () => {
-      try {
-        const response = await fetch('/api/onboarding/merge-pending', {
-          method: 'POST',
-        });
-
-        if (response.ok) {
-          const result = await response.json();
-          if (result.merged && result.tickersCreated?.length > 0) {
-            toast.success(`Added ${result.tickersCreated.length} ticker(s) from onboarding`);
-            // Reload companies to show the merged tickers
-            loadCompanies();
-          }
-        }
-      } catch (error) {
-        console.error('Error merging pending tickers:', error);
-      } finally {
-        setHasMergedPending(true);
-      }
-    };
-
-    mergePending();
-  }, [shouldMergePending, hasMergedPending, loadCompanies]);
+  // Legacy merge-pending removed (endpoint deprecated)
 
   // Load tracked companies on component mount (skip if server-provided data exists)
   useEffect(() => {
@@ -163,7 +136,7 @@ export function DashboardClient({ showWelcome: _showWelcome = false, shouldMerge
   const loadCompaniesForSearch = useCallback(async () => {
     if (companiesLoaded) return;
     try {
-      const response = await fetch("/api/companies/list");
+      const response = await fetch("/api/companies?list=true");
       if (response.ok) {
         const data = (await response.json()) as {
           companies?: Array<{ symbol: string; name: string }>;

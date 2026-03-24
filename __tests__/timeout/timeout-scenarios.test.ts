@@ -6,7 +6,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { GET } from '../../app/api/cron/tier-aware/route';
+import { GET } from '../../app/api/cron/route';
 
 // Mock all external dependencies
 jest.mock('../../lib/monitoring/cron-monitor', () => ({

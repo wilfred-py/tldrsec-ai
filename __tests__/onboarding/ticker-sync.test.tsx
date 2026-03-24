@@ -143,7 +143,7 @@ global.fetch = jest.fn().mockImplementation((url) => {
       ]),
     });
   }
-  if (url === '/api/user/preferences') {
+  if (url === '/api/user?type=preferences') {
     return Promise.resolve({
       ok: true,
       json: () => Promise.resolve({ success: true }),

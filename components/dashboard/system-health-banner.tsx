@@ -21,7 +21,7 @@ export function SystemHealthBanner() {
     // Fetch system health status
     const fetchHealth = async () => {
       try {
-        const response = await fetch('/api/system/health');
+        const response = await fetch('/api/health');
         if (response.ok) {
           const data = await response.json();
           setHealth(data);

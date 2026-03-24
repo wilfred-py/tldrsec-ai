@@ -52,7 +52,7 @@ export function useSubscription(): UseSubscriptionReturn {
       setLoading(true);
       setError(null);
 
-      const response = await fetch('/api/user/subscription');
+      const response = await fetch('/api/user?type=subscription');
       
       if (!response.ok) {
         if (response.status === 401) {
@@ -79,7 +79,7 @@ export function useSubscription(): UseSubscriptionReturn {
     try {
       setError(null);
 
-      const response = await fetch('/api/user/subscription', {
+      const response = await fetch('/api/user?type=subscription', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -113,7 +113,7 @@ export function useSubscription(): UseSubscriptionReturn {
     try {
       setError(null);
 
-      const response = await fetch('/api/billing/portal', {
+      const response = await fetch('/api/user?type=billing-portal', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

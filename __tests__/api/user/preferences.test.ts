@@ -3,7 +3,7 @@ import { PreferenceService } from '@/lib/user/preference-service';
 import { currentUser } from '@clerk/nextjs/server';
 import { NotificationPreference } from '@/lib/email/notification-service';
 import { UserPreferences } from '@/lib/user/preference-types';
-import { GET, PATCH } from '@/app/api/user/preferences/route';
+import { GET, PATCH } from '@/app/api/user/route';
 
 // Mock the currentUser function from Clerk
 jest.mock('@clerk/nextjs/server', () => ({
@@ -47,7 +47,7 @@ class MockNextRequest extends NextRequest {
   private _body: any;
   
   constructor(body = {}) {
-    super(new Request('https://example.com/api/user/preferences', {
+    super(new Request('https://example.com/api/user?type=preferences', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body)
@@ -113,7 +113,7 @@ describe('User Preferences API', () => {
   describe('GET /api/user/preferences', () => {
     it('should return user preferences for authenticated user', async () => {
       // Mock request
-      const request = new NextRequest(new Request('https://example.com/api/user/preferences'));
+      const request = new NextRequest(new Request('https://example.com/api/user?type=preferences'));
       
       // Call handler
       const response = await GET(request);
@@ -134,7 +134,7 @@ describe('User Preferences API', () => {
       (currentUser as jest.Mock).mockResolvedValue(null);
       
       // Mock request
-      const request = new NextRequest(new Request('https://example.com/api/user/preferences'));
+      const request = new NextRequest(new Request('https://example.com/api/user?type=preferences'));
       
       // Call handler
       const response = await GET(request);
@@ -151,7 +151,7 @@ describe('User Preferences API', () => {
       (PreferenceService.getUserPreferences as jest.Mock).mockRejectedValue(new Error('Database error'));
       
       // Mock request
-      const request = new NextRequest(new Request('https://example.com/api/user/preferences'));
+      const request = new NextRequest(new Request('https://example.com/api/user?type=preferences'));
       
       // Call handler
       const response = await GET(request);
@@ -208,7 +208,7 @@ describe('User Preferences API', () => {
     
     it('should handle invalid JSON in request body', async () => {
       // Mock request with invalid JSON body
-      const request = new NextRequest(new Request('https://example.com/api/user/preferences', {
+      const request = new NextRequest(new Request('https://example.com/api/user?type=preferences', {
         method: 'PATCH'
       }));
       

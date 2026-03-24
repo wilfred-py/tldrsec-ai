@@ -44,7 +44,7 @@ describe('SettingsForm', () => {
     
     // Mock fetch to return user preferences
     (global.fetch as jest.Mock).mockImplementation((url) => {
-      if (url === '/api/user/preferences') {
+      if (url === '/api/user?type=preferences') {
         return Promise.resolve({
           ok: true,
           json: () => Promise.resolve({

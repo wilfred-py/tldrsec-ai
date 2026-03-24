@@ -43,7 +43,7 @@ export async function sendWelcomeEmail(): Promise<{ success: boolean; error?: st
     }
     
     // Send the welcome email via our API endpoint
-    const response = await fetch('/api/email/welcome', {
+    const response = await fetch('/api/onboarding?action=welcome-email', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'

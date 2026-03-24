@@ -268,7 +268,7 @@ describe('Middleware Public Route Security', () => {
     it('should NOT apply security validation to non-cron/health API routes', async () => {
       const protectedEndpoints = [
         '/api/summaries',
-        '/api/user/preferences',
+        '/api/user?type=preferences',
         '/api/billing/subscription',
         '/api/webhook/stripe',
         '/api/test/endpoint'
