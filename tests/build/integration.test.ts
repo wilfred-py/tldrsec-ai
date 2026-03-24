@@ -272,7 +272,7 @@ describe('Build Integration Tests', () => {
     test('should handle unauthorized requests appropriately', async () => {
       const protectedEndpoints = [
         '/api/user/tickers',
-        '/api/user/preferences',
+        '/api/user?type=preferences',
         '/dashboard'
       ];
 

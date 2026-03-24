@@ -71,7 +71,7 @@ jest.mock('../../../lib/sec-edgar/ticker-monitoring', () => ({
 }));
 
 // Import after mocking
-import { GET } from '../../../app/api/cron/tier-aware/route';
+import { GET } from '../../../app/api/cron/route';
 import { getPrismaClient } from '../../../lib/db/prisma';
 
 const mockPrisma = (getPrismaClient as jest.Mock)();

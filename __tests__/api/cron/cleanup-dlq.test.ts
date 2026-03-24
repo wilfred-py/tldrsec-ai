@@ -4,7 +4,7 @@
  * Tests the automated cleanup of Dead Letter Queue entries and old failed jobs.
  */
 
-import { POST, GET } from '@/app/api/cron/cleanup-dlq/route';
+import { POST, GET } from '@/app/api/cron/route';
 import { getPrismaClient } from '@/lib/db/prisma';
 import { DeadLetterQueueService } from '@/lib/job-queue/dead-letter-queue';
 import { CronAuthService } from '@/lib/cron/auth-service';

@@ -95,7 +95,7 @@ jest.mock('@/lib/db/supabase-config', () => ({
 }));
 
 // Import after mocks
-import { GET } from '@/app/api/health/pipeline/route';
+import { GET } from '@/app/api/health/route';
 
 function createMockRequest(url = 'http://localhost:3000/api/health/pipeline'): NextRequest {
   return new NextRequest(url, {

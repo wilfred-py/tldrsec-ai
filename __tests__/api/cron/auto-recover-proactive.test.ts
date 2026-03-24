@@ -99,7 +99,7 @@ jest.mock('@/lib/slack/webhook-service', () => ({
 }));
 
 // Import after mocks
-import { GET, _resetRecoveryStateForTesting } from '@/app/api/cron/auto-recover/route';
+import { GET, _resetRecoveryStateForTesting } from '@/app/api/cron/route';
 
 describe('Comprehensive Self-Healing Auto-Recovery', () => {
   const cronSecret = 'test-cron-secret';

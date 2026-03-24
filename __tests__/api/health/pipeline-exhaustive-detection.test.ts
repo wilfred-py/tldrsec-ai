@@ -60,7 +60,7 @@ jest.mock('@/lib/logging', () => ({
   },
 }));
 
-import { GET } from '@/app/api/health/pipeline/route';
+import { GET } from '@/app/api/health/route';
 
 describe('Pipeline Health - Exhaustive Detection', () => {
   const mockRequest = new NextRequest('http://localhost/api/health/pipeline');

@@ -6,7 +6,7 @@
  */
 
 import { NextRequest } from 'next/server';
-import { GET } from '../../app/api/cron/tier-aware/route';
+import { GET } from '../../app/api/cron/route';
 import { getPrismaClient } from '../../lib/db/prisma';
 import * as tickerMonitoring from '../../lib/sec-edgar/ticker-monitoring';
 import * as enhancedFetch from '../../lib/network/enhanced-fetch';

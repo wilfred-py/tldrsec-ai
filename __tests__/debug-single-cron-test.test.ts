@@ -3,7 +3,7 @@
  */
 
 import { NextRequest } from 'next/server';
-import { GET as tierAwareRoute } from '../app/api/cron/tier-aware/route';
+import { GET as tierAwareRoute } from '../app/api/cron/route';
 
 // Mock external dependencies more comprehensively
 jest.mock('../lib/db/prisma', () => {

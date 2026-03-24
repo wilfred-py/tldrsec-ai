@@ -1,7 +1,7 @@
 import { jest } from '@jest/globals';
 import { NextRequest } from 'next/server';
 // Note: monitor-sec-filings route is disabled, using tier-aware route for testing
-import { GET } from '../../../app/api/cron/tier-aware/route';
+import { GET } from '../../../app/api/cron/route';
 
 // Mock all external dependencies
 jest.mock('../../../lib/sec-edgar/ticker-monitoring', () => ({

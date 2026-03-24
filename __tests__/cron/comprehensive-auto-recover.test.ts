@@ -148,7 +148,7 @@ jest.mock('@/lib/cron/recovery-state-service', () => ({
 }));
 
 // Import after mocks
-import { GET } from '@/app/api/cron/auto-recover/route';
+import { GET } from '@/app/api/cron/route';
 import { CronExecutionGapDetector } from '@/lib/cron/execution-gap-detector';
 import { OrphanedFilingDetector } from '@/lib/cron/orphaned-filing-detector';
 import { RecoveryStateService } from '@/lib/cron/recovery-state-service';

@@ -7,7 +7,7 @@
  * @see docs/plans/2026-01-05-100-percent-pipeline-uptime.md
  */
 import { NextRequest } from 'next/server';
-import { GET, _resetRecoveryStateForTesting } from '@/app/api/cron/auto-recover/route';
+import { GET, _resetRecoveryStateForTesting } from '@/app/api/cron/route';
 
 // Mock fetch for API calls
 const mockFetch = jest.fn();

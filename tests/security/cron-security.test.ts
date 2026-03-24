@@ -4,7 +4,7 @@
  */
 
 import { NextRequest } from 'next/server';
-import { GET } from '../../app/api/cron/tier-aware/route';
+import { GET } from '../../app/api/cron/route';
 import { HmacAuthService } from '../../lib/security/hmac-auth';
 
 // Mock dependencies with more comprehensive database model coverage
