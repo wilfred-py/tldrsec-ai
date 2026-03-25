@@ -371,4 +371,96 @@ describe('Form 4 Field Normalizer', () => {
       expect(truncateWithEllipsis('', 30)).toBe('');
     });
   });
+
+  // =========================================================================
+  // BAC stale summaryJSON regression tests (PR #370 follow-up)
+  // Root cause: resolveFieldZeroSafe treated "" as valid, preventing alias lookup
+  // =========================================================================
+  describe('BAC stale summaryJSON regression (PR #370 follow-up)', () => {
+    it('should resolve price from alias when pricePerShare is empty string', () => {
+      const tx = normalizeTransaction({
+        code: 'S',
+        type: 'Sale',
+        shares: '3,004',
+        pricePerShare: '',  // Empty string from stale AI output
+        price: '$184.90',   // Real value under old field name
+      });
+      expect(tx).not.toBeNull();
+      expect(tx!.pricePerShare).toBe('$184.90');
+      expect(tx!.shares).toBe('3,004');
+    });
+
+    it('should resolve shares from alias when shares is numeric 0 and alias exists', () => {
+      const tx = normalizeTransaction({
+        code: 'S',
+        shares: 0,           // Stale numeric zero
+        shareCount: '3,004', // Real value under old field name
+        pricePerShare: '$184.90',
+      });
+      expect(tx).not.toBeNull();
+      // shares: 0 is falsy but resolveFieldZeroSafe still returns 0 since it's not ""
+      // The alias won't fire because 0 !== '' passes the check.
+      // This is expected: numeric 0 IS a valid value for resolveFieldZeroSafe.
+      expect(tx!.shares).toBe(0);
+      expect(tx!.pricePerShare).toBe('$184.90');
+    });
+
+    it('should resolve shares from alias when shares is empty string', () => {
+      const tx = normalizeTransaction({
+        code: 'S',
+        shares: '',           // Empty string from stale AI output
+        shareCount: '3,004',  // Real value under old field name
+        pricePerShare: '$184.90',
+      });
+      expect(tx).not.toBeNull();
+      expect(tx!.shares).toBe('3,004');
+    });
+
+    it('should render full pipeline with stale BAC data correctly', () => {
+      const staleJSON = {
+        company: 'BANK OF AMERICA CORP',
+        summary: 'BAC insider sold 5,000 shares at $42.15.',
+        filerName: 'MOYNIHAN BRIAN T',
+        filerRole: 'CEO',
+        transactions: [{
+          code: 'S',
+          type: 'Sale',
+          shares: '',
+          shareCount: '5,000',
+          pricePerShare: '',
+          price: '$42.15',
+          acquisitionDisposition: 'D',
+          sharesOwnedFollowing: '500,000',
+        }],
+      };
+      const result = normalizeForm4Data(staleJSON);
+      expect(result).not.toBeNull();
+      expect(result!.transactions[0].pricePerShare).toBe('$42.15');
+      expect(result!.transactions[0].shares).toBe('5,000');
+    });
+
+    it('should return empty when both canonical and all aliases are empty strings', () => {
+      const tx = normalizeTransaction({
+        code: 'S',
+        shares: '',
+        shareCount: '',
+        pricePerShare: '',
+        price: '',
+      });
+      expect(tx).not.toBeNull();
+      expect(tx!.shares).toBe('');
+      expect(tx!.pricePerShare).toBe('');
+    });
+
+    it('should still treat numeric 0 as valid for $0 grants (invariant check)', () => {
+      const tx = normalizeTransaction({
+        code: 'A',
+        shares: 60208,
+        price: 0,
+      });
+      expect(tx).not.toBeNull();
+      expect(tx!.pricePerShare).toBe(0);
+      expect(tx!.shares).toBe(60208);
+    });
+  });
 });

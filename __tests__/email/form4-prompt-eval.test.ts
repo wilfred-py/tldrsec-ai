@@ -17,7 +17,7 @@
  */
 
 import { parseResponse } from '../../lib/ai/parsers/response-parser';
-import { normalizeForm4Data } from '../../lib/email/form4-field-normalizer';
+import { normalizeForm4Data, CURRENT_FORM4_SCHEMA_VERSION } from '../../lib/email/form4-field-normalizer';
 
 describe('Form 4 Prompt Eval: sharesOwnedFollowing Compliance', () => {
   describe('when AI returns sharesOwnedFollowing on transactions', () => {
@@ -296,5 +296,55 @@ describe('Cross-Form Normalizer Alignment', () => {
       // Should have computed totalCompensation
       expect(execs[0].totalCompensation).toBeDefined();
     });
+  });
+});
+
+describe('Form 4 Schema Version Stamp', () => {
+  it('should stamp _schemaVersion: 2 on Form 4 parsed output', () => {
+    const aiResponse = JSON.stringify({
+      company: 'BANK OF AMERICA CORP',
+      summary: 'BAC insider sold shares at $42.15.',
+      filerName: 'Test Person',
+      filerRole: 'CEO',
+      transactions: [{
+        code: 'S',
+        type: 'Sale',
+        shares: '100',
+        pricePerShare: '$42.15',
+        acquisitionDisposition: 'D',
+        sharesOwnedFollowing: '900',
+      }],
+    });
+    const result = parseResponse(aiResponse, '4' as any);
+    expect(result.success).toBe(true);
+    expect((result.data as Record<string, unknown>)._schemaVersion).toBe(CURRENT_FORM4_SCHEMA_VERSION);
+  });
+
+  it('should stamp _schemaVersion: 2 on Form 3 parsed output', () => {
+    const aiResponse = JSON.stringify({
+      company: 'TEST CORP',
+      summary: 'Form 3 initial ownership filing.',
+      filerName: 'Test Person',
+      ownershipPercentage: '5%',
+    });
+    const result = parseResponse(aiResponse, '3' as any);
+    expect(result.success).toBe(true);
+    expect((result.data as Record<string, unknown>)._schemaVersion).toBe(CURRENT_FORM4_SCHEMA_VERSION);
+  });
+
+  it('should stamp _schemaVersion: 2 on Form 144 parsed output', () => {
+    const aiResponse = JSON.stringify({
+      company: 'TEST CORP',
+      summary: 'Form 144 intent to sell.',
+      filerName: 'Test Person',
+      shares: '10,000',
+      estimatedValue: '$500,000',
+      remainingHoldings: '90,000',
+      signalStrength: 'Routine Sale',
+      sharesOutstanding: '1,000,000',
+    });
+    const result = parseResponse(aiResponse, '144' as any);
+    expect(result.success).toBe(true);
+    expect((result.data as Record<string, unknown>)._schemaVersion).toBe(CURRENT_FORM4_SCHEMA_VERSION);
   });
 });
