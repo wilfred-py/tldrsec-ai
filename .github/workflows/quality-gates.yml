@@ -208,8 +208,8 @@ jobs:
           DATABASE_URL: postgresql://test:test@localhost:5432/testdb
           ANTHROPIC_API_KEY: test-key
           RESEND_API_KEY: test-key
-          NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: pk_test_dGVzdC1jbGVyay1rZXk
-          CLERK_SECRET_KEY: sk_test_testclerkkey
+          NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ""
+          CLERK_SECRET_KEY: ""
           OPENROUTER_API_KEY: test-key
           TLDRSEC_AI_SUMMARIZER: test-key
           CI: true

@@ -34,8 +34,8 @@ env:
   # Mock API keys for testing
   ANTHROPIC_API_KEY: test_anthropic_key_for_monitoring_validation
   RESEND_API_KEY: test_resend_key_for_monitoring_validation
-  CLERK_SECRET_KEY: test_clerk_secret_for_monitoring_validation
-  NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: pk_test_dGVzdC1jbGVyay1rZXk
+  CLERK_SECRET_KEY: ""
+  NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ""
   # Alert system configuration
   ALERT_EMAIL_RECIPIENTS: test-alerts@tldrsec.app,monitoring-team@tldrsec.app
   ESCALATION_EMAIL_RECIPIENTS: critical-alerts@tldrsec.app,engineering-lead@tldrsec.app
