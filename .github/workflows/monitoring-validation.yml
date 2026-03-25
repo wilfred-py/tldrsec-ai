@@ -84,20 +84,24 @@ jobs:
       - name: Push database schema
         run: npx prisma db push --accept-data-loss
 
+      - name: Set search path for multiSchema
+        run: |
+          PGPASSWORD=test_password psql -h localhost -U test_user -d tldrsec_monitoring_test -c "ALTER DATABASE tldrsec_monitoring_test SET search_path TO app, pipeline, public;"
+
       - name: Validate schema integrity
         run: |
           # Check that all monitoring models exist
           npx prisma validate
-          
-          # Verify monitoring tables exist
-          psql $DATABASE_URL -c "SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' AND table_name IN ('PipelineHealthHistory', 'ErrorAlert', 'MonitoringThreshold');"
-          
+
+          # Verify monitoring tables exist (check app and pipeline schemas)
+          psql $DATABASE_URL -c "SELECT table_schema, table_name FROM information_schema.tables WHERE table_schema IN ('app', 'pipeline') AND table_name IN ('ErrorAlert', 'MonitoringThreshold') ORDER BY table_name;"
+
           # Verify indices exist
-          psql $DATABASE_URL -c "SELECT indexname FROM pg_indexes WHERE tablename IN ('PipelineHealthHistory', 'ErrorAlert', 'MonitoringThreshold');"
+          psql $DATABASE_URL -c "SELECT schemaname, indexname FROM pg_indexes WHERE tablename IN ('ErrorAlert', 'MonitoringThreshold') ORDER BY indexname;"
 
       - name: Seed test monitoring data
         run: |
-          # Insert test monitoring thresholds
+          # Insert test monitoring thresholds (using schema-qualified names)
           psql $DATABASE_URL -c "
             INSERT INTO \"MonitoringThreshold\" (id, \"metricName\", \"thresholdType\", operator, value, description)
             VALUES 

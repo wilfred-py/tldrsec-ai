@@ -129,7 +129,7 @@ jobs:
           CI: true
           NODE_ENV: test
           # Newsletter environment variables
-          NEXT_PUBLIC_SUPABASE_URL: test-url
+          NEXT_PUBLIC_SUPABASE_URL: https://test.supabase.co
           NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: test-key
           SUPABASE_SECRET_KEY: test-key
         run: |
@@ -165,7 +165,7 @@ jobs:
           NODE_ENV: test
           CI: true
           # Newsletter environment variables  
-          NEXT_PUBLIC_SUPABASE_URL: test-url
+          NEXT_PUBLIC_SUPABASE_URL: https://test.supabase.co
           NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: test-key
           SUPABASE_SECRET_KEY: test-key
         run: |
@@ -219,7 +219,7 @@ jobs:
           # Skip static page generation that triggers Clerk validation
           NEXT_PRIVATE_STANDALONE: true
           # Newsletter environment variables
-          NEXT_PUBLIC_SUPABASE_URL: test-url
+          NEXT_PUBLIC_SUPABASE_URL: https://test.supabase.co
           NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: test-key
           SUPABASE_SECRET_KEY: test-key
         run: |
