@@ -20,12 +20,19 @@ const mockUser = {
 } as any;
 
 describe('UserProfileSection', () => {
-  it('should display "Trial" not "Free Plan" in subscription section', () => {
+  it('should display subscription tier dynamically (defaults to free)', () => {
     render(<UserProfileSection user={mockUser} />);
 
-    expect(screen.getByText('Trial')).toBeInTheDocument();
-    expect(screen.queryByText('Free Plan')).not.toBeInTheDocument();
-    expect(screen.queryByText('Free')).not.toBeInTheDocument();
+    expect(screen.getByText('free')).toBeInTheDocument();
+    expect(screen.getByText('$0/month')).toBeInTheDocument();
+  });
+
+  it('should display PRO tier when passed', () => {
+    render(<UserProfileSection user={mockUser} subscriptionTier="PRO" tickerCount={10} />);
+
+    expect(screen.getByText('pro')).toBeInTheDocument();
+    expect(screen.getByText('$29/month')).toBeInTheDocument();
+    expect(screen.getByText(/Tracking 10 companies/)).toBeInTheDocument();
   });
 
   it('should render user profile information', () => {
@@ -35,11 +42,26 @@ describe('UserProfileSection', () => {
     expect(screen.getByDisplayValue('test@example.com')).toBeInTheDocument();
   });
 
-  it('should show subscription section with upgrade button', () => {
+  it('should show subscription section with upgrade and billing buttons', () => {
     render(<UserProfileSection user={mockUser} />);
 
     expect(screen.getByText('Subscription')).toBeInTheDocument();
     expect(screen.getByText('Upgrade to Pro')).toBeInTheDocument();
-    expect(screen.getByText('View Plans')).toBeInTheDocument();
+    expect(screen.getByText('Manage Billing')).toBeInTheDocument();
+  });
+
+  it('should show delete and export account buttons', () => {
+    render(<UserProfileSection user={mockUser} />);
+
+    expect(screen.getByText('Export Account Data')).toBeInTheDocument();
+    expect(screen.getByText('Delete Account')).toBeInTheDocument();
+  });
+
+  it('should not show upgrade button for MAX tier', () => {
+    render(<UserProfileSection user={mockUser} subscriptionTier="MAX" />);
+
+    expect(screen.queryByText('Upgrade to Pro')).not.toBeInTheDocument();
+    expect(screen.queryByText('Upgrade to Max')).not.toBeInTheDocument();
+    expect(screen.getByText('Manage Billing')).toBeInTheDocument();
   });
 });

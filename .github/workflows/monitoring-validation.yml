@@ -35,7 +35,7 @@ env:
   ANTHROPIC_API_KEY: test_anthropic_key_for_monitoring_validation
   RESEND_API_KEY: test_resend_key_for_monitoring_validation
   CLERK_SECRET_KEY: test_clerk_secret_for_monitoring_validation
-  NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: pk_test_monitoring_validation_key
+  NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: pk_test_dGVzdF9wbGFjZWhvbGRlcl9rZXlfZm9yX2Np
   # Alert system configuration
   ALERT_EMAIL_RECIPIENTS: test-alerts@tldrsec.app,monitoring-team@tldrsec.app
   ESCALATION_EMAIL_RECIPIENTS: critical-alerts@tldrsec.app,engineering-lead@tldrsec.app
@@ -73,6 +73,10 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+
+      - name: Create database schemas
+        run: |
+          PGPASSWORD=test_password psql -h localhost -U test_user -d tldrsec_monitoring_test -c "CREATE SCHEMA IF NOT EXISTS app; CREATE SCHEMA IF NOT EXISTS pipeline;"
 
       - name: Generate Prisma client
         run: npx prisma generate
