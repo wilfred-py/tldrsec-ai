@@ -210,12 +210,14 @@ jobs:
           DIRECT_URL: postgresql://test:test@localhost:5432/testdb
           ANTHROPIC_API_KEY: test-key
           RESEND_API_KEY: test-key
-          NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: pk_test_dGVzdF9wbGFjZWhvbGRlcl9rZXlfZm9yX2Np
+          NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ""
           CLERK_SECRET_KEY: test-key
           OPENROUTER_API_KEY: test-key
           TLDRSEC_AI_SUMMARIZER: test-key
           CI: true
           NODE_ENV: production
+          # Skip static page generation that triggers Clerk validation
+          NEXT_PRIVATE_STANDALONE: true
           # Newsletter environment variables
           NEXT_PUBLIC_SUPABASE_URL: test-url
           NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: test-key
