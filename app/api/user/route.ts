@@ -538,6 +538,16 @@ async function handlePostSubscription(request: NextRequest) {
       : `${appUrl}/dashboard/billing?canceled=true`;
 
     const { createCheckoutSession } = await import('@/lib/stripe');
+    const { TRIAL_CONFIG } = await import('@/lib/auth/trial-config');
+
+    // Only grant trial to users who have never had a paid subscription.
+    // Prevents trial cycling: cancel → resubscribe → free trial again.
+    const existingSub = await prisma.userSubscription.findUnique({
+      where: { userId: dbUserId },
+      select: { stripeSubscriptionId: true },
+    });
+    const isFirstSubscription = !existingSub?.stripeSubscriptionId;
+
     const session = await createCheckoutSession({
       priceId,
       customerId: stripeCustomerId,
@@ -548,6 +558,8 @@ async function handlePostSubscription(request: NextRequest) {
         planType,
         billingInterval,
       },
+      trialPeriodDays: isFirstSubscription ? TRIAL_CONFIG.TRIAL_DURATION_DAYS : undefined,
+      paymentMethodCollection: 'always',
     });
 
     // Update or create subscription record with customer ID
