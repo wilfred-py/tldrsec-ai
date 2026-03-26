@@ -13,6 +13,8 @@ import { auth } from '@clerk/nextjs/server';
 import { enhancedFilingService } from '@/services/enhancedFilingService';
 import { logger } from '@/lib/logging';
 import { FilingType } from '@/lib/sec-edgar/types';
+
+export const dynamic = 'force-dynamic';
 import { getFormMetadata } from '@/lib/sec-edgar/form-registry';
 import { getPrismaClient } from '@/lib/db/prisma';
 
