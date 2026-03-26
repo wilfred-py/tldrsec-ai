@@ -2,6 +2,14 @@ import { render, screen } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { LandingPageV2 } from '@/components/landing/landing-page-v2';
 
+jest.mock('@clerk/nextjs', () => ({
+  useUser: () => ({ isSignedIn: false, isLoaded: true, user: null }),
+  useAuth: () => ({ isSignedIn: false, isLoaded: true }),
+  ClerkProvider: ({ children }: React.PropsWithChildren) => children,
+  SignInButton: ({ children }: React.PropsWithChildren) => children,
+  SignUpButton: ({ children }: React.PropsWithChildren) => children,
+}));
+
 jest.mock('framer-motion', () => ({
   motion: {
     div: ({ children, ...props }: React.PropsWithChildren<Record<string, unknown>>) => <div {...props}>{children}</div>,
