@@ -5,6 +5,9 @@
  * This module is the SINGLE source of truth for normalizing AI output into
  * the canonical field names used by templates and extractors.
  *
+ * CURRENT_FORM4_SCHEMA_VERSION: Bump when changing field mappings or normalizer
+ * behavior. Used by summarize-cached-handler to detect stale summaryJSON.
+ *
  * Field name drift observed in production:
  *
  *   AI Returns          │  Schema Expected      │  Template Reads
@@ -61,6 +64,11 @@ export interface NormalizedForm4Data {
  * NOTE: Must stay in sync with TRANSACTION_CODE_MAP in form4-data-extractor.ts
  * which has additional codes (V, I, E, H, O, L, Z, U) for edge cases.
  */
+
+// Bump when changing field mappings or normalizer behavior.
+// Used by response-parser (stamp) and summarize-cached-handler (detect stale data).
+export const CURRENT_FORM4_SCHEMA_VERSION = 2;
+
 export const TX_CODE_TO_TYPE: Record<string, string> = {
   'P': 'Purchase',
   'S': 'Sale',
@@ -165,16 +173,16 @@ function resolveFieldZeroSafe(
   canonicalName: string,
   aliases: string[]
 ): unknown {
-  // Check canonical name first — treat 0 as valid
+  // Check canonical name first — treat 0 as valid, but "" falls through to aliases
   const canonical = obj[canonicalName];
-  if (canonical !== undefined && canonical !== null) {
+  if (canonical !== undefined && canonical !== null && canonical !== '') {
     return canonical;
   }
 
-  // Check aliases — treat 0 as valid
+  // Check aliases — treat 0 as valid, but "" falls through
   for (const alias of aliases) {
     const val = obj[alias];
-    if (val !== undefined && val !== null) {
+    if (val !== undefined && val !== null && val !== '') {
       return val;
     }
   }

@@ -325,7 +325,7 @@ export function aggregateTransactionsByType(transactions: TransactionData[]): Ag
     }
 
     const shares = Math.round(parseNumericValue(tx.shares));
-    const price = parseNumericValue(tx.pricePerShare ?? (tx as Record<string, unknown>).price as string | number | undefined);
+    const price = parseNumericValue(tx.pricePerShare || (tx as Record<string, unknown>).price as string | number | undefined);
 
     // Calculate value: prefer totalValue if it's meaningful (> 0), otherwise calculate from shares * price
     let value = 0;

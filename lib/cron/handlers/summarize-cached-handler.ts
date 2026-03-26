@@ -19,6 +19,7 @@ import { verifyFilingContent, type FilingMetadata } from '../../validation/filin
 import { shouldProcessFiling } from '../../filing/filing-type-preferences-mapper';
 import { TrialService } from '../../auth/trial-service';
 import { parseResponse } from '../../ai/parsers/response-parser';
+import { CURRENT_FORM4_SCHEMA_VERSION } from '../../email/form4-field-normalizer';
 import type { SECFilingType } from '../../ai/prompts/prompt-types';
 
 const summarizeLogger = logger.child('summarize-cached-handler');
@@ -365,16 +366,24 @@ export async function handleSummarizeCached(
         formType: filing.formType
       });
 
-      // Re-normalize stale pre-deployment summaries that lack transaction codes
+      // Re-normalize stale shared summaries: missing codes, stale field names, or old schema version
       let normalizedJSON = sharedSummary.summaryJSON;
       if (normalizedJSON && typeof normalizedJSON === 'object') {
         const jsonObj = normalizedJSON as Record<string, unknown>;
         const txArr = Array.isArray(jsonObj.transactions) ? jsonObj.transactions as Record<string, unknown>[] : [];
         const hasCodelessTx = txArr.length > 0 && txArr.some(t => !t.code || t.code === '');
-        if (hasCodelessTx) {
-          summarizeLogger.info(`[${executionId}] Re-normalizing stale shared summary (missing transaction codes)`, {
+        const hasStaleSchema = !jsonObj._schemaVersion || (jsonObj._schemaVersion as number) < CURRENT_FORM4_SCHEMA_VERSION;
+        const hasStaleFieldNames = txArr.some(t =>
+          'price' in t || 'action' in t || 'shareCount' in t || 'numberOfShares' in t ||
+          t.pricePerShare === '' || t.shares === '' || t.shares === 0
+        );
+        const needsReNormalization = hasCodelessTx || hasStaleFieldNames || hasStaleSchema;
+        if (needsReNormalization) {
+          summarizeLogger.info(`[${executionId}] Re-normalizing stale shared summary`, {
             sharedSummaryId: sharedSummary.id,
-            transactionCount: txArr.length
+            transactionCount: txArr.length,
+            reason: hasCodelessTx ? 'missing-codes' : hasStaleFieldNames ? 'stale-field-names' : 'stale-schema',
+            schemaVersion: jsonObj._schemaVersion ?? 'none',
           });
           try {
             const reNormalized = parseResponse(
