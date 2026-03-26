@@ -168,8 +168,9 @@ jobs:
 
       - name: Setup test database
         run: |
+          PGPASSWORD=test_password psql -h localhost -U test_user -d tldrsec_monitoring_test -c "CREATE SCHEMA IF NOT EXISTS app; CREATE SCHEMA IF NOT EXISTS pipeline;"
           npx prisma generate
-          npx prisma migrate deploy
+          npx prisma db push --accept-data-loss
 
       - name: Run monitoring API tests
         run: |
@@ -238,8 +239,9 @@ jobs:
 
       - name: Setup test database
         run: |
+          PGPASSWORD=test_password psql -h localhost -U test_user -d tldrsec_monitoring_test -c "CREATE SCHEMA IF NOT EXISTS app; CREATE SCHEMA IF NOT EXISTS pipeline;"
           npx prisma generate
-          npx prisma migrate deploy
+          npx prisma db push --accept-data-loss
 
       - name: Test alert service functionality
         run: |
