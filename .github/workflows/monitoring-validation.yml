@@ -235,12 +235,12 @@ jobs:
 
       - name: Test alert service functionality
         run: |
-          cat > test_alert_service.js << 'EOF'
+          cat > test_alert_service.cjs << 'EOF'
           const { alertService } = require('./lib/monitoring/alert-service');
-          
+
           async function testAlertService() {
             console.log('Testing alert service...');
-            
+
             // Test alert creation
             const alertId = await alertService.createAlert({
               alertType: 'warning',
@@ -248,9 +248,9 @@ jobs:
               message: 'Test alert for CI validation',
               autoNotify: false
             });
-            
+
             console.log('Alert created:', alertId);
-            
+
             // Test threshold checking
             const testMetrics = {
               errorRate: 20, // Should trigger critical threshold
@@ -261,25 +261,25 @@ jobs:
               activeJobs: 5,
               errorCount: 10
             };
-            
+
             await alertService.checkThresholds(testMetrics);
             console.log('Threshold checking completed');
-            
+
             // Test alert statistics
             const stats = await alertService.getAlertStatistics('hour');
             console.log('Alert statistics:', stats);
-            
+
             console.log('Alert service tests passed!');
           }
-          
+
           testAlertService().catch(console.error);
           EOF
-          
-          node test_alert_service.js
+
+          node test_alert_service.cjs
 
       - name: Test monitoring integration
         run: |
-          cat > test_monitoring_integration.js << 'EOF'
+          cat > test_monitoring_integration.cjs << 'EOF'
           const { monitoringIntegration } = require('./lib/monitoring/monitoring-integration');
           
           async function testMonitoringIntegration() {
@@ -303,7 +303,7 @@ jobs:
           testMonitoringIntegration().catch(console.error);
           EOF
           
-          node test_monitoring_integration.js
+          node test_monitoring_integration.cjs
 
   security-validation:
     name: Security & Performance Validation
