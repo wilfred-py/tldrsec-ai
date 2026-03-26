@@ -9,7 +9,6 @@ import { headers } from 'next/headers';
 import { WebhookEvent } from '@clerk/nextjs/server';
 import { NextRequest, NextResponse } from 'next/server';
 import { getPrismaClient } from '@/lib/db/prisma';
-import { TrialService } from '@/lib/auth/trial-service';
 import { checkIPTrialAbuse } from '@/lib/security/trial-abuse-prevention';
 import { validateWebhookSignature, getPlanTypeFromPriceId, stripe } from '@/lib/stripe';
 import { syncUserSubscriptionTier, syncSubscriptionFromStripeData } from '@/lib/stripe/sync-subscription';
@@ -86,21 +85,20 @@ async function handleClerkWebhook(req: Request) {
             || headerPayloadForIP.get('x-real-ip')
             || 'unknown';
 
-          let grantTrial = true;
+          // IP abuse check — log for monitoring, but trial lifecycle is now
+          // managed by Stripe (CC-required trial on checkout session).
+          // Legacy trial fields (trialStartedAt, trialEndsAt, isTrialing) are
+          // no longer set for new users.
           if (ipAddress !== 'unknown') {
             try {
               const abuseCheck = await checkIPTrialAbuse(ipAddress);
               if (!abuseCheck.allowed) {
-                console.warn(`[trial-abuse] IP ${ipAddress} blocked: ${abuseCheck.reason}`);
-                grantTrial = false;
+                console.warn(`[trial-abuse] IP ${ipAddress} flagged: ${abuseCheck.reason}`);
               }
             } catch (err) {
-              console.error('[trial-abuse] Check failed, granting trial anyway:', err);
+              console.error('[trial-abuse] Check failed:', err);
             }
           }
-
-          const now = new Date();
-          const trialEndsAt = grantTrial ? TrialService.calculateTrialEnd(now) : undefined;
 
           const newUser = await prisma.user.create({
             data: {
@@ -111,13 +109,10 @@ async function handleClerkWebhook(req: Request) {
               name: userData.first_name ? `${userData.first_name} ${userData.last_name || ''}`.trim() : undefined,
               subscriptionTier: 'FREE',
               onboardingCompleted: false,
-              trialStartedAt: grantTrial ? now : undefined,
-              trialEndsAt: trialEndsAt,
-              isTrialing: grantTrial,
               signupIpAddress: ipAddress !== 'unknown' ? ipAddress : undefined,
             }
           });
-          console.log(`User created in database: ${newUser.id}, trial: ${grantTrial}`);
+          console.log(`User created in database: ${newUser.id}`);
         } else {
           console.error('Missing required user data in webhook:', { id: userData.id, email: primaryEmail });
         }
@@ -329,7 +324,7 @@ async function handleSubscriptionCreated(subscription: Stripe.Subscription) {
         planType,
         stripeSubscriptionId: subscription.id,
         stripePriceId: priceId,
-        isActive: subscription.status === 'active',
+        isActive: ['active', 'trialing'].includes(subscription.status),
         currentPeriodStart: new Date(subscription.current_period_start * 1000),
         currentPeriodEnd: new Date(subscription.current_period_end * 1000),
         cancelAtPeriodEnd: subscription.cancel_at_period_end,
@@ -360,7 +355,7 @@ async function handleSubscriptionUpdated(subscription: Stripe.Subscription) {
       data: {
         planType,
         stripePriceId: priceId,
-        isActive: subscription.status === 'active',
+        isActive: ['active', 'trialing'].includes(subscription.status),
         currentPeriodStart: new Date(subscription.current_period_start * 1000),
         currentPeriodEnd: new Date(subscription.current_period_end * 1000),
         cancelAtPeriodEnd: subscription.cancel_at_period_end,
@@ -418,9 +413,39 @@ async function handlePaymentFailed(invoice: Stripe.Invoice) {
 
   const userSubscription = await prisma.userSubscription.findUnique({
     where: { stripeSubscriptionId: invoice.subscription as string },
+    select: { userId: true },
   });
 
-  if (userSubscription) {
-    console.log(`Payment failed for user ${userSubscription.userId}`);
+  if (!userSubscription) return;
+
+  const user = await prisma.user.findUnique({
+    where: { id: userSubscription.userId },
+    select: { email: true, name: true },
+  });
+
+  console.log(`Payment failed for user ${userSubscription.userId} (${user?.email})`);
+
+  // Send notification email — catch errors so webhook still returns 200
+  // Stripe Smart Retries will handle actual retry logic; we just notify the user
+  if (user?.email) {
+    try {
+      const { Resend } = await import('resend');
+      const resend = new Resend(process.env.RESEND_API_KEY);
+      await resend.emails.send({
+        from: 'tldrSEC <noreply@tldrsec.app>',
+        to: user.email,
+        subject: 'Action needed: Update your payment method',
+        html: `
+          <p>Hi${user.name ? ` ${user.name}` : ''},</p>
+          <p>We were unable to process your payment for tldrSEC. Please update your payment method to continue receiving SEC filing summaries.</p>
+          <p><a href="https://tldrsec.app/dashboard/billing" style="display:inline-block;padding:12px 24px;background-color:#7C3AED;color:#ffffff;text-decoration:none;border-radius:6px;font-weight:600;">Update Payment Method</a></p>
+          <p style="color:#6B7280;font-size:14px;">If you don't update your payment method, your subscription will be cancelled after Stripe's retry attempts are exhausted.</p>
+          <p style="color:#9CA3AF;font-size:12px;">tldrSEC | AI-Powered SEC Filing Summaries</p>
+        `,
+      });
+      console.log(`[webhook] Payment failed notification sent to ${user.email}`);
+    } catch (emailError) {
+      console.error(`[webhook] Failed to send payment failed notification to ${user.email}:`, emailError);
+    }
   }
 }
