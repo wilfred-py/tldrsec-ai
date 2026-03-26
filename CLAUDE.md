@@ -797,3 +797,39 @@ See `docs/architecture/job-retry-patterns.md` for:
 - **Cloudflare Worker Updates**: Worker deployment should be coordinated with Vercel deployments
 - **Database Migrations**: New alert and security audit tables require migration
 - **Environment Variables**: Additional monitoring configuration variables required for full functionality
+
+## gstack (Browser & Workflow Skills)
+
+Use the `/browse` skill from gstack for all web browsing. Never use `mcp__claude-in-chrome__*` tools.
+
+### Available Skills
+
+| Skill | Purpose |
+|-------|---------|
+| `/office-hours` | YC-style brainstorming and idea validation |
+| `/plan-ceo-review` | CEO/founder-mode plan review |
+| `/plan-eng-review` | Engineering manager plan review |
+| `/plan-design-review` | Designer's eye plan review |
+| `/design-consultation` | Design system creation (DESIGN.md) |
+| `/review` | Pre-landing PR code review |
+| `/ship` | Ship workflow (test, review, PR) |
+| `/land-and-deploy` | Merge PR, deploy, verify production |
+| `/canary` | Post-deploy canary monitoring |
+| `/benchmark` | Performance regression detection |
+| `/browse` | Headless browser for testing and dogfooding |
+| `/qa` | QA test and fix bugs |
+| `/qa-only` | QA report only (no fixes) |
+| `/design-review` | Visual QA and design polish |
+| `/setup-browser-cookies` | Import browser cookies for authenticated testing |
+| `/setup-deploy` | Configure deployment settings |
+| `/retro` | Weekly engineering retrospective |
+| `/investigate` | Systematic root cause debugging |
+| `/document-release` | Post-ship documentation update |
+| `/codex` | OpenAI Codex second opinion |
+| `/cso` | Security audit (OWASP, STRIDE, supply chain) |
+| `/autoplan` | Auto-review pipeline (CEO + design + eng) |
+| `/careful` | Safety guardrails for destructive commands |
+| `/freeze` | Restrict edits to a specific directory |
+| `/guard` | Full safety mode (careful + freeze) |
+| `/unfreeze` | Remove directory edit restrictions |
+| `/gstack-upgrade` | Upgrade gstack to latest version |
