@@ -1,15 +1,24 @@
 import axios, { AxiosError, AxiosInstance, AxiosRequestConfig } from 'axios';
 import Bottleneck from 'bottleneck';
-import { 
-  FilingType, 
-  SECApiResponse, 
-  SECEdgarConfig, 
-  SECEdgarError, 
-  SECErrorCode, 
+import {
+  FilingType,
+  SECApiResponse,
+  SECEdgarConfig,
+  SECEdgarError,
+  SECErrorCode,
   SECRequestOptions,
   SECFilingSearchParams
 } from './types';
 import { sleep } from '../utils';
+import {
+  SubmissionsResponse,
+  SubmissionsFiling,
+  SubmissionsPollResult,
+  buildSubmissionsUrl,
+  zipColumnarFilings,
+  filterNewFilings,
+  SubmissionsParseError,
+} from './submissions-client';
 
 /**
  * Default SEC EDGAR API configuration
@@ -337,6 +346,122 @@ export class SECEdgarClient {
       return response.data;
     } catch (error) {
       console.error(`Error fetching SEC filing: ${error}`);
+      throw error;
+    }
+  }
+
+  /**
+   * Fetch submissions data from the SEC EDGAR Submissions API.
+   *
+   * Polls data.sec.gov/submissions/CIK{padded}.json for a specific company.
+   * Returns new filings since the given watermark, plus the latest
+   * acceptanceDateTime for watermark updates.
+   *
+   * Uses the shared Bottleneck rate limiter (SEC rate limits apply per IP
+   * across all *.sec.gov hostnames).
+   *
+   * Supports ETag-based conditional requests: when lastEtag is provided,
+   * sends If-None-Match header. SEC returns 304 Not Modified when nothing
+   * changed, saving bandwidth (~95% of polls during normal operation).
+   *
+   * @param cik - Company CIK number (will be zero-padded to 10 digits)
+   * @param watermark - Last seen acceptanceDateTime string, or null for first run
+   * @param lastEtag - ETag from previous response, or null for first request
+   * @returns Poll result with new filings, latest watermark, and ETag status
+   */
+  async fetchSubmissions(
+    cik: string,
+    watermark: string | null,
+    lastEtag: string | null = null
+  ): Promise<SubmissionsPollResult & { etag: string | null }> {
+    const url = buildSubmissionsUrl(cik);
+
+    const headers: Record<string, string> = {};
+    if (lastEtag) {
+      headers['If-None-Match'] = lastEtag;
+    }
+
+    try {
+      const response = await this.limiter.schedule(async () => {
+        return this.client.request<SubmissionsResponse>({
+          method: 'GET',
+          url,
+          headers,
+          // Accept 304 as valid (conditional request cache hit)
+          validateStatus: (status) => status === 304 || (status >= 200 && status < 300),
+        });
+      }, {
+        retries: 0,
+        expiration: 60000,
+      });
+
+      // 304 Not Modified — ETag cache hit, no new filings
+      if (response.status === 304) {
+        return {
+          newFilings: [],
+          latestAcceptanceDateTime: null,
+          companyName: '',
+          notModified: true,
+          etag: lastEtag,
+        };
+      }
+
+      const data = response.data;
+      const responseEtag = (response.headers?.etag as string) ?? null;
+
+      // Parse columnar arrays into filing records
+      const allFilings = zipColumnarFilings(data.filings.recent);
+
+      // Filter to filings newer than watermark
+      const newFilings = filterNewFilings(allFilings, watermark);
+
+      // Determine the latest acceptanceDateTime for watermark update
+      let latestAcceptanceDateTime: string | null = null;
+      if (data.filings.recent.acceptanceDateTime.length > 0) {
+        // The first entry is the most recent filing
+        latestAcceptanceDateTime = data.filings.recent.acceptanceDateTime[0];
+      }
+
+      return {
+        newFilings,
+        latestAcceptanceDateTime,
+        companyName: data.name,
+        notModified: false,
+        etag: responseEtag,
+      };
+    } catch (error) {
+      if (error instanceof SubmissionsParseError) {
+        console.error(`[fetchSubmissions] Parse error for CIK ${cik}: ${error.message}`);
+        throw new SECEdgarError(
+          `Submissions API parse error for CIK ${cik}: ${error.message}`,
+          SECErrorCode.PARSING_ERROR
+        );
+      }
+
+      const axiosError = error as AxiosError;
+      if (axiosError.response) {
+        const status = axiosError.response.status;
+        if (status === 429) {
+          throw new SECEdgarError(
+            `SEC rate limit exceeded polling CIK ${cik}`,
+            SECErrorCode.RATE_LIMIT_EXCEEDED,
+            429
+          );
+        }
+        throw new SECEdgarError(
+          `Submissions API error for CIK ${cik}: ${status} ${axiosError.response.statusText}`,
+          SECErrorCode.UNKNOWN_ERROR,
+          status
+        );
+      }
+
+      if (axiosError.request) {
+        throw new SECEdgarError(
+          `Submissions API timeout for CIK ${cik}`,
+          SECErrorCode.TIMEOUT
+        );
+      }
+
       throw error;
     }
   }
