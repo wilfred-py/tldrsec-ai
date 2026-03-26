@@ -6,7 +6,7 @@
  * per-CIK with sub-second update latency (vs 10-minute RSS lag).
  *
  * Data flow:
- *   CF Worker (*/1 cron) → GET /api/cron?action=fast-poll
+ *   CF Worker (every-1-min cron) -> GET /api/cron?action=fast-poll
  *     → shouldPollNow() adaptive gate
  *     → distributed lock (prevent concurrent polls)
  *     → poll Submissions API per tracked CIK
