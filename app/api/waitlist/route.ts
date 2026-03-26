@@ -1,11 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createSupabaseServiceClient } from '@/lib/supabase/server-client';
 import { getPrismaClient } from '@/lib/db/prisma';
 import { EmailSecurityValidator, NewsletterSecurityValidator } from '@/lib/security/email-validation';
 import { logger } from '@/lib/logging';
 import { Resend } from 'resend';
 
+// Force dynamic — route uses DB and Supabase at runtime
+export const dynamic = 'force-dynamic';
+
 const apiLogger = logger.child('waitlist-api');
+
+// Lazy import to avoid Supabase client construction at build time
+async function getSupabaseClient() {
+  const { createSupabaseServiceClient } = await import('@/lib/supabase/server-client');
+  return createSupabaseServiceClient();
+}
 const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
 const INITIAL_SEED = 147;
 
@@ -41,7 +49,7 @@ export async function GET() {
       return NextResponse.json({ count: fallbackCount });
     }
 
-    const supabase = createSupabaseServiceClient();
+    const supabase = await getSupabaseClient();
     const { count: currentSubscriberCount, error } = await supabase
       .from('newsletter_subscribers')
       .select('*', { count: 'exact', head: true });
@@ -106,7 +114,7 @@ export async function POST(request: NextRequest) {
     const email = validatedData.email as string;
     const emailAnalysis = await EmailSecurityValidator.analyzeEmail(email);
     const canonicalEmail = emailAnalysis.canonical;
-    const supabase = createSupabaseServiceClient();
+    const supabase = await getSupabaseClient();
 
     const { data: existingSubscriber, error: checkError } = await supabase
       .from('newsletter_subscribers')

@@ -14,6 +14,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { currentUser, auth } from '@clerk/nextjs/server';
 import { PreferenceService } from '@/lib/user/preference-service';
+
+export const dynamic = 'force-dynamic';
 import { logger } from '@/lib/logging';
 import { getPrismaClient } from '@/lib/db/prisma';
 import {

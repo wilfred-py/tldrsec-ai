@@ -236,6 +236,33 @@ export async function sendFilingSummaryEmail(
   }
 ): Promise<{ success: boolean; error?: string }> {
   try {
+    // Quality gate: don't send Form 4 emails with all-zero transaction data
+    if (['3', '4', '144'].includes(filingData.filingType)) {
+      const summaryJSON = filingData.summaryData as Record<string, unknown> | undefined;
+      const txArr = Array.isArray(summaryJSON?.transactions) ? summaryJSON.transactions as Record<string, unknown>[] : [];
+
+      if (txArr.length > 0) {
+        const allZeroValues = txArr.every(t => {
+          const shares = parseFloat(String(t.shares || '0').replace(/[$,]/g, '')) || 0;
+          const price = parseFloat(String(t.pricePerShare || '0').replace(/[$,]/g, '')) || 0;
+          const code = String(t.code || '').toUpperCase();
+          // Gifts, awards, and exercises legitimately have $0 prices
+          const zeroOk = ['A', 'G', 'M', 'X', 'C', 'W', 'J', 'K'].includes(code);
+          // Block only when BOTH shares AND price are zero for non-exempt codes
+          return shares === 0 && price === 0 && !zeroOk;
+        });
+
+        if (allZeroValues) {
+          secureLogger.warn('Form 4 quality gate: blocking email with all-zero transaction data', {
+            ticker: filingData.ticker,
+            filingType: filingData.filingType,
+            transactionCount: txArr.length,
+          });
+          return { success: false, error: 'Quality gate: all transactions have zero values' };
+        }
+      }
+    }
+
     // Generate email content using filing data
     const { html, text } = await getEmailTemplate(EmailType.FILING_NOTIFICATION, {
       recipientName: 'Investor',
