@@ -137,6 +137,8 @@ model Summary {
   extractionSuccess     Boolean                @default(true)
   parsingErrors         Int                    @default(0)
   qualityScore          Float?
+  edgarAcceptedAt       DateTime?              // SEC EDGAR acceptance timestamp (from Submissions API)
+  deliveryLatencyMs     Int?                   // E2E latency: edgarAcceptedAt → email sent (ms)
   forceRefreshFlag      Boolean                @default(false)
   invalidatedBy         String?
   invalidationCount     Int                    @default(0)
@@ -197,19 +199,22 @@ model CikMapping {
 }
 
 model TickerMonitoring {
-  id                String           @id @default(uuid())
-  cik               String           @unique
-  symbol            String
-  companyName       String
-  isActive          Boolean          @default(true)
-  rssUrl            String
-  lastChecked       DateTime?
-  lastAccessionSeen String?
-  subscriberCount   Int              @default(0)
-  createdAt         DateTime         @default(now())
-  updatedAt         DateTime         @updatedAt
-  version           Int              @default(0)
-  filingChecks      RssFilingCheck[]
+  id                           String           @id @default(uuid())
+  cik                          String           @unique
+  symbol                       String
+  companyName                  String
+  isActive                     Boolean          @default(true)
+  rssUrl                       String
+  lastChecked                  DateTime?
+  lastAccessionSeen            String?
+  lastSeenAcceptanceDateTime   String?          // Submissions API watermark (acceptanceDateTime string)
+  lastEtag                     String?          // ETag for conditional requests (304 Not Modified)
+  lastPollTime                 DateTime?        // When fast-poll last checked this ticker
+  subscriberCount              Int              @default(0)
+  createdAt                    DateTime         @default(now())
+  updatedAt                    DateTime         @updatedAt
+  version                      Int              @default(0)
+  filingChecks                 RssFilingCheck[]
 
   @@index([isActive, lastChecked])
   @@index([cik])
