@@ -1,3 +1,4 @@
+import React from 'react';
 import { render, screen } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { LandingPageV2 } from '@/components/landing/landing-page-v2';
@@ -17,7 +18,7 @@ jest.mock('@/contexts/auth-context', () => ({
 
 jest.mock('@/contexts/subscription-context', () => ({
   SubscriptionProvider: ({ children }: React.PropsWithChildren) => children,
-  useSubscription: () => ({ tier: 'FREE', isLoading: false }),
+  useSubscriptionContext: () => ({ tier: 'FREE', isLoading: false, isSubscribed: false }),
 }));
 
 jest.mock('framer-motion', () => ({
@@ -28,20 +29,47 @@ jest.mock('framer-motion', () => ({
     p: ({ children, ...props }: React.PropsWithChildren<Record<string, unknown>>) => <p {...props}>{children}</p>,
     span: ({ children, ...props }: React.PropsWithChildren<Record<string, unknown>>) => <span {...props}>{children}</span>,
     article: ({ children, ...props }: React.PropsWithChildren<Record<string, unknown>>) => <article {...props}>{children}</article>,
+    section: ({ children, ...props }: React.PropsWithChildren<Record<string, unknown>>) => <section {...props}>{children}</section>,
+    nav: ({ children, ...props }: React.PropsWithChildren<Record<string, unknown>>) => <nav {...props}>{children}</nav>,
+    button: ({ children, ...props }: React.PropsWithChildren<Record<string, unknown>>) => <button {...props}>{children}</button>,
+    a: ({ children, ...props }: React.PropsWithChildren<Record<string, unknown>>) => <a {...props}>{children}</a>,
+    footer: ({ children, ...props }: React.PropsWithChildren<Record<string, unknown>>) => <footer {...props}>{children}</footer>,
+    ul: ({ children, ...props }: React.PropsWithChildren<Record<string, unknown>>) => <ul {...props}>{children}</ul>,
+    li: ({ children, ...props }: React.PropsWithChildren<Record<string, unknown>>) => <li {...props}>{children}</li>,
+    img: (props: Record<string, unknown>) => <img {...props} />,
+    header: ({ children, ...props }: React.PropsWithChildren<Record<string, unknown>>) => <header {...props}>{children}</header>,
   },
   AnimatePresence: ({ children }: React.PropsWithChildren) => children,
   useInView: () => true,
+  useAnimation: () => ({ start: jest.fn(), stop: jest.fn() }),
+  useMotionValue: () => ({ get: () => 0, set: jest.fn() }),
+  useTransform: () => ({ get: () => 0 }),
+}));
+
+// Mock animations module
+jest.mock('@/lib/animations/landing-animations', () => ({
+  staggerContainer: {},
+  staggerItem: {},
+  meshGradientStyle: {},
+  fadeInUp: {},
+  fadeIn: {},
+}));
+
+// Mock Sheet components from shadcn/ui
+jest.mock('@/components/ui/sheet', () => ({
+  Sheet: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
+  SheetTrigger: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
+  SheetContent: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
+  SheetClose: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
 }));
 
 describe('LandingPageV2', () => {
   it('should render all sections', () => {
     render(<LandingPageV2 />);
 
-    // Hero - text appears in multiple places, verify at least one exists
-    const secFilingsElements = screen.getAllByText(/SEC Filings/i);
-    expect(secFilingsElements.length).toBeGreaterThan(0);
-    const simplifiedElements = screen.getAllByText(/Simplified/i);
-    expect(simplifiedElements.length).toBeGreaterThan(0);
+    // Hero - verify key marketing copy renders
+    expect(screen.getByText(/Summaries That/i)).toBeInTheDocument();
+    expect(screen.getByText(/Actually Matter/i)).toBeInTheDocument();
 
     // Features
     expect(screen.getByText(/Built for Modern Investors/i)).toBeInTheDocument();
