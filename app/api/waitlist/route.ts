@@ -4,6 +4,9 @@ import { EmailSecurityValidator, NewsletterSecurityValidator } from '@/lib/secur
 import { logger } from '@/lib/logging';
 import { Resend } from 'resend';
 
+// Force dynamic — route uses DB and Supabase at runtime
+export const dynamic = 'force-dynamic';
+
 const apiLogger = logger.child('waitlist-api');
 
 // Lazy import to avoid Supabase client construction at build time
