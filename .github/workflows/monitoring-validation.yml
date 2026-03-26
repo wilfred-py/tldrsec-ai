@@ -203,6 +203,13 @@ jobs:
 
           # Cleanup
           kill $SERVER_PID
+        env:
+          DATABASE_URL: postgresql://test_user:test_password@localhost:5432/tldrsec_monitoring_test
+          DIRECT_URL: postgresql://test_user:test_password@localhost:5432/tldrsec_monitoring_test
+          NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: pk_test_Y2xlcmstdGVzdC0xMjM0LmNsZXJrLmFjY291bnRzLmRldiQ
+          CLERK_SECRET_KEY: sk_test_monitoring_validation
+          NEXT_PUBLIC_SUPABASE_URL: https://test.supabase.co
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: test-anon-key
 
   alert-system-tests:
     name: Validate Alert System
@@ -245,12 +252,12 @@ jobs:
 
       - name: Test alert service functionality
         run: |
-          cat > test_alert_service.js << 'EOF'
+          cat > test_alert_service.cjs << 'EOF'
           const { alertService } = require('./lib/monitoring/alert-service');
-          
+
           async function testAlertService() {
             console.log('Testing alert service...');
-            
+
             // Test alert creation
             const alertId = await alertService.createAlert({
               alertType: 'warning',
@@ -258,9 +265,9 @@ jobs:
               message: 'Test alert for CI validation',
               autoNotify: false
             });
-            
+
             console.log('Alert created:', alertId);
-            
+
             // Test threshold checking
             const testMetrics = {
               errorRate: 20, // Should trigger critical threshold
@@ -271,34 +278,34 @@ jobs:
               activeJobs: 5,
               errorCount: 10
             };
-            
+
             await alertService.checkThresholds(testMetrics);
             console.log('Threshold checking completed');
-            
+
             // Test alert statistics
             const stats = await alertService.getAlertStatistics('hour');
             console.log('Alert statistics:', stats);
-            
+
             console.log('Alert service tests passed!');
           }
-          
+
           testAlertService().catch(console.error);
           EOF
-          
-          node test_alert_service.js
+
+          node test_alert_service.cjs
 
       - name: Test monitoring integration
         run: |
-          cat > test_monitoring_integration.js << 'EOF'
+          cat > test_monitoring_integration.cjs << 'EOF'
           const { monitoringIntegration } = require('./lib/monitoring/monitoring-integration');
-          
+
           async function testMonitoringIntegration() {
             console.log('Testing monitoring integration...');
-            
+
             // Test health checks
             const healthChecks = await monitoringIntegration.performHealthCheck();
             console.log('Health checks:', healthChecks.map(h => ({ component: h.component, status: h.status })));
-            
+
             // Test monitoring cycle
             const monitoringData = await monitoringIntegration.runMonitoringCycle();
             console.log('Monitoring cycle:', {
@@ -306,14 +313,14 @@ jobs:
               activeAlerts: monitoringData.activeAlerts,
               errorRate: monitoringData.metrics.errorRate
             });
-            
+
             console.log('Monitoring integration tests passed!');
           }
-          
+
           testMonitoringIntegration().catch(console.error);
           EOF
-          
-          node test_monitoring_integration.js
+
+          node test_monitoring_integration.cjs
 
   security-validation:
     name: Security & Performance Validation

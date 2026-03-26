@@ -54,7 +54,7 @@ describe('UserProfileSection', () => {
     render(<UserProfileSection user={mockUser} />);
 
     expect(screen.getByText('Export Account Data')).toBeInTheDocument();
-    expect(screen.getByText('Delete Account')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Delete Account/i })).toBeInTheDocument();
   });
 
   it('should not show upgrade button for MAX tier', () => {
