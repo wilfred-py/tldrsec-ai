@@ -9,6 +9,11 @@ jest.mock('@clerk/nextjs', () => ({
   useAuth: () => ({ isSignedIn: false, isLoaded: true }),
 }));
 
+// Mock auth context (component uses useAuth from @/contexts/auth-context)
+jest.mock('@/contexts/auth-context', () => ({
+  useAuth: () => ({ isSignedIn: false, isLoaded: true, user: null }),
+}));
+
 // Mock framer-motion to avoid animation complexity in tests
 jest.mock('framer-motion', () => ({
   motion: {

@@ -1,6 +1,10 @@
 import { describe, it, expect } from '@jest/globals';
 
-describe('Pipeline Recovery Validation', () => {
+// Skip in CI — these tests hit the live production API and are meant
+// for manual post-recovery validation, not automated test suites.
+const describeOrSkip = process.env.CI ? describe.skip : describe;
+
+describeOrSkip('Pipeline Recovery Validation', () => {
   it('should have healthy pipeline status after recovery', async () => {
     const response = await fetch('https://tldrsec.app/api/health/pipeline');
     const health = await response.json();

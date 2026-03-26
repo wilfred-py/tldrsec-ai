@@ -7,7 +7,7 @@
 import { jest } from '@jest/globals';
 
 // Mock all dependencies before importing the modules
-jest.mock('../../claude-client');
+jest.mock('../../openrouter-client');
 jest.mock('../../enhanced-claude-client');
 jest.mock('../chunk-processor');
 jest.mock('../../../logging');
