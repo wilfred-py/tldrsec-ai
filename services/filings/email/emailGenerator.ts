@@ -154,7 +154,7 @@ export async function generateHtmlEmail(summaries: FilingSummaryResult[], errors
         Powered by <a href="https://tldrsec.app" style="color: ${EmailColors.brand.primary}; text-decoration: none;">TLDR SEC</a>
       </p>
       <p style="margin: 0; color: ${EmailColors.text.meta}; font-size: 11px;">
-        <a href="${process.env.NEXT_PUBLIC_APP_URL || 'https://tldrsec.app'}/settings/notifications" style="color: ${EmailColors.text.meta}; text-decoration: underline;">Manage notification preferences</a>
+        <a href="${process.env.NEXT_PUBLIC_APP_URL || 'https://tldrsec.app'}/dashboard/settings" style="color: ${EmailColors.text.meta}; text-decoration: underline;">Manage notification preferences</a>
       </p>
     </div>
   </div>

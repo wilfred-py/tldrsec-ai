@@ -3,6 +3,12 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { GmailInboxHero } from '@/components/landing/sections-v2/gmail-inbox-hero';
 
+// Mock Clerk
+jest.mock('@clerk/nextjs', () => ({
+  useUser: () => ({ isSignedIn: false, isLoaded: true, user: null }),
+  useAuth: () => ({ isSignedIn: false, isLoaded: true }),
+}));
+
 // Mock framer-motion to avoid animation complexity in tests
 jest.mock('framer-motion', () => ({
   motion: {

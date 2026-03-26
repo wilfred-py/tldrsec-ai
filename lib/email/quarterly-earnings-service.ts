@@ -99,7 +99,7 @@ export async function sendQuarterlyEarningsEmail(
       recipientEmail: email,
       summaries: summaryData,
       tickerCount: summaryData.length,
-      unsubscribeUrl: `${process.env.NEXT_PUBLIC_APP_URL}/settings/notifications`,
+      unsubscribeUrl: `${process.env.NEXT_PUBLIC_APP_URL || 'https://tldrsec.app'}/dashboard/settings`,
       preferencesUrl: `${process.env.NEXT_PUBLIC_APP_URL}/settings`,
     });
 

@@ -28,7 +28,7 @@ describe('CTASectionV2', () => {
   it('should display trust signals', () => {
     render(<CTASectionV2 />);
     expect(screen.getByText(/No credit card/i)).toBeInTheDocument();
-    expect(screen.getByText(/free tickers/i)).toBeInTheDocument();
+    expect(screen.getByText(/unlimited tickers/i)).toBeInTheDocument();
   });
 
   it('should have light blue gradient background', () => {

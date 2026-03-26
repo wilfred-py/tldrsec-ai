@@ -129,7 +129,7 @@ export function GenericMinimalistTemplate({ filing }: GenericMinimalistTemplateP
       <EmailFooter
         filingUrl={filingUrl}
         formType={filingType}
-        unsubscribeUrl={`${process.env.NEXT_PUBLIC_APP_URL || ''}/settings/notifications`}
+        unsubscribeUrl={`${process.env.NEXT_PUBLIC_APP_URL || ''}/dashboard/settings`}
       />
     </div>
   );

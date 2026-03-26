@@ -26,6 +26,18 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   let initialCompanies: Company[] = [];
   let tutorialCompleted = false;
   let subscriptionTier: 'FREE' | 'PRO' | 'MAX' = 'FREE';
+  let hoursSavedThisMonth = 0;
+  let hoursSavedTotal = 0;
+  let recentSummaries: Array<{
+    id: string;
+    filingType: string;
+    filingDate: string;
+    importance: string | null;
+    smartSubject: string | null;
+    companyName: string;
+    ticker: string;
+    filingUrl: string;
+  }> = [];
   const email = user.emailAddresses?.[0]?.emailAddress;
   if (email) {
     try {
@@ -48,6 +60,37 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
       if (dbUser) {
         tutorialCompleted = dbUser.tutorialCompletedAt != null;
         subscriptionTier = (dbUser.subscriptionTier as 'FREE' | 'PRO' | 'MAX') || 'FREE';
+        hoursSavedThisMonth = dbUser.hoursSavedThisMonth || 0;
+        hoursSavedTotal = dbUser.hoursSavedTotal || 0;
+
+        // Fetch recent summaries for activity feed (across all tickers)
+        const tickerIds = dbUser.tickers.map(t => t.id);
+        if (tickerIds.length > 0) {
+          const summaries = await prisma.summary.findMany({
+            where: { tickerId: { in: tickerIds } },
+            select: {
+              id: true,
+              filingType: true,
+              filingDate: true,
+              importance: true,
+              smartSubject: true,
+              filingUrl: true,
+              ticker: { select: { symbol: true, companyName: true } },
+            },
+            orderBy: { filingDate: 'desc' },
+            take: 50,
+          });
+          recentSummaries = summaries.map(s => ({
+            id: s.id,
+            filingType: s.filingType,
+            filingDate: s.filingDate.toISOString(),
+            importance: s.importance,
+            smartSubject: s.smartSubject,
+            companyName: s.ticker.companyName,
+            ticker: s.ticker.symbol,
+            filingUrl: s.filingUrl,
+          }));
+        }
 
         // Safety net: reconcile Stripe subscription for FREE users who have interacted with Stripe
         if (subscriptionTier === 'FREE' && email) {
@@ -144,6 +187,9 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
       tutorialCompleted={tutorialCompleted}
       subscriptionTier={subscriptionTier}
       tickerLimit={tickerLimit}
+      hoursSavedThisMonth={hoursSavedThisMonth}
+      hoursSavedTotal={hoursSavedTotal}
+      recentSummaries={recentSummaries}
     />
   );
 }

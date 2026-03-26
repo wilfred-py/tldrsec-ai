@@ -8,7 +8,6 @@ import { sendEmail } from './index';
 import { logger } from '../logging';
 import { SecureEmailLogger } from './security-helpers';
 import { EmailSubjectService } from './subject-service';
-import { normalizePersonName } from './form4-field-normalizer';
 
 // Create secure logger to prevent PII exposure
 const secureLogger = new SecureEmailLogger(logger.child('summary-service'));
@@ -159,7 +158,7 @@ export async function sendLatestSummariesEmail(): Promise<{ success: boolean; er
       recipientName: dbUser.name || user.firstName || 'there',
       recipientEmail: primaryEmail,
       tickerGroups: tickerGroups,
-      unsubscribeUrl: `${process.env.NEXT_PUBLIC_APP_URL}/settings/notifications`,
+      unsubscribeUrl: `${process.env.NEXT_PUBLIC_APP_URL || 'https://tldrsec.app'}/dashboard/settings`,
       preferencesUrl: `${process.env.NEXT_PUBLIC_APP_URL}/settings`
     });
     
@@ -233,6 +232,10 @@ export async function sendFilingSummaryEmail(
     summary: string;
     filingUrl: string;
     summaryData?: Record<string, unknown>;  // Structured AI response for rich email templates
+    userId?: string;      // For feedback token generation
+    summaryId?: string;   // For feedback token generation
+    importance?: string;  // For importance badge in email
+    smartSubject?: string; // AI-generated subject line
   }
 ): Promise<{ success: boolean; error?: string }> {
   try {
@@ -246,9 +249,7 @@ export async function sendFilingSummaryEmail(
           const shares = parseFloat(String(t.shares || '0').replace(/[$,]/g, '')) || 0;
           const price = parseFloat(String(t.pricePerShare || '0').replace(/[$,]/g, '')) || 0;
           const code = String(t.code || '').toUpperCase();
-          // Gifts, awards, and exercises legitimately have $0 prices
           const zeroOk = ['A', 'G', 'M', 'X', 'C', 'W', 'J', 'K'].includes(code);
-          // Block only when BOTH shares AND price are zero for non-exempt codes
           return shares === 0 && price === 0 && !zeroOk;
         });
 
@@ -263,6 +264,21 @@ export async function sendFilingSummaryEmail(
       }
     }
 
+    // Generate feedback links if userId and summaryId provided
+    let feedbackUpUrl: string | undefined;
+    let feedbackDownUrl: string | undefined;
+    if (filingData.userId && filingData.summaryId) {
+      try {
+        const { generateFeedbackToken } = await import('./feedback-tokens');
+        const token = generateFeedbackToken(filingData.userId, filingData.summaryId);
+        const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://tldrsec.app';
+        feedbackUpUrl = `${baseUrl}/api/feedback?token=${encodeURIComponent(token)}&vote=up`;
+        feedbackDownUrl = `${baseUrl}/api/feedback?token=${encodeURIComponent(token)}&vote=down`;
+      } catch {
+        // Non-fatal: skip feedback links if token generation fails
+      }
+    }
+
     // Generate email content using filing data
     const { html, text } = await getEmailTemplate(EmailType.FILING_NOTIFICATION, {
       recipientName: 'Investor',
@@ -274,26 +290,22 @@ export async function sendFilingSummaryEmail(
       summary: filingData.summary,
       filingUrl: filingData.filingUrl,
       summaryData: filingData.summaryData,  // Pass structured data to email template
-      unsubscribeUrl: `${process.env.NEXT_PUBLIC_APP_URL}/settings/notifications`,
+      importance: filingData.importance,
+      feedbackUpUrl,
+      feedbackDownUrl,
+      unsubscribeUrl: `${process.env.NEXT_PUBLIC_APP_URL || 'https://tldrsec.app'}/dashboard/settings`,
       preferencesUrl: `${process.env.NEXT_PUBLIC_APP_URL}/settings`
     });
-    
-    // Prepare email message — include filer name for insider filings
-    // Use normalizer to resolve aliases (reportingPerson → filerName) and normalize format
-    const summaryJSON = filingData.summaryData as Record<string, unknown> | undefined;
-    const rawFilerName = (summaryJSON?.filerName || summaryJSON?.reportingPerson || summaryJSON?.insiderName) as string | undefined;
-    const filerName = rawFilerName ? normalizePersonName(rawFilerName) : undefined;
-    const subject = EmailSubjectService.generateSingleFilingSubject({
-      filingType: filingData.filingType,
-      companyName: filingData.companyName,
-      ticker: filingData.ticker,
-      filerName,
-    });
 
-    // Determine data quality level for monitoring
-    const hasFiler = !!filerName && filerName !== 'Insider';
-    const hasTxns = Array.isArray(summaryJSON?.transactions) && (summaryJSON.transactions as unknown[]).length > 0;
-    const dataQuality = hasFiler && hasTxns ? 'full' : hasFiler || hasTxns ? 'partial' : 'degraded';
+    // Use smart subject if available, fall back to standard
+    const subject = filingData.smartSubject || EmailSubjectService.generateSmartSubject(
+      filingData.summaryData || null,
+      {
+        filingType: filingData.filingType,
+        companyName: filingData.companyName,
+        ticker: filingData.ticker
+      }
+    );
 
     const message: EmailMessage = {
       to: recipientEmail,
@@ -304,14 +316,12 @@ export async function sendFilingSummaryEmail(
         'type:filing-notification',
         `filing-type:${filingData.filingType.toLowerCase()}`,
         `ticker:${filingData.ticker}`,
-        `data-quality:${dataQuality}`,
       ],
       metadata: {
         type: 'filing-notification',
         ticker: filingData.ticker,
         filingType: filingData.filingType,
         companyName: filingData.companyName,
-        dataQuality,
       }
     };
     

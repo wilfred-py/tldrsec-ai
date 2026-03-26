@@ -405,7 +405,7 @@ export function FormDEF14AMinimalistTemplate({ filing }: FormDEF14AMinimalistTem
       <EmailFooter
         filingUrl={filingUrl}
         formType={filingType || 'DEF 14A'}
-        unsubscribeUrl={`${process.env.NEXT_PUBLIC_APP_URL || ''}/settings/notifications`}
+        unsubscribeUrl={`${process.env.NEXT_PUBLIC_APP_URL || ''}/dashboard/settings`}
       />
     </div>
   );
