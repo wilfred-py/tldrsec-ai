@@ -16,8 +16,8 @@ describe('Cloudflare Worker Cron Routing', () => {
   });
 
   describe('wrangler.toml configuration', () => {
-    it('should have */5 * * * * pipeline processing schedule', () => {
-      expect(wranglerConfig).toContain('*/5 * * * *');
+    it('should have */1 * * * * fast-poll pipeline schedule', () => {
+      expect(wranglerConfig).toContain('*/1 * * * *');
     });
 
     it('should have */15 * * * * auto-recovery schedule', () => {
@@ -53,7 +53,7 @@ describe('Cloudflare Worker Cron Routing', () => {
       expect(workerCode).toContain('handleDailyTasks');
     });
 
-    it('should default to handlePipelineProcessing for */5 * * * *', () => {
+    it('should default to handlePipelineProcessing for */1 * * * *', () => {
       expect(workerCode).toContain('handlePipelineProcessing');
     });
 

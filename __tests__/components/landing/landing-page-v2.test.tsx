@@ -10,6 +10,16 @@ jest.mock('@clerk/nextjs', () => ({
   SignUpButton: ({ children }: React.PropsWithChildren) => children,
 }));
 
+jest.mock('@/contexts/auth-context', () => ({
+  useAuth: () => ({ isSignedIn: false, isLoaded: true, user: null }),
+  AuthProvider: ({ children }: React.PropsWithChildren) => children,
+}));
+
+jest.mock('@/contexts/subscription-context', () => ({
+  SubscriptionProvider: ({ children }: React.PropsWithChildren) => children,
+  useSubscription: () => ({ tier: 'FREE', isLoading: false }),
+}));
+
 jest.mock('framer-motion', () => ({
   motion: {
     div: ({ children, ...props }: React.PropsWithChildren<Record<string, unknown>>) => <div {...props}>{children}</div>,
@@ -20,6 +30,7 @@ jest.mock('framer-motion', () => ({
     article: ({ children, ...props }: React.PropsWithChildren<Record<string, unknown>>) => <article {...props}>{children}</article>,
   },
   AnimatePresence: ({ children }: React.PropsWithChildren) => children,
+  useInView: () => true,
 }));
 
 describe('LandingPageV2', () => {
