@@ -35,6 +35,7 @@ export const maxDuration = 300;
 
 const GET_ACTIONS = [
   'tier-aware',
+  'fast-poll',
   'process-queue',
   'auto-recover',
   'final-backup',
@@ -75,6 +76,8 @@ export async function GET(request: NextRequest) {
   switch (action) {
     case 'tier-aware':
       return handleTierAware(request);
+    case 'fast-poll':
+      return handleFastPollAction(request);
     case 'process-queue':
       return handleProcessQueue(request);
     case 'auto-recover':
@@ -111,6 +114,39 @@ export async function POST(request: NextRequest) {
       return handleUpdateDailyCountPOST(request);
     default:
       return missingActionResponse('POST');
+  }
+}
+
+// ===========================================================================
+// ACTION: fast-poll
+// SEC EDGAR Submissions API polling for near-real-time filing detection
+// ===========================================================================
+
+async function handleFastPollAction(request: NextRequest) {
+  const { logger } = await import('@/lib/logging');
+  const fastPollLogger = logger.child('cron-fast-poll');
+
+  try {
+    // Validate cron auth
+    const { CronAuthService } = await import('@/lib/cron/auth-service');
+    const authResult = await CronAuthService.validateCronRequest(request);
+    if (!authResult.isValid) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const { handleFastPoll } = await import('@/lib/cron/handlers/fast-poll-handler');
+    const result = await handleFastPoll();
+
+    const statusCode = result.status === 'skipped' ? 200 : 202;
+    return NextResponse.json(result, { status: statusCode });
+  } catch (error) {
+    fastPollLogger.error('Fast-poll handler error', {
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return NextResponse.json(
+      { error: 'Fast-poll failed', message: error instanceof Error ? error.message : 'Unknown error' },
+      { status: 500 }
+    );
   }
 }
 
