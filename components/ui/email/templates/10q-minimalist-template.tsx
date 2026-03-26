@@ -288,7 +288,7 @@ export function Form10QMinimalistTemplate({ filing }: Form10QMinimalistTemplateP
       <EmailFooter
         filingUrl={filingUrl}
         formType={filingType || '10-Q'}
-        unsubscribeUrl={`${process.env.NEXT_PUBLIC_APP_URL || ''}/settings/notifications`}
+        unsubscribeUrl={`${process.env.NEXT_PUBLIC_APP_URL || ''}/dashboard/settings`}
       />
     </div>
   );

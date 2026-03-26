@@ -46,7 +46,7 @@ export async function queueWelcomeEmail(
         recipientName: name || 'there',
         recipientEmail: email,
         selectedTickers,
-        unsubscribeUrl: `${process.env.NEXT_PUBLIC_APP_URL}/settings/notifications`,
+        unsubscribeUrl: `${process.env.NEXT_PUBLIC_APP_URL || 'https://tldrsec.app'}/dashboard/settings`,
         preferencesUrl: `${process.env.NEXT_PUBLIC_APP_URL}/settings`
       });
 
@@ -135,7 +135,7 @@ export async function sendWelcomeEmail(): Promise<{ success: boolean; error?: st
       recipientName: dbUser.name || user.firstName || 'there',
       recipientEmail: primaryEmail,
       selectedTickers,
-      unsubscribeUrl: `${process.env.NEXT_PUBLIC_APP_URL}/settings/notifications`,
+      unsubscribeUrl: `${process.env.NEXT_PUBLIC_APP_URL || 'https://tldrsec.app'}/dashboard/settings`,
       preferencesUrl: `${process.env.NEXT_PUBLIC_APP_URL}/settings`
     });
     

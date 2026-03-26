@@ -1,6 +1,8 @@
 import type { Metadata } from 'next';
 import { FocusedInvestorHero } from '@/components/landing/focused-investor-hero';
-import { createSupabaseServiceClient } from '@/lib/supabase/server-client';
+
+// Force dynamic rendering — Supabase client requires runtime env vars
+export const dynamic = 'force-dynamic';
 
 // Initial seed value - must match the API endpoint
 const INITIAL_SEED = 147;
@@ -15,6 +17,7 @@ interface CounterData {
 // Fetch counter data for SSR - provides both starting point and target
 async function getCounterData(): Promise<CounterData> {
   try {
+    const { createSupabaseServiceClient } = await import('@/lib/supabase/server-client');
     const supabase = createSupabaseServiceClient();
 
     // Get current subscriber count

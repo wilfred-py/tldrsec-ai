@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { clerkClient } from '@clerk/nextjs/server';
+
+export const dynamic = 'force-dynamic';
 import { stripe, SUBSCRIPTION_PLANS, getPriceIdForPlan } from '@/lib/stripe';
 import { rateLimit, rateLimitConfigs } from '@/lib/middleware/rate-limit';
 import { PaymentLogger } from '@/lib/audit/payment-logger';

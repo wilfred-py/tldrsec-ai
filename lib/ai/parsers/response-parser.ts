@@ -18,6 +18,7 @@ import {
   normalizeTransaction as centralNormalizeTx,
   parseStringTransaction as centralParseStringTx,
   isCharacterIndexedObject,
+  CURRENT_FORM4_SCHEMA_VERSION,
 } from '../../email/form4-field-normalizer';
 
 /**
@@ -280,6 +281,9 @@ function normalizeFields(data: unknown, filingType: SECFilingType): unknown {
       if (normalized.percentageChange && typeof normalized.percentageChange === 'string') {
         normalized.percentageChange = normalizePercentage(normalized.percentageChange);
       }
+
+      // Stamp schema version for stale-data detection in shared summary handler
+      normalized._schemaVersion = CURRENT_FORM4_SCHEMA_VERSION;
       break;
       
     case 'DEF 14A':

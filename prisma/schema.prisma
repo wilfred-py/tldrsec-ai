@@ -45,7 +45,16 @@ model User {
   lastConfirmationEmailSentAt DateTime?
   tickersAtLastConfirmation   String[]          @default([])
 
+  // Soft delete support
+  deletedAt            DateTime?
+  deleteScheduledFor   DateTime?
+
+  // Hours saved tracking (cached, incremented on new summary)
+  hoursSavedThisMonth  Int                    @default(0)
+  hoursSavedTotal      Int                    @default(0)
+
   auditLogs             AuditLog[]
+  emailFeedback         EmailFeedback[]
   filingUsage           FilingUsage[]
   jobs                  JobQueue[]
   notificationsSent     NotificationSent[]
@@ -57,6 +66,7 @@ model User {
 
   @@index([isTrialing, trialEndsAt])
   @@index([signupIpAddress, createdAt])
+  @@index([deletedAt])
   @@schema("app")
 }
 
@@ -144,15 +154,22 @@ model Summary {
   invalidationCount     Int                    @default(0)
   invalidationReason    String?
   lastInvalidatedAt     DateTime?
+  // Pre-launch features: importance scoring and smart subjects
+  importance            String?                // critical, high, medium, low
+  smartSubject          String?                // AI-extracted email subject line
+
   secFiling             SecFiling?             @relation(fields: [secFilingId], references: [id])
   ticker                Ticker                 @relation(fields: [tickerId], references: [id], onDelete: Cascade)
   cacheAccesses         SummaryCacheAccess[]
   emailDeliveries       SummaryEmailDelivery[]
+  feedback              EmailFeedback[]
 
   // Unique constraint to prevent duplicate summaries for the same filing
   // A filing is uniquely identified by tickerId + filingUrl
   @@unique([tickerId, filingUrl])
   @@index([filingUrl])
+  @@index([filingUrl, filingType])
+  @@index([tickerId, filingDate(sort: Desc)])
   @@schema("app")
 }
 
@@ -765,6 +782,39 @@ model RecoveryState {
 
   @@map("RecoveryState")
   @@schema("pipeline")
+}
+
+// =============================================================================
+// PRE-LAUNCH FEATURES
+// =============================================================================
+
+model EmailFeedback {
+  id        String   @id @default(uuid())
+  userId    String
+  summaryId String
+  vote      String   // "up" or "down"
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  summary   Summary  @relation(fields: [summaryId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, summaryId])
+  @@index([summaryId])
+  @@schema("app")
+}
+
+model WeeklyDigestLog {
+  id           String   @id @default(uuid())
+  userId       String
+  weekStart    DateTime
+  weekEnd      DateTime
+  filingsCount Int
+  sentAt       DateTime
+  metadata     Json?
+
+  @@unique([userId, weekStart])
+  @@index([userId])
+  @@schema("app")
 }
 
 // =============================================================================

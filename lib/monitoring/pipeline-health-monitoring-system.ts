@@ -915,9 +915,9 @@ export class PipelineHealthMonitoringSystem extends EventEmitter {
   }
 
   private calculateAverageResponseTime(): number {
-    // This would be calculated from monitoring data
-    // For now, return a simulated value
-    return Math.random() * 1000 + 500; // 500-1500ms
+    // Return 0 when no monitoring data is available
+    // Actual response times are tracked via pipeline-error-detector performance metrics
+    return 0;
   }
 
   private calculateCpuUsage(): number {

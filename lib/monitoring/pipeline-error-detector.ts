@@ -538,19 +538,28 @@ class PipelineErrorDetector {
         }
       });
 
-      const processingTimes = recentSummaries.map(s => 
-        Math.random() * 5000 + 1000 // Simulate 1-6 second processing times
-      );
+      // Use actual processingTimeMs from summaries instead of simulated values
+      const processingTimes = recentSummaries
+        .map(s => (s as Record<string, unknown>).processingTimeMs as number)
+        .filter((t): t is number => typeof t === 'number' && t > 0);
+
+      const errorCount = recentSummaries.filter(
+        s => (s as Record<string, unknown>).processingStatus === 'FAILED'
+      ).length;
 
       return {
-        avgResponseTime: processingTimes.reduce((a, b) => a + b, 0) / processingTimes.length || 0,
+        avgResponseTime: processingTimes.length > 0
+          ? processingTimes.reduce((a, b) => a + b, 0) / processingTimes.length
+          : 0,
         p95ResponseTime: this.calculatePercentile(processingTimes, 95),
         p99ResponseTime: this.calculatePercentile(processingTimes, 99),
-        errorRate: 0, // Would be calculated from actual error logs
+        errorRate: recentSummaries.length > 0 ? errorCount / recentSummaries.length : 0,
         throughput: recentSummaries.length,
-        dbConnectionTime: Math.random() * 100 + 50, // Simulate 50-150ms
-        aiProcessingTime: Math.random() * 10000 + 5000, // Simulate 5-15 seconds
-        emailDeliveryTime: Math.random() * 2000 + 1000 // Simulate 1-3 seconds
+        dbConnectionTime: 0,
+        aiProcessingTime: processingTimes.length > 0
+          ? processingTimes.reduce((a, b) => a + b, 0) / processingTimes.length
+          : 0,
+        emailDeliveryTime: 0
       };
     } catch (error) {
       errorLogger.error('Failed to collect performance metrics', { error });
@@ -743,7 +752,9 @@ class PipelineErrorDetector {
       );
 
       return {
-        avgProcessingDelay: Math.random() * 60000 + 30000, // Simulate 30s-90s delays
+        avgProcessingDelay: recentSummaries.length > 0
+          ? recentSummaries.reduce((sum, s) => sum + (s.processingTimeMs || 0), 0) / recentSummaries.length
+          : 0,
         emailDeliveryFailures: failedEmails,
         userComplaints: 0, // Would come from support tickets
         systemSatisfaction: 85 // Would come from user surveys

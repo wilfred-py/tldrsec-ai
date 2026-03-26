@@ -478,6 +478,7 @@ export default {
     const results = {
       dlqCleanup: null,
       dailyReport: null,
+      weeklyDigest: null,
     };
 
     try {
@@ -489,6 +490,65 @@ export default {
       console.log(`[${executionId}] Running daily report...`);
       results.dailyReport = await this.handleDailyReport(event, env, ctx);
 
+      // Task 3: Weekly digest (Sunday only — piggybacked on daily cron)
+      const dayOfWeek = new Date().getUTCDay();
+      if (dayOfWeek === 0) {
+        console.log(`[${executionId}] Running weekly digest (Sunday)...`);
+        try {
+          const timestamp = Date.now().toString();
+          const payload = `${timestamp}:GET:/api/cron/weekly-digest`;
+          const encoder = new TextEncoder();
+          const key = await crypto.subtle.importKey(
+            'raw', encoder.encode(env.CRON_SECRET), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']
+          );
+          const signatureBuffer = await crypto.subtle.sign('HMAC', key, encoder.encode(payload));
+          const signature = Array.from(new Uint8Array(signatureBuffer)).map(b => b.toString(16).padStart(2, '0')).join('');
+
+          const url = `${env.PUBLIC_URL}/api/cron/weekly-digest`;
+          const response = await fetch(url, {
+            method: 'GET',
+            headers: {
+              'x-hmac-signature': signature,
+              'x-hmac-timestamp': timestamp,
+              'x-execution-id': executionId,
+            },
+          });
+
+          const responseData = response.ok ? await response.json() : await response.text();
+          results.weeklyDigest = { success: response.ok, status: response.status, data: responseData };
+          console.log(`[${executionId}] Weekly digest: ${response.ok ? 'SUCCESS' : 'FAILED'} (${response.status})`);
+        } catch (digestError) {
+          results.weeklyDigest = { success: false, error: digestError.message };
+          console.error(`[${executionId}] Weekly digest error: ${digestError.message}`);
+        }
+
+        // Also run prompt improvement analysis on Sundays
+        console.log(`[${executionId}] Running prompt improvement analysis...`);
+        try {
+          const piTimestamp = Date.now().toString();
+          const piPayload = `${piTimestamp}:GET:/api/cron/prompt-improvement`;
+          const piKey = await crypto.subtle.importKey(
+            'raw', encoder.encode(env.CRON_SECRET), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']
+          );
+          const piSigBuf = await crypto.subtle.sign('HMAC', piKey, encoder.encode(piPayload));
+          const piSig = Array.from(new Uint8Array(piSigBuf)).map(b => b.toString(16).padStart(2, '0')).join('');
+
+          const piResponse = await fetch(`${env.PUBLIC_URL}/api/cron/prompt-improvement`, {
+            method: 'GET',
+            headers: {
+              'x-hmac-signature': piSig,
+              'x-hmac-timestamp': piTimestamp,
+              'x-execution-id': executionId,
+            },
+          });
+          console.log(`[${executionId}] Prompt improvement: ${piResponse.ok ? 'SUCCESS' : 'FAILED'} (${piResponse.status})`);
+        } catch (piError) {
+          console.error(`[${executionId}] Prompt improvement error: ${piError.message}`);
+        }
+      } else {
+        console.log(`[${executionId}] Skipping weekly digest (not Sunday, day=${dayOfWeek})`);
+      }
+
       const duration = Date.now() - startTime;
       const allSuccessful = results.dlqCleanup?.success &&
                             results.dailyReport?.success;
@@ -496,6 +556,7 @@ export default {
       console.log(`[${executionId}] Combined daily tasks completed in ${duration}ms`, {
         dlqCleanup: results.dlqCleanup?.success ? 'SUCCESS' : 'FAILED',
         dailyReport: results.dailyReport?.success ? 'SUCCESS' : 'FAILED',
+        weeklyDigest: results.weeklyDigest ? (results.weeklyDigest.success ? 'SUCCESS' : 'FAILED') : 'SKIPPED',
       });
 
       return {

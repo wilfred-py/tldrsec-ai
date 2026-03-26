@@ -24,7 +24,7 @@ describe('FooterSectionV2', () => {
 
   it('should display copyright', () => {
     render(<FooterSectionV2 />);
-    expect(screen.getByText(/2024|2025/)).toBeInTheDocument();
+    expect(screen.getByText(/202[4-9]/)).toBeInTheDocument();
   });
 
   it('should have SEC disclaimer', () => {

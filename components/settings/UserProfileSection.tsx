@@ -6,16 +6,69 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import type { User } from "@clerk/nextjs/server";
 import { toast } from "sonner";
+import { Loader2, Download, Trash2 } from "lucide-react";
 
 interface UserProfileSectionProps {
   user: User;
+  subscriptionTier?: string;
+  tickerCount?: number;
 }
 
-export default function UserProfileSection({ user }: UserProfileSectionProps) {
+export default function UserProfileSection({ user, subscriptionTier = 'FREE', tickerCount = 0 }: UserProfileSectionProps) {
   const [loading, setLoading] = useState(false);
   const [theme, setTheme] = useState('light');
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
+
+  const handleExportData = async () => {
+    setIsExporting(true);
+    try {
+      const response = await fetch('/api/user/export');
+      if (!response.ok) throw new Error('Export failed');
+      const data = await response.json();
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `tldrsec-export-${new Date().toISOString().split('T')[0]}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success('Data exported successfully');
+    } catch {
+      toast.error('Failed to export data. Please try again.');
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  const handleDeleteAccount = async () => {
+    setIsDeleting(true);
+    try {
+      const response = await fetch('/api/user/account', { method: 'DELETE' });
+      if (!response.ok) {
+        const data = await response.json() as { error?: string };
+        throw new Error(data.error || 'Deletion failed');
+      }
+      toast.success('Account scheduled for deletion. You have 30 days to change your mind.');
+      window.location.href = '/';
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to delete account. Please contact support.');
+    } finally {
+      setIsDeleting(false);
+      setIsDeleteDialogOpen(false);
+    }
+  };
 
   const handleThemeChange = async (newTheme: string) => {
     try {
@@ -34,7 +87,7 @@ export default function UserProfileSection({ user }: UserProfileSectionProps) {
         }),
       });
 
-      const data = await response.json();
+      const data = await response.json() as { success?: boolean };
 
       if (data.success) {
         toast.success('Theme updated successfully');
@@ -137,17 +190,27 @@ export default function UserProfileSection({ user }: UserProfileSectionProps) {
               <p className="text-xs text-muted-foreground">
                 Download all your account data including preferences and tracked companies.
               </p>
-              <Button variant="outline" size="sm">
-                Export Account Data
+              <Button variant="outline" size="sm" onClick={handleExportData} disabled={isExporting}>
+                {isExporting ? (
+                  <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Exporting...</>
+                ) : (
+                  <><Download className="h-4 w-4 mr-2" />Export Account Data</>
+                )}
               </Button>
             </div>
 
             <div className="space-y-2">
               <h3 className="text-sm font-medium">Delete Account</h3>
               <p className="text-xs text-muted-foreground">
-                Permanently delete your account and all associated data.
+                Schedule your account for deletion. You have 30 days to change your mind.
               </p>
-              <Button variant="outline" size="sm" className="text-red-500 hover:text-red-600">
+              <Button
+                variant="outline"
+                size="sm"
+                className="text-red-500 hover:text-red-600"
+                onClick={() => setIsDeleteDialogOpen(true)}
+              >
+                <Trash2 className="h-4 w-4 mr-2" />
                 Delete Account
               </Button>
             </div>
@@ -155,7 +218,7 @@ export default function UserProfileSection({ user }: UserProfileSectionProps) {
         </CardContent>
       </Card>
 
-      {/* Subscription Information */}
+      {/* Subscription Information — dynamic */}
       <Card>
         <CardHeader>
           <CardTitle>Subscription</CardTitle>
@@ -165,42 +228,63 @@ export default function UserProfileSection({ user }: UserProfileSectionProps) {
           <div className="rounded-lg border border-blue-100 bg-blue-50 p-4">
             <div className="flex justify-between">
               <div>
-                <h3 className="font-semibold">Trial</h3>
-                <p className="text-sm">$0/month</p>
+                <h3 className="font-semibold capitalize">{subscriptionTier.toLowerCase()}</h3>
+                <p className="text-sm">
+                  {subscriptionTier === 'FREE' ? '$0/month' : subscriptionTier === 'PRO' ? '$29/month' : '$199/month'}
+                </p>
               </div>
               <span className="inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold bg-blue-100 text-blue-800 border-blue-200">
                 Active
               </span>
             </div>
-            
-            <ul className="mt-4 space-y-2">
-              <li className="flex items-center text-sm">
-                <svg viewBox="0 0 24 24" className="mr-2 h-4 w-4 text-green-600" fill="none" stroke="currentColor" strokeWidth="2">
-                  <polyline points="20 6 9 17 4 12"></polyline>
-                </svg>
-                Track up to 5 companies
-              </li>
-              <li className="flex items-center text-sm">
-                <svg viewBox="0 0 24 24" className="mr-2 h-4 w-4 text-green-600" fill="none" stroke="currentColor" strokeWidth="2">
-                  <polyline points="20 6 9 17 4 12"></polyline>
-                </svg>
-                Daily digest notifications
-              </li>
-              <li className="flex items-center text-sm">
-                <svg viewBox="0 0 24 24" className="mr-2 h-4 w-4 text-green-600" fill="none" stroke="currentColor" strokeWidth="2">
-                  <polyline points="20 6 9 17 4 12"></polyline>
-                </svg>
-                Basic filing summaries
-              </li>
-            </ul>
+
+            <p className="mt-3 text-sm text-muted-foreground">
+              Tracking {tickerCount} {tickerCount === 1 ? 'company' : 'companies'}
+            </p>
           </div>
 
           <div className="flex flex-wrap gap-3">
-            <Button>Upgrade to Pro</Button>
-            <Button variant="outline">View Plans</Button>
+            {subscriptionTier === 'FREE' || subscriptionTier === 'PRO' ? (
+              <Button onClick={() => window.location.href = '/subscribe'}>
+                {subscriptionTier === 'FREE' ? 'Upgrade to Pro' : 'Upgrade to Max'}
+              </Button>
+            ) : null}
+            <Button variant="outline" onClick={() => window.location.href = '/dashboard/billing'}>
+              Manage Billing
+            </Button>
           </div>
         </CardContent>
       </Card>
+
+      {/* Delete Account Confirmation Dialog */}
+      <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <DialogContent className="max-w-[95vw] sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-lg font-semibold">Delete Account</DialogTitle>
+            <DialogDescription>
+              This will schedule your account for deletion. Your subscription will be cancelled immediately.
+              You have <strong>30 days</strong> to change your mind by contacting support.
+              After 30 days, all data will be permanently removed.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="flex-col sm:flex-row gap-2 mt-4">
+            <Button variant="outline" onClick={() => setIsDeleteDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleDeleteAccount}
+              disabled={isDeleting}
+              className="bg-red-600 hover:bg-red-700 text-white"
+            >
+              {isDeleting ? (
+                <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Deleting...</>
+              ) : (
+                'Delete My Account'
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }

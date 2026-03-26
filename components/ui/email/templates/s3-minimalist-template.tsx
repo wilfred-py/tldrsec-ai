@@ -342,7 +342,7 @@ export function FormS3MinimalistTemplate({ filing }: FormS3MinimalistTemplatePro
       <EmailFooter
         filingUrl={filingUrl}
         formType={filingType || 'S-3'}
-        unsubscribeUrl={`${process.env.NEXT_PUBLIC_APP_URL || ''}/settings/notifications`}
+        unsubscribeUrl={`${process.env.NEXT_PUBLIC_APP_URL || ''}/dashboard/settings`}
       />
     </div>
   );

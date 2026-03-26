@@ -343,7 +343,7 @@ export function Form11KMinimalistTemplate({ filing }: Form11KMinimalistTemplateP
       <EmailFooter
         filingUrl={filingUrl}
         formType={filingType || '11-K'}
-        unsubscribeUrl={`${process.env.NEXT_PUBLIC_APP_URL || ''}/settings/notifications`}
+        unsubscribeUrl={`${process.env.NEXT_PUBLIC_APP_URL || ''}/dashboard/settings`}
       />
     </div>
   );

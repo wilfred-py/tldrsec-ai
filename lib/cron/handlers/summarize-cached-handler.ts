@@ -19,6 +19,7 @@ import { verifyFilingContent, type FilingMetadata } from '../../validation/filin
 import { shouldProcessFiling } from '../../filing/filing-type-preferences-mapper';
 import { TrialService } from '../../auth/trial-service';
 import { parseResponse } from '../../ai/parsers/response-parser';
+import { CURRENT_FORM4_SCHEMA_VERSION } from '../../email/form4-field-normalizer';
 import type { SECFilingType } from '../../ai/prompts/prompt-types';
 
 const summarizeLogger = logger.child('summarize-cached-handler');
@@ -78,6 +79,16 @@ export async function handleSummarizeCached(
   try {
     const { getPrismaClient } = await import('../../db/prisma');
     const prisma = getPrismaClient();
+
+    // Check if user account is soft-deleted — skip processing entirely
+    const dbUser = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { deletedAt: true },
+    });
+    if (dbUser?.deletedAt) {
+      summarizeLogger.info(`[${executionId}] Skipping deleted user`, { userId });
+      return { success: true, emailSent: false };
+    }
 
     // Email delivery gate: check if user's trial is still active
     // Expired trial users don't receive emails (soft block)
@@ -355,16 +366,24 @@ export async function handleSummarizeCached(
         formType: filing.formType
       });
 
-      // Re-normalize stale pre-deployment summaries that lack transaction codes
+      // Re-normalize stale shared summaries: missing codes, stale field names, or old schema version
       let normalizedJSON = sharedSummary.summaryJSON;
       if (normalizedJSON && typeof normalizedJSON === 'object') {
         const jsonObj = normalizedJSON as Record<string, unknown>;
         const txArr = Array.isArray(jsonObj.transactions) ? jsonObj.transactions as Record<string, unknown>[] : [];
         const hasCodelessTx = txArr.length > 0 && txArr.some(t => !t.code || t.code === '');
-        if (hasCodelessTx) {
-          summarizeLogger.info(`[${executionId}] Re-normalizing stale shared summary (missing transaction codes)`, {
+        const hasStaleSchema = !jsonObj._schemaVersion || (jsonObj._schemaVersion as number) < CURRENT_FORM4_SCHEMA_VERSION;
+        const hasStaleFieldNames = txArr.some(t =>
+          'price' in t || 'action' in t || 'shareCount' in t || 'numberOfShares' in t ||
+          t.pricePerShare === '' || t.shares === '' || t.shares === 0
+        );
+        const needsReNormalization = hasCodelessTx || hasStaleFieldNames || hasStaleSchema;
+        if (needsReNormalization) {
+          summarizeLogger.info(`[${executionId}] Re-normalizing stale shared summary`, {
             sharedSummaryId: sharedSummary.id,
-            transactionCount: txArr.length
+            transactionCount: txArr.length,
+            reason: hasCodelessTx ? 'missing-codes' : hasStaleFieldNames ? 'stale-field-names' : 'stale-schema',
+            schemaVersion: jsonObj._schemaVersion ?? 'none',
           });
           try {
             const reNormalized = parseResponse(
@@ -601,6 +620,23 @@ export async function handleSummarizeCached(
       });
     }
 
+    // Extract importance score and smart subject from AI response
+    const summaryData = summaryResult.summaryJSON as Record<string, unknown> | null;
+    const importance = (summaryData && typeof summaryData.importanceScore === 'string')
+      ? summaryData.importanceScore
+      : 'medium';
+
+    // Generate smart email subject line
+    const { EmailSubjectService } = await import('../../email/subject-service');
+    const smartSubject = EmailSubjectService.generateSmartSubject(
+      summaryData,
+      {
+        filingType: filing.formType,
+        companyName: ticker.companyName || ticker.symbol,
+        ticker: ticker.symbol
+      }
+    );
+
     // Save summary to database
     // Note: Summary model uses tickerId, filingType, filingUrl, summaryText (not userId, formType, summary)
     const summary = await prisma.summary.create({
@@ -611,6 +647,8 @@ export async function handleSummarizeCached(
         filingUrl: filing.filingUrl,
         summaryText: summaryResult.summaryText,
         summaryJSON: summaryResult.summaryJSON || null,  // Preserve structured AI response for email templates
+        importance,
+        smartSubject,
         modelVersion: summaryResult.modelUsed || 'x-ai/grok-4-fast:free',
         promptVersion: 'v1',
         totalCost: summaryResult.cost || 0,
@@ -670,7 +708,11 @@ export async function handleSummarizeCached(
           filingDate: new Date(filing.filingDate),
           summary: summaryResult.summaryText,
           filingUrl: cachedContent.primaryDocUrl || filing.filingUrl,  // Prefer direct document URL
-          summaryData: summaryResult.summaryJSON  // Pass structured AI data to email template
+          summaryData: summaryResult.summaryJSON as Record<string, unknown> | undefined,  // Pass structured AI data to email template
+          userId,
+          summaryId: summary.id,
+          importance,
+          smartSubject,
         });
 
         emailSent = true;
@@ -719,11 +761,24 @@ export async function handleSummarizeCached(
       }
     }
 
-    // Update lastProcessedAt timestamp
+    // Update lastProcessedAt and increment hours saved
+    // Hours saved estimates per filing type (in minutes)
+    const HOURS_SAVED_MINUTES: Record<string, number> = {
+      '10-K': 240, '10-Q': 120, '8-K': 60,
+      '4': 30, 'Form 4': 30, '144': 30, 'Form 144': 30,
+      'SC 13G': 60, 'SC 13D': 60, 'DEF 14A': 90,
+      'S-1': 120, 'S-3': 60, '424B2': 60, '11-K': 60
+    };
+    const minutesSaved = HOURS_SAVED_MINUTES[filing.formType] || 60;
+
     try {
       await prisma.user.update({
         where: { id: userId },
-        data: { lastProcessedAt: new Date() }
+        data: {
+          lastProcessedAt: new Date(),
+          hoursSavedThisMonth: { increment: minutesSaved },
+          hoursSavedTotal: { increment: minutesSaved }
+        }
       });
     } catch (updateError) {
       summarizeLogger.error(`[${executionId}] Failed to update lastProcessedAt`, {
