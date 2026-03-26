@@ -35,7 +35,7 @@ env:
   ANTHROPIC_API_KEY: test_anthropic_key_for_monitoring_validation
   RESEND_API_KEY: test_resend_key_for_monitoring_validation
   CLERK_SECRET_KEY: test_clerk_secret_for_monitoring_validation
-  NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: test_clerk_public_for_monitoring_validation
+  NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: pk_test_dGVzdC5leGFtcGxlLmNvbSQ
   # Alert system configuration
   ALERT_EMAIL_RECIPIENTS: test-alerts@tldrsec.app,monitoring-team@tldrsec.app
   ESCALATION_EMAIL_RECIPIENTS: critical-alerts@tldrsec.app,engineering-lead@tldrsec.app
@@ -76,6 +76,11 @@ jobs:
 
       - name: Generate Prisma client
         run: npx prisma generate
+
+      - name: Create database schemas
+        run: |
+          psql $DATABASE_URL -c "CREATE SCHEMA IF NOT EXISTS app;"
+          psql $DATABASE_URL -c "CREATE SCHEMA IF NOT EXISTS pipeline;"
 
       - name: Run database migrations
         run: npx prisma migrate deploy
