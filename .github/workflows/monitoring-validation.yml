@@ -30,6 +30,7 @@ env:
   VERCEL_ENV: test
   # Test database configuration
   DATABASE_URL: postgresql://test_user:test_password@localhost:5432/tldrsec_monitoring_test
+  DIRECT_URL: postgresql://test_user:test_password@localhost:5432/tldrsec_monitoring_test
   # Mock API keys for testing
   ANTHROPIC_API_KEY: test_anthropic_key_for_monitoring_validation
   RESEND_API_KEY: test_resend_key_for_monitoring_validation
