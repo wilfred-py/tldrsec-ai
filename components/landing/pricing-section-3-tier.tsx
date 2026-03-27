@@ -12,14 +12,14 @@ export function PricingSection3Tier() {
   const [email, setEmail] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
-  const handlePlanSelect = async (planType: 'FREE' | 'PRO' | 'MAX') => {
+  const handlePlanSelect = async (planType: 'PRO' | 'MAX') => {
     if (!email) {
       toast.error('Please enter your email address');
       return;
     }
 
     setIsLoading(true);
-    
+
     try {
       const response = await fetch('/api/checkout', {
         method: 'POST',
@@ -34,12 +34,10 @@ export function PricingSection3Tier() {
 
       if (response.ok) {
         if (data.sessionUrl) {
-          // Redirect to Stripe checkout for paid plans
           window.location.href = data.sessionUrl;
-        } else if (data.redirectUrl) {
-          // Redirect to onboarding for FREE plan
-          window.location.href = data.redirectUrl;
         }
+      } else if (response.status === 409 && data.signInUrl) {
+        toast.error('An account with this email already exists. Please sign in.');
       } else {
         toast.error(data.error || 'An error occurred. Please try again.');
       }
@@ -52,23 +50,10 @@ export function PricingSection3Tier() {
 
   const plans = [
     {
-      name: 'FREE',
-      price: '$0',
-      period: 'for 7 days',
-      description: 'Full access trial',
-      features: [
-        'Unlimited companies to track',
-        'Real-time email alerts',
-        'All SEC filing types',
-        'First priority processing queue',
-      ],
-      buttonText: 'Start Trial',
-      popular: false,
-    },
-    {
       name: 'PRO',
       price: '$199',
       period: '/month',
+      trialText: '7-day free trial — then $199/mo',
       description: 'For serious investors and analysts',
       features: [
         '25 companies to track',
@@ -77,13 +62,14 @@ export function PricingSection3Tier() {
         'All SEC filing types',
         'Email support',
       ],
-      buttonText: 'Start PRO',
+      buttonText: 'Start Free Trial',
       popular: true,
     },
     {
       name: 'MAX',
       price: '$349',
       period: '/month',
+      trialText: '7-day free trial — then $349/mo',
       description: 'For institutions and power users',
       features: [
         'Unlimited companies',
@@ -92,7 +78,7 @@ export function PricingSection3Tier() {
         'All SEC filing types',
         'Dedicated support',
       ],
-      buttonText: 'Start MAX',
+      buttonText: 'Start Free Trial',
       popular: false,
     },
   ];
@@ -101,11 +87,11 @@ export function PricingSection3Tier() {
     <section className="py-12 px-4">
       <div className="max-w-6xl mx-auto">
         <div className="text-center mb-12">
-          <h2 className="text-3xl font-bold mb-4">Choose Your Plan</h2>
+          <h2 className="text-3xl font-bold mb-4">Never miss another filing</h2>
           <p className="text-lg text-gray-600 mb-8">
-            Start tracking SEC filings and get AI-powered summaries delivered to your inbox
+            AI-powered SEC filing summaries delivered to your inbox the moment they drop
           </p>
-          
+
           {/* Email Input */}
           <div className="max-w-md mx-auto mb-8">
             <Label htmlFor="email" className="sr-only">
@@ -122,11 +108,11 @@ export function PricingSection3Tier() {
           </div>
         </div>
 
-        {/* Pricing Cards */}
-        <div className="grid md:grid-cols-3 gap-6">
+        {/* Pricing Cards — 2-tier centered layout */}
+        <div className="grid md:grid-cols-2 gap-6 max-w-3xl mx-auto">
           {plans.map((plan) => (
-            <Card 
-              key={plan.name} 
+            <Card
+              key={plan.name}
               className={`relative ${plan.popular ? 'ring-2 ring-blue-600 scale-105' : ''}`}
             >
               {plan.popular && (
@@ -136,7 +122,7 @@ export function PricingSection3Tier() {
                   </span>
                 </div>
               )}
-              
+
               <CardHeader className="text-center pb-4">
                 <CardTitle className="text-xl font-bold">{plan.name}</CardTitle>
                 <CardDescription className="text-sm">{plan.description}</CardDescription>
@@ -144,8 +130,9 @@ export function PricingSection3Tier() {
                   <span className="text-4xl font-bold">{plan.price}</span>
                   <span className="text-gray-600">{plan.period}</span>
                 </div>
+                <p className="text-sm text-gray-500 mt-2">{plan.trialText}</p>
               </CardHeader>
-              
+
               <CardContent className="pt-0">
                 <ul className="space-y-3 mb-6">
                   {plan.features.map((feature, index) => (
@@ -155,17 +142,17 @@ export function PricingSection3Tier() {
                     </li>
                   ))}
                 </ul>
-                
+
                 <Button
-                  onClick={() => handlePlanSelect(plan.name as 'FREE' | 'PRO' | 'MAX')}
+                  onClick={() => handlePlanSelect(plan.name as 'PRO' | 'MAX')}
                   disabled={isLoading || !email}
                   className={`w-full ${
-                    plan.popular 
-                      ? 'bg-blue-600 hover:bg-blue-700' 
+                    plan.popular
+                      ? 'bg-blue-600 hover:bg-blue-700'
                       : 'bg-gray-900 hover:bg-gray-800'
                   }`}
                 >
-                  {isLoading ? 'Loading...' : plan.buttonText}
+                  {isLoading ? 'Redirecting to checkout...' : plan.buttonText}
                 </Button>
               </CardContent>
             </Card>

@@ -1,10 +1,17 @@
 /**
- * TrialService - Manages trial status checks for users
+ * TrialService - LEGACY: Trial status for grandfathered users only
  *
- * Handles three user types:
+ * As of the CC-required trial launch, NEW users' trial lifecycle is managed
+ * entirely by Stripe (trial_period_days on the checkout session). Stripe
+ * handles trial start, expiry, card charging, and subscription activation.
+ *
+ * This service remains for users who signed up BEFORE the CC-trial launch:
  * - Grandfathered FREE users (NULL trial dates) - always active
- * - Trial users (isTrialing + trialEndsAt) - active until expiry
- * - Paid users (PRO/MAX) - always active
+ * - Legacy trial users (isTrialing + trialEndsAt) - active until expiry
+ * - Paid users (PRO/MAX) - always active (handled here for completeness)
+ *
+ * Do NOT add new trial logic here. New trial features should use Stripe's
+ * subscription lifecycle (status: 'trialing' → 'active' → 'past_due').
  */
 
 import { getPrismaClient } from '@/lib/db/prisma';

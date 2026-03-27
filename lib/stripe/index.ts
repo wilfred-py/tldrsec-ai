@@ -149,27 +149,38 @@ export function validateWebhookSignature(
 
 /**
  * Create checkout session
+ *
+ * Supports CC-required trials via trialPeriodDays + paymentMethodCollection.
+ * When trialPeriodDays is set, Stripe creates a subscription in 'trialing'
+ * status and charges the card after the trial period ends.
  */
 export async function createCheckoutSession({
   priceId,
   customerId,
+  customerEmail,
   successUrl,
   cancelUrl,
   metadata = {},
+  trialPeriodDays,
+  paymentMethodCollection,
+  clientReferenceId,
 }: {
   priceId: string;
   customerId?: string;
+  customerEmail?: string;
   successUrl: string;
   cancelUrl: string;
   metadata?: Record<string, string>;
+  trialPeriodDays?: number;
+  paymentMethodCollection?: 'always' | 'if_required';
+  clientReferenceId?: string;
 }): Promise<Stripe.Checkout.Session> {
   if (!stripe) {
     throw new Error('Stripe not configured');
   }
 
-  const session = await stripe.checkout.sessions.create({
+  const sessionParams: Stripe.Checkout.SessionCreateParams = {
     mode: 'subscription',
-    customer: customerId,
     line_items: [
       {
         price: priceId,
@@ -181,8 +192,30 @@ export async function createCheckoutSession({
     metadata,
     allow_promotion_codes: true,
     billing_address_collection: 'required',
-    customer_update: customerId ? { address: 'auto' } : undefined,
-  });
+  };
+
+  if (customerId) {
+    sessionParams.customer = customerId;
+    sessionParams.customer_update = { address: 'auto' };
+  } else if (customerEmail) {
+    sessionParams.customer_email = customerEmail;
+  }
+
+  if (clientReferenceId) {
+    sessionParams.client_reference_id = clientReferenceId;
+  }
+
+  if (trialPeriodDays) {
+    sessionParams.subscription_data = {
+      trial_period_days: trialPeriodDays,
+    };
+  }
+
+  if (paymentMethodCollection) {
+    sessionParams.payment_method_collection = paymentMethodCollection;
+  }
+
+  const session = await stripe.checkout.sessions.create(sessionParams);
 
   return session;
 }
@@ -322,8 +355,9 @@ export async function updateSubscription(
 }
 
 /**
- * List active subscriptions for a Stripe customer.
- * Used to check Stripe as source of truth before creating new checkout sessions.
+ * List active or trialing subscriptions for a Stripe customer.
+ * Checks both statuses to prevent duplicate subscriptions when
+ * CC-required trials create subs in 'trialing' status.
  */
 export async function listActiveSubscriptions(
   customerId: string
@@ -332,12 +366,12 @@ export async function listActiveSubscriptions(
     throw new Error('Stripe not configured');
   }
 
-  const subscriptions = await stripe.subscriptions.list({
-    customer: customerId,
-    status: 'active',
-  });
+  const [active, trialing] = await Promise.all([
+    stripe.subscriptions.list({ customer: customerId, status: 'active' }),
+    stripe.subscriptions.list({ customer: customerId, status: 'trialing' }),
+  ]);
 
-  return subscriptions.data;
+  return [...active.data, ...trialing.data];
 }
 
 /**
