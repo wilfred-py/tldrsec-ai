@@ -477,6 +477,7 @@ export default {
 
     const results = {
       dlqCleanup: null,
+      checkTrials: null,
       dailyReport: null,
       weeklyDigest: null,
     };
@@ -486,7 +487,39 @@ export default {
       console.log(`[${executionId}] Running DLQ cleanup...`);
       results.dlqCleanup = await this.handleDLQCleanup(event, env, ctx);
 
-      // Task 2: Daily report (informational, least critical)
+      // Task 2: Check trial expirations (sets isTrialing=false for expired trials)
+      console.log(`[${executionId}] Running trial expiration check...`);
+      try {
+        const secret = sanitizeCronSecret(env.CRON_SECRET);
+        const trialTimestamp = Date.now().toString();
+        const trialPath = '/api/cron?action=check-trials';
+        const trialPayload = `${trialTimestamp}:GET:${trialPath}`;
+        const encoder = new TextEncoder();
+        const trialKey = await crypto.subtle.importKey(
+          'raw', encoder.encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']
+        );
+        const trialSigBuffer = await crypto.subtle.sign('HMAC', trialKey, encoder.encode(trialPayload));
+        const trialSig = Array.from(new Uint8Array(trialSigBuffer)).map(b => b.toString(16).padStart(2, '0')).join('');
+
+        const trialUrl = `${env.PUBLIC_URL}${trialPath}`;
+        const trialResponse = await fetch(trialUrl, {
+          method: 'GET',
+          headers: {
+            'x-hmac-signature': trialSig,
+            'x-hmac-timestamp': trialTimestamp,
+            'x-execution-id': executionId,
+          },
+        });
+
+        const trialData = trialResponse.ok ? await trialResponse.json() : await trialResponse.text();
+        results.checkTrials = { success: trialResponse.ok, status: trialResponse.status, data: trialData };
+        console.log(`[${executionId}] Trial check: ${trialResponse.ok ? 'SUCCESS' : 'FAILED'} (${trialResponse.status})`);
+      } catch (trialError) {
+        results.checkTrials = { success: false, error: trialError.message };
+        console.error(`[${executionId}] Trial check error: ${trialError.message}`);
+      }
+
+      // Task 3: Daily report (informational, least critical)
       console.log(`[${executionId}] Running daily report...`);
       results.dailyReport = await this.handleDailyReport(event, env, ctx);
 
@@ -551,10 +584,12 @@ export default {
 
       const duration = Date.now() - startTime;
       const allSuccessful = results.dlqCleanup?.success &&
+                            results.checkTrials?.success !== false &&
                             results.dailyReport?.success;
 
       console.log(`[${executionId}] Combined daily tasks completed in ${duration}ms`, {
         dlqCleanup: results.dlqCleanup?.success ? 'SUCCESS' : 'FAILED',
+        checkTrials: results.checkTrials?.success ? 'SUCCESS' : 'FAILED',
         dailyReport: results.dailyReport?.success ? 'SUCCESS' : 'FAILED',
         weeklyDigest: results.weeklyDigest ? (results.weeklyDigest.success ? 'SUCCESS' : 'FAILED') : 'SKIPPED',
       });
@@ -773,28 +808,25 @@ export default {
         };
       }
       
-      // Build URLs for Vercel endpoints (five-step pipeline for async processing)
+      // Build URLs for Vercel endpoints (four-step pipeline for async processing)
       // Step 0: Proactive lock cleanup (PREVENTS PIPELINE STALLS!)
       const cleanupLocksUrl = `${env.PUBLIC_URL}/api/cron?action=cleanup-locks`;
-      // Step 1: Queue new filings for discovery
-      const tierAwareUrl = `${env.PUBLIC_URL}/api/cron?action=tier-aware`;
-      // Step 1.5: Process discovery jobs (RSS feed checking, queues fetch jobs)
-      const discoveryUrl = `${env.PUBLIC_URL}/api/cron?action=process-queue&jobTypes=ASYNC_DISCOVER_FILINGS`;
+      // Step 1: Fast-poll discovery via SEC Submissions API (replaces tier-aware + RSS)
+      // Directly detects new filings and queues ASYNC_FETCH_FILING jobs — no intermediate
+      // ASYNC_DISCOVER_FILINGS step needed (Step 1.5 was deleted)
+      const fastPollUrl = `${env.PUBLIC_URL}/api/cron?action=fast-poll`;
       // Step 2: Process fetch jobs (content retrieval from SEC)
-      // IMPORTANT: We separate fetch and summarize jobs to ensure both get processing time.
-      // The previous combined approach caused summarize jobs to be blocked by the fetch backlog.
       const fetchUrl = `${env.PUBLIC_URL}/api/cron?action=process-queue&jobTypes=ASYNC_FETCH_FILING`;
       // Step 3: Process summarize jobs (AI summarization)
       const summarizeUrl = `${env.PUBLIC_URL}/api/cron?action=process-queue&jobTypes=ASYNC_SUMMARIZE_CACHED`;
       const dailyCountUrl = `${env.PUBLIC_URL}/api/cron?action=update-daily-count`;
 
-      console.log(`[${executionId}] Five-step pipeline configuration:`, {
+      console.log(`[${executionId}] Four-step pipeline configuration:`, {
         step0: cleanupLocksUrl,
-        step1: tierAwareUrl,
-        step1_5: discoveryUrl,
+        step1: fastPollUrl,
         step2: fetchUrl,
         step3: summarizeUrl,
-        pattern: 'Sequential execution: cleanup → queue discovery → process discovery → fetch → summarize'
+        pattern: 'Sequential execution: cleanup → fast-poll discovery → fetch → summarize'
       });
       console.log(`[${executionId}] PUBLIC_URL: ${env.PUBLIC_URL}`);
       const rawSecretLen = env.CRON_SECRET?.length || 0;
@@ -907,24 +939,26 @@ export default {
       }
 
       // ========================================
-      // STEP 1: Queue Discovery Jobs
+      // STEP 1: Fast-Poll Discovery (Submissions API)
       // ========================================
-      console.log(`[${executionId}] ====== STEP 1: DISCOVERY ======`);
-      console.log(`[${executionId}] Step 1: Calling tier-aware endpoint to queue filings...`);
-      let tierAwareResult;
+      // Polls data.sec.gov/submissions/ per-CIK for near-real-time detection.
+      // Directly queues ASYNC_FETCH_FILING jobs — no intermediate discovery step.
+      console.log(`[${executionId}] ====== STEP 1: FAST-POLL DISCOVERY ======`);
+      console.log(`[${executionId}] Step 1: Calling fast-poll endpoint for Submissions API discovery...`);
+      let fastPollResult;
       try {
-        const { signatureHex, timestamp } = await generateSignature(tierAwareUrl);
-        const tierAwareHeaders = createHeaders(signatureHex, timestamp);
+        const { signatureHex, timestamp } = await generateSignature(fastPollUrl);
+        const fastPollHeaders = createHeaders(signatureHex, timestamp);
 
-        tierAwareResult = await executeWithAdvancedRateLimiting({
+        fastPollResult = await executeWithAdvancedRateLimiting({
           executionId,
-          url: tierAwareUrl,
-          headers: tierAwareHeaders,
+          url: fastPollUrl,
+          headers: fastPollHeaders,
           workerTimeoutMs: WORKER_TIMEOUT_MS,
-          requestTimeoutMs: REQUEST_TIMEOUT_MS,
-          maxAttempts: MAX_ATTEMPTS,
+          requestTimeoutMs: 55000, // 55s — fast-poll should complete in <10s, leave buffer
+          maxAttempts: 2, // Quick retry — adaptive skip handles most no-ops
           initialBackoffMs: INITIAL_BACKOFF_MS,
-          maxBackoffMs: MAX_BACKOFF_MS,
+          maxBackoffMs: 5000,
           jitterPercentage: JITTER_PERCENTAGE,
           rateLimiter,
           circuitBreaker,
@@ -940,86 +974,33 @@ export default {
           env
         });
 
-        console.log(`[${executionId}] Step 1 completed: tier-aware endpoint success`, {
-          queuedJobs: tierAwareResult?.queue?.filingsQueued || 0,
-          queueDepth: tierAwareResult?.queue?.queueDepth || 0
+        console.log(`[${executionId}] Step 1 completed: fast-poll discovery`, {
+          status: fastPollResult?.status || 'unknown',
+          filingsDetected: fastPollResult?.filingsDetected || 0,
+          fetchJobsQueued: fastPollResult?.fetchJobsQueued || 0,
+          tickersPolled: fastPollResult?.tickersPolled || 0,
+          cacheHits: fastPollResult?.cacheHits || 0,
+          durationMs: fastPollResult?.durationMs || 0
         });
-      } catch (tierAwareError) {
-        console.error(`[${executionId}] Step 1 failed: tier-aware endpoint error`, {
-          error: tierAwareError.message
+      } catch (fastPollError) {
+        console.error(`[${executionId}] Step 1 failed: fast-poll error`, {
+          error: fastPollError.message
         });
-        throw tierAwareError; // Don't proceed if queueing fails
+        // Continue to fetch/summarize — there may be previously queued jobs to process
+        fastPollResult = { success: false, error: fastPollError.message };
       }
 
-      // ========================================
-      // STEP 1.5: Process Discovery Jobs (CRITICAL!)
-      // ========================================
-      // This step processes the ASYNC_DISCOVER_FILINGS jobs queued in Step 1.
-      // Without this step, discovery jobs accumulate indefinitely in PENDING status.
-      // Discovery jobs check RSS feeds for each user's tickers and queue fetch jobs.
-      console.log(`[${executionId}] ====== STEP 1.5: DISCOVERY JOBS ======`);
-      console.log(`[${executionId}] Step 1.5: Processing discovery jobs...`);
-      let discoveryResult;
-      try {
-        const { signatureHex: discoverySignature, timestamp: discoveryTimestamp } = await generateSignature(discoveryUrl);
-        const discoveryHeaders = createHeaders(discoverySignature, discoveryTimestamp);
+      // Step 1.5 was removed — fast-poll (Step 1) queues ASYNC_FETCH_FILING
+      // jobs directly, eliminating the intermediate ASYNC_DISCOVER_FILINGS step.
 
-        // Discovery uses reduced timeout (90s) and single attempt to leave time for Steps 2-3
-        // Discovery processes many tickers via SEC API and can legitimately take >100s
-        // If it fails, jobs retry on next cron cycle - no need to retry within same invocation
-        const DISCOVERY_TIMEOUT_MS = 90 * 1000; // 90 seconds (reduced from 270s)
-        const DISCOVERY_MAX_ATTEMPTS = 1; // No retries - fails fast to allow Steps 2-3
-
-        discoveryResult = await executeWithAdvancedRateLimiting({
-          executionId,
-          url: discoveryUrl,
-          headers: discoveryHeaders,
-          workerTimeoutMs: WORKER_TIMEOUT_MS,
-          requestTimeoutMs: DISCOVERY_TIMEOUT_MS,  // Reduced from REQUEST_TIMEOUT_MS
-          maxAttempts: DISCOVERY_MAX_ATTEMPTS,     // Reduced from MAX_ATTEMPTS
-          initialBackoffMs: INITIAL_BACKOFF_MS,
-          maxBackoffMs: MAX_BACKOFF_MS,
-          jitterPercentage: JITTER_PERCENTAGE,
-          rateLimiter,
-          circuitBreaker,
-          monitor,
-          rateLimitConfig: {
-            windowMs: RATE_LIMIT_WINDOW_MS,
-            maxRequests: MAX_REQUESTS_PER_WINDOW,
-            burstLimit: MAX_BURST_REQUESTS,
-            globalLimit: GLOBAL_SUBREQUEST_LIMIT,
-            burstWindowMs: BURST_PROTECTION_WINDOW_MS,
-            breakerThreshold: CIRCUIT_BREAKER_THRESHOLD
-          },
-          env
-        });
-
-        console.log(`[${executionId}] Step 1.5 completed: discovery jobs processed`, {
-          jobsProcessed: discoveryResult?.processed || 0,
-          fetchJobsQueued: discoveryResult?.queued || 0
-        });
-      } catch (discoveryError) {
-        console.error(`[${executionId}] Step 1.5 failed: discovery jobs error`, {
-          error: discoveryError.message
-        });
-        // Continue to fetch step even if discovery fails - jobs will retry on next cycle
-        console.warn(`[${executionId}] Discovery processing failed, continuing to fetch step`);
-        discoveryResult = { success: false, error: discoveryError.message };
-
-        // CRITICAL FIX: Reset circuit breaker after discovery timeout
-        // Discovery jobs can take 100+ seconds (processing many tickers via SEC API)
-        // which triggers 524 timeouts. This should NOT block fetch/summarize steps
-        // since those are different endpoints that work correctly.
-        // See: 2025-12-16 pipeline stall investigation - discovery timeout causing
-        // circuit breaker to open and block Steps 2-3.
-        const isDiscoveryTimeout = discoveryError.message?.includes('Circuit breaker') ||
-                                   discoveryError.message?.includes('524') ||
-                                   discoveryError.message?.includes('timeout');
-        if (isDiscoveryTimeout) {
-          console.log(`[${executionId}] Resetting circuit breaker after discovery timeout to allow Steps 2-3`);
-          await circuitBreaker.reset();
-        }
-      }
+      // Skip Steps 2/3 if fast-poll was skipped (adaptive interval) AND no new jobs were queued.
+      // This prevents ~1440 unnecessary Vercel invocations/day during off-hours.
+      const fastPollSkipped = fastPollResult?.status === 'skipped';
+      const noNewJobs = !fastPollResult?.fetchJobsQueued || fastPollResult.fetchJobsQueued === 0;
+      if (fastPollSkipped && noNewJobs && !fastPollResult?.error) {
+        console.log(`[${executionId}] Fast-poll skipped (${fastPollResult?.reason || 'unknown'}), no pending jobs — skipping Steps 2/3`);
+        // Fall through to final reporting
+      } else {
 
       // ========================================
       // STEP 2: Process Fetch Jobs (Content Retrieval)
@@ -1145,6 +1126,8 @@ export default {
           totalJobsProcessed: totalSummarizeJobsProcessed
         };
       }
+
+      } // end of else block (Steps 2/3 skipped when fast-poll returns 'skipped')
 
       // Combine results from all five endpoints (including discovery)
       const result = {

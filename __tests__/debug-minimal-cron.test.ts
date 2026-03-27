@@ -93,8 +93,9 @@ describe('Minimal Cron Test - Isolate Error', () => {
     };
 
     const mockRequest = {
-      headers: mockHeaders
-    } as NextRequest;
+      headers: mockHeaders,
+      url: 'http://localhost:3000/api/cron?action=tier-aware'
+    } as unknown as NextRequest;
 
     try {
       const response = await tierAwareRoute(mockRequest);

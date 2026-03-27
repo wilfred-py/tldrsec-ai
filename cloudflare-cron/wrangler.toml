@@ -1,16 +1,17 @@
 # Cloudflare Worker Configuration for TLDRSEC SEC Filing Monitoring
-# This worker executes every 10 minutes to trigger SEC filing processing
+# This worker executes every 1 minute to trigger SEC filing processing via fast-poll
 
 name = "cloudflare-cron"
 main = "index.js"
 compatibility_date = "2024-10-01"
 
 # Cron schedules (Cloudflare free tier limit: 3 triggers):
-# - Every 5 minutes: Main pipeline processing (discovery, fetch, summarize)
+# - Every 1 minute: Fast-poll pipeline (Submissions API discovery, fetch, summarize)
+#   Adaptive polling on the Vercel side skips unnecessary cycles based on market hours
 # - Every 15 minutes: Auto-recovery health check and remediation
 # - Daily at 00:00 UTC: Combined daily tasks (trial expiration, DLQ cleanup, report)
 [triggers]
-crons = ["*/5 * * * *", "*/15 * * * *", "0 0 * * *"]
+crons = ["*/1 * * * *", "*/15 * * * *", "0 0 * * *"]
 
 # Environment variables (non-sensitive)
 [vars]

@@ -39,6 +39,47 @@ export async function POST(request: NextRequest) {
       userAgent,
     });
 
+    // Handle FREE plan — check for existing accounts first, then create via magic link
+    if (planType === 'FREE') {
+      // Check if email is already registered in Clerk
+      const existingClerkUsers = await clerkClient.users.getUserList({
+        emailAddress: [email],
+        limit: 1,
+      });
+
+      if (existingClerkUsers.data.length > 0) {
+        return NextResponse.json(
+          { error: 'An account with this email already exists. Please sign in.' },
+          { status: 409 }
+        );
+      }
+
+      // Check if email exists in our database (e.g., from a previous webhook)
+      const existingDbUser = await getPrismaClient().user.findFirst({
+        where: { email },
+        select: { id: true },
+      }).catch(() => null);
+
+      if (existingDbUser) {
+        return NextResponse.json(
+          { error: 'An account with this email already exists. Please sign in.' },
+          { status: 409 }
+        );
+      }
+
+      // Create user with email verification required
+      const clerkUser = await clerkClient.users.createUser({
+        emailAddresses: [{ emailAddress: email }],
+        skipPasswordChecks: true,
+      });
+
+      return NextResponse.json({
+        planType: 'FREE',
+        redirectUrl: '/onboarding',
+        userId: clerkUser.id
+      });
+    }
+
     if (!stripe) {
       return NextResponse.json({ error: 'Stripe not configured' }, { status: 503 });
     }
