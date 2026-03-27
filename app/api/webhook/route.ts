@@ -418,9 +418,37 @@ async function handlePaymentFailed(invoice: Stripe.Invoice) {
 
   const userSubscription = await prisma.userSubscription.findUnique({
     where: { stripeSubscriptionId: invoice.subscription as string },
+    select: { userId: true },
   });
 
-  if (userSubscription) {
-    console.log(`Payment failed for user ${userSubscription.userId}`);
+  if (!userSubscription) return;
+
+  const user = await prisma.user.findUnique({
+    where: { id: userSubscription.userId },
+    select: { email: true, name: true },
+  });
+
+  console.log(`Payment failed for user ${userSubscription.userId} (${user?.email})`);
+
+  if (user?.email) {
+    try {
+      const { Resend } = await import('resend');
+      const resend = new Resend(process.env.RESEND_API_KEY);
+      await resend.emails.send({
+        from: 'tldrSEC <noreply@tldrsec.app>',
+        to: user.email,
+        subject: 'Action needed: Update your payment method',
+        html: `
+          <p>Hi${user.name ? ` ${user.name}` : ''},</p>
+          <p>We were unable to process your payment for tldrSEC. Please update your payment method to continue receiving SEC filing summaries.</p>
+          <p><a href="https://tldrsec.app/dashboard/billing" style="display:inline-block;padding:12px 24px;background-color:#7C3AED;color:#ffffff;text-decoration:none;border-radius:6px;font-weight:600;">Update Payment Method</a></p>
+          <p style="color:#6B7280;font-size:14px;">If you don&apos;t update your payment method, your subscription will be cancelled after Stripe&apos;s retry attempts are exhausted.</p>
+          <p style="color:#9CA3AF;font-size:12px;">tldrSEC | AI-Powered SEC Filing Summaries</p>
+        `,
+      });
+      console.log(`[webhook] Payment failed notification sent to ${user.email}`);
+    } catch (emailError) {
+      console.error(`[webhook] Failed to send payment failed notification to ${user.email}:`, emailError);
+    }
   }
 }

@@ -477,6 +477,7 @@ export default {
 
     const results = {
       dlqCleanup: null,
+      checkTrials: null,
       dailyReport: null,
       weeklyDigest: null,
     };
@@ -486,7 +487,39 @@ export default {
       console.log(`[${executionId}] Running DLQ cleanup...`);
       results.dlqCleanup = await this.handleDLQCleanup(event, env, ctx);
 
-      // Task 2: Daily report (informational, least critical)
+      // Task 2: Check trial expirations (sets isTrialing=false for expired trials)
+      console.log(`[${executionId}] Running trial expiration check...`);
+      try {
+        const secret = sanitizeCronSecret(env.CRON_SECRET);
+        const trialTimestamp = Date.now().toString();
+        const trialPath = '/api/cron?action=check-trials';
+        const trialPayload = `${trialTimestamp}:GET:${trialPath}`;
+        const encoder = new TextEncoder();
+        const trialKey = await crypto.subtle.importKey(
+          'raw', encoder.encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']
+        );
+        const trialSigBuffer = await crypto.subtle.sign('HMAC', trialKey, encoder.encode(trialPayload));
+        const trialSig = Array.from(new Uint8Array(trialSigBuffer)).map(b => b.toString(16).padStart(2, '0')).join('');
+
+        const trialUrl = `${env.PUBLIC_URL}${trialPath}`;
+        const trialResponse = await fetch(trialUrl, {
+          method: 'GET',
+          headers: {
+            'x-hmac-signature': trialSig,
+            'x-hmac-timestamp': trialTimestamp,
+            'x-execution-id': executionId,
+          },
+        });
+
+        const trialData = trialResponse.ok ? await trialResponse.json() : await trialResponse.text();
+        results.checkTrials = { success: trialResponse.ok, status: trialResponse.status, data: trialData };
+        console.log(`[${executionId}] Trial check: ${trialResponse.ok ? 'SUCCESS' : 'FAILED'} (${trialResponse.status})`);
+      } catch (trialError) {
+        results.checkTrials = { success: false, error: trialError.message };
+        console.error(`[${executionId}] Trial check error: ${trialError.message}`);
+      }
+
+      // Task 3: Daily report (informational, least critical)
       console.log(`[${executionId}] Running daily report...`);
       results.dailyReport = await this.handleDailyReport(event, env, ctx);
 
@@ -551,10 +584,12 @@ export default {
 
       const duration = Date.now() - startTime;
       const allSuccessful = results.dlqCleanup?.success &&
+                            results.checkTrials?.success !== false &&
                             results.dailyReport?.success;
 
       console.log(`[${executionId}] Combined daily tasks completed in ${duration}ms`, {
         dlqCleanup: results.dlqCleanup?.success ? 'SUCCESS' : 'FAILED',
+        checkTrials: results.checkTrials?.success ? 'SUCCESS' : 'FAILED',
         dailyReport: results.dailyReport?.success ? 'SUCCESS' : 'FAILED',
         weeklyDigest: results.weeklyDigest ? (results.weeklyDigest.success ? 'SUCCESS' : 'FAILED') : 'SKIPPED',
       });
@@ -958,6 +993,15 @@ export default {
       // Step 1.5 was removed — fast-poll (Step 1) queues ASYNC_FETCH_FILING
       // jobs directly, eliminating the intermediate ASYNC_DISCOVER_FILINGS step.
 
+      // Skip Steps 2/3 if fast-poll was skipped (adaptive interval) AND no new jobs were queued.
+      // This prevents ~1440 unnecessary Vercel invocations/day during off-hours.
+      const fastPollSkipped = fastPollResult?.status === 'skipped';
+      const noNewJobs = !fastPollResult?.fetchJobsQueued || fastPollResult.fetchJobsQueued === 0;
+      if (fastPollSkipped && noNewJobs && !fastPollResult?.error) {
+        console.log(`[${executionId}] Fast-poll skipped (${fastPollResult?.reason || 'unknown'}), no pending jobs — skipping Steps 2/3`);
+        // Fall through to final reporting
+      } else {
+
       // ========================================
       // STEP 2: Process Fetch Jobs (Content Retrieval)
       // ========================================
@@ -1082,6 +1126,8 @@ export default {
           totalJobsProcessed: totalSummarizeJobsProcessed
         };
       }
+
+      } // end of else block (Steps 2/3 skipped when fast-poll returns 'skipped')
 
       // Combine results from all five endpoints (including discovery)
       const result = {

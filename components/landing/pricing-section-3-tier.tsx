@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Check } from 'lucide-react';
+import { toast } from 'sonner';
 
 export function PricingSection3Tier() {
   const [email, setEmail] = useState('');
@@ -13,7 +14,7 @@ export function PricingSection3Tier() {
 
   const handlePlanSelect = async (planType: 'FREE' | 'PRO' | 'MAX') => {
     if (!email) {
-      alert('Please enter your email address');
+      toast.error('Please enter your email address');
       return;
     }
 
@@ -40,10 +41,10 @@ export function PricingSection3Tier() {
           window.location.href = data.redirectUrl;
         }
       } else {
-        alert('Error: ' + data.error);
+        toast.error(data.error || 'An error occurred. Please try again.');
       }
     } catch {
-      alert('An error occurred. Please try again.');
+      toast.error('An error occurred. Please try again.');
     } finally {
       setIsLoading(false);
     }

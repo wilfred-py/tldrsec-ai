@@ -1,5 +1,5 @@
 # Cloudflare Worker Configuration for TLDRSEC SEC Filing Monitoring
-# This worker executes every 10 minutes to trigger SEC filing processing
+# This worker executes every 1 minute to trigger SEC filing processing via fast-poll
 
 name = "cloudflare-cron"
 main = "index.js"

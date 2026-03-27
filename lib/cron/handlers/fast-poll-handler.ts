@@ -24,6 +24,7 @@ import { logger } from '../../logging';
 import { shouldPollNow } from '../edgar-schedule';
 import { getCompositePriority } from '../tier-priority';
 import { enrichTickersWithCik, type EnrichedTicker, type UserForFiling } from './discovery-handler';
+import { SECEdgarError, SECErrorCode } from '../../sec-edgar/types';
 
 const fastPollLogger = logger.child('fast-poll-handler');
 
@@ -156,7 +157,6 @@ export async function handleFastPoll(): Promise<FastPollResult> {
       filingDate: string;
       primaryDocument: string;
       acceptanceDateTime: Date;
-      acceptanceDateTimeRaw: string;
     }
 
     const allDetectedFilings: DetectedFiling[] = [];
@@ -185,7 +185,6 @@ export async function handleFastPoll(): Promise<FastPollResult> {
           continue;
         }
 
-        // Store the raw acceptanceDateTime strings for watermark updates
         for (const filing of result.newFilings) {
           allDetectedFilings.push({
             ticker,
@@ -194,11 +193,10 @@ export async function handleFastPoll(): Promise<FastPollResult> {
             filingDate: filing.filingDate,
             primaryDocument: filing.primaryDocument,
             acceptanceDateTime: filing.acceptanceDateTime,
-            acceptanceDateTimeRaw: result.latestAcceptanceDateTime ?? '',
           });
         }
 
-        // Update ETag and watermark for this ticker
+        // Update ETag and watermark for this ticker (upsert to handle new tickers)
         if (monitoring) {
           await prisma.tickerMonitoring.update({
             where: { id: monitoring.id },
@@ -209,8 +207,37 @@ export async function handleFastPoll(): Promise<FastPollResult> {
               lastChecked: new Date(),
             },
           });
+        } else {
+          // Create monitoring record for new tickers so watermarks persist
+          await prisma.tickerMonitoring.upsert({
+            where: { cik: ticker.cik! },
+            update: {
+              lastEtag: result.etag,
+              lastSeenAcceptanceDateTime: result.latestAcceptanceDateTime,
+              lastPollTime: new Date(),
+              lastChecked: new Date(),
+            },
+            create: {
+              cik: ticker.cik!,
+              symbol: ticker.symbol,
+              companyName: ticker.companyName || ticker.symbol,
+              rssUrl: `https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=${ticker.cik}&type=&dateb=&owner=include&count=40&search_text=&action=getcompany&output=atom`,
+              lastEtag: result.etag,
+              lastSeenAcceptanceDateTime: result.latestAcceptanceDateTime,
+              lastPollTime: new Date(),
+              lastChecked: new Date(),
+            },
+          });
         }
       } catch (error) {
+        // Break the loop on SEC rate limiting to avoid hammering the API
+        if (error instanceof SECEdgarError && error.code === SECErrorCode.RATE_LIMIT_EXCEEDED) {
+          fastPollLogger.error(`SEC rate limit hit at CIK ${ticker.cik} (${ticker.symbol}), stopping poll cycle`, {
+            tickersPolled,
+            tickersRemaining: tickersToProcess.length - tickersToProcess.indexOf(ticker) - 1,
+          });
+          break;
+        }
         fastPollLogger.error(`Failed to poll CIK ${ticker.cik} (${ticker.symbol})`, {
           error: error instanceof Error ? error.message : String(error),
         });
@@ -264,6 +291,8 @@ export async function handleFastPoll(): Promise<FastPollResult> {
         id: true,
         email: true,
         subscriptionTier: true,
+        isTrialing: true,
+        trialEndsAt: true,
         tickers: {
           where: { symbol: { in: detectedSymbols } },
           select: { id: true, symbol: true, companyName: true },
@@ -280,6 +309,8 @@ export async function handleFastPoll(): Promise<FastPollResult> {
           id: user.id,
           email: user.email || '',
           subscriptionTier: user.subscriptionTier,
+          isTrialing: user.isTrialing,
+          trialEndsAt: user.trialEndsAt,
           tickers: [{ id: ticker.id, companyName: ticker.companyName }],
         });
         usersBySymbol.set(ticker.symbol, existing);
