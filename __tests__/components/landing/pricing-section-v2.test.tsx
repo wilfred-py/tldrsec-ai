@@ -50,19 +50,17 @@ describe('PricingSectionV2', () => {
     expect(screen.getByText(/Simple, Transparent Pricing/i)).toBeInTheDocument();
   });
 
-  it('should render 3 pricing tiers', () => {
+  it('should render 2 pricing tiers (Pro and Max)', () => {
     render(<PricingSectionV2 />);
     const tierHeadings = screen.getAllByRole('heading', { level: 3 });
     const tierNames = tierHeadings.map((h) => h.textContent);
-    expect(tierNames).toContain('Trial');
     expect(tierNames).toContain('Pro');
     expect(tierNames).toContain('Max');
+    expect(tierNames).not.toContain('Trial');
   });
 
   it('should display prices for all tiers', () => {
     render(<PricingSectionV2 />);
-    // Trial tier shows "Free" price text
-    expect(screen.getByText('Free', { selector: 'span' })).toBeInTheDocument();
     // PRO tier shows $199
     expect(screen.getByText('$199')).toBeInTheDocument();
     // MAX tier shows $349
@@ -93,17 +91,17 @@ describe('PricingSectionV2', () => {
 
   it('should display feature lists for each tier', () => {
     render(<PricingSectionV2 />);
-    // Trial tier now shows unlimited companies
-    expect(screen.getAllByText(/Unlimited/i).length).toBeGreaterThanOrEqual(2); // Trial + Max both have unlimited
+    // Only MAX has unlimited companies now
+    expect(screen.getAllByText(/Unlimited/i).length).toBeGreaterThanOrEqual(1);
     // PRO: "25" in bold (rendered within <strong>)
     expect(screen.getByText('25')).toBeInTheDocument();
   });
 
-  it('should have CTA buttons for each tier (unauthenticated shows "Get Started")', () => {
+  it('should have CTA buttons for each tier (unauthenticated shows "Start Free Trial")', () => {
     render(<PricingSectionV2 />);
     const buttons = screen.getAllByRole('button').filter(
-      (btn) => btn.textContent?.includes('Get Started')
+      (btn) => btn.textContent?.includes('Start Free Trial')
     );
-    expect(buttons.length).toBe(3);
+    expect(buttons.length).toBe(2);
   });
 });

@@ -393,7 +393,7 @@ export function DashboardClient({ showWelcome: _showWelcome = false, shouldMerge
               <h2 className="text-lg font-semibold">Tracked Tickers</h2>
               <p className="text-sm text-muted-foreground">
                 {!isUnlimited
-                  ? `${companies.length} / ${tickerLimit} tickers used on ${subscriptionTier === 'FREE' ? 'Trial' : subscriptionTier} plan`
+                  ? `${companies.length} / ${tickerLimit} tickers used on ${subscriptionTier === 'FREE' ? 'Free' : subscriptionTier} plan`
                   : "Manage your tracked companies."}
               </p>
             </div>

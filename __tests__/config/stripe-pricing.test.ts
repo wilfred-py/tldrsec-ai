@@ -1,7 +1,7 @@
 import { SUBSCRIPTION_PLANS, getPlanConfig, calculateSavingsPercentage } from '@/lib/stripe';
 
 describe('Stripe Pricing Configuration', () => {
-  describe('Free (Trial) Tier', () => {
+  describe('Free Tier', () => {
     it('should have $0 price and unlimited ticker limit', () => {
       const plan = getPlanConfig('FREE');
       expect(plan).toBeDefined();
@@ -9,9 +9,9 @@ describe('Stripe Pricing Configuration', () => {
       expect(plan?.tickerLimit).toBe(-1);
     });
 
-    it('should be named Trial', () => {
+    it('should be named Free', () => {
       const plan = getPlanConfig('FREE');
-      expect(plan?.name).toBe('Trial');
+      expect(plan?.name).toBe('Free');
     });
   });
 
@@ -113,7 +113,7 @@ describe('Stripe Pricing Configuration', () => {
   });
 
   describe('Plan Features', () => {
-    it('Free (Trial) tier should have ALL filing types', () => {
+    it('Free tier should have ALL filing types', () => {
       const plan = getPlanConfig('FREE');
       expect(plan?.filingTypes).toEqual(['ALL']);
     });
@@ -140,7 +140,7 @@ describe('Stripe Pricing Configuration', () => {
   });
 
   describe('Email Frequency', () => {
-    it('Free (Trial) tier should have realtime email frequency', () => {
+    it('Free tier should have realtime email frequency', () => {
       const plan = getPlanConfig('FREE');
       expect(plan?.emailFrequency).toBe('realtime');
     });
