@@ -19,6 +19,8 @@ import {
   parseStringTransaction as centralParseStringTx,
   isCharacterIndexedObject,
   CURRENT_FORM4_SCHEMA_VERSION,
+  derivePreviousStake,
+  NormalizedTransaction,
 } from '../../email/form4-field-normalizer';
 
 /**
@@ -222,39 +224,33 @@ function normalizeFields(data: unknown, filingType: SECFilingType): unknown {
         }
       }
 
-      // Derive previousStake from first transaction's sharesOwnedFollowing + shares
+      // Derive previousStake using shared first-chronological algorithm
       if (!normalized.previousStake && normalized.newStake && Array.isArray(normalized.transactions)) {
-        const txArr = normalized.transactions as Record<string, unknown>[];
-        // Find first transaction with sharesOwnedFollowing
-        for (let i = 0; i < txArr.length; i++) {
-          const sof = txArr[i].sharesOwnedFollowing;
-          if (sof && String(sof).trim()) {
-            const sofCleaned = parseFloat(String(sof).replace(/[$,\[\]]/g, '').trim());
-            const txShares = parseFloat(String(txArr[i].shares || '0').replace(/[$,\[\]]/g, '').trim());
-            if (!isNaN(sofCleaned) && !isNaN(txShares) && txShares > 0) {
-              const ad = String(txArr[i].acquisitionDisposition || '').toUpperCase();
-              const code = String(txArr[i].code || '').toUpperCase();
-              // Disposition: shares were removed → before = after + shares
-              // Acquisition: shares were added → before = after - shares
-              const isDisposition = ad === 'D' || code === 'S' || code === 'D' || code === 'G' || code === 'F';
-              const previousNum = isDisposition ? sofCleaned + txShares : sofCleaned - txShares;
-              if (previousNum > 0) {
-                normalized.previousStake = `${Math.round(previousNum)} shares`;
-              }
-              break;
-            }
-          }
+        const txArr = normalized.transactions as NormalizedTransaction[];
+        const prevNum = derivePreviousStake(txArr);
+        if (prevNum !== null) {
+          // Use same suffix as newStake (shares vs derivative securities)
+          const suffix = String(normalized.newStake).includes('derivative securities')
+            ? 'derivative securities' : 'shares';
+          normalized.previousStake = `${prevNum} ${suffix}`;
         }
       }
 
       // Derive percentageChange from previousStake and newStake
       if (!normalized.percentageChange && normalized.previousStake && normalized.newStake) {
-        const prevNum = parseFloat(String(normalized.previousStake).replace(/[^0-9.]/g, ''));
-        const newNum = parseFloat(String(normalized.newStake).replace(/[^0-9.]/g, ''));
-        if (!isNaN(prevNum) && !isNaN(newNum) && prevNum > 0) {
-          const pctChange = ((newNum - prevNum) / prevNum) * 100;
-          const sign = pctChange >= 0 ? '+' : '';
-          normalized.percentageChange = `${sign}${pctChange.toFixed(1)}%`;
+        // Skip % calc when comparing different security types (shares vs derivative securities)
+        const prevStr = String(normalized.previousStake);
+        const newStr = String(normalized.newStake);
+        const prevIsDerivative = prevStr.includes('derivative');
+        const newIsDerivative = newStr.includes('derivative');
+        if (prevIsDerivative === newIsDerivative) {
+          const prevNum = parseFloat(prevStr.replace(/[^0-9.]/g, ''));
+          const newNum = parseFloat(newStr.replace(/[^0-9.]/g, ''));
+          if (!isNaN(prevNum) && !isNaN(newNum) && isFinite(prevNum) && prevNum > 0) {
+            const pctChange = ((newNum - prevNum) / prevNum) * 100;
+            const sign = pctChange >= 0 ? '+' : '';
+            normalized.percentageChange = `${sign}${pctChange.toFixed(1)}%`;
+          }
         }
       }
 

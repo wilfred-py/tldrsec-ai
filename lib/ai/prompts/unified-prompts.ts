@@ -342,7 +342,10 @@ export const FORM_SCHEMAS: Record<string, JSONSchema> = {
             pricePerShare: { type: 'string', description: 'REQUIRED: Price per share with $ from column 4 - if $0, check if this is a gift/grant. Never leave blank.' },
             date: { type: 'string', description: 'Transaction date from column 2 (YYYY-MM-DD)' },
             acquisitionDisposition: { type: 'string', description: 'A for acquired, D for disposed' },
-            sharesOwnedFollowing: { type: 'string', description: 'Amount of Securities Beneficially Owned Following Reported Transaction. For Table I use Column 5 (shares of common stock). For Table II use Column 11 (derivative securities remaining, e.g., stock options). Total shares/securities held after this transaction.' }
+            sharesOwnedFollowing: { type: 'string', description: 'Amount of Securities Beneficially Owned Following Reported Transaction. For Table I use Column 5 (shares of common stock). For Table II use Column 11 (derivative securities remaining, e.g., stock options). Total shares/securities held after this transaction.' },
+            securityType: { type: 'string', description: 'Security type exactly from filing table header: "Common Stock", "Stock Option (Right to Buy)", "Restricted Stock Unit", "Performance Stock Unit". Copy verbatim from the Title of Security column.' },
+            ownershipForm: { type: 'string', description: 'D for Direct, I for Indirect ownership. From Column 7 of Table I or Table II.' },
+            ownershipNature: { type: 'string', description: 'Nature of indirect ownership (e.g., "By Family Trust", "By LLC", "By Spouse"). From Column 8. Only populate for indirect ownership.' }
           },
           required: ['code', 'type', 'shares', 'pricePerShare', 'sharesOwnedFollowing']
         }
@@ -365,6 +368,11 @@ export const FORM_SCHEMAS: Record<string, JSONSchema> = {
       has10b51Plan: {
         type: 'boolean',
         description: 'CRITICAL: Check footnotes/explanations for 10b5-1 trading plan. Set true if: "pursuant to a 10b5-1", "pre-arranged trading plan", "Rule 10b5-1", "prearranged trading agreement". Set false if: "no 10b5-1", "not pursuant to", or no mention.'
+      },
+      vestingDetails: {
+        type: 'string',
+        description: 'Vesting schedule from footnotes if present (e.g., "25% vests annually starting March 15, 2026"). Include plan name and key dates. Empty string if no vesting info found.',
+        maxLength: 300
       }
     }
   },
@@ -1037,6 +1045,9 @@ const FORM_EXTRACTION_GUIDANCE: Record<string, string> = {
   * If checkbox marked OR language found = has10b51Plan: true
   * If no checkbox/mention = has10b51Plan: false
 - FOOTNOTES ARE CRITICAL: Often contain essential context about the transaction (vesting schedules, plan details, related transactions)
+- SECURITY TYPE: Copy the security type verbatim from the "Title of Security" column in Table I or Table II (e.g., "Class A Common Stock", "Stock Option (Right to Buy)", "Restricted Stock Unit"). Put in securityType field for each transaction.
+- OWNERSHIP FORM: Column 7 indicates Direct (D) or Indirect (I) ownership. Column 8 shows the nature of indirect ownership (e.g., "By Family Trust", "By LLC"). Extract ownershipForm and ownershipNature for every transaction.
+- VESTING DETAILS: Check footnotes for vesting schedules. Look for "vesting schedule", "vest", "annual installments", "quarterly vesting", specific dates. Populate vestingDetails with a concise schedule summary. Leave empty if no vesting info found.
 - **CRITICAL** POST-TRANSACTION OWNERSHIP — sharesOwnedFollowing is REQUIRED for EVERY transaction:
   * You MUST populate sharesOwnedFollowing on every transaction object. This field drives the ownership change display.
   * Table I (Non-Derivative): Extract from Column 5 — total shares of common stock remaining after this transaction

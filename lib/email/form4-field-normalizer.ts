@@ -37,6 +37,9 @@ export interface NormalizedTransaction {
   sharesOwnedFollowing?: string | number;
   acquisitionDisposition?: string;
   date?: string;
+  securityType?: string;
+  ownershipForm?: string;
+  ownershipNature?: string;
 }
 
 /**
@@ -55,6 +58,7 @@ export interface NormalizedForm4Data {
   percentageChange?: string;
   newStake?: string;
   previousStake?: string;
+  vestingDetails?: string;
 }
 
 /**
@@ -67,7 +71,7 @@ export interface NormalizedForm4Data {
 
 // Bump when changing field mappings or normalizer behavior.
 // Used by response-parser (stamp) and summarize-cached-handler (detect stale data).
-export const CURRENT_FORM4_SCHEMA_VERSION = 2;
+export const CURRENT_FORM4_SCHEMA_VERSION = 3;
 
 export const TX_CODE_TO_TYPE: Record<string, string> = {
   'P': 'Purchase',
@@ -229,11 +233,11 @@ function buildKnownFieldSet(aliases: Record<string, string[]>): Set<string> {
 
 const KNOWN_TX_FIELDS = buildKnownFieldSet(TRANSACTION_FIELD_ALIASES);
 // Add extra fields the AI returns that we intentionally ignore
-['table', 'security', 'footnote', 'footnotes', 'ownershipForm', 'nature'].forEach(f => KNOWN_TX_FIELDS.add(f));
+['table', 'security', 'footnote', 'footnotes', 'ownershipForm', 'ownershipNature', 'nature', 'securityType', 'tableSource'].forEach(f => KNOWN_TX_FIELDS.add(f));
 
 const KNOWN_FORM4_FIELDS = buildKnownFieldSet(FORM4_FIELD_ALIASES);
 // Add fields that are always present and don't need aliasing
-['company', 'summary', 'filingDate', 'has10b51Plan', 'transactions', 'signalStrength', 'filingType'].forEach(f => KNOWN_FORM4_FIELDS.add(f));
+['company', 'summary', 'filingDate', 'has10b51Plan', 'transactions', 'signalStrength', 'filingType', 'vestingDetails'].forEach(f => KNOWN_FORM4_FIELDS.add(f));
 
 /**
  * Normalize a single transaction object from AI output.
@@ -306,6 +310,11 @@ export function normalizeTransaction(raw: unknown): NormalizedTransaction | null
   // Audit unexpected fields
   auditUnexpectedFields(obj, KNOWN_TX_FIELDS, 'transaction');
 
+  // Extract new optional fields
+  const securityType = (obj.securityType as string) || '';
+  const ownershipFormVal = (obj.ownershipForm as string) || '';
+  const ownershipNature = (obj.ownershipNature as string) || '';
+
   const result: NormalizedTransaction = {
     code,
     type,
@@ -315,7 +324,51 @@ export function normalizeTransaction(raw: unknown): NormalizedTransaction | null
   if (cleanOwnership !== undefined) result.sharesOwnedFollowing = cleanOwnership as string | number;
   if (acquisitionDisposition) result.acquisitionDisposition = acquisitionDisposition;
   if (date) result.date = date;
+  if (securityType) result.securityType = securityType;
+  if (ownershipFormVal) result.ownershipForm = ownershipFormVal;
+  if (ownershipNature) result.ownershipNature = ownershipNature;
   return result;
+}
+
+/**
+ * Derive previousStake from transactions using first-chronological approach.
+ *
+ * Sort transactions by date (if available), take the FIRST transaction,
+ * and derive the position BEFORE that transaction:
+ *   - Disposition (S, D, G, F): before = sharesOwnedFollowing + shares
+ *   - Acquisition (A, P, J, M): before = sharesOwnedFollowing - shares
+ *
+ * This is the shared algorithm used by both response-parser and normalizer.
+ */
+export function derivePreviousStake(transactions: NormalizedTransaction[]): number | null {
+  if (transactions.length === 0) return null;
+
+  // Sort by date if available, otherwise preserve array order (filing order)
+  const sorted = [...transactions].sort((a, b) => {
+    if (a.date && b.date) return a.date.localeCompare(b.date);
+    return 0;
+  });
+
+  // Find first transaction with valid sharesOwnedFollowing
+  for (const tx of sorted) {
+    const sof = parseFloat(String(tx.sharesOwnedFollowing || '').replace(/[$,\[\]]/g, ''));
+    const shares = parseFloat(String(tx.shares || '').replace(/[$,\[\]]/g, ''));
+    if (isNaN(sof) || isNaN(shares) || shares <= 0) continue;
+
+    const code = (tx.code || '').toUpperCase();
+    const ad = (tx.acquisitionDisposition || '').toUpperCase();
+    const isDisposition = ad === 'D' || code === 'S' || code === 'D' || code === 'G' || code === 'F';
+    const before = isDisposition ? sof + shares : sof - shares;
+
+    if (before > 0) {
+      componentLogger.debug('Derived previousStake from first-chronological transaction', {
+        code, shares, sof, before, date: tx.date,
+      });
+      return Math.round(before);
+    }
+    return null;
+  }
+  return null;
 }
 
 /**
@@ -370,22 +423,11 @@ export function normalizeForm4Data(summaryJSON: Record<string, unknown> | null |
     }
   }
 
-  // Derive previousStake from first transaction
+  // Derive previousStake using shared first-chronological algorithm
   if (!previousStake && transactions.length > 0 && newStake) {
-    const firstTx = transactions[0];
-    const sof = firstTx.sharesOwnedFollowing;
-    const sharesNum = parseFloat(String(firstTx.shares).replace(/,/g, ''));
-    const sofNum = parseFloat(String(sof).replace(/,/g, ''));
-
-    if (!isNaN(sharesNum) && !isNaN(sofNum)) {
-      const code = firstTx.code?.toUpperCase();
-      const ad = firstTx.acquisitionDisposition?.toUpperCase();
-      const isDisposition = ad === 'D' || code === 'S' || code === 'D' || code === 'G' || code === 'F';
-
-      const prevNum = isDisposition ? sofNum + sharesNum : sofNum - sharesNum;
-      if (prevNum > 0) {
-        previousStake = formatNumberWithCommas(prevNum);
-      }
+    const prevNum = derivePreviousStake(transactions);
+    if (prevNum !== null) {
+      previousStake = formatNumberWithCommas(prevNum);
     }
   }
 
@@ -420,6 +462,9 @@ export function normalizeForm4Data(summaryJSON: Record<string, unknown> | null |
   // Audit unexpected top-level fields
   auditUnexpectedFields(summaryJSON, KNOWN_FORM4_FIELDS, 'form4-top-level');
 
+  // Extract vestingDetails
+  const vestingDetails = (summaryJSON.vestingDetails as string) || undefined;
+
   return {
     company: (summaryJSON.company as string) || '',
     summary: (summaryJSON.summary as string) || '',
@@ -433,6 +478,7 @@ export function normalizeForm4Data(summaryJSON: Record<string, unknown> | null |
     percentageChange,
     newStake,
     previousStake,
+    vestingDetails: vestingDetails ? vestingDetails.substring(0, 300) : undefined,
   };
 }
 

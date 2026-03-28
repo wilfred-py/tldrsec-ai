@@ -427,8 +427,8 @@ describe('Form 4: AI Schema → Template Classification', () => {
       });
       const result = parseResponse(aiResponse, '4');
       const data = result.data as Record<string, unknown>;
-      // Code A + $0 price = derivative grant → suffix is "derivative securities"
-      expect(data.previousStake).toBe('100000 shares'); // 150000 - 50000 (previousStake always uses "shares")
+      // Code A + $0 price = derivative grant → suffix matches newStake
+      expect(data.previousStake).toBe('100000 derivative securities'); // 150000 - 50000
       expect(data.newStake).toBe('150000 derivative securities');
     });
 

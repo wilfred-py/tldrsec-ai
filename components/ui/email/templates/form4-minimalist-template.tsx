@@ -24,6 +24,10 @@ interface TransactionData {
   acquisitionDisposition?: string;
   code?: string;
   date?: string;
+  sharesOwnedFollowing?: string | number;
+  securityType?: string;
+  ownershipForm?: string;
+  ownershipNature?: string;
 }
 
 /**
@@ -291,17 +295,19 @@ interface AggregatedTransaction {
   // SEC transaction code (only populated for single transactions)
   code?: string;
   codeDescription?: string;
+  // Security types from underlying transactions
+  securityTypes: string[];
 }
 
 export function aggregateTransactionsByType(transactions: TransactionData[]): AggregatedTransaction[] {
-  const groups: Record<string, { shares: number; value: number; count: number; prices: number[]; codes: string[] }> = {
-    gift: { shares: 0, value: 0, count: 0, prices: [], codes: [] },
-    sale: { shares: 0, value: 0, count: 0, prices: [], codes: [] },
-    purchase: { shares: 0, value: 0, count: 0, prices: [], codes: [] },
-    transfer: { shares: 0, value: 0, count: 0, prices: [], codes: [] },
-    award: { shares: 0, value: 0, count: 0, prices: [], codes: [] },
-    exercise: { shares: 0, value: 0, count: 0, prices: [], codes: [] },
-    other: { shares: 0, value: 0, count: 0, prices: [], codes: [] },
+  const groups: Record<string, { shares: number; value: number; count: number; prices: number[]; codes: string[]; securityTypes: string[] }> = {
+    gift: { shares: 0, value: 0, count: 0, prices: [], codes: [], securityTypes: [] },
+    sale: { shares: 0, value: 0, count: 0, prices: [], codes: [], securityTypes: [] },
+    purchase: { shares: 0, value: 0, count: 0, prices: [], codes: [], securityTypes: [] },
+    transfer: { shares: 0, value: 0, count: 0, prices: [], codes: [], securityTypes: [] },
+    award: { shares: 0, value: 0, count: 0, prices: [], codes: [], securityTypes: [] },
+    exercise: { shares: 0, value: 0, count: 0, prices: [], codes: [], securityTypes: [] },
+    other: { shares: 0, value: 0, count: 0, prices: [], codes: [], securityTypes: [] },
   };
 
   for (const tx of transactions) {
@@ -347,6 +353,7 @@ export function aggregateTransactionsByType(transactions: TransactionData[]): Ag
     groups[groupKey].count += 1;
     if (price > 0) groups[groupKey].prices.push(price);
     if (tx.code) groups[groupKey].codes.push(tx.code);
+    if (tx.securityType) groups[groupKey].securityTypes.push(tx.securityType);
   }
 
   // Format and return non-empty groups
@@ -371,6 +378,7 @@ export function aggregateTransactionsByType(transactions: TransactionData[]): Ag
         priceDisplay: avgPrice > 0 ? `$${avgPrice.toFixed(2)}` : '$0',
         code: primaryCode,
         codeDescription: primaryCode ? getTransactionCodeDescription(primaryCode) : undefined,
+        securityTypes: data.securityTypes,
       });
     }
   }
@@ -388,6 +396,39 @@ function formatAggregatedValue(value: number): string {
   if (value >= 1000) return `$${(value / 1000).toFixed(0)}K`;
   if (value > 0) return `$${value.toFixed(0)}`;
   return '$0';
+}
+
+function getAwardSubtitle(aggTx: AggregatedTransaction): string {
+  const types = aggTx.securityTypes || [];
+  const joined = types.join(' ').toLowerCase();
+  if (joined.includes('stock option') || joined.includes('right to buy')) {
+    return aggTx.avgPrice > 0 ? `Stock options @ ${aggTx.priceDisplay}` : 'Stock options';
+  }
+  if (joined.includes('restricted stock') || joined.includes('rsu')) return 'Restricted Stock Units';
+  if (joined.includes('performance') || joined.includes('psu')) return 'Performance Stock Units';
+  return 'Equity compensation';
+}
+
+function getOwnershipBreakdown(transactions: TransactionData[]): { form: string; nature: string; shares: string }[] | null {
+  const groups = new Map<string, string>();
+  for (const tx of transactions) {
+    const form = tx.ownershipForm || 'D';
+    const nature = tx.ownershipNature || '';
+    const key = `${form}:${nature}`;
+    const sof = tx.sharesOwnedFollowing;
+    if (sof) groups.set(key, String(sof));
+  }
+  if (groups.size <= 1) return null; // All same form, use simple display
+  const result: { form: string; nature: string; shares: string }[] = [];
+  for (const [key, shares] of groups.entries()) {
+    const [form, nature] = key.split(':');
+    result.push({
+      form: form === 'I' ? 'Indirect' : 'Direct',
+      nature,
+      shares: parseFloat(shares.replace(/,/g, '')).toLocaleString(),
+    });
+  }
+  return result.slice(0, 3); // Cap at 3 entities
 }
 
 /**
@@ -644,6 +685,9 @@ export function Form4MinimalistTemplate({ filing }: Form4MinimalistTemplateProps
     sharesOwnedFollowing: t.sharesOwnedFollowing !== undefined ? String(t.sharesOwnedFollowing) : undefined,
     acquisitionDisposition: t.acquisitionDisposition,
     date: t.date,
+    securityType: t.securityType,
+    ownershipForm: t.ownershipForm,
+    ownershipNature: t.ownershipNature,
   }));
   const extractedTransactions = hasExtractedData ? extractedData.transactions.map(t => ({
     type: t.type,
@@ -875,7 +919,7 @@ export function Form4MinimalistTemplate({ filing }: Form4MinimalistTemplateProps
                                             marginTop: '4px',
                                           }}>
                                             {aggTx.totalValue === 0
-                                              ? (aggTx.type === 'award' ? 'Equity compensation' : aggTx.type === 'gift' || aggTx.type === 'transfer' ? 'No monetary value' : `${aggTx.sharesDisplay} shares`)
+                                              ? (aggTx.type === 'award' ? getAwardSubtitle(aggTx) : aggTx.type === 'gift' || aggTx.type === 'transfer' ? 'No monetary value' : `${aggTx.sharesDisplay} shares`)
                                               : `${aggTx.sharesDisplay} shares${aggTx.avgPrice > 0 ? ` @ ${aggTx.priceDisplay}` : ''}`}
                                           </div>
                                           {/* SEC transaction code description for single transactions */}
@@ -980,7 +1024,7 @@ export function Form4MinimalistTemplate({ filing }: Form4MinimalistTemplateProps
                 // Parse percentage for color logic (handles "-10.00%", "50.00%", "+5.0%")
                 const pctNum = parseFloat((percentChange || '0').replace(/[%+]/g, ''));
                 const pctColor = pctNum < 0 ? '#DC2626' : pctNum > 0 ? '#16A34A' : EmailColors.text.meta;
-                const pctDisplay = percentChange
+                const pctDisplay = percentChange && !percentChange.includes('NaN')
                   ? (pctNum > 0 && !percentChange.startsWith('+') ? `+${percentChange}` : percentChange)
                   : '';
 
@@ -1004,6 +1048,32 @@ export function Form4MinimalistTemplate({ filing }: Form4MinimalistTemplateProps
                         }}>
                           {previousStake && newStake ? 'Ownership Impact' : 'Current Holdings'}
                         </div>
+                        {/* Ownership breakdown for mixed direct/indirect */}
+                        {(() => {
+                          const breakdown = getOwnershipBreakdown(transactions);
+                          if (breakdown) {
+                            return (
+                              <div style={{ marginBottom: '8px' }}>
+                                {breakdown.map((b, i) => (
+                                  <div key={i} style={{
+                                    fontSize: '13px',
+                                    color: EmailColors.text.body,
+                                    padding: '2px 0',
+                                  }}>
+                                    <span style={{ fontWeight: 600 }}>{b.form}{b.nature ? ` (${b.nature})` : ''}:</span>{' '}
+                                    {b.shares} shares
+                                  </div>
+                                ))}
+                                {transactions.length > 3 && transactions.some((t) => t.ownershipForm) && (
+                                  <div style={{ fontSize: '11px', color: EmailColors.text.muted, marginTop: '2px' }}>
+                                    and more entities in filing
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          }
+                          return null;
+                        })()}
                         <div>
                           {previousStake && newStake ? (
                             <>
@@ -1089,6 +1159,40 @@ export function Form4MinimalistTemplate({ filing }: Form4MinimalistTemplateProps
                         }}
                         dangerouslySetInnerHTML={{ __html: markdownToHtml(headline) }}
                       />
+                    </tr>
+                  </tbody>
+                </table>
+              )}
+
+              {/* Vesting Details - shown when vesting schedule is available */}
+              {normalizedData?.vestingDetails && (
+                <table width="100%" cellPadding="0" cellSpacing="0" style={{ marginBottom: '16px' }}>
+                  <tbody>
+                    <tr>
+                      <td style={{
+                        padding: '12px 16px',
+                        backgroundColor: '#EFF6FF',
+                        borderRadius: '8px',
+                        border: '1px solid #BFDBFE',
+                      }}>
+                        <div style={{
+                          fontSize: '11px',
+                          fontWeight: 700,
+                          color: '#1E40AF',
+                          textTransform: 'uppercase' as const,
+                          letterSpacing: '0.5px',
+                          marginBottom: '4px',
+                        }}>
+                          Vesting Schedule
+                        </div>
+                        <div style={{
+                          fontSize: '13px',
+                          color: '#1E3A5F',
+                          lineHeight: '1.4',
+                        }}>
+                          {normalizedData.vestingDetails}
+                        </div>
+                      </td>
                     </tr>
                   </tbody>
                 </table>
