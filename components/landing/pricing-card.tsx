@@ -63,7 +63,7 @@ export function PricingCard({
       <div className="flex items-center justify-between mb-4">
         <div>
           <p className="text-xs text-[var(--landing-text-muted)] uppercase tracking-wide mb-1">
-            {plan.key === 'FREE' ? 'Trial' : plan.name}
+            {plan.name}
           </p>
           <h3
             className="text-2xl font-bold"
@@ -96,42 +96,31 @@ export function PricingCard({
 
       {/* Price Display */}
       <div className="mb-6 h-[88px] flex flex-col justify-center">
-        {plan.monthlyPrice === 0 ? (
-          <div className="flex items-baseline gap-2">
-            <span
-              className="text-4xl font-bold"
-              style={{ color: 'var(--landing-secondary)' }}
-            >
-              Free
-            </span>
-            <span className="text-[var(--landing-text-muted)]">
-              for 7 days
-            </span>
-          </div>
-        ) : (
-          <>
-            <div className="flex items-baseline gap-2">
-              <span
-                className="text-4xl font-bold"
-                style={{ color: 'var(--landing-secondary)' }}
-              >
-                ${getPrice(plan)}
-              </span>
-              <span className="text-[var(--landing-text-muted)]">
-                /{billingInterval === 'annual' ? 'year' : 'month'}
-              </span>
-              {billingInterval === 'annual' && savings && (
-                <Badge className="bg-green-100 text-green-700 border-green-200 text-xs px-2 py-0.5">
-                  Save {savings}%
-                </Badge>
-              )}
-            </div>
-            {monthlyEquiv && (
-              <p className="text-xs text-[var(--landing-text-muted)] mt-1">
-                ${monthlyEquiv}/mo billed annually
-              </p>
-            )}
-          </>
+        <div className="flex items-baseline gap-2">
+          <span
+            className="text-4xl font-bold"
+            style={{ color: 'var(--landing-secondary)' }}
+          >
+            ${getPrice(plan)}
+          </span>
+          <span className="text-[var(--landing-text-muted)]">
+            /{billingInterval === 'annual' ? 'year' : 'month'}
+          </span>
+          {billingInterval === 'annual' && savings && (
+            <Badge className="bg-green-100 text-green-700 border-green-200 text-xs px-2 py-0.5">
+              Save {savings}%
+            </Badge>
+          )}
+        </div>
+        {monthlyEquiv && (
+          <p className="text-xs text-[var(--landing-text-muted)] mt-1">
+            ${monthlyEquiv}/mo billed annually
+          </p>
+        )}
+        {!isCurrentPlan && (
+          <p className="text-xs text-[var(--landing-text-muted)] mt-1">
+            7-day free trial included
+          </p>
         )}
       </div>
 
@@ -179,6 +168,11 @@ export function PricingCard({
             )}
           </Button>
         )}
+        {!loading && !isCurrentPlan && !plan.disabled && !isTrialEndingSoon && (
+          <p className="text-xs text-center text-[var(--landing-text-muted)] mt-2">
+            Cancel anytime. No charge until day 8.
+          </p>
+        )}
       </div>
 
       {/* Features List */}
@@ -206,14 +200,12 @@ export function PricingCard({
         })}
       </ul>
 
-      {/* "Everything in X" footer for higher tiers */}
-      {plan.key !== 'FREE' && (
+      {/* "Everything in Pro" footer for MAX tier */}
+      {plan.key === 'MAX' && (
         <div className="mt-4 pt-4 border-t border-gray-100">
           <div className="flex items-center gap-2 text-sm text-[var(--landing-text-muted)]">
             <span className="text-[var(--landing-primary)]">+</span>
-            <span>
-              Everything in {plan.key === 'PRO' ? 'Trial' : 'Pro'}
-            </span>
+            <span>Everything in Pro</span>
           </div>
         </div>
       )}

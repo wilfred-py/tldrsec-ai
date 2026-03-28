@@ -38,6 +38,7 @@ interface ActivitySummary {
   filingDate: string;
   importance: string | null;
   smartSubject: string | null;
+  summaryText: string | null;
   companyName: string;
   ticker: string;
   filingUrl: string;
@@ -51,12 +52,12 @@ interface DashboardClientProps {
   tutorialCompleted?: boolean;
   subscriptionTier?: 'FREE' | 'PRO' | 'MAX';
   tickerLimit?: number;
-  hoursSavedThisMonth?: number;
-  hoursSavedTotal?: number;
+  summaryCountThisMonth?: number;
+  summaryCountTotal?: number;
   recentSummaries?: ActivitySummary[];
 }
 
-export function DashboardClient({ showWelcome: _showWelcome = false, shouldMergePending: _shouldMergePending = false, subscriptionSuccess = false, initialCompanies = [], tutorialCompleted = false, subscriptionTier = 'FREE', tickerLimit = 3, hoursSavedThisMonth = 0, hoursSavedTotal = 0, recentSummaries = [] }: DashboardClientProps) {
+export function DashboardClient({ showWelcome: _showWelcome = false, shouldMergePending: _shouldMergePending = false, subscriptionSuccess = false, initialCompanies = [], tutorialCompleted = false, subscriptionTier = 'FREE', tickerLimit = 3, summaryCountThisMonth = 0, summaryCountTotal = 0, recentSummaries = [] }: DashboardClientProps) {
   // State for tracked companies
   const [companies, setCompanies] = useState<Company[]>(initialCompanies);
   const [currentCompany, setCurrentCompany] = useState<Company | null>(null);
@@ -357,8 +358,8 @@ export function DashboardClient({ showWelcome: _showWelcome = false, shouldMerge
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="md:col-span-1">
           <HoursSavedWidget
-            hoursSavedThisMonth={hoursSavedThisMonth}
-            hoursSavedTotal={hoursSavedTotal}
+            summaryCountThisMonth={summaryCountThisMonth}
+            summaryCountTotal={summaryCountTotal}
           />
         </div>
         <div className="md:col-span-2 flex items-center">
@@ -393,7 +394,7 @@ export function DashboardClient({ showWelcome: _showWelcome = false, shouldMerge
               <h2 className="text-lg font-semibold">Tracked Tickers</h2>
               <p className="text-sm text-muted-foreground">
                 {!isUnlimited
-                  ? `${companies.length} / ${tickerLimit} tickers used on ${subscriptionTier === 'FREE' ? 'Trial' : subscriptionTier} plan`
+                  ? `${companies.length} / ${tickerLimit} tickers used on ${subscriptionTier === 'FREE' ? 'Free' : subscriptionTier} plan`
                   : "Manage your tracked companies."}
               </p>
             </div>

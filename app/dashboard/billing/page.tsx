@@ -146,11 +146,11 @@ export default function BillingPage() {
     if (subscription.isTrialing && subscription.daysRemaining > 0) {
       return `Trial — ${subscription.daysRemaining} ${subscription.daysRemaining === 1 ? 'day' : 'days'} remaining`;
     }
-    return 'Trial Expired — Upgrade to continue receiving summaries';
+    return 'Free Plan — Upgrade to continue receiving summaries';
   };
 
   const currentPrice = isFree
-    ? (getTrialStatusText() || 'Trial')
+    ? (getTrialStatusText() || 'Free')
     : currentPlanConfig
       ? `$${currentPlanConfig.monthlyPrice}/month`
       : 'Price unavailable';
@@ -198,7 +198,7 @@ export default function BillingPage() {
           <CardContent className="space-y-4">
             <div>
               <h3 className="font-semibold text-lg">
-                {isFree ? 'Trial' : (currentPlanConfig?.name || 'Unknown Plan')}
+                {isFree ? 'Free' : (currentPlanConfig?.name || 'Unknown Plan')}
               </h3>
               <p className="text-gray-600">
                 {currentPrice}

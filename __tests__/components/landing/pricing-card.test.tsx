@@ -11,42 +11,42 @@ jest.mock('lucide-react', () => ({
 }));
 
 // Default plan fixture
-const freePlan = {
-  key: 'FREE',
-  name: 'Trial',
-  monthlyPrice: 0,
-  annualPrice: 0,
-  description: 'Full access for 7 days',
-  features: ['**Unlimited** companies', 'Real-time email alerts'],
-  cta: 'Start Free Trial',
-  href: '/onboarding',
-  popular: false,
-  disabled: false,
-  icon: ({ className }: { className?: string }) => <span className={className}>icon</span>,
-};
-
-const proPlan = {
-  ...freePlan,
+const proPlanFixture = {
   key: 'PRO',
   name: 'Pro',
   monthlyPrice: 199,
   annualPrice: 1990,
-  features: ['**25** companies to track', 'Priority processing queue'],
+  description: 'Everything you need for serious investing',
+  features: ['**25** companies to track', 'Real-time email alerts'],
   cta: 'Upgrade to Pro',
   href: '/onboarding?plan=pro',
   popular: true,
+  disabled: false,
+  icon: ({ className }: { className?: string }) => <span className={className}>icon</span>,
+};
+
+const maxPlan = {
+  ...proPlanFixture,
+  key: 'MAX',
+  name: 'Max',
+  monthlyPrice: 349,
+  annualPrice: 3490,
+  features: ['**Unlimited** companies', 'Dedicated support'],
+  cta: 'Upgrade to Max',
+  href: '/onboarding?plan=max',
+  popular: false,
 };
 
 const defaultProps = {
-  plan: freePlan,
+  plan: proPlanFixture,
   billingInterval: 'monthly' as const,
   isCurrentPlan: false,
   isTrialEndingSoon: false,
   loading: false,
   checkoutLoading: false,
   onCheckout: jest.fn(),
-  getCtaText: (plan: typeof freePlan) => plan.cta,
-  getPrice: (plan: typeof freePlan) => plan.monthlyPrice,
+  getCtaText: (plan: typeof proPlanFixture) => plan.cta,
+  getPrice: (plan: typeof proPlanFixture) => plan.monthlyPrice,
   getMonthlyEquivalent: () => null,
   getSavings: () => null,
 };
@@ -59,8 +59,8 @@ describe('PricingCard', () => {
   it('renders plan name, price, and features', () => {
     render(<PricingCard {...defaultProps} />);
 
-    expect(screen.getByRole('heading', { level: 3, name: /Trial/i })).toBeInTheDocument();
-    expect(screen.getByText('Unlimited')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 3, name: /Pro/i })).toBeInTheDocument();
+    expect(screen.getByText('25')).toBeInTheDocument();
     expect(screen.getByText('Real-time email alerts')).toBeInTheDocument();
   });
 
@@ -121,14 +121,14 @@ describe('PricingCard', () => {
   });
 
   it('shows "Popular" badge for popular plans', () => {
-    render(<PricingCard {...defaultProps} plan={proPlan} />);
+    render(<PricingCard {...defaultProps} />);
 
     expect(screen.getByText('Popular')).toBeInTheDocument();
   });
 
   it('shows both Popular and Current Plan badges', () => {
     render(
-      <PricingCard {...defaultProps} plan={proPlan} isCurrentPlan={true} />
+      <PricingCard {...defaultProps} isCurrentPlan={true} />
     );
 
     expect(screen.getByText('Popular')).toBeInTheDocument();
@@ -149,20 +149,26 @@ describe('PricingCard', () => {
     const button = screen.getByRole('button');
     fireEvent.click(button);
 
-    expect(onCheckout).toHaveBeenCalledWith('FREE');
+    expect(onCheckout).toHaveBeenCalledWith('PRO');
   });
 
   it('renders bold text within features using **markdown** syntax', () => {
-    render(<PricingCard {...defaultProps} plan={proPlan} />);
+    render(<PricingCard {...defaultProps} />);
 
     // Bold text should be in a <strong> element
     const strongElement = screen.getByText('25');
     expect(strongElement.tagName).toBe('STRONG');
   });
 
-  it('shows "Everything in Trial" footer for PRO plan', () => {
-    render(<PricingCard {...defaultProps} plan={proPlan} />);
+  it('shows "Everything in Pro" footer for MAX plan', () => {
+    render(<PricingCard {...defaultProps} plan={maxPlan} />);
 
-    expect(screen.getByText('Everything in Trial')).toBeInTheDocument();
+    expect(screen.getByText('Everything in Pro')).toBeInTheDocument();
+  });
+
+  it('does not show "Everything in" footer for PRO plan', () => {
+    render(<PricingCard {...defaultProps} />);
+
+    expect(screen.queryByText(/Everything in/)).not.toBeInTheDocument();
   });
 });

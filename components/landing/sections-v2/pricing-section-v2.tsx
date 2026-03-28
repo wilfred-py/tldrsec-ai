@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { useRouter } from 'next/navigation';
-import { Zap, Sparkles, Crown } from 'lucide-react';
+import { Sparkles, Crown } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   staggerContainer,
@@ -23,19 +23,6 @@ import { PricingCard } from '@/components/landing/pricing-card';
  * Sourced from centralized Stripe config in lib/stripe.ts
  */
 const plans = [
-  {
-    key: 'FREE' as const,
-    name: SUBSCRIPTION_PLANS.FREE.name,
-    icon: Zap,
-    monthlyPrice: SUBSCRIPTION_PLANS.FREE.monthlyPrice,
-    annualPrice: SUBSCRIPTION_PLANS.FREE.annualPrice,
-    description: 'Full access for 7 days',
-    features: SUBSCRIPTION_PLANS.FREE.features,
-    cta: 'Start Free Trial',
-    href: '/onboarding',
-    popular: false,
-    disabled: false,
-  },
   {
     key: 'PRO' as const,
     name: SUBSCRIPTION_PLANS.PRO.name,
@@ -118,7 +105,7 @@ export function PricingSectionV2() {
   // Determine CTA text based on auth state
   const getCtaText = (plan: typeof plans[0]) => {
     if (plan.disabled) return plan.cta;
-    if (!isSignedIn) return 'Get Started';
+    if (!isSignedIn) return 'Start Free Trial';
     if (!isOnboarded) return 'Complete Setup';
     return plan.cta; // "Upgrade to Pro" or "Upgrade to Max"
   };
@@ -207,7 +194,7 @@ export function PricingSectionV2() {
             Simple, Transparent Pricing
           </h2>
           <p className="landing-body max-w-2xl mx-auto mb-8">
-            Start with a free trial, upgrade when you&apos;re ready. No hidden fees.
+            Start with a 7-day free trial on any plan. Cancel anytime.
           </p>
         </motion.div>
 
@@ -237,6 +224,9 @@ export function PricingSectionV2() {
               }`}
             />
           </button>
+          <p className="text-xs text-[var(--landing-text-muted)] mt-2">
+            Billing starts after your 7-day free trial
+          </p>
         </motion.div>
 
         {/* Pricing Cards Grid */}
@@ -245,7 +235,7 @@ export function PricingSectionV2() {
           initial="initial"
           whileInView="animate"
           viewport={viewportOnce}
-          className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-5xl mx-auto"
+          className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-4xl mx-auto"
         >
           {plans.map((plan) => (
             <PricingCard

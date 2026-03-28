@@ -128,7 +128,7 @@ describe('Landing Page Auth-Aware Integration', () => {
   // Pricing Section with subscription context
   // ===========================================================
   describe('PricingSectionV2 personalized behavior', () => {
-    it('Scenario 1: unauthenticated - all CTAs show "Get Started"', () => {
+    it('Scenario 1: unauthenticated - all CTAs show "Start Free Trial"', () => {
       mockUseAuth.mockReturnValue(authStates.unauthenticated);
       mockUseSubscriptionContext.mockReturnValue(
         makeSubscriptionContext(subscriptionFixtures.noSubscription)
@@ -137,11 +137,11 @@ describe('Landing Page Auth-Aware Integration', () => {
       render(<PricingSectionV2 />);
 
       const buttons = screen.getAllByRole('button');
-      const getStartedButtons = buttons.filter(
-        (btn) => btn.textContent?.includes('Get Started')
+      const trialButtons = buttons.filter(
+        (btn) => btn.textContent?.includes('Start Free Trial')
       );
-      // All 3 plans should show "Get Started" for unauthenticated
-      expect(getStartedButtons.length).toBe(3);
+      // 2 plans (Pro + Max) should show "Start Free Trial" for unauthenticated
+      expect(trialButtons.length).toBe(2);
     });
 
     it('Scenario 2: authenticated not onboarded - CTAs show "Complete Setup"', () => {
@@ -156,10 +156,10 @@ describe('Landing Page Auth-Aware Integration', () => {
       const setupButtons = buttons.filter(
         (btn) => btn.textContent?.includes('Complete Setup')
       );
-      expect(setupButtons.length).toBe(3);
+      expect(setupButtons.length).toBe(2);
     });
 
-    it('Scenario 3: FREE trial active - FREE shows "Current Plan" badge', () => {
+    it('Scenario 3: FREE trial active - no "Current Plan" badge (FREE card removed)', () => {
       mockUseAuth.mockReturnValue(authStates.authenticatedOnboarded);
       mockUseSubscriptionContext.mockReturnValue(
         makeSubscriptionContext(subscriptionFixtures.freeTrialActive)
@@ -167,13 +167,8 @@ describe('Landing Page Auth-Aware Integration', () => {
 
       render(<PricingSectionV2 />);
 
-      // FREE plan should have Current Plan badge
-      const statusBadge = screen.getByRole('status');
-      expect(statusBadge).toHaveTextContent('Current Plan');
-
-      // FREE plan button should be disabled
-      const currentPlanBtn = screen.getByRole('button', { name: /Current Plan/i });
-      expect(currentPlanBtn).toBeDisabled();
+      // FREE plan card no longer exists, so no "Current Plan" badge
+      expect(screen.queryByRole('status')).not.toBeInTheDocument();
 
       // PRO and MAX should have active upgrade CTAs
       expect(screen.getByRole('button', { name: /Upgrade to Pro/i })).toBeEnabled();
@@ -215,7 +210,7 @@ describe('Landing Page Auth-Aware Integration', () => {
       expect(currentPlanBtn).toBeDisabled();
     });
 
-    it('Scenario 6: grandfathered FREE - FREE shows "Current Plan" badge', () => {
+    it('Scenario 6: grandfathered FREE - no "Current Plan" badge (FREE card removed)', () => {
       mockUseAuth.mockReturnValue(authStates.authenticatedOnboarded);
       mockUseSubscriptionContext.mockReturnValue(
         makeSubscriptionContext(subscriptionFixtures.freeGrandfathered)
@@ -223,8 +218,8 @@ describe('Landing Page Auth-Aware Integration', () => {
 
       render(<PricingSectionV2 />);
 
-      const statusBadge = screen.getByRole('status');
-      expect(statusBadge).toHaveTextContent('Current Plan');
+      // FREE plan card no longer exists, so no "Current Plan" badge
+      expect(screen.queryByRole('status')).not.toBeInTheDocument();
     });
 
     it('shows error banner when subscription fetch fails', () => {
@@ -266,7 +261,7 @@ describe('Landing Page Auth-Aware Integration', () => {
         screen.queryByRole('button', { name: /Current Plan/i })
       ).not.toBeInTheDocument();
       expect(
-        screen.queryByRole('button', { name: /Get Started/i })
+        screen.queryByRole('button', { name: /Start Free Trial/i })
       ).not.toBeInTheDocument();
     });
   });
