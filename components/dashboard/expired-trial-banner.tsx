@@ -27,7 +27,7 @@ export function ExpiredTrialBanner() {
             className="bg-orange-600 hover:bg-orange-700"
           >
             <Link
-              href="/dashboard/billing"
+              href="/subscribe"
               className="flex items-center gap-2"
             >
               <CreditCard className="h-5 w-5" />

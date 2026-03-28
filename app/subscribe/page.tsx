@@ -273,7 +273,7 @@ function SubscribePageContent() {
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {Array.from({ length: 2 }).map((_, i) => (
-              <div key={i} className="rounded-xl border p-6 space-y-4 animate-slideUp" style={{ animationDelay: `${i * 100}ms`, backgroundColor: 'var(--landing-card-bg, white)' }}>
+              <div key={i} className="landing-card space-y-4 animate-slideUp" style={{ animationDelay: `${i * 100}ms` }}>
                 <div className="flex items-center justify-between">
                   <div className="space-y-1"><Skeleton className="h-3 w-12" /><Skeleton className="h-7 w-24" /></div>
                   <Skeleton className="h-6 w-6 rounded" />
@@ -577,7 +577,7 @@ function SubscribePageLoading() {
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {Array.from({ length: 2 }).map((_, i) => (
-            <div key={i} className="rounded-xl border p-6 space-y-4 animate-slideUp" style={{ animationDelay: `${i * 100}ms`, backgroundColor: 'var(--landing-card-bg, white)' }}>
+            <div key={i} className="landing-card space-y-4 animate-slideUp" style={{ animationDelay: `${i * 100}ms` }}>
               <div className="flex items-center justify-between">
                 <div className="space-y-1"><Skeleton className="h-3 w-12" /><Skeleton className="h-7 w-24" /></div>
                 <Skeleton className="h-6 w-6 rounded" />
