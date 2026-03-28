@@ -24,7 +24,6 @@ interface TickersMobileViewProps {
   formatDate: (date?: string) => string;
   totalCount: number;
   pageSize: number;
-  hasPagination: boolean;
 }
 
 export function TickersMobileView({
@@ -38,7 +37,6 @@ export function TickersMobileView({
   formatDate,
   totalCount: _totalCount,
   pageSize: _pageSize,
-  hasPagination,
 }: TickersMobileViewProps) {
   const [searchResults, setSearchResults] = useState<TickerSearchResult[]>([]);
 
@@ -57,11 +55,10 @@ export function TickersMobileView({
     }
   };
 
-  // Mobile card height is ~140px, 10 cards + spacing = ~1500px
-  // Using min-height to ensure consistent layout when paginated
+  // Always apply consistent layout to prevent shifts when paginating
   return (
-    <div className={`${hasPagination ? "min-h-[1550px] flex flex-col" : ""}`}>
-      <div className={`space-y-3 ${hasPagination ? "flex-1" : ""}`}>
+    <div className="min-h-[1550px] flex flex-col">
+      <div className="space-y-3 flex-1">
         {/* Mobile Inline Add Card */}
         {showInlineAdd && (
           <div className="landing-card p-4 bg-muted/30">
@@ -159,12 +156,10 @@ export function TickersMobileView({
         })}
       </div>
 
-      {/* Mobile Pagination - always at bottom when paginated */}
-      {hasPagination && (
-        <div className="mt-auto pt-3">
-          <DataTablePaginationMobile table={table} />
-        </div>
-      )}
+      {/* Mobile Pagination - always rendered, component returns null when single page */}
+      <div className="mt-auto pt-3">
+        <DataTablePaginationMobile table={table} />
+      </div>
     </div>
   );
 }
