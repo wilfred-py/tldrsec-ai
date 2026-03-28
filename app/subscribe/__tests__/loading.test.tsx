@@ -27,15 +27,15 @@ describe("SubscribeLoading", () => {
     expect(toggle).toBeInTheDocument();
   });
 
-  test("renders 3 plan card skeletons", () => {
+  test("renders 2 plan card skeletons matching actual plan count", () => {
     const { container } = render(<SubscribeLoading />);
     const cards = container.querySelectorAll('[data-testid="plan-card-skeleton"]');
-    expect(cards).toHaveLength(3);
+    expect(cards).toHaveLength(2);
   });
 
   test("uses responsive grid for plan cards", () => {
     const { container } = render(<SubscribeLoading />);
-    const grid = container.querySelector(".md\\:grid-cols-3");
+    const grid = container.querySelector(".md\\:grid-cols-2");
     expect(grid).toBeInTheDocument();
   });
 

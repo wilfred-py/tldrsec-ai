@@ -31,15 +31,14 @@ export default function SubscribeLoading() {
         </div>
 
         {/* Plan Cards Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {Array.from({ length: 3 }).map((_, i) => (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {Array.from({ length: 2 }).map((_, i) => (
             <div
               key={i}
               data-testid="plan-card-skeleton"
-              className="rounded-xl border p-6 space-y-4 animate-slideUp focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-blue-500"
+              className="landing-card space-y-4 animate-slideUp focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-blue-500"
               style={{
                 animationDelay: `${i * 100}ms`,
-                backgroundColor: "var(--landing-card-bg, white)",
               }}
               role="article"
               aria-label={`Loading pricing plan ${i + 1}`}
