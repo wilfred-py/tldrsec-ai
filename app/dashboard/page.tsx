@@ -26,14 +26,15 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   let initialCompanies: Company[] = [];
   let tutorialCompleted = false;
   let subscriptionTier: 'FREE' | 'PRO' | 'MAX' = 'FREE';
-  let hoursSavedThisMonth = 0;
-  let hoursSavedTotal = 0;
+  let summaryCountThisMonth = 0;
+  let summaryCountTotal = 0;
   let recentSummaries: Array<{
     id: string;
     filingType: string;
     filingDate: string;
     importance: string | null;
     smartSubject: string | null;
+    summaryText: string | null;
     companyName: string;
     ticker: string;
     filingUrl: string;
@@ -60,8 +61,6 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
       if (dbUser) {
         tutorialCompleted = dbUser.tutorialCompletedAt != null;
         subscriptionTier = (dbUser.subscriptionTier as 'FREE' | 'PRO' | 'MAX') || 'FREE';
-        hoursSavedThisMonth = dbUser.hoursSavedThisMonth || 0;
-        hoursSavedTotal = dbUser.hoursSavedTotal || 0;
 
         // Fetch recent summaries for activity feed (across all tickers)
         const tickerIds = dbUser.tickers.map(t => t.id);
@@ -74,6 +73,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
               filingDate: true,
               importance: true,
               smartSubject: true,
+              summaryText: true,
               filingUrl: true,
               ticker: { select: { symbol: true, companyName: true } },
             },
@@ -86,10 +86,25 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
             filingDate: s.filingDate.toISOString(),
             importance: s.importance,
             smartSubject: s.smartSubject,
+            summaryText: s.summaryText ? s.summaryText.substring(0, 200) : null,
             companyName: s.ticker.companyName,
             ticker: s.ticker.symbol,
             filingUrl: s.filingUrl,
           }));
+
+          // Compute summary counts for Time Saved widget
+          const now = new Date();
+          const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+          const [countThisMonth, countTotal] = await Promise.all([
+            prisma.summary.count({
+              where: { tickerId: { in: tickerIds }, filingDate: { gte: startOfMonth } },
+            }),
+            prisma.summary.count({
+              where: { tickerId: { in: tickerIds } },
+            }),
+          ]);
+          summaryCountThisMonth = countThisMonth;
+          summaryCountTotal = countTotal;
         }
 
         // Safety net: reconcile Stripe subscription for FREE users who have interacted with Stripe
@@ -187,8 +202,8 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
       tutorialCompleted={tutorialCompleted}
       subscriptionTier={subscriptionTier}
       tickerLimit={tickerLimit}
-      hoursSavedThisMonth={hoursSavedThisMonth}
-      hoursSavedTotal={hoursSavedTotal}
+      summaryCountThisMonth={summaryCountThisMonth}
+      summaryCountTotal={summaryCountTotal}
       recentSummaries={recentSummaries}
     />
   );
