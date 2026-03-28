@@ -3,7 +3,7 @@
 import { useState, useRef } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Summary } from '@/lib/generated/prisma';
+import { Summary } from '@prisma/client';
 import { Badge } from '@/components/ui/badge';
 import { ArrowDown, ArrowUp, Info, AlertTriangle, BarChart, Briefcase, Calendar, DollarSign, FileText, TrendingUp, Search, Copy, Download, Check, X, ShieldAlert } from 'lucide-react';
 import { format } from 'date-fns';

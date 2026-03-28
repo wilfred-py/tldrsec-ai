@@ -1,6 +1,6 @@
 'use client';
 
-import { Summary } from '@/lib/generated/prisma';
+import { Summary } from '@prisma/client';
 import { formatDistanceToNow } from 'date-fns';
 import Link from 'next/link';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';

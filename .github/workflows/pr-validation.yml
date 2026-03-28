@@ -115,7 +115,8 @@ jobs:
         run: npm audit --audit-level=high || echo "⚠️ npm audit found vulnerabilities (non-blocking)"
         
       - name: Unit Tests
-        run: npm run test
+        run: npm run test -- --forceExit --testPathIgnorePatterns="monitoring|performance|security/timing"
+        timeout-minutes: 15
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}

@@ -57,10 +57,11 @@ jest.mock('../../../lib/cron/async-response-service', () => ({
 describe('Tier-Aware Async API', () => {
   const mockRequest = (headers: Record<string, string> = {}) => {
     return {
+      url: 'http://localhost/api/cron?action=tier-aware',
       headers: {
         get: (name: string) => headers[name] || null
       }
-    } as NextRequest;
+    } as unknown as NextRequest;
   };
 
   beforeEach(() => {
