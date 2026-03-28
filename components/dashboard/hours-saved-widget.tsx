@@ -9,19 +9,21 @@ import {
 } from "@/components/ui/card";
 
 interface HoursSavedWidgetProps {
-  hoursSavedThisMonth: number;
-  hoursSavedTotal: number;
+  summaryCountThisMonth: number;
+  summaryCountTotal: number;
 }
 
-function formatHours(minutes: number): string {
-  return `~${Math.round(minutes / 60)}`;
+function formatTimeSaved(count: number): string {
+  const minutes = count * 15;
+  if (minutes < 60) return `~${minutes} min`;
+  return `~${Math.round(minutes / 60)} hrs`;
 }
 
 export function HoursSavedWidget({
-  hoursSavedThisMonth,
-  hoursSavedTotal,
+  summaryCountThisMonth,
+  summaryCountTotal,
 }: HoursSavedWidgetProps) {
-  const isEmpty = hoursSavedThisMonth === 0 && hoursSavedTotal === 0;
+  const isEmpty = summaryCountThisMonth === 0 && summaryCountTotal === 0;
 
   return (
     <Card>
@@ -39,10 +41,12 @@ export function HoursSavedWidget({
         ) : (
           <div className="space-y-1">
             <p className="text-2xl font-bold tracking-tight">
-              {formatHours(hoursSavedThisMonth)} hrs saved this month
+              {formatTimeSaved(summaryCountThisMonth)} this month
             </p>
             <p className="text-sm text-muted-foreground">
-              {formatHours(hoursSavedTotal)} hrs total
+              {formatTimeSaved(summaryCountTotal)} total &middot;{" "}
+              {summaryCountTotal} filing{summaryCountTotal !== 1 ? "s" : ""}{" "}
+              summarized
             </p>
           </div>
         )}
