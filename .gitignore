@@ -114,3 +114,4 @@ test-tesla-filing-extraction.js
 
 # MCP servers (cloned repos)
 /mcp-send-email/
+.gstack/
