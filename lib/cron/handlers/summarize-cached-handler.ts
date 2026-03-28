@@ -65,7 +65,7 @@ export async function handleSummarizeCached(
 ): Promise<SummarizeResult> {
   const startTime = Date.now();
   const { userId, userEmail, userTier: _userTier, ticker, filing, cacheId, executionContext } = payload;
-  const { executionId } = executionContext;
+  const executionId = executionContext?.executionId ?? `legacy-${Date.now()}`;
 
   summarizeLogger.info(`[${executionId}] Starting summarize phase`, {
     userId,
@@ -73,7 +73,7 @@ export async function handleSummarizeCached(
     formType: filing.formType,
     accessionNumber: filing.accessionNumber,
     cacheId,
-    cacheHit: executionContext.cacheHit
+    cacheHit: executionContext?.cacheHit
   });
 
   try {
@@ -427,10 +427,10 @@ export async function handleSummarizeCached(
               cacheId,
               cacheHit: true,
               summarizeDuration: 0,
-              cronTriggerTime: executionContext.cronTriggerTime,
-              sourceContext: executionContext.sourceContext,
-              discoveryPhaseCompletedAt: executionContext.discoveryPhaseCompletedAt,
-              fetchPhaseCompletedAt: executionContext.fetchPhaseCompletedAt,
+              cronTriggerTime: executionContext?.cronTriggerTime,
+              sourceContext: executionContext?.sourceContext,
+              discoveryPhaseCompletedAt: executionContext?.discoveryPhaseCompletedAt,
+              fetchPhaseCompletedAt: executionContext?.fetchPhaseCompletedAt,
               summarizePhaseCompletedAt: new Date().toISOString(),
               ticker: ticker.symbol,
               companyName: ticker.companyName,
@@ -654,18 +654,18 @@ export async function handleSummarizeCached(
         totalCost: summaryResult.cost || 0,
         inputTokens: summaryResult.inputTokens || 0,
         outputTokens: summaryResult.outputTokens || 0,
-        isCacheHit: executionContext.cacheHit || false,
+        isCacheHit: executionContext?.cacheHit || false,
         processingCompletedAt: new Date(), // Fix: Add missing completion timestamp
         processingTimeMs: summarizeDuration,  // AI processing duration in ms
         metadata: {
           executionId,
           cacheId,
-          cacheHit: executionContext.cacheHit,
+          cacheHit: executionContext?.cacheHit,
           summarizeDuration,
-          cronTriggerTime: executionContext.cronTriggerTime,
-          sourceContext: executionContext.sourceContext,
-          discoveryPhaseCompletedAt: executionContext.discoveryPhaseCompletedAt,
-          fetchPhaseCompletedAt: executionContext.fetchPhaseCompletedAt,
+          cronTriggerTime: executionContext?.cronTriggerTime,
+          sourceContext: executionContext?.sourceContext,
+          discoveryPhaseCompletedAt: executionContext?.discoveryPhaseCompletedAt,
+          fetchPhaseCompletedAt: executionContext?.fetchPhaseCompletedAt,
           summarizePhaseCompletedAt: new Date().toISOString(),
           ticker: ticker.symbol,
           companyName: ticker.companyName,
@@ -795,8 +795,8 @@ export async function handleSummarizeCached(
       emailSent,
       totalDuration,
       phases: {
-        discovery: executionContext.discoveryPhaseCompletedAt,
-        fetch: executionContext.fetchPhaseCompletedAt,
+        discovery: executionContext?.discoveryPhaseCompletedAt,
+        fetch: executionContext?.fetchPhaseCompletedAt,
         summarize: new Date().toISOString()
       }
     });
