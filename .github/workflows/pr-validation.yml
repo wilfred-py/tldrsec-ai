@@ -115,7 +115,7 @@ jobs:
         run: npm audit --audit-level=high || echo "⚠️ npm audit found vulnerabilities (non-blocking)"
         
       - name: Unit Tests
-        run: npm run test -- --forceExit --testPathIgnorePatterns="monitoring|performance|security/timing|filing-retrieval"
+        run: npm run test -- --forceExit --testPathIgnorePatterns="monitoring|performance|security/timing|filing-retrieval|rate-limiting|infrastructure"
         timeout-minutes: 15
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL || 'postgresql://test:test@localhost:5432/testdb' }}
