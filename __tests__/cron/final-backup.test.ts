@@ -44,7 +44,7 @@ jest.mock('@/lib/logging', () => ({
 import { GET } from '@/app/api/cron/route';
 
 function createMockRequest(
-  url = 'http://localhost:3000/api/cron/final-backup'
+  url = 'http://localhost:3000/api/cron?action=final-backup'
 ): NextRequest {
   return new NextRequest(url, {
     headers: {
@@ -54,7 +54,7 @@ function createMockRequest(
 }
 
 function createMockRequestWithQuerySecret(
-  url = 'http://localhost:3000/api/cron/final-backup?secret=test-cron-secret'
+  url = 'http://localhost:3000/api/cron?action=final-backup&secret=test-cron-secret'
 ): NextRequest {
   return new NextRequest(url);
 }
@@ -101,7 +101,7 @@ describe('Final Backup Cron Endpoint - Phase 7', () => {
   describe('Authentication', () => {
     it('should reject requests without authorization', async () => {
       const request = new NextRequest(
-        'http://localhost:3000/api/cron/final-backup',
+        'http://localhost:3000/api/cron?action=final-backup',
         { headers: {} }
       );
 

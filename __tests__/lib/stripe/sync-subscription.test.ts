@@ -119,6 +119,8 @@ describe('syncSubscriptionFromStripeData', () => {
   });
 
   it('should be idempotent — second call produces same upsert shape', async () => {
+    // Freeze time so both calls get the same updatedAt timestamp
+    jest.useFakeTimers({ now: new Date('2026-01-01T00:00:00Z') });
     const sub = makeStripeSubscription({ priceId: 'price_max_monthly_test' });
 
     await syncSubscriptionFromStripeData('user_1', sub, 'cus_test_mock');
@@ -129,6 +131,7 @@ describe('syncSubscriptionFromStripeData', () => {
     expect(mockUserSubscriptionUpsert.mock.calls[0]).toEqual(
       mockUserSubscriptionUpsert.mock.calls[1]
     );
+    jest.useRealTimers();
   });
 
   it('should propagate upsert errors (not swallowed)', async () => {

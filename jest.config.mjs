@@ -5,6 +5,27 @@ const createJestConfig = nextJest({
   dir: './',
 });
 
+// ESM packages that Jest needs to transform (including transitive deps)
+const esmPackages = [
+  '@vercel/analytics',
+  '@clerk/backend.*\\.mjs',
+  '@clerk/.*',
+  'react-syntax-highlighter',
+  'react-syntax-highlighter/.*',
+  'react-json-tree',
+  'react-base16-styling',
+  'base16',
+  'lodash-es',
+  'color',
+  'color-string',
+  'color-convert',
+  'color-name',
+  'react-copy-to-clipboard',
+  'dompurify',
+  '@jest/transform',
+  '@babel/preset-env',
+].join('|');
+
 // Add any custom config to be passed to Jest
 const config = {
   testEnvironment: 'jsdom',
@@ -40,7 +61,7 @@ const config = {
   },
   moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'mjs'],
   transformIgnorePatterns: [
-    'node_modules/(?!(@vercel/analytics|@clerk/backend.*\\.mjs|@clerk/.*|react-syntax-highlighter/.*|@jest/transform|@babel/preset-env))',
+    `node_modules/(?!(${esmPackages}))`,
   ],
   extensionsToTreatAsEsm: ['.ts', '.tsx'],
   globals: {
@@ -50,5 +71,13 @@ const config = {
   },
 };
 
-// createJestConfig is exported this way to ensure that next/jest can load the Next.js config which is async
-export default createJestConfig(config); 
+// Override next/jest's transformIgnorePatterns with ours
+const baseConfig = createJestConfig(config);
+export default async () => {
+  const resolved = await baseConfig();
+  resolved.transformIgnorePatterns = [
+    `node_modules/(?!(${esmPackages}))`,
+    '^.+\\.module\\.(css|sass|scss)$',
+  ];
+  return resolved;
+};

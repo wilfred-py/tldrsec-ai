@@ -171,7 +171,7 @@ describe('Comprehensive Self-Healing Auto-Recovery', () => {
       mockPrisma.$executeRaw.mockResolvedValueOnce(0); // invalidJobTypes cleanup
       mockPrisma.$executeRaw.mockResolvedValueOnce(0); // staleProcessing cleanup
 
-      const request = new NextRequest('http://localhost/api/cron/auto-recover', {
+      const request = new NextRequest('http://localhost/api/cron?action=auto-recover', {
         headers: { 'x-cron-secret': cronSecret },
       });
       const response = await GET(request);
@@ -195,7 +195,7 @@ describe('Comprehensive Self-Healing Auto-Recovery', () => {
       // Mock the cleanup - only invalidJobTypes cleanup will be called
       mockPrisma.$executeRaw.mockResolvedValueOnce(3); // invalidJobTypes cleanup
 
-      const request = new NextRequest('http://localhost/api/cron/auto-recover', {
+      const request = new NextRequest('http://localhost/api/cron?action=auto-recover', {
         headers: { 'x-cron-secret': cronSecret },
       });
       const response = await GET(request);
@@ -219,7 +219,7 @@ describe('Comprehensive Self-Healing Auto-Recovery', () => {
       // Mock the cleanup - only staleProcessing cleanup will be called
       mockPrisma.$executeRaw.mockResolvedValueOnce(2); // staleProcessing cleanup
 
-      const request = new NextRequest('http://localhost/api/cron/auto-recover', {
+      const request = new NextRequest('http://localhost/api/cron?action=auto-recover', {
         headers: { 'x-cron-secret': cronSecret },
       });
       const response = await GET(request);
@@ -248,7 +248,7 @@ describe('Comprehensive Self-Healing Auto-Recovery', () => {
       mockPrisma.$executeRaw.mockResolvedValueOnce(2); // invalidJobTypes
       mockPrisma.$executeRaw.mockResolvedValueOnce(1); // staleProcessing
 
-      const request = new NextRequest('http://localhost/api/cron/auto-recover', {
+      const request = new NextRequest('http://localhost/api/cron?action=auto-recover', {
         headers: { 'x-cron-secret': cronSecret },
       });
       const response = await GET(request);
@@ -279,7 +279,7 @@ describe('Comprehensive Self-Healing Auto-Recovery', () => {
       }));
       mockPrisma.$executeRaw.mockResolvedValue(0); // No cleanup needed
 
-      const request1 = new NextRequest('http://localhost/api/cron/auto-recover', {
+      const request1 = new NextRequest('http://localhost/api/cron?action=auto-recover', {
         headers: { 'x-cron-secret': cronSecret },
       });
       const response1 = await GET(request1);
@@ -295,7 +295,7 @@ describe('Comprehensive Self-Healing Auto-Recovery', () => {
         minutesSinceLastCompletion: 50,
       }));
 
-      const request2 = new NextRequest('http://localhost/api/cron/auto-recover', {
+      const request2 = new NextRequest('http://localhost/api/cron?action=auto-recover', {
         headers: { 'x-cron-secret': cronSecret },
       });
       const response2 = await GET(request2);
@@ -314,7 +314,7 @@ describe('Comprehensive Self-Healing Auto-Recovery', () => {
       }));
       mockPrisma.$executeRaw.mockResolvedValue(0);
 
-      const request1 = new NextRequest('http://localhost/api/cron/auto-recover', {
+      const request1 = new NextRequest('http://localhost/api/cron?action=auto-recover', {
         headers: { 'x-cron-secret': cronSecret },
       });
       await GET(request1);
@@ -325,7 +325,7 @@ describe('Comprehensive Self-Healing Auto-Recovery', () => {
         minutesSinceLastCompletion: 5,
       }));
 
-      const request2 = new NextRequest('http://localhost/api/cron/auto-recover', {
+      const request2 = new NextRequest('http://localhost/api/cron?action=auto-recover', {
         headers: { 'x-cron-secret': cronSecret },
       });
       const response2 = await GET(request2);
@@ -347,7 +347,7 @@ describe('Comprehensive Self-Healing Auto-Recovery', () => {
           minutesSinceLastCompletion: 45 + i * 5,
         }));
 
-        const request = new NextRequest('http://localhost/api/cron/auto-recover', {
+        const request = new NextRequest('http://localhost/api/cron?action=auto-recover', {
           headers: { 'x-cron-secret': cronSecret },
         });
         const response = await GET(request);
@@ -380,7 +380,7 @@ describe('Comprehensive Self-Healing Auto-Recovery', () => {
       mockPrisma.$executeRaw.mockResolvedValueOnce(2);
       mockPrisma.$executeRaw.mockResolvedValueOnce(1);
 
-      const request = new NextRequest('http://localhost/api/cron/auto-recover', {
+      const request = new NextRequest('http://localhost/api/cron?action=auto-recover', {
         headers: { 'x-cron-secret': cronSecret },
       });
       await GET(request);
@@ -408,7 +408,7 @@ describe('Comprehensive Self-Healing Auto-Recovery', () => {
       mockPrisma.$executeRaw.mockResolvedValueOnce(0);
       mockPrisma.$executeRaw.mockResolvedValueOnce(0);
 
-      const request = new NextRequest('http://localhost/api/cron/auto-recover', {
+      const request = new NextRequest('http://localhost/api/cron?action=auto-recover', {
         headers: { 'x-cron-secret': cronSecret },
       });
       await GET(request);
@@ -433,7 +433,7 @@ describe('Comprehensive Self-Healing Auto-Recovery', () => {
         status: 'HEALTHY',
       }));
 
-      const request = new NextRequest('http://localhost/api/cron/auto-recover', {
+      const request = new NextRequest('http://localhost/api/cron?action=auto-recover', {
         headers: { 'x-cron-secret': cronSecret },
       });
       await GET(request);
@@ -458,7 +458,7 @@ describe('Comprehensive Self-Healing Auto-Recovery', () => {
           json: async () => ({ success: true, locksCleared: 3 }),
         });
 
-      const request = new NextRequest('http://localhost/api/cron/auto-recover', {
+      const request = new NextRequest('http://localhost/api/cron?action=auto-recover', {
         headers: { 'x-cron-secret': cronSecret },
       });
       const response = await GET(request);
@@ -484,7 +484,7 @@ describe('Comprehensive Self-Healing Auto-Recovery', () => {
       mockPrisma.$executeRaw.mockResolvedValueOnce(0);
       mockPrisma.$executeRaw.mockResolvedValueOnce(0);
 
-      const request = new NextRequest('http://localhost/api/cron/auto-recover', {
+      const request = new NextRequest('http://localhost/api/cron?action=auto-recover', {
         headers: { 'x-cron-secret': cronSecret },
       });
       const response = await GET(request);

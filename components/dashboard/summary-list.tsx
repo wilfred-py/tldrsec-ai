@@ -1,4 +1,4 @@
-import { Summary, Ticker } from '@/lib/generated/prisma';
+import { Summary, Ticker } from '@prisma/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { FileTextIcon } from 'lucide-react';
 import { SummaryCard } from '@/components/summary/summary-card';
