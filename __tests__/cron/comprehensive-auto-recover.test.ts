@@ -163,7 +163,7 @@ const mockRecordCleanup = RecoveryStateService.recordCleanup as jest.MockedFunct
 const mockClearCache = RecoveryStateService.clearCache as jest.MockedFunction<typeof RecoveryStateService.clearCache>;
 const mockResetState = RecoveryStateService.reset as jest.MockedFunction<typeof RecoveryStateService.reset>;
 
-function createMockRequest(url = 'http://localhost:3000/api/cron/auto-recover'): NextRequest {
+function createMockRequest(url = 'http://localhost:3000/api/cron?action=auto-recover'): NextRequest {
   return new NextRequest(url, {
     headers: {
       'x-forwarded-for': '127.0.0.1',

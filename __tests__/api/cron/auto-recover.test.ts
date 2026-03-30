@@ -103,7 +103,7 @@ describe('/api/cron/auto-recover', () => {
 
   describe('Authentication', () => {
     it('should reject requests without valid cron secret', async () => {
-      const request = new NextRequest('http://localhost/api/cron/auto-recover');
+      const request = new NextRequest('http://localhost/api/cron?action=auto-recover');
       const response = await GET(request);
 
       expect(response.status).toBe(401);
@@ -112,7 +112,7 @@ describe('/api/cron/auto-recover', () => {
     it('should accept requests with valid cron secret in header', async () => {
       mockFetch.mockResolvedValue(createHealthResponse({ status: 'HEALTHY' }));
 
-      const request = new NextRequest('http://localhost/api/cron/auto-recover', {
+      const request = new NextRequest('http://localhost/api/cron?action=auto-recover', {
         headers: { 'x-cron-secret': cronSecret },
       });
       const response = await GET(request);
@@ -125,7 +125,7 @@ describe('/api/cron/auto-recover', () => {
     it('should take no action when pipeline is HEALTHY', async () => {
       mockFetch.mockResolvedValue(createHealthResponse({ status: 'HEALTHY' }));
 
-      const request = new NextRequest('http://localhost/api/cron/auto-recover', {
+      const request = new NextRequest('http://localhost/api/cron?action=auto-recover', {
         headers: { 'x-cron-secret': cronSecret },
       });
       const response = await GET(request);
@@ -148,7 +148,7 @@ describe('/api/cron/auto-recover', () => {
           json: async () => ({ success: true, locksCleared: 5 }),
         });
 
-      const request = new NextRequest('http://localhost/api/cron/auto-recover', {
+      const request = new NextRequest('http://localhost/api/cron?action=auto-recover', {
         headers: { 'x-cron-secret': cronSecret },
       });
       const response = await GET(request);
@@ -177,7 +177,7 @@ describe('/api/cron/auto-recover', () => {
           json: async () => ({ success: true, deploymentId: 'dpl_123' }),
         });
 
-      const request = new NextRequest('http://localhost/api/cron/auto-recover', {
+      const request = new NextRequest('http://localhost/api/cron?action=auto-recover', {
         headers: { 'x-cron-secret': cronSecret },
       });
       const response = await GET(request);
@@ -201,7 +201,7 @@ describe('/api/cron/auto-recover', () => {
           json: async () => ({ success: true, locksCleared: 3 }),
         });
 
-      const request = new NextRequest('http://localhost/api/cron/auto-recover', {
+      const request = new NextRequest('http://localhost/api/cron?action=auto-recover', {
         headers: { 'x-cron-secret': cronSecret },
       });
       const response = await GET(request);

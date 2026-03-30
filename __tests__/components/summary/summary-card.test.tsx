@@ -5,8 +5,8 @@ import '@testing-library/jest-dom';
 
 // Mock next/link to avoid navigation during tests
 jest.mock('next/link', () => {
-  return ({ children, href }: { children: React.ReactNode; href: string }) => {
-    return <a href={href}>{children}</a>;
+  return ({ children, href, ...rest }: { children: React.ReactNode; href: string; [key: string]: unknown }) => {
+    return <a href={href} {...rest}>{children}</a>;
   };
 });
 

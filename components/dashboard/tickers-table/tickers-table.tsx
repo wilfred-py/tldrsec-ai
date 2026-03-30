@@ -145,13 +145,19 @@ export function TickersTable({
                     ))}
                   </TableRow>
                 ))}
-                {/* Empty rows to maintain consistent height */}
+                {/* Empty rows to maintain consistent height across pages */}
                 {emptyRowCount > 0 &&
                   Array.from({ length: emptyRowCount }).map((_, i) => (
                     <TableRow key={`empty-${i}`} className="pointer-events-none">
-                      <TableCell colSpan={columns.length} className="py-4">
-                        &nbsp;
-                      </TableCell>
+                      {Array.from({ length: columns.length }).map((_, j) => (
+                        <TableCell key={j}>
+                          {j === columns.length - 1 ? (
+                            <div className="h-8 invisible" />
+                          ) : (
+                            "\u00A0"
+                          )}
+                        </TableCell>
+                      ))}
                     </TableRow>
                   ))}
               </>
@@ -168,9 +174,15 @@ export function TickersTable({
                 {/* Fill remaining space when empty */}
                 {Array.from({ length: ITEMS_PER_PAGE - 1 }).map((_, i) => (
                   <TableRow key={`empty-${i}`} className="pointer-events-none">
-                    <TableCell colSpan={columns.length} className="py-4">
-                      &nbsp;
-                    </TableCell>
+                    {Array.from({ length: columns.length }).map((_, j) => (
+                      <TableCell key={j}>
+                        {j === columns.length - 1 ? (
+                          <div className="h-8 invisible" />
+                        ) : (
+                          "\u00A0"
+                        )}
+                      </TableCell>
+                    ))}
                   </TableRow>
                 ))}
               </>
@@ -205,7 +217,6 @@ export function TickersTable({
           formatDate={formatDate}
           totalCount={data.length}
           pageSize={ITEMS_PER_PAGE}
-          hasPagination={pageCount > 1}
         />
       </div>
     </>

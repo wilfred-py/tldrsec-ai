@@ -115,6 +115,7 @@ describe('SEC Filings Cron Job', () => {
     
     // Setup mock request with proper authorization
     mockRequest = {
+      url: 'http://localhost/api/cron?action=tier-aware',
       headers: {
         get: jest.fn((header) => {
           if (header === 'authorization') return 'Bearer test-cron-secret';
@@ -131,6 +132,7 @@ describe('SEC Filings Cron Job', () => {
   describe('Authorization', () => {
     it('should reject unauthorized requests', async () => {
       const unauthorizedRequest = {
+        url: 'http://localhost/api/cron?action=tier-aware',
         headers: {
           get: jest.fn(() => null)
         }

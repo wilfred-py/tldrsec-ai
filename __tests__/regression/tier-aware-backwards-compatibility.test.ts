@@ -137,7 +137,7 @@ describe('Tier-Aware Backwards Compatibility Tests', () => {
 
       mockPrisma.user.findMany.mockResolvedValue(legacyUsers);
 
-      const request = new NextRequest('http://localhost:3000/api/cron/tier-aware', {
+      const request = new NextRequest('http://localhost:3000/api/cron?action=tier-aware', {
         headers: {
           'authorization': 'Bearer test-secret'
         }
@@ -177,7 +177,7 @@ describe('Tier-Aware Backwards Compatibility Tests', () => {
         { userId: 'old-field-user', tier: 'PROFESSIONAL', eligible: false, reason: 'budget_exceeded' }
       ]);
 
-      const request = new NextRequest('http://localhost:3000/api/cron/tier-aware', {
+      const request = new NextRequest('http://localhost:3000/api/cron?action=tier-aware', {
         headers: {
           'authorization': 'Bearer test-secret'
         }
@@ -214,7 +214,7 @@ describe('Tier-Aware Backwards Compatibility Tests', () => {
 
       mockPrisma.user.findMany.mockResolvedValue(usersWithOldTiers);
 
-      const request = new NextRequest('http://localhost:3000/api/cron/tier-aware', {
+      const request = new NextRequest('http://localhost:3000/api/cron?action=tier-aware', {
         headers: {
           'authorization': 'Bearer test-secret'
         }
@@ -256,7 +256,7 @@ describe('Tier-Aware Backwards Compatibility Tests', () => {
         { userId: 'legacy-freq-user', tier: 'FREE' }
       ]);
 
-      const request = new NextRequest('http://localhost:3000/api/cron/tier-aware', {
+      const request = new NextRequest('http://localhost:3000/api/cron?action=tier-aware', {
         headers: {
           'authorization': 'Bearer test-secret'
         }
@@ -289,7 +289,7 @@ describe('Tier-Aware Backwards Compatibility Tests', () => {
         { userId: 'no-reset-date-user', tier: 'ENTERPRISE', eligible: false, reason: 'no_reset_date' }
       ]);
 
-      const request = new NextRequest('http://localhost:3000/api/cron/tier-aware', {
+      const request = new NextRequest('http://localhost:3000/api/cron?action=tier-aware', {
         headers: {
           'authorization': 'Bearer test-secret'
         }
@@ -317,7 +317,7 @@ describe('Tier-Aware Backwards Compatibility Tests', () => {
 
       mockPrisma.user.findMany.mockResolvedValue([]);
 
-      const request = new NextRequest('http://localhost:3000/api/cron/tier-aware', {
+      const request = new NextRequest('http://localhost:3000/api/cron?action=tier-aware', {
         headers: {
           'authorization': 'Bearer test-secret'
         }
@@ -337,7 +337,7 @@ describe('Tier-Aware Backwards Compatibility Tests', () => {
 
       mockPrisma.user.findMany.mockResolvedValue([]);
 
-      const request = new NextRequest('http://localhost:3000/api/cron/tier-aware', {
+      const request = new NextRequest('http://localhost:3000/api/cron?action=tier-aware', {
         headers: {
           'authorization': 'Bearer test-secret'
         }
@@ -354,7 +354,7 @@ describe('Tier-Aware Backwards Compatibility Tests', () => {
     it('should maintain response format for monitoring systems', async () => {
       mockPrisma.user.findMany.mockResolvedValue([]);
 
-      const request = new NextRequest('http://localhost:3000/api/cron/tier-aware', {
+      const request = new NextRequest('http://localhost:3000/api/cron?action=tier-aware', {
         headers: {
           'authorization': 'Bearer test-secret'
         }
@@ -410,7 +410,7 @@ describe('Tier-Aware Backwards Compatibility Tests', () => {
       // Mock a processing error
       mockPrisma.$transaction.mockRejectedValue(new Error('Processing failed'));
 
-      const request = new NextRequest('http://localhost:3000/api/cron/tier-aware', {
+      const request = new NextRequest('http://localhost:3000/api/cron?action=tier-aware', {
         headers: {
           'authorization': 'Bearer test-secret'
         }
@@ -456,7 +456,7 @@ describe('Tier-Aware Backwards Compatibility Tests', () => {
 
       mockPrisma.user.findMany.mockResolvedValue(usersWithMissingFields);
 
-      const request = new NextRequest('http://localhost:3000/api/cron/tier-aware', {
+      const request = new NextRequest('http://localhost:3000/api/cron?action=tier-aware', {
         headers: {
           'authorization': 'Bearer test-secret'
         }
@@ -512,7 +512,7 @@ describe('Tier-Aware Backwards Compatibility Tests', () => {
         return await callback(mockTx);
       });
 
-      const request = new NextRequest('http://localhost:3000/api/cron/tier-aware', {
+      const request = new NextRequest('http://localhost:3000/api/cron?action=tier-aware', {
         headers: {
           'authorization': 'Bearer test-secret'
         }
@@ -547,7 +547,7 @@ describe('Tier-Aware Backwards Compatibility Tests', () => {
       getUserProcessingStatuses.mockReturnValue([]);
       getEligibleUsers.mockReturnValue([]);
 
-      const request = new NextRequest('http://localhost:3000/api/cron/tier-aware', {
+      const request = new NextRequest('http://localhost:3000/api/cron?action=tier-aware', {
         headers: {
           'authorization': 'Bearer test-secret'
         }
@@ -566,7 +566,7 @@ describe('Tier-Aware Backwards Compatibility Tests', () => {
     it('should maintain monitoring metrics format for existing dashboards', async () => {
       mockPrisma.user.findMany.mockResolvedValue([]);
 
-      const request = new NextRequest('http://localhost:3000/api/cron/tier-aware', {
+      const request = new NextRequest('http://localhost:3000/api/cron?action=tier-aware', {
         headers: {
           'authorization': 'Bearer test-secret'
         }
