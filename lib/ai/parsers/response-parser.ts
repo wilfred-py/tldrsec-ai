@@ -13,6 +13,7 @@ import { parseJSONResponse, ParseResult as SimpleParseResult } from './simple-pa
 import { normalizeDate, normalizeCurrency, normalizePercentage } from './normalizers';
 import { SECFilingType } from '../prompts/prompt-types';
 import { secLogger as logger } from '../../../utils/logger';
+import { canonicalizeFormType } from '../utils/form-type-utils';
 import { jsonParsingMonitor } from '../../monitoring/json-parsing-monitor';
 import {
   normalizeTransaction as centralNormalizeTx,
@@ -92,29 +93,33 @@ function normalizeFields(data: unknown, filingType: SECFilingType): unknown {
   if (!data || typeof data !== 'object') {
     return data;
   }
-  
+
   const dataObj = data as Record<string, unknown>;
-  
+
   const normalized = { ...dataObj };
-  
+
   // Normalize common fields regardless of filing type
   if (normalized.filingDate && typeof normalized.filingDate === 'string') {
     normalized.filingDate = normalizeDate(normalized.filingDate);
   }
-  
+
   if (normalized.reportDate && typeof normalized.reportDate === 'string') {
     normalized.reportDate = normalizeDate(normalized.reportDate);
   }
-  
+
   if (normalized.period && typeof normalized.period === 'string') {
     // Only normalize if it contains a date-like string
     if (/\d{4}/.test(normalized.period)) {
       normalized.period = normalizeDate(normalized.period);
     }
   }
-  
-  // Normalize filing-specific fields
-  switch (filingType as string) {
+
+  // Canonicalize form type: '10-K/A' -> '10-K', 'SCHEDULE 13G' -> 'SC 13G', etc.
+  // This ensures amendments and alternate names route to the correct normalization branch.
+  const { type: canonicalType } = canonicalizeFormType(filingType);
+
+  // Normalize filing-specific fields using the canonical type
+  switch (canonicalType) {
     case '10-K':
     case '10-Q':
     case '20-F':
@@ -148,9 +153,46 @@ function normalizeFields(data: unknown, filingType: SECFilingType): unknown {
       break;
     }
       
-    case '8-K':
-      // No specific fields that need normalization
+    case '8-K': {
+      // Normalize sentiment to lowercase enum values
+      if (typeof normalized.sentiment === 'string') {
+        const sentimentLower = normalized.sentiment.toLowerCase().trim();
+        const validSentiments = ['positive', 'negative', 'neutral', 'mixed'];
+        normalized.sentiment = validSentiments.includes(sentimentLower) ? sentimentLower : 'neutral';
+      }
+
+      // Normalize itemNumbers to array format
+      if (normalized.itemNumbers && !Array.isArray(normalized.itemNumbers)) {
+        normalized.itemNumbers = [String(normalized.itemNumbers)];
+      }
+
+      // Derive eventType from itemNumbers if missing
+      if (!normalized.eventType && Array.isArray(normalized.itemNumbers) && normalized.itemNumbers.length > 0) {
+        const itemDescriptions: Record<string, string> = {
+          '1.01': 'Entry into Material Agreement',
+          '1.02': 'Termination of Material Agreement',
+          '1.03': 'Bankruptcy',
+          '1.05': 'Cybersecurity Incident',
+          '2.01': 'Acquisition/Disposition of Assets',
+          '2.02': 'Results of Operations',
+          '2.06': 'Material Impairment',
+          '4.01': 'Auditor Change',
+          '4.02': 'Restatement',
+          '5.02': 'Executive Departure/Appointment',
+          '7.01': 'Regulation FD Disclosure',
+          '8.01': 'Other Events',
+        };
+        const firstItem = String(normalized.itemNumbers[0]);
+        normalized.eventType = itemDescriptions[firstItem] || `Item ${firstItem}`;
+      }
+
+      // Normalize positiveDevelopments to array (can be string OR array from AI)
+      if (typeof normalized.positiveDevelopments === 'string') {
+        normalized.positiveDevelopments = [normalized.positiveDevelopments];
+      }
+
       break;
+    }
       
     case '3' as SECFilingType:
     case '4' as SECFilingType:
