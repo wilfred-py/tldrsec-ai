@@ -230,7 +230,7 @@ export default function UserProfileSection({ user, subscriptionTier = 'FREE', ti
               <div>
                 <h3 className="font-semibold capitalize">{subscriptionTier.toLowerCase()}</h3>
                 <p className="text-sm">
-                  {subscriptionTier === 'FREE' ? '$0/month' : subscriptionTier === 'PRO' ? '$29/month' : '$199/month'}
+                  {subscriptionTier === 'FREE' ? '$0/month' : subscriptionTier === 'PRO' ? '$199/month' : '$349/month'}
                 </p>
               </div>
               <span className="inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold bg-blue-100 text-blue-800 border-blue-200">

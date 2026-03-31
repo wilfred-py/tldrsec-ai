@@ -55,9 +55,10 @@ interface DashboardClientProps {
   summaryCountThisMonth?: number;
   summaryCountTotal?: number;
   recentSummaries?: ActivitySummary[];
+  featuredSummaries?: ActivitySummary[];
 }
 
-export function DashboardClient({ showWelcome: _showWelcome = false, shouldMergePending: _shouldMergePending = false, subscriptionSuccess = false, initialCompanies = [], tutorialCompleted = false, subscriptionTier = 'FREE', tickerLimit = 3, summaryCountThisMonth = 0, summaryCountTotal = 0, recentSummaries = [] }: DashboardClientProps) {
+export function DashboardClient({ showWelcome: _showWelcome = false, shouldMergePending: _shouldMergePending = false, subscriptionSuccess = false, initialCompanies = [], tutorialCompleted = false, subscriptionTier = 'FREE', tickerLimit = 3, summaryCountThisMonth = 0, summaryCountTotal = 0, recentSummaries = [], featuredSummaries = [] }: DashboardClientProps) {
   // State for tracked companies
   const [companies, setCompanies] = useState<Company[]>(initialCompanies);
   const [currentCompany, setCurrentCompany] = useState<Company | null>(null);
@@ -382,7 +383,7 @@ export function DashboardClient({ showWelcome: _showWelcome = false, shouldMerge
 
         <TabsContent value="activity">
           <div className="landing-card">
-            <ActivityFeed summaries={recentSummaries} />
+            <ActivityFeed summaries={recentSummaries} featuredSummaries={featuredSummaries} />
           </div>
         </TabsContent>
 
