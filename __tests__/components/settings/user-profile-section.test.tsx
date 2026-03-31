@@ -31,7 +31,7 @@ describe('UserProfileSection', () => {
     render(<UserProfileSection user={mockUser} subscriptionTier="PRO" tickerCount={10} />);
 
     expect(screen.getByText('pro')).toBeInTheDocument();
-    expect(screen.getByText('$29/month')).toBeInTheDocument();
+    expect(screen.getByText('$199/month')).toBeInTheDocument();
     expect(screen.getByText(/Tracking 10 companies/)).toBeInTheDocument();
   });
 
