@@ -4,12 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { FileTextIcon, ChevronDown, ChevronUp } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+// Card wrappers removed — ActivityFeed is rendered inside a landing-card container
 import { formatDistanceToNow } from "date-fns";
 
 export interface ActivitySummary {
@@ -345,14 +340,12 @@ export function ActivityFeed({ summaries, featuredSummaries = [] }: ActivityFeed
   const featuredGrouped = showFeatured ? groupSummaries(featuredSummaries) : [];
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2 text-sm font-medium">
-          <FileTextIcon className="h-4 w-4 text-muted-foreground" />
-          {showFeatured ? "Featured Filings" : "Recent Activity"}
-        </CardTitle>
-      </CardHeader>
-      <CardContent>
+    <div>
+      <div className="flex items-center gap-2 text-sm font-medium mb-4">
+        <FileTextIcon className="h-4 w-4 text-muted-foreground" />
+        {showFeatured ? "Featured Filings" : "Recent Activity"}
+      </div>
+      <div>
         {showFeatured ? (
           <>
             <p className="text-sm text-muted-foreground mb-4">
@@ -408,7 +401,7 @@ export function ActivityFeed({ summaries, featuredSummaries = [] }: ActivityFeed
             })}
           </div>
         )}
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   );
 }
