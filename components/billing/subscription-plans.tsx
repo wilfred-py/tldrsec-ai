@@ -1,6 +1,6 @@
 /**
  * Subscription Plans Component
- * Fresh implementation for Stripe subscription plans display
+ * Displays Pro and Max plans with 7-day free trial
  */
 
 'use client';
@@ -10,7 +10,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { CheckCircle, Loader2, CreditCard } from 'lucide-react';
-import { getAllPlans, type PlanType } from '@/lib/stripe/plans';
+import { SUBSCRIPTION_PLANS, type PlanType } from '@/lib/stripe/plans';
 
 interface SubscriptionPlansProps {
   currentPlan?: PlanType | null;
@@ -18,17 +18,19 @@ interface SubscriptionPlansProps {
   loading?: boolean;
 }
 
-export function SubscriptionPlans({ 
-  currentPlan, 
-  onSubscribe, 
-  loading = false 
+// Only show paid plans (PRO and MAX)
+const PAID_PLANS: PlanType[] = ['PRO', 'MAX'];
+
+export function SubscriptionPlans({
+  currentPlan,
+  onSubscribe,
+  loading = false
 }: SubscriptionPlansProps) {
   const [selectedPlan, setSelectedPlan] = useState<PlanType | null>(null);
-  const plans = getAllPlans();
 
   const handleSubscribe = async (planType: PlanType, priceId: string) => {
     if (!onSubscribe || loading) return;
-    
+
     setSelectedPlan(planType);
     try {
       await onSubscribe(planType, priceId);
@@ -41,15 +43,6 @@ export function SubscriptionPlans({
     return loading || selectedPlan === planType;
   };
 
-  const getPlanPrice = (planType: PlanType) => {
-    const prices = {
-      BASIC: '$9',
-      PROFESSIONAL: '$29',
-      MAX: '$139',
-    };
-    return prices[planType];
-  };
-
   const isCurrentPlan = (planType: PlanType) => {
     return currentPlan === planType;
   };
@@ -58,20 +51,21 @@ export function SubscriptionPlans({
     if (isCurrentPlan(planType)) {
       return 'Current Plan';
     }
-    return currentPlan ? 'Switch Plan' : 'Get Started';
+    return currentPlan && currentPlan !== 'FREE' ? 'Switch Plan' : 'Start Free Trial';
   };
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 py-8">
-      {Object.entries(plans).map(([planKey, plan]) => {
-        const planType = planKey as PlanType;
-        const isRecommended = planType === 'PROFESSIONAL';
-        const isCurrent = isCurrentPlan(planType);
-        const planLoading = isPlanLoading(planType);
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 py-8 max-w-3xl mx-auto">
+      {PAID_PLANS.map((planKey) => {
+        const plan = SUBSCRIPTION_PLANS[planKey];
+        const isRecommended = planKey === 'PRO';
+        const isCurrent = isCurrentPlan(planKey);
+        const planLoading = isPlanLoading(planKey);
+        const priceId = plan.monthlyPriceId;
 
         return (
-          <Card 
-            key={planKey} 
+          <Card
+            key={planKey}
             className={`relative ${
               isRecommended ? 'border-blue-500 shadow-lg scale-105' : ''
             } ${isCurrent ? 'border-green-500' : ''}`}
@@ -95,11 +89,11 @@ export function SubscriptionPlans({
             <CardHeader className="text-center">
               <CardTitle className="text-2xl">{plan.name}</CardTitle>
               <CardDescription className="text-3xl font-bold">
-                {getPlanPrice(planType)}
+                ${plan.monthlyPrice}
                 <span className="text-base font-normal text-gray-500">/month</span>
               </CardDescription>
               <p className="text-sm text-gray-600 mt-2">
-                {plan.monthlyFilings} filings per month
+                7-day free trial
               </p>
             </CardHeader>
 
@@ -108,7 +102,7 @@ export function SubscriptionPlans({
                 {plan.features.map((feature, index) => (
                   <div key={index} className="flex items-start gap-2">
                     <CheckCircle className="h-4 w-4 text-green-500 mt-0.5 flex-shrink-0" />
-                    <span className="text-sm">{feature}</span>
+                    <span className="text-sm">{feature.replace(/\*\*/g, '')}</span>
                   </div>
                 ))}
               </div>
@@ -116,8 +110,8 @@ export function SubscriptionPlans({
               <Button
                 className="w-full"
                 variant={isCurrent ? "outline" : "default"}
-                disabled={isCurrent || planLoading || !plan.priceId}
-                onClick={() => handleSubscribe(planType, plan.priceId)}
+                disabled={isCurrent || planLoading || !priceId}
+                onClick={() => priceId && handleSubscribe(planKey, priceId)}
               >
                 {planLoading && (
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
@@ -125,10 +119,10 @@ export function SubscriptionPlans({
                 {!planLoading && !isCurrent && (
                   <CreditCard className="h-4 w-4 mr-2" />
                 )}
-                {getButtonText(planType)}
+                {getButtonText(planKey)}
               </Button>
 
-              {!plan.priceId && (
+              {!priceId && (
                 <p className="text-xs text-orange-600 text-center">
                   Price not configured
                 </p>

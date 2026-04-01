@@ -46,25 +46,25 @@ interface UsageAnalytics {
 
 const TIER_CONFIG = {
   basic: {
-    name: 'Basic',
+    name: 'Free Trial',
     color: 'bg-blue-500',
     badgeVariant: 'default' as const,
-    optimizationLevel: 'Balanced (85% reduction)',
-    price: '$9/month'
+    optimizationLevel: '7-day free trial',
+    price: '$0/month'
   },
   professional: {
-    name: 'Professional', 
+    name: 'Pro',
     color: 'bg-purple-500',
     badgeVariant: 'secondary' as const,
-    optimizationLevel: 'Conservative (67% reduction)',
-    price: '$29/month'
+    optimizationLevel: '25 companies',
+    price: '$199/month'
   },
   premium: {
-    name: 'Premium',
-    color: 'bg-orange-500', 
+    name: 'Max',
+    color: 'bg-orange-500',
     badgeVariant: 'destructive' as const,
-    optimizationLevel: 'Minimal (55% reduction)',
-    price: '$99/month'
+    optimizationLevel: 'Unlimited companies',
+    price: '$349/month'
   }
 };
 

@@ -8,34 +8,35 @@ import { useAuthContext } from '@/lib/context/auth-context';
 
 const pricingPlans = [
   {
-    name: "Basic",
-    price: "$9",
+    name: "Pro",
+    price: "$199",
     period: "per month",
-    description: "Perfect for individual investors tracking a few companies.",
+    description: "For investors who track a focused portfolio.",
     features: [
-      "Up to 5 ticker subscriptions",
-      "Email summaries of SEC filings",
-      "10-K, 10-Q, and 8-K coverage",
-      "Basic summary format",
-      "24-hour delivery window"
+      "Up to 25 companies",
+      "Real-time email alerts",
+      "All SEC filing types (10-K, 10-Q, 8-K, Form 4, Form 144)",
+      "Priority processing queue",
+      "7-day free trial"
     ],
-    cta: "Get Started",
+    cta: "Start Free Trial",
     ctaAuth: "Go to Dashboard",
     highlighted: false
   },
   {
-    name: "Premium",
-    price: "$29",
+    name: "Max",
+    price: "$349",
     period: "per month",
-    description: "Ideal for active investors who need comprehensive insights.",
+    description: "For professionals who need unlimited coverage.",
     features: [
-      "Unlimited ticker subscriptions",
-      "Delivery within minutes of SEC filing",
-      "All SEC filing types covered",
-      "Enhanced summary format with insights",
-      "Real-time delivery (within minutes)"
+      "Unlimited companies",
+      "Real-time email alerts",
+      "All SEC filing types (10-K, 10-Q, 8-K, Form 4, Form 144)",
+      "First priority processing queue",
+      "Dedicated support",
+      "7-day free trial"
     ],
-    cta: "Get Started",
+    cta: "Start Free Trial",
     ctaAuth: "Go to Dashboard",
     highlighted: true
   }

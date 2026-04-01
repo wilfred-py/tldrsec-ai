@@ -169,6 +169,155 @@ export async function sendTrialExpirationEmail(
   trialEmailLogger.info('Trial expiration email sent', { userId });
 }
 
+// --- Trial Nurture: Day 3 "What You'd Miss" ---
+
+interface TrialDay3Params extends TrialEmailParams {
+  summaryCount: number;
+}
+
+/**
+ * Day 3: Show what they'd miss without tldrSEC.
+ * Reinforce the status quo pain of reading filings manually.
+ */
+export async function sendTrialDay3Email(
+  params: TrialDay3Params
+): Promise<void> {
+  const { email, userId, summaryCount } = params;
+
+  const summaryLine = summaryCount > 0
+    ? `In the last 3 days, we've delivered <strong>${summaryCount} filing ${summaryCount === 1 ? 'summary' : 'summaries'}</strong> to your inbox.`
+    : `We're watching your tickers around the clock. As soon as new filings hit EDGAR, you'll get a summary.`;
+
+  const message: EmailMessage = {
+    to: email,
+    subject: 'what you would have missed this week',
+    html: `
+      <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+        <h1 style="color: #1a1a2e; font-size: 24px;">What you'd miss without tldrSEC</h1>
+        <p style="color: #4a4a5a; font-size: 16px; line-height: 1.6;">
+          ${summaryLine}
+        </p>
+        <p style="color: #4a4a5a; font-size: 16px; line-height: 1.6;">
+          Without tldrSEC, each of those filings would mean opening EDGAR, finding the document, reading 20-100 pages, and figuring out what actually matters. That's hours of work per filing.
+        </p>
+        <p style="color: #4a4a5a; font-size: 16px; line-height: 1.6;">
+          With tldrSEC, you get the key takeaways in your inbox within 10 minutes. No EDGAR, no PDFs, no guesswork.
+        </p>
+        <div style="text-align: center; margin: 30px 0;">
+          <a href="${APP_URL}/dashboard" style="background-color: #2563eb; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: 600; font-size: 16px;">
+            View Your Dashboard
+          </a>
+        </div>
+      </div>
+    `,
+    text: `What you'd miss without tldrSEC. ${summaryCount > 0 ? `We've delivered ${summaryCount} summaries in 3 days.` : "We're watching your tickers."} Without tldrSEC, each filing means hours on EDGAR. With us, key takeaways in 10 minutes. Visit ${APP_URL}/dashboard.`,
+    tags: ['type:trial-nurture-day3'],
+  };
+
+  const result = await sendEmail(message);
+  if (!result.success) {
+    trialEmailLogger.error('Failed to send trial day 3 email', { userId, error: result.error?.message });
+    throw new Error(result.error?.message || 'Failed to send trial day 3 email');
+  }
+  trialEmailLogger.info('Trial day 3 email sent', { userId, summaryCount });
+}
+
+// --- Trial Nurture: Day 4 "Trial Ending Soon" ---
+
+interface TrialDay4Params extends TrialEmailParams {
+  summaryCount: number;
+  trialEndsAt: Date;
+}
+
+/**
+ * Day 4: Trial ending soon. Show hours saved + filing count.
+ * Create urgency with concrete value delivered.
+ */
+export async function sendTrialDay4Email(
+  params: TrialDay4Params
+): Promise<void> {
+  const { email, userId, summaryCount, trialEndsAt } = params;
+  const hoursSaved = Math.round(summaryCount * 1.5 * 10) / 10; // 1.5 hrs avg per filing
+
+  const message: EmailMessage = {
+    to: email,
+    subject: `your trial ends ${trialEndsAt.toLocaleDateString('en-US', { weekday: 'long' })}`,
+    html: `
+      <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+        <h1 style="color: #1a1a2e; font-size: 24px;">Your trial ends in 3 days</h1>
+
+        <div style="background: #f0fdf4; border-radius: 8px; padding: 20px; margin: 20px 0; text-align: center;">
+          <p style="color: #16a34a; font-size: 28px; font-weight: 700; margin: 0;">${summaryCount} filings</p>
+          <p style="color: #4a4a5a; font-size: 14px; margin: 4px 0 0;">summarized &middot; ~${hoursSaved} hours saved</p>
+        </div>
+
+        <p style="color: #4a4a5a; font-size: 16px; line-height: 1.6;">
+          That's what tldrSEC has done for you since you signed up. After ${trialEndsAt.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}, you'll stop receiving filing summaries unless you upgrade.
+        </p>
+        <div style="text-align: center; margin: 30px 0;">
+          <a href="${APP_URL}/subscribe" style="background-color: #f59e0b; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: 600; font-size: 16px;">
+            Keep My Summaries
+          </a>
+        </div>
+        <p style="color: #9a9aaa; font-size: 14px;">
+          Plans start at $199/month. Cancel anytime.
+        </p>
+      </div>
+    `,
+    text: `Your trial ends in 3 days. So far: ${summaryCount} filings summarized, ~${hoursSaved} hours saved. After ${trialEndsAt.toLocaleDateString()}, you'll stop receiving summaries. Upgrade at ${APP_URL}/subscribe. Plans start at $199/month.`,
+    tags: ['type:trial-nurture-day4'],
+  };
+
+  const result = await sendEmail(message);
+  if (!result.success) {
+    trialEmailLogger.error('Failed to send trial day 4 email', { userId, error: result.error?.message });
+    throw new Error(result.error?.message || 'Failed to send trial day 4 email');
+  }
+  trialEmailLogger.info('Trial day 4 email sent', { userId, summaryCount, hoursSaved });
+}
+
+// --- Trial Nurture: Day 6 "Last Day" ---
+
+/**
+ * Day 6: Last day. Short, direct, no fluff.
+ * "Tomorrow you go back to reading filings manually."
+ */
+export async function sendTrialDay6Email(
+  params: TrialEmailParams
+): Promise<void> {
+  const { email, userId } = params;
+
+  const message: EmailMessage = {
+    to: email,
+    subject: 'last day of your tldrSEC trial',
+    html: `
+      <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+        <h1 style="color: #1a1a2e; font-size: 24px;">Tomorrow you go back to reading filings manually.</h1>
+        <p style="color: #4a4a5a; font-size: 16px; line-height: 1.6;">
+          Your trial ends tomorrow. After that, no more AI summaries, no more instant alerts, no more skipping the 50-page 10-Ks.
+        </p>
+        <div style="text-align: center; margin: 30px 0;">
+          <a href="${APP_URL}/subscribe" style="background-color: #dc2626; color: white; padding: 14px 32px; text-decoration: none; border-radius: 6px; font-weight: 600; font-size: 16px;">
+            Upgrade Now
+          </a>
+        </div>
+        <p style="color: #9a9aaa; font-size: 14px; text-align: center;">
+          $199/month &middot; Cancel anytime &middot; All filing types included
+        </p>
+      </div>
+    `,
+    text: `Tomorrow you go back to reading filings manually. Your trial ends tomorrow. No more AI summaries, no more instant alerts. Upgrade at ${APP_URL}/subscribe. $199/month, cancel anytime.`,
+    tags: ['type:trial-nurture-day6'],
+  };
+
+  const result = await sendEmail(message);
+  if (!result.success) {
+    trialEmailLogger.error('Failed to send trial day 6 email', { userId, error: result.error?.message });
+    throw new Error(result.error?.message || 'Failed to send trial day 6 email');
+  }
+  trialEmailLogger.info('Trial day 6 email sent', { userId });
+}
+
 // --- Checkout Reminder (Q3) ---
 
 interface CheckoutReminderParams {

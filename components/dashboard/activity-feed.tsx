@@ -26,6 +26,7 @@ export interface ActivitySummary {
 
 interface ActivityFeedProps {
   summaries: ActivitySummary[];
+  featuredSummaries?: ActivitySummary[];
 }
 
 const IMPORTANCE_BORDER: Record<string, string> = {
@@ -338,19 +339,48 @@ function Form4GroupCard({ group }: { group: Form4Group }) {
   );
 }
 
-export function ActivityFeed({ summaries }: ActivityFeedProps) {
+export function ActivityFeed({ summaries, featuredSummaries = [] }: ActivityFeedProps) {
   const grouped = groupSummaries(summaries);
+  const showFeatured = grouped.length === 0 && featuredSummaries.length > 0;
+  const featuredGrouped = showFeatured ? groupSummaries(featuredSummaries) : [];
 
   return (
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-sm font-medium">
           <FileTextIcon className="h-4 w-4 text-muted-foreground" />
-          Recent Activity
+          {showFeatured ? "Featured Filings" : "Recent Activity"}
         </CardTitle>
       </CardHeader>
       <CardContent>
-        {grouped.length === 0 ? (
+        {showFeatured ? (
+          <>
+            <p className="text-sm text-muted-foreground mb-4">
+              Here&apos;s what our AI does with real SEC filings. Your personalized summaries will appear here as new filings come in for your tracked companies.
+            </p>
+            <div className="space-y-5">
+              {featuredGrouped.map((group) => {
+                const processedItems = groupForm4s(group.items);
+                return (
+                  <div key={group.label}>
+                    <h4 className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                      {group.label}
+                    </h4>
+                    <div className="space-y-1">
+                      {processedItems.map((item) =>
+                        isForm4Group(item) ? (
+                          <Form4GroupCard key={item.key} group={item} />
+                        ) : (
+                          <FeedCard key={item.id} summary={item} />
+                        )
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </>
+        ) : grouped.length === 0 ? (
           <p className="text-sm text-muted-foreground">
             Your first summaries are on the way! We&apos;ll email you when
             filings come in.
