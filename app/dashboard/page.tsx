@@ -63,24 +63,36 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
         tutorialCompleted = dbUser.tutorialCompletedAt != null;
         subscriptionTier = (dbUser.subscriptionTier as 'FREE' | 'PRO' | 'MAX') || 'FREE';
 
-        // Fetch recent summaries for activity feed (across all tickers)
+        // Fetch recent summaries + counts in parallel (all depend on tickerIds)
         const tickerIds = dbUser.tickers.map(t => t.id);
         if (tickerIds.length > 0) {
-          const summaries = await prisma.summary.findMany({
-            where: { tickerId: { in: tickerIds } },
-            select: {
-              id: true,
-              filingType: true,
-              filingDate: true,
-              importance: true,
-              smartSubject: true,
-              summaryText: true,
-              filingUrl: true,
-              ticker: { select: { symbol: true, companyName: true } },
-            },
-            orderBy: { filingDate: 'desc' },
-            take: 50,
-          });
+          const now = new Date();
+          const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+
+          const [summaries, countThisMonth, countTotal] = await Promise.all([
+            prisma.summary.findMany({
+              where: { tickerId: { in: tickerIds } },
+              select: {
+                id: true,
+                filingType: true,
+                filingDate: true,
+                importance: true,
+                smartSubject: true,
+                summaryText: true,
+                filingUrl: true,
+                ticker: { select: { symbol: true, companyName: true } },
+              },
+              orderBy: { filingDate: 'desc' },
+              take: 50,
+            }),
+            prisma.summary.count({
+              where: { tickerId: { in: tickerIds }, filingDate: { gte: startOfMonth } },
+            }),
+            prisma.summary.count({
+              where: { tickerId: { in: tickerIds } },
+            }),
+          ]);
+
           recentSummaries = summaries.map(s => ({
             id: s.id,
             filingType: s.filingType,
@@ -92,18 +104,6 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
             ticker: s.ticker.symbol,
             filingUrl: s.filingUrl,
           }));
-
-          // Compute summary counts for Time Saved widget
-          const now = new Date();
-          const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-          const [countThisMonth, countTotal] = await Promise.all([
-            prisma.summary.count({
-              where: { tickerId: { in: tickerIds }, filingDate: { gte: startOfMonth } },
-            }),
-            prisma.summary.count({
-              where: { tickerId: { in: tickerIds } },
-            }),
-          ]);
           summaryCountThisMonth = countThisMonth;
           summaryCountTotal = countTotal;
         }
