@@ -1,14 +1,12 @@
 import { currentUser } from '@clerk/nextjs/server';
 import { redirect, notFound } from 'next/navigation';
-import { prisma } from '@/lib/db';
+import { getPrismaClient } from '@/lib/db';
 import { formatDistanceToNow, format } from 'date-fns';
 import { ArrowLeft, ChevronRight } from 'lucide-react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { checkSummaryAccess, AccessDeniedError, ResourceNotFoundError } from '@/lib/auth/access-control';
 import { SummaryContent } from '@/components/summary/summary-content';
-import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
-import { AlertCircle } from 'lucide-react';
 import { getSecFilingViewerUrl } from '@/lib/email/url-utils';
 import {
   Breadcrumb,
@@ -69,9 +67,11 @@ export default async function SummaryPage({ params }: SummaryPageProps) {
   }
 
   try {
-    // Check if user has access to this summary
+    // Check if user is authenticated and summary exists
     await checkSummaryAccess(resolvedParams.id);
-  
+
+    const prisma = getPrismaClient();
+
     // Fetch summary with ticker information
     const summary = await prisma.summary.findUnique({
       where: { 
@@ -156,67 +156,9 @@ export default async function SummaryPage({ params }: SummaryPageProps) {
     }
     
     if (error instanceof AccessDeniedError) {
-      // Render access denied view
-      return (
-        <div className="min-h-screen flex flex-col" style={{ backgroundColor: 'var(--landing-bg)' }}>
-          <main className="flex-1" style={{ backgroundColor: 'var(--landing-bg)' }}>
-            <div className="container max-w-7xl mx-auto py-8 md:py-10 px-6 md:px-8 space-y-6">
-              <Breadcrumb className="mb-4">
-                <BreadcrumbList>
-                  <BreadcrumbItem>
-                    <BreadcrumbLink href="/dashboard">Dashboard</BreadcrumbLink>
-                  </BreadcrumbItem>
-                  <BreadcrumbSeparator>
-                    <ChevronRight className="h-4 w-4" />
-                  </BreadcrumbSeparator>
-                  <BreadcrumbItem>
-                    <BreadcrumbPage>Access Denied</BreadcrumbPage>
-                  </BreadcrumbItem>
-                </BreadcrumbList>
-              </Breadcrumb>
-
-              <div className="flex items-center space-x-2 mb-6">
-                <Link href="/dashboard">
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    aria-label="Back to dashboard"
-                  >
-                    <ArrowLeft className="h-4 w-4" aria-hidden="true" />
-                    <span className="sr-only">Back to dashboard</span>
-                  </Button>
-                </Link>
-                <h1 className="text-2xl font-bold">Summary Access Denied</h1>
-              </div>
-
-              <Alert variant="destructive" className="mb-6" role="alert">
-                <AlertCircle className="h-4 w-4" aria-label="Access denied indicator" />
-                <AlertTitle>Access Denied</AlertTitle>
-                <AlertDescription>
-                  You don&apos;t have permission to view this summary. To view summaries for a company, you must add its ticker to your watchlist.
-                </AlertDescription>
-              </Alert>
-
-              <div className="landing-card p-6">
-                <div className="text-center">
-                  <h2 className="text-xl font-semibold mb-4">Want to see this summary?</h2>
-                  <p className="mb-6">Add this company&apos;s ticker to your watchlist to gain access to all of its summaries.</p>
-                  <Link href="/dashboard">
-                    <Button
-                      className="focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-                      aria-label="Go to dashboard to add this company"
-                    >
-                      Go to Dashboard
-                    </Button>
-                  </Link>
-                </div>
-              </div>
-            </div>
-          </main>
-        </div>
-      );
+      redirect('/sign-in');
     }
-    
+
     // For other errors, redirect to an error page
     redirect('/error');
   }

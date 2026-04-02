@@ -364,7 +364,7 @@ export function DashboardClient({ showWelcome: _showWelcome = false, shouldMerge
           />
         </div>
         <div className="md:col-span-2 flex items-center">
-          <div className="landing-card w-full p-4">
+          <div className="landing-card w-full p-4 hover:shadow-[0_1px_3px_0_rgba(0,0,0,0.1)] hover:border-[var(--landing-border)]">
             <div className="flex items-center gap-4 text-sm text-muted-foreground">
               <span><strong className="text-foreground">{companies.length}</strong> tickers tracked</span>
               <span><strong className="text-foreground">{recentSummaries.length}</strong> recent summaries</span>
@@ -376,19 +376,19 @@ export function DashboardClient({ showWelcome: _showWelcome = false, shouldMerge
 
       {/* Tabs: Activity / Tickers */}
       <Tabs defaultValue="activity" className="w-full">
-        <TabsList className="mb-4">
-          <TabsTrigger value="activity">Activity</TabsTrigger>
-          <TabsTrigger value="tickers">Tickers</TabsTrigger>
+        <TabsList className="mb-4 bg-muted border border-border rounded-lg p-1">
+          <TabsTrigger value="activity" className="data-[state=active]:bg-background data-[state=active]:shadow-sm data-[state=inactive]:text-muted-foreground px-4 py-1.5 text-sm font-medium rounded-md">Activity</TabsTrigger>
+          <TabsTrigger value="tickers" className="data-[state=active]:bg-background data-[state=active]:shadow-sm data-[state=inactive]:text-muted-foreground px-4 py-1.5 text-sm font-medium rounded-md">Tickers</TabsTrigger>
         </TabsList>
 
         <TabsContent value="activity">
-          <div className="landing-card">
+          <div className="landing-card hover:shadow-[0_1px_3px_0_rgba(0,0,0,0.1)] hover:border-[var(--landing-border)]">
             <ActivityFeed summaries={recentSummaries} featuredSummaries={featuredSummaries} />
           </div>
         </TabsContent>
 
         <TabsContent value="tickers">
-      <div className="landing-card">
+      <div className="landing-card hover:shadow-[0_1px_3px_0_rgba(0,0,0,0.1)] hover:border-[var(--landing-border)]">
         <div className="mb-6">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div className="text-left">
