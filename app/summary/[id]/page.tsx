@@ -166,6 +166,9 @@ export default async function SummaryPage({ params }: SummaryPageProps) {
       redirect('/sign-in');
     }
 
+    // Log the error server-side before rendering the friendly card
+    console.error('SummaryPage error:', error);
+
     // Render inline error card instead of redirecting to nonexistent /error page
     return (
       <div className="min-h-screen flex flex-col" style={{ backgroundColor: 'var(--landing-bg)' }}>

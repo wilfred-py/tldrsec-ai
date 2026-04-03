@@ -417,7 +417,7 @@ export function ActivityFeed({ summaries, featuredSummaries = [] }: ActivityFeed
                   onClick={() => setShowAll(true)}
                   className="text-muted-foreground"
                 >
-                  Show {summaries.length - INITIAL_VISIBLE} more summaries
+                  Show all summaries
                 </Button>
               </div>
             )}
