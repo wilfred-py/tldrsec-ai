@@ -2,6 +2,7 @@
 
 import { SignUp } from "@clerk/nextjs";
 import { useState, useEffect, useRef, useCallback } from "react";
+import { useSearchParams } from "next/navigation";
 
 function SkeletonBar({ className }: { className?: string }) {
   return (
@@ -57,6 +58,19 @@ function SignUpSkeleton() {
 export default function SignUpPage() {
   const [clerkLoaded, setClerkLoaded] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+  const searchParams = useSearchParams();
+
+  // Capture plan intent from campaign emails (e.g., ?plan=pro&ref=campaign)
+  useEffect(() => {
+    const plan = searchParams.get('plan');
+    const ref = searchParams.get('ref');
+    if (plan) {
+      document.cookie = `signup_plan=${plan};path=/;max-age=3600;SameSite=Lax`;
+    }
+    if (ref) {
+      document.cookie = `signup_ref=${ref};path=/;max-age=3600;SameSite=Lax`;
+    }
+  }, [searchParams]);
 
   const checkClerkContent = useCallback(() => {
     const el = containerRef.current;
