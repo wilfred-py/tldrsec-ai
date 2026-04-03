@@ -415,9 +415,9 @@ const curatedSummaries: EmailSummary[] = [
  * Trust metrics displayed in the hero section
  */
 const trustMetrics = [
-  { value: '2,500+', label: 'investors' },
+  { value: '10 min', label: 'filing-to-inbox' },
   { value: '99.9%', label: 'uptime' },
-  { value: '<5 min', label: 'delivery' },
+  { value: '5 types', label: 'of SEC filings' },
 ];
 
 /**
@@ -966,7 +966,7 @@ export const GmailInboxHero = memo<GmailInboxHeroProps>(({ className = '', heroR
   // Extract caption logic for clarity
   const getCaptionText = () => {
     if (isSignedIn && !isOnboarded) return 'Just one more step!';
-    if (!isSignedIn) return 'No credit card required. Cancel anytime.';
+    if (!isSignedIn) return '7-day free trial. Cancel anytime.';
     return ''; // Authenticated and onboarded users see no caption
   };
 

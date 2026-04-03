@@ -375,7 +375,7 @@ export function DashboardClient({ showWelcome: _showWelcome = false, shouldMerge
       </div>
 
       {/* Tabs: Activity / Tickers */}
-      <Tabs defaultValue="activity" className="w-full">
+      <Tabs defaultValue={showTutorial ? "tickers" : "activity"} className="w-full">
         <TabsList className="mb-4 bg-muted border border-border rounded-lg p-1">
           <TabsTrigger value="activity" className="data-[state=active]:bg-background data-[state=active]:shadow-sm data-[state=inactive]:text-muted-foreground px-4 py-1.5 text-sm font-medium rounded-md">Activity</TabsTrigger>
           <TabsTrigger value="tickers" className="data-[state=active]:bg-background data-[state=active]:shadow-sm data-[state=inactive]:text-muted-foreground px-4 py-1.5 text-sm font-medium rounded-md">Tickers</TabsTrigger>
