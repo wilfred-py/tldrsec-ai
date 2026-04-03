@@ -11,15 +11,15 @@ import {
   meshGradientStyle,
 } from '@/lib/animations/landing-animations';
 import { HeroFilingCard } from './hero-filing-card';
+import { useAuth } from '@/contexts/auth-context';
 
 /**
  * Trust metrics displayed in the hero section
- * Quantified social proof to build credibility
  */
 const trustMetrics = [
-  { value: '2,500+', label: 'investors' },
+  { value: '10 min', label: 'filing-to-inbox' },
   { value: '99.9%', label: 'uptime' },
-  { value: '<5 min', label: 'delivery' },
+  { value: '5 types', label: 'of SEC filings' },
 ];
 
 /**
@@ -33,6 +33,12 @@ const trustMetrics = [
  * - Clear CTA hierarchy
  */
 export function HeroSectionV2() {
+  const { isSignedIn, isOnboarded } = useAuth();
+
+  // Unauthenticated: go to sign-up. Signed in but not onboarded: go to onboarding. Onboarded: go to dashboard.
+  const ctaHref = !isSignedIn ? '/sign-up' : !isOnboarded ? '/onboarding' : '/dashboard';
+  const ctaLabel = !isSignedIn ? 'Start Free Trial' : !isOnboarded ? 'Complete Setup' : 'Go to Dashboard';
+
   return (
     <section
       className="relative min-h-[100vh] flex items-center overflow-hidden"
@@ -126,9 +132,9 @@ export function HeroSectionV2() {
               variants={staggerItem}
               className="flex flex-col sm:flex-row items-center justify-center lg:justify-start gap-4 mb-6"
             >
-              <Link href="/onboarding">
+              <Link href={ctaHref}>
                 <Button className="landing-button-gradient">
-                  Start Free Trial
+                  {ctaLabel}
                   <ArrowRight className="w-5 h-5 ml-2" />
                 </Button>
               </Link>
@@ -144,7 +150,7 @@ export function HeroSectionV2() {
               variants={staggerItem}
               className="landing-caption"
             >
-              No credit card required. Cancel anytime.
+              7-day free trial. Cancel anytime.
             </motion.p>
           </motion.div>
 
