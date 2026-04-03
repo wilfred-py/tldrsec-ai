@@ -48,8 +48,8 @@ describe('GmailInboxHero', () => {
 
   it('shows metrics section', () => {
     render(<GmailInboxHero />);
-    expect(screen.getByText('2,500+')).toBeInTheDocument();
-    expect(screen.getByText('investors')).toBeInTheDocument();
+    expect(screen.getByText('10 min')).toBeInTheDocument();
+    expect(screen.getByText('filing-to-inbox')).toBeInTheDocument();
   });
 
   it('displays AI badge', () => {

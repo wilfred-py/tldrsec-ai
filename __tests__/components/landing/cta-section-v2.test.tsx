@@ -27,7 +27,7 @@ describe('CTASectionV2', () => {
 
   it('should display trust signals', () => {
     render(<CTASectionV2 />);
-    expect(screen.getByText(/No credit card/i)).toBeInTheDocument();
+    expect(screen.getByText(/7-day free trial/i)).toBeInTheDocument();
     expect(screen.getByText(/unlimited tickers/i)).toBeInTheDocument();
   });
 
