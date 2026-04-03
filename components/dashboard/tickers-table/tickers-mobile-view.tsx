@@ -57,7 +57,7 @@ export function TickersMobileView({
 
   // Always apply consistent layout to prevent shifts when paginating
   return (
-    <div className="min-h-[1550px] flex flex-col">
+    <div className="flex flex-col">
       <div className="space-y-3 flex-1">
         {/* Mobile Inline Add Card */}
         {showInlineAdd && (
