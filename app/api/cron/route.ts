@@ -29,6 +29,9 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 export const maxDuration = 300;
 
+// Module-level cooldown for pipeline stall alerts (resets on cold start, which is fine)
+let lastStallAlertSentAt = 0;
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -47,6 +50,7 @@ const GET_ACTIONS = [
 const POST_ACTIONS = [
   'cleanup-dlq',
   'update-daily-count',
+  'send-alert',
 ] as const;
 
 function missingActionResponse(method: string) {
@@ -112,6 +116,8 @@ export async function POST(request: NextRequest) {
       return handleCleanupDlq(request);
     case 'update-daily-count':
       return handleUpdateDailyCountPOST(request);
+    case 'send-alert':
+      return handleSendAlert(request);
     default:
       return missingActionResponse('POST');
   }
@@ -1422,6 +1428,58 @@ async function handleAutoRecover(request: NextRequest) {
     const health = await getPipelineHealth();
     const now = Date.now();
     const persistentState = await RecoveryStateService.getState();
+
+    // Pipeline stall detection: if no summaries created in 4+ hours during EDGAR open hours, send email alert
+    try {
+      const { isEdgarOpen } = await import('@/lib/cron/edgar-schedule');
+      if (isEdgarOpen()) {
+        const { getPrismaClient } = await import('@/lib/db/prisma');
+        const db = getPrismaClient();
+        const fourHoursAgo = new Date(now - 4 * 60 * 60 * 1000);
+        const recentSummaryCount = await db.summary.count({
+          where: { createdAt: { gte: fourHoursAgo } },
+        });
+        if (recentSummaryCount === 0) {
+          const alertCooldownMs = 4 * 60 * 60 * 1000;
+          if (now - lastStallAlertSentAt > alertCooldownMs) {
+            console.warn('[AutoRecover] PIPELINE STALL: No summaries created in 4+ hours during EDGAR open hours');
+            const alertEmail = process.env.ALERT_EMAIL_RECIPIENTS;
+            if (alertEmail) {
+              const { sendEmail } = await import('@/lib/email');
+              const esc = (s: unknown) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+              await sendEmail({
+                to: alertEmail.split(',').map((e: string) => e.trim()),
+                subject: '[CRITICAL] Pipeline Stall: No summaries in 4+ hours',
+                html: `
+                  <div style="font-family: sans-serif; max-width: 600px;">
+                    <h2 style="color: #dc2626;">Pipeline Stall Detected</h2>
+                    <p>No new summaries have been created in the last 4 hours during EDGAR open hours.</p>
+                    <table style="border-collapse: collapse; width: 100%;">
+                      <tr><td style="padding: 8px; border: 1px solid #e5e7eb; font-weight: bold;">Pipeline Status</td><td style="padding: 8px; border: 1px solid #e5e7eb;">${esc(health.status)}</td></tr>
+                      <tr><td style="padding: 8px; border: 1px solid #e5e7eb; font-weight: bold;">Minutes Since Last Completion</td><td style="padding: 8px; border: 1px solid #e5e7eb;">${esc(health.minutesSinceLastCompletion ?? 'unknown')}</td></tr>
+                      <tr><td style="padding: 8px; border: 1px solid #e5e7eb; font-weight: bold;">Pending Jobs</td><td style="padding: 8px; border: 1px solid #e5e7eb;">${esc(health.jobs.pending)}</td></tr>
+                      <tr><td style="padding: 8px; border: 1px solid #e5e7eb; font-weight: bold;">Dead Letter</td><td style="padding: 8px; border: 1px solid #e5e7eb;">${esc(health.jobs.deadLetter)}</td></tr>
+                      <tr><td style="padding: 8px; border: 1px solid #e5e7eb; font-weight: bold;">Time</td><td style="padding: 8px; border: 1px solid #e5e7eb;">${esc(new Date().toISOString())}</td></tr>
+                    </table>
+                    <p style="margin-top: 16px;">Check <a href="https://tldrsec.app/api/health?type=pipeline">pipeline health</a> and Cloudflare Worker logs.</p>
+                    <p style="color: #6b7280; font-size: 12px;">Sent by tldrsec.app auto-recovery</p>
+                  </div>
+                `,
+                text: `CRITICAL: No summaries created in 4+ hours. Pipeline status: ${health.status}. Pending: ${health.jobs.pending}. Dead letter: ${health.jobs.deadLetter}.`,
+                tags: [{ name: 'type', value: 'pipeline-stall' }],
+              });
+              lastStallAlertSentAt = now;
+              console.log('[AutoRecover] Pipeline stall alert email sent');
+            } else {
+              console.warn('[AutoRecover] ALERT_EMAIL_RECIPIENTS not set, cannot send stall alert');
+            }
+          }
+        }
+      }
+    } catch (stallCheckError) {
+      console.error('[AutoRecover] Stall detection check failed:', stallCheckError);
+    }
+
     const cleanupResults = await runImmediateCleanup(health);
 
     let cronGapCheck: CronGapCheckResult = { checked: false, gapsFound: 0, alerted: false };
@@ -2209,5 +2267,70 @@ async function handleUpdateDailyCountPOST(request: NextRequest) {
       },
       { status: 500 }
     );
+  }
+}
+
+// ===========================================================================
+// ACTION: send-alert
+// Email alert endpoint for Cloudflare Worker pipeline failure notifications
+// ===========================================================================
+
+async function handleSendAlert(request: NextRequest) {
+  const { logger } = await import('@/lib/logging');
+  const { CronAuthService } = await import('@/lib/cron/auth-service');
+  const alertLogger = logger.child('cron-send-alert');
+
+  try {
+    const authResult = await CronAuthService.validateCronRequest(request);
+    if (!authResult.isValid) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const body = await request.json();
+    const { handler, error: errorMessage, consecutiveFailures, executionId } = body;
+
+    if (typeof handler !== 'string' || typeof errorMessage !== 'string') {
+      return NextResponse.json({ error: 'Missing or invalid handler/error' }, { status: 400 });
+    }
+
+    const alertEmail = process.env.ALERT_EMAIL_RECIPIENTS;
+    if (!alertEmail) {
+      alertLogger.warn('ALERT_EMAIL_RECIPIENTS not set, skipping alert email');
+      return NextResponse.json({ success: false, error: 'No alert recipients configured' }, { status: 200 });
+    }
+    const { sendEmail } = await import('@/lib/email');
+
+    const esc = (s: unknown) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    const safeHandler = esc(handler.slice(0, 100));
+    const safeError = esc(errorMessage.slice(0, 500));
+    const safeFailures = esc(typeof consecutiveFailures === 'number' ? consecutiveFailures : 'unknown');
+    const safeExecId = esc(typeof executionId === 'string' ? executionId.slice(0, 100) : 'unknown');
+
+    const severity = (typeof consecutiveFailures === 'number' && consecutiveFailures >= 3) ? 'CRITICAL' : 'WARNING';
+    const result = await sendEmail({
+      to: alertEmail.split(',').map((e: string) => e.trim()),
+      subject: `[${severity}] Pipeline Alert: ${handler.slice(0, 50)} failed`,
+      html: `
+        <div style="font-family: sans-serif; max-width: 600px;">
+          <h2 style="color: ${severity === 'CRITICAL' ? '#dc2626' : '#d97706'};">${severity}: Pipeline Handler Failure</h2>
+          <table style="border-collapse: collapse; width: 100%;">
+            <tr><td style="padding: 8px; border: 1px solid #e5e7eb; font-weight: bold;">Handler</td><td style="padding: 8px; border: 1px solid #e5e7eb;">${safeHandler}</td></tr>
+            <tr><td style="padding: 8px; border: 1px solid #e5e7eb; font-weight: bold;">Error</td><td style="padding: 8px; border: 1px solid #e5e7eb;">${safeError}</td></tr>
+            <tr><td style="padding: 8px; border: 1px solid #e5e7eb; font-weight: bold;">Consecutive Failures</td><td style="padding: 8px; border: 1px solid #e5e7eb;">${safeFailures}</td></tr>
+            <tr><td style="padding: 8px; border: 1px solid #e5e7eb; font-weight: bold;">Execution ID</td><td style="padding: 8px; border: 1px solid #e5e7eb;">${safeExecId}</td></tr>
+            <tr><td style="padding: 8px; border: 1px solid #e5e7eb; font-weight: bold;">Time</td><td style="padding: 8px; border: 1px solid #e5e7eb;">${esc(new Date().toISOString())}</td></tr>
+          </table>
+          <p style="margin-top: 16px; color: #6b7280; font-size: 12px;">Sent by tldrsec.app pipeline monitoring</p>
+        </div>
+      `,
+      text: `${severity}: ${handler} failed - ${errorMessage} (${typeof consecutiveFailures === 'number' ? consecutiveFailures : 0} consecutive failures)`,
+      tags: [{ name: 'type', value: 'pipeline-alert' }, { name: 'severity', value: severity.toLowerCase() }],
+    });
+
+    alertLogger.info('Pipeline alert email sent', { handler, severity, success: result.success });
+    return NextResponse.json({ success: result.success, severity });
+  } catch (err) {
+    alertLogger.error('Failed to send pipeline alert', { error: err instanceof Error ? err.message : String(err) });
+    return NextResponse.json({ error: 'Alert send failed' }, { status: 500 });
   }
 }
