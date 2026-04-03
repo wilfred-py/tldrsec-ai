@@ -200,6 +200,22 @@ export function TutorialGuide({
     }
   }, [currentStep]);
 
+  const skipTutorial = useCallback(async () => {
+    try {
+      await updateTutorialProgress(100, {
+        currentStep: totalSteps - 1,
+        currentSubstep: 0,
+        completed: true,
+      });
+      setIsActive(false);
+      onComplete();
+    } catch (error) {
+      console.error('Error skipping tutorial:', error);
+      setIsActive(false);
+      onComplete();
+    }
+  }, [totalSteps, onComplete]);
+
   const completeTutorial = useCallback(async () => {
     try {
       // Immediately show confetti and hide overlay + tooltip
@@ -225,20 +241,13 @@ export function TutorialGuide({
         console.error('Failed to deliver cached summaries:', err);
       });
 
-      // Send welcome email in the background
-      fetch('/api/onboarding?action=welcome-email', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ data: {} })
-      }).catch(err => {
-        console.error('Failed to send welcome email:', err);
-      });
+      // Welcome email already sent by completeOnboardingBatched — no duplicate needed
 
-      // Hide tutorial after confetti (5s)
+      // Hide tutorial after confetti (2s)
       setTimeout(() => {
         setIsActive(false);
         onComplete();
-      }, 5000);
+      }, 2000);
     } catch (error) {
       console.error('Error completing tutorial:', error);
       toast.error('Something went wrong. Please try again.');
@@ -360,7 +369,13 @@ export function TutorialGuide({
             <div className="p-1.5 rounded-full" style={{ background: 'linear-gradient(135deg, #0079F2, #8B5CF6)' }}>
               <span className="text-white">{step?.icon || <List className="h-5 w-5" />}</span>
             </div>
-            <h3 className="font-semibold text-sm">{step?.title || 'Tutorial'}</h3>
+            <h3 className="font-semibold text-sm flex-1">{step?.title || 'Tutorial'}</h3>
+            <button
+              onClick={skipTutorial}
+              className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+            >
+              Skip
+            </button>
           </div>
 
           {/* Progress bar */}
