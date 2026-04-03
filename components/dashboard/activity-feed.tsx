@@ -4,7 +4,9 @@ import { useState } from "react";
 import Link from "next/link";
 import { FileTextIcon, ChevronDown, ChevronUp } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-// Card wrappers removed — ActivityFeed is rendered inside a landing-card container
+import { Button } from "@/components/ui/button";
+import { Separator } from "@/components/ui/separator";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { formatDistanceToNow } from "date-fns";
 
 export interface ActivitySummary {
@@ -285,13 +287,15 @@ function Form4GroupCard({ group }: { group: Form4Group }) {
     <div className="space-y-0">
       <FeedCard summary={group.primary} />
       <div className="px-3 pb-2">
-        <button
+        <Button
+          variant="ghost"
+          size="sm"
           onClick={(e) => {
             e.preventDefault();
             setExpanded(!expanded);
           }}
           aria-expanded={expanded}
-          className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors py-1"
+          className="h-auto p-0 text-xs text-muted-foreground hover:text-foreground gap-1"
         >
           {expanded ? (
             <ChevronUp className="h-3 w-3" />
@@ -300,7 +304,7 @@ function Form4GroupCard({ group }: { group: Form4Group }) {
           )}
           {expanded ? "Hide" : `Show ${group.rest.length} more`} insider
           transaction{group.rest.length !== 1 ? "s" : ""} from {group.ticker}
-        </button>
+        </Button>
 
         {expanded && (
           <div className="mt-1 space-y-1 border-l-2 border-muted ml-1 pl-3">
@@ -334,10 +338,50 @@ function Form4GroupCard({ group }: { group: Form4Group }) {
   );
 }
 
+const INITIAL_VISIBLE = 10;
+
+function DateGroupedFeed({ groups }: { groups: GroupedSummaries[] }) {
+  return (
+    <>
+      {groups.map((group, idx) => {
+        const processedItems = groupForm4s(group.items);
+        return (
+          <div key={group.label}>
+            {idx > 0 && <Separator className="my-4" />}
+            <h4 className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              {group.label}
+            </h4>
+            <div className="space-y-1">
+              {processedItems.map((item) =>
+                isForm4Group(item) ? (
+                  <Form4GroupCard key={item.key} group={item} />
+                ) : (
+                  <FeedCard key={item.id} summary={item} />
+                )
+              )}
+            </div>
+          </div>
+        );
+      })}
+    </>
+  );
+}
+
 export function ActivityFeed({ summaries, featuredSummaries = [] }: ActivityFeedProps) {
+  const [showAll, setShowAll] = useState(false);
   const grouped = groupSummaries(summaries);
   const showFeatured = grouped.length === 0 && featuredSummaries.length > 0;
   const featuredGrouped = showFeatured ? groupSummaries(featuredSummaries) : [];
+
+  // Limit visible summaries: flatten, slice, re-group
+  const visibleGrouped = (() => {
+    if (showAll || summaries.length <= INITIAL_VISIBLE) return grouped;
+    const limitedSummaries = summaries.slice(0, INITIAL_VISIBLE);
+    return groupSummaries(limitedSummaries);
+  })();
+
+  const hasMore = !showAll && summaries.length > INITIAL_VISIBLE;
+  const isSparse = summaries.length <= 3 && summaries.length > 0;
 
   return (
     <div>
@@ -351,55 +395,33 @@ export function ActivityFeed({ summaries, featuredSummaries = [] }: ActivityFeed
             <p className="text-sm text-muted-foreground mb-4">
               Here&apos;s what our AI does with real SEC filings. Your personalized summaries will appear here as new filings come in for your tracked companies.
             </p>
-            <div className="space-y-5">
-              {featuredGrouped.map((group) => {
-                const processedItems = groupForm4s(group.items);
-                return (
-                  <div key={group.label}>
-                    <h4 className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                      {group.label}
-                    </h4>
-                    <div className="space-y-1">
-                      {processedItems.map((item) =>
-                        isForm4Group(item) ? (
-                          <Form4GroupCard key={item.key} group={item} />
-                        ) : (
-                          <FeedCard key={item.id} summary={item} />
-                        )
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
+            <DateGroupedFeed groups={featuredGrouped} />
           </>
         ) : grouped.length === 0 ? (
           <p className="text-sm text-muted-foreground">
             Your first summaries are on the way! We&apos;ll email you when
             filings come in.
           </p>
+        ) : isSparse ? (
+          // Sparse feed: no scroll container, just render naturally
+          <DateGroupedFeed groups={visibleGrouped} />
         ) : (
-          <div className="space-y-5">
-            {grouped.map((group) => {
-              const processedItems = groupForm4s(group.items);
-              return (
-                <div key={group.label}>
-                  <h4 className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                    {group.label}
-                  </h4>
-                  <div className="space-y-1">
-                    {processedItems.map((item) =>
-                      isForm4Group(item) ? (
-                        <Form4GroupCard key={item.key} group={item} />
-                      ) : (
-                        <FeedCard key={item.id} summary={item} />
-                      )
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+          // Normal feed: scroll container for many items
+          <ScrollArea className="max-h-[50vh] md:max-h-[60vh]">
+            <DateGroupedFeed groups={visibleGrouped} />
+            {hasMore && (
+              <div className="pt-4 text-center">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setShowAll(true)}
+                  className="text-muted-foreground"
+                >
+                  Show {summaries.length - INITIAL_VISIBLE} more summaries
+                </Button>
+              </div>
+            )}
+          </ScrollArea>
         )}
       </div>
     </div>

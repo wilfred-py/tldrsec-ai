@@ -2,9 +2,10 @@ import { currentUser } from '@clerk/nextjs/server';
 import { redirect, notFound } from 'next/navigation';
 import { getPrismaClient } from '@/lib/db';
 import { formatDistanceToNow, format } from 'date-fns';
-import { ArrowLeft, ChevronRight } from 'lucide-react';
+import { ArrowLeft, ChevronRight, AlertTriangle } from 'lucide-react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
 import { checkSummaryAccess, AccessDeniedError, ResourceNotFoundError } from '@/lib/auth/access-control';
 import { SummaryContent } from '@/components/summary/summary-content';
 import { getSecFilingViewerUrl } from '@/lib/email/url-utils';
@@ -151,15 +152,62 @@ export default async function SummaryPage({ params }: SummaryPageProps) {
       </div>
     );
   } catch (error) {
+    // Re-throw Next.js internal errors (redirect, notFound) — they use special
+    // error objects with a `digest` property that must propagate
+    if (error && typeof error === 'object' && 'digest' in error) {
+      throw error;
+    }
+
     if (error instanceof ResourceNotFoundError) {
       notFound();
     }
-    
+
     if (error instanceof AccessDeniedError) {
       redirect('/sign-in');
     }
 
-    // For other errors, redirect to an error page
-    redirect('/error');
+    // Render inline error card instead of redirecting to nonexistent /error page
+    return (
+      <div className="min-h-screen flex flex-col" style={{ backgroundColor: 'var(--landing-bg)' }}>
+        <main className="flex-1" style={{ backgroundColor: 'var(--landing-bg)' }}>
+          <div className="container max-w-7xl mx-auto py-8 md:py-10 px-6 md:px-8 space-y-6">
+            <Breadcrumb className="mb-4">
+              <BreadcrumbList>
+                <BreadcrumbItem>
+                  <BreadcrumbLink href="/dashboard">Dashboard</BreadcrumbLink>
+                </BreadcrumbItem>
+                <BreadcrumbSeparator>
+                  <ChevronRight className="h-4 w-4" />
+                </BreadcrumbSeparator>
+                <BreadcrumbItem>
+                  <BreadcrumbPage>Error</BreadcrumbPage>
+                </BreadcrumbItem>
+              </BreadcrumbList>
+            </Breadcrumb>
+
+            <Card className="border-red-200 bg-red-50/50">
+              <CardContent className="p-6">
+                <div className="flex items-start space-x-3">
+                  <AlertTriangle className="h-6 w-6 text-red-500 mt-0.5 flex-shrink-0" />
+                  <div className="flex-1">
+                    <h1 className="text-red-800 font-semibold text-lg mb-2">
+                      Something went wrong
+                    </h1>
+                    <p className="text-red-700 text-sm mb-4">
+                      We couldn&apos;t load this summary. This is usually temporary — try again in a moment.
+                    </p>
+                    <div className="flex gap-3">
+                      <Button variant="outline" size="sm" className="border-red-300 text-red-700 hover:bg-red-100" asChild>
+                        <Link href="/dashboard">Back to Dashboard</Link>
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </main>
+      </div>
+    );
   }
-} 
+}
