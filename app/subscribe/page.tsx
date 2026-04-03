@@ -46,6 +46,9 @@ function SubscribePageContent() {
   const [downgradingTo, setDowngradingTo] = useState<PlanType | null>(null);
   const [showDowngradeConfirm, setShowDowngradeConfirm] = useState<PlanType | null>(null);
 
+  // Read pre-selected plan from query param (e.g., /subscribe?plan=pro from campaign flow)
+  const preSelectedPlan = (searchParams.get('plan')?.toUpperCase() as PlanType) || null;
+
   // Handle checkout cancellation - show toast
   useEffect(() => {
     if (searchParams.get('canceled') === 'true') {
@@ -56,6 +59,20 @@ function SubscribePageContent() {
       router.replace('/subscribe');
     }
   }, [searchParams, router]);
+
+  // Auto-trigger checkout when arriving with a pre-selected plan (campaign flow)
+  const [autoCheckoutTriggered, setAutoCheckoutTriggered] = useState(false);
+  useEffect(() => {
+    if (!loading && !autoCheckoutTriggered && preSelectedPlan && PLAN_ORDER.includes(preSelectedPlan)) {
+      const effectivePlan = getEffectivePlan();
+      // Only auto-trigger if user is on FREE and the pre-selected plan is an upgrade
+      if (effectivePlan === 'FREE' && PLAN_RANK[preSelectedPlan] > 0) {
+        setAutoCheckoutTriggered(true);
+        handleCheckout(preSelectedPlan);
+      }
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, preSelectedPlan, autoCheckoutTriggered]);
 
   // Fetch user's current subscription
   useEffect(() => {
@@ -361,7 +378,7 @@ function SubscribePageContent() {
                 transition={{ duration: 0.3, delay: index * 0.1 }}
                 whileHover={{ y: -4, boxShadow: '0 20px 40px -10px rgba(0, 0, 0, 0.15)' }}
                 className={`landing-card relative flex flex-col ${
-                  planKey === 'PRO' ? 'ring-2 ring-[var(--landing-primary)] shadow-lg' : ''
+                  planKey === 'PRO' || planKey === preSelectedPlan ? 'ring-2 ring-[var(--landing-primary)] shadow-lg' : ''
                 }`}
               >
                 {/* Popular Badge */}

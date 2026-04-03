@@ -33,7 +33,18 @@ export function OnboardingTransition() {
       const elapsed = Date.now() - startTime;
       const remaining = Math.max(0, MIN_DISPLAY_MS - elapsed);
       const timer = setTimeout(() => {
-        window.location.href = '/dashboard';
+        // Check if user came from a campaign with a plan intent
+        const planCookie = document.cookie.split('; ').find(c => c.startsWith('signup_plan='));
+        if (planCookie) {
+          const plan = planCookie.split('=')[1];
+          // Clear the cookie
+          document.cookie = 'signup_plan=; path=/; max-age=0';
+          document.cookie = 'signup_ref=; path=/; max-age=0';
+          // Redirect to subscribe page with plan pre-selected
+          window.location.href = `/subscribe?plan=${plan}`;
+        } else {
+          window.location.href = '/dashboard';
+        }
       }, remaining + 800); // small extra pause on "ready!"
       return () => clearTimeout(timer);
     }
