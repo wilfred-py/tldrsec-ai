@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-## [0.0.3.1] - 2026-04-04
+## [0.0.3.2] - 2026-04-04
 
 ### Changed
 - Email 3 ("Your Trial Is Ready") rewritten with Hormozi Grand Slam Offer framework: pain-first intro, CTA above the fold, value-first FAQ, honest CC disclosure with risk reversal
@@ -10,6 +10,21 @@ All notable changes to this project will be documented in this file.
 - All 3 campaign emails now use dynamic filing data from the database, ranked by materiality, size, and rarity (falls back to hardcoded samples if no summaries exist)
 - Gmail/Outlook-safe inline HTML with table layout, MSO conditionals, preheader text with whitespace padding
 - Added plaintext MIME parts to all campaign emails for improved deliverability
+
+## [0.0.3.1] - 2026-04-04
+
+### Fixed
+- JSON-LD structured data used wrong domain (`tldrsec.ai` instead of `tldrsec.app`)
+- Removed broken SearchAction and unverified sameAs social links from structured data
+- Sitemap listed non-existent routes (`/pricing`, `/about`) and auth-gated `/dashboard`
+- robots.txt only blocked `/dashboard/settings` and `/dashboard/billing`, now blocks all auth-gated routes
+- Homepage used `force-dynamic` unnecessarily, now statically generated for faster crawling
+
+### Added
+- Dynamic OG image generation (`app/opengraph-image.tsx`) with error handling and 24h cache
+- High-intent SEC filing keywords across homepage and root metadata (10-K, 10-Q, 8-K, Form 4)
+- SEO validation test suite (11 tests) preventing regression on crawlability fixes
+- `/subscribe` and `/waitlist` added to sitemap as actual public routes
 
 ## [0.0.3.0] - 2026-04-04
 

@@ -23,7 +23,7 @@ export const metadata: Metadata = {
   metadataBase: new URL('https://tldrsec.app'),
   title: "tldrSEC - AI-Powered SEC Filing Summaries",
   description: "Save hours analyzing SEC filings with AI-generated summaries. Get instant insights from 10-K, 10-Q, and 8-K reports for better investment decisions.",
-  keywords: "SEC filing summarizer, analyze SEC filing, summarize US financial statements, summarize US company filings, AI financial analysis",
+  keywords: "SEC filing summary, 10-K summary, 10-Q summary, 8-K filing analysis, Form 4 insider trading, SEC filing alerts, AI SEC analysis, earnings report summary, SEC EDGAR summary tool, investment research",
   authors: [{ name: "tldrSEC Team" }],
   openGraph: {
     type: "website",
@@ -33,7 +33,7 @@ export const metadata: Metadata = {
     siteName: "tldrSEC",
     images: [
       {
-        url: "/og-image.png",
+        url: "/opengraph-image",
         width: 1200,
         height: 630,
         alt: "tldrSEC - AI-Powered SEC Filing Summaries",
@@ -44,7 +44,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "tldrSEC - AI-Powered SEC Filing Summaries",
     description: "Save hours analyzing SEC filings with AI-generated summaries. Get instant insights from complex financial documents.",
-    images: ["/og-image.png"],
+    images: ["/opengraph-image"],
   },
 };
 
