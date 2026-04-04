@@ -29,7 +29,7 @@ export function DashboardShell({ children }: DashboardShellProps) {
         )}
         <MinimalHeader />
         <main className="flex-1" style={{ backgroundColor: 'var(--landing-bg)' }}>
-          <div className="container max-w-7xl mx-auto py-8 md:py-10 px-6 md:px-8 space-y-8">
+          <div className="container max-w-7xl mx-auto py-4 md:py-6 px-6 md:px-8 space-y-4">
             {children}
           </div>
         </main>

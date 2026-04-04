@@ -12,7 +12,7 @@ import { viewportOnce } from '@/lib/animations/landing-animations';
  * Reduces friction and builds confidence
  */
 const trustPoints = [
-  'No credit card required',
+  '7-day free trial',
   'Start with unlimited tickers',
   'Cancel anytime',
 ];
