@@ -175,8 +175,10 @@ export function filterNewFilings(
   watermark: string | null
 ): SubmissionsFiling[] {
   if (!watermark) {
-    // No watermark — return empty (cold start seeding handles this case)
-    return [];
+    // No watermark — return all filings sorted newest-first.
+    // Idempotency keys on job creation prevent duplicate processing.
+    // This ensures filings are never silently skipped after a watermark reset.
+    return filings.sort((a, b) => b.acceptanceDateTime.getTime() - a.acceptanceDateTime.getTime());
   }
 
   const watermarkDate = parseAcceptanceDateTime(watermark);

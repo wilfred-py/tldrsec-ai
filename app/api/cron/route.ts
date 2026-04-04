@@ -47,6 +47,7 @@ const GET_ACTIONS = [
   'check-trials',
   'nurture-trials',
   'update-daily-count',
+  'backfill-missed',
 ] as const;
 
 const POST_ACTIONS = [
@@ -98,6 +99,8 @@ export async function GET(request: NextRequest) {
       return handleNurtureTrials(request);
     case 'update-daily-count':
       return handleUpdateDailyCountGET();
+    case 'backfill-missed':
+      return handleBackfillMissed(request);
     default:
       return missingActionResponse('GET');
   }
@@ -2405,5 +2408,198 @@ async function handleSendAlert(request: NextRequest) {
   } catch (err) {
     alertLogger.error('Failed to send pipeline alert', { error: err instanceof Error ? err.message : String(err) });
     return NextResponse.json({ error: 'Alert send failed' }, { status: 500 });
+  }
+}
+
+// ===========================================================================
+// ACTION: backfill-missed
+// Cross-reference SEC Submissions API against local records to find and
+// queue any filings that were missed during pipeline downtime.
+// ===========================================================================
+
+async function handleBackfillMissed(request: NextRequest) {
+  const { logger } = await import('@/lib/logging');
+  const backfillLogger = logger.child('backfill-missed');
+
+  try {
+    // Auth — same as other cron actions
+    const { CronAuthService } = await import('@/lib/cron/auth-service');
+    const authResult = await CronAuthService.validateCronRequest(request);
+    if (!authResult.isValid) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const url = new URL(request.url);
+    const daysParam = parseInt(url.searchParams.get('days') || '7', 10);
+    const days = Math.min(Math.max(daysParam, 1), 90); // Clamp 1-90
+
+    backfillLogger.info(`Starting manual backfill check (last ${days} days)`);
+
+    const { getPrismaClient } = await import('@/lib/db/prisma');
+    const prisma = getPrismaClient();
+
+    // Get active tickers with CIK mappings
+    const { getActiveTickersForMonitoring } = await import('@/lib/sec-edgar/ticker-monitoring');
+    const activeTickers = await getActiveTickersForMonitoring();
+
+    const { SECEdgarClient } = await import('@/lib/sec-edgar/client');
+    const client = new SECEdgarClient();
+
+    const cutoffDate = new Date();
+    cutoffDate.setDate(cutoffDate.getDate() - days);
+
+    let totalMissed = 0;
+    let totalJobsQueued = 0;
+    const tickerResults: Array<{ symbol: string; checked: number; missed: number; jobsQueued: number }> = [];
+
+    for (const ticker of activeTickers) {
+      try {
+        // Fetch from Submissions API (no watermark — get all recent filings)
+        const result = await client.fetchSubmissions(ticker.cik, null, null);
+        if (result.notModified) continue;
+
+        // Filter to filings within the date range
+        const recentFilings = result.newFilings.filter(
+          f => f.acceptanceDateTime.getTime() >= cutoffDate.getTime()
+        );
+
+        if (recentFilings.length === 0) {
+          tickerResults.push({ symbol: ticker.symbol, checked: 0, missed: 0, jobsQueued: 0 });
+          continue;
+        }
+
+        // Get existing accession numbers from RssFilingCheck
+        const existingChecks = await prisma.rssFilingCheck.findMany({
+          where: {
+            accessionNumber: { in: recentFilings.map(f => f.accessionNumber) },
+          },
+          select: { accessionNumber: true },
+        });
+        const existingSet = new Set(existingChecks.map(c => c.accessionNumber));
+
+        // Also check JobQueue for existing jobs (they might have been created by fast-poll
+        // without going through RssFilingCheck)
+        const existingJobs = await prisma.jobQueue.findMany({
+          where: {
+            idempotencyKey: {
+              in: recentFilings.map(f => `ASYNC_FETCH_FILING:%:${f.accessionNumber}`),
+              startsWith: 'ASYNC_FETCH_FILING:',
+            },
+          },
+          select: { idempotencyKey: true },
+        });
+        const jobAccessions = new Set(
+          existingJobs
+            .map(j => j.idempotencyKey?.split(':').pop())
+            .filter(Boolean)
+        );
+
+        // Find truly missed filings
+        const missedFilings = recentFilings.filter(
+          f => !existingSet.has(f.accessionNumber) && !jobAccessions.has(f.accessionNumber)
+        );
+
+        if (missedFilings.length === 0) {
+          tickerResults.push({ symbol: ticker.symbol, checked: recentFilings.length, missed: 0, jobsQueued: 0 });
+          continue;
+        }
+
+        totalMissed += missedFilings.length;
+
+        // Get the TickerMonitoring record for this ticker
+        const monitoringRecord = await prisma.tickerMonitoring.findFirst({
+          where: { cik: ticker.cik },
+          select: { id: true },
+        });
+
+        // Insert missed filings into RssFilingCheck
+        if (monitoringRecord) {
+          await prisma.rssFilingCheck.createMany({
+            data: missedFilings.slice(0, 50).map(f => ({
+              tickerMonitoringId: monitoringRecord.id,
+              accessionNumber: f.accessionNumber,
+              filingType: f.form,
+              filingDate: new Date(f.filingDate),
+              filingUrl: `https://www.sec.gov/Archives/edgar/data/${ticker.cik}/${f.accessionNumber.replace(/-/g, '')}/${f.primaryDocument}`,
+              rssEntryDate: f.acceptanceDateTime,
+              processed: false,
+            })),
+            skipDuplicates: true,
+          });
+        }
+
+        // Create jobs for all users tracking this ticker
+        const { enrichTickersWithCik, createBulkFetchJobs } = await import('@/lib/cron/handlers/discovery-handler');
+        const enriched = await enrichTickersWithCik([ticker.symbol]);
+        const tickerInfo = enriched[0] || { symbol: ticker.symbol, companyName: ticker.companyName, cik: ticker.cik };
+
+        const usersForTicker = await prisma.user.findMany({
+          where: { tickers: { some: { symbol: ticker.symbol } } },
+          select: {
+            id: true,
+            email: true,
+            subscriptionTier: true,
+            isTrialing: true,
+            trialEndsAt: true,
+            tickers: {
+              where: { symbol: ticker.symbol },
+              select: { id: true, companyName: true },
+            },
+          },
+        });
+
+        let jobsQueued = 0;
+        for (const filing of missedFilings.slice(0, 50)) {
+          const count = await createBulkFetchJobs(
+            usersForTicker.map(u => ({
+              id: u.id,
+              email: u.email || '',
+              subscriptionTier: u.subscriptionTier || 'FREE',
+              isTrialing: u.isTrialing,
+              trialEndsAt: u.trialEndsAt,
+              tickers: u.tickers,
+            })),
+            {
+              ticker: ticker.symbol,
+              formType: filing.form,
+              filingDate: filing.filingDate,
+              url: `https://www.sec.gov/Archives/edgar/data/${ticker.cik}/${filing.accessionNumber.replace(/-/g, '')}/${filing.primaryDocument}`,
+              accessionNumber: filing.accessionNumber,
+              id: `backfill-${filing.accessionNumber}`,
+            },
+            tickerInfo,
+            { executionId: `backfill-${new Date().toISOString()}`, cronTriggerTime: new Date().toISOString() }
+          );
+          jobsQueued += count;
+        }
+
+        totalJobsQueued += jobsQueued;
+        tickerResults.push({ symbol: ticker.symbol, checked: recentFilings.length, missed: missedFilings.length, jobsQueued });
+
+        backfillLogger.info(`Backfill for ${ticker.symbol}: ${missedFilings.length} missed, ${jobsQueued} jobs queued`);
+      } catch (error) {
+        backfillLogger.error(`Backfill failed for ${ticker.symbol}`, {
+          error: error instanceof Error ? error.message : String(error),
+        });
+        tickerResults.push({ symbol: ticker.symbol, checked: 0, missed: 0, jobsQueued: 0 });
+      }
+    }
+
+    return NextResponse.json({
+      success: true,
+      days,
+      tickersChecked: activeTickers.length,
+      totalMissed,
+      totalJobsQueued,
+      tickers: tickerResults,
+    });
+  } catch (error) {
+    backfillLogger.error('Backfill handler failed', {
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return NextResponse.json(
+      { error: 'Backfill failed', message: error instanceof Error ? error.message : 'Unknown error' },
+      { status: 500 }
+    );
   }
 }
