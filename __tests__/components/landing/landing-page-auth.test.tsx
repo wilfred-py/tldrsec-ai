@@ -98,6 +98,20 @@ global.fetch = jest.fn(() =>
   Promise.resolve({ ok: false, status: 401, json: () => Promise.resolve({}) })
 ) as jest.Mock;
 
+// Mock BillingToggle (uses motion.span + layout animations that break in test env)
+jest.mock('@/components/billing/billing-toggle', () => ({
+  BillingToggle: ({ billingInterval, onToggle }: { billingInterval: string; onToggle: () => void }) => (
+    <button onClick={onToggle} data-testid="billing-toggle">
+      {billingInterval === 'annual' ? 'Annual' : 'Monthly'}
+    </button>
+  ),
+}));
+
+// Mock AnimatedPrice (uses @number-flow/react)
+jest.mock('@/components/landing/sections-v2/animated-price', () => ({
+  AnimatedPrice: ({ amount }: { amount: number }) => <span>${amount}</span>,
+}));
+
 // Mock next/navigation
 jest.mock('next/navigation', () => ({
   useRouter: () => ({
