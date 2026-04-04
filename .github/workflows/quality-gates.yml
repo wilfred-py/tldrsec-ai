@@ -1,7 +1,7 @@
 name: Quality Gates
 on:
   push:
-    branches: [main, continue-newsletter-implementation]
+    branches: [main]
     paths:
       # Only run on code changes, skip docs/config-only changes
       - 'app/**'
