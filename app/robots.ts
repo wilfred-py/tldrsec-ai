@@ -7,8 +7,10 @@ export default function robots(): MetadataRoute.Robots {
       allow: '/',
       disallow: [
         '/api/',
-        '/dashboard/settings',
-        '/dashboard/billing',
+        '/dashboard/',
+        '/summary/',
+        '/filing/',
+        '/portfolio/',
         '/admin/',
         '/_next/',
         '/tmp/',
