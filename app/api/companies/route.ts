@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getPrismaClient } from '@/lib/db/prisma';
 import { z } from 'zod';
+import { getPopularBySector, getPopularSectorCounts } from '@/lib/onboarding/popular-companies';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -183,30 +184,10 @@ async function handleBySector(searchParams: URLSearchParams) {
     const { sectors: sectorsParam, page, limit } = parsed.data;
     const requestedSectors = sectorsParam.split(',').map(s => s.trim().toLowerCase());
 
-    const prisma = getPrismaClient();
-    const cached = await prisma.secCompanyCache.findFirst({ where: { id: 1 } });
-
-    if (!cached) {
-      return NextResponse.json({ companies: [], total: 0, page: 1, totalPages: 0, sectorCounts: {} });
-    }
-
-    let allCompanies: CompanyData[];
-    try {
-      allCompanies = CompanyDataSchema.parse(JSON.parse(cached.data));
-    } catch {
-      return NextResponse.json({ error: 'Invalid cached data' }, { status: 500 });
-    }
-
-    const sectorCounts: Record<string, number> = {};
-    for (const company of allCompanies) {
-      if (company.sector && requestedSectors.includes(company.sector)) {
-        sectorCounts[company.sector] = (sectorCounts[company.sector] || 0) + 1;
-      }
-    }
-
-    const filtered = allCompanies
-      .filter(c => c.sector && requestedSectors.includes(c.sector))
+    // Use curated popular companies for sector browsing
+    const filtered = getPopularBySector(requestedSectors)
       .sort((a, b) => a.symbol.localeCompare(b.symbol));
+    const sectorCounts = getPopularSectorCounts(requestedSectors);
 
     const total = filtered.length;
     const totalPages = Math.ceil(total / limit);
