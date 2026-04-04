@@ -8,7 +8,7 @@ import { NextResponse } from 'next/server';
 export async function GET(request: Request) {
   // Validate HMAC auth
   try {
-    const { CronAuthService } = await import('@/lib/auth/cron-auth');
+    const { CronAuthService } = await import('@/lib/cron/auth-service');
     const authResult = CronAuthService.validateCronRequest(request);
     if (!authResult.isValid) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });

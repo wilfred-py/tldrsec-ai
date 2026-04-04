@@ -66,6 +66,63 @@ export function generateFeedbackToken(userId: string, summaryId: string): string
  * Returns the userId and summaryId if the token is valid and not expired.
  * Returns null if the token is invalid, tampered with, or expired.
  */
+/**
+ * Generate an HMAC-signed unsubscribe token for embedding in email links.
+ *
+ * Token format: base64url(email:unsubscribe:expiry:signature)
+ * where signature = HMAC-SHA256(CRON_SECRET, email:unsubscribe:expiry)
+ *
+ * Tokens expire after 30 days.
+ */
+export function generateUnsubscribeToken(email: string): string {
+  const expiry = Date.now() + TOKEN_EXPIRY_DAYS * 24 * 60 * 60 * 1000;
+  const payload = `${email}:unsubscribe:${expiry}`;
+  const signature = sign(payload);
+  return toBase64Url(`${payload}:${signature}`);
+}
+
+/**
+ * Validate and decode an unsubscribe token.
+ *
+ * Returns the email if the token is valid and not expired.
+ * Returns null if the token is invalid, tampered with, or expired.
+ */
+export function validateUnsubscribeToken(token: string): { email: string } | null {
+  try {
+    const decoded = fromBase64Url(token);
+    const parts = decoded.split(':');
+    // Format: email:unsubscribe:expiry:signature (minimum 4 parts)
+    if (parts.length < 4) return null;
+
+    const signature = parts[parts.length - 1];
+    const expiryStr = parts[parts.length - 2];
+    const payloadWithoutSig = parts.slice(0, -1).join(':');
+
+    // Verify 'unsubscribe' purpose marker
+    const purposeIdx = parts.length - 3;
+    if (parts[purposeIdx] !== 'unsubscribe') return null;
+
+    // Extract email (everything before :unsubscribe:expiry:signature)
+    const email = parts.slice(0, purposeIdx).join(':');
+    if (!email || !email.includes('@')) return null;
+
+    const expiry = parseInt(expiryStr, 10);
+    if (isNaN(expiry) || Date.now() > expiry) return null;
+
+    // Verify HMAC signature (constant-time comparison)
+    const expectedSignature = sign(payloadWithoutSig);
+    const sigBuf = Buffer.from(signature, 'utf-8');
+    const expectedBuf = Buffer.from(expectedSignature, 'utf-8');
+    if (sigBuf.length !== expectedBuf.length || !timingSafeEqual(sigBuf, expectedBuf)) {
+      return null;
+    }
+
+    return { email };
+  } catch {
+    return null;
+  }
+}
+
 export function validateFeedbackToken(
   token: string
 ): { userId: string; summaryId: string } | null {

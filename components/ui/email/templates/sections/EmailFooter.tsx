@@ -12,15 +12,16 @@ interface EmailFooterProps {
  * Minimalist email footer component
  * Morning Brew style: clean CTA, simple footer links
  */
-export function EmailFooter({ filingUrl, formType }: EmailFooterProps) {
+export function EmailFooter({ filingUrl, formType, unsubscribeUrl }: EmailFooterProps) {
   // Convert index URLs to EDGAR Filing Viewer URLs for better user experience
   // Pass formType for smart XML URL construction (stylesheet injection)
-  const viewerUrl = getSecFilingViewerUrl(filingUrl, formType);
+  const viewerUrl = filingUrl ? getSecFilingViewerUrl(filingUrl, formType) : '';
 
   return (
     <table width="100%" cellPadding="0" cellSpacing="0">
       <tbody>
-        {/* CTA button */}
+        {/* CTA button - only show when there's a real filing URL */}
+        {viewerUrl && (
         <tr>
           <td style={{
             padding: '20px 15px',
@@ -44,6 +45,7 @@ export function EmailFooter({ filingUrl, formType }: EmailFooterProps) {
             </a>
           </td>
         </tr>
+        )}
 
         {/* Footer */}
         <tr>
@@ -58,6 +60,17 @@ export function EmailFooter({ filingUrl, formType }: EmailFooterProps) {
             }}>
               tldrSEC | AI-Powered SEC Filing Summaries
             </p>
+            {unsubscribeUrl && (
+              <p style={{
+                margin: '8px 0 0',
+                fontSize: '12px',
+                color: '#6B7280',
+              }}>
+                <a href={unsubscribeUrl} style={{ color: '#6B7280', textDecoration: 'underline' }}>
+                  Unsubscribe
+                </a>
+              </p>
+            )}
           </td>
         </tr>
       </tbody>

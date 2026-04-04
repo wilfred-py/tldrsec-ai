@@ -431,6 +431,12 @@ export default async function middleware(request: NextRequest) {
         // Checkout (unauthenticated direct checkout)
         '/api/checkout',
 
+        // Email unsubscribe (HMAC token verified in handler)
+        '/api/unsubscribe',
+
+        // Email feedback (HMAC token verified in handler)
+        '/api/feedback',
+
         // Marketing pages
         '/',
         '/pricing',
@@ -440,6 +446,11 @@ export default async function middleware(request: NextRequest) {
 
         // Onboarding page
         '/onboarding',
+
+        // Email action pages (token-verified, no auth needed)
+        '/unsubscribe/confirmed',
+        '/feedback/thanks',
+        '/feedback/error',
       ]
     }
   )(request);

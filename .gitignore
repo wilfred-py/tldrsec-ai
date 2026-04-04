@@ -76,6 +76,7 @@ scripts/*
 !scripts/test-production-waitlist.sh
 !scripts/verify-cascade-delete-trigger.ts
 !scripts/check-prisma-imports.sh
+!scripts/send-campaign.ts
 
 # Prisma generated files
 lib/generated/
