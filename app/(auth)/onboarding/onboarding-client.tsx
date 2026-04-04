@@ -7,6 +7,9 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { badgeVariants } from "@/components/ui/badge";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { cn } from "@/lib/utils";
 import {
   CheckCircle, ArrowRight, Cpu, Heart, ShoppingCart,
   Zap, Home, Banknote, Search, Loader2, ArrowLeft,
@@ -511,40 +514,43 @@ export default function OnboardingPage() {
                       </p>
                     </div>
 
-                    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                      {sectors.map((sector) => {
-                        const Icon = sector.icon;
-                        const isSelected = selectedSectors.includes(sector.id);
-                        return (
-                          <div
-                            key={sector.id}
-                            className={`cursor-pointer rounded-lg border-2 p-4 transition-all hover:shadow-md ${
-                              isSelected
-                                ? "border-primary bg-primary/10 shadow-md"
-                                : "border-gray-200 hover:border-primary/50 dark:border-gray-700"
-                            }`}
-                            onClick={() => handleSectorToggle(sector.id)}
-                          >
-                            <div className="flex flex-col items-center text-center">
-                              <div
-                                className={`mb-3 flex h-12 w-12 items-center justify-center rounded-lg border ${sector.color}`}
-                              >
-                                <Icon className="h-6 w-6" />
-                              </div>
-                              <h3 className="mb-1 font-medium">{sector.name}</h3>
-                              <p className="mb-6 text-xs text-muted-foreground">
-                                {sector.description}
-                              </p>
-                              <div className="h-5 flex items-center justify-center">
-                                {isSelected && (
-                                  <CheckCircle className="h-5 w-5 text-primary" />
-                                )}
+                    <ScrollArea className="max-h-[calc(100vh-320px)]">
+                      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4">
+                        {sectors.map((sector, index) => {
+                          const Icon = sector.icon;
+                          const isSelected = selectedSectors.includes(sector.id);
+                          return (
+                            <div
+                              key={sector.id}
+                              className={`cursor-pointer rounded-lg border-2 p-3 opacity-0 animate-slideUp transition-all hover:shadow-md ${
+                                isSelected
+                                  ? "border-primary bg-primary/10 shadow-md"
+                                  : "border-gray-200 hover:border-primary/50 dark:border-gray-700"
+                              }`}
+                              style={{ animationDelay: `${index * 30}ms` }}
+                              onClick={() => handleSectorToggle(sector.id)}
+                            >
+                              <div className="flex flex-col items-center text-center">
+                                <div
+                                  className={`mb-2 flex h-10 w-10 items-center justify-center rounded-lg border ${sector.color}`}
+                                >
+                                  <Icon className="h-5 w-5" />
+                                </div>
+                                <h3 className="mb-1 text-sm font-medium">{sector.name}</h3>
+                                <p className="mb-2 text-xs text-muted-foreground">
+                                  {sector.description}
+                                </p>
+                                <div className="h-5 flex items-center justify-center">
+                                  {isSelected && (
+                                    <CheckCircle className="h-5 w-5 text-primary" />
+                                  )}
+                                </div>
                               </div>
                             </div>
-                          </div>
-                        );
-                      })}
-                    </div>
+                          );
+                        })}
+                      </div>
+                    </ScrollArea>
 
                     <div className="mt-8 flex items-center justify-between">
                       <div></div>
@@ -580,6 +586,13 @@ export default function OnboardingPage() {
                           : `Select up to ${MAX_TICKERS} tickers to start tracking. Browse by sector or search for any company.`
                         }
                       </p>
+                      <p className="text-sm text-muted-foreground mt-1">
+                        Showing companies in{" "}
+                        {selectedSectors
+                          .map((id) => sectors.find((s) => s.id === id)?.name)
+                          .filter(Boolean)
+                          .join(", ")}
+                      </p>
                     </div>
 
                     {/* Search */}
@@ -602,11 +615,10 @@ export default function OnboardingPage() {
                     {searchQuery.length < 2 && (
                       <div className="mb-6 flex flex-wrap gap-2">
                         <button
-                          className={`inline-flex items-center rounded-full px-3 py-1 text-sm transition-colors ${
-                            activeSectorFilter === null
-                              ? "bg-primary text-primary-foreground"
-                              : "bg-muted text-muted-foreground hover:bg-muted/80"
-                          }`}
+                          className={cn(
+                            badgeVariants({ variant: activeSectorFilter === null ? "default" : "secondary" }),
+                            "cursor-pointer rounded-full px-3 py-1"
+                          )}
                           onClick={() => {
                             setActiveSectorFilter(null);
                             setBrowseCompanies([]);
@@ -627,11 +639,10 @@ export default function OnboardingPage() {
                           return (
                             <button
                               key={sectorId}
-                              className={`inline-flex items-center rounded-full px-3 py-1 text-sm transition-colors ${
-                                activeSectorFilter === sectorId
-                                  ? "bg-primary text-primary-foreground"
-                                  : "bg-muted text-muted-foreground hover:bg-muted/80"
-                              }`}
+                              className={cn(
+                                badgeVariants({ variant: activeSectorFilter === sectorId ? "default" : "secondary" }),
+                                "cursor-pointer rounded-full px-3 py-1"
+                              )}
                               onClick={() => handleSectorFilterClick(sectorId)}
                             >
                               {sector?.name}
@@ -654,7 +665,8 @@ export default function OnboardingPage() {
                     )}
 
                     {/* Company Grid */}
-                    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                    <ScrollArea className="max-h-[50vh]">
+                      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                       {displayedCompanies.map((company) => {
                         const isSelected = selectedEquities.includes(company.symbol);
                         const isDisabled =
@@ -693,6 +705,7 @@ export default function OnboardingPage() {
                         );
                       })}
                     </div>
+                    </ScrollArea>
 
                     {/* Loading indicator for browse */}
                     {isBrowseLoading && searchQuery.length < 2 && (
@@ -720,7 +733,7 @@ export default function OnboardingPage() {
                       <div className="py-8 text-center text-muted-foreground">
                         {searchQuery.length >= 2
                           ? "No companies found matching your search."
-                          : "No companies available for selected sectors. Run the SIC population script to enrich company data."}
+                          : "No companies found. Try searching by name instead."}
                       </div>
                     )}
 
