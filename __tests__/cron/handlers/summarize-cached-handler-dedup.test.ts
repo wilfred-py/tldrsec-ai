@@ -24,6 +24,7 @@ const mockPrisma = {
     findFirst: jest.fn(),
   },
   user: {
+    findUnique: jest.fn(),
     update: jest.fn(),
   },
   summaryEmailDelivery: {
@@ -92,6 +93,10 @@ jest.mock('../../../lib/ai/parsers/response-parser', () => ({
   parseResponse: jest.fn().mockReturnValue({ success: false, data: null }),
 }));
 
+jest.mock('../../../lib/email/form4-field-normalizer', () => ({
+  CURRENT_FORM4_SCHEMA_VERSION: 1,
+}));
+
 // --- Imports (after all jest.mock calls) ---
 
 import { handleSummarizeCached, SummarizeJobPayload } from '../../../lib/cron/handlers/summarize-cached-handler';
@@ -135,6 +140,9 @@ function setupExistingSummaryMocks(opts: {
   hasDeliveryRecord: boolean;
 }) {
   jest.clearAllMocks();
+
+  // User exists and is not soft-deleted
+  mockPrisma.user.findUnique.mockResolvedValue({ deletedAt: null });
 
   mockPrisma.filingContentCache.findUnique.mockResolvedValue({
     content: '<html><body>Test Form 4 filing</body></html>',
@@ -328,6 +336,9 @@ describe('Re-send path passes summaryData (Bug 3)', () => {
 describe('Shared summary P2002 race condition (Bug 1B)', () => {
   function setupSharedSummaryMocks() {
     jest.clearAllMocks();
+
+    // User exists and is not soft-deleted
+    mockPrisma.user.findUnique.mockResolvedValue({ deletedAt: null });
 
     mockPrisma.filingContentCache.findUnique.mockResolvedValue({
       content: '<html><body>Test Form 4 filing</body></html>',

@@ -19,9 +19,11 @@ const mockPrisma = {
     findFirst: jest.fn()
   },
   user: {
+    findUnique: jest.fn(),
     update: jest.fn()
   },
   summaryEmailDelivery: {
+    findFirst: jest.fn(),
     create: jest.fn()
   }
 };
@@ -97,6 +99,14 @@ jest.mock('../../../lib/auth/trial-service', () => ({
   },
 }));
 
+jest.mock('../../../lib/ai/parsers/response-parser', () => ({
+  parseResponse: jest.fn(),
+}));
+
+jest.mock('../../../lib/email/form4-field-normalizer', () => ({
+  CURRENT_FORM4_SCHEMA_VERSION: 1,
+}));
+
 jest.mock('../../../lib/validation/filing-content-verifier', () => ({
   verifyFilingContent: jest.fn().mockReturnValue({
     isVerified: true,
@@ -151,6 +161,9 @@ describe('summarize-cached-handler field population', () => {
     mockPrisma.summaryEmailDelivery.create.mockReset();
 
     // Setup default mock implementations
+    mockPrisma.user.findUnique.mockResolvedValue({ deletedAt: null });
+    mockPrisma.summaryEmailDelivery.findFirst.mockResolvedValue(null);
+
     mockPrisma.filingContentCache.findUnique.mockResolvedValue({
       content: '<html><body>Test filing content</body></html>',
       contentLength: 100,
@@ -160,7 +173,8 @@ describe('summarize-cached-handler field population', () => {
     });
 
     mockPrisma.ticker.findFirst.mockResolvedValue({
-      id: 'test-ticker-id'
+      id: 'test-ticker-id',
+      preferences: null,
     });
 
     mockPrisma.user.update.mockResolvedValue({});
