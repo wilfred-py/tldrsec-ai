@@ -106,11 +106,13 @@ describe('SEO Metadata Validation', () => {
   });
 
   describe('Homepage', () => {
-    it('should not use force-dynamic rendering', () => {
+    it('should use force-dynamic rendering (required for Clerk auth)', () => {
       const filePath = path.join(projectRoot, 'app/page.tsx');
       const content = fs.readFileSync(filePath, 'utf-8');
 
-      expect(content).not.toContain("force-dynamic");
+      // force-dynamic is required because LandingPageV2 uses Clerk's useUser
+      // via AuthProvider. Without it, Next.js static pre-rendering crashes.
+      expect(content).toContain("force-dynamic");
     });
 
     it('should include high-intent SEC filing keywords', () => {
