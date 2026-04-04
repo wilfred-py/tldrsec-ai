@@ -32,7 +32,7 @@ describe('HeroSectionV2', () => {
     render(<HeroSectionV2 />);
     const primaryCTA = screen.getByRole('link', { name: /Start Free Trial/i });
     expect(primaryCTA).toBeInTheDocument();
-    expect(primaryCTA).toHaveAttribute('href', '/sign-up');
+    expect(primaryCTA).toHaveAttribute('href', '/onboarding');
   });
 
   // Test 4: Secondary CTA links to pricing

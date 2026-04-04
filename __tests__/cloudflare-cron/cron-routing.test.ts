@@ -16,8 +16,8 @@ describe('Cloudflare Worker Cron Routing', () => {
   });
 
   describe('wrangler.toml configuration', () => {
-    it('should have */1 * * * * fast-poll pipeline schedule', () => {
-      expect(wranglerConfig).toContain('*/1 * * * *');
+    it('should have */5 * * * * fast-poll pipeline schedule', () => {
+      expect(wranglerConfig).toContain('*/5 * * * *');
     });
 
     it('should have */15 * * * * auto-recovery schedule', () => {
