@@ -35,7 +35,7 @@ export const SSEUpdateSchema = z.object({
     planType: z.enum(['FREE', 'PRO', 'MAX']),
     isActive: z.boolean(),
     isTrialing: z.boolean(),
-    daysRemaining: z.number().min(0),
+    daysRemaining: z.number(),
     trialEndsAt: z.string().nullable(),
     isGrandfathered: z.boolean(),
   }),
