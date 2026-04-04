@@ -77,7 +77,7 @@ describe('Timeout Handling Edge Cases', () => {
       'x-execution-id': 'test-exec-timeout-123'
     });
     
-    mockRequest = new NextRequest('http://localhost:3000/api/cron/tier-aware', {
+    mockRequest = new NextRequest('http://localhost:3000/api/cron?action=tier-aware', {
       method: 'GET',
       headers
     });

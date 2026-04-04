@@ -9,7 +9,7 @@ import { describe, it, expect, beforeEach, jest } from '@jest/globals';
 import { NextRequest } from 'next/server';
 
 // Mock dependencies before importing the route
-jest.mock('../../../lib/db/prisma', () => {
+jest.mock('../../lib/db/prisma', () => {
   const mockPrismaInstance = {
     user: {
       findMany: jest.fn(),
@@ -28,7 +28,7 @@ jest.mock('../../../lib/db/prisma', () => {
   };
 });
 
-jest.mock('../../../lib/logging', () => ({
+jest.mock('../../lib/logging', () => ({
   logger: {
     child: jest.fn(() => ({
       info: jest.fn(),
@@ -39,7 +39,7 @@ jest.mock('../../../lib/logging', () => ({
   }
 }));
 
-jest.mock('../../../lib/security/rate-limiter', () => ({
+jest.mock('../../lib/security/rate-limiter', () => ({
   rateLimiter: {
     checkLimit: jest.fn().mockResolvedValue({
       allowed: true,
@@ -49,12 +49,12 @@ jest.mock('../../../lib/security/rate-limiter', () => ({
   }
 }));
 
-jest.mock('../../../lib/cron/tier-eligibility', () => ({
+jest.mock('../../lib/cron/tier-eligibility', () => ({
   getUserProcessingStatuses: jest.fn(),
   getEligibleUsers: jest.fn()
 }));
 
-jest.mock('../../../lib/monitoring/cron-monitor', () => ({
+jest.mock('../../lib/monitoring/cron-monitor', () => ({
   CronJobMonitor: {
     create: jest.fn().mockResolvedValue({
       recordMetric: jest.fn(),
@@ -64,15 +64,15 @@ jest.mock('../../../lib/monitoring/cron-monitor', () => ({
   }
 }));
 
-jest.mock('../../../lib/sec-edgar/ticker-monitoring', () => ({
+jest.mock('../../lib/sec-edgar/ticker-monitoring', () => ({
   getActiveTickersForMonitoring: jest.fn(),
   checkTickerForNewFilings: jest.fn(),
   markFilingAsProcessed: jest.fn()
 }));
 
 // Import after mocking
-import { GET } from '../../../app/api/cron/route';
-import { getPrismaClient } from '../../../lib/db/prisma';
+import { GET } from '../../app/api/cron/route';
+import { getPrismaClient } from '../../lib/db/prisma';
 
 const mockPrisma = (getPrismaClient as jest.Mock)();
 
@@ -103,8 +103,8 @@ describe('Tier-Aware Backwards Compatibility Tests', () => {
     });
     
     // Setup tier eligibility mocks (24/7 processing - no market hours)
-    const { getUserProcessingStatuses, getEligibleUsers } = require('../../../lib/cron/tier-eligibility');
-    const { getActiveTickersForMonitoring, checkTickerForNewFilings } = require('../../../lib/sec-edgar/ticker-monitoring');
+    const { getUserProcessingStatuses, getEligibleUsers } = require('../../lib/cron/tier-eligibility');
+    const { getActiveTickersForMonitoring, checkTickerForNewFilings } = require('../../lib/sec-edgar/ticker-monitoring');
 
     getUserProcessingStatuses.mockReturnValue([]);
     getEligibleUsers.mockReturnValue([]);
@@ -137,7 +137,7 @@ describe('Tier-Aware Backwards Compatibility Tests', () => {
 
       mockPrisma.user.findMany.mockResolvedValue(legacyUsers);
 
-      const request = new NextRequest('http://localhost:3000/api/cron/tier-aware', {
+      const request = new NextRequest('http://localhost:3000/api/cron?action=tier-aware', {
         headers: {
           'authorization': 'Bearer test-secret'
         }
@@ -172,12 +172,12 @@ describe('Tier-Aware Backwards Compatibility Tests', () => {
 
       mockPrisma.user.findMany.mockResolvedValue(usersWithOldFields);
       
-      const { getUserProcessingStatuses } = require('../../../lib/cron/market-hours');
+      const { getUserProcessingStatuses } = require('../../lib/cron/market-hours');
       getUserProcessingStatuses.mockReturnValue([
         { userId: 'old-field-user', tier: 'PROFESSIONAL', eligible: false, reason: 'budget_exceeded' }
       ]);
 
-      const request = new NextRequest('http://localhost:3000/api/cron/tier-aware', {
+      const request = new NextRequest('http://localhost:3000/api/cron?action=tier-aware', {
         headers: {
           'authorization': 'Bearer test-secret'
         }
@@ -214,7 +214,7 @@ describe('Tier-Aware Backwards Compatibility Tests', () => {
 
       mockPrisma.user.findMany.mockResolvedValue(usersWithOldTiers);
 
-      const request = new NextRequest('http://localhost:3000/api/cron/tier-aware', {
+      const request = new NextRequest('http://localhost:3000/api/cron?action=tier-aware', {
         headers: {
           'authorization': 'Bearer test-secret'
         }
@@ -248,7 +248,7 @@ describe('Tier-Aware Backwards Compatibility Tests', () => {
 
       mockPrisma.user.findMany.mockResolvedValue(usersWithLegacyProcessing);
       
-      const { getUserProcessingStatuses, getEligibleUsers } = require('../../../lib/cron/market-hours');
+      const { getUserProcessingStatuses, getEligibleUsers } = require('../../lib/cron/market-hours');
       getUserProcessingStatuses.mockReturnValue([
         { userId: 'legacy-freq-user', tier: 'FREE', eligible: true, reason: 'eligible' }
       ]);
@@ -256,7 +256,7 @@ describe('Tier-Aware Backwards Compatibility Tests', () => {
         { userId: 'legacy-freq-user', tier: 'FREE' }
       ]);
 
-      const request = new NextRequest('http://localhost:3000/api/cron/tier-aware', {
+      const request = new NextRequest('http://localhost:3000/api/cron?action=tier-aware', {
         headers: {
           'authorization': 'Bearer test-secret'
         }
@@ -284,12 +284,12 @@ describe('Tier-Aware Backwards Compatibility Tests', () => {
 
       mockPrisma.user.findMany.mockResolvedValue(usersWithoutResetDates);
       
-      const { getUserProcessingStatuses } = require('../../../lib/cron/market-hours');
+      const { getUserProcessingStatuses } = require('../../lib/cron/market-hours');
       getUserProcessingStatuses.mockReturnValue([
         { userId: 'no-reset-date-user', tier: 'ENTERPRISE', eligible: false, reason: 'no_reset_date' }
       ]);
 
-      const request = new NextRequest('http://localhost:3000/api/cron/tier-aware', {
+      const request = new NextRequest('http://localhost:3000/api/cron?action=tier-aware', {
         headers: {
           'authorization': 'Bearer test-secret'
         }
@@ -317,7 +317,7 @@ describe('Tier-Aware Backwards Compatibility Tests', () => {
 
       mockPrisma.user.findMany.mockResolvedValue([]);
 
-      const request = new NextRequest('http://localhost:3000/api/cron/tier-aware', {
+      const request = new NextRequest('http://localhost:3000/api/cron?action=tier-aware', {
         headers: {
           'authorization': 'Bearer test-secret'
         }
@@ -337,7 +337,7 @@ describe('Tier-Aware Backwards Compatibility Tests', () => {
 
       mockPrisma.user.findMany.mockResolvedValue([]);
 
-      const request = new NextRequest('http://localhost:3000/api/cron/tier-aware', {
+      const request = new NextRequest('http://localhost:3000/api/cron?action=tier-aware', {
         headers: {
           'authorization': 'Bearer test-secret'
         }
@@ -354,7 +354,7 @@ describe('Tier-Aware Backwards Compatibility Tests', () => {
     it('should maintain response format for monitoring systems', async () => {
       mockPrisma.user.findMany.mockResolvedValue([]);
 
-      const request = new NextRequest('http://localhost:3000/api/cron/tier-aware', {
+      const request = new NextRequest('http://localhost:3000/api/cron?action=tier-aware', {
         headers: {
           'authorization': 'Bearer test-secret'
         }
@@ -386,7 +386,7 @@ describe('Tier-Aware Backwards Compatibility Tests', () => {
 
     it('should include new error breakdown while maintaining old error count', async () => {
       // Setup a scenario with errors
-      const { getUserProcessingStatuses, getEligibleUsers } = require('../../../lib/cron/market-hours');
+      const { getUserProcessingStatuses, getEligibleUsers } = require('../../lib/cron/market-hours');
       
       mockPrisma.user.findMany.mockResolvedValue([
         {
@@ -410,7 +410,7 @@ describe('Tier-Aware Backwards Compatibility Tests', () => {
       // Mock a processing error
       mockPrisma.$transaction.mockRejectedValue(new Error('Processing failed'));
 
-      const request = new NextRequest('http://localhost:3000/api/cron/tier-aware', {
+      const request = new NextRequest('http://localhost:3000/api/cron?action=tier-aware', {
         headers: {
           'authorization': 'Bearer test-secret'
         }
@@ -456,7 +456,7 @@ describe('Tier-Aware Backwards Compatibility Tests', () => {
 
       mockPrisma.user.findMany.mockResolvedValue(usersWithMissingFields);
 
-      const request = new NextRequest('http://localhost:3000/api/cron/tier-aware', {
+      const request = new NextRequest('http://localhost:3000/api/cron?action=tier-aware', {
         headers: {
           'authorization': 'Bearer test-secret'
         }
@@ -471,7 +471,7 @@ describe('Tier-Aware Backwards Compatibility Tests', () => {
     });
 
     it('should handle old audit log format', async () => {
-      const { getUserProcessingStatuses, getEligibleUsers } = require('../../../lib/cron/market-hours');
+      const { getUserProcessingStatuses, getEligibleUsers } = require('../../lib/cron/market-hours');
       
       mockPrisma.user.findMany.mockResolvedValue([
         {
@@ -512,7 +512,7 @@ describe('Tier-Aware Backwards Compatibility Tests', () => {
         return await callback(mockTx);
       });
 
-      const request = new NextRequest('http://localhost:3000/api/cron/tier-aware', {
+      const request = new NextRequest('http://localhost:3000/api/cron?action=tier-aware', {
         headers: {
           'authorization': 'Bearer test-secret'
         }
@@ -542,12 +542,12 @@ describe('Tier-Aware Backwards Compatibility Tests', () => {
 
       mockPrisma.user.findMany.mockResolvedValue(users);
       
-      const { getUserProcessingStatuses, getEligibleUsers } = require('../../../lib/cron/market-hours');
+      const { getUserProcessingStatuses, getEligibleUsers } = require('../../lib/cron/market-hours');
       // Return empty eligible users (simulating feature being disabled)
       getUserProcessingStatuses.mockReturnValue([]);
       getEligibleUsers.mockReturnValue([]);
 
-      const request = new NextRequest('http://localhost:3000/api/cron/tier-aware', {
+      const request = new NextRequest('http://localhost:3000/api/cron?action=tier-aware', {
         headers: {
           'authorization': 'Bearer test-secret'
         }
@@ -566,7 +566,7 @@ describe('Tier-Aware Backwards Compatibility Tests', () => {
     it('should maintain monitoring metrics format for existing dashboards', async () => {
       mockPrisma.user.findMany.mockResolvedValue([]);
 
-      const request = new NextRequest('http://localhost:3000/api/cron/tier-aware', {
+      const request = new NextRequest('http://localhost:3000/api/cron?action=tier-aware', {
         headers: {
           'authorization': 'Bearer test-secret'
         }

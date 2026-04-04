@@ -76,6 +76,6 @@ describe('SummaryContent Component', () => {
     expect(queryByRole('tab', { name: /formatted/i })).not.toBeInTheDocument();
     
     // Check that the "Add to Watchlist" button is displayed
-    expect(getByRole('button', { name: /add to watchlist/i })).toBeInTheDocument();
+    expect(getByText(/add to watchlist/i)).toBeInTheDocument();
   });
 }); 

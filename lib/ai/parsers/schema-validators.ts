@@ -8,6 +8,7 @@
 import { z } from 'zod';
 import { SECFilingType } from '../prompts/prompt-types';
 import { ValidationResult } from './types';
+import { canonicalizeFormType } from '../utils/form-type-utils';
 
 /**
  * Common reused schema elements
@@ -197,6 +198,29 @@ const schemaGeneric = z.object({
 /**
  * Map filing types to their schemas
  */
+/**
+ * Form 144 schema for planned sales of securities.
+ * Matches required fields in FORM_SCHEMAS['144'] from unified-prompts.ts.
+ *
+ * NOTE: In non-strict mode, Zod calls .partial() which makes all fields optional.
+ * This schema only enforces its required fields when strict=true is passed to
+ * validateAgainstSchema(). See the validation function for details.
+ */
+const schemaForm144 = z.object({
+  company: z.string(),
+  summary: z.string(),
+  filerName: z.string(),
+  shares: z.number().or(z.string()),
+  estimatedValue: z.string().or(z.number()),
+  remainingHoldings: z.string().or(z.number()).optional(),
+  signalStrength: z.string().optional(),
+  sharesOutstanding: z.string().or(z.number()).optional(),
+  tradingPlan: z.string().optional(),
+  recentActivity: z.string().optional(),
+  percentOfHoldings: z.string().or(z.number()).optional(),
+  broker: z.string().optional(),
+});
+
 const schemaMap: Record<SECFilingType | string, z.ZodTypeAny> = {
   '10-K': schema10K,
   '10-Q': schema10Q,
@@ -209,7 +233,7 @@ const schemaMap: Record<SECFilingType | string, z.ZodTypeAny> = {
   'DEF 14A': schemaDEF14A,
   '3': schemaForm3,  // Form 3 for initial insider holdings reports
   '4': schemaForm4,  // Form 4 for insider trading reports
-  '144': schemaGeneric, // Form 144 for planned sales of securities
+  '144': schemaForm144, // Form 144 for planned sales of securities
   'Generic': schemaGeneric
 };
 
@@ -222,13 +246,15 @@ const schemaMap: Record<SECFilingType | string, z.ZodTypeAny> = {
  * @returns Validation result with status and errors if any
  */
 export function validateAgainstSchema(
-  data: unknown, 
+  data: unknown,
   filingType: SECFilingType = 'Generic',
   strict = false
 ): ValidationResult {
   try {
-    // Get the appropriate schema
-    const schema = schemaMap[filingType] || schemaGeneric;
+    // Canonicalize form type: '10-K/A' -> '10-K', 'SCHEDULE 13G' -> 'SC 13G', etc.
+    const { type: canonicalType } = canonicalizeFormType(filingType);
+    // Get the appropriate schema using canonical type
+    const schema = schemaMap[canonicalType] || schemaGeneric;
     
     // In strict mode, we validate against the full schema
     if (strict) {
@@ -306,7 +332,9 @@ export function extractValidFields(
   filingType: SECFilingType = 'Generic'
 ): Record<string, unknown> {
   try {
-    const schema = schemaMap[filingType] || schemaGeneric;
+    // Canonicalize form type: '10-K/A' -> '10-K', 'SCHEDULE 13G' -> 'SC 13G', etc.
+    const { type: canonicalType } = canonicalizeFormType(filingType);
+    const schema = schemaMap[canonicalType] || schemaGeneric;
     const validFields: Record<string, unknown> = {};
     
     if (!data || typeof data !== 'object') {

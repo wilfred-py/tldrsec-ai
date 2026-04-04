@@ -5,8 +5,8 @@ import { ReactNode } from 'react';
 
 interface ClerkProviderWrapperProps {
   children: ReactNode;
-  afterSignUpUrl?: string;
-  afterSignInUrl?: string;
+  signInFallbackRedirectUrl?: string;
+  signUpFallbackRedirectUrl?: string;
   signUpUrl?: string;
   signInUrl?: string;
 }
@@ -14,10 +14,10 @@ interface ClerkProviderWrapperProps {
 /**
  * Wrapper around ClerkProvider that handles missing publishable key during build time
  */
-export function ClerkProviderWrapper({ 
-  children, 
-  afterSignUpUrl,
-  afterSignInUrl,
+export function ClerkProviderWrapper({
+  children,
+  signInFallbackRedirectUrl,
+  signUpFallbackRedirectUrl,
   signUpUrl,
   signInUrl
 }: ClerkProviderWrapperProps) {
@@ -38,8 +38,8 @@ export function ClerkProviderWrapper({
   
   return (
     <ClerkProvider
-      afterSignUpUrl={afterSignUpUrl}
-      afterSignInUrl={afterSignInUrl}
+      signUpFallbackRedirectUrl={signUpFallbackRedirectUrl}
+      signInFallbackRedirectUrl={signInFallbackRedirectUrl}
       signUpUrl={signUpUrl}
       signInUrl={signInUrl}
     >

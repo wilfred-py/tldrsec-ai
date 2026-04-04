@@ -115,7 +115,7 @@ describe('/api/cron/tier-aware', () => {
 
   describe('Authentication and Security', () => {
     it('should reject requests without authorization header', async () => {
-      const request = new NextRequest('http://localhost:3000/api/cron/tier-aware');
+      const request = new NextRequest('http://localhost:3000/api/cron?action=tier-aware');
       
       const response = await GET(request);
       const data = await response.json();
@@ -125,7 +125,7 @@ describe('/api/cron/tier-aware', () => {
     });
 
     it('should reject requests with invalid authorization', async () => {
-      const request = new NextRequest('http://localhost:3000/api/cron/tier-aware', {
+      const request = new NextRequest('http://localhost:3000/api/cron?action=tier-aware', {
         headers: {
           'authorization': 'Bearer invalid-secret'
         }
@@ -139,7 +139,7 @@ describe('/api/cron/tier-aware', () => {
     });
 
     it('should accept requests with valid authorization', async () => {
-      const request = new NextRequest('http://localhost:3000/api/cron/tier-aware', {
+      const request = new NextRequest('http://localhost:3000/api/cron?action=tier-aware', {
         headers: {
           'authorization': `Bearer ${validSecret}`
         }
@@ -166,7 +166,7 @@ describe('/api/cron/tier-aware', () => {
         resetTime: Date.now() + 60000
       });
 
-      const request = new NextRequest('http://localhost:3000/api/cron/tier-aware', {
+      const request = new NextRequest('http://localhost:3000/api/cron?action=tier-aware', {
         headers: {
           'authorization': `Bearer ${validSecret}`
         }
@@ -184,7 +184,7 @@ describe('/api/cron/tier-aware', () => {
       // the behavior when no allowed IPs are configured (empty array)
       // This test verifies the IP checking logic works when properly configured
       
-      const request = new NextRequest('http://localhost:3000/api/cron/tier-aware', {
+      const request = new NextRequest('http://localhost:3000/api/cron?action=tier-aware', {
         headers: {
           'authorization': `Bearer ${validSecret}`,
           'x-forwarded-for': '192.168.1.100'
@@ -262,7 +262,7 @@ describe('/api/cron/tier-aware', () => {
         return await callback(mockTx);
       });
 
-      const request = new NextRequest('http://localhost:3000/api/cron/tier-aware', {
+      const request = new NextRequest('http://localhost:3000/api/cron?action=tier-aware', {
         headers: {
           'authorization': `Bearer ${validSecret}`
         }
@@ -313,7 +313,7 @@ describe('/api/cron/tier-aware', () => {
         return await callback(mockTx);
       });
 
-      const request = new NextRequest('http://localhost:3000/api/cron/tier-aware', {
+      const request = new NextRequest('http://localhost:3000/api/cron?action=tier-aware', {
         headers: {
           'authorization': `Bearer ${validSecret}`
         }
@@ -371,7 +371,7 @@ describe('/api/cron/tier-aware', () => {
         return await callback(mockTx);
       });
 
-      const request = new NextRequest('http://localhost:3000/api/cron/tier-aware', {
+      const request = new NextRequest('http://localhost:3000/api/cron?action=tier-aware', {
         headers: {
           'authorization': `Bearer ${validSecret}`
         }
@@ -427,7 +427,7 @@ describe('/api/cron/tier-aware', () => {
         throw new Error('Subscription tier mismatch: expected ENTERPRISE, got FREE');
       });
 
-      const request = new NextRequest('http://localhost:3000/api/cron/tier-aware', {
+      const request = new NextRequest('http://localhost:3000/api/cron?action=tier-aware', {
         headers: {
           'authorization': `Bearer ${validSecret}`
         }
@@ -446,7 +446,7 @@ describe('/api/cron/tier-aware', () => {
     it('should process filings anytime (24/7 processing)', async () => {
       mockPrisma.user.findMany.mockResolvedValue([]);
 
-      const request = new NextRequest('http://localhost:3000/api/cron/tier-aware', {
+      const request = new NextRequest('http://localhost:3000/api/cron?action=tier-aware', {
         headers: {
           'authorization': `Bearer ${validSecret}`
         }
@@ -465,7 +465,7 @@ describe('/api/cron/tier-aware', () => {
     it('should handle database errors gracefully', async () => {
       mockPrisma.user.findMany.mockRejectedValue(new Error('Database connection failed'));
 
-      const request = new NextRequest('http://localhost:3000/api/cron/tier-aware', {
+      const request = new NextRequest('http://localhost:3000/api/cron?action=tier-aware', {
         headers: {
           'authorization': `Bearer ${validSecret}`
         }
@@ -486,7 +486,7 @@ describe('/api/cron/tier-aware', () => {
       
       mockPrisma.user.findMany.mockResolvedValue([]);
 
-      const request = new NextRequest('http://localhost:3000/api/cron/tier-aware', {
+      const request = new NextRequest('http://localhost:3000/api/cron?action=tier-aware', {
         headers: {
           'authorization': `Bearer ${validSecret}`
         }
@@ -545,7 +545,7 @@ describe('/api/cron/tier-aware', () => {
         return await callback(mockTx);
       });
 
-      const request = new NextRequest('http://localhost:3000/api/cron/tier-aware', {
+      const request = new NextRequest('http://localhost:3000/api/cron?action=tier-aware', {
         headers: {
           'authorization': `Bearer ${validSecret}`
         }

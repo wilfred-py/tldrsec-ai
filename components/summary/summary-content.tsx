@@ -3,7 +3,7 @@
 import { useState, useRef } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Summary } from '@/lib/generated/prisma';
+import { Summary } from '@prisma/client';
 import { Badge } from '@/components/ui/badge';
 import { ArrowDown, ArrowUp, Info, AlertTriangle, BarChart, Briefcase, Calendar, DollarSign, FileText, TrendingUp, Search, Copy, Download, Check, X, ShieldAlert } from 'lucide-react';
 import { format } from 'date-fns';
@@ -16,6 +16,8 @@ import { Button } from '@/components/ui/button';
 import Link from 'next/link';
 import { SummaryErrorState } from './summary-error-state';
 import DOMPurify from 'dompurify';
+import { canonicalizeFormType } from '@/lib/ai/utils/form-type-utils';
+import { StructuredSummary } from './formatted-summaries/structured-summary';
 
 /**
  * Sanitize content to prevent DOM clobbering and XSS attacks
@@ -468,34 +470,58 @@ interface FormattedSummaryProps {
 }
 
 function FormattedSummary({ summaryData, filingType, summaryText, ticker, filingDate }: FormattedSummaryProps) {
+  // Canonicalize form type: 'Form4' -> '4', '10-K/A' -> '10-K' + isAmendment, etc.
+  const { type: canonicalType, isAmendment } = canonicalizeFormType(filingType);
+
+  // Amendment badge shown above the summary for /A filing types
+  const amendmentBadge = isAmendment ? (
+    <div className="mb-3 flex items-center gap-2">
+      <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950 dark:text-amber-300 dark:border-amber-800">
+        Amendment ({filingType})
+      </Badge>
+    </div>
+  ) : null;
+
   // Render Annual/Quarterly Reports (10-K and 10-Q)
-  if (filingType === '10-K' || filingType === '10-Q') {
-    return <FinancialReportSummary summaryData={summaryData} filingType={filingType} ticker={ticker} filingDate={filingDate} />;
-  } 
-  
-  // Render Current Reports (8-K)
-  else if (filingType === '8-K') {
-    return <CurrentReportSummary summaryData={summaryData} ticker={ticker} filingDate={filingDate} />;
-  } 
-  
-  // Render Insider Trading Reports (Form 4)
-  else if (filingType === 'Form4') {
-    return <InsiderTradingSummary summaryData={summaryData} ticker={ticker} filingDate={filingDate} />;
+  if (canonicalType === '10-K' || canonicalType === '10-Q') {
+    return (
+      <>
+        {amendmentBadge}
+        <FinancialReportSummary summaryData={summaryData} filingType={canonicalType} ticker={ticker} filingDate={filingDate} />
+      </>
+    );
   }
-  
-  // Fallback for unknown filing types
+
+  // Render Current Reports (8-K)
+  if (canonicalType === '8-K') {
+    return (
+      <>
+        {amendmentBadge}
+        <CurrentReportSummary summaryData={summaryData} ticker={ticker} filingDate={filingDate} />
+      </>
+    );
+  }
+
+  // Render Insider Trading Reports (Form 4 only — Form 3 has no transactions, uses StructuredSummary)
+  if (canonicalType === '4') {
+    return (
+      <>
+        {amendmentBadge}
+        <InsiderTradingSummary summaryData={summaryData} ticker={ticker} filingDate={filingDate} />
+      </>
+    );
+  }
+
+  // Structured renderer for all other filing types (SC 13G, DEF 14A, 424B2, S-1, FWP, etc.)
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>{ticker.companyName} ({ticker.symbol})</CardTitle>
-        <CardDescription>Filing Date: {format(new Date(filingDate), 'PPP')}</CardDescription>
-      </CardHeader>
-      <CardContent>
-        <div className="prose dark:prose-invert max-w-none">
-          <div className="whitespace-pre-wrap">{sanitizeDisplayContent(summaryText || '')}</div>
-        </div>
-      </CardContent>
-    </Card>
+    <StructuredSummary
+      summaryData={summaryData}
+      summaryText={sanitizeDisplayContent(summaryText || '')}
+      ticker={ticker}
+      filingDate={filingDate}
+      filingType={canonicalType}
+      isAmendment={isAmendment}
+    />
   );
 }
 

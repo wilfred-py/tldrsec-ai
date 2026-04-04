@@ -37,14 +37,14 @@ export async function reconcileStripeSubscription(
   const customers = await stripe.customers.list({ email, limit: 3 });
 
   for (const customer of customers.data) {
-    const activeSubs = await stripe.subscriptions.list({
-      customer: customer.id,
-      status: 'active',
-      limit: 1,
-    });
+    // Check both 'active' and 'trialing' — CC-required trials create 'trialing' status
+    const [activeSubs, trialingSubs] = await Promise.all([
+      stripe.subscriptions.list({ customer: customer.id, status: 'active', limit: 1 }),
+      stripe.subscriptions.list({ customer: customer.id, status: 'trialing', limit: 1 }),
+    ]);
 
-    if (activeSubs.data.length > 0) {
-      const sub = activeSubs.data[0];
+    const sub = activeSubs.data[0] || trialingSubs.data[0];
+    if (sub) {
       const priceId = sub.items.data[0]?.price.id;
       const derivedPlanType = getPlanTypeFromPriceId(priceId);
 

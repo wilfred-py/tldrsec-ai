@@ -90,7 +90,9 @@ function getHandlerStatus(handler) {
 }
 
 /**
- * Alert on handler failure via Slack webhook
+ * Alert on handler failure via Slack webhook AND email
+ * Sends alerts on first failure and every 3rd consecutive failure.
+ * Email alerts go through the Vercel send-alert endpoint using HMAC auth.
  * @param {string} handlerName - Name of the handler
  * @param {Error} error - The error that occurred
  * @param {object} env - Worker environment
@@ -105,58 +107,91 @@ async function alertOnHandlerFailure(handlerName, error, env) {
     return;
   }
 
+  // --- Slack alert (best-effort) ---
   const webhookUrl = env.SLACK_ALERTS_WEBHOOK_URL || env.SLACK_WEBHOOK_URL;
-  if (!webhookUrl) {
-    console.warn(`[ALERT] Slack not configured, cannot alert on ${handlerName} failure`);
-    return;
+  if (webhookUrl) {
+    const payload = {
+      text: `:rotating_light: Cron Handler Failure: ${handlerName}`,
+      blocks: [
+        {
+          type: 'section',
+          text: { type: 'mrkdwn', text: `:rotating_light: *Cron Handler Failed: ${handlerName}*` },
+        },
+        {
+          type: 'section',
+          fields: [
+            { type: 'mrkdwn', text: `*Handler:* ${handlerName}` },
+            { type: 'mrkdwn', text: `*Consecutive Failures:* ${handler.consecutiveFailures}` },
+            { type: 'mrkdwn', text: `*Error:* ${error?.message || 'Unknown'}` },
+            { type: 'mrkdwn', text: `*Time:* ${new Date().toISOString()}` },
+          ],
+        },
+        {
+          type: 'context',
+          elements: [
+            {
+              type: 'mrkdwn',
+              text: handler.consecutiveFailures >= 3
+                ? ':warning: Handler is now UNHEALTHY - investigate immediately'
+                : ':eyes: First failure - monitoring for recovery',
+            },
+          ],
+        },
+      ],
+    };
+
+    try {
+      const response = await fetch(webhookUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      if (!response.ok) {
+        console.error(`[ALERT] Slack webhook failed: ${response.status}`);
+      } else {
+        console.log(`[ALERT] Sent Slack alert for ${handlerName}`);
+      }
+    } catch (alertError) {
+      console.error(`[ALERT] Failed to send Slack alert for ${handlerName}:`, alertError.message);
+    }
   }
 
-  const payload = {
-    text: `:rotating_light: Cron Handler Failure: ${handlerName}`,
-    blocks: [
-      {
-        type: 'section',
-        text: {
-          type: 'mrkdwn',
-          text: `:rotating_light: *Cron Handler Failed: ${handlerName}*`,
-        },
-      },
-      {
-        type: 'section',
-        fields: [
-          { type: 'mrkdwn', text: `*Handler:* ${handlerName}` },
-          { type: 'mrkdwn', text: `*Consecutive Failures:* ${handler.consecutiveFailures}` },
-          { type: 'mrkdwn', text: `*Error:* ${error?.message || 'Unknown'}` },
-          { type: 'mrkdwn', text: `*Time:* ${new Date().toISOString()}` },
-        ],
-      },
-      {
-        type: 'context',
-        elements: [
-          {
-            type: 'mrkdwn',
-            text: handler.consecutiveFailures >= 3
-              ? ':warning: Handler is now UNHEALTHY - investigate immediately'
-              : ':eyes: First failure - monitoring for recovery',
-          },
-        ],
-      },
-    ],
-  };
+  // --- Email alert via Vercel send-alert endpoint ---
+  if (env.PUBLIC_URL && env.CRON_SECRET) {
+    try {
+      const alertUrl = `${env.PUBLIC_URL}/api/cron?action=send-alert`;
+      const timestamp = Date.now();
+      const hmacPayload = `${timestamp}:POST:/api/cron`;
+      const encoder = new TextEncoder();
+      const key = await crypto.subtle.importKey(
+        'raw', encoder.encode(sanitizeCronSecret(env.CRON_SECRET)),
+        { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']
+      );
+      const sig = await crypto.subtle.sign('HMAC', key, encoder.encode(hmacPayload));
+      const sigHex = Array.from(new Uint8Array(sig)).map(b => b.toString(16).padStart(2, '0')).join('');
 
-  try {
-    const response = await fetch(webhookUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    });
-    if (!response.ok) {
-      console.error(`[ALERT] Slack webhook failed: ${response.status}`);
-    } else {
-      console.log(`[ALERT] Sent failure alert for ${handlerName}`);
+      const emailResponse = await fetch(alertUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-hmac-signature': sigHex,
+          'x-hmac-timestamp': timestamp.toString(),
+        },
+        body: JSON.stringify({
+          handler: handlerName,
+          error: error?.message || 'Unknown error',
+          consecutiveFailures: handler.consecutiveFailures,
+          executionId: `alert-${Date.now()}`,
+        }),
+      });
+      if (emailResponse.ok) {
+        console.log(`[ALERT] Email alert sent for ${handlerName}`);
+      } else {
+        console.warn(`[ALERT] Email alert failed: ${emailResponse.status}`);
+      }
+    } catch (emailError) {
+      console.error(`[ALERT] Failed to send email alert for ${handlerName}:`, emailError.message);
     }
-  } catch (alertError) {
-    console.error(`[ALERT] Failed to send Slack alert for ${handlerName}:`, alertError.message);
   }
 }
 
@@ -335,65 +370,14 @@ export default {
     }
   },
 
-  // Handle daily Slack report (9 AM AEST)
+  // Handle daily Slack report
+  // NOTE: /api/cron/slack-daily-report was removed in route consolidation (#371).
+  // Slack notifications now go through the webhook service directly from pipeline handlers.
   async handleDailyReport(event, env, ctx) {
     const executionId = `daily-report-${Date.now()}`;
-    const startTime = Date.now();
-
-    // Record handler execution start
-    recordHandlerExecution('dailyReport', null);
-    console.log(`[${executionId}] Starting daily Slack report (9 AM AEST)`);
-
-    try {
-      const url = `${env.PUBLIC_URL}/api/cron/slack-daily-report`;
-
-      // Generate HMAC signature
-      const timestamp = Date.now();
-      const payload = `${timestamp}:GET:/api/cron/slack-daily-report`;
-      const encoder = new TextEncoder();
-      const key = await crypto.subtle.importKey(
-        'raw',
-        encoder.encode(sanitizeCronSecret(env.CRON_SECRET)),
-        { name: 'HMAC', hash: 'SHA-256' },
-        false,
-        ['sign']
-      );
-      const signature = await crypto.subtle.sign('HMAC', key, encoder.encode(payload));
-      const signatureHex = Array.from(new Uint8Array(signature))
-        .map(byte => byte.toString(16).padStart(2, '0'))
-        .join('');
-
-      const response = await fetch(url, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Execution-Id': executionId,
-          'X-Cloudflare-Worker': 'tldrsec-cron',
-          'x-hmac-signature': signatureHex,
-          'x-hmac-timestamp': timestamp.toString(),
-        },
-      });
-
-      const duration = Date.now() - startTime;
-
-      if (response.ok) {
-        console.log(`[${executionId}] Daily report completed successfully in ${duration}ms`);
-        recordHandlerExecution('dailyReport', true);
-        return { success: true, executionId, duration };
-      } else {
-        const errorText = await response.text();
-        console.error(`[${executionId}] Daily report failed: ${response.status} - ${errorText}`);
-        recordHandlerExecution('dailyReport', false);
-        await alertOnHandlerFailure('dailyReport', new Error(errorText), env);
-        return { success: false, executionId, duration, error: errorText };
-      }
-    } catch (error) {
-      const duration = Date.now() - startTime;
-      console.error(`[${executionId}] Daily report error: ${error.message}`);
-      recordHandlerExecution('dailyReport', false);
-      await alertOnHandlerFailure('dailyReport', error, env);
-      return { success: false, executionId, duration, error: error.message };
-    }
+    recordHandlerExecution('dailyReport', true);
+    console.log(`[${executionId}] Daily Slack report skipped (route removed in consolidation, notifications handled inline)`);
+    return { success: true, executionId, skipped: true, reason: 'route-removed-in-consolidation' };
   },
 
   // Handle DLQ cleanup (daily at midnight UTC via handleDailyTasks)
@@ -478,6 +462,7 @@ export default {
     const results = {
       dlqCleanup: null,
       checkTrials: null,
+      nurtureTrials: null,
       dailyReport: null,
       weeklyDigest: null,
     };
@@ -493,7 +478,8 @@ export default {
         const secret = sanitizeCronSecret(env.CRON_SECRET);
         const trialTimestamp = Date.now().toString();
         const trialPath = '/api/cron?action=check-trials';
-        const trialPayload = `${trialTimestamp}:GET:${trialPath}`;
+        // HMAC signs pathname only (no query string) to match Vercel's url.pathname validation
+        const trialPayload = `${trialTimestamp}:GET:/api/cron`;
         const encoder = new TextEncoder();
         const trialKey = await crypto.subtle.importKey(
           'raw', encoder.encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']
@@ -519,7 +505,39 @@ export default {
         console.error(`[${executionId}] Trial check error: ${trialError.message}`);
       }
 
-      // Task 3: Daily report (informational, least critical)
+      // Task 3: Trial nurture emails (engagement-based nurture sequence)
+      console.log(`[${executionId}] Running trial nurture...`);
+      try {
+        const nurtureSecret = sanitizeCronSecret(env.CRON_SECRET);
+        const nurtureTimestamp = Date.now().toString();
+        const nurturePath = '/api/cron?action=nurture-trials';
+        const nurturePayload = `${nurtureTimestamp}:GET:/api/cron`;
+        const nurtureEncoder = new TextEncoder();
+        const nurtureKey = await crypto.subtle.importKey(
+          'raw', nurtureEncoder.encode(nurtureSecret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']
+        );
+        const nurtureSigBuffer = await crypto.subtle.sign('HMAC', nurtureKey, nurtureEncoder.encode(nurturePayload));
+        const nurtureSig = Array.from(new Uint8Array(nurtureSigBuffer)).map(b => b.toString(16).padStart(2, '0')).join('');
+
+        const nurtureUrl = `${env.PUBLIC_URL}${nurturePath}`;
+        const nurtureResponse = await fetch(nurtureUrl, {
+          method: 'GET',
+          headers: {
+            'x-hmac-signature': nurtureSig,
+            'x-hmac-timestamp': nurtureTimestamp,
+            'x-execution-id': executionId,
+          },
+        });
+
+        const nurtureData = nurtureResponse.ok ? await nurtureResponse.json() : await nurtureResponse.text();
+        results.nurtureTrials = { success: nurtureResponse.ok, status: nurtureResponse.status, data: nurtureData };
+        console.log(`[${executionId}] Trial nurture: ${nurtureResponse.ok ? 'SUCCESS' : 'FAILED'} (${nurtureResponse.status})`);
+      } catch (nurtureError) {
+        results.nurtureTrials = { success: false, error: nurtureError.message };
+        console.error(`[${executionId}] Trial nurture error: ${nurtureError.message}`);
+      }
+
+      // Task 4: Daily report (informational, least critical)
       console.log(`[${executionId}] Running daily report...`);
       results.dailyReport = await this.handleDailyReport(event, env, ctx);
 
@@ -532,7 +550,7 @@ export default {
           const payload = `${timestamp}:GET:/api/cron/weekly-digest`;
           const encoder = new TextEncoder();
           const key = await crypto.subtle.importKey(
-            'raw', encoder.encode(env.CRON_SECRET), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']
+            'raw', encoder.encode(sanitizeCronSecret(env.CRON_SECRET)), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']
           );
           const signatureBuffer = await crypto.subtle.sign('HMAC', key, encoder.encode(payload));
           const signature = Array.from(new Uint8Array(signatureBuffer)).map(b => b.toString(16).padStart(2, '0')).join('');
@@ -561,7 +579,7 @@ export default {
           const piTimestamp = Date.now().toString();
           const piPayload = `${piTimestamp}:GET:/api/cron/prompt-improvement`;
           const piKey = await crypto.subtle.importKey(
-            'raw', encoder.encode(env.CRON_SECRET), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']
+            'raw', encoder.encode(sanitizeCronSecret(env.CRON_SECRET)), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']
           );
           const piSigBuf = await crypto.subtle.sign('HMAC', piKey, encoder.encode(piPayload));
           const piSig = Array.from(new Uint8Array(piSigBuf)).map(b => b.toString(16).padStart(2, '0')).join('');
@@ -590,6 +608,7 @@ export default {
       console.log(`[${executionId}] Combined daily tasks completed in ${duration}ms`, {
         dlqCleanup: results.dlqCleanup?.success ? 'SUCCESS' : 'FAILED',
         checkTrials: results.checkTrials?.success ? 'SUCCESS' : 'FAILED',
+        nurtureTrials: results.nurtureTrials?.success ? 'SUCCESS' : 'FAILED',
         dailyReport: results.dailyReport?.success ? 'SUCCESS' : 'FAILED',
         weeklyDigest: results.weeklyDigest ? (results.weeklyDigest.success ? 'SUCCESS' : 'FAILED') : 'SKIPPED',
       });
@@ -1129,33 +1148,32 @@ export default {
 
       } // end of else block (Steps 2/3 skipped when fast-poll returns 'skipped')
 
-      // Combine results from all five endpoints (including discovery)
+      // Combine results from all steps
+      // fast-poll replaces the old tier-aware + discovery steps
+      // fast-poll is successful if it completed, was skipped, or explicitly succeeded
+      // Use === true / explicit checks to avoid false-positives when results are undefined (e.g. fetch threw)
+      const fastPollSuccess = fastPollResult?.status === 'completed' || fastPollResult?.status === 'skipped' || fastPollResult?.success === true;
+      const fetchSuccess = fetchResult?.success === true;
+      const summarizeSuccess = totalSummarizeJobsProcessed > 0 || summarizeResult?.success === true;
       const result = {
         cleanup: cleanupResult,
-        tierAware: tierAwareResult,
-        discovery: discoveryResult,
+        fastPoll: fastPollResult,
         fetch: fetchResult,
         summarize: summarizeResult,
-        // Note: cleanup and discovery failures don't fail the whole pipeline
-        // Discovery failures are non-fatal - jobs will retry on next cycle
-        combinedSuccess: tierAwareResult?.success && fetchResult?.success && (totalSummarizeJobsProcessed > 0 || summarizeResult?.success),
+        // All pipeline steps must explicitly succeed. undefined results = failure, not success.
+        combinedSuccess: fastPollSuccess && fetchSuccess && summarizeSuccess,
         metrics: {
           cleanup: {
             duration: cleanupResult?.duration || 0,
             locksCleared: cleanupResult?.cleanup?.expiredLocksCleared || 0,
             healthStatus: cleanupResult?.health?.status || 'UNKNOWN',
-            status: cleanupResult?.success ? 'success' : 'warning' // warning, not failed
+            status: cleanupResult?.success ? 'success' : 'warning'
           },
-          tierAware: {
-            duration: tierAwareResult?.duration || 0,
-            filesProcessed: tierAwareResult?.filesProcessed || 0,
-            status: tierAwareResult?.success ? 'success' : 'failed'
-          },
-          discovery: {
-            duration: discoveryResult?.duration || 0,
-            jobsProcessed: discoveryResult?.processed || 0,
-            fetchJobsQueued: discoveryResult?.queued || 0,
-            status: discoveryResult?.success ? 'success' : 'warning' // warning, not failed
+          fastPoll: {
+            duration: fastPollResult?.durationMs || 0,
+            filingsDetected: fastPollResult?.filingsDetected || 0,
+            fetchJobsQueued: fastPollResult?.fetchJobsQueued || 0,
+            status: fastPollResult?.error ? 'failed' : (fastPollResult?.status || 'unknown')
           },
           fetch: {
             duration: fetchResult?.duration || 0,
@@ -1174,22 +1192,16 @@ export default {
 
       const duration = Date.now() - startTime;
 
-      console.log(`[${executionId}] Five-step pipeline execution completed in ${duration}ms:`, {
+      console.log(`[${executionId}] Four-step pipeline execution completed in ${duration}ms:`, {
         step0Cleanup: result.metrics.cleanup.status,
         step0LocksCleared: result.metrics.cleanup.locksCleared,
-        step0HealthStatus: result.metrics.cleanup.healthStatus,
-        step1TierAware: result.metrics.tierAware.status,
-        step1_5Discovery: result.metrics.discovery.status,
-        step1_5JobsProcessed: result.metrics.discovery.jobsProcessed,
+        step1FastPoll: result.metrics.fastPoll.status,
+        step1FilingsDetected: result.metrics.fastPoll.filingsDetected,
+        step1FetchJobsQueued: result.metrics.fastPoll.fetchJobsQueued,
         step2Fetch: result.metrics.fetch.status,
         step3Summarize: result.metrics.summarize.status,
         combinedSuccess: result.combinedSuccess,
-        totalDuration: duration,
-        cleanupDuration: result.metrics.cleanup.duration,
-        tierAwareDuration: result.metrics.tierAware.duration,
-        discoveryDuration: result.metrics.discovery.duration,
-        fetchDuration: result.metrics.fetch.duration,
-        summarizeDuration: result.metrics.summarize.duration
+        totalDuration: duration
       });
 
       // Call daily count update endpoint after main cron job
@@ -1270,7 +1282,7 @@ export default {
           duration,
           success: true,
           cleanupMetrics: result.metrics.cleanup,
-          tierAwareMetrics: result.metrics.tierAware,
+          fastPollMetrics: result.metrics.fastPoll,
           fetchMetrics: result.metrics.fetch,
           summarizeMetrics: result.metrics.summarize
         });
@@ -1283,9 +1295,9 @@ export default {
       } else {
         // Partial failure - at least one endpoint failed
         const failedSteps = [];
-        if (!tierAwareResult?.success) failedSteps.push('tier-aware');
-        if (!fetchResult?.success) failedSteps.push('fetch');
-        if (!summarizeResult?.success) failedSteps.push('summarize');
+        if (fastPollResult?.error) failedSteps.push('fast-poll');
+        if (fetchResult?.success === false) failedSteps.push('fetch');
+        if (summarizeResult?.success === false) failedSteps.push('summarize');
         const failureReason = `${failedSteps.join(', ')} endpoint(s) failed`;
 
         console.warn(`[${executionId}] Partial failure: ${failureReason}`);
@@ -1295,7 +1307,7 @@ export default {
           success: false,
           failureReason,
           cleanupMetrics: result.metrics.cleanup,
-          tierAwareMetrics: result.metrics.tierAware,
+          fastPollMetrics: result.metrics.fastPoll,
           fetchMetrics: result.metrics.fetch,
           summarizeMetrics: result.metrics.summarize
         });

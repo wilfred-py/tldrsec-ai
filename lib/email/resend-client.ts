@@ -30,13 +30,14 @@ import { SecureEmailLogger } from './security-helpers';
 function isBuildTime(): boolean {
   // Check for explicit build indicators
   const buildIndicators = [
+    process.env.NEXT_PHASE === 'phase-production-build', // Next.js build phase (works on Vercel)
     process.env.NODE_ENV === 'production' && !process.env.VERCEL, // Non-Vercel production builds
     process.env.CF_PAGES === '1' && !process.env.RESEND_API_KEY, // Cloudflare Pages build
     process.env.GITHUB_ACTIONS === 'true', // GitHub Actions build
     process.env.CI === 'true' && !process.env.RESEND_API_KEY, // General CI environment
     process.env.BUILD_PHASE === 'true' // Explicit build phase flag
   ];
-  
+
   return buildIndicators.some(indicator => indicator);
 }
 
@@ -128,18 +129,14 @@ export class ResendClient {
       
       // If no API key is provided, create a dummy client
       if (!key) {
-        // In development or test, create a dummy client that logs but doesn't send
-        if (process.env.NODE_ENV !== 'production') {
-          this.isDummyClient = true;
-          logger.warn('No Resend API key provided. Using dummy client that will not send emails.');
-          // Initialize with empty string for dummy client
-          this.resend = new Resend('');
-        } else {
-          // In production, still create the client but log a warning
+        this.isDummyClient = true;
+        if (process.env.NODE_ENV === 'production') {
           logger.error('No Resend API key provided in production. Set RESEND_API_KEY in your environment variables.');
-          // We'll initialize with an empty string which will cause API calls to fail gracefully
-          this.resend = new Resend('');
+        } else {
+          logger.warn('No Resend API key provided. Using dummy client that will not send emails.');
         }
+        // Use placeholder key to avoid Resend SDK constructor throwing
+        this.resend = new Resend('re_placeholder_no_key_configured');
       } else {
         // Initialize with valid API key
         this.resend = new Resend(key);

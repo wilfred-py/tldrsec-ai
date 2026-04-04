@@ -376,9 +376,32 @@ export default async function middleware(request: NextRequest) {
       const url = new URL(request.url);
       const pathname = url.pathname;
 
-      // Redirect authenticated users away from auth pages to dashboard
-      const { userId } = await auth();
+      // Redirect authenticated users away from auth pages
+      const { userId, sessionClaims } = await auth();
       if (userId && (pathname.startsWith('/sign-up') || pathname.startsWith('/sign-in'))) {
+        // Check if onboarding is completed via Clerk publicMetadata or cookie fallback
+        const metadata = (sessionClaims as Record<string, unknown>)?.metadata as Record<string, unknown> | undefined;
+        const onboardingCompleted =
+          metadata?.onboardingCompleted === true ||
+          request.cookies.get('onboarding_completed')?.value === 'true';
+
+        // Preserve plan/ref params from campaign emails as cookies
+        // (the sign-up page's useEffect won't run since we redirect server-side)
+        const plan = url.searchParams.get('plan');
+        const ref = url.searchParams.get('ref');
+
+        if (!onboardingCompleted) {
+          const response = NextResponse.redirect(new URL('/onboarding', request.url));
+          if (plan) response.cookies.set('signup_plan', plan, { path: '/', maxAge: 3600, sameSite: 'lax' });
+          if (ref) response.cookies.set('signup_ref', ref, { path: '/', maxAge: 3600, sameSite: 'lax' });
+          return response;
+        }
+
+        // Already onboarded — if they have a plan intent, send to subscribe
+        if (plan) {
+          const subscribeUrl = new URL(`/subscribe?plan=${plan}`, request.url);
+          return NextResponse.redirect(subscribeUrl);
+        }
         return NextResponse.redirect(new URL('/dashboard', request.url));
       }
 

@@ -63,7 +63,7 @@ describe('process-filing-queue jobTypes filter', () => {
 
   it('should accept valid job type filter', async () => {
     const request = createMockRequest(
-      'http://localhost:3000/api/cron/process-filing-queue?jobTypes=ASYNC_FETCH_FILING'
+      'http://localhost:3000/api/cron?action=process-queue&jobTypes=ASYNC_FETCH_FILING'
     );
 
     const response = await GET(request);
@@ -75,7 +75,7 @@ describe('process-filing-queue jobTypes filter', () => {
 
   it('should reject invalid job type filter', async () => {
     const request = createMockRequest(
-      'http://localhost:3000/api/cron/process-filing-queue?jobTypes=INVALID_TYPE'
+      'http://localhost:3000/api/cron?action=process-queue&jobTypes=INVALID_TYPE'
     );
 
     const response = await GET(request);
@@ -88,7 +88,7 @@ describe('process-filing-queue jobTypes filter', () => {
 
   it('should process all types when no filter provided', async () => {
     const request = createMockRequest(
-      'http://localhost:3000/api/cron/process-filing-queue'
+      'http://localhost:3000/api/cron?action=process-queue'
     );
 
     const response = await GET(request);
@@ -100,7 +100,7 @@ describe('process-filing-queue jobTypes filter', () => {
 
   it('should accept multiple job types', async () => {
     const request = createMockRequest(
-      'http://localhost:3000/api/cron/process-filing-queue?jobTypes=ASYNC_FETCH_FILING,ASYNC_SUMMARIZE_CACHED'
+      'http://localhost:3000/api/cron?action=process-queue&jobTypes=ASYNC_FETCH_FILING,ASYNC_SUMMARIZE_CACHED'
     );
 
     const response = await GET(request);
@@ -114,7 +114,7 @@ describe('process-filing-queue jobTypes filter', () => {
     const { BackgroundFilingWorker } = require('../../lib/cron/background-filing-worker');
 
     const request = createMockRequest(
-      'http://localhost:3000/api/cron/process-filing-queue?jobTypes=ASYNC_FETCH_FILING,ASYNC_SUMMARIZE_CACHED'
+      'http://localhost:3000/api/cron?action=process-queue&jobTypes=ASYNC_FETCH_FILING,ASYNC_SUMMARIZE_CACHED'
     );
 
     await GET(request);
@@ -131,7 +131,7 @@ describe('process-filing-queue jobTypes filter', () => {
     const { BackgroundFilingWorker } = require('../../lib/cron/background-filing-worker');
 
     const request = createMockRequest(
-      'http://localhost:3000/api/cron/process-filing-queue'
+      'http://localhost:3000/api/cron?action=process-queue'
     );
 
     await GET(request);
@@ -146,7 +146,7 @@ describe('process-filing-queue jobTypes filter', () => {
 
   it('should reject request with mixed valid and invalid job types', async () => {
     const request = createMockRequest(
-      'http://localhost:3000/api/cron/process-filing-queue?jobTypes=ASYNC_FETCH_FILING,INVALID_TYPE'
+      'http://localhost:3000/api/cron?action=process-queue&jobTypes=ASYNC_FETCH_FILING,INVALID_TYPE'
     );
 
     const response = await GET(request);
@@ -159,7 +159,7 @@ describe('process-filing-queue jobTypes filter', () => {
 
   it('should handle empty job types parameter gracefully', async () => {
     const request = createMockRequest(
-      'http://localhost:3000/api/cron/process-filing-queue?jobTypes='
+      'http://localhost:3000/api/cron?action=process-queue&jobTypes='
     );
 
     const response = await GET(request);
@@ -172,7 +172,7 @@ describe('process-filing-queue jobTypes filter', () => {
 
   it('should accept ASYNC_DISCOVER_FILINGS as valid job type', async () => {
     const request = createMockRequest(
-      'http://localhost:3000/api/cron/process-filing-queue?jobTypes=ASYNC_DISCOVER_FILINGS'
+      'http://localhost:3000/api/cron?action=process-queue&jobTypes=ASYNC_DISCOVER_FILINGS'
     );
 
     const response = await GET(request);
@@ -184,7 +184,7 @@ describe('process-filing-queue jobTypes filter', () => {
 
   it('should handle whitespace in job types parameter', async () => {
     const request = createMockRequest(
-      'http://localhost:3000/api/cron/process-filing-queue?jobTypes=ASYNC_FETCH_FILING,%20ASYNC_SUMMARIZE_CACHED'
+      'http://localhost:3000/api/cron?action=process-queue&jobTypes=ASYNC_FETCH_FILING,%20ASYNC_SUMMARIZE_CACHED'
     );
 
     const response = await GET(request);

@@ -15,6 +15,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Card, CardContent } from "@/components/ui/card";
 import { TickerSearchResult } from "@/lib/api/types";
 import { Company, FilingPreferences } from "@/lib/api/types";
 import { HoursSavedWidget } from "@/components/dashboard/hours-saved-widget";
@@ -55,9 +56,10 @@ interface DashboardClientProps {
   summaryCountThisMonth?: number;
   summaryCountTotal?: number;
   recentSummaries?: ActivitySummary[];
+  featuredSummaries?: ActivitySummary[];
 }
 
-export function DashboardClient({ showWelcome: _showWelcome = false, shouldMergePending: _shouldMergePending = false, subscriptionSuccess = false, initialCompanies = [], tutorialCompleted = false, subscriptionTier = 'FREE', tickerLimit = 3, summaryCountThisMonth = 0, summaryCountTotal = 0, recentSummaries = [] }: DashboardClientProps) {
+export function DashboardClient({ showWelcome: _showWelcome = false, shouldMergePending: _shouldMergePending = false, subscriptionSuccess = false, initialCompanies = [], tutorialCompleted = false, subscriptionTier = 'FREE', tickerLimit = 3, summaryCountThisMonth = 0, summaryCountTotal = 0, recentSummaries = [], featuredSummaries = [] }: DashboardClientProps) {
   // State for tracked companies
   const [companies, setCompanies] = useState<Company[]>(initialCompanies);
   const [currentCompany, setCurrentCompany] = useState<Company | null>(null);
@@ -351,7 +353,7 @@ export function DashboardClient({ showWelcome: _showWelcome = false, shouldMerge
   const canUpgrade = subscriptionTier !== 'MAX';
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <DashboardHeader heading="Dashboard" />
 
       {/* Hours Saved + Stats Row */}
@@ -363,31 +365,36 @@ export function DashboardClient({ showWelcome: _showWelcome = false, shouldMerge
           />
         </div>
         <div className="md:col-span-2 flex items-center">
-          <div className="landing-card w-full p-4">
-            <div className="flex items-center gap-4 text-sm text-muted-foreground">
-              <span><strong className="text-foreground">{companies.length}</strong> tickers tracked</span>
-              <span><strong className="text-foreground">{recentSummaries.length}</strong> recent summaries</span>
-              <span className="capitalize"><strong className="text-foreground">{subscriptionTier}</strong> plan</span>
-            </div>
-          </div>
+          <Card className="w-full rounded-2xl">
+            <CardContent className="p-4">
+              <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                <span><strong className="text-foreground">{companies.length}</strong> tickers tracked</span>
+                <span><strong className="text-foreground">{recentSummaries.length}</strong> recent summaries</span>
+                <span className="capitalize"><strong className="text-foreground">{subscriptionTier}</strong> plan</span>
+              </div>
+            </CardContent>
+          </Card>
         </div>
       </div>
 
       {/* Tabs: Activity / Tickers */}
-      <Tabs defaultValue="activity" className="w-full">
-        <TabsList className="mb-4">
-          <TabsTrigger value="activity">Activity</TabsTrigger>
-          <TabsTrigger value="tickers">Tickers</TabsTrigger>
+      <Tabs defaultValue={showTutorial ? "tickers" : "activity"} className="w-full">
+        <TabsList className="mb-4 bg-muted border border-border rounded-lg p-1">
+          <TabsTrigger value="activity" className="data-[state=active]:bg-background data-[state=active]:shadow-sm data-[state=inactive]:text-muted-foreground px-4 py-1.5 text-sm font-medium rounded-md">Activity</TabsTrigger>
+          <TabsTrigger value="tickers" className="data-[state=active]:bg-background data-[state=active]:shadow-sm data-[state=inactive]:text-muted-foreground px-4 py-1.5 text-sm font-medium rounded-md">Tickers</TabsTrigger>
         </TabsList>
 
         <TabsContent value="activity">
-          <div className="landing-card">
-            <ActivityFeed summaries={recentSummaries} />
-          </div>
+          <Card className="rounded-2xl">
+            <CardContent className="p-6 md:p-8">
+              <ActivityFeed summaries={recentSummaries} featuredSummaries={featuredSummaries} />
+            </CardContent>
+          </Card>
         </TabsContent>
 
         <TabsContent value="tickers">
-      <div className="landing-card">
+      <Card className="rounded-2xl">
+        <CardContent className="p-6 md:p-8">
         <div className="mb-6">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div className="text-left">
@@ -436,7 +443,8 @@ export function DashboardClient({ showWelcome: _showWelcome = false, shouldMerge
             <TickersLoadingSkeleton />
           </div>
         ) : showEmptyState ? (
-          <div className="flex min-h-[200px] flex-col items-center justify-center rounded-md border border-dashed p-4 sm:p-8 text-center space-y-4">
+          <Card className="rounded-2xl border-dashed">
+            <CardContent className="flex min-h-[200px] flex-col items-center justify-center p-4 sm:p-8 text-center space-y-4">
             <h3 className="text-base font-medium">No companies tracked yet</h3>
             <p className="text-sm text-muted-foreground">
               Start tracking companies to receive SEC filing summaries.
@@ -510,7 +518,8 @@ export function DashboardClient({ showWelcome: _showWelcome = false, shouldMerge
                 </Button>
               </div>
             )}
-          </div>
+            </CardContent>
+          </Card>
         ) : (
           <TickersTable
             data={companies}
@@ -522,7 +531,8 @@ export function DashboardClient({ showWelcome: _showWelcome = false, shouldMerge
             onDeleteClick={handleDeleteClick}
           />
         )}
-      </div>
+        </CardContent>
+      </Card>
         </TabsContent>
       </Tabs>
 

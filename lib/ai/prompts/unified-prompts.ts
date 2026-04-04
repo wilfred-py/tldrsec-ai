@@ -14,6 +14,8 @@
  * @module unified-prompts
  */
 
+import { canonicalizeFormType } from '../utils/form-type-utils';
+
 /**
  * Configuration for generating a filing prompt
  */
@@ -450,6 +452,47 @@ export const FORM_SCHEMAS: Record<string, JSONSchema> = {
     }
   },
 
+  '3': {
+    type: 'object',
+    required: ['company', 'summary', 'filerName', 'ownershipPercentage'],
+    properties: {
+      ...BASE_SCHEMA_PROPERTIES,
+      filerName: {
+        type: 'string',
+        description: 'Name of the reporting person (insider)',
+        maxLength: 150
+      },
+      filerRole: {
+        type: 'string',
+        description: 'Relationship: Officer, Director, 10% Owner, or Other',
+        maxLength: 100
+      },
+      ownershipPercentage: {
+        type: 'string',
+        description: 'Beneficial ownership percentage (e.g., "5.2%")',
+        maxLength: 20
+      },
+      sharesOwned: {
+        type: 'string',
+        description: 'Number of shares beneficially owned (e.g., "500,000")',
+        maxLength: 50
+      },
+      securitiesHeld: {
+        type: 'array',
+        description: 'Securities held at time of becoming insider (Table I: non-derivative, Table II: derivative)',
+        maxItems: 10,
+        items: {
+          type: 'object',
+          properties: {
+            securityType: { type: 'string', description: 'Type of security (e.g., "Common Stock", "Stock Option")' },
+            shares: { type: 'string', description: 'Number of shares or units' },
+            ownershipForm: { type: 'string', description: 'D for Direct, I for Indirect' }
+          }
+        }
+      }
+    }
+  },
+
   'SC 13G': {
     type: 'object',
     required: ['company', 'summary', 'filerName', 'ownershipPercentage'],
@@ -854,6 +897,80 @@ export const FORM_SCHEMAS: Record<string, JSONSchema> = {
     }
   },
 
+  'DEFA14A': {
+    type: 'object',
+    required: ['company', 'summary'],
+    properties: {
+      ...BASE_SCHEMA_PROPERTIES,
+      materialType: {
+        type: 'string',
+        description: 'Type of supplemental material (shareholder letter, investor presentation, press release, supplemental disclosure)',
+        maxLength: 100
+      },
+      meetingDate: {
+        type: 'string',
+        description: 'Annual/special meeting date this material relates to (YYYY-MM-DD)',
+        maxLength: 20
+      },
+      filerIdentity: {
+        type: 'string',
+        description: 'Who filed this material: the company itself, or an activist/shareholder group (name them)',
+        maxLength: 200
+      },
+      keyProposals: {
+        type: 'array',
+        description: 'Proposals being advocated for or against, with vote recommendations',
+        maxItems: 6,
+        items: {
+          type: 'object',
+          properties: {
+            proposal: { type: 'string', description: 'Description of the proposal' },
+            recommendation: { type: 'string', description: 'FOR, AGAINST, or ABSTAIN' }
+          }
+        }
+      },
+      newInformation: {
+        type: 'string',
+        description: 'What this adds beyond the original proxy statement (updated figures, new recommendations, etc.)',
+        maxLength: 500
+      }
+    }
+  },
+
+  'FWP': {
+    type: 'object',
+    required: ['company', 'summary', 'offeringType'],
+    properties: {
+      ...BASE_SCHEMA_PROPERTIES,
+      offeringType: {
+        type: 'string',
+        description: 'Type of offering: IPO, follow-on equity, debt, structured notes, convertible',
+        maxLength: 50
+      },
+      updatedTerms: {
+        type: 'string',
+        description: 'Updated pricing, deal size, or timing vs base prospectus',
+        maxLength: 300
+      },
+      keyHighlights: {
+        type: 'array',
+        description: 'Key selling points or investor highlights from the FWP',
+        maxItems: 5,
+        items: {
+          type: 'object',
+          properties: {
+            highlight: { type: 'string', description: 'Key point or updated term' }
+          }
+        }
+      },
+      underlyingReference: {
+        type: 'string',
+        description: 'For structured notes: underlying index, stock, or commodity reference',
+        maxLength: 100
+      }
+    }
+  },
+
   // Generic fallback for unsupported form types
   'Generic': {
     type: 'object',
@@ -990,7 +1107,10 @@ const FORM_EXTRACTION_GUIDANCE: Record<string, string> = {
 - Gross margin is a MANDATORY metric for investors - if not explicitly stated, calculate it from revenue and cost of revenue/COGS
 - Include segment breakdown if the company has multiple business units
 - For fiscal year, extract the EXACT year (e.g., "2024" or "FY2025")
-- The summary MUST lead with: company name, total revenue, and profitability highlight`,
+- The summary MUST lead with: company name, total revenue, and profitability highlight
+- DELTA-AWARE: Compare revenue, margins, and key metrics to the PRIOR fiscal year. State the direction and magnitude of change for each metric (e.g., "Revenue $130.5B, up 14% from $114.5B in FY2023")
+- For each financial highlight, include the "change" field with the YoY delta (e.g., "+14.0%", "-2.3pp for margins")
+- If historical context about this company is provided, highlight what is NEW or materially different vs the prior annual report`,
 
   '10-Q': `10-Q QUARTERLY REPORT EXTRACTION RULES:
 - DOCUMENT STRUCTURE: 10-Q has 2 parts:
@@ -1012,7 +1132,26 @@ const FORM_EXTRACTION_GUIDANCE: Record<string, string> = {
 - Extract guidance updates if management provides forward-looking statements
 - RED FLAGS: Bloated inventory, slower demand signals, supply chain issues, decreasing profit margins
 - For fiscal quarter, format as "Q3 2024" or "Q1 FY2025"
-- The summary MUST lead with: company name, quarterly revenue, and margin performance`,
+- The summary MUST lead with: company name, quarterly revenue, and margin performance
+- DELTA-AWARE: Compare to BOTH the prior quarter (QoQ) AND same quarter last year (YoY). State which comparison is more meaningful for each metric.
+- Flag any metric that moved more than 10% in either direction, whether that is revenue, margins, or operating metrics
+- For each financial highlight, populate both "change" (YoY) and "qoqChange" fields when data is available`,
+
+  '3': `FORM 3 INITIAL STATEMENT OF BENEFICIAL OWNERSHIP EXTRACTION RULES:
+- COMPANY FIELD IS REQUIRED: The "company" field must contain the ISSUER name (the company whose securities are held). Extract from "Name of Issuer" field on the form. NEVER leave blank.
+- DOCUMENT TYPE: Filed when a person becomes an insider (officer, director, or 10%+ owner) — reports their initial holdings
+- This is NOT a transaction — it is a snapshot of what the insider already owns at the time they become a reporting person
+- KEY FIELDS TO EXTRACT:
+  1. Filer name (from "Reporting Person" field)
+  2. Company name (from "Issuer" field) — REQUIRED, must not be blank
+  3. Filer role: Officer, Director, 10% Owner, or Other (from Relationship checkboxes)
+  4. Ownership percentage (calculate if not stated: shares owned / shares outstanding)
+  5. Shares owned (total from Table I and Table II)
+- TABLE I (Non-Derivative Securities): Common stock, preferred stock held directly
+- TABLE II (Derivative Securities): Stock options, warrants, RSUs, convertible securities
+- For each security: extract type, shares/units, and ownership form (Direct vs Indirect)
+- If ownership is indirect, note the nature (e.g., "By Trust", "By Spouse", "By LLC")
+- The summary MUST lead with: filer name, company name, role, and total shares owned`,
 
   '4': `FORM 4 EXTRACTION RULES:
 - TABLE STRUCTURE:
@@ -1098,6 +1237,7 @@ const FORM_EXTRACTION_GUIDANCE: Record<string, string> = {
 - Sentiment: Set to "positive" for beats/good news, "negative" for misses/concerns, "neutral" for informational filings, "mixed" if both`,
 
   '144': `FORM 144 EXTRACTION RULES:
+- COMPANY FIELD IS REQUIRED: The "company" field must contain the ISSUER name (the company whose stock is being sold, e.g., "Tesla, Inc."). Extract from "Name of Issuer" or "Issuer Name" on the form. This is NOT the filer — it is the company whose securities are being sold. NEVER leave blank.
 - CRITICAL DISTINCTION: Form 144 is NOTICE OF INTENT TO SELL - shares have NOT been sold yet
   * This is a prospective filing declaring intent to sell under Rule 144
   * Actual sale may or may not occur - filing does not guarantee execution
@@ -1242,19 +1382,111 @@ const FORM_EXTRACTION_GUIDANCE: Record<string, string> = {
 - Look for any audit findings or compliance issues
 - Note the plan type: 401(k), profit sharing, ESOP, pension, etc.
 - The summary MUST lead with: plan name, total assets, and net change in assets`,
+
+  '424B2': `424B2 PROSPECTUS SUPPLEMENT EXTRACTION RULES:
+- DOCUMENT TYPE: Filed under Rule 424(b)(2) — a pricing supplement for debt securities, structured notes, or equity-linked products registered on a shelf (S-3)
+- KEY FIELDS TO EXTRACT:
+  1. Issuer name (the company issuing the security)
+  2. Offering type: Senior Notes, Subordinated Notes, Structured Notes, Medium-Term Notes, or other
+  3. Principal amount / offering size (e.g., "$500,000,000")
+  4. Maturity date (final redemption date)
+  5. Interest rate or coupon (fixed, floating, or zero — specify)
+  6. For floating rate: reference rate (SOFR, Fed Funds) + spread
+  7. For structured notes: underlying reference (index, stock, commodity)
+- PRICING DETAILS: Issue price, settlement date, CUSIP
+- UNDERWRITERS: Lead bookrunners and co-managers if listed
+- USE OF PROCEEDS: "General corporate purposes" is common — note if anything specific
+- CREDIT RATING: Moody's / S&P / Fitch ratings if disclosed
+- RISK: Note any call provisions (issuer can redeem early), make-whole provisions, or step-up features
+- The summary MUST lead with: issuer name, offering type, principal amount, and interest rate`,
+
+  'SC 13G': `SCHEDULE 13G BENEFICIAL OWNERSHIP EXTRACTION RULES:
+- DOCUMENT TYPE: Filed by institutional investors, passive investors, or exempt investors to report ownership of 5%+ of a class of equity securities
+- FILER TYPES:
+  * Institutional investor (Rule 13d-1(b)) — banks, broker-dealers, insurance cos, investment companies
+  * Passive investor (Rule 13d-1(c)) — acquired in ordinary course, no intent to change control
+  * Exempt investor (Rule 13d-1(d)) — pre-existing holdings before Feb 5 reporting trigger
+- KEY FIELDS TO EXTRACT:
+  1. Filer name (the reporting entity or person)
+  2. Issuer name and ticker (the company whose shares are owned)
+  3. Ownership percentage (from Item 11 — percentage of class)
+  4. Number of shares beneficially owned (from Item 9)
+  5. Filing purpose: Initial filing, Amendment (note what changed), or Annual update
+  6. Date of event that triggered filing
+- AMENDMENT DETECTION: If "/A" in form type, compare to prior percentage if mentioned
+- JOINT FILERS: Multiple entities may file jointly — list all reporting persons from Item 1
+- The summary MUST lead with: filer name, issuer name, ownership percentage, and number of shares`,
+
+  'SC 13D': `SCHEDULE 13D BENEFICIAL OWNERSHIP EXTRACTION RULES:
+- DOCUMENT TYPE: Filed by investors with 5%+ ownership who have ACTIVIST intent or are NOT passive
+- This is the "activist" filing — the filer may seek to influence or change the company
+- KEY FIELDS TO EXTRACT:
+  1. Filer name (from Item 2 — Identity and Background)
+  2. Issuer name and ticker
+  3. Ownership percentage (from Item 5 — Interest in Securities of the Issuer)
+  4. Number of shares and class of securities
+  5. Purpose of transaction (Item 4) — THIS IS THE MOST IMPORTANT FIELD
+  6. Source of funds (Item 3) — personal funds, bank loan, margin
+  7. Proposed actions: board seats, merger proposals, asset sales, management changes
+- ITEM 4 ANALYSIS: Common purposes include:
+  * "Investment purposes" (may still be activist if 13D not 13G)
+  * Board representation or nominations
+  * Opposition to proposed transaction
+  * Proposal for strategic alternatives (sale, merger, spinoff)
+  * Governance changes (bylaw amendments, proxy contest)
+- JOINT FILERS: activist groups often file jointly — list all members
+- The summary MUST lead with: filer name, ownership percentage, and stated purpose`,
+
+  'DEFA14A': `DEFA14A ADDITIONAL PROXY SOLICITING MATERIAL EXTRACTION RULES:
+- DOCUMENT TYPE: Additional proxy soliciting materials filed under Rule 14a-6 — supplements the main DEF 14A proxy statement
+- These are often presentations, letters to shareholders, press releases, or supplemental disclosures
+- KEY FIELDS TO EXTRACT:
+  1. Company name
+  2. Type of material: shareholder letter, investor presentation, supplemental disclosure, press release
+  3. Meeting date (annual/special meeting it relates to)
+  4. Key proposals being advocated for or against
+  5. Any new information not in the original proxy (updated vote recommendations, revised figures)
+- CONTEXT: Often filed by the company OR by activist shareholders running a proxy contest
+- If filed by an ACTIVIST: note the activist's name and their slate/proposals
+- If filed by the COMPANY: note what they're responding to or supplementing
+- Vote recommendations: FOR/AGAINST/ABSTAIN for each proposal
+- The summary MUST lead with: company name, filer identity, and what this material adds vs the base proxy`,
+
+  'FWP': `FREE WRITING PROSPECTUS (FWP) EXTRACTION RULES:
+- DOCUMENT TYPE: Filed under Rule 433 — marketing material for a securities offering that goes beyond the base prospectus
+- Common during IPOs and follow-on offerings — often contains updated pricing, terms, or investor presentations
+- KEY FIELDS TO EXTRACT:
+  1. Issuer name
+  2. Type of offering: IPO, follow-on equity, debt, structured notes, convertible
+  3. Updated terms: price range, deal size, timing
+  4. Key selling points or investor highlights
+  5. Related registration statement number
+- FWPs are often shorter and more marketing-oriented than formal prospectuses
+- For structured notes FWPs: extract underlying reference, payoff structure, barrier levels
+- For equity FWPs: extract updated price range, overallotment option, lock-up terms
+- Note if this is a "term sheet" style FWP (common for structured notes) vs a "road show" FWP
+- The summary MUST lead with: issuer name, offering type, and any updated pricing/terms`,
 };
 
 export function generateFilingPrompt(config: FilingPromptConfig): PromptOutput {
-  const { formType, filingContent } = config;
+  const { formType: rawFormType, filingContent } = config;
 
-  // Get the schema for this form type, falling back to Generic
-  const schema = FORM_SCHEMAS[formType] || FORM_SCHEMAS['Generic'];
+  // Canonicalize form type: '10-K/A' -> '10-K' + isAmendment, 'SCHEDULE 13G' -> 'SC 13G', etc.
+  const { type: canonicalType, isAmendment } = canonicalizeFormType(rawFormType);
+
+  // Get the schema for the canonical form type, falling back to Generic
+  const schema = FORM_SCHEMAS[canonicalType] || FORM_SCHEMAS['Generic'];
 
   // Build the user prompt with schema FIRST, then content
   const schemaDescription = formatSchemaDescription(schema);
 
-  // Get form-specific extraction guidance
-  const extractionGuidance = FORM_EXTRACTION_GUIDANCE[formType] || '';
+  // Get form-specific extraction guidance, using the canonical type
+  let extractionGuidance = FORM_EXTRACTION_GUIDANCE[canonicalType] || '';
+
+  // Append amendment-specific guidance when filing is an amendment (/A)
+  if (isAmendment) {
+    extractionGuidance += `\n\nAMENDMENT FILING: This is an AMENDMENT (${rawFormType}), not an original filing. Compare to the original filing. Highlight what changed and WHY the amendment was filed. Lead your summary with the amendment reason.`;
+  }
 
   let userPrompt = `JSON Schema (you MUST use these exact field names):
 ${schemaDescription}
@@ -1332,7 +1564,8 @@ function formatSchemaDescription(schema: JSONSchema): string {
  * @returns The JSON schema for that form type
  */
 export function getSchemaForFormType(formType: string): JSONSchema {
-  return FORM_SCHEMAS[formType] || FORM_SCHEMAS['Generic'];
+  const { type: canonicalType } = canonicalizeFormType(formType);
+  return FORM_SCHEMAS[canonicalType] || FORM_SCHEMAS['Generic'];
 }
 
 /**

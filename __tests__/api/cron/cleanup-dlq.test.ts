@@ -4,6 +4,7 @@
  * Tests the automated cleanup of Dead Letter Queue entries and old failed jobs.
  */
 
+import { NextRequest } from 'next/server';
 import { POST, GET } from '@/app/api/cron/route';
 import { getPrismaClient } from '@/lib/db/prisma';
 import { DeadLetterQueueService } from '@/lib/job-queue/dead-letter-queue';
@@ -73,7 +74,7 @@ describe('DLQ Cleanup Endpoint', () => {
         error: 'Invalid HMAC signature'
       });
 
-      const request = new Request('http://localhost:3000/api/cron/cleanup-dlq', {
+      const request = new Request('http://localhost:3000/api/cron?action=cleanup-dlq', {
         method: 'POST'
       });
 
@@ -96,7 +97,7 @@ describe('DLQ Cleanup Endpoint', () => {
         .mockResolvedValueOnce(120); // reprocessed
       mockPrisma.deadLetterQueue.findMany.mockResolvedValue([]);
 
-      const request = new Request('http://localhost:3000/api/cron/cleanup-dlq', {
+      const request = new Request('http://localhost:3000/api/cron?action=cleanup-dlq', {
         method: 'POST'
       });
 
@@ -121,7 +122,7 @@ describe('DLQ Cleanup Endpoint', () => {
         .mockResolvedValueOnce(100);
       mockPrisma.deadLetterQueue.findMany.mockResolvedValue([]);
 
-      const request = new Request('http://localhost:3000/api/cron/cleanup-dlq', {
+      const request = new Request('http://localhost:3000/api/cron?action=cleanup-dlq', {
         method: 'POST'
       });
 
@@ -162,7 +163,7 @@ describe('DLQ Cleanup Endpoint', () => {
         }
       ]);
 
-      const request = new Request('http://localhost:3000/api/cron/cleanup-dlq', {
+      const request = new Request('http://localhost:3000/api/cron?action=cleanup-dlq', {
         method: 'POST'
       });
 
@@ -187,7 +188,7 @@ describe('DLQ Cleanup Endpoint', () => {
         .mockResolvedValueOnce(100); // reprocessed
       mockPrisma.deadLetterQueue.findMany.mockResolvedValue([]);
 
-      const request = new Request('http://localhost:3000/api/cron/cleanup-dlq', {
+      const request = new Request('http://localhost:3000/api/cron?action=cleanup-dlq', {
         method: 'POST'
       });
 
@@ -213,7 +214,7 @@ describe('DLQ Cleanup Endpoint', () => {
         .mockResolvedValueOnce(200); // reprocessed
       mockPrisma.deadLetterQueue.findMany.mockResolvedValue([]);
 
-      const request = new Request('http://localhost:3000/api/cron/cleanup-dlq', {
+      const request = new Request('http://localhost:3000/api/cron?action=cleanup-dlq', {
         method: 'POST'
       });
 
@@ -239,7 +240,7 @@ describe('DLQ Cleanup Endpoint', () => {
         .mockResolvedValueOnce(0); // reprocessed
       mockPrisma.deadLetterQueue.findMany.mockResolvedValue([]);
 
-      const request = new Request('http://localhost:3000/api/cron/cleanup-dlq', {
+      const request = new Request('http://localhost:3000/api/cron?action=cleanup-dlq', {
         method: 'POST'
       });
 
@@ -282,7 +283,7 @@ describe('DLQ Cleanup Endpoint', () => {
         }
       ]);
 
-      const request = new Request('http://localhost:3000/api/cron/cleanup-dlq', {
+      const request = new Request('http://localhost:3000/api/cron?action=cleanup-dlq', {
         method: 'POST'
       });
 
@@ -303,13 +304,14 @@ describe('DLQ Cleanup Endpoint', () => {
     });
   });
 
-  describe('GET /api/cron/cleanup-dlq', () => {
-    it('should return 405 Method Not Allowed', async () => {
-      const response = await GET();
+  describe('GET /api/cron?action=cleanup-dlq', () => {
+    it('should return 400 for cleanup-dlq via GET (POST-only action)', async () => {
+      const request = new NextRequest('http://localhost:3000/api/cron?action=cleanup-dlq');
+      const response = await GET(request);
       const data = await response.json();
 
-      expect(response.status).toBe(405);
-      expect(data.error).toBe('Method not allowed');
+      expect(response.status).toBe(400);
+      expect(data.error).toBeDefined();
     });
   });
 });

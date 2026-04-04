@@ -2,6 +2,11 @@ import { render, screen } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { HeroSectionV2 } from '@/components/landing/sections-v2/hero-section-v2';
 
+// Mock auth context (component now uses useAuth)
+jest.mock('@/contexts/auth-context', () => ({
+  useAuth: () => ({ isSignedIn: false, isLoaded: true, user: null }),
+}));
+
 // Mock framer-motion to avoid animation issues in tests
 jest.mock('framer-motion', () => ({
   motion: {
@@ -17,7 +22,8 @@ describe('HeroSectionV2', () => {
   // Test 1: Renders headline with gradient text
   it('should render headline with "SEC Filings, Simplified" text', () => {
     render(<HeroSectionV2 />);
-    expect(screen.getByText(/SEC Filings/i)).toBeInTheDocument();
+    const headings = screen.getAllByText(/SEC Filings/i);
+    expect(headings.length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText(/Simplified/i)).toBeInTheDocument();
   });
 
@@ -46,10 +52,10 @@ describe('HeroSectionV2', () => {
   // Test 5: Trust metrics are displayed
   it('should display trust metrics with specific values', () => {
     render(<HeroSectionV2 />);
-    expect(screen.getByText(/2,500\+/i)).toBeInTheDocument();
-    expect(screen.getByText(/investors/i)).toBeInTheDocument();
+    expect(screen.getByText(/10 min/i)).toBeInTheDocument();
+    expect(screen.getByText(/filing-to-inbox/i)).toBeInTheDocument();
     expect(screen.getByText(/99\.9%/i)).toBeInTheDocument();
-    expect(screen.getByText(/<5 min/i)).toBeInTheDocument();
+    expect(screen.getByText(/5 types/i)).toBeInTheDocument();
   });
 
   // Test 6: Filing preview card is rendered
@@ -60,10 +66,10 @@ describe('HeroSectionV2', () => {
     expect(screen.getByText(/10-K/i)).toBeInTheDocument();
   });
 
-  // Test 7: No credit card message is visible
-  it('should display trust signal about no credit card', () => {
+  // Test 7: Free trial message is visible
+  it('should display trust signal about free trial', () => {
     render(<HeroSectionV2 />);
-    expect(screen.getByText(/No credit card required/i)).toBeInTheDocument();
+    expect(screen.getByText(/7-day free trial/i)).toBeInTheDocument();
   });
 
   // Test 8: Uses light background (not dark)

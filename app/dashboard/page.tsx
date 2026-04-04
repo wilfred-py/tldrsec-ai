@@ -39,6 +39,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     ticker: string;
     filingUrl: string;
   }> = [];
+  let featuredSummaries: typeof recentSummaries = [];
   const email = user.emailAddresses?.[0]?.emailAddress;
   if (email) {
     try {
@@ -62,24 +63,36 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
         tutorialCompleted = dbUser.tutorialCompletedAt != null;
         subscriptionTier = (dbUser.subscriptionTier as 'FREE' | 'PRO' | 'MAX') || 'FREE';
 
-        // Fetch recent summaries for activity feed (across all tickers)
+        // Fetch recent summaries + counts in parallel (all depend on tickerIds)
         const tickerIds = dbUser.tickers.map(t => t.id);
         if (tickerIds.length > 0) {
-          const summaries = await prisma.summary.findMany({
-            where: { tickerId: { in: tickerIds } },
-            select: {
-              id: true,
-              filingType: true,
-              filingDate: true,
-              importance: true,
-              smartSubject: true,
-              summaryText: true,
-              filingUrl: true,
-              ticker: { select: { symbol: true, companyName: true } },
-            },
-            orderBy: { filingDate: 'desc' },
-            take: 50,
-          });
+          const now = new Date();
+          const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+
+          const [summaries, countThisMonth, countTotal] = await Promise.all([
+            prisma.summary.findMany({
+              where: { tickerId: { in: tickerIds } },
+              select: {
+                id: true,
+                filingType: true,
+                filingDate: true,
+                importance: true,
+                smartSubject: true,
+                summaryText: true,
+                filingUrl: true,
+                ticker: { select: { symbol: true, companyName: true } },
+              },
+              orderBy: { filingDate: 'desc' },
+              take: 50,
+            }),
+            prisma.summary.count({
+              where: { tickerId: { in: tickerIds }, filingDate: { gte: startOfMonth } },
+            }),
+            prisma.summary.count({
+              where: { tickerId: { in: tickerIds } },
+            }),
+          ]);
+
           recentSummaries = summaries.map(s => ({
             id: s.id,
             filingType: s.filingType,
@@ -91,20 +104,42 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
             ticker: s.ticker.symbol,
             filingUrl: s.filingUrl,
           }));
-
-          // Compute summary counts for Time Saved widget
-          const now = new Date();
-          const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-          const [countThisMonth, countTotal] = await Promise.all([
-            prisma.summary.count({
-              where: { tickerId: { in: tickerIds }, filingDate: { gte: startOfMonth } },
-            }),
-            prisma.summary.count({
-              where: { tickerId: { in: tickerIds } },
-            }),
-          ]);
           summaryCountThisMonth = countThisMonth;
           summaryCountTotal = countTotal;
+        }
+
+        // If user has tickers but zero summaries, fetch featured summaries
+        // from across the platform so the dashboard isn't empty on day 1
+        if (recentSummaries.length === 0 && tickerIds.length > 0) {
+          const featured = await prisma.summary.findMany({
+            where: {
+              importance: { in: ['critical', 'high'] },
+              summaryText: { not: '' },
+            },
+            select: {
+              id: true,
+              filingType: true,
+              filingDate: true,
+              importance: true,
+              smartSubject: true,
+              summaryText: true,
+              filingUrl: true,
+              ticker: { select: { symbol: true, companyName: true } },
+            },
+            orderBy: { filingDate: 'desc' },
+            take: 10,
+          });
+          featuredSummaries = featured.map(s => ({
+            id: s.id,
+            filingType: s.filingType,
+            filingDate: s.filingDate.toISOString(),
+            importance: s.importance,
+            smartSubject: s.smartSubject,
+            summaryText: s.summaryText ? s.summaryText.substring(0, 200) : null,
+            companyName: s.ticker.companyName,
+            ticker: s.ticker.symbol,
+            filingUrl: s.filingUrl,
+          }));
         }
 
         // Safety net: reconcile Stripe subscription for FREE users who have interacted with Stripe
@@ -205,6 +240,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
       summaryCountThisMonth={summaryCountThisMonth}
       summaryCountTotal={summaryCountTotal}
       recentSummaries={recentSummaries}
+      featuredSummaries={featuredSummaries}
     />
   );
 }
