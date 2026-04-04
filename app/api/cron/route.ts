@@ -10,6 +10,7 @@
  *   - final-backup        (last-resort pipeline trigger)
  *   - cleanup-locks       (proactive lock cleanup)
  *   - check-trials        (trial expiration check)
+ *   - nurture-trials      (trial nurture email sequence)
  *   - update-daily-count  (info only)
  *
  * POST actions:
@@ -44,6 +45,7 @@ const GET_ACTIONS = [
   'final-backup',
   'cleanup-locks',
   'check-trials',
+  'nurture-trials',
   'update-daily-count',
 ] as const;
 
@@ -92,6 +94,8 @@ export async function GET(request: NextRequest) {
       return handleCleanupLocks(request);
     case 'check-trials':
       return handleCheckTrials(request);
+    case 'nurture-trials':
+      return handleNurtureTrials(request);
     case 'update-daily-count':
       return handleUpdateDailyCountGET();
     default:
@@ -2138,6 +2142,75 @@ async function handleCheckTrials(request: NextRequest) {
   } catch (error) {
     const duration = Date.now() - startTime;
     trialLogger.error(`[${executionId}] Trial expiration check failed`, {
+      error: error instanceof Error ? error.message : 'Unknown error',
+      duration,
+    });
+    return NextResponse.json({ success: false, error: 'Internal system error', executionId, duration }, { status: 500 });
+  }
+}
+
+// ===========================================================================
+// ACTION: nurture-trials
+// Trial nurture email sequence with engagement scoring
+// ===========================================================================
+
+async function handleNurtureTrials(request: NextRequest) {
+  const { logger } = await import('@/lib/logging');
+  const { generateSecureExecutionId } = await import('@/lib/security/secure-random');
+  const { CronAuthService } = await import('@/lib/cron/auth-service');
+
+  const nurtureLogger = logger.child('nurture-trials');
+  const startTime = Date.now();
+  const executionId = request.headers.get('x-execution-id') || generateSecureExecutionId('nurture');
+
+  nurtureLogger.info(`[${executionId}] Trial nurture triggered`);
+
+  try {
+    const authResult = await CronAuthService.validateCronRequest(request);
+    if (!authResult.isValid) {
+      nurtureLogger.warn(`[${executionId}] Authentication failed`, {
+        error: authResult.error,
+        clientIP: authResult.clientIP,
+      });
+      return NextResponse.json(
+        { success: false, error: authResult.error || 'Authentication failed', executionId, duration: Date.now() - startTime },
+        {
+          status: authResult.error?.includes('Rate limit')
+            ? 429
+            : authResult.error?.includes('IP not allowed')
+              ? 403
+              : 401,
+        }
+      );
+    }
+
+    const { handleTrialNurture } = await import('@/lib/cron/handlers/trial-nurture-handler');
+    const result = await handleTrialNurture();
+
+    const duration = Date.now() - startTime;
+    nurtureLogger.info(`[${executionId}] Trial nurture completed`, {
+      usersFound: result.usersFound,
+      emailsSent: result.emailsSent,
+      usersSkipped: result.usersSkipped,
+      errors: result.errors.length,
+      duration,
+    });
+
+    return NextResponse.json(
+      {
+        success: result.success,
+        executionId,
+        duration,
+        usersFound: result.usersFound,
+        emailsSent: result.emailsSent,
+        usersSkipped: result.usersSkipped,
+        errors: result.errors.length > 0 ? result.errors : undefined,
+      },
+      { headers: { 'X-Execution-ID': executionId, 'X-Processed': String(result.emailsSent) } }
+    );
+  } catch (error) {
+    const duration = Date.now() - startTime;
+    nurtureLogger.error(`[${executionId}] Trial nurture failed`, {
       error: error instanceof Error ? error.message : 'Unknown error',
       duration,
     });

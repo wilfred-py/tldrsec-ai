@@ -462,6 +462,7 @@ export default {
     const results = {
       dlqCleanup: null,
       checkTrials: null,
+      nurtureTrials: null,
       dailyReport: null,
       weeklyDigest: null,
     };
@@ -504,7 +505,39 @@ export default {
         console.error(`[${executionId}] Trial check error: ${trialError.message}`);
       }
 
-      // Task 3: Daily report (informational, least critical)
+      // Task 3: Trial nurture emails (engagement-based nurture sequence)
+      console.log(`[${executionId}] Running trial nurture...`);
+      try {
+        const nurtureSecret = sanitizeCronSecret(env.CRON_SECRET);
+        const nurtureTimestamp = Date.now().toString();
+        const nurturePath = '/api/cron?action=nurture-trials';
+        const nurturePayload = `${nurtureTimestamp}:GET:/api/cron`;
+        const nurtureEncoder = new TextEncoder();
+        const nurtureKey = await crypto.subtle.importKey(
+          'raw', nurtureEncoder.encode(nurtureSecret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']
+        );
+        const nurtureSigBuffer = await crypto.subtle.sign('HMAC', nurtureKey, nurtureEncoder.encode(nurturePayload));
+        const nurtureSig = Array.from(new Uint8Array(nurtureSigBuffer)).map(b => b.toString(16).padStart(2, '0')).join('');
+
+        const nurtureUrl = `${env.PUBLIC_URL}${nurturePath}`;
+        const nurtureResponse = await fetch(nurtureUrl, {
+          method: 'GET',
+          headers: {
+            'x-hmac-signature': nurtureSig,
+            'x-hmac-timestamp': nurtureTimestamp,
+            'x-execution-id': executionId,
+          },
+        });
+
+        const nurtureData = nurtureResponse.ok ? await nurtureResponse.json() : await nurtureResponse.text();
+        results.nurtureTrials = { success: nurtureResponse.ok, status: nurtureResponse.status, data: nurtureData };
+        console.log(`[${executionId}] Trial nurture: ${nurtureResponse.ok ? 'SUCCESS' : 'FAILED'} (${nurtureResponse.status})`);
+      } catch (nurtureError) {
+        results.nurtureTrials = { success: false, error: nurtureError.message };
+        console.error(`[${executionId}] Trial nurture error: ${nurtureError.message}`);
+      }
+
+      // Task 4: Daily report (informational, least critical)
       console.log(`[${executionId}] Running daily report...`);
       results.dailyReport = await this.handleDailyReport(event, env, ctx);
 
@@ -575,6 +608,7 @@ export default {
       console.log(`[${executionId}] Combined daily tasks completed in ${duration}ms`, {
         dlqCleanup: results.dlqCleanup?.success ? 'SUCCESS' : 'FAILED',
         checkTrials: results.checkTrials?.success ? 'SUCCESS' : 'FAILED',
+        nurtureTrials: results.nurtureTrials?.success ? 'SUCCESS' : 'FAILED',
         dailyReport: results.dailyReport?.success ? 'SUCCESS' : 'FAILED',
         weeklyDigest: results.weeklyDigest ? (results.weeklyDigest.success ? 'SUCCESS' : 'FAILED') : 'SKIPPED',
       });
