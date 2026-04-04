@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Check, Loader2, CheckCircle2 } from 'lucide-react';
+import { AnimatedPrice } from '@/components/landing/sections-v2/animated-price';
 
 interface PricingPlan {
   key: string;
@@ -96,22 +97,11 @@ export function PricingCard({
 
       {/* Price Display */}
       <div className="mb-6 h-[88px] flex flex-col justify-center">
-        <div className="flex items-baseline gap-2">
-          <span
-            className="text-4xl font-bold"
-            style={{ color: 'var(--landing-secondary)' }}
-          >
-            ${getPrice(plan)}
-          </span>
-          <span className="text-[var(--landing-text-muted)]">
-            /{billingInterval === 'annual' ? 'year' : 'month'}
-          </span>
-          {billingInterval === 'annual' && savings && (
-            <Badge className="bg-green-100 text-green-700 border-green-200 text-xs px-2 py-0.5">
-              Save {savings}%
-            </Badge>
-          )}
-        </div>
+        <AnimatedPrice
+          value={getPrice(plan)}
+          suffix={billingInterval === 'annual' ? '/year' : '/month'}
+          savings={billingInterval === 'annual' ? savings : null}
+        />
         {monthlyEquiv && (
           <p className="text-xs text-[var(--landing-text-muted)] mt-1">
             ${monthlyEquiv}/mo billed annually

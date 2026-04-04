@@ -25,7 +25,9 @@ jest.mock('framer-motion', () => ({
   motion: {
     div: ({ children, ...props }: React.PropsWithChildren<Record<string, unknown>>) => <div {...props}>{children}</div>,
     h2: ({ children, ...props }: React.PropsWithChildren<Record<string, unknown>>) => <h2 {...props}>{children}</h2>,
+    span: React.forwardRef(({ children, ...props }: React.PropsWithChildren<Record<string, unknown>>, ref: unknown) => <span {...(props as object)}>{children}</span>),
   },
+  AnimatePresence: ({ children }: React.PropsWithChildren) => <>{children}</>,
 }));
 
 jest.mock('next/navigation', () => ({
@@ -74,19 +76,19 @@ describe('PricingSectionV2', () => {
 
   it('should have billing toggle', () => {
     render(<PricingSectionV2 />);
-    // Toggle is a button with aria-label
+    // Toggle is a switch with aria-label
     expect(
-      screen.getByRole('button', { name: /switch to annual billing/i })
+      screen.getByRole('switch', { name: /switch to annual billing/i })
     ).toBeInTheDocument();
   });
 
   it('should update prices when toggling to annual', () => {
     render(<PricingSectionV2 />);
-    const toggle = screen.getByRole('button', { name: /switch to annual billing/i });
+    const toggle = screen.getByRole('switch', { name: /switch to annual billing/i });
     fireEvent.click(toggle);
-    // Annual prices should show (e.g., $1990, $3490)
-    expect(screen.getByText('$1990')).toBeInTheDocument();
-    expect(screen.getByText('$3490')).toBeInTheDocument();
+    // Annual prices shown via NumberFlow mock (Intl.NumberFormat)
+    expect(screen.getByText('$1,990')).toBeInTheDocument();
+    expect(screen.getByText('$3,490')).toBeInTheDocument();
   });
 
   it('should display feature lists for each tier', () => {
