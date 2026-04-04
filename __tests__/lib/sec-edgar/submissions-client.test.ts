@@ -159,9 +159,30 @@ describe('filterNewFilings', () => {
     expect(result).toHaveLength(0);
   });
 
-  it('returns empty when watermark is null (cold start)', () => {
+  it('returns all filings when watermark is null (recovery safety net)', () => {
+    const filings = makeFilings([
+      '20240618160548',
+      '20240618140000',
+      '20240618120000',
+    ]);
+    const result = filterNewFilings(filings, null);
+    // All filings returned so none are silently skipped after watermark reset
+    expect(result).toHaveLength(3);
+    // Sorted newest-first
+    expect(result[0].acceptanceDateTime.getTime())
+      .toBeGreaterThan(result[1].acceptanceDateTime.getTime());
+    expect(result[1].acceptanceDateTime.getTime())
+      .toBeGreaterThan(result[2].acceptanceDateTime.getTime());
+  });
+
+  it('returns single filing when watermark is null', () => {
     const filings = makeFilings(['20240618160548']);
     const result = filterNewFilings(filings, null);
+    expect(result).toHaveLength(1);
+  });
+
+  it('returns empty array for empty filings list with null watermark', () => {
+    const result = filterNewFilings([], null);
     expect(result).toHaveLength(0);
   });
 

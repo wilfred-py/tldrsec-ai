@@ -32,6 +32,12 @@ const fastPollLogger = logger.child('fast-poll-handler');
 // At 10 req/s, 200 CIKs = 20s. Beyond this, overflow falls back to Atom feed.
 const MAX_PER_CIK_POLLING = parseInt(process.env.MAX_PER_CIK_POLLING || '200', 10);
 
+/** Minutes since last poll that triggers recovery mode (backfill cross-reference) */
+const RECOVERY_GAP_MINUTES = parseInt(process.env.RECOVERY_GAP_MINUTES || '30', 10);
+
+/** Max filings to backfill per recovery cycle to prevent queue overwhelm */
+const MAX_BACKFILL_PER_CYCLE = parseInt(process.env.MAX_BACKFILL_PER_CYCLE || '50', 10);
+
 export interface FastPollResult {
   status: 'completed' | 'skipped';
   reason?: string;
@@ -41,6 +47,12 @@ export interface FastPollResult {
   tickersSkipped: number;
   cacheHits: number;
   durationMs: number;
+  /** True when a polling gap was detected and recovery mode activated */
+  recoveryMode?: boolean;
+  /** Minutes since last successful poll (only set in recovery mode) */
+  gapMinutes?: number;
+  /** Filings found via cross-reference that watermark detection missed */
+  backfilledFilings?: number;
   latencyMetrics?: {
     /** Oldest detection latency among new filings (ms from EDGAR acceptance to detection) */
     maxDetectionLatencyMs: number;
@@ -80,6 +92,21 @@ export async function handleFastPoll(): Promise<FastPollResult> {
       cacheHits: 0,
       durationMs: Date.now() - startTime,
     };
+  }
+
+  // ── Step 1.5: Detect recovery mode ────────────────────────────
+  // If the gap since last poll exceeds RECOVERY_GAP_MINUTES, we're
+  // recovering from downtime. In this mode we also cross-reference
+  // discovered filings against RssFilingCheck to catch anything the
+  // watermark-based detection might have missed.
+  const lastPollTime = lastPollRecord?.lastPollTime;
+  const gapMinutes = lastPollTime
+    ? Math.round((Date.now() - lastPollTime.getTime()) / (60 * 1000))
+    : null;
+  const isRecoveryMode = gapMinutes !== null && gapMinutes >= RECOVERY_GAP_MINUTES;
+
+  if (isRecoveryMode) {
+    fastPollLogger.warn(`Recovery mode activated: ${gapMinutes} min gap since last poll (threshold: ${RECOVERY_GAP_MINUTES} min)`);
   }
 
   // ── Step 2: Distributed lock ────────────────────────────────────
@@ -262,11 +289,75 @@ export async function handleFastPoll(): Promise<FastPollResult> {
       }
     }
 
+    // ── Step 4.5: Recovery cross-reference ─────────────────────────
+    // In recovery mode, cross-reference all filings seen in this cycle
+    // against RssFilingCheck to catch anything missed during downtime.
+    // Also sync detected filings into RssFilingCheck for the legacy path.
+    let backfilledFilings = 0;
+
+    if (isRecoveryMode && allDetectedFilings.length > 0) {
+      try {
+        const accessionNumbers = allDetectedFilings.map(f => f.accessionNumber);
+        const existingChecks = await prisma.rssFilingCheck.findMany({
+          where: { accessionNumber: { in: accessionNumbers } },
+          select: { accessionNumber: true },
+        });
+        const existingSet = new Set(existingChecks.map(c => c.accessionNumber));
+
+        // Find filings detected by Submissions API that are missing from RssFilingCheck
+        const missingFromRssCheck = allDetectedFilings.filter(
+          f => !existingSet.has(f.accessionNumber)
+        );
+
+        if (missingFromRssCheck.length > 0) {
+          // Sync to RssFilingCheck so the legacy discovery path also knows about them
+          const tickerMonitoringIds = new Map<string, string>();
+          for (const record of monitoringRecords) {
+            tickerMonitoringIds.set(record.cik, record.id);
+          }
+
+          const rssCheckRecords = missingFromRssCheck
+            .slice(0, MAX_BACKFILL_PER_CYCLE)
+            .filter(f => tickerMonitoringIds.has(f.ticker.cik!))
+            .map(f => ({
+              tickerMonitoringId: tickerMonitoringIds.get(f.ticker.cik!)!,
+              accessionNumber: f.accessionNumber,
+              filingType: f.form,
+              filingDate: new Date(f.filingDate),
+              filingUrl: `https://www.sec.gov/Archives/edgar/data/${f.ticker.cik}/${f.accessionNumber.replace(/-/g, '')}/${f.primaryDocument}`,
+              rssEntryDate: f.acceptanceDateTime,
+              processed: false,
+            }));
+
+          if (rssCheckRecords.length > 0) {
+            const result = await prisma.rssFilingCheck.createMany({
+              data: rssCheckRecords,
+              skipDuplicates: true,
+            });
+            backfilledFilings = result.count;
+
+            fastPollLogger.info(`Recovery backfill: synced ${backfilledFilings} filings to RssFilingCheck`, {
+              total: missingFromRssCheck.length,
+              synced: backfilledFilings,
+              capped: missingFromRssCheck.length > MAX_BACKFILL_PER_CYCLE,
+            });
+          }
+        }
+      } catch (error) {
+        // Non-critical: log and continue. The watermark-based detection already found the filings.
+        fastPollLogger.error('Recovery cross-reference failed (non-critical)', {
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
+
     if (allDetectedFilings.length === 0) {
       fastPollLogger.info('No new filings detected', {
         tickersPolled,
         cacheHits,
         durationMs: Date.now() - startTime,
+        recoveryMode: isRecoveryMode,
+        gapMinutes: gapMinutes ?? undefined,
       });
 
       return {
@@ -277,6 +368,8 @@ export async function handleFastPoll(): Promise<FastPollResult> {
         tickersSkipped,
         cacheHits,
         durationMs: Date.now() - startTime,
+        recoveryMode: isRecoveryMode || undefined,
+        gapMinutes: isRecoveryMode ? (gapMinutes ?? undefined) : undefined,
       };
     }
 
@@ -409,6 +502,9 @@ export async function handleFastPoll(): Promise<FastPollResult> {
       tickersPolled,
       cacheHits,
       durationMs: Date.now() - startTime,
+      recoveryMode: isRecoveryMode,
+      gapMinutes: gapMinutes ?? undefined,
+      backfilledFilings,
       filings: allDetectedFilings.map(f => ({
         ticker: f.ticker.symbol,
         form: f.form,
@@ -425,6 +521,9 @@ export async function handleFastPoll(): Promise<FastPollResult> {
       tickersSkipped,
       cacheHits,
       durationMs: Date.now() - startTime,
+      recoveryMode: isRecoveryMode || undefined,
+      gapMinutes: isRecoveryMode ? (gapMinutes ?? undefined) : undefined,
+      backfilledFilings: backfilledFilings > 0 ? backfilledFilings : undefined,
       latencyMetrics: latencies.length > 0 ? {
         maxDetectionLatencyMs: Math.max(...latencies),
         minDetectionLatencyMs: Math.min(...latencies),
