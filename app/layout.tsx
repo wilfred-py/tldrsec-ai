@@ -58,8 +58,8 @@ export default function RootLayout({
   
   return (
     <ClerkProviderWrapper
-      afterSignUpUrl="/onboarding"
-      afterSignInUrl="/dashboard"
+      signUpFallbackRedirectUrl="/onboarding"
+      signInFallbackRedirectUrl="/dashboard"
       signUpUrl="/sign-up"
       signInUrl="/sign-in"
     >
