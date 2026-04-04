@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-## [0.0.3.2] - 2026-04-04
+## [0.0.4.1] - 2026-04-04
 
 ### Changed
 - Email 3 ("Your Trial Is Ready") rewritten with Hormozi Grand Slam Offer framework: pain-first intro, CTA above the fold, value-first FAQ, honest CC disclosure with risk reversal
@@ -10,6 +10,25 @@ All notable changes to this project will be documented in this file.
 - All 3 campaign emails now use dynamic filing data from the database, ranked by materiality, size, and rarity (falls back to hardcoded samples if no summaries exist)
 - Gmail/Outlook-safe inline HTML with table layout, MSO conditionals, preheader text with whitespace padding
 - Added plaintext MIME parts to all campaign emails for improved deliverability
+
+## [0.0.4.0] - 2026-04-04
+
+### Fixed
+- Onboarding sector tiles overflow viewport on smaller screens (now 2/3/4 column responsive grid)
+- Companies never loaded after sector selection ("No companies available" error) due to missing sector data in SEC cache
+- Sector filter pills used raw HTML buttons instead of design system components
+- Dev-facing error message ("Run the SIC population script") replaced with user-friendly copy
+
+### Added
+- Staggered fade-in animation on sector tiles (reuses existing `animate-slideUp`, a11y-safe with `prefers-reduced-motion`)
+- Curated list of ~190 popular S&P-class companies mapped to all 11 GICS sectors for onboarding browse
+- "Showing companies in X, Y" subtitle in step 2 to validate sector choice
+- ScrollArea viewport containment for both sector grid and company list
+
+### Changed
+- Sector filter pills now use `badgeVariants()` styling while keeping `<button>` for keyboard accessibility
+- Sector browse API (`/api/companies?sectors=`) uses curated popular companies instead of unenriched SEC cache
+- Sector card sizing reduced (p-3, h-10 icon box) for better viewport fit
 
 ## [0.0.3.1] - 2026-04-04
 
