@@ -2,35 +2,37 @@ import type { Metadata } from 'next';
 import { Suspense } from 'react';
 import { LandingPageV2 } from '@/components/landing/landing-page-v2';
 
-export const dynamic = 'force-dynamic';
-
-export async function generateMetadata(): Promise<Metadata> {
-  return {
-    title: 'Save 10+ Hours Weekly on SEC Filing Analysis',
-    description: 'Stop spending weekends reading SEC filings. Get AI-powered summaries that help you make informed investment decisions on your portfolio companies.',
-    keywords: [
-      'SEC filing summaries',
-      'investment time savings',
-      'portfolio analysis',
-      'Buffett-style investing',
-      'filing alerts',
-      'investment decisions'
-    ],
-    openGraph: {
-      title: 'Save 10+ Hours Weekly on SEC Filing Analysis',
-      description: 'Stop spending weekends reading SEC filings. Get AI summaries for informed investment decisions.',
-      type: 'website',
-    },
-    twitter: {
-      card: 'summary_large_image',
-      title: 'Save 10+ Hours Weekly on SEC Filing Analysis',
-      description: 'Stop spending weekends reading SEC filings. Get AI summaries for informed investment decisions.',
-    },
-    alternates: {
-      canonical: 'https://tldrsec.app',
-    },
-  };
-}
+export const metadata: Metadata = {
+  title: 'AI SEC Filing Summaries - 10-K, 10-Q, 8-K & Form 4 | tldrSEC',
+  description: 'Get AI-powered summaries of SEC filings delivered to your inbox. Instant analysis of 10-K annual reports, 10-Q quarterly filings, 8-K events, and Form 4 insider trades for smarter investment decisions.',
+  keywords: [
+    'SEC filing summary',
+    '10-K summary',
+    '10-Q summary',
+    '8-K filing summary',
+    'Form 4 insider trading',
+    'SEC filing analysis',
+    'AI financial analysis',
+    'SEC filing alerts',
+    'earnings report summary',
+    'investment research tool',
+    'SEC EDGAR summary',
+    'portfolio filing alerts',
+  ],
+  openGraph: {
+    title: 'AI SEC Filing Summaries - 10-K, 10-Q, 8-K & Form 4 | tldrSEC',
+    description: 'Get AI-powered summaries of SEC filings delivered to your inbox. Instant analysis for smarter investment decisions.',
+    type: 'website',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'AI SEC Filing Summaries - 10-K, 10-Q, 8-K & Form 4 | tldrSEC',
+    description: 'Get AI-powered summaries of SEC filings delivered to your inbox. Instant analysis for smarter investment decisions.',
+  },
+  alternates: {
+    canonical: 'https://tldrsec.app',
+  },
+};
 
 function LoadingSpinner() {
   return (
@@ -40,7 +42,7 @@ function LoadingSpinner() {
   );
 }
 
-export default async function Home() {
+export default function Home() {
   return (
     <Suspense fallback={<LoadingSpinner />}>
       <LandingPageV2 />
