@@ -1,6 +1,6 @@
 import { currentUser } from '@clerk/nextjs/server';
 import { redirect, notFound } from 'next/navigation';
-import { getPrismaClient } from '@/lib/db';
+import { getPrismaClient } from '@/lib/db/prisma';
 import { formatDistanceToNow, format } from 'date-fns';
 import { ArrowLeft, ChevronRight, AlertTriangle } from 'lucide-react';
 import Link from 'next/link';
