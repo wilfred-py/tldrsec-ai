@@ -29,6 +29,11 @@ import {
 import { TrialService } from '@/lib/auth/trial-service';
 
 type BillingInterval = 'monthly' | 'annual';
+
+/** Infinity is not valid JSON — clamp to a safe sentinel that the client treats as "unlimited". */
+function safeDaysRemaining(days: number): number {
+  return Number.isFinite(days) ? days : 9999;
+}
 type NewPlanKey = 'FREE' | 'PRO' | 'MAX';
 
 const prisma = getPrismaClient();
@@ -206,6 +211,7 @@ async function handleGetSubscription() {
       return NextResponse.json({
         planType: 'FREE',
         isActive: true,
+        currentPeriodStart: new Date().toISOString(),
         currentPeriodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
         cancelAtPeriodEnd: false,
         stripeCustomerId: null,
@@ -218,7 +224,7 @@ async function handleGetSubscription() {
         _stripeDisabled: true,
         trialEndsAt: trialData.trialEndsAt?.toISOString() ?? null,
         isTrialing: trialData.isActive,
-        daysRemaining: trialData.daysRemaining,
+        daysRemaining: safeDaysRemaining(trialData.daysRemaining),
         isGrandfathered: trialData.isGrandfathered,
       });
     }
@@ -255,6 +261,7 @@ async function handleGetSubscription() {
       return NextResponse.json({
         planType: 'FREE',
         isActive: true,
+        currentPeriodStart: new Date().toISOString(),
         currentPeriodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
         cancelAtPeriodEnd: false,
         stripeCustomerId: null,
@@ -266,7 +273,7 @@ async function handleGetSubscription() {
         },
         trialEndsAt: trialData.trialEndsAt?.toISOString() ?? null,
         isTrialing: trialData.isActive,
-        daysRemaining: trialData.daysRemaining,
+        daysRemaining: safeDaysRemaining(trialData.daysRemaining),
         isGrandfathered: trialData.isGrandfathered,
       });
     }
@@ -300,7 +307,7 @@ async function handleGetSubscription() {
       },
       trialEndsAt: trialData.trialEndsAt?.toISOString() ?? null,
       isTrialing: trialData.isActive,
-      daysRemaining: trialData.daysRemaining,
+      daysRemaining: safeDaysRemaining(trialData.daysRemaining),
       isGrandfathered: trialData.isGrandfathered,
     });
 

@@ -8,7 +8,7 @@ export const SubscriptionDataSchema = z.object({
   planType: z.enum(['FREE', 'PRO', 'MAX']),
   isActive: z.boolean(),
   isTrialing: z.boolean(),
-  daysRemaining: z.number().min(0),
+  daysRemaining: z.number(),
   trialEndsAt: z.string().nullable(),
   isGrandfathered: z.boolean(),
   currentPeriodStart: z.string().nullable(),
@@ -17,9 +17,9 @@ export const SubscriptionDataSchema = z.object({
   stripeCustomerId: z.string().nullable(),
   stripeSubscriptionId: z.string().nullable(),
   limits: z.object({
-    monthlyFilings: z.number().min(0),
+    monthlyFilings: z.number(),
     usedFilings: z.number().min(0),
-    remainingFilings: z.number().min(0),
+    remainingFilings: z.number(),
   }),
 });
 
