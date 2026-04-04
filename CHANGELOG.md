@@ -2,6 +2,21 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.0.2.0] - 2026-04-04
+
+### Added
+- Trial nurture email cron: automated day 3/4/6 nurture sequence with cumulative day logic
+- Win-back emails at day 10 and 14 for expired trial users
+- Setup nudge email for trial users who haven't added any tickers
+- Engagement scoring (0-100) based on views, deliveries, feedback, tickers, onboarding
+- Conversion metrics utility for measuring nurture-to-paid conversion rates by stage and engagement band
+- `nurture-trials` action wired to consolidated cron route and Cloudflare Worker daily tasks
+
+### Fixed
+- Hero section test: add auth context mock after upstream component change
+- Cloudflare Worker wrangler.toml: sync cron schedule `*/1` to `*/5` to match root config
+- Cron routing test: update schedule assertion to match actual config
+
 ## [0.0.1.0] - 2026-04-03
 
 ### Fixed
