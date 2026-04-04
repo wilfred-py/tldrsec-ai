@@ -24,6 +24,7 @@ import {
   type BillingInterval,
 } from '@/lib/stripe/plans';
 import { AnimatedPrice, StaticPrice } from '@/components/landing/sections-v2/animated-price';
+import { BillingToggle } from '@/components/billing/billing-toggle';
 import type { UserSubscription } from '@/lib/types/subscription';
 
 const PLAN_ICONS: Record<PlanType, typeof Sparkles | null> = {
@@ -340,26 +341,13 @@ function SubscribePageContent() {
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.4, delay: 0.1 }}
-          className="flex items-center justify-center gap-3 mb-12"
+          className="flex items-center justify-center mb-12"
         >
-          <span className="text-sm text-[var(--landing-text-muted)]">
-            Save with yearly billing
-          </span>
-          <button
-            onClick={() => setBillingInterval(billingInterval === 'monthly' ? 'annual' : 'monthly')}
-            className={`relative w-12 h-6 rounded-full transition-colors duration-200 ${
-              billingInterval === 'annual'
-                ? 'bg-[var(--landing-primary)]'
-                : 'bg-gray-300'
-            }`}
-            aria-label={`Switch to ${billingInterval === 'monthly' ? 'annual' : 'monthly'} billing`}
-          >
-            <motion.span
-              animate={{ x: billingInterval === 'annual' ? 24 : 0 }}
-              transition={{ type: 'spring', stiffness: 500, damping: 30 }}
-              className="absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow-md"
-            />
-          </button>
+          <BillingToggle
+            billingInterval={billingInterval}
+            onToggle={() => setBillingInterval(billingInterval === 'monthly' ? 'annual' : 'monthly')}
+            disabled={checkingOut !== null}
+          />
         </motion.div>
 
         {/* Plan Cards */}

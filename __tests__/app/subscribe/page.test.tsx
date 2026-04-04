@@ -180,15 +180,15 @@ describe('SubscribePage', () => {
       expect(screen.getByRole('heading', { name: /pro/i })).toBeInTheDocument();
     });
 
-    // Find the toggle button by its aria-label
-    const toggleButton = screen.getByRole('button', { name: /switch to annual billing/i });
+    // Find the toggle switch by its aria-label
+    const toggleButton = screen.getByRole('switch', { name: /switch to annual billing/i });
     expect(toggleButton).toBeInTheDocument();
 
     await userEvent.click(toggleButton);
 
     // After clicking, it should now say "switch to monthly"
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: /switch to monthly billing/i })).toBeInTheDocument();
+      expect(screen.getByRole('switch', { name: /switch to monthly billing/i })).toBeInTheDocument();
     });
   });
 

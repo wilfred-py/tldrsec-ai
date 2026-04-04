@@ -17,6 +17,7 @@ import {
 import { useAuth } from '@/contexts/auth-context';
 import { useSubscriptionContext } from '@/contexts/subscription-context';
 import { PricingCard } from '@/components/landing/pricing-card';
+import { BillingToggle } from '@/components/billing/billing-toggle';
 
 /**
  * Pricing plans configuration
@@ -204,27 +205,14 @@ export function PricingSectionV2() {
           whileInView={{ opacity: 1, y: 0 }}
           viewport={viewportOnce}
           transition={{ duration: 0.4, delay: 0.1 }}
-          className="flex items-center justify-center gap-3 mb-12"
+          className="flex flex-col items-center gap-2 mb-12"
         >
-          <span className="text-sm text-[var(--landing-text-muted)]">
-            Save with yearly billing
-          </span>
-          <button
-            onClick={() => setBillingInterval(billingInterval === 'monthly' ? 'annual' : 'monthly')}
-            className={`relative w-12 h-6 rounded-full transition-colors duration-200 ${
-              billingInterval === 'annual'
-                ? 'bg-[var(--landing-primary)]'
-                : 'bg-gray-300'
-            }`}
-            aria-label={`Switch to ${billingInterval === 'monthly' ? 'annual' : 'monthly'} billing`}
-          >
-            <span
-              className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow-md transition-transform duration-200 ${
-                billingInterval === 'annual' ? 'translate-x-6' : 'translate-x-0'
-              }`}
-            />
-          </button>
-          <p className="text-xs text-[var(--landing-text-muted)] mt-2">
+          <BillingToggle
+            billingInterval={billingInterval}
+            onToggle={() => setBillingInterval(billingInterval === 'monthly' ? 'annual' : 'monthly')}
+            disabled={loadingPlan !== null}
+          />
+          <p className="text-xs text-[var(--landing-text-muted)]">
             Billing starts after your 7-day free trial
           </p>
         </motion.div>
