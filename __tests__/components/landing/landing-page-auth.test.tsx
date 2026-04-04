@@ -57,6 +57,18 @@ jest.mock('framer-motion', () => {
   );
   forwardRefP.displayName = 'MotionP';
 
+  const forwardRefSpan = React.forwardRef(
+    (
+      { children, variants, initial, animate, transition, layout, ...props }: React.PropsWithChildren<Record<string, unknown>>,
+      ref
+    ) => (
+      <span ref={ref as React.Ref<HTMLSpanElement>} {...props}>
+        {children}
+      </span>
+    )
+  );
+  forwardRefSpan.displayName = 'MotionSpan';
+
   const forwardRefNav = React.forwardRef(
     (
       { children, initial, animate, exit, transition, ...props }: React.PropsWithChildren<Record<string, unknown>>,
@@ -80,6 +92,11 @@ jest.mock('framer-motion', () => {
     useInView: () => true,
   };
 });
+
+// Mock global fetch (subscribe page calls fetch('/api/user?type=subscription'))
+global.fetch = jest.fn(() =>
+  Promise.resolve({ ok: false, status: 401, json: () => Promise.resolve({}) })
+) as jest.Mock;
 
 // Mock next/navigation
 jest.mock('next/navigation', () => ({
