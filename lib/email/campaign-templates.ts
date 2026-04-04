@@ -6,11 +6,9 @@
  * 2. "What You Missed This Week" - Multiple summaries, soft CTA
  * 3. "Your Trial Is Ready" - Conversion email with FAQ
  *
- * Uses baseTemplate() from templates.ts for consistent branding and
- * CAN-SPAM compliant unsubscribe footer.
+ * Self-contained table-based HTML for maximum email client compatibility.
+ * Does NOT use baseTemplate() — campaign emails have their own minimal design.
  */
-
-import { baseTemplate, BaseTemplateData } from './templates';
 
 interface CampaignEmailOptions {
   unsubscribeUrl: string;
@@ -22,6 +20,52 @@ interface CampaignEmailContent {
   html: string;
 }
 
+const FONT_STACK = '-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif';
+
+const FOUNDER_PS = `
+<tr><td style="padding:16px 15px 0;">
+  <div style="border-top:1px solid #e6e6e6;padding-top:16px;">
+    <p style="font-size:13px;line-height:1.6;color:#6B7280;font-style:italic;margin:0;">
+      <span style="font-weight:600;color:#374151;font-style:normal;">P.S.</span>
+      I built tldrSEC because I got tired of reading SEC filings manually.
+      A single 10-K runs 100-200 pages. 10-Qs are 50-80. Even Form 4s pile up fast
+      when you're tracking multiple companies.
+    </p>
+    <p style="font-size:13px;line-height:1.6;color:#6B7280;font-style:italic;margin:12px 0 0 0;">
+      This is what our AI does with all of them, minutes after they hit EDGAR.
+    </p>
+  </div>
+</td></tr>`;
+
+function campaignShell(headerRight: string, body: string, unsubscribeUrl: string): string {
+  return `<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<style>body{margin:0;padding:20px;background:#f0f0f0;font-family:${FONT_STACK};}</style>
+</head>
+<body>
+<table width="600" cellpadding="0" cellspacing="0" style="margin:0 auto;background:#ffffff;border:1px solid #e6e6e6;border-radius:8px;overflow:hidden;">
+<tbody>
+<!-- Header -->
+<tr><td style="padding:20px 15px 16px;border-bottom:1px solid #e6e6e6;">
+<table width="100%" cellpadding="0" cellspacing="0"><tbody><tr>
+<td><span style="font-size:18px;font-weight:700;color:#000;">tldrSEC</span></td>
+<td style="text-align:right;"><span style="font-size:12px;color:#6B7280;">${headerRight}</span></td>
+</tr></tbody></table>
+</td></tr>
+
+${body}
+
+<!-- Footer -->
+<tr><td style="padding:16px 15px;border-top:1px solid #e6e6e6;text-align:center;">
+<p style="margin:0;font-size:11px;color:#9CA3AF;">tldrSEC | AI-Powered SEC Filing Summaries<br><a href="${unsubscribeUrl}" style="color:#9CA3AF;text-decoration:underline;">Unsubscribe</a></p>
+</td></tr>
+</tbody>
+</table>
+</body>
+</html>`;
+}
+
 /**
  * Email 1: "The Filing That Moved [Ticker]"
  *
@@ -31,46 +75,59 @@ interface CampaignEmailContent {
  */
 function email1(options: CampaignEmailOptions): CampaignEmailContent {
   const subject = options.variant === 'B'
-    ? 'NVDA insider bought $2.1M last week'
+    ? 'NVDA insider sold $17.1M last week'
     : 'the form 4 filing most investors missed';
 
-  const content = `
-    <p>You signed up for tldrSEC a few weeks ago. Here's what our AI does with SEC filings.</p>
+  const body = `
+<!-- Filing Header -->
+<tr><td style="padding:20px 15px 16px;">
+<div style="display:inline-block;padding:3px 8px;background:#F3F4F6;border-radius:4px;font-size:11px;font-weight:600;color:#6B7280;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;">FORM 4 | INSIDER</div>
+<h1 style="margin:8px 0 4px;font-size:22px;font-weight:700;color:#000;line-height:1.3;">NVDA: Jensen Huang<span style="font-weight:400;font-size:16px;color:#6B7280;">, CEO</span></h1>
+<p style="margin:0;font-size:14px;color:#6B7280;">NVIDIA Corporation</p>
+</td></tr>
 
-    <p>Below is a real summary, generated automatically within minutes of the filing hitting EDGAR.</p>
+<!-- Importance Badge -->
+<tr><td style="padding:0 15px 12px;">
+<span style="display:inline-block;padding:3px 10px;background:#FEE2E2;color:#991B1B;border-radius:4px;font-size:11px;font-weight:600;letter-spacing:0.5px;">HIGH IMPORTANCE</span>
+</td></tr>
 
-    <div style="background: #f8fafc; border-left: 4px solid #ef4444; border-radius: 4px; padding: 20px; margin: 20px 0;">
-      <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px;">
-        <span style="background: #ef4444; color: white; font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 4px; text-transform: uppercase;">HIGH</span>
-        <span style="background: #f3e8ff; color: #7c3aed; font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 4px;">Form 4</span>
-      </div>
-      <h3 style="margin: 0 0 8px; color: #1e293b; font-size: 16px;">NVIDIA Corp (NVDA) - Insider Purchase</h3>
-      <p style="margin: 0 0 12px; color: #475569; font-size: 14px; line-height: 1.6;">
-        A senior executive acquired 15,000 shares at $142.50/share ($2.14M total). This is notable because insider buying at this scale, during a period of elevated valuation, signals strong internal confidence in near-term performance. The executive now holds 185,000 shares directly.
-      </p>
-      <p style="margin: 0; color: #94a3b8; font-size: 12px;">
-        Filed: March 2026 &middot; Source: SEC EDGAR
-      </p>
-    </div>
+<!-- Key Takeaway -->
+<tr><td style="padding:0 15px 20px;">
+<div style="border:1px solid #e6e6e6;border-radius:15px;padding:15px;">
+<h2 style="margin:0 0 7px;font-size:16px;font-weight:600;color:#000;border-bottom:1px solid #f1f5f9;padding-bottom:8px;">Key Takeaway</h2>
+<p style="margin:0;font-size:14px;color:#374151;line-height:1.6;">Jensen Huang sold 120,000 shares at $142.50/share for a total of <strong style="color:#000;">$17.1M</strong>. This is part of a pre-announced 10b5-1 trading plan filed in Q3 2025. Huang still holds <strong style="color:#000;">89.4M shares</strong> (3.5% of outstanding), so this sale represents 0.13% of his total position. Not a bearish signal — routine planned diversification.</p>
+</div>
+</td></tr>
 
-    <p style="color: #64748b; font-size: 14px;">
-      On EDGAR, parsing this Form 4 takes 15-20 minutes. Our AI extracted the key details in under 10 minutes from the moment it was filed.
-    </p>
+<!-- Transaction Table -->
+<tr><td style="padding:0 15px 20px;">
+<div style="border:1px solid #e6e6e6;border-radius:15px;overflow:hidden;">
+<table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">
+<thead><tr>
+<th style="padding:10px 12px;text-align:left;font-weight:600;border-bottom:2px solid #e6e6e6;color:#000;font-size:12px;text-transform:uppercase;background:#f8fafc;">Detail</th>
+<th style="padding:10px 12px;text-align:right;font-weight:600;border-bottom:2px solid #e6e6e6;color:#000;font-size:12px;text-transform:uppercase;background:#f8fafc;">Value</th>
+</tr></thead>
+<tbody>
+<tr><td style="padding:10px 12px;border-bottom:1px solid #f1f5f9;font-size:14px;color:#374151;">Transaction Type</td><td style="padding:10px 12px;border-bottom:1px solid #f1f5f9;font-size:14px;color:#374151;text-align:right;font-weight:600;">Open Market Sale</td></tr>
+<tr style="background:#f8fafc;"><td style="padding:10px 12px;border-bottom:1px solid #f1f5f9;font-size:14px;color:#374151;">Shares</td><td style="padding:10px 12px;border-bottom:1px solid #f1f5f9;font-size:14px;color:#EF4444;text-align:right;font-weight:600;font-family:Monaco,Consolas,monospace;">120,000 ↓</td></tr>
+<tr><td style="padding:10px 12px;border-bottom:1px solid #f1f5f9;font-size:14px;color:#374151;">Price Per Share</td><td style="padding:10px 12px;border-bottom:1px solid #f1f5f9;font-size:14px;color:#374151;text-align:right;font-weight:600;font-family:Monaco,Consolas,monospace;">$142.50</td></tr>
+<tr style="background:#f8fafc;"><td style="padding:10px 12px;border-bottom:1px solid #f1f5f9;font-size:14px;color:#374151;">Total Value</td><td style="padding:10px 12px;border-bottom:1px solid #f1f5f9;font-size:14px;color:#000;text-align:right;font-weight:700;font-family:Monaco,Consolas,monospace;">$17.1M</td></tr>
+<tr><td style="padding:10px 12px;font-size:14px;color:#374151;">Shares Remaining</td><td style="padding:10px 12px;font-size:14px;color:#374151;text-align:right;font-weight:600;font-family:Monaco,Consolas,monospace;">89.4M (3.5%)</td></tr>
+</tbody>
+</table>
+</div>
+</td></tr>
 
-    <p style="color: #94a3b8; font-size: 13px; margin-top: 24px;">
-      This is a sample of what tldrSEC delivers to your inbox within minutes of every SEC filing. More to come.
-    </p>
-  `;
+<!-- Sample note -->
+<tr><td style="padding:0 15px 4px;text-align:center;">
+<p style="margin:0;font-size:13px;color:#6B7280;line-height:1.5;">This is a sample of what <strong style="color:#374151;">tldrSEC</strong> delivers to your inbox within minutes of every SEC filing.</p>
+</td></tr>
 
-  const data: BaseTemplateData = {
-    recipientEmail: '',
-    unsubscribeUrl: options.unsubscribeUrl,
-    preferencesUrl: 'https://tldrsec.app/dashboard/settings',
-  };
+${FOUNDER_PS}`;
 
   return {
     subject,
-    html: baseTemplate(content, data),
+    html: campaignShell('Mar 28, 2026', body, options.unsubscribeUrl),
   };
 }
 
@@ -78,86 +135,66 @@ function email1(options: CampaignEmailOptions): CampaignEmailContent {
  * Email 2: "What You Missed This Week"
  *
  * Shows breadth: multiple filings, multiple types, importance-ranked.
- * Soft CTA to landing page. Includes competitive comparison.
+ * Soft CTA to landing page.
  */
 function email2(options: CampaignEmailOptions): CampaignEmailContent {
   const subject = '3 SEC filings you should know about';
 
-  const filings = [
-    {
-      importance: 'HIGH',
-      importanceColor: '#ef4444',
-      badge: 'Form 4',
-      badgeColor: '#f3e8ff',
-      badgeTextColor: '#7c3aed',
-      company: 'Tesla Inc (TSLA)',
-      title: 'Director Stock Sale',
-      summary: 'Board member sold 50,000 shares at $248.30 ($12.4M). Scheduled sale under 10b5-1 plan filed in January. Director retains 420,000 shares.',
-    },
-    {
-      importance: 'MEDIUM',
-      importanceColor: '#f59e0b',
-      badge: '8-K',
-      badgeColor: '#f0fdf4',
-      badgeTextColor: '#16a34a',
-      company: 'Apple Inc (AAPL)',
-      title: 'Material Definitive Agreement',
-      summary: 'Entered into a $5B revolving credit facility with a consortium of banks. Replaces existing $3B facility expiring Q2 2026. Signals preparation for potential large acquisition or capital deployment.',
-    },
-    {
-      importance: 'MEDIUM',
-      importanceColor: '#f59e0b',
-      badge: '10-Q',
-      badgeColor: '#eff6ff',
-      badgeTextColor: '#2563eb',
-      company: 'Microsoft Corp (MSFT)',
-      title: 'Quarterly Report',
-      summary: 'Revenue $65.2B (+14% YoY). Cloud segment grew 22%. Operating margin expanded 180bps to 44.2%. Raised full-year guidance by $2B on AI demand strength.',
-    },
-  ];
+  const body = `
+<!-- Headline -->
+<tr><td style="padding:20px 15px 8px;">
+<h1 style="margin:0;font-size:22px;font-weight:700;color:#000;line-height:1.3;">3 SEC Filings You Should Know About</h1>
+<p style="margin:6px 0 0;font-size:14px;color:#6B7280;">Week of March 23–28, 2026</p>
+</td></tr>
 
-  let filingsHtml = '';
-  for (const f of filings) {
-    filingsHtml += `
-      <div style="background: #f8fafc; border-left: 4px solid ${f.importanceColor}; border-radius: 4px; padding: 16px; margin: 12px 0;">
-        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
-          <span style="background: ${f.importanceColor}; color: white; font-size: 10px; font-weight: 600; padding: 2px 6px; border-radius: 3px; text-transform: uppercase;">${f.importance}</span>
-          <span style="background: ${f.badgeColor}; color: ${f.badgeTextColor}; font-size: 10px; font-weight: 600; padding: 2px 6px; border-radius: 3px;">${f.badge}</span>
-        </div>
-        <h4 style="margin: 0 0 6px; color: #1e293b; font-size: 14px;">${f.company} - ${f.title}</h4>
-        <p style="margin: 0; color: #475569; font-size: 13px; line-height: 1.5;">${f.summary}</p>
-      </div>
-    `;
-  }
+<!-- Filing 1: HIGH -->
+<tr><td style="padding:12px 15px;">
+<div style="border:1px solid #e6e6e6;border-radius:15px;padding:15px;">
+<div style="margin-bottom:8px;">
+<span style="display:inline-block;padding:2px 8px;background:#FEE2E2;color:#991B1B;border-radius:4px;font-size:10px;font-weight:600;letter-spacing:0.3px;margin-right:6px;">HIGH</span>
+<span style="font-size:11px;font-weight:600;color:#6B7280;text-transform:uppercase;letter-spacing:0.5px;">FORM 4 | INSIDER</span>
+</div>
+<h3 style="margin:0 0 6px;font-size:16px;font-weight:600;color:#000;">TSLA: Board member sold $12.4M in shares</h3>
+<p style="margin:0;font-size:14px;color:#374151;line-height:1.5;">50,000 shares at $248.30. Scheduled sale under 10b5-1 plan filed in January. Director retains 420,000 shares.</p>
+</div>
+</td></tr>
 
-  const content = `
-    <p>3 SEC filings from this week, ranked by importance:</p>
+<!-- Filing 2: CRITICAL -->
+<tr><td style="padding:4px 15px 12px;">
+<div style="border:1px solid #e6e6e6;border-radius:15px;padding:15px;">
+<div style="margin-bottom:8px;">
+<span style="display:inline-block;padding:2px 8px;background:#FEE2E2;color:#991B1B;border-radius:4px;font-size:10px;font-weight:600;letter-spacing:0.3px;margin-right:6px;">CRITICAL</span>
+<span style="font-size:11px;font-weight:600;color:#6B7280;text-transform:uppercase;letter-spacing:0.5px;">8-K | MATERIAL EVENT</span>
+</div>
+<h3 style="margin:0 0 6px;font-size:16px;font-weight:600;color:#000;">AAPL: $5B revolving credit facility</h3>
+<p style="margin:0;font-size:14px;color:#374151;line-height:1.5;">Entered into a $5B revolving credit facility with a consortium of banks. Replaces existing $3B facility expiring Q2 2026. Signals preparation for potential large acquisition or capital deployment.</p>
+</div>
+</td></tr>
 
-    ${filingsHtml}
+<!-- Filing 3: MEDIUM -->
+<tr><td style="padding:4px 15px 16px;">
+<div style="border:1px solid #e6e6e6;border-radius:15px;padding:15px;">
+<div style="margin-bottom:8px;">
+<span style="display:inline-block;padding:2px 8px;background:#FEF3C7;color:#92400E;border-radius:4px;font-size:10px;font-weight:600;letter-spacing:0.3px;margin-right:6px;">MEDIUM</span>
+<span style="font-size:11px;font-weight:600;color:#6B7280;text-transform:uppercase;letter-spacing:0.5px;">10-Q | QUARTERLY</span>
+</div>
+<h3 style="margin:0 0 6px;font-size:16px;font-weight:600;color:#000;">MSFT: Revenue $65.2B (+14% YoY)</h3>
+<p style="margin:0;font-size:14px;color:#374151;line-height:1.5;">Cloud segment grew 22%. Operating margin expanded 180bps to 44.2%. Raised full-year guidance by $2B on AI demand strength.</p>
+</div>
+</td></tr>
 
-    <p style="color: #64748b; font-size: 14px; margin-top: 16px;">
-      On EDGAR, each of these would take 30-60 minutes to read and analyze. Our AI summarized all three within minutes of filing.
-    </p>
+<!-- Soft CTA -->
+<tr><td style="padding:8px 15px 20px;text-align:center;">
+<p style="margin:0 0 12px;font-size:15px;color:#374151;">Want these delivered automatically?</p>
+<a href="https://tldrsec.app" style="display:inline-block;padding:14px 28px;background:#7C3AED;color:#ffffff;text-decoration:none;border-radius:8px;font-size:14px;font-weight:600;">Get Early Access</a>
+<p style="margin:10px 0 0;font-size:12px;color:#9CA3AF;">We're opening access to waitlist members first.</p>
+</td></tr>
 
-    <div style="text-align: center; margin: 28px 0;">
-      <p style="color: #475569; font-size: 14px; margin-bottom: 16px;">
-        Want these delivered automatically? We're opening early access to waitlist members.
-      </p>
-      <a href="https://tldrsec.app" style="display: inline-block; background: #2563eb; color: white; font-size: 14px; font-weight: 600; padding: 12px 28px; border-radius: 6px; text-decoration: none;">
-        See How It Works
-      </a>
-    </div>
-  `;
-
-  const data: BaseTemplateData = {
-    recipientEmail: '',
-    unsubscribeUrl: options.unsubscribeUrl,
-    preferencesUrl: 'https://tldrsec.app/dashboard/settings',
-  };
+${FOUNDER_PS}`;
 
   return {
     subject,
-    html: baseTemplate(content, data),
+    html: campaignShell('Weekly Intelligence', body, options.unsubscribeUrl),
   };
 }
 
@@ -165,57 +202,57 @@ function email2(options: CampaignEmailOptions): CampaignEmailContent {
  * Email 3: "Your Trial Is Ready"
  *
  * Conversion email. Single CTA. FAQ section handles objections.
- * This is the money email.
+ * This is the money email. No P.S. — keep focus on CTA.
  */
 function email3(options: CampaignEmailOptions): CampaignEmailContent {
   const subject = 'your 7-day trial is ready';
 
-  const content = `
-    <p>You've seen what our AI does with SEC filings. Here's what happens when you sign up:</p>
+  const body = `
+<!-- Main content -->
+<tr><td style="padding:24px 15px 8px;">
+<h1 style="margin:0 0 12px;font-size:24px;font-weight:700;color:#000;line-height:1.3;">Your trial is ready.</h1>
+<p style="margin:0;font-size:15px;color:#374151;line-height:1.6;">You've seen what our AI does with SEC filings. Now get it working for your portfolio.</p>
+</td></tr>
 
-    <div style="background: #f8fafc; border-radius: 8px; padding: 20px; margin: 20px 0;">
-      <ol style="margin: 0; padding-left: 20px; color: #334155;">
-        <li style="margin-bottom: 10px;"><strong>Pick the companies you follow</strong> - from any sector, any size. We cover every public company on EDGAR.</li>
-        <li style="margin-bottom: 10px;"><strong>Get AI summaries within minutes</strong> of every SEC filing: 10-K, 10-Q, 8-K, Form 4, Form 144.</li>
-        <li style="margin-bottom: 0;"><strong>Never miss an insider trade or material event again.</strong> Our pipeline checks EDGAR every 10 minutes.</li>
-      </ol>
-    </div>
+<!-- What you get -->
+<tr><td style="padding:16px 15px;">
+<div style="border:1px solid #e6e6e6;border-radius:15px;padding:15px;">
+<h2 style="margin:0 0 12px;font-size:16px;font-weight:600;color:#000;">When you sign up:</h2>
+<table width="100%" cellpadding="0" cellspacing="0">
+<tbody>
+<tr><td style="padding:8px 0;font-size:14px;color:#374151;vertical-align:top;" width="24"><strong style="color:#10B981;">1.</strong></td><td style="padding:8px 0 8px 8px;font-size:14px;color:#374151;line-height:1.5;">Pick the companies you track from 2,000+ SEC-listed equities</td></tr>
+<tr><td style="padding:8px 0;font-size:14px;color:#374151;vertical-align:top;" width="24"><strong style="color:#10B981;">2.</strong></td><td style="padding:8px 0 8px 8px;font-size:14px;color:#374151;line-height:1.5;">Get an AI summary within minutes of every filing — 10-K, 10-Q, 8-K, Form 4, and more</td></tr>
+<tr><td style="padding:8px 0;font-size:14px;color:#374151;vertical-align:top;" width="24"><strong style="color:#10B981;">3.</strong></td><td style="padding:8px 0 8px 8px;font-size:14px;color:#374151;line-height:1.5;">Never miss an insider trade, earnings report, or material event again</td></tr>
+</tbody>
+</table>
+</div>
+</td></tr>
 
-    <div style="text-align: center; margin: 28px 0;">
-      <a href="https://tldrsec.app/sign-up?plan=pro&ref=campaign" style="display: inline-block; background: #2563eb; color: white; font-size: 16px; font-weight: 600; padding: 14px 36px; border-radius: 6px; text-decoration: none;">
-        Start Your 7-Day Trial
-      </a>
-      <p style="color: #94a3b8; font-size: 13px; margin-top: 8px;">
-        7 days free. Cancel anytime. No charge until the trial ends.
-      </p>
-    </div>
+<!-- CTA -->
+<tr><td style="padding:12px 15px 24px;text-align:center;">
+<a href="https://tldrsec.app/sign-up?plan=pro&ref=campaign" style="display:inline-block;padding:16px 40px;background:#7C3AED;color:#ffffff;text-decoration:none;border-radius:8px;font-size:16px;font-weight:600;">Start Your 7-Day Free Trial</a>
+<p style="margin:10px 0 0;font-size:13px;color:#6B7280;">Credit card required. Cancel anytime before day 7 — you're never charged.</p>
+</td></tr>
 
-    <div style="border-top: 1px solid #e2e8f0; padding-top: 20px; margin-top: 24px;">
-      <h3 style="color: #1e293b; font-size: 15px; margin-bottom: 16px;">Common Questions</h3>
+<!-- FAQ -->
+<tr><td style="padding:0 15px 20px;">
+<div style="border:1px solid #e6e6e6;border-radius:15px;padding:15px;">
+<h2 style="margin:0 0 12px;font-size:14px;font-weight:600;color:#000;text-transform:uppercase;letter-spacing:0.5px;">FAQ</h2>
 
-      <p style="color: #1e293b; font-size: 14px; font-weight: 600; margin-bottom: 4px;">What if I don't like it?</p>
-      <p style="color: #64748b; font-size: 13px; margin-bottom: 16px;">Cancel anytime during your 7-day trial. You won't be charged a cent.</p>
+<p style="margin:0 0 4px;font-size:14px;font-weight:600;color:#000;">What filing types do you cover?</p>
+<p style="margin:0 0 14px;font-size:14px;color:#374151;line-height:1.5;">All of them. 10-K, 10-Q, 8-K, Form 4, Form 144, DEF 14A, S-1, S-3, Schedule 13D/G, and more. If it's filed with the SEC, we summarize it.</p>
 
-      <p style="color: #1e293b; font-size: 14px; font-weight: 600; margin-bottom: 4px;">What filings do you cover?</p>
-      <p style="color: #64748b; font-size: 13px; margin-bottom: 16px;">10-K (annual), 10-Q (quarterly), 8-K (material events), Form 4 (insider trades), and Form 144 (planned sales). Every filing type that moves stocks.</p>
+<p style="margin:0 0 4px;font-size:14px;font-weight:600;color:#000;">How fast are the summaries?</p>
+<p style="margin:0 0 14px;font-size:14px;color:#374151;line-height:1.5;">Within minutes of the filing appearing on EDGAR. Most arrive in your inbox in under 10 minutes.</p>
 
-      <p style="color: #1e293b; font-size: 14px; font-weight: 600; margin-bottom: 4px;">How fast are the summaries?</p>
-      <p style="color: #64748b; font-size: 13px; margin-bottom: 16px;">Within 10 minutes of the filing appearing on SEC EDGAR. We check every 10 minutes, 24/7.</p>
-
-      <p style="color: #1e293b; font-size: 14px; font-weight: 600; margin-bottom: 4px;">What does it cost?</p>
-      <p style="color: #64748b; font-size: 13px; margin-bottom: 0;">Pro: $199/month (25 companies). Max: $349/month (unlimited). Both include a 7-day free trial.</p>
-    </div>
-  `;
-
-  const data: BaseTemplateData = {
-    recipientEmail: '',
-    unsubscribeUrl: options.unsubscribeUrl,
-    preferencesUrl: 'https://tldrsec.app/dashboard/settings',
-  };
+<p style="margin:0 0 4px;font-size:14px;font-weight:600;color:#000;">What if I don't like it?</p>
+<p style="margin:0;font-size:14px;color:#374151;line-height:1.5;">Cancel before day 7 and you pay nothing. No questions asked. We think you'll stay — but we make leaving easy.</p>
+</div>
+</td></tr>`;
 
   return {
     subject,
-    html: baseTemplate(content, data),
+    html: campaignShell('Early Access', body, options.unsubscribeUrl),
   };
 }
 
