@@ -2450,7 +2450,7 @@ async function handleBackfillMissed(request: NextRequest) {
 
     let totalMissed = 0;
     let totalJobsQueued = 0;
-    const tickerResults: Array<{ symbol: string; checked: number; missed: number; jobsQueued: number }> = [];
+    const tickerResults: Array<{ symbol: string; checked: number; missed: number; jobsQueued: number; error?: string }> = [];
 
     for (const ticker of activeTickers) {
       try {
@@ -2578,10 +2578,9 @@ async function handleBackfillMissed(request: NextRequest) {
 
         backfillLogger.info(`Backfill for ${ticker.symbol}: ${missedFilings.length} missed, ${jobsQueued} jobs queued`);
       } catch (error) {
-        backfillLogger.error(`Backfill failed for ${ticker.symbol}`, {
-          error: error instanceof Error ? error.message : String(error),
-        });
-        tickerResults.push({ symbol: ticker.symbol, checked: 0, missed: 0, jobsQueued: 0 });
+        const errMsg = error instanceof Error ? error.message : String(error);
+        backfillLogger.error(`Backfill failed for ${ticker.symbol}`, { error: errMsg });
+        tickerResults.push({ symbol: ticker.symbol, checked: 0, missed: 0, jobsQueued: 0, error: errMsg });
       }
     }
 
