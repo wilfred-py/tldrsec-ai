@@ -24,6 +24,8 @@ const esmPackages = [
   'dompurify',
   '@jest/transform',
   '@babel/preset-env',
+  '@number-flow/react',
+  'number-flow',
 ].join('|');
 
 // Add any custom config to be passed to Jest
@@ -51,6 +53,7 @@ const config = {
     '^@/__tests__/(.*)$': '<rootDir>/__tests__/$1',
     '^@/scripts/(.*)$': '<rootDir>/scripts/$1',
     '\\.(css|less|scss|sass)$': 'identity-obj-proxy',
+    '^@number-flow/react$': '<rootDir>/__mocks__/@number-flow/react.tsx',
     '@clerk/backend': '<rootDir>/__tests__/__mocks__/@clerk/backend.js',
     '@clerk/nextjs/server$': '<rootDir>/__tests__/__mocks__/@clerk/nextjs.js',
   },

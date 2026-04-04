@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-## [0.0.2.2] - 2026-04-04
+## [0.0.3.1] - 2026-04-04
 
 ### Changed
 - Email 3 ("Your Trial Is Ready") rewritten with Hormozi Grand Slam Offer framework: pain-first intro, CTA above the fold, value-first FAQ, honest CC disclosure with risk reversal
@@ -10,6 +10,19 @@ All notable changes to this project will be documented in this file.
 - All 3 campaign emails now use dynamic filing data from the database, ranked by materiality, size, and rarity (falls back to hardcoded samples if no summaries exist)
 - Gmail/Outlook-safe inline HTML with table layout, MSO conditionals, preheader text with whitespace padding
 - Added plaintext MIME parts to all campaign emails for improved deliverability
+
+## [0.0.3.0] - 2026-04-04
+
+### Changed
+- Pricing toggle upgraded to Grok-inspired pill design with green savings-mode switch
+- Price animation replaced with `@number-flow/react` slot-machine digit scroll (same library Grok uses)
+- Savings indicator unified to emerald green across landing page and subscribe page
+- BillingToggle extracted as shared component, disabled during checkout to prevent mismatch
+- AnimatedPrice simplified from 161 lines of custom framer-motion to ~50 lines using NumberFlow
+
+### Fixed
+- Landing page pricing had no digit animation on toggle (now matches subscribe page)
+- Savings colour inconsistency between landing (green badge) and subscribe (orange text)
 
 ## [0.0.2.1] - 2026-04-04
 

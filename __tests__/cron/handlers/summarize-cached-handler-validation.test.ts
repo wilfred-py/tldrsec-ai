@@ -27,9 +27,11 @@ const mockPrisma = {
     findFirst: jest.fn(),
   },
   user: {
+    findUnique: jest.fn(),
     update: jest.fn(),
   },
   summaryEmailDelivery: {
+    findFirst: jest.fn(),
     create: jest.fn(),
   },
 };
@@ -82,6 +84,14 @@ jest.mock('../../../lib/validation/filing-content-verifier', () => ({
 
 jest.mock('../../../lib/filing/filing-type-preferences-mapper', () => ({
   shouldProcessFiling: jest.fn().mockReturnValue(true),
+}));
+
+jest.mock('../../../lib/ai/parsers/response-parser', () => ({
+  parseResponse: jest.fn(),
+}));
+
+jest.mock('../../../lib/email/form4-field-normalizer', () => ({
+  CURRENT_FORM4_SCHEMA_VERSION: 1,
 }));
 
 jest.mock('../../../lib/auth/trial-service', () => ({
@@ -181,6 +191,9 @@ const mockBaseResultNoValidation = {
 function setupBaseMocks() {
   jest.clearAllMocks();
 
+  // User exists and is not soft-deleted
+  mockPrisma.user.findUnique.mockResolvedValue({ deletedAt: null });
+
   mockPrisma.filingContentCache.findUnique.mockResolvedValue({
     content: '<html><body>Test 10-K filing content for Coinbase</body></html>',
     contentLength: 200,
@@ -202,6 +215,7 @@ function setupBaseMocks() {
   mockPrisma.summary.create.mockResolvedValue({ id: 'new-summary-id' });
   mockPrisma.summary.update.mockResolvedValue({});
   mockPrisma.user.update.mockResolvedValue({});
+  mockPrisma.summaryEmailDelivery.findFirst.mockResolvedValue(null);
   mockPrisma.summaryEmailDelivery.create.mockResolvedValue({});
 
   mockSummarizeWithValidation.mockResolvedValue(mockEnrichedResult);
