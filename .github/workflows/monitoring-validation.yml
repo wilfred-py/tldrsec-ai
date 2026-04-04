@@ -25,6 +25,10 @@ on:
       - 'prisma/schema.prisma'
       - 'prisma/migrations/**'
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 env:
   NODE_ENV: test
   VERCEL_ENV: test
@@ -45,6 +49,7 @@ jobs:
   database-validation:
     name: Validate Database Schema & Migrations
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     
     services:
       postgres:
@@ -136,6 +141,7 @@ jobs:
   monitoring-api-tests:
     name: Test Monitoring API Endpoints
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     needs: database-validation
     
     services:
@@ -184,13 +190,27 @@ jobs:
           CI: true
 
       - name: Test monitoring endpoints integration
+        timeout-minutes: 5
         run: |
-          # Start Next.js dev server (avoids build-time page collection issues)
+          # Start Next.js dev server in background
           npm run dev &
           SERVER_PID=$!
+          trap "kill $SERVER_PID 2>/dev/null || true" EXIT
 
-          # Wait for server to start
-          sleep 10
+          # Wait for server to be ready (up to 60s)
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:3000/api/health > /dev/null 2>&1; then
+              echo "Server ready after ~$((i*2))s"
+              break
+            fi
+            sleep 2
+          done
+
+          # Fail fast if server never started
+          if ! curl -sf http://localhost:3000/api/health > /dev/null 2>&1; then
+            echo "ERROR: Server failed to start within 60s"
+            exit 1
+          fi
 
           # Test health endpoints (with mock auth)
           curl -f http://localhost:3000/api/health || exit 1
@@ -201,7 +221,7 @@ jobs:
           curl -s http://localhost:3000/api/health/pipeline | head -c 500 || echo "⚠️ Pipeline health check skipped (may require auth)"
 
           # Cleanup
-          kill $SERVER_PID
+          kill $SERVER_PID || true
         env:
           DATABASE_URL: postgresql://test_user:test_password@localhost:5432/tldrsec_monitoring_test
           DIRECT_URL: postgresql://test_user:test_password@localhost:5432/tldrsec_monitoring_test
@@ -213,6 +233,7 @@ jobs:
   alert-system-tests:
     name: Validate Alert System
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     needs: database-validation
 
     services:
@@ -272,6 +293,7 @@ jobs:
   security-validation:
     name: Security & Performance Validation
     runs-on: ubuntu-latest
+    timeout-minutes: 10
 
     steps:
       - name: Checkout code
@@ -349,6 +371,7 @@ jobs:
   deployment-readiness:
     name: Deployment Readiness Check
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     needs: [database-validation, monitoring-api-tests, alert-system-tests, security-validation]
 
     steps:
@@ -421,6 +444,7 @@ jobs:
   notification:
     name: Notify Deployment Status
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     needs: [deployment-readiness]
     if: always()
 
