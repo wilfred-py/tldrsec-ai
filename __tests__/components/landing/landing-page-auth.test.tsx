@@ -57,6 +57,18 @@ jest.mock('framer-motion', () => {
   );
   forwardRefP.displayName = 'MotionP';
 
+  const forwardRefSpan = React.forwardRef(
+    (
+      { children, variants, initial, animate, transition, layout, ...props }: React.PropsWithChildren<Record<string, unknown>>,
+      ref
+    ) => (
+      <span ref={ref as React.Ref<HTMLSpanElement>} {...props}>
+        {children}
+      </span>
+    )
+  );
+  forwardRefSpan.displayName = 'MotionSpan';
+
   const forwardRefNav = React.forwardRef(
     (
       { children, initial, animate, exit, transition, ...props }: React.PropsWithChildren<Record<string, unknown>>,
@@ -80,6 +92,25 @@ jest.mock('framer-motion', () => {
     useInView: () => true,
   };
 });
+
+// Mock global fetch (subscribe page calls fetch('/api/user?type=subscription'))
+global.fetch = jest.fn(() =>
+  Promise.resolve({ ok: false, status: 401, json: () => Promise.resolve({}) })
+) as jest.Mock;
+
+// Mock BillingToggle (uses motion.span + layout animations that break in test env)
+jest.mock('@/components/billing/billing-toggle', () => ({
+  BillingToggle: ({ billingInterval, onToggle }: { billingInterval: string; onToggle: () => void }) => (
+    <button onClick={onToggle} data-testid="billing-toggle">
+      {billingInterval === 'annual' ? 'Annual' : 'Monthly'}
+    </button>
+  ),
+}));
+
+// Mock AnimatedPrice (uses @number-flow/react)
+jest.mock('@/components/landing/sections-v2/animated-price', () => ({
+  AnimatedPrice: ({ amount }: { amount: number }) => <span>${amount}</span>,
+}));
 
 // Mock next/navigation
 jest.mock('next/navigation', () => ({

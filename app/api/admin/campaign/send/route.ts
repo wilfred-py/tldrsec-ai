@@ -14,6 +14,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { currentUser } from '@clerk/nextjs/server';
 import { Resend } from 'resend';
 import { generateUnsubscribeUrl } from '@/lib/email/unsubscribe-tokens';
+import { fetchCampaignFilings } from '@/lib/email/campaign-templates';
 import { logger } from '@/lib/logging';
 
 export const dynamic = 'force-dynamic';
@@ -123,6 +124,19 @@ export async function POST(request: NextRequest) {
       });
     }
 
+    // Fetch dynamic filing data for emails 1 and 2 (email 3 is static copy)
+    const filings = (emailNumber === 1 || emailNumber === 2)
+      ? await fetchCampaignFilings(emailNumber === 1 ? 1 : 3)
+      : undefined;
+
+    if (filings && filings.length > 0) {
+      campaignLogger.info('Using dynamic filing data for campaign email', {
+        emailNumber,
+        filingCount: filings.length,
+        tickers: filings.map(f => f.ticker),
+      });
+    }
+
     // Queue emails via Resend batch (up to 100 per batch call)
     const resend = new Resend(resendApiKey);
     const emails = targetSubscribers.map(subscriber => {
@@ -130,6 +144,7 @@ export async function POST(request: NextRequest) {
       const content = getCampaignEmailContent(emailNumber, {
         unsubscribeUrl,
         variant,
+        filings: filings || undefined,
       });
 
       return {
@@ -137,6 +152,7 @@ export async function POST(request: NextRequest) {
         to: subscriber.email,
         subject: content.subject,
         html: content.html,
+        text: content.text,
         headers: {
           'List-Unsubscribe': `<${unsubscribeUrl}>`,
           'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
