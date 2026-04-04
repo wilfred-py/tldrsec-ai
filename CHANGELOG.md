@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.0.2.1] - 2026-04-04
+
+### Changed
+- Campaign emails redesigned with clean table-based layout matching Nike-style design artifacts
+- Replaced baseTemplate() wrapper with self-contained campaign HTML for better email client compatibility
+- Added founder P.S. story to Email 1 and Email 2 with italic styling and border separator
+- Email 3 (conversion) left clean to keep CTA focus
+- Purple CTAs, system font stack, monospace financial figures, rounded card design
+
 ## [0.0.2.0] - 2026-04-04
 
 ### Added
