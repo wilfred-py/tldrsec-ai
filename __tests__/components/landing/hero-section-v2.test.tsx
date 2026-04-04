@@ -2,6 +2,11 @@ import { render, screen } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { HeroSectionV2 } from '@/components/landing/sections-v2/hero-section-v2';
 
+// Mock auth context (component now uses useAuth)
+jest.mock('@/contexts/auth-context', () => ({
+  useAuth: () => ({ isSignedIn: false, isLoaded: true, user: null }),
+}));
+
 // Mock framer-motion to avoid animation issues in tests
 jest.mock('framer-motion', () => ({
   motion: {
@@ -17,7 +22,8 @@ describe('HeroSectionV2', () => {
   // Test 1: Renders headline with gradient text
   it('should render headline with "SEC Filings, Simplified" text', () => {
     render(<HeroSectionV2 />);
-    expect(screen.getByText(/SEC Filings/i)).toBeInTheDocument();
+    const headings = screen.getAllByText(/SEC Filings/i);
+    expect(headings.length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText(/Simplified/i)).toBeInTheDocument();
   });
 
@@ -32,7 +38,7 @@ describe('HeroSectionV2', () => {
     render(<HeroSectionV2 />);
     const primaryCTA = screen.getByRole('link', { name: /Start Free Trial/i });
     expect(primaryCTA).toBeInTheDocument();
-    expect(primaryCTA).toHaveAttribute('href', '/onboarding');
+    expect(primaryCTA).toHaveAttribute('href', '/sign-up');
   });
 
   // Test 4: Secondary CTA links to pricing
