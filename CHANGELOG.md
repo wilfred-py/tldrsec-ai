@@ -2,6 +2,20 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.0.4.4] - 2026-04-05
+
+### Added
+- Public summary preview pages at `/s/[ticker]/[filingType]/[accession]` for organic search growth. Each AI summary becomes an indexable page targeting long-tail keywords like "Tesla 10-K summary 2025." Previews show ~75 words with a sign-up CTA, keyed on SEC accession number for deduplication.
+- Rich JSON-LD structured data: Organization and SoftwareApplication schemas added to existing WebSite schema via `@graph` array.
+- Subscribe page now has proper metadata (title, description, canonical URL, OpenGraph) via `app/subscribe/layout.tsx`.
+- Dynamic sitemap with summary preview URLs from database, capped at 500 entries.
+- SEO test suite expanded from 11 to 28 tests covering all new functionality.
+
+### Changed
+- Root layout uses title template (`%s | tldrSEC`) so child pages get consistent branding without manual suffixes.
+- Sitemap uses fixed `lastModified` dates instead of `new Date()` to avoid wasting crawler budget.
+- Utility pages (unsubscribe, feedback) now have `noindex, nofollow` robots directives.
+
 ## [0.0.4.3] - 2026-04-05
 
 ### Fixed
