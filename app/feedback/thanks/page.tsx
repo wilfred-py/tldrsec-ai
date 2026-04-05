@@ -7,7 +7,8 @@ import {
 } from '@/components/ui/card';
 
 export const metadata = {
-  title: 'Thanks for your feedback - tldrSEC',
+  title: 'Thanks for your feedback',
+  robots: { index: false, follow: false },
 };
 
 export default function FeedbackThanksPage({

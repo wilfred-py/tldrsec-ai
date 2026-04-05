@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { FileText, ArrowLeft } from 'lucide-react';
 
 export const metadata: Metadata = {
-  title: 'Terms of Service | tldrsec',
+  title: 'Terms of Service',
   description: 'Terms of Service for tldrsec - Read our terms and conditions for using our AI-powered SEC filing analysis service.',
   alternates: {
     canonical: 'https://tldrsec.app/terms',

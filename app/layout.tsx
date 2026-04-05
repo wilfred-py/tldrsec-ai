@@ -21,7 +21,10 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   metadataBase: new URL('https://tldrsec.app'),
-  title: "tldrSEC - AI-Powered SEC Filing Summaries",
+  title: {
+    default: "tldrSEC - AI-Powered SEC Filing Summaries",
+    template: "%s | tldrSEC",
+  },
   description: "Save hours analyzing SEC filings with AI-generated summaries. Get instant insights from 10-K, 10-Q, and 8-K reports for better investment decisions.",
   keywords: "SEC filing summary, 10-K summary, 10-Q summary, 8-K filing analysis, Form 4 insider trading, SEC filing alerts, AI SEC analysis, earnings report summary, SEC EDGAR summary tool, investment research",
   authors: [{ name: "tldrSEC Team" }],

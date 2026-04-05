@@ -7,7 +7,8 @@ import {
 } from '@/components/ui/card';
 
 export const metadata = {
-  title: 'Feedback Error - tldrSEC',
+  title: 'Feedback Error',
+  robots: { index: false, follow: false },
 };
 
 const ERROR_MESSAGES: Record<string, string> = {
