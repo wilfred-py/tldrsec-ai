@@ -298,6 +298,11 @@ export async function completeOnboarding(): Promise<{ success: boolean; error?: 
  * 3. Updates Clerk metadata once
  * 4. Queues welcome email async (doesn't block)
  */
+// Server-side validation constants
+const MAX_TICKERS_SERVER = 50;
+const TICKER_SYMBOL_REGEX = /^[A-Z0-9\-.]{1,10}$/;
+const MAX_PREFERENCES_SIZE = 10_000; // 10KB max for preferences JSON
+
 export async function completeOnboardingBatched(input: {
   preferences: UserPreferencesInput;
   tickers: { symbol: string; companyName: string }[];
@@ -305,6 +310,27 @@ export async function completeOnboardingBatched(input: {
   const startTime = Date.now();
 
   try {
+    // --- Server-side input validation ---
+    if (!input.tickers || !Array.isArray(input.tickers)) {
+      return { success: false, error: 'Invalid tickers input' };
+    }
+    if (input.tickers.length > MAX_TICKERS_SERVER) {
+      return { success: false, error: `Too many tickers (max ${MAX_TICKERS_SERVER})` };
+    }
+    for (const ticker of input.tickers) {
+      if (!ticker.symbol || !TICKER_SYMBOL_REGEX.test(ticker.symbol)) {
+        return { success: false, error: `Invalid ticker symbol: ${ticker.symbol}` };
+      }
+      if (ticker.companyName && ticker.companyName.length > 200) {
+        return { success: false, error: `Company name too long for ${ticker.symbol}` };
+      }
+    }
+    // Validate preferences size to prevent payload abuse
+    const prefsString = JSON.stringify(input.preferences);
+    if (prefsString.length > MAX_PREFERENCES_SIZE) {
+      return { success: false, error: 'Preferences data too large' };
+    }
+
     // Single auth call for entire operation
     const { userId } = await auth();
 
@@ -397,18 +423,27 @@ export async function completeOnboardingBatched(input: {
     console.log(`[Onboarding] DB operations completed in ${dbTime}ms`);
 
     // CRITICAL: Update Clerk metadata BEFORE returning
-    // This prevents the middleware race condition where user gets redirected back to onboarding
-    // because Clerk's publicMetadata.onboardingCompleted hasn't synced yet
-    try {
-      const client = await clerkClient();
-      await client.users.updateUserMetadata(userId, {
-        publicMetadata: { onboardingCompleted: true }
-      });
-      console.log(`[Onboarding] Clerk metadata synced for ${userId}`);
-    } catch (err) {
-      console.error('[Onboarding] Failed to sync Clerk metadata:', err);
-      // Don't fail the entire onboarding, but this could cause redirect issues
-      // The user will still be in the database, so they can retry onboarding
+    // This prevents the middleware from redirecting authenticated users back to onboarding.
+    // Retry up to 3 times since failure here causes redirect issues until the 60s cookie expires.
+    let clerkSynced = false;
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      try {
+        const client = await clerkClient();
+        await client.users.updateUserMetadata(userId, {
+          publicMetadata: { onboardingCompleted: true }
+        });
+        console.log(`[Onboarding] Clerk metadata synced for ${userId} (attempt ${attempt})`);
+        clerkSynced = true;
+        break;
+      } catch (err) {
+        console.error(`[Onboarding] Clerk metadata sync attempt ${attempt}/3 failed:`, err);
+        if (attempt < 3) {
+          await new Promise((r) => setTimeout(r, 500 * attempt));
+        }
+      }
+    }
+    if (!clerkSynced) {
+      console.error('[Onboarding] All Clerk metadata sync attempts failed. User may see redirect loop after cookie expires.');
     }
 
     // Queue welcome email async (doesn't block user)
