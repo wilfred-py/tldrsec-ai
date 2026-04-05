@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { FileText, ArrowLeft } from 'lucide-react';
 
 export const metadata: Metadata = {
-  title: 'Privacy Policy | tldrsec',
+  title: 'Privacy Policy',
   description: 'Privacy Policy for tldrsec - Learn how we collect, use, and protect your personal information.',
   alternates: {
     canonical: 'https://tldrsec.app/privacy',

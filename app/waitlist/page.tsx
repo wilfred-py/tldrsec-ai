@@ -48,7 +48,7 @@ async function getCounterData(): Promise<CounterData> {
 }
 
 export const metadata: Metadata = {
-  title: 'Join the Waitlist - tldrsec.app',
+  title: 'Join the Waitlist',
   description:
     'Join thousands of investors getting AI-powered SEC filing summaries. Save 10+ hours weekly on filing analysis.',
   keywords: [
@@ -59,7 +59,7 @@ export const metadata: Metadata = {
     'investment decisions',
   ],
   openGraph: {
-    title: 'Join the Waitlist - tldrsec.app',
+    title: 'Join the Waitlist',
     description:
       'Join thousands of investors getting AI-powered SEC filing summaries.',
     type: 'website',

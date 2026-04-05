@@ -7,7 +7,8 @@ import {
 } from '@/components/ui/card';
 
 export const metadata = {
-  title: 'Unsubscribe - tldrSEC',
+  title: 'Unsubscribe',
+  robots: { index: false, follow: false },
 };
 
 export default async function UnsubscribeConfirmedPage({
