@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { DashboardHeader } from "@/components/dashboard";
 import { PlusIcon, Loader2, Search, ArrowUpRight } from "lucide-react";
@@ -27,7 +27,8 @@ import {
   updateCompanyPreferences,
 } from "@/lib/api/ticker-service";
 import { useAsync } from "@/lib/hooks/use-async";
-import { TutorialGuide } from "@/components/onboarding/tutorial-guide";
+import { Confetti } from "@/components/ui/confetti";
+import { updateTutorialProgress } from "@/components/onboarding/actions";
 import {
   TickersTable,
   TickersLoadingSkeleton,
@@ -73,8 +74,10 @@ export function DashboardClient({ showWelcome: _showWelcome = false, shouldMerge
     TickerSearchResult[]
   >([]);
 
-  const [showTutorial, setShowTutorial] = useState(false);
-  const [tutorialProgress, setTutorialProgress] = useState(0);
+  // First-visit confetti (replaces tutorial overlay)
+  const [showConfetti, setShowConfetti] = useState(false);
+  const confettiFiredRef = useRef(false);
+  const isFirstVisit = !tutorialCompleted && typeof window !== 'undefined' && localStorage.getItem('tutorialCompleted') !== 'true';
 
   // Async hooks for API calls
   const {
@@ -110,24 +113,36 @@ export function DashboardClient({ showWelcome: _showWelcome = false, shouldMerge
     if (initialCompanies.length === 0) {
       loadCompanies();
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-    // Always show tutorial if not completed (unskippable)
-    if (!tutorialCompleted) {
-      setShowTutorial(true);
+  // Fire confetti on first visit (replaces tutorial overlay)
+  useEffect(() => {
+    if (!isFirstVisit || confettiFiredRef.current) return;
+    confettiFiredRef.current = true;
 
-      // Restore tutorial step from localStorage if user refreshed mid-tutorial
-      const savedProgress = localStorage.getItem("tutorialProgress");
-      if (savedProgress) {
-        try {
-          const parsed = JSON.parse(savedProgress);
-          if (parsed.currentStep) {
-            setTutorialProgress(parsed.currentStep);
-          }
-        } catch {
-          // Ignore parse errors from old format
-        }
-      }
-    }
+    // Short delay so dashboard content renders first
+    const timer = setTimeout(() => {
+      setShowConfetti(true);
+
+      // Mark tutorial complete in DB
+      updateTutorialProgress(100, { currentStep: 0, currentSubstep: 0, completed: true })
+        .catch((err) => console.error('Failed to mark tutorial complete:', err));
+
+      // Client-side guard in case DB write fails
+      localStorage.setItem('tutorialCompleted', 'true');
+
+      // Deliver cached summaries (was previously in tutorial completion)
+      fetch('/api/onboarding?action=deliver-summaries', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      }).catch((err) => console.error('Failed to deliver cached summaries:', err));
+
+      // Hide confetti after animation
+      setTimeout(() => setShowConfetti(false), 4000);
+    }, 500);
+
+    return () => clearTimeout(timer);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -251,10 +266,6 @@ export function DashboardClient({ showWelcome: _showWelcome = false, shouldMerge
           )
         );
 
-        // Update tutorial progress
-        if (showTutorial && tutorialProgress === 0) {
-          setTutorialProgress(1);
-        }
       } else {
         // Revert optimistic update
         setCompanies((prevCompanies) =>
@@ -378,7 +389,7 @@ export function DashboardClient({ showWelcome: _showWelcome = false, shouldMerge
       </div>
 
       {/* Tabs: Activity / Tickers */}
-      <Tabs defaultValue={showTutorial ? "tickers" : "activity"} className="w-full">
+      <Tabs defaultValue={isFirstVisit ? "tickers" : "activity"} className="w-full">
         <TabsList className="mb-4 bg-muted border border-border rounded-lg p-1">
           <TabsTrigger value="activity" className="data-[state=active]:bg-background data-[state=active]:shadow-sm data-[state=inactive]:text-muted-foreground px-4 py-1.5 text-sm font-medium rounded-md">Activity</TabsTrigger>
           <TabsTrigger value="tickers" className="data-[state=active]:bg-background data-[state=active]:shadow-sm data-[state=inactive]:text-muted-foreground px-4 py-1.5 text-sm font-medium rounded-md">Tickers</TabsTrigger>
@@ -425,7 +436,6 @@ export function DashboardClient({ showWelcome: _showWelcome = false, shouldMerge
                     setShowInlineAdd(true);
                   }}
                   className="gap-1 bg-primary hover:bg-primary/90 text-primary-foreground font-medium shadow-sm"
-                  data-tutorial="add-ticker"
                   disabled={showInlineAdd || isAtLimit}
                   size="lg"
                 >
@@ -577,13 +587,8 @@ export function DashboardClient({ showWelcome: _showWelcome = false, shouldMerge
         </DialogContent>
       </Dialog>
 
-      {/* Tutorial Guide */}
-      <TutorialGuide
-        active={showTutorial}
-        onComplete={() => setShowTutorial(false)}
-        initialStep={tutorialProgress}
-        tickerLimit={tickerLimit}
-      />
+      {/* First-visit celebration */}
+      <Confetti active={showConfetti} duration={3000} />
     </div>
   );
 }

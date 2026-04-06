@@ -26,6 +26,17 @@ All notable changes to this project will be documented in this file.
 - Welcome banner ("Welcome to tldrSEC!") and horizontal progress bar.
 - Two stale test files that tested non-existent functions (`saveUserPreferences`, `addTickerSubscription`).
 
+## [0.0.4.5] - 2026-04-05
+
+### Changed
+- Onboarding transition screen now fades in smoothly (300ms) and fades to white (500ms) before navigating to the dashboard, eliminating the jarring color jump from brand gradient to plain white.
+- First-time dashboard visit shows a confetti celebration instead of the blocking tutorial overlay. The tutorial overlay trapped new users on a dark grey screen with no visible instructions.
+- Confetti respects `prefers-reduced-motion` for accessibility.
+- Cached summary delivery now fires on first dashboard load (previously required completing the tutorial).
+
+### Removed
+- Tutorial overlay (`TutorialGuide`) is no longer rendered on the dashboard. The 4-step guided tour added friction without value since the onboarding flow already teaches the product.
+
 ## [0.0.4.4] - 2026-04-05
 
 ### Added
