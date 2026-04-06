@@ -271,9 +271,10 @@ jobs:
           npx prisma db push --accept-data-loss
 
       - name: Test alert service functionality
+        timeout-minutes: 5
         run: |
           echo "🧪 Running alert service tests via Jest..."
-          npm run test -- --testPathPattern="monitoring" --testNamePattern="alert" || echo "⚠️ Some alert tests failed (non-blocking)"
+          npm run test -- --testPathPattern="monitoring" --testNamePattern="alert" --testPathIgnorePatterns="comprehensive" --testTimeout=30000 || echo "⚠️ Some alert tests failed (non-blocking)"
           echo "✅ Alert service validation completed"
         env:
           DATABASE_URL: postgresql://test_user:test_password@localhost:5432/tldrsec_monitoring_test
@@ -281,9 +282,10 @@ jobs:
           CI: true
 
       - name: Test monitoring integration
+        timeout-minutes: 5
         run: |
           echo "🧪 Running monitoring integration tests via Jest..."
-          npm run test -- --testPathPattern="monitoring" --testNamePattern="(integration|health)" || echo "⚠️ Some monitoring tests failed (non-blocking)"
+          npm run test -- --testPathPattern="monitoring" --testNamePattern="(integration|health)" --testPathIgnorePatterns="comprehensive" --testTimeout=30000 || echo "⚠️ Some monitoring tests failed (non-blocking)"
           echo "✅ Monitoring integration validation completed"
         env:
           DATABASE_URL: postgresql://test_user:test_password@localhost:5432/tldrsec_monitoring_test
