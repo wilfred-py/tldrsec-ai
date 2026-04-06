@@ -2,6 +2,30 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.0.5.0] - 2026-04-05
+
+### Added
+- Redesigned onboarding flow with 3-step vertical progress indicator (Sectors, Companies, Profile) replacing the old welcome banner and horizontal progress bar.
+- New Step 3 "Profile" asking users their role (investor, analyst, advisor, etc.) and approximate AUM bracket, stored in User.preferences JSON.
+- Full client-side SEC company search: fetches the entire ~10K company list once, filters instantly in-browser instead of round-tripping to the server on every keystroke.
+- Paste-tickers shortcut (desktop): type "AAPL, MSFT, NVDA" and hit Enter to add multiple companies at once.
+- Loading skeleton cards while companies load in Step 2, error state with retry button on fetch failure, and max-selection toast feedback.
+- Server-side input validation on onboarding completion: ticker symbol regex, count cap (50), preferences size limit (10KB).
+- Rate limiting on `/api/companies` endpoint (30 req/min per IP).
+- Clerk metadata sync retry (3 attempts with backoff) to prevent redirect loops after onboarding.
+
+### Changed
+- Onboarding extracted from a single 780-line component into 6 focused modules: `OnboardingShell`, `SectorStep`, `CompanyStep`, `ProfileStep`, `VerticalProgress`, and shared `types.ts`.
+- Sector and company selection cards are now accessible `<button>` elements with `aria-pressed` (previously inaccessible `<div onClick>`).
+- Search bar border changed from harsh black to light gray, matching the card aesthetic.
+- Filter pills scroll horizontally on mobile instead of wrapping to multiple lines.
+- Company grid uses flex column layout instead of fixed 50vh ScrollArea, giving more room for results.
+- Server-side module-level cache for SEC company data eliminates DB roundtrip on repeated searches.
+
+### Removed
+- Welcome banner ("Welcome to tldrSEC!") and horizontal progress bar.
+- Two stale test files that tested non-existent functions (`saveUserPreferences`, `addTickerSubscription`).
+
 ## [0.0.4.5] - 2026-04-05
 
 ### Changed

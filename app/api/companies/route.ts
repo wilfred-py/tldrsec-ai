@@ -9,6 +9,26 @@ export const dynamic = 'force-dynamic';
 const CACHE_MAX_AGE = 60 * 60 * 24;
 const SEC_API_URL = 'https://www.sec.gov/files/company_tickers.json';
 
+// Module-level cache to avoid DB roundtrip on every search
+let moduleCache: { companies: CompanyData[]; expiresAt: number } | null = null;
+const MODULE_CACHE_TTL = 60 * 60 * 1000; // 1 hour
+
+// Simple in-memory rate limiter (per serverless instance)
+const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
+const RATE_LIMIT_WINDOW = 60_000; // 1 minute
+const RATE_LIMIT_MAX = 30; // 30 requests per minute per IP
+
+function isRateLimited(ip: string): boolean {
+  const now = Date.now();
+  const entry = rateLimitMap.get(ip);
+  if (!entry || now >= entry.resetAt) {
+    rateLimitMap.set(ip, { count: 1, resetAt: now + RATE_LIMIT_WINDOW });
+    return false;
+  }
+  entry.count++;
+  return entry.count > RATE_LIMIT_MAX;
+}
+
 interface SecCompany {
   cik_str: number;
   ticker: string;
@@ -48,6 +68,12 @@ const SectorQuerySchema = z.object({
  *   GET /api/companies?sectors=X&page=Y → filter by GICS sector
  */
 export async function GET(request: NextRequest) {
+  // Basic rate limiting
+  const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown';
+  if (isRateLimited(ip)) {
+    return NextResponse.json({ error: 'Too many requests' }, { status: 429 });
+  }
+
   const { searchParams } = new URL(request.url);
 
   if (searchParams.has('sectors')) {
@@ -74,8 +100,15 @@ async function handleList() {
     });
 
     if (cachedData) {
+      const companies = JSON.parse(cachedData.data);
+      // Populate module cache for search performance
+      if (!moduleCache || Date.now() >= moduleCache.expiresAt) {
+        try {
+          moduleCache = { companies: CompanyDataSchema.parse(companies), expiresAt: Date.now() + MODULE_CACHE_TTL };
+        } catch { /* non-critical: module cache is an optimization */ }
+      }
       return NextResponse.json(
-        { companies: JSON.parse(cachedData.data) },
+        { companies },
         { headers: { 'Cache-Control': `public, max-age=${CACHE_MAX_AGE}` } }
       );
     }
@@ -126,19 +159,25 @@ async function handleSearch(searchParams: URLSearchParams) {
       return NextResponse.json({ companies: [], error: 'Search query too long' }, { status: 400 });
     }
 
-    const prisma = getPrismaClient();
-    const cachedData = await prisma.secCompanyCache.findFirst({ where: { id: 1 } });
-
-    if (!cachedData) {
-      return NextResponse.json({ companies: [] });
-    }
-
+    // Use module-level cache if available
     let allCompanies: CompanyData[];
-    try {
-      allCompanies = CompanyDataSchema.parse(JSON.parse(cachedData.data));
-    } catch (parseError) {
-      console.error('Invalid cached company data format:', parseError);
-      return NextResponse.json({ companies: [], error: 'Invalid data format' }, { status: 500 });
+    if (moduleCache && Date.now() < moduleCache.expiresAt) {
+      allCompanies = moduleCache.companies;
+    } else {
+      const prisma = getPrismaClient();
+      const cachedData = await prisma.secCompanyCache.findFirst({ where: { id: 1 } });
+
+      if (!cachedData) {
+        return NextResponse.json({ companies: [] });
+      }
+
+      try {
+        allCompanies = CompanyDataSchema.parse(JSON.parse(cachedData.data));
+        moduleCache = { companies: allCompanies, expiresAt: Date.now() + MODULE_CACHE_TTL };
+      } catch (parseError) {
+        console.error('Invalid cached company data format:', parseError);
+        return NextResponse.json({ companies: [], error: 'Invalid data format' }, { status: 500 });
+      }
     }
 
     const searchTerm = q.toLowerCase();
