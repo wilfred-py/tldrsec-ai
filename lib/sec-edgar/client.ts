@@ -441,6 +441,13 @@ export class SECEdgarClient {
       const axiosError = error as AxiosError;
       if (axiosError.response) {
         const status = axiosError.response.status;
+        if (status === 403) {
+          throw new SECEdgarError(
+            `SEC blocked request for CIK ${cik} (HTTP 403 — likely IP-based block)`,
+            SECErrorCode.ACCESS_DENIED,
+            403
+          );
+        }
         if (status === 429) {
           throw new SECEdgarError(
             `SEC rate limit exceeded polling CIK ${cik}`,
