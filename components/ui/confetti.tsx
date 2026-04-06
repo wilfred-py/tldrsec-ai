@@ -17,6 +17,7 @@ export function Confetti({ active, duration = 3000 }: ConfettiProps) {
 
   useEffect(() => {
     if (!active || firedRef.current) return;
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
     firedRef.current = true;
 
     const end = Date.now() + duration;
