@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { Button } from '@/components/ui/button';
+import { Logo } from '@/components/ui/logo';
 import { useAuthContext } from '@/lib/context/auth-context';
 
 export function Navigation() {
@@ -16,8 +17,8 @@ export function Navigation() {
       <div className="container mx-auto px-4 py-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center">
-            <Link href="/" className="text-2xl font-bold text-foreground">
-              tldrSEC
+            <Link href="/" className="flex items-center">
+              <Logo variant="full" size={24} />
             </Link>
           </div>
 

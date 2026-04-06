@@ -2,6 +2,21 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.0.5.1] - 2026-04-06
+
+### Added
+- Brand logo: "Stacked Pages" icon (Concept #4) representing 300+ pages compressed into a summary.
+- Reusable `Logo` component (`components/ui/logo.tsx`) with `variant` (full/icon/wordmark), `size`, and `theme` props.
+- SVG assets: `app/icon.svg` (favicon), `public/logo-icon.svg`, `public/logo.svg`.
+- OG image updated with inline stacked-pages icon and branded wordmark colors.
+
+### Changed
+- Unified all brand touchpoints (navbar, sidebar, footer, dashboard header, navigation, email header) to use the Logo component instead of inconsistent text/icon markup.
+- Email header now renders "SEC" in brand blue (#0079F2) for consistent identity.
+
+### Fixed
+- SVG gradient ID collision when multiple Logo instances render on the same page (unique ID per instance).
+
 ## [0.0.5.0] - 2026-04-05
 
 ### Added

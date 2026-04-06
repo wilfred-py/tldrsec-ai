@@ -48,7 +48,7 @@ export function EmailHeader({
                       fontWeight: 700,
                       color: EmailColors.text.headline,
                     }}>
-                      tldrSEC
+                      tldr<span style={{ color: '#0079F2' }}>SEC</span>
                     </span>
                   </td>
                   <td style={{ textAlign: 'right' }}>

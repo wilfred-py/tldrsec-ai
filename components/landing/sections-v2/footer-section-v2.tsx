@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { FileText } from 'lucide-react';
+import { Logo } from '@/components/ui/logo';
 
 /**
  * Product navigation links
@@ -37,11 +37,8 @@ export function FooterSectionV2() {
         <div className="grid grid-cols-1 md:grid-cols-4 gap-8 mb-8">
           {/* Brand */}
           <div className="md:col-span-2">
-            <div className="flex items-center gap-2 mb-4">
-              <FileText className="w-6 h-6 text-[var(--landing-primary)]" />
-              <span className="text-xl font-bold" style={{ color: 'var(--landing-secondary)' }}>
-                tldrsec
-              </span>
+            <div className="mb-4">
+              <Logo variant="full" size={24} />
             </div>
             <p className="landing-caption max-w-sm">
               AI-powered SEC filing analysis for modern investors.

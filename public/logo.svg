@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="160" height="32" viewBox="0 0 160 32" fill="none">
+  <defs>
+    <linearGradient id="brand-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0079F2"/>
+      <stop offset="100%" stop-color="#8B5CF6"/>
+    </linearGradient>
+  </defs>
+  <!-- Stacked pages icon -->
+  <rect x="10" y="2" width="18" height="24" rx="2" fill="#8B5CF6" opacity="0.3"/>
+  <rect x="6" y="5" width="18" height="24" rx="2" fill="#6366F1" opacity="0.5"/>
+  <rect x="2" y="8" width="18" height="24" rx="2" fill="url(#brand-gradient)"/>
+  <!-- Wordmark -->
+  <text x="36" y="24" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-weight="700" font-size="20" letter-spacing="-0.5" fill="#1A1A2E">tldr<tspan fill="#0079F2">SEC</tspan></text>
+</svg>

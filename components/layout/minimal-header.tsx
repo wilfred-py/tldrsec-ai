@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { CreditCard } from "lucide-react";
+import { Logo } from "@/components/ui/logo";
 import UserButton from "@/components/auth/user-button";
 import { useUser } from "@clerk/nextjs";
 
@@ -13,9 +14,8 @@ export function MinimalHeader() {
     <header className="sticky top-0 z-40 w-full border-b border-[var(--landing-border)] bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="container max-w-7xl mx-auto flex h-14 items-center justify-between px-6 md:px-8">
         {/* Logo */}
-        <Link href="/dashboard" className="flex items-center font-semibold">
-          <span className="text-[var(--landing-primary)] font-bold text-lg">tldr</span>
-          <span className="font-bold text-lg">SEC</span>
+        <Link href="/dashboard" className="flex items-center">
+          <Logo variant="full" size={20} />
         </Link>
 
         {/* Right side: Manage Subscription + User */}
