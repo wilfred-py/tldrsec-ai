@@ -1,0 +1,6 @@
+<!-- Solid #0079F2 (no gradient) — gradients band at favicon sizes (16-32px) -->
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" fill="none">
+  <rect x="10" y="2" width="18" height="24" rx="2" fill="#8B5CF6" opacity="0.3"/>
+  <rect x="6" y="5" width="18" height="24" rx="2" fill="#6366F1" opacity="0.5"/>
+  <rect x="2" y="8" width="18" height="24" rx="2" fill="#0079F2"/>
+</svg>

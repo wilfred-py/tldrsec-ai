@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Sheet, SheetTrigger, SheetContent } from '@/components/ui/sheet';
 import { Menu, ArrowRight } from 'lucide-react';
 import { useAuth } from '@/contexts/auth-context';
+import { Logo } from '@/components/ui/logo';
 
 interface LandingNavbarProps {
   heroRef: RefObject<HTMLElement | null>;
@@ -101,9 +102,7 @@ export function LandingNavbar({ heroRef }: LandingNavbarProps) {
             <div className="flex items-center justify-between h-16">
               {/* Logo */}
               <Link href="/" className="flex items-center gap-2">
-                <span className="text-xl font-bold text-[var(--landing-secondary)]">
-                  tldrSEC
-                </span>
+                <Logo variant="full" size={24} />
               </Link>
 
               {/* Desktop Navigation */}

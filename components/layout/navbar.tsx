@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { Logo } from "@/components/ui/logo";
 import { SignInButton, SignUpButton, UserButton } from "@/components/auth";
 import { useAuth } from "@clerk/nextjs";
 
@@ -11,8 +12,8 @@ export function Navbar() {
     <nav className="border-b bg-background">
       <div className="container flex h-16 items-center justify-between px-4">
         <div className="flex items-center gap-6">
-          <Link href="/" className="flex items-center gap-2 font-semibold">
-            <span className="text-lg font-bold">tldrSEC</span>
+          <Link href="/" className="flex items-center">
+            <Logo variant="full" size={24} />
           </Link>
           <div className="hidden gap-6 md:flex">
             {isSignedIn && (

@@ -27,25 +27,15 @@ export default async function Image() {
             style={{
               display: 'flex',
               alignItems: 'center',
-              gap: '16px',
+              gap: '20px',
               marginBottom: '32px',
             }}
           >
-            <div
-              style={{
-                width: '56px',
-                height: '56px',
-                borderRadius: '12px',
-                background: 'linear-gradient(135deg, #3b82f6, #2563eb)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontSize: '28px',
-                fontWeight: 700,
-                color: 'white',
-              }}
-            >
-              S
+            {/* Stacked Pages icon (inline for Satori) */}
+            <div style={{ display: 'flex', position: 'relative', width: '56px', height: '56px' }}>
+              <div style={{ position: 'absolute', left: '16px', top: '0px', width: '36px', height: '44px', borderRadius: '4px', background: '#a78bfa', opacity: 0.3 }} />
+              <div style={{ position: 'absolute', left: '8px', top: '5px', width: '36px', height: '44px', borderRadius: '4px', background: '#818cf8', opacity: 0.5 }} />
+              <div style={{ position: 'absolute', left: '0px', top: '10px', width: '36px', height: '44px', borderRadius: '4px', background: 'linear-gradient(135deg, #60a5fa, #a78bfa)' }} />
             </div>
             <span
               style={{
@@ -55,7 +45,7 @@ export default async function Image() {
                 letterSpacing: '-1px',
               }}
             >
-              tldrSEC
+              tldr<span style={{ color: '#60a5fa' }}>SEC</span>
             </span>
           </div>
           <div

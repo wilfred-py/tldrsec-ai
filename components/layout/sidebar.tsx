@@ -4,6 +4,7 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
+import { Logo } from "@/components/ui/logo";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
@@ -53,12 +54,8 @@ export function Sidebar() {
       <aside className="hidden md:fixed md:inset-y-0 md:z-30 md:flex md:w-64 md:flex-col border-r border-[var(--landing-border)] bg-background">
         <div className="flex h-full w-full flex-col space-y-2">
           <div className="flex h-14 items-center border-b px-4">
-            <Link
-              href="/dashboard"
-              className="flex items-center font-semibold"
-            >
-              <span className="text-[var(--landing-primary)] font-bold">tldr</span>
-              <span className="font-bold">SEC</span>
+            <Link href="/dashboard" className="flex items-center">
+              <Logo variant="full" size={20} />
             </Link>
           </div>
           <ScrollArea className="flex-1 overflow-auto py-2">
@@ -116,9 +113,8 @@ function MobileSidebar({
   return (
     <div className="flex h-full flex-col gap-2">
       <div className="flex h-14 items-center border-b px-4">
-        <Link href="/dashboard" className="flex items-center font-semibold">
-          <span className="text-[var(--landing-primary)] font-bold">tldr</span>
-          <span className="font-bold">SEC</span>
+        <Link href="/dashboard" className="flex items-center">
+          <Logo variant="full" size={20} />
         </Link>
       </div>
       <ScrollArea className="flex-1 overflow-auto py-2">
