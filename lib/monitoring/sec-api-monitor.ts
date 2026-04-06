@@ -433,6 +433,8 @@ export class MonitoredSECEdgarClient extends SECEdgarClient {
           return { statusCode: undefined, errorType: 'network_error' };
         case SECErrorCode.DOCUMENT_FETCH_ERROR:
           return { statusCode: error.statusCode, errorType: 'document_fetch_error' };
+        case SECErrorCode.ACCESS_DENIED:
+          return { statusCode: 403, errorType: 'access_denied' };
         default:
           return { statusCode: error.statusCode, errorType: 'unknown_sec_error' };
       }

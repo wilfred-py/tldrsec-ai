@@ -96,6 +96,7 @@ export interface SECEdgarConfig {
 // Error codes for SEC Edgar API
 export enum SECErrorCode {
   UNKNOWN_ERROR = 'UNKNOWN_ERROR',
+  ACCESS_DENIED = 'ACCESS_DENIED',
   RATE_LIMIT_EXCEEDED = 'RATE_LIMIT_EXCEEDED',
   TIMEOUT = 'TIMEOUT',
   NETWORK_ERROR = 'NETWORK_ERROR',

@@ -827,25 +827,29 @@ export default {
         };
       }
       
-      // Build URLs for Vercel endpoints (four-step pipeline for async processing)
-      // Step 0: Proactive lock cleanup (PREVENTS PIPELINE STALLS!)
+      // Build URLs for Vercel endpoints (4-step pipeline)
+      //
+      // Fast-poll (SEC REST API) was deleted — SEC blocks data.sec.gov from
+      // Vercel IPs with 403. RSS feeds work. One discovery path, not two.
+      //
+      // Step 0: Lock cleanup
+      // Step 1: RSS discovery (tier-aware enqueues job, then we process it)
+      // Step 2: Fetch filing content
+      // Step 3: AI summarization + email
       const cleanupLocksUrl = `${env.PUBLIC_URL}/api/cron?action=cleanup-locks`;
-      // Step 1: Fast-poll discovery via SEC Submissions API (replaces tier-aware + RSS)
-      // Directly detects new filings and queues ASYNC_FETCH_FILING jobs — no intermediate
-      // ASYNC_DISCOVER_FILINGS step needed (Step 1.5 was deleted)
-      const fastPollUrl = `${env.PUBLIC_URL}/api/cron?action=fast-poll`;
-      // Step 2: Process fetch jobs (content retrieval from SEC)
+      const tierAwareUrl = `${env.PUBLIC_URL}/api/cron?action=tier-aware`;
+      const discoveryProcessUrl = `${env.PUBLIC_URL}/api/cron?action=process-queue&jobTypes=ASYNC_DISCOVER_FILINGS`;
       const fetchUrl = `${env.PUBLIC_URL}/api/cron?action=process-queue&jobTypes=ASYNC_FETCH_FILING`;
-      // Step 3: Process summarize jobs (AI summarization)
       const summarizeUrl = `${env.PUBLIC_URL}/api/cron?action=process-queue&jobTypes=ASYNC_SUMMARIZE_CACHED`;
       const dailyCountUrl = `${env.PUBLIC_URL}/api/cron?action=update-daily-count`;
 
-      console.log(`[${executionId}] Four-step pipeline configuration:`, {
+      console.log(`[${executionId}] Pipeline configuration:`, {
         step0: cleanupLocksUrl,
-        step1: fastPollUrl,
+        step1a: tierAwareUrl,
+        step1b: discoveryProcessUrl,
         step2: fetchUrl,
         step3: summarizeUrl,
-        pattern: 'Sequential execution: cleanup → fast-poll discovery → fetch → summarize'
+        pattern: 'Sequential: cleanup → RSS discovery → fetch → summarize'
       });
       console.log(`[${executionId}] PUBLIC_URL: ${env.PUBLIC_URL}`);
       const rawSecretLen = env.CRON_SECRET?.length || 0;
@@ -958,24 +962,25 @@ export default {
       }
 
       // ========================================
-      // STEP 1: Fast-Poll Discovery (Submissions API)
+      // STEP 1: RSS Discovery
       // ========================================
-      // Polls data.sec.gov/submissions/ per-CIK for near-real-time detection.
-      // Directly queues ASYNC_FETCH_FILING jobs — no intermediate discovery step.
-      console.log(`[${executionId}] ====== STEP 1: FAST-POLL DISCOVERY ======`);
-      console.log(`[${executionId}] Step 1: Calling fast-poll endpoint for Submissions API discovery...`);
-      let fastPollResult;
+      // tier-aware enqueues ASYNC_DISCOVER_FILINGS job (returns 202 immediately),
+      // then we process it. handleDiscovery() routes through fetchCompanyFilingsUnified()
+      // which uses RSS on Vercel (SEC blocks REST API from Vercel IPs with 403).
+      console.log(`[${executionId}] ====== STEP 1: RSS DISCOVERY ======`);
+      let discoveryResult;
       try {
-        const { signatureHex, timestamp } = await generateSignature(fastPollUrl);
-        const fastPollHeaders = createHeaders(signatureHex, timestamp);
+        // Step 1a: Enqueue discovery job
+        const { signatureHex: taSig, timestamp: taTs } = await generateSignature(tierAwareUrl);
+        const tierAwareHeaders = createHeaders(taSig, taTs);
 
-        fastPollResult = await executeWithAdvancedRateLimiting({
+        const tierAwareResult = await executeWithAdvancedRateLimiting({
           executionId,
-          url: fastPollUrl,
-          headers: fastPollHeaders,
+          url: tierAwareUrl,
+          headers: tierAwareHeaders,
           workerTimeoutMs: WORKER_TIMEOUT_MS,
-          requestTimeoutMs: 55000, // 55s — fast-poll should complete in <10s, leave buffer
-          maxAttempts: 2, // Quick retry — adaptive skip handles most no-ops
+          requestTimeoutMs: 15000,
+          maxAttempts: 2,
           initialBackoffMs: INITIAL_BACKOFF_MS,
           maxBackoffMs: 5000,
           jitterPercentage: JITTER_PERCENTAGE,
@@ -993,33 +998,59 @@ export default {
           env
         });
 
-        console.log(`[${executionId}] Step 1 completed: fast-poll discovery`, {
-          status: fastPollResult?.status || 'unknown',
-          filingsDetected: fastPollResult?.filingsDetected || 0,
-          fetchJobsQueued: fastPollResult?.fetchJobsQueued || 0,
-          tickersPolled: fastPollResult?.tickersPolled || 0,
-          cacheHits: fastPollResult?.cacheHits || 0,
-          durationMs: fastPollResult?.durationMs || 0
+        console.log(`[${executionId}] Step 1a: discovery job enqueued`, {
+          success: tierAwareResult?.success,
+          status: tierAwareResult?.status,
+          discoveryJobId: tierAwareResult?.discoveryJob?.id,
+          backlog: tierAwareResult?.backlog
         });
-      } catch (fastPollError) {
-        console.error(`[${executionId}] Step 1 failed: fast-poll error`, {
-          error: fastPollError.message
+
+        // Step 1b: Process the discovery job (RSS-based filing detection)
+        const { signatureHex: dpSig, timestamp: dpTs } = await generateSignature(discoveryProcessUrl);
+        const discoveryHeaders = createHeaders(dpSig, dpTs);
+
+        const discoveryProcessResult = await executeWithAdvancedRateLimiting({
+          executionId,
+          url: discoveryProcessUrl,
+          headers: discoveryHeaders,
+          workerTimeoutMs: WORKER_TIMEOUT_MS,
+          requestTimeoutMs: 55000,
+          maxAttempts: 2,
+          initialBackoffMs: INITIAL_BACKOFF_MS,
+          maxBackoffMs: 5000,
+          jitterPercentage: JITTER_PERCENTAGE,
+          rateLimiter,
+          circuitBreaker,
+          monitor,
+          rateLimitConfig: {
+            windowMs: RATE_LIMIT_WINDOW_MS,
+            maxRequests: MAX_REQUESTS_PER_WINDOW,
+            burstLimit: MAX_BURST_REQUESTS,
+            globalLimit: GLOBAL_SUBREQUEST_LIMIT,
+            burstWindowMs: BURST_PROTECTION_WINDOW_MS,
+            breakerThreshold: CIRCUIT_BREAKER_THRESHOLD
+          },
+          env
         });
-        // Continue to fetch/summarize — there may be previously queued jobs to process
-        fastPollResult = { success: false, error: fastPollError.message };
+
+        const jobsProcessed = discoveryProcessResult?.batchResult?.jobsProcessed?.length || 0;
+        console.log(`[${executionId}] Step 1b: discovery processed`, {
+          jobsProcessed,
+          recoveredStaleJobs: discoveryProcessResult?.batchResult?.recoveredStaleJobs || 0
+        });
+
+        discoveryResult = {
+          tierAware: tierAwareResult,
+          process: discoveryProcessResult,
+          success: true,
+          jobsProcessed
+        };
+      } catch (discoveryError) {
+        console.warn(`[${executionId}] Step 1 warning: discovery failed (continuing to fetch/summarize)`, {
+          error: discoveryError.message
+        });
+        discoveryResult = { success: false, error: discoveryError.message };
       }
-
-      // Step 1.5 was removed — fast-poll (Step 1) queues ASYNC_FETCH_FILING
-      // jobs directly, eliminating the intermediate ASYNC_DISCOVER_FILINGS step.
-
-      // Skip Steps 2/3 if fast-poll was skipped (adaptive interval) AND no new jobs were queued.
-      // This prevents ~1440 unnecessary Vercel invocations/day during off-hours.
-      const fastPollSkipped = fastPollResult?.status === 'skipped';
-      const noNewJobs = !fastPollResult?.fetchJobsQueued || fastPollResult.fetchJobsQueued === 0;
-      if (fastPollSkipped && noNewJobs && !fastPollResult?.error) {
-        console.log(`[${executionId}] Fast-poll skipped (${fastPollResult?.reason || 'unknown'}), no pending jobs — skipping Steps 2/3`);
-        // Fall through to final reporting
-      } else {
 
       // ========================================
       // STEP 2: Process Fetch Jobs (Content Retrieval)
@@ -1146,22 +1177,16 @@ export default {
         };
       }
 
-      } // end of else block (Steps 2/3 skipped when fast-poll returns 'skipped')
-
       // Combine results from all steps
-      // fast-poll replaces the old tier-aware + discovery steps
-      // fast-poll is successful if it completed, was skipped, or explicitly succeeded
-      // Use === true / explicit checks to avoid false-positives when results are undefined (e.g. fetch threw)
-      const fastPollSuccess = fastPollResult?.status === 'completed' || fastPollResult?.status === 'skipped' || fastPollResult?.success === true;
+      const discoverySuccess = discoveryResult?.success === true;
       const fetchSuccess = fetchResult?.success === true;
       const summarizeSuccess = totalSummarizeJobsProcessed > 0 || summarizeResult?.success === true;
       const result = {
         cleanup: cleanupResult,
-        fastPoll: fastPollResult,
+        discovery: discoveryResult,
         fetch: fetchResult,
         summarize: summarizeResult,
-        // All pipeline steps must explicitly succeed. undefined results = failure, not success.
-        combinedSuccess: fastPollSuccess && fetchSuccess && summarizeSuccess,
+        combinedSuccess: discoverySuccess && fetchSuccess && summarizeSuccess,
         metrics: {
           cleanup: {
             duration: cleanupResult?.duration || 0,
@@ -1169,11 +1194,10 @@ export default {
             healthStatus: cleanupResult?.health?.status || 'UNKNOWN',
             status: cleanupResult?.success ? 'success' : 'warning'
           },
-          fastPoll: {
-            duration: fastPollResult?.durationMs || 0,
-            filingsDetected: fastPollResult?.filingsDetected || 0,
-            fetchJobsQueued: fastPollResult?.fetchJobsQueued || 0,
-            status: fastPollResult?.error ? 'failed' : (fastPollResult?.status || 'unknown')
+          discovery: {
+            success: discoveryResult?.success || false,
+            jobsProcessed: discoveryResult?.jobsProcessed || 0,
+            status: discoveryResult?.success ? 'success' : 'failed'
           },
           fetch: {
             duration: fetchResult?.duration || 0,
@@ -1192,12 +1216,11 @@ export default {
 
       const duration = Date.now() - startTime;
 
-      console.log(`[${executionId}] Four-step pipeline execution completed in ${duration}ms:`, {
+      console.log(`[${executionId}] Pipeline completed in ${duration}ms:`, {
         step0Cleanup: result.metrics.cleanup.status,
         step0LocksCleared: result.metrics.cleanup.locksCleared,
-        step1FastPoll: result.metrics.fastPoll.status,
-        step1FilingsDetected: result.metrics.fastPoll.filingsDetected,
-        step1FetchJobsQueued: result.metrics.fastPoll.fetchJobsQueued,
+        step1Discovery: result.metrics.discovery.status,
+        step1JobsProcessed: result.metrics.discovery.jobsProcessed,
         step2Fetch: result.metrics.fetch.status,
         step3Summarize: result.metrics.summarize.status,
         combinedSuccess: result.combinedSuccess,
@@ -1282,7 +1305,7 @@ export default {
           duration,
           success: true,
           cleanupMetrics: result.metrics.cleanup,
-          fastPollMetrics: result.metrics.fastPoll,
+          discoveryMetrics: result.metrics.discovery,
           fetchMetrics: result.metrics.fetch,
           summarizeMetrics: result.metrics.summarize
         });
@@ -1295,7 +1318,7 @@ export default {
       } else {
         // Partial failure - at least one endpoint failed
         const failedSteps = [];
-        if (fastPollResult?.error) failedSteps.push('fast-poll');
+        if (!discoveryResult?.success) failedSteps.push('discovery');
         if (fetchResult?.success === false) failedSteps.push('fetch');
         if (summarizeResult?.success === false) failedSteps.push('summarize');
         const failureReason = `${failedSteps.join(', ')} endpoint(s) failed`;
@@ -1307,7 +1330,7 @@ export default {
           success: false,
           failureReason,
           cleanupMetrics: result.metrics.cleanup,
-          fastPollMetrics: result.metrics.fastPoll,
+          discoveryMetrics: result.metrics.discovery,
           fetchMetrics: result.metrics.fetch,
           summarizeMetrics: result.metrics.summarize
         });
