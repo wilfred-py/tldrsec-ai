@@ -1,7 +1,9 @@
 // index.js - Cloudflare Worker for Cron Trigger
 // Enhanced with advanced rate limiting, circuit breaker patterns, and comprehensive monitoring
 // Features: Request tracking, adaptive backoff, circuit breaker state persistence, burst protection
-// Version: 2.7.0 - Added defensive CRON_SECRET sanitization to prevent HMAC auth failures
+// Version: 2.8.0 - Added /status page served from KV for independent uptime monitoring
+
+import { renderStatusPage } from './status-page.js';
 
 /**
  * Sanitizes CRON_SECRET by removing common contamination:
@@ -72,6 +74,50 @@ function recordHandlerExecution(handlerName, success) {
     handler.consecutiveFailures++;
   }
   // null means "started" - we don't update success/failure yet
+}
+
+/**
+ * Write current component health status to KV for the /status page.
+ * Merges new data with existing KV state so each handler updates its own component.
+ * Falls back silently if KV is not provisioned.
+ *
+ * @param {object} env - Worker environment bindings
+ * @param {object} update - Partial component update, e.g. { pipeline: { lastCompletion: '...' } }
+ */
+async function writeStatusToKV(env, update) {
+  if (!env.STATUS_KV) return;
+  try {
+    const existing = await env.STATUS_KV.get('status', { type: 'json' }) || {
+      lastCheck: null,
+      overall: 'unknown',
+      components: {}
+    };
+
+    // Merge component updates
+    for (const [key, value] of Object.entries(update)) {
+      existing.components[key] = { ...existing.components[key], ...value };
+    }
+
+    // Always update worker self-health
+    existing.components.worker = {
+      ...existing.components.worker,
+      checkedAt: new Date().toISOString(),
+      circuitBreaker: handlerHealth.pipelineProcessing.consecutiveFailures >= 3 ? 'OPEN' : 'CLOSED',
+      consecutiveFailures: handlerHealth.pipelineProcessing.consecutiveFailures,
+    };
+
+    existing.lastCheck = new Date().toISOString();
+
+    // Derive overall status
+    const components = Object.values(existing.components);
+    const hasOutage = components.some(c => c.status === 'outage');
+    const hasDegraded = components.some(c => c.status === 'degraded');
+    existing.overall = hasOutage ? 'outage' : hasDegraded ? 'degraded' : 'operational';
+
+    await env.STATUS_KV.put('status', JSON.stringify(existing), { expirationTtl: 3600 });
+  } catch (e) {
+    console.warn('[STATUS_KV] Write failed:', e.message);
+  }
 }
 
 /**
@@ -314,6 +360,31 @@ export default {
         status: status.stale || circuitBreakerInfo.state === 'OPEN' || unhealthyHandlers.length > 0 ? 503 : 200,
         headers: { 'Content-Type': 'application/json' }
       });
+    }
+
+    // Public status page - independently hosted, survives Vercel outages
+    if (url.pathname === '/status') {
+      try {
+        let kvData = null;
+        if (env.STATUS_KV) {
+          kvData = await env.STATUS_KV.get('status', { type: 'json' });
+        }
+        const html = renderStatusPage(kvData, handlerHealth);
+        return new Response(html, {
+          status: 200,
+          headers: {
+            'Content-Type': 'text/html; charset=utf-8',
+            'Cache-Control': 'public, max-age=60',
+            'Content-Security-Policy': "default-src 'none'; style-src 'unsafe-inline'",
+          }
+        });
+      } catch (e) {
+        console.error('[STATUS] Render error:', e.message);
+        return new Response('tldrSEC Status: Unable to load. Check https://tldrsec.app directly.', {
+          status: 500,
+          headers: { 'Content-Type': 'text/plain' }
+        });
+      }
     }
 
     return new Response('TLDRSEC Cron Worker - This endpoint is for scheduled execution only', {
@@ -690,6 +761,10 @@ export default {
         }
 
         recordHandlerExecution('autoRecovery', true);
+        // Write web app health (auto-recovery checks Vercel, so a success means Vercel is reachable)
+        await writeStatusToKV(env, {
+          web: { status: 'operational', checkedAt: new Date().toISOString(), latencyMs: duration },
+        });
         return { success: true, executionId, duration, ...result };
       } else {
         const errorText = await response.text();
@@ -1314,6 +1389,10 @@ export default {
 
         // Record handler success
         recordHandlerExecution('pipelineProcessing', true);
+        // Write pipeline health to KV for status page
+        await writeStatusToKV(env, {
+          pipeline: { status: 'operational', lastCompletion: new Date().toISOString() },
+        });
         console.log(`[${executionId}] All processing endpoints succeeded - circuit breaker updated`);
       } else {
         // Partial failure - at least one endpoint failed
@@ -1342,6 +1421,9 @@ export default {
 
         // Record handler partial failure (don't alert for partial failures, only full failures)
         recordHandlerExecution('pipelineProcessing', false);
+        await writeStatusToKV(env, {
+          pipeline: { status: 'degraded', lastCompletion: handlerHealth.pipelineProcessing.lastSuccess },
+        });
       }
 
       return result;
@@ -1383,6 +1465,9 @@ export default {
       
       // Record handler failure and alert
       recordHandlerExecution('pipelineProcessing', false);
+      await writeStatusToKV(env, {
+        pipeline: { status: 'outage', lastCompletion: handlerHealth.pipelineProcessing.lastSuccess },
+      });
       await alertOnHandlerFailure('pipelineProcessing', error, env);
 
       // Don't throw - let Cloudflare handle gracefully
