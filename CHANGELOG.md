@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.0.5.2] - 2026-04-07
+
+### Added
+- Public status page served from Cloudflare Worker at `/status` route, independently hosted from Vercel
+- `status-page.js` module with XSS-safe HTML rendering, staleness guard, and edge case handling
+- KV-backed component health tracking (web app, filing pipeline, cron worker) written on each cron run
+- STATUS_KV namespace documentation and provisioning instructions in `wrangler.toml`
+
 ## [0.0.5.1] - 2026-04-06
 
 ### Added
