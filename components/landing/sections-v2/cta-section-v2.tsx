@@ -43,7 +43,7 @@ export function CTASectionV2() {
     <section
       className="py-24 relative overflow-hidden"
       style={{
-        background: 'linear-gradient(180deg, #EBF5FF 0%, #E3F2FD 50%, #FFFFFF 100%)',
+        background: 'linear-gradient(180deg, #F9FAFB 0%, #F0F7FF 40%, #FFFFFF 100%)',
       }}
     >
       {/* Subtle pattern overlay */}
