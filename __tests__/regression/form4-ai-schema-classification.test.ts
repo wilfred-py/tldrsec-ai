@@ -347,7 +347,7 @@ describe('Form 4: AI Schema → Template Classification', () => {
       });
       const result = parseResponse(aiResponse, '4');
       const data = result.data as Record<string, unknown>;
-      expect(data.newStake).toBe('85000 shares'); // Last transaction's post-ownership
+      expect(data.newStake).toBe('85,000 shares'); // Last transaction's post-ownership
     });
 
     it('should not overwrite existing newStake', () => {
@@ -391,7 +391,7 @@ describe('Form 4: AI Schema → Template Classification', () => {
       const result = parseResponse(aiResponse, '4');
       const data = result.data as Record<string, unknown>;
       // Code A + $0 price = derivative grant → suffix is "derivative securities"
-      expect(data.newStake).toBe('659729 derivative securities');
+      expect(data.newStake).toBe('659,729 derivative securities');
       expect(data.newStake).not.toContain(']');
     });
   });
@@ -412,8 +412,8 @@ describe('Form 4: AI Schema → Template Classification', () => {
       });
       const result = parseResponse(aiResponse, '4');
       const data = result.data as Record<string, unknown>;
-      expect(data.previousStake).toBe('100000 shares'); // 90000 + 10000
-      expect(data.newStake).toBe('90000 shares');
+      expect(data.previousStake).toBe('100,000 shares'); // 90000 + 10000
+      expect(data.newStake).toBe('90,000 shares');
     });
 
     it('should derive previousStake for an award (acquisition)', () => {
@@ -428,8 +428,8 @@ describe('Form 4: AI Schema → Template Classification', () => {
       const result = parseResponse(aiResponse, '4');
       const data = result.data as Record<string, unknown>;
       // Code A + $0 price = derivative grant → suffix matches newStake
-      expect(data.previousStake).toBe('100000 derivative securities'); // 150000 - 50000
-      expect(data.newStake).toBe('150000 derivative securities');
+      expect(data.previousStake).toBe('100,000 derivative securities'); // 150000 - 50000
+      expect(data.newStake).toBe('150,000 derivative securities');
     });
 
     it('should derive previousStake for sale inferred from code S', () => {
@@ -444,7 +444,7 @@ describe('Form 4: AI Schema → Template Classification', () => {
       });
       const result = parseResponse(aiResponse, '4');
       const data = result.data as Record<string, unknown>;
-      expect(data.previousStake).toBe('228330 shares'); // 223330 + 5000
+      expect(data.previousStake).toBe('228,330 shares'); // 223330 + 5000
     });
 
     it('should derive percentageChange from previousStake and newStake', () => {
@@ -503,9 +503,9 @@ describe('Form 4: AI Schema → Template Classification', () => {
       const result = parseResponse(aiResponse, '4');
       const data = result.data as Record<string, unknown>;
       // First tx: Exercise (acquisition), shares=10000, after=110000 → before = 110000 - 10000 = 100000
-      expect(data.previousStake).toBe('100000 shares');
+      expect(data.previousStake).toBe('100,000 shares');
       // Last tx: after=105000
-      expect(data.newStake).toBe('105000 shares');
+      expect(data.newStake).toBe('105,000 shares');
       // Change: (105000 - 100000) / 100000 = +5%
       expect(data.percentageChange).toBe('5.00%');
     });
