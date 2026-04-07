@@ -47,7 +47,7 @@ describe('Derivative transaction handling (Bug 4 & 5)', () => {
 
       expect(result.success).toBe(true);
       const data = result.data as Record<string, unknown>;
-      expect(data.newStake).toBe('250000 derivative securities');
+      expect(data.newStake).toBe('250,000 derivative securities');
     });
 
     it('should suffix newStake with "shares" when transactions include non-derivative types', () => {
@@ -80,7 +80,7 @@ describe('Derivative transaction handling (Bug 4 & 5)', () => {
 
       expect(result.success).toBe(true);
       const data = result.data as Record<string, unknown>;
-      expect(data.newStake).toBe('55000 shares');
+      expect(data.newStake).toBe('55,000 shares');
     });
 
     it('should suffix with "derivative securities" for M-code only filings', () => {
@@ -104,7 +104,7 @@ describe('Derivative transaction handling (Bug 4 & 5)', () => {
 
       expect(result.success).toBe(true);
       const data = result.data as Record<string, unknown>;
-      expect(data.newStake).toBe('40000 derivative securities');
+      expect(data.newStake).toBe('40,000 derivative securities');
     });
 
     it('should not override newStake if already set by AI', () => {
@@ -180,7 +180,7 @@ describe('Derivative transaction handling (Bug 4 & 5)', () => {
 
       const result = parseResponse(JSON.stringify(jsonData), '4' as never);
       const data = result.data as Record<string, unknown>;
-      expect(data.newStake).toBe('20000 derivative securities');
+      expect(data.newStake).toBe('20,000 derivative securities');
     });
 
     it('should treat mixed A($0) + M as all-derivative', () => {
@@ -210,7 +210,7 @@ describe('Derivative transaction handling (Bug 4 & 5)', () => {
 
       const result = parseResponse(JSON.stringify(jsonData), '4' as never);
       const data = result.data as Record<string, unknown>;
-      expect(data.newStake).toBe('35000 derivative securities');
+      expect(data.newStake).toBe('35,000 derivative securities');
     });
 
     it('should treat A($50) + M as NOT all-derivative (A with price is non-derivative)', () => {
@@ -240,7 +240,7 @@ describe('Derivative transaction handling (Bug 4 & 5)', () => {
 
       const result = parseResponse(JSON.stringify(jsonData), '4' as never);
       const data = result.data as Record<string, unknown>;
-      expect(data.newStake).toBe('35000 shares');
+      expect(data.newStake).toBe('35,000 shares');
     });
   });
 });

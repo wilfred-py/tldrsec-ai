@@ -21,6 +21,7 @@ import {
   isCharacterIndexedObject,
   CURRENT_FORM4_SCHEMA_VERSION,
   derivePreviousStake,
+  formatNumberWithCommas,
   NormalizedTransaction,
 } from '../../email/form4-field-normalizer';
 
@@ -259,7 +260,9 @@ function normalizeFields(data: unknown, filingType: SECFilingType): unknown {
               });
 
               const suffix = allDerivative ? 'derivative securities' : 'shares';
-              normalized.newStake = `${cleaned} ${suffix}`;
+              const num = parseFloat(cleaned);
+              const formatted = isNaN(num) ? cleaned : formatNumberWithCommas(num);
+              normalized.newStake = `${formatted} ${suffix}`;
               break;
             }
           }
@@ -274,7 +277,7 @@ function normalizeFields(data: unknown, filingType: SECFilingType): unknown {
           // Use same suffix as newStake (shares vs derivative securities)
           const suffix = String(normalized.newStake).includes('derivative securities')
             ? 'derivative securities' : 'shares';
-          normalized.previousStake = `${prevNum} ${suffix}`;
+          normalized.previousStake = `${formatNumberWithCommas(prevNum)} ${suffix}`;
         }
       }
 

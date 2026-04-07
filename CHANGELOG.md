@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.0.5.2] - 2026-04-07
+
+### Fixed
+- Ownership impact numbers now display with comma formatting (e.g., "3,319" instead of "3319").
+- Arrow in ownership impact section always points downward as a flow indicator (before → after).
+- Decimal places removed from ownership impact share counts (rounded to integer).
+- Shared `formatNumberWithCommas` function exported from form4-field-normalizer for DRY reuse.
+
 ## [0.0.5.1] - 2026-04-06
 
 ### Added

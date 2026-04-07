@@ -77,7 +77,7 @@ export function getStakeChangeArrow(percentChange: string | undefined): string {
   if (!percentChange) return '';
   const num = parseFloat(percentChange.replace(/[%+]/g, ''));
   if (isNaN(num) || num === 0) return '→';
-  return num > 0 ? '↑' : '↓';
+  return '↓';
 }
 
 /**
@@ -1092,7 +1092,7 @@ export function Form4MinimalistTemplate({ filing }: Form4MinimalistTemplateProps
                                 margin: '4px 0',
                                 color: pctColor,
                               }}>
-                                {pctNum > 0 ? '↑' : '↓'}
+                                {'↓'}
                               </div>
                               {/* New ownership (after transaction) */}
                               <div style={{
