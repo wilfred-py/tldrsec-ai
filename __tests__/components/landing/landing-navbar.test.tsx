@@ -79,7 +79,7 @@ describe('LandingNavbar', () => {
       // Navbar uses isVisible state which starts false for unauthenticated
       // Since IntersectionObserver mock doesn't trigger callback by default,
       // navbar should not render navigation content
-      expect(screen.queryByText('tldrSEC')).not.toBeInTheDocument();
+      expect(screen.queryByLabelText('tldrSEC')).not.toBeInTheDocument();
     });
 
     it('shows "Get Started" CTA linking to /sign-up after scroll', () => {
@@ -112,7 +112,7 @@ describe('LandingNavbar', () => {
 
     it('navbar is always visible (bypasses observer)', () => {
       render(<LandingNavbar heroRef={heroRef} />);
-      expect(screen.getByText('tldrSEC')).toBeInTheDocument();
+      expect(screen.getByLabelText('tldrSEC')).toBeInTheDocument();
     });
 
     it('shows "Complete Setup" CTA linking to /onboarding', () => {
@@ -130,7 +130,7 @@ describe('LandingNavbar', () => {
 
     it('navbar is always visible (bypasses observer)', () => {
       render(<LandingNavbar heroRef={heroRef} />);
-      expect(screen.getByText('tldrSEC')).toBeInTheDocument();
+      expect(screen.getByLabelText('tldrSEC')).toBeInTheDocument();
     });
 
     it('shows "Go to Dashboard" CTA linking to /dashboard', () => {
