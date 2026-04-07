@@ -417,7 +417,8 @@ export function normalizeForm4Data(summaryJSON: Record<string, unknown> | null |
     for (let i = transactions.length - 1; i >= 0; i--) {
       const sof = transactions[i].sharesOwnedFollowing;
       if (sof !== undefined && sof !== '' && sof !== null) {
-        newStake = String(sof);
+        const sofNum = parseFloat(String(sof).replace(/[$,\[\]]/g, ''));
+        newStake = isNaN(sofNum) ? String(sof) : formatNumberWithCommas(sofNum);
         break;
       }
     }
@@ -605,7 +606,7 @@ export function normalizePersonName(name: string): string {
  * Format a number with US-style commas. Locale-independent.
  * 14788 → "14,788"
  */
-function formatNumberWithCommas(num: number): string {
+export function formatNumberWithCommas(num: number): string {
   return Math.round(num).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
 }
 
