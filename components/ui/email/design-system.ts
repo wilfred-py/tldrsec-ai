@@ -359,8 +359,13 @@ export function markdownToHtml(markdown: string | undefined): string {
 
   let html = markdown;
 
-  // Escape HTML entities first (but preserve intentional HTML)
-  html = html.replace(/&(?!amp;|lt;|gt;|quot;|#)/g, '&amp;');
+  // ⚠️ SECURITY BOUNDARY: All escaping MUST remain above the regex-based HTML
+  // generators below. The markdown converters (bold, headers, lists, tables)
+  // produce safe HTML from markdown syntax AFTER user content is escaped.
+  // Moving these lines below the converters re-opens XSS vectors.
+  html = html.replace(/&/g, '&amp;');
+  html = html.replace(/</g, '&lt;');
+  html = html.replace(/>/g, '&gt;');
 
   // Convert markdown tables to styled HTML tables
   const tableRegex = /\|(.+)\|\n\|[-:\s|]+\|\n((?:\|.+\|\n?)+)/g;

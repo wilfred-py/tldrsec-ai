@@ -169,8 +169,9 @@ export function formatText(text: string): string {
   let html = text;
   // Strip leading bullets/dashes that AI may have included in JSON string values
   html = html.replace(/^[\s]*[•\-\*]\s*/, '');
-  // Escape all HTML entities to prevent XSS from AI-generated content
-  html = html.replace(/&(?!amp;|lt;|gt;|quot;|#)/g, '&amp;');
+  // ⚠️ SECURITY BOUNDARY: Unconditional escaping prevents entity-based XSS bypass
+  // (e.g., &#60;script&#62;). Must remain above all HTML generation below.
+  html = html.replace(/&/g, '&amp;');
   html = html.replace(/</g, '&lt;');
   html = html.replace(/>/g, '&gt;');
   html = html.replace(/"/g, '&quot;');
@@ -187,6 +188,44 @@ export function formatText(text: string): string {
   );
   html = html.replace(/—/g, '&mdash;');
   return html;
+}
+
+/**
+ * Extract a clean, specific headline from AI-generated summary text.
+ * Skips generic prefixes, deduplicates against eventType, and truncates.
+ */
+export function getCleanHeadline(summaryText: string, eventType: string): string {
+  if (!summaryText) return '';
+
+  // Split on sentence boundaries, skipping common abbreviations
+  const abbrevPattern = /(?<!\b(?:Corp|Inc|Ltd|Mr|Mrs|Dr|Jr|Sr|vs|etc|approx|est))\.\s+/;
+  const firstSentence = summaryText.split(abbrevPattern)[0] || '';
+
+  let headline = firstSentence;
+
+  // If first sentence is too short, use more text
+  if (headline.length < 30 && summaryText.length > headline.length) {
+    headline = summaryText;
+  }
+
+  // Skip generic AI prefixes
+  if (/^this\s+(filing|8-k|report|document)\b/i.test(headline)) {
+    return '';
+  }
+
+  // Strip leading eventType prefix to avoid duplication
+  if (eventType && headline.toLowerCase().startsWith(eventType.toLowerCase())) {
+    headline = headline.slice(eventType.length);
+    // Strip leading separators after prefix removal
+    headline = headline.replace(/^[\s]*[:\-–—]+[\s]*/, '');
+  }
+
+  // Truncate at 120 chars
+  if (headline.length > 120) {
+    headline = headline.slice(0, 117) + '...';
+  }
+
+  return headline.trim();
 }
 
 /**
@@ -226,11 +265,8 @@ export function Form8KMinimalistTemplate({ filing }: Form8KMinimalistTemplatePro
   const isMaterial = isMaterialFiling(itemNumbers, summaryText || '');
   const signal = getSignalConfig(isMaterial);
 
-  // Extract first sentence as the headline
-  let headline = summaryText?.split(/(?<=[.!?])\s+/)[0] || '';
-  if (headline.length < 30 && summaryText && summaryText.length > headline.length) {
-    headline = summaryText;
-  }
+  // Extract and clean the headline for the verdict box
+  const headline = getCleanHeadline(summaryText || '', eventType);
 
   // Format items for display with human-readable descriptions
   const itemsDisplay = itemNumbers.length > 0
@@ -254,6 +290,7 @@ export function Form8KMinimalistTemplate({ filing }: Form8KMinimalistTemplatePro
         companyName={companyName}
         filingType={filingType || '8-K'}
         filingDate={filingDate}
+        filingCategory={isMaterial ? 'Material' : 'Routine'}
       />
 
       {/* Staleness warning */}
@@ -318,30 +355,34 @@ export function Form8KMinimalistTemplate({ filing }: Form8KMinimalistTemplatePro
                             </td>
                           </tr>
 
-                          {/* The Verdict */}
+                          {/* Event type label */}
+                          {eventType && (
+                            <tr>
+                              <td style={{ paddingTop: '12px' }}>
+                                <div style={{
+                                  fontSize: '12px',
+                                  fontWeight: 700,
+                                  color: signal.textColor,
+                                  textTransform: 'uppercase' as const,
+                                  letterSpacing: '0.5px',
+                                  opacity: 0.8,
+                                }}>
+                                  {eventType}
+                                </div>
+                              </td>
+                            </tr>
+                          )}
+
+                          {/* The headline: what actually happened */}
                           <tr>
-                            <td style={{ paddingTop: '12px' }}>
+                            <td style={{ paddingTop: eventType ? '4px' : '12px' }}>
                               <div style={{
-                                fontSize: '24px',
+                                fontSize: '20px',
                                 fontWeight: 700,
                                 color: signal.textColor,
-                                lineHeight: '1.2',
+                                lineHeight: '1.3',
                               }}>
-                                {eventType || signal.verdict}
-                              </div>
-                            </td>
-                          </tr>
-
-                          {/* Quick explanation */}
-                          <tr>
-                            <td style={{ paddingTop: '8px' }}>
-                              <div style={{
-                                fontSize: '14px',
-                                lineHeight: '1.5',
-                                color: signal.textColor,
-                                opacity: 0.9,
-                              }}>
-                                {signal.description}
+                                {headline || eventType || signal.verdict}
                               </div>
                             </td>
                           </tr>
