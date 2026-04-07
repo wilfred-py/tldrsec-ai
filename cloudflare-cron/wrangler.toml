@@ -55,10 +55,9 @@ enabled = true
 #   npx wrangler kv namespace create "STATUS_KV" --preview
 # Then uncomment the binding below and fill in the IDs:
 #
-# [[kv_namespaces]]
-# binding = "STATUS_KV"
-# id = "<production-namespace-id>"
-# preview_id = "<preview-namespace-id>"
+[[kv_namespaces]]
+binding = "STATUS_KV"
+id = "ff97c4f0ff214c14a3c7df257a86f929"
 
 # Build configuration for robust deployment
 # Note: upload exclusions are handled automatically by wrangler
