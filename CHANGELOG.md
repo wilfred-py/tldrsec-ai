@@ -2,6 +2,22 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.0.6.0] - 2026-04-08
+
+### Added
+- Unified email badge format: all emails now show `{Type} | {Category}` (e.g., "8-K | Material", "4 | Insider", "10-K | Annual").
+- Centralized `DEFAULT_CATEGORY_MAP` in EmailHeader with 18 filing type variants for automatic badge labeling.
+- `getCleanHeadline()` function for extracting clean, specific headlines from AI-generated 8-K summaries.
+- XSS test suite for `markdownToHtml()` covering script injection, numeric entity bypass, and normal markdown rendering.
+
+### Changed
+- 8-K verdict box hierarchy swapped: actual headline now displayed at 20px bold, event type demoted to 12px uppercase label.
+- 8-K emails now lead with what happened ("Tesla's CFO resigned") instead of generic boilerplate.
+
+### Fixed
+- XSS vulnerability in `markdownToHtml()`: numeric entity bypass (`&#60;script&#62;`) closed by switching to unconditional `&` escaping.
+- Same entity-based XSS bypass fixed in `formatText()` across 8-K, Form 4, and Form 144 templates.
+
 ## [0.0.5.2] - 2026-04-07
 
 ### Fixed
