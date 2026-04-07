@@ -1,6 +1,32 @@
 import * as React from 'react';
 import { EmailColors } from '../../design-system';
 
+/**
+ * Default category labels for the filing type badge.
+ * Maps normalized (uppercased) filing types to short, human-readable categories.
+ * Templates can override via the `filingCategory` prop for dynamic values.
+ */
+const DEFAULT_CATEGORY_MAP: Record<string, string> = {
+  '4': 'Insider',
+  'FORM 4': 'Insider',
+  'FORM4': 'Insider',
+  '10-K': 'Annual',
+  '10K': 'Annual',
+  '10-Q': 'Quarterly',
+  '10Q': 'Quarterly',
+  '8-K': 'Current Report',
+  '8K': 'Current Report',
+  'FORM 8-K': 'Current Report',
+  'FORM8-K': 'Current Report',
+  '144': 'Sale Notice',
+  'FORM 144': 'Sale Notice',
+  'FORM144': 'Sale Notice',
+  'DEF 14A': 'Proxy',
+  'S-1': 'IPO',
+  'S-3': 'Offering',
+  '11-K': 'Employee Plan',
+};
+
 interface EmailHeaderProps {
   ticker: string;
   companyName: string;
@@ -8,6 +34,7 @@ interface EmailHeaderProps {
   filingDate: string | Date;
   filerName?: string;
   filerRole?: string;
+  filingCategory?: string;
   dataQuality?: 'full' | 'partial' | 'extractor-only' | 'degraded';
 }
 
@@ -22,6 +49,7 @@ export function EmailHeader({
   filingDate,
   filerName,
   filerRole,
+  filingCategory,
 }: EmailHeaderProps) {
   const formattedDate = filingDate instanceof Date
     ? filingDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
@@ -29,6 +57,11 @@ export function EmailHeader({
 
   // Show filer name if it's not the default fallback
   const hasFiler = filerName && filerName !== 'Insider';
+
+  const displayType = filingType || 'SEC';
+  const category = filingCategory
+    || DEFAULT_CATEGORY_MAP[displayType.toUpperCase().trim()]
+    || 'Filing';
 
   return (
     <table width="100%" cellPadding="0" cellSpacing="0">
@@ -81,7 +114,7 @@ export function EmailHeader({
               letterSpacing: '0.5px',
               marginBottom: '8px',
             }}>
-              {filingType} {hasFiler ? '| Insider' : ''}
+              {displayType} | {category}
             </div>
 
             <h1 style={{
