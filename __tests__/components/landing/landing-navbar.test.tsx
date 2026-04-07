@@ -112,7 +112,7 @@ describe('LandingNavbar', () => {
 
     it('navbar is always visible (bypasses observer)', () => {
       render(<LandingNavbar heroRef={heroRef} />);
-      expect(screen.getByText('tldrSEC')).toBeInTheDocument();
+      expect(screen.getByRole('img', { name: 'tldrSEC' })).toBeInTheDocument();
     });
 
     it('shows "Complete Setup" CTA linking to /onboarding', () => {
@@ -130,7 +130,7 @@ describe('LandingNavbar', () => {
 
     it('navbar is always visible (bypasses observer)', () => {
       render(<LandingNavbar heroRef={heroRef} />);
-      expect(screen.getByText('tldrSEC')).toBeInTheDocument();
+      expect(screen.getByRole('img', { name: 'tldrSEC' })).toBeInTheDocument();
     });
 
     it('shows "Go to Dashboard" CTA linking to /dashboard', () => {
