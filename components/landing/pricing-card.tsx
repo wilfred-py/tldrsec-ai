@@ -63,9 +63,6 @@ export function PricingCard({
       {/* Plan Header with Badges */}
       <div className="flex items-center justify-between mb-4">
         <div>
-          <p className="text-xs text-[var(--landing-text-muted)] uppercase tracking-wide mb-1">
-            {plan.name}
-          </p>
           <h3
             className="text-2xl font-bold"
             style={{ color: 'var(--landing-secondary)' }}
@@ -105,11 +102,6 @@ export function PricingCard({
         {monthlyEquiv && (
           <p className="text-xs text-[var(--landing-text-muted)] mt-1">
             ${monthlyEquiv}/mo billed annually
-          </p>
-        )}
-        {!isCurrentPlan && (
-          <p className="text-xs text-[var(--landing-text-muted)] mt-1">
-            7-day free trial included
           </p>
         )}
       </div>
@@ -157,11 +149,6 @@ export function PricingCard({
               getCtaText(plan)
             )}
           </Button>
-        )}
-        {!loading && !isCurrentPlan && !plan.disabled && !isTrialEndingSoon && (
-          <p className="text-xs text-center text-[var(--landing-text-muted)] mt-2">
-            Cancel anytime. No charge until day 8.
-          </p>
         )}
       </div>
 

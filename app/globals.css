@@ -234,14 +234,14 @@
   /* Primary button style */
   .landing-button-primary {
     @apply h-12 px-8 text-base font-semibold rounded-lg;
-    background-color: var(--landing-primary);
-    color: white;
+    background-color: var(--landing-primary) !important;
+    color: white !important;
     box-shadow: 0 4px 14px 0 rgba(0, 121, 242, 0.39);
     transition: all 0.2s ease;
   }
 
   .landing-button-primary:hover {
-    background-color: var(--landing-primary-hover);
+    background-color: var(--landing-primary-hover) !important;
     box-shadow: 0 6px 20px 0 rgba(0, 121, 242, 0.5);
     transform: translateY(-1px);
   }

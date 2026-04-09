@@ -10,7 +10,18 @@ All notable changes to this project will be documented in this file.
 - KV-backed component health tracking (web app, filing pipeline, cron worker) written on each cron run
 - STATUS_KV namespace documentation and provisioning instructions in `wrangler.toml`
 
+### Changed
+- Pricing cards: removed redundant plan name label (was showing "PRO" twice).
+- Pricing cards: removed "7-day free trial included" and "Cancel anytime" subtext for cleaner CTA area.
+- Billing toggle: removed gray border for a lighter, more integrated look.
+- CTA section gradient now flows smoothly from pricing background (#F9FAFB) through subtle blue (#F0F7FF) to white.
+- Footer: removed hard border-top for seamless section transitions.
+- "Get Started" buttons (navbar + hero) changed from blue-to-purple gradient to solid blue, matching pricing tier CTAs.
+- Navbar CTA now shows a loading spinner on click and prefetches auth routes on mount for faster navigation.
+
 ### Fixed
+- CSS specificity: `landing-button-primary` hover state was dead due to missing `!important` (base rule had it, hover didn't).
+- Navbar CTA restored `<Link>` semantics for accessibility, SEO, and right-click support.
 - Ownership impact numbers now display with comma formatting (e.g., "3,319" instead of "3319").
 - Arrow in ownership impact section always points downward as a flow indicator (before → after).
 - Decimal places removed from ownership impact share counts (rounded to integer).

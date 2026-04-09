@@ -32,7 +32,7 @@ export function FooterSectionV2() {
   const currentYear = new Date().getFullYear();
 
   return (
-    <footer className="py-12 bg-white border-t" style={{ borderColor: 'var(--landing-border)' }}>
+    <footer className="py-12 bg-white">
       <div className="container mx-auto px-4">
         <div className="grid grid-cols-1 md:grid-cols-4 gap-8 mb-8">
           {/* Brand */}
