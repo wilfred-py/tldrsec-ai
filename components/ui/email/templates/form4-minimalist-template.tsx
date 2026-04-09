@@ -622,7 +622,8 @@ function getSignalConfig(signalStrength: string, summaryText: string, isSale: bo
 function _formatText(text: string): string {
   if (!text) return '';
   let html = text;
-  html = html.replace(/&(?!amp;|lt;|gt;|quot;|#)/g, '&amp;');
+  // ⚠️ SECURITY BOUNDARY: Unconditional escaping prevents entity-based XSS bypass
+  html = html.replace(/&/g, '&amp;');
   html = html.replace(
     /(\$[\d,]+(?:\.\d+)?[KMB]?)/g,
     `<strong style="color:${EmailColors.text.headline};font-weight:700;">$1</strong>`

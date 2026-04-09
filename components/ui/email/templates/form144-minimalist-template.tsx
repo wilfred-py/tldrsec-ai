@@ -122,8 +122,8 @@ function getSignalConfig(isNotable: boolean, has10b51: boolean) {
 function formatText(text: string): string {
   if (!text) return '';
   let html = text;
-  // Escape all HTML entities to prevent XSS from AI-generated content
-  html = html.replace(/&(?!amp;|lt;|gt;|quot;|#)/g, '&amp;');
+  // ⚠️ SECURITY BOUNDARY: Unconditional escaping prevents entity-based XSS bypass
+  html = html.replace(/&/g, '&amp;');
   html = html.replace(/</g, '&lt;');
   html = html.replace(/>/g, '&gt;');
   html = html.replace(/"/g, '&quot;');
