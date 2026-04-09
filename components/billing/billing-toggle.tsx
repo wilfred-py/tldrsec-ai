@@ -17,7 +17,7 @@ export function BillingToggle({ billingInterval, onToggle, disabled = false }: B
   const isAnnual = billingInterval === 'annual';
 
   return (
-    <div className="inline-flex items-center gap-2.5 rounded-full border border-[var(--landing-card-border,#e5e7eb)] bg-[var(--landing-bg,#fff)] px-4 py-2.5">
+    <div className="inline-flex items-center gap-2.5 rounded-full bg-[var(--landing-bg,#fff)] px-4 py-2.5">
       <span className="text-sm text-[var(--landing-text-muted)]">
         Save with yearly billing
       </span>

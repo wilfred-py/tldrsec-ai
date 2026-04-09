@@ -3,9 +3,10 @@
 import { useEffect, useState, RefObject } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetTrigger, SheetContent } from '@/components/ui/sheet';
-import { Menu, ArrowRight } from 'lucide-react';
+import { Menu, ArrowRight, Loader2 } from 'lucide-react';
 import { useAuth } from '@/contexts/auth-context';
 import { Logo } from '@/components/ui/logo';
 
@@ -23,8 +24,15 @@ interface LandingNavbarProps {
  */
 export function LandingNavbar({ heroRef }: LandingNavbarProps) {
   const { isSignedIn, isLoaded, isOnboarded } = useAuth();
+  const pathname = usePathname();
   const [isVisible, setIsVisible] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isNavigating, setIsNavigating] = useState(false);
+
+  // Reset navigating state when pathname changes (navigation completed)
+  useEffect(() => {
+    setIsNavigating(false);
+  }, [pathname]);
 
   // Track hero section visibility with Intersection Observer
   useEffect(() => {
@@ -62,28 +70,20 @@ export function LandingNavbar({ heroRef }: LandingNavbarProps) {
   ];
 
   // 3-state CTA button logic
-  const ctaButton = isOnboarded ? (
-    // State 3: Authenticated AND onboarded → Dashboard
-    <Link href="/dashboard">
-      <Button className="landing-button-gradient">
-        Go to Dashboard
-        <ArrowRight className="w-4 h-4 ml-2" />
-      </Button>
-    </Link>
-  ) : isSignedIn ? (
-    // State 2: Authenticated but NOT onboarded → Onboarding
-    <Link href="/onboarding">
-      <Button className="landing-button-gradient">
-        Complete Setup
-        <ArrowRight className="w-4 h-4 ml-2" />
-      </Button>
-    </Link>
-  ) : (
-    // State 1: Unauthenticated → Sign Up
-    <Link href="/sign-up">
-      <Button className="landing-button-gradient">
-        Get Started
-        <ArrowRight className="w-4 h-4 ml-2" />
+  const ctaHref = isOnboarded ? '/dashboard' : isSignedIn ? '/onboarding' : '/sign-up';
+  const ctaLabel = isOnboarded ? 'Go to Dashboard' : isSignedIn ? 'Complete Setup' : 'Get Started';
+
+  const ctaButton = (
+    <Link href={ctaHref} onClick={() => setIsNavigating(true)}>
+      <Button
+        className="landing-button-primary"
+        disabled={isNavigating}
+      >
+        {isNavigating ? (
+          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+        ) : null}
+        {ctaLabel}
+        {!isNavigating && <ArrowRight className="w-4 h-4 ml-2" />}
       </Button>
     </Link>
   );

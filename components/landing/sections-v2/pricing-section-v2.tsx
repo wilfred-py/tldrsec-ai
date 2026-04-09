@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { useRouter } from 'next/navigation';
 import { Sparkles, Crown } from 'lucide-react';
@@ -65,6 +65,12 @@ export function PricingSectionV2() {
   const [billingInterval, setBillingInterval] = useState<BillingInterval>('monthly');
   const [loadingPlan, setLoadingPlan] = useState<string | null>(null);
   const router = useRouter();
+
+  // Prefetch auth routes on mount for faster navigation
+  useEffect(() => {
+    router.prefetch('/sign-up');
+    router.prefetch('/onboarding');
+  }, [router]);
 
   // Auth context
   const { isSignedIn, isLoaded, isOnboarded } = useAuth();
