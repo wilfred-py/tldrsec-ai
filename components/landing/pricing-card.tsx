@@ -133,11 +133,7 @@ export function PricingCard({
           <Button
             onClick={() => onCheckout(plan.key)}
             disabled={checkoutLoading}
-            className={`w-full ${
-              plan.popular
-                ? 'landing-button-primary'
-                : 'landing-button-secondary'
-            }`}
+            className="w-full landing-button-secondary"
           >
             {checkoutLoading ? (
               <>

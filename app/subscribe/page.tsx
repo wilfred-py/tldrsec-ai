@@ -462,9 +462,7 @@ function SubscribePageContent() {
                           <Button
                             onClick={() => handleCheckout(planKey)}
                             disabled={checkingOut === planKey}
-                            className={`w-full ${
-                              planKey === 'PRO' ? 'landing-button-primary' : 'landing-button-secondary'
-                            }`}
+                            className="w-full landing-button-secondary"
                           >
                             {checkingOut === planKey ? (
                               <>

@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.0.6.1] - 2026-04-09
+
+### Changed
+- Pricing section: billing toggle blends into section background (removed white pill).
+- Pricing section: both Pro and Max CTAs now use consistent outline button style.
+- Subscribe page: CTA button style unified to match landing page.
+
+### Removed
+- Redundant "Billing starts after your 7-day free trial" copy below billing toggle (already in section header).
+
 ## [0.0.6.0] - 2026-04-08
 
 ### Added
