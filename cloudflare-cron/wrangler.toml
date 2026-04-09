@@ -48,6 +48,16 @@ enabled = true
 #
 # KV namespaces are commented out to prevent build failures
 # Worker gracefully falls back to memory cache when KV is not available
+#
+# STATUS_KV: Used by /status page for independently-hosted uptime monitoring
+# Create with:
+#   npx wrangler kv namespace create "STATUS_KV"
+#   npx wrangler kv namespace create "STATUS_KV" --preview
+# Then uncomment the binding below and fill in the IDs:
+#
+[[kv_namespaces]]
+binding = "STATUS_KV"
+id = "ff97c4f0ff214c14a3c7df257a86f929"
 
 # Build configuration for robust deployment
 # Note: upload exclusions are handled automatically by wrangler
