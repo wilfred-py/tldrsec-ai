@@ -218,9 +218,6 @@ export function PricingSectionV2() {
             onToggle={() => setBillingInterval(billingInterval === 'monthly' ? 'annual' : 'monthly')}
             disabled={loadingPlan !== null}
           />
-          <p className="text-xs text-[var(--landing-text-muted)]">
-            Billing starts after your 7-day free trial
-          </p>
         </motion.div>
 
         {/* Pricing Cards Grid */}
