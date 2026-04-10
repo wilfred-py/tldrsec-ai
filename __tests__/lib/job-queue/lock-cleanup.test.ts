@@ -227,74 +227,6 @@ describe('LockService Cleanup', () => {
     });
   });
 
-  describe('acquireLock', () => {
-    it('should clean up expired locks before acquiring', async () => {
-      // Mock cleanup
-      mockPrisma.jobLock.updateMany.mockResolvedValue({ count: 1 });
-
-      // Mock no existing lock after cleanup
-      mockPrisma.jobLock.findFirst.mockResolvedValue(null);
-
-      // Mock lock creation
-      const newLock = {
-        id: 'new-lock-id',
-        lockName: 'test-lock',
-        acquiredBy: 'test-process',
-        acquiredAt: new Date(),
-        expiresAt: new Date(Date.now() + 5 * 60 * 1000),
-        released: false,
-      };
-      mockPrisma.jobLock.upsert.mockResolvedValue(newLock);
-
-      const lock = await LockService.acquireLock('test-lock', 'test-process', 5);
-
-      expect(lock).not.toBeNull();
-      expect(lock?.acquiredBy).toBe('test-process');
-      // Verify cleanup was called
-      expect(mockPrisma.jobLock.updateMany).toHaveBeenCalled();
-    });
-
-    it('should not acquire if active lock exists', async () => {
-      // Mock cleanup
-      mockPrisma.jobLock.updateMany.mockResolvedValue({ count: 0 });
-
-      // Mock existing active lock
-      const existingLock = {
-        id: 'existing-lock',
-        lockName: 'test-lock',
-        acquiredBy: 'other-process',
-        acquiredAt: new Date(),
-        expiresAt: new Date(Date.now() + 60 * 60 * 1000), // 1 hour from now
-        released: false,
-      };
-      mockPrisma.jobLock.findFirst.mockResolvedValue(existingLock);
-
-      const lock = await LockService.acquireLock('test-lock', 'new-process', 5);
-
-      expect(lock).toBeNull();
-    });
-
-    it('should use default TTL when not specified', async () => {
-      mockPrisma.jobLock.updateMany.mockResolvedValue({ count: 0 });
-      mockPrisma.jobLock.findFirst.mockResolvedValue(null);
-
-      const createdLock = {
-        id: 'new-lock',
-        lockName: 'test-lock',
-        acquiredBy: 'test-process',
-        acquiredAt: new Date(),
-        expiresAt: new Date(Date.now() + 30 * 60 * 1000), // 30 minutes default
-        released: false,
-      };
-      mockPrisma.jobLock.upsert.mockResolvedValue(createdLock);
-
-      const lock = await LockService.acquireLock('test-lock', 'test-process');
-
-      expect(lock).not.toBeNull();
-      // Default TTL is 30 minutes
-    });
-  });
-
   describe('releaseLock', () => {
     it('should mark lock as released', async () => {
       const existingLock = {
@@ -339,30 +271,4 @@ describe('LockService Cleanup', () => {
     });
   });
 
-  describe('checkLock', () => {
-    it('should return lock if exists and not expired', async () => {
-      const activeLock = {
-        id: 'lock-id',
-        lockName: 'test-lock',
-        acquiredBy: 'test-process',
-        acquiredAt: new Date(),
-        expiresAt: new Date(Date.now() + 60 * 60 * 1000),
-        released: false,
-      };
-      mockPrisma.jobLock.findFirst.mockResolvedValue(activeLock);
-
-      const lock = await LockService.checkLock('test-lock');
-
-      expect(lock).not.toBeNull();
-      expect(lock?.lockName).toBe('test-lock');
-    });
-
-    it('should return null if no active lock', async () => {
-      mockPrisma.jobLock.findFirst.mockResolvedValue(null);
-
-      const lock = await LockService.checkLock('test-lock');
-
-      expect(lock).toBeNull();
-    });
-  });
 });

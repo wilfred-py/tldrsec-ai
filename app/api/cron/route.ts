@@ -39,7 +39,6 @@ let lastStallAlertSentAt = 0;
 
 const GET_ACTIONS = [
   'tier-aware',
-  'fast-poll',
   'process-queue',
   'auto-recover',
   'final-backup',
@@ -47,7 +46,6 @@ const GET_ACTIONS = [
   'check-trials',
   'nurture-trials',
   'update-daily-count',
-  'backfill-missed',
 ] as const;
 
 const POST_ACTIONS = [
@@ -83,8 +81,6 @@ export async function GET(request: NextRequest) {
   switch (action) {
     case 'tier-aware':
       return handleTierAware(request);
-    case 'fast-poll':
-      return handleFastPollAction(request);
     case 'process-queue':
       return handleProcessQueue(request);
     case 'auto-recover':
@@ -99,8 +95,6 @@ export async function GET(request: NextRequest) {
       return handleNurtureTrials(request);
     case 'update-daily-count':
       return handleUpdateDailyCountGET();
-    case 'backfill-missed':
-      return handleBackfillMissed(request);
     default:
       return missingActionResponse('GET');
   }
@@ -131,39 +125,6 @@ export async function POST(request: NextRequest) {
 }
 
 // ===========================================================================
-// ACTION: fast-poll
-// SEC EDGAR Submissions API polling for near-real-time filing detection
-// ===========================================================================
-
-async function handleFastPollAction(request: NextRequest) {
-  const { logger } = await import('@/lib/logging');
-  const fastPollLogger = logger.child('cron-fast-poll');
-
-  try {
-    // Validate cron auth
-    const { CronAuthService } = await import('@/lib/cron/auth-service');
-    const authResult = await CronAuthService.validateCronRequest(request);
-    if (!authResult.isValid) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    const { handleFastPoll } = await import('@/lib/cron/handlers/fast-poll-handler');
-    const result = await handleFastPoll();
-
-    const statusCode = result.status === 'skipped' ? 200 : 202;
-    return NextResponse.json(result, { status: statusCode });
-  } catch (error) {
-    fastPollLogger.error('Fast-poll handler error', {
-      error: error instanceof Error ? error.message : String(error),
-    });
-    return NextResponse.json(
-      { error: 'Fast-poll failed', message: error instanceof Error ? error.message : 'Unknown error' },
-      { status: 500 }
-    );
-  }
-}
-
-// ===========================================================================
 // ACTION: tier-aware
 // Original: app/api/cron/tier-aware/route.ts
 // ===========================================================================
@@ -175,13 +136,6 @@ async function handleTierAware(request: NextRequest) {
   const { generateSecureExecutionId } = await import('@/lib/security/secure-random');
   const { withVercelRateLimit } = await import('@/lib/infrastructure/rate-limiting/vercel-endpoint-enhancer');
   const { rateLimitMonitor, RateLimitEventType } = await import('@/lib/infrastructure/rate-limiting/rate-limit-monitor');
-  const { CronAuthService } = await import('@/lib/cron/auth-service');
-  const { CronUserProcessingService } = await import('@/lib/cron/user-processing-service');
-  const { CronSecFilingService } = await import('@/lib/cron/sec-filing-service');
-  const { AsyncFilingQueue } = await import('@/lib/cron/async-filing-queue');
-  const { QueueMonitoringService } = await import('@/lib/cron/queue-monitoring');
-  const { slackWebhookService } = await import('@/lib/slack/webhook-service');
-  const { evaluateAlertRules } = await import('@/lib/slack/alert-rules');
 
   const cronLogger = logger.child('tier-aware-cron');
 
@@ -227,43 +181,12 @@ async function handleTierAware(request: NextRequest) {
     });
   }
 
-  // Timeout configuration
-  const parseTimeoutHeader = (header: string | null, defaultValue: number): number => {
-    if (!header) return defaultValue;
-    const parsed = parseInt(header);
-    if (isNaN(parsed) || parsed < 0) return defaultValue;
-    return Math.min(parsed, 600000);
-  };
-
-  const workerTimeoutMs = parseTimeoutHeader(request.headers.get('x-worker-timeout'), 300000);
-  const effectiveTimeoutMs = parseTimeoutHeader(request.headers.get('x-effective-timeout'), 270000);
-  const timeoutBuffer = 30000;
-
-  cronLogger.info(`[${executionId}] Starting tier-aware cron with timeout protection`, {
-    workerTimeoutMs,
-    effectiveTimeoutMs,
-    timeoutBuffer,
-  });
-
-  const timeoutController = new AbortController();
-  const timeoutId = setTimeout(() => {
-    cronLogger.warn(`[${executionId}] Approaching timeout, initiating graceful shutdown`);
-    timeoutController.abort(new DOMException('Execution timeout approaching', 'TimeoutError'));
-  }, effectiveTimeoutMs - timeoutBuffer);
-
-  cronLogger.debug(`[${executionId}] Checkpoint 0: GET function entry`);
-
-  const platform = CronAuthService.detectPlatform();
-  cronLogger.debug(`[${executionId}] Checkpoint 0.1: Platform determined`, { platform });
-
   let monitor: InstanceType<typeof CronJobMonitor> | undefined;
 
   try {
-    cronLogger.debug(`[${executionId}] Checkpoint 0.2: About to create CronJobMonitor`);
-    monitor = await CronJobMonitor.create('tier-aware-sec-monitor', platform);
-    cronLogger.debug(`[${executionId}] Checkpoint 0.3: CronJobMonitor created successfully`);
+    monitor = await CronJobMonitor.create('tier-aware-sec-monitor', 'vercel');
   } catch (initError) {
-    clearTimeout(timeoutId);
+
     cronLogger.error(`[${executionId}] Failed to initialize cron job monitor`, { error: initError });
     return NextResponse.json(
       {
@@ -276,23 +199,14 @@ async function handleTierAware(request: NextRequest) {
     );
   }
 
-  let lock: unknown = null;
-  let lockName = '';
-  let lockId = '';
-
   try {
-    cronLogger.info(`[${executionId}] Starting tier-aware SEC filing cron job with bulletproof duplicate email prevention`);
-    cronLogger.debug(`[${executionId}] Checkpoint 1: Route function started with enhanced security features`);
-
-    const use3PhasePipeline = process.env.USE_3_PHASE_PIPELINE !== 'false';
-    cronLogger.info(
-      `[${executionId}] 3-phase pipeline: ${use3PhasePipeline ? 'ENABLED (default)' : 'DISABLED (explicit opt-out)'} [USE_3_PHASE_PIPELINE=${process.env.USE_3_PHASE_PIPELINE || 'not set'}]`
-    );
+    cronLogger.info(`[${executionId}] Starting tier-aware SEC filing cron job`);
+    cronLogger.debug(`[${executionId}] Checkpoint 1: Route function started`);
 
     // Skip discovery during EDGAR quiet hours
     const { isEdgarOpen } = await import('@/lib/cron/edgar-schedule');
     if (process.env.NODE_ENV === 'production' && !isEdgarOpen()) {
-      clearTimeout(timeoutId);
+  
       if (monitor) await monitor.complete(CronJobStatus.SUCCESS, 'Skipped: EDGAR quiet hours');
       cronLogger.info(`[${executionId}] Skipping pipeline: EDGAR quiet hours`, {
         duration: Date.now() - startTime,
@@ -309,657 +223,93 @@ async function handleTierAware(request: NextRequest) {
       );
     }
 
-    if (use3PhasePipeline) {
-      cronLogger.info(`[${executionId}] Using 3-phase async pipeline mode`);
+    const { JobQueueService } = await import('@/lib/job-queue');
 
-      try {
-        const { JobQueueService } = await import('@/lib/job-queue');
-
-        const discoveryJob = await JobQueueService.addJob({
-          jobType: 'ASYNC_DISCOVER_FILINGS',
-          payload: {
-            executionId,
-            cronTriggerTime: new Date().toISOString(),
-          },
-          priority: 10,
-          maxAttempts: 3,
-        });
-
-        if (!discoveryJob) {
-          throw new Error('Failed to queue discovery job');
-        }
-
-        const discoveryPending = await JobQueueService.getQueueDepth('ASYNC_DISCOVER_FILINGS');
-        const fetchPending = await JobQueueService.getQueueDepth('ASYNC_FETCH_FILING');
-        const summarizePending = await JobQueueService.getQueueDepth('ASYNC_SUMMARIZE_CACHED');
-        const totalPending = discoveryPending + fetchPending + summarizePending;
-
-        if (totalPending > 0) {
-          cronLogger.info(
-            `[${executionId}] Pending jobs backlog: discovery=${discoveryPending}, fetch=${fetchPending}, summarize=${summarizePending}, total=${totalPending}`
-          );
-        }
-
-        const duration = Date.now() - startTime;
-
-        cronLogger.info(`[${executionId}] Discovery job queued successfully (3-phase pipeline)`, {
-          discoveryJobId: discoveryJob.id,
-          duration,
-          mode: '3-phase-async',
-        });
-
-        if (monitor) {
-          await monitor.complete(CronJobStatus.SUCCESS, '3-phase pipeline: discovery job queued');
-        }
-
-        clearTimeout(timeoutId);
-
-        return NextResponse.json(
-          {
-            success: true,
-            executionId,
-            duration,
-            processingMode: '3-phase-async',
-            message: 'Discovery job queued for 3-phase async processing',
-            discoveryJob: {
-              id: discoveryJob.id,
-              status: discoveryJob.status,
-            },
-            backlog: {
-              discovery: discoveryPending,
-              fetch: fetchPending,
-              summarize: summarizePending,
-              total: totalPending,
-            },
-          },
-          {
-            status: 202,
-            headers: {
-              'X-Processing-Mode': '3-phase-async',
-              'X-Execution-ID': executionId,
-              'X-Discovery-Job-ID': discoveryJob.id,
-              'X-Backlog-Total': totalPending.toString(),
-            },
-          }
-        );
-      } catch (pipelineError) {
-        cronLogger.error(`[${executionId}] Failed to queue discovery job in 3-phase pipeline`, {
-          error: pipelineError instanceof Error ? pipelineError.message : 'Unknown error',
-        });
-        cronLogger.warn(`[${executionId}] Falling back to legacy processing due to 3-phase pipeline error`);
-      }
-    }
-
-    // LEGACY PROCESSING
-    cronLogger.debug(`[${executionId}] Using legacy backlog processing mode`);
-
-    const checkTimeRemaining = () => {
-      const elapsed = Date.now() - startTime;
-      const remaining = effectiveTimeoutMs - elapsed;
-      return { elapsed, remaining, shouldContinue: remaining > timeoutBuffer };
-    };
-
-    // Auth
-    const authResult = await CronAuthService.validateCronRequest(request);
-    if (!authResult.isValid) {
-      clearTimeout(timeoutId);
-      const isConfigurationError = authResult.error?.includes('not properly configured');
-
-      if (isConfigurationError) {
-        cronLogger.error(`[${executionId}] Server configuration error`, {
-          error: authResult.error,
-          clientIP: authResult.clientIP,
-        });
-        if (monitor) await monitor.complete(CronJobStatus.FAILED, 'Server configuration error');
-        return NextResponse.json(
-          { success: false, error: 'Server configuration error', executionId, duration: Date.now() - startTime },
-          { status: 500 }
-        );
-      } else {
-        cronLogger.warn(`[${executionId}] Authentication failed`, {
-          error: authResult.error,
-          clientIP: authResult.clientIP,
-        });
-        if (monitor) await monitor.complete(CronJobStatus.FAILED, 'Unauthorized access attempt');
-        return NextResponse.json(
-          { success: false, error: authResult.error || 'Authentication failed', executionId, duration: Date.now() - startTime },
-          {
-            status: authResult.error?.includes('Rate limit')
-              ? 429
-              : authResult.error?.includes('IP not allowed')
-                ? 403
-                : 401,
-          }
-        );
-      }
-    }
-
-    cronLogger.info(`[${executionId}] Authentication validated successfully`, {
-      clientIP: authResult.clientIP,
-      environment: process.env.NODE_ENV,
-      timestamp: new Date().toISOString(),
-    });
-
-    let timeCheck = checkTimeRemaining();
-    if (!timeCheck.shouldContinue) {
-      throw new Error(`Timeout approaching after authentication: ${timeCheck.remaining}ms remaining`);
-    }
-
-    // Distributed lock
-    const environment = process.env.NODE_ENV || 'development';
-    lockName = `tier-aware-cron-execution-${environment}`;
-    lockId = `${platform}-${executionId}`;
-
-    try {
-      const { LockService } = await import('@/lib/job-queue/lock-service');
-      await LockService.cleanupExpiredLocks();
-
-      cronLogger.debug(`[${executionId}] Attempting to acquire distributed lock`, {
-        lockName,
-        lockId,
-        platform,
-        environment,
-      });
-
-      lock = await LockService.acquireLock(lockName, lockId, 12);
-
-      if (!lock) {
-        cronLogger.warn(`[${executionId}] Concurrent execution detected - another cron is running`, {
-          lockName,
-          lockId,
-          platform,
-          environment,
-          ttlMinutes: 12,
-        });
-
-        const existingLock = await LockService.checkLock(lockName);
-        if (existingLock) {
-          cronLogger.info(`[${executionId}] Lock currently held by: ${existingLock.acquiredBy}`, {
-            acquiredAt: existingLock.acquiredAt,
-            expiresAt: existingLock.expiresAt,
-          });
-        }
-
-        clearTimeout(timeoutId);
-        if (monitor) await monitor.complete(CronJobStatus.SUCCESS, 'Skipped due to concurrent execution');
-
-        return NextResponse.json(
-          {
-            success: true,
-            message: 'Concurrent execution detected - skipped to prevent conflicts',
-            executionId,
-            duration: Date.now() - startTime,
-            lockInfo: {
-              lockName,
-              currentHolder: existingLock?.acquiredBy || 'Unknown',
-              acquiredAt: existingLock?.acquiredAt?.toISOString(),
-              expiresAt: existingLock?.expiresAt?.toISOString(),
-            },
-          },
-          { status: 429 }
-        );
-      }
-
-      cronLogger.info(`[${executionId}] Distributed lock acquired successfully`, {
-        lockName,
-        lockId,
-        platform,
-        environment,
-        ttlMinutes: 12,
-        expiresAt: new Date(Date.now() + 12 * 60 * 1000).toISOString(),
-      });
-    } catch (lockError) {
-      cronLogger.error(`[${executionId}] Failed to acquire distributed lock after all attempts`, {
-        error: lockError instanceof Error ? lockError.message : 'Unknown error',
-        lockName,
-        lockId,
-        platform,
-        ttlMinutes: 30,
-        errorType: lockError instanceof Error ? lockError.constructor.name : 'Unknown',
-        alertLevel: 'LOCK_CONTENTION_HIGH',
-        recommendation: 'Check for long-running cron jobs or database connectivity issues',
-      });
-
-      if (monitor) {
-        await monitor.recordMetric('cron_lock_failure', {
-          lockName,
-          lockId,
-          platform,
-          errorMessage: lockError instanceof Error ? lockError.message : 'Unknown error',
-        });
-      }
-
-      cronLogger.warn(`[${executionId}] Continuing without lock - increased risk of concurrent execution`, {
-        riskLevel: 'HIGH',
-        mitigation: 'Relying on individual user locks for protection',
-      });
-    }
-
-    // Get eligible users
-    cronLogger.debug(`[${executionId}] Checkpoint 2: Starting user eligibility check`);
-
-    timeCheck = checkTimeRemaining();
-    if (!timeCheck.shouldContinue) {
-      throw new Error(`Timeout approaching before user processing: ${timeCheck.remaining}ms remaining`);
-    }
-
-    cronLogger.debug(`[${executionId}] Checkpoint 3: Getting eligible users for processing`);
-    const maxUsersForTimeRemaining = Math.min(100, Math.floor(timeCheck.remaining / 60000) * 10);
-
-    const { allUsers: _allUsers, eligibleUsers } = await CronUserProcessingService.getEligibleUsersForProcessing({
-      maxUsersPerCycle: maxUsersForTimeRemaining,
-    });
-    cronLogger.debug(`[${executionId}] Checkpoint 4: User eligibility check completed`, {
-      maxUsersForTimeRemaining,
-      eligibleUsers: eligibleUsers.length,
-    });
-
-    // Backlog processing
-    cronLogger.debug(`[${executionId}] Checkpoint 5.5: Starting backlog queueing for unprocessed filings`);
-
-    let unprocessedCount = 0;
-    let backlogQueuedCount = 0;
-
-    try {
-      timeCheck = checkTimeRemaining();
-      if (!timeCheck.shouldContinue) {
-        throw new Error(`Timeout approaching before backlog queueing: ${timeCheck.remaining}ms remaining`);
-      }
-
-      const unprocessedFilings = await import('@/lib/sec-edgar/ticker-monitoring').then((m) =>
-        m.getUnprocessedFilings(100)
-      );
-      unprocessedCount = unprocessedFilings.length;
-
-      const backlogTimeRemainingMs = effectiveTimeoutMs - (Date.now() - startTime);
-      const skipBacklogDueToTimeConstraints = backlogTimeRemainingMs < 30000;
-
-      cronLogger.info(`[${executionId}] Backlog queueing decision`, {
-        unprocessedCount,
-        backlogTimeRemainingMs,
-        skipBacklogDueToTimeConstraints,
-        effectiveTimeoutMs,
-        elapsed: Date.now() - startTime,
-      });
-
-      if (unprocessedCount > 0 && !skipBacklogDueToTimeConstraints) {
-        const queueStartTime = Date.now();
-        cronLogger.info(`[${executionId}] Queueing ${unprocessedCount} backlog filings for async processing`);
-
-        if (monitor) {
-          await monitor.recordMetric('unprocessed_filings_backlog', {
-            count: unprocessedCount,
-            alertLevel: unprocessedCount > 10 ? 'HIGH' : unprocessedCount > 5 ? 'MEDIUM' : 'LOW',
-          });
-        }
-
-        const maxBacklogFilings = Math.min(50, unprocessedCount);
-        const backlogFilings = unprocessedFilings.slice(0, maxBacklogFilings);
-        const filingsToQueue: InstanceType<typeof Object>[] = [];
-
-        const { getPrismaClient } = await import('@/lib/db/prisma');
-        const prisma = getPrismaClient();
-
-        for (const filing of backlogFilings) {
-          if (!filing?.accessionNumber) continue;
-
-          const usersForTicker = await prisma.user.findMany({
-            where: { tickers: { some: { symbol: filing.ticker.symbol } } },
-            select: { id: true, email: true, subscriptionTier: true },
-          });
-
-          for (const user of usersForTicker) {
-            filingsToQueue.push({
-              userId: user.id,
-              userEmail: user.email,
-              userTier: user.subscriptionTier,
-              ticker: {
-                symbol: filing.ticker.symbol,
-                companyName: filing.ticker.companyName,
-                cik: filing.ticker.cik,
-              },
-              filing: {
-                filingId: filing.id,
-                formType: filing.filingType,
-                filingDate: filing.filingDate,
-                filingUrl: filing.filingUrl,
-                accessionNumber: filing.accessionNumber,
-              },
-              executionContext: {
-                executionId,
-                cronTriggerTime: new Date().toISOString(),
-                sourceContext: 'backlog',
-              },
-            });
-          }
-        }
-
-        const queueResults = await AsyncFilingQueue.queueMultipleFilings(
-          filingsToQueue as Parameters<typeof AsyncFilingQueue.queueMultipleFilings>[0]
-        );
-
-        const queueDuration = Date.now() - queueStartTime;
-        const successCount = queueResults.filter((r: { success: boolean }) => r.success).length;
-
-        cronLogger.info(`[${executionId}] Backlog filings queued`, {
-          totalFilings: filingsToQueue.length,
-          successfullyQueued: successCount,
-          failed: filingsToQueue.length - successCount,
-          queueDuration,
-          averageQueueTime: queueDuration / filingsToQueue.length,
-        });
-
-        backlogQueuedCount = successCount;
-      } else if (skipBacklogDueToTimeConstraints) {
-        cronLogger.warn(
-          `[${executionId}] CIRCUIT BREAKER: Backlog exists (${unprocessedCount} filings) but skipped due to time constraints`,
-          {
-            unprocessedFilings: unprocessedCount,
-            timeRemaining: timeCheck.remaining,
-            circuitBreakerActive: true,
-            willRetryNextRun: true,
-          }
-        );
-      } else {
-        cronLogger.info(`[${executionId}] No backlog detected - all filings processed`);
-      }
-    } catch (backlogCheckError) {
-      cronLogger.error(`[${executionId}] Failed to check/queue backlog`, {
-        error: backlogCheckError instanceof Error ? backlogCheckError.message : 'Unknown error',
-      });
-    }
-
-    cronLogger.debug(`[${executionId}] Checkpoint 5.6: Backlog queueing completed`, {
-      unprocessedFilingsFound: unprocessedCount,
-      backlogQueued: backlogQueuedCount,
-    });
-
-    // Backlog health monitoring
-    if (unprocessedCount > 0) {
-      const backlogQueueingRate = ((backlogQueuedCount / unprocessedCount) * 100).toFixed(2);
-      cronLogger.info(`[${executionId}] BACKLOG QUEUEING HEALTH CHECK`, {
-        totalBacklogFound: unprocessedCount,
-        successfullyQueued: backlogQueuedCount,
-        queueingRate: `${backlogQueueingRate}%`,
-        processingMode: 'async',
-        healthStatus: backlogQueuedCount > 0 ? 'QUEUED' : 'FAILED',
-      });
-
-      if (backlogQueuedCount === 0 && monitor) {
-        await monitor.createAlert('BACKLOG_QUEUEING_FAILURE', {
-          severity: 'HIGH',
-          message: `Backlog of ${unprocessedCount} filings found but none were successfully queued`,
-          details: {
-            unprocessedFilingsFound: unprocessedCount,
-            backlogQueued: backlogQueuedCount,
-            possibleCause: 'Job queue system may be unavailable',
-          },
-        });
-      }
-
-      if (unprocessedCount > 10 && monitor) {
-        await monitor.createAlert('LARGE_BACKLOG_DETECTED', {
-          severity: 'MEDIUM',
-          message: `Large backlog of ${unprocessedCount} unprocessed filings detected`,
-          details: {
-            totalBacklogFound: unprocessedCount,
-            queuedThisRun: backlogQueuedCount,
-            processingMode: 'async',
-          },
-        });
-      }
-    } else {
-      cronLogger.info(`[${executionId}] BACKLOG STATUS: No unprocessed filings - system healthy`);
-    }
-
-    // SEC Filing Monitoring
-    cronLogger.debug(`[${executionId}] Checkpoint 6: Starting SEC filing monitoring`);
-    const filingMonitoringResults = await Promise.race([
-      CronSecFilingService.runSecFilingMonitoring(monitor),
-      new Promise<never>((_, reject) => {
-        timeoutController.signal.addEventListener('abort', () => {
-          reject(new Error('SEC filing monitoring aborted due to timeout'));
-        });
-      }),
-    ]);
-    cronLogger.debug(`[${executionId}] Checkpoint 7: SEC filing monitoring completed`);
-
-    timeCheck = checkTimeRemaining();
-    if (!timeCheck.shouldContinue) {
-      cronLogger.warn(`[${executionId}] Skipping user processing due to timeout constraint`, {
-        remainingTime: timeCheck.remaining,
-        eligibleUsers: eligibleUsers.length,
-      });
-
-      const partialResults = {
-        filingMonitoring: filingMonitoringResults,
-        usersProcessed: 0,
-        emailsSent: 0,
-        totalCostUSD: 0,
-        skippedDueToTimeout: true,
-        timeConstraint: { elapsed: timeCheck.elapsed, remaining: timeCheck.remaining },
-      };
-
-      const monitorResult = monitor
-        ? await monitor.complete(CronJobStatus.SUCCESS, 'Partial completion due to timeout')
-        : { executionId: 'test', duration: timeCheck.elapsed };
-
-      if (lock) {
-        try {
-          const { LockService } = await import('@/lib/job-queue/lock-service');
-          await LockService.releaseLock(lockName, lockId);
-          cronLogger.info(`[${executionId}] Lock released during timeout handling`);
-        } catch (lockError) {
-          cronLogger.error(`[${executionId}] Failed to release lock during timeout`, {
-            error: lockError instanceof Error ? lockError.message : 'Unknown error',
-          });
-        }
-      }
-
-      clearTimeout(timeoutId);
-      return NextResponse.json({
-        success: true,
-        executionId: monitorResult.executionId,
-        duration: monitorResult.duration,
-        results: partialResults,
-        warning: 'Processing completed partially due to timeout constraints',
-      });
-    }
-
-    // Build processing results
-    cronLogger.debug(`[${executionId}] Checkpoint 8: Skipping placeholder job creation (using backlog queueing only)`);
-
-    const successCount = 0;
-
-    cronLogger.info(`[${executionId}] User filing queueing skipped - relying on backlog mechanism`, {
-      eligibleUsers: eligibleUsers.length,
-      reason: 'Placeholder jobs with empty filingId caused failures; backlog queueing provides real filing data',
-      backlogQueuedThisRun: backlogQueuedCount,
-    });
-
-    const processingResults = {
-      usersProcessed: eligibleUsers.length,
-      filingsProcessed: 0,
-      totalCost: 0,
-      tierBreakdown: eligibleUsers.reduce(
-        (acc: Record<string, number>, user: { tier: string }) => {
-          acc[user.tier] = (acc[user.tier] || 0) + 1;
-          return acc;
-        },
-        {} as Record<string, number>
-      ),
-      errors: 0,
-      errorBreakdown: {
-        concurrencyConflicts: 0,
-        costValidationFailed: 0,
-        tierMismatch: 0,
-        unknownErrors: 0,
+    const discoveryJob = await JobQueueService.addJob({
+      jobType: 'ASYNC_DISCOVER_FILINGS',
+      payload: {
+        executionId,
+        cronTriggerTime: new Date().toISOString(),
       },
-      cacheMetrics: { hits: 0, misses: 0, hitRatio: 0, apiCallsSaved: 0 },
-    };
+      priority: 10,
+      maxAttempts: 3,
+    });
 
-    cronLogger.debug(`[${executionId}] Checkpoint 9: User filing queueing completed`);
+    if (!discoveryJob) {
+      throw new Error('Failed to queue discovery job');
+    }
 
-    const results = {
-      ...processingResults,
-      filingMonitoring: filingMonitoringResults,
-      backlogQueueing: { unprocessedFound: unprocessedCount, backlogQueued: backlogQueuedCount },
-    };
+    const discoveryPending = await JobQueueService.getQueueDepth('ASYNC_DISCOVER_FILINGS');
+    const fetchPending = await JobQueueService.getQueueDepth('ASYNC_FETCH_FILING');
+    const summarizePending = await JobQueueService.getQueueDepth('ASYNC_SUMMARIZE_CACHED');
+    const totalPending = discoveryPending + fetchPending + summarizePending;
 
-    if (backlogQueuedCount > 0) {
+    if (totalPending > 0) {
       cronLogger.info(
-        `[${executionId}] BACKLOG QUEUED: Successfully queued ${backlogQueuedCount} backlog filings for async processing`,
-        { backlogQueued: backlogQueuedCount, unprocessedFilings: unprocessedCount, processingMode: 'async' }
+        `[${executionId}] Pending jobs backlog: discovery=${discoveryPending}, fetch=${fetchPending}, summarize=${summarizePending}, total=${totalPending}`
       );
     }
 
-    const monitorResult = monitor
-      ? await monitor.complete(CronJobStatus.SUCCESS)
-      : { executionId: 'test', duration: 0 };
+    const duration = Date.now() - startTime;
 
-    if (lock) {
-      try {
-        const { LockService } = await import('@/lib/job-queue/lock-service');
-        const released = await LockService.releaseLock(lockName, lockId);
-        cronLogger.info(`[${executionId}] Distributed lock released`, { lockName, lockId, released });
-      } catch (lockReleaseError) {
-        cronLogger.error(`[${executionId}] Failed to release distributed lock`, {
-          error: lockReleaseError instanceof Error ? lockReleaseError.message : 'Unknown error',
-          lockName,
-          lockId,
-        });
-      }
-    }
-
-    clearTimeout(timeoutId);
-
-    cronLogger.info(`[${executionId}] Tier-aware cron job completed successfully with async queueing`, {
-      ...results,
-      executionId: monitorResult.executionId,
-      duration: monitorResult.duration,
-      duplicatePreventionActive: true,
-      distributedLockUsed: lock !== null,
-      processingMode: 'async',
-      backlogStatus: backlogQueuedCount > 0 ? `${backlogQueuedCount} jobs queued` : 'No backlog',
+    cronLogger.info(`[${executionId}] Discovery job queued successfully`, {
+      discoveryJobId: discoveryJob.id,
+      duration,
     });
 
-    const queueHealth = await QueueMonitoringService.checkQueueHealth();
-
-    if (!queueHealth.healthy) {
-      cronLogger.warn(`[${executionId}] Queue health issues detected`, {
-        issues: queueHealth.issues,
-        metrics: queueHealth.metrics,
-      });
+    if (monitor) {
+      await monitor.complete(CronJobStatus.SUCCESS, '3-phase pipeline: discovery job queued');
     }
 
-    const cronResult: Parameters<typeof slackWebhookService.postCronResults>[0] = {
-      success: true,
-      executionId: monitorResult.executionId,
-      duration: monitorResult.duration,
-      processingMode: 'async',
-      message: 'Filings queued for async processing',
-      queue: {
-        filingsQueued: backlogQueuedCount || 0,
-        userFilingsQueued: successCount || 0,
-        totalQueued: (backlogQueuedCount || 0) + (successCount || 0),
-        queueDepth: queueHealth.metrics.queueDepth,
-        estimatedCompletionMinutes: queueHealth.metrics.estimatedProcessingTime,
-        healthy: queueHealth.healthy,
-      },
-      results: {
-        filingMonitoring: filingMonitoringResults,
-        backlogQueueing: { unprocessedFound: unprocessedCount, backlogQueued: backlogQueuedCount },
-      },
-    };
 
-    const triggeredAlerts = evaluateAlertRules(cronResult, queueHealth);
-
-    slackWebhookService.postCronResults(cronResult, queueHealth).catch((err: Error) => {
-      cronLogger.warn(`[${executionId}] Failed to post to Slack`, { error: err.message });
-    });
-
-    if (triggeredAlerts.length > 0) {
-      cronLogger.info(`[${executionId}] ${triggeredAlerts.length} alerts triggered`, {
-        alerts: triggeredAlerts.map((a: { rule: { id: string } }) => a.rule.id),
-      });
-      slackWebhookService.postAlerts(triggeredAlerts, cronResult, queueHealth).catch((err: Error) => {
-        cronLogger.warn(`[${executionId}] Failed to post alerts to Slack`, { error: err.message });
-      });
-    }
 
     return NextResponse.json(
       {
         success: true,
-        executionId: monitorResult.executionId,
-        duration: monitorResult.duration,
-        processingMode: 'async',
-        message: 'Filings queued for async processing',
-        queue: {
-          filingsQueued: backlogQueuedCount || 0,
-          userFilingsQueued: successCount || 0,
-          totalQueued: (backlogQueuedCount || 0) + (successCount || 0),
-          queueDepth: queueHealth.metrics.queueDepth,
-          estimatedCompletionMinutes: queueHealth.metrics.estimatedProcessingTime,
-          healthy: queueHealth.healthy,
+        executionId,
+        duration,
+        processingMode: '3-phase-async',
+        message: 'Discovery job queued for 3-phase async processing',
+        discoveryJob: {
+          id: discoveryJob.id,
+          status: discoveryJob.status,
         },
-        results,
+        backlog: {
+          discovery: discoveryPending,
+          fetch: fetchPending,
+          summarize: summarizePending,
+          total: totalPending,
+        },
       },
       {
         status: 202,
         headers: {
-          'X-Processing-Mode': 'async',
+          'X-Processing-Mode': '3-phase-async',
           'X-Execution-ID': executionId,
-          'X-Filings-Queued': String((backlogQueuedCount || 0) + (successCount || 0)),
+          'X-Discovery-Job-ID': discoveryJob.id,
+          'X-Backlog-Total': totalPending.toString(),
         },
       }
     );
   } catch (error) {
-    if (lock && lockName && lockId) {
-      try {
-        const { LockService } = await import('@/lib/job-queue/lock-service');
-        await LockService.releaseLock(lockName, lockId);
-        cronLogger.info(`[${executionId}] Distributed lock released after error`, { lockName, lockId });
-      } catch (lockReleaseError) {
-        cronLogger.error(`[${executionId}] Failed to release lock after error`, {
-          lockError: lockReleaseError instanceof Error ? lockReleaseError.message : 'Unknown error',
-          originalError: error instanceof Error ? error.message : 'Unknown error',
-        });
-      }
-    }
 
-    clearTimeout(timeoutId);
 
     if (monitor) {
       await monitor.complete(CronJobStatus.FAILED, error instanceof Error ? error.message : 'Unknown error');
     }
 
-    const errorType = error instanceof Error && error.message.includes('timeout') ? 'TIMEOUT' : 'ERROR';
-
-    const safeErrorMessage = (() => {
-      if (errorType === 'TIMEOUT') return 'Request timeout';
-      if (error instanceof Error) {
-        if (error.message.includes('Database')) return 'Database temporarily unavailable';
-        if (error.message.includes('Network')) return 'Network error';
-        if (error.message.includes('Authentication')) return 'Authentication failed';
-        return 'Internal processing error';
-      }
-      return 'Unknown error occurred';
-    })();
-
     cronLogger.error(`[${executionId}] Tier-aware cron job failed`, {
-      error,
-      errorType,
-      errorMessage: error instanceof Error ? error.message : 'Unknown error',
-      stack: error instanceof Error ? error.stack : undefined,
+      error: error instanceof Error ? error.message : 'Unknown error',
       duration: Date.now() - startTime,
     });
 
     return NextResponse.json(
-      { success: false, error: safeErrorMessage, errorType, executionId, duration: Date.now() - startTime },
-      { status: errorType === 'TIMEOUT' ? 408 : 500 }
+      { success: false, error: 'Internal processing error', executionId, duration: Date.now() - startTime },
+      { status: 500 }
     );
   }
 }
+
 
 // ===========================================================================
 // ACTION: process-queue
@@ -1871,7 +1221,7 @@ async function handleCleanupLocks(request: NextRequest) {
           activeLocks: healthMetrics.activeLocks,
           staleLocksCount: healthMetrics.staleLocksCount,
           recentLocks: healthMetrics.recentLocks,
-          locksByType: healthMetrics.locksByType,
+          topContentedLocks: healthMetrics.topContentedLocks,
         },
         message: cleanedCount > 0 ? `Cleared ${cleanedCount} expired lock(s)` : 'No expired locks found',
       },
@@ -2411,194 +1761,3 @@ async function handleSendAlert(request: NextRequest) {
   }
 }
 
-// ===========================================================================
-// ACTION: backfill-missed
-// Cross-reference SEC Submissions API against local records to find and
-// queue any filings that were missed during pipeline downtime.
-// ===========================================================================
-
-async function handleBackfillMissed(request: NextRequest) {
-  const { logger } = await import('@/lib/logging');
-  const backfillLogger = logger.child('backfill-missed');
-
-  try {
-    // Auth — same as other cron actions
-    const { CronAuthService } = await import('@/lib/cron/auth-service');
-    const authResult = await CronAuthService.validateCronRequest(request);
-    if (!authResult.isValid) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    const url = new URL(request.url);
-    const daysParam = parseInt(url.searchParams.get('days') || '7', 10);
-    const days = Math.min(Math.max(daysParam, 1), 90); // Clamp 1-90
-
-    backfillLogger.info(`Starting manual backfill check (last ${days} days)`);
-
-    const { getPrismaClient } = await import('@/lib/db/prisma');
-    const prisma = getPrismaClient();
-
-    // Get active tickers with CIK mappings
-    const { getActiveTickersForMonitoring } = await import('@/lib/sec-edgar/ticker-monitoring');
-    const activeTickers = await getActiveTickersForMonitoring();
-
-    const { SECEdgarClient } = await import('@/lib/sec-edgar/client');
-    const client = new SECEdgarClient();
-
-    const cutoffDate = new Date();
-    cutoffDate.setDate(cutoffDate.getDate() - days);
-
-    let totalMissed = 0;
-    let totalJobsQueued = 0;
-    const tickerResults: Array<{ symbol: string; checked: number; missed: number; jobsQueued: number; error?: string }> = [];
-
-    for (const ticker of activeTickers) {
-      try {
-        // Fetch from Submissions API (no watermark — get all recent filings)
-        const result = await client.fetchSubmissions(ticker.cik, null, null);
-        if (result.notModified) continue;
-
-        // Filter to filings within the date range
-        const recentFilings = result.newFilings.filter(
-          f => f.acceptanceDateTime.getTime() >= cutoffDate.getTime()
-        );
-
-        if (recentFilings.length === 0) {
-          tickerResults.push({ symbol: ticker.symbol, checked: 0, missed: 0, jobsQueued: 0 });
-          continue;
-        }
-
-        // Get existing accession numbers from RssFilingCheck
-        const existingChecks = await prisma.rssFilingCheck.findMany({
-          where: {
-            accessionNumber: { in: recentFilings.map(f => f.accessionNumber) },
-          },
-          select: { accessionNumber: true },
-        });
-        const existingSet = new Set(existingChecks.map(c => c.accessionNumber));
-
-        // Also check JobQueue for existing jobs (they might have been created by fast-poll
-        // without going through RssFilingCheck)
-        const existingJobs = await prisma.jobQueue.findMany({
-          where: {
-            idempotencyKey: {
-              in: recentFilings.map(f => `ASYNC_FETCH_FILING:%:${f.accessionNumber}`),
-              startsWith: 'ASYNC_FETCH_FILING:',
-            },
-          },
-          select: { idempotencyKey: true },
-        });
-        const jobAccessions = new Set(
-          existingJobs
-            .map(j => j.idempotencyKey?.split(':').pop())
-            .filter(Boolean)
-        );
-
-        // Find truly missed filings
-        const missedFilings = recentFilings.filter(
-          f => !existingSet.has(f.accessionNumber) && !jobAccessions.has(f.accessionNumber)
-        );
-
-        if (missedFilings.length === 0) {
-          tickerResults.push({ symbol: ticker.symbol, checked: recentFilings.length, missed: 0, jobsQueued: 0 });
-          continue;
-        }
-
-        totalMissed += missedFilings.length;
-
-        // Get the TickerMonitoring record for this ticker
-        const monitoringRecord = await prisma.tickerMonitoring.findFirst({
-          where: { cik: ticker.cik },
-          select: { id: true },
-        });
-
-        // Insert missed filings into RssFilingCheck
-        if (monitoringRecord) {
-          await prisma.rssFilingCheck.createMany({
-            data: missedFilings.slice(0, 50).map(f => ({
-              tickerMonitoringId: monitoringRecord.id,
-              accessionNumber: f.accessionNumber,
-              filingType: f.form,
-              filingDate: new Date(f.filingDate),
-              filingUrl: `https://www.sec.gov/Archives/edgar/data/${ticker.cik}/${f.accessionNumber.replace(/-/g, '')}/${f.primaryDocument}`,
-              rssEntryDate: f.acceptanceDateTime,
-              processed: false,
-            })),
-            skipDuplicates: true,
-          });
-        }
-
-        // Create jobs for all users tracking this ticker
-        const { enrichTickersWithCik, createBulkFetchJobs } = await import('@/lib/cron/handlers/discovery-handler');
-        const enriched = await enrichTickersWithCik([ticker.symbol]);
-        const tickerInfo = enriched[0] || { symbol: ticker.symbol, companyName: ticker.companyName, cik: ticker.cik };
-
-        const usersForTicker = await prisma.user.findMany({
-          where: { tickers: { some: { symbol: ticker.symbol } } },
-          select: {
-            id: true,
-            email: true,
-            subscriptionTier: true,
-            isTrialing: true,
-            trialEndsAt: true,
-            tickers: {
-              where: { symbol: ticker.symbol },
-              select: { id: true, companyName: true },
-            },
-          },
-        });
-
-        let jobsQueued = 0;
-        for (const filing of missedFilings.slice(0, 50)) {
-          const count = await createBulkFetchJobs(
-            usersForTicker.map(u => ({
-              id: u.id,
-              email: u.email || '',
-              subscriptionTier: u.subscriptionTier || 'FREE',
-              isTrialing: u.isTrialing,
-              trialEndsAt: u.trialEndsAt,
-              tickers: u.tickers,
-            })),
-            {
-              ticker: ticker.symbol,
-              formType: filing.form,
-              filingDate: filing.filingDate,
-              url: `https://www.sec.gov/Archives/edgar/data/${ticker.cik}/${filing.accessionNumber.replace(/-/g, '')}/${filing.primaryDocument}`,
-              accessionNumber: filing.accessionNumber,
-              id: `backfill-${filing.accessionNumber}`,
-            },
-            tickerInfo,
-            { executionId: `backfill-${new Date().toISOString()}`, cronTriggerTime: new Date().toISOString() }
-          );
-          jobsQueued += count;
-        }
-
-        totalJobsQueued += jobsQueued;
-        tickerResults.push({ symbol: ticker.symbol, checked: recentFilings.length, missed: missedFilings.length, jobsQueued });
-
-        backfillLogger.info(`Backfill for ${ticker.symbol}: ${missedFilings.length} missed, ${jobsQueued} jobs queued`);
-      } catch (error) {
-        const errMsg = error instanceof Error ? error.message : String(error);
-        backfillLogger.error(`Backfill failed for ${ticker.symbol}`, { error: errMsg });
-        tickerResults.push({ symbol: ticker.symbol, checked: 0, missed: 0, jobsQueued: 0, error: errMsg });
-      }
-    }
-
-    return NextResponse.json({
-      success: true,
-      days,
-      tickersChecked: activeTickers.length,
-      totalMissed,
-      totalJobsQueued,
-      tickers: tickerResults,
-    });
-  } catch (error) {
-    backfillLogger.error('Backfill handler failed', {
-      error: error instanceof Error ? error.message : String(error),
-    });
-    return NextResponse.json(
-      { error: 'Backfill failed', message: error instanceof Error ? error.message : 'Unknown error' },
-      { status: 500 }
-    );
-  }
-}
