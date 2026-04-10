@@ -265,7 +265,7 @@ export function baseTemplate(content: string, data: BaseTemplateData): string {
 <body>
   <div class="container">
     <div class="header">
-      <img src="https://tldrsec.app/images/logo-white.png" alt="tldrSEC Logo" class="header-logo">
+      <img src="https://tldrsec.app/images/logo-email.png" alt="tldrSEC" width="120" height="24" style="display:block;width:120px;height:24px;border:0;" class="header-logo">
     </div>
     
     <div class="content">
