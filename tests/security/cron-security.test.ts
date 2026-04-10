@@ -153,15 +153,7 @@ jest.mock('../../lib/cron/sec-filing-service', () => ({
   }
 }));
 
-jest.mock('../../lib/cron/queue-monitoring', () => ({
-  QueueMonitoringService: {
-    checkQueueHealth: jest.fn().mockResolvedValue({
-      healthy: true,
-      issues: [],
-      metrics: { queueDepth: 0, estimatedProcessingTime: 0 }
-    })
-  }
-}));
+// queue-monitoring mock removed (module deleted in dead code cleanup)
 
 // async-filing-queue mock removed (module deleted in dead code cleanup)
 
