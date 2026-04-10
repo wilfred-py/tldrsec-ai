@@ -41,8 +41,8 @@ export function FooterSectionV2() {
               <Logo variant="full" size={24} />
             </div>
             <p className="landing-caption max-w-sm">
-              AI-powered SEC filing analysis for modern investors.
-              Save hours every week with intelligent summaries.
+              AI-powered SEC intelligence for modern investors.
+              Save hours every week with summaries delivered straight to your inbox.
             </p>
           </div>
 
@@ -87,11 +87,11 @@ export function FooterSectionV2() {
 
         {/* Bottom Bar */}
         <div className="pt-8 border-t" style={{ borderColor: 'var(--landing-border)' }}>
-          <div className="flex flex-col md:flex-row justify-between items-center gap-4">
+          <div className="flex flex-col items-center gap-2 text-center">
             <p className="landing-caption">
               © {currentYear} tldrsec. All rights reserved.
             </p>
-            <p className="landing-caption text-center md:text-right max-w-md">
+            <p className="landing-caption max-w-lg">
               This service provides summaries for informational purposes only and is not investment advice.
               Always consult original SEC filings for complete information.
             </p>
