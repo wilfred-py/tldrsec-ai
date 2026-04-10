@@ -27,6 +27,9 @@ interface PricingCardProps {
   isTrialEndingSoon: boolean;
   loading: boolean;
   checkoutLoading: boolean;
+  hoveredCard: string | null;
+  onMouseEnter: () => void;
+  onMouseLeave: () => void;
   onCheckout: (planKey: string) => void;
   getCtaText: (plan: PricingPlan) => string;
   getPrice: (plan: PricingPlan) => number;
@@ -41,6 +44,9 @@ export function PricingCard({
   isTrialEndingSoon,
   loading,
   checkoutLoading,
+  hoveredCard,
+  onMouseEnter,
+  onMouseLeave,
   onCheckout,
   getCtaText,
   getPrice,
@@ -50,15 +56,30 @@ export function PricingCard({
   const savings = getSavings(plan);
   const monthlyEquiv = getMonthlyEquivalent(plan);
 
+  // Assumes exactly 2 pricing tiers. If adding a third, revisit this logic.
+  const isHighlighted = hoveredCard === null ? !!plan.popular : hoveredCard === plan.key;
+  const isCardHovered = hoveredCard === plan.key;
+
+  const dynamicStyles: React.CSSProperties = {
+    borderColor: isHighlighted ? 'var(--landing-primary)' : 'var(--landing-border)',
+    transition: 'border-color 0.3s ease, box-shadow 0.3s ease, transform 0.3s ease',
+    ...(isCardHovered ? {
+      boxShadow: '0 20px 50px -10px rgba(0, 0, 0, 0.15)',
+      transform: 'scale(1.02)',
+      zIndex: 10,
+    } : {}),
+  };
+
   return (
     <div
-      className={`landing-card relative flex flex-col focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-blue-500 ${
-        plan.popular
-          ? 'ring-2 ring-[var(--landing-primary)] shadow-lg'
-          : ''
-      }`}
+      className="landing-card relative flex flex-col border-2 focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-blue-500"
+      style={dynamicStyles}
       role="article"
       aria-label={`${plan.name} pricing plan`}
+      data-highlighted={isHighlighted}
+      data-hovered={isCardHovered || undefined}
+      onMouseEnter={onMouseEnter}
+      onMouseLeave={onMouseLeave}
     >
       {/* Plan Header with Badges */}
       <div className="flex items-center justify-between mb-4">
@@ -133,7 +154,7 @@ export function PricingCard({
           <Button
             onClick={() => onCheckout(plan.key)}
             disabled={checkoutLoading}
-            className="w-full landing-button-secondary"
+            className={`w-full ${isCardHovered && !checkoutLoading ? 'landing-button-primary' : 'landing-button-secondary'}`}
           >
             {checkoutLoading ? (
               <>
