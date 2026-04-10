@@ -160,16 +160,6 @@ jest.mock('../../lib/cron/sec-filing-service', () => ({
   }
 }));
 
-jest.mock('../../lib/cron/queue-monitoring', () => ({
-  QueueMonitoringService: {
-    checkQueueHealth: jest.fn().mockResolvedValue({
-      healthy: true,
-      issues: [],
-      metrics: { queueDepth: 0, estimatedProcessingTime: 0 }
-    })
-  }
-}));
-
 jest.mock('../../lib/cron/async-filing-queue', () => ({
   AsyncFilingQueue: {
     queueMultipleFilings: jest.fn().mockResolvedValue([])
