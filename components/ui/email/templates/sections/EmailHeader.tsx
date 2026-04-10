@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { EmailColors } from '../../design-system';
+import { EmailColors, EMAIL_LOGO_URL, EMAIL_LOGO_WIDTH, EMAIL_LOGO_HEIGHT } from '../../design-system';
 
 /**
  * Default category labels for the filing type badge.
@@ -76,13 +76,21 @@ export function EmailHeader({
               <tbody>
                 <tr>
                   <td>
-                    <span style={{
-                      fontSize: '18px',
-                      fontWeight: 700,
-                      color: EmailColors.text.headline,
-                    }}>
-                      tldr<span style={{ color: '#0079F2' }}>SEC</span>
-                    </span>
+                    <img
+                      src={EMAIL_LOGO_URL}
+                      alt="tldrSEC"
+                      width={EMAIL_LOGO_WIDTH}
+                      height={EMAIL_LOGO_HEIGHT}
+                      style={{
+                        display: 'block',
+                        width: `${EMAIL_LOGO_WIDTH}px`,
+                        height: `${EMAIL_LOGO_HEIGHT}px`,
+                        border: '0',
+                        fontSize: '18px',
+                        fontWeight: 700,
+                        color: EmailColors.text.headline,
+                      }}
+                    />
                   </td>
                   <td style={{ textAlign: 'right' }}>
                     <span style={{

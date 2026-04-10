@@ -9,6 +9,7 @@ import {
   BulletList,
   CTAButton
 } from '../sections';
+import { EMAIL_LOGO_URL } from '../../design-system';
 
 describe('Email Section Components', () => {
   describe('EmailHeader', () => {
@@ -41,7 +42,7 @@ describe('Email Section Components', () => {
       expect(container.textContent).toContain('CEO');
     });
 
-    it('renders tldrSEC branding', () => {
+    it('renders tldrSEC logo image', () => {
       const { container } = render(
         <EmailHeader
           ticker="MSFT"
@@ -50,7 +51,9 @@ describe('Email Section Components', () => {
           filingDate="2025-03-01"
         />
       );
-      expect(container.textContent).toContain('tldrSEC');
+      const img = container.querySelector('img[alt="tldrSEC"]');
+      expect(img).toBeTruthy();
+      expect(img?.getAttribute('src')).toBe(EMAIL_LOGO_URL);
     });
   });
 
