@@ -2,8 +2,7 @@
 
 import { motion } from 'framer-motion';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { ArrowRight, Sparkles, CheckCircle2 } from 'lucide-react';
+import { ArrowRight, CheckCircle2 } from 'lucide-react';
 import Link from 'next/link';
 import {
   staggerContainer,
@@ -19,7 +18,7 @@ import { useAuth } from '@/contexts/auth-context';
 const trustMetrics = [
   { value: '10 min', label: 'filing-to-inbox' },
   { value: '99.9%', label: 'uptime' },
-  { value: '5 types', label: 'of SEC filings' },
+  { value: 'All types', label: 'of SEC filings' },
 ];
 
 /**
@@ -87,14 +86,6 @@ export function HeroSectionV2() {
             animate="animate"
             className="text-center lg:text-left"
           >
-            {/* Badge */}
-            <motion.div variants={staggerItem}>
-              <Badge className="landing-badge mb-6">
-                <Sparkles className="w-4 h-4 mr-2" />
-                AI-Powered SEC Intelligence
-              </Badge>
-            </motion.div>
-
             {/* Headline */}
             <motion.h1
               variants={staggerItem}
