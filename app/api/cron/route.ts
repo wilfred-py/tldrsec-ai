@@ -176,10 +176,13 @@ async function handleTierAware(request: NextRequest) {
   const { withVercelRateLimit } = await import('@/lib/infrastructure/rate-limiting/vercel-endpoint-enhancer');
   const { rateLimitMonitor, RateLimitEventType } = await import('@/lib/infrastructure/rate-limiting/rate-limit-monitor');
   const { CronAuthService } = await import('@/lib/cron/auth-service');
-  const { CronUserProcessingService } = await import('@/lib/cron/user-processing-service');
+  // Legacy modules removed (user-processing-service, async-filing-queue, queue-monitoring)
+  // These were only used by the legacy sync fallback path which is now dead code.
+  // Kept as null stubs to prevent crashes until the legacy path is fully removed.
+  const CronUserProcessingService = null as unknown;
+  const AsyncFilingQueue = null as unknown;
+  const QueueMonitoringService = null as unknown;
   const { CronSecFilingService } = await import('@/lib/cron/sec-filing-service');
-  const { AsyncFilingQueue } = await import('@/lib/cron/async-filing-queue');
-  const { QueueMonitoringService } = await import('@/lib/cron/queue-monitoring');
   const { slackWebhookService } = await import('@/lib/slack/webhook-service');
   const { evaluateAlertRules } = await import('@/lib/slack/alert-rules');
 

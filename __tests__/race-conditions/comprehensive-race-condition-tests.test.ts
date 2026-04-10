@@ -11,7 +11,6 @@ import { EventBus, eventBus } from '../../lib/services/event-bus';
 import { FilingRetrievalService } from '../../lib/services/filing-retrieval-service';
 import { SecApiCache, getSecApiCache, withSecApiCache } from '../../lib/cache/sec-api-cache';
 import { TransactionManager, FilingTransactionManager } from '../../lib/db/transaction-manager';
-import { CronUserProcessingService } from '../../lib/cron/user-processing-service';
 
 // Mock external dependencies
 jest.mock('../../lib/db/prisma');
