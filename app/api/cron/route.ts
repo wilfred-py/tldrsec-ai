@@ -178,10 +178,16 @@ async function handleTierAware(request: NextRequest) {
   const { CronAuthService } = await import('@/lib/cron/auth-service');
   // Legacy modules removed (user-processing-service, async-filing-queue, queue-monitoring)
   // These were only used by the legacy sync fallback path which is now dead code.
-  // Kept as null stubs to prevent crashes until the legacy path is fully removed.
-  const CronUserProcessingService = null as unknown;
-  const AsyncFilingQueue = null as unknown;
-  const QueueMonitoringService = null as unknown;
+  // No-op stubs prevent crashes until the legacy path is fully removed in Phase 2.
+  const CronUserProcessingService = {
+    getEligibleUsersForProcessing: async () => ({ allUsers: [], eligibleUsers: [] }),
+  } as Record<string, unknown>;
+  const AsyncFilingQueue = {
+    queueMultipleFilings: async () => [],
+  } as Record<string, unknown>;
+  const QueueMonitoringService = {
+    checkQueueHealth: async () => ({ healthy: true, issues: [], metrics: { queueDepth: 0, estimatedProcessingTime: 0 } }),
+  } as Record<string, unknown>;
   const { CronSecFilingService } = await import('@/lib/cron/sec-filing-service');
   const { slackWebhookService } = await import('@/lib/slack/webhook-service');
   const { evaluateAlertRules } = await import('@/lib/slack/alert-rules');
