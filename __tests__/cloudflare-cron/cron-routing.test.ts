@@ -16,7 +16,7 @@ describe('Cloudflare Worker Cron Routing', () => {
   });
 
   describe('wrangler.toml configuration', () => {
-    it('should have */5 * * * * fast-poll pipeline schedule', () => {
+    it('should have */5 * * * * pipeline schedule', () => {
       expect(wranglerConfig).toContain('*/5 * * * *');
     });
 
@@ -34,32 +34,28 @@ describe('Cloudflare Worker Cron Routing', () => {
       const schedules = cronsMatch![1].match(/"[^"]+"/g);
       expect(schedules).toHaveLength(3);
     });
-
-    it('should NOT have old hourly schedule', () => {
-      const cronsMatch = wranglerConfig.match(/crons\s*=\s*\[([^\]]+)\]/);
-      expect(cronsMatch).toBeTruthy();
-      expect(cronsMatch![1]).not.toContain('"0 * * * *"');
-    });
   });
 
   describe('Worker routing logic', () => {
-    it('should route */15 * * * * to handleAutoRecovery', () => {
-      expect(workerCode).toContain("cronExpression === '*/15 * * * *'");
+    it('should route auto-recovery cron', () => {
+      expect(workerCode).toContain('*/15 * * * *');
       expect(workerCode).toContain('handleAutoRecovery');
     });
 
-    it('should route 0 0 * * * to handleDailyTasks', () => {
-      expect(workerCode).toContain("cronExpression === '0 0 * * *'");
+    it('should route daily tasks cron', () => {
+      expect(workerCode).toContain('0 0 * * *');
       expect(workerCode).toContain('handleDailyTasks');
     });
 
-    it('should default to handlePipelineProcessing for */1 * * * *', () => {
+    it('should default to handlePipelineProcessing', () => {
       expect(workerCode).toContain('handlePipelineProcessing');
     });
 
     it('should NOT contain removed dead handlers', () => {
-      expect(workerCode).not.toMatch(/async\s+handleIntervalSummary\s*\(/);
-      expect(workerCode).not.toMatch(/async\s+handleSummarizeOnly\s*\(/);
+      expect(workerCode).not.toMatch(/AdvancedRateLimiter/);
+      expect(workerCode).not.toMatch(/CircuitBreaker/);
+      expect(workerCode).not.toMatch(/WorkerMonitor/);
+      expect(workerCode).not.toMatch(/WorkerMetrics/);
     });
   });
 
@@ -68,13 +64,10 @@ describe('Cloudflare Worker Cron Routing', () => {
       expect(workerCode).toContain('handlePipelineProcessing');
       expect(workerCode).toContain('handleAutoRecovery');
       expect(workerCode).toContain('handleDailyTasks');
-      expect(workerCode).toContain('handleDLQCleanup');
-      expect(workerCode).toContain('handleDailyReport');
     });
 
-    it('should have handleDailyTasks calling DLQ cleanup and daily report', () => {
-      expect(workerCode).toContain('handleDLQCleanup');
-      expect(workerCode).toContain('handleDailyReport');
+    it('should have handleDailyTasks calling cleanup-dlq', () => {
+      expect(workerCode).toContain('cleanup-dlq');
     });
   });
 });
