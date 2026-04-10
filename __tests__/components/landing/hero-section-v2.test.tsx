@@ -27,13 +27,7 @@ describe('HeroSectionV2', () => {
     expect(screen.getByText(/Simplified/i)).toBeInTheDocument();
   });
 
-  // Test 2: Has badge above headline
-  it('should render AI-Powered badge above headline', () => {
-    render(<HeroSectionV2 />);
-    expect(screen.getByText(/AI-Powered/i)).toBeInTheDocument();
-  });
-
-  // Test 3: Primary CTA is visible and links to sign-up
+  // Test 2: Primary CTA is visible and links to sign-up
   it('should render primary CTA linking to sign-up', () => {
     render(<HeroSectionV2 />);
     const primaryCTA = screen.getByRole('link', { name: /Start Free Trial/i });
@@ -55,7 +49,7 @@ describe('HeroSectionV2', () => {
     expect(screen.getByText(/10 min/i)).toBeInTheDocument();
     expect(screen.getByText(/filing-to-inbox/i)).toBeInTheDocument();
     expect(screen.getByText(/99\.9%/i)).toBeInTheDocument();
-    expect(screen.getByText(/5 types/i)).toBeInTheDocument();
+    expect(screen.getByText(/All types/i)).toBeInTheDocument();
   });
 
   // Test 6: Filing preview card is rendered

@@ -11,6 +11,10 @@
  * - 15px border-radius
  */
 
+export const EMAIL_LOGO_URL = 'https://tldrsec.app/images/logo-email.png';
+export const EMAIL_LOGO_WIDTH = 120;
+export const EMAIL_LOGO_HEIGHT = 24;
+
 export const EmailColors = {
   text: {
     headline: '#000000',      // Pure black for section headings
