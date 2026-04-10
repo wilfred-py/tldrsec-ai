@@ -163,11 +163,7 @@ jest.mock('../../lib/cron/queue-monitoring', () => ({
   }
 }));
 
-jest.mock('../../lib/cron/async-filing-queue', () => ({
-  AsyncFilingQueue: {
-    queueMultipleFilings: jest.fn().mockResolvedValue([])
-  }
-}));
+// async-filing-queue mock removed (module deleted in dead code cleanup)
 
 jest.mock('../../lib/slack/webhook-service', () => ({
   slackWebhookService: {
