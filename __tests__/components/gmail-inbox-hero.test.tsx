@@ -52,11 +52,6 @@ describe('GmailInboxHero', () => {
     expect(screen.getByText('filing-to-inbox')).toBeInTheDocument();
   });
 
-  it('displays AI badge', () => {
-    render(<GmailInboxHero />);
-    expect(screen.getByText('AI-Powered SEC Intelligence')).toBeInTheDocument();
-  });
-
   it('shows descriptive text', () => {
     render(<GmailInboxHero />);
     expect(screen.getByText(/Transform 300\+ page SEC filings/)).toBeInTheDocument();

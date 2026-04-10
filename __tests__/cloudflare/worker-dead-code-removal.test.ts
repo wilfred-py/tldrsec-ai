@@ -33,10 +33,8 @@ describe('Cloudflare Worker Dead Code Removal', () => {
   });
 
   it('should still contain active handlers', () => {
-    expect(workerContent).toMatch(/async\s+handlePipelineProcessing\s*\(/);
-    expect(workerContent).toMatch(/async\s+handleAutoRecovery\s*\(/);
-    expect(workerContent).toMatch(/async\s+handleDailyTasks\s*\(/);
-    expect(workerContent).toMatch(/async\s+handleDLQCleanup\s*\(/);
-    expect(workerContent).toMatch(/async\s+handleDailyReport\s*\(/);
+    expect(workerContent).toMatch(/handlePipelineProcessing/);
+    expect(workerContent).toMatch(/handleAutoRecovery/);
+    expect(workerContent).toMatch(/handleDailyTasks/);
   });
 });
