@@ -3,7 +3,6 @@
 import { CheckCircle, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { SECTORS } from "@/app/(auth)/onboarding/types";
 
 interface SectorStepProps {
@@ -21,7 +20,7 @@ export function SectorStep({
 }: SectorStepProps) {
   return (
     <Card className="border-0 shadow-lg">
-      <CardContent className="p-6">
+      <CardContent className="flex flex-col p-6">
         <div className="text-center mb-6">
           <h2 className="text-xl font-bold">What sectors interest you?</h2>
           <p className="text-muted-foreground">
@@ -30,8 +29,8 @@ export function SectorStep({
           </p>
         </div>
 
-        <ScrollArea className="max-h-[calc(100vh-320px)]">
-          <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4">
+        <div>
+          <div className="flex flex-wrap justify-center gap-3">
             {SECTORS.map((sector, index) => {
               const Icon = sector.icon;
               const isSelected = selectedSectors.includes(sector.id);
@@ -40,7 +39,7 @@ export function SectorStep({
                   key={sector.id}
                   type="button"
                   aria-pressed={isSelected}
-                  className={`cursor-pointer rounded-lg border-2 p-3 opacity-0 animate-slideUp transition-all hover:shadow-md text-left ${
+                  className={`w-[calc(50%-6px)] md:w-[calc(33.333%-8px)] lg:w-[calc(25%-9px)] cursor-pointer rounded-lg border-2 p-3 opacity-0 animate-slideUp transition-all hover:shadow-md text-left ${
                     isSelected
                       ? "border-primary bg-primary/10 shadow-md"
                       : "border-gray-200 hover:border-primary/50 dark:border-gray-700"
@@ -68,23 +67,16 @@ export function SectorStep({
               );
             })}
           </div>
-        </ScrollArea>
+        </div>
 
-        <div className="mt-8 flex items-center justify-between">
-          <div />
-          <div className="flex items-center gap-4">
-            <span className="text-sm text-muted-foreground">
-              {selectedSectors.length} sector
-              {selectedSectors.length !== 1 ? "s" : ""} selected
-            </span>
-            <Button
-              onClick={onContinue}
-              disabled={selectedSectors.length === 0 || isTransitioning}
-            >
-              Continue
-              <ArrowRight className="ml-2 h-4 w-4" />
-            </Button>
-          </div>
+        <div className="mt-8 flex justify-end">
+          <Button
+            onClick={onContinue}
+            disabled={selectedSectors.length === 0 || isTransitioning}
+          >
+            Continue
+            <ArrowRight className="ml-2 h-4 w-4" />
+          </Button>
         </div>
       </CardContent>
     </Card>
