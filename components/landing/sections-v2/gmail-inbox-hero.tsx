@@ -8,7 +8,6 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useAuth } from '@/contexts/auth-context';
 import {
   ArrowRight,
-  Sparkles,
   CheckCircle2,
   Mail,
   Star,
@@ -417,7 +416,7 @@ const curatedSummaries: EmailSummary[] = [
 const trustMetrics = [
   { value: '10 min', label: 'filing-to-inbox' },
   { value: '99.9%', label: 'uptime' },
-  { value: '5 types', label: 'of SEC filings' },
+  { value: 'All types', label: 'of SEC filings' },
 ];
 
 /**
@@ -1006,13 +1005,6 @@ export const GmailInboxHero = memo<GmailInboxHeroProps>(({ className = '', heroR
             animate="animate"
             className="text-center lg:text-left"
           >
-            <motion.div variants={staggerItem}>
-              <Badge className="landing-badge mb-6">
-                <Sparkles className="w-4 h-4 mr-2" />
-                AI-Powered SEC Intelligence
-              </Badge>
-            </motion.div>
-
             <motion.h1 variants={staggerItem} className="landing-display mb-6">
               Summaries That{' '}
               <span className="landing-gradient-text">Actually Matter</span>
