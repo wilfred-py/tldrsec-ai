@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.0.6.2] - 2026-04-10
+
+### Changed
+- Email templates now display the brand logo image instead of plain styled text in the header.
+- All email touchpoints updated: shared EmailHeader (13 templates), campaign shell, campaign invite, and campaign digest templates.
+- Logo hosted as retina PNG at `/images/logo-email.png` with styled alt text fallback for image-blocking email clients.
+- Fixed broken `logo-white.png` reference in legacy email template.
+
 ## [0.0.6.1] - 2026-04-09
 
 ### Changed
