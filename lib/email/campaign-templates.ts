@@ -78,7 +78,7 @@ function campaignShell(content: string, options: { unsubscribeUrl: string; prehe
         <table role="presentation" cellpadding="0" cellspacing="0" width="600" style="max-width:600px;width:100%;background-color:#ffffff;border-radius:8px;">
           <tr>
             <td style="padding:32px 28px 0;">
-              <p style="margin:0 0 24px;font-size:18px;font-weight:700;color:#1e293b;font-family:${FONT_STACK};">tldrSEC</p>
+              <img src="https://tldrsec.app/images/logo-email.png" alt="tldrSEC" width="120" height="24" style="display:block;width:120px;height:24px;border:0;font-size:18px;font-weight:700;color:#1e293b;margin:0 0 24px;" />
             </td>
           </tr>
           <tr>

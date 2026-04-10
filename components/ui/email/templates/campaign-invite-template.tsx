@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { EmailColors } from '../design-system';
+import { EmailColors, EMAIL_LOGO_URL, EMAIL_LOGO_WIDTH, EMAIL_LOGO_HEIGHT } from '../design-system';
 import { EmailFooter } from './sections/EmailFooter';
 
 interface CampaignInviteTemplateProps {
@@ -29,7 +29,7 @@ export function CampaignInviteTemplate({
         <tr>
           <td style={{ padding: '20px 15px 16px', borderBottom: `1px solid ${EmailColors.structure.border}` }}>
             <table width="100%" cellPadding="0" cellSpacing="0"><tbody><tr>
-              <td><span style={{ fontSize: '18px', fontWeight: 700, color: '#000' }}>tldrSEC</span></td>
+              <td><img src={EMAIL_LOGO_URL} alt="tldrSEC" width={EMAIL_LOGO_WIDTH} height={EMAIL_LOGO_HEIGHT} style={{ display: 'block', width: `${EMAIL_LOGO_WIDTH}px`, height: `${EMAIL_LOGO_HEIGHT}px`, border: '0', fontSize: '18px', fontWeight: 700, color: '#000' }} /></td>
               <td style={{ textAlign: 'right' }}><span style={{ fontSize: '12px', color: EmailColors.text.meta }}>Early Access</span></td>
             </tr></tbody></table>
           </td>
