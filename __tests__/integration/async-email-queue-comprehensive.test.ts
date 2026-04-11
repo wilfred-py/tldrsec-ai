@@ -81,7 +81,6 @@ import { EmailQueueLock } from '../../../lib/email/security-helpers';
 import { getPrismaClient } from '../../../lib/db/prisma';
 import { emailClient } from '../../../lib/email/index';
 import { EmailMessage } from '../../../lib/email/types';
-import { QueueManagerService } from '../../../lib/job-queue/queue-manager';
 
 // Get mock implementations
 const mockPrisma = getPrismaClient();
@@ -93,8 +92,6 @@ describe('Async Email Queue Comprehensive Integration', () => {
     
     // Reset singleton instances and static state
     (AsyncEmailQueue as any).instance = undefined;
-    (QueueManagerService as any).workers = [];
-    (QueueManagerService as any).isMonitoring = false;
     
     // Clear all locks
     const activeLocks = (EmailQueueLock as any).activeLocks;
@@ -792,50 +789,4 @@ describe('Async Email Queue Comprehensive Integration', () => {
     });
   });
 
-  describe('Queue Manager Integration', () => {
-    it('should integrate with queue manager for metrics collection', async () => {
-      // Mock queue metrics data
-      mockPrisma.jobQueue.groupBy
-        .mockResolvedValueOnce([
-          { status: 'PENDING', _count: { id: 10 } },
-          { status: 'PROCESSING', _count: { id: 2 } },
-          { status: 'COMPLETED', _count: { id: 50 } }
-        ])
-        .mockResolvedValueOnce([
-          { priority: 9, _count: { id: 8 } },
-          { priority: 5, _count: { id: 4 } }
-        ])
-        .mockResolvedValueOnce([
-          { jobType: 'ASYNC_EMAIL_DIGEST', _count: { id: 12 } }
-        ]);
-
-      mockPrisma.jobQueue.findMany.mockResolvedValue([
-        { executionTime: 30000 },
-        { executionTime: 45000 }
-      ]);
-
-      mockPrisma.jobQueue.findFirst.mockResolvedValue({
-        createdAt: new Date(Date.now() - 2 * 60 * 1000) // 2 minutes ago
-      });
-
-      const metrics = await QueueManagerService.getQueueMetrics();
-
-      expect(metrics).toEqual({
-        totalJobs: 62,
-        pendingJobs: 10,
-        processingJobs: 2,
-        failedJobs: 0,
-        avgProcessingTime: 37500,
-        queueDepth: 12,
-        oldestPendingJobAge: 2 * 60 * 1000,
-        priorityDistribution: {
-          'priority_9': 8,
-          'priority_5': 4
-        },
-        jobTypeDistribution: {
-          'ASYNC_EMAIL_DIGEST': 12
-        }
-      });
-    });
-  });
 });

@@ -138,15 +138,8 @@ jest.mock('../../lib/cron/edgar-schedule', () => ({
   isEdgarOpen: jest.fn().mockReturnValue(true)
 }));
 
-// Mock cron service layer to prevent database access in legacy processing
-jest.mock('../../lib/cron/user-processing-service', () => ({
-  CronUserProcessingService: {
-    getEligibleUsersForProcessing: jest.fn().mockResolvedValue({
-      allUsers: [],
-      eligibleUsers: []
-    })
-  }
-}));
+// Mock cron service layer to prevent database access
+// user-processing-service mock removed (module deleted in dead code cleanup)
 
 jest.mock('../../lib/cron/sec-filing-service', () => ({
   CronSecFilingService: {
@@ -160,21 +153,9 @@ jest.mock('../../lib/cron/sec-filing-service', () => ({
   }
 }));
 
-jest.mock('../../lib/cron/queue-monitoring', () => ({
-  QueueMonitoringService: {
-    checkQueueHealth: jest.fn().mockResolvedValue({
-      healthy: true,
-      issues: [],
-      metrics: { queueDepth: 0, estimatedProcessingTime: 0 }
-    })
-  }
-}));
+// queue-monitoring mock removed (module deleted in dead code cleanup)
 
-jest.mock('../../lib/cron/async-filing-queue', () => ({
-  AsyncFilingQueue: {
-    queueMultipleFilings: jest.fn().mockResolvedValue([])
-  }
-}));
+// async-filing-queue mock removed (module deleted in dead code cleanup)
 
 jest.mock('../../lib/slack/webhook-service', () => ({
   slackWebhookService: {

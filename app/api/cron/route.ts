@@ -203,6 +203,23 @@ async function handleTierAware(request: NextRequest) {
     cronLogger.info(`[${executionId}] Starting tier-aware SEC filing cron job`);
     cronLogger.debug(`[${executionId}] Checkpoint 1: Route function started`);
 
+    // Auth check — HMAC signature validation + IP allowlist
+    const { CronAuthService } = await import('@/lib/cron/auth-service');
+    const authResult = await CronAuthService.validateCronRequest(request);
+    if (!authResult.isValid) {
+      const isIPBlock = authResult.error?.includes('IP not allowed');
+      const statusCode = isIPBlock ? 403 : 401;
+      cronLogger.warn(`[${executionId}] ${isIPBlock ? 'Forbidden' : 'Unauthorized'} cron request`, {
+        error: authResult.error,
+        clientIP: authResult.clientIP,
+      });
+      if (monitor) await monitor.complete(CronJobStatus.FAILED, isIPBlock ? 'IP not allowed' : 'Authentication failed');
+      return NextResponse.json(
+        { error: authResult.error || 'Unauthorized', code: statusCode, timestamp: new Date().toISOString(), path: '/api/cron?action=tier-aware' },
+        { status: statusCode }
+      );
+    }
+
     // Skip discovery during EDGAR quiet hours
     const { isEdgarOpen } = await import('@/lib/cron/edgar-schedule');
     if (process.env.NODE_ENV === 'production' && !isEdgarOpen()) {
