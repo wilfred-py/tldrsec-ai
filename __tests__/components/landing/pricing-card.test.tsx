@@ -8,6 +8,7 @@ jest.mock('lucide-react', () => ({
   Check: ({ className }: { className?: string }) => <span data-testid="check-icon" className={className} />,
   Loader2: ({ className }: { className?: string }) => <span data-testid="loader-icon" className={className} />,
   CheckCircle2: ({ className }: { className?: string }) => <span data-testid="check-circle-icon" className={className} />,
+  ArrowDown: ({ className }: { className?: string }) => <span data-testid="arrow-down-icon" className={className} />,
 }));
 
 // Default plan fixture
@@ -244,6 +245,53 @@ describe('PricingCard', () => {
 
       fireEvent.mouseLeave(card);
       expect(onMouseLeave).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('subscribe-specific props', () => {
+    it('renders downgrade button when onDowngrade is provided', () => {
+      const onDowngrade = jest.fn();
+      render(
+        <PricingCard
+          {...defaultProps}
+          onDowngrade={onDowngrade}
+          isDowngrading={false}
+        />
+      );
+
+      const button = screen.getByRole('button', { name: /downgrade to pro/i });
+      expect(button).toBeInTheDocument();
+      expect(screen.getByTestId('arrow-down-icon')).toBeInTheDocument();
+
+      fireEvent.click(button);
+      expect(onDowngrade).toHaveBeenCalledWith('PRO');
+    });
+
+    it('shows loading state when isDowngrading is true', () => {
+      render(
+        <PricingCard
+          {...defaultProps}
+          onDowngrade={jest.fn()}
+          isDowngrading={true}
+        />
+      );
+
+      expect(screen.getByText('Processing...')).toBeInTheDocument();
+      expect(screen.getByTestId('loader-icon')).toBeInTheDocument();
+    });
+
+    it('highlights non-popular card when forceHighlight is true', () => {
+      const { container } = render(
+        <PricingCard
+          {...defaultProps}
+          plan={maxPlan}
+          hoveredCard={null}
+          forceHighlight={true}
+        />
+      );
+
+      const card = container.querySelector('[role="article"]') as HTMLElement;
+      expect(card.getAttribute('data-highlighted')).toBe('true');
     });
   });
 });

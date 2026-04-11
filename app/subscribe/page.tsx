@@ -4,9 +4,8 @@ import { Suspense, useEffect, useState, useCallback, Component, type ReactNode }
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useUser } from '@clerk/nextjs';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import { ArrowLeft, Check, Loader2, Sparkles, Crown, AlertTriangle, ArrowDown } from 'lucide-react';
+import { ArrowLeft, Loader2, Sparkles, Crown, AlertTriangle } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -16,25 +15,48 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { toast } from 'sonner';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import {
   SUBSCRIPTION_PLANS,
   calculateSavingsPercentage,
   type PlanType,
   type BillingInterval,
 } from '@/lib/stripe/plans';
-import { AnimatedPrice, StaticPrice } from '@/components/landing/sections-v2/animated-price';
+import { PricingCard } from '@/components/landing/pricing-card';
 import { BillingToggle } from '@/components/billing/billing-toggle';
 import type { UserSubscription } from '@/lib/types/subscription';
 
-const PLAN_ICONS: Record<PlanType, typeof Sparkles | null> = {
-  FREE: null,
-  PRO: Sparkles,
-  MAX: Crown,
-};
-
 const PLAN_ORDER: PlanType[] = ['PRO', 'MAX'];
 const PLAN_RANK: Record<PlanType, number> = { FREE: 0, PRO: 1, MAX: 2 };
+
+const plans = [
+  {
+    key: 'PRO' as const,
+    name: SUBSCRIPTION_PLANS.PRO.name,
+    icon: Sparkles,
+    monthlyPrice: SUBSCRIPTION_PLANS.PRO.monthlyPrice,
+    annualPrice: SUBSCRIPTION_PLANS.PRO.annualPrice,
+    description: 'Everything you need for serious investing',
+    features: SUBSCRIPTION_PLANS.PRO.features,
+    cta: 'Upgrade to Pro',
+    href: '/subscribe?plan=pro',
+    popular: true,
+    disabled: false,
+  },
+  {
+    key: 'MAX' as const,
+    name: SUBSCRIPTION_PLANS.MAX.name,
+    icon: Crown,
+    monthlyPrice: SUBSCRIPTION_PLANS.MAX.monthlyPrice,
+    annualPrice: SUBSCRIPTION_PLANS.MAX.annualPrice,
+    description: 'For professional traders & analysts',
+    features: SUBSCRIPTION_PLANS.MAX.features,
+    cta: 'Upgrade to Max',
+    href: '/subscribe?plan=max',
+    popular: false,
+    disabled: false,
+  },
+];
 
 function SubscribePageContent() {
   const router = useRouter();
@@ -46,6 +68,7 @@ function SubscribePageContent() {
   const [checkingOut, setCheckingOut] = useState<PlanType | null>(null);
   const [downgradingTo, setDowngradingTo] = useState<PlanType | null>(null);
   const [showDowngradeConfirm, setShowDowngradeConfirm] = useState<PlanType | null>(null);
+  const [hoveredCard, setHoveredCard] = useState<string | null>(null);
 
   // Read pre-selected plan from query param (e.g., /subscribe?plan=pro from campaign flow)
   const preSelectedPlan = (searchParams.get('plan')?.toUpperCase() as PlanType) || null;
@@ -159,22 +182,23 @@ function SubscribePageContent() {
   };
 
   // Handle checkout (new subscription via Stripe checkout)
-  const handleCheckout = async (planType: PlanType) => {
-    if (planType === 'FREE' || isCurrentPlan(planType)) return;
+  const handleCheckout = async (planType: PlanType | string) => {
+    const pt = planType as PlanType;
+    if (pt === 'FREE' || isCurrentPlan(pt)) return;
 
     // If user has an active paid plan and target is higher tier, use PUT upgrade
     const effectivePlan = getEffectivePlan();
-    if (subscription?.isActive && PLAN_RANK[effectivePlan] > 0 && PLAN_RANK[planType] > PLAN_RANK[effectivePlan]) {
-      return handleUpgrade(planType);
+    if (subscription?.isActive && PLAN_RANK[effectivePlan] > 0 && PLAN_RANK[pt] > PLAN_RANK[effectivePlan]) {
+      return handleUpgrade(pt);
     }
 
-    setCheckingOut(planType);
+    setCheckingOut(pt);
     try {
       const response = await fetch('/api/user?type=subscription', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          planType,
+          planType: pt,
           billingInterval,
           cancelUrl: '/subscribe?canceled=true', // Custom cancel URL to return to this page
         }),
@@ -185,7 +209,7 @@ function SubscribePageContent() {
       if (!response.ok) {
         // Handle 409 with action: 'use_put' - stale client state, use PUT instead
         if (response.status === 409 && data.action === 'use_put') {
-          return handleUpgrade(planType);
+          return handleUpgrade(pt);
         }
         if (response.status === 409) {
           toast.error('You already have an active subscription');
@@ -205,17 +229,20 @@ function SubscribePageContent() {
     }
   };
 
-  const getPrice = (planKey: PlanType) => {
-    const plan = SUBSCRIPTION_PLANS[planKey];
+  const getPrice = (plan: typeof plans[0]) => {
     return billingInterval === 'annual' ? plan.annualPrice : plan.monthlyPrice;
   };
 
-  const getMonthlyEquivalent = (planKey: PlanType) => {
-    const plan = SUBSCRIPTION_PLANS[planKey];
+  const getMonthlyEquivalent = (plan: typeof plans[0]) => {
     if (billingInterval === 'annual' && plan.annualPrice > 0) {
       return Math.round(plan.annualPrice / 12);
     }
     return null;
+  };
+
+  const getSavings = (plan: typeof plans[0]) => {
+    if (plan.monthlyPrice === 0) return null;
+    return calculateSavingsPercentage(plan.key);
   };
 
   const isCurrentPlan = (planKey: PlanType) => {
@@ -274,6 +301,10 @@ function SubscribePageContent() {
       setDowngradingTo(null);
       setShowDowngradeConfirm(null);
     }
+  };
+
+  const getCtaText = (plan: typeof plans[0]) => {
+    return plan.cta;
   };
 
   if (loading) {
@@ -350,164 +381,33 @@ function SubscribePageContent() {
           />
         </motion.div>
 
-        {/* Plan Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {PLAN_ORDER.map((planKey, index) => {
-            const plan = SUBSCRIPTION_PLANS[planKey];
-            const Icon = PLAN_ICONS[planKey];
-            const savings = planKey !== 'FREE' ? calculateSavingsPercentage(planKey) : null;
-            const monthlyEquiv = getMonthlyEquivalent(planKey);
+        {/* Plan Cards — uses same PricingCard as landing page */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-4xl mx-auto">
+          {plans.map((plan) => {
+            const planKey = plan.key as PlanType;
+            const buttonType = getButtonType(planKey);
 
             return (
-              <motion.div
-                key={planKey}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.3, delay: index * 0.1 }}
-                whileHover={{ y: -4, boxShadow: '0 20px 40px -10px rgba(0, 0, 0, 0.15)' }}
-                className={`landing-card relative flex flex-col ${
-                  planKey === 'PRO' || planKey === preSelectedPlan ? 'ring-2 ring-[var(--landing-primary)] shadow-lg' : ''
-                }`}
-              >
-                {/* Popular Badge */}
-                {planKey === 'PRO' && (
-                  <Badge className="absolute -top-3 left-1/2 -translate-x-1/2 bg-[var(--landing-primary)] text-white">
-                    Popular
-                  </Badge>
-                )}
-
-                {/* Plan Header */}
-                <div className="flex items-center justify-between mb-4">
-                  <div>
-                    <p className="text-xs text-[var(--landing-text-muted)] uppercase tracking-wide mb-1">
-                      {plan.name}
-                    </p>
-                    <h3 className="text-2xl font-bold" style={{ color: 'var(--landing-secondary)' }}>
-                      {plan.name}
-                    </h3>
-                  </div>
-                  {Icon && <Icon className="h-6 w-6 text-[var(--landing-primary)]" />}
-                </div>
-
-                {/* Price - Using AnimatedPrice component */}
-                <div className="mb-6 h-[88px]">
-                  {plan.monthlyPrice === 0 ? (
-                    <StaticPrice label="$0" />
-                  ) : (
-                    <>
-                      <AnimatedPrice
-                        value={getPrice(planKey)}
-                        suffix={billingInterval === 'annual' ? '/year' : '/month'}
-                        savings={billingInterval === 'annual' ? savings : null}
-                      />
-                      {/* Monthly equivalent text */}
-                      <div className="h-4 mt-1">
-                        <AnimatePresence mode="wait">
-                          {monthlyEquiv && (
-                            <motion.p
-                              key="monthly-equiv"
-                              initial={{ opacity: 0 }}
-                              animate={{ opacity: 1 }}
-                              exit={{ opacity: 0 }}
-                              transition={{ duration: 0.2 }}
-                              className="text-xs text-[var(--landing-text-muted)]"
-                            >
-                              ${monthlyEquiv}/mo billed annually
-                            </motion.p>
-                          )}
-                        </AnimatePresence>
-                      </div>
-                    </>
-                  )}
-                </div>
-
-                {/* CTA Button */}
-                <div className="mb-6">
-                  {(() => {
-                    const buttonType = getButtonType(planKey);
-                    switch (buttonType) {
-                      case 'current':
-                        return (
-                          <Button
-                            disabled
-                            className="w-full bg-gray-100 text-gray-500 cursor-not-allowed"
-                          >
-                            Current Plan
-                          </Button>
-                        );
-                      case 'downgrade':
-                        return (
-                          <Button
-                            variant="outline"
-                            onClick={() => setShowDowngradeConfirm(planKey)}
-                            disabled={downgradingTo === planKey}
-                            className="w-full"
-                          >
-                            {downgradingTo === planKey ? (
-                              <>
-                                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                                Processing...
-                              </>
-                            ) : (
-                              <>
-                                <ArrowDown className="w-4 h-4 mr-2" />
-                                Downgrade to {plan.name}
-                              </>
-                            )}
-                          </Button>
-                        );
-                      case 'upgrade':
-                      default:
-                        return (
-                          <Button
-                            onClick={() => handleCheckout(planKey)}
-                            disabled={checkingOut === planKey}
-                            className="w-full landing-button-secondary"
-                          >
-                            {checkingOut === planKey ? (
-                              <>
-                                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                                Loading...
-                              </>
-                            ) : (
-                              `Upgrade to ${plan.name}`
-                            )}
-                          </Button>
-                        );
-                    }
-                  })()}
-                </div>
-
-                {/* Features */}
-                <ul className="space-y-3 flex-grow">
-                  {plan.features.map((feature, idx) => {
-                    const parts = feature.split(/(\*\*[^*]+\*\*)/);
-                    return (
-                      <li key={idx} className="flex items-start gap-3">
-                        <Check className="w-4 h-4 text-[var(--landing-success)] flex-shrink-0 mt-0.5" />
-                        <span className="text-sm" style={{ color: 'var(--landing-text)' }}>
-                          {parts.map((part, i) => {
-                            if (part.startsWith('**') && part.endsWith('**')) {
-                              return <strong key={i} className="font-semibold">{part.slice(2, -2)}</strong>;
-                            }
-                            return part;
-                          })}
-                        </span>
-                      </li>
-                    );
-                  })}
-                </ul>
-
-                {/* Everything in Pro footer (MAX only) */}
-                {planKey === 'MAX' && (
-                  <div className="mt-4 pt-4 border-t border-gray-100">
-                    <div className="flex items-center gap-2 text-sm text-[var(--landing-text-muted)]">
-                      <span className="text-[var(--landing-primary)]">+</span>
-                      <span>Everything in Pro</span>
-                    </div>
-                  </div>
-                )}
-              </motion.div>
+              <PricingCard
+                key={plan.key}
+                plan={plan}
+                billingInterval={billingInterval}
+                isCurrentPlan={isCurrentPlan(planKey)}
+                isTrialEndingSoon={false}
+                loading={false}
+                checkoutLoading={checkingOut === planKey}
+                hoveredCard={hoveredCard}
+                onMouseEnter={() => setHoveredCard(plan.key)}
+                onMouseLeave={() => setHoveredCard(null)}
+                onCheckout={handleCheckout}
+                getCtaText={getCtaText}
+                getPrice={getPrice}
+                getMonthlyEquivalent={getMonthlyEquivalent}
+                getSavings={getSavings}
+                forceHighlight={planKey === preSelectedPlan || undefined}
+                onDowngrade={buttonType === 'downgrade' ? () => setShowDowngradeConfirm(planKey) : undefined}
+                isDowngrading={downgradingTo === planKey}
+              />
             );
           })}
         </div>
