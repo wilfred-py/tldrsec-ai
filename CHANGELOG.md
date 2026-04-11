@@ -2,6 +2,36 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.0.7.0] - 2026-04-10
+
+### Changed
+- Onboarding: removed "x sectors selected" counter text (border color already communicates selection).
+- Onboarding: sector grid last row (Materials, Utilities, Real Estate) now centers instead of left-aligning.
+- Onboarding: company step loads instantly from static data instead of 3 API calls on mount.
+- Onboarding: removed paste tickers input field.
+- Onboarding: profile questions now appear one at a time with slide transition between role and AUM.
+- Onboarding: "Other" role option transforms into inline text input for custom role entry.
+- Onboarding: reduced AUM brackets from 8 to 5 options (capped at $5M+).
+- Onboarding: progress sidebar uses brand blue (#0079F2) instead of generic black/white.
+- Onboarding: progress bar positioned closer to content card, content centered in viewport.
+- Onboarding: Enter key advances between profile questions.
+- Onboarding: Back buttons use ghost variant (no border).
+- Onboarding: company and profile steps share fixed card height so footer buttons stay in place.
+
+### Added
+- Company logo domain mappings expanded from 65 to ~200 entries covering all popular companies.
+
+### Fixed
+- Onboarding: auth error screen auto-redirects to sign-in after 3 seconds instead of showing dead-end buttons.
+- Onboarding: optimistic cookie set before server action prevents redirect loops on auth failure.
+- Onboarding: submittingRef reset in catch block allows retry after failure.
+- Onboarding: sector filter pills stay visible during company search (prevents layout shift).
+- Onboarding: setTimeout in error render moved to useEffect to prevent stacking on re-renders.
+
+### Removed
+- Removed "Investment Analyst" and "C-Suite Executive" from profile role options.
+- Removed "optional" label from AUM question, "This takes 30 seconds" from profile intro.
+
 ## [0.0.6.5] - 2026-04-11
 
 ### Fixed

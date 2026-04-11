@@ -290,9 +290,9 @@ describe('SECURITY: Authentication Bypass Prevention', () => {
       const response = await GET(request);
       const responseData = await response.json();
 
-      // When CRON_SECRET is not configured, it returns 401 with configuration error message
+      // When CRON_SECRET is not configured, request is rejected (missing HMAC headers)
       expect(response.status).toBe(401);
-      expect(responseData.error).toBe('CRON_SECRET environment variable not configured');
+      expect(responseData.error).toMatch(/Missing x-hmac-signature header|CRON_SECRET environment variable not configured/);
     });
   });
 

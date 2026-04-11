@@ -12,7 +12,7 @@ export function VerticalProgress({ currentStep }: VerticalProgressProps) {
   return (
     <nav
       aria-label="Onboarding progress"
-      className="flex flex-col items-center sm:items-start gap-0 pt-[20vh]"
+      className="flex flex-col items-center sm:items-start gap-0"
     >
       {ONBOARDING_STEPS.map((step, index) => {
         const stepNum = index + 1;
@@ -27,8 +27,8 @@ export function VerticalProgress({ currentStep }: VerticalProgressProps) {
               <div
                 className={cn(
                   "flex h-8 w-8 items-center justify-center rounded-full border-2 transition-all duration-300",
-                  isCompleted && "border-primary bg-primary text-primary-foreground",
-                  isActive && "border-primary bg-primary/10 text-primary",
+                  isCompleted && "border-[var(--landing-primary)] bg-[var(--landing-primary)] text-white",
+                  isActive && "border-[var(--landing-primary)] bg-[var(--landing-primary)]/10 text-[var(--landing-primary)]",
                   !isCompleted && !isActive && "border-gray-300 text-gray-400 dark:border-gray-600"
                 )}
                 aria-current={isActive ? "step" : undefined}
@@ -45,7 +45,7 @@ export function VerticalProgress({ currentStep }: VerticalProgressProps) {
                 className={cn(
                   "hidden sm:block text-sm transition-colors duration-300",
                   isActive && "font-semibold text-foreground",
-                  isCompleted && "font-medium text-primary",
+                  isCompleted && "font-medium text-[var(--landing-primary)]",
                   !isCompleted && !isActive && "text-muted-foreground"
                 )}
               >
@@ -59,7 +59,7 @@ export function VerticalProgress({ currentStep }: VerticalProgressProps) {
                 <div
                   className={cn(
                     "h-8 w-0.5 transition-colors duration-300",
-                    currentStep > stepNum ? "bg-primary" : "bg-gray-200 dark:bg-gray-700"
+                    currentStep > stepNum ? "bg-[var(--landing-primary)]" : "bg-gray-200 dark:bg-gray-700"
                   )}
                 />
               </div>
