@@ -69,6 +69,9 @@ function SubscribePageContent() {
   const [downgradingTo, setDowngradingTo] = useState<PlanType | null>(null);
   const [showDowngradeConfirm, setShowDowngradeConfirm] = useState<PlanType | null>(null);
   const [hoveredCard, setHoveredCard] = useState<string | null>(null);
+  const [selectedCard, setSelectedCard] = useState<string>(
+    () => preSelectedPlan && PLAN_ORDER.includes(preSelectedPlan) ? preSelectedPlan : 'PRO'
+  );
 
   // Read pre-selected plan from query param (e.g., /subscribe?plan=pro from campaign flow)
   const preSelectedPlan = (searchParams.get('plan')?.toUpperCase() as PlanType) || null;
@@ -397,8 +400,10 @@ function SubscribePageContent() {
                 loading={false}
                 checkoutLoading={checkingOut === planKey}
                 hoveredCard={hoveredCard}
+                selectedCard={selectedCard}
                 onMouseEnter={() => setHoveredCard(plan.key)}
                 onMouseLeave={() => setHoveredCard(null)}
+                onSelect={() => setSelectedCard(plan.key)}
                 onCheckout={handleCheckout}
                 getCtaText={getCtaText}
                 getPrice={getPrice}
