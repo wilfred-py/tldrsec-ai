@@ -64,6 +64,7 @@ const plans = [
 export function PricingSectionV2() {
   const [billingInterval, setBillingInterval] = useState<BillingInterval>('monthly');
   const [loadingPlan, setLoadingPlan] = useState<string | null>(null);
+  const [hoveredCard, setHoveredCard] = useState<string | null>(null);
   const router = useRouter();
 
   // Prefetch auth routes on mount for faster navigation
@@ -237,6 +238,9 @@ export function PricingSectionV2() {
               isTrialEndingSoon={isTrialEndingSoon(plan.key)}
               loading={showLoading}
               checkoutLoading={loadingPlan === plan.key}
+              hoveredCard={hoveredCard}
+              onMouseEnter={() => setHoveredCard(plan.key)}
+              onMouseLeave={() => setHoveredCard(null)}
               onCheckout={handleCheckout}
               getCtaText={getCtaText}
               getPrice={getPrice}

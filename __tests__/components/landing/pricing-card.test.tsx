@@ -44,6 +44,9 @@ const defaultProps = {
   isTrialEndingSoon: false,
   loading: false,
   checkoutLoading: false,
+  hoveredCard: null as string | null,
+  onMouseEnter: jest.fn(),
+  onMouseLeave: jest.fn(),
   onCheckout: jest.fn(),
   getCtaText: (plan: typeof proPlanFixture) => plan.cta,
   getPrice: (plan: typeof proPlanFixture) => plan.monthlyPrice,
@@ -170,5 +173,77 @@ describe('PricingCard', () => {
     render(<PricingCard {...defaultProps} />);
 
     expect(screen.queryByText(/Everything in/)).not.toBeInTheDocument();
+  });
+
+  describe('hover interactions', () => {
+    it('shows blue border on popular card when no card is hovered', () => {
+      const { container } = render(<PricingCard {...defaultProps} hoveredCard={null} />);
+
+      const card = container.querySelector('[role="article"]') as HTMLElement;
+      expect(card.getAttribute('data-highlighted')).toBe('true');
+    });
+
+    it('removes blue border from Pro when Max is hovered', () => {
+      const { container } = render(<PricingCard {...defaultProps} hoveredCard="MAX" />);
+
+      const card = container.querySelector('[role="article"]') as HTMLElement;
+      expect(card.getAttribute('data-highlighted')).toBe('false');
+    });
+
+    it('shows blue border on Max card when Max is hovered', () => {
+      const { container } = render(
+        <PricingCard {...defaultProps} plan={maxPlan} hoveredCard="MAX" />
+      );
+
+      const card = container.querySelector('[role="article"]') as HTMLElement;
+      expect(card.getAttribute('data-highlighted')).toBe('true');
+    });
+
+    it('applies depth styles when card is hovered', () => {
+      const { container } = render(
+        <PricingCard {...defaultProps} hoveredCard="PRO" />
+      );
+
+      const card = container.querySelector('[role="article"]') as HTMLElement;
+      expect(card.getAttribute('data-hovered')).toBe('true');
+      const style = card.getAttribute('style') || '';
+      expect(style).toContain('scale(1.02)');
+      expect(style).toContain('z-index: 10');
+    });
+
+    it('uses landing-button-primary on CTA when card is hovered', () => {
+      render(<PricingCard {...defaultProps} hoveredCard="PRO" />);
+
+      const button = screen.getByRole('button');
+      expect(button.className).toContain('landing-button-primary');
+    });
+
+    it('keeps landing-button-secondary on CTA when checkoutLoading even if hovered', () => {
+      render(
+        <PricingCard {...defaultProps} hoveredCard="PRO" checkoutLoading={true} />
+      );
+
+      const button = screen.getByRole('button');
+      expect(button.className).toContain('landing-button-secondary');
+    });
+
+    it('calls onMouseEnter and onMouseLeave handlers', () => {
+      const onMouseEnter = jest.fn();
+      const onMouseLeave = jest.fn();
+      const { container } = render(
+        <PricingCard
+          {...defaultProps}
+          onMouseEnter={onMouseEnter}
+          onMouseLeave={onMouseLeave}
+        />
+      );
+
+      const card = container.querySelector('[role="article"]') as HTMLElement;
+      fireEvent.mouseEnter(card);
+      expect(onMouseEnter).toHaveBeenCalledTimes(1);
+
+      fireEvent.mouseLeave(card);
+      expect(onMouseLeave).toHaveBeenCalledTimes(1);
+    });
   });
 });
