@@ -11,6 +11,7 @@ import {
   isGiftTransaction,
   isPurchaseTransaction,
   isAwardTransaction,
+  isAwardOnlyFiling,
   isExerciseTransaction,
   isOtherTransaction,
   isSaleTransaction,
@@ -414,6 +415,65 @@ describe('Form 4 Transaction Classification - All 21 SEC Codes', () => {
         tx({ code: 'ZZ', type: '', shares: 100 }),
       ]);
       expect(result[0].type).toBe('other');
+    });
+  });
+
+  describe('isAwardOnlyFiling', () => {
+    it('should return true when all transactions are awards (code A)', () => {
+      expect(isAwardOnlyFiling([
+        tx({ code: 'A', shares: 1000 }),
+        tx({ code: 'A', shares: 2000 }),
+      ])).toBe(true);
+    });
+
+    it('should return true for single award transaction', () => {
+      expect(isAwardOnlyFiling([
+        tx({ code: 'A', shares: 5000 }),
+      ])).toBe(true);
+    });
+
+    it('should return true for code I (Discretionary 16b-3)', () => {
+      expect(isAwardOnlyFiling([
+        tx({ code: 'I', shares: 1000 }),
+      ])).toBe(true);
+    });
+
+    it('should return true for codeless award transactions via text matching', () => {
+      expect(isAwardOnlyFiling([
+        tx({ type: 'Stock Award', shares: 1000 }),
+        tx({ type: 'RSU Vesting', shares: 500 }),
+      ])).toBe(true);
+    });
+
+    it('should return false for mixed filing (award + sale)', () => {
+      expect(isAwardOnlyFiling([
+        tx({ code: 'A', shares: 1000 }),
+        tx({ code: 'S', shares: 500, pricePerShare: 100 }),
+      ])).toBe(false);
+    });
+
+    it('should return false for mixed filing (award + exercise)', () => {
+      expect(isAwardOnlyFiling([
+        tx({ code: 'A', shares: 1000 }),
+        tx({ code: 'M', shares: 500 }),
+      ])).toBe(false);
+    });
+
+    it('should return false for empty transactions array', () => {
+      expect(isAwardOnlyFiling([])).toBe(false);
+    });
+
+    it('should return false for non-award transactions', () => {
+      expect(isAwardOnlyFiling([
+        tx({ code: 'S', shares: 1000, pricePerShare: 50 }),
+      ])).toBe(false);
+    });
+
+    it('should return false for award + tax withholding (code F)', () => {
+      expect(isAwardOnlyFiling([
+        tx({ code: 'A', shares: 1000 }),
+        tx({ code: 'F', shares: 300 }),
+      ])).toBe(false);
     });
   });
 
