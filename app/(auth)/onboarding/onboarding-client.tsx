@@ -3,8 +3,6 @@
 import { useEffect, useState, useRef } from "react";
 import { useSession } from "@clerk/nextjs";
 import { useAuthContext } from "@/lib/context/auth-context";
-import { Card, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { NotificationPreference } from "@/lib/email/notification-types";
@@ -40,6 +38,7 @@ export default function OnboardingPage() {
 
   const equityNamesRef = useRef<Map<string, string>>(new Map());
   const submittingRef = useRef(false);
+  const lastProfileRef = useRef<{ role: UserRole; aumBracket?: AumBracket; customRoleText?: string } | null>(null);
 
   // Default preferences
   const [emailFrequency] = useState<NotificationPreference>(
@@ -113,12 +112,16 @@ export default function OnboardingPage() {
   // -----------------------------------------------------------------------
   // Complete onboarding
   // -----------------------------------------------------------------------
-  const handleCompleteOnboarding = async (profile: { role: UserRole; aumBracket?: AumBracket }) => {
+  const handleCompleteOnboarding = async (profile: { role: UserRole; aumBracket?: AumBracket; customRoleText?: string }) => {
     if (submittingRef.current) return;
     submittingRef.current = true;
+    lastProfileRef.current = profile;
     try {
       setIsSubmitting(true);
       setError(null);
+
+      // Set cookie optimistically — middleware checks this as fallback to prevent redirect loops
+      document.cookie = "onboarding_completed=true; path=/; max-age=60; SameSite=Lax";
 
       const formattedTickers = selectedEquities.map((symbol) => ({
         symbol,
@@ -140,6 +143,7 @@ export default function OnboardingPage() {
           profile: {
             role: profile.role,
             aumBracket: profile.aumBracket,
+            ...(profile.customRoleText ? { customRoleText: profile.customRoleText } : {}),
           },
           ...(utmParams.utm_source ? { utmParams } : {}),
         },
@@ -150,7 +154,6 @@ export default function OnboardingPage() {
         throw new Error(result.error || "Failed to complete onboarding");
       }
 
-      document.cookie = "onboarding_completed=true; path=/; max-age=60; SameSite=Lax";
       setShowTransition(true);
 
       if (session) {
@@ -164,8 +167,18 @@ export default function OnboardingPage() {
       setError(errorMessage);
       toast.error("Failed to complete onboarding. Please try again.");
       setIsSubmitting(false);
+      submittingRef.current = false;
     }
   };
+
+  // Auto-redirect to sign-in on error after 3 seconds
+  useEffect(() => {
+    if (!error || showTransition) return;
+    const timer = setTimeout(() => {
+      window.location.href = "/sign-in";
+    }, 3000);
+    return () => clearTimeout(timer);
+  }, [error, showTransition]);
 
   // -----------------------------------------------------------------------
   // Render guards
@@ -184,17 +197,11 @@ export default function OnboardingPage() {
   if (error && !showTransition) {
     return (
       <div className="flex min-h-screen items-center justify-center p-4">
-        <Card className="w-full max-w-md">
-          <CardContent className="p-6">
-            <div className="text-center">
-              <h2 className="text-2xl font-bold text-red-600 mb-4">Error</h2>
-              <p className="mb-6">{error}</p>
-              <Button onClick={() => { setError(null); setIsSubmitting(false); }}>
-                Retry
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
+        <div className="text-center max-w-md">
+          <h2 className="text-2xl font-bold text-red-600 mb-4">Something went wrong</h2>
+          <p className="text-muted-foreground">{error}</p>
+          <p className="text-sm text-muted-foreground mt-4">Redirecting to sign in...</p>
+        </div>
       </div>
     );
   }
@@ -208,21 +215,15 @@ export default function OnboardingPage() {
   // -----------------------------------------------------------------------
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50 dark:from-gray-950 dark:via-gray-900 dark:to-gray-950">
-      <div className="flex min-h-screen">
-        {/* Left column: vertical progress */}
-        <div className="w-16 sm:w-48 flex-shrink-0 pl-4 sm:pl-8">
-          <VerticalProgress currentStep={currentStep} />
-        </div>
+      <div className="flex min-h-screen items-center justify-center px-4">
+        <div className="flex gap-6 sm:gap-10 w-full max-w-4xl">
+          {/* Left: vertical progress */}
+          <div className="flex-shrink-0 flex items-center">
+            <VerticalProgress currentStep={currentStep} />
+          </div>
 
-        {/* Right column: main content */}
-        <div
-          className={`flex-1 flex items-start justify-center px-4 ${
-            currentStep === 1
-              ? "pt-4 sm:pt-[8vh] lg:pt-[12vh]"
-              : "pt-4 sm:pt-[4vh] lg:pt-[8vh]"
-          }`}
-        >
-          <div className="w-full max-w-3xl">
+          {/* Right: main content */}
+          <div className="flex-1 min-w-0">
             {/* Step transition wrapper */}
             <div className="relative overflow-hidden">
               <div

@@ -153,7 +153,7 @@ jest.mock('../../lib/cron/sec-filing-service', () => ({
   }
 }));
 
-// queue-monitoring and async-filing-queue mocks removed (modules deleted in dead code cleanup)
+// queue-monitoring and async-filing-queue mocks removed (modules deleted in pipeline simplification)
 
 jest.mock('../../lib/slack/webhook-service', () => ({
   slackWebhookService: {

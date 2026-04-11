@@ -134,9 +134,34 @@ async function handleTierAware(request: NextRequest) {
   const { CronJobMonitor } = await import('@/lib/monitoring/cron-monitor');
   const { CronJobStatus } = await import('@/types/cron');
   const { generateSecureExecutionId } = await import('@/lib/security/secure-random');
+  const { validateCronRequestHmac } = await import('@/lib/security/hmac-auth');
   const { withVercelRateLimit } = await import('@/lib/infrastructure/rate-limiting/vercel-endpoint-enhancer');
   const { rateLimitMonitor, RateLimitEventType } = await import('@/lib/infrastructure/rate-limiting/rate-limit-monitor');
   const { CronAuthService } = await import('@/lib/cron/auth-service');
+
+  // HMAC authentication — reject unauthenticated requests
+  const hmacSignature = request.headers.get('x-hmac-signature');
+  if (!hmacSignature) {
+    return NextResponse.json({ error: 'Missing x-hmac-signature header' }, { status: 401 });
+  }
+  const hmacTimestamp = request.headers.get('x-hmac-timestamp');
+  if (!hmacTimestamp) {
+    return NextResponse.json({ error: 'Missing x-hmac-timestamp header' }, { status: 401 });
+  }
+  const hmacResult = validateCronRequestHmac(request);
+  if (!hmacResult.isValid) {
+    return NextResponse.json({ error: hmacResult.error || 'Invalid HMAC signature' }, { status: 401 });
+  }
+
+  // IP allowlist enforcement
+  const allowedIPs = process.env.CRON_ALLOWED_IPS;
+  if (allowedIPs) {
+    const clientIP = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || '';
+    const allowList = allowedIPs.split(',').map(ip => ip.trim());
+    if (!allowList.includes(clientIP)) {
+      return NextResponse.json({ error: 'IP not allowed' }, { status: 403 });
+    }
+  }
 
   const cronLogger = logger.child('tier-aware-cron');
 
