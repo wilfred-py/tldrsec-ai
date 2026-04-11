@@ -32,6 +32,15 @@ All notable changes to this project will be documented in this file.
 - Removed "Investment Analyst" and "C-Suite Executive" from profile role options.
 - Removed "optional" label from AUM question, "This takes 30 seconds" from profile intro.
 
+## [0.0.6.4] - 2026-04-10
+
+### Changed
+- Google OAuth now forces account picker via `oidcPrompt: 'select_account'`, so users with multiple Gmail accounts can choose which to sign in with.
+- Removed Apple and Facebook social login buttons from sign-in and sign-up pages.
+- Sign-up Google OAuth redirects to `/onboarding` instead of `/dashboard` for new users.
+- Added double-click protection on Google sign-in/sign-up buttons.
+- Google button on sign-up page is now visible immediately when Clerk SDK loads, independent of the form skeleton.
+
 ## [0.0.6.3] - 2026-04-10
 
 ### Changed

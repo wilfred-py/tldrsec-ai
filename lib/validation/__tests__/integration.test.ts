@@ -6,7 +6,6 @@
  */
 
 import { FilingContentValidator } from '../filing-content-validator';
-import { CronFilingProcessor } from '../../cron/filing-processor';
 import {
   NoSuchKeyError,
   InvalidContentError
@@ -95,36 +94,6 @@ describe('Filing Content Validation Integration', () => {
       expect(result.validationMetrics.contentLength).toBeGreaterThan(500);
       expect(result.validationMetrics.detectedFormat).toBe('html');
       expect(result.validationMetrics.hasNoSuchKey).toBe(false);
-    });
-  });
-
-  describe('Retry Logic Integration', () => {
-    test('should correctly identify non-retryable validation errors', () => {
-      const nonRetryableErrors = [
-        'NoSuchKey error detected',
-        'Content validation failed: content too short',
-        'Invalid date in accession number',
-        'Malformed content detected'
-      ];
-      
-      for (const errorMessage of nonRetryableErrors) {
-        const isRetryable = CronFilingProcessor['isRetryableError'](errorMessage);
-        expect(isRetryable).toBe(false);
-      }
-    });
-
-    test('should correctly identify retryable validation errors', () => {
-      const retryableErrors = [
-        'SEC API error: timeout',
-        'Network timeout occurred',
-        'Rate limit exceeded',
-        'Temporarily unavailable'
-      ];
-      
-      for (const errorMessage of retryableErrors) {
-        const isRetryable = CronFilingProcessor['isRetryableError'](errorMessage);
-        expect(isRetryable).toBe(true);
-      }
     });
   });
 

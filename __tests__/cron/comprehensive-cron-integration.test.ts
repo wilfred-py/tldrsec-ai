@@ -172,48 +172,12 @@ jest.mock('../../lib/cron/auth-service', () => ({
   }
 }));
 
-jest.mock('../../lib/cron/user-processing-service', () => ({
-  CronUserProcessingService: {
-    getEligibleUsersForProcessing: jest.fn().mockResolvedValue({
-      allUsers: [],
-      eligibleUsers: []
-    }),
-    processEligibleUsers: jest.fn().mockResolvedValue({
-      usersProcessed: 0,
-      filingsProcessed: 0,
-      emailsSent: 0,
-      totalCostUSD: 0,
-      errorBreakdown: {
-        costValidationFailed: 0,
-        concurrencyConflicts: 0
-      }
-    })
-  }
-}));
-
 jest.mock('../../lib/cron/sec-filing-service', () => ({
   CronSecFilingService: {
     runSecFilingMonitoring: jest.fn().mockResolvedValue({
       tickersChecked: 0,
       newFilingsFound: 0,
       errorCount: 0
-    })
-  }
-}));
-
-jest.mock('../../lib/cron/filing-processor', () => ({
-  CronFilingProcessor: {
-    processSingleFiling: jest.fn().mockResolvedValue({
-      success: true,
-      cost: 0.5
-    }),
-    processUserWithDeduplicatedFilings: jest.fn().mockResolvedValue({
-      success: true,
-      cost: 0.5
-    }),
-    processUserTierFilings: jest.fn().mockResolvedValue({
-      success: true,
-      cost: 0.5
     })
   }
 }));
@@ -289,9 +253,7 @@ jest.mock('../../services/company/filings', () => ({
 import { getPrismaClient } from '../../lib/db/prisma';
 import { GET as tierAwareRoute } from '../../app/api/cron/route';
 import { CronAuthService } from '../../lib/cron/auth-service';
-import { CronUserProcessingService } from '../../lib/cron/user-processing-service';
 import { CronSecFilingService } from '../../lib/cron/sec-filing-service';
-import { CronFilingProcessor } from '../../lib/cron/filing-processor';
 
 // Get reference to the mocked Prisma instance
 const mockPrismaInstance = (getPrismaClient as jest.Mock)();
@@ -319,9 +281,7 @@ const mockRateLimiter = rateLimiter as jest.Mocked<typeof rateLimiter>;
 
 // Mock service references
 const mockCronAuthService = CronAuthService as jest.Mocked<typeof CronAuthService>;
-const mockCronUserProcessingService = CronUserProcessingService as jest.Mocked<typeof CronUserProcessingService>;
 const mockCronSecFilingService = CronSecFilingService as jest.Mocked<typeof CronSecFilingService>;
-const mockCronFilingProcessor = CronFilingProcessor as jest.Mocked<typeof CronFilingProcessor>;
 
 
 // Mock CronJobMonitor
@@ -1726,38 +1686,11 @@ describe('Comprehensive Cron Integration Tests', () => {
     });
     mockCronAuthService.detectPlatform.mockReturnValue('test');
     
-    mockCronUserProcessingService.getEligibleUsersForProcessing.mockResolvedValue({
-      allUsers: [],
-      eligibleUsers: []
-    });
-    mockCronUserProcessingService.processEligibleUsers.mockResolvedValue({
-      usersProcessed: 0,
-      filingsProcessed: 0,
-      emailsSent: 0,
-      totalCostUSD: 0,
-      errorBreakdown: {
-        costValidationFailed: 0,
-        concurrencyConflicts: 0
-      }
-    });
-
     mockCronSecFilingService.runSecFilingMonitoring.mockResolvedValue({
       tickersChecked: 0,
       newFilingsFound: 0,
       errorCount: 0
     });
     
-    mockCronFilingProcessor.processSingleFiling.mockResolvedValue({
-      success: true,
-      cost: 0.5
-    });
-    mockCronFilingProcessor.processUserWithDeduplicatedFilings.mockResolvedValue({
-      success: true,
-      cost: 0.5
-    });
-    mockCronFilingProcessor.processUserTierFilings.mockResolvedValue({
-      success: true,
-      cost: 0.5
-    });
   }
 });

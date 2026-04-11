@@ -50,10 +50,7 @@ jest.mock('../../../lib/job-queue', () => ({
   },
 }));
 
-// Mock CronFilingProcessor to avoid loading its dependencies
-jest.mock('../../../lib/cron/filing-processor', () => ({
-  CronFilingProcessor: jest.fn(),
-}));
+// filing-processor mock removed (module deleted in dead code cleanup)
 
 import { BackgroundFilingWorker } from '@/lib/cron/background-filing-worker';
 
