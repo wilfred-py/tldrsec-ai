@@ -7,6 +7,8 @@ All notable changes to this project will be documented in this file.
 ### Fixed
 - Form 4 emails: award-only filings (stock grants, RSU vesting) no longer show misleading percentage change badges. Previously, a compensation event like "+33.6%" looked identical to a market buy signal. Now shows "Stock Award" neutral signal with purple badge.
 - Form 4 emails: award-only filings show "Current Holdings" instead of "Ownership Impact" with a before/after arrow flow that implied a market transaction.
+- Email logo no longer shows white rectangle in Gmail dark mode. Replaced with transparent-background PNG using all-blue wordmark.
+- Legacy email template header changed from blue to white background, matching the minimalist design system.
 
 ## [0.0.7.0] - 2026-04-10
 
