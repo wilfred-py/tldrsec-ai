@@ -55,6 +55,16 @@ describe('Email Section Components', () => {
       expect(img).toBeTruthy();
       expect(img?.getAttribute('src')).toBe(EMAIL_LOGO_URL);
     });
+
+    it('logo PNG has alpha channel for dark mode transparency', () => {
+      const fs = require('fs');
+      const path = require('path');
+      const logoPath = path.resolve(__dirname, '../../../../../public/images/logo-email.png');
+      const buffer = fs.readFileSync(logoPath);
+      // PNG color type is at byte offset 25 (within IHDR chunk)
+      // Value 6 = RGBA (truecolor with alpha)
+      expect(buffer[25]).toBe(6);
+    });
   });
 
   describe('EmailFooter', () => {
