@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.0.6.5] - 2026-04-11
+
+### Fixed
+- Form 4 email summaries now show the full AI-generated summary instead of only the first sentence. Previously, multi-sentence summaries like equity award analyses were truncated to a single headline.
+- Plain text email fallbacks no longer truncate summaries at 300 characters.
+
 ## [0.0.6.4] - 2026-04-10
 
 ### Changed
