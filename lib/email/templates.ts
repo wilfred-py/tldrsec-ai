@@ -143,8 +143,9 @@ export function baseTemplate(content: string, data: BaseTemplateData): string {
     /* Header styling */
     .header {
       padding: 20px;
-      background-color: ${COLORS.primary};
-      text-align: center;
+      background-color: #ffffff;
+      text-align: left;
+      border-bottom: 1px solid #e6e6e6;
     }
     
     .header-logo {

@@ -238,6 +238,16 @@ export function isAwardTransaction(tx: TransactionData): boolean {
 }
 
 /**
+ * Check if ALL transactions in a filing are equity compensation awards/grants.
+ * Award-only filings should not display percentage change badges or
+ * before/after ownership flows — they are compensation events, not market signals.
+ */
+export function isAwardOnlyFiling(transactions: TransactionData[]): boolean {
+  if (transactions.length === 0) return false;
+  return transactions.every(tx => isAwardTransaction(tx));
+}
+
+/**
  * Check if a transaction is a derivative exercise, conversion, or expiration
  * Covers SEC codes M, C, X, O, E, H
  */
@@ -548,7 +558,7 @@ function getAggregatedTransactionConfig(type: 'gift' | 'sale' | 'purchase' | 'tr
 /**
  * Determine signal level and get appropriate styling
  */
-function getSignalConfig(signalStrength: string, summaryText: string, isSale: boolean, percentChange: string) {
+function getSignalConfig(signalStrength: string, summaryText: string, isSale: boolean, percentChange: string, isAwardOnly: boolean = false) {
   const signalLower = signalStrength.toLowerCase();
   const summaryLower = summaryText?.toLowerCase() || '';
 
@@ -566,6 +576,19 @@ function getSignalConfig(signalStrength: string, summaryText: string, isSale: bo
       borderColor: '#3B82F6',
       textColor: '#1E40AF',
       icon: '🔄',
+    };
+  }
+
+  // Check for award/grant-only filings — compensation, not market activity
+  if (isAwardOnly) {
+    return {
+      level: 'NEUTRAL',
+      verdict: 'Stock Award',
+      description: 'Equity compensation grant — not a market transaction or investment signal.',
+      bgColor: '#F5F3FF',
+      borderColor: '#8B5CF6',
+      textColor: '#6D28D9',
+      icon: '🎯',
     };
   }
 
@@ -710,9 +733,16 @@ export function Form4MinimalistTemplate({ filing }: Form4MinimalistTemplateProps
     validTransactions.length > 0 || normalizedData?.filerName ? 'partial' :
     hasExtractedData ? 'extractor-only' : 'degraded';
 
-  const percentChange = (normalizedData?.percentageChange || extractedData?.percentageChange || '') as string;
+  // Detect award-only filings — suppress misleading % and before/after flow
+  const isAwardOnly = isAwardOnlyFiling(transactions);
+
+  const percentChange = isAwardOnly
+    ? ''  // Suppress misleading % for award-only filings
+    : (normalizedData?.percentageChange || extractedData?.percentageChange || '') as string;
   const newStake = (normalizedData?.newStake || extractedData?.newStake || '') as string;
-  const previousStake = (normalizedData?.previousStake || extractedData?.previousStake || '') as string;
+  const previousStake = isAwardOnly
+    ? ''  // Show "Current Holdings" header instead of "Ownership Impact"
+    : (normalizedData?.previousStake || extractedData?.previousStake || '') as string;
   const signalStrength = (normalizedData?.signalStrength || extractedData?.signalStrength || '') as string;
 
   // For signal config, check if primary transaction is a sale (not gift)
@@ -725,7 +755,7 @@ export function Form4MinimalistTemplate({ filing }: Form4MinimalistTemplateProps
   const hasTransactionData = transactions.length > 0 || percentChange;
 
   // Get signal configuration
-  const signal = getSignalConfig(signalStrength, summaryText || '', primaryIsSale, percentChange);
+  const signal = getSignalConfig(signalStrength, summaryText || '', primaryIsSale, percentChange, isAwardOnly);
 
   // Extract first sentence as the headline, but ensure we have meaningful content
   let headline = summaryText?.split(/(?<=[.!?])\s+/)[0] || '';
