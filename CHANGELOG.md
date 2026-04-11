@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.0.7.1] - 2026-04-11
+
+### Fixed
+- Email logo no longer shows white rectangle in Gmail dark mode. Replaced with transparent-background PNG using all-blue wordmark.
+- Legacy email template header changed from blue to white background, matching the minimalist design system.
+
 ## [0.0.7.0] - 2026-04-10
 
 ### Changed
