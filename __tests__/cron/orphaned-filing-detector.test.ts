@@ -2,17 +2,45 @@
  * Tests for OrphanedFilingDetector
  *
  * Unit tests for OrphanedFilingDetector that verify the service correctly
- * detects filings with processed=false but no corresponding JobQueue entries.
+ * detects filings with processed=false but no corresponding JobQueue entries,
+ * and creates ASYNC_FETCH_FILING jobs with the correct per-user payload shape.
  *
  * @see docs/plans/2026-01-09-eliminate-manual-pipeline-intervention.md Phase 3
  */
 
+// Mock getPrismaClient before importing the module under test
+const mockPrismaClient = {
+  tickerMonitoring: {
+    findMany: jest.fn(),
+  },
+  rssFilingCheck: {
+    findMany: jest.fn(),
+    update: jest.fn(),
+  },
+  user: {
+    findMany: jest.fn(),
+  },
+};
+
+jest.mock('@/lib/db/prisma', () => ({
+  getPrismaClient: () => mockPrismaClient,
+}));
+
+jest.mock('@/lib/job-queue', () => ({
+  JobQueueService: {
+    addJob: jest.fn(),
+  },
+}));
+
 import { OrphanedFilingDetector } from '@/lib/cron/orphaned-filing-detector';
 
 describe('OrphanedFilingDetector', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
   describe('detectOrphanedFilings', () => {
     it('should return empty array when all unprocessed filings have jobs', async () => {
-      // Mock: all unprocessed filings have corresponding jobs
       const orphaned = await OrphanedFilingDetector.detectOrphanedFilings({
         ageThresholdMinutes: 10,
         mockUnprocessedFilings: [
@@ -35,7 +63,6 @@ describe('OrphanedFilingDetector', () => {
         ],
         mockJobsForFilings: [
           { payload: { filingId: 'filing-1' } },
-          // filing-2 has no jobs
         ],
       });
 
@@ -44,19 +71,14 @@ describe('OrphanedFilingDetector', () => {
     });
 
     it('should only consider filings older than threshold', async () => {
-      const recentFiling = {
-        id: 'filing-recent',
-        accessionNumber: 'ACC-R',
-        createdAt: new Date(), // Just created (within threshold)
-      };
-
       const orphaned = await OrphanedFilingDetector.detectOrphanedFilings({
         ageThresholdMinutes: 10,
-        mockUnprocessedFilings: [recentFiling],
+        mockUnprocessedFilings: [
+          { id: 'filing-recent', accessionNumber: 'ACC-R', createdAt: new Date() },
+        ],
         mockJobsForFilings: [],
       });
 
-      // Recent filings should not be flagged as orphaned
       expect(orphaned).toHaveLength(0);
     });
 
@@ -70,7 +92,6 @@ describe('OrphanedFilingDetector', () => {
         ],
         mockJobsForFilings: [
           { payload: { filingId: 'filing-1' } },
-          // filing-2 and filing-3 have no jobs
         ],
       });
 
@@ -90,7 +111,6 @@ describe('OrphanedFilingDetector', () => {
     });
 
     it('should use default age threshold of 10 minutes', async () => {
-      // Filing created 5 minutes ago (within default threshold)
       const orphaned = await OrphanedFilingDetector.detectOrphanedFilings({
         mockUnprocessedFilings: [
           { id: 'filing-1', accessionNumber: 'ACC-1', createdAt: new Date(Date.now() - 5 * 60 * 1000) },
@@ -103,28 +123,59 @@ describe('OrphanedFilingDetector', () => {
   });
 
   describe('recoverOrphanedFilings', () => {
+    const mockTickerMonitoring = {
+      id: 'tm-1',
+      symbol: 'AAPL',
+      companyName: 'Apple Inc.',
+      cik: '0000320193',
+    };
+
+    const mockRssFiling = {
+      id: 'filing-1',
+      filingUrl: 'https://sec.gov/filing/1',
+      filingDate: new Date('2026-04-01'),
+      filingType: '10-K',
+      accessionNumber: 'ACC-1',
+    };
+
+    const mockUser = {
+      id: 'user-1',
+      email: 'test@example.com',
+      subscriptionTier: 'FREE',
+      isTrialing: false,
+      trialEndsAt: null,
+      tickers: [{ id: 'ticker-1', symbol: 'AAPL', companyName: 'Apple Inc.' }],
+    };
+
+    beforeEach(() => {
+      mockPrismaClient.tickerMonitoring.findMany.mockResolvedValue([mockTickerMonitoring]);
+      mockPrismaClient.rssFilingCheck.findMany.mockResolvedValue([mockRssFiling]);
+      mockPrismaClient.rssFilingCheck.update.mockResolvedValue({});
+      mockPrismaClient.user.findMany.mockResolvedValue([mockUser]);
+    });
+
     it('should create ASYNC_FETCH_FILING jobs for orphaned filings', async () => {
       const created = await OrphanedFilingDetector.recoverOrphanedFilings({
         mockOrphanedFilings: [
-          { id: 'filing-1', accessionNumber: 'ACC-1', formType: '10-K', tickerId: 'ticker-1', createdAt: new Date() },
+          { id: 'filing-1', accessionNumber: 'ACC-1', formType: '10-K', tickerId: 'tm-1', createdAt: new Date() },
         ],
         dryRun: true,
       });
 
       expect(created).toHaveLength(1);
       expect(created[0].jobType).toBe('ASYNC_FETCH_FILING');
-      expect(created[0].payload.filingId).toBe('filing-1');
+      expect(created[0].payload.filing.filingId).toBe('filing-1');
     });
 
-    it('should include source identifier in job payload', async () => {
+    it('should include orphaned-filing-recovery source in execution context', async () => {
       const created = await OrphanedFilingDetector.recoverOrphanedFilings({
         mockOrphanedFilings: [
-          { id: 'filing-1', accessionNumber: 'ACC-1', formType: '10-Q', tickerId: 'ticker-1', createdAt: new Date() },
+          { id: 'filing-1', accessionNumber: 'ACC-1', formType: '10-Q', tickerId: 'tm-1', createdAt: new Date() },
         ],
         dryRun: true,
       });
 
-      expect(created[0].payload.source).toBe('orphaned-filing-recovery');
+      expect(created[0].payload.executionContext.sourceContext).toBe('orphaned-filing-recovery');
     });
 
     it('should return empty array when no orphaned filings', async () => {
@@ -136,31 +187,89 @@ describe('OrphanedFilingDetector', () => {
       expect(created).toHaveLength(0);
     });
 
-    it('should create jobs for multiple orphaned filings', async () => {
+    it('should create one job per user per filing', async () => {
+      const user2 = {
+        ...mockUser,
+        id: 'user-2',
+        email: 'user2@example.com',
+        tickers: [{ id: 'ticker-2', symbol: 'AAPL', companyName: 'Apple Inc.' }],
+      };
+      mockPrismaClient.user.findMany.mockResolvedValue([mockUser, user2]);
+
       const created = await OrphanedFilingDetector.recoverOrphanedFilings({
         mockOrphanedFilings: [
-          { id: 'filing-1', accessionNumber: 'ACC-1', formType: '10-K', tickerId: 'ticker-1', createdAt: new Date() },
-          { id: 'filing-2', accessionNumber: 'ACC-2', formType: '8-K', tickerId: 'ticker-2', createdAt: new Date() },
-          { id: 'filing-3', accessionNumber: 'ACC-3', formType: 'Form 4', tickerId: 'ticker-3', createdAt: new Date() },
+          { id: 'filing-1', accessionNumber: 'ACC-1', formType: '10-K', tickerId: 'tm-1', createdAt: new Date() },
         ],
         dryRun: true,
       });
 
-      expect(created).toHaveLength(3);
-      expect(created[0].payload.filingId).toBe('filing-1');
-      expect(created[1].payload.filingId).toBe('filing-2');
-      expect(created[2].payload.filingId).toBe('filing-3');
+      expect(created).toHaveLength(2);
+      expect(created[0].payload.userId).toBe('user-1');
+      expect(created[1].payload.userId).toBe('user-2');
+    });
+
+    it('should skip filings with no real users tracking the ticker', async () => {
+      mockPrismaClient.user.findMany.mockResolvedValue([]);
+
+      const created = await OrphanedFilingDetector.recoverOrphanedFilings({
+        mockOrphanedFilings: [
+          { id: 'filing-1', accessionNumber: 'ACC-1', formType: '10-K', tickerId: 'tm-1', createdAt: new Date() },
+        ],
+        dryRun: true,
+      });
+
+      expect(created).toHaveLength(0);
+    });
+
+    it('should use deterministic idempotency key (no Date.now)', async () => {
+      const created = await OrphanedFilingDetector.recoverOrphanedFilings({
+        mockOrphanedFilings: [
+          { id: 'filing-1', accessionNumber: 'ACC-1', formType: '10-K', tickerId: 'tm-1', createdAt: new Date() },
+        ],
+        dryRun: true,
+      });
+
+      expect(created[0].idempotencyKey).toBe('orphan-recovery-filing-1-user-1');
+      // Run again -- should produce same key (deterministic)
+      const created2 = await OrphanedFilingDetector.recoverOrphanedFilings({
+        mockOrphanedFilings: [
+          { id: 'filing-1', accessionNumber: 'ACC-1', formType: '10-K', tickerId: 'tm-1', createdAt: new Date() },
+        ],
+        dryRun: true,
+      });
+      expect(created2[0].idempotencyKey).toBe(created[0].idempotencyKey);
     });
 
     it('should set higher priority for recovery jobs', async () => {
       const created = await OrphanedFilingDetector.recoverOrphanedFilings({
         mockOrphanedFilings: [
-          { id: 'filing-1', accessionNumber: 'ACC-1', formType: '10-K', tickerId: 'ticker-1', createdAt: new Date() },
+          { id: 'filing-1', accessionNumber: 'ACC-1', formType: '10-K', tickerId: 'tm-1', createdAt: new Date() },
         ],
         dryRun: true,
       });
 
       expect(created[0].priority).toBe(5);
+    });
+
+    it('should build correct FetchJobPayload shape', async () => {
+      const created = await OrphanedFilingDetector.recoverOrphanedFilings({
+        mockOrphanedFilings: [
+          { id: 'filing-1', accessionNumber: 'ACC-1', formType: '10-K', tickerId: 'tm-1', createdAt: new Date() },
+        ],
+        dryRun: true,
+      });
+
+      const payload = created[0].payload;
+      expect(payload.userId).toBe('user-1');
+      expect(payload.userEmail).toBe('test@example.com');
+      expect(payload.userTier).toBe('FREE');
+      expect(payload.ticker.symbol).toBe('AAPL');
+      expect(payload.ticker.companyName).toBe('Apple Inc.');
+      expect(payload.ticker.cik).toBe('0000320193');
+      expect(payload.filing.filingId).toBe('filing-1');
+      expect(payload.filing.formType).toBe('10-K');
+      expect(payload.filing.filingUrl).toBe('https://sec.gov/filing/1');
+      expect(payload.filing.accessionNumber).toBe('ACC-1');
     });
   });
 
@@ -203,14 +312,25 @@ describe('OrphanedFilingDetector', () => {
   });
 
   describe('checkAndRecover', () => {
+    beforeEach(() => {
+      mockPrismaClient.tickerMonitoring.findMany.mockResolvedValue([
+        { id: 'tm-1', symbol: 'AAPL', companyName: 'Apple Inc.', cik: '0000320193' },
+      ]);
+      mockPrismaClient.rssFilingCheck.findMany.mockResolvedValue([
+        { id: 'filing-1', filingUrl: 'https://sec.gov/1', filingDate: new Date('2026-04-01'), filingType: '10-K', accessionNumber: 'ACC-1' },
+      ]);
+      mockPrismaClient.rssFilingCheck.update.mockResolvedValue({});
+      mockPrismaClient.user.findMany.mockResolvedValue([
+        { id: 'user-1', email: 'test@example.com', subscriptionTier: 'FREE', isTrialing: false, trialEndsAt: null, tickers: [{ id: 't-1', symbol: 'AAPL', companyName: 'Apple Inc.' }] },
+      ]);
+    });
+
     it('should return recovered count and filings list', async () => {
-      // This test uses mocks provided to detectOrphanedFilings internally
-      // For unit testing, we'll test the logic with dry run
       const result = await OrphanedFilingDetector.checkAndRecover({
         detectOptions: {
           ageThresholdMinutes: 10,
           mockUnprocessedFilings: [
-            { id: 'filing-1', accessionNumber: 'ACC-1', formType: '10-K', tickerId: 'ticker-1', createdAt: new Date(Date.now() - 20 * 60 * 1000) },
+            { id: 'filing-1', accessionNumber: 'ACC-1', formType: '10-K', tickerId: 'tm-1', createdAt: new Date(Date.now() - 20 * 60 * 1000) },
           ],
           mockJobsForFilings: [],
         },
@@ -242,9 +362,7 @@ describe('OrphanedFilingDetector', () => {
     });
 
     it('should clear rate limit for testing', () => {
-      // This test verifies the clearRateLimit method works
       OrphanedFilingDetector.clearRateLimit();
-      // No error means success
       expect(true).toBe(true);
     });
   });

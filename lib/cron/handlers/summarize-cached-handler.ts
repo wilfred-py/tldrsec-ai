@@ -67,6 +67,13 @@ export async function handleSummarizeCached(
   const { userId, userEmail, userTier: _userTier, ticker, filing, cacheId, executionContext } = payload;
   const executionId = executionContext?.executionId ?? `legacy-${Date.now()}`;
 
+  // Defense-in-depth: fail fast if payload is missing required nested objects
+  if (!ticker?.symbol || !filing?.formType) {
+    const msg = `Invalid payload: missing ${!ticker?.symbol ? 'ticker.symbol' : 'filing.formType'}. This usually means a job was created with the wrong payload shape.`;
+    summarizeLogger.error(`[${executionId}] ${msg}`, { payload: JSON.stringify(payload).slice(0, 500) });
+    return { success: false, error: msg, summarizeJobQueued: false };
+  }
+
   summarizeLogger.info(`[${executionId}] Starting summarize phase`, {
     userId,
     ticker: ticker.symbol,

@@ -8,8 +8,6 @@ import { logger } from '../logging';
 // IMPORTANT: Use lazy imports to avoid singleton instantiation at module load time
 // Importing the singletons directly causes them to instantiate during build/import
 import type { AsyncAlertQueue } from './async-alert-queue';
-import type { BoundedContextManager } from '../cron/bounded-context-manager';
-
 const perfLogger = logger.child('performance-monitor');
 
 // Lazy accessors for singletons to avoid module-level instantiation
@@ -19,11 +17,8 @@ const getAsyncAlertQueue = (): AsyncAlertQueue => {
   return asyncAlertQueue;
 };
 
-const getBoundedContextManager = (): BoundedContextManager => {
-  // Dynamic require to defer singleton instantiation until first use
-  const { boundedContextManager } = require('../cron/bounded-context-manager');
-  return boundedContextManager;
-};
+// Stub for removed BoundedContextManager (legacy dead code)
+const getContextStats = () => ({ memoryUsageMB: 0, totalContexts: 0, activeContexts: 0, hitRate: 0, missRate: 0 });
 
 interface PerformanceMetrics {
   alertProcessingTime: {
@@ -153,7 +148,7 @@ export class PerformanceMonitor {
     }
 
     // Check memory usage
-    const contextStats = getBoundedContextManager().getStats();
+    const contextStats = getContextStats();
     if (contextStats.memoryUsageMB > 500) {
       issues.push(`Memory usage (${contextStats.memoryUsageMB}MB) is excessive`);
     }
@@ -180,7 +175,7 @@ export class PerformanceMonitor {
   public generateReport(): string {
     const metrics = this.getMetrics();
     const queueStats = getAsyncAlertQueue().getQueueStats();
-    const contextStats = getBoundedContextManager().getStats();
+    const contextStats = getContextStats();
     const regression = this.checkPerformanceRegression();
 
     const report = `
@@ -270,7 +265,7 @@ ${regression.issues.length > 0 ? '\nISSUES:\n' + regression.issues.map(issue => 
     this.updateDatabaseMetrics();
 
     // Update context memory metrics
-    const contextStats = getBoundedContextManager().getStats();
+    const contextStats = getContextStats();
     this.metrics.contextMemoryUsage = {
       current: contextStats.memoryUsageMB,
       peak: Math.max(this.metrics.contextMemoryUsage.peak, contextStats.memoryUsageMB),

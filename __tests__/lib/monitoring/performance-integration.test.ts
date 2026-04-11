@@ -6,7 +6,6 @@
 
 import { CronJobMonitor } from '../../../lib/monitoring/cron-monitor';
 import { asyncAlertQueue } from '../../../lib/monitoring/async-alert-queue';
-import { boundedContextManager } from '../../../lib/cron/bounded-context-manager';
 import { performanceMonitor } from '../../../lib/monitoring/performance-monitor';
 import { getPrismaClient } from '../../../lib/db/prisma';
 import { logger } from '../../../lib/logging';
@@ -54,88 +53,6 @@ describe('Performance Integration Tests', () => {
   });
 
   describe('End-to-End Performance Validation', () => {
-    it('should process 1000+ users with alerts in under 10 seconds', async () => {
-      // Simulate high-scale cron processing scenario
-      const userCount = 1000;
-      const filingCount = 5; // Average filings per user
-      const startTime = Date.now();
-
-      mockPrisma.cronJobExecution.create.mockResolvedValue({ id: 'test-id' });
-      mockPrisma.cronJobExecution.update.mockResolvedValue({ id: 'test-id' });
-      mockPrisma.cronJobAlert.createMany.mockResolvedValue({ count: 10 });
-
-      // Create multiple cron monitors to simulate concurrent processing
-      const monitors = [];
-      for (let i = 0; i < 10; i++) {
-        const monitor = await CronJobMonitor.create(`test-job-${i}`, 'VERCEL_CRON');
-        monitors.push(monitor);
-      }
-
-      // Simulate processing multiple users with filings and alerts
-      const promises = [];
-      
-      for (let userId = 0; userId < userCount; userId++) {
-        const monitorIndex = userId % monitors.length;
-        const monitor = monitors[monitorIndex];
-
-        // Simulate filing processing with potential alerts
-        for (let filingId = 0; filingId < filingCount; filingId++) {
-          const promise = (async () => {
-            // Add processing context
-            boundedContextManager.addContext(`user-${userId}`, {
-              userId: `user-${userId}`,
-              tier: userId % 2 === 0 ? 'PRO' : 'HOBBY',
-              operation: `filing-${filingId}`,
-              operationType: filingId % 3 === 0 ? 'cached_summary' : 'ai_generation',
-              isCached: filingId % 3 === 0,
-              processingStartTime: Date.now(),
-            });
-
-            // Create alerts for some filings (simulating errors/warnings)
-            if (filingId % 10 === 0) {
-              await monitor.createAlert('HIGH_ERROR_RATE', {
-                severity: 'HIGH',
-                message: `High error rate for user ${userId}, filing ${filingId}`,
-                details: { userId, filingId, errorRate: 0.15 }
-              });
-            }
-
-            if (filingId % 20 === 0) {
-              await monitor.createAlert('COST_THRESHOLD_EXCEEDED', {
-                severity: 'MEDIUM',
-                message: `Cost threshold exceeded for user ${userId}`,
-                details: { userId, currentCost: 5.50, threshold: 5.00 }
-              });
-            }
-          })();
-
-          promises.push(promise);
-        }
-      }
-
-      // Wait for all processing to complete
-      await Promise.all(promises);
-
-      // Trigger alert queue processing
-      jest.advanceTimersByTime(6000);
-      await jest.runAllTimersAsync();
-
-      const totalProcessingTime = Date.now() - startTime;
-
-      // Performance assertions
-      expect(totalProcessingTime).toBeLessThan(10000); // Under 10 seconds
-
-      // Verify alert queue is not overwhelmed
-      const queueStats = asyncAlertQueue.getQueueStats();
-      expect(queueStats.circuitBreakerOpen).toBe(false);
-
-      // Verify context manager is handling memory efficiently
-      const contextStats = boundedContextManager.getStats();
-      expect(contextStats.memoryUsageMB).toBeLessThan(100); // Reasonable memory usage
-
-      console.log(`Processed ${userCount} users with ${userCount * filingCount} filings in ${totalProcessingTime}ms`);
-    });
-
     it('should maintain sub-10ms alert creation times under sustained load', async () => {
       const monitor = await CronJobMonitor.create('load-test-job', 'VERCEL_CRON');
       mockPrisma.cronJobExecution.create.mockResolvedValue({ id: 'test-id' });
@@ -180,62 +97,6 @@ describe('Performance Integration Tests', () => {
       console.log(`Alert Performance: avg=${avgTime}ms, p95=${p95Time}ms, p99=${p99Time}ms, max=${maxTime}ms`);
     });
 
-    it('should handle memory efficiently with large context sets', async () => {
-      const userCount = 100;
-      const contextsPerUser = 50;
-      const initialMemory = process.memoryUsage().heapUsed;
-
-      // Add many contexts to test memory management
-      for (let userId = 0; userId < userCount; userId++) {
-        const contexts = [];
-        
-        for (let contextId = 0; contextId < contextsPerUser; contextId++) {
-          const context = {
-            userId: `memory-test-user-${userId}`,
-            tier: 'PRO',
-            operation: `memory-test-${contextId}`,
-            operationType: 'ai_generation' as const,
-            isCached: false,
-            processingStartTime: Date.now() + contextId,
-          };
-          
-          boundedContextManager.addContext(`memory-test-user-${userId}`, context);
-          contexts.push(context);
-        }
-
-        // Create aggregate context to test aggregation performance
-        const startTime = Date.now();
-        boundedContextManager.createBoundedAggregateContext(
-          `memory-test-user-${userId}`,
-          'PRO',
-          contexts,
-          Math.random() * 10,
-          contexts.length
-        );
-        const aggregationTime = Date.now() - startTime;
-
-        // Aggregation should be fast even with many contexts
-        expect(aggregationTime).toBeLessThan(50);
-      }
-
-      // Trigger cleanup
-      for (let userId = 0; userId < userCount; userId++) {
-        boundedContextManager.cleanupCompletedContexts(`memory-test-user-${userId}`);
-      }
-
-      const finalMemory = process.memoryUsage().heapUsed;
-      const memoryGrowth = (finalMemory - initialMemory) / 1024 / 1024; // MB
-
-      // Memory growth should be reasonable
-      expect(memoryGrowth).toBeLessThan(50); // Less than 50MB growth
-
-      // Context manager should report healthy stats
-      const stats = boundedContextManager.getStats();
-      expect(stats.totalContexts).toBeLessThan(userCount * contextsPerUser); // Should have bounds
-      expect(stats.evictedContexts).toBeGreaterThan(0); // Should have evicted some
-
-      console.log(`Memory growth: ${memoryGrowth}MB, Total contexts: ${stats.totalContexts}, Evicted: ${stats.evictedContexts}`);
-    });
   });
 
   describe('Performance Regression Detection', () => {

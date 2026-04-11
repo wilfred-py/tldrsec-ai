@@ -14,9 +14,7 @@
 
 import { logger } from '../logging';
 import { JobQueueService, type JobType } from '../job-queue';
-import { CronFilingProcessor } from './filing-processor';
 import { getPrismaClient } from '../db/prisma';
-import type { FilingJobPayload } from './async-filing-queue';
 import type { JobQueue } from '@prisma/client';
 import { FILING_PROCESSING_TIMEOUT, getBatchSizeForJobType, SUMMARIZE_TIME_BUDGET_MS } from './types';
 
@@ -491,7 +489,7 @@ export class BackgroundFilingWorker {
    */
   private async processJob(job: JobQueue): Promise<ProcessedJobResult> {
     const jobStartTime = Date.now();
-    const payload = job.payload as unknown as FilingJobPayload;
+    const payload = job.payload as unknown as Record<string, unknown>;
 
     workerLogger.info('Processing job', {
       processId: this.processId,
@@ -682,10 +680,9 @@ export class BackgroundFilingWorker {
           return await handleTrialExpiration(payload as TrialPayloadType) as HandlerResult;
         }
 
-        case 'ASYNC_SUMMARIZE_FILING':
         default:
-          // Legacy filing processing for backward compatibility
-          return await this.executeFilingProcessing(job, payload as FilingJobPayload, signal);
+          workerLogger.warn('Unknown job type', { jobType: job.jobType, jobId: job.id });
+          return { success: false, error: `Unknown job type: ${job.jobType}` };
       }
     } catch (error) {
       workerLogger.error('Handler routing failed', {
@@ -700,63 +697,6 @@ export class BackgroundFilingWorker {
     }
   }
 
-  /**
-   * Execute the actual filing processing logic (separated for timeout wrapping)
-   * LEGACY: Used for ASYNC_SUMMARIZE_FILING and backward compatibility
-   *
-   * @param job - The job queue entry
-   * @param payload - The filing job payload with user, ticker, and filing info
-   * @param signal - Optional AbortSignal for cancelling in-flight requests on timeout
-   */
-  private async executeFilingProcessing(
-    job: JobQueue,
-    payload: FilingJobPayload,
-    signal?: AbortSignal
-  ): Promise<{ success: boolean; cost?: number; error?: string; processingContext?: unknown }> {
-    // Check if already aborted before starting
-    if (signal?.aborted) {
-      return { success: false, error: 'Job was aborted before processing started' };
-    }
-
-    // Get user from database
-    const user = await getPrisma().user.findUnique({
-      where: { id: payload.userId },
-      include: {
-        tickers: {
-          where: { symbol: payload.ticker.symbol },
-        },
-      },
-    });
-
-    if (!user) {
-      return { success: false, error: `User not found: ${payload.userId}` };
-    }
-
-    // Check if aborted after DB query
-    if (signal?.aborted) {
-      return { success: false, error: 'Job was aborted after user lookup' };
-    }
-
-    // Process filing using existing processor
-    // Pass signal through for proper request cancellation
-    return await CronFilingProcessor.processSingleFiling(
-      {
-        id: payload.filing.filingId,
-        accessionNumber: payload.filing.accessionNumber,
-        filingType: payload.filing.formType,
-        filingDate: new Date(payload.filing.filingDate),
-        filingUrl: payload.filing.filingUrl,
-      },
-      user,
-      payload.userTier,
-      {
-        symbol: payload.ticker.symbol,
-        cik: payload.ticker.cik,
-      },
-      payload.ticker,
-      signal // Pass abort signal to processor
-    );
-  }
 }
 
 /**

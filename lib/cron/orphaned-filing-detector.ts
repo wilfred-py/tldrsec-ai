@@ -12,7 +12,7 @@
  *
  * Features:
  * - Detects orphaned filing checks older than configurable threshold
- * - Creates ASYNC_SUMMARIZE_CACHED jobs to recover orphaned filings
+ * - Creates ASYNC_FETCH_FILING jobs to recover orphaned filings (re-enters at Phase 2)
  * - Rate-limited alerting to prevent duplicate notifications
  * - Configurable via environment variables
  *
@@ -91,18 +91,41 @@ interface CheckAndRecoverResult {
 
 /**
  * Job data structure for creating recovery jobs
+ * Uses ASYNC_FETCH_FILING (Phase 2) because orphaned filings never went through
+ * the fetch phase, so there is no FilingContentCache entry. The fetch handler
+ * will populate the cache and queue the summarize job itself.
  */
 interface RecoveryJobData {
   jobType: string;
-  payload: {
-    filingId: string;
-    accessionNumber: string;
-    formType: string;
-    tickerId: string;
-    source: string;
-  };
+  status: string;
   priority: number;
+  maxRetries: number;
+  retryCount: number;
+  scheduledFor: Date;
   idempotencyKey: string;
+  payload: {
+    userId: string;
+    userEmail: string;
+    userTier: string;
+    ticker: {
+      id: string;
+      symbol: string;
+      companyName?: string;
+      cik?: string;
+    };
+    filing: {
+      filingId: string;
+      formType: string;
+      filingDate: string;
+      filingUrl: string;
+      accessionNumber: string;
+    };
+    executionContext: {
+      executionId: string;
+      cronTriggerTime: string;
+      sourceContext: string;
+    };
+  };
 }
 
 /**
@@ -224,7 +247,14 @@ export class OrphanedFilingDetector {
   }
 
   /**
-   * Recover orphaned filings by creating jobs for them
+   * Recover orphaned filings by creating ASYNC_FETCH_FILING jobs.
+   *
+   * Re-enters the pipeline at Phase 2 (fetch) because orphaned filings never
+   * went through fetch, so there is no FilingContentCache. The fetch handler
+   * will populate the cache and queue the summarize job itself.
+   *
+   * Creates one job per user per filing (matching the discovery handler pattern).
+   * Skips filings where no real users track the ticker.
    */
   static async recoverOrphanedFilings(options: RecoverOptions = {}): Promise<RecoveryJobData[]> {
     const { mockOrphanedFilings, dryRun = false } = options;
@@ -235,31 +265,134 @@ export class OrphanedFilingDetector {
       return [];
     }
 
+    const prisma = getPrismaClient();
     const createdJobs: RecoveryJobData[] = [];
+    const executionId = `orphan-recovery-${Date.now()}`;
+
+    // Collect unique tickerMonitoringIds to batch-lookup ticker info
+    const uniqueTickerIds = [...new Set(orphanedFilings.map(f => f.tickerId).filter(id => id !== 'unknown'))];
+
+    // Batch lookup TickerMonitoring records
+    const tickerMonitorings = uniqueTickerIds.length > 0
+      ? await prisma.tickerMonitoring.findMany({
+          where: { id: { in: uniqueTickerIds } },
+          select: { id: true, symbol: true, companyName: true, cik: true },
+        })
+      : [];
+    const tickerMap = new Map(tickerMonitorings.map(t => [t.id, t]));
+
+    // Batch lookup RssFilingCheck records for filing URLs and dates
+    const filingIds = orphanedFilings.map(f => f.id);
+    const rssFilings = await prisma.rssFilingCheck.findMany({
+      where: { id: { in: filingIds } },
+      select: { id: true, filingUrl: true, filingDate: true, filingType: true, accessionNumber: true },
+    });
+    const rssMap = new Map(rssFilings.map(f => [f.id, f]));
+
+    // Get unique ticker symbols and batch lookup users
+    const uniqueSymbols = [...new Set(tickerMonitorings.map(t => t.symbol))];
+    const usersForSymbols = uniqueSymbols.length > 0
+      ? await prisma.user.findMany({
+          where: { tickers: { some: { symbol: { in: uniqueSymbols } } } },
+          select: {
+            id: true,
+            email: true,
+            subscriptionTier: true,
+            isTrialing: true,
+            trialEndsAt: true,
+            tickers: {
+              where: { symbol: { in: uniqueSymbols } },
+              select: { id: true, symbol: true, companyName: true },
+            },
+          },
+        })
+      : [];
+
+    // Build symbol -> users map
+    const usersBySymbol = new Map<string, typeof usersForSymbols>();
+    for (const user of usersForSymbols) {
+      for (const ticker of user.tickers) {
+        const list = usersBySymbol.get(ticker.symbol) || [];
+        list.push(user);
+        usersBySymbol.set(ticker.symbol, list);
+      }
+    }
 
     for (const filing of orphanedFilings) {
-      const jobData: RecoveryJobData = {
-        // Use ASYNC_SUMMARIZE_CACHED since this is for RssFilingCheck entries
-        // that were discovered but not yet processed into summaries
-        jobType: 'ASYNC_SUMMARIZE_CACHED',
-        payload: {
-          filingId: filing.id,  // This is now the RssFilingCheck ID
-          accessionNumber: filing.accessionNumber,
-          formType: filing.formType,
-          tickerId: filing.tickerId,  // This is tickerMonitoringId
-          source: 'orphaned-filing-recovery',
-        },
-        priority: 5, // Higher priority for recovery
-        idempotencyKey: `orphan-recovery-${filing.id}-${Date.now()}`,
-      };
+      const tickerInfo = tickerMap.get(filing.tickerId);
+      if (!tickerInfo) {
+        continue; // Skip filings with unknown ticker monitoring records
+      }
 
-      if (dryRun) {
+      const rssInfo = rssMap.get(filing.id);
+      if (!rssInfo) {
+        continue; // Skip filings we can't find details for
+      }
+
+      const users = usersBySymbol.get(tickerInfo.symbol) || [];
+      if (users.length === 0) {
+        // No real users track this ticker -- mark as processed to stop re-detection
+        if (!dryRun) {
+          await prisma.rssFilingCheck.update({
+            where: { id: filing.id },
+            data: { processed: true },
+          });
+        }
+        continue;
+      }
+
+      // Create one job per user (matching discovery-handler pattern)
+      for (const user of users) {
+        const userTicker = user.tickers.find(t => t.symbol === tickerInfo.symbol);
+        if (!userTicker) continue;
+
+        const jobData: RecoveryJobData = {
+          jobType: 'ASYNC_FETCH_FILING',
+          status: 'PENDING',
+          priority: 5,
+          maxRetries: 3,
+          retryCount: 0,
+          scheduledFor: new Date(),
+          // Deterministic key: prevents duplicate jobs across recovery cycles
+          idempotencyKey: `orphan-recovery-${filing.id}-${user.id}`,
+          payload: {
+            userId: user.id,
+            userEmail: user.email || '',
+            userTier: user.subscriptionTier || 'FREE',
+            ticker: {
+              id: userTicker.id,
+              symbol: tickerInfo.symbol,
+              companyName: userTicker.companyName || tickerInfo.companyName || undefined,
+              cik: tickerInfo.cik || undefined,
+            },
+            filing: {
+              filingId: filing.id,
+              formType: rssInfo.filingType,
+              filingDate: rssInfo.filingDate.toISOString().split('T')[0],
+              filingUrl: rssInfo.filingUrl,
+              accessionNumber: rssInfo.accessionNumber,
+            },
+            executionContext: {
+              executionId,
+              cronTriggerTime: new Date().toISOString(),
+              sourceContext: 'orphaned-filing-recovery',
+            },
+          },
+        };
+
+        if (!dryRun) {
+          const { JobQueueService } = await import('@/lib/job-queue');
+          await JobQueueService.addJob(jobData);
+        }
         createdJobs.push(jobData);
-      } else {
-        // Dynamic import to avoid circular dependency
-        const { JobQueueService } = await import('@/lib/job-queue');
-        await JobQueueService.addJob(jobData);
-        createdJobs.push(jobData);
+      }
+
+      // Mark the RssFilingCheck as processed after creating recovery jobs
+      if (!dryRun) {
+        await prisma.rssFilingCheck.update({
+          where: { id: filing.id },
+          data: { processed: true },
+        });
       }
     }
 
@@ -349,7 +482,7 @@ export class OrphanedFilingDetector {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          text: `:recycle: *Orphaned Filing Recovery*\n\nRecovered ${count} orphaned filing(s) by creating ASYNC_SUMMARIZE_CACHED jobs.\n\nThese filings (from RssFilingCheck) had \`processed=false\` but no active jobs in the queue.`,
+          text: `:recycle: *Orphaned Filing Recovery*\n\nRecovered ${count} orphaned filing(s) by creating ASYNC_FETCH_FILING jobs.\n\nThese filings (from RssFilingCheck) had \`processed=false\` but no active jobs in the queue.`,
         }),
       });
     } catch (error) {
