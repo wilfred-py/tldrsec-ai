@@ -32,6 +32,12 @@ All notable changes to this project will be documented in this file.
 - Removed "Investment Analyst" and "C-Suite Executive" from profile role options.
 - Removed "optional" label from AUM question, "This takes 30 seconds" from profile intro.
 
+## [0.0.6.5] - 2026-04-11
+
+### Fixed
+- Form 4 email summaries now show the full AI-generated summary instead of only the first sentence. Previously, multi-sentence summaries like equity award analyses were truncated to a single headline.
+- Plain text email fallbacks no longer truncate summaries at 300 characters.
+
 ## [0.0.6.4] - 2026-04-10
 
 ### Changed

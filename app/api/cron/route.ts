@@ -137,6 +137,7 @@ async function handleTierAware(request: NextRequest) {
   const { validateCronRequestHmac } = await import('@/lib/security/hmac-auth');
   const { withVercelRateLimit } = await import('@/lib/infrastructure/rate-limiting/vercel-endpoint-enhancer');
   const { rateLimitMonitor, RateLimitEventType } = await import('@/lib/infrastructure/rate-limiting/rate-limit-monitor');
+  const { CronAuthService } = await import('@/lib/cron/auth-service');
 
   // HMAC authentication — reject unauthenticated requests
   const hmacSignature = request.headers.get('x-hmac-signature');
@@ -163,6 +164,17 @@ async function handleTierAware(request: NextRequest) {
   }
 
   const cronLogger = logger.child('tier-aware-cron');
+
+  // Authenticate request before any processing
+  const authResult = await CronAuthService.validateCronRequest(request);
+  if (!authResult.isValid) {
+    cronLogger.warn('Unauthorized tier-aware cron request', {
+      error: authResult.error,
+      clientIP: authResult.clientIP,
+    });
+    const statusCode = authResult.error === 'IP not allowed' ? 403 : 401;
+    return NextResponse.json({ error: authResult.error }, { status: statusCode });
+  }
 
   const startTime = Date.now();
   const secureExecutionId = generateSecureExecutionId('api');
