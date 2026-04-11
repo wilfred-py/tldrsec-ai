@@ -439,7 +439,7 @@ A new ${filing.filingType} filing has been submitted for ${filing.companyName} (
 Filing Type: ${filing.filingType}
 Filing Date: ${formattedDate}
 
-${filing.summaryText ? filing.summaryText.substring(0, 300) + '...' : 'View the full summary for details.'}
+${filing.summaryText || 'View the full summary for details.'}
 
 View Full Summary: ${filing.summaryUrl}
 View Original SEC Filing: ${filing.filingUrl}
@@ -451,7 +451,7 @@ You received this email because you're subscribed to updates from tldrSEC.
 Manage preferences: ${data.preferencesUrl}
 Unsubscribe: ${data.unsubscribeUrl}
   `.trim();
-  
+
   return {
     html: baseTemplate(htmlContent, data),
     text: textContent
@@ -503,7 +503,7 @@ Hello ${name},
 
 A new Form 4 filing has been submitted for ${filing.companyName} (${filing.symbol}) on ${formattedDate}.
 
-${filing.summaryText ? filing.summaryText.substring(0, 300) + '...' : 'View the full summary for details.'}
+${filing.summaryText || 'View the full summary for details.'}
 
 View Full Summary: ${filing.summaryUrl}
 View Original SEC Filing: ${filing.filingUrl}

@@ -734,6 +734,11 @@ export function Form4MinimalistTemplate({ filing }: Form4MinimalistTemplateProps
     headline = summaryText;
   }
 
+  // Remaining summary text after the headline sentence
+  const remainingSummary = (headline && summaryText && summaryText.length > headline.length)
+    ? summaryText.slice(headline.length).trim()
+    : '';
+
   // Build preheader text for inbox preview
   const preheaderText = `${signal.level} SIGNAL: ${signal.verdict} — ${(summaryText || '').substring(0, 100)}`;
 
@@ -1144,7 +1149,7 @@ export function Form4MinimalistTemplate({ filing }: Form4MinimalistTemplateProps
               })()}
 
               {/* ═══════════════════════════════════════════════════════════
-                  THE STORY - One-liner summary
+                  THE STORY - Full AI summary
                   ═══════════════════════════════════════════════════════════ */}
               {headline && (
                 <table width="100%" cellPadding="0" cellSpacing="0" style={{ marginBottom: '16px' }}>
@@ -1161,6 +1166,20 @@ export function Form4MinimalistTemplate({ filing }: Form4MinimalistTemplateProps
                         dangerouslySetInnerHTML={{ __html: markdownToHtml(headline) }}
                       />
                     </tr>
+                    {remainingSummary && (
+                      <tr>
+                        <td
+                          style={{
+                            fontSize: '14px',
+                            lineHeight: '1.6',
+                            color: EmailColors.text.body,
+                            padding: '0 16px 16px',
+                            backgroundColor: 'transparent',
+                          }}
+                          dangerouslySetInnerHTML={{ __html: markdownToHtml(remainingSummary) }}
+                        />
+                      </tr>
+                    )}
                   </tbody>
                 </table>
               )}
