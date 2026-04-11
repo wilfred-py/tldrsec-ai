@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.0.7.2] - 2026-04-12
+
+### Fixed
+- Email logo dark mode: previous fix shipped an RGB PNG (no alpha channel). Now ships RGBA with verified transparency. Added regression test asserting PNG color type byte = 6 (RGBA) to prevent recurrence.
+
 ## [0.0.7.1] - 2026-04-11
 
 ### Fixed
