@@ -28,8 +28,10 @@ interface PricingCardProps {
   loading: boolean;
   checkoutLoading: boolean;
   hoveredCard: string | null;
+  selectedCard: string;
   onMouseEnter: () => void;
   onMouseLeave: () => void;
+  onSelect: () => void;
   onCheckout: (planKey: string) => void;
   getCtaText: (plan: PricingPlan) => string;
   getPrice: (plan: PricingPlan) => number;
@@ -45,8 +47,10 @@ export function PricingCard({
   loading,
   checkoutLoading,
   hoveredCard,
+  selectedCard,
   onMouseEnter,
   onMouseLeave,
+  onSelect,
   onCheckout,
   getCtaText,
   getPrice,
@@ -56,14 +60,15 @@ export function PricingCard({
   const savings = getSavings(plan);
   const monthlyEquiv = getMonthlyEquivalent(plan);
 
-  // Assumes exactly 2 pricing tiers. If adding a third, revisit this logic.
-  const isHighlighted = hoveredCard === null ? !!plan.popular : hoveredCard === plan.key;
+  const isSelected = selectedCard === plan.key;
+  const isHighlighted = isSelected;
   const isCardHovered = hoveredCard === plan.key;
 
   const dynamicStyles: React.CSSProperties = {
-    borderColor: isHighlighted ? 'var(--landing-primary)' : 'var(--landing-border)',
+    borderColor: isSelected ? 'var(--landing-primary)' : isCardHovered ? 'var(--landing-primary-hover)' : 'var(--landing-border)',
     transition: 'border-color 0.3s ease, box-shadow 0.3s ease, transform 0.3s ease',
-    ...(isCardHovered ? {
+    cursor: 'pointer',
+    ...(isSelected ? {
       boxShadow: '0 20px 50px -10px rgba(0, 0, 0, 0.15)',
       transform: 'scale(1.02)',
       zIndex: 10,
@@ -76,8 +81,12 @@ export function PricingCard({
       style={dynamicStyles}
       role="article"
       aria-label={`${plan.name} pricing plan`}
+      tabIndex={0}
+      aria-selected={isSelected}
       data-highlighted={isHighlighted}
       data-hovered={isCardHovered || undefined}
+      onClick={onSelect}
+      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onSelect(); } }}
       onMouseEnter={onMouseEnter}
       onMouseLeave={onMouseLeave}
     >
@@ -152,9 +161,9 @@ export function PricingCard({
         ) : (
           // Active plan - show checkout button
           <Button
-            onClick={() => onCheckout(plan.key)}
+            onClick={(e) => { e.stopPropagation(); onCheckout(plan.key); }}
             disabled={checkoutLoading}
-            className={`w-full ${isCardHovered && !checkoutLoading ? 'landing-button-primary' : 'landing-button-secondary'}`}
+            className={`w-full ${isSelected && !checkoutLoading ? 'landing-button-primary' : 'landing-button-secondary'}`}
           >
             {checkoutLoading ? (
               <>

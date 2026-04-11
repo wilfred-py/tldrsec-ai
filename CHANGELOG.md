@@ -7,6 +7,11 @@ All notable changes to this project will be documented in this file.
 ### Fixed
 - Email logo dark mode: previous fix shipped an RGB PNG (no alpha channel). Now ships RGBA with verified transparency. Added regression test asserting PNG color type byte = 6 (RGBA) to prevent recurrence.
 
+### Changed
+- Pricing cards: clicking a card now keeps it highlighted until the other card is clicked. PRO card starts selected on mount.
+- Pricing cards: added keyboard support (Enter/Space) and `aria-selected` for accessibility.
+- Pricing cards: CTA button click no longer bubbles to card selection handler.
+
 ## [0.0.7.1] - 2026-04-11
 
 ### Fixed
