@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.0.9.0] - 2026-04-12
+
+### Fixed
+- Upgrade to Pro/Max buttons on /subscribe now work. Previously returned 500 due to Stripe SDK v18 API version mismatch (subscription period fields moved from Subscription to SubscriptionItem in the basil API).
+- Stripe webhook handlers for subscription creation and updates now correctly read billing period dates.
+- Centralized subscription period extraction into a shared helper with safe fallbacks.
+
 ## [0.0.8.0] - 2026-04-12
 
 ### Changed
