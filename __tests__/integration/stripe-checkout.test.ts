@@ -123,13 +123,15 @@ describe('Stripe Integration - Premium Pricing', () => {
       const mockSubscription = {
         id: 'sub_test_123',
         status: 'active',
-        current_period_end: Math.floor(Date.now() / 1000) + 2592000, // 30 days
+        start_date: Math.floor(Date.now() / 1000),
         items: {
           data: [{
             price: {
               id: SUBSCRIPTION_PLANS.PRO.monthlyPriceId,
               unit_amount: 19900,
             },
+            current_period_start: Math.floor(Date.now() / 1000),
+            current_period_end: Math.floor(Date.now() / 1000) + 2592000, // 30 days
           }],
         },
       };

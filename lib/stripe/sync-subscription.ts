@@ -13,6 +13,20 @@ import { getPrismaClient } from '@/lib/db/prisma';
 import { getPlanTypeFromPriceId } from '@/lib/stripe';
 
 /**
+ * Extract billing period dates from a Stripe subscription.
+ *
+ * In Stripe API `basil` (2025-07-30), `current_period_start` and
+ * `current_period_end` moved from `Subscription` to `SubscriptionItem`.
+ */
+export function getSubscriptionPeriod(subscription: Stripe.Subscription) {
+  const item = subscription.items.data[0];
+  return {
+    start: new Date((item?.current_period_start ?? subscription.start_date) * 1000),
+    end: new Date((item?.current_period_end ?? Math.floor(Date.now() / 1000) + 30 * 86400) * 1000),
+  };
+}
+
+/**
  * Sync User.subscriptionTier to match the given plan.
  *
  * Extracted from the webhook route so every call site uses
@@ -52,6 +66,7 @@ export async function syncSubscriptionFromStripeData(
   const prisma = getPrismaClient();
   const priceId = subscription.items.data[0]?.price.id;
   const planType = getPlanTypeFromPriceId(priceId);
+  const period = getSubscriptionPeriod(subscription);
 
   await prisma.userSubscription.upsert({
     where: { userId },
@@ -61,8 +76,8 @@ export async function syncSubscriptionFromStripeData(
       stripeCustomerId: customerId,
       stripePriceId: priceId,
       isActive: ['active', 'trialing'].includes(subscription.status),
-      currentPeriodStart: new Date(subscription.current_period_start * 1000),
-      currentPeriodEnd: new Date(subscription.current_period_end * 1000),
+      currentPeriodStart: period.start,
+      currentPeriodEnd: period.end,
       cancelAtPeriodEnd: subscription.cancel_at_period_end,
       updatedAt: new Date(),
     },
@@ -73,8 +88,8 @@ export async function syncSubscriptionFromStripeData(
       stripeCustomerId: customerId,
       stripePriceId: priceId,
       isActive: ['active', 'trialing'].includes(subscription.status),
-      currentPeriodStart: new Date(subscription.current_period_start * 1000),
-      currentPeriodEnd: new Date(subscription.current_period_end * 1000),
+      currentPeriodStart: period.start,
+      currentPeriodEnd: period.end,
       cancelAtPeriodEnd: subscription.cancel_at_period_end,
     },
   });

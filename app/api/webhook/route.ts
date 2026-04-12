@@ -11,7 +11,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getPrismaClient } from '@/lib/db/prisma';
 import { checkIPTrialAbuse } from '@/lib/security/trial-abuse-prevention';
 import { validateWebhookSignature, getPlanTypeFromPriceId, stripe } from '@/lib/stripe';
-import { syncUserSubscriptionTier, syncSubscriptionFromStripeData } from '@/lib/stripe/sync-subscription';
+import { syncUserSubscriptionTier, syncSubscriptionFromStripeData, getSubscriptionPeriod } from '@/lib/stripe/sync-subscription';
 import Stripe from 'stripe';
 
 export const runtime = 'nodejs';
@@ -318,6 +318,7 @@ async function handleSubscriptionCreated(subscription: Stripe.Subscription) {
 
   try {
     const planType = getPlanTypeFromPriceId(priceId);
+    const period = getSubscriptionPeriod(subscription);
     await prisma.userSubscription.update({
       where: { userId: userSubscription.userId },
       data: {
@@ -325,8 +326,8 @@ async function handleSubscriptionCreated(subscription: Stripe.Subscription) {
         stripeSubscriptionId: subscription.id,
         stripePriceId: priceId,
         isActive: ['active', 'trialing'].includes(subscription.status),
-        currentPeriodStart: new Date(subscription.current_period_start * 1000),
-        currentPeriodEnd: new Date(subscription.current_period_end * 1000),
+        currentPeriodStart: period.start,
+        currentPeriodEnd: period.end,
         cancelAtPeriodEnd: subscription.cancel_at_period_end,
         updatedAt: new Date(),
       },
@@ -350,14 +351,15 @@ async function handleSubscriptionUpdated(subscription: Stripe.Subscription) {
   try {
     const priceId = subscription.items.data[0]?.price.id;
     const planType = getPlanTypeFromPriceId(priceId);
+    const period = getSubscriptionPeriod(subscription);
     await prisma.userSubscription.update({
       where: { userId: userSubscription.userId },
       data: {
         planType,
         stripePriceId: priceId,
         isActive: ['active', 'trialing'].includes(subscription.status),
-        currentPeriodStart: new Date(subscription.current_period_start * 1000),
-        currentPeriodEnd: new Date(subscription.current_period_end * 1000),
+        currentPeriodStart: period.start,
+        currentPeriodEnd: period.end,
         cancelAtPeriodEnd: subscription.cancel_at_period_end,
         updatedAt: new Date(),
       },
