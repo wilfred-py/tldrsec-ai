@@ -2,6 +2,22 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.0.11.0] - 2026-04-12
+
+### Changed
+- Dashboard redesigned as email delivery management center. Activity feed now shows "Sent to your inbox" with per-filing "Emailed" indicators, matching the landing page's Gmail inbox visual style.
+- Filing type badges now use consistent colors across dashboard and landing page (10-K purple, 10-Q blue, 8-K orange, Form 4 green).
+- Summary preview text trimmed to 1 line everywhere (was 2-3 lines on desktop).
+- Stats section replaced: "Time Saved" widget becomes "Email Delivery" showing monthly and total email counts.
+- Dashboard layout simplified with landing page design tokens throughout (colors, borders, shadows).
+- Featured summaries for new users labeled "Example Filing Summaries" instead of "Featured Filings".
+- Tab renamed from "Activity" to "Emails" to reinforce the email-first model.
+
+### Removed
+- Duplicate `ActivitySummary` type definition in dashboard-client (now imported from activity-feed).
+- `ScrollArea` wrapper on activity feed (natural page scroll with "Show more" button instead).
+- `DashboardHeader` component usage (replaced with sr-only h1 for accessibility).
+
 ## [0.0.10.0] - 2026-04-12
 
 ### Fixed
