@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { Button } from "@/components/ui/button";
-import { DashboardHeader } from "@/components/dashboard";
 import { PlusIcon, Loader2, Search, ArrowUpRight } from "lucide-react";
 import {
   Dialog,
@@ -15,10 +14,9 @@ import {
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Card, CardContent } from "@/components/ui/card";
 import { TickerSearchResult } from "@/lib/api/types";
 import { Company, FilingPreferences } from "@/lib/api/types";
-import { HoursSavedWidget } from "@/components/dashboard/hours-saved-widget";
+import { EmailStatsWidget } from "@/components/dashboard/email-stats-widget";
 import { ActivityFeed } from "@/components/dashboard/activity-feed";
 import {
   getTrackedCompanies,
@@ -33,18 +31,7 @@ import {
   TickersTable,
   TickersLoadingSkeleton,
 } from "@/components/dashboard/tickers-table";
-
-interface ActivitySummary {
-  id: string;
-  filingType: string;
-  filingDate: string;
-  importance: string | null;
-  smartSubject: string | null;
-  summaryText: string | null;
-  companyName: string;
-  ticker: string;
-  filingUrl: string;
-}
+import type { ActivitySummary } from "@/components/dashboard/activity-feed";
 
 interface DashboardClientProps {
   showWelcome?: boolean;
@@ -364,53 +351,40 @@ export function DashboardClient({ showWelcome: _showWelcome = false, shouldMerge
   const canUpgrade = subscriptionTier !== 'MAX';
 
   return (
-    <div className="space-y-4">
-      <DashboardHeader heading="Dashboard" />
-
-      {/* Hours Saved + Stats Row */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="md:col-span-1">
-          <HoursSavedWidget
+    <div className="space-y-6">
+      <h1 className="sr-only">Dashboard</h1>
+      {/* Email Stats Row */}
+      <div className="flex flex-col md:flex-row gap-4 items-stretch">
+        <div className="md:flex-1">
+          <EmailStatsWidget
             summaryCountThisMonth={summaryCountThisMonth}
             summaryCountTotal={summaryCountTotal}
           />
         </div>
-        <div className="md:col-span-2 flex items-center">
-          <Card className="w-full rounded-2xl">
-            <CardContent className="p-4">
-              <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                <span><strong className="text-foreground">{companies.length}</strong> tickers tracked</span>
-                <span><strong className="text-foreground">{recentSummaries.length}</strong> recent summaries</span>
-                <span className="capitalize"><strong className="text-foreground">{subscriptionTier}</strong> plan</span>
-              </div>
-            </CardContent>
-          </Card>
+        <div className="flex items-center gap-4 rounded-2xl border border-[var(--landing-border)] bg-[var(--landing-bg)] px-5 py-4 shadow-sm">
+          <span className="text-sm text-[var(--landing-text-muted)]"><strong className="text-[var(--landing-secondary)]">{companies.length}</strong> tickers</span>
+          <span className="text-sm text-[var(--landing-text-muted)] capitalize"><strong className="text-[var(--landing-secondary)]">{subscriptionTier}</strong> plan</span>
         </div>
       </div>
 
-      {/* Tabs: Activity / Tickers */}
+      {/* Tabs: Emails / Tickers */}
       <Tabs defaultValue={isFirstVisit ? "tickers" : "activity"} className="w-full">
-        <TabsList className="mb-4 bg-muted border border-border rounded-lg p-1">
-          <TabsTrigger value="activity" className="data-[state=active]:bg-background data-[state=active]:shadow-sm data-[state=inactive]:text-muted-foreground px-4 py-1.5 text-sm font-medium rounded-md">Activity</TabsTrigger>
-          <TabsTrigger value="tickers" className="data-[state=active]:bg-background data-[state=active]:shadow-sm data-[state=inactive]:text-muted-foreground px-4 py-1.5 text-sm font-medium rounded-md">Tickers</TabsTrigger>
+        <TabsList className="mb-4 bg-[var(--landing-bg)] border border-[var(--landing-border)] rounded-lg p-1">
+          <TabsTrigger value="activity" className="data-[state=active]:bg-[var(--landing-bg-subtle)] data-[state=active]:shadow-sm data-[state=inactive]:text-[var(--landing-text-muted)] px-4 py-1.5 text-sm font-medium rounded-md">Emails</TabsTrigger>
+          <TabsTrigger value="tickers" className="data-[state=active]:bg-[var(--landing-bg-subtle)] data-[state=active]:shadow-sm data-[state=inactive]:text-[var(--landing-text-muted)] px-4 py-1.5 text-sm font-medium rounded-md">Tickers</TabsTrigger>
         </TabsList>
 
         <TabsContent value="activity">
-          <Card className="rounded-2xl">
-            <CardContent className="p-6 md:p-8">
-              <ActivityFeed summaries={recentSummaries} featuredSummaries={featuredSummaries} />
-            </CardContent>
-          </Card>
+          <ActivityFeed summaries={recentSummaries} featuredSummaries={featuredSummaries} />
         </TabsContent>
 
         <TabsContent value="tickers">
-      <Card className="rounded-2xl">
-        <CardContent className="p-6 md:p-8">
+      <div className="rounded-2xl border border-[var(--landing-border)] bg-[var(--landing-bg)] p-6 md:p-8 shadow-sm">
         <div className="mb-6">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div className="text-left">
-              <h2 className="text-lg font-semibold">Tracked Tickers</h2>
-              <p className="text-sm text-muted-foreground">
+              <h2 className="text-lg font-semibold text-[var(--landing-secondary)]">Tracked Tickers</h2>
+              <p className="text-sm text-[var(--landing-text-muted)]">
                 {!isUnlimited
                   ? `${companies.length} / ${tickerLimit} tickers used on ${subscriptionTier === 'FREE' ? 'Free' : subscriptionTier} plan`
                   : "Manage your tracked companies."}
@@ -435,7 +409,7 @@ export function DashboardClient({ showWelcome: _showWelcome = false, shouldMerge
                     loadCompaniesForSearch();
                     setShowInlineAdd(true);
                   }}
-                  className="gap-1 bg-primary hover:bg-primary/90 text-primary-foreground font-medium shadow-sm"
+                  className="gap-1 bg-[var(--landing-primary)] hover:bg-[var(--landing-primary-hover)] text-white font-medium shadow-sm"
                   disabled={showInlineAdd || isAtLimit}
                   size="lg"
                 >
@@ -453,14 +427,13 @@ export function DashboardClient({ showWelcome: _showWelcome = false, shouldMerge
             <TickersLoadingSkeleton />
           </div>
         ) : showEmptyState ? (
-          <Card className="rounded-2xl border-dashed">
-            <CardContent className="flex min-h-[200px] flex-col items-center justify-center p-4 sm:p-8 text-center space-y-4">
-            <h3 className="text-base font-medium">No companies tracked yet</h3>
-            <p className="text-sm text-muted-foreground">
-              Start tracking companies to receive SEC filing summaries.
+          <div className="rounded-2xl border border-dashed border-[var(--landing-border)] flex min-h-[200px] flex-col items-center justify-center p-4 sm:p-8 text-center space-y-4">
+            <h3 className="text-base font-medium text-[var(--landing-secondary)]">No companies tracked yet</h3>
+            <p className="text-sm text-[var(--landing-text-muted)]">
+              Start tracking companies to receive SEC filing summaries via email.
             </p>
             <Button
-              className="mt-2 bg-primary hover:bg-primary/90"
+              className="mt-2 bg-[var(--landing-primary)] hover:bg-[var(--landing-primary-hover)] text-white"
               size="lg"
               onClick={() => {
                 loadCompaniesForSearch();
@@ -470,11 +443,10 @@ export function DashboardClient({ showWelcome: _showWelcome = false, shouldMerge
               <PlusIcon className="h-5 w-5 mr-1" />
               Add Your First Company
             </Button>
-            {/* Show inline search in empty state */}
             {showInlineAdd && (
               <div className="w-full max-w-md mt-4">
                 <div className="relative">
-                  <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                  <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-[var(--landing-text-muted)]" />
                   <Input
                     type="search"
                     placeholder="Type to search ticker or company..."
@@ -501,17 +473,17 @@ export function DashboardClient({ showWelcome: _showWelcome = false, shouldMerge
                   />
                 </div>
                 {emptyStateResults.length > 0 && (
-                  <div className="mt-2 bg-background border rounded-md shadow-lg">
+                  <div className="mt-2 bg-[var(--landing-bg)] border border-[var(--landing-border)] rounded-md shadow-lg">
                     {emptyStateResults.map((result) => (
                       <div
                         key={result.symbol}
-                        className="px-3 py-2 cursor-pointer hover:bg-accent/50 flex justify-between items-center"
+                        className="px-3 py-2 cursor-pointer hover:bg-[var(--landing-bg-subtle)] flex justify-between items-center"
                         onClick={() =>
                           handleAddTicker(result.symbol, result.name)
                         }
                       >
-                        <span className="font-semibold">{result.symbol}</span>
-                        <span className="text-muted-foreground text-sm">
+                        <span className="font-semibold text-[var(--landing-secondary)]">{result.symbol}</span>
+                        <span className="text-[var(--landing-text-muted)] text-sm">
                           {result.name}
                         </span>
                       </div>
@@ -528,8 +500,7 @@ export function DashboardClient({ showWelcome: _showWelcome = false, shouldMerge
                 </Button>
               </div>
             )}
-            </CardContent>
-          </Card>
+          </div>
         ) : (
           <TickersTable
             data={companies}
@@ -541,8 +512,7 @@ export function DashboardClient({ showWelcome: _showWelcome = false, shouldMerge
             onDeleteClick={handleDeleteClick}
           />
         )}
-        </CardContent>
-      </Card>
+      </div>
         </TabsContent>
       </Tabs>
 
