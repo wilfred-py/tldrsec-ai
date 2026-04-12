@@ -1,6 +1,4 @@
-import { currentUser } from '@clerk/nextjs/server';
 import { redirect, notFound } from 'next/navigation';
-import { getPrismaClient } from '@/lib/db/prisma';
 import { formatDistanceToNow, format } from 'date-fns';
 import { ArrowLeft, ChevronRight, AlertTriangle } from 'lucide-react';
 import Link from 'next/link';
@@ -61,35 +59,15 @@ interface SummaryPageProps {
 
 export default async function SummaryPage({ params }: SummaryPageProps) {
   const resolvedParams = await params;
-  const user = await currentUser();
-
-  if (!user) {
-    redirect('/sign-in');
-  }
 
   try {
-    // Check if user is authenticated and summary exists
-    await checkSummaryAccess(resolvedParams.id);
+    // Auth check + data fetch in a single call (no redundant queries)
+    const summary = await checkSummaryAccess(resolvedParams.id);
 
-    const prisma = getPrismaClient();
-
-    // Fetch summary with ticker information
-    const summary = await prisma.summary.findUnique({
-      where: { 
-        id: resolvedParams.id 
-      },
-      include: {
-        ticker: true
-      }
-    });
-  
-    if (!summary) {
-      notFound();
-    }
-  
     return (
-      <div className="min-h-screen flex flex-col" style={{ backgroundColor: 'var(--brand-bg)' }}>
+      <div className="min-h-screen flex flex-col animate-fade-in" style={{ backgroundColor: 'var(--brand-bg)' }}>
         <main className="flex-1" style={{ backgroundColor: 'var(--brand-bg)' }}>
+
           <div className="container max-w-7xl mx-auto py-8 md:py-10 px-6 md:px-8 space-y-6">
               <Breadcrumb className="mb-4">
                 <BreadcrumbList>

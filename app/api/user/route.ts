@@ -490,10 +490,9 @@ async function handlePostSubscription(request: NextRequest) {
       if (activeSubs.length > 0) {
         const latestSub = activeSubs[0];
         const { getPlanTypeFromPriceId: getPlan } = await import('@/lib/stripe');
+        const { getSubscriptionPeriod } = await import('@/lib/stripe/sync-subscription');
         const activePlanType = getPlan(latestSub.items.data[0]?.price.id);
-        const subData = latestSub as unknown as { current_period_start: number; current_period_end: number };
-        const periodStart = new Date(subData.current_period_start * 1000);
-        const periodEnd = new Date(subData.current_period_end * 1000);
+        const { start: periodStart, end: periodEnd } = getSubscriptionPeriod(latestSub);
         await prisma.userSubscription.upsert({
           where: { userId: dbUserId },
           update: {

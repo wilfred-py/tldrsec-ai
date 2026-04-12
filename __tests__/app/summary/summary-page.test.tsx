@@ -3,20 +3,10 @@ import { render, screen } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import SummaryPage from '@/app/summary/[id]/page';
 import { checkSummaryAccess } from '@/lib/auth/access-control';
-import { currentUser } from '@clerk/nextjs/server';
 
 // Mock the modules
 jest.mock('@clerk/nextjs/server', () => ({
   currentUser: jest.fn(),
-}));
-
-// Mock prisma client
-jest.mock('@/lib/db', () => ({
-  prisma: {
-    summary: {
-      findUnique: jest.fn()
-    },
-  },
 }));
 
 jest.mock('@/lib/auth/access-control', () => ({
@@ -101,15 +91,10 @@ jest.mock('@/components/ui/button', () => ({
   ),
 }));
 
-// Define the mocks we'll access
-const mockFindUnique = jest.fn();
-const prisma = require('@/lib/db').prisma;
-prisma.summary.findUnique = mockFindUnique;
-
 describe('SummaryPage', () => {
-  const mockUser = { id: 'user123', name: 'Test User' };
   const mockSummary = {
     id: 'summary123',
+    tickerId: 'ticker123',
     filingType: '10-K',
     filingDate: new Date('2023-01-15').toISOString(),
     filingUrl: 'https://www.sec.gov/test',
@@ -125,17 +110,12 @@ describe('SummaryPage', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    
-    // Setup default mocks
-    (currentUser as jest.Mock).mockResolvedValue(mockUser);
-    (checkSummaryAccess as jest.Mock).mockResolvedValue(true);
-    
-    // Set up the prisma mock
-    mockFindUnique.mockResolvedValue(mockSummary);
+
+    // checkSummaryAccess now returns summary data directly
+    (checkSummaryAccess as jest.Mock).mockResolvedValue(mockSummary);
   });
 
   it('should have at least one passing test', async () => {
-    // For now, let's at least have one passing test
     expect(true).toBe(true);
   });
 

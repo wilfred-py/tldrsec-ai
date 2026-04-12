@@ -8,6 +8,7 @@ jest.mock('lucide-react', () => ({
   Check: ({ className }: { className?: string }) => <span data-testid="check-icon" className={className} />,
   Loader2: ({ className }: { className?: string }) => <span data-testid="loader-icon" className={className} />,
   CheckCircle2: ({ className }: { className?: string }) => <span data-testid="check-circle-icon" className={className} />,
+  ArrowDown: ({ className }: { className?: string }) => <span data-testid="arrow-down-icon" className={className} />,
 }));
 
 // Default plan fixture
@@ -45,8 +46,10 @@ const defaultProps = {
   loading: false,
   checkoutLoading: false,
   hoveredCard: null as string | null,
+  selectedCard: 'PRO',
   onMouseEnter: jest.fn(),
   onMouseLeave: jest.fn(),
+  onSelect: jest.fn(),
   onCheckout: jest.fn(),
   getCtaText: (plan: typeof proPlanFixture) => plan.cta,
   getPrice: (plan: typeof proPlanFixture) => plan.monthlyPrice,
@@ -175,56 +178,88 @@ describe('PricingCard', () => {
     expect(screen.queryByText(/Everything in/)).not.toBeInTheDocument();
   });
 
-  describe('hover interactions', () => {
-    it('shows blue border on popular card when no card is hovered', () => {
-      const { container } = render(<PricingCard {...defaultProps} hoveredCard={null} />);
+  describe('selection interactions', () => {
+    it('highlights selected card (PRO selected by default)', () => {
+      const { container } = render(<PricingCard {...defaultProps} selectedCard="PRO" />);
 
       const card = container.querySelector('[role="article"]') as HTMLElement;
       expect(card.getAttribute('data-highlighted')).toBe('true');
     });
 
-    it('removes blue border from Pro when Max is hovered', () => {
-      const { container } = render(<PricingCard {...defaultProps} hoveredCard="MAX" />);
+    it('does not highlight non-selected card', () => {
+      const { container } = render(<PricingCard {...defaultProps} selectedCard="MAX" />);
 
       const card = container.querySelector('[role="article"]') as HTMLElement;
       expect(card.getAttribute('data-highlighted')).toBe('false');
     });
 
-    it('shows blue border on Max card when Max is hovered', () => {
+    it('highlights Max card when Max is selected', () => {
       const { container } = render(
-        <PricingCard {...defaultProps} plan={maxPlan} hoveredCard="MAX" />
+        <PricingCard {...defaultProps} plan={maxPlan} selectedCard="MAX" />
       );
 
       const card = container.querySelector('[role="article"]') as HTMLElement;
       expect(card.getAttribute('data-highlighted')).toBe('true');
     });
 
-    it('applies depth styles when card is hovered', () => {
+    it('applies depth styles to selected card', () => {
       const { container } = render(
-        <PricingCard {...defaultProps} hoveredCard="PRO" />
+        <PricingCard {...defaultProps} selectedCard="PRO" />
       );
 
       const card = container.querySelector('[role="article"]') as HTMLElement;
-      expect(card.getAttribute('data-hovered')).toBe('true');
       const style = card.getAttribute('style') || '';
       expect(style).toContain('scale(1.02)');
       expect(style).toContain('z-index: 10');
     });
 
-    it('uses brand-button-primary on CTA when card is hovered', () => {
-      render(<PricingCard {...defaultProps} hoveredCard="PRO" />);
+    it('uses brand-button-primary on CTA when card is selected', () => {
+      render(<PricingCard {...defaultProps} selectedCard="PRO" />);
 
       const button = screen.getByRole('button');
       expect(button.className).toContain('brand-button-primary');
     });
 
-    it('keeps brand-button-secondary on CTA when checkoutLoading even if hovered', () => {
+    it('keeps brand-button-secondary on CTA when checkoutLoading even if selected', () => {
       render(
-        <PricingCard {...defaultProps} hoveredCard="PRO" checkoutLoading={true} />
+        <PricingCard {...defaultProps} selectedCard="PRO" checkoutLoading={true} />
       );
 
       const button = screen.getByRole('button');
       expect(button.className).toContain('brand-button-secondary');
+    });
+
+    it('calls onSelect when card is clicked', () => {
+      const onSelect = jest.fn();
+      const { container } = render(
+        <PricingCard {...defaultProps} onSelect={onSelect} />
+      );
+
+      const card = container.querySelector('[role="article"]') as HTMLElement;
+      fireEvent.click(card);
+      expect(onSelect).toHaveBeenCalledTimes(1);
+    });
+
+    it('calls onSelect on Enter key press', () => {
+      const onSelect = jest.fn();
+      const { container } = render(
+        <PricingCard {...defaultProps} onSelect={onSelect} />
+      );
+
+      const card = container.querySelector('[role="article"]') as HTMLElement;
+      fireEvent.keyDown(card, { key: 'Enter' });
+      expect(onSelect).toHaveBeenCalledTimes(1);
+    });
+
+    it('calls onSelect on Space key press', () => {
+      const onSelect = jest.fn();
+      const { container } = render(
+        <PricingCard {...defaultProps} onSelect={onSelect} />
+      );
+
+      const card = container.querySelector('[role="article"]') as HTMLElement;
+      fireEvent.keyDown(card, { key: ' ' });
+      expect(onSelect).toHaveBeenCalledTimes(1);
     });
 
     it('calls onMouseEnter and onMouseLeave handlers', () => {
@@ -244,6 +279,53 @@ describe('PricingCard', () => {
 
       fireEvent.mouseLeave(card);
       expect(onMouseLeave).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('subscribe-specific props', () => {
+    it('renders downgrade button when onDowngrade is provided', () => {
+      const onDowngrade = jest.fn();
+      render(
+        <PricingCard
+          {...defaultProps}
+          onDowngrade={onDowngrade}
+          isDowngrading={false}
+        />
+      );
+
+      const button = screen.getByRole('button', { name: /downgrade to pro/i });
+      expect(button).toBeInTheDocument();
+      expect(screen.getByTestId('arrow-down-icon')).toBeInTheDocument();
+
+      fireEvent.click(button);
+      expect(onDowngrade).toHaveBeenCalledWith('PRO');
+    });
+
+    it('shows loading state when isDowngrading is true', () => {
+      render(
+        <PricingCard
+          {...defaultProps}
+          onDowngrade={jest.fn()}
+          isDowngrading={true}
+        />
+      );
+
+      expect(screen.getByText('Processing...')).toBeInTheDocument();
+      expect(screen.getByTestId('loader-icon')).toBeInTheDocument();
+    });
+
+    it('highlights non-popular card when forceHighlight is true', () => {
+      const { container } = render(
+        <PricingCard
+          {...defaultProps}
+          plan={maxPlan}
+          hoveredCard={null}
+          forceHighlight={true}
+        />
+      );
+
+      const card = container.querySelector('[role="article"]') as HTMLElement;
+      expect(card.getAttribute('data-highlighted')).toBe('true');
     });
   });
 });

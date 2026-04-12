@@ -2,6 +2,58 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.0.9.1] - 2026-04-12
+
+### Changed
+- Summary pages load faster: eliminated redundant auth call and duplicate database query from the navigation path.
+- Clicking a summary from the dashboard now shows an instant skeleton loading state instead of a blank screen.
+- Summary page and dashboard content fade in smoothly (200ms ease-out) after loading, with `prefers-reduced-motion` support.
+
+### Fixed
+- Orphaned ticker references in summaries now produce a clear error log and audit trail entry instead of a misleading TypeError.
+
+## [0.0.9.0] - 2026-04-12
+
+### Fixed
+- Upgrade to Pro/Max buttons on /subscribe now work. Previously returned 500 due to Stripe SDK v18 API version mismatch (subscription period fields moved from Subscription to SubscriptionItem in the basil API).
+- Stripe webhook handlers for subscription creation and updates now correctly read billing period dates.
+- Centralized subscription period extraction into a shared helper with safe fallbacks.
+
+## [0.0.8.0] - 2026-04-12
+
+### Changed
+- Subscribe page now uses the same PricingCard component as the landing page, so hover animations, border highlights, and CTA button styles are identical across both routes.
+- Pricing cards on /subscribe now scale up on hover (was: lift up), show shared blue border tracking (was: static ring on PRO), and upgrade the CTA button to filled blue on hover (was: always outline).
+- "Current Plan" button on /subscribe now shows green background with checkmark icon, matching the landing page style.
+- "Popular" badge position on /subscribe moved from centered-above-card to top-right corner, matching the landing page.
+- Removed duplicate plan name label on /subscribe pricing cards.
+
+## [0.0.7.3] - 2026-04-12
+
+### Fixed
+- Email logo dark mode: previous fix shipped an RGB PNG (no alpha channel). Now ships RGBA with verified transparency. Added regression test asserting PNG color type byte = 6 (RGBA) to prevent recurrence.
+
+### Changed
+- Billing and subscription pages now load instantly via route prefetching from the dashboard header.
+- "Manage Payment Methods" button shows a spinner while the Stripe portal loads, with a 10-second timeout.
+- Billing and subscribe pages fade in smoothly instead of popping in after data loads.
+- Stripe portal button recovers correctly when returning via browser back button (bfcache).
+
+## [0.0.7.2] - 2026-04-11
+
+### Changed
+- Pricing cards: clicking a card now keeps it highlighted until the other card is clicked. PRO card starts selected on mount.
+- Pricing cards: added keyboard support (Enter/Space) and `aria-selected` for accessibility.
+- Pricing cards: CTA button click no longer bubbles to card selection handler.
+
+## [0.0.7.1] - 2026-04-11
+
+### Fixed
+- Form 4 emails: award-only filings (stock grants, RSU vesting) no longer show misleading percentage change badges. Previously, a compensation event like "+33.6%" looked identical to a market buy signal. Now shows "Stock Award" neutral signal with purple badge.
+- Form 4 emails: award-only filings show "Current Holdings" instead of "Ownership Impact" with a before/after arrow flow that implied a market transaction.
+- Email logo no longer shows white rectangle in Gmail dark mode. Replaced with transparent-background PNG using all-blue wordmark.
+- Legacy email template header changed from blue to white background, matching the minimalist design system.
+
 ## [0.0.7.0] - 2026-04-10
 
 ### Changed

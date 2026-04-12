@@ -3,7 +3,7 @@
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Check, Loader2, CheckCircle2 } from 'lucide-react';
+import { Check, Loader2, CheckCircle2, ArrowDown } from 'lucide-react';
 import { AnimatedPrice } from '@/components/landing/sections-v2/animated-price';
 
 interface PricingPlan {
@@ -28,14 +28,19 @@ interface PricingCardProps {
   loading: boolean;
   checkoutLoading: boolean;
   hoveredCard: string | null;
+  selectedCard: string;
   onMouseEnter: () => void;
   onMouseLeave: () => void;
-  onSelect?: (planKey: string) => void;
+  onSelect: () => void;
   onCheckout: (planKey: string) => void;
   getCtaText: (plan: PricingPlan) => string;
   getPrice: (plan: PricingPlan) => number;
   getMonthlyEquivalent: (plan: PricingPlan) => number | null;
   getSavings: (plan: PricingPlan) => number | null;
+  // Optional props for /subscribe route
+  forceHighlight?: boolean;
+  onDowngrade?: (planKey: string) => void;
+  isDowngrading?: boolean;
 }
 
 export function PricingCard({
@@ -46,6 +51,7 @@ export function PricingCard({
   loading,
   checkoutLoading,
   hoveredCard,
+  selectedCard,
   onMouseEnter,
   onMouseLeave,
   onSelect,
@@ -54,18 +60,22 @@ export function PricingCard({
   getPrice,
   getMonthlyEquivalent,
   getSavings,
+  forceHighlight,
+  onDowngrade,
+  isDowngrading,
 }: PricingCardProps) {
   const savings = getSavings(plan);
   const monthlyEquiv = getMonthlyEquivalent(plan);
 
-  // Assumes exactly 2 pricing tiers. If adding a third, revisit this logic.
-  const isHighlighted = hoveredCard === null ? !!plan.popular : hoveredCard === plan.key;
+  const isSelected = forceHighlight ?? (selectedCard === plan.key);
+  const isHighlighted = isSelected;
   const isCardHovered = hoveredCard === plan.key;
 
   const dynamicStyles: React.CSSProperties = {
-    borderColor: isHighlighted ? 'var(--brand-primary)' : 'var(--brand-border)',
+    borderColor: isSelected ? 'var(--brand-primary)' : isCardHovered ? 'var(--brand-primary-hover)' : 'var(--brand-border)',
     transition: 'border-color 0.3s ease, box-shadow 0.3s ease, transform 0.3s ease',
-    ...(isCardHovered ? {
+    cursor: 'pointer',
+    ...(isSelected ? {
       boxShadow: '0 20px 50px -10px rgba(0, 0, 0, 0.15)',
       transform: 'scale(1.02)',
       zIndex: 10,
@@ -78,18 +88,14 @@ export function PricingCard({
       style={dynamicStyles}
       role="article"
       aria-label={`${plan.name} pricing plan`}
-      aria-selected={isHighlighted}
       tabIndex={0}
+      aria-selected={isSelected}
       data-highlighted={isHighlighted}
       data-hovered={isCardHovered || undefined}
+      onClick={onSelect}
+      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onSelect(); } }}
       onMouseEnter={onMouseEnter}
       onMouseLeave={onMouseLeave}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
-          e.preventDefault();
-          onSelect?.(plan.key);
-        }
-      }}
       onFocus={onMouseEnter}
       onBlur={onMouseLeave}
     >
@@ -153,6 +159,26 @@ export function PricingCard({
             <CheckCircle2 className="w-4 h-4 mr-2" aria-hidden="true" />
             {isTrialEndingSoon ? 'Trial Ending Soon' : 'Current Plan'}
           </Button>
+        ) : onDowngrade ? (
+          // Downgrade button (used by /subscribe for lower-tier plans)
+          <Button
+            variant="outline"
+            onClick={() => onDowngrade(plan.key)}
+            disabled={isDowngrading}
+            className="w-full"
+          >
+            {isDowngrading ? (
+              <>
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" aria-hidden="true" />
+                Processing...
+              </>
+            ) : (
+              <>
+                <ArrowDown className="w-4 h-4 mr-2" aria-hidden="true" />
+                Downgrade to {plan.name}
+              </>
+            )}
+          </Button>
         ) : plan.disabled ? (
           // Disabled plan (e.g., coming soon)
           <Button
@@ -164,9 +190,9 @@ export function PricingCard({
         ) : (
           // Active plan - show checkout button
           <Button
-            onClick={() => onCheckout(plan.key)}
+            onClick={(e) => { e.stopPropagation(); onCheckout(plan.key); }}
             disabled={checkoutLoading}
-            className={`w-full ${isCardHovered && !checkoutLoading ? 'brand-button-primary' : 'brand-button-secondary'}`}
+            className={`w-full ${isSelected && !checkoutLoading ? 'brand-button-primary' : 'brand-button-secondary'}`}
           >
             {checkoutLoading ? (
               <>

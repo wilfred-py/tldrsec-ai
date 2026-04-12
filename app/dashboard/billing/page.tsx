@@ -19,6 +19,7 @@ import {
   CreditCard,
   AlertTriangle,
   Clock,
+  Loader2,
   Sparkles
 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -34,6 +35,7 @@ export default function BillingPage() {
   const [subscription, setSubscription] = useState<UserSubscription | null>(null);
   const [loading, setLoading] = useState(true);
   const [updatingCancellation, setUpdatingCancellation] = useState(false);
+  const [openingPortal, setOpeningPortal] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // Handle checkout cancellation - redirect to dashboard
@@ -103,15 +105,31 @@ export default function BillingPage() {
     }
   };
 
+  // Prefetch /subscribe so navigation is instant
+  useEffect(() => {
+    router.prefetch('/subscribe');
+  }, [router]);
+
+  // Reset loading state when returning via bfcache (browser back from Stripe)
+  useEffect(() => {
+    const handlePageShow = (e: PageTransitionEvent) => {
+      if (e.persisted) setOpeningPortal(false);
+    };
+    window.addEventListener('pageshow', handlePageShow);
+    return () => window.removeEventListener('pageshow', handlePageShow);
+  }, []);
+
   const openStripePortal = async () => {
     if (!subscription?.stripeCustomerId) return;
-    
+
+    setOpeningPortal(true);
     try {
       const response = await fetch('/api/user?type=billing-portal', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
-        }
+        },
+        signal: AbortSignal.timeout(10000),
       });
 
       if (!response.ok) {
@@ -119,8 +137,12 @@ export default function BillingPage() {
       }
 
       const { url } = await response.json();
+      if (!url || typeof url !== 'string') {
+        throw new Error('No portal URL returned');
+      }
       window.location.href = url;
     } catch (err) {
+      setOpeningPortal(false);
       setError(err instanceof Error ? err.message : 'Portal access failed');
     }
   };
@@ -156,7 +178,7 @@ export default function BillingPage() {
       : 'Price unavailable';
 
   return (
-    <div className="container mx-auto py-8 space-y-8">
+    <div className="container mx-auto py-8 space-y-8 animate-fadeIn">
       {/* Header */}
       <div>
         <Button
@@ -239,9 +261,18 @@ export default function BillingPage() {
                 </Button>
               ) : (
                 <>
-                  <Button variant="outline" onClick={openStripePortal} disabled={!subscription.stripeCustomerId}>
-                    <CreditCard className="h-4 w-4 mr-2" />
-                    Manage Payment Methods
+                  <Button variant="outline" onClick={openStripePortal} disabled={!subscription.stripeCustomerId || openingPortal}>
+                    {openingPortal ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        Opening Portal...
+                      </>
+                    ) : (
+                      <>
+                        <CreditCard className="h-4 w-4 mr-2" />
+                        Manage Payment Methods
+                      </>
+                    )}
                   </Button>
                   <div className="flex items-center gap-2">
                     <Switch

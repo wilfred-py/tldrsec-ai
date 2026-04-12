@@ -149,6 +149,10 @@
     animation: fadeIn 0.5s ease-out;
   }
 
+  .animate-fade-in {
+    animation: fadeIn 200ms ease-out;
+  }
+
   .animate-slideUp {
     animation: slideUp 0.4s ease-out forwards;
   }
@@ -173,6 +177,7 @@
   @media (prefers-reduced-motion: reduce) {
     .animate-shimmer,
     .animate-fadeIn,
+    .animate-fade-in,
     .animate-slideUp {
       animation: none !important;
       transition: none !important;
@@ -180,6 +185,7 @@
 
     /* Show content immediately for reduced motion users */
     .animate-fadeIn,
+    .animate-fade-in,
     .animate-slideUp {
       opacity: 1 !important;
       transform: none !important;
