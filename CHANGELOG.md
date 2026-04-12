@@ -13,6 +13,9 @@ All notable changes to this project will be documented in this file.
 
 ## [0.0.7.3] - 2026-04-12
 
+### Fixed
+- Email logo dark mode: previous fix shipped an RGB PNG (no alpha channel). Now ships RGBA with verified transparency. Added regression test asserting PNG color type byte = 6 (RGBA) to prevent recurrence.
+
 ### Changed
 - Billing and subscription pages now load instantly via route prefetching from the dashboard header.
 - "Manage Payment Methods" button shows a spinner while the Stripe portal loads, with a 10-second timeout.
