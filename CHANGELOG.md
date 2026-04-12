@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.0.8.0] - 2026-04-12
+
+### Changed
+- Subscribe page now uses the same PricingCard component as the landing page, so hover animations, border highlights, and CTA button styles are identical across both routes.
+- Pricing cards on /subscribe now scale up on hover (was: lift up), show shared blue border tracking (was: static ring on PRO), and upgrade the CTA button to filled blue on hover (was: always outline).
+- "Current Plan" button on /subscribe now shows green background with checkmark icon, matching the landing page style.
+- "Popular" badge position on /subscribe moved from centered-above-card to top-right corner, matching the landing page.
+- Removed duplicate plan name label on /subscribe pricing cards.
+
 ## [0.0.7.3] - 2026-04-12
 
 ### Changed

@@ -3,7 +3,7 @@
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Check, Loader2, CheckCircle2 } from 'lucide-react';
+import { Check, Loader2, CheckCircle2, ArrowDown } from 'lucide-react';
 import { AnimatedPrice } from '@/components/landing/sections-v2/animated-price';
 
 interface PricingPlan {
@@ -37,6 +37,10 @@ interface PricingCardProps {
   getPrice: (plan: PricingPlan) => number;
   getMonthlyEquivalent: (plan: PricingPlan) => number | null;
   getSavings: (plan: PricingPlan) => number | null;
+  // Optional props for /subscribe route
+  forceHighlight?: boolean;
+  onDowngrade?: (planKey: string) => void;
+  isDowngrading?: boolean;
 }
 
 export function PricingCard({
@@ -56,11 +60,14 @@ export function PricingCard({
   getPrice,
   getMonthlyEquivalent,
   getSavings,
+  forceHighlight,
+  onDowngrade,
+  isDowngrading,
 }: PricingCardProps) {
   const savings = getSavings(plan);
   const monthlyEquiv = getMonthlyEquivalent(plan);
 
-  const isSelected = selectedCard === plan.key;
+  const isSelected = forceHighlight ?? (selectedCard === plan.key);
   const isHighlighted = isSelected;
   const isCardHovered = hoveredCard === plan.key;
 
@@ -149,6 +156,26 @@ export function PricingCard({
           >
             <CheckCircle2 className="w-4 h-4 mr-2" aria-hidden="true" />
             {isTrialEndingSoon ? 'Trial Ending Soon' : 'Current Plan'}
+          </Button>
+        ) : onDowngrade ? (
+          // Downgrade button (used by /subscribe for lower-tier plans)
+          <Button
+            variant="outline"
+            onClick={() => onDowngrade(plan.key)}
+            disabled={isDowngrading}
+            className="w-full"
+          >
+            {isDowngrading ? (
+              <>
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" aria-hidden="true" />
+                Processing...
+              </>
+            ) : (
+              <>
+                <ArrowDown className="w-4 h-4 mr-2" aria-hidden="true" />
+                Downgrade to {plan.name}
+              </>
+            )}
           </Button>
         ) : plan.disabled ? (
           // Disabled plan (e.g., coming soon)
