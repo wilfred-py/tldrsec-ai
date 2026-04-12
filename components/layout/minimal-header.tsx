@@ -1,6 +1,8 @@
 "use client";
 
+import { useEffect } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { CreditCard } from "lucide-react";
 import { Logo } from "@/components/ui/logo";
@@ -9,6 +11,13 @@ import { useUser } from "@clerk/nextjs";
 
 export function MinimalHeader() {
   const { user } = useUser();
+  const router = useRouter();
+
+  // Prefetch billing routes so navigation is instant
+  useEffect(() => {
+    router.prefetch('/dashboard/billing');
+    router.prefetch('/subscribe');
+  }, [router]);
 
   return (
     <header className="sticky top-0 z-40 w-full border-b border-[var(--landing-border)] bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
