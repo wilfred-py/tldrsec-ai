@@ -22,12 +22,13 @@ export function makeStripeSubscription(overrides?: Partial<{
     status: overrides?.status ?? 'active',
     customer: overrides?.customer ?? 'cus_test_mock',
     created: overrides?.created ?? Math.floor(Date.now() / 1000),
-    current_period_start: Math.floor(Date.now() / 1000),
-    current_period_end: Math.floor(Date.now() / 1000) + 30 * 86400,
+    start_date: Math.floor(Date.now() / 1000),
     cancel_at_period_end: false,
     items: {
       data: [{
         price: { id: overrides?.priceId ?? 'price_pro_monthly_test' },
+        current_period_start: Math.floor(Date.now() / 1000),
+        current_period_end: Math.floor(Date.now() / 1000) + 30 * 86400,
       }],
     },
     ...overrides,
