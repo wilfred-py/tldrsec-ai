@@ -2,6 +2,24 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.0.9.2] - 2026-04-12
+
+### Changed
+- Dashboard redesign: unified visual language with landing page. Blue primary buttons, brand-card hover effects, pill-style tab selector, framer-motion entrance animations, mesh gradient background.
+- Renamed all `landing-*` CSS classes and variables to `brand-*` for semantic correctness across the codebase (36 files).
+- Activity feed: filing-type badges now use distinct colors (10-K purple, 10-Q blue, 8-K orange, Form 4 green). Feed items have CSS hover + focus-visible states.
+- Stats row: three individual brand-cards with blue icon containers replacing the single compact stats line.
+- Empty states: centered blue icon with brand-button-primary CTA instead of dashed-border card.
+- HoursSavedWidget: brand-card with blue Clock icon container pattern.
+- Tickers table: brand-bg-subtle header row, brand-primary-light row hover, blue Add Ticker button.
+- Billing upgrade CTA: uses brand-button-gradient (blue-to-purple) instead of violet gradient.
+- Pricing cards: restored keyboard accessibility (tabIndex, aria-selected, onKeyDown, onFocus/onBlur).
+
+### Added
+- framer-motion Jest mock (`__mocks__/framer-motion.tsx`) for test compatibility with dashboard animations.
+- `:disabled` styles for `brand-button-primary` and `brand-button-gradient` CSS classes.
+- `[role="tablist"]` scoped CSS selector for active tab pill styling (prevents unintended style leaks).
+
 ## [0.0.9.1] - 2026-04-12
 
 ### Changed
