@@ -11,6 +11,14 @@ All notable changes to this project will be documented in this file.
 - "Popular" badge position on /subscribe moved from centered-above-card to top-right corner, matching the landing page.
 - Removed duplicate plan name label on /subscribe pricing cards.
 
+## [0.0.7.3] - 2026-04-12
+
+### Changed
+- Billing and subscription pages now load instantly via route prefetching from the dashboard header.
+- "Manage Payment Methods" button shows a spinner while the Stripe portal loads, with a 10-second timeout.
+- Billing and subscribe pages fade in smoothly instead of popping in after data loads.
+- Stripe portal button recovers correctly when returning via browser back button (bfcache).
+
 ## [0.0.7.2] - 2026-04-11
 
 ### Changed
