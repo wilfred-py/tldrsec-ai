@@ -39,7 +39,7 @@ beforeEach(() => {
   localStorage.clear();
 
   global.fetch = jest.fn().mockImplementation((url) => {
-    if (url === '/api/companies/list') {
+    if (url === '/api/companies?list=true') {
       return Promise.resolve({
         ok: true,
         json: () => Promise.resolve({ companies: mockCompanies })
@@ -61,6 +61,10 @@ describe('Dashboard - Inline Ticker Integration', () => {
     const user = userEvent.setup();
     render(<DashboardClient tutorialCompleted={true} />);
 
+    // Navigate to Tickers tab where the Add Ticker button lives
+    const tickersTab = screen.getByRole('tab', { name: /tickers/i });
+    await user.click(tickersTab);
+
     // Wait for initial render to complete
     const addButton = await screen.findByRole('button', { name: /add ticker/i });
     await user.click(addButton);
@@ -72,6 +76,10 @@ describe('Dashboard - Inline Ticker Integration', () => {
   it('should show inline search row when Add Ticker clicked', async () => {
     const user = userEvent.setup();
     render(<DashboardClient tutorialCompleted={true} />);
+
+    // Navigate to Tickers tab where the Add Ticker button lives
+    const tickersTab = screen.getByRole('tab', { name: /tickers/i });
+    await user.click(tickersTab);
 
     // Find and click Add Ticker button
     const addButton = await screen.findByRole('button', { name: /add ticker/i });
@@ -87,12 +95,16 @@ describe('Dashboard - Inline Ticker Integration', () => {
     const user = userEvent.setup();
     render(<DashboardClient tutorialCompleted={true} />);
 
+    // Navigate to Tickers tab where the Add Ticker button lives
+    const tickersTab = screen.getByRole('tab', { name: /tickers/i });
+    await user.click(tickersTab);
+
     // Click Add Ticker to trigger company list fetch
     const addButton = await screen.findByRole('button', { name: /add ticker/i });
     await user.click(addButton);
 
     await waitFor(() => {
-      expect(global.fetch).toHaveBeenCalledWith('/api/companies/list');
+      expect(global.fetch).toHaveBeenCalledWith('/api/companies?list=true');
     });
   });
 
@@ -100,12 +112,15 @@ describe('Dashboard - Inline Ticker Integration', () => {
     const user = userEvent.setup();
     render(<DashboardClient tutorialCompleted={true} />);
 
+    const tickersTab = screen.getByRole('tab', { name: /tickers/i });
+    await user.click(tickersTab);
+
     const addButton = await screen.findByRole('button', { name: /add ticker/i });
     await user.click(addButton);
 
     // Wait for companies to load after clicking Add Ticker
     await waitFor(() => {
-      expect(global.fetch).toHaveBeenCalledWith('/api/companies/list');
+      expect(global.fetch).toHaveBeenCalledWith('/api/companies?list=true');
     });
 
     const input = await screen.findByPlaceholderText(/type to search ticker or company/i);
@@ -119,6 +134,9 @@ describe('Dashboard - Inline Ticker Integration', () => {
   it('should hide inline search when Cancel clicked', async () => {
     const user = userEvent.setup();
     render(<DashboardClient tutorialCompleted={true} />);
+
+    const tickersTab = screen.getByRole('tab', { name: /tickers/i });
+    await user.click(tickersTab);
 
     const addButton = await screen.findByRole('button', { name: /add ticker/i });
     await user.click(addButton);
@@ -140,7 +158,7 @@ describe('Dashboard - Inline Ticker Integration', () => {
     const user = userEvent.setup();
 
     (global.fetch as jest.Mock).mockImplementation((url, options) => {
-      if (url === '/api/companies/list') {
+      if (url === '/api/companies?list=true') {
         return Promise.resolve({
           ok: true,
           json: () => Promise.resolve({ companies: mockCompanies })
@@ -163,12 +181,15 @@ describe('Dashboard - Inline Ticker Integration', () => {
 
     render(<DashboardClient tutorialCompleted={true} />);
 
+    const tickersTab = screen.getByRole('tab', { name: /tickers/i });
+    await user.click(tickersTab);
+
     const addButton = await screen.findByRole('button', { name: /add ticker/i });
     await user.click(addButton);
 
     // Wait for companies to load
     await waitFor(() => {
-      expect(global.fetch).toHaveBeenCalledWith('/api/companies/list');
+      expect(global.fetch).toHaveBeenCalledWith('/api/companies?list=true');
     });
 
     const input = await screen.findByPlaceholderText(/type to search ticker or company/i);

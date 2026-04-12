@@ -2,11 +2,10 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { FileTextIcon, ChevronDown, ChevronUp } from "lucide-react";
+import { Mail, ChevronDown, ChevronUp } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { formatDistanceToNow } from "date-fns";
 
 export interface ActivitySummary {
@@ -27,16 +26,9 @@ interface ActivityFeedProps {
 }
 
 const IMPORTANCE_BORDER: Record<string, string> = {
-  critical: "border-l-4 border-red-600",
-  high: "border-l-4 border-red-500",
-  medium: "border-l-4 border-amber-500",
-};
-
-const IMPORTANCE_BADGE: Record<string, string> = {
-  critical: "bg-red-600 text-white",
-  high: "bg-red-500 text-white",
-  medium: "bg-amber-500 text-white",
-  low: "bg-gray-400 text-white",
+  critical: "border-l-4 border-l-red-600",
+  high: "border-l-4 border-l-red-500",
+  medium: "border-l-4 border-l-amber-500",
 };
 
 function formatFilingType(type: string): string {
@@ -64,27 +56,39 @@ function formatFilingType(type: string): string {
   }
 }
 
-function getFilingBadge(filingType: string) {
-  const formatted = formatFilingType(filingType);
+/** Filing badge colors matching the landing page gmail-inbox-hero */
+function getFilingBadgeColor(filingType: string): string {
   const upper = filingType.toUpperCase();
 
   if (upper.includes("10-K") || upper.includes("10K")) {
-    return <Badge variant="default">{formatted}</Badge>;
+    return "bg-purple-100 text-purple-700 border-purple-200";
   }
   if (upper.includes("10-Q") || upper.includes("10Q")) {
-    return <Badge variant="secondary">{formatted}</Badge>;
+    return "bg-blue-100 text-blue-700 border-blue-200";
   }
   if (upper.includes("8-K") || upper.includes("8K")) {
-    return <Badge variant="outline">{formatted}</Badge>;
+    return "bg-orange-100 text-orange-700 border-orange-200";
   }
-  if (upper.includes("FORM 4") || upper === "4" || upper === "FORM4") {
-    return (
-      <Badge className="bg-purple-100 text-purple-800 border-transparent">
-        Form 4
-      </Badge>
-    );
+  if (upper.includes("FORM 4") || upper === "4" || upper === "FORM4" || upper === "144") {
+    return "bg-green-100 text-green-700 border-green-200";
   }
-  return <Badge variant="secondary">{formatted}</Badge>;
+  if (upper.includes("DEFA14A") || upper.includes("DEF 14A")) {
+    return "bg-red-100 text-red-700 border-red-200";
+  }
+  return "bg-gray-100 text-gray-700 border-gray-200";
+}
+
+function getFilingBadge(filingType: string) {
+  const formatted = formatFilingType(filingType);
+  const upper = filingType.toUpperCase();
+  const label = (upper.includes("FORM 4") || upper === "4" || upper === "FORM4") ? "Form 4" : formatted;
+  const colorClass = getFilingBadgeColor(filingType);
+
+  return (
+    <Badge className={`${colorClass} border text-[10px] px-1.5 py-0 font-medium`}>
+      {label}
+    </Badge>
+  );
 }
 
 function stripMarkdown(text: string): string {
@@ -103,7 +107,7 @@ function getPreviewText(summary: ActivitySummary): string | null {
   const raw = summary.summaryText?.trim();
   if (raw && raw.length > 0) {
     const text = stripMarkdown(raw);
-    return text.length > 150 ? text.substring(0, 150) + "..." : text;
+    return text.length > 120 ? text.substring(0, 120) + "..." : text;
   }
   return null;
 }
@@ -119,7 +123,6 @@ function getDateGroup(dateStr: string): string {
   const startOfYesterday = new Date(startOfToday);
   startOfYesterday.setDate(startOfYesterday.getDate() - 1);
   const startOfWeek = new Date(startOfToday);
-  // Use Monday as week start (getDay()=0 on Sunday, so offset by 6 instead of -1)
   const dayOfWeek = startOfToday.getDay();
   const mondayOffset = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
   startOfWeek.setDate(startOfWeek.getDate() - mondayOffset);
@@ -182,7 +185,6 @@ function groupForm4s(items: ActivitySummary[]): (ActivitySummary | Form4Group)[]
 
   for (const [ticker, form4s] of form4sByCompany) {
     if (form4s.length >= 3) {
-      // Sort by importance: critical > high > medium > low > null
       const importanceOrder = ["critical", "high", "medium", "low"];
       const sorted = [...form4s].sort((a, b) => {
         const aIdx = a.importance
@@ -205,8 +207,6 @@ function groupForm4s(items: ActivitySummary[]): (ActivitySummary | Form4Group)[]
     }
   }
 
-  // Interleave by original date order: merge non-form4s and form4 entries
-  // For simplicity, put non-form4s first, then form4 entries
   result.push(...nonForm4s, ...form4Entries);
   return result;
 }
@@ -218,10 +218,10 @@ function isForm4Group(item: ActivitySummary | Form4Group): item is Form4Group {
 function ImportanceBadge({ importance }: { importance: string | null }) {
   if (!importance) return null;
   const level = importance.toLowerCase();
-  // Only show text badge for critical/high — border handles medium/low
   if (level !== "critical" && level !== "high") return null;
-  const colorClass =
-    IMPORTANCE_BADGE[level] ?? IMPORTANCE_BADGE.low;
+  const colorClass = level === "critical"
+    ? "bg-red-600 text-white"
+    : "bg-red-500 text-white";
   return (
     <Badge
       className={`${colorClass} border-transparent text-[10px] uppercase tracking-wide`}
@@ -231,7 +231,7 @@ function ImportanceBadge({ importance }: { importance: string | null }) {
   );
 }
 
-function FeedCard({ summary }: { summary: ActivitySummary }) {
+function FeedCard({ summary, showEmailBadge = true }: { summary: ActivitySummary; showEmailBadge?: boolean }) {
   const subject =
     summary.smartSubject ??
     `${summary.companyName} ${formatFilingType(summary.filingType)} Filing`;
@@ -247,45 +247,49 @@ function FeedCard({ summary }: { summary: ActivitySummary }) {
   return (
     <Link
       href={`/summary/${summary.id}`}
-      className={`block rounded-md px-3 py-3 transition-colors hover:bg-muted/50 hover:shadow-sm ${borderClass}`}
+      className={`block border-b border-[var(--landing-border)] px-3 py-3 transition-colors hover:bg-[var(--landing-bg-subtle)] ${borderClass}`}
     >
       <div className="flex items-start justify-between gap-2">
         <div className="flex items-center gap-2 min-w-0 flex-wrap">
           {getFilingBadge(summary.filingType)}
-          <span className="text-sm text-muted-foreground truncate">
+          <span className="text-sm text-[var(--landing-text-muted)] truncate">
             {summary.ticker} &middot; {summary.companyName}
           </span>
         </div>
-        <span className="text-xs text-muted-foreground whitespace-nowrap flex-shrink-0">
+        <span className="text-xs text-[var(--landing-text-muted)] whitespace-nowrap flex-shrink-0">
           {relativeDate}
         </span>
       </div>
 
-      <p className="mt-1.5 text-sm font-medium text-foreground line-clamp-1">
+      <p className="mt-1.5 text-sm font-medium text-[var(--landing-secondary)] line-clamp-1">
         {subject}
       </p>
 
       {preview && (
-        <p className="mt-1 text-sm text-muted-foreground line-clamp-2 sm:line-clamp-3">
+        <p className="mt-1 text-sm text-[var(--landing-text-muted)] line-clamp-1">
           {preview}
         </p>
       )}
 
-      {summary.importance && (
-        <div className="mt-1.5">
-          <ImportanceBadge importance={summary.importance} />
-        </div>
-      )}
+      <div className="mt-1.5 flex items-center gap-3">
+        {showEmailBadge && (
+          <span className="flex items-center gap-1 text-xs text-[var(--landing-text-muted)]">
+            <Mail className="h-3 w-3" />
+            Emailed
+          </span>
+        )}
+        {summary.importance && <ImportanceBadge importance={summary.importance} />}
+      </div>
     </Link>
   );
 }
 
-function Form4GroupCard({ group }: { group: Form4Group }) {
+function Form4GroupCard({ group, showEmailBadge = true }: { group: Form4Group; showEmailBadge?: boolean }) {
   const [expanded, setExpanded] = useState(false);
 
   return (
     <div className="space-y-0">
-      <FeedCard summary={group.primary} />
+      <FeedCard summary={group.primary} showEmailBadge={showEmailBadge} />
       <div className="px-3 pb-2">
         <Button
           variant="ghost"
@@ -295,7 +299,7 @@ function Form4GroupCard({ group }: { group: Form4Group }) {
             setExpanded(!expanded);
           }}
           aria-expanded={expanded}
-          className="h-auto p-0 text-xs text-muted-foreground hover:text-foreground gap-1"
+          className="h-auto p-0 text-xs text-[var(--landing-text-muted)] hover:text-[var(--landing-secondary)] gap-1"
         >
           {expanded ? (
             <ChevronUp className="h-3 w-3" />
@@ -307,7 +311,7 @@ function Form4GroupCard({ group }: { group: Form4Group }) {
         </Button>
 
         {expanded && (
-          <div className="mt-1 space-y-1 border-l-2 border-muted ml-1 pl-3">
+          <div className="mt-1 space-y-1 border-l-2 border-[var(--landing-border)] ml-1 pl-3">
             {group.rest.map((summary) => {
               const subject =
                 summary.smartSubject ??
@@ -320,12 +324,12 @@ function Form4GroupCard({ group }: { group: Form4Group }) {
                 <Link
                   key={summary.id}
                   href={`/summary/${summary.id}`}
-                  className="flex items-center justify-between gap-2 py-1 text-sm hover:text-foreground transition-colors"
+                  className="flex items-center justify-between gap-2 py-1 text-sm hover:text-[var(--landing-secondary)] transition-colors"
                 >
-                  <span className="text-muted-foreground truncate">
+                  <span className="text-[var(--landing-text-muted)] truncate">
                     {subject}
                   </span>
-                  <span className="text-xs text-muted-foreground whitespace-nowrap flex-shrink-0">
+                  <span className="text-xs text-[var(--landing-text-muted)] whitespace-nowrap flex-shrink-0">
                     {relativeDate}
                   </span>
                 </Link>
@@ -340,7 +344,7 @@ function Form4GroupCard({ group }: { group: Form4Group }) {
 
 const INITIAL_VISIBLE = 10;
 
-function DateGroupedFeed({ groups }: { groups: GroupedSummaries[] }) {
+function DateGroupedFeed({ groups, showEmailBadge = true }: { groups: GroupedSummaries[]; showEmailBadge?: boolean }) {
   return (
     <>
       {groups.map((group, idx) => {
@@ -348,15 +352,15 @@ function DateGroupedFeed({ groups }: { groups: GroupedSummaries[] }) {
         return (
           <div key={group.label}>
             {idx > 0 && <Separator className="my-4" />}
-            <h4 className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            <h4 className="mb-2 text-xs font-semibold uppercase tracking-wider text-[var(--landing-text-muted)]">
               {group.label}
             </h4>
-            <div className="space-y-1">
+            <div>
               {processedItems.map((item) =>
                 isForm4Group(item) ? (
-                  <Form4GroupCard key={item.key} group={item} />
+                  <Form4GroupCard key={item.key} group={item} showEmailBadge={showEmailBadge} />
                 ) : (
-                  <FeedCard key={item.id} summary={item} />
+                  <FeedCard key={item.id} summary={item} showEmailBadge={showEmailBadge} />
                 )
               )}
             </div>
@@ -373,7 +377,6 @@ export function ActivityFeed({ summaries, featuredSummaries = [] }: ActivityFeed
   const showFeatured = grouped.length === 0 && featuredSummaries.length > 0;
   const featuredGrouped = showFeatured ? groupSummaries(featuredSummaries) : [];
 
-  // Limit visible summaries: flatten, slice, re-group
   const visibleGrouped = (() => {
     if (showAll || summaries.length <= INITIAL_VISIBLE) return grouped;
     const limitedSummaries = summaries.slice(0, INITIAL_VISIBLE);
@@ -381,47 +384,42 @@ export function ActivityFeed({ summaries, featuredSummaries = [] }: ActivityFeed
   })();
 
   const hasMore = !showAll && summaries.length > INITIAL_VISIBLE;
-  const isSparse = summaries.length <= 3 && summaries.length > 0;
 
   return (
     <div>
-      <div className="flex items-center gap-2 text-sm font-medium mb-4">
-        <FileTextIcon className="h-4 w-4 text-muted-foreground" />
-        {showFeatured ? "Featured Filings" : "Recent Activity"}
+      <div className="flex items-center gap-2 text-sm font-medium text-[var(--landing-secondary)] mb-4">
+        <Mail className="h-4 w-4 text-[var(--landing-primary)]" />
+        {showFeatured ? "Example Filing Summaries" : "Sent to your inbox"}
       </div>
-      <div>
+      <div className="rounded-lg border border-[var(--landing-border)] overflow-hidden bg-[var(--landing-bg)]">
         {showFeatured ? (
           <>
-            <p className="text-sm text-muted-foreground mb-4">
+            <p className="text-sm text-[var(--landing-text-muted)] px-3 py-3 border-b border-[var(--landing-border)]">
               Here&apos;s what our AI does with real SEC filings. Your personalized summaries will appear here as new filings come in for your tracked companies.
             </p>
-            <DateGroupedFeed groups={featuredGrouped} />
+            <DateGroupedFeed groups={featuredGrouped} showEmailBadge={false} />
           </>
         ) : grouped.length === 0 ? (
-          <p className="text-sm text-muted-foreground">
-            Your first summaries are on the way! We&apos;ll email you when
+          <p className="text-sm text-[var(--landing-text-muted)] px-3 py-6 text-center">
+            Your first email summaries are on the way! We&apos;ll email you when
             filings come in.
           </p>
-        ) : isSparse ? (
-          // Sparse feed: no scroll container, just render naturally
-          <DateGroupedFeed groups={visibleGrouped} />
         ) : (
-          // Normal feed: scroll container for many items
-          <ScrollArea className="max-h-[50vh] md:max-h-[60vh]">
+          <>
             <DateGroupedFeed groups={visibleGrouped} />
             {hasMore && (
-              <div className="pt-4 text-center">
+              <div className="py-3 text-center border-t border-[var(--landing-border)]">
                 <Button
                   variant="ghost"
                   size="sm"
                   onClick={() => setShowAll(true)}
-                  className="text-muted-foreground"
+                  className="text-[var(--landing-text-muted)] hover:text-[var(--landing-secondary)]"
                 >
                   Show all summaries
                 </Button>
               </div>
             )}
-          </ScrollArea>
+          </>
         )}
       </div>
     </div>
