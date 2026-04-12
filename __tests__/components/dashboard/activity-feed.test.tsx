@@ -24,7 +24,7 @@ function makeSummary(overrides: Partial<ActivitySummary> = {}): ActivitySummary 
 }
 
 describe('ActivityFeed', () => {
-  it('renders preview text from summaryText', () => {
+  it('renders 1-line preview text from summaryText', () => {
     const summary = makeSummary({
       summaryText: 'Revenue increased 12% driven by strong iPhone sales and services growth.',
     });
@@ -32,11 +32,11 @@ describe('ActivityFeed', () => {
     expect(screen.getByText(/Revenue increased 12%/)).toBeInTheDocument();
   });
 
-  it('truncates long summaryText to 150 chars', () => {
+  it('truncates long summaryText to 120 chars', () => {
     const longText = 'A'.repeat(200);
     const summary = makeSummary({ summaryText: longText });
     render(<ActivityFeed summaries={[summary]} />);
-    expect(screen.getByText('A'.repeat(150) + '...')).toBeInTheDocument();
+    expect(screen.getByText('A'.repeat(120) + '...')).toBeInTheDocument();
   });
 
   it('shows smartSubject as headline when summaryText is null', () => {
@@ -72,6 +72,12 @@ describe('ActivityFeed', () => {
     const summary = makeSummary();
     render(<ActivityFeed summaries={[summary]} />);
     expect(screen.getByText('2 hours ago')).toBeInTheDocument();
+  });
+
+  it('renders "Emailed" indicator on each card', () => {
+    const summary = makeSummary();
+    render(<ActivityFeed summaries={[summary]} />);
+    expect(screen.getByText('Emailed')).toBeInTheDocument();
   });
 
   it('renders importance badge for critical/high importance', () => {
@@ -136,7 +142,19 @@ describe('ActivityFeed', () => {
   it('renders empty state when no summaries', () => {
     render(<ActivityFeed summaries={[]} />);
     expect(
-      screen.getByText(/Your first summaries are on the way/)
+      screen.getByText(/Your first email summaries are on the way/)
     ).toBeInTheDocument();
+  });
+
+  it('shows "Sent to your inbox" header for real summaries', () => {
+    const summary = makeSummary();
+    render(<ActivityFeed summaries={[summary]} />);
+    expect(screen.getByText('Sent to your inbox')).toBeInTheDocument();
+  });
+
+  it('shows "Example Filing Summaries" header for featured summaries', () => {
+    const featured = makeSummary({ id: 'featured-1' });
+    render(<ActivityFeed summaries={[]} featuredSummaries={[featured]} />);
+    expect(screen.getByText('Example Filing Summaries')).toBeInTheDocument();
   });
 });
