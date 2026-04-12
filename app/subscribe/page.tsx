@@ -110,6 +110,12 @@ function SubscribePageContent() {
     };
   }, [isLoaded, user]);
 
+  // Prefetch dashboard so back navigation is instant
+  useEffect(() => {
+    router.prefetch('/dashboard');
+    router.prefetch('/dashboard/billing');
+  }, [router]);
+
   // Handle ESC key to go back
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
     if (e.key === 'Escape') {
@@ -315,7 +321,7 @@ function SubscribePageContent() {
   }
 
   return (
-    <div className="min-h-screen py-8 px-4" style={{ backgroundColor: 'var(--landing-bg)' }}>
+    <div className="min-h-screen py-8 px-4 animate-fadeIn" style={{ backgroundColor: 'var(--landing-bg)' }}>
       <div className="max-w-5xl mx-auto">
         {/* Back Button */}
         <Button
