@@ -88,8 +88,8 @@ export default async function SummaryPage({ params }: SummaryPageProps) {
     }
   
     return (
-      <div className="min-h-screen flex flex-col" style={{ backgroundColor: 'var(--landing-bg)' }}>
-        <main className="flex-1" style={{ backgroundColor: 'var(--landing-bg)' }}>
+      <div className="min-h-screen flex flex-col" style={{ backgroundColor: 'var(--brand-bg)' }}>
+        <main className="flex-1" style={{ backgroundColor: 'var(--brand-bg)' }}>
           <div className="container max-w-7xl mx-auto py-8 md:py-10 px-6 md:px-8 space-y-6">
               <Breadcrumb className="mb-4">
                 <BreadcrumbList>
@@ -171,8 +171,8 @@ export default async function SummaryPage({ params }: SummaryPageProps) {
 
     // Render inline error card instead of redirecting to nonexistent /error page
     return (
-      <div className="min-h-screen flex flex-col" style={{ backgroundColor: 'var(--landing-bg)' }}>
-        <main className="flex-1" style={{ backgroundColor: 'var(--landing-bg)' }}>
+      <div className="min-h-screen flex flex-col" style={{ backgroundColor: 'var(--brand-bg)' }}>
+        <main className="flex-1" style={{ backgroundColor: 'var(--brand-bg)' }}>
           <div className="container max-w-7xl mx-auto py-8 md:py-10 px-6 md:px-8 space-y-6">
             <Breadcrumb className="mb-4">
               <BreadcrumbList>

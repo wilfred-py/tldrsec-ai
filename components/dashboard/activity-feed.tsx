@@ -69,22 +69,22 @@ function getFilingBadge(filingType: string) {
   const upper = filingType.toUpperCase();
 
   if (upper.includes("10-K") || upper.includes("10K")) {
-    return <Badge variant="default">{formatted}</Badge>;
+    return <Badge className="bg-purple-100 text-purple-700 border-purple-200">{formatted}</Badge>;
   }
   if (upper.includes("10-Q") || upper.includes("10Q")) {
-    return <Badge variant="secondary">{formatted}</Badge>;
+    return <Badge className="bg-blue-100 text-blue-700 border-blue-200">{formatted}</Badge>;
   }
   if (upper.includes("8-K") || upper.includes("8K")) {
-    return <Badge variant="outline">{formatted}</Badge>;
+    return <Badge className="bg-orange-100 text-orange-700 border-orange-200">{formatted}</Badge>;
   }
   if (upper.includes("FORM 4") || upper === "4" || upper === "FORM4") {
     return (
-      <Badge className="bg-purple-100 text-purple-800 border-transparent">
+      <Badge className="bg-green-100 text-green-700 border-green-200">
         Form 4
       </Badge>
     );
   }
-  return <Badge variant="secondary">{formatted}</Badge>;
+  return <Badge className="bg-gray-100 text-gray-700 border-gray-200">{formatted}</Badge>;
 }
 
 function stripMarkdown(text: string): string {
@@ -247,26 +247,26 @@ function FeedCard({ summary }: { summary: ActivitySummary }) {
   return (
     <Link
       href={`/summary/${summary.id}`}
-      className={`block rounded-md px-3 py-3 transition-colors hover:bg-muted/50 hover:shadow-sm ${borderClass}`}
+      className={`block rounded-xl px-4 py-3 transition-all hover:bg-[var(--brand-primary-light)] focus-visible:bg-[var(--brand-primary-light)] hover:shadow-sm focus-visible:shadow-sm focus-visible:outline-none ${borderClass}`}
     >
       <div className="flex items-start justify-between gap-2">
         <div className="flex items-center gap-2 min-w-0 flex-wrap">
           {getFilingBadge(summary.filingType)}
-          <span className="text-sm text-muted-foreground truncate">
+          <span className="text-sm truncate" style={{ color: 'var(--brand-text-muted)' }}>
             {summary.ticker} &middot; {summary.companyName}
           </span>
         </div>
-        <span className="text-xs text-muted-foreground whitespace-nowrap flex-shrink-0">
+        <span className="text-xs whitespace-nowrap flex-shrink-0" style={{ color: 'var(--brand-text-muted)' }}>
           {relativeDate}
         </span>
       </div>
 
-      <p className="mt-1.5 text-sm font-medium text-foreground line-clamp-1">
+      <p className="mt-1.5 text-sm font-medium line-clamp-1" style={{ color: 'var(--brand-secondary)' }}>
         {subject}
       </p>
 
       {preview && (
-        <p className="mt-1 text-sm text-muted-foreground line-clamp-2 sm:line-clamp-3">
+        <p className="mt-1 text-sm line-clamp-2 sm:line-clamp-3" style={{ color: 'var(--brand-text)' }}>
           {preview}
         </p>
       )}
@@ -348,7 +348,7 @@ function DateGroupedFeed({ groups }: { groups: GroupedSummaries[] }) {
         return (
           <div key={group.label}>
             {idx > 0 && <Separator className="my-4" />}
-            <h4 className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            <h4 className="brand-caption mb-2 text-xs font-semibold uppercase tracking-wider">
               {group.label}
             </h4>
             <div className="space-y-1">
@@ -385,9 +385,13 @@ export function ActivityFeed({ summaries, featuredSummaries = [] }: ActivityFeed
 
   return (
     <div>
-      <div className="flex items-center gap-2 text-sm font-medium mb-4">
-        <FileTextIcon className="h-4 w-4 text-muted-foreground" />
-        {showFeatured ? "Featured Filings" : "Recent Activity"}
+      <div className="flex items-center gap-3 mb-4">
+        <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: 'var(--brand-primary-light)' }}>
+          <FileTextIcon className="h-4 w-4" style={{ color: 'var(--brand-primary)' }} />
+        </div>
+        <span className="text-sm font-semibold" style={{ color: 'var(--brand-secondary)' }}>
+          {showFeatured ? "Featured Filings" : "Recent Activity"}
+        </span>
       </div>
       <div>
         {showFeatured ? (

@@ -69,7 +69,7 @@ describe("DashboardLoading", () => {
     render(<DashboardLoading />);
 
     // Check for main content card
-    const landingCard = document.querySelector(".landing-card");
+    const landingCard = document.querySelector(".brand-card");
     expect(landingCard).toBeInTheDocument();
   });
 

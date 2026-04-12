@@ -18,7 +18,13 @@ export function DashboardShell({ children }: DashboardShellProps) {
       <Suspense fallback={null}>
         <ErrorHandler />
       </Suspense>
-      <div className="min-h-screen flex flex-col" style={{ backgroundColor: 'var(--landing-bg)' }}>
+      <div
+        className="min-h-screen flex flex-col"
+        style={{
+          backgroundColor: 'var(--brand-bg)',
+          backgroundImage: 'radial-gradient(ellipse 80% 50% at 50% 0%, rgba(0, 121, 242, 0.04) 0%, transparent 100%)',
+        }}
+      >
         {subscription && (
           <PlanStatusBanner
             planType={subscription.planType as "FREE" | "PRO" | "MAX"}
@@ -28,8 +34,8 @@ export function DashboardShell({ children }: DashboardShellProps) {
           />
         )}
         <MinimalHeader />
-        <main className="flex-1" style={{ backgroundColor: 'var(--landing-bg)' }}>
-          <div className="container max-w-7xl mx-auto py-4 md:py-6 px-6 md:px-8 space-y-4">
+        <main className="flex-1">
+          <div className="container max-w-7xl mx-auto py-4 md:py-6 px-6 md:px-8 space-y-6">
             {children}
           </div>
         </main>

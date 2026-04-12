@@ -64,11 +64,11 @@ export function CTASectionV2() {
           className="max-w-2xl mx-auto text-center"
         >
           {/* Headline */}
-          <h2 className="landing-heading mb-4">
+          <h2 className="brand-heading mb-4">
             Start Monitoring SEC Filings Today
           </h2>
 
-          <p className="landing-body mb-8">
+          <p className="brand-body mb-8">
             Join thousands of investors who save hours every week with AI-powered filing summaries.
           </p>
 
@@ -84,7 +84,7 @@ export function CTASectionV2() {
             />
             <Button
               type="submit"
-              className="landing-button-primary whitespace-nowrap"
+              className="brand-button-primary whitespace-nowrap"
               disabled={isSubmitting}
             >
               {isSubmitting ? 'Joining...' : 'Get Started'}
@@ -96,8 +96,8 @@ export function CTASectionV2() {
           <div className="flex flex-wrap justify-center gap-6">
             {trustPoints.map((point) => (
               <div key={point} className="flex items-center gap-2">
-                <CheckCircle2 className="w-4 h-4 text-[var(--landing-success)]" />
-                <span className="landing-caption">{point}</span>
+                <CheckCircle2 className="w-4 h-4 text-[var(--brand-success)]" />
+                <span className="brand-caption">{point}</span>
               </div>
             ))}
           </div>

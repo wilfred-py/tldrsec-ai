@@ -73,10 +73,10 @@ export function FeaturesSectionV2() {
           transition={{ duration: 0.5 }}
           className="text-center mb-16"
         >
-          <h2 className="landing-heading mb-4">
+          <h2 className="brand-heading mb-4">
             Built for Modern Investors
           </h2>
-          <p className="landing-body max-w-2xl mx-auto">
+          <p className="brand-body max-w-2xl mx-auto">
             Everything you need to stay informed about the companies you care about.
           </p>
         </motion.div>
@@ -93,26 +93,26 @@ export function FeaturesSectionV2() {
             <motion.article
               key={feature.title}
               variants={staggerItem}
-              className="landing-card group"
+              className="brand-card group"
             >
               {/* Icon */}
               <div
                 className="w-12 h-12 rounded-xl flex items-center justify-center mb-4 transition-transform duration-300 group-hover:scale-110"
-                style={{ backgroundColor: 'var(--landing-primary-light)' }}
+                style={{ backgroundColor: 'var(--brand-primary-light)' }}
               >
-                <feature.icon className="w-6 h-6 text-[var(--landing-primary)]" />
+                <feature.icon className="w-6 h-6 text-[var(--brand-primary)]" />
               </div>
 
               {/* Title */}
               <h3
                 className="text-lg font-semibold mb-2"
-                style={{ color: 'var(--landing-secondary)' }}
+                style={{ color: 'var(--brand-secondary)' }}
               >
                 {feature.title}
               </h3>
 
               {/* Description */}
-              <p className="landing-body text-sm">
+              <p className="brand-body text-sm">
                 {feature.description}
               </p>
             </motion.article>

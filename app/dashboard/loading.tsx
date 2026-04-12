@@ -22,8 +22,8 @@ export default function DashboardLoading() {
         </div>
       </div>
 
-      {/* Matches DashboardClient landing-card container */}
-      <div className="landing-card">
+      {/* Matches DashboardClient brand-card container */}
+      <div className="brand-card">
         <div className="mb-6">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             {/* Matches: h2(text-lg = lh 1.75rem = h-7) + p(text-sm = lh 1.25rem = h-5) */}

@@ -67,31 +67,31 @@ export function HeroFilingCard() {
   return (
     <>
       <motion.div
-        className="landing-card relative overflow-hidden"
+        className="brand-card relative overflow-hidden"
         whileHover={{ y: -4 }}
         transition={{ duration: 0.2 }}
       >
         {/* Card Header */}
         <div className="flex items-start justify-between mb-6">
           <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-xl bg-[var(--landing-bg-subtle)] flex items-center justify-center">
-              <Building2 className="w-6 h-6 text-[var(--landing-primary)]" />
+            <div className="w-12 h-12 rounded-xl bg-[var(--brand-bg-subtle)] flex items-center justify-center">
+              <Building2 className="w-6 h-6 text-[var(--brand-primary)]" />
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <span className="font-bold text-lg" style={{ color: 'var(--landing-secondary)' }}>
+                <span className="font-bold text-lg" style={{ color: 'var(--brand-secondary)' }}>
                   {sampleFiling.ticker}
                 </span>
                 <Badge className="bg-blue-100 text-blue-700 border-blue-200">
                   {sampleFiling.filingType}
                 </Badge>
               </div>
-              <p className="text-sm" style={{ color: 'var(--landing-text-muted)' }}>
+              <p className="text-sm" style={{ color: 'var(--brand-text-muted)' }}>
                 {sampleFiling.companyName}
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-1 text-sm" style={{ color: 'var(--landing-text-muted)' }}>
+          <div className="flex items-center gap-1 text-sm" style={{ color: 'var(--brand-text-muted)' }}>
             <Calendar className="w-4 h-4" />
             {sampleFiling.filedAt}
           </div>
@@ -99,20 +99,20 @@ export function HeroFilingCard() {
 
         {/* Key Highlights */}
         <div className="space-y-3">
-          <p className="text-sm font-medium" style={{ color: 'var(--landing-text-muted)' }}>
+          <p className="text-sm font-medium" style={{ color: 'var(--brand-text-muted)' }}>
             Key Highlights
           </p>
           {sampleFiling.keyHighlights.map((highlight, index) => (
             <motion.div
               key={index}
               className="flex items-center gap-3 p-3 rounded-lg"
-              style={{ backgroundColor: 'var(--landing-bg-subtle)' }}
+              style={{ backgroundColor: 'var(--brand-bg-subtle)' }}
               initial={{ opacity: 0, x: -10 }}
               animate={{ opacity: 1, x: 0 }}
               transition={{ delay: 0.5 + index * 0.1 }}
             >
-              <highlight.icon className="w-4 h-4 text-[var(--landing-primary)]" />
-              <span className="text-sm" style={{ color: 'var(--landing-secondary)' }}>
+              <highlight.icon className="w-4 h-4 text-[var(--brand-primary)]" />
+              <span className="text-sm" style={{ color: 'var(--brand-secondary)' }}>
                 {highlight.text}
               </span>
             </motion.div>
@@ -120,10 +120,10 @@ export function HeroFilingCard() {
         </div>
 
         {/* CTA Link */}
-        <div className="mt-6 pt-4 border-t" style={{ borderColor: 'var(--landing-border)' }}>
+        <div className="mt-6 pt-4 border-t" style={{ borderColor: 'var(--brand-border)' }}>
           <button
             onClick={() => setIsModalOpen(true)}
-            className="text-sm font-medium text-[var(--landing-primary)] hover:underline flex items-center gap-1"
+            className="text-sm font-medium text-[var(--brand-primary)] hover:underline flex items-center gap-1"
           >
             Read full analysis
             <span className="text-xs">→</span>
@@ -161,21 +161,21 @@ export function HeroFilingCard() {
               transition={{ duration: 0.2 }}
             >
               {/* Modal Header */}
-              <div className="flex items-center justify-between p-6 border-b" style={{ borderColor: 'var(--landing-border)' }}>
+              <div className="flex items-center justify-between p-6 border-b" style={{ borderColor: 'var(--brand-border)' }}>
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-[var(--landing-primary-light)] flex items-center justify-center">
-                    <Building2 className="w-5 h-5 text-[var(--landing-primary)]" />
+                  <div className="w-10 h-10 rounded-xl bg-[var(--brand-primary-light)] flex items-center justify-center">
+                    <Building2 className="w-5 h-5 text-[var(--brand-primary)]" />
                   </div>
                   <div>
                     <div className="flex items-center gap-2">
-                      <span className="font-bold" style={{ color: 'var(--landing-secondary)' }}>
+                      <span className="font-bold" style={{ color: 'var(--brand-secondary)' }}>
                         {sampleFiling.ticker}
                       </span>
                       <Badge className="bg-blue-100 text-blue-700 border-blue-200">
                         {sampleFiling.filingType}
                       </Badge>
                     </div>
-                    <p className="text-sm" style={{ color: 'var(--landing-text-muted)' }}>
+                    <p className="text-sm" style={{ color: 'var(--brand-text-muted)' }}>
                       {sampleFiling.companyName} • {sampleFiling.filedAt}
                     </p>
                   </div>
@@ -184,7 +184,7 @@ export function HeroFilingCard() {
                   onClick={() => setIsModalOpen(false)}
                   className="p-2 rounded-lg hover:bg-gray-100 transition-colors"
                 >
-                  <X className="w-5 h-5" style={{ color: 'var(--landing-text-muted)' }} />
+                  <X className="w-5 h-5" style={{ color: 'var(--brand-text-muted)' }} />
                 </button>
               </div>
 
@@ -192,10 +192,10 @@ export function HeroFilingCard() {
               <div className="p-6 max-h-[60vh] overflow-y-auto">
                 {/* Summary */}
                 <div className="mb-6">
-                  <h3 className="text-lg font-semibold mb-3" style={{ color: 'var(--landing-secondary)' }}>
+                  <h3 className="text-lg font-semibold mb-3" style={{ color: 'var(--brand-secondary)' }}>
                     Executive Summary
                   </h3>
-                  <p className="text-sm leading-relaxed" style={{ color: 'var(--landing-text)' }}>
+                  <p className="text-sm leading-relaxed" style={{ color: 'var(--brand-text)' }}>
                     {sampleFiling.fullAnalysis.summary}
                   </p>
                 </div>
@@ -206,18 +206,18 @@ export function HeroFilingCard() {
                     <motion.div
                       key={section.title}
                       className="p-4 rounded-xl"
-                      style={{ backgroundColor: 'var(--landing-bg-subtle)' }}
+                      style={{ backgroundColor: 'var(--brand-bg-subtle)' }}
                       initial={{ opacity: 0, y: 10 }}
                       animate={{ opacity: 1, y: 0 }}
                       transition={{ delay: index * 0.1 }}
                     >
                       <div className="flex items-center gap-2 mb-2">
-                        <section.icon className="w-4 h-4 text-[var(--landing-primary)]" />
-                        <h4 className="font-semibold text-sm" style={{ color: 'var(--landing-secondary)' }}>
+                        <section.icon className="w-4 h-4 text-[var(--brand-primary)]" />
+                        <h4 className="font-semibold text-sm" style={{ color: 'var(--brand-secondary)' }}>
                           {section.title}
                         </h4>
                       </div>
-                      <p className="text-sm" style={{ color: 'var(--landing-text)' }}>
+                      <p className="text-sm" style={{ color: 'var(--brand-text)' }}>
                         {section.content}
                       </p>
                     </motion.div>
@@ -234,9 +234,9 @@ export function HeroFilingCard() {
               </div>
 
               {/* Modal Footer */}
-              <div className="p-6 border-t" style={{ borderColor: 'var(--landing-border)', backgroundColor: 'var(--landing-bg-subtle)' }}>
+              <div className="p-6 border-t" style={{ borderColor: 'var(--brand-border)', backgroundColor: 'var(--brand-bg-subtle)' }}>
                 <Button
-                  className="landing-button-gradient w-full"
+                  className="brand-button-gradient w-full"
                   onClick={() => {
                     setIsModalOpen(false);
                     window.location.href = '/onboarding';

@@ -27,8 +27,8 @@ export function VerticalProgress({ currentStep }: VerticalProgressProps) {
               <div
                 className={cn(
                   "flex h-8 w-8 items-center justify-center rounded-full border-2 transition-all duration-300",
-                  isCompleted && "border-[var(--landing-primary)] bg-[var(--landing-primary)] text-white",
-                  isActive && "border-[var(--landing-primary)] bg-[var(--landing-primary)]/10 text-[var(--landing-primary)]",
+                  isCompleted && "border-[var(--brand-primary)] bg-[var(--brand-primary)] text-white",
+                  isActive && "border-[var(--brand-primary)] bg-[var(--brand-primary)]/10 text-[var(--brand-primary)]",
                   !isCompleted && !isActive && "border-gray-300 text-gray-400 dark:border-gray-600"
                 )}
                 aria-current={isActive ? "step" : undefined}
@@ -45,7 +45,7 @@ export function VerticalProgress({ currentStep }: VerticalProgressProps) {
                 className={cn(
                   "hidden sm:block text-sm transition-colors duration-300",
                   isActive && "font-semibold text-foreground",
-                  isCompleted && "font-medium text-[var(--landing-primary)]",
+                  isCompleted && "font-medium text-[var(--brand-primary)]",
                   !isCompleted && !isActive && "text-muted-foreground"
                 )}
               >
@@ -59,7 +59,7 @@ export function VerticalProgress({ currentStep }: VerticalProgressProps) {
                 <div
                   className={cn(
                     "h-8 w-0.5 transition-colors duration-300",
-                    currentStep > stepNum ? "bg-[var(--landing-primary)]" : "bg-gray-200 dark:bg-gray-700"
+                    currentStep > stepNum ? "bg-[var(--brand-primary)]" : "bg-gray-200 dark:bg-gray-700"
                   )}
                 />
               </div>

@@ -40,7 +40,7 @@ export function FooterSectionV2() {
             <div className="mb-4">
               <Logo variant="full" size={24} />
             </div>
-            <p className="landing-caption max-w-sm">
+            <p className="brand-caption max-w-sm">
               AI-powered SEC intelligence for modern investors.
               Save hours every week with summaries delivered straight to your inbox.
             </p>
@@ -48,7 +48,7 @@ export function FooterSectionV2() {
 
           {/* Product Links */}
           <div>
-            <h4 className="font-semibold mb-4" style={{ color: 'var(--landing-secondary)' }}>
+            <h4 className="font-semibold mb-4" style={{ color: 'var(--brand-secondary)' }}>
               Product
             </h4>
             <ul className="space-y-2">
@@ -56,7 +56,7 @@ export function FooterSectionV2() {
                 <li key={link.label}>
                   <Link
                     href={link.href}
-                    className="landing-caption hover:text-[var(--landing-primary)] transition-colors"
+                    className="brand-caption hover:text-[var(--brand-primary)] transition-colors"
                   >
                     {link.label}
                   </Link>
@@ -67,7 +67,7 @@ export function FooterSectionV2() {
 
           {/* Legal Links */}
           <div>
-            <h4 className="font-semibold mb-4" style={{ color: 'var(--landing-secondary)' }}>
+            <h4 className="font-semibold mb-4" style={{ color: 'var(--brand-secondary)' }}>
               Legal
             </h4>
             <ul className="space-y-2">
@@ -75,7 +75,7 @@ export function FooterSectionV2() {
                 <li key={link.label}>
                   <Link
                     href={link.href}
-                    className="landing-caption hover:text-[var(--landing-primary)] transition-colors"
+                    className="brand-caption hover:text-[var(--brand-primary)] transition-colors"
                   >
                     {link.label}
                   </Link>
@@ -86,12 +86,12 @@ export function FooterSectionV2() {
         </div>
 
         {/* Bottom Bar */}
-        <div className="pt-8 border-t" style={{ borderColor: 'var(--landing-border)' }}>
+        <div className="pt-8 border-t" style={{ borderColor: 'var(--brand-border)' }}>
           <div className="flex flex-col items-center gap-2 text-center">
-            <p className="landing-caption">
+            <p className="brand-caption">
               © {currentYear} tldrsec. All rights reserved.
             </p>
-            <p className="landing-caption max-w-lg">
+            <p className="brand-caption max-w-lg">
               This service provides summaries for informational purposes only and is not investment advice.
               Always consult original SEC filings for complete information.
             </p>

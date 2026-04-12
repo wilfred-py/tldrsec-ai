@@ -26,6 +26,7 @@ const esmPackages = [
   '@babel/preset-env',
   '@number-flow/react',
   'number-flow',
+  'framer-motion',
 ].join('|');
 
 // Add any custom config to be passed to Jest

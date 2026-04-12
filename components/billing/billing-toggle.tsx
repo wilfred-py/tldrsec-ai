@@ -18,7 +18,7 @@ export function BillingToggle({ billingInterval, onToggle, disabled = false }: B
 
   return (
     <div className="inline-flex items-center gap-2.5 rounded-full px-4 py-2.5">
-      <span className="text-sm text-[var(--landing-text-muted)]">
+      <span className="text-sm text-[var(--brand-text-muted)]">
         Save with yearly billing
       </span>
       <button

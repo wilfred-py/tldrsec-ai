@@ -61,7 +61,7 @@ export function TickersMobileView({
       <div className="space-y-3 flex-1">
         {/* Mobile Inline Add Card */}
         {showInlineAdd && (
-          <div className="landing-card p-4 bg-muted/30">
+          <div className="brand-card p-4 bg-muted/30">
             <div className="relative">
               <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
               <Input
@@ -107,7 +107,7 @@ export function TickersMobileView({
         {table.getRowModel().rows.map((row) => {
           const company = row.original;
           return (
-            <div key={company.id} className="landing-card p-4">
+            <div key={company.id} className="brand-card p-4">
               <div className="flex justify-between items-start mb-3">
                 <div>
                   <h3 className="font-semibold">{company.symbol}</h3>

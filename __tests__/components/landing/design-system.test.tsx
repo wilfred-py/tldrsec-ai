@@ -14,30 +14,30 @@ describe('Design System - Colors', () => {
   });
 
   it('should have light theme primary blue defined in globals.css', () => {
-    expect(globalsContent).toContain('--landing-primary:');
+    expect(globalsContent).toContain('--brand-primary:');
     expect(globalsContent).toContain('#0079F2');
   });
 
   it('should have trust metric colors defined in globals.css', () => {
-    expect(globalsContent).toContain('--landing-success:');
-    expect(globalsContent).toContain('--landing-accent:');
+    expect(globalsContent).toContain('--brand-success:');
+    expect(globalsContent).toContain('--brand-accent:');
     expect(globalsContent).toContain('#10B981'); // success green
     expect(globalsContent).toContain('#8B5CF6'); // accent purple
   });
 
   it('should have all required landing color tokens', () => {
     const requiredTokens = [
-      '--landing-primary',
-      '--landing-primary-hover',
-      '--landing-primary-light',
-      '--landing-secondary',
-      '--landing-text',
-      '--landing-text-muted',
-      '--landing-bg',
-      '--landing-bg-subtle',
-      '--landing-border',
-      '--landing-success',
-      '--landing-accent',
+      '--brand-primary',
+      '--brand-primary-hover',
+      '--brand-primary-light',
+      '--brand-secondary',
+      '--brand-text',
+      '--brand-text-muted',
+      '--brand-bg',
+      '--brand-bg-subtle',
+      '--brand-border',
+      '--brand-success',
+      '--brand-accent',
     ];
 
     requiredTokens.forEach((token) => {
@@ -95,18 +95,18 @@ describe('Design System - Typography', () => {
   });
 
   it('should have display heading class defined', () => {
-    expect(globalsContent).toContain('.landing-display');
+    expect(globalsContent).toContain('.brand-display');
   });
 
   it('should have all required typography classes', () => {
     const requiredClasses = [
-      '.landing-display',
-      '.landing-heading',
-      '.landing-subheading',
-      '.landing-body',
-      '.landing-body-large',
-      '.landing-caption',
-      '.landing-gradient-text',
+      '.brand-display',
+      '.brand-heading',
+      '.brand-subheading',
+      '.brand-body',
+      '.brand-body-large',
+      '.brand-caption',
+      '.brand-gradient-text',
     ];
 
     requiredClasses.forEach((className) => {
@@ -115,18 +115,18 @@ describe('Design System - Typography', () => {
   });
 
   it('should have button styles defined', () => {
-    expect(globalsContent).toContain('.landing-button-primary');
-    expect(globalsContent).toContain('.landing-button-secondary');
+    expect(globalsContent).toContain('.brand-button-primary');
+    expect(globalsContent).toContain('.brand-button-secondary');
   });
 
   it('should have card and badge styles defined', () => {
-    expect(globalsContent).toContain('.landing-card');
-    expect(globalsContent).toContain('.landing-badge');
+    expect(globalsContent).toContain('.brand-card');
+    expect(globalsContent).toContain('.brand-badge');
   });
 
   it('should render elements with landing classes correctly', () => {
-    render(<h1 className="landing-display">Test</h1>);
+    render(<h1 className="brand-display">Test</h1>);
     const heading = screen.getByText('Test');
-    expect(heading).toHaveClass('landing-display');
+    expect(heading).toHaveClass('brand-display');
   });
 });

@@ -101,19 +101,19 @@ function EmailCard({
       }}
       whileHover={{
         x: 4,
-        backgroundColor: 'var(--landing-primary-light)',
+        backgroundColor: 'var(--brand-primary-light)',
         transition: { duration: 0.15 }
       }}
       className={`flex items-start gap-4 p-4 rounded-xl border cursor-pointer transition-all ${
         summary.isNew
           ? 'bg-blue-50/50 border-blue-100'
-          : 'bg-white border-[var(--landing-border)]'
+          : 'bg-white border-[var(--brand-border)]'
       }`}
     >
       {/* Unread indicator */}
       <div className="flex-shrink-0 mt-1">
         {summary.isNew ? (
-          <div className="w-2 h-2 rounded-full bg-[var(--landing-primary)]" />
+          <div className="w-2 h-2 rounded-full bg-[var(--brand-primary)]" />
         ) : (
           <div className="w-2 h-2 rounded-full bg-transparent" />
         )}
@@ -122,9 +122,9 @@ function EmailCard({
       {/* Icon */}
       <div
         className="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0"
-        style={{ backgroundColor: 'var(--landing-primary-light)' }}
+        style={{ backgroundColor: 'var(--brand-primary-light)' }}
       >
-        <summary.icon className="w-5 h-5 text-[var(--landing-primary)]" />
+        <summary.icon className="w-5 h-5 text-[var(--brand-primary)]" />
       </div>
 
       {/* Content */}
@@ -132,7 +132,7 @@ function EmailCard({
         <div className="flex items-center justify-between gap-2 mb-1">
           <div className="flex items-center gap-2">
             <span
-              className={`font-semibold text-sm ${summary.isNew ? 'text-[var(--landing-secondary)]' : 'text-[var(--landing-text)]'}`}
+              className={`font-semibold text-sm ${summary.isNew ? 'text-[var(--brand-secondary)]' : 'text-[var(--brand-text)]'}`}
             >
               {summary.ticker}
             </span>
@@ -147,7 +147,7 @@ function EmailCard({
               {summary.filingType}
             </Badge>
           </div>
-          <span className="text-xs text-[var(--landing-text-muted)] flex items-center gap-1 flex-shrink-0">
+          <span className="text-xs text-[var(--brand-text-muted)] flex items-center gap-1 flex-shrink-0">
             <Clock className="w-3 h-3" />
             {summary.filedAt}
           </span>
@@ -155,13 +155,13 @@ function EmailCard({
 
         <h4
           className={`text-sm mb-1 line-clamp-1 ${
-            summary.isNew ? 'font-semibold text-[var(--landing-secondary)]' : 'text-[var(--landing-text)]'
+            summary.isNew ? 'font-semibold text-[var(--brand-secondary)]' : 'text-[var(--brand-text)]'
           }`}
         >
           {summary.headline}
         </h4>
 
-        <p className="text-xs text-[var(--landing-text-muted)] line-clamp-1">
+        <p className="text-xs text-[var(--brand-text-muted)] line-clamp-1">
           {summary.preview}
         </p>
       </div>
@@ -190,17 +190,17 @@ export function SummariesShowcaseV2() {
             viewport={{ once: true }}
             transition={{ duration: 0.5 }}
           >
-            <Badge className="landing-badge mb-6">
+            <Badge className="brand-badge mb-6">
               <Mail className="w-4 h-4 mr-2" />
               Delivered to Your Inbox
             </Badge>
 
-            <h2 className="landing-heading mb-4">
+            <h2 className="brand-heading mb-4">
               Summaries That{' '}
-              <span className="landing-gradient-text">Actually Matter</span>
+              <span className="brand-gradient-text">Actually Matter</span>
             </h2>
 
-            <p className="landing-body mb-6">
+            <p className="brand-body mb-6">
               Watch as filing summaries arrive in real-time. Each summary is AI-generated,
               highlighting the key insights you need to make informed decisions.
             </p>
@@ -220,12 +220,12 @@ export function SummariesShowcaseV2() {
                   transition={{ duration: 0.3, delay: 0.1 * index }}
                   className="flex items-center gap-3"
                 >
-                  <div className="w-5 h-5 rounded-full bg-[var(--landing-success)] flex items-center justify-center">
+                  <div className="w-5 h-5 rounded-full bg-[var(--brand-success)] flex items-center justify-center">
                     <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
                     </svg>
                   </div>
-                  <span className="text-sm" style={{ color: 'var(--landing-text)' }}>{item}</span>
+                  <span className="text-sm" style={{ color: 'var(--brand-text)' }}>{item}</span>
                 </motion.li>
               ))}
             </ul>
@@ -239,21 +239,21 @@ export function SummariesShowcaseV2() {
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true }}
               transition={{ duration: 0.5 }}
-              className="bg-white rounded-2xl border border-[var(--landing-border)] shadow-xl overflow-hidden"
+              className="bg-white rounded-2xl border border-[var(--brand-border)] shadow-xl overflow-hidden"
             >
               {/* Email client header */}
-              <div className="flex items-center gap-2 px-4 py-3 bg-[var(--landing-bg-subtle)] border-b border-[var(--landing-border)]">
+              <div className="flex items-center gap-2 px-4 py-3 bg-[var(--brand-bg-subtle)] border-b border-[var(--brand-border)]">
                 <div className="flex gap-1.5">
                   <div className="w-3 h-3 rounded-full bg-red-400" />
                   <div className="w-3 h-3 rounded-full bg-yellow-400" />
                   <div className="w-3 h-3 rounded-full bg-green-400" />
                 </div>
                 <div className="flex-grow text-center">
-                  <span className="text-sm font-medium text-[var(--landing-text-muted)]">
+                  <span className="text-sm font-medium text-[var(--brand-text-muted)]">
                     SEC Filing Summaries
                   </span>
                 </div>
-                <Badge className="bg-[var(--landing-primary)] text-white text-xs">
+                <Badge className="bg-[var(--brand-primary)] text-white text-xs">
                   {sampleSummaries.filter(s => s.isNew).length} new
                 </Badge>
               </div>
@@ -271,8 +271,8 @@ export function SummariesShowcaseV2() {
               </div>
 
               {/* Footer hint */}
-              <div className="px-4 py-3 bg-[var(--landing-bg-subtle)] border-t border-[var(--landing-border)] text-center">
-                <span className="text-xs text-[var(--landing-text-muted)]">
+              <div className="px-4 py-3 bg-[var(--brand-bg-subtle)] border-t border-[var(--brand-border)] text-center">
+                <span className="text-xs text-[var(--brand-text-muted)]">
                   Showing 5 of 127 summaries this week
                 </span>
               </div>

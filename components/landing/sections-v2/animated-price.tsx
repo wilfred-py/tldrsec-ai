@@ -26,10 +26,10 @@ export function AnimatedPrice({ value, suffix, savings, className = '' }: Animat
           locales="en-US"
           format={{ style: 'currency', currency: 'USD', minimumFractionDigits: 0, maximumFractionDigits: 0 }}
           className="text-4xl font-bold tracking-tight"
-          style={{ color: 'var(--landing-secondary)' }}
+          style={{ color: 'var(--brand-secondary)' }}
         />
         <span
-          className="text-sm text-[var(--landing-text-muted)] ml-1"
+          className="text-sm text-[var(--brand-text-muted)] ml-1"
           style={{ minWidth: '4.5rem' }}
         >
           {suffix}
@@ -64,7 +64,7 @@ export function StaticPrice({ label }: { label: string }) {
     <div className="flex flex-col">
       <span
         className="text-4xl font-bold tracking-tight"
-        style={{ color: 'var(--landing-secondary)' }}
+        style={{ color: 'var(--brand-secondary)' }}
       >
         {label}
       </span>

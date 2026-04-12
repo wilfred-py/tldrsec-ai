@@ -211,20 +211,20 @@ describe('PricingCard', () => {
       expect(style).toContain('z-index: 10');
     });
 
-    it('uses landing-button-primary on CTA when card is hovered', () => {
+    it('uses brand-button-primary on CTA when card is hovered', () => {
       render(<PricingCard {...defaultProps} hoveredCard="PRO" />);
 
       const button = screen.getByRole('button');
-      expect(button.className).toContain('landing-button-primary');
+      expect(button.className).toContain('brand-button-primary');
     });
 
-    it('keeps landing-button-secondary on CTA when checkoutLoading even if hovered', () => {
+    it('keeps brand-button-secondary on CTA when checkoutLoading even if hovered', () => {
       render(
         <PricingCard {...defaultProps} hoveredCard="PRO" checkoutLoading={true} />
       );
 
       const button = screen.getByRole('button');
-      expect(button.className).toContain('landing-button-secondary');
+      expect(button.className).toContain('brand-button-secondary');
     });
 
     it('calls onMouseEnter and onMouseLeave handlers', () => {

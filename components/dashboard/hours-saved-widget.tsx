@@ -1,12 +1,6 @@
 "use client";
 
 import { Clock } from "lucide-react";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 
 interface HoursSavedWidgetProps {
   summaryCountThisMonth: number;
@@ -26,31 +20,34 @@ export function HoursSavedWidget({
   const isEmpty = summaryCountThisMonth === 0 && summaryCountTotal === 0;
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2 text-sm font-medium">
-          <Clock className="h-4 w-4 text-muted-foreground" />
+    <div className="brand-card">
+      <div className="flex items-center gap-3 mb-3">
+        <div
+          className="w-10 h-10 rounded-xl flex items-center justify-center"
+          style={{ backgroundColor: 'var(--brand-primary-light)' }}
+        >
+          <Clock className="h-5 w-5" style={{ color: 'var(--brand-primary)' }} />
+        </div>
+        <span className="text-sm font-medium" style={{ color: 'var(--brand-text-muted)' }}>
           Time Saved
-        </CardTitle>
-      </CardHeader>
-      <CardContent>
-        {isEmpty ? (
-          <p className="text-sm text-muted-foreground">
-            Summaries save you time. Check back after your first filing.
+        </span>
+      </div>
+      {isEmpty ? (
+        <p className="text-sm" style={{ color: 'var(--brand-text-muted)' }}>
+          Summaries save you time. Check back after your first filing.
+        </p>
+      ) : (
+        <div className="space-y-1">
+          <p className="text-2xl font-bold tracking-tight" style={{ color: 'var(--brand-secondary)' }}>
+            {formatTimeSaved(summaryCountThisMonth)} this month
           </p>
-        ) : (
-          <div className="space-y-1">
-            <p className="text-2xl font-bold tracking-tight">
-              {formatTimeSaved(summaryCountThisMonth)} this month
-            </p>
-            <p className="text-sm text-muted-foreground">
-              {formatTimeSaved(summaryCountTotal)} total &middot;{" "}
-              {summaryCountTotal} filing{summaryCountTotal !== 1 ? "s" : ""}{" "}
-              summarized
-            </p>
-          </div>
-        )}
-      </CardContent>
-    </Card>
+          <p className="text-sm" style={{ color: 'var(--brand-text-muted)' }}>
+            {formatTimeSaved(summaryCountTotal)} total &middot;{" "}
+            {summaryCountTotal} filing{summaryCountTotal !== 1 ? "s" : ""}{" "}
+            summarized
+          </p>
+        </div>
+      )}
+    </div>
   );
 }

@@ -11,7 +11,7 @@ export function MinimalHeader() {
   const { user } = useUser();
 
   return (
-    <header className="sticky top-0 z-40 w-full border-b border-[var(--landing-border)] bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+    <header className="sticky top-0 z-40 w-full border-b border-[var(--brand-border)] bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="container max-w-7xl mx-auto flex h-14 items-center justify-between px-6 md:px-8">
         {/* Logo */}
         <Link href="/dashboard" className="flex items-center">
@@ -24,6 +24,7 @@ export function MinimalHeader() {
           <Button
             variant="ghost"
             size="sm"
+            className="text-[var(--brand-text-muted)] hover:text-[var(--brand-primary)] hover:bg-[var(--brand-primary-light)]"
             asChild
           >
             <Link href="/dashboard/billing">
