@@ -114,13 +114,16 @@ describe('Access Control', () => {
       );
     });
 
-    it('should return true for any authenticated user viewing any summary', async () => {
+    it('should return summary with ticker for any authenticated user', async () => {
       mockedCurrentUser.mockResolvedValue(mockUser);
       mockedFindUnique.mockResolvedValue(mockSummary);
 
       const result = await checkSummaryAccess(mockSummaryId);
 
-      expect(result).toBe(true);
+      expect(result).toHaveProperty('id', mockSummaryId);
+      expect(result).toHaveProperty('ticker');
+      expect(result.ticker).toHaveProperty('symbol', 'AAPL');
+      expect(result).toHaveProperty('filingType', '10-K');
       expect(mockedLogSummaryAccess).toHaveBeenCalledWith(
         mockUser.id,
         mockSummaryId,
@@ -139,7 +142,16 @@ describe('Access Control', () => {
       mockedFindUnique.mockResolvedValue(mockSummary);
 
       const result = await checkSummaryAccess(mockSummaryId);
-      expect(result).toBe(true);
+      expect(result).toHaveProperty('id', mockSummaryId);
+      expect(result).toHaveProperty('ticker');
+    });
+
+    it('should throw ResourceNotFoundError for orphaned ticker reference', async () => {
+      mockedCurrentUser.mockResolvedValue(mockUser);
+      mockedFindUnique.mockResolvedValue({ ...mockSummary, ticker: null });
+
+      await expect(checkSummaryAccess(mockSummaryId))
+        .rejects.toThrow(ResourceNotFoundError);
     });
 
     it('should handle unexpected errors gracefully', async () => {

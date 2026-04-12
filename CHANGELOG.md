@@ -12,6 +12,16 @@ All notable changes to this project will be documented in this file.
 ### Removed
 - Dead `publicRoutes` config from middleware. This was a Clerk v4 API silently ignored by Clerk v6, giving a false sense of security.
 
+## [0.0.9.1] - 2026-04-12
+
+### Changed
+- Summary pages load faster: eliminated redundant auth call and duplicate database query from the navigation path.
+- Clicking a summary from the dashboard now shows an instant skeleton loading state instead of a blank screen.
+- Summary page and dashboard content fade in smoothly (200ms ease-out) after loading, with `prefers-reduced-motion` support.
+
+### Fixed
+- Orphaned ticker references in summaries now produce a clear error log and audit trail entry instead of a misleading TypeError.
+
 ## [0.0.9.0] - 2026-04-12
 
 ### Fixed
