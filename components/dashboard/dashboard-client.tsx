@@ -364,7 +364,7 @@ export function DashboardClient({ showWelcome: _showWelcome = false, shouldMerge
   const canUpgrade = subscriptionTier !== 'MAX';
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 animate-fade-in">
       <DashboardHeader heading="Dashboard" />
 
       {/* Hours Saved + Stats Row */}
