@@ -37,7 +37,17 @@ interface UseSubscriptionReturn {
 }
 
 export function useSubscription(): UseSubscriptionReturn {
-  const { user, isLoaded } = useUser();
+  // Wrap useUser() in try/catch to handle missing ClerkProvider (build time / missing keys)
+  // Same pattern as contexts/auth-context.tsx
+  let user: ReturnType<typeof useUser>['user'] = null;
+  let isLoaded = false;
+  try {
+    const clerkUser = useUser();
+    user = clerkUser.user;
+    isLoaded = clerkUser.isLoaded;
+  } catch {
+    // ClerkProvider not available (build time / missing keys)
+  }
   const [subscription, setSubscription] = useState<SubscriptionData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
