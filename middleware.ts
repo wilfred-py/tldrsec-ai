@@ -376,6 +376,12 @@ export default async function middleware(request: NextRequest) {
       const url = new URL(request.url);
       const pathname = url.pathname;
 
+      // Protect authenticated routes — redirects to sign-in for unauth'd page requests
+      const protectedPrefixes = ['/dashboard', '/summary', '/filing'];
+      if (protectedPrefixes.some(prefix => pathname.startsWith(prefix))) {
+        await auth.protect();
+      }
+
       // Redirect authenticated users away from auth pages
       const { userId, sessionClaims } = await auth();
       if (userId && (pathname.startsWith('/sign-up') || pathname.startsWith('/sign-in'))) {
@@ -414,45 +420,13 @@ export default async function middleware(request: NextRequest) {
       // Continue with default Clerk processing
       return;
     },
-    {
-      publicRoutes: [
-        // Health endpoint (all types via ?type= param)
-        '/api/health',
-
-        // Webhook endpoint (Clerk + Stripe, signature-verified in handler)
-        '/api/webhook',
-
-        // Cron endpoint (all actions via ?action= param, auth handled internally)
-        '/api/cron',
-
-        // Waitlist (public landing page)
-        '/api/waitlist',
-
-        // Checkout (unauthenticated direct checkout)
-        '/api/checkout',
-
-        // Email unsubscribe (HMAC token verified in handler)
-        '/api/unsubscribe',
-
-        // Email feedback (HMAC token verified in handler)
-        '/api/feedback',
-
-        // Marketing pages
-        '/',
-        '/pricing',
-        '/about',
-        '/privacy',
-        '/terms',
-
-        // Onboarding page
-        '/onboarding',
-
-        // Email action pages (token-verified, no auth needed)
-        '/unsubscribe/confirmed',
-        '/feedback/thanks',
-        '/feedback/error',
-      ]
-    }
+    // Clerk v6 does not use publicRoutes — route protection is handled via
+    // auth.protect() above and page-level currentUser() guards.
+    // Public routes (no auth required): /, /pricing, /about, /privacy, /terms,
+    //   /onboarding, /unsubscribe/confirmed, /feedback/thanks, /feedback/error
+    // API routes with own auth: /api/cron, /api/webhook, /api/health,
+    //   /api/waitlist, /api/checkout, /api/unsubscribe, /api/feedback
+    {}
   )(request);
 }
 

@@ -351,7 +351,7 @@ export function DashboardClient({ showWelcome: _showWelcome = false, shouldMerge
   const canUpgrade = subscriptionTier !== 'MAX';
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 animate-fade-in">
       <h1 className="sr-only">Dashboard</h1>
       {/* Email Stats Row */}
       <div className="flex flex-col md:flex-row gap-4 items-stretch">

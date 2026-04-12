@@ -56,7 +56,7 @@ if (isServer) {
 // Initialize Stripe client (server-side only)
 export const stripe = (isServer && requiredEnvVars.STRIPE_SECRET_KEY)
   ? new Stripe(requiredEnvVars.STRIPE_SECRET_KEY, {
-      apiVersion: '2024-12-18.acacia', // Latest stable API version
+      apiVersion: '2025-07-30.basil',
       typescript: true,
       telemetry: false, // Disable telemetry for production
       maxNetworkRetries: 3,

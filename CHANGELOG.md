@@ -2,6 +2,33 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.0.10.0] - 2026-04-12
+
+### Fixed
+- Unauthenticated users hitting /dashboard, /summary, or /filing routes now redirect to /sign-in at the middleware level via Clerk v6 `auth.protect()`, instead of relying solely on page-level guards.
+- `useSubscription` hook no longer crashes when ClerkProvider is absent (dev environments without Clerk keys). Follows the same try/catch pattern as AuthProvider.
+- Dashboard errors now show a recovery UI via Next.js `error.tsx` instead of a white screen. Auth-related errors auto-redirect to sign-in.
+
+### Removed
+- Dead `publicRoutes` config from middleware. This was a Clerk v4 API silently ignored by Clerk v6, giving a false sense of security.
+
+## [0.0.9.1] - 2026-04-12
+
+### Changed
+- Summary pages load faster: eliminated redundant auth call and duplicate database query from the navigation path.
+- Clicking a summary from the dashboard now shows an instant skeleton loading state instead of a blank screen.
+- Summary page and dashboard content fade in smoothly (200ms ease-out) after loading, with `prefers-reduced-motion` support.
+
+### Fixed
+- Orphaned ticker references in summaries now produce a clear error log and audit trail entry instead of a misleading TypeError.
+
+## [0.0.9.0] - 2026-04-12
+
+### Fixed
+- Upgrade to Pro/Max buttons on /subscribe now work. Previously returned 500 due to Stripe SDK v18 API version mismatch (subscription period fields moved from Subscription to SubscriptionItem in the basil API).
+- Stripe webhook handlers for subscription creation and updates now correctly read billing period dates.
+- Centralized subscription period extraction into a shared helper with safe fallbacks.
+
 ## [0.0.8.0] - 2026-04-12
 
 ### Changed
