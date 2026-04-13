@@ -1,9 +1,7 @@
 import * as React from 'react';
-import { EmailColors, markdownToHtml } from '../design-system';
+import { EmailColors, EmailStyles, BadgeColors, markdownToHtml } from '../design-system';
 import { EmailHeader } from './sections/EmailHeader';
 import { EmailFooter } from './sections/EmailFooter';
-import { SectionCard } from './sections/SectionCard';
-import { SectionHeader } from './sections/SectionHeader';
 import { FilingTemplateData } from '../../../../lib/email/types';
 
 interface FormS3MinimalistTemplateProps {
@@ -11,16 +9,16 @@ interface FormS3MinimalistTemplateProps {
 }
 
 /**
- * Minimalist S-3 (Secondary Offering) email template
- * Morning Brew style: clean, scannable, lead with key metrics
+ * S-3 (Secondary Offering) email template - Smart Brevity format
  *
  * Layout:
- * - Header: ticker, company name, offering type
- * - Offering Details: amount, dilution impact
- * - Shelf Registration: if applicable
- * - Selling Shareholders: who's selling
- * - Use of Proceeds: where the money goes
- * - CTA: View full filing
+ * - Preheader for inbox preview
+ * - Signal pill badge (OFFERING)
+ * - Lead sentence (offering type + dilution impact)
+ * - Why it matters
+ * - Data snapshot: amount, shares, price, shelf details
+ * - Selling shareholders as narrative
+ * - Use of proceeds as "Watch for:" bullets
  */
 export function FormS3MinimalistTemplate({ filing }: FormS3MinimalistTemplateProps) {
   const {
@@ -58,17 +56,48 @@ export function FormS3MinimalistTemplate({ filing }: FormS3MinimalistTemplatePro
 
   const useOfProceeds = rawData?.useOfProceeds as string[] | undefined;
 
-  // Determine signal color based on offering type
-  const getOfferingTypeColor = (type: string | undefined) => {
-    if (!type) return { bg: '#F3F4F6', text: '#374151' };
-    const lowerType = type.toLowerCase();
-    if (lowerType.includes('shelf')) return { bg: '#DBEAFE', text: '#1D4ED8' }; // Blue for shelf
-    if (lowerType.includes('atm') || lowerType.includes('at-the-market')) return { bg: '#FEF3C7', text: '#B45309' }; // Yellow for ATM
-    if (lowerType.includes('secondary')) return { bg: '#FEE2E2', text: '#B91C1C' }; // Red for secondary (dilution)
-    return { bg: '#ECFDF5', text: '#059669' }; // Green for primary
-  };
+  // Build preheader text
+  const preheaderText = `OFFERING: ${companyName} (${displayTicker}) -- ${offeringType || 'Secondary offering'} ${offeringAmount ? `of ${offeringAmount}` : ''}`;
 
-  const typeColors = getOfferingTypeColor(offeringType);
+  // Build lead sentence
+  const leadText = summaryText?.split(/(?<=[.!?])\s+/)[0] || '';
+  const headline = leadText.length >= 30 ? leadText : summaryText || '';
+
+  // Remaining summary after headline
+  const remainingSummary = (headline && summaryText && summaryText.length > headline.length)
+    ? summaryText.slice(headline.length).trim()
+    : '';
+
+  // Build data snapshot rows
+  const dataRows: { label: string; value: string; color?: string }[] = [];
+  if (offeringAmount) {
+    dataRows.push({ label: 'Offering Amount', value: offeringAmount, color: '#059669' });
+  }
+  if (sharesOffered) {
+    dataRows.push({ label: 'Shares Offered', value: sharesOffered });
+  }
+  if (pricePerShare) {
+    dataRows.push({ label: 'Price/Share', value: pricePerShare });
+  }
+  if (dilutionImpact) {
+    dataRows.push({ label: 'Dilution Impact', value: dilutionImpact, color: '#DC2626' });
+  }
+  // Shelf registration details
+  if (shelfRegistration?.totalAuthorized) {
+    dataRows.push({ label: 'Shelf Authorized', value: shelfRegistration.totalAuthorized });
+  }
+  if (shelfRegistration?.remainingCapacity) {
+    dataRows.push({ label: 'Remaining Capacity', value: shelfRegistration.remainingCapacity });
+  }
+  if (shelfRegistration?.expirationDate) {
+    dataRows.push({ label: 'Shelf Expiration', value: shelfRegistration.expirationDate });
+  }
+
+  // Watch-for items from use of proceeds
+  const watchFor: string[] = [];
+  if (useOfProceeds && useOfProceeds.length > 0) {
+    watchFor.push(...useOfProceeds.slice(0, 4));
+  }
 
   return (
     <div style={{
@@ -78,6 +107,20 @@ export function FormS3MinimalistTemplate({ filing }: FormS3MinimalistTemplatePro
       backgroundColor: EmailColors.structure.background,
       color: EmailColors.text.body,
     }}>
+      {/* Preheader */}
+      <div style={{
+        display: 'none',
+        fontSize: '1px',
+        color: EmailColors.structure.background,
+        lineHeight: '1px',
+        maxHeight: '0px',
+        maxWidth: '0px',
+        opacity: 0,
+        overflow: 'hidden',
+      }}>
+        {preheaderText}
+      </div>
+
       {/* Header */}
       <EmailHeader
         ticker={displayTicker}
@@ -86,252 +129,122 @@ export function FormS3MinimalistTemplate({ filing }: FormS3MinimalistTemplatePro
         filingDate={filingDate}
       />
 
-      {/* Main content */}
+      {/* Smart Brevity body */}
       <table width="100%" cellPadding="0" cellSpacing="0">
         <tbody>
           <tr>
             <td style={{ padding: '0 15px 20px' }}>
-              {/* Offering Type Signal Banner */}
-              <SectionCard>
-                <tr>
-                  <td style={{
-                    padding: '16px',
-                    backgroundColor: typeColors.bg,
-                    borderRadius: '8px',
-                    textAlign: 'center',
-                  }}>
-                    <span style={{
-                      display: 'inline-block',
-                      padding: '4px 12px',
-                      backgroundColor: typeColors.text,
-                      color: 'white',
-                      borderRadius: '4px',
-                      fontSize: '12px',
-                      fontWeight: 600,
-                      textTransform: 'uppercase',
-                      letterSpacing: '0.5px',
-                    }}>
-                      {offeringType || 'Secondary Offering'}
-                    </span>
-                    {dilutionImpact && (
-                      <p style={{
-                        margin: '12px 0 0',
-                        fontSize: '14px',
-                        fontWeight: 600,
-                        color: '#B91C1C',
-                      }}>
-                        Dilution Impact: {dilutionImpact}
-                      </p>
-                    )}
-                  </td>
-                </tr>
-              </SectionCard>
 
-              {/* Offering Details */}
-              {(offeringAmount || sharesOffered || pricePerShare) && (
-                <SectionCard>
-                  <SectionHeader emoji="💰" title="Offering Details" />
-                  <tr>
-                    <td>
-                      <table width="100%" cellPadding="0" cellSpacing="0">
-                        <tbody>
-                          {offeringAmount && (
-                            <tr>
-                              <td style={{
-                                padding: '8px 0',
-                                fontSize: '14px',
-                                color: EmailColors.text.body,
-                                borderBottom: `1px solid ${EmailColors.structure.borderLight}`,
-                              }}>
-                                <span style={{ fontWeight: 600, color: EmailColors.text.headline }}>
-                                  Offering Amount:
-                                </span>
-                                <span style={{ float: 'right', fontWeight: 600, color: '#059669' }}>
-                                  {offeringAmount}
-                                </span>
-                              </td>
-                            </tr>
-                          )}
-                          {sharesOffered && (
-                            <tr>
-                              <td style={{
-                                padding: '8px 0',
-                                fontSize: '14px',
-                                color: EmailColors.text.body,
-                                borderBottom: pricePerShare ? `1px solid ${EmailColors.structure.borderLight}` : 'none',
-                              }}>
-                                <span style={{ fontWeight: 600, color: EmailColors.text.headline }}>
-                                  Shares Offered:
-                                </span>
-                                <span style={{ float: 'right' }}>
-                                  {sharesOffered}
-                                </span>
-                              </td>
-                            </tr>
-                          )}
-                          {pricePerShare && (
-                            <tr>
-                              <td style={{
-                                padding: '8px 0',
-                                fontSize: '14px',
-                                color: EmailColors.text.body,
-                              }}>
-                                <span style={{ fontWeight: 600, color: EmailColors.text.headline }}>
-                                  Price Per Share:
-                                </span>
-                                <span style={{ float: 'right' }}>
-                                  {pricePerShare}
-                                </span>
-                              </td>
-                            </tr>
-                          )}
-                        </tbody>
-                      </table>
-                    </td>
-                  </tr>
-                </SectionCard>
+              {/* Signal badge -- FIRST element */}
+              <div style={{ marginBottom: '12px' }}>
+                <span style={{
+                  ...EmailStyles.pillBadge,
+                  backgroundColor: BadgeColors.neutral.bg,
+                  color: BadgeColors.neutral.text,
+                }}>
+                  {offeringType || 'OFFERING'}
+                </span>
+              </div>
+
+              {/* Lead sentence */}
+              <h1 style={EmailStyles.leadSentence}>
+                {headline || `${companyName} filed an S-3 registration for a secondary offering`}
+              </h1>
+
+              {/* Why it matters */}
+              <p style={EmailStyles.whyItMatters}>
+                <strong style={{ color: '#000000' }}>Why it matters: </strong>
+                {dilutionImpact
+                  ? `This offering has a dilution impact of ${dilutionImpact}. Secondary offerings can signal capital needs or shareholder exits -- context matters.`
+                  : 'Secondary offerings can dilute existing shares or signal that large holders are exiting. Monitor the offering size relative to market cap.'}
+              </p>
+
+              {/* Thin divider */}
+              {dataRows.length > 0 && (
+                <table width="100%" cellPadding="0" cellSpacing="0" style={{ margin: '20px 0' }}>
+                  <tbody><tr><td style={EmailStyles.thinDivider}></td></tr></tbody>
+                </table>
               )}
 
-              {/* Shelf Registration Details */}
-              {shelfRegistration && (shelfRegistration.totalAuthorized || shelfRegistration.remainingCapacity) && (
-                <SectionCard>
-                  <SectionHeader emoji="📋" title="Shelf Registration" />
-                  <tr>
-                    <td>
-                      <table width="100%" cellPadding="0" cellSpacing="0">
-                        <tbody>
-                          {shelfRegistration.totalAuthorized && (
-                            <tr>
-                              <td style={{
-                                padding: '8px 0',
-                                fontSize: '14px',
-                                color: EmailColors.text.body,
-                                borderBottom: `1px solid ${EmailColors.structure.borderLight}`,
-                              }}>
-                                <span style={{ fontWeight: 600, color: EmailColors.text.headline }}>
-                                  Total Authorized:
-                                </span>
-                                <span style={{ float: 'right' }}>
-                                  {shelfRegistration.totalAuthorized}
-                                </span>
-                              </td>
-                            </tr>
-                          )}
-                          {shelfRegistration.remainingCapacity && (
-                            <tr>
-                              <td style={{
-                                padding: '8px 0',
-                                fontSize: '14px',
-                                color: EmailColors.text.body,
-                                borderBottom: shelfRegistration.expirationDate ? `1px solid ${EmailColors.structure.borderLight}` : 'none',
-                              }}>
-                                <span style={{ fontWeight: 600, color: EmailColors.text.headline }}>
-                                  Remaining Capacity:
-                                </span>
-                                <span style={{ float: 'right' }}>
-                                  {shelfRegistration.remainingCapacity}
-                                </span>
-                              </td>
-                            </tr>
-                          )}
-                          {shelfRegistration.expirationDate && (
-                            <tr>
-                              <td style={{
-                                padding: '8px 0',
-                                fontSize: '14px',
-                                color: EmailColors.text.body,
-                              }}>
-                                <span style={{ fontWeight: 600, color: EmailColors.text.headline }}>
-                                  Expiration:
-                                </span>
-                                <span style={{ float: 'right' }}>
-                                  {shelfRegistration.expirationDate}
-                                </span>
-                              </td>
-                            </tr>
-                          )}
-                        </tbody>
-                      </table>
-                    </td>
-                  </tr>
-                </SectionCard>
+              {/* Data snapshot */}
+              {dataRows.length > 0 && (
+                <table width="100%" cellPadding="0" cellSpacing="0" style={{ marginBottom: '4px' }}>
+                  <tbody>
+                    {dataRows.map((row, idx) => (
+                      <tr key={idx}>
+                        <td style={{
+                          ...EmailStyles.dataLabel,
+                          borderBottom: idx < dataRows.length - 1 ? '1px solid #F0F0F0' : 'none',
+                        }}>{row.label}</td>
+                        <td style={{
+                          ...EmailStyles.dataValue,
+                          color: row.color || '#111827',
+                          borderBottom: idx < dataRows.length - 1 ? '1px solid #F0F0F0' : 'none',
+                        }}>{row.value}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               )}
 
-              {/* Selling Shareholders */}
+              {/* Selling shareholders as narrative */}
               {sellingShareholders && sellingShareholders.length > 0 && (
-                <SectionCard>
-                  <SectionHeader emoji="👥" title="Selling Shareholders" />
-                  <tr>
-                    <td>
-                      <table width="100%" cellPadding="0" cellSpacing="0">
-                        <tbody>
-                          {sellingShareholders.slice(0, 5).map((holder, index) => (
-                            <tr key={index}>
-                              <td style={{
-                                padding: '8px 0',
-                                fontSize: '14px',
-                                color: EmailColors.text.body,
-                                borderBottom: index < sellingShareholders.length - 1 ? `1px solid ${EmailColors.structure.borderLight}` : 'none',
-                              }}>
-                                <span style={{ fontWeight: 600, color: EmailColors.text.headline }}>
-                                  {holder.name}:
-                                </span>
-                                <span style={{ float: 'right' }}>
-                                  {holder.shares}
-                                </span>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </td>
-                  </tr>
-                </SectionCard>
+                <>
+                  <table width="100%" cellPadding="0" cellSpacing="0" style={{ margin: '20px 0' }}>
+                    <tbody><tr><td style={EmailStyles.thinDivider}></td></tr></tbody>
+                  </table>
+                  <div style={{ ...EmailStyles.watchForHeader, marginBottom: '6px' }}>Selling shareholders:</div>
+                  <table width="100%" cellPadding="0" cellSpacing="0" style={{ marginBottom: '4px' }}>
+                    <tbody>
+                      {sellingShareholders.slice(0, 5).map((holder, idx) => (
+                        <tr key={idx}>
+                          <td style={{
+                            ...EmailStyles.dataLabel,
+                            borderBottom: idx < Math.min(sellingShareholders.length, 5) - 1 ? '1px solid #F0F0F0' : 'none',
+                          }}>{holder.name}</td>
+                          <td style={{
+                            ...EmailStyles.dataValue,
+                            borderBottom: idx < Math.min(sellingShareholders.length, 5) - 1 ? '1px solid #F0F0F0' : 'none',
+                          }}>{holder.shares}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </>
               )}
 
-              {/* Use of Proceeds */}
-              {useOfProceeds && useOfProceeds.length > 0 && (
-                <SectionCard>
-                  <SectionHeader emoji="💼" title="Use of Proceeds" />
-                  <tr>
-                    <td>
-                      <table width="100%" cellPadding="0" cellSpacing="0">
-                        <tbody>
-                          {useOfProceeds.slice(0, 4).map((item, index) => (
-                            <tr key={index}>
-                              <td style={{
-                                padding: '4px 0',
-                                fontSize: '14px',
-                                lineHeight: '1.5',
-                                color: EmailColors.text.body,
-                              }}>
-                                <span style={{ marginRight: '8px', color: EmailColors.text.meta }}>•</span>
-                                {item}
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </td>
-                  </tr>
-                </SectionCard>
+              {/* Story -- remaining narrative via markdown */}
+              {remainingSummary && (
+                <>
+                  <table width="100%" cellPadding="0" cellSpacing="0" style={{ margin: '20px 0' }}>
+                    <tbody><tr><td style={EmailStyles.thinDivider}></td></tr></tbody>
+                  </table>
+                  <div
+                    style={EmailStyles.prose}
+                    dangerouslySetInnerHTML={{ __html: markdownToHtml(remainingSummary) }}
+                  />
+                </>
               )}
 
-              {/* Summary Text (fallback) */}
-              {summaryText && (
-                <SectionCard>
-                  <SectionHeader emoji="📝" title="Summary" />
-                  <tr>
-                    <td
-                      style={{
-                        fontSize: '14px',
-                        lineHeight: '1.6',
-                        color: EmailColors.text.body,
-                      }}
-                      dangerouslySetInnerHTML={{ __html: markdownToHtml(summaryText) }}
-                    />
-                  </tr>
-                </SectionCard>
+              {/* Watch for (use of proceeds) */}
+              {watchFor.length > 0 && (
+                <>
+                  <table width="100%" cellPadding="0" cellSpacing="0" style={{ margin: '20px 0' }}>
+                    <tbody><tr><td style={EmailStyles.thinDivider}></td></tr></tbody>
+                  </table>
+                  <div style={EmailStyles.watchForHeader}>Use of proceeds:</div>
+                  {watchFor.map((item, idx) => (
+                    <div key={idx} style={{
+                      padding: '3px 0 3px 16px',
+                      fontSize: '14px',
+                      color: EmailColors.text.body,
+                      lineHeight: '1.5',
+                    }}>
+                      <span style={{ color: EmailColors.text.meta, marginRight: '8px' }}>•</span>
+                      {item}
+                    </div>
+                  ))}
+                </>
               )}
             </td>
           </tr>
@@ -342,7 +255,6 @@ export function FormS3MinimalistTemplate({ filing }: FormS3MinimalistTemplatePro
       <EmailFooter
         filingUrl={filingUrl}
         formType={filingType || 'S-3'}
-        unsubscribeUrl={`${process.env.NEXT_PUBLIC_APP_URL || ''}/dashboard/settings`}
       />
     </div>
   );

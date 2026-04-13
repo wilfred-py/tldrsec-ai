@@ -1,8 +1,7 @@
 import * as React from 'react';
-import { EmailColors, markdownToHtml, getSentimentColor, getSentimentEmoji } from '../design-system';
+import { EmailColors, EmailStyles, BadgeColors, markdownToHtml, getSentimentColor, getSentimentEmoji } from '../design-system';
 import { EmailHeader } from './sections/EmailHeader';
 import { EmailFooter } from './sections/EmailFooter';
-import { SectionCard } from './sections/SectionCard';
 import { FilingTemplateData } from '../../../../lib/email/types';
 import { extract8KData } from '../../../../lib/email/8k-data-extractor';
 import { getItemDescription } from '../../../../lib/constants/sec-item-descriptions';
@@ -229,7 +228,10 @@ export function getCleanHeadline(summaryText: string, eventType: string): string
 }
 
 /**
- * Form 8-K Email Template - Signal-First Design
+ * Form 8-K Email Template - Smart Brevity Design
+ *
+ * Structure: Signal badge (MATERIAL/ROUTINE) -> Lead sentence -> Why it matters
+ * -> Data snapshot -> Story narrative -> Watch for bullets
  *
  * 2-level signal system:
  * - MATERIAL EVENT (amber): Significant corporate news (earnings, M&A, executive changes)
@@ -265,7 +267,7 @@ export function Form8KMinimalistTemplate({ filing }: Form8KMinimalistTemplatePro
   const isMaterial = isMaterialFiling(itemNumbers, summaryText || '');
   const signal = getSignalConfig(isMaterial);
 
-  // Extract and clean the headline for the verdict box
+  // Extract and clean the headline for the lead sentence
   const headline = getCleanHeadline(summaryText || '', eventType);
 
   // Format items for display with human-readable descriptions
@@ -276,6 +278,40 @@ export function Form8KMinimalistTemplate({ filing }: Form8KMinimalistTemplatePro
       }).join(' | ')
     : '';
 
+  // Build preheader text for inbox preview
+  const preheaderText = `${signal.level}: ${signal.verdict} — ${(summaryText || '').substring(0, 100)}`;
+
+  // Pick badge colors from the muted palette
+  const signalBadgeColors = isMaterial ? BadgeColors.high : BadgeColors.low;
+
+  // Remaining summary text after the headline sentence for the story section
+  const remainingSummary = (headline && summaryText && summaryText.length > headline.length)
+    ? summaryText.slice(headline.length).trim()
+    : '';
+
+  // Build "Why it matters" prose — consolidate financial impact + signal description
+  const whyItMattersText = financialImpact
+    ? `${signal.description} ${financialImpact}`
+    : signal.description;
+
+  // Build data snapshot rows
+  const dataRows: { label: string; value: string }[] = [];
+  if (eventType) {
+    dataRows.push({ label: 'Event', value: eventType });
+  }
+  if (filingDate) {
+    dataRows.push({ label: 'Filed', value: filingDate });
+  }
+
+  // Build watch-for items from key highlights + items reported
+  const watchFor: string[] = [];
+  if (keyHighlights.length > 0) {
+    watchFor.push(...keyHighlights.slice(0, 4));
+  }
+  if (itemsDisplay) {
+    watchFor.push(itemsDisplay);
+  }
+
   return (
     <div style={{
       maxWidth: '600px',
@@ -284,6 +320,20 @@ export function Form8KMinimalistTemplate({ filing }: Form8KMinimalistTemplatePro
       backgroundColor: EmailColors.structure.background,
       color: EmailColors.text.body,
     }}>
+      {/* Preheader — hidden text for inbox preview */}
+      <div style={{
+        display: 'none',
+        fontSize: '1px',
+        color: EmailColors.structure.background,
+        lineHeight: '1px',
+        maxHeight: '0px',
+        maxWidth: '0px',
+        opacity: 0,
+        overflow: 'hidden',
+      }}>
+        {preheaderText}
+      </div>
+
       {/* Header */}
       <EmailHeader
         ticker={displayTicker}
@@ -300,279 +350,128 @@ export function Form8KMinimalistTemplate({ filing }: Form8KMinimalistTemplatePro
         </div>
       )}
 
-      {/* Main content */}
+      {/* Smart Brevity body */}
       <table width="100%" cellPadding="0" cellSpacing="0">
         <tbody>
           <tr>
             <td style={{ padding: '0 15px 20px' }}>
 
-              {/* ═══════════════════════════════════════════════════════════
-                  THE VERDICT - 2-Level Signal (Material Event vs Routine)
-                  ═══════════════════════════════════════════════════════════ */}
-              <table width="100%" cellPadding="0" cellSpacing="0" style={{
-                backgroundColor: signal.bgColor,
-                borderRadius: '12px',
-                marginBottom: '16px',
-                border: `2px solid ${signal.borderColor}`,
-              }}>
-                <tbody>
-                  <tr>
-                    <td style={{ padding: '20px' }}>
-                      {/* Signal Level Badge */}
-                      <table width="100%" cellPadding="0" cellSpacing="0">
-                        <tbody>
-                          <tr>
-                            <td>
-                              <span style={{
-                                display: 'inline-block',
-                                padding: '4px 12px',
-                                backgroundColor: signal.borderColor,
-                                color: '#FFFFFF',
-                                borderRadius: '20px',
-                                fontSize: '11px',
-                                fontWeight: 700,
-                                letterSpacing: '1px',
-                                textTransform: 'uppercase' as const,
-                              }}>
-                                {signal.icon} {signal.level}
-                              </span>
-                              {/* Sentiment badge inline with materiality */}
-                              {/* Don't show neutral sentiment with material events - conflicting information */}
-                              {sentiment && !(isMaterial && sentiment.toLowerCase() === 'neutral') && (
-                                <span style={{
-                                  display: 'inline-block',
-                                  padding: '4px 12px',
-                                  marginLeft: '8px',
-                                  backgroundColor: getSentimentColor(sentiment).bg,
-                                  color: getSentimentColor(sentiment).text,
-                                  borderRadius: '20px',
-                                  fontSize: '11px',
-                                  fontWeight: 600,
-                                }}>
-                                  {getSentimentEmoji(sentiment)} {sentiment.charAt(0).toUpperCase() + sentiment.slice(1)}
-                                </span>
-                              )}
-                            </td>
-                          </tr>
+              {/* Signal badge — FIRST element the user sees */}
+              <div style={{ marginBottom: '12px' }}>
+                <span style={{
+                  ...EmailStyles.pillBadge,
+                  backgroundColor: signalBadgeColors.bg,
+                  color: signalBadgeColors.text,
+                }}>
+                  {signal.icon} {signal.level}
+                </span>
 
-                          {/* Event type label */}
-                          {eventType && (
-                            <tr>
-                              <td style={{ paddingTop: '12px' }}>
-                                <div style={{
-                                  fontSize: '12px',
-                                  fontWeight: 700,
-                                  color: signal.textColor,
-                                  textTransform: 'uppercase' as const,
-                                  letterSpacing: '0.5px',
-                                  opacity: 0.8,
-                                }}>
-                                  {eventType}
-                                </div>
-                              </td>
-                            </tr>
-                          )}
+                {/* Sentiment badge — inline, muted colors */}
+                {sentiment && !(isMaterial && sentiment.toLowerCase() === 'neutral') && (
+                  <span style={{
+                    ...EmailStyles.pillBadge,
+                    marginLeft: '8px',
+                    backgroundColor: getSentimentColor(sentiment).bg,
+                    color: getSentimentColor(sentiment).text,
+                  }}>
+                    {getSentimentEmoji(sentiment)} {sentiment.charAt(0).toUpperCase() + sentiment.slice(1)}
+                  </span>
+                )}
 
-                          {/* The headline: what actually happened */}
-                          <tr>
-                            <td style={{ paddingTop: eventType ? '4px' : '12px' }}>
-                              <div style={{
-                                fontSize: '20px',
-                                fontWeight: 700,
-                                color: signal.textColor,
-                                lineHeight: '1.3',
-                              }}>
-                                {headline || eventType || signal.verdict}
-                              </div>
-                            </td>
-                          </tr>
-                        </tbody>
-                      </table>
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
+                {/* Filing type category badge */}
+                <span style={{
+                  ...EmailStyles.categoryBadge,
+                  marginLeft: '8px',
+                }}>
+                  8-K {eventType ? `| ${eventType}` : ''}
+                </span>
+              </div>
 
-              {/* ═══════════════════════════════════════════════════════════
-                  FILING DETAILS - Item numbers and event type
-                  ═══════════════════════════════════════════════════════════ */}
-              {(itemsDisplay || financialImpact) && (
-                <table width="100%" cellPadding="0" cellSpacing="0" style={{ marginBottom: '16px' }}>
+              {/* Lead sentence */}
+              <h1 style={EmailStyles.leadSentence}>
+                {headline || eventType || signal.verdict}
+              </h1>
+
+              {/* Why it matters */}
+              <p style={EmailStyles.whyItMatters}>
+                <strong style={{ color: '#000000' }}>Why it matters: </strong>
+                {whyItMattersText}
+              </p>
+
+              {/* Thin divider */}
+              {dataRows.length > 0 && (
+                <table width="100%" cellPadding="0" cellSpacing="0" style={{ margin: '20px 0' }}>
+                  <tbody><tr><td style={EmailStyles.thinDivider}></td></tr></tbody>
+                </table>
+              )}
+
+              {/* Data snapshot rows */}
+              {dataRows.length > 0 && (
+                <table width="100%" cellPadding="0" cellSpacing="0" style={{ marginBottom: '4px' }}>
                   <tbody>
-                    <tr>
-                      <td>
-                        <table width="100%" cellPadding="0" cellSpacing="0">
-                          <tbody>
-                            <tr>
-                              {/* Items Reported Card */}
-                              {itemsDisplay && (
-                                <td style={{
-                                  width: financialImpact ? '48%' : '100%',
-                                  padding: '16px',
-                                  backgroundColor: EmailColors.structure.backgroundAlt,
-                                  borderRadius: '8px',
-                                  verticalAlign: 'top',
-                                }}>
-                                  <div style={{
-                                    fontSize: '11px',
-                                    fontWeight: 700,
-                                    color: EmailColors.text.meta,
-                                    textTransform: 'uppercase' as const,
-                                    letterSpacing: '0.5px',
-                                    marginBottom: '4px',
-                                  }}>
-                                    Items Reported
-                                  </div>
-                                  <div style={{
-                                    fontSize: '14px',
-                                    fontWeight: 600,
-                                    color: EmailColors.text.headline,
-                                    lineHeight: '1.4',
-                                  }}>
-                                    {itemsDisplay}
-                                  </div>
-                                </td>
-                              )}
-
-                              {/* Gap spacer */}
-                              {itemsDisplay && financialImpact && (
-                                <td style={{ width: '4%' }}></td>
-                              )}
-
-                              {/* Financial Impact Card */}
-                              {financialImpact && (
-                                <td style={{
-                                  width: itemsDisplay ? '48%' : '100%',
-                                  padding: '16px',
-                                  backgroundColor: EmailColors.structure.backgroundAlt,
-                                  borderRadius: '8px',
-                                  verticalAlign: 'top',
-                                }}>
-                                  <div style={{
-                                    fontSize: '11px',
-                                    fontWeight: 700,
-                                    color: EmailColors.text.meta,
-                                    textTransform: 'uppercase' as const,
-                                    letterSpacing: '0.5px',
-                                    marginBottom: '4px',
-                                  }}>
-                                    Financial Impact
-                                  </div>
-                                  <div style={{
-                                    fontSize: '14px',
-                                    fontWeight: 600,
-                                    color: EmailColors.text.headline,
-                                    lineHeight: '1.4',
-                                  }}>
-                                    {financialImpact}
-                                  </div>
-                                </td>
-                              )}
-                            </tr>
-                          </tbody>
-                        </table>
-                      </td>
-                    </tr>
+                    {dataRows.map((row, idx) => (
+                      <tr key={idx}>
+                        <td style={{
+                          ...EmailStyles.dataLabel,
+                          borderBottom: idx < dataRows.length - 1 ? '1px solid #F0F0F0' : 'none',
+                        }}>{row.label}</td>
+                        <td style={{
+                          ...EmailStyles.dataValue,
+                          borderBottom: idx < dataRows.length - 1 ? '1px solid #F0F0F0' : 'none',
+                        }}>{row.value}</td>
+                      </tr>
+                    ))}
                   </tbody>
                 </table>
               )}
 
-              {/* ═══════════════════════════════════════════════════════════
-                  KEY HIGHLIGHTS - Bullet points from AI
-                  ═══════════════════════════════════════════════════════════ */}
-              {keyHighlights.length > 0 && (
-                <SectionCard>
-                  <tr>
-                    <td>
-                      <div style={{
-                        fontSize: '12px',
-                        fontWeight: 600,
-                        color: EmailColors.text.meta,
-                        textTransform: 'uppercase' as const,
-                        letterSpacing: '0.5px',
-                        marginBottom: '12px',
-                        borderBottom: `1px solid ${EmailColors.structure.borderLight}`,
-                        paddingBottom: '8px',
-                      }}>
-                        Key Highlights
-                      </div>
-                      <table width="100%" cellPadding="0" cellSpacing="0">
-                        <tbody>
-                          {keyHighlights.slice(0, 5).map((highlight, index) => (
-                            <tr key={index}>
-                              <td valign="top" width="16" style={{
-                                width: '16px',
-                                padding: '4px 8px 4px 0',
-                                fontSize: '14px',
-                                lineHeight: '1.5',
-                                color: EmailColors.text.meta,
-                              }}>
-                                •
-                              </td>
-                              <td style={{
-                                padding: '4px 0',
-                                fontSize: '14px',
-                                lineHeight: '1.5',
-                                color: EmailColors.text.body,
-                              }}>
-                                <span dangerouslySetInnerHTML={{ __html: formatText(highlight) }} />
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </td>
-                  </tr>
-                </SectionCard>
+              {/* Thin divider */}
+              {remainingSummary && (
+                <table width="100%" cellPadding="0" cellSpacing="0" style={{ margin: '20px 0' }}>
+                  <tbody><tr><td style={EmailStyles.thinDivider}></td></tr></tbody>
+                </table>
               )}
 
-              {/* ═══════════════════════════════════════════════════════════
-                  THE STORY - Summary with key values highlighted
-                  ═══════════════════════════════════════════════════════════ */}
-              {headline && !keyHighlights.length && (
-                <SectionCard>
-                  <tr>
-                    <td>
-                      <div style={{
-                        fontSize: '12px',
-                        fontWeight: 600,
-                        color: EmailColors.text.meta,
-                        textTransform: 'uppercase' as const,
-                        letterSpacing: '0.5px',
-                        marginBottom: '12px',
-                        borderBottom: `1px solid ${EmailColors.structure.borderLight}`,
-                        paddingBottom: '8px',
-                      }}>
-                        Summary
-                      </div>
-                      <div
-                        style={{
-                          fontSize: '15px',
-                          lineHeight: '1.6',
-                          color: EmailColors.text.body,
-                        }}
-                        dangerouslySetInnerHTML={{ __html: markdownToHtml(headline) }}
-                      />
-                    </td>
-                  </tr>
-                </SectionCard>
+              {/* Story — remaining narrative */}
+              {remainingSummary && (
+                <div
+                  style={EmailStyles.prose}
+                  dangerouslySetInnerHTML={{ __html: markdownToHtml(remainingSummary) }}
+                />
+              )}
+
+              {/* Watch for */}
+              {watchFor.length > 0 && (
+                <>
+                  <table width="100%" cellPadding="0" cellSpacing="0" style={{ margin: '20px 0' }}>
+                    <tbody><tr><td style={EmailStyles.thinDivider}></td></tr></tbody>
+                  </table>
+                  <div style={EmailStyles.watchForHeader}>Watch for:</div>
+                  {watchFor.map((item, idx) => (
+                    <div key={idx} style={{
+                      padding: '3px 0 3px 16px',
+                      fontSize: '14px',
+                      color: EmailColors.text.body,
+                      lineHeight: '1.5',
+                    }}>
+                      <span style={{ color: EmailColors.text.meta, marginRight: '8px' }}>•</span>
+                      <span dangerouslySetInnerHTML={{ __html: formatText(item) }} />
+                    </div>
+                  ))}
+                </>
               )}
 
               {/* No data fallback */}
               {!summaryText && !keyHighlights.length && (
-                <SectionCard>
-                  <tr>
-                    <td style={{
-                      fontSize: '14px',
-                      lineHeight: '1.6',
-                      color: EmailColors.text.meta,
-                      textAlign: 'center',
-                      padding: '20px',
-                    }}>
-                      View the full Form 8-K filing for event details.
-                    </td>
-                  </tr>
-                </SectionCard>
+                <p style={{
+                  fontSize: '14px',
+                  lineHeight: '1.6',
+                  color: EmailColors.text.meta,
+                  textAlign: 'center',
+                  padding: '20px 0',
+                }}>
+                  View the full Form 8-K filing for event details.
+                </p>
               )}
             </td>
           </tr>

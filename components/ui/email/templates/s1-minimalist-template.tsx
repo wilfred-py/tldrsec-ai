@@ -1,9 +1,7 @@
 import * as React from 'react';
-import { EmailColors, getChangeStyle, getChangeArrow, markdownToHtml } from '../design-system';
+import { EmailColors, EmailStyles, BadgeColors, getChangeStyle, getChangeArrow, markdownToHtml } from '../design-system';
 import { EmailHeader } from './sections/EmailHeader';
 import { EmailFooter } from './sections/EmailFooter';
-import { SectionCard } from './sections/SectionCard';
-import { SectionHeader } from './sections/SectionHeader';
 import { FilingTemplateData } from '../../../../lib/email/types';
 
 interface FormS1MinimalistTemplateProps {
@@ -11,16 +9,17 @@ interface FormS1MinimalistTemplateProps {
 }
 
 /**
- * Minimalist S-1 (IPO Registration) email template
- * Morning Brew style: clean, scannable, lead with key metrics
+ * S-1 (IPO Registration) email template - Smart Brevity format
  *
  * Layout:
- * - Header: ticker, company name, IPO details
- * - Offering Details: size, price range, shares
- * - Financial Highlights: key pre-IPO metrics
- * - Use of Proceeds: where the money goes
- * - Risk Factors: top risks
- * - CTA: View full filing
+ * - Preheader for inbox preview
+ * - Signal pill badge (IPO FILING)
+ * - Lead sentence (business description or headline)
+ * - Why it matters
+ * - Data snapshot: offering size, price range, shares, exchange
+ * - Financial highlights as prose/bullets
+ * - Use of proceeds + underwriters as narrative
+ * - Risk factors as "Watch for:" bullets
  */
 export function FormS1MinimalistTemplate({ filing }: FormS1MinimalistTemplateProps) {
   const {
@@ -55,6 +54,43 @@ export function FormS1MinimalistTemplate({ filing }: FormS1MinimalistTemplatePro
   const riskFactors = rawData?.riskFactors as string[] | undefined;
   const underwriters = rawData?.underwriters as string[] | undefined;
 
+  // Build preheader text
+  const preheaderText = `IPO FILING: ${companyName} (${displayTicker}) -- ${businessDescription || (summaryText || '').substring(0, 80)}`;
+
+  // Extract first sentence as the headline
+  const leadText = businessDescription || summaryText?.split(/(?<=[.!?])\s+/)[0] || '';
+
+  // Remaining summary after the headline
+  const remainingSummary = summaryText && leadText && summaryText.length > leadText.length && !businessDescription
+    ? summaryText.slice(leadText.length).trim()
+    : summaryText && businessDescription
+      ? summaryText
+      : '';
+
+  // Build data snapshot rows
+  const dataRows: { label: string; value: string; color?: string }[] = [];
+  if (offeringSize) {
+    dataRows.push({ label: 'Offering Size', value: offeringSize, color: '#059669' });
+  }
+  if (priceRange) {
+    dataRows.push({ label: 'Price Range', value: priceRange });
+  }
+  if (sharesOffered) {
+    dataRows.push({ label: 'Shares Offered', value: sharesOffered });
+  }
+  if (exchangeListing) {
+    dataRows.push({ label: 'Exchange', value: exchangeListing });
+  }
+  if (expectedTradingDate) {
+    dataRows.push({ label: 'Expected Trading', value: expectedTradingDate });
+  }
+
+  // Build watch-for items from risk factors
+  const watchFor: string[] = [];
+  if (riskFactors && riskFactors.length > 0) {
+    watchFor.push(...riskFactors.slice(0, 3));
+  }
+
   return (
     <div style={{
       maxWidth: '600px',
@@ -63,6 +99,20 @@ export function FormS1MinimalistTemplate({ filing }: FormS1MinimalistTemplatePro
       backgroundColor: EmailColors.structure.background,
       color: EmailColors.text.body,
     }}>
+      {/* Preheader */}
+      <div style={{
+        display: 'none',
+        fontSize: '1px',
+        color: EmailColors.structure.background,
+        lineHeight: '1px',
+        maxHeight: '0px',
+        maxWidth: '0px',
+        opacity: 0,
+        overflow: 'hidden',
+      }}>
+        {preheaderText}
+      </div>
+
       {/* Header */}
       <EmailHeader
         ticker={displayTicker}
@@ -71,275 +121,161 @@ export function FormS1MinimalistTemplate({ filing }: FormS1MinimalistTemplatePro
         filingDate={filingDate}
       />
 
-      {/* Main content */}
+      {/* Smart Brevity body */}
       <table width="100%" cellPadding="0" cellSpacing="0">
         <tbody>
           <tr>
             <td style={{ padding: '0 15px 20px' }}>
-              {/* IPO Signal Banner */}
-              <SectionCard>
-                <tr>
-                  <td style={{
-                    padding: '16px',
-                    backgroundColor: '#F5F3FF',
-                    borderRadius: '8px',
-                    textAlign: 'center',
-                  }}>
-                    <span style={{
-                      display: 'inline-block',
-                      padding: '4px 12px',
-                      backgroundColor: '#7C3AED',
-                      color: 'white',
-                      borderRadius: '4px',
-                      fontSize: '12px',
-                      fontWeight: 600,
-                      textTransform: 'uppercase',
-                      letterSpacing: '0.5px',
-                      marginBottom: '8px',
-                    }}>
-                      IPO Registration
-                    </span>
-                    {businessDescription && (
-                      <p style={{
-                        margin: '8px 0 0',
-                        fontSize: '14px',
-                        color: EmailColors.text.body,
-                        lineHeight: '1.5',
-                      }}>
-                        {businessDescription}
-                      </p>
-                    )}
-                  </td>
-                </tr>
-              </SectionCard>
 
-              {/* Offering Details */}
-              {(offeringSize || priceRange || sharesOffered) && (
-                <SectionCard>
-                  <SectionHeader emoji="💰" title="Offering Details" />
-                  <tr>
-                    <td>
-                      <table width="100%" cellPadding="0" cellSpacing="0">
-                        <tbody>
-                          {offeringSize && (
-                            <tr>
-                              <td style={{
-                                padding: '8px 0',
-                                fontSize: '14px',
-                                color: EmailColors.text.body,
-                                borderBottom: `1px solid ${EmailColors.structure.borderLight}`,
-                              }}>
-                                <span style={{ fontWeight: 600, color: EmailColors.text.headline }}>
-                                  Offering Size:
-                                </span>
-                                <span style={{ float: 'right', fontWeight: 600, color: '#059669' }}>
-                                  {offeringSize}
-                                </span>
-                              </td>
-                            </tr>
-                          )}
-                          {priceRange && (
-                            <tr>
-                              <td style={{
-                                padding: '8px 0',
-                                fontSize: '14px',
-                                color: EmailColors.text.body,
-                                borderBottom: `1px solid ${EmailColors.structure.borderLight}`,
-                              }}>
-                                <span style={{ fontWeight: 600, color: EmailColors.text.headline }}>
-                                  Price Range:
-                                </span>
-                                <span style={{ float: 'right' }}>
-                                  {priceRange}
-                                </span>
-                              </td>
-                            </tr>
-                          )}
-                          {sharesOffered && (
-                            <tr>
-                              <td style={{
-                                padding: '8px 0',
-                                fontSize: '14px',
-                                color: EmailColors.text.body,
-                                borderBottom: exchangeListing ? `1px solid ${EmailColors.structure.borderLight}` : 'none',
-                              }}>
-                                <span style={{ fontWeight: 600, color: EmailColors.text.headline }}>
-                                  Shares Offered:
-                                </span>
-                                <span style={{ float: 'right' }}>
-                                  {sharesOffered}
-                                </span>
-                              </td>
-                            </tr>
-                          )}
-                          {exchangeListing && (
-                            <tr>
-                              <td style={{
-                                padding: '8px 0',
-                                fontSize: '14px',
-                                color: EmailColors.text.body,
-                                borderBottom: expectedTradingDate ? `1px solid ${EmailColors.structure.borderLight}` : 'none',
-                              }}>
-                                <span style={{ fontWeight: 600, color: EmailColors.text.headline }}>
-                                  Exchange:
-                                </span>
-                                <span style={{ float: 'right' }}>
-                                  {exchangeListing}
-                                </span>
-                              </td>
-                            </tr>
-                          )}
-                          {expectedTradingDate && (
-                            <tr>
-                              <td style={{
-                                padding: '8px 0',
-                                fontSize: '14px',
-                                color: EmailColors.text.body,
-                              }}>
-                                <span style={{ fontWeight: 600, color: EmailColors.text.headline }}>
-                                  Expected Trading:
-                                </span>
-                                <span style={{ float: 'right' }}>
-                                  {expectedTradingDate}
-                                </span>
-                              </td>
-                            </tr>
-                          )}
-                        </tbody>
-                      </table>
-                    </td>
-                  </tr>
-                </SectionCard>
+              {/* Signal badge -- FIRST element */}
+              <div style={{ marginBottom: '12px' }}>
+                <span style={{
+                  ...EmailStyles.pillBadge,
+                  backgroundColor: BadgeColors.moderate.bg,
+                  color: BadgeColors.moderate.text,
+                }}>
+                  IPO FILING
+                </span>
+              </div>
+
+              {/* Lead sentence */}
+              <h1 style={EmailStyles.leadSentence}>
+                {leadText || `${companyName} filed an S-1 registration statement`}
+              </h1>
+
+              {/* Why it matters */}
+              <p style={EmailStyles.whyItMatters}>
+                <strong style={{ color: '#000000' }}>Why it matters: </strong>
+                An S-1 signals a company is preparing to go public. The offering size, valuation, and use of proceeds reveal management priorities and growth expectations.
+              </p>
+
+              {/* Thin divider */}
+              {dataRows.length > 0 && (
+                <table width="100%" cellPadding="0" cellSpacing="0" style={{ margin: '20px 0' }}>
+                  <tbody><tr><td style={EmailStyles.thinDivider}></td></tr></tbody>
+                </table>
+              )}
+
+              {/* Data snapshot */}
+              {dataRows.length > 0 && (
+                <table width="100%" cellPadding="0" cellSpacing="0" style={{ marginBottom: '4px' }}>
+                  <tbody>
+                    {dataRows.map((row, idx) => (
+                      <tr key={idx}>
+                        <td style={{
+                          ...EmailStyles.dataLabel,
+                          borderBottom: idx < dataRows.length - 1 ? '1px solid #F0F0F0' : 'none',
+                        }}>{row.label}</td>
+                        <td style={{
+                          ...EmailStyles.dataValue,
+                          color: row.color || '#111827',
+                          borderBottom: idx < dataRows.length - 1 ? '1px solid #F0F0F0' : 'none',
+                        }}>{row.value}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               )}
 
               {/* Financial Highlights */}
               {financialHighlights && financialHighlights.length > 0 && (
-                <SectionCard>
-                  <SectionHeader emoji="📈" title="Financial Highlights" />
-                  <tr>
-                    <td>
-                      <table width="100%" cellPadding="0" cellSpacing="0">
-                        <tbody>
-                          {financialHighlights.map((item, index) => {
-                            const changeStyle = getChangeStyle(item.change);
-                            const arrow = getChangeArrow(item.change);
-                            return (
-                              <tr key={index}>
-                                <td style={{
-                                  padding: '4px 0',
-                                  fontSize: '14px',
-                                  lineHeight: '1.5',
-                                  color: EmailColors.text.body,
-                                }}>
-                                  <span style={{ marginRight: '8px', color: EmailColors.text.meta }}>•</span>
-                                  <span style={{ fontWeight: 600 }}>{item.label}:</span>
-                                  {' '}{item.value}
-                                  {item.change && (
-                                    <span style={{ ...changeStyle, marginLeft: '6px' }}>
-                                      ({arrow}{item.change})
-                                    </span>
-                                  )}
-                                </td>
-                              </tr>
-                            );
-                          })}
-                        </tbody>
-                      </table>
-                    </td>
-                  </tr>
-                </SectionCard>
+                <>
+                  <table width="100%" cellPadding="0" cellSpacing="0" style={{ margin: '20px 0' }}>
+                    <tbody><tr><td style={EmailStyles.thinDivider}></td></tr></tbody>
+                  </table>
+                  <table width="100%" cellPadding="0" cellSpacing="0" style={{ marginBottom: '4px' }}>
+                    <tbody>
+                      {financialHighlights.map((item, idx) => {
+                        const changeStyle = getChangeStyle(item.change);
+                        const arrow = getChangeArrow(item.change);
+                        const valueStr = item.change
+                          ? `${item.value} (${arrow}${item.change})`
+                          : String(item.value);
+                        return (
+                          <tr key={idx}>
+                            <td style={{
+                              ...EmailStyles.dataLabel,
+                              borderBottom: idx < financialHighlights.length - 1 ? '1px solid #F0F0F0' : 'none',
+                            }}>{item.label}</td>
+                            <td style={{
+                              ...EmailStyles.dataValue,
+                              color: item.change ? changeStyle.color : '#111827',
+                              borderBottom: idx < financialHighlights.length - 1 ? '1px solid #F0F0F0' : 'none',
+                            }}>{valueStr}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </>
               )}
 
-              {/* Use of Proceeds */}
-              {useOfProceeds && useOfProceeds.length > 0 && (
-                <SectionCard>
-                  <SectionHeader emoji="💼" title="Use of Proceeds" />
-                  <tr>
-                    <td>
-                      <table width="100%" cellPadding="0" cellSpacing="0">
-                        <tbody>
-                          {useOfProceeds.slice(0, 4).map((item, index) => (
-                            <tr key={index}>
-                              <td style={{
-                                padding: '4px 0',
-                                fontSize: '14px',
-                                lineHeight: '1.5',
-                                color: EmailColors.text.body,
-                              }}>
-                                <span style={{ marginRight: '8px', color: EmailColors.text.meta }}>•</span>
-                                {item}
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </td>
-                  </tr>
-                </SectionCard>
+              {/* Use of Proceeds + Underwriters as narrative */}
+              {((useOfProceeds && useOfProceeds.length > 0) || (underwriters && underwriters.length > 0)) && (
+                <>
+                  <table width="100%" cellPadding="0" cellSpacing="0" style={{ margin: '20px 0' }}>
+                    <tbody><tr><td style={EmailStyles.thinDivider}></td></tr></tbody>
+                  </table>
+                  {useOfProceeds && useOfProceeds.length > 0 && (
+                    <>
+                      <div style={{ ...EmailStyles.watchForHeader, marginBottom: '6px' }}>Use of proceeds:</div>
+                      {useOfProceeds.slice(0, 4).map((item, idx) => (
+                        <div key={idx} style={{
+                          padding: '3px 0 3px 16px',
+                          fontSize: '14px',
+                          color: EmailColors.text.body,
+                          lineHeight: '1.5',
+                        }}>
+                          <span style={{ color: EmailColors.text.meta, marginRight: '8px' }}>•</span>
+                          {item}
+                        </div>
+                      ))}
+                    </>
+                  )}
+                  {underwriters && underwriters.length > 0 && (
+                    <p style={{
+                      ...EmailStyles.prose,
+                      marginTop: '12px',
+                    }}>
+                      <strong style={{ color: '#000000' }}>Underwriters: </strong>
+                      {underwriters.join(', ')}
+                    </p>
+                  )}
+                </>
               )}
 
-              {/* Underwriters */}
-              {underwriters && underwriters.length > 0 && (
-                <SectionCard>
-                  <SectionHeader emoji="🏦" title="Underwriters" />
-                  <tr>
-                    <td>
-                      <p style={{
-                        margin: '0',
-                        fontSize: '14px',
-                        lineHeight: '1.5',
-                        color: EmailColors.text.body,
-                      }}>
-                        {underwriters.join(', ')}
-                      </p>
-                    </td>
-                  </tr>
-                </SectionCard>
+              {/* Story -- remaining narrative via markdown */}
+              {remainingSummary && (
+                <>
+                  <table width="100%" cellPadding="0" cellSpacing="0" style={{ margin: '20px 0' }}>
+                    <tbody><tr><td style={EmailStyles.thinDivider}></td></tr></tbody>
+                  </table>
+                  <div
+                    style={EmailStyles.prose}
+                    dangerouslySetInnerHTML={{ __html: markdownToHtml(remainingSummary) }}
+                  />
+                </>
               )}
 
-              {/* Risk Factors */}
-              {riskFactors && riskFactors.length > 0 && (
-                <SectionCard>
-                  <SectionHeader emoji="⚠️" title="Key Risks" />
-                  <tr>
-                    <td>
-                      <table width="100%" cellPadding="0" cellSpacing="0">
-                        <tbody>
-                          {riskFactors.slice(0, 3).map((risk, index) => (
-                            <tr key={index}>
-                              <td style={{
-                                padding: '4px 0',
-                                fontSize: '14px',
-                                lineHeight: '1.5',
-                                color: EmailColors.text.body,
-                              }}>
-                                <span style={{ marginRight: '8px', color: EmailColors.text.meta }}>•</span>
-                                {risk}
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </td>
-                  </tr>
-                </SectionCard>
-              )}
-
-              {/* Summary Text (fallback) */}
-              {summaryText && (
-                <SectionCard>
-                  <SectionHeader emoji="📝" title="Summary" />
-                  <tr>
-                    <td
-                      style={{
-                        fontSize: '14px',
-                        lineHeight: '1.6',
-                        color: EmailColors.text.body,
-                      }}
-                      dangerouslySetInnerHTML={{ __html: markdownToHtml(summaryText) }}
-                    />
-                  </tr>
-                </SectionCard>
+              {/* Watch for (risk factors) */}
+              {watchFor.length > 0 && (
+                <>
+                  <table width="100%" cellPadding="0" cellSpacing="0" style={{ margin: '20px 0' }}>
+                    <tbody><tr><td style={EmailStyles.thinDivider}></td></tr></tbody>
+                  </table>
+                  <div style={EmailStyles.watchForHeader}>Watch for:</div>
+                  {watchFor.map((item, idx) => (
+                    <div key={idx} style={{
+                      padding: '3px 0 3px 16px',
+                      fontSize: '14px',
+                      color: EmailColors.text.body,
+                      lineHeight: '1.5',
+                    }}>
+                      <span style={{ color: EmailColors.text.meta, marginRight: '8px' }}>•</span>
+                      {item}
+                    </div>
+                  ))}
+                </>
               )}
             </td>
           </tr>
@@ -350,7 +286,6 @@ export function FormS1MinimalistTemplate({ filing }: FormS1MinimalistTemplatePro
       <EmailFooter
         filingUrl={filingUrl}
         formType={filingType || 'S-1'}
-        unsubscribeUrl={`${process.env.NEXT_PUBLIC_APP_URL || ''}/dashboard/settings`}
       />
     </div>
   );

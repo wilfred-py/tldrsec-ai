@@ -27,6 +27,10 @@ All notable changes to this project will be documented in this file.
 ## [0.0.13.0] - 2026-04-13
 
 ### Changed
+- All SEC filing email templates redesigned from card-heavy dashboard layout to Axios Smart Brevity narrative style. Signal/importance badge is now the first element users see, followed by a bold lead sentence, "Why it matters" prose, compact data snapshot rows, and "Watch for" bullets.
+- Badge colors muted across all templates. Green positive and yellow high-importance badges replaced with subtle 12% opacity backgrounds that don't clash with white email backgrounds.
+- EmailHeader simplified: removed competing h1 headline, replaced with ticker/company meta line. Lead sentence in template body is now the dominant first read.
+- EmailFooter always shows "Manage preferences through your dashboard" link, hardcoded to `https://tldrsec.app/dashboard/settings`. Previously conditional and broken when `NEXT_PUBLIC_APP_URL` was empty.
 - Dashboard stats widget shows "Time Saved" metric calculated from token usage across all summaries, replacing the generic "Email Delivery" header.
 - Activity feed header renamed from "Sent to your inbox" to "Filing Summaries" with FileText icon.
 - Tickers tab and activity feed containers use Shadcn Card components instead of custom styled divs.
@@ -36,7 +40,18 @@ All notable changes to this project will be documented in this file.
 - Redundant "14 tickers / FREE plan" info box from dashboard stats row. Users see this on the Tickers tab.
 
 ### Fixed
+- Broken unsubscribe URL across all 10 email templates. `${process.env.NEXT_PUBLIC_APP_URL || ''}/dashboard/settings` produced `http://dashboard/settings` in email clients. Now hardcoded to correct URL.
+- 8-K and Form 144 templates now include preferences link in footer (previously missing, CAN-SPAM compliance issue).
+- Bare `<td>` elements in 10 templates replaced with `<div>` for email client compatibility (Outlook/Gmail strip bare `<td>` outside `<tr>` context).
+- `borderBottom` styles moved from `<tr>` to `<td>` elements across all data tables for email client rendering compatibility.
 - Activity feed date group headings ("Today", "Earlier") now have proper left padding matching the feed cards.
+
+### Added
+- `BadgeColors` muted palette in design system (high, moderate, low, neutral, positive, negative, mixed, trust, award).
+- `EmailStyles` Smart Brevity primitives: pillBadge, categoryBadge, leadSentence, whyItMatters, thinDivider, prose, dataLabel, dataValue, watchForHeader.
+- Preheader text for inbox preview added to all filing types (previously only Form 4 had it).
+- DEF 14A, 11-K, S-1, S-3 added to production template registry (`lib/email/templates.ts`).
+- Template registry (`components/email/templates/template-registry.ts`) updated to use minimalist versions of DEF 14A and 11-K.
 
 ## [0.0.12.1] - 2026-04-13
 

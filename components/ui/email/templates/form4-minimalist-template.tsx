@@ -1,8 +1,7 @@
 import * as React from 'react';
-import { EmailColors, getTransactionCodeDescription as getTransactionCodeDescriptionFromDesign, markdownToHtml } from '../design-system';
+import { EmailColors, EmailStyles, BadgeColors, getTransactionCodeDescription as getTransactionCodeDescriptionFromDesign, markdownToHtml } from '../design-system';
 import { EmailHeader } from './sections/EmailHeader';
 import { EmailFooter } from './sections/EmailFooter';
-import { SectionCard } from './sections/SectionCard';
 import { FilingTemplateData } from '../../../../lib/email/types';
 import { extractForm4Data } from '../../../../lib/email/form4-data-extractor';
 import { StalenessBanner } from './sections/StalenessBanner';
@@ -408,7 +407,7 @@ function formatAggregatedValue(value: number): string {
   return '$0';
 }
 
-function getAwardSubtitle(aggTx: AggregatedTransaction): string {
+function _getAwardSubtitle(aggTx: AggregatedTransaction): string {
   const types = aggTx.securityTypes || [];
   const joined = types.join(' ').toLowerCase();
   if (joined.includes('stock option') || joined.includes('right to buy')) {
@@ -772,6 +771,53 @@ export function Form4MinimalistTemplate({ filing }: Form4MinimalistTemplateProps
   // Build preheader text for inbox preview
   const preheaderText = `${signal.level} SIGNAL: ${signal.verdict} — ${(summaryText || '').substring(0, 100)}`;
 
+  // Pick the badge color based on signal level
+  const signalBadgeColors = signal.level === 'HIGH' ? BadgeColors.high
+    : signal.level === 'LOW' ? BadgeColors.low
+    : signal.level === 'NEUTRAL' && isAwardOnly ? BadgeColors.award
+    : signal.level === 'NEUTRAL' ? BadgeColors.trust
+    : BadgeColors.moderate;
+
+  // Build data snapshot rows from transaction data
+  const dataRows: { label: string; value: string; color?: string }[] = [];
+  for (const aggTx of aggregatedTransactions.slice(0, 3)) {
+    const config = getAggregatedTransactionConfig(aggTx.type);
+    const valueStr = aggTx.totalValue === 0
+      ? `${aggTx.sharesDisplay} shares`
+      : `${aggTx.valueDisplay} (${aggTx.sharesDisplay} shares${aggTx.avgPrice > 0 ? ` @ ${aggTx.priceDisplay}` : ''})`;
+    dataRows.push({ label: `${config.icon} ${config.label}`, value: valueStr, color: config.valueColor });
+  }
+
+  // Add holdings row with directional arrow
+  if (previousStake && newStake) {
+    const pctNum = parseFloat((percentChange || '0').replace(/[%+]/g, ''));
+    const pctColor = pctNum < 0 ? '#DC2626' : pctNum > 0 ? '#16A34A' : EmailColors.text.meta;
+    const arrow = pctNum < 0 ? '↓' : pctNum > 0 ? '↑' : '→';
+    const pctDisplay = percentChange && !percentChange.includes('NaN')
+      ? (pctNum > 0 && !percentChange.startsWith('+') ? `+${percentChange}` : percentChange)
+      : '';
+    dataRows.push({
+      label: 'Holdings',
+      value: `${previousStake} ${arrow} ${newStake}${pctDisplay ? ` (${pctDisplay})` : ''}`,
+      color: pctColor,
+    });
+  } else if (newStake) {
+    dataRows.push({ label: 'Holdings', value: newStake });
+  }
+
+  // Ownership breakdown for mixed direct/indirect
+  const breakdown = getOwnershipBreakdown(transactions);
+
+  // Build watch-for items
+  const watchFor: string[] = [];
+  if (normalizedData?.vestingDetails) {
+    watchFor.push(`Vesting schedule: ${normalizedData.vestingDetails}`);
+  }
+  if (aggregatedTransactions.some(t => t.codeDescription)) {
+    const descs = aggregatedTransactions.filter(t => t.codeDescription).map(t => t.codeDescription);
+    watchFor.push(`SEC transaction code: ${descs.join(', ')}`);
+  }
+
   return (
     <div style={{
       maxWidth: '600px',
@@ -780,7 +826,7 @@ export function Form4MinimalistTemplate({ filing }: Form4MinimalistTemplateProps
       backgroundColor: EmailColors.structure.background,
       color: EmailColors.text.body,
     }}>
-      {/* Preheader: invisible text shown in inbox preview after subject */}
+      {/* Preheader */}
       <div style={{
         display: 'none',
         fontSize: '1px',
@@ -794,7 +840,6 @@ export function Form4MinimalistTemplate({ filing }: Form4MinimalistTemplateProps
         {preheaderText}
       </div>
 
-      {/* Header */}
       <EmailHeader
         ticker={displayTicker}
         companyName={companyName}
@@ -805,475 +850,149 @@ export function Form4MinimalistTemplate({ filing }: Form4MinimalistTemplateProps
         dataQuality={dataQuality}
       />
 
-      {/* Staleness warning */}
       {filingDate && (
         <div style={{ padding: '0 15px' }}>
           <StalenessBanner filingDate={new Date(filingDate)} />
         </div>
       )}
 
-      {/* Main content */}
+      {/* Smart Brevity body */}
       <table width="100%" cellPadding="0" cellSpacing="0">
         <tbody>
           <tr>
             <td style={{ padding: '0 15px 20px' }}>
 
-              {/* ═══════════════════════════════════════════════════════════
-                  THE VERDICT - This is the HERO section
-                  Users should know in 2 seconds if this matters
-                  ═══════════════════════════════════════════════════════════ */}
-              <table width="100%" cellPadding="0" cellSpacing="0" style={{
-                backgroundColor: signal.bgColor,
-                borderRadius: '12px',
-                marginBottom: '16px',
-                border: `2px solid ${signal.borderColor}`,
-              }}>
-                <tbody>
-                  <tr>
-                    <td style={{ padding: '20px' }}>
-                      {/* Signal Level Badge */}
-                      <table width="100%" cellPadding="0" cellSpacing="0">
-                        <tbody>
-                          <tr>
-                            <td>
-                              <span style={{
-                                display: 'inline-block',
-                                padding: '4px 12px',
-                                backgroundColor: signal.borderColor,
-                                color: '#FFFFFF',
-                                borderRadius: '20px',
-                                fontSize: '11px',
-                                fontWeight: 700,
-                                letterSpacing: '1px',
-                                textTransform: 'uppercase' as const,
-                              }}>
-                                {signal.icon} {signal.level} SIGNAL
-                              </span>
-                            </td>
-                          </tr>
+              {/* Signal badge — FIRST element */}
+              <div style={{ marginBottom: '12px' }}>
+                <span style={{
+                  ...EmailStyles.pillBadge,
+                  backgroundColor: signalBadgeColors.bg,
+                  color: signalBadgeColors.text,
+                }}>
+                  {signal.icon} {signal.level} — {signal.verdict}
+                </span>
+              </div>
 
-                          {/* The Verdict */}
-                          <tr>
-                            <td style={{ paddingTop: '12px' }}>
-                              <div style={{
-                                fontSize: '24px',
-                                fontWeight: 700,
-                                color: signal.textColor,
-                                lineHeight: '1.2',
-                              }}>
-                                {signal.verdict}
-                              </div>
-                            </td>
-                          </tr>
+              {/* Lead sentence */}
+              <h1 style={EmailStyles.leadSentence}>
+                {headline || `${filerName} filed a Form 4 for ${displayTicker}`}
+              </h1>
 
-                          {/* Quick explanation */}
-                          <tr>
-                            <td style={{ paddingTop: '8px' }}>
-                              <div style={{
-                                fontSize: '14px',
-                                lineHeight: '1.5',
-                                color: signal.textColor,
-                                opacity: 0.9,
-                              }}>
-                                {signal.description}
-                              </div>
-                            </td>
-                          </tr>
-                        </tbody>
-                      </table>
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
+              {/* Why it matters */}
+              <p style={EmailStyles.whyItMatters}>
+                <strong style={{ color: '#000000' }}>Why it matters: </strong>
+                {signal.description}
+              </p>
 
-              {/* ═══════════════════════════════════════════════════════════
-                  THE NUMBERS - Quick scan metrics (supports multiple transaction types)
-                  Shows aggregated totals: Sale + Gift + Purchase (up to 3 types)
-                  Mobile-first: Stacks on small screens, side-by-side on desktop
-                  ═══════════════════════════════════════════════════════════ */}
-              {hasTransactionData && (
-                <table width="100%" cellPadding="0" cellSpacing="0" style={{ marginBottom: '16px' }}>
-                  <tbody>
-                    <tr>
-                      <td>
-                        {/* Mobile-first responsive layout using stacked tables */}
-                        {/* Each transaction type is a separate table that can stack */}
-                        <table width="100%" cellPadding="0" cellSpacing="0">
-                          <tbody>
-                            <tr>
-                              {/* Aggregated transaction types display - shows all transaction types (sale, gift, purchase) */}
-                              {aggregatedTransactions.length > 0 ? (
-                                <>
-                                  {aggregatedTransactions.slice(0, 3).map((aggTx, idx) => {
-                                    const config = getAggregatedTransactionConfig(aggTx.type);
-                                    const totalCols = Math.min(aggregatedTransactions.length, 3);
-                                    const isLast = idx === Math.min(aggregatedTransactions.length, 3) - 1;
-
-                                    // For mobile: use percentage width that works well on small screens
-                                    // For 2 items: 48% each (with 4% gap)
-                                    // For 1 item: 100%
-                                    // For 3 items: 31% each (with gaps)
-                                    const widthPercent = totalCols === 1 ? 100 : totalCols === 2 ? 48 : 31;
-
-                                    return (
-                                      <React.Fragment key={idx}>
-                                        <td style={{
-                                          width: `${widthPercent}%`,
-                                          padding: '16px',
-                                          backgroundColor: config.bgColor,
-                                          borderRadius: '8px',
-                                          verticalAlign: 'top',
-                                        }}>
-                                          <div style={{
-                                            fontSize: '11px',
-                                            fontWeight: 700,
-                                            color: config.textColor,
-                                            textTransform: 'uppercase' as const,
-                                            letterSpacing: '0.5px',
-                                            marginBottom: '4px',
-                                          }}>
-                                            {config.icon} {config.label}{aggTx.count > 1 ? ` (${aggTx.count})` : ''}
-                                          </div>
-                                          <div style={{
-                                            fontSize: '22px',
-                                            fontWeight: 800,
-                                            color: config.valueColor,
-                                            lineHeight: '1.2',
-                                          }}>
-                                            {/* For $0 transactions: show shares as the hero number, not misleading "$0" */}
-                                            {aggTx.totalValue === 0 && (aggTx.type === 'gift' || aggTx.type === 'transfer')
-                                              ? `${aggTx.sharesDisplay} shares`
-                                              : aggTx.totalValue === 0 && (aggTx.type === 'award' || aggTx.type === 'exercise' || aggTx.type === 'other')
-                                              ? `${aggTx.sharesDisplay} shares`
-                                              : (aggTx.valueDisplay || '$0')}
-                                          </div>
-                                          {/* Secondary info: shares count (only when value is the hero) or price info */}
-                                          <div style={{
-                                            fontSize: '12px',
-                                            color: config.textColor,
-                                            opacity: 0.8,
-                                            marginTop: '4px',
-                                          }}>
-                                            {aggTx.totalValue === 0
-                                              ? (aggTx.type === 'award' ? getAwardSubtitle(aggTx) : aggTx.type === 'gift' || aggTx.type === 'transfer' ? 'No monetary value' : `${aggTx.sharesDisplay} shares`)
-                                              : `${aggTx.sharesDisplay} shares${aggTx.avgPrice > 0 ? ` @ ${aggTx.priceDisplay}` : ''}`}
-                                          </div>
-                                          {/* SEC transaction code description for single transactions */}
-                                          {aggTx.codeDescription && (
-                                            <div style={{
-                                              fontSize: '11px',
-                                              color: config.textColor,
-                                              opacity: 0.7,
-                                              marginTop: '4px',
-                                            }}>
-                                              {aggTx.codeDescription}
-                                            </div>
-                                          )}
-                                          {/* Show (estimated) tag when using extractor-derived data */}
-                                          {dataQuality === 'extractor-only' && (
-                                            <div style={{
-                                              fontSize: '10px',
-                                              color: EmailColors.text.muted,
-                                              fontStyle: 'italic',
-                                              marginTop: '4px',
-                                            }}>
-                                              (estimated)
-                                            </div>
-                                          )}
-                                        </td>
-                                        {/* Add gap spacer between items (not after last item) */}
-                                        {!isLast && (
-                                          <td style={{ width: totalCols === 2 ? '4%' : '3.5%' }}></td>
-                                        )}
-                                      </React.Fragment>
-                                    );
-                                  })}
-                                </>
-                              ) : (
-                                /* Fallback: Just stake impact if no transaction details */
-                                <td style={{
-                                  width: '100%',
-                                  padding: '20px',
-                                  backgroundColor: EmailColors.structure.backgroundAlt,
-                                  borderRadius: '8px',
-                                  verticalAlign: 'top',
-                                }}>
-                                  {percentChange && (
-                                    <>
-                                      <div style={{
-                                        fontSize: '11px',
-                                        fontWeight: 700,
-                                        color: EmailColors.text.meta,
-                                        textTransform: 'uppercase' as const,
-                                        letterSpacing: '0.5px',
-                                        marginBottom: '4px',
-                                      }}>
-                                        Stake Impact
-                                      </div>
-                                      <div style={{
-                                        fontSize: '28px',
-                                        fontWeight: 800,
-                                        color: primaryIsSale ? '#DC2626' : '#16A34A',
-                                        lineHeight: '1.1',
-                                      }}>
-                                        {percentChange}
-                                      </div>
-                                    </>
-                                  )}
-                                  {(previousStake || newStake) && (
-                                    <div style={{
-                                      fontSize: '13px',
-                                      color: EmailColors.text.meta,
-                                      marginTop: '6px',
-                                    }}>
-                                      {previousStake && newStake
-                                        ? `${previousStake} ${getStakeChangeArrow(percentChange)} ${newStake}`
-                                        : newStake || previousStake
-                                      }
-                                    </div>
-                                  )}
-                                </td>
-                              )}
-                            </tr>
-                          </tbody>
-                        </table>
-                      </td>
-                    </tr>
-                  </tbody>
+              {/* Thin divider */}
+              {dataRows.length > 0 && (
+                <table width="100%" cellPadding="0" cellSpacing="0" style={{ margin: '20px 0' }}>
+                  <tbody><tr><td style={EmailStyles.thinDivider}></td></tr></tbody>
                 </table>
               )}
 
-              {/* ═══════════════════════════════════════════════════════════
-                  STAKE IMPACT - Shows ownership change when transactions exist
-                  Only displays when we have stake data AND transactions above
-                  ═══════════════════════════════════════════════════════════ */}
-              {/* Adaptive stake display:
-                  - Full bar: when both previousStake and newStake exist
-                  - Current holdings: when only newStake exists (from fallback extraction)
-                  - Hidden: when neither exists */}
-              {(
-                (previousStake && newStake) || // Have before/after comparison
-                (newStake && percentChange) || // Have new stake with change
-                (previousStake && percentChange) || // Have previous stake with change
-                newStake // Have current holdings from fallback extraction
-              ) && (() => {
-                // Parse percentage for color logic (handles "-10.00%", "50.00%", "+5.0%")
-                const pctNum = parseFloat((percentChange || '0').replace(/[%+]/g, ''));
-                const pctColor = pctNum < 0 ? '#DC2626' : pctNum > 0 ? '#16A34A' : EmailColors.text.meta;
-                const pctDisplay = percentChange && !percentChange.includes('NaN')
-                  ? (pctNum > 0 && !percentChange.startsWith('+') ? `+${percentChange}` : percentChange)
-                  : '';
-
-                return (
-                <table width="100%" cellPadding="0" cellSpacing="0" style={{ marginBottom: '16px' }}>
+              {/* Data snapshot */}
+              {dataRows.length > 0 && (
+                <table width="100%" cellPadding="0" cellSpacing="0" style={{ marginBottom: '4px' }}>
                   <tbody>
-                    <tr>
-                      <td style={{
-                        padding: '16px',
-                        backgroundColor: EmailColors.structure.backgroundAlt,
-                        borderRadius: '8px',
-                        textAlign: 'center',
-                      }}>
-                        <div style={{
-                          fontSize: '11px',
-                          fontWeight: 700,
-                          color: EmailColors.text.meta,
-                          textTransform: 'uppercase' as const,
-                          letterSpacing: '0.5px',
-                          marginBottom: '8px',
-                        }}>
-                          {previousStake && newStake ? 'Ownership Impact' : 'Current Holdings'}
-                        </div>
-                        {/* Ownership breakdown for mixed direct/indirect */}
-                        {(() => {
-                          const breakdown = getOwnershipBreakdown(transactions);
-                          if (breakdown) {
-                            return (
-                              <div style={{ marginBottom: '8px' }}>
-                                {breakdown.map((b, i) => (
-                                  <div key={i} style={{
-                                    fontSize: '13px',
-                                    color: EmailColors.text.body,
-                                    padding: '2px 0',
-                                  }}>
-                                    <span style={{ fontWeight: 600 }}>{b.form}{b.nature ? ` (${b.nature})` : ''}:</span>{' '}
-                                    {b.shares} shares
-                                  </div>
-                                ))}
-                                {transactions.length > 3 && transactions.some((t) => t.ownershipForm) && (
-                                  <div style={{ fontSize: '11px', color: EmailColors.text.muted, marginTop: '2px' }}>
-                                    and more entities in filing
-                                  </div>
-                                )}
-                              </div>
-                            );
-                          }
-                          return null;
-                        })()}
-                        <div>
-                          {previousStake && newStake ? (
-                            <>
-                              {/* Previous ownership (before transaction) */}
-                              <div style={{
-                                fontSize: '14px',
-                                color: EmailColors.text.muted,
-                                marginBottom: '6px',
-                              }}>
-                                {previousStake}
-                              </div>
-                              {/* Direction arrow - matches sentiment direction */}
-                              <div style={{
-                                fontSize: '20px',
-                                lineHeight: '1',
-                                margin: '4px 0',
-                                color: pctColor,
-                              }}>
-                                {'↓'}
-                              </div>
-                              {/* New ownership (after transaction) */}
-                              <div style={{
-                                fontSize: '16px',
-                                fontWeight: 700,
-                                color: EmailColors.text.headline,
-                                marginTop: '6px',
-                              }}>
-                                {newStake}
-                                {pctDisplay && (
-                                  <span style={{
-                                    marginLeft: '8px',
-                                    fontSize: '14px',
-                                    fontWeight: 600,
-                                    color: pctColor,
-                                  }}>
-                                    ({pctDisplay})
-                                  </span>
-                                )}
-                              </div>
-                            </>
-                          ) : (
-                            /* Single stake value with optional percent change */
-                            <div style={{
-                              fontSize: '16px',
-                              fontWeight: 700,
-                              color: EmailColors.text.headline,
-                            }}>
-                              {newStake || previousStake}
-                              {pctDisplay && (
-                                <span style={{
-                                  marginLeft: '8px',
-                                  fontSize: '14px',
-                                  fontWeight: 600,
-                                  color: pctColor,
-                                }}>
-                                  ({pctDisplay})
-                                </span>
-                              )}
-                            </div>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
-                );
-              })()}
-
-              {/* ═══════════════════════════════════════════════════════════
-                  THE STORY - Full AI summary
-                  ═══════════════════════════════════════════════════════════ */}
-              {headline && (
-                <table width="100%" cellPadding="0" cellSpacing="0" style={{ marginBottom: '16px' }}>
-                  <tbody>
-                    <tr>
-                      <td
-                        style={{
-                          fontSize: '15px',
-                          lineHeight: '1.6',
-                          color: EmailColors.text.body,
-                          padding: '16px',
-                          backgroundColor: 'transparent',
-                        }}
-                        dangerouslySetInnerHTML={{ __html: markdownToHtml(headline) }}
-                      />
-                    </tr>
-                    {remainingSummary && (
+                    {dataRows.map((row, idx) => (
+                      <tr key={idx}>
+                        <td style={{
+                          ...EmailStyles.dataLabel,
+                          borderBottom: idx < dataRows.length - 1 ? '1px solid #F0F0F0' : 'none',
+                        }}>{row.label}</td>
+                        <td style={{
+                          ...EmailStyles.dataValue,
+                          color: row.color || '#111827',
+                          borderBottom: idx < dataRows.length - 1 ? '1px solid #F0F0F0' : 'none',
+                        }}>{row.value}</td>
+                      </tr>
+                    ))}
+                    {/* Ownership breakdown rows */}
+                    {breakdown && breakdown.map((b, i) => (
+                      <tr key={`bd-${i}`}>
+                        <td style={{
+                          ...EmailStyles.dataLabel,
+                          borderBottom: i < breakdown.length - 1 ? '1px solid #F0F0F0' : 'none',
+                        }}>{b.form}{b.nature ? ` (${b.nature})` : ''}</td>
+                        <td style={{
+                          ...EmailStyles.dataValue,
+                          borderBottom: i < breakdown.length - 1 ? '1px solid #F0F0F0' : 'none',
+                        }}>{b.shares} shares</td>
+                      </tr>
+                    ))}
+                    {dataQuality === 'extractor-only' && (
                       <tr>
-                        <td
-                          style={{
-                            fontSize: '14px',
-                            lineHeight: '1.6',
-                            color: EmailColors.text.body,
-                            padding: '0 16px 16px',
-                            backgroundColor: 'transparent',
-                          }}
-                          dangerouslySetInnerHTML={{ __html: markdownToHtml(remainingSummary) }}
-                        />
+                        <td colSpan={2} style={{
+                          fontSize: '10px',
+                          color: EmailColors.text.muted,
+                          fontStyle: 'italic',
+                          padding: '4px 0 0',
+                        }}>
+                          Values are estimated from filing text
+                        </td>
                       </tr>
                     )}
                   </tbody>
                 </table>
               )}
 
-              {/* Vesting Details - shown when vesting schedule is available */}
-              {normalizedData?.vestingDetails && (
-                <table width="100%" cellPadding="0" cellSpacing="0" style={{ marginBottom: '16px' }}>
-                  <tbody>
-                    <tr>
-                      <td style={{
-                        padding: '12px 16px',
-                        backgroundColor: '#EFF6FF',
-                        borderRadius: '8px',
-                        border: '1px solid #BFDBFE',
-                      }}>
-                        <div style={{
-                          fontSize: '11px',
-                          fontWeight: 700,
-                          color: '#1E40AF',
-                          textTransform: 'uppercase' as const,
-                          letterSpacing: '0.5px',
-                          marginBottom: '4px',
-                        }}>
-                          Vesting Schedule
-                        </div>
-                        <div style={{
-                          fontSize: '13px',
-                          color: '#1E3A5F',
-                          lineHeight: '1.4',
-                        }}>
-                          {normalizedData.vestingDetails}
-                        </div>
-                      </td>
-                    </tr>
-                  </tbody>
+              {/* Thin divider */}
+              {remainingSummary && (
+                <table width="100%" cellPadding="0" cellSpacing="0" style={{ margin: '20px 0' }}>
+                  <tbody><tr><td style={EmailStyles.thinDivider}></td></tr></tbody>
                 </table>
+              )}
+
+              {/* Story — remaining narrative */}
+              {remainingSummary && (
+                <div
+                  style={EmailStyles.prose}
+                  dangerouslySetInnerHTML={{ __html: markdownToHtml(remainingSummary) }}
+                />
+              )}
+
+              {/* Watch for */}
+              {watchFor.length > 0 && (
+                <>
+                  <table width="100%" cellPadding="0" cellSpacing="0" style={{ margin: '20px 0' }}>
+                    <tbody><tr><td style={EmailStyles.thinDivider}></td></tr></tbody>
+                  </table>
+                  <div style={EmailStyles.watchForHeader}>Watch for:</div>
+                  {watchFor.map((item, idx) => (
+                    <div key={idx} style={{
+                      padding: '3px 0 3px 16px',
+                      fontSize: '14px',
+                      color: EmailColors.text.body,
+                      lineHeight: '1.5',
+                    }}>
+                      <span style={{ color: EmailColors.text.meta, marginRight: '8px' }}>•</span>
+                      {item}
+                    </div>
+                  ))}
+                </>
               )}
 
               {/* No data fallback */}
               {!hasTransactionData && !summaryText && (
-                <SectionCard>
-                  <tr>
-                    <td style={{
-                      fontSize: '14px',
-                      lineHeight: '1.6',
-                      color: EmailColors.text.meta,
-                      textAlign: 'center',
-                      padding: '20px',
-                    }}>
-                      View the full Form 4 filing for transaction details.
-                    </td>
-                  </tr>
-                </SectionCard>
+                <p style={{
+                  fontSize: '14px',
+                  lineHeight: '1.6',
+                  color: EmailColors.text.meta,
+                  textAlign: 'center',
+                  padding: '20px 0',
+                }}>
+                  View the full Form 4 filing for transaction details.
+                </p>
               )}
             </td>
           </tr>
         </tbody>
       </table>
 
-      {/* Footer with CTA */}
       <EmailFooter
         filingUrl={filingUrl}
         formType={filingType || 'Form 4'}
-        unsubscribeUrl={`${process.env.NEXT_PUBLIC_APP_URL || ''}/dashboard/settings`}
       />
     </div>
   );

@@ -1,20 +1,18 @@
 import * as React from 'react';
-import { EmailColors } from '../../design-system';
+import { EmailColors, EMAIL_PREFERENCES_URL } from '../../design-system';
 import { getSecFilingViewerUrl } from '../../../../../lib/email/url-utils';
 
 interface EmailFooterProps {
   filingUrl: string;
   formType?: string;
-  unsubscribeUrl?: string;
 }
 
 /**
  * Minimalist email footer component
- * Morning Brew style: clean CTA, simple footer links
+ * CTA button + preferences link (always shown)
  */
-export function EmailFooter({ filingUrl, formType, unsubscribeUrl }: EmailFooterProps) {
+export function EmailFooter({ filingUrl, formType }: EmailFooterProps) {
   // Convert index URLs to EDGAR Filing Viewer URLs for better user experience
-  // Pass formType for smart XML URL construction (stylesheet injection)
   const viewerUrl = filingUrl ? getSecFilingViewerUrl(filingUrl, formType) : '';
 
   return (
@@ -60,17 +58,15 @@ export function EmailFooter({ filingUrl, formType, unsubscribeUrl }: EmailFooter
             }}>
               tldrSEC | AI-Powered SEC Filing Summaries
             </p>
-            {unsubscribeUrl && (
-              <p style={{
-                margin: '8px 0 0',
-                fontSize: '12px',
-                color: '#6B7280',
-              }}>
-                <a href={unsubscribeUrl} style={{ color: '#6B7280', textDecoration: 'underline' }}>
-                  Unsubscribe
-                </a>
-              </p>
-            )}
+            <p style={{
+              margin: '8px 0 0',
+              fontSize: '12px',
+              color: '#6B7280',
+            }}>
+              <a href={EMAIL_PREFERENCES_URL} style={{ color: '#6B7280', textDecoration: 'underline' }}>
+                Manage preferences through your dashboard
+              </a>
+            </p>
           </td>
         </tr>
       </tbody>

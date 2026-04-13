@@ -1,9 +1,7 @@
 import * as React from 'react';
-import { EmailColors, getChangeStyle, getChangeArrow, markdownToHtml } from '../design-system';
+import { EmailColors, EmailStyles, BadgeColors, getChangeStyle, getChangeArrow, markdownToHtml } from '../design-system';
 import { EmailHeader } from './sections/EmailHeader';
 import { EmailFooter } from './sections/EmailFooter';
-import { SectionCard } from './sections/SectionCard';
-import { SectionHeader } from './sections/SectionHeader';
 import { StalenessBanner } from './sections/StalenessBanner';
 import { FilingTemplateData } from '../../../../lib/email/types';
 
@@ -12,14 +10,17 @@ interface Form10KMinimalistTemplateProps {
 }
 
 /**
- * Minimalist 10-K email template
- * Morning Brew style: clean, scannable, lead with key metrics
+ * Minimalist 10-K email template — Smart Brevity format
  *
  * Layout:
+ * - Preheader for inbox preview
  * - Header: ticker, company name, fiscal year
- * - Financial Highlights: bullet points with YoY changes
- * - Segment Performance: inline data
- * - Key Risks: bullet points
+ * - [ANNUAL REPORT] pill badge
+ * - Lead sentence from first key point or financial highlight
+ * - "Why it matters:" revenue/earnings context
+ * - Data snapshot: top financial metrics with YoY changes
+ * - Story: segment performance + key takeaways woven into narrative prose
+ * - "Watch for:" risk factors as bullets
  * - CTA: View full filing
  */
 export function Form10KMinimalistTemplate({ filing }: Form10KMinimalistTemplateProps) {
@@ -57,6 +58,66 @@ export function Form10KMinimalistTemplate({ filing }: Form10KMinimalistTemplateP
   // Extract simple summary if available
   const _parsedContent = rawData?.parsedContent as Record<string, unknown> | undefined;
 
+  // --- Smart Brevity content assembly ---
+
+  const hasStructuredData = !!(
+    (financialHighlights && financialHighlights.length > 0) ||
+    (keyPoints && keyPoints.length > 0)
+  );
+
+  // Lead sentence: first key point, or first financial highlight, or first sentence of summaryText
+  let leadSentence = '';
+  if (keyPoints && keyPoints.length > 0) {
+    leadSentence = keyPoints[0];
+  } else if (financialHighlights && financialHighlights.length > 0) {
+    const first = financialHighlights[0];
+    leadSentence = `${first.label}: ${first.value}${first.change ? ` (${first.change} YoY)` : ''}`;
+  } else if (summaryText) {
+    leadSentence = summaryText.split(/(?<=[.!?])\s+/)[0] || summaryText;
+  }
+
+  // "Why it matters" context — pull revenue/earnings highlights or second key point
+  let whyItMatters = '';
+  if (financialHighlights && financialHighlights.length > 0) {
+    const parts = financialHighlights.slice(0, 3).map(h =>
+      `${h.label} ${h.value}${h.change ? ` (${h.change} YoY)` : ''}`
+    );
+    whyItMatters = parts.join('; ') + '.';
+  } else if (keyPoints && keyPoints.length > 1) {
+    whyItMatters = keyPoints[1];
+  } else if (summaryText) {
+    const sentences = summaryText.split(/(?<=[.!?])\s+/);
+    whyItMatters = sentences.length > 1 ? sentences[1] : '';
+  }
+
+  // Data snapshot rows: top financial metrics
+  const dataRows: { label: string; value: string; change?: string | number }[] = [];
+  if (financialHighlights) {
+    for (const h of financialHighlights.slice(0, 5)) {
+      dataRows.push({ label: h.label, value: String(h.value), change: h.change });
+    }
+  }
+
+  // Story: segment performance + remaining key takeaways woven into prose
+  const storyParts: string[] = [];
+  if (segments && segments.length > 0) {
+    const segmentSummaries = segments.map(s =>
+      `${s.name} generated ${s.revenue} in revenue (${s.growth} YoY)`
+    );
+    storyParts.push(segmentSummaries.join('. ') + '.');
+  }
+  if (keyPoints && keyPoints.length > 1) {
+    // Skip the first (used as lead sentence) and weave the rest
+    storyParts.push(...keyPoints.slice(1));
+  }
+  const storyText = storyParts.join(' ');
+
+  // Watch-for items: risk factors
+  const watchForItems = riskFactors ? riskFactors.slice(0, 4) : [];
+
+  // Preheader text for inbox preview
+  const preheaderText = `${displayTicker} Annual Report: ${leadSentence.substring(0, 120)}`;
+
   return (
     <div style={{
       maxWidth: '600px',
@@ -65,6 +126,20 @@ export function Form10KMinimalistTemplate({ filing }: Form10KMinimalistTemplateP
       backgroundColor: EmailColors.structure.background,
       color: EmailColors.text.body,
     }}>
+      {/* Preheader — hidden text for inbox preview */}
+      <div style={{
+        display: 'none',
+        fontSize: '1px',
+        color: EmailColors.structure.background,
+        lineHeight: '1px',
+        maxHeight: '0px',
+        maxWidth: '0px',
+        opacity: 0,
+        overflow: 'hidden',
+      }}>
+        {preheaderText}
+      </div>
+
       {/* Header */}
       <EmailHeader
         ticker={displayTicker}
@@ -80,159 +155,133 @@ export function Form10KMinimalistTemplate({ filing }: Form10KMinimalistTemplateP
         </div>
       )}
 
-      {/* Main content */}
+      {/* Smart Brevity body */}
       <table width="100%" cellPadding="0" cellSpacing="0">
         <tbody>
           <tr>
             <td style={{ padding: '0 15px 20px' }}>
-              {/* Financial Highlights Section */}
-              {financialHighlights && financialHighlights.length > 0 && (
-                <SectionCard>
-                  <SectionHeader emoji="📈" title="Financial Highlights" />
-                  <tr>
-                    <td>
-                      <table width="100%" cellPadding="0" cellSpacing="0">
-                        <tbody>
-                          {financialHighlights.map((item, index) => {
-                            const changeStyle = getChangeStyle(item.change);
-                            const arrow = getChangeArrow(item.change);
-                            return (
-                              <tr key={index}>
-                                <td style={{
-                                  padding: '4px 0',
-                                  fontSize: '14px',
-                                  lineHeight: '1.5',
-                                  color: EmailColors.text.body,
-                                }}>
-                                  <span style={{ marginRight: '8px', color: EmailColors.text.meta }}>•</span>
-                                  <span style={{ fontWeight: 600 }}>{item.label}:</span>
-                                  {' '}{item.value}
-                                  {item.change && (
-                                    <span style={{ ...changeStyle, marginLeft: '6px' }}>
-                                      ({arrow}{item.change})
-                                    </span>
-                                  )}
-                                </td>
-                              </tr>
-                            );
-                          })}
-                        </tbody>
-                      </table>
-                    </td>
-                  </tr>
-                </SectionCard>
+
+              {/* ANNUAL REPORT pill badge */}
+              <div style={{ marginBottom: '12px' }}>
+                <span style={{
+                  ...EmailStyles.pillBadge,
+                  backgroundColor: BadgeColors.neutral.bg,
+                  color: BadgeColors.neutral.text,
+                }}>
+                  ANNUAL REPORT
+                </span>
+              </div>
+
+              {/* Lead sentence */}
+              <h1 style={EmailStyles.leadSentence}>
+                {leadSentence || `${companyName || displayTicker} filed its annual report (10-K)`}
+              </h1>
+
+              {/* Why it matters */}
+              {whyItMatters && (
+                <p style={EmailStyles.whyItMatters}>
+                  <strong style={{ color: '#000000' }}>Why it matters: </strong>
+                  {whyItMatters}
+                </p>
               )}
 
-              {/* Key Points Section (if no structured financial data) */}
-              {keyPoints && keyPoints.length > 0 && (
-                <SectionCard>
-                  <SectionHeader emoji="📊" title="Key Takeaways" />
-                  <tr>
-                    <td>
-                      <table width="100%" cellPadding="0" cellSpacing="0">
-                        <tbody>
-                          {keyPoints.slice(0, 5).map((point, index) => (
-                            <tr key={index}>
-                              <td style={{
-                                padding: '4px 0',
-                                fontSize: '14px',
-                                lineHeight: '1.5',
-                                color: EmailColors.text.body,
-                              }}>
-                                <span style={{ marginRight: '8px', color: EmailColors.text.meta }}>•</span>
-                                {point}
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </td>
-                  </tr>
-                </SectionCard>
+              {/* Data snapshot — financial metrics */}
+              {dataRows.length > 0 && (
+                <>
+                  <table width="100%" cellPadding="0" cellSpacing="0" style={{ margin: '20px 0' }}>
+                    <tbody><tr><td style={EmailStyles.thinDivider}></td></tr></tbody>
+                  </table>
+
+                  <table width="100%" cellPadding="0" cellSpacing="0" style={{ marginBottom: '4px' }}>
+                    <tbody>
+                      {dataRows.map((row, idx) => {
+                        const changeStyle = getChangeStyle(row.change);
+                        const arrow = getChangeArrow(row.change);
+                        return (
+                          <tr key={idx}>
+                            <td style={{
+                              ...EmailStyles.dataLabel,
+                              borderBottom: idx < dataRows.length - 1 ? '1px solid #F0F0F0' : 'none',
+                            }}>{row.label}</td>
+                            <td style={{
+                              ...EmailStyles.dataValue,
+                              color: '#111827',
+                              borderBottom: idx < dataRows.length - 1 ? '1px solid #F0F0F0' : 'none',
+                            }}>
+                              {row.value}
+                              {row.change && (
+                                <span style={{ ...changeStyle, marginLeft: '6px', fontSize: '13px' }}>
+                                  {arrow}{row.change}
+                                </span>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </>
               )}
 
-              {/* Segment Performance */}
-              {segments && segments.length > 0 && (
-                <SectionCard>
-                  <SectionHeader emoji="📊" title="Segment Performance" />
-                  <tr>
-                    <td>
-                      <table width="100%" cellPadding="0" cellSpacing="0">
-                        <tbody>
-                          {segments.map((segment, index) => {
-                            const changeStyle = getChangeStyle(segment.growth);
-                            const arrow = getChangeArrow(segment.growth);
-                            return (
-                              <tr key={index}>
-                                <td style={{
-                                  padding: '8px 0',
-                                  fontSize: '14px',
-                                  color: EmailColors.text.body,
-                                  borderTop: index > 0 ? `1px solid ${EmailColors.structure.borderLight}` : 'none',
-                                }}>
-                                  <span style={{ fontWeight: 600, color: EmailColors.text.headline }}>
-                                    {segment.name}:
-                                  </span>
-                                  <span style={{ float: 'right' }}>
-                                    {segment.revenue}
-                                    <span style={{ ...changeStyle, marginLeft: '6px' }}>
-                                      ({arrow}{segment.growth})
-                                    </span>
-                                  </span>
-                                </td>
-                              </tr>
-                            );
-                          })}
-                        </tbody>
-                      </table>
-                    </td>
-                  </tr>
-                </SectionCard>
+              {/* Story — segment performance + key takeaways */}
+              {storyText && (
+                <>
+                  <table width="100%" cellPadding="0" cellSpacing="0" style={{ margin: '20px 0' }}>
+                    <tbody><tr><td style={EmailStyles.thinDivider}></td></tr></tbody>
+                  </table>
+
+                  <div
+                    style={EmailStyles.prose}
+                    dangerouslySetInnerHTML={{ __html: markdownToHtml(storyText) }}
+                  />
+                </>
               )}
 
-              {/* Risk Factors */}
-              {riskFactors && riskFactors.length > 0 && (
-                <SectionCard>
-                  <SectionHeader emoji="⚠️" title="Key Risks" />
-                  <tr>
-                    <td>
-                      <table width="100%" cellPadding="0" cellSpacing="0">
-                        <tbody>
-                          {riskFactors.slice(0, 3).map((risk, index) => (
-                            <tr key={index}>
-                              <td style={{
-                                padding: '4px 0',
-                                fontSize: '14px',
-                                lineHeight: '1.5',
-                                color: EmailColors.text.body,
-                              }}>
-                                <span style={{ marginRight: '8px', color: EmailColors.text.meta }}>•</span>
-                                {risk}
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </td>
-                  </tr>
-                </SectionCard>
+              {/* Watch for — risk factors */}
+              {watchForItems.length > 0 && (
+                <>
+                  <table width="100%" cellPadding="0" cellSpacing="0" style={{ margin: '20px 0' }}>
+                    <tbody><tr><td style={EmailStyles.thinDivider}></td></tr></tbody>
+                  </table>
+                  <div style={EmailStyles.watchForHeader}>Watch for:</div>
+                  {watchForItems.map((risk, idx) => (
+                    <div key={idx} style={{
+                      padding: '3px 0 3px 16px',
+                      fontSize: '14px',
+                      color: EmailColors.text.body,
+                      lineHeight: '1.5',
+                    }}>
+                      <span style={{ color: EmailColors.text.meta, marginRight: '8px' }}>•</span>
+                      {risk}
+                    </div>
+                  ))}
+                </>
               )}
 
-              {/* Summary Text (always show as fallback) */}
-              {summaryText && (
-                <SectionCard>
-                  <SectionHeader emoji="📝" title="Summary" />
-                  <tr>
-                    <td
-                      style={{
-                        fontSize: '14px',
-                        lineHeight: '1.6',
-                        color: EmailColors.text.body,
-                      }}
-                      dangerouslySetInnerHTML={{ __html: markdownToHtml(summaryText) }}
-                    />
-                  </tr>
-                </SectionCard>
+              {/* Fallback: when no structured data, render full summaryText */}
+              {!hasStructuredData && summaryText && (
+                <>
+                  <table width="100%" cellPadding="0" cellSpacing="0" style={{ margin: '20px 0' }}>
+                    <tbody><tr><td style={EmailStyles.thinDivider}></td></tr></tbody>
+                  </table>
+                  <div
+                    style={EmailStyles.prose}
+                    dangerouslySetInnerHTML={{ __html: markdownToHtml(summaryText) }}
+                  />
+                </>
+              )}
+
+              {/* No data at all */}
+              {!hasStructuredData && !summaryText && (
+                <p style={{
+                  fontSize: '14px',
+                  lineHeight: '1.6',
+                  color: EmailColors.text.meta,
+                  textAlign: 'center',
+                  padding: '20px 0',
+                }}>
+                  View the full 10-K filing for details.
+                </p>
               )}
             </td>
           </tr>
@@ -243,7 +292,6 @@ export function Form10KMinimalistTemplate({ filing }: Form10KMinimalistTemplateP
       <EmailFooter
         filingUrl={filingUrl}
         formType={filingType || '10-K'}
-        unsubscribeUrl={`${process.env.NEXT_PUBLIC_APP_URL || ''}/dashboard/settings`}
       />
     </div>
   );

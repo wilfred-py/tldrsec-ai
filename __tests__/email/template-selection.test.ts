@@ -82,7 +82,7 @@ describe('Template Selection Consistency', () => {
 
       // Generic fallback
       { formType: 'UNKNOWN', expected: 'GenericMinimalistTemplate' },
-      { formType: 'DEF 14A', expected: 'FormDEF14AEmailTemplate' },
+      { formType: 'DEF 14A', expected: 'FormDEF14AMinimalistTemplate' },
       { formType: 'Schedule 13D', expected: 'Schedule13DEmailTemplate' },
     ];
 
