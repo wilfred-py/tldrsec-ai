@@ -262,6 +262,30 @@ describe('PricingCard', () => {
       expect(onSelect).toHaveBeenCalledTimes(1);
     });
 
+    it('uses brand-button-primary when card is hovered but not selected', () => {
+      render(
+        <PricingCard {...defaultProps} plan={maxPlan} hoveredCard="MAX" selectedCard="PRO" />
+      );
+
+      const button = screen.getByRole('button');
+      expect(button.className).toContain('brand-button-primary');
+    });
+
+    it('uses brand-button-secondary when hovered but checkoutLoading is true', () => {
+      render(
+        <PricingCard
+          {...defaultProps}
+          plan={maxPlan}
+          hoveredCard="MAX"
+          selectedCard="PRO"
+          checkoutLoading={true}
+        />
+      );
+
+      const button = screen.getByRole('button');
+      expect(button.className).toContain('brand-button-secondary');
+    });
+
     it('calls onMouseEnter and onMouseLeave handlers', () => {
       const onMouseEnter = jest.fn();
       const onMouseLeave = jest.fn();
