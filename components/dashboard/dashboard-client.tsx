@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { Button } from "@/components/ui/button";
+import { Card, CardHeader, CardTitle, CardDescription, CardAction, CardContent } from "@/components/ui/card";
 import { PlusIcon, Loader2, Search, ArrowUpRight } from "lucide-react";
 import {
   Dialog,
@@ -43,11 +44,12 @@ interface DashboardClientProps {
   tickerLimit?: number;
   summaryCountThisMonth?: number;
   summaryCountTotal?: number;
+  totalTimeSavedMinutes?: number;
   recentSummaries?: ActivitySummary[];
   featuredSummaries?: ActivitySummary[];
 }
 
-export function DashboardClient({ showWelcome: _showWelcome = false, shouldMergePending: _shouldMergePending = false, subscriptionSuccess = false, initialCompanies = [], tutorialCompleted = false, subscriptionTier = 'FREE', tickerLimit = 3, summaryCountThisMonth = 0, summaryCountTotal = 0, recentSummaries = [], featuredSummaries = [] }: DashboardClientProps) {
+export function DashboardClient({ showWelcome: _showWelcome = false, shouldMergePending: _shouldMergePending = false, subscriptionSuccess = false, initialCompanies = [], tutorialCompleted = false, subscriptionTier = 'FREE', tickerLimit = 3, summaryCountThisMonth = 0, summaryCountTotal = 0, totalTimeSavedMinutes = 0, recentSummaries = [], featuredSummaries = [] }: DashboardClientProps) {
   // State for tracked companies
   const [companies, setCompanies] = useState<Company[]>(initialCompanies);
   const [currentCompany, setCurrentCompany] = useState<Company | null>(null);
@@ -353,19 +355,12 @@ export function DashboardClient({ showWelcome: _showWelcome = false, shouldMerge
   return (
     <div className="space-y-6 animate-fade-in">
       <h1 className="sr-only">Dashboard</h1>
-      {/* Email Stats Row */}
-      <div className="flex flex-col md:flex-row gap-4 items-stretch">
-        <div className="md:flex-1">
-          <EmailStatsWidget
-            summaryCountThisMonth={summaryCountThisMonth}
-            summaryCountTotal={summaryCountTotal}
-          />
-        </div>
-        <div className="flex items-center gap-4 rounded-2xl border border-[var(--brand-border)] bg-[var(--brand-bg)] px-5 py-4 shadow-sm">
-          <span className="text-sm text-[var(--brand-text-muted)]"><strong className="text-[var(--brand-secondary)]">{companies.length}</strong> tickers</span>
-          <span className="text-sm text-[var(--brand-text-muted)] capitalize"><strong className="text-[var(--brand-secondary)]">{subscriptionTier}</strong> plan</span>
-        </div>
-      </div>
+      {/* Stats Widget */}
+      <EmailStatsWidget
+        summaryCountThisMonth={summaryCountThisMonth}
+        summaryCountTotal={summaryCountTotal}
+        totalTimeSavedMinutes={totalTimeSavedMinutes}
+      />
 
       {/* Tabs: Emails / Tickers */}
       <Tabs defaultValue={isFirstVisit ? "tickers" : "activity"} className="w-full">
@@ -379,47 +374,43 @@ export function DashboardClient({ showWelcome: _showWelcome = false, shouldMerge
         </TabsContent>
 
         <TabsContent value="tickers">
-      <div className="rounded-2xl border border-[var(--brand-border)] bg-[var(--brand-bg)] p-6 md:p-8 shadow-sm">
-        <div className="mb-6">
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <div className="text-left">
-              <h2 className="text-lg font-semibold text-[var(--brand-secondary)]">Tracked Tickers</h2>
-              <p className="text-sm text-[var(--brand-text-muted)]">
-                {!isUnlimited
-                  ? `${companies.length} / ${tickerLimit} tickers used on ${subscriptionTier === 'FREE' ? 'Free' : subscriptionTier} plan`
-                  : "Manage your tracked companies."}
-              </p>
-            </div>
-
-            <div className="flex items-center gap-2">
-              {isAtLimit && canUpgrade ? (
-                <Button
-                  onClick={() => window.location.href = "/subscribe"}
-                  className="gap-1 bg-[var(--brand-primary)] hover:bg-[var(--brand-primary-hover)] text-white font-medium shadow-sm"
-                  size="lg"
-                >
-                  <ArrowUpRight className="h-4 w-4" />
-                  <span className="hidden sm:inline">Upgrade to add more</span>
-                  <span className="inline sm:hidden">Upgrade</span>
-                </Button>
-              ) : (
-                <Button
-                  onClick={() => {
-                    loadCompaniesForSearch();
-                    setShowInlineAdd(true);
-                  }}
-                  className="gap-1 bg-[var(--brand-primary)] hover:bg-[var(--brand-primary-hover)] text-white font-medium shadow-sm"
-                  disabled={showInlineAdd || isAtLimit}
-                  size="lg"
-                >
-                  <PlusIcon className="h-5 w-5 mr-1" />
-                  <span className="hidden sm:inline">Add Ticker</span>
-                  <span className="inline sm:hidden">Add</span>
-                </Button>
-              )}
-            </div>
-          </div>
-        </div>
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-lg text-[var(--brand-secondary)]">Tracked Tickers</CardTitle>
+          <CardDescription>
+            {!isUnlimited
+              ? `${companies.length} / ${tickerLimit} tickers used on ${subscriptionTier === 'FREE' ? 'Free' : subscriptionTier} plan`
+              : "Manage your tracked companies."}
+          </CardDescription>
+          <CardAction>
+            {isAtLimit && canUpgrade ? (
+              <Button
+                onClick={() => window.location.href = "/subscribe"}
+                className="gap-1 bg-[var(--brand-primary)] hover:bg-[var(--brand-primary-hover)] text-white font-medium shadow-sm"
+                size="lg"
+              >
+                <ArrowUpRight className="h-4 w-4" />
+                <span className="hidden sm:inline">Upgrade to add more</span>
+                <span className="inline sm:hidden">Upgrade</span>
+              </Button>
+            ) : (
+              <Button
+                onClick={() => {
+                  loadCompaniesForSearch();
+                  setShowInlineAdd(true);
+                }}
+                className="gap-1 bg-[var(--brand-primary)] hover:bg-[var(--brand-primary-hover)] text-white font-medium shadow-sm"
+                disabled={showInlineAdd || isAtLimit}
+                size="lg"
+              >
+                <PlusIcon className="h-5 w-5 mr-1" />
+                <span className="hidden sm:inline">Add Ticker</span>
+                <span className="inline sm:hidden">Add</span>
+              </Button>
+            )}
+          </CardAction>
+        </CardHeader>
+        <CardContent>
 
         {isLoadingCompanies ? (
           <div className="overflow-hidden">
@@ -511,7 +502,8 @@ export function DashboardClient({ showWelcome: _showWelcome = false, shouldMerge
             onDeleteClick={handleDeleteClick}
           />
         )}
-      </div>
+        </CardContent>
+      </Card>
         </TabsContent>
       </Tabs>
 

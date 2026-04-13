@@ -23,7 +23,7 @@ import { getTickersColumns } from "./columns";
 import { TickersMobileView } from "./tickers-mobile-view";
 import { InlineAddRow } from "@/components/dashboard/inline-add-row";
 
-const ITEMS_PER_PAGE = 10;
+const ITEMS_PER_PAGE = 8;
 
 interface TickersTableProps {
   data: Company[];

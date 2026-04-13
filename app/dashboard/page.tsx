@@ -28,6 +28,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   let subscriptionTier: 'FREE' | 'PRO' | 'MAX' = 'FREE';
   let summaryCountThisMonth = 0;
   let summaryCountTotal = 0;
+  let totalTimeSavedMinutes = 0;
   let recentSummaries: Array<{
     id: string;
     filingType: string;
@@ -69,7 +70,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
           const now = new Date();
           const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
 
-          const [summaries, countThisMonth, countTotal] = await Promise.all([
+          const [summaries, countThisMonth, countTotal, tokenAgg] = await Promise.all([
             prisma.summary.findMany({
               where: { tickerId: { in: tickerIds } },
               select: {
@@ -91,6 +92,10 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
             prisma.summary.count({
               where: { tickerId: { in: tickerIds } },
             }),
+            prisma.summary.aggregate({
+              where: { tickerId: { in: tickerIds } },
+              _sum: { inputTokens: true, outputTokens: true },
+            }),
           ]);
 
           recentSummaries = summaries.map(s => ({
@@ -106,6 +111,9 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
           }));
           summaryCountThisMonth = countThisMonth;
           summaryCountTotal = countTotal;
+          const totalInput = tokenAgg._sum.inputTokens ?? 0;
+          const totalOutput = tokenAgg._sum.outputTokens ?? 0;
+          totalTimeSavedMinutes = Math.max(0, ((totalInput - totalOutput) * 0.75) / 250);
         }
 
         // If user has tickers but zero summaries, fetch featured summaries
@@ -239,6 +247,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
       tickerLimit={tickerLimit}
       summaryCountThisMonth={summaryCountThisMonth}
       summaryCountTotal={summaryCountTotal}
+      totalTimeSavedMinutes={totalTimeSavedMinutes}
       recentSummaries={recentSummaries}
       featuredSummaries={featuredSummaries}
     />
