@@ -1,15 +1,8 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
-import { DashboardHeader } from "@/components/dashboard";
-import { PlusIcon, Loader2, Search, ArrowUpRight, BarChart3, FileText, Sparkles } from "lucide-react";
-import {
-  fadeUpVariant,
-  staggerContainer,
-  staggerItem,
-} from "@/lib/animations/landing-animations";
+import { PlusIcon, Loader2, Search, ArrowUpRight } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -23,7 +16,7 @@ import { toast } from "sonner";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { TickerSearchResult } from "@/lib/api/types";
 import { Company, FilingPreferences } from "@/lib/api/types";
-import { HoursSavedWidget } from "@/components/dashboard/hours-saved-widget";
+import { EmailStatsWidget } from "@/components/dashboard/email-stats-widget";
 import { ActivityFeed } from "@/components/dashboard/activity-feed";
 import {
   getTrackedCompanies,
@@ -38,18 +31,7 @@ import {
   TickersTable,
   TickersLoadingSkeleton,
 } from "@/components/dashboard/tickers-table";
-
-interface ActivitySummary {
-  id: string;
-  filingType: string;
-  filingDate: string;
-  importance: string | null;
-  smartSubject: string | null;
-  summaryText: string | null;
-  companyName: string;
-  ticker: string;
-  filingUrl: string;
-}
+import type { ActivitySummary } from "@/components/dashboard/activity-feed";
 
 interface DashboardClientProps {
   showWelcome?: boolean;
@@ -369,214 +351,169 @@ export function DashboardClient({ showWelcome: _showWelcome = false, shouldMerge
   const canUpgrade = subscriptionTier !== 'MAX';
 
   return (
-    <div className="space-y-6">
-      <DashboardHeader heading="Dashboard" />
-
-      {/* Stats Row */}
-      <motion.div
-        variants={staggerContainer}
-        initial="initial"
-        animate="animate"
-        className="grid grid-cols-1 sm:grid-cols-3 gap-4"
-      >
-        <motion.div variants={staggerItem}>
-          <HoursSavedWidget
+    <div className="space-y-6 animate-fade-in">
+      <h1 className="sr-only">Dashboard</h1>
+      {/* Email Stats Row */}
+      <div className="flex flex-col md:flex-row gap-4 items-stretch">
+        <div className="md:flex-1">
+          <EmailStatsWidget
             summaryCountThisMonth={summaryCountThisMonth}
             summaryCountTotal={summaryCountTotal}
           />
-        </motion.div>
-        <motion.div variants={staggerItem}>
-          <div className="brand-card h-full flex items-center">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ backgroundColor: 'var(--brand-primary-light)' }}>
-                <BarChart3 className="h-5 w-5" style={{ color: 'var(--brand-primary)' }} />
-              </div>
-              <div>
-                <p className="text-2xl font-bold tracking-tight" style={{ color: 'var(--brand-secondary)' }}>{companies.length}</p>
-                <p className="text-sm" style={{ color: 'var(--brand-text-muted)' }}>tickers tracked</p>
-              </div>
+        </div>
+        <div className="flex items-center gap-4 rounded-2xl border border-[var(--brand-border)] bg-[var(--brand-bg)] px-5 py-4 shadow-sm">
+          <span className="text-sm text-[var(--brand-text-muted)]"><strong className="text-[var(--brand-secondary)]">{companies.length}</strong> tickers</span>
+          <span className="text-sm text-[var(--brand-text-muted)] capitalize"><strong className="text-[var(--brand-secondary)]">{subscriptionTier}</strong> plan</span>
+        </div>
+      </div>
+
+      {/* Tabs: Emails / Tickers */}
+      <Tabs defaultValue={isFirstVisit ? "tickers" : "activity"} className="w-full">
+        <TabsList className="mb-4 bg-[var(--brand-bg)] border border-[var(--brand-border)] rounded-lg p-1">
+          <TabsTrigger value="activity" className="data-[state=active]:bg-[var(--brand-bg-subtle)] data-[state=active]:shadow-sm data-[state=inactive]:text-[var(--brand-text-muted)] px-4 py-1.5 text-sm font-medium rounded-md">Emails</TabsTrigger>
+          <TabsTrigger value="tickers" className="data-[state=active]:bg-[var(--brand-bg-subtle)] data-[state=active]:shadow-sm data-[state=inactive]:text-[var(--brand-text-muted)] px-4 py-1.5 text-sm font-medium rounded-md">Tickers</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="activity">
+          <ActivityFeed summaries={recentSummaries} featuredSummaries={featuredSummaries} />
+        </TabsContent>
+
+        <TabsContent value="tickers">
+      <div className="rounded-2xl border border-[var(--brand-border)] bg-[var(--brand-bg)] p-6 md:p-8 shadow-sm">
+        <div className="mb-6">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="text-left">
+              <h2 className="text-lg font-semibold text-[var(--brand-secondary)]">Tracked Tickers</h2>
+              <p className="text-sm text-[var(--brand-text-muted)]">
+                {!isUnlimited
+                  ? `${companies.length} / ${tickerLimit} tickers used on ${subscriptionTier === 'FREE' ? 'Free' : subscriptionTier} plan`
+                  : "Manage your tracked companies."}
+              </p>
             </div>
-          </div>
-        </motion.div>
-        <motion.div variants={staggerItem}>
-          <div className="brand-card h-full flex items-center">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ backgroundColor: 'var(--brand-primary-light)' }}>
-                <FileText className="h-5 w-5" style={{ color: 'var(--brand-primary)' }} />
-              </div>
-              <div>
-                <p className="text-2xl font-bold tracking-tight" style={{ color: 'var(--brand-secondary)' }}>{recentSummaries.length}</p>
-                <p className="text-sm" style={{ color: 'var(--brand-text-muted)' }}>recent summaries</p>
-              </div>
-            </div>
-          </div>
-        </motion.div>
-      </motion.div>
 
-      {/* Tabs: Activity / Tickers */}
-      <motion.div variants={fadeUpVariant} initial="initial" animate="animate">
-        <Tabs defaultValue={isFirstVisit ? "tickers" : "activity"} className="w-full">
-          <TabsList className="mb-4 rounded-full p-1" style={{ backgroundColor: 'var(--brand-bg-subtle)', border: '1px solid var(--brand-border)' }}>
-            <TabsTrigger
-              value="activity"
-              className="rounded-full px-5 py-1.5 text-sm font-medium transition-all data-[state=active]:text-white data-[state=active]:shadow-sm"
-              style={{
-                // Active state is handled via data attribute in CSS, but we set inactive color here
-                color: 'var(--brand-text-muted)',
-              }}
-            >Activity</TabsTrigger>
-            <TabsTrigger
-              value="tickers"
-              className="rounded-full px-5 py-1.5 text-sm font-medium transition-all data-[state=active]:text-white data-[state=active]:shadow-sm"
-              style={{
-                color: 'var(--brand-text-muted)',
-              }}
-            >Tickers</TabsTrigger>
-          </TabsList>
-
-          <TabsContent value="activity">
-            <div className="brand-card">
-              <ActivityFeed summaries={recentSummaries} featuredSummaries={featuredSummaries} />
-            </div>
-          </TabsContent>
-
-          <TabsContent value="tickers">
-            <div className="brand-card">
-              <div className="mb-6">
-                <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                  <div className="text-left">
-                    <h2 className="text-lg font-semibold" style={{ color: 'var(--brand-secondary)' }}>Tracked Tickers</h2>
-                    <p className="text-sm" style={{ color: 'var(--brand-text-muted)' }}>
-                      {!isUnlimited
-                        ? `${companies.length} / ${tickerLimit} tickers used on ${subscriptionTier === 'FREE' ? 'Free' : subscriptionTier} plan`
-                        : "Manage your tracked companies."}
-                    </p>
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    {isAtLimit && canUpgrade ? (
-                      <button
-                        onClick={() => window.location.href = "/subscribe"}
-                        className="brand-button-gradient gap-1 inline-flex items-center"
-                      >
-                        <ArrowUpRight className="h-4 w-4" />
-                        <span className="hidden sm:inline">Upgrade to add more</span>
-                        <span className="inline sm:hidden">Upgrade</span>
-                      </button>
-                    ) : (
-                      <button
-                        onClick={() => {
-                          loadCompaniesForSearch();
-                          setShowInlineAdd(true);
-                        }}
-                        className="brand-button-primary gap-1 inline-flex items-center"
-                        disabled={showInlineAdd || isAtLimit}
-                      >
-                        <PlusIcon className="h-5 w-5 mr-1" />
-                        <span className="hidden sm:inline">Add Ticker</span>
-                        <span className="inline sm:hidden">Add</span>
-                      </button>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              {isLoadingCompanies ? (
-                <div className="overflow-hidden">
-                  <TickersLoadingSkeleton />
-                </div>
-              ) : showEmptyState ? (
-                <div className="flex min-h-[200px] flex-col items-center justify-center p-4 sm:p-8 text-center space-y-4 rounded-2xl" style={{ border: '2px dashed var(--brand-border)' }}>
-                  <div className="w-14 h-14 rounded-xl flex items-center justify-center" style={{ backgroundColor: 'var(--brand-primary-light)' }}>
-                    <Sparkles className="h-7 w-7" style={{ color: 'var(--brand-primary)' }} />
-                  </div>
-                  <h3 className="text-base font-semibold" style={{ color: 'var(--brand-secondary)' }}>No companies tracked yet</h3>
-                  <p className="text-sm max-w-xs" style={{ color: 'var(--brand-text-muted)' }}>
-                    Start tracking companies to receive AI-powered SEC filing summaries.
-                  </p>
-                  <button
-                    className="brand-button-primary mt-2 inline-flex items-center"
-                    onClick={() => {
-                      loadCompaniesForSearch();
-                      setShowInlineAdd(true);
-                    }}
-                  >
-                    <PlusIcon className="h-5 w-5 mr-1" />
-                    Add Your First Company
-                  </button>
-                  {showInlineAdd && (
-                    <div className="w-full max-w-md mt-4">
-                      <div className="relative">
-                        <Search className="absolute left-2.5 top-2.5 h-4 w-4" style={{ color: 'var(--brand-text-muted)' }} />
-                        <Input
-                          type="search"
-                          placeholder="Type to search ticker or company..."
-                          className="pl-8"
-                          autoFocus
-                          onChange={(e) => {
-                            const query = e.target.value.toLowerCase();
-                            if (query.length >= 1) {
-                              const filtered = allCompanies
-                                .filter(
-                                  (c) =>
-                                    c.symbol.toLowerCase().includes(query) ||
-                                    c.name.toLowerCase().includes(query)
-                                )
-                                .slice(0, 8);
-                              setEmptyStateResults(filtered);
-                            } else {
-                              setEmptyStateResults([]);
-                            }
-                          }}
-                          onKeyDown={(e) => {
-                            if (e.key === "Escape") setShowInlineAdd(false);
-                          }}
-                        />
-                      </div>
-                      {emptyStateResults.length > 0 && (
-                        <div className="mt-2 bg-background border rounded-md shadow-lg" style={{ borderColor: 'var(--brand-border)' }}>
-                          {emptyStateResults.map((result) => (
-                            <div
-                              key={result.symbol}
-                              className="px-3 py-2 cursor-pointer flex justify-between items-center transition-colors hover:bg-[var(--brand-primary-light)] focus-visible:bg-[var(--brand-primary-light)]"
-                              onClick={() =>
-                                handleAddTicker(result.symbol, result.name)
-                              }
-                            >
-                              <span className="font-semibold" style={{ color: 'var(--brand-secondary)' }}>{result.symbol}</span>
-                              <span className="text-sm" style={{ color: 'var(--brand-text-muted)' }}>
-                                {result.name}
-                              </span>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setShowInlineAdd(false)}
-                        className="mt-2"
-                      >
-                        Cancel
-                      </Button>
-                    </div>
-                  )}
-                </div>
+            <div className="flex items-center gap-2">
+              {isAtLimit && canUpgrade ? (
+                <Button
+                  onClick={() => window.location.href = "/subscribe"}
+                  className="gap-1 bg-[var(--brand-primary)] hover:bg-[var(--brand-primary-hover)] text-white font-medium shadow-sm"
+                  size="lg"
+                >
+                  <ArrowUpRight className="h-4 w-4" />
+                  <span className="hidden sm:inline">Upgrade to add more</span>
+                  <span className="inline sm:hidden">Upgrade</span>
+                </Button>
               ) : (
-                <TickersTable
-                  data={companies}
-                  showInlineAdd={showInlineAdd}
-                  allCompanies={allCompanies}
-                  onAddTicker={handleAddTicker}
-                  onCancelAdd={() => setShowInlineAdd(false)}
-                  onPreferenceChange={handlePreferenceChange}
-                  onDeleteClick={handleDeleteClick}
-                />
+                <Button
+                  onClick={() => {
+                    loadCompaniesForSearch();
+                    setShowInlineAdd(true);
+                  }}
+                  className="gap-1 bg-[var(--brand-primary)] hover:bg-[var(--brand-primary-hover)] text-white font-medium shadow-sm"
+                  disabled={showInlineAdd || isAtLimit}
+                  size="lg"
+                >
+                  <PlusIcon className="h-5 w-5 mr-1" />
+                  <span className="hidden sm:inline">Add Ticker</span>
+                  <span className="inline sm:hidden">Add</span>
+                </Button>
               )}
             </div>
-          </TabsContent>
-        </Tabs>
-      </motion.div>
+          </div>
+        </div>
+
+        {isLoadingCompanies ? (
+          <div className="overflow-hidden">
+            <TickersLoadingSkeleton />
+          </div>
+        ) : showEmptyState ? (
+          <div className="rounded-2xl border border-dashed border-[var(--brand-border)] flex min-h-[200px] flex-col items-center justify-center p-4 sm:p-8 text-center space-y-4">
+            <h3 className="text-base font-medium text-[var(--brand-secondary)]">No companies tracked yet</h3>
+            <p className="text-sm text-[var(--brand-text-muted)]">
+              Start tracking companies to receive SEC filing summaries via email.
+            </p>
+            <Button
+              className="mt-2 bg-[var(--brand-primary)] hover:bg-[var(--brand-primary-hover)] text-white"
+              size="lg"
+              onClick={() => {
+                loadCompaniesForSearch();
+                setShowInlineAdd(true);
+              }}
+            >
+              <PlusIcon className="h-5 w-5 mr-1" />
+              Add Your First Company
+            </Button>
+            {showInlineAdd && (
+              <div className="w-full max-w-md mt-4">
+                <div className="relative">
+                  <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-[var(--brand-text-muted)]" />
+                  <Input
+                    type="search"
+                    placeholder="Type to search ticker or company..."
+                    className="pl-8"
+                    autoFocus
+                    onChange={(e) => {
+                      const query = e.target.value.toLowerCase();
+                      if (query.length >= 1) {
+                        const filtered = allCompanies
+                          .filter(
+                            (c) =>
+                              c.symbol.toLowerCase().includes(query) ||
+                              c.name.toLowerCase().includes(query)
+                          )
+                          .slice(0, 8);
+                        setEmptyStateResults(filtered);
+                      } else {
+                        setEmptyStateResults([]);
+                      }
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === "Escape") setShowInlineAdd(false);
+                    }}
+                  />
+                </div>
+                {emptyStateResults.length > 0 && (
+                  <div className="mt-2 bg-[var(--brand-bg)] border border-[var(--brand-border)] rounded-md shadow-lg">
+                    {emptyStateResults.map((result) => (
+                      <div
+                        key={result.symbol}
+                        className="px-3 py-2 cursor-pointer hover:bg-[var(--brand-bg-subtle)] flex justify-between items-center"
+                        onClick={() =>
+                          handleAddTicker(result.symbol, result.name)
+                        }
+                      >
+                        <span className="font-semibold text-[var(--brand-secondary)]">{result.symbol}</span>
+                        <span className="text-[var(--brand-text-muted)] text-sm">
+                          {result.name}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setShowInlineAdd(false)}
+                  className="mt-2"
+                >
+                  Cancel
+                </Button>
+              </div>
+            )}
+          </div>
+        ) : (
+          <TickersTable
+            data={companies}
+            showInlineAdd={showInlineAdd}
+            allCompanies={allCompanies}
+            onAddTicker={handleAddTicker}
+            onCancelAdd={() => setShowInlineAdd(false)}
+            onPreferenceChange={handlePreferenceChange}
+            onDeleteClick={handleDeleteClick}
+          />
+        )}
+      </div>
+        </TabsContent>
+      </Tabs>
 
       {/* Delete Confirmation Dialog */}
       <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>

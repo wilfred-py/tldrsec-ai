@@ -2,23 +2,38 @@
 
 All notable changes to this project will be documented in this file.
 
-## [0.0.9.2] - 2026-04-12
+## [0.0.11.0] - 2026-04-12
 
 ### Changed
-- Dashboard redesign: unified visual language with landing page. Blue primary buttons, brand-card hover effects, pill-style tab selector, framer-motion entrance animations, mesh gradient background.
-- Renamed all `landing-*` CSS classes and variables to `brand-*` for semantic correctness across the codebase (36 files).
-- Activity feed: filing-type badges now use distinct colors (10-K purple, 10-Q blue, 8-K orange, Form 4 green). Feed items have CSS hover + focus-visible states.
-- Stats row: three individual brand-cards with blue icon containers replacing the single compact stats line.
-- Empty states: centered blue icon with brand-button-primary CTA instead of dashed-border card.
-- HoursSavedWidget: brand-card with blue Clock icon container pattern.
-- Tickers table: brand-bg-subtle header row, brand-primary-light row hover, blue Add Ticker button.
-- Billing upgrade CTA: uses brand-button-gradient (blue-to-purple) instead of violet gradient.
+- Dashboard redesigned as email delivery management center. Activity feed now shows "Sent to your inbox" with per-filing "Emailed" indicators, matching the landing page's Gmail inbox visual style.
+- Filing type badges now use consistent colors across dashboard and landing page (10-K purple, 10-Q blue, 8-K orange, Form 4 green).
+- Summary preview text trimmed to 1 line everywhere (was 2-3 lines on desktop).
+- Stats section replaced: "Time Saved" widget becomes "Email Delivery" showing monthly and total email counts.
+- Dashboard layout simplified with brand design tokens throughout (colors, borders, shadows).
+- Featured summaries for new users labeled "Example Filing Summaries" instead of "Featured Filings".
+- Tab renamed from "Activity" to "Emails" to reinforce the email-first model.
+- Renamed all `landing-*` CSS classes and variables to `brand-*` for semantic correctness across the codebase.
 - Pricing cards: restored keyboard accessibility (tabIndex, aria-selected, onKeyDown, onFocus/onBlur).
 
 ### Added
 - framer-motion Jest mock (`__mocks__/framer-motion.tsx`) for test compatibility with dashboard animations.
 - `:disabled` styles for `brand-button-primary` and `brand-button-gradient` CSS classes.
 - `[role="tablist"]` scoped CSS selector for active tab pill styling (prevents unintended style leaks).
+
+### Removed
+- Duplicate `ActivitySummary` type definition in dashboard-client (now imported from activity-feed).
+- `ScrollArea` wrapper on activity feed (natural page scroll with "Show more" button instead).
+- `DashboardHeader` component usage (replaced with sr-only h1 for accessibility).
+
+## [0.0.10.0] - 2026-04-12
+
+### Fixed
+- Unauthenticated users hitting /dashboard, /summary, or /filing routes now redirect to /sign-in at the middleware level via Clerk v6 `auth.protect()`, instead of relying solely on page-level guards.
+- `useSubscription` hook no longer crashes when ClerkProvider is absent (dev environments without Clerk keys). Follows the same try/catch pattern as AuthProvider.
+- Dashboard errors now show a recovery UI via Next.js `error.tsx` instead of a white screen. Auth-related errors auto-redirect to sign-in.
+
+### Removed
+- Dead `publicRoutes` config from middleware. This was a Clerk v4 API silently ignored by Clerk v6, giving a false sense of security.
 
 ## [0.0.9.1] - 2026-04-12
 

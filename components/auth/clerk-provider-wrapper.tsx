@@ -12,7 +12,8 @@ interface ClerkProviderWrapperProps {
 }
 
 /**
- * Wrapper around ClerkProvider that handles missing publishable key during build time
+ * Wrapper around ClerkProvider that handles missing publishable key during build time.
+ * Session lifetime is configured in Clerk Dashboard > Settings > Sessions, not in code.
  */
 export function ClerkProviderWrapper({
   children,
