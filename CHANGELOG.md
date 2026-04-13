@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.0.12.2] - 2026-04-13
+
+### Fixed
+- Max plan CTA button now highlights blue with white text when hovering over the card, matching the card border highlight behavior.
+
 ## [0.0.12.1] - 2026-04-13
 
 ### Changed
