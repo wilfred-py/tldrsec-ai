@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.0.12.1] - 2026-04-13
+
+### Changed
+- CLAUDE.md reduced from 852 to 146 lines. Six verbose sections extracted to `.context/` wiki files that agents load on-demand via context profiles.
+- All slash commands (`/create_plan`, `/implement_plan`, `/review_plan`, `/commit`, `/push-pr-review-merge`, `/research_codebase`) now include context profile directives so agents read wiki pages before exploring raw source files.
+- Skill-to-Profile Mapping added to CLAUDE.md so gstack skills (`/autoplan`, `/review`, `/ship`, `/investigate`) load only the context their workflow stage needs.
+
+### Added
+- `/wiki-ingest` command for creating and updating `.context/wiki/` pages from source files.
+- `/wiki-lint` command for auditing wiki health and flagging stale pages.
+
 ## [0.0.12.0] - 2026-04-13
 
 ### Changed
