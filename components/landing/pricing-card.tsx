@@ -192,7 +192,7 @@ export function PricingCard({
           <Button
             onClick={(e) => { e.stopPropagation(); onCheckout(plan.key); }}
             disabled={checkoutLoading}
-            className={`w-full ${isSelected && !checkoutLoading ? 'brand-button-primary' : 'brand-button-secondary'}`}
+            className={`w-full ${(isSelected || isCardHovered) && !checkoutLoading ? 'brand-button-primary' : 'brand-button-secondary'}`}
           >
             {checkoutLoading ? (
               <>
