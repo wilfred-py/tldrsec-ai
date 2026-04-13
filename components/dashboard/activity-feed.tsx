@@ -2,9 +2,10 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Mail, ChevronDown, ChevronUp } from "lucide-react";
+import { Mail, ChevronDown, ChevronUp, FileText } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { formatDistanceToNow } from "date-fns";
 
@@ -351,8 +352,8 @@ function DateGroupedFeed({ groups, showEmailBadge = true }: { groups: GroupedSum
         const processedItems = groupForm4s(group.items);
         return (
           <div key={group.label}>
-            {idx > 0 && <Separator className="my-4" />}
-            <h4 className="mb-2 text-xs font-semibold uppercase tracking-wider text-[var(--brand-text-muted)]">
+            {idx > 0 && <Separator className="my-4 mx-3" />}
+            <h4 className="mb-2 px-3 text-xs font-semibold uppercase tracking-wider text-[var(--brand-text-muted)]">
               {group.label}
             </h4>
             <div>
@@ -388,10 +389,10 @@ export function ActivityFeed({ summaries, featuredSummaries = [] }: ActivityFeed
   return (
     <div>
       <div className="flex items-center gap-2 text-sm font-medium text-[var(--brand-secondary)] mb-4">
-        <Mail className="h-4 w-4 text-[var(--brand-primary)]" />
-        {showFeatured ? "Example Filing Summaries" : "Sent to your inbox"}
+        <FileText className="h-4 w-4 text-[var(--brand-primary)]" />
+        {showFeatured ? "Example Filing Summaries" : "Filing Summaries"}
       </div>
-      <div className="rounded-lg border border-[var(--brand-border)] overflow-hidden bg-[var(--brand-bg)]">
+      <Card className="overflow-hidden py-0">
         {showFeatured ? (
           <>
             <p className="text-sm text-[var(--brand-text-muted)] px-3 py-3 border-b border-[var(--brand-border)]">
@@ -421,7 +422,7 @@ export function ActivityFeed({ summaries, featuredSummaries = [] }: ActivityFeed
             )}
           </>
         )}
-      </div>
+      </Card>
     </div>
   );
 }
