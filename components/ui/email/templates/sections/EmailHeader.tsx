@@ -1,10 +1,8 @@
 import * as React from 'react';
-import { EmailColors, EMAIL_LOGO_URL, EMAIL_LOGO_WIDTH, EMAIL_LOGO_HEIGHT } from '../../design-system';
+import { EmailColors, EmailStyles, EMAIL_LOGO_URL, EMAIL_LOGO_WIDTH, EMAIL_LOGO_HEIGHT } from '../../design-system';
 
 /**
  * Default category labels for the filing type badge.
- * Maps normalized (uppercased) filing types to short, human-readable categories.
- * Templates can override via the `filingCategory` prop for dynamic values.
  */
 const DEFAULT_CATEGORY_MAP: Record<string, string> = {
   '4': 'Insider',
@@ -35,12 +33,11 @@ interface EmailHeaderProps {
   filerName?: string;
   filerRole?: string;
   filingCategory?: string;
-  dataQuality?: 'full' | 'partial' | 'extractor-only' | 'degraded';
 }
 
 /**
- * Minimalist email header component
- * Morning Brew style: clean headline, essential info only
+ * Simplified email header — logo, date, category badge, company meta
+ * The h1 headline is removed; the lead sentence in the template body replaces it.
  */
 export function EmailHeader({
   ticker,
@@ -55,7 +52,6 @@ export function EmailHeader({
     ? filingDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
     : new Date(filingDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 
-  // Show filer name if it's not the default fallback
   const hasFiler = filerName && filerName !== 'Insider';
 
   const displayType = filingType || 'SEC';
@@ -106,48 +102,22 @@ export function EmailHeader({
           </td>
         </tr>
 
-        {/* Headline row */}
+        {/* Category badge + company meta */}
         <tr>
-          <td style={{ padding: '20px 15px 16px' }}>
-            {/* Filing type badge */}
-            <div style={{
-              display: 'inline-block',
-              padding: '3px 8px',
-              backgroundColor: '#F3F4F6',
-              borderRadius: '4px',
-              fontSize: '11px',
-              fontWeight: 600,
-              color: EmailColors.text.meta,
-              textTransform: 'uppercase' as const,
-              letterSpacing: '0.5px',
-              marginBottom: '8px',
-            }}>
+          <td style={{ padding: '16px 15px 12px' }}>
+            <div style={EmailStyles.categoryBadge}>
               {displayType} | {category}
             </div>
 
-            <h1 style={{
-              margin: '0 0 4px 0',
-              fontSize: '22px',
-              fontWeight: 700,
-              color: EmailColors.text.headline,
-              lineHeight: '1.3',
-            }}>
-              {ticker}: {hasFiler ? filerName : companyName}
-              {hasFiler && filerRole && (
-                <span style={{
-                  fontWeight: 400,
-                  fontSize: '16px',
-                  color: EmailColors.text.meta
-                }}>, {filerRole}</span>
-              )}
-            </h1>
-
             <p style={{
-              margin: '0',
+              margin: '8px 0 0',
               fontSize: '14px',
               color: EmailColors.text.meta,
             }}>
-              {companyName}
+              {ticker} · {companyName}
+              {hasFiler && (
+                <span> · {filerName}{filerRole ? `, ${filerRole}` : ''}</span>
+              )}
             </p>
           </td>
         </tr>

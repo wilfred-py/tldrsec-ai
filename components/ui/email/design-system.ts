@@ -15,6 +15,9 @@ export const EMAIL_LOGO_URL = 'https://tldrsec.app/images/logo-email.png';
 export const EMAIL_LOGO_WIDTH = 120;
 export const EMAIL_LOGO_HEIGHT = 24;
 
+/** Hardcoded preferences URL — avoids broken links when NEXT_PUBLIC_APP_URL is empty */
+export const EMAIL_PREFERENCES_URL = 'https://tldrsec.app/dashboard/settings';
+
 export const EmailColors = {
   text: {
     headline: '#000000',      // Pure black for section headings
@@ -197,6 +200,113 @@ export const EmailStyles = {
     color: EmailColors.semantic.neutral,
     fontWeight: '400',
   },
+
+  // --- Smart Brevity primitives ---
+
+  /** Pill badge for signal/importance levels (HIGH, LOW, MATERIAL, etc.) */
+  pillBadge: {
+    display: 'inline-block' as const,
+    padding: '4px 10px',
+    borderRadius: '999px',
+    fontSize: '11px',
+    fontWeight: 600,
+    textTransform: 'uppercase' as const,
+    letterSpacing: '0.5px',
+    lineHeight: '1',
+  },
+
+  /** Gray pill for filing type category (FORM 4 | Insider) */
+  categoryBadge: {
+    display: 'inline-block' as const,
+    padding: '3px 8px',
+    backgroundColor: '#F3F4F6',
+    borderRadius: '4px',
+    fontSize: '11px',
+    fontWeight: 600,
+    color: '#6B7280',
+    textTransform: 'uppercase' as const,
+    letterSpacing: '0.5px',
+  },
+
+  /** Bold lead sentence — the whole story in one line */
+  leadSentence: {
+    margin: '0 0 12px 0',
+    fontSize: '18px',
+    fontWeight: 700,
+    color: '#000000',
+    lineHeight: '1.3',
+  },
+
+  /** "Why it matters:" narrative paragraph */
+  whyItMatters: {
+    fontSize: '15px',
+    fontWeight: 400,
+    color: '#374151',
+    lineHeight: '1.6',
+    margin: '0',
+  },
+
+  /** Thin section divider — replaces bordered SectionCards */
+  thinDivider: {
+    borderTop: '1px solid #E5E7EB',
+    padding: '0',
+    height: '1px',
+    lineHeight: '0',
+    fontSize: '0',
+  },
+
+  /** "Watch for:" section header */
+  watchForHeader: {
+    fontSize: '14px',
+    fontWeight: 600,
+    color: '#000000',
+    margin: '0 0 8px 0',
+  },
+
+  /** Narrative body prose */
+  prose: {
+    fontSize: '15px',
+    fontWeight: 400,
+    color: '#374151',
+    lineHeight: '1.6',
+    margin: '0',
+  },
+
+  /** Compact data row label */
+  dataLabel: {
+    fontSize: '12px',
+    fontWeight: 600,
+    color: '#6B7280',
+    textTransform: 'uppercase' as const,
+    letterSpacing: '0.3px',
+    padding: '6px 0',
+    verticalAlign: 'top' as const,
+  },
+
+  /** Compact data row value */
+  dataValue: {
+    fontSize: '14px',
+    fontWeight: 500,
+    color: '#111827',
+    padding: '6px 0',
+    textAlign: 'right' as const,
+    verticalAlign: 'top' as const,
+  },
+} as const;
+
+/**
+ * Muted badge color palette — 12% opacity backgrounds for subtle, non-jarring badges
+ */
+export const BadgeColors = {
+  high:     { bg: '#FEF3C7', text: '#92400E' },  // Amber — material/high signal
+  moderate: { bg: '#EEF2FF', text: '#4338CA' },  // Indigo — worth monitoring
+  low:      { bg: '#F1F5F9', text: '#475569' },  // Slate — routine
+  neutral:  { bg: '#F3F4F6', text: '#4B5563' },  // Gray — informational
+  positive: { bg: '#F0FDF4', text: '#166534' },  // Muted green (replaces jarring #DCFCE7)
+  negative: { bg: '#FEF2F2', text: '#991B1B' },  // Muted red
+  mixed:    { bg: '#EDE9FE', text: '#5B21B6' },  // Violet
+  trust:    { bg: '#EBF8FF', text: '#1E40AF' },  // Blue — trust/family transfers
+  award:    { bg: '#F5F3FF', text: '#6D28D9' },  // Purple — awards/grants
 } as const;
 
 /**
@@ -263,7 +373,7 @@ export function formatPercent(value: number | string | undefined, options?: {
 /**
  * Get change indicator styles based on value
  */
-export function getChangeStyle(change: number | string | undefined): typeof EmailStyles.positiveChange {
+export function getChangeStyle(change: number | string | undefined): { color: string; fontWeight: string } {
   if (change === undefined || change === null) return EmailStyles.neutralChange;
 
   const num = typeof change === 'string' ? parseFloat(change.replace(/[%$,+]/g, '')) : change;
@@ -299,10 +409,10 @@ export interface SentimentColorConfig {
  */
 export function getSentimentColor(sentiment: string): SentimentColorConfig {
   switch (sentiment.toLowerCase()) {
-    case 'positive': return { bg: '#DCFCE7', text: '#166534' }; // Green - 4.6:1 contrast
-    case 'negative': return { bg: '#FEE2E2', text: '#991B1B' }; // Red - 5.1:1 contrast
-    case 'mixed': return { bg: '#EDE9FE', text: '#5B21B6' }; // Violet - distinct from amber Material Event
-    default: return { bg: '#F3F4F6', text: '#4B5563' }; // Gray (neutral) - 5.3:1 contrast
+    case 'positive': return BadgeColors.positive;
+    case 'negative': return BadgeColors.negative;
+    case 'mixed': return BadgeColors.mixed;
+    default: return BadgeColors.neutral;
   }
 }
 
