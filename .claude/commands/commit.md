@@ -4,6 +4,9 @@ description: Create git commits for session changes with clear, atomic messages
 
 # Commit Changes
 
+## Context Loading (profile:ship)
+Before committing, read `.context/git-workflow.md` for mandatory pre-commit tests.
+
 You are tasked with creating git commits for the changes made during this session.
 
 ## Process:
