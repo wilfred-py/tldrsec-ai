@@ -38,6 +38,7 @@ interface DashboardClientProps {
   showWelcome?: boolean;
   shouldMergePending?: boolean;
   subscriptionSuccess?: boolean;
+  sessionId?: string;
   initialCompanies?: Company[];
   tutorialCompleted?: boolean;
   subscriptionTier?: 'FREE' | 'PRO' | 'MAX';
@@ -49,7 +50,7 @@ interface DashboardClientProps {
   featuredSummaries?: ActivitySummary[];
 }
 
-export function DashboardClient({ showWelcome: _showWelcome = false, shouldMergePending: _shouldMergePending = false, subscriptionSuccess = false, initialCompanies = [], tutorialCompleted = false, subscriptionTier = 'FREE', tickerLimit = 3, summaryCountThisMonth = 0, summaryCountTotal = 0, totalTimeSavedMinutes = 0, recentSummaries = [], featuredSummaries = [] }: DashboardClientProps) {
+export function DashboardClient({ showWelcome: _showWelcome = false, shouldMergePending: _shouldMergePending = false, subscriptionSuccess = false, sessionId, initialCompanies = [], tutorialCompleted = false, subscriptionTier = 'FREE', tickerLimit = 3, summaryCountThisMonth = 0, summaryCountTotal = 0, totalTimeSavedMinutes = 0, recentSummaries = [], featuredSummaries = [] }: DashboardClientProps) {
   // State for tracked companies
   const [companies, setCompanies] = useState<Company[]>(initialCompanies);
   const [currentCompany, setCurrentCompany] = useState<Company | null>(null);
@@ -155,6 +156,47 @@ export function DashboardClient({ showWelcome: _showWelcome = false, shouldMerge
       }
     }
   }, [subscriptionSuccess, subscriptionTier]);
+
+  // Background Stripe reconciliation: verify subscription status without blocking render
+  // Checkout verification always fires (one-time URL param); general reconcile throttled to once per 5 min
+  useEffect(() => {
+    if (subscriptionTier !== 'FREE') return;
+
+    const reconcileInBackground = async () => {
+      try {
+        if (subscriptionSuccess && sessionId) {
+          const res = await fetch('/api/user?type=verify-checkout', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ sessionId }),
+          });
+          if (res?.ok) {
+            const data = await res.json();
+            if (data?.reconciled) window.location.reload();
+          }
+        } else {
+          // Throttle general reconcile to avoid Stripe API abuse
+          const lastReconcile = sessionStorage.getItem('lastReconcile');
+          if (lastReconcile && Date.now() - Number(lastReconcile) < 5 * 60 * 1000) return;
+          sessionStorage.setItem('lastReconcile', String(Date.now()));
+
+          const res = await fetch('/api/user?type=reconcile', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+          });
+          if (res?.ok) {
+            const data = await res.json();
+            if (data?.reconciled) window.location.reload();
+          }
+        }
+      } catch {
+        // Non-fatal: webhook will eventually sync
+      }
+    };
+
+    reconcileInBackground();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Lazy-load companies for search - only fetch when user clicks Add Ticker
   const loadCompaniesForSearch = useCallback(async () => {

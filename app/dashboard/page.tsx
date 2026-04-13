@@ -20,7 +20,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   const showWelcome = params.welcome === 'true';
   const shouldMergePending = params.merge === 'pending' || showWelcome;
   const subscriptionSuccess = params.subscription_success === 'true';
-  const sessionId = typeof params.session_id === 'string' ? params.session_id : undefined;
+  const sessionId = typeof params.session_id === 'string' ? params.session_id : undefined; // Passed to client for background verification
 
   // Fetch tickers server-side to eliminate client-side waterfall
   let initialCompanies: Company[] = [];
@@ -79,12 +79,11 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                 filingDate: true,
                 importance: true,
                 smartSubject: true,
-                summaryText: true,
                 filingUrl: true,
                 ticker: { select: { symbol: true, companyName: true } },
               },
               orderBy: { filingDate: 'desc' },
-              take: 50,
+              take: 15,
             }),
             prisma.summary.count({
               where: { tickerId: { in: tickerIds }, filingDate: { gte: startOfMonth } },
@@ -104,7 +103,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
             filingDate: s.filingDate.toISOString(),
             importance: s.importance,
             smartSubject: s.smartSubject,
-            summaryText: s.summaryText ? s.summaryText.substring(0, 200) : null,
+            summaryText: null,
             companyName: s.ticker.companyName,
             ticker: s.ticker.symbol,
             filingUrl: s.filingUrl,
@@ -122,7 +121,6 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
           const featured = await prisma.summary.findMany({
             where: {
               importance: { in: ['critical', 'high'] },
-              summaryText: { not: '' },
             },
             select: {
               id: true,
@@ -130,7 +128,6 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
               filingDate: true,
               importance: true,
               smartSubject: true,
-              summaryText: true,
               filingUrl: true,
               ticker: { select: { symbol: true, companyName: true } },
             },
@@ -143,35 +140,11 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
             filingDate: s.filingDate.toISOString(),
             importance: s.importance,
             smartSubject: s.smartSubject,
-            summaryText: s.summaryText ? s.summaryText.substring(0, 200) : null,
+            summaryText: null,
             companyName: s.ticker.companyName,
             ticker: s.ticker.symbol,
             filingUrl: s.filingUrl,
           }));
-        }
-
-        // Safety net: reconcile Stripe subscription for FREE users who have interacted with Stripe
-        if (subscriptionTier === 'FREE' && email) {
-          try {
-            // Only reconcile if user has a UserSubscription with stripeCustomerId
-            const existingSub = await prisma.userSubscription.findUnique({
-              where: { userId: dbUser.id },
-              select: { stripeCustomerId: true, planType: true },
-            });
-            if (existingSub?.stripeCustomerId && existingSub.planType === 'FREE') {
-              const { isStripeEnabled } = await import('@/lib/stripe');
-              if (isStripeEnabled()) {
-                const { reconcileStripeSubscription } = await import('@/lib/stripe/reconcile');
-                const result = await reconcileStripeSubscription(dbUser.id, email);
-                if (result.reconciled && result.planType) {
-                  subscriptionTier = result.planType as 'FREE' | 'PRO' | 'MAX';
-                  console.log(`[dashboard] Reconciled Stripe subscription: ${result.planType}`);
-                }
-              }
-            }
-          } catch (reconcileError) {
-            console.error('[dashboard] Stripe reconciliation failed:', reconcileError);
-          }
         }
 
         initialCompanies = dbUser.tickers.map(ticker => ({
@@ -184,49 +157,6 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
           preferences: (ticker.preferences as Company['preferences']) || { tenK: true, tenQ: true, eightK: true, form4: true, other: false },
         }));
 
-        // Checkout session verification fallback:
-        // If user just returned from Stripe checkout but webhook hasn't fired yet,
-        // verify the session directly with Stripe and update the tier.
-        if (subscriptionSuccess && sessionId && subscriptionTier === 'FREE') {
-          try {
-            const { retrieveCheckoutSession, isStripeEnabled } = await import('@/lib/stripe');
-            if (isStripeEnabled()) {
-              const session = await retrieveCheckoutSession(sessionId);
-              if (session && session.payment_status === 'paid' && session.metadata?.planType) {
-                const paidPlan = session.metadata.planType as 'PRO' | 'MAX';
-                // Update User.subscriptionTier
-                await prisma.user.update({
-                  where: { id: dbUser.id },
-                  data: { subscriptionTier: paidPlan },
-                });
-                // Also ensure UserSubscription record matches (use dbUser.id, not Clerk user.id)
-                await prisma.userSubscription.upsert({
-                  where: { userId: dbUser.id },
-                  update: {
-                    planType: paidPlan,
-                    stripeSubscriptionId: session.subscription as string || undefined,
-                    stripeCustomerId: session.customer as string || undefined,
-                    isActive: true,
-                    updatedAt: new Date(),
-                  },
-                  create: {
-                    userId: dbUser.id,
-                    planType: paidPlan,
-                    stripeSubscriptionId: session.subscription as string || undefined,
-                    stripeCustomerId: session.customer as string || undefined,
-                    isActive: true,
-                    currentPeriodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
-                  },
-                });
-                subscriptionTier = paidPlan;
-                console.log(`[dashboard] Verified checkout session ${sessionId}, set tier to ${paidPlan}`);
-              }
-            }
-          } catch (stripeError) {
-            console.error('[dashboard] Checkout session verification failed:', stripeError);
-            // Non-fatal - webhook will eventually sync
-          }
-        }
       }
     } catch (error) {
       console.error('Failed to prefetch tickers:', error);
@@ -241,6 +171,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
       showWelcome={showWelcome}
       shouldMergePending={shouldMergePending}
       subscriptionSuccess={subscriptionSuccess}
+      sessionId={sessionId}
       initialCompanies={initialCompanies}
       tutorialCompleted={tutorialCompleted}
       subscriptionTier={subscriptionTier}
