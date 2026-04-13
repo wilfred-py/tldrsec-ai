@@ -158,10 +158,10 @@ describe('Hidden Data Display', () => {
 
       const { container } = render(<Form8KMinimalistTemplate filing={filing} />);
 
-      // Should display the financial impact value
+      // Should display the financial impact value in the "Why it matters" prose
       expect(container.textContent).toContain('$2.5B');
-      // Should have a financial impact section
-      expect(container.textContent).toMatch(/Financial Impact/i);
+      // Financial impact is now woven into "Why it matters" narrative, not a separate section
+      expect(container.textContent).toMatch(/Why it matters/i);
     });
   });
 

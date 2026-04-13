@@ -7,9 +7,9 @@ import Form10KMinimalistTemplate from '../../ui/email/templates/10k-minimalist-t
 import Form10QMinimalistTemplate from '../../ui/email/templates/10q-minimalist-template';
 import Form8KMinimalistTemplate from '../../ui/email/templates/8k-minimalist-template';
 import GenericMinimalistTemplate from '../../ui/email/templates/generic-minimalist-template';
-import Form11KEmailTemplate from '../../ui/email/templates/11k-template';
+import Form11KMinimalistTemplate from '../../ui/email/templates/11k-minimalist-template';
 import Form144MinimalistTemplate from '../../ui/email/templates/form144-minimalist-template';
-import FormDEF14AEmailTemplate from '../../ui/email/templates/def14a-template';
+import FormDEF14AMinimalistTemplate from '../../ui/email/templates/def14a-minimalist-template';
 import Schedule13DEmailTemplate from '../../ui/email/templates/13d-template';
 
 interface TemplateProps {
@@ -43,11 +43,11 @@ const templateRegistry = new Map<string, TemplateComponent>([
   ['FORM 8-K', Form8KMinimalistTemplate],
 
   // Specialized templates
-  ['Form 11-K', Form11KEmailTemplate],
+  ['Form 11-K', Form11KMinimalistTemplate],
   ['144', Form144MinimalistTemplate],
   ['Form 144', Form144MinimalistTemplate],
-  ['DEF 14A', FormDEF14AEmailTemplate],
-  ['Form DEF 14A', FormDEF14AEmailTemplate],
+  ['DEF 14A', FormDEF14AMinimalistTemplate],
+  ['Form DEF 14A', FormDEF14AMinimalistTemplate],
   ['Schedule 13D', Schedule13DEmailTemplate],
 ]);
 

@@ -17,6 +17,10 @@ import { Form10KMinimalistTemplate } from '../../components/ui/email/templates/1
 import { Form10QMinimalistTemplate } from '../../components/ui/email/templates/10q-minimalist-template';
 import { Form8KMinimalistTemplate } from '../../components/ui/email/templates/8k-minimalist-template';
 import { Form144MinimalistTemplate } from '../../components/ui/email/templates/form144-minimalist-template';
+import { FormDEF14AMinimalistTemplate } from '../../components/ui/email/templates/def14a-minimalist-template';
+import { Form11KMinimalistTemplate } from '../../components/ui/email/templates/11k-minimalist-template';
+import { FormS1MinimalistTemplate } from '../../components/ui/email/templates/s1-minimalist-template';
+import { FormS3MinimalistTemplate } from '../../components/ui/email/templates/s3-minimalist-template';
 import { GenericMinimalistTemplate } from '../../components/ui/email/templates/generic-minimalist-template';
 import * as React from 'react';
 
@@ -39,6 +43,14 @@ const MINIMALIST_TEMPLATE_REGISTRY: Record<string, React.ComponentType<{ filing:
   '144': Form144MinimalistTemplate,
   'FORM 144': Form144MinimalistTemplate,
   'FORM144': Form144MinimalistTemplate,
+  'DEF 14A': FormDEF14AMinimalistTemplate,
+  'FORM DEF 14A': FormDEF14AMinimalistTemplate,
+  '11-K': Form11KMinimalistTemplate,
+  'FORM 11-K': Form11KMinimalistTemplate,
+  'S-1': FormS1MinimalistTemplate,
+  'FORM S-1': FormS1MinimalistTemplate,
+  'S-3': FormS3MinimalistTemplate,
+  'FORM S-3': FormS3MinimalistTemplate,
 };
 
 /**
