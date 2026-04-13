@@ -61,17 +61,14 @@ export function LandingNavbar({ heroRef }: LandingNavbarProps) {
     return () => observer.disconnect();
   }, [heroRef, isSignedIn]); // Add isSignedIn to dependency array
 
-  // Don't render until Clerk is loaded (prevents flash)
-  if (!isLoaded) return null;
-
   const navLinks = [
     { label: 'Features', href: '#features' },
     { label: 'Pricing', href: '#pricing' },
   ];
 
-  // 3-state CTA button logic
-  const ctaHref = isOnboarded ? '/dashboard' : isSignedIn ? '/onboarding' : '/sign-up';
-  const ctaLabel = isOnboarded ? 'Go to Dashboard' : isSignedIn ? 'Complete Setup' : 'Get Started';
+  // 3-state CTA button logic (with fallback before Clerk loads)
+  const ctaHref = !isLoaded ? '/sign-up' : isOnboarded ? '/dashboard' : isSignedIn ? '/onboarding' : '/sign-up';
+  const ctaLabel = !isLoaded ? 'Get Started' : isOnboarded ? 'Go to Dashboard' : isSignedIn ? 'Complete Setup' : 'Get Started';
 
   const ctaButton = (
     <Link href={ctaHref} onClick={() => setIsNavigating(true)}>

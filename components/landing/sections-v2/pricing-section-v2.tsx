@@ -116,6 +116,7 @@ export function PricingSectionV2() {
   // Determine CTA text based on auth state
   const getCtaText = (plan: typeof plans[0]) => {
     if (plan.disabled) return plan.cta;
+    if (!isLoaded) return 'View Plans';
     if (!isSignedIn) return 'Start Free Trial';
     if (!isOnboarded) return 'Complete Setup';
     return plan.cta; // "Upgrade to Pro" or "Upgrade to Max"
@@ -187,8 +188,9 @@ export function PricingSectionV2() {
     }
   };
 
-  // Combined loading state (Clerk + subscription)
-  const showLoading = !isLoaded || (isSignedIn && subscriptionLoading);
+  // Progressive enhancement: never block CTA rendering.
+  // Buttons show immediately with "View Plans" default, then update once auth/subscription loads.
+  const subscriptionReady = isLoaded && (!isSignedIn || !subscriptionLoading);
 
   return (
     <section className="py-24 bg-[var(--brand-bg-subtle)]" id="pricing">
@@ -237,9 +239,9 @@ export function PricingSectionV2() {
               key={plan.key}
               plan={plan}
               billingInterval={billingInterval}
-              isCurrentPlan={isCurrentPlan(plan.key)}
-              isTrialEndingSoon={isTrialEndingSoon(plan.key)}
-              loading={showLoading}
+              isCurrentPlan={subscriptionReady && isCurrentPlan(plan.key)}
+              isTrialEndingSoon={subscriptionReady && isTrialEndingSoon(plan.key)}
+              loading={false}
               checkoutLoading={loadingPlan === plan.key}
               hoveredCard={hoveredCard}
               selectedCard={selectedCard}

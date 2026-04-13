@@ -2,8 +2,6 @@ import type { Metadata } from 'next';
 import { Suspense } from 'react';
 import { LandingPageV2 } from '@/components/landing/landing-page-v2';
 
-export const dynamic = 'force-dynamic';
-
 export const metadata: Metadata = {
   title: 'AI SEC Filing Summaries - 10-K, 10-Q, 8-K & Form 4',
   description: 'Get AI-powered summaries of SEC filings delivered to your inbox. Instant analysis of 10-K annual reports, 10-Q quarterly filings, 8-K events, and Form 4 insider trades for smarter investment decisions.',
