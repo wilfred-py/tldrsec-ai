@@ -2,10 +2,24 @@
 
 All notable changes to this project will be documented in this file.
 
-## [0.0.12.2] - 2026-04-13
+## [0.0.13.1] - 2026-04-13
 
 ### Fixed
 - Max plan CTA button now highlights blue with white text when hovering over the card, matching the card border highlight behavior.
+
+## [0.0.13.0] - 2026-04-13
+
+### Changed
+- Dashboard stats widget shows "Time Saved" metric calculated from token usage across all summaries, replacing the generic "Email Delivery" header.
+- Activity feed header renamed from "Sent to your inbox" to "Filing Summaries" with FileText icon.
+- Tickers tab and activity feed containers use Shadcn Card components instead of custom styled divs.
+- Tickers table page size reduced from 10 to 8 rows to eliminate vertical overflow on the Tickers tab.
+
+### Removed
+- Redundant "14 tickers / FREE plan" info box from dashboard stats row. Users see this on the Tickers tab.
+
+### Fixed
+- Activity feed date group headings ("Today", "Earlier") now have proper left padding matching the feed cards.
 
 ## [0.0.12.1] - 2026-04-13
 

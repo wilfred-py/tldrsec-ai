@@ -146,10 +146,10 @@ describe('ActivityFeed', () => {
     ).toBeInTheDocument();
   });
 
-  it('shows "Sent to your inbox" header for real summaries', () => {
+  it('shows "Filing Summaries" header for real summaries', () => {
     const summary = makeSummary();
     render(<ActivityFeed summaries={[summary]} />);
-    expect(screen.getByText('Sent to your inbox')).toBeInTheDocument();
+    expect(screen.getByText('Filing Summaries')).toBeInTheDocument();
   });
 
   it('shows "Example Filing Summaries" header for featured summaries', () => {
