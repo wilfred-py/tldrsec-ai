@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.0.12.0] - 2026-04-13
+
+### Changed
+- Pricing card CTA buttons render instantly with "View Plans" default text, eliminating ~7500ms skeleton wait caused by Clerk JS loading and sequential API queries.
+- Landing navbar renders immediately instead of returning null until Clerk auth loads.
+- Subscription API (`/api/user?type=subscription`) parallelizes DB queries and eliminates a duplicate user lookup, reducing response time from ~2-4s to ~300-500ms.
+- Stripe reconciliation moved from blocking GET handler to fire-and-forget background execution.
+- Landing page no longer uses `force-dynamic`, enabling static HTML caching.
+
+### Fixed
+- TrialService refactored to eliminate redundant database query. `checkTrialStatusFromUser()` is now a pure function called by both the API route and the existing `checkTrialStatus()` method.
+
 ## [0.0.11.0] - 2026-04-12
 
 ### Changed
