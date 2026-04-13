@@ -2,6 +2,23 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.0.14.0] - 2026-04-13
+
+### Changed
+- Dashboard loads instantly on return navigation. Removed `force-dynamic` from layout so Next.js Router Cache kicks in.
+- Summary queries fetch 15 items (down from 50) and skip the `summaryText` column entirely, cutting payload size and DB load.
+- Stripe subscription reconciliation moved to a background client-side call instead of blocking the server render. Users who just paid see their tier update without a 1-2 second spinner.
+
+### Added
+- Database index on `Summary(importance, filingDate)` for the featured summaries query used by new users.
+- IDOR protection on checkout verification endpoint: validates session email matches authenticated user.
+- Plan type validation: only `PRO` and `MAX` are accepted from Stripe metadata, preventing arbitrary tier injection.
+- Stripe reconciliation throttled to once per 5 minutes via sessionStorage to avoid API rate limits.
+
+### Fixed
+- Featured summaries query no longer filters on `summaryText: { not: '' }` which defeated index usage.
+- Dead code branch in `activity-feed.tsx` preview text function.
+
 ## [0.0.13.1] - 2026-04-13
 
 ### Fixed

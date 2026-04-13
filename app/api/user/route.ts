@@ -96,6 +96,10 @@ export async function POST(request: NextRequest) {
       return handlePostSubscription(request);
     case 'billing-portal':
       return handlePostBillingPortal();
+    case 'reconcile':
+      return handleReconcile();
+    case 'verify-checkout':
+      return handleVerifyCheckout(request);
     default:
       return badType(type);
   }
@@ -896,5 +900,133 @@ async function handlePostBillingPortal() {
       { error: stripeError.message },
       { status: stripeError.statusCode }
     );
+  }
+}
+
+// ===========================================================================
+// Background Stripe reconciliation (moved from page.tsx to avoid blocking render)
+// ===========================================================================
+
+async function handleReconcile() {
+  try {
+    const user = await currentUser();
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    const email = user.emailAddresses?.[0]?.emailAddress;
+    if (!email) {
+      return NextResponse.json({ reconciled: false });
+    }
+
+    const dbUser = await prisma.user.findUnique({
+      where: { email },
+      select: { id: true, subscriptionTier: true },
+    });
+    if (!dbUser || dbUser.subscriptionTier !== 'FREE') {
+      return NextResponse.json({ reconciled: false });
+    }
+
+    const existingSub = await prisma.userSubscription.findUnique({
+      where: { userId: dbUser.id },
+      select: { stripeCustomerId: true, planType: true },
+    });
+    if (!existingSub?.stripeCustomerId || existingSub.planType !== 'FREE') {
+      return NextResponse.json({ reconciled: false });
+    }
+
+    if (!isStripeEnabled()) {
+      return NextResponse.json({ reconciled: false });
+    }
+
+    const { reconcileStripeSubscription } = await import('@/lib/stripe/reconcile');
+    const result = await reconcileStripeSubscription(dbUser.id, email);
+    if (result.reconciled && result.planType) {
+      return NextResponse.json({ reconciled: true, planType: result.planType });
+    }
+
+    return NextResponse.json({ reconciled: false });
+  } catch (error) {
+    console.error('[api/user] Stripe reconciliation failed:', error);
+    return NextResponse.json({ reconciled: false });
+  }
+}
+
+async function handleVerifyCheckout(request: NextRequest) {
+  try {
+    const user = await currentUser();
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    const email = user.emailAddresses?.[0]?.emailAddress;
+    if (!email) {
+      return NextResponse.json({ reconciled: false });
+    }
+
+    const body = await request.json();
+    const sessionId = body?.sessionId;
+    if (!sessionId || typeof sessionId !== 'string') {
+      return NextResponse.json({ reconciled: false });
+    }
+
+    const dbUser = await prisma.user.findUnique({
+      where: { email },
+      select: { id: true, subscriptionTier: true },
+    });
+    if (!dbUser || dbUser.subscriptionTier !== 'FREE') {
+      return NextResponse.json({ reconciled: false });
+    }
+
+    if (!isStripeEnabled()) {
+      return NextResponse.json({ reconciled: false });
+    }
+
+    const { retrieveCheckoutSession } = await import('@/lib/stripe');
+    const session = await retrieveCheckoutSession(sessionId);
+    if (session && session.payment_status === 'paid' && session.metadata?.planType) {
+      // Security: verify checkout session belongs to this user
+      const sessionEmail = session.customer_details?.email || session.customer_email;
+      if (sessionEmail && sessionEmail.toLowerCase() !== email.toLowerCase()) {
+        console.warn('[api/user] Checkout session email mismatch', { sessionEmail, userEmail: email });
+        return NextResponse.json({ reconciled: false });
+      }
+
+      // Validate planType is an expected value
+      const planType = session.metadata.planType;
+      if (planType !== 'PRO' && planType !== 'MAX') {
+        console.warn('[api/user] Unexpected planType in checkout session', { planType });
+        return NextResponse.json({ reconciled: false });
+      }
+
+      await prisma.$transaction([
+        prisma.user.update({
+          where: { id: dbUser.id },
+          data: { subscriptionTier: planType },
+        }),
+        prisma.userSubscription.upsert({
+          where: { userId: dbUser.id },
+          update: {
+            planType,
+            stripeSubscriptionId: session.subscription as string || undefined,
+            stripeCustomerId: session.customer as string || undefined,
+            isActive: true,
+            updatedAt: new Date(),
+          },
+          create: {
+            userId: dbUser.id,
+            planType,
+            stripeSubscriptionId: session.subscription as string || undefined,
+            stripeCustomerId: session.customer as string || undefined,
+            isActive: true,
+            currentPeriodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+          },
+        }),
+      ]);
+      return NextResponse.json({ reconciled: true, planType });
+    }
+
+    return NextResponse.json({ reconciled: false });
+  } catch (error) {
+    console.error('[api/user] Checkout verification failed:', error);
+    return NextResponse.json({ reconciled: false });
   }
 }

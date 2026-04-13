@@ -170,6 +170,7 @@ model Summary {
   @@index([filingUrl])
   @@index([filingUrl, filingType])
   @@index([tickerId, filingDate(sort: Desc)])
+  @@index([importance, filingDate(sort: Desc)])
   @@schema("app")
 }
 
