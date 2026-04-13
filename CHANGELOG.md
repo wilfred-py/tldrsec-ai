@@ -19,6 +19,11 @@ All notable changes to this project will be documented in this file.
 - Featured summaries query no longer filters on `summaryText: { not: '' }` which defeated index usage.
 - Dead code branch in `activity-feed.tsx` preview text function.
 
+## [0.0.13.1] - 2026-04-13
+
+### Fixed
+- Max plan CTA button now highlights blue with white text when hovering over the card, matching the card border highlight behavior.
+
 ## [0.0.13.0] - 2026-04-13
 
 ### Changed
