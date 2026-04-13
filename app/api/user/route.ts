@@ -196,15 +196,21 @@ async function handleGetSubscription() {
       );
     }
 
-    // Resolve Clerk ID -> DB user ID (CLAUDE.md #11: Clerk userId stored in authProviderId)
+    // Resolve Clerk ID -> DB user ID AND fetch trial fields in one query (eliminates duplicate)
     const dbUser = await prisma.user.findFirst({
       where: { OR: [{ id: clerkId }, { authProviderId: clerkId }] },
-      select: { id: true },
+      select: {
+        id: true,
+        subscriptionTier: true,
+        trialEndsAt: true,
+        trialStartedAt: true,
+        isTrialing: true,
+      },
     });
     const userId = dbUser?.id ?? clerkId;
 
-    // Fetch trial data for the user (used in all response paths)
-    const trialData = await TrialService.checkTrialStatus(clerkId);
+    // Compute trial status from already-fetched user data (no extra DB call)
+    const trialData = TrialService.checkTrialStatusFromUser(dbUser);
 
     // When Stripe is not configured, return mock Free tier subscription
     if (!isStripeEnabled()) {
@@ -229,31 +235,34 @@ async function handleGetSubscription() {
       });
     }
 
-    // Get user's subscription from database using resolved DB user ID
-    let userSubscription = await prisma.userSubscription.findUnique({
-      where: { userId },
-    });
+    // Parallelize subscription + usage queries for speed
+    const now = new Date();
+    const [subResult, periodResult] = await Promise.allSettled([
+      prisma.userSubscription.findUnique({ where: { userId } }),
+      prisma.usagePeriod.findFirst({
+        where: {
+          userId,
+          periodStart: { lte: now },
+          periodEnd: { gte: now },
+        },
+      }),
+    ]);
+    const userSubscription = subResult.status === 'fulfilled' ? subResult.value : null;
+    const currentPeriod = periodResult.status === 'fulfilled' ? periodResult.value : null;
 
-    // Safety net: if no subscription or FREE with a stripeCustomerId, reconcile from Stripe
+    // Fire-and-forget Stripe reconciliation (don't block the response)
     if (
       (!userSubscription || (userSubscription.planType === 'FREE' && userSubscription.stripeCustomerId)) &&
       isStripeEnabled()
     ) {
-      try {
-        const clerkUser = await currentUser();
-        const email = clerkUser?.emailAddresses?.[0]?.emailAddress;
-        if (email) {
-          const { reconcileStripeSubscription } = await import('@/lib/stripe/reconcile');
-          const result = await reconcileStripeSubscription(userId, email);
-          if (result.reconciled) {
-            console.log(`[subscription GET] Reconciled Stripe subscription: ${result.planType}`);
-            userSubscription = await prisma.userSubscription.findUnique({
-              where: { userId },
-            });
-          }
-        }
-      } catch (reconcileError) {
-        console.error('[subscription GET] Reconciliation failed:', reconcileError);
+      // Capture email NOW while request context is alive (currentUser() may fail after response sent)
+      const clerkUser = await currentUser();
+      const reconcileEmail = clerkUser?.emailAddresses?.[0]?.emailAddress;
+      if (reconcileEmail) {
+        // Background reconciliation — SWR revalidation picks up reconciled data
+        reconcileInBackground(userId, reconcileEmail).catch((err) =>
+          console.error('[subscription GET] Background reconciliation failed:', err)
+        );
       }
     }
 
@@ -277,16 +286,6 @@ async function handleGetSubscription() {
         isGrandfathered: trialData.isGrandfathered,
       });
     }
-
-    // Get current usage period
-    const now = new Date();
-    const currentPeriod = await prisma.usagePeriod.findFirst({
-      where: {
-        userId,
-        periodStart: { lte: now },
-        periodEnd: { gte: now },
-      },
-    });
 
     const remainingFilings = currentPeriod
       ? Math.max(0, currentPeriod.filingLimit - currentPeriod.filingsUsed)
@@ -317,6 +316,15 @@ async function handleGetSubscription() {
       { error: 'Internal server error' },
       { status: 500 }
     );
+  }
+}
+
+/** Fire-and-forget Stripe reconciliation helper (email pre-resolved from request context) */
+async function reconcileInBackground(userId: string, email: string) {
+  const { reconcileStripeSubscription } = await import('@/lib/stripe/reconcile');
+  const result = await reconcileStripeSubscription(userId, email);
+  if (result.reconciled) {
+    console.log(`[subscription GET] Background reconciled: ${result.planType}`);
   }
 }
 

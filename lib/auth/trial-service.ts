@@ -26,27 +26,15 @@ export interface TrialStatus {
 
 export class TrialService {
   /**
-   * Check trial status for a user.
-   * Returns status for trial users, grandfathered users, and paid users.
+   * Compute trial status from already-fetched user data (no DB call).
+   * Use this when the caller already has the user row to avoid a duplicate query.
    */
-  static async checkTrialStatus(userId: string): Promise<TrialStatus> {
-    const prisma = getPrismaClient();
-
-    const user = await prisma.user.findFirst({
-      where: {
-        OR: [
-          { id: userId },
-          { authProviderId: userId },
-        ],
-      },
-      select: {
-        subscriptionTier: true,
-        trialEndsAt: true,
-        trialStartedAt: true,
-        isTrialing: true,
-      },
-    });
-
+  static checkTrialStatusFromUser(user: {
+    subscriptionTier: string | null;
+    trialEndsAt: Date | null;
+    trialStartedAt: Date | null;
+    isTrialing: boolean | null;
+  } | null): TrialStatus {
     if (!user) {
       // User exists in Clerk but not yet in DB (created on first tickers fetch).
       // Return active/grandfathered so the subscription endpoint doesn't 500.
@@ -101,6 +89,31 @@ export class TrialService {
       trialEndsAt: null,
       isGrandfathered: false,
     };
+  }
+
+  /**
+   * Check trial status for a user by querying the database.
+   * Returns status for trial users, grandfathered users, and paid users.
+   */
+  static async checkTrialStatus(userId: string): Promise<TrialStatus> {
+    const prisma = getPrismaClient();
+
+    const user = await prisma.user.findFirst({
+      where: {
+        OR: [
+          { id: userId },
+          { authProviderId: userId },
+        ],
+      },
+      select: {
+        subscriptionTier: true,
+        trialEndsAt: true,
+        trialStartedAt: true,
+        isTrialing: true,
+      },
+    });
+
+    return TrialService.checkTrialStatusFromUser(user);
   }
 
   /**
