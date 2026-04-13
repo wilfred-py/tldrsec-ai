@@ -113,7 +113,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
           summaryCountTotal = countTotal;
           const totalInput = tokenAgg._sum.inputTokens ?? 0;
           const totalOutput = tokenAgg._sum.outputTokens ?? 0;
-          totalTimeSavedMinutes = Math.max(0, ((totalInput - totalOutput) * 0.75) / 250);
+          totalTimeSavedMinutes = Math.round(Math.max(0, ((totalInput - totalOutput) * 0.75) / 250) * 10) / 10;
         }
 
         // If user has tickers but zero summaries, fetch featured summaries
