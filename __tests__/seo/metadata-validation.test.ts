@@ -153,11 +153,13 @@ describe('SEO Metadata Validation', () => {
   });
 
   describe('Homepage', () => {
-    it('should use force-dynamic rendering (required for Clerk auth)', () => {
+    it('should use static rendering (all auth is client-side via Clerk hooks)', () => {
       const filePath = path.join(projectRoot, 'app/page.tsx');
       const content = fs.readFileSync(filePath, 'utf-8');
 
-      expect(content).toContain('force-dynamic');
+      // Landing page should NOT use force-dynamic — all auth/subscription
+      // logic is client-side (useUser, SWR), so static generation is safe
+      expect(content).not.toContain('force-dynamic');
     });
 
     it('should include high-intent SEC filing keywords', () => {
