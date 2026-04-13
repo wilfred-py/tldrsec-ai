@@ -1,9 +1,7 @@
 import * as React from 'react';
-import { EmailColors, markdownToHtml } from '../design-system';
+import { EmailColors, EmailStyles, BadgeColors, markdownToHtml } from '../design-system';
 import { EmailHeader } from './sections/EmailHeader';
 import { EmailFooter } from './sections/EmailFooter';
-import { SectionCard } from './sections/SectionCard';
-import { SectionHeader } from './sections/SectionHeader';
 import { FilingTemplateData } from '../../../../lib/email/types';
 
 interface GenericMinimalistTemplateProps {
@@ -11,14 +9,15 @@ interface GenericMinimalistTemplateProps {
 }
 
 /**
- * Generic minimalist email template for all filing types
- * Morning Brew style: clean, scannable, works for any SEC filing
+ * Generic email template for all filing types - Smart Brevity format
  *
  * Layout:
- * - Header: ticker, company name, filing type
- * - Key Points: bullet list from AI summary
- * - Summary Text: full AI-generated summary
- * - CTA: View full filing
+ * - Preheader for inbox preview
+ * - Signal pill badge (filing type)
+ * - Lead sentence (first sentence or document description)
+ * - Why it matters
+ * - Key points as data-style rows
+ * - Story via markdownToHtml
  */
 export function GenericMinimalistTemplate({ filing }: GenericMinimalistTemplateProps) {
   const {
@@ -39,6 +38,18 @@ export function GenericMinimalistTemplate({ filing }: GenericMinimalistTemplateP
   const keyPoints = rawData?.keyPoints as string[] | undefined;
   const documentDescription = rawData?.documentDescription as string | undefined;
 
+  // Build preheader text
+  const preheaderText = `${filingType || 'SEC FILING'}: ${companyName} (${displayTicker}) -- ${(documentDescription || summaryText || '').substring(0, 80)}`;
+
+  // Build lead sentence
+  const leadText = documentDescription || summaryText?.split(/(?<=[.!?])\s+/)[0] || '';
+  const headline = leadText.length >= 30 ? leadText : (summaryText || leadText);
+
+  // Remaining summary after headline
+  const remainingSummary = summaryText && headline && summaryText.length > headline.length
+    ? (documentDescription ? summaryText : summaryText.slice(headline.length).trim())
+    : '';
+
   return (
     <div style={{
       maxWidth: '600px',
@@ -47,6 +58,20 @@ export function GenericMinimalistTemplate({ filing }: GenericMinimalistTemplateP
       backgroundColor: EmailColors.structure.background,
       color: EmailColors.text.body,
     }}>
+      {/* Preheader */}
+      <div style={{
+        display: 'none',
+        fontSize: '1px',
+        color: EmailColors.structure.background,
+        lineHeight: '1px',
+        maxHeight: '0px',
+        maxWidth: '0px',
+        opacity: 0,
+        overflow: 'hidden',
+      }}>
+        {preheaderText}
+      </div>
+
       {/* Header */}
       <EmailHeader
         ticker={displayTicker}
@@ -55,70 +80,68 @@ export function GenericMinimalistTemplate({ filing }: GenericMinimalistTemplateP
         filingDate={filingDate}
       />
 
-      {/* Main content */}
+      {/* Smart Brevity body */}
       <table width="100%" cellPadding="0" cellSpacing="0">
         <tbody>
           <tr>
             <td style={{ padding: '0 15px 20px' }}>
-              {/* Document Description (if available) */}
-              {documentDescription && (
-                <SectionCard>
-                  <tr>
-                    <td style={{
-                      fontSize: '14px',
-                      lineHeight: '1.6',
-                      color: EmailColors.text.meta,
-                      fontStyle: 'italic',
-                    }}>
-                      {documentDescription}
-                    </td>
-                  </tr>
-                </SectionCard>
-              )}
 
-              {/* Key Points Section */}
+              {/* Signal badge -- FIRST element */}
+              <div style={{ marginBottom: '12px' }}>
+                <span style={{
+                  ...EmailStyles.pillBadge,
+                  backgroundColor: BadgeColors.neutral.bg,
+                  color: BadgeColors.neutral.text,
+                }}>
+                  {filingType || 'SEC FILING'}
+                </span>
+              </div>
+
+              {/* Lead sentence */}
+              <h1 style={EmailStyles.leadSentence}>
+                {headline || `${companyName} filed a ${filingType || 'document'} with the SEC`}
+              </h1>
+
+              {/* Why it matters */}
+              <p style={EmailStyles.whyItMatters}>
+                <strong style={{ color: '#000000' }}>Why it matters: </strong>
+                {documentDescription
+                  ? `This filing provides new disclosure that may affect your investment thesis for ${displayTicker}.`
+                  : `SEC filings contain material disclosures. Review the key points below for anything relevant to your ${displayTicker} position.`}
+              </p>
+
+              {/* Key points as watch-for style bullets */}
               {keyPoints && keyPoints.length > 0 && (
-                <SectionCard>
-                  <SectionHeader emoji="📊" title="Key Points" />
-                  <tr>
-                    <td>
-                      <table width="100%" cellPadding="0" cellSpacing="0">
-                        <tbody>
-                          {keyPoints.slice(0, 6).map((point, index) => (
-                            <tr key={index}>
-                              <td style={{
-                                padding: '4px 0',
-                                fontSize: '14px',
-                                lineHeight: '1.5',
-                                color: EmailColors.text.body,
-                              }}>
-                                <span style={{ marginRight: '8px', color: EmailColors.text.meta }}>•</span>
-                                {point}
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </td>
-                  </tr>
-                </SectionCard>
+                <>
+                  <table width="100%" cellPadding="0" cellSpacing="0" style={{ margin: '20px 0' }}>
+                    <tbody><tr><td style={EmailStyles.thinDivider}></td></tr></tbody>
+                  </table>
+                  <div style={EmailStyles.watchForHeader}>Key points:</div>
+                  {keyPoints.slice(0, 6).map((point, idx) => (
+                    <div key={idx} style={{
+                      padding: '3px 0 3px 16px',
+                      fontSize: '14px',
+                      color: EmailColors.text.body,
+                      lineHeight: '1.5',
+                    }}>
+                      <span style={{ color: EmailColors.text.meta, marginRight: '8px' }}>•</span>
+                      {point}
+                    </div>
+                  ))}
+                </>
               )}
 
-              {/* Summary Text */}
-              {summaryText && (
-                <SectionCard>
-                  <SectionHeader emoji="📝" title="Summary" />
-                  <tr>
-                    <td
-                      style={{
-                        fontSize: '14px',
-                        lineHeight: '1.6',
-                        color: EmailColors.text.body,
-                      }}
-                      dangerouslySetInnerHTML={{ __html: markdownToHtml(summaryText) }}
-                    />
-                  </tr>
-                </SectionCard>
+              {/* Story -- full narrative via markdown */}
+              {remainingSummary && (
+                <>
+                  <table width="100%" cellPadding="0" cellSpacing="0" style={{ margin: '20px 0' }}>
+                    <tbody><tr><td style={EmailStyles.thinDivider}></td></tr></tbody>
+                  </table>
+                  <div
+                    style={EmailStyles.prose}
+                    dangerouslySetInnerHTML={{ __html: markdownToHtml(remainingSummary) }}
+                  />
+                </>
               )}
             </td>
           </tr>
@@ -129,7 +152,6 @@ export function GenericMinimalistTemplate({ filing }: GenericMinimalistTemplateP
       <EmailFooter
         filingUrl={filingUrl}
         formType={filingType}
-        unsubscribeUrl={`${process.env.NEXT_PUBLIC_APP_URL || ''}/dashboard/settings`}
       />
     </div>
   );

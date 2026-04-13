@@ -1,8 +1,7 @@
 import * as React from 'react';
-import { EmailColors } from '../design-system';
+import { EmailColors, EmailStyles, BadgeColors, markdownToHtml } from '../design-system';
 import { EmailHeader } from './sections/EmailHeader';
 import { EmailFooter } from './sections/EmailFooter';
-import { SectionCard } from './sections/SectionCard';
 import { FilingTemplateData } from '../../../../lib/email/types';
 import { extractForm144Data } from '../../../../lib/email/form144-data-extractor';
 
@@ -86,69 +85,7 @@ function isNotableSale(
 }
 
 /**
- * Get signal configuration (2-level: Notable vs Routine)
- */
-function getSignalConfig(isNotable: boolean, has10b51: boolean) {
-  if (isNotable) {
-    return {
-      level: 'NOTABLE SALE',
-      verdict: 'Worth Attention',
-      description: has10b51
-        ? 'Large planned sale under 10b5-1 - significant size warrants review.'
-        : 'This transaction size may be relevant to your investment thesis.',
-      bgColor: '#FEF3C7',      // Amber 100
-      borderColor: '#F59E0B',  // Amber 500
-      textColor: '#92400E',    // Amber 800
-      icon: '!',
-    };
-  } else {
-    return {
-      level: 'ROUTINE FILING',
-      verdict: 'Pre-planned Sale',
-      description: has10b51
-        ? 'Scheduled 10b5-1 trade - no discretionary decision by insider.'
-        : 'Likely routine diversification, not a signal about company outlook.',
-      bgColor: '#F1F5F9',      // Slate 100
-      borderColor: '#94A3B8',  // Slate 400
-      textColor: '#475569',    // Slate 600
-      icon: '\u2713',
-    };
-  }
-}
-
-/**
- * Format text with bold styling for key values
- */
-function formatText(text: string): string {
-  if (!text) return '';
-  let html = text;
-  // ⚠️ SECURITY BOUNDARY: Unconditional escaping prevents entity-based XSS bypass
-  html = html.replace(/&/g, '&amp;');
-  html = html.replace(/</g, '&lt;');
-  html = html.replace(/>/g, '&gt;');
-  html = html.replace(/"/g, '&quot;');
-  html = html.replace(/'/g, '&#39;');
-  // Bold dollar amounts
-  html = html.replace(
-    /(\$[\d,]+(?:\.\d+)?[KMB]?)/g,
-    `<strong style="color:${EmailColors.text.headline};font-weight:700;">$1</strong>`
-  );
-  // Bold percentages
-  html = html.replace(
-    /(-?\d+(?:\.\d+)?%)/g,
-    `<strong style="color:${EmailColors.text.headline};font-weight:700;">$1</strong>`
-  );
-  // Bold share counts (including decimal values for fractional shares like RSUs/DSUs)
-  html = html.replace(
-    /([\d,]+(?:\.\d+)?)\s+(shares?)/gi,
-    `<strong style="color:${EmailColors.text.headline};font-weight:700;">$1</strong> $2`
-  );
-  html = html.replace(/—/g, '&mdash;');
-  return html;
-}
-
-/**
- * Form 144 Email Template - Minimalist Signal-First Design
+ * Form 144 Email Template - Smart Brevity Signal-First Design
  *
  * 2-level signal system:
  * - NOTABLE SALE (amber): Large/significant sales worth attention
@@ -176,7 +113,6 @@ export function Form144MinimalistTemplate({ filing }: Form144MinimalistTemplateP
   const filerRole = (data?.filerRole || data?.position || extractedData?.filerRole || '') as string;
   const shares = (data?.shares || data?.sharesSold || extractedData?.shares || '') as string;
   const estimatedValue = (data?.estimatedValue || extractedData?.estimatedValue || '') as string;
-  const _pricePerShare = (data?.pricePerShare || extractedData?.pricePerShare || '') as string;
   const percentOfHoldings = (data?.percentOfHoldings || data?.percentOwnership || extractedData?.percentOfHoldings || '') as string;
   const tradingPlan = (data?.tradingPlan || extractedData?.tradingPlan || '') as string;
   const signalStrength = (data?.signalStrength || extractedData?.signalStrength || '') as string;
@@ -193,8 +129,22 @@ export function Form144MinimalistTemplate({ filing }: Form144MinimalistTemplateP
     (summaryText?.toLowerCase() || '').includes('10b5-1');
 
   // Determine signal level (2-level system)
-  const isNotable = isNotableSale(signalStrength, summaryText || '', estimatedValueNum);
-  const signal = getSignalConfig(isNotable, has10b51);
+  const notable = isNotableSale(signalStrength, summaryText || '', estimatedValueNum);
+
+  // Badge colors
+  const badgeColors = notable ? BadgeColors.high : BadgeColors.low;
+  const signalLabel = notable ? 'NOTABLE SALE' : 'ROUTINE';
+  const signalVerdict = notable ? 'Worth Attention' : 'Pre-planned Sale';
+  const signalDescription = notable
+    ? (has10b51
+        ? 'Large planned sale under 10b5-1 -- significant size warrants review.'
+        : 'This transaction size may be relevant to your investment thesis.')
+    : (has10b51
+        ? 'Pre-scheduled 10b5-1 trade -- no discretionary decision by insider.'
+        : 'Likely routine diversification, not a signal about company outlook.');
+
+  // Determine if we have meaningful transaction data
+  const hasTransactionData = shares || estimatedValue || percentOfHoldings;
 
   // Extract first sentence as the headline
   let headline = summaryText?.split(/(?<=[.!?])\s+/)[0] || '';
@@ -202,8 +152,44 @@ export function Form144MinimalistTemplate({ filing }: Form144MinimalistTemplateP
     headline = summaryText;
   }
 
-  // Determine if we have meaningful transaction data
-  const hasTransactionData = shares || estimatedValue || percentOfHoldings;
+  // Remaining summary after the headline
+  const remainingSummary = (headline && summaryText && summaryText.length > headline.length)
+    ? summaryText.slice(headline.length).trim()
+    : '';
+
+  // Build preheader text for inbox preview
+  const preheaderText = `${signalLabel}: ${signalVerdict} -- ${filerName} filed Form 144 for ${displayTicker}`;
+
+  // Build data snapshot rows
+  const dataRows: { label: string; value: string; color?: string }[] = [];
+  if (estimatedValue) {
+    dataRows.push({
+      label: 'Est. Value',
+      value: estimatedValue || formatCompactValue(estimatedValueNum),
+      color: '#DC2626',
+    });
+  }
+  if (shares) {
+    dataRows.push({ label: 'Shares to Sell', value: shares, color: '#DC2626' });
+  }
+  if (percentOfHoldings) {
+    dataRows.push({ label: '% of Holdings', value: percentOfHoldings });
+  }
+  if (remainingHoldings && parseNumericValue(remainingHoldings) > 0) {
+    dataRows.push({ label: 'Remaining', value: remainingHoldings });
+  }
+  if (sharesOutstanding && parseNumericValue(sharesOutstanding) > 0) {
+    dataRows.push({ label: 'Class Outstanding', value: sharesOutstanding });
+  }
+
+  // Watch-for items
+  const watchFor: string[] = [];
+  if (has10b51) {
+    watchFor.push('Trade executed under a pre-planned 10b5-1 trading plan');
+  }
+  if (investorImplication) {
+    watchFor.push(investorImplication);
+  }
 
   return (
     <div style={{
@@ -213,6 +199,20 @@ export function Form144MinimalistTemplate({ filing }: Form144MinimalistTemplateP
       backgroundColor: EmailColors.structure.background,
       color: EmailColors.text.body,
     }}>
+      {/* Preheader */}
+      <div style={{
+        display: 'none',
+        fontSize: '1px',
+        color: EmailColors.structure.background,
+        lineHeight: '1px',
+        maxHeight: '0px',
+        maxWidth: '0px',
+        opacity: 0,
+        overflow: 'hidden',
+      }}>
+        {preheaderText}
+      </div>
+
       {/* Header */}
       <EmailHeader
         ticker={displayTicker}
@@ -223,341 +223,109 @@ export function Form144MinimalistTemplate({ filing }: Form144MinimalistTemplateP
         filerRole={filerRole}
       />
 
-      {/* Main content */}
+      {/* Smart Brevity body */}
       <table width="100%" cellPadding="0" cellSpacing="0">
         <tbody>
           <tr>
             <td style={{ padding: '0 15px 20px' }}>
 
-              {/* ═══════════════════════════════════════════════════════════
-                  THE VERDICT - 2-Level Signal (Notable vs Routine)
-                  ═══════════════════════════════════════════════════════════ */}
-              <table width="100%" cellPadding="0" cellSpacing="0" style={{
-                backgroundColor: signal.bgColor,
-                borderRadius: '12px',
-                marginBottom: '16px',
-                border: `2px solid ${signal.borderColor}`,
-              }}>
-                <tbody>
-                  <tr>
-                    <td style={{ padding: '20px' }}>
-                      {/* Signal Level Badge */}
-                      <table width="100%" cellPadding="0" cellSpacing="0">
-                        <tbody>
-                          <tr>
-                            <td>
-                              <span style={{
-                                display: 'inline-block',
-                                padding: '4px 12px',
-                                backgroundColor: signal.borderColor,
-                                color: '#FFFFFF',
-                                borderRadius: '20px',
-                                fontSize: '11px',
-                                fontWeight: 700,
-                                letterSpacing: '1px',
-                                textTransform: 'uppercase' as const,
-                              }}>
-                                {signal.icon} {signal.level}
-                              </span>
-                            </td>
-                          </tr>
+              {/* Signal badge -- FIRST element */}
+              <div style={{ marginBottom: '12px' }}>
+                <span style={{
+                  ...EmailStyles.pillBadge,
+                  backgroundColor: badgeColors.bg,
+                  color: badgeColors.text,
+                }}>
+                  {notable ? '!' : '\u2713'} {signalLabel}
+                </span>
+              </div>
 
-                          {/* The Verdict */}
-                          <tr>
-                            <td style={{ paddingTop: '12px' }}>
-                              <div style={{
-                                fontSize: '24px',
-                                fontWeight: 700,
-                                color: signal.textColor,
-                                lineHeight: '1.2',
-                              }}>
-                                {signal.verdict}
-                              </div>
-                            </td>
-                          </tr>
+              {/* Lead sentence */}
+              <h1 style={EmailStyles.leadSentence}>
+                {headline || `${filerName} filed a Form 144 for ${displayTicker}`}
+              </h1>
 
-                          {/* Quick explanation */}
-                          <tr>
-                            <td style={{ paddingTop: '8px' }}>
-                              <div style={{
-                                fontSize: '14px',
-                                lineHeight: '1.5',
-                                color: signal.textColor,
-                                opacity: 0.9,
-                              }}>
-                                {signal.description}
-                              </div>
-                            </td>
-                          </tr>
-                        </tbody>
-                      </table>
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
+              {/* Why it matters */}
+              <p style={EmailStyles.whyItMatters}>
+                <strong style={{ color: '#000000' }}>Why it matters: </strong>
+                {signalDescription}
+              </p>
 
-              {/* ═══════════════════════════════════════════════════════════
-                  KEY METRICS - Single row: Value first, then Shares
-                  ═══════════════════════════════════════════════════════════ */}
-              {hasTransactionData && (
-                <table width="100%" cellPadding="0" cellSpacing="0" style={{ marginBottom: '16px' }}>
-                  <tbody>
-                    <tr>
-                      <td>
-                        <table width="100%" cellPadding="0" cellSpacing="0">
-                          <tbody>
-                            <tr>
-                              {/* Estimated Value Card - FIRST (most important) */}
-                              {estimatedValue && (
-                                <td style={{
-                                  width: shares ? '48%' : '100%',
-                                  padding: '16px',
-                                  backgroundColor: '#FEF2F2',
-                                  borderRadius: '8px',
-                                  verticalAlign: 'top',
-                                }}>
-                                  <div style={{
-                                    fontSize: '11px',
-                                    fontWeight: 700,
-                                    color: '#991B1B',
-                                    textTransform: 'uppercase' as const,
-                                    letterSpacing: '0.5px',
-                                    marginBottom: '4px',
-                                  }}>
-                                    Estimated Value
-                                  </div>
-                                  <div style={{
-                                    fontSize: '22px',
-                                    fontWeight: 800,
-                                    color: '#DC2626',
-                                    lineHeight: '1.2',
-                                  }}>
-                                    {estimatedValue || formatCompactValue(estimatedValueNum)}
-                                  </div>
-                                  {percentOfHoldings && (
-                                    <div style={{
-                                      fontSize: '12px',
-                                      color: '#991B1B',
-                                      opacity: 0.8,
-                                      marginTop: '4px',
-                                    }}>
-                                      {percentOfHoldings} of holdings
-                                    </div>
-                                  )}
-                                </td>
-                              )}
-
-                              {/* Gap spacer */}
-                              {shares && estimatedValue && (
-                                <td style={{ width: '4%' }}></td>
-                              )}
-
-                              {/* Shares to Sell Card - SECOND */}
-                              {shares && (
-                                <td style={{
-                                  width: estimatedValue ? '48%' : '100%',
-                                  padding: '16px',
-                                  backgroundColor: '#FEF2F2',
-                                  borderRadius: '8px',
-                                  verticalAlign: 'top',
-                                }}>
-                                  <div style={{
-                                    fontSize: '11px',
-                                    fontWeight: 700,
-                                    color: '#991B1B',
-                                    textTransform: 'uppercase' as const,
-                                    letterSpacing: '0.5px',
-                                    marginBottom: '4px',
-                                  }}>
-                                    Shares to Sell
-                                  </div>
-                                  <div style={{
-                                    fontSize: '22px',
-                                    fontWeight: 800,
-                                    color: '#DC2626',
-                                    lineHeight: '1.2',
-                                  }}>
-                                    {shares}
-                                  </div>
-                                  {remainingHoldings && parseNumericValue(remainingHoldings) > 0 && (
-                                    <div style={{
-                                      fontSize: '12px',
-                                      color: '#991B1B',
-                                      opacity: 0.8,
-                                      marginTop: '4px',
-                                    }}>
-                                      → {remainingHoldings} remaining
-                                    </div>
-                                  )}
-                                </td>
-                              )}
-                            </tr>
-                          </tbody>
-                        </table>
-                      </td>
-                    </tr>
-                  </tbody>
+              {/* Thin divider */}
+              {dataRows.length > 0 && (
+                <table width="100%" cellPadding="0" cellSpacing="0" style={{ margin: '20px 0' }}>
+                  <tbody><tr><td style={EmailStyles.thinDivider}></td></tr></tbody>
                 </table>
               )}
 
-              {/* ═══════════════════════════════════════════════════════════
-                  OWNERSHIP IMPACT - Before/after ownership comparison
-                  Matches Form 4 visual: before → ↓ → after (percentage)
-                  ═══════════════════════════════════════════════════════════ */}
-              {/* Ownership Impact: Only show when we have the insider's actual remaining holdings.
-                  sharesOutstanding is the issuer's total class outstanding — NOT the insider's position.
-                  Showing issuer-level data as "ownership impact" is misleading for director/officer filers. */}
-              {shares && remainingHoldings && parseNumericValue(remainingHoldings) > 0 && (() => {
-                const sharesNum = parseNumericValue(shares);
-                const remainingNum = parseNumericValue(remainingHoldings);
-                if (!Number.isFinite(sharesNum) || !Number.isFinite(remainingNum)) return null;
-                const outstandingNum = parseNumericValue(sharesOutstanding);
-                const beforeNum = sharesNum + remainingNum;
-                const pctChange = beforeNum > 0 ? -((sharesNum / beforeNum) * 100) : 0;
-                const pctColor = '#DC2626'; // Sales are always red
-                const pctDisplay = `${pctChange.toFixed(1)}%`;
-
-                return (
-                  <table width="100%" cellPadding="0" cellSpacing="0" style={{ marginBottom: '16px' }}>
-                    <tbody>
-                      <tr>
+              {/* Data snapshot */}
+              {dataRows.length > 0 && (
+                <table width="100%" cellPadding="0" cellSpacing="0" style={{ marginBottom: '4px' }}>
+                  <tbody>
+                    {dataRows.map((row, idx) => (
+                      <tr key={idx}>
                         <td style={{
-                          padding: '16px',
-                          backgroundColor: EmailColors.structure.backgroundAlt,
-                          borderRadius: '8px',
-                          textAlign: 'center',
-                        }}>
-                          <div style={{
-                            fontSize: '11px',
-                            fontWeight: 700,
-                            color: EmailColors.text.meta,
-                            textTransform: 'uppercase' as const,
-                            letterSpacing: '0.5px',
-                            marginBottom: '8px',
-                          }}>
-                            Ownership Impact
-                          </div>
-                          {/* Previous ownership (before sale) */}
-                          <div style={{
-                            fontSize: '14px',
-                            color: EmailColors.text.muted,
-                            marginBottom: '6px',
-                          }}>
-                            {beforeNum.toLocaleString()} shares
-                          </div>
-                          {/* Direction arrow */}
-                          <div style={{
-                            fontSize: '20px',
-                            lineHeight: '1',
-                            margin: '4px 0',
-                            color: pctColor,
-                          }}>
-                            ↓
-                          </div>
-                          {/* New ownership (after sale) */}
-                          <div style={{
-                            fontSize: '16px',
-                            fontWeight: 700,
-                            color: EmailColors.text.headline,
-                            marginTop: '6px',
-                          }}>
-                            {remainingNum.toLocaleString()} shares
-                            <span style={{
-                              marginLeft: '8px',
-                              fontSize: '14px',
-                              fontWeight: 600,
-                              color: pctColor,
-                            }}>
-                              ({pctDisplay})
-                            </span>
-                          </div>
-                          {outstandingNum > 0 && (
-                            <div style={{
-                              fontSize: '11px',
-                              color: EmailColors.text.meta,
-                              marginTop: '8px',
-                            }}>
-                              of {outstandingNum.toLocaleString()} class shares outstanding
-                            </div>
-                          )}
-                        </td>
+                          ...EmailStyles.dataLabel,
+                          borderBottom: idx < dataRows.length - 1 ? '1px solid #F0F0F0' : 'none',
+                        }}>{row.label}</td>
+                        <td style={{
+                          ...EmailStyles.dataValue,
+                          color: row.color || '#111827',
+                          borderBottom: idx < dataRows.length - 1 ? '1px solid #F0F0F0' : 'none',
+                        }}>{row.value}</td>
                       </tr>
-                    </tbody>
-                  </table>
-                );
-              })()}
-
-              {/* ═══════════════════════════════════════════════════════════
-                  THE STORY - Summary with key values highlighted
-                  ═══════════════════════════════════════════════════════════ */}
-              {headline && (
-                <SectionCard>
-                  <tr>
-                    <td
-                      style={{
-                        fontSize: '15px',
-                        lineHeight: '1.6',
-                        color: EmailColors.text.body,
-                      }}
-                      dangerouslySetInnerHTML={{ __html: formatText(headline) }}
-                    />
-                  </tr>
-                </SectionCard>
-              )}
-
-              {/* ═══════════════════════════════════════════════════════════
-                  INVESTOR IMPLICATION - What this means for shareholders
-                  ═══════════════════════════════════════════════════════════ */}
-              {investorImplication && (
-                <table width="100%" cellPadding="0" cellSpacing="0" style={{ marginBottom: '16px' }}>
-                  <tbody>
-                    <tr>
-                      <td style={{
-                        padding: '16px',
-                        backgroundColor: '#F0F9FF',
-                        borderRadius: '8px',
-                        borderLeft: `4px solid #0EA5E9`,
-                      }}>
-                        <div style={{
-                          fontSize: '11px',
-                          fontWeight: 700,
-                          color: '#0369A1',
-                          textTransform: 'uppercase' as const,
-                          letterSpacing: '0.5px',
-                          marginBottom: '8px',
-                        }}>
-                          💡 Investor Takeaway
-                        </div>
-                        <div style={{
-                          fontSize: '14px',
-                          lineHeight: '1.5',
-                          color: '#0C4A6E',
-                        }}>
-                          {investorImplication}
-                        </div>
-                      </td>
-                    </tr>
+                    ))}
                   </tbody>
                 </table>
               )}
 
-              {/* Filing Details removed - too much noise for skimming */}
+              {/* Thin divider */}
+              {remainingSummary && (
+                <table width="100%" cellPadding="0" cellSpacing="0" style={{ margin: '20px 0' }}>
+                  <tbody><tr><td style={EmailStyles.thinDivider}></td></tr></tbody>
+                </table>
+              )}
+
+              {/* Story -- remaining narrative */}
+              {remainingSummary && (
+                <div
+                  style={EmailStyles.prose}
+                  dangerouslySetInnerHTML={{ __html: markdownToHtml(remainingSummary) }}
+                />
+              )}
+
+              {/* Watch for */}
+              {watchFor.length > 0 && (
+                <>
+                  <table width="100%" cellPadding="0" cellSpacing="0" style={{ margin: '20px 0' }}>
+                    <tbody><tr><td style={EmailStyles.thinDivider}></td></tr></tbody>
+                  </table>
+                  <div style={EmailStyles.watchForHeader}>Watch for:</div>
+                  {watchFor.map((item, idx) => (
+                    <div key={idx} style={{
+                      padding: '3px 0 3px 16px',
+                      fontSize: '14px',
+                      color: EmailColors.text.body,
+                      lineHeight: '1.5',
+                    }}>
+                      <span style={{ color: EmailColors.text.meta, marginRight: '8px' }}>•</span>
+                      {item}
+                    </div>
+                  ))}
+                </>
+              )}
 
               {/* No data fallback */}
               {!hasTransactionData && !summaryText && (
-                <SectionCard>
-                  <tr>
-                    <td style={{
-                      fontSize: '14px',
-                      lineHeight: '1.6',
-                      color: EmailColors.text.meta,
-                      textAlign: 'center',
-                      padding: '20px',
-                    }}>
-                      View the full Form 144 filing for transaction details.
-                    </td>
-                  </tr>
-                </SectionCard>
+                <p style={{
+                  fontSize: '14px',
+                  lineHeight: '1.6',
+                  color: EmailColors.text.meta,
+                  textAlign: 'center',
+                  padding: '20px 0',
+                }}>
+                  View the full Form 144 filing for transaction details.
+                </p>
               )}
             </td>
           </tr>

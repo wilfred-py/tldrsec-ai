@@ -1,9 +1,7 @@
 import * as React from 'react';
-import { EmailColors, getChangeStyle, getChangeArrow, markdownToHtml } from '../design-system';
+import { EmailColors, EmailStyles, BadgeColors, getChangeStyle, getChangeArrow, markdownToHtml } from '../design-system';
 import { EmailHeader } from './sections/EmailHeader';
 import { EmailFooter } from './sections/EmailFooter';
-import { SectionCard } from './sections/SectionCard';
-import { SectionHeader } from './sections/SectionHeader';
 import { FilingTemplateData } from '../../../../lib/email/types';
 
 interface Form11KMinimalistTemplateProps {
@@ -11,15 +9,16 @@ interface Form11KMinimalistTemplateProps {
 }
 
 /**
- * Minimalist 11-K (Employee Stock Plan) email template
- * Morning Brew style: clean, scannable, lead with key metrics
+ * 11-K (Employee Stock Plan) email template - Smart Brevity format
  *
  * Layout:
- * - Header: company name, plan name
- * - Plan Overview: assets, participants, fiscal year
- * - Contributions & Distributions: money flow
- * - Investment Options: top holdings
- * - CTA: View full filing
+ * - Preheader for inbox preview
+ * - Signal pill badge (EMPLOYEE PLAN)
+ * - Lead sentence (plan name + fiscal year)
+ * - Why it matters
+ * - Data snapshot: assets, participants, contributions, distributions
+ * - Investment options as narrative
+ * - Watch for: notable changes
  */
 export function Form11KMinimalistTemplate({ filing }: Form11KMinimalistTemplateProps) {
   const {
@@ -55,6 +54,59 @@ export function Form11KMinimalistTemplate({ filing }: Form11KMinimalistTemplateP
     return?: string;
   }> | undefined;
 
+  // Build preheader text
+  const preheaderText = `EMPLOYEE PLAN: ${companyName} (${displayTicker}) -- ${planName || '11-K filing'} ${planAssets ? `with ${planAssets} in assets` : ''}`;
+
+  // Build lead sentence
+  const leadText = planName
+    ? `${companyName} reported on ${planName}${planFiscalYear ? ` for fiscal year ${planFiscalYear}` : ''}.`
+    : summaryText?.split(/(?<=[.!?])\s+/)[0] || '';
+
+  // Remaining summary
+  const remainingSummary = summaryText && leadText && summaryText !== leadText
+    ? (summaryText.startsWith(leadText) ? summaryText.slice(leadText.length).trim() : summaryText)
+    : '';
+
+  // Build data snapshot rows
+  const dataRows: { label: string; value: string; color?: string }[] = [];
+  if (planAssets) {
+    dataRows.push({ label: 'Plan Assets', value: planAssets, color: '#059669' });
+  }
+  if (netAssetsChange) {
+    const changeStyle = getChangeStyle(netAssetsChange);
+    const arrow = getChangeArrow(netAssetsChange);
+    dataRows.push({ label: 'Net Change', value: `${arrow}${netAssetsChange}`, color: changeStyle.color });
+  }
+  if (participantCount) {
+    dataRows.push({ label: 'Participants', value: participantCount });
+  }
+  if (companyStockHoldings) {
+    dataRows.push({ label: 'Company Stock', value: companyStockHoldings });
+  }
+  if (contributionsReceived) {
+    dataRows.push({ label: 'Employee Contributions', value: `+${contributionsReceived}`, color: '#059669' });
+  }
+  if (employerContributions) {
+    dataRows.push({ label: 'Employer Match', value: `+${employerContributions}`, color: '#059669' });
+  }
+  if (benefitsDistributed) {
+    dataRows.push({ label: 'Benefits Paid Out', value: `-${benefitsDistributed}`, color: '#DC2626' });
+  }
+
+  // Watch-for items from investment options
+  const watchFor: string[] = [];
+  if (investmentOptions && investmentOptions.length > 0) {
+    for (const opt of investmentOptions.slice(0, 4)) {
+      const parts = [opt.name];
+      if (opt.allocation) parts.push(opt.allocation);
+      if (opt.return) {
+        const arrow = getChangeArrow(opt.return);
+        parts.push(`${arrow}${opt.return}`);
+      }
+      watchFor.push(parts.join(' -- '));
+    }
+  }
+
   return (
     <div style={{
       maxWidth: '600px',
@@ -63,6 +115,20 @@ export function Form11KMinimalistTemplate({ filing }: Form11KMinimalistTemplateP
       backgroundColor: EmailColors.structure.background,
       color: EmailColors.text.body,
     }}>
+      {/* Preheader */}
+      <div style={{
+        display: 'none',
+        fontSize: '1px',
+        color: EmailColors.structure.background,
+        lineHeight: '1px',
+        maxHeight: '0px',
+        maxWidth: '0px',
+        opacity: 0,
+        overflow: 'hidden',
+      }}>
+        {preheaderText}
+      </div>
+
       {/* Header */}
       <EmailHeader
         ticker={displayTicker}
@@ -71,268 +137,94 @@ export function Form11KMinimalistTemplate({ filing }: Form11KMinimalistTemplateP
         filingDate={filingDate}
       />
 
-      {/* Main content */}
+      {/* Smart Brevity body */}
       <table width="100%" cellPadding="0" cellSpacing="0">
         <tbody>
           <tr>
             <td style={{ padding: '0 15px 20px' }}>
-              {/* Plan Signal Banner */}
-              <SectionCard>
-                <tr>
-                  <td style={{
-                    padding: '16px',
-                    backgroundColor: '#F0FDF4',
-                    borderRadius: '8px',
-                    textAlign: 'center',
-                  }}>
-                    <span style={{
-                      display: 'inline-block',
-                      padding: '4px 12px',
-                      backgroundColor: '#059669',
-                      color: 'white',
-                      borderRadius: '4px',
-                      fontSize: '12px',
-                      fontWeight: 600,
-                      textTransform: 'uppercase',
-                      letterSpacing: '0.5px',
+
+              {/* Signal badge -- FIRST element */}
+              <div style={{ marginBottom: '12px' }}>
+                <span style={{
+                  ...EmailStyles.pillBadge,
+                  backgroundColor: BadgeColors.neutral.bg,
+                  color: BadgeColors.neutral.text,
+                }}>
+                  {planType || 'EMPLOYEE PLAN'}
+                </span>
+              </div>
+
+              {/* Lead sentence */}
+              <h1 style={EmailStyles.leadSentence}>
+                {leadText || `${companyName} filed an 11-K employee benefit plan report`}
+              </h1>
+
+              {/* Why it matters */}
+              <p style={EmailStyles.whyItMatters}>
+                <strong style={{ color: '#000000' }}>Why it matters: </strong>
+                Employee benefit plan filings reveal workforce investment health, employer match generosity, and how much employees are concentrated in company stock -- a proxy for internal confidence.
+              </p>
+
+              {/* Thin divider */}
+              {dataRows.length > 0 && (
+                <table width="100%" cellPadding="0" cellSpacing="0" style={{ margin: '20px 0' }}>
+                  <tbody><tr><td style={EmailStyles.thinDivider}></td></tr></tbody>
+                </table>
+              )}
+
+              {/* Data snapshot */}
+              {dataRows.length > 0 && (
+                <table width="100%" cellPadding="0" cellSpacing="0" style={{ marginBottom: '4px' }}>
+                  <tbody>
+                    {dataRows.map((row, idx) => (
+                      <tr key={idx}>
+                        <td style={{
+                          ...EmailStyles.dataLabel,
+                          borderBottom: idx < dataRows.length - 1 ? '1px solid #F0F0F0' : 'none',
+                        }}>{row.label}</td>
+                        <td style={{
+                          ...EmailStyles.dataValue,
+                          color: row.color || '#111827',
+                          borderBottom: idx < dataRows.length - 1 ? '1px solid #F0F0F0' : 'none',
+                        }}>{row.value}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+
+              {/* Story -- remaining narrative via markdown */}
+              {remainingSummary && (
+                <>
+                  <table width="100%" cellPadding="0" cellSpacing="0" style={{ margin: '20px 0' }}>
+                    <tbody><tr><td style={EmailStyles.thinDivider}></td></tr></tbody>
+                  </table>
+                  <div
+                    style={EmailStyles.prose}
+                    dangerouslySetInnerHTML={{ __html: markdownToHtml(remainingSummary) }}
+                  />
+                </>
+              )}
+
+              {/* Watch for (investment options) */}
+              {watchFor.length > 0 && (
+                <>
+                  <table width="100%" cellPadding="0" cellSpacing="0" style={{ margin: '20px 0' }}>
+                    <tbody><tr><td style={EmailStyles.thinDivider}></td></tr></tbody>
+                  </table>
+                  <div style={EmailStyles.watchForHeader}>Top investment options:</div>
+                  {watchFor.map((item, idx) => (
+                    <div key={idx} style={{
+                      padding: '3px 0 3px 16px',
+                      fontSize: '14px',
+                      color: EmailColors.text.body,
+                      lineHeight: '1.5',
                     }}>
-                      {planType || 'Employee Benefit Plan'}
-                    </span>
-                    {planName && (
-                      <p style={{
-                        margin: '12px 0 0',
-                        fontSize: '15px',
-                        fontWeight: 600,
-                        color: EmailColors.text.headline,
-                      }}>
-                        {planName}
-                      </p>
-                    )}
-                    {planFiscalYear && (
-                      <p style={{
-                        margin: '4px 0 0',
-                        fontSize: '13px',
-                        color: EmailColors.text.meta,
-                      }}>
-                        Fiscal Year: {planFiscalYear}
-                      </p>
-                    )}
-                  </td>
-                </tr>
-              </SectionCard>
-
-              {/* Plan Overview */}
-              {(planAssets || participantCount) && (
-                <SectionCard>
-                  <SectionHeader emoji="📊" title="Plan Overview" />
-                  <tr>
-                    <td>
-                      <table width="100%" cellPadding="0" cellSpacing="0">
-                        <tbody>
-                          {planAssets && (
-                            <tr>
-                              <td style={{
-                                padding: '8px 0',
-                                fontSize: '14px',
-                                color: EmailColors.text.body,
-                                borderBottom: `1px solid ${EmailColors.structure.borderLight}`,
-                              }}>
-                                <span style={{ fontWeight: 600, color: EmailColors.text.headline }}>
-                                  Total Plan Assets:
-                                </span>
-                                <span style={{ float: 'right', fontWeight: 600, color: '#059669' }}>
-                                  {planAssets}
-                                </span>
-                              </td>
-                            </tr>
-                          )}
-                          {netAssetsChange && (
-                            <tr>
-                              <td style={{
-                                padding: '8px 0',
-                                fontSize: '14px',
-                                color: EmailColors.text.body,
-                                borderBottom: participantCount ? `1px solid ${EmailColors.structure.borderLight}` : 'none',
-                              }}>
-                                <span style={{ fontWeight: 600, color: EmailColors.text.headline }}>
-                                  Net Assets Change:
-                                </span>
-                                <span style={{
-                                  float: 'right',
-                                  ...getChangeStyle(netAssetsChange),
-                                }}>
-                                  {getChangeArrow(netAssetsChange)}{netAssetsChange}
-                                </span>
-                              </td>
-                            </tr>
-                          )}
-                          {participantCount && (
-                            <tr>
-                              <td style={{
-                                padding: '8px 0',
-                                fontSize: '14px',
-                                color: EmailColors.text.body,
-                                borderBottom: companyStockHoldings ? `1px solid ${EmailColors.structure.borderLight}` : 'none',
-                              }}>
-                                <span style={{ fontWeight: 600, color: EmailColors.text.headline }}>
-                                  Participants:
-                                </span>
-                                <span style={{ float: 'right' }}>
-                                  {participantCount}
-                                </span>
-                              </td>
-                            </tr>
-                          )}
-                          {companyStockHoldings && (
-                            <tr>
-                              <td style={{
-                                padding: '8px 0',
-                                fontSize: '14px',
-                                color: EmailColors.text.body,
-                              }}>
-                                <span style={{ fontWeight: 600, color: EmailColors.text.headline }}>
-                                  Company Stock Holdings:
-                                </span>
-                                <span style={{ float: 'right' }}>
-                                  {companyStockHoldings}
-                                </span>
-                              </td>
-                            </tr>
-                          )}
-                        </tbody>
-                      </table>
-                    </td>
-                  </tr>
-                </SectionCard>
-              )}
-
-              {/* Contributions & Distributions */}
-              {(contributionsReceived || employerContributions || benefitsDistributed) && (
-                <SectionCard>
-                  <SectionHeader emoji="💵" title="Contributions & Distributions" />
-                  <tr>
-                    <td>
-                      <table width="100%" cellPadding="0" cellSpacing="0">
-                        <tbody>
-                          {contributionsReceived && (
-                            <tr>
-                              <td style={{
-                                padding: '8px 0',
-                                fontSize: '14px',
-                                color: EmailColors.text.body,
-                                borderBottom: `1px solid ${EmailColors.structure.borderLight}`,
-                              }}>
-                                <span style={{ fontWeight: 600, color: EmailColors.text.headline }}>
-                                  Employee Contributions:
-                                </span>
-                                <span style={{ float: 'right', color: '#059669' }}>
-                                  +{contributionsReceived}
-                                </span>
-                              </td>
-                            </tr>
-                          )}
-                          {employerContributions && (
-                            <tr>
-                              <td style={{
-                                padding: '8px 0',
-                                fontSize: '14px',
-                                color: EmailColors.text.body,
-                                borderBottom: benefitsDistributed ? `1px solid ${EmailColors.structure.borderLight}` : 'none',
-                              }}>
-                                <span style={{ fontWeight: 600, color: EmailColors.text.headline }}>
-                                  Employer Match:
-                                </span>
-                                <span style={{ float: 'right', color: '#059669' }}>
-                                  +{employerContributions}
-                                </span>
-                              </td>
-                            </tr>
-                          )}
-                          {benefitsDistributed && (
-                            <tr>
-                              <td style={{
-                                padding: '8px 0',
-                                fontSize: '14px',
-                                color: EmailColors.text.body,
-                              }}>
-                                <span style={{ fontWeight: 600, color: EmailColors.text.headline }}>
-                                  Benefits Paid Out:
-                                </span>
-                                <span style={{ float: 'right', color: '#DC2626' }}>
-                                  -{benefitsDistributed}
-                                </span>
-                              </td>
-                            </tr>
-                          )}
-                        </tbody>
-                      </table>
-                    </td>
-                  </tr>
-                </SectionCard>
-              )}
-
-              {/* Investment Options */}
-              {investmentOptions && investmentOptions.length > 0 && (
-                <SectionCard>
-                  <SectionHeader emoji="📈" title="Top Investment Options" />
-                  <tr>
-                    <td>
-                      <table width="100%" cellPadding="0" cellSpacing="0">
-                        <tbody>
-                          {investmentOptions.slice(0, 5).map((option, index) => {
-                            const changeStyle = getChangeStyle(option.return);
-                            const arrow = getChangeArrow(option.return);
-                            return (
-                              <tr key={index}>
-                                <td style={{
-                                  padding: '8px 0',
-                                  fontSize: '14px',
-                                  color: EmailColors.text.body,
-                                  borderBottom: index < Math.min(investmentOptions.length, 5) - 1 ? `1px solid ${EmailColors.structure.borderLight}` : 'none',
-                                }}>
-                                  <div>
-                                    <span style={{ fontWeight: 600, color: EmailColors.text.headline }}>
-                                      {option.name}
-                                    </span>
-                                    <span style={{ float: 'right' }}>
-                                      {option.allocation && (
-                                        <span style={{ marginRight: '12px', color: EmailColors.text.meta }}>
-                                          {option.allocation}
-                                        </span>
-                                      )}
-                                      {option.return && (
-                                        <span style={changeStyle}>
-                                          {arrow}{option.return}
-                                        </span>
-                                      )}
-                                    </span>
-                                  </div>
-                                </td>
-                              </tr>
-                            );
-                          })}
-                        </tbody>
-                      </table>
-                    </td>
-                  </tr>
-                </SectionCard>
-              )}
-
-              {/* Summary Text (fallback) */}
-              {summaryText && (
-                <SectionCard>
-                  <SectionHeader emoji="📝" title="Summary" />
-                  <tr>
-                    <td
-                      style={{
-                        fontSize: '14px',
-                        lineHeight: '1.6',
-                        color: EmailColors.text.body,
-                      }}
-                      dangerouslySetInnerHTML={{ __html: markdownToHtml(summaryText) }}
-                    />
-                  </tr>
-                </SectionCard>
+                      <span style={{ color: EmailColors.text.meta, marginRight: '8px' }}>•</span>
+                      {item}
+                    </div>
+                  ))}
+                </>
               )}
             </td>
           </tr>
@@ -343,7 +235,6 @@ export function Form11KMinimalistTemplate({ filing }: Form11KMinimalistTemplateP
       <EmailFooter
         filingUrl={filingUrl}
         formType={filingType || '11-K'}
-        unsubscribeUrl={`${process.env.NEXT_PUBLIC_APP_URL || ''}/dashboard/settings`}
       />
     </div>
   );
