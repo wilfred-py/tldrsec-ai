@@ -32,16 +32,17 @@ describe('Email Template Formatting', () => {
     });
 
     it('should render bullet lists from markdown', () => {
-      // Arrange
+      // Arrange — the first sentence becomes the headline; bullets must be in the
+      // remaining summary so they flow through markdownToHtml for bullet conversion.
       const mockFiling: FilingTemplateData = {
         companyName: 'Test Corp',
         symbol: 'TEST',
         filingType: '8-K',
         filingDate: '2026-01-20',
         filingUrl: 'https://example.com',
-        summaryText: '## Key Points\n\n- Point 1\n- Point 2\n- Point 3',
+        summaryText: 'CEO sold a significant block of shares worth over fifty million dollars. Key points below.\n\n- Point 1\n- Point 2\n- Point 3',
         summaryData: {
-          summary: '## Key Points\n\n- Point 1\n- Point 2\n- Point 3',
+          summary: 'CEO sold a significant block of shares worth over fifty million dollars. Key points below.\n\n- Point 1\n- Point 2\n- Point 3',
           filerName: 'Test Filer',
           transactions: []
         }
