@@ -616,7 +616,7 @@ function EmailDetailPanel({
         <div className="flex items-center gap-3">
           <div
             className="w-10 h-10 rounded-lg flex items-center justify-center"
-            style={{ backgroundColor: 'var(--landing-primary-light, #e0edff)' }}
+            style={{ backgroundColor: 'var(--brand-primary-light, #e0edff)' }}
           >
             <email.icon className="w-5 h-5 text-blue-600" />
           </div>
@@ -696,7 +696,7 @@ function EmailDetailPanel({
             : 'This is a real AI-generated summary. Sign up to receive summaries for your portfolio.'}
         </p>
         <Link href={isOnboarded ? '/dashboard' : '/sign-up'}>
-          <Button className="w-full landing-button-gradient">
+          <Button className="w-full brand-button-gradient">
             {isOnboarded ? 'Go to Dashboard' : 'Get Summaries Like This'}
             <ArrowRight className="w-4 h-4 ml-2" />
           </Button>
@@ -1005,12 +1005,12 @@ export const GmailInboxHero = memo<GmailInboxHeroProps>(({ className = '', heroR
             animate="animate"
             className="text-center lg:text-left"
           >
-            <motion.h1 variants={staggerItem} className="landing-display mb-6">
+            <motion.h1 variants={staggerItem} className="brand-display mb-6">
               Summaries That{' '}
-              <span className="landing-gradient-text">Actually Matter</span>
+              <span className="brand-gradient-text">Actually Matter</span>
             </motion.h1>
 
-            <motion.p variants={staggerItem} className="landing-body-large mb-8 max-w-xl mx-auto lg:mx-0">
+            <motion.p variants={staggerItem} className="brand-body-large mb-8 max-w-xl mx-auto lg:mx-0">
               Transform 300+ page SEC filings into clear, actionable summaries
               delivered to your inbox in minutes. Click any email to see the AI analysis.
             </motion.p>
@@ -1020,10 +1020,10 @@ export const GmailInboxHero = memo<GmailInboxHeroProps>(({ className = '', heroR
               className="flex flex-wrap justify-center lg:justify-start gap-6 mb-8"
             >
               {trustMetrics.map((metric) => (
-                <div key={metric.label} className="landing-metric">
-                  <CheckCircle2 className="w-5 h-5 text-[var(--landing-success)]" />
-                  <span className="landing-metric-value">{metric.value}</span>
-                  <span className="landing-metric-label">{metric.label}</span>
+                <div key={metric.label} className="brand-metric">
+                  <CheckCircle2 className="w-5 h-5 text-[var(--brand-success)]" />
+                  <span className="brand-metric-value">{metric.value}</span>
+                  <span className="brand-metric-label">{metric.label}</span>
                 </div>
               ))}
             </motion.div>
@@ -1038,7 +1038,7 @@ export const GmailInboxHero = memo<GmailInboxHeroProps>(({ className = '', heroR
               ) : isOnboarded ? (
                 // State 3: Authenticated AND onboarded → Dashboard
                 <Link href="/dashboard">
-                  <Button className="landing-button-gradient">
+                  <Button className="brand-button-gradient">
                     Go to Dashboard
                     <ArrowRight className="w-5 h-5 ml-2" />
                   </Button>
@@ -1046,7 +1046,7 @@ export const GmailInboxHero = memo<GmailInboxHeroProps>(({ className = '', heroR
               ) : isSignedIn ? (
                 // State 2: Authenticated but NOT onboarded → Onboarding
                 <Link href="/onboarding">
-                  <Button className="landing-button-gradient">
+                  <Button className="brand-button-gradient">
                     Complete Setup
                     <ArrowRight className="w-5 h-5 ml-2" />
                   </Button>
@@ -1054,7 +1054,7 @@ export const GmailInboxHero = memo<GmailInboxHeroProps>(({ className = '', heroR
               ) : (
                 // State 1: Unauthenticated → Sign Up
                 <Link href="/sign-up">
-                  <Button className="landing-button-gradient">
+                  <Button className="brand-button-gradient">
                     Get Summaries Like This
                     <ArrowRight className="w-5 h-5 ml-2" />
                   </Button>
@@ -1062,7 +1062,7 @@ export const GmailInboxHero = memo<GmailInboxHeroProps>(({ className = '', heroR
               )}
             </motion.div>
 
-            <motion.p variants={staggerItem} className="landing-caption">
+            <motion.p variants={staggerItem} className="brand-caption">
               {getCaptionText()}
             </motion.p>
           </motion.div>

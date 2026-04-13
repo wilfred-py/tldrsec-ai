@@ -9,9 +9,16 @@ All notable changes to this project will be documented in this file.
 - Filing type badges now use consistent colors across dashboard and landing page (10-K purple, 10-Q blue, 8-K orange, Form 4 green).
 - Summary preview text trimmed to 1 line everywhere (was 2-3 lines on desktop).
 - Stats section replaced: "Time Saved" widget becomes "Email Delivery" showing monthly and total email counts.
-- Dashboard layout simplified with landing page design tokens throughout (colors, borders, shadows).
+- Dashboard layout simplified with brand design tokens throughout (colors, borders, shadows).
 - Featured summaries for new users labeled "Example Filing Summaries" instead of "Featured Filings".
 - Tab renamed from "Activity" to "Emails" to reinforce the email-first model.
+- Renamed all `landing-*` CSS classes and variables to `brand-*` for semantic correctness across the codebase.
+- Pricing cards: restored keyboard accessibility (tabIndex, aria-selected, onKeyDown, onFocus/onBlur).
+
+### Added
+- framer-motion Jest mock (`__mocks__/framer-motion.tsx`) for test compatibility with dashboard animations.
+- `:disabled` styles for `brand-button-primary` and `brand-button-gradient` CSS classes.
+- `[role="tablist"]` scoped CSS selector for active tab pill styling (prevents unintended style leaks).
 
 ### Removed
 - Duplicate `ActivitySummary` type definition in dashboard-client (now imported from activity-feed).

@@ -16,19 +16,19 @@ export default function PrivacyPolicyPage() {
   return (
     <div className="min-h-screen bg-white">
       {/* Header */}
-      <header className="border-b" style={{ borderColor: 'var(--landing-border)' }}>
+      <header className="border-b" style={{ borderColor: 'var(--brand-border)' }}>
         <div className="container mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
             <Link href="/" className="flex items-center gap-2">
-              <FileText className="w-6 h-6 text-[var(--landing-primary)]" />
-              <span className="text-xl font-bold" style={{ color: 'var(--landing-secondary)' }}>
+              <FileText className="w-6 h-6 text-[var(--brand-primary)]" />
+              <span className="text-xl font-bold" style={{ color: 'var(--brand-secondary)' }}>
                 tldrsec
               </span>
             </Link>
             <Link
               href="/"
-              className="flex items-center gap-2 text-sm hover:text-[var(--landing-primary)] transition-colors"
-              style={{ color: 'var(--landing-text-muted)' }}
+              className="flex items-center gap-2 text-sm hover:text-[var(--brand-primary)] transition-colors"
+              style={{ color: 'var(--brand-text-muted)' }}
             >
               <ArrowLeft className="w-4 h-4" />
               Back to Home
@@ -39,17 +39,17 @@ export default function PrivacyPolicyPage() {
 
       {/* Content */}
       <main className="container mx-auto px-4 py-12 max-w-4xl">
-        <h1 className="text-4xl font-bold mb-2" style={{ color: 'var(--landing-secondary)' }}>
+        <h1 className="text-4xl font-bold mb-2" style={{ color: 'var(--brand-secondary)' }}>
           Privacy Policy
         </h1>
-        <p className="mb-8" style={{ color: 'var(--landing-text-muted)' }}>
+        <p className="mb-8" style={{ color: 'var(--brand-text-muted)' }}>
           Last updated: {currentDate}
         </p>
 
-        <div className="prose prose-gray max-w-none" style={{ color: 'var(--landing-text)' }}>
+        <div className="prose prose-gray max-w-none" style={{ color: 'var(--brand-text)' }}>
           {/* Introduction */}
           <section className="mb-8">
-            <h2 className="text-2xl font-semibold mb-4" style={{ color: 'var(--landing-secondary)' }}>
+            <h2 className="text-2xl font-semibold mb-4" style={{ color: 'var(--brand-secondary)' }}>
               1. Introduction
             </h2>
             <p className="mb-4 leading-relaxed">
@@ -62,11 +62,11 @@ export default function PrivacyPolicyPage() {
 
           {/* Information We Collect */}
           <section className="mb-8">
-            <h2 className="text-2xl font-semibold mb-4" style={{ color: 'var(--landing-secondary)' }}>
+            <h2 className="text-2xl font-semibold mb-4" style={{ color: 'var(--brand-secondary)' }}>
               2. Information We Collect
             </h2>
 
-            <h3 className="text-xl font-medium mb-3" style={{ color: 'var(--landing-secondary)' }}>
+            <h3 className="text-xl font-medium mb-3" style={{ color: 'var(--brand-secondary)' }}>
               2.1 Information You Provide
             </h3>
             <ul className="list-disc pl-6 mb-4 space-y-2">
@@ -76,7 +76,7 @@ export default function PrivacyPolicyPage() {
               <li><strong>Payment Information:</strong> If you subscribe to a paid plan, our payment processor (Stripe) collects billing information. We do not store your credit card details directly.</li>
             </ul>
 
-            <h3 className="text-xl font-medium mb-3" style={{ color: 'var(--landing-secondary)' }}>
+            <h3 className="text-xl font-medium mb-3" style={{ color: 'var(--brand-secondary)' }}>
               2.2 Information Collected Automatically
             </h3>
             <ul className="list-disc pl-6 mb-4 space-y-2">
@@ -85,7 +85,7 @@ export default function PrivacyPolicyPage() {
               <li><strong>Log Data:</strong> IP address, access times, and pages viewed for security monitoring and service improvement.</li>
             </ul>
 
-            <h3 className="text-xl font-medium mb-3" style={{ color: 'var(--landing-secondary)' }}>
+            <h3 className="text-xl font-medium mb-3" style={{ color: 'var(--brand-secondary)' }}>
               2.3 SEC Filing Data
             </h3>
             <p className="mb-4 leading-relaxed">
@@ -95,7 +95,7 @@ export default function PrivacyPolicyPage() {
 
           {/* How We Use Your Information */}
           <section className="mb-8">
-            <h2 className="text-2xl font-semibold mb-4" style={{ color: 'var(--landing-secondary)' }}>
+            <h2 className="text-2xl font-semibold mb-4" style={{ color: 'var(--brand-secondary)' }}>
               3. How We Use Your Information
             </h2>
             <p className="mb-4 leading-relaxed">We use the information we collect to:</p>
@@ -113,18 +113,18 @@ export default function PrivacyPolicyPage() {
 
           {/* Third-Party Services */}
           <section className="mb-8">
-            <h2 className="text-2xl font-semibold mb-4" style={{ color: 'var(--landing-secondary)' }}>
+            <h2 className="text-2xl font-semibold mb-4" style={{ color: 'var(--brand-secondary)' }}>
               4. Third-Party Services
             </h2>
             <p className="mb-4 leading-relaxed">
               We use trusted third-party service providers to operate our Service:
             </p>
             <ul className="list-disc pl-6 mb-4 space-y-2">
-              <li><strong>Clerk:</strong> Authentication and user account management. <a href="https://clerk.com/privacy" className="text-[var(--landing-primary)] hover:underline" target="_blank" rel="noopener noreferrer">Clerk Privacy Policy</a></li>
-              <li><strong>Stripe:</strong> Payment processing for subscriptions. <a href="https://stripe.com/privacy" className="text-[var(--landing-primary)] hover:underline" target="_blank" rel="noopener noreferrer">Stripe Privacy Policy</a></li>
-              <li><strong>Resend:</strong> Email delivery for filing notifications. <a href="https://resend.com/legal/privacy-policy" className="text-[var(--landing-primary)] hover:underline" target="_blank" rel="noopener noreferrer">Resend Privacy Policy</a></li>
-              <li><strong>Supabase:</strong> Database hosting and data storage. <a href="https://supabase.com/privacy" className="text-[var(--landing-primary)] hover:underline" target="_blank" rel="noopener noreferrer">Supabase Privacy Policy</a></li>
-              <li><strong>Vercel:</strong> Web application hosting. <a href="https://vercel.com/legal/privacy-policy" className="text-[var(--landing-primary)] hover:underline" target="_blank" rel="noopener noreferrer">Vercel Privacy Policy</a></li>
+              <li><strong>Clerk:</strong> Authentication and user account management. <a href="https://clerk.com/privacy" className="text-[var(--brand-primary)] hover:underline" target="_blank" rel="noopener noreferrer">Clerk Privacy Policy</a></li>
+              <li><strong>Stripe:</strong> Payment processing for subscriptions. <a href="https://stripe.com/privacy" className="text-[var(--brand-primary)] hover:underline" target="_blank" rel="noopener noreferrer">Stripe Privacy Policy</a></li>
+              <li><strong>Resend:</strong> Email delivery for filing notifications. <a href="https://resend.com/legal/privacy-policy" className="text-[var(--brand-primary)] hover:underline" target="_blank" rel="noopener noreferrer">Resend Privacy Policy</a></li>
+              <li><strong>Supabase:</strong> Database hosting and data storage. <a href="https://supabase.com/privacy" className="text-[var(--brand-primary)] hover:underline" target="_blank" rel="noopener noreferrer">Supabase Privacy Policy</a></li>
+              <li><strong>Vercel:</strong> Web application hosting. <a href="https://vercel.com/legal/privacy-policy" className="text-[var(--brand-primary)] hover:underline" target="_blank" rel="noopener noreferrer">Vercel Privacy Policy</a></li>
               <li><strong>OpenRouter/xAI:</strong> AI processing for filing summarization. We send SEC filing content (public government data) to generate summaries.</li>
             </ul>
             <p className="mb-4 leading-relaxed">
@@ -134,7 +134,7 @@ export default function PrivacyPolicyPage() {
 
           {/* Data Sharing */}
           <section className="mb-8">
-            <h2 className="text-2xl font-semibold mb-4" style={{ color: 'var(--landing-secondary)' }}>
+            <h2 className="text-2xl font-semibold mb-4" style={{ color: 'var(--brand-secondary)' }}>
               5. Data Sharing and Disclosure
             </h2>
             <p className="mb-4 leading-relaxed">
@@ -150,7 +150,7 @@ export default function PrivacyPolicyPage() {
 
           {/* Data Security */}
           <section className="mb-8">
-            <h2 className="text-2xl font-semibold mb-4" style={{ color: 'var(--landing-secondary)' }}>
+            <h2 className="text-2xl font-semibold mb-4" style={{ color: 'var(--brand-secondary)' }}>
               6. Data Security
             </h2>
             <p className="mb-4 leading-relaxed">
@@ -170,7 +170,7 @@ export default function PrivacyPolicyPage() {
 
           {/* Data Retention */}
           <section className="mb-8">
-            <h2 className="text-2xl font-semibold mb-4" style={{ color: 'var(--landing-secondary)' }}>
+            <h2 className="text-2xl font-semibold mb-4" style={{ color: 'var(--brand-secondary)' }}>
               7. Data Retention
             </h2>
             <p className="mb-4 leading-relaxed">
@@ -180,7 +180,7 @@ export default function PrivacyPolicyPage() {
 
           {/* Your Rights */}
           <section className="mb-8">
-            <h2 className="text-2xl font-semibold mb-4" style={{ color: 'var(--landing-secondary)' }}>
+            <h2 className="text-2xl font-semibold mb-4" style={{ color: 'var(--brand-secondary)' }}>
               8. Your Rights and Choices
             </h2>
             <p className="mb-4 leading-relaxed">You have the right to:</p>
@@ -192,13 +192,13 @@ export default function PrivacyPolicyPage() {
               <li><strong>Modify Preferences:</strong> Update your notification and tracking preferences in your dashboard.</li>
             </ul>
             <p className="mb-4 leading-relaxed">
-              To exercise these rights, please contact us at <a href="mailto:privacy@tldrsec.app" className="text-[var(--landing-primary)] hover:underline">privacy@tldrsec.app</a>.
+              To exercise these rights, please contact us at <a href="mailto:privacy@tldrsec.app" className="text-[var(--brand-primary)] hover:underline">privacy@tldrsec.app</a>.
             </p>
           </section>
 
           {/* Cookies */}
           <section className="mb-8">
-            <h2 className="text-2xl font-semibold mb-4" style={{ color: 'var(--landing-secondary)' }}>
+            <h2 className="text-2xl font-semibold mb-4" style={{ color: 'var(--brand-secondary)' }}>
               9. Cookies and Tracking
             </h2>
             <p className="mb-4 leading-relaxed">
@@ -208,7 +208,7 @@ export default function PrivacyPolicyPage() {
 
           {/* Children */}
           <section className="mb-8">
-            <h2 className="text-2xl font-semibold mb-4" style={{ color: 'var(--landing-secondary)' }}>
+            <h2 className="text-2xl font-semibold mb-4" style={{ color: 'var(--brand-secondary)' }}>
               10. Children&apos;s Privacy
             </h2>
             <p className="mb-4 leading-relaxed">
@@ -218,7 +218,7 @@ export default function PrivacyPolicyPage() {
 
           {/* International */}
           <section className="mb-8">
-            <h2 className="text-2xl font-semibold mb-4" style={{ color: 'var(--landing-secondary)' }}>
+            <h2 className="text-2xl font-semibold mb-4" style={{ color: 'var(--brand-secondary)' }}>
               11. International Data Transfers
             </h2>
             <p className="mb-4 leading-relaxed">
@@ -228,7 +228,7 @@ export default function PrivacyPolicyPage() {
 
           {/* Changes */}
           <section className="mb-8">
-            <h2 className="text-2xl font-semibold mb-4" style={{ color: 'var(--landing-secondary)' }}>
+            <h2 className="text-2xl font-semibold mb-4" style={{ color: 'var(--brand-secondary)' }}>
               12. Changes to This Privacy Policy
             </h2>
             <p className="mb-4 leading-relaxed">
@@ -238,23 +238,23 @@ export default function PrivacyPolicyPage() {
 
           {/* Contact */}
           <section className="mb-8">
-            <h2 className="text-2xl font-semibold mb-4" style={{ color: 'var(--landing-secondary)' }}>
+            <h2 className="text-2xl font-semibold mb-4" style={{ color: 'var(--brand-secondary)' }}>
               13. Contact Us
             </h2>
             <p className="mb-4 leading-relaxed">
               If you have any questions about this Privacy Policy or our data practices, please contact us at:
             </p>
             <p className="mb-4 leading-relaxed">
-              <strong>Email:</strong> <a href="mailto:privacy@tldrsec.app" className="text-[var(--landing-primary)] hover:underline">privacy@tldrsec.app</a>
+              <strong>Email:</strong> <a href="mailto:privacy@tldrsec.app" className="text-[var(--brand-primary)] hover:underline">privacy@tldrsec.app</a>
             </p>
           </section>
         </div>
       </main>
 
       {/* Footer */}
-      <footer className="py-8 border-t" style={{ borderColor: 'var(--landing-border)' }}>
+      <footer className="py-8 border-t" style={{ borderColor: 'var(--brand-border)' }}>
         <div className="container mx-auto px-4 text-center">
-          <p style={{ color: 'var(--landing-text-muted)' }}>
+          <p style={{ color: 'var(--brand-text-muted)' }}>
             &copy; {new Date().getFullYear()} tldrsec. All rights reserved.
           </p>
         </div>

@@ -45,20 +45,20 @@
   --fintech-text-primary: oklch(0.15 0.01 232); /* Near black with blue hint */
   --fintech-text-secondary: oklch(0.45 0.05 232); /* Professional gray-blue */
 
-  /* Landing Page V2 - Light Theme */
-  --landing-primary: #0079F2;           /* Stripe-inspired blue */
-  --landing-primary-hover: #0066CC;     /* Darker on hover */
-  --landing-primary-light: #E8F4FD;     /* Light blue backgrounds */
-  --landing-secondary: #1A1A2E;         /* Dark text */
-  --landing-text: #374151;              /* Body text gray */
-  --landing-text-muted: #6B7280;        /* Muted text */
-  --landing-bg: #FFFFFF;                /* White background */
-  --landing-bg-subtle: #F9FAFB;         /* Subtle gray background */
-  --landing-border: #E5E7EB;            /* Light borders */
-  --landing-success: #10B981;           /* Green for positive metrics */
-  --landing-accent: #8B5CF6;            /* Purple accent */
-  --landing-gradient-start: #0079F2;    /* Gradient start */
-  --landing-gradient-end: #8B5CF6;      /* Gradient end */
+  /* Brand Design System - Light Theme */
+  --brand-primary: #0079F2;           /* Stripe-inspired blue */
+  --brand-primary-hover: #0066CC;     /* Darker on hover */
+  --brand-primary-light: #E8F4FD;     /* Light blue backgrounds */
+  --brand-secondary: #1A1A2E;         /* Dark text */
+  --brand-text: #374151;              /* Body text gray */
+  --brand-text-muted: #6B7280;        /* Muted text */
+  --brand-bg: #FFFFFF;                /* White background */
+  --brand-bg-subtle: #F9FAFB;         /* Subtle gray background */
+  --brand-border: #E5E7EB;            /* Light borders */
+  --brand-success: #10B981;           /* Green for positive metrics */
+  --brand-accent: #8B5CF6;            /* Purple accent */
+  --brand-gradient-start: #0079F2;    /* Gradient start */
+  --brand-gradient-end: #8B5CF6;      /* Gradient end */
 }
 
 .dark {
@@ -193,147 +193,163 @@
   }
 }
 
-/* Landing Page V2 - Typography & Component Styles */
+/* Brand Design System - Typography & Component Styles */
 @layer components {
-  .landing-display {
+  .brand-display {
     @apply text-5xl md:text-6xl lg:text-7xl font-bold tracking-tight leading-[1.1];
-    color: var(--landing-secondary);
+    color: var(--brand-secondary);
   }
 
-  .landing-heading {
+  .brand-heading {
     @apply text-3xl md:text-4xl lg:text-5xl font-bold tracking-tight;
-    color: var(--landing-secondary);
+    color: var(--brand-secondary);
   }
 
-  .landing-subheading {
+  .brand-subheading {
     @apply text-xl md:text-2xl font-medium;
-    color: var(--landing-text);
+    color: var(--brand-text);
   }
 
-  .landing-body {
+  .brand-body {
     @apply text-base md:text-lg;
-    color: var(--landing-text);
+    color: var(--brand-text);
     line-height: 1.7;
   }
 
-  .landing-body-large {
+  .brand-body-large {
     @apply text-lg md:text-xl;
-    color: var(--landing-text);
+    color: var(--brand-text);
     line-height: 1.6;
   }
 
-  .landing-caption {
+  .brand-caption {
     @apply text-sm;
-    color: var(--landing-text-muted);
+    color: var(--brand-text-muted);
   }
 
   /* Gradient text effect */
-  .landing-gradient-text {
+  .brand-gradient-text {
     @apply bg-clip-text text-transparent;
     background-image: linear-gradient(
       135deg,
-      var(--landing-primary) 0%,
-      var(--landing-accent) 100%
+      var(--brand-primary) 0%,
+      var(--brand-accent) 100%
     );
   }
 
   /* Primary button style */
-  .landing-button-primary {
+  .brand-button-primary {
     @apply h-12 px-8 text-base font-semibold rounded-lg;
-    background-color: var(--landing-primary) !important;
-    color: white !important;
+    background-color: var(--brand-primary);
+    color: white;
     box-shadow: 0 4px 14px 0 rgba(0, 121, 242, 0.39);
     transition: all 0.2s ease;
   }
 
-  .landing-button-primary:hover {
-    background-color: var(--landing-primary-hover) !important;
+  .brand-button-primary:hover:not(:disabled) {
+    background-color: var(--brand-primary-hover);
     box-shadow: 0 6px 20px 0 rgba(0, 121, 242, 0.5);
     transform: translateY(-1px);
   }
 
+  .brand-button-primary:disabled {
+    opacity: 0.5;
+    pointer-events: none;
+  }
+
   /* Secondary button style */
-  .landing-button-secondary {
+  .brand-button-secondary {
     @apply h-12 px-8 text-base font-semibold rounded-lg;
     background-color: transparent;
-    color: var(--landing-secondary);
-    border: 1px solid var(--landing-border);
+    color: var(--brand-secondary);
+    border: 1px solid var(--brand-border);
     transition: all 0.2s ease;
   }
 
-  .landing-button-secondary:hover {
-    background-color: var(--landing-bg-subtle);
-    border-color: var(--landing-text-muted);
+  .brand-button-secondary:hover {
+    background-color: var(--brand-bg-subtle);
+    border-color: var(--brand-text-muted);
   }
 
-  /* Gradient button style - matches landing-gradient-text colors */
-  .landing-button-gradient {
-    @apply h-12 px-8 text-base font-semibold rounded-lg text-white;
+  /* Gradient button style - matches brand-gradient-text colors */
+  .brand-button-gradient {
+    @apply h-12 px-8 text-base font-semibold rounded-lg;
     background: linear-gradient(
       135deg,
-      var(--landing-primary) 0%,
-      var(--landing-accent) 100%
-    ) !important;
-    color: white !important;
+      var(--brand-primary) 0%,
+      var(--brand-accent) 100%
+    );
+    color: white;
     box-shadow: 0 4px 14px 0 rgba(0, 121, 242, 0.39);
     transition: all 0.2s ease;
   }
 
-  .landing-button-gradient:hover {
+  .brand-button-gradient:hover:not(:disabled) {
     box-shadow: 0 6px 20px 0 rgba(139, 92, 246, 0.5);
     transform: translateY(-1px);
     filter: brightness(1.05);
   }
 
+  .brand-button-gradient:disabled {
+    opacity: 0.5;
+    pointer-events: none;
+  }
+
   /* Outline button style - more visible than secondary */
-  .landing-button-outline {
+  .brand-button-outline {
     @apply h-12 px-8 text-base font-semibold rounded-lg;
     background-color: transparent;
-    color: var(--landing-text);
-    border: 2px solid var(--landing-text-muted);
+    color: var(--brand-text);
+    border: 2px solid var(--brand-text-muted);
     transition: all 0.2s ease;
   }
 
-  .landing-button-outline:hover {
-    background-color: var(--landing-bg-subtle);
-    border-color: var(--landing-secondary);
-    color: var(--landing-secondary);
+  .brand-button-outline:hover {
+    background-color: var(--brand-bg-subtle);
+    border-color: var(--brand-secondary);
+    color: var(--brand-secondary);
   }
 
   /* Card styles */
-  .landing-card {
+  .brand-card {
     @apply rounded-2xl p-6 md:p-8;
-    background-color: var(--landing-bg);
-    border: 1px solid var(--landing-border);
+    background-color: var(--brand-bg);
+    border: 1px solid var(--brand-border);
     box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1);
     transition: all 0.3s ease;
   }
 
-  .landing-card:hover {
+  .brand-card:hover {
     box-shadow: 0 10px 40px -10px rgba(0, 0, 0, 0.1);
-    border-color: var(--landing-primary-light);
+    border-color: var(--brand-primary-light);
   }
 
   /* Badge styles */
-  .landing-badge {
+  .brand-badge {
     @apply inline-flex items-center px-3 py-1 rounded-full text-sm font-medium;
-    background-color: var(--landing-primary-light);
-    color: var(--landing-primary);
+    background-color: var(--brand-primary-light);
+    color: var(--brand-primary);
   }
 
   /* Trust metric styles */
-  .landing-metric {
+  .brand-metric {
     @apply flex items-center gap-2;
   }
 
-  .landing-metric-value {
+  .brand-metric-value {
     @apply text-lg font-bold;
-    color: var(--landing-secondary);
+    color: var(--brand-secondary);
   }
 
-  .landing-metric-label {
+  .brand-metric-label {
     @apply text-sm;
-    color: var(--landing-text-muted);
+    color: var(--brand-text-muted);
+  }
+
+  /* Active tab pill for dashboard tabs */
+  [role="tablist"].rounded-full > [data-state="active"] {
+    background-color: var(--brand-primary) !important;
+    color: white !important;
   }
 }
 

@@ -51,7 +51,7 @@ export function Sidebar() {
       </Sheet>
 
       {/* Desktop Sidebar - hidden on mobile, visible on md+ */}
-      <aside className="hidden md:fixed md:inset-y-0 md:z-30 md:flex md:w-64 md:flex-col border-r border-[var(--landing-border)] bg-background">
+      <aside className="hidden md:fixed md:inset-y-0 md:z-30 md:flex md:w-64 md:flex-col border-r border-[var(--brand-border)] bg-background">
         <div className="flex h-full w-full flex-col space-y-2">
           <div className="flex h-14 items-center border-b px-4">
             <Link href="/dashboard" className="flex items-center">
@@ -69,7 +69,7 @@ export function Sidebar() {
                     "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium hover:bg-accent hover:text-accent-foreground",
                     (pathname === item.href ||
                      (item.href !== "/dashboard" && pathname.startsWith(item.href)))
-                      ? "bg-[var(--landing-primary-light)] text-[var(--landing-primary)]"
+                      ? "bg-[var(--brand-primary-light)] text-[var(--brand-primary)]"
                       : "transparent"
                   )}
                 >
@@ -128,7 +128,7 @@ function MobileSidebar({
                 "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium hover:bg-accent hover:text-accent-foreground",
                 (pathname === item.href ||
                  (item.href !== "/dashboard" && pathname.startsWith(item.href)))
-                  ? "bg-[var(--landing-primary-light)] text-[var(--landing-primary)]"
+                  ? "bg-[var(--brand-primary-light)] text-[var(--brand-primary)]"
                   : "transparent"
               )}
             >

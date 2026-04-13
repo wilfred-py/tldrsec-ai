@@ -105,9 +105,9 @@ export function TickersTable({
         <Table>
           <TableHeader>
             {table.getHeaderGroups().map((headerGroup) => (
-              <TableRow key={headerGroup.id}>
+              <TableRow key={headerGroup.id} style={{ backgroundColor: 'var(--brand-bg-subtle)' }}>
                 {headerGroup.headers.map((header) => (
-                  <TableHead key={header.id} className="group">
+                  <TableHead key={header.id} className="group brand-caption text-xs font-semibold uppercase tracking-wider">
                     {header.isPlaceholder
                       ? null
                       : flexRender(
@@ -134,6 +134,7 @@ export function TickersTable({
                   <TableRow
                     key={row.id}
                     data-state={row.getIsSelected() && "selected"}
+                    className="transition-colors hover:bg-[var(--brand-primary-light)]"
                   >
                     {row.getVisibleCells().map((cell) => (
                       <TableCell key={cell.id}>

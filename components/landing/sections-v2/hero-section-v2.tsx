@@ -89,16 +89,16 @@ export function HeroSectionV2() {
             {/* Headline */}
             <motion.h1
               variants={staggerItem}
-              className="landing-display mb-6"
+              className="brand-display mb-6"
             >
               SEC Filings,{' '}
-              <span className="landing-gradient-text">Simplified</span>
+              <span className="brand-gradient-text">Simplified</span>
             </motion.h1>
 
             {/* Subheadline */}
             <motion.p
               variants={staggerItem}
-              className="landing-body-large mb-8 max-w-xl mx-auto lg:mx-0"
+              className="brand-body-large mb-8 max-w-xl mx-auto lg:mx-0"
             >
               Transform 300+ page regulatory documents into clear, actionable
               summaries delivered to your inbox in minutes.
@@ -110,10 +110,10 @@ export function HeroSectionV2() {
               className="flex flex-wrap justify-center lg:justify-start gap-6 mb-8"
             >
               {trustMetrics.map((metric) => (
-                <div key={metric.label} className="landing-metric">
-                  <CheckCircle2 className="w-5 h-5 text-[var(--landing-success)]" />
-                  <span className="landing-metric-value">{metric.value}</span>
-                  <span className="landing-metric-label">{metric.label}</span>
+                <div key={metric.label} className="brand-metric">
+                  <CheckCircle2 className="w-5 h-5 text-[var(--brand-success)]" />
+                  <span className="brand-metric-value">{metric.value}</span>
+                  <span className="brand-metric-label">{metric.label}</span>
                 </div>
               ))}
             </motion.div>
@@ -124,13 +124,13 @@ export function HeroSectionV2() {
               className="flex flex-col sm:flex-row items-center justify-center lg:justify-start gap-4 mb-6"
             >
               <Link href={ctaHref}>
-                <Button className="landing-button-primary">
+                <Button className="brand-button-primary">
                   {ctaLabel}
                   <ArrowRight className="w-5 h-5 ml-2" />
                 </Button>
               </Link>
               <Link href="#pricing">
-                <Button className="landing-button-outline">
+                <Button className="brand-button-outline">
                   View Pricing
                 </Button>
               </Link>
@@ -139,7 +139,7 @@ export function HeroSectionV2() {
             {/* Trust Signal */}
             <motion.p
               variants={staggerItem}
-              className="landing-caption"
+              className="brand-caption"
             >
               7-day free trial. Cancel anytime.
             </motion.p>

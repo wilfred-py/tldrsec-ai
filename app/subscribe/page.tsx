@@ -319,7 +319,7 @@ function SubscribePageContent() {
 
   if (loading) {
     return (
-      <div className="min-h-screen py-8 px-4 animate-fadeIn" style={{ backgroundColor: 'var(--landing-bg)' }}>
+      <div className="min-h-screen py-8 px-4 animate-fadeIn" style={{ backgroundColor: 'var(--brand-bg)' }}>
         <div className="max-w-5xl mx-auto">
           <Skeleton className="h-9 w-20 rounded-md mb-8" />
           <div className="text-center mb-8 space-y-4">
@@ -332,7 +332,7 @@ function SubscribePageContent() {
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {Array.from({ length: 2 }).map((_, i) => (
-              <div key={i} className="landing-card space-y-4 animate-slideUp" style={{ animationDelay: `${i * 100}ms` }}>
+              <div key={i} className="brand-card space-y-4 animate-slideUp" style={{ animationDelay: `${i * 100}ms` }}>
                 <div className="flex items-center justify-between">
                   <div className="space-y-1"><Skeleton className="h-3 w-12" /><Skeleton className="h-7 w-24" /></div>
                   <Skeleton className="h-6 w-6 rounded" />
@@ -356,13 +356,13 @@ function SubscribePageContent() {
   }
 
   return (
-    <div className="min-h-screen py-8 px-4 animate-fadeIn" style={{ backgroundColor: 'var(--landing-bg)' }}>
+    <div className="min-h-screen py-8 px-4 animate-fadeIn" style={{ backgroundColor: 'var(--brand-bg)' }}>
       <div className="max-w-5xl mx-auto">
         {/* Back Button */}
         <Button
           variant="ghost"
           onClick={() => router.push('/dashboard')}
-          className="mb-8 text-[var(--landing-text-muted)] hover:text-[var(--landing-text)]"
+          className="mb-8 text-[var(--brand-text-muted)] hover:text-[var(--brand-text)]"
           aria-label="Go back to dashboard"
         >
           <ArrowLeft className="h-4 w-4 mr-2" />
@@ -371,8 +371,8 @@ function SubscribePageContent() {
 
         {/* Header */}
         <div className="text-center mb-8">
-          <h1 className="landing-heading mb-4">Choose Your Plan</h1>
-          <p className="landing-body max-w-2xl mx-auto">
+          <h1 className="brand-heading mb-4">Choose Your Plan</h1>
+          <p className="brand-body max-w-2xl mx-auto">
             Upgrade to get more companies, faster alerts, and priority support.
           </p>
         </div>
@@ -420,12 +420,13 @@ function SubscribePageContent() {
                 onDowngrade={buttonType === 'downgrade' ? () => setShowDowngradeConfirm(planKey) : undefined}
                 isDowngrading={downgradingTo === planKey}
               />
+
             );
           })}
         </div>
 
         {/* ESC hint */}
-        <p className="text-center mt-8 text-sm text-[var(--landing-text-muted)]">
+        <p className="text-center mt-8 text-sm text-[var(--brand-text-muted)]">
           Press <kbd className="px-2 py-1 bg-gray-100 rounded text-xs">ESC</kbd> to go back
         </p>
 
@@ -479,7 +480,7 @@ function SubscribePageContent() {
 // Loading fallback for Suspense
 function SubscribePageLoading() {
   return (
-    <div className="min-h-screen py-8 px-4 animate-fadeIn" style={{ backgroundColor: 'var(--landing-bg)' }}>
+    <div className="min-h-screen py-8 px-4 animate-fadeIn" style={{ backgroundColor: 'var(--brand-bg)' }}>
       <div className="max-w-5xl mx-auto">
         <Skeleton className="h-9 w-20 rounded-md mb-8" />
         <div className="text-center mb-8 space-y-4">
@@ -492,7 +493,7 @@ function SubscribePageLoading() {
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {Array.from({ length: 2 }).map((_, i) => (
-            <div key={i} className="landing-card space-y-4 animate-slideUp" style={{ animationDelay: `${i * 100}ms` }}>
+            <div key={i} className="brand-card space-y-4 animate-slideUp" style={{ animationDelay: `${i * 100}ms` }}>
               <div className="flex items-center justify-between">
                 <div className="space-y-1"><Skeleton className="h-3 w-12" /><Skeleton className="h-7 w-24" /></div>
                 <Skeleton className="h-6 w-6 rounded" />
@@ -520,11 +521,11 @@ function SubscribePageError() {
   const router = useRouter();
 
   return (
-    <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: 'var(--landing-bg)' }}>
+    <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: 'var(--brand-bg)' }}>
       <div className="text-center space-y-4 max-w-md">
         <AlertTriangle className="h-12 w-12 text-red-500 mx-auto" />
         <h2 className="text-2xl font-bold">Failed to load subscription plans</h2>
-        <p className="text-[var(--landing-text-muted)]">
+        <p className="text-[var(--brand-text-muted)]">
           We encountered an error loading the subscription page. Please try again.
         </p>
         <div className="flex gap-4 justify-center">

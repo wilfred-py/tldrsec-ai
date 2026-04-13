@@ -191,7 +191,7 @@ export function PricingSectionV2() {
   const showLoading = !isLoaded || (isSignedIn && subscriptionLoading);
 
   return (
-    <section className="py-24 bg-[var(--landing-bg-subtle)]" id="pricing">
+    <section className="py-24 bg-[var(--brand-bg-subtle)]" id="pricing">
       <div className="container mx-auto px-4">
         {/* Section Header */}
         <motion.div
@@ -201,10 +201,10 @@ export function PricingSectionV2() {
           transition={{ duration: 0.5 }}
           className="text-center mb-12"
         >
-          <h2 className="landing-heading mb-4">
+          <h2 className="brand-heading mb-4">
             Simple, Transparent Pricing
           </h2>
-          <p className="landing-body max-w-2xl mx-auto mb-8">
+          <p className="brand-body max-w-2xl mx-auto mb-8">
             Start with a 7-day free trial on any plan. Cancel anytime.
           </p>
         </motion.div>

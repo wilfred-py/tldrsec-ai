@@ -4,7 +4,7 @@ export default function SubscribeLoading() {
   return (
     <div
       className="min-h-screen py-8 px-4 animate-fadeIn"
-      style={{ backgroundColor: "var(--landing-bg)" }}
+      style={{ backgroundColor: "var(--brand-bg)" }}
       role="status"
       aria-live="polite"
       aria-label="Loading subscription plans"
@@ -36,7 +36,7 @@ export default function SubscribeLoading() {
             <div
               key={i}
               data-testid="plan-card-skeleton"
-              className="landing-card space-y-4 animate-slideUp focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-blue-500"
+              className="brand-card space-y-4 animate-slideUp focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-blue-500"
               style={{
                 animationDelay: `${i * 100}ms`,
               }}

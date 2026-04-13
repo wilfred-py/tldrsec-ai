@@ -247,33 +247,33 @@ function FeedCard({ summary, showEmailBadge = true }: { summary: ActivitySummary
   return (
     <Link
       href={`/summary/${summary.id}`}
-      className={`block border-b border-[var(--landing-border)] px-3 py-3 transition-colors hover:bg-[var(--landing-bg-subtle)] ${borderClass}`}
+      className={`block border-b border-[var(--brand-border)] px-3 py-3 transition-colors hover:bg-[var(--brand-bg-subtle)] ${borderClass}`}
     >
       <div className="flex items-start justify-between gap-2">
         <div className="flex items-center gap-2 min-w-0 flex-wrap">
           {getFilingBadge(summary.filingType)}
-          <span className="text-sm text-[var(--landing-text-muted)] truncate">
+          <span className="text-sm text-[var(--brand-text-muted)] truncate">
             {summary.ticker} &middot; {summary.companyName}
           </span>
         </div>
-        <span className="text-xs text-[var(--landing-text-muted)] whitespace-nowrap flex-shrink-0">
+        <span className="text-xs text-[var(--brand-text-muted)] whitespace-nowrap flex-shrink-0">
           {relativeDate}
         </span>
       </div>
 
-      <p className="mt-1.5 text-sm font-medium text-[var(--landing-secondary)] line-clamp-1">
+      <p className="mt-1.5 text-sm font-medium text-[var(--brand-secondary)] line-clamp-1">
         {subject}
       </p>
 
       {preview && (
-        <p className="mt-1 text-sm text-[var(--landing-text-muted)] line-clamp-1">
+        <p className="mt-1 text-sm text-[var(--brand-text-muted)] line-clamp-1">
           {preview}
         </p>
       )}
 
       <div className="mt-1.5 flex items-center gap-3">
         {showEmailBadge && (
-          <span className="flex items-center gap-1 text-xs text-[var(--landing-text-muted)]">
+          <span className="flex items-center gap-1 text-xs text-[var(--brand-text-muted)]">
             <Mail className="h-3 w-3" />
             Emailed
           </span>
@@ -299,7 +299,7 @@ function Form4GroupCard({ group, showEmailBadge = true }: { group: Form4Group; s
             setExpanded(!expanded);
           }}
           aria-expanded={expanded}
-          className="h-auto p-0 text-xs text-[var(--landing-text-muted)] hover:text-[var(--landing-secondary)] gap-1"
+          className="h-auto p-0 text-xs text-[var(--brand-text-muted)] hover:text-[var(--brand-secondary)] gap-1"
         >
           {expanded ? (
             <ChevronUp className="h-3 w-3" />
@@ -311,7 +311,7 @@ function Form4GroupCard({ group, showEmailBadge = true }: { group: Form4Group; s
         </Button>
 
         {expanded && (
-          <div className="mt-1 space-y-1 border-l-2 border-[var(--landing-border)] ml-1 pl-3">
+          <div className="mt-1 space-y-1 border-l-2 border-[var(--brand-border)] ml-1 pl-3">
             {group.rest.map((summary) => {
               const subject =
                 summary.smartSubject ??
@@ -324,12 +324,12 @@ function Form4GroupCard({ group, showEmailBadge = true }: { group: Form4Group; s
                 <Link
                   key={summary.id}
                   href={`/summary/${summary.id}`}
-                  className="flex items-center justify-between gap-2 py-1 text-sm hover:text-[var(--landing-secondary)] transition-colors"
+                  className="flex items-center justify-between gap-2 py-1 text-sm hover:text-[var(--brand-secondary)] transition-colors"
                 >
-                  <span className="text-[var(--landing-text-muted)] truncate">
+                  <span className="text-[var(--brand-text-muted)] truncate">
                     {subject}
                   </span>
-                  <span className="text-xs text-[var(--landing-text-muted)] whitespace-nowrap flex-shrink-0">
+                  <span className="text-xs text-[var(--brand-text-muted)] whitespace-nowrap flex-shrink-0">
                     {relativeDate}
                   </span>
                 </Link>
@@ -352,7 +352,7 @@ function DateGroupedFeed({ groups, showEmailBadge = true }: { groups: GroupedSum
         return (
           <div key={group.label}>
             {idx > 0 && <Separator className="my-4" />}
-            <h4 className="mb-2 text-xs font-semibold uppercase tracking-wider text-[var(--landing-text-muted)]">
+            <h4 className="mb-2 text-xs font-semibold uppercase tracking-wider text-[var(--brand-text-muted)]">
               {group.label}
             </h4>
             <div>
@@ -387,20 +387,20 @@ export function ActivityFeed({ summaries, featuredSummaries = [] }: ActivityFeed
 
   return (
     <div>
-      <div className="flex items-center gap-2 text-sm font-medium text-[var(--landing-secondary)] mb-4">
-        <Mail className="h-4 w-4 text-[var(--landing-primary)]" />
+      <div className="flex items-center gap-2 text-sm font-medium text-[var(--brand-secondary)] mb-4">
+        <Mail className="h-4 w-4 text-[var(--brand-primary)]" />
         {showFeatured ? "Example Filing Summaries" : "Sent to your inbox"}
       </div>
-      <div className="rounded-lg border border-[var(--landing-border)] overflow-hidden bg-[var(--landing-bg)]">
+      <div className="rounded-lg border border-[var(--brand-border)] overflow-hidden bg-[var(--brand-bg)]">
         {showFeatured ? (
           <>
-            <p className="text-sm text-[var(--landing-text-muted)] px-3 py-3 border-b border-[var(--landing-border)]">
+            <p className="text-sm text-[var(--brand-text-muted)] px-3 py-3 border-b border-[var(--brand-border)]">
               Here&apos;s what our AI does with real SEC filings. Your personalized summaries will appear here as new filings come in for your tracked companies.
             </p>
             <DateGroupedFeed groups={featuredGrouped} showEmailBadge={false} />
           </>
         ) : grouped.length === 0 ? (
-          <p className="text-sm text-[var(--landing-text-muted)] px-3 py-6 text-center">
+          <p className="text-sm text-[var(--brand-text-muted)] px-3 py-6 text-center">
             Your first email summaries are on the way! We&apos;ll email you when
             filings come in.
           </p>
@@ -408,12 +408,12 @@ export function ActivityFeed({ summaries, featuredSummaries = [] }: ActivityFeed
           <>
             <DateGroupedFeed groups={visibleGrouped} />
             {hasMore && (
-              <div className="py-3 text-center border-t border-[var(--landing-border)]">
+              <div className="py-3 text-center border-t border-[var(--brand-border)]">
                 <Button
                   variant="ghost"
                   size="sm"
                   onClick={() => setShowAll(true)}
-                  className="text-[var(--landing-text-muted)] hover:text-[var(--landing-secondary)]"
+                  className="text-[var(--brand-text-muted)] hover:text-[var(--brand-secondary)]"
                 >
                   Show all summaries
                 </Button>

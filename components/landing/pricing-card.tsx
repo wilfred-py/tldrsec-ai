@@ -72,7 +72,7 @@ export function PricingCard({
   const isCardHovered = hoveredCard === plan.key;
 
   const dynamicStyles: React.CSSProperties = {
-    borderColor: isSelected ? 'var(--landing-primary)' : isCardHovered ? 'var(--landing-primary-hover)' : 'var(--landing-border)',
+    borderColor: isSelected ? 'var(--brand-primary)' : isCardHovered ? 'var(--brand-primary-hover)' : 'var(--brand-border)',
     transition: 'border-color 0.3s ease, box-shadow 0.3s ease, transform 0.3s ease',
     cursor: 'pointer',
     ...(isSelected ? {
@@ -84,7 +84,7 @@ export function PricingCard({
 
   return (
     <div
-      className="landing-card relative flex flex-col border-2 focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-blue-500"
+      className="brand-card relative flex flex-col border-2 outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
       style={dynamicStyles}
       role="article"
       aria-label={`${plan.name} pricing plan`}
@@ -96,13 +96,15 @@ export function PricingCard({
       onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onSelect(); } }}
       onMouseEnter={onMouseEnter}
       onMouseLeave={onMouseLeave}
+      onFocus={onMouseEnter}
+      onBlur={onMouseLeave}
     >
       {/* Plan Header with Badges */}
       <div className="flex items-center justify-between mb-4">
         <div>
           <h3
             className="text-2xl font-bold"
-            style={{ color: 'var(--landing-secondary)' }}
+            style={{ color: 'var(--brand-secondary)' }}
           >
             {plan.name}
           </h3>
@@ -111,7 +113,7 @@ export function PricingCard({
         <div className="flex flex-col gap-1 items-end">
           {/* Popular badge */}
           {plan.popular && (
-            <Badge className="bg-[var(--landing-primary)] text-white text-xs px-2 py-0.5">
+            <Badge className="bg-[var(--brand-primary)] text-white text-xs px-2 py-0.5">
               Popular
             </Badge>
           )}
@@ -137,7 +139,7 @@ export function PricingCard({
           savings={billingInterval === 'annual' ? savings : null}
         />
         {monthlyEquiv && (
-          <p className="text-xs text-[var(--landing-text-muted)] mt-1">
+          <p className="text-xs text-[var(--brand-text-muted)] mt-1">
             ${monthlyEquiv}/mo billed annually
           </p>
         )}
@@ -190,7 +192,7 @@ export function PricingCard({
           <Button
             onClick={(e) => { e.stopPropagation(); onCheckout(plan.key); }}
             disabled={checkoutLoading}
-            className={`w-full ${isSelected && !checkoutLoading ? 'landing-button-primary' : 'landing-button-secondary'}`}
+            className={`w-full ${isSelected && !checkoutLoading ? 'brand-button-primary' : 'brand-button-secondary'}`}
           >
             {checkoutLoading ? (
               <>
@@ -212,8 +214,8 @@ export function PricingCard({
           const parts = feature.split(/(\*\*[^*]+\*\*)/);
           return (
             <li key={index} className="flex items-start gap-3">
-              <Check className="w-4 h-4 text-[var(--landing-success)] flex-shrink-0 mt-0.5" />
-              <span className="text-sm" style={{ color: 'var(--landing-text)' }}>
+              <Check className="w-4 h-4 text-[var(--brand-success)] flex-shrink-0 mt-0.5" />
+              <span className="text-sm" style={{ color: 'var(--brand-text)' }}>
                 {parts.map((part, i) => {
                   if (part.startsWith('**') && part.endsWith('**')) {
                     return (
@@ -233,8 +235,8 @@ export function PricingCard({
       {/* "Everything in Pro" footer for MAX tier */}
       {plan.key === 'MAX' && (
         <div className="mt-4 pt-4 border-t border-gray-100">
-          <div className="flex items-center gap-2 text-sm text-[var(--landing-text-muted)]">
-            <span className="text-[var(--landing-primary)]">+</span>
+          <div className="flex items-center gap-2 text-sm text-[var(--brand-text-muted)]">
+            <span className="text-[var(--brand-primary)]">+</span>
             <span>Everything in Pro</span>
           </div>
         </div>

@@ -254,7 +254,7 @@ export default function BillingPage() {
               {isFree ? (
                 <Button
                   onClick={() => router.push('/subscribe')}
-                  className="bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 text-white shadow-md hover:shadow-lg transition-all duration-200"
+                  className="brand-button-gradient"
                 >
                   <Sparkles className="h-4 w-4 mr-2" />
                   Upgrade Plan

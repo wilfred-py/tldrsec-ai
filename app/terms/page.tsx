@@ -16,19 +16,19 @@ export default function TermsOfServicePage() {
   return (
     <div className="min-h-screen bg-white">
       {/* Header */}
-      <header className="border-b" style={{ borderColor: 'var(--landing-border)' }}>
+      <header className="border-b" style={{ borderColor: 'var(--brand-border)' }}>
         <div className="container mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
             <Link href="/" className="flex items-center gap-2">
-              <FileText className="w-6 h-6 text-[var(--landing-primary)]" />
-              <span className="text-xl font-bold" style={{ color: 'var(--landing-secondary)' }}>
+              <FileText className="w-6 h-6 text-[var(--brand-primary)]" />
+              <span className="text-xl font-bold" style={{ color: 'var(--brand-secondary)' }}>
                 tldrsec
               </span>
             </Link>
             <Link
               href="/"
-              className="flex items-center gap-2 text-sm hover:text-[var(--landing-primary)] transition-colors"
-              style={{ color: 'var(--landing-text-muted)' }}
+              className="flex items-center gap-2 text-sm hover:text-[var(--brand-primary)] transition-colors"
+              style={{ color: 'var(--brand-text-muted)' }}
             >
               <ArrowLeft className="w-4 h-4" />
               Back to Home
@@ -39,17 +39,17 @@ export default function TermsOfServicePage() {
 
       {/* Content */}
       <main className="container mx-auto px-4 py-12 max-w-4xl">
-        <h1 className="text-4xl font-bold mb-2" style={{ color: 'var(--landing-secondary)' }}>
+        <h1 className="text-4xl font-bold mb-2" style={{ color: 'var(--brand-secondary)' }}>
           Terms of Service
         </h1>
-        <p className="mb-8" style={{ color: 'var(--landing-text-muted)' }}>
+        <p className="mb-8" style={{ color: 'var(--brand-text-muted)' }}>
           Last updated: {currentDate}
         </p>
 
-        <div className="prose prose-gray max-w-none" style={{ color: 'var(--landing-text)' }}>
+        <div className="prose prose-gray max-w-none" style={{ color: 'var(--brand-text)' }}>
           {/* Agreement */}
           <section className="mb-8">
-            <h2 className="text-2xl font-semibold mb-4" style={{ color: 'var(--landing-secondary)' }}>
+            <h2 className="text-2xl font-semibold mb-4" style={{ color: 'var(--brand-secondary)' }}>
               1. Agreement to Terms
             </h2>
             <p className="mb-4 leading-relaxed">
@@ -62,7 +62,7 @@ export default function TermsOfServicePage() {
 
           {/* Service Description */}
           <section className="mb-8">
-            <h2 className="text-2xl font-semibold mb-4" style={{ color: 'var(--landing-secondary)' }}>
+            <h2 className="text-2xl font-semibold mb-4" style={{ color: 'var(--brand-secondary)' }}>
               2. Description of Service
             </h2>
             <p className="mb-4 leading-relaxed">
@@ -78,7 +78,7 @@ export default function TermsOfServicePage() {
 
           {/* Account Registration */}
           <section className="mb-8">
-            <h2 className="text-2xl font-semibold mb-4" style={{ color: 'var(--landing-secondary)' }}>
+            <h2 className="text-2xl font-semibold mb-4" style={{ color: 'var(--brand-secondary)' }}>
               3. Account Registration
             </h2>
             <p className="mb-4 leading-relaxed">
@@ -98,10 +98,10 @@ export default function TermsOfServicePage() {
 
           {/* Subscription Plans */}
           <section className="mb-8">
-            <h2 className="text-2xl font-semibold mb-4" style={{ color: 'var(--landing-secondary)' }}>
+            <h2 className="text-2xl font-semibold mb-4" style={{ color: 'var(--brand-secondary)' }}>
               4. Subscription Plans and Payment
             </h2>
-            <h3 className="text-xl font-medium mb-3" style={{ color: 'var(--landing-secondary)' }}>
+            <h3 className="text-xl font-medium mb-3" style={{ color: 'var(--brand-secondary)' }}>
               4.1 Subscription Tiers
             </h3>
             <p className="mb-4 leading-relaxed">
@@ -113,7 +113,7 @@ export default function TermsOfServicePage() {
               <li><strong>Max:</strong> Unlimited company tracking, priority processing, dedicated support</li>
             </ul>
 
-            <h3 className="text-xl font-medium mb-3" style={{ color: 'var(--landing-secondary)' }}>
+            <h3 className="text-xl font-medium mb-3" style={{ color: 'var(--brand-secondary)' }}>
               4.2 Payment Terms
             </h3>
             <ul className="list-disc pl-6 mb-4 space-y-2">
@@ -123,7 +123,7 @@ export default function TermsOfServicePage() {
               <li>Payment processing is handled securely by Stripe</li>
             </ul>
 
-            <h3 className="text-xl font-medium mb-3" style={{ color: 'var(--landing-secondary)' }}>
+            <h3 className="text-xl font-medium mb-3" style={{ color: 'var(--brand-secondary)' }}>
               4.3 Cancellation
             </h3>
             <p className="mb-4 leading-relaxed">
@@ -133,7 +133,7 @@ export default function TermsOfServicePage() {
 
           {/* Acceptable Use */}
           <section className="mb-8">
-            <h2 className="text-2xl font-semibold mb-4" style={{ color: 'var(--landing-secondary)' }}>
+            <h2 className="text-2xl font-semibold mb-4" style={{ color: 'var(--brand-secondary)' }}>
               5. Acceptable Use
             </h2>
             <p className="mb-4 leading-relaxed">
@@ -153,24 +153,24 @@ export default function TermsOfServicePage() {
 
           {/* Intellectual Property */}
           <section className="mb-8">
-            <h2 className="text-2xl font-semibold mb-4" style={{ color: 'var(--landing-secondary)' }}>
+            <h2 className="text-2xl font-semibold mb-4" style={{ color: 'var(--brand-secondary)' }}>
               6. Intellectual Property
             </h2>
-            <h3 className="text-xl font-medium mb-3" style={{ color: 'var(--landing-secondary)' }}>
+            <h3 className="text-xl font-medium mb-3" style={{ color: 'var(--brand-secondary)' }}>
               6.1 Our Content
             </h3>
             <p className="mb-4 leading-relaxed">
               The Service, including its original content (excluding SEC filing data), features, and functionality, is owned by tldrsec and is protected by copyright, trademark, and other intellectual property laws. Our AI-generated summaries, user interface, and proprietary algorithms are our intellectual property.
             </p>
 
-            <h3 className="text-xl font-medium mb-3" style={{ color: 'var(--landing-secondary)' }}>
+            <h3 className="text-xl font-medium mb-3" style={{ color: 'var(--brand-secondary)' }}>
               6.2 SEC Filing Data
             </h3>
             <p className="mb-4 leading-relaxed">
               SEC filings are public government documents and are not subject to copyright. Our AI-generated summaries of these filings are derivative works created through our proprietary technology.
             </p>
 
-            <h3 className="text-xl font-medium mb-3" style={{ color: 'var(--landing-secondary)' }}>
+            <h3 className="text-xl font-medium mb-3" style={{ color: 'var(--brand-secondary)' }}>
               6.3 License to Use
             </h3>
             <p className="mb-4 leading-relaxed">
@@ -180,10 +180,10 @@ export default function TermsOfServicePage() {
 
           {/* Disclaimers */}
           <section className="mb-8">
-            <h2 className="text-2xl font-semibold mb-4" style={{ color: 'var(--landing-secondary)' }}>
+            <h2 className="text-2xl font-semibold mb-4" style={{ color: 'var(--brand-secondary)' }}>
               7. Important Disclaimers
             </h2>
-            <div className="bg-[var(--landing-bg-subtle)] border border-[var(--landing-border)] rounded-lg p-6 mb-4">
+            <div className="bg-[var(--brand-bg-subtle)] border border-[var(--brand-border)] rounded-lg p-6 mb-4">
               <h3 className="text-xl font-medium mb-3 text-red-600">
                 NOT INVESTMENT ADVICE
               </h3>
@@ -195,7 +195,7 @@ export default function TermsOfServicePage() {
               </p>
             </div>
 
-            <h3 className="text-xl font-medium mb-3" style={{ color: 'var(--landing-secondary)' }}>
+            <h3 className="text-xl font-medium mb-3" style={{ color: 'var(--brand-secondary)' }}>
               7.1 AI Limitations
             </h3>
             <p className="mb-4 leading-relaxed">
@@ -208,7 +208,7 @@ export default function TermsOfServicePage() {
               <li>May be delayed in processing or delivery</li>
             </ul>
 
-            <h3 className="text-xl font-medium mb-3" style={{ color: 'var(--landing-secondary)' }}>
+            <h3 className="text-xl font-medium mb-3" style={{ color: 'var(--brand-secondary)' }}>
               7.2 No Guarantees
             </h3>
             <p className="mb-4 leading-relaxed">
@@ -224,7 +224,7 @@ export default function TermsOfServicePage() {
 
           {/* Limitation of Liability */}
           <section className="mb-8">
-            <h2 className="text-2xl font-semibold mb-4" style={{ color: 'var(--landing-secondary)' }}>
+            <h2 className="text-2xl font-semibold mb-4" style={{ color: 'var(--brand-secondary)' }}>
               8. Limitation of Liability
             </h2>
             <p className="mb-4 leading-relaxed">
@@ -243,7 +243,7 @@ export default function TermsOfServicePage() {
 
           {/* Indemnification */}
           <section className="mb-8">
-            <h2 className="text-2xl font-semibold mb-4" style={{ color: 'var(--landing-secondary)' }}>
+            <h2 className="text-2xl font-semibold mb-4" style={{ color: 'var(--brand-secondary)' }}>
               9. Indemnification
             </h2>
             <p className="mb-4 leading-relaxed">
@@ -259,7 +259,7 @@ export default function TermsOfServicePage() {
 
           {/* Service Modifications */}
           <section className="mb-8">
-            <h2 className="text-2xl font-semibold mb-4" style={{ color: 'var(--landing-secondary)' }}>
+            <h2 className="text-2xl font-semibold mb-4" style={{ color: 'var(--brand-secondary)' }}>
               10. Service Modifications
             </h2>
             <p className="mb-4 leading-relaxed">
@@ -278,7 +278,7 @@ export default function TermsOfServicePage() {
 
           {/* Third-Party Services */}
           <section className="mb-8">
-            <h2 className="text-2xl font-semibold mb-4" style={{ color: 'var(--landing-secondary)' }}>
+            <h2 className="text-2xl font-semibold mb-4" style={{ color: 'var(--brand-secondary)' }}>
               11. Third-Party Services
             </h2>
             <p className="mb-4 leading-relaxed">
@@ -288,7 +288,7 @@ export default function TermsOfServicePage() {
 
           {/* Termination */}
           <section className="mb-8">
-            <h2 className="text-2xl font-semibold mb-4" style={{ color: 'var(--landing-secondary)' }}>
+            <h2 className="text-2xl font-semibold mb-4" style={{ color: 'var(--brand-secondary)' }}>
               12. Termination
             </h2>
             <p className="mb-4 leading-relaxed">
@@ -307,7 +307,7 @@ export default function TermsOfServicePage() {
 
           {/* Governing Law */}
           <section className="mb-8">
-            <h2 className="text-2xl font-semibold mb-4" style={{ color: 'var(--landing-secondary)' }}>
+            <h2 className="text-2xl font-semibold mb-4" style={{ color: 'var(--brand-secondary)' }}>
               13. Governing Law and Disputes
             </h2>
             <p className="mb-4 leading-relaxed">
@@ -317,7 +317,7 @@ export default function TermsOfServicePage() {
 
           {/* Severability */}
           <section className="mb-8">
-            <h2 className="text-2xl font-semibold mb-4" style={{ color: 'var(--landing-secondary)' }}>
+            <h2 className="text-2xl font-semibold mb-4" style={{ color: 'var(--brand-secondary)' }}>
               14. Severability
             </h2>
             <p className="mb-4 leading-relaxed">
@@ -327,7 +327,7 @@ export default function TermsOfServicePage() {
 
           {/* Entire Agreement */}
           <section className="mb-8">
-            <h2 className="text-2xl font-semibold mb-4" style={{ color: 'var(--landing-secondary)' }}>
+            <h2 className="text-2xl font-semibold mb-4" style={{ color: 'var(--brand-secondary)' }}>
               15. Entire Agreement
             </h2>
             <p className="mb-4 leading-relaxed">
@@ -337,23 +337,23 @@ export default function TermsOfServicePage() {
 
           {/* Contact */}
           <section className="mb-8">
-            <h2 className="text-2xl font-semibold mb-4" style={{ color: 'var(--landing-secondary)' }}>
+            <h2 className="text-2xl font-semibold mb-4" style={{ color: 'var(--brand-secondary)' }}>
               16. Contact Us
             </h2>
             <p className="mb-4 leading-relaxed">
               If you have any questions about these Terms, please contact us at:
             </p>
             <p className="mb-4 leading-relaxed">
-              <strong>Email:</strong> <a href="mailto:legal@tldrsec.app" className="text-[var(--landing-primary)] hover:underline">legal@tldrsec.app</a>
+              <strong>Email:</strong> <a href="mailto:legal@tldrsec.app" className="text-[var(--brand-primary)] hover:underline">legal@tldrsec.app</a>
             </p>
           </section>
         </div>
       </main>
 
       {/* Footer */}
-      <footer className="py-8 border-t" style={{ borderColor: 'var(--landing-border)' }}>
+      <footer className="py-8 border-t" style={{ borderColor: 'var(--brand-border)' }}>
         <div className="container mx-auto px-4 text-center">
-          <p style={{ color: 'var(--landing-text-muted)' }}>
+          <p style={{ color: 'var(--brand-text-muted)' }}>
             &copy; {new Date().getFullYear()} tldrsec. All rights reserved.
           </p>
         </div>

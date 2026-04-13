@@ -2,8 +2,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 
 export default function SummaryLoading() {
   return (
-    <div className="min-h-screen flex flex-col" style={{ backgroundColor: 'var(--landing-bg)' }}>
-      <main className="flex-1" style={{ backgroundColor: 'var(--landing-bg)' }}>
+    <div className="min-h-screen flex flex-col" style={{ backgroundColor: 'var(--brand-bg)' }}>
+      <main className="flex-1" style={{ backgroundColor: 'var(--brand-bg)' }}>
         <div className="container max-w-7xl mx-auto py-8 md:py-10 px-6 md:px-8 space-y-6">
           {/* Breadcrumb skeleton */}
           <div className="mb-4 flex items-center gap-2">

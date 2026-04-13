@@ -41,7 +41,7 @@ export default async function FilingChatPage({ params }: ChatPageProps) {
   }
 
   return (
-    <div className="min-h-screen flex flex-col" style={{ backgroundColor: 'var(--landing-bg)' }}>
+    <div className="min-h-screen flex flex-col" style={{ backgroundColor: 'var(--brand-bg)' }}>
       <main className="flex-1 flex flex-col">
         <ChatClient
           summaryId={summary.id}
