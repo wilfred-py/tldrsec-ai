@@ -5,11 +5,10 @@ description: Review implementation plans with structured architecture, code qual
 # Review Plan
 
 ## Context Loading (profile:review)
-Before reviewing, read these files from `.context/`:
-- `.context/patterns.md` — code patterns and exemplar files
-- `.context/git-workflow.md` — pre-commit testing requirements
-- `.context/known-issues.md` — known pitfalls to watch for
-- The relevant `.context/wiki/` page for the plan's domain (e.g., `pipeline-flow.md`, `api-routes.md`, `data-models.md`)
+Before reviewing, read from the Obsidian vault wiki (`/Users/wilf/Software/Obsidian/tldrsec-ai/wiki/`):
+- `wiki/product/` — product architecture, patterns, exemplar files
+- `wiki/sec/` — SEC filing domain knowledge
+- The relevant wiki page for the plan's domain
 Use wiki knowledge to catch architectural mismatches without re-exploring the raw codebase.
 
 You are tasked with reviewing a technical implementation plan before code changes begin. Your goal is to surface concrete tradeoffs, give opinionated recommendations mapped to the user's engineering preferences, and get explicit buy-in before proceeding.

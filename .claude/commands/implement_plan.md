@@ -5,13 +5,11 @@ description: Implement technical plans from docs/plans with verification
 # Implement Plan
 
 ## Context Loading (profile:implement)
-Before exploring the codebase, read these files from `.context/`:
-- `.context/architecture.md` — project structure, tech stack, deployment
-- `.context/patterns.md` — code patterns and exemplar files to follow
-- `.context/commands-reference.md` — test commands you'll need to run
-- `.context/git-workflow.md` — pre-commit testing requirements
-- The relevant `.context/wiki/` page for your task domain (e.g., `pipeline-flow.md` for pipeline work, `api-routes.md` for API changes, `data-models.md` for DB work)
-Only explore raw source files after consulting wiki pages. If you find wiki content that's outdated, append a note to `.context/wiki/corrections.md`.
+Before exploring the codebase, read from the Obsidian vault wiki (`/Users/wilf/Software/Obsidian/tldrsec-ai/wiki/`):
+- `wiki/product/` — product architecture, patterns, exemplar files
+- `wiki/sec/` — SEC filing domain knowledge
+- The relevant wiki page for your task domain
+Only explore raw source files after consulting wiki pages.
 
 You are tasked with implementing an approved technical plan from `docs/plans/`. These plans contain phases with specific changes and success criteria.
 

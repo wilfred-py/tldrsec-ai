@@ -1,36 +1,51 @@
-Wiki Lint: Check .context/ wiki health and flag stale pages.
+Wiki Lint: Check Obsidian vault wiki health and flag stale pages.
+
+Vault path: /Users/wilf/Software/Obsidian/tldrsec-ai/
+Vault schema: Read the vault's CLAUDE.md for page conventions and directory structure.
 
 Steps:
 
-1. For each .context/wiki/*.md file:
-   - Read the `last_verified` date from YAML frontmatter
+1. For each wiki page in the vault (`wiki/**/*.md`):
+   - Read the `updated` date from YAML frontmatter
    - If older than 14 days from today, flag as STALE
-   - Read the `sources` list and check if any source files were modified after `last_verified` (use `git log --since`)
-   - If modified sources found, flag as NEEDS_UPDATE
+   - Check if the page's topic has had recent code changes (use `git log --since` in the repo)
+   - If relevant code changed after `updated`, flag as NEEDS_UPDATE
 
-2. Check .context/active-plans/README.md:
-   - Verify all linked plans still exist
-   - Flag plans that appear completed for archival
+2. Check for structural issues:
+   - Scan for contradictions between pages
+   - Find orphan pages with no inbound wikilinks
+   - List unresolved wikilinks (referenced but no page exists)
+   - Spot missing cross-references where pages discuss the same topic but don't link
+   - Verify all pages have complete YAML frontmatter
 
-3. Check .context/wiki/corrections.md:
-   - Count pending corrections
-   - List which pages have unresolved corrections
+3. Check empty directories that should have content:
+   - wiki/product/ — should have product architecture, pipeline, data models
+   - wiki/growth/ — should have pricing, distribution, email strategy
+   - wiki/competitors/ — should have competitive landscape
+   - wiki/concepts/ — should have SaaS metrics, business models
+   - wiki/analysis/ — should have decision logs, research syntheses
+   - wiki/people/ — should have notable people/founders
 
-4. Report summary:
+4. Verify wiki/index.md is up to date with all existing pages.
+
+5. Report summary:
    ```
    Wiki Health Report
    ==================
    Total pages: X
-   Verified (current): X
+   Current (<14 days): X
    Stale (>14 days): X
-   Needs update (source changed): X
-   Pending corrections: X
-   
+   Needs update (code changed): X
+   Empty categories: X
+   Unresolved wikilinks: X
+   Orphan pages: X
+
    Action items:
    - [page] — stale since YYYY-MM-DD, run /wiki-ingest page-name
-   - [page] — sources modified, run /wiki-ingest page-name
+   - [category] — empty, suggest pages to create
+   - [[Link Target]] — referenced but doesn't exist
    ```
 
-5. If any pages need updating, offer to run /wiki-ingest for them.
+6. If any pages need updating, offer to run /wiki-ingest for them.
 
 This is a read-only audit — it reports but does not modify wiki pages.

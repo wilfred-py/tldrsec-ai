@@ -5,13 +5,14 @@ description: Document codebase as-is with thoughts directory for historical cont
 # Research Codebase
 
 ## Context Loading (profile:research)
-Before exploring the codebase, check `.context/wiki/` for pre-compiled knowledge:
-- `.context/index.md` — master index of all wiki pages
-- `.context/wiki/pipeline-flow.md` — SEC pipeline architecture
-- `.context/wiki/api-routes.md` — all API routes and auth
-- `.context/wiki/data-models.md` — Prisma schema and relationships
-- `.context/wiki/monitoring.md` — alerts and health checks
-Read wiki pages relevant to the research question first. Only explore raw source files for details the wiki doesn't cover. If you find wiki content that's outdated, append a note to `.context/wiki/corrections.md`.
+Before exploring the codebase, check the Obsidian vault wiki for pre-compiled knowledge:
+- Vault path: `/Users/wilf/Software/Obsidian/tldrsec-ai/wiki/`
+- `wiki/index.md` — master index of all wiki pages
+- `wiki/product/` — product architecture, pipeline, data models
+- `wiki/sec/` — SEC filing types, EDGAR, regulations
+- `wiki/companies/` — company profiles with financials
+- `wiki/overview.md` — product goals and open questions
+Read wiki pages relevant to the research question first. Only explore raw source files for details the wiki doesn't cover.
 
 You are tasked with conducting comprehensive research across the codebase to answer user questions by spawning parallel sub-agents and synthesizing their findings.
 

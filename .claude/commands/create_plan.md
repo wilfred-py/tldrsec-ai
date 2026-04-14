@@ -5,12 +5,11 @@ description: Create detailed implementation plans through interactive research a
 # Implementation Plan
 
 ## Context Loading (profile:plan)
-Before exploring the codebase, read these files from `.context/`:
-- `.context/architecture.md` — project structure, tech stack, deployment
-- `.context/changelog.md` — recent updates and breaking changes
-- `.context/wiki/pipeline-flow.md` — if task involves the SEC pipeline
-- `.context/wiki/data-models.md` — if task involves database/Prisma
-- `.context/wiki/api-routes.md` — if task involves API endpoints
+Before exploring the codebase, read from the Obsidian vault wiki (`/Users/wilf/Software/Obsidian/tldrsec-ai/wiki/`):
+- `wiki/overview.md` — product goals, open questions, key metrics
+- `wiki/product/` — product architecture, pipeline, data models
+- `wiki/sec/` — if task involves SEC filings or EDGAR
+- `wiki/companies/` — if task involves specific company data
 Only read wiki pages relevant to the task. Skip raw source file exploration until wiki pages prove insufficient.
 
 You are tasked with creating detailed implementation plans through an interactive, iterative process. You should be skeptical, thorough, and work collaboratively with the user to produce high-quality technical specifications.
