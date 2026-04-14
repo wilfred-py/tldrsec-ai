@@ -79,10 +79,10 @@ Apply these steps IN ORDER to every task:
 ### Common Mistakes to Avoid
 1. **Don't guess file locations** - Use codebase-locator agent or Grep/Glob before assuming paths
 2. **Use `getPrismaClient()` not direct `prisma` import** - Direct imports fail in API routes
-3. **Verify secret lengths** - CRON_SECRET must be exactly 80 chars (see .context/known-issues.md)
+3. **Verify secret lengths** - CRON_SECRET must be exactly 80 chars
 4. **Read files fully** - Never use limit/offset when understanding context for planning
 5. **Check git status first** - Before any commit, run `git status` to see actual changes
-6. **Run tests before committing** - See .context/git-workflow.md for mandatory tests
+6. **Run tests before committing** - Run `npm test` before committing
 7. **Never store API keys in shell config** - API keys belong in `.env.local` files (gitignored)
 8. **Define CSS animations explicitly** - Define keyframes in `app/globals.css` using `@layer utilities`
 9. **Don't use `/i` flag with name-extraction regexes** - Makes `[A-Z][a-z]+` match verbs as names
@@ -95,30 +95,34 @@ Apply these steps IN ORDER to every task:
 16. **SVG elements need explicit pixel dimensions** - Use `width={px} height={px} viewBox` with React state
 17. **Verify correct dev server port in worktrees** - Check `lsof -Pi :3000 -sTCP:LISTEN` and `:3001`
 
-## Context Wiki
+## Knowledge Base (Obsidian Vault)
 
-**IMPORTANT: Before exploring raw source files, read the relevant `.context/` wiki pages first.**
-This project maintains distilled codebase knowledge in `.context/wiki/`. These pages are LLM-maintained summaries that replace the need to read 15-20 source files. Only explore raw code when wiki pages are insufficient.
+**IMPORTANT: This project's knowledge base lives in an Obsidian vault, NOT in `.context/wiki/`.**
 
-**If you find wiki content that's outdated, append a correction to `.context/wiki/corrections.md`.**
+**Vault path**: `/Users/wilf/Software/Obsidian/tldrsec-ai/`
 
-| File | When to Read |
-|------|-------------|
-| `.context/architecture.md` | Project structure, tech stack, deployment model |
-| `.context/commands-reference.md` | npm scripts, CLI commands, health checks |
-| `.context/git-workflow.md` | Pre-commit tests, deployment checklist |
-| `.context/known-issues.md` | CRON_SECRET, retry patterns, troubleshooting |
-| `.context/patterns.md` | Code patterns, exemplar files, pre-impl checklist |
-| `.context/changelog.md` | Recent updates and breaking changes |
-| `.context/skills-reference.md` | gstack browser/workflow skills |
-| `.context/wiki/` | Distilled codebase knowledge (see .context/index.md) |
+The vault is the single source of truth for domain knowledge, product decisions, and research. It follows its own schema defined in the vault's `CLAUDE.md`. Read the vault wiki pages before exploring raw source files — they replace the need to read 15-20 source files.
 
-### Context Profiles (load selectively)
-- **plan**: architecture.md, changelog.md, wiki/pipeline-flow.md, wiki/data-models.md
-- **implement**: architecture.md, patterns.md, commands-reference.md, git-workflow.md + domain wiki page
-- **review**: patterns.md, git-workflow.md, known-issues.md + domain wiki page
-- **ship**: git-workflow.md, commands-reference.md
-- **debug**: known-issues.md, commands-reference.md, wiki/monitoring.md
+| Vault Path | When to Read |
+|------------|-------------|
+| `wiki/overview.md` | Product goals, open questions, key metrics |
+| `wiki/sec/` | SEC filing types, EDGAR, transaction codes, regulations |
+| `wiki/companies/` | Company profiles with financials, insider activity, peer links |
+| `wiki/sources/` | Summarized source documents with key takeaways |
+| `wiki/product/` | Product architecture, features, decisions, roadmap |
+| `wiki/growth/` | Marketing, pricing, distribution, email strategy |
+| `wiki/competitors/` | Competitive landscape and comparisons |
+| `wiki/concepts/` | SaaS metrics, business models, positioning |
+| `wiki/analysis/` | Research syntheses, decision logs, comparisons |
+| `wiki/index.md` | Master index of all wiki pages |
+| `wiki/log.md` | Chronological record of all wiki operations |
+
+### Context Profiles (load from vault selectively)
+- **plan**: wiki/overview.md, wiki/product/, wiki/analysis/ + relevant domain pages
+- **implement**: wiki/product/, wiki/sec/ + domain-specific wiki pages
+- **review**: wiki/product/, wiki/sec/ + domain-specific wiki pages
+- **ship**: wiki/overview.md (for changelog context)
+- **debug**: wiki/product/, wiki/sec/ + relevant company pages
 
 ### Skill-to-Profile Mapping
 When a gstack skill is invoked, load the matching context profile FIRST:
@@ -127,6 +131,17 @@ When a gstack skill is invoked, load the matching context profile FIRST:
 - `/review`, `/codex` → **profile:review**
 - `/ship`, `/land-and-deploy`, `/commit` → **profile:ship**
 - `/investigate` → **profile:debug**
+
+### Recursive Wiki Improvement
+
+The vault compounds knowledge over time. After each dev cycle, distill what was learned:
+
+1. **After `/land-and-deploy`** → run `/wiki-sync` to update vault with what shipped
+2. **After `/investigate`** → write findings to `wiki/analysis/` or relevant category
+3. **During `/autoplan`** → read vault pages for domain context before planning
+4. **When answering product questions** → write the answer as a vault wiki page so it compounds
+
+Follow the vault's `CLAUDE.md` schema for all writes: YAML frontmatter, wikilinks, update index.md and log.md.
 
 ## Skill routing
 
@@ -144,3 +159,6 @@ Key routing rules:
 - Design system, brand → invoke design-consultation
 - Visual audit, design polish → invoke design-review
 - Architecture review → invoke plan-eng-review
+- Sync knowledge to vault after shipping → invoke wiki-sync
+- Ingest source into vault wiki → invoke wiki-ingest
+- Audit vault wiki health → invoke wiki-lint

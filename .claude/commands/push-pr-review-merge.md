@@ -5,7 +5,7 @@ description: Push committed changes to remote, create PR, initiate code review, 
 # Push, PR, Review, and Merge
 
 ## Context Loading (profile:ship)
-Before creating PRs, read `.context/git-workflow.md` for pre-deployment checklist and `.context/commands-reference.md` for test commands.
+Before creating PRs, run `npm test` to verify pre-commit tests pass.
 
 You are tasked with handling the post-commit Git workflow: pushing to remote, creating PR, reviewing iteratively, and merging if approved.
 
