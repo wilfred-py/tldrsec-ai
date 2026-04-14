@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.0.14.1] - 2026-04-14
+
+### Changed
+- Knowledge base moved from empty `.context/wiki/` to Obsidian vault at `/Users/wilf/Software/Obsidian/tldrsec-ai/`. The vault is the single source of truth for domain knowledge, product decisions, and research.
+- All 9 Claude Code commands (`wiki-ingest`, `wiki-lint`, `research_codebase`, `create_plan`, `implement_plan`, `review_plan`, `push-pr-review-merge`, `commit`) now reference the Obsidian vault instead of `.context/` files that didn't exist.
+- Context profiles in CLAUDE.md updated to load vault wiki pages (product, SEC, companies, etc.) instead of stale `.context/` references.
+
+### Added
+- `/wiki-sync` command for post-ship knowledge distillation into the Obsidian vault wiki.
+- Recursive wiki improvement workflow: after each dev cycle, distill what was learned into vault pages that compound over time.
+- Skill routing entries for `/wiki-sync`, `/wiki-ingest`, and `/wiki-lint`.
+
 ## [0.0.14.0] - 2026-04-13
 
 ### Changed
