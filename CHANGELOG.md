@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.0.18.0] - 2026-04-16
+
+### Fixed
+- Pricing card mobile highlight: tapping a different plan card now switches the blue highlight correctly on both the landing page and /subscribe route.
+- Removed `forceHighlight` prop that permanently locked the pre-selected card's highlight, preventing users from switching plans on /subscribe.
+- Wrapped `.brand-card:hover` CSS in `@media (hover: hover)` to prevent sticky hover states on mobile touch devices.
+
+### Changed
+- Replaced email input form in CTA section below pricing with a single "Get Started" button linking to /onboarding, reducing signup friction.
+
 ## [0.0.17.0] - 2026-04-15
 
 ### Changed
