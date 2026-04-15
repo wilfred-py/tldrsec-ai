@@ -1,9 +1,17 @@
+import { Suspense } from "react";
 import { currentUser } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
-import { DashboardClient } from "@/components/dashboard/dashboard-client";
 import { getPrismaClient } from "@/lib/db/prisma";
-import { Company } from "@/lib/api/types";
+import { mapTickersToCompanies } from "@/lib/db/dashboard-queries";
 import { THREE_TIER_LIMITS } from "@/lib/subscription/three-tier-limits";
+import { DashboardOnboarding } from "@/components/dashboard/dashboard-onboarding";
+import { TickersPanel } from "@/components/dashboard/tickers-panel";
+import { DashboardStatsSection } from "@/components/dashboard/sections/dashboard-stats-section";
+import { DashboardActivitySection } from "@/components/dashboard/sections/dashboard-activity-section";
+import { StatsSkeleton } from "@/components/dashboard/sections/stats-skeleton";
+import { ActivitySkeleton } from "@/components/dashboard/sections/activity-skeleton";
+import { SectionErrorBoundary } from "@/components/dashboard/section-error-boundary";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 interface DashboardPageProps {
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
@@ -17,30 +25,18 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   }
 
   const params = await searchParams;
-  const showWelcome = params.welcome === 'true';
-  const shouldMergePending = params.merge === 'pending' || showWelcome;
-  const subscriptionSuccess = params.subscription_success === 'true';
-  const sessionId = typeof params.session_id === 'string' ? params.session_id : undefined; // Passed to client for background verification
+  const showWelcome = params.welcome === "true";
+  const subscriptionSuccess = params.subscription_success === "true";
+  const sessionId = typeof params.session_id === "string" ? params.session_id : undefined;
 
-  // Fetch tickers server-side to eliminate client-side waterfall
-  let initialCompanies: Company[] = [];
+  // Minimal server-side fetch: auth + user with tickers only.
+  // Stats and activity sections stream independently via Suspense.
+  let tickerIds: string[] = [];
+  let initialCompanies: ReturnType<typeof mapTickersToCompanies> = [];
   let tutorialCompleted = false;
-  let subscriptionTier: 'FREE' | 'PRO' | 'MAX' = 'FREE';
-  let summaryCountThisMonth = 0;
-  let summaryCountTotal = 0;
-  let totalTimeSavedMinutes = 0;
-  let recentSummaries: Array<{
-    id: string;
-    filingType: string;
-    filingDate: string;
-    importance: string | null;
-    smartSubject: string | null;
-    summaryText: string | null;
-    companyName: string;
-    ticker: string;
-    filingUrl: string;
-  }> = [];
-  let featuredSummaries: typeof recentSummaries = [];
+  let subscriptionTier: "FREE" | "PRO" | "MAX" = "FREE";
+  let isFirstVisit = false;
+
   const email = user.emailAddresses?.[0]?.emailAddress;
   if (email) {
     try {
@@ -54,133 +50,86 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
               summaries: {
                 take: 1,
                 select: { id: true, filingDate: true },
-                orderBy: { filingDate: 'desc' },
+                orderBy: { filingDate: "desc" },
               },
             },
           },
         },
       });
+
       if (dbUser) {
         tutorialCompleted = dbUser.tutorialCompletedAt != null;
-        subscriptionTier = (dbUser.subscriptionTier as 'FREE' | 'PRO' | 'MAX') || 'FREE';
-
-        // Fetch recent summaries + counts in parallel (all depend on tickerIds)
-        const tickerIds = dbUser.tickers.map(t => t.id);
-        if (tickerIds.length > 0) {
-          const now = new Date();
-          const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-
-          const [summaries, countThisMonth, countTotal, tokenAgg] = await Promise.all([
-            prisma.summary.findMany({
-              where: { tickerId: { in: tickerIds } },
-              select: {
-                id: true,
-                filingType: true,
-                filingDate: true,
-                importance: true,
-                smartSubject: true,
-                filingUrl: true,
-                ticker: { select: { symbol: true, companyName: true } },
-              },
-              orderBy: { filingDate: 'desc' },
-              take: 15,
-            }),
-            prisma.summary.count({
-              where: { tickerId: { in: tickerIds }, filingDate: { gte: startOfMonth } },
-            }),
-            prisma.summary.count({
-              where: { tickerId: { in: tickerIds } },
-            }),
-            prisma.summary.aggregate({
-              where: { tickerId: { in: tickerIds } },
-              _sum: { inputTokens: true, outputTokens: true },
-            }),
-          ]);
-
-          recentSummaries = summaries.map(s => ({
-            id: s.id,
-            filingType: s.filingType,
-            filingDate: s.filingDate.toISOString(),
-            importance: s.importance,
-            smartSubject: s.smartSubject,
-            summaryText: null,
-            companyName: s.ticker.companyName,
-            ticker: s.ticker.symbol,
-            filingUrl: s.filingUrl,
-          }));
-          summaryCountThisMonth = countThisMonth;
-          summaryCountTotal = countTotal;
-          const totalInput = tokenAgg._sum.inputTokens ?? 0;
-          const totalOutput = tokenAgg._sum.outputTokens ?? 0;
-          totalTimeSavedMinutes = Math.round(Math.max(0, ((totalInput - totalOutput) * 0.75) / 250) * 10) / 10;
-        }
-
-        // If user has tickers but zero summaries, fetch featured summaries
-        // from across the platform so the dashboard isn't empty on day 1
-        if (recentSummaries.length === 0 && tickerIds.length > 0) {
-          const featured = await prisma.summary.findMany({
-            where: {
-              importance: { in: ['critical', 'high'] },
-            },
-            select: {
-              id: true,
-              filingType: true,
-              filingDate: true,
-              importance: true,
-              smartSubject: true,
-              filingUrl: true,
-              ticker: { select: { symbol: true, companyName: true } },
-            },
-            orderBy: { filingDate: 'desc' },
-            take: 10,
-          });
-          featuredSummaries = featured.map(s => ({
-            id: s.id,
-            filingType: s.filingType,
-            filingDate: s.filingDate.toISOString(),
-            importance: s.importance,
-            smartSubject: s.smartSubject,
-            summaryText: null,
-            companyName: s.ticker.companyName,
-            ticker: s.ticker.symbol,
-            filingUrl: s.filingUrl,
-          }));
-        }
-
-        initialCompanies = dbUser.tickers.map(ticker => ({
-          id: ticker.id,
-          symbol: ticker.symbol,
-          name: ticker.companyName,
-          lastFiling: "—",
-          lastFilingDate: ticker.summaries[0]?.filingDate?.toISOString() ?? undefined,
-          summaryCount: ticker._count.summaries,
-          preferences: (ticker.preferences as Company['preferences']) || { tenK: true, tenQ: true, eightK: true, form4: true, other: false },
-        }));
-
+        subscriptionTier = (dbUser.subscriptionTier as "FREE" | "PRO" | "MAX") || "FREE";
+        tickerIds = dbUser.tickers.map((t) => t.id);
+        initialCompanies = mapTickersToCompanies(dbUser.tickers);
+        isFirstVisit = !tutorialCompleted;
       }
     } catch (error) {
-      console.error('Failed to prefetch tickers:', error);
-      // DashboardClient will fall back to client-side fetch
+      console.error("Failed to prefetch user:", error);
+      // Page still renders — Suspense sections will show skeletons,
+      // TickersPanel falls back to client-side fetch
     }
   }
 
   const tickerLimit = THREE_TIER_LIMITS[subscriptionTier];
 
   return (
-    <DashboardClient
-      showWelcome={showWelcome}
-      shouldMergePending={shouldMergePending}
-      subscriptionSuccess={subscriptionSuccess}
-      sessionId={sessionId}
-      initialCompanies={initialCompanies}
-      tutorialCompleted={tutorialCompleted}
-      subscriptionTier={subscriptionTier}
-      tickerLimit={tickerLimit}
-      summaryCountThisMonth={summaryCountThisMonth}
-      summaryCountTotal={summaryCountTotal}
-      totalTimeSavedMinutes={totalTimeSavedMinutes}
-      recentSummaries={recentSummaries}
-      featuredSummaries={featuredSummaries}
-    />
+    <div className="space-y-6 animate-fade-in">
+      <h1 className="sr-only">Dashboard</h1>
+
+      <DashboardOnboarding
+        tutorialCompleted={tutorialCompleted}
+        subscriptionSuccess={subscriptionSuccess}
+        sessionId={sessionId}
+        subscriptionTier={subscriptionTier}
+      />
+
+      {/* Stats — streams independently */}
+      <SectionErrorBoundary sectionName="stats">
+        <Suspense fallback={<StatsSkeleton />}>
+          <DashboardStatsSection tickerIds={tickerIds} />
+        </Suspense>
+      </SectionErrorBoundary>
+
+      {/* Tabs: Activity feed (streamed) / Tickers (immediate) */}
+      <Tabs defaultValue={isFirstVisit ? "tickers" : "activity"} className="w-full">
+        <TabsList className="mb-4 bg-[var(--brand-bg)] border border-[var(--brand-border)] rounded-lg p-1">
+          <TabsTrigger
+            value="activity"
+            className="data-[state=active]:bg-[var(--brand-bg-subtle)] data-[state=active]:shadow-sm data-[state=inactive]:text-[var(--brand-text-muted)] px-4 py-1.5 text-sm font-medium rounded-md"
+          >
+            Emails
+          </TabsTrigger>
+          <TabsTrigger
+            value="tickers"
+            className="data-[state=active]:bg-[var(--brand-bg-subtle)] data-[state=active]:shadow-sm data-[state=inactive]:text-[var(--brand-text-muted)] px-4 py-1.5 text-sm font-medium rounded-md"
+          >
+            Tickers
+          </TabsTrigger>
+        </TabsList>
+
+        {/* forceMount keeps both tabs in the DOM so the streamed Suspense
+            content hydrates correctly regardless of which tab is active.
+            data-[state=inactive]:hidden hides the inactive tab via CSS. */}
+        <TabsContent value="activity" forceMount className="data-[state=inactive]:hidden">
+          <SectionErrorBoundary sectionName="activity feed">
+            <Suspense fallback={<ActivitySkeleton />}>
+              <DashboardActivitySection
+                tickerIds={tickerIds}
+                hasCompanies={tickerIds.length > 0}
+              />
+            </Suspense>
+          </SectionErrorBoundary>
+        </TabsContent>
+
+        <TabsContent value="tickers" forceMount className="data-[state=inactive]:hidden">
+          <TickersPanel
+            initialCompanies={initialCompanies}
+            subscriptionTier={subscriptionTier}
+            tickerLimit={tickerLimit}
+          />
+        </TabsContent>
+      </Tabs>
+    </div>
   );
 }
