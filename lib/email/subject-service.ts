@@ -166,23 +166,39 @@ export class EmailSubjectService {
       }
 
       const { ticker, filingType } = params;
-      const summary = typeof summaryJSON.summary === 'string' ? summaryJSON.summary : '';
 
-      // Extract a compelling one-liner from the summary text
+      // Priority 1: AI-generated emailSubject field (30-120 chars)
+      const aiSubject = typeof summaryJSON.emailSubject === 'string' ? summaryJSON.emailSubject.trim() : '';
+      if (aiSubject.length >= 30 && aiSubject.length <= 120) {
+        return aiSubject;
+      }
+
+      // Priority 2: Extract from summary text
+      const summary = typeof summaryJSON.summary === 'string' ? summaryJSON.summary : '';
       if (summary) {
-        // Take the first sentence and trim to a reasonable subject length
         const firstSentence = summary.split(/\.\s/)[0];
         if (firstSentence && firstSentence.length > 20 && firstSentence.length < 120) {
-          // Ensure it mentions the ticker or company
           const hasTicker = firstSentence.toUpperCase().includes(ticker.toUpperCase());
           if (hasTicker) {
             return firstSentence.endsWith('.') ? firstSentence : `${firstSentence}.`;
           }
           return `${ticker}: ${firstSentence}${firstSentence.endsWith('.') ? '' : '.'}`;
         }
+
+        // When first sentence is too long, truncate at last word boundary within 80 chars
+        if (firstSentence && firstSentence.length >= 120) {
+          const truncated = firstSentence.slice(0, 80);
+          const lastSpace = truncated.lastIndexOf(' ');
+          if (lastSpace > 30) {
+            const short = truncated.slice(0, lastSpace);
+            const hasTicker = short.toUpperCase().includes(ticker.toUpperCase());
+            const prefix = hasTicker ? '' : `${ticker}: `;
+            return `${prefix}${short}...`;
+          }
+        }
       }
 
-      // Form-specific extraction as fallback
+      // Priority 3: Form-specific extraction
       const normalizedType = filingType.replace(/^Form\s*/i, '').replace(/\/A$/, '');
 
       if (normalizedType === '4' || normalizedType === '4/A') {

@@ -16,7 +16,7 @@ import { SECFilingType } from './prompts/prompt-types';
 import { generateFilingPrompt as generateUnifiedPrompt } from './prompts/unified-prompts';
 import { estimateTokenCount, splitDocumentIntoChunks, getContextConfig } from './prompts/context-manager';
 import { getHistoricalSummaries, buildContextEnrichedPrompt } from './historical-context';
-import { getCounterpartyContext } from './counterparty-context';
+import { getEnrichmentContext } from './web-search-context';
 // Removed Anthropic SDK import - using OpenRouter client
 // import { extractFilingContent } from '../parsers/filing-extractor'; // Currently unused
 import { logger } from '../logging';
@@ -746,23 +746,22 @@ export async function summarizeFiling(content: string, options: SummarizationOpt
       }
     }
 
-    // Enrich 8-K M&A filings with counterparty context via web search
+    // Enrich 8-K filings with web search context (M&A counterparty, director governance)
     if (filingRecordFromDB.formType === '8-K' || filingRecordFromDB.formType === '8-K/A') {
       try {
-        const counterpartyCtx = await getCounterpartyContext(
+        const enrichments = await getEnrichmentContext(
           processedContent,
           filingRecordFromDB.formType,
           filingRecordFromDB.companyName,
           tickerSymbol || 'UNKNOWN'
         );
-        if (counterpartyCtx) {
-          enrichedContent += `\n\n--- COUNTERPARTY CONTEXT (from web search) ---\n${counterpartyCtx}`;
-          componentLogger.info(`Added counterparty context for ${tickerSymbol}`);
-          monitoring.incrementCounter('ai.counterparty_context_added', 1);
+        for (const ctx of enrichments) {
+          enrichedContent += `\n\n${ctx}`;
+          componentLogger.info(`Added enrichment context for ${tickerSymbol}`);
         }
-      } catch (cpError) {
-        componentLogger.warn(`Failed to fetch counterparty context: ${cpError instanceof Error ? cpError.message : String(cpError)}`);
-        monitoring.incrementCounter('ai.counterparty_context_error', 1);
+      } catch (enrichError) {
+        componentLogger.warn(`Failed to fetch enrichment context: ${enrichError instanceof Error ? enrichError.message : String(enrichError)}`);
+        monitoring.incrementCounter('ai.enrichment_context_error', 1);
       }
     }
 
