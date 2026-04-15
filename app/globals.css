@@ -319,9 +319,11 @@
     transition: all 0.3s ease;
   }
 
-  .brand-card:hover {
-    box-shadow: 0 10px 40px -10px rgba(0, 0, 0, 0.1);
-    border-color: var(--brand-primary-light);
+  @media (hover: hover) {
+    .brand-card:hover {
+      box-shadow: 0 10px 40px -10px rgba(0, 0, 0, 0.1);
+      border-color: var(--brand-primary-light);
+    }
   }
 
   /* Badge styles */
