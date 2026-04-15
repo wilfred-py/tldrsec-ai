@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.0.15.1] - 2026-04-15
+
+### Changed
+- Engineering principles in CLAUDE.md expanded with Karpathy-inspired guidelines. Added "Think Before Coding" (surface assumptions before implementing) and "Goal-Driven Execution" (transform tasks into verifiable goals). Strengthened "Simplicity First" and replaced "Minimal Impact" with specific "Surgical Changes" rules.
+
 ## [0.0.15.0] - 2026-04-15
 
 ### Added
