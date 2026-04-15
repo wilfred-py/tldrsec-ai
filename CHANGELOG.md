@@ -12,6 +12,17 @@ All notable changes to this project will be documented in this file.
 ### Changed
 - Replaced email input form in CTA section below pricing with a single "Get Started" button linking to /onboarding, reducing signup friction.
 
+## [0.0.17.1] - 2026-04-16
+
+### Fixed
+- Mobile hamburger menu now opens with a visible background instead of just borders.
+- All 384 theme color usages across 98 files now render correctly (were producing invalid `hsl(oklch(...))` CSS).
+- Dark mode borders and inputs use solid composited colors instead of broken semi-transparent oklch values.
+- Fintech brand color tokens unified to HSL format, matching the rest of the design system.
+
+### Added
+- Regression test guard preventing future shadcn CLI updates from regenerating oklch-format CSS variables.
+
 ## [0.0.17.0] - 2026-04-15
 
 ### Changed
