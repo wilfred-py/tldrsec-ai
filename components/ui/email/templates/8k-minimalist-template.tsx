@@ -190,48 +190,69 @@ export function formatText(text: string): string {
 }
 
 /**
- * Extract a clean, specific headline from AI-generated summary text.
- * Skips generic prefixes, deduplicates against eventType, and truncates.
+ * Quality gate for AI-provided headline field.
+ * Rejects garbage: too short, generic prefixes, or identical to eventType.
  */
-export function getCleanHeadline(summaryText: string, eventType: string): string {
-  if (!summaryText) return '';
+function isValidHeadline(headline: string, eventType: string): boolean {
+  if (!headline || headline.trim().length < 15) return false;
+  if (/^this\s+(filing|8-k|report|document)\b/i.test(headline.trim())) return false;
+  if (eventType && headline.trim().toLowerCase() === eventType.toLowerCase()) return false;
+  return true;
+}
 
-  // Split on sentence boundaries, skipping common abbreviations
-  const abbrevPattern = /(?<!\b(?:Corp|Inc|Ltd|Mr|Mrs|Dr|Jr|Sr|vs|etc|approx|est))\.\s+/;
-  const firstSentence = summaryText.split(abbrevPattern)[0] || '';
+/**
+ * Find the first sentence boundary in text.
+ * Returns the index AFTER the sentence-ending period + space,
+ * or -1 if no boundary found (single sentence or too short to split).
+ * Skips common abbreviations to avoid false splits.
+ */
+export function findFirstSentenceBoundary(text: string): number {
+  if (!text) return -1;
 
-  let headline = firstSentence;
+  // Match period followed by space, but skip abbreviations
+  const abbrevs = /(?:Corp|Inc|Ltd|LLC|Mr|Mrs|Dr|Jr|Sr|vs|etc|approx|est|No|Vol|Dept|Gov|Gen|Sgt|Pvt|Rev|Prof|Capt|Cmdr|Lt|Col|Maj|Brig|Adm|Supt|Pres|Treas|Sec|Atty|Dist|Assn|Bros|Mgr|Acct|Mfg|Natl|Intl)\./i;
 
-  // If first sentence is too short, use more text
-  if (headline.length < 30 && summaryText.length > headline.length) {
-    headline = summaryText;
+  // Walk through the text looking for ". " that isn't after an abbreviation
+  let i = 0;
+  while (i < text.length - 1) {
+    if (text[i] === '.' && (text[i + 1] === ' ' || text[i + 1] === '\n')) {
+      // Check if this period is part of an abbreviation
+      const before = text.slice(Math.max(0, i - 10), i + 1);
+      if (!abbrevs.test(before)) {
+        // Check it's not a decimal number (e.g., "$1.5 billion")
+        if (i > 0 && /\d/.test(text[i - 1]) && i + 2 < text.length && /\d/.test(text[i + 2])) {
+          i++;
+          continue;
+        }
+        return i + 2; // Index after ". "
+      }
+    }
+    i++;
   }
+  return -1;
+}
 
-  // Skip generic AI prefixes
-  if (/^this\s+(filing|8-k|report|document)\b/i.test(headline)) {
-    return '';
-  }
-
-  // Strip leading eventType prefix to avoid duplication
-  if (eventType && headline.toLowerCase().startsWith(eventType.toLowerCase())) {
-    headline = headline.slice(eventType.length);
-    // Strip leading separators after prefix removal
-    headline = headline.replace(/^[\s]*[:\-–—]+[\s]*/, '');
-  }
-
-  // Truncate at 120 chars
-  if (headline.length > 120) {
-    headline = headline.slice(0, 117) + '...';
-  }
-
-  return headline.trim();
+/**
+ * Get the display headline for the email.
+ * Priority: AI headline field → eventType → signal verdict.
+ */
+function getDisplayHeadline(
+  data: Record<string, unknown> | undefined,
+  eventType: string,
+  signalVerdict: string,
+): string {
+  const aiHeadline = typeof data?.headline === 'string' ? data.headline.trim() : '';
+  if (isValidHeadline(aiHeadline, eventType)) return aiHeadline;
+  return eventType || signalVerdict;
 }
 
 /**
  * Form 8-K Email Template - Smart Brevity Design
  *
- * Structure: Signal badge (MATERIAL/ROUTINE) -> Lead sentence -> Why it matters
- * -> Data snapshot -> Story narrative -> Watch for bullets
+ * Layout: Signal badge -> Headline -> Data snapshot (Event/Filed) -> Why it matters
+ *         -> Story narrative -> Watch for bullets
+ *
+ * Headline source: AI `headline` field (with quality gate) -> eventType -> signal verdict
  *
  * 2-level signal system:
  * - MATERIAL EVENT (amber): Significant corporate news (earnings, M&A, executive changes)
@@ -267,8 +288,8 @@ export function Form8KMinimalistTemplate({ filing }: Form8KMinimalistTemplatePro
   const isMaterial = isMaterialFiling(itemNumbers, summaryText || '');
   const signal = getSignalConfig(isMaterial);
 
-  // Extract and clean the headline for the lead sentence
-  const headline = getCleanHeadline(summaryText || '', eventType);
+  // Headline from AI field with fallback chain
+  const headline = getDisplayHeadline(data, eventType, signal.verdict);
 
   // Format items for display with human-readable descriptions
   const itemsDisplay = itemNumbers.length > 0
@@ -284,15 +305,14 @@ export function Form8KMinimalistTemplate({ filing }: Form8KMinimalistTemplatePro
   // Pick badge colors from the muted palette
   const signalBadgeColors = isMaterial ? BadgeColors.high : BadgeColors.low;
 
-  // Remaining summary text after the headline sentence for the story section
-  const remainingSummary = (headline && summaryText && summaryText.length > headline.length)
-    ? summaryText.slice(headline.length).trim()
+  // Remaining summary: decouple from headline — find first sentence boundary in original text
+  const sentenceBoundary = findFirstSentenceBoundary(summaryText || '');
+  const remainingSummary = sentenceBoundary > 0
+    ? (summaryText || '').slice(sentenceBoundary).trim()
     : '';
 
-  // Build "Why it matters" prose — consolidate financial impact + signal description
-  const whyItMattersText = financialImpact
-    ? `${signal.description} ${financialImpact}`
-    : signal.description;
+  // "Why it matters" — use financialImpact when available, drop boilerplate
+  const whyItMattersText = financialImpact || signal.description;
 
   // Build data snapshot rows
   const dataRows: { label: string; value: string }[] = [];
@@ -340,7 +360,7 @@ export function Form8KMinimalistTemplate({ filing }: Form8KMinimalistTemplatePro
         companyName={companyName}
         filingType={filingType || '8-K'}
         filingDate={filingDate}
-        filingCategory={isMaterial ? 'Material' : 'Routine'}
+        filingCategory={eventType || (isMaterial ? 'Material' : 'Routine')}
       />
 
       {/* Staleness warning */}
@@ -356,7 +376,7 @@ export function Form8KMinimalistTemplate({ filing }: Form8KMinimalistTemplatePro
           <tr>
             <td style={{ padding: '0 15px 20px' }}>
 
-              {/* Signal badge — FIRST element the user sees */}
+              {/* Signal badge + sentiment — one row, no duplicate category badge */}
               <div style={{ marginBottom: '12px' }}>
                 <span style={{
                   ...EmailStyles.pillBadge,
@@ -377,37 +397,16 @@ export function Form8KMinimalistTemplate({ filing }: Form8KMinimalistTemplatePro
                     {getSentimentEmoji(sentiment)} {sentiment.charAt(0).toUpperCase() + sentiment.slice(1)}
                   </span>
                 )}
-
-                {/* Filing type category badge */}
-                <span style={{
-                  ...EmailStyles.categoryBadge,
-                  marginLeft: '8px',
-                }}>
-                  8-K {eventType ? `| ${eventType}` : ''}
-                </span>
               </div>
 
               {/* Lead sentence */}
               <h1 style={EmailStyles.leadSentence}>
-                {headline || eventType || signal.verdict}
+                {headline}
               </h1>
 
-              {/* Why it matters */}
-              <p style={EmailStyles.whyItMatters}>
-                <strong style={{ color: '#000000' }}>Why it matters: </strong>
-                {whyItMattersText}
-              </p>
-
-              {/* Thin divider */}
+              {/* Data snapshot — after headline, before why-it-matters */}
               {dataRows.length > 0 && (
-                <table width="100%" cellPadding="0" cellSpacing="0" style={{ margin: '20px 0' }}>
-                  <tbody><tr><td style={EmailStyles.thinDivider}></td></tr></tbody>
-                </table>
-              )}
-
-              {/* Data snapshot rows */}
-              {dataRows.length > 0 && (
-                <table width="100%" cellPadding="0" cellSpacing="0" style={{ marginBottom: '4px' }}>
+                <table width="100%" cellPadding="0" cellSpacing="0" style={{ marginBottom: '12px' }}>
                   <tbody>
                     {dataRows.map((row, idx) => (
                       <tr key={idx}>
@@ -424,6 +423,12 @@ export function Form8KMinimalistTemplate({ filing }: Form8KMinimalistTemplatePro
                   </tbody>
                 </table>
               )}
+
+              {/* Why it matters */}
+              <p style={EmailStyles.whyItMatters}>
+                <strong style={{ color: '#000000' }}>Why it matters: </strong>
+                {whyItMattersText}
+              </p>
 
               {/* Thin divider */}
               {remainingSummary && (

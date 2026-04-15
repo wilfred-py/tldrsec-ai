@@ -2,6 +2,22 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.0.16.0] - 2026-04-15
+
+### Fixed
+- 8-K email badge redundancy: removed duplicate category badge from template body. Header now shows "8-K | {eventType}" (e.g., "8-K | Acquisition") instead of generic "Current Report".
+- 8-K headline truncation: AI now returns a structured `headline` field instead of the template regex-parsing it from prose. Fallback chain: AI headline, eventType, signal verdict.
+- 8-K body text starting mid-sentence: `remainingSummary` now uses proper sentence boundary detection, decoupled from headline derivation.
+- 8-K email layout reordered: signal badge, headline, event/filed metadata, why-it-matters, story. Metadata no longer buried in the middle.
+- 8-K subject lines for long summaries: uses AI `emailSubject` field first, falls back to word-boundary truncation instead of generic "TICKER 8-K: EventType".
+- "Why it matters" section drops boilerplate signal description when specific financial impact is available.
+
+### Added
+- Shared web search enrichment module (`web-search-context.ts`) with `EnrichmentProvider` interface and `AbortSignal` timeout budget (45s total for all providers).
+- Director governance web search: 8-K filings with Item 5.02/5.07 now get web-sourced context about departing/appointed directors and why the change matters.
+- `headline`, `emailSubject`, and `governanceContext` fields added to 8-K AI schema.
+- 32 new tests: enrichment module (23), sentence boundary detection (9).
+
 ## [0.0.15.1] - 2026-04-15
 
 ### Changed
