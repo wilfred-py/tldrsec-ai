@@ -26,7 +26,6 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   let initialCompanies: Company[] = [];
   let tutorialCompleted = false;
   let subscriptionTier: 'FREE' | 'PRO' | 'MAX' = 'FREE';
-  let summaryCountThisMonth = 0;
   let summaryCountTotal = 0;
   let totalTimeSavedMinutes = 0;
   let recentSummaries: Array<{
@@ -67,10 +66,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
         // Fetch recent summaries + counts in parallel (all depend on tickerIds)
         const tickerIds = dbUser.tickers.map(t => t.id);
         if (tickerIds.length > 0) {
-          const now = new Date();
-          const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-
-          const [summaries, countThisMonth, countTotal, tokenAgg] = await Promise.all([
+          const [summaries, countTotal, tokenAgg] = await Promise.all([
             prisma.summary.findMany({
               where: { tickerId: { in: tickerIds } },
               select: {
@@ -84,9 +80,6 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
               },
               orderBy: { filingDate: 'desc' },
               take: 15,
-            }),
-            prisma.summary.count({
-              where: { tickerId: { in: tickerIds }, filingDate: { gte: startOfMonth } },
             }),
             prisma.summary.count({
               where: { tickerId: { in: tickerIds } },
@@ -108,7 +101,6 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
             ticker: s.ticker.symbol,
             filingUrl: s.filingUrl,
           }));
-          summaryCountThisMonth = countThisMonth;
           summaryCountTotal = countTotal;
           const totalInput = tokenAgg._sum.inputTokens ?? 0;
           const totalOutput = tokenAgg._sum.outputTokens ?? 0;
@@ -176,7 +168,6 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
       tutorialCompleted={tutorialCompleted}
       subscriptionTier={subscriptionTier}
       tickerLimit={tickerLimit}
-      summaryCountThisMonth={summaryCountThisMonth}
       summaryCountTotal={summaryCountTotal}
       totalTimeSavedMinutes={totalTimeSavedMinutes}
       recentSummaries={recentSummaries}

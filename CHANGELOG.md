@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.0.17.0] - 2026-04-15
+
+### Changed
+- Dashboard redesign: removed bordered Card wrappers from activity feed, tickers table, and stats section for a cleaner, content-first layout.
+- Time saved metric now uses animated digit-rolling counter (reuses waitlist page CounterDisplay component) instead of a static bordered card.
+- Removed unused "summary count this month" Prisma query from dashboard page load, reducing server-side queries by one.
+
+### Removed
+- `EmailStatsWidget` component (replaced by inline animated counter).
+- `HoursSavedWidget` component (dead code, was never imported).
+
 ## [0.0.16.0] - 2026-04-15
 
 ### Fixed
