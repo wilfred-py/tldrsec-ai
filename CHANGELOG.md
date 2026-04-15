@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.0.15.0] - 2026-04-15
+
+### Added
+- Counterparty context for M&A 8-K filings. When an 8-K involves an acquisition or merger, the system now web-searches for who the counterparty is, what they do, and why the deal matters to investors. The context gets woven into the summary automatically.
+- New `counterpartyContext` field in the 8-K JSON schema for structured counterparty data.
+- 25 unit tests covering M&A detection, web search, and graceful error handling.
+
 ## [0.0.14.1] - 2026-04-14
 
 ### Changed
