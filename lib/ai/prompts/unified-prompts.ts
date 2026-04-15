@@ -313,6 +313,11 @@ export const FORM_SCHEMAS: Record<string, JSONSchema> = {
         type: 'string',
         description: 'Any forward-looking guidance provided (e.g., "Q4 revenue expected $13-14B")',
         maxLength: 150
+      },
+      counterpartyContext: {
+        type: 'string',
+        description: 'For M&A filings (Item 1.01, 2.01): Who is the counterparty, what do they do, and why does this deal matter to shareholders',
+        maxLength: 300
       }
     }
   },
@@ -1234,7 +1239,8 @@ const FORM_EXTRACTION_GUIDANCE: Record<string, string> = {
 - ALWAYS include: specific dollar amounts ($X.XB), percentage changes (+X% YoY), and key metrics
 - Lead keyHighlights with the most investor-relevant fact
 - If management provides a quote, include it in managementCommentary
-- Sentiment: Set to "positive" for beats/good news, "negative" for misses/concerns, "neutral" for informational filings, "mixed" if both`,
+- Sentiment: Set to "positive" for beats/good news, "negative" for misses/concerns, "neutral" for informational filings, "mixed" if both
+- COUNTERPARTY CONTEXT: If a "COUNTERPARTY CONTEXT" section appears in the content, use it to populate the counterpartyContext field. Weave the counterparty's identity and strategic rationale into the summary and keyHighlights to explain WHO the counterparty is and WHY the deal matters.`,
 
   '144': `FORM 144 EXTRACTION RULES:
 - COMPANY FIELD IS REQUIRED: The "company" field must contain the ISSUER name (the company whose stock is being sold, e.g., "Tesla, Inc."). Extract from "Name of Issuer" or "Issuer Name" on the form. This is NOT the filer — it is the company whose securities are being sold. NEVER leave blank.

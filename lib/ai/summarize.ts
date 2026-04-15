@@ -16,6 +16,7 @@ import { SECFilingType } from './prompts/prompt-types';
 import { generateFilingPrompt as generateUnifiedPrompt } from './prompts/unified-prompts';
 import { estimateTokenCount, splitDocumentIntoChunks, getContextConfig } from './prompts/context-manager';
 import { getHistoricalSummaries, buildContextEnrichedPrompt } from './historical-context';
+import { getCounterpartyContext } from './counterparty-context';
 // Removed Anthropic SDK import - using OpenRouter client
 // import { extractFilingContent } from '../parsers/filing-extractor'; // Currently unused
 import { logger } from '../logging';
@@ -742,6 +743,26 @@ export async function summarizeFiling(content: string, options: SummarizationOpt
         componentLogger.warn(`Failed to fetch historical context for ${tickerSymbol}: ${historyError instanceof Error ? historyError.message : String(historyError)}`);
         monitoring.incrementCounter('ai.historical_context_error', 1);
         // Continue without historical context - non-fatal error
+      }
+    }
+
+    // Enrich 8-K M&A filings with counterparty context via web search
+    if (filingRecordFromDB.formType === '8-K' || filingRecordFromDB.formType === '8-K/A') {
+      try {
+        const counterpartyCtx = await getCounterpartyContext(
+          processedContent,
+          filingRecordFromDB.formType,
+          filingRecordFromDB.companyName,
+          tickerSymbol || 'UNKNOWN'
+        );
+        if (counterpartyCtx) {
+          enrichedContent += `\n\n--- COUNTERPARTY CONTEXT (from web search) ---\n${counterpartyCtx}`;
+          componentLogger.info(`Added counterparty context for ${tickerSymbol}`);
+          monitoring.incrementCounter('ai.counterparty_context_added', 1);
+        }
+      } catch (cpError) {
+        componentLogger.warn(`Failed to fetch counterparty context: ${cpError instanceof Error ? cpError.message : String(cpError)}`);
+        monitoring.incrementCounter('ai.counterparty_context_error', 1);
       }
     }
 
