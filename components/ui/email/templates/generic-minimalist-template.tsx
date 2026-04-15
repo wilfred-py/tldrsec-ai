@@ -41,9 +41,10 @@ export function GenericMinimalistTemplate({ filing }: GenericMinimalistTemplateP
   // Build preheader text
   const preheaderText = `${filingType || 'SEC FILING'}: ${companyName} (${displayTicker}) -- ${(documentDescription || summaryText || '').substring(0, 80)}`;
 
-  // Build lead sentence
+  // Prefer AI-provided headline, fall back to documentDescription or sentence extraction
+  const aiHeadline = typeof rawData?.headline === 'string' ? rawData.headline : '';
   const leadText = documentDescription || summaryText?.split(/(?<=[.!?])\s+/)[0] || '';
-  const headline = leadText.length >= 30 ? leadText : (summaryText || leadText);
+  const headline = aiHeadline || (leadText.length >= 30 ? leadText : (summaryText || leadText));
 
   // Remaining summary after headline
   const remainingSummary = summaryText && headline && summaryText.length > headline.length

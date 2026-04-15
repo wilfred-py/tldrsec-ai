@@ -756,11 +756,14 @@ export function Form4MinimalistTemplate({ filing }: Form4MinimalistTemplateProps
   // Get signal configuration
   const signal = getSignalConfig(signalStrength, summaryText || '', primaryIsSale, percentChange, isAwardOnly);
 
-  // Extract first sentence as the headline, but ensure we have meaningful content
-  let headline = summaryText?.split(/(?<=[.!?])\s+/)[0] || '';
-  // If headline is too short or just a name fragment, use full summary
-  if (headline.length < 30 && summaryText && summaryText.length > headline.length) {
-    headline = summaryText;
+  // Prefer AI-provided headline, fall back to sentence extraction
+  const aiHeadline = typeof rawData?.headline === 'string' ? rawData.headline : '';
+  let headline = aiHeadline;
+  if (!headline) {
+    headline = summaryText?.split(/(?<=[.!?])\s+/)[0] || '';
+    if (headline.length < 30 && summaryText && summaryText.length > headline.length) {
+      headline = summaryText;
+    }
   }
 
   // Remaining summary text after the headline sentence

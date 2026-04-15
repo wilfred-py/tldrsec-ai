@@ -38,7 +38,9 @@ const schema10K = z.object({
   insights: z.array(z.string()),
   risks: z.array(z.string()),
   sections: z.array(sectionSchema).optional(),
-  summary: z.string().optional()
+  summary: z.string().optional(),
+  headline: z.string().max(120).optional(),
+  emailSubject: z.string().max(100).optional()
 });
 
 /**
@@ -54,7 +56,9 @@ const schema10Q = z.object({
   risks: z.array(z.string()),
   marketOutlook: z.string().optional(),
   sections: z.array(sectionSchema).optional(),
-  summary: z.string().optional()
+  summary: z.string().optional(),
+  headline: z.string().max(120).optional(),
+  emailSubject: z.string().max(100).optional()
 });
 
 /**
@@ -69,7 +73,9 @@ const schema8K = z.object({
   positiveDevelopments: z.string().or(z.array(z.string())),
   potentialConcerns: z.string().or(z.array(z.string())),
   structuralChanges: z.string().or(z.array(z.string())).optional(),
-  additionalNotes: z.string().optional()
+  additionalNotes: z.string().optional(),
+  headline: z.string().max(120).optional(),
+  emailSubject: z.string().max(100).optional()
 });
 
 /**
@@ -96,7 +102,9 @@ const schemaForm4 = z.object({
   percentageChange: z.string().optional(),
   previousStake: z.string().optional(),
   newStake: z.string().optional(),
-  summary: z.string()
+  summary: z.string(),
+  headline: z.string().max(120).optional(),
+  emailSubject: z.string().max(100).optional()
 });
 
 /**
@@ -128,7 +136,9 @@ const schemaForm3 = z.object({
     })
   ).optional(),
   totalShares: z.string().optional(),
-  summary: z.string().optional()
+  summary: z.string().optional(),
+  headline: z.string().max(120).optional(),
+  emailSubject: z.string().max(100).optional()
 });
 
 /**
@@ -150,7 +160,9 @@ const schemaS1 = z.object({
       background: z.string().optional()
     })
   ).optional(),
-  summary: z.string()
+  summary: z.string(),
+  headline: z.string().max(120).optional(),
+  emailSubject: z.string().max(100).optional()
 });
 
 /**
@@ -180,7 +192,9 @@ const schemaDEF14A = z.object({
       total: z.string().optional()
     })
   ).optional(),
-  summary: z.string()
+  summary: z.string(),
+  headline: z.string().max(120).optional(),
+  emailSubject: z.string().max(100).optional()
 });
 
 /**
@@ -192,7 +206,9 @@ const schemaGeneric = z.object({
   filingDate: z.string(),
   sections: z.array(sectionSchema).optional(),
   keyPoints: z.array(z.string()),
-  summary: z.string()
+  summary: z.string(),
+  headline: z.string().max(120).optional(),
+  emailSubject: z.string().max(100).optional()
 });
 
 /**
@@ -219,6 +235,8 @@ const schemaForm144 = z.object({
   recentActivity: z.string().optional(),
   percentOfHoldings: z.string().or(z.number()).optional(),
   broker: z.string().optional(),
+  headline: z.string().max(120).optional(),
+  emailSubject: z.string().max(100).optional()
 });
 
 const schemaMap: Record<SECFilingType | string, z.ZodTypeAny> = {

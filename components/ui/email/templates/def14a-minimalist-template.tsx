@@ -97,18 +97,17 @@ export function FormDEF14AMinimalistTemplate({ filing }: FormDEF14AMinimalistTem
     return rec.toUpperCase();
   };
 
-  // Build lead sentence from the most consequential proposal
+  // Prefer AI-provided headline, fall back to structured synthesis
+  const aiHeadline = typeof rawData?.headline === 'string' ? rawData.headline : '';
   const buildLeadSentence = (): string => {
-    // Try say-on-pay first as it's usually the most attention-getting
+    if (aiHeadline) return aiHeadline;
     if (sayOnPay?.recommendation) {
       return `${companyName} asks shareholders to approve executive pay at its ${meetingType?.toLowerCase() || 'annual'} meeting${meetingDate ? ` on ${meetingDate}` : ''}.`;
     }
-    // Fall back to first board proposal
     if (boardProposals?.length) {
       const first = boardProposals[0];
       return `${companyName} puts ${boardProposals.length} proposal${boardProposals.length > 1 ? 's' : ''} to a shareholder vote${meetingDate ? ` on ${meetingDate}` : ''}, including ${first.description.toLowerCase()}.`;
     }
-    // Minimal fallback
     return `${companyName} filed a proxy statement${meetingDate ? ` ahead of its ${meetingDate} meeting` : ''}.`;
   };
 

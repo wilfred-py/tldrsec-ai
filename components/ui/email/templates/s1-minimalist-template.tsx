@@ -57,8 +57,9 @@ export function FormS1MinimalistTemplate({ filing }: FormS1MinimalistTemplatePro
   // Build preheader text
   const preheaderText = `IPO FILING: ${companyName} (${displayTicker}) -- ${businessDescription || (summaryText || '').substring(0, 80)}`;
 
-  // Extract first sentence as the headline
-  const leadText = businessDescription || summaryText?.split(/(?<=[.!?])\s+/)[0] || '';
+  // Prefer AI-provided headline, fall back to businessDescription or sentence extraction
+  const aiHeadline = typeof rawData?.headline === 'string' ? rawData.headline : '';
+  const leadText = aiHeadline || businessDescription || summaryText?.split(/(?<=[.!?])\s+/)[0] || '';
 
   // Remaining summary after the headline
   const remainingSummary = summaryText && leadText && summaryText.length > leadText.length && !businessDescription

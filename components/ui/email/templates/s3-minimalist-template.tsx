@@ -59,9 +59,10 @@ export function FormS3MinimalistTemplate({ filing }: FormS3MinimalistTemplatePro
   // Build preheader text
   const preheaderText = `OFFERING: ${companyName} (${displayTicker}) -- ${offeringType || 'Secondary offering'} ${offeringAmount ? `of ${offeringAmount}` : ''}`;
 
-  // Build lead sentence
+  // Prefer AI-provided headline, fall back to sentence extraction
+  const aiHeadline = typeof rawData?.headline === 'string' ? rawData.headline : '';
   const leadText = summaryText?.split(/(?<=[.!?])\s+/)[0] || '';
-  const headline = leadText.length >= 30 ? leadText : summaryText || '';
+  const headline = aiHeadline || (leadText.length >= 30 ? leadText : summaryText || '');
 
   // Remaining summary after headline
   const remainingSummary = (headline && summaryText && summaryText.length > headline.length)
