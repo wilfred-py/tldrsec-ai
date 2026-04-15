@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.0.17.0] - 2026-04-15
+
+### Added
+- `headline` and `emailSubject` fields added to AI schema for ALL filing types via `BASE_SCHEMA_PROPERTIES`. Every form type (10-K, 10-Q, Form 4, DEF 14A, Form 144, S-1, S-3, 11-K, Generic) now gets AI-generated headlines and subject lines.
+- Headline quality gate in `response-parser.ts`: strips ticker/form-type prefixes, rejects generic headlines (< 20 chars or starting with "this", "the company"), forcing templates to use existing fallback logic.
+- `emailSubject` quality gate: rejects subjects < 15 chars.
+- Zod validation for `headline` (max 120 chars) and `emailSubject` (max 100 chars) in all schema validators.
+- 18 new tests: schema coverage for headline/emailSubject across all 15 form types, headline normalization quality gate.
+
+### Changed
+- All 9 non-8-K email templates now prefer AI-provided `headline` over regex-parsed prose, with zero-risk fallback to existing extraction logic.
+- `subject-service.ts` uses AI `emailSubject` (30-120 chars) as first priority for all form types, falling back to existing smart extraction.
+
 ## [0.0.16.0] - 2026-04-15
 
 ### Fixed
