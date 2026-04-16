@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-## [0.0.17.2] - 2026-04-16
+## [0.0.18.1] - 2026-04-16
 
 ### Added
 - `headline` and `emailSubject` fields added to AI schema for ALL filing types via `BASE_SCHEMA_PROPERTIES`. Every form type (10-K, 10-Q, Form 4, DEF 14A, Form 144, S-1, S-3, 11-K, Generic) now gets AI-generated headlines and subject lines.
@@ -14,6 +14,16 @@ All notable changes to this project will be documented in this file.
 ### Changed
 - All 9 non-8-K email templates now prefer AI-provided `headline` over regex-parsed prose, with zero-risk fallback to existing extraction logic.
 - `subject-service.ts` uses AI `emailSubject` (30-120 chars) as first priority for all form types, falling back to existing smart extraction.
+
+## [0.0.18.0] - 2026-04-16
+
+### Fixed
+- Pricing card mobile highlight: tapping a different plan card now switches the blue highlight correctly on both the landing page and /subscribe route.
+- Removed `forceHighlight` prop that permanently locked the pre-selected card's highlight, preventing users from switching plans on /subscribe.
+- Wrapped `.brand-card:hover` CSS in `@media (hover: hover)` to prevent sticky hover states on mobile touch devices.
+
+### Changed
+- Replaced email input form in CTA section below pricing with a single "Get Started" button linking to /onboarding, reducing signup friction.
 
 ## [0.0.17.1] - 2026-04-16
 
