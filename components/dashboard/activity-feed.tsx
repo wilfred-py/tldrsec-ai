@@ -5,7 +5,6 @@ import Link from "next/link";
 import { Mail, ChevronDown, ChevronUp, FileText } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { formatDistanceToNow } from "date-fns";
 
@@ -392,7 +391,7 @@ export function ActivityFeed({ summaries, featuredSummaries = [] }: ActivityFeed
         <FileText className="h-4 w-4 text-[var(--brand-primary)]" />
         {showFeatured ? "Example Filing Summaries" : "Filing Summaries"}
       </div>
-      <Card className="overflow-hidden py-0">
+      <div className="overflow-hidden">
         {showFeatured ? (
           <>
             <p className="text-sm text-[var(--brand-text-muted)] px-3 py-3 border-b border-[var(--brand-border)]">
@@ -422,7 +421,7 @@ export function ActivityFeed({ summaries, featuredSummaries = [] }: ActivityFeed
             )}
           </>
         )}
-      </Card>
+      </div>
     </div>
   );
 }

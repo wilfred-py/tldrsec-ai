@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-## [0.0.17.0] - 2026-04-15
+## [0.0.17.2] - 2026-04-16
 
 ### Added
 - `headline` and `emailSubject` fields added to AI schema for ALL filing types via `BASE_SCHEMA_PROPERTIES`. Every form type (10-K, 10-Q, Form 4, DEF 14A, Form 144, S-1, S-3, 11-K, Generic) now gets AI-generated headlines and subject lines.
@@ -14,6 +14,28 @@ All notable changes to this project will be documented in this file.
 ### Changed
 - All 9 non-8-K email templates now prefer AI-provided `headline` over regex-parsed prose, with zero-risk fallback to existing extraction logic.
 - `subject-service.ts` uses AI `emailSubject` (30-120 chars) as first priority for all form types, falling back to existing smart extraction.
+
+## [0.0.17.1] - 2026-04-16
+
+### Fixed
+- Mobile hamburger menu now opens with a visible background instead of just borders.
+- All 384 theme color usages across 98 files now render correctly (were producing invalid `hsl(oklch(...))` CSS).
+- Dark mode borders and inputs use solid composited colors instead of broken semi-transparent oklch values.
+- Fintech brand color tokens unified to HSL format, matching the rest of the design system.
+
+### Added
+- Regression test guard preventing future shadcn CLI updates from regenerating oklch-format CSS variables.
+
+## [0.0.17.0] - 2026-04-15
+
+### Changed
+- Dashboard redesign: removed bordered Card wrappers from activity feed, tickers table, and stats section for a cleaner, content-first layout.
+- Time saved metric now uses animated digit-rolling counter (reuses waitlist page CounterDisplay component) instead of a static bordered card.
+- Removed unused "summary count this month" Prisma query from dashboard page load, reducing server-side queries by one.
+
+### Removed
+- `EmailStatsWidget` component (replaced by inline animated counter).
+- `HoursSavedWidget` component (dead code, was never imported).
 
 ## [0.0.16.0] - 2026-04-15
 

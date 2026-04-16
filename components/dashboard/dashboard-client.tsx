@@ -2,8 +2,8 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { Button } from "@/components/ui/button";
-import { Card, CardHeader, CardTitle, CardDescription, CardAction, CardContent } from "@/components/ui/card";
-import { PlusIcon, Loader2, Search, ArrowUpRight } from "lucide-react";
+import { PlusIcon, Loader2, Search, ArrowUpRight, Clock } from "lucide-react";
+import { CounterDisplay } from "@/components/landing/counter";
 import {
   Dialog,
   DialogContent,
@@ -17,7 +17,6 @@ import { toast } from "sonner";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { TickerSearchResult } from "@/lib/api/types";
 import { Company, FilingPreferences } from "@/lib/api/types";
-import { EmailStatsWidget } from "@/components/dashboard/email-stats-widget";
 import { ActivityFeed } from "@/components/dashboard/activity-feed";
 import {
   getTrackedCompanies,
@@ -43,14 +42,13 @@ interface DashboardClientProps {
   tutorialCompleted?: boolean;
   subscriptionTier?: 'FREE' | 'PRO' | 'MAX';
   tickerLimit?: number;
-  summaryCountThisMonth?: number;
   summaryCountTotal?: number;
   totalTimeSavedMinutes?: number;
   recentSummaries?: ActivitySummary[];
   featuredSummaries?: ActivitySummary[];
 }
 
-export function DashboardClient({ showWelcome: _showWelcome = false, shouldMergePending: _shouldMergePending = false, subscriptionSuccess = false, sessionId, initialCompanies = [], tutorialCompleted = false, subscriptionTier = 'FREE', tickerLimit = 3, summaryCountThisMonth = 0, summaryCountTotal = 0, totalTimeSavedMinutes = 0, recentSummaries = [], featuredSummaries = [] }: DashboardClientProps) {
+export function DashboardClient({ showWelcome: _showWelcome = false, shouldMergePending: _shouldMergePending = false, subscriptionSuccess = false, sessionId, initialCompanies = [], tutorialCompleted = false, subscriptionTier = 'FREE', tickerLimit = 3, summaryCountTotal = 0, totalTimeSavedMinutes = 0, recentSummaries = [], featuredSummaries = [] }: DashboardClientProps) {
   // State for tracked companies
   const [companies, setCompanies] = useState<Company[]>(initialCompanies);
   const [currentCompany, setCurrentCompany] = useState<Company | null>(null);
@@ -397,12 +395,21 @@ export function DashboardClient({ showWelcome: _showWelcome = false, shouldMerge
   return (
     <div className="space-y-6 animate-fade-in">
       <h1 className="sr-only">Dashboard</h1>
-      {/* Stats Widget */}
-      <EmailStatsWidget
-        summaryCountThisMonth={summaryCountThisMonth}
-        summaryCountTotal={summaryCountTotal}
-        totalTimeSavedMinutes={totalTimeSavedMinutes}
-      />
+      {/* Time Saved Counter */}
+      {(totalTimeSavedMinutes >= 1 || summaryCountTotal > 0) && (
+        <div className="flex items-center gap-3 text-sm text-[var(--brand-text-muted)]" role="status" aria-label={`${totalTimeSavedMinutes >= 1 ? `${Math.round(totalTimeSavedMinutes)} minutes saved` : ""}${totalTimeSavedMinutes >= 1 && summaryCountTotal > 0 ? ", " : ""}${summaryCountTotal > 0 ? `${summaryCountTotal} filings summarized` : ""}`}>
+          <Clock className="h-4 w-4 text-[var(--brand-primary)]" aria-hidden="true" />
+          {totalTimeSavedMinutes >= 1 && (
+            <span className="flex items-center gap-1" aria-hidden="true">
+              <CounterDisplay count={Math.round(totalTimeSavedMinutes)} className="text-lg font-bold text-[var(--brand-secondary)]" />
+              <span>minutes saved</span>
+            </span>
+          )}
+          {summaryCountTotal > 0 && (
+            <span aria-hidden="true">&middot; {summaryCountTotal} filing{summaryCountTotal !== 1 ? "s" : ""} summarized</span>
+          )}
+        </div>
+      )}
 
       {/* Tabs: Emails / Tickers */}
       <Tabs defaultValue={isFirstVisit ? "tickers" : "activity"} className="w-full">
@@ -416,15 +423,17 @@ export function DashboardClient({ showWelcome: _showWelcome = false, shouldMerge
         </TabsContent>
 
         <TabsContent value="tickers">
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg text-[var(--brand-secondary)]">Tracked Tickers</CardTitle>
-          <CardDescription>
-            {!isUnlimited
-              ? `${companies.length} / ${tickerLimit} tickers used on ${subscriptionTier === 'FREE' ? 'Free' : subscriptionTier} plan`
-              : "Manage your tracked companies."}
-          </CardDescription>
-          <CardAction>
+      <div>
+        <div className="flex items-start justify-between gap-4 mb-4">
+          <div className="space-y-1">
+            <h3 className="text-lg font-semibold text-[var(--brand-secondary)]">Tracked Tickers</h3>
+            <p className="text-sm text-muted-foreground">
+              {!isUnlimited
+                ? `${companies.length} / ${tickerLimit} tickers used on ${subscriptionTier === 'FREE' ? 'Free' : subscriptionTier} plan`
+                : "Manage your tracked companies."}
+            </p>
+          </div>
+          <div>
             {isAtLimit && canUpgrade ? (
               <Button
                 onClick={() => window.location.href = "/subscribe"}
@@ -450,9 +459,9 @@ export function DashboardClient({ showWelcome: _showWelcome = false, shouldMerge
                 <span className="inline sm:hidden">Add</span>
               </Button>
             )}
-          </CardAction>
-        </CardHeader>
-        <CardContent>
+          </div>
+        </div>
+        <div className="pb-2">
 
         {isLoadingCompanies ? (
           <div className="overflow-hidden">
@@ -544,8 +553,8 @@ export function DashboardClient({ showWelcome: _showWelcome = false, shouldMerge
             onDeleteClick={handleDeleteClick}
           />
         )}
-        </CardContent>
-      </Card>
+        </div>
+      </div>
         </TabsContent>
       </Tabs>
 
